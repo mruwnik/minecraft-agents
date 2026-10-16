@@ -1,0 +1,26 @@
+;; Cards 170daf10 89eafb63: items.obtain with a source that is seen but cannot be reached. Cobblestone is the stone mass seen through a glass
+;; window of a bedrock cage that holds the body (no way out, nothing diggable): the gather walk ends unreachable and obtain ends
+;; nothing-possible naming that ("could not get to a source of"), not :no-source. Trees seen on bedrock pillars with :explore true: the
+;; no-tree run is not counted fruitless (obtain.exploring follows) and a final no-source says "seen but unreachable" (the second case: a free body, a log column on a bedrock pillar).
+;; Cage x 14..18, z 14..18 (bedrock shell, body inside at the middle, glass at [18 1 16]); stone mass x 19..30, z 8..24, y 0..4.
+{:defaults
+ {:tags [:items :obtain :gather]
+  :time :day
+  :plot {:height 14}
+  :body {:at [16.5 0 16.5] :yaw 270 :effects [["resistance" 600 4]] :settle-s 2}
+  :limit-s 120}
+ :cases
+ [{:name "stone-seen-through-a-window-but-unreachable-is-not-no-source"
+   :blocks [[:fill [14 -1 14] [18 3 18] "bedrock" :hollow] [:fill [19 0 8] [30 4 24] "stone"] [:set [18 1 16] "glass"]]
+   :body {:inventory [["wooden_pickaxe" 1]]}
+   :act [[:job (jobs.items.obtain {:item "cobblestone" :count 4 :explore false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:why [:contains "could not get to a source of"]}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 100 :until {:source :job :kind :stopped} :of-job true}]
+   :after [[:item "cobblestone" 0]]}
+  {:name "logs-only-on-an-unreachable-pillar-explores-first-and-says-unreachable"
+   :blocks [[:fill [22 0 15] [22 6 15] "bedrock"] [:fill [22 7 15] [22 12 15] "oak_log"]]
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :explore true})]]
+   :expect [{:event {:source :job :kind :obtain.exploring} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 20 :until {:source :job :kind :obtain.exploring} :of-job true}]
+   :after [[:item "oak_log" 0]]
+   :limit-s 100}]}

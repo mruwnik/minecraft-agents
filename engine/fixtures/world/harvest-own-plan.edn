@@ -1,0 +1,43 @@
+;; Card 27073749: plan-mode harvest and tend look round once when a planned crop is remembered unripe and out of view (it grew meanwhile), instead of
+;; saying nothing-to-do; the body's own plan never refuses its own plain radius harvest, another body's plan still does.
+;; Wheat row [10..13 0 16] on farmland (water beside); the body at [10.5 0 14.5] sees it unripe (age 3), turns its back, the wheat is set ripe by RCON.
+;; Should-succeed: harvest {:plan} and tend {:plan} cut it (wheat in the bag); harvest {:radius 16} in its own plan cuts. Should-fail: another body's plan keeps the refusal.
+{:defaults
+ {:tags [:farm :harvest :tend :sensing :jobs]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]
+           [:fill [10 0 16] [13 0 16] "wheat[age=3]"]]
+  :plans [{:id "field" :metadata {:by "$body"}
+           :parts [{:id "row" :box [#at [10 0 16] #at [13 0 16]] :want {:crop "wheat"}}]}]
+  :body {:at [10.5 0 14.5] :yaw 0 :effects [["resistance" 600 4]] :inventory [["wheat_seeds" 8]] :settle-s 3}
+  :limit-s 120}
+ :cases
+ [{:name "harvest-plan-looks-round-for-wheat-that-grew-out-of-view"
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 0"] [:wait-s 3]
+         [:rcon "execute positioned $X $Y $Z run fill ~10 ~ ~16 ~13 ~ ~16 wheat[age=7]"] [:wait-s 1]
+         [:job (jobs.farm.harvest {:plan "$plan:field"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :nothing-to-do}} :for-s 20 :of-job true}]
+   :after [[:item "wheat" [:>= 1]]]}
+  {:name "tend-plan-looks-round-for-wheat-that-grew-out-of-view"
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 0"] [:wait-s 3]
+         [:rcon "execute positioned $X $Y $Z run fill ~10 ~ ~16 ~13 ~ ~16 wheat[age=7]"] [:wait-s 1]
+         [:job (jobs.farm.tend {:plan "$plan:field"})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :nothing-to-do}} :for-s 20 :of-job true}]
+   :after [[:item "wheat" [:>= 1]]]}
+  {:name "radius-harvest-inside-the-own-plan-cuts"
+   :blocks [[:fill [10 0 16] [13 0 16] "wheat[age=7]"]]
+   :act [[:job (jobs.farm.harvest {:radius 16})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:item "wheat" [:>= 1]]]}
+  {:name "radius-harvest-in-another-bodys-plan-stays-refused"
+   :blocks [[:fill [10 -1 20] [13 -1 20] "farmland[moisture=7]"] [:fill [10 -2 21] [13 -2 21] "stone"] [:fill [10 -1 21] [13 -1 21] "water"]
+            [:fill [10 0 20] [13 0 20] "wheat[age=7]"]]
+   :plans [{:id "theirs" :metadata {:by "Other"}
+            :parts [{:id "row" :box [#at [10 0 20] #at [13 0 20]] :want {:crop "wheat"}}]}]
+   :act [[:job (jobs.farm.harvest {:radius 16})]]
+   :expect [{:no-event {:source :job :kind :completed} :for-s 40 :of-job true}]
+   :after [[:item "wheat" 0] [:block [10 0 20] "wheat[age=7]"]]
+   :limit-s 60}]}

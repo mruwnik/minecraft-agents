@@ -1,0 +1,28 @@
+;; Card 3c8e82a7: a go-to toward a goal with a skeleton and a zombie between the body and the goal. The hostile reflex flees away from the goal
+;; (back toward the start), it does not sprint at the skeleton or run on through the mobs; a lone skeleton against an armed body is a fight.
+;; Open plot 64 long; body at [4.5 0 16.5], goal at x 56; mobs NoAI with helmets (no sun burn).
+{:defaults
+ {:tags [:hostile :survival :flee]
+  :time :any
+  :mobs :keep
+  :plot {:length 64 :width 32 :height 8}
+  :register [{:trigger :hostile-near :args {:radius 12 :ranged-radius 20}
+              :job (jobs.survival.respond-to-hostile {:radius 12 :ranged-radius 20})}]
+  :body {:at [4.5 0 16.5] :effects [["resistance" 600 3]]}
+  :limit-s 90}
+ :cases
+ [{:name "unarmed-go-to-past-a-skeleton-and-a-zombie-flees-back-not-on"
+   :act [[:summon "skeleton" [26.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [22.5 0 18.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.movement.go-to {:pos #at [56 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee}} :within-s 60}
+            {:no-event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :fight}} :for-s 45}
+            {:no-event {:source :body :kind :died} :for-s 45}]
+   :after [[:body-far [26.5 0 16.5] 10]]
+   :limit-s 70}
+  {:name "armed-body-approaches-a-lone-skeleton"
+   :body {:inventory [["iron_sword" 1]]}
+   :act [[:summon "skeleton" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :fight}} :within-s 30}
+            {:event {:source :action :kind :done :data {:name "attack" :status "hit"}} :within-s 60}]
+   :limit-s 70}]}

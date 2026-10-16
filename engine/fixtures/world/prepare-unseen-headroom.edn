@@ -1,0 +1,21 @@
+;; Card bf1d3d6e: forestry.prepare's unseen headroom is a look-first condition. The planned oak cell [16 0 16] and its headroom stand inside a closed stone
+;; box the body (at [16.5 0 9.5], looking south) cannot see into: the queued prepare looks once and stays listed, not started, and never stops
+;; :cells-unloaded; once the walls are gone (RCON) it works the cells and plants the sapling.
+{:defaults
+ {:tags [:forestry :prepare :sensing :jobs]
+  :time :any
+  :plot {:height 12 :floor "grass_block"}
+  :blocks [[:set [2 0 2] "torch"] [:set [2 0 30] "torch"] [:set [30 0 2] "torch"] [:set [30 0 30] "torch"]
+           [:fill [14 0 14] [18 8 18] "stone" :hollow]]
+  :plans [{:id "wood" :metadata {:by "$body"} :parts [{:id "t" :cells [#at [16 0 16]] :want {:tree "oak"}}]}]
+  :body {:at [16.5 0 9.5] :yaw 0 :inventory [["oak_sapling" 1] ["dirt" 2] ["iron_pickaxe" 1]] :effects [["resistance" 600 4]] :settle-s 2}
+  :limit-s 120}
+ :cases
+ [{:name "unseen-headroom-keeps-prepare-listed-then-it-works-once-seen"
+   :act [[:http :submit (jobs.forestry.prepare {:plan "$plan:wood"}) [] {:ok true}]
+         [:wait-s 12]
+         [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]
+         [:rcon "execute positioned $X $Y $Z run fill ~14 ~ ~14 ~18 ~8 ~18 air replace stone"]]
+   :expect [{:no-event {:source :job :data {:reason :cells-unloaded}} :for-s 12 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:block [16 0 16] "oak_sapling"]]}]}

@@ -1,0 +1,18 @@
+;; Card 6a6659c0: look/seen-blocks :live? rechecks a remembered cell by sight, not by reading the world. Ripe wheat the body saw, then set back
+;; to age 0 by RCON while it looks away: a harvest goes by memory, walks up to it and only then learns it is unripe: nothing is cut, no error.
+;; Wheat [20 0 16] on farmland (water beside), body at [14.5 0 16.5] looking east.
+{:defaults
+ {:tags [:farm :harvest :sensing :jobs]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:set [20 -1 16] "farmland[moisture=7]"] [:set [20 -1 17] "water"] [:set [20 0 16] "wheat[age=7]"]]
+  :body {:at [14.5 0 16.5] :yaw 270 :effects [["resistance" 600 4]] :settle-s 3}
+  :limit-s 80}
+ :cases
+ [{:name "wheat-reset-out-of-view-is-walked-to-and-found-unripe"
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"] [:wait-s 3]
+         [:rcon "execute positioned $X $Y $Z run setblock ~20 ~ ~16 wheat[age=0]"] [:wait-s 1]
+         [:job (jobs.farm.harvest {:radius 16})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped :waiting}} :within-s 60 :of-job true}
+            {:no-event {:source :system :kind :error} :for-s 30}]
+   :after [[:block [20 0 16] "wheat[age=0]"] [:item "wheat" 0]]}]}

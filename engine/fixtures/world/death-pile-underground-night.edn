@@ -1,0 +1,20 @@
+;; Card 34811f40: at night a pile lying in a covered stone tunnel (no sky, no hostile) is walked to and collected; recover-drops does not wait for day.
+;; Needs night: run with --allow-time. No mobs. Stone mass x 2..30, z 10..22, y 0..6; a lit 1x2 tunnel along z 16 from x 4 to 28; the body dies at its east
+;; end [26 0 16] and respawns at its west end [4 0 16], 22 blocks of tunnel away.
+;; Should-succeed: the pile is collected, no waiting :night. (Control with :accept-night-risk false at time 22500 is hand-run: the runner's night window ends at 22000.)
+{:defaults
+ {:tags [:survival :death :night :jobs]
+  :time :night
+  :plot {:height 10}
+  :register [{:trigger :died :persistence :cooldown :cooldown-s 30 :args {}}]
+  :blocks [[:fill [2 0 10] [30 6 22] "stone"] [:fill [4 0 16] [28 1 16] "air"]
+           [:set [6 1 16] "torch"] [:set [12 1 16] "torch"] [:set [18 1 16] "torch"] [:set [24 1 16] "torch"] [:set [28 1 16] "torch"]]
+  :body {:at [26.5 0 16.5] :spawnpoint [4 0 16] :effects [["resistance" 600 4]]
+         :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
+  :act [[:wait-s 1] [:kill-body]]
+  :limit-s 220}
+ :cases
+ [{:name "underground-pile-is-fetched-at-night"
+   :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 200}
+            {:no-event {:source :job :kind :waiting :data {:reason :night}} :for-s 200 :until {:source :job :kind :recover-drops.decided}}]
+   :after [[:item "raw_iron" 24]]}]}

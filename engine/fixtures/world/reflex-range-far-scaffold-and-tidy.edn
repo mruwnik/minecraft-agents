@@ -41,4 +41,23 @@
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :tidy-pending}} :within-s 30}
             {:event {:source :job :kind :completed :data {:cells [[:any]]}} :within-s 80}]
    :after [[:block [6 0 8] "cobblestone"]]
+   :limit-s 100}
+  ;; Card c9815f0b: scaffold-left ignores an open entry far below the feet (past cleanup's ::max-below), so it does not refire for ever; one 3 below, reachable by steps, is taken back
+  {:name "scaffold-left-entry-26-below-the-feet-is-left-alone"
+   :plot {:length 120 :width 16 :height 31}
+   :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}]
+   :blocks [[:set [6 0 8] "cobblestone"] [:fill [14 25 6] [18 25 10] "stone"]]
+   :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "cobblestone" :before "air" :job "j1" :purpose :pillar :state :placed}]}}]
+   :body {:at [16.5 26 8.5] :inventory [["iron_pickaxe" 1]] :effects [["resistance" 600 4]]}
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :for-s 60}]
+   :after [[:block [6 0 8] "cobblestone"]]
+   :limit-s 70}
+  {:name "scaffold-left-entry-3-below-the-feet-is-taken-back"
+   :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}]
+   :blocks [[:set [6 0 8] "cobblestone"] [:fill [20 -1 6] [22 2 10] "stone"] [:fill [18 -1 6] [19 1 10] "stone"] [:fill [16 -1 6] [17 0 10] "stone"]]
+   :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "cobblestone" :before "air" :job "j1" :purpose :pillar :state :placed}]}}]
+   :body {:at [21.5 3 8.5] :inventory [["iron_pickaxe" 1]] :effects [["resistance" 600 4]]}
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :within-s 30}
+            {:event {:source :job :kind :cleanup.done :data {:removed 1}} :within-s 80}]
+   :after [[:not-block [6 0 8] "cobblestone"]]
    :limit-s 100}]}

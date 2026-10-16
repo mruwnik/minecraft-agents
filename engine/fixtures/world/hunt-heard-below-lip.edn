@@ -1,0 +1,25 @@
+;; Card 5843cb64: hunt and attack by type target cows the body only hears (3 of them 4-5 blocks below a pit lip, out of sight) and step to the lip to
+;; look; with no cows at all hunt still ends/waits too-few. Dirt pad y -8..-1, pit x 16..18, z 20..22, y -5..-1; the body 3 blocks short of the lip.
+;; Cows NoAI (the ambient moo is what the body hears). Sword in hand.
+{:defaults
+ {:tags [:animals :hunt :sensing :heard]
+  :time :day
+  :plot {:height 8}
+  :blocks [[:fill [8 -8 8] [24 -1 26] "dirt"] [:fill [16 -5 20] [18 -1 22] "air"]]
+  :body {:at [17.5 0 16.5] :yaw 0 :inventory [["iron_sword" 1]] :effects [["resistance" 600 4]] :settle-s 3}
+  :limit-s 120}
+ :cases
+ [{:name "hunt-steps-to-the-lip-and-kills-a-heard-cow"
+   :act [[:summon "cow" [16.5 -5 20.5] "{NoAI:1b}"] [:summon "cow" [17.5 -5 21.5] "{NoAI:1b}"] [:summon "cow" [18.5 -5 20.5] "{NoAI:1b}"]
+         [:job (jobs.combat.hunt {:mob "cow" :count 1 :keep 0})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :too-few}} :for-s 60 :until {:source :job :kind :completed} :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[8 -8 8] [24 0 26]] 2]]}
+  {:name "attack-by-type-steps-to-the-lip-too"
+   :act [[:summon "cow" [16.5 -5 20.5] "{NoAI:1b}"] [:summon "cow" [17.5 -5 21.5] "{NoAI:1b}"] [:summon "cow" [18.5 -5 20.5] "{NoAI:1b}"]
+         [:job (jobs.combat.attack {:targets "cow"})]]
+   :expect [{:event {:source :action :kind :done :data {:name "attack" :status "hit"}} :within-s 100}]}
+  {:name "no-cows-at-all-hunt-waits-too-few"
+   :limit-s 40
+   :act [[:job (jobs.combat.hunt {:mob "cow" :count 1 :keep 0})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :too-few}} :within-s 30 :of-job true}]}]}

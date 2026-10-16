@@ -1,0 +1,15 @@
+;; Card 734b2094: a lure-to that walks 150 blocks with a cow behind it is a useful act all the way: no body.idle ("idle 10 s, no useful act") is logged and
+;; the job ends :arrived. Grass plot 192 long, scattered tree-less; the cow starts beside the body, wheat in hand, the goal at x 170.
+{:defaults
+ {:tags [:lure-to :animals :jobs :large]
+  :time :day
+  :plot {:floor "grass_block" :length 192 :width 32}
+  :body {:at [4.5 0 16.5] :yaw 270 :inventory [["wheat" 8]] :effects [["resistance" 900 4]] :settle-s 3}
+  :limit-s 400}
+ :cases
+ [{:name "long-lure-walk-raises-no-idle-notice"
+   :act [[:summon "cow" [6.5 0 18.5]] [:wait-s 2]
+         [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [170 0 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :arrived}} :within-s 380 :of-job true}
+            {:no-event {:source :body :kind :idle} :for-s 380 :until {:source :job :kind :completed}}]
+   :after [[:entities "type=cow,tag=wt" [[160 0 8] [180 3 24]] 1]]}]}

@@ -1,0 +1,38 @@
+;; Card 18b2f213 (and a0e376ef): a flight's first step acts at once. Seven fence gates in view (each an open side to judge as a room) must not
+;; make the body stand searching while a zombie closes in; a zombie inside the body's own closed hut, hitting it, gets a flight choice at once;
+;; a body hurt within 5 s flees in legs of about a second even with no hitter seen.
+;; AI on, helmets stop sun burn; resistance 3 so the hits do not kill. Hut: stone walls x 12..20, z 12..20.
+{:defaults
+ {:tags [:hostile :survival :flee]
+  :time :any
+  :mobs :keep
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :body {:at [16.5 0 16.5] :inventory [["cobblestone" 20]] :effects [["resistance" 600 3]]}
+  :limit-s 60}
+ :cases
+ [{:name "close-zombie-among-seven-gates-gets-a-flight-choice-at-once"
+   :blocks [[:set [6 0 6] "oak_fence_gate[facing=south]"] [:set [10 0 6] "oak_fence_gate[facing=south]"] [:set [22 0 6] "oak_fence_gate[facing=south]"]
+            [:set [26 0 6] "oak_fence_gate[facing=south]"] [:set [6 0 26] "oak_fence_gate[facing=south]"] [:set [10 0 26] "oak_fence_gate[facing=south]"]
+            [:set [26 0 26] "oak_fence_gate[facing=south]"]]
+   :act [[:summon "zombie" [20.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 4}
+            {:event {:source :job :kind :retreat.choice} :within-s 4}
+            {:no-event {:source :body :kind :died} :for-s 30}]
+   :limit-s 45}
+  {:name "zombie-inside-the-closed-hut-hitting-the-body-gets-a-flight-choice-at-once"
+   :blocks [[:fill [12 0 12] [20 3 20] "stone" :hollow] [:fill [13 0 13] [19 2 19] "air"]
+            [:set [13 1 13] "torch"] [:set [19 1 19] "torch"]]
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [16 0 16]}) [:now]]
+         [:summon "zombie" [18.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :body :kind :hurt} :within-s 10}
+            {:event {:source :job :kind :retreat.choice} :within-s 6}
+            {:no-event {:source :body :kind :died} :for-s 30}]
+   :limit-s 45}
+  {:name "hurt-body-flees-in-short-legs-from-a-mob-it-cannot-see-hit"
+   :body {:effects []}
+   :act [[:summon "zombie" [24.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :job :kind :hostile.decided :data {:decision :flee}} 15]
+         [:rcon "damage $BODY 1 minecraft:generic"]]
+   :expect [{:event {:source :job :kind :retreat.step-speed :data {:seconds [:<= 2]}} :within-s 20}]
+   :limit-s 30}]}

@@ -1,0 +1,35 @@
+;; Dusk-home with a far home (cards 2cfdbe26 71dfaed7 8a97717f cf947198): the trigger fires only for a home within go-home's :limit (160),
+;; so a home 300 blocks off never refires it every cooldown; go-home called by hand with such a home waits :too-far with the distance.
+;; Should-succeed: a home 100 blocks off at late dusk fires dusk-home once and the body arrives. Should-fail: the 300-block home never fires.
+;; Time: run with --allow-time --time-log <the shared time log> (time set 11500 = 25 s of day left).
+{:defaults
+ {:tags [:night :survival :dusk-home]
+  :time :day
+  :plot {:length 340 :width 32 :height 8}
+  :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "home-300-blocks-away-never-fires-dusk-home"
+   :register [{:trigger :dusk-home :persistence :cooldown :cooldown-s 5}]
+   :blocks [[:set [304 0 16] "torch"]]
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [304 0 16]}) [:now]]
+         [:time-set 11500]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :dusk-home}} :for-s 40}]
+   :after [[:body-far [304.5 0 16.5] 250]]
+   :limit-s 60}
+  {:name "home-100-blocks-away-fires-dusk-home-once"
+   :register [{:trigger :dusk-home :persistence :cooldown :cooldown-s 5}]
+   :blocks [[:set [104 0 16] "torch"]]
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [104 0 16]}) [:now]]
+         [:time-set 11500]]
+   :expect [{:count-event {:source :reflex :kind :fired :context {:reflex-id :dusk-home}} :for-s 120 :at-least 1 :at-most 1}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :dusk-home}} :within-s 120}]
+   :after [[:body-near [104.5 0 16.5] 5]]}
+  {:name "go-home-by-hand-with-a-home-300-away-waits-too-far"
+   :blocks [[:set [304 0 16] "torch"]]
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [304 0 16]}) [:now]]
+         [:job (jobs.survival.go-home {})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :too-far}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :action :data {:name "steer"}} :for-s 5 :until {:source :job :kind :waiting :data {:reason :too-far}} :of-job true}]
+   :after [[:body-far [304.5 0 16.5] 250]]
+   :limit-s 45}]}

@@ -1,0 +1,24 @@
+;; Card d56da453: a creeper fusing round a corner of a dark one-wide corridor (no line of sight, 3 blocks off) fires hostile-near and a
+;; hostile.decided before the blast; a creeper fusing 13 blocks off down the corridor fires nothing.
+;; Stone mass x 4..24, z 0..20, y 0..4 (plot 32); corridor 1x2 along z 16 from x 10 to 14, then north along x 14 from z 16 up to z 3. Torches off: dark.
+;; Resistance 4 so the blast does not kill the probe. The creeper is ignited with a 3 s fuse (NoAI keeps it where it was put).
+{:defaults
+ {:tags [:hostile :survival :combat :creeper]
+  :time :any
+  :mobs :keep
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :blocks [[:fill [4 0 0] [24 4 20] "stone"] [:fill [10 0 16] [14 1 16] "air"] [:fill [14 0 3] [14 1 16] "air"]]
+  :body {:at [12.5 0 16.5] :yaw 270 :effects [["resistance" 600 4]]}
+  :limit-s 40}
+ :cases
+ [{:name "creeper-fusing-round-the-corner-fires-before-the-blast"
+   :act [[:summon "creeper" [14.5 0 14.5] "{NoAI:1b,ignited:1b,Fuse:60s}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 3}
+            {:event {:source :job :kind :hostile.decided :data {:mob "creeper"}} :within-s 4}]
+   :limit-s 30}
+  {:name "creeper-fusing-thirteen-blocks-down-the-corridor-fires-nothing"
+   :act [[:summon "creeper" [14.5 0 3.5] "{NoAI:1b,ignited:1b,Fuse:60s}"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
+   :after [[:body-near [12.5 0 16.5] 3]]
+   :limit-s 20}]}

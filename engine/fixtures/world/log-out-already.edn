@@ -1,0 +1,16 @@
+;; Card 0d8303ba: a log-out job queued behind a log-out that already ran ends done without logging out again; the log-out ledger holds one entry.
+;; Night: run with --allow-time --time-log <the shared time log>. The body stays away 3 s (the engine logs it out and back in).
+{:defaults
+ {:tags [:night :survival :tool]
+  :time :night
+  :plot {:height 8}
+  :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]]
+  :body {:at [16.5 0 16.5] :spawnpoint [4 0 4]}
+  :limit-s 120}
+ :cases
+ [{:name "second-queued-log-out-ends-done-without-acting"
+   :act [[:http :submit (jobs.survival.log-out {:offline-ms 3000 :news-ms 500}) [] {:ok true}]
+         [:http :submit (jobs.survival.log-out {:offline-ms 3000 :news-ms 500}) [] {:ok true}]
+         [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 90]]
+   :expect [{:count-event {:source :job :kind :completed :data {:name "jobs.survival.log-out"}} :for-s 90 :at-least 2}]
+   :after [[:memory {:entries {:log-out [{:data {:status "ok"}}]}}]]}]}

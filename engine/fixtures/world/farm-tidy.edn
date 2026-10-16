@@ -1,0 +1,29 @@
+;; Card d2d247b6: jobs.farm.tidy over a farm plan digs the stray blocks over its cells (a stone, a sapling, a dirt block above a crop cell) and ends
+;; done {:dug n}; a clean field is done with nothing dug; a missing plan waits :plan-trouble (one tidy.declined warn), never acts.
+;; Plan row of 4 wheat cells [10..13 0 16] on farmland (water beside); the body at [10.5 0 14.5] holds an iron pickaxe.
+{:defaults
+ {:tags [:farm :tidy :jobs]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]
+           [:fill [10 0 16] [11 0 16] "wheat[age=7]"]]
+  :plans [{:id "field" :metadata {:by "$body"}
+           :parts [{:id "row" :box [#at [10 0 16] #at [13 0 16]] :want {:crop "wheat"}}]}]
+  :body {:at [10.5 0 14.5] :effects [["resistance" 600 4]] :inventory [["iron_pickaxe" 1]] :settle-s 2}
+  :limit-s 90}
+ :cases
+ [{:name "strays-over-the-crop-cells-are-dug"
+   :blocks [[:set [12 0 16] "stone"] [:set [13 0 16] "oak_sapling"] [:set [11 1 16] "dirt"]]
+   :act [[:job (jobs.farm.tidy {:plan "$plan:field"})]]
+   :expect [{:event {:source :job :kind :completed :data {:dug [:>= 2]}} :within-s 80 :of-job true}]
+   :after [[:not-block [12 0 16] "stone"] [:not-block [11 1 16] "dirt"] [:block [10 0 16] "wheat[age=7]"]]}
+  {:name "clean-field-is-done-with-nothing-dug"
+   :act [[:job (jobs.farm.tidy {:plan "$plan:field"})]]
+   :expect [{:event {:source :job :kind :completed :data {:dug 0}} :within-s 40 :of-job true}]
+   :after [[:block [10 0 16] "wheat[age=7]"] [:block [11 0 16] "wheat[age=7]"]]
+   :limit-s 50}
+  {:name "missing-plan-waits-plan-trouble"
+   :act [[:job (jobs.farm.tidy {:plan "no-such-plan"})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :plan-trouble}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :round_started} :for-s 10 :until {:source :job :kind :waiting :data {:reason :plan-trouble}} :of-job true}]
+   :limit-s 40}]}

@@ -1,0 +1,20 @@
+;; Card e8f2e581: a standing kitchen stores only what its own pass made. Bread the agent just withdrew by hand stays carried (it is not deposited
+;; again); wheat carried is baked and only the new loaf goes into the chest.
+;; Chest at [20 0 16] holding 17 bread, a crafting table at [18 0 20]; the body carries 3 wheat. Should-succeed: after the withdraw and one kitchen pass the body
+;; carries 17 bread and the chest holds the loaf baked (booked stock 1). Should-fail: the pass does not put the 17 back.
+{:defaults
+ {:tags [:items :kitchen :storage :jobs]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:set [20 0 16] "chest[facing=west]{Items:[{Slot:0b,id:\"minecraft:bread\",count:17}]}"] [:set [18 0 20] "crafting_table"]]
+  :body {:at [16.5 0 16.5] :yaw 270 :inventory [["wheat" 3]] :effects [["resistance" 600 4]] :settle-s 2}
+  :limit-s 150}
+ :cases
+ [{:name "withdrawn-bread-stays-carried-and-only-the-new-loaf-is-stored"
+   :act [[:job (jobs.storage.withdraw {:chest #xyz [20 0 16] :items {"bread" 17}})]
+         [:await {:source :job :kind :completed :data {:name "jobs.storage.withdraw"}} 60]
+         [:http :submit (jobs.items.kitchen {:chest #xyz [20 0 16] :stock {"bread" 20} :reserve {"wheat" 0}}) [] {:ok true}]
+         [:await {:source :job :kind :completed :data {:name "jobs.items.kitchen"}} 100]
+         [:cli "observe" ["$body" "--world" "$world" "chests"] {:ok true :chests [{:pos #at [20 0 16] :items {"bread" 1}}]}]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.items.kitchen"}} :within-s 120}]
+   :after [[:item "bread" 17] [:item "wheat" 0]]}]}

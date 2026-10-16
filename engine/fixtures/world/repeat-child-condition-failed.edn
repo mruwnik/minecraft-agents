@@ -1,0 +1,20 @@
+;; Card 7d0cad09: (repeat child) goes on when the child ends condition-failed / nothing-possible (a standing tend on a box with nothing to do rests
+;; and tries again); it stops for good only when the child ends impossible. Empty grass plot, a box with no farmland.
+;; Should-succeed: the repeat is still listed after the child ended condition-failed twice. Should-fail: a child that ends impossible (mine with no block) ends the repeat.
+{:defaults
+ {:tags [:scheduler :farm :repeat]
+  :time :any
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 2}
+  :limit-s 130}
+ :cases
+ [{:name "standing-tend-with-nothing-to-do-stays-listed-and-runs-again"
+   :act [[:http :submit (repeat (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [12 0 18]}})) [] {:ok true}]
+         [:await {:source :job :kind :stopped :data {:kind :condition-failed}} 40]
+         [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]]
+   :expect [{:count-event {:source :job :kind :stopped :data {:kind :condition-failed}} :for-s 100 :at-least 2}]}
+  {:name "repeat-of-an-impossible-child-ends"
+   :limit-s 40
+   :act [[:http :submit (repeat (jobs.gather.mine {})) [] {:ok true}]
+         [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 30]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 30 :of-job true}]}]}

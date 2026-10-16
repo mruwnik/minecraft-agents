@@ -68,4 +68,13 @@
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :mine.side} :for-s 60}]
    :after [[:block [18 0 14] "diamond_ore"] [:item "diamond" 0]]
-   :limit-s 130}]}
+   :limit-s 130}
+  ;; Card b83469be: the side cut's child mine is not held to the parent's :from, so an ore more than 6 blocks from the submit cell is taken too (mine.side info "took", no "did not take")
+  {:name "stay-level-takes-seen-side-ore-eight-blocks-from-the-start"
+   :blocks [[:set [24 0 15] "glass"] [:set [24 0 14] "diamond_ore"]]
+   :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
+   :act [[:job (jobs.gather.mine {:block "diamond_ore" :count 1 :direction :east :stay-level true :tunnel-length 12 :mend false})]]
+   :expect [{:event {:source :job :kind :mine.side :level :info :data {:shut true}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :mine.side :level :warn} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:item "diamond" [:>= 1]] [:not-block [24 0 14] "diamond_ore"]]
+   :limit-s 150}]}

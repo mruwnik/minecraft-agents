@@ -1,0 +1,64 @@
+;; What the jobs/observe tools answer in situations that need a live body (cards abe33c66 a2972022 999ed566 4f3c0f82).
+;; Should-succeed: a --now submit behind the night reflex says so in :hint; a weather change is logged; a fresh body knows no job of the last case;
+;; a zombie that left the body's sight is no longer listed. Should-fail (controls): by day no reflex hint; a zombie still in sight stays listed.
+;; Night cases: run with --allow-time --time-log <the shared time log>.
+{:defaults
+ {:tags [:agent-tools :tool]
+  :time :any
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :spawnpoint [4 0 4] :settle-s 2}
+  :limit-s 90}
+ :cases
+ [{:name "now-submit-behind-the-night-reflex-names-it"
+   :time :night
+   :register [{:trigger :night :persistence :cooldown :cooldown-s 2 :args {:roof-height 4}}]
+   :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]]
+   :body {:inventory [["cobblestone" 16]]}
+   :act [[:await {:source :reflex :kind :fired :context {:reflex-id :night}} 30]
+         [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.items.get-tool {:item \"wooden_pickaxe\"})" "--now"]
+          {:ok true :hint [:contains "queued behind reflex"]}]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night}} :within-s 30}]}
+  {:name "now-submit-by-day-has-no-reflex-hint"
+   :time :day
+   :act [[:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.set-place {:name :wt-a :pos [6 150 6]})" "--now"]
+          {:ok true :hint [:not [:any]]}]]
+   :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}]}
+  {:name "weather-change-is-logged-both-ways"
+   :weather :rain
+   :act [[:rcon "weather clear"]
+         [:await {:source :body :kind :weather-changed :data {:raining false}} 30]
+         [:rcon "weather rain"]
+         [:await {:source :body :kind :weather-changed :data {:raining true}} 30]]
+   :expect [{:event {:source :body :kind :weather-changed :data {:raining false}} :within-s 30}
+            {:event {:source :body :kind :weather-changed :data {:raining true}} :within-s 60}]}
+  {:name "a-fresh-body-knows-no-job-of-the-case-before"
+   :act [[:http :submit (jobs.debug.notify {:text "a"}) [] {:ok true}]
+         [:http :submit (jobs.debug.notify {:text "b"}) [] {:ok true}]
+         [:http :submit (jobs.debug.notify {:text "c"}) [] {:ok true}]
+         [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 30]]
+   :expect [{:count-event {:source :job :kind :completed} :for-s 20 :at-least 3}]}
+  {:name "second-case-asks-for-a-job-of-the-first"
+   :act [[:cli "observe" ["$body" "--world" "$world" "result" "j2"] {:ok false :reason :unknown-job}]]
+   :expect [{:no-event {:source :job :kind :queued} :for-s 3}]
+   :after [[:body-near [16.5 0 16.5] 3]]}
+;; 4f3c0f82: a zombie teleported far away (the client stops tracking it) must leave the list within a sample or two, not after the 120 s ttl
+  {:name "zombie-out-of-sight-is-no-longer-listed"
+  
+   :plot {:height 8 :floor "grass_block"}
+   :blocks [[:fill [10 0 10] [22 3 22] "stone" :hollow] [:fill [11 0 11] [21 2 21] "air"]]
+   :body {:at [16.5 0 16.5]}
+   :act [[:summon "zombie" [19.5 0 16.5] "{NoAI:1b,UUID:[I;7001,1,1,7001],Silent:1b}"]
+         [:until [:cli "entities" ["$body" "--world" "$world" "--type" "zombie"] {:total 1}] 20]
+         [:rcon "tp @e[type=zombie,$BOX] ~ ~ ~400"]
+         [:until [:cli "entities" ["$body" "--world" "$world" "--type" "zombie"] {:total 0}] 30]]
+   :expect [{:no-event {:source :job :kind :queued} :for-s 3}]
+   :after [[:body-near [16.5 0 16.5] 3]]}
+  {:name "zombie-in-sight-stays-listed"
+  
+   :blocks [[:fill [10 0 10] [22 3 22] "stone" :hollow] [:fill [11 0 11] [21 2 21] "air"]]
+   :act [[:summon "zombie" [19.5 0 16.5] "{NoAI:1b,UUID:[I;7002,1,1,7002],Silent:1b,PersistenceRequired:1b,Health:100f}"]
+         [:until [:cli "entities" ["$body" "--world" "$world" "--type" "zombie"] {:total 1}] 20]
+         [:wait-s 6]
+         [:cli "entities" ["$body" "--world" "$world" "--type" "zombie"] {:total 1}]]
+   :expect [{:no-event {:source :job :kind :queued} :for-s 3}]
+   :after [[:body-near [16.5 0 16.5] 3]]}]}

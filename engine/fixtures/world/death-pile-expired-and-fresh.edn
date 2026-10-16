@@ -1,0 +1,22 @@
+;; Card 6d6e0edc: recover-drops does not spend its run on an expired pile when a fresh one is open, and fetches the fresh pile whole (raw_iron too).
+;; The old death is memory backdated 400 s (past the 5 minute window of 300 s); the fresh one is a real death at [26 0 26] 31 blocks from the spawn point.
+;; Should-succeed: the fresh pile is collected, 7 raw_iron back, no abandoned window-closed. Control: a lone expired pile ends abandoned window-closed.
+{:defaults
+ {:tags [:survival :death :jobs]
+  :time :day
+  :memory [{:kind :died :age-s 400
+            :data {:pos #xyz [8 0 8] :dimension "overworld" :inventory [{:name "dirt" :count 40 :slot 36}] :experience {:level 0 :points 0}}}]
+  :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "fresh-pile-is-fetched-whole-past-the-expired-one"
+   :body {:inventory [["raw_iron" 7] ["cobblestone" 64] ["cobblestone" 36]]}
+   :act [[:wait-s 1] [:kill-body] [:await {:source :body :kind :respawned} 30] [:wait-s 4]
+         [:job (jobs.survival.recover-drops)]]
+   :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :recover-drops.decided :data {:decision :abandoned :reason :window-closed}} :for-s 120 :until {:source :job :kind :recover-drops.decided :data {:decision :collected}}}]
+   :after [[:item "raw_iron" 7]]}
+  {:name "lone-expired-pile-is-abandoned-window-closed"
+   :limit-s 40
+   :act [[:job (jobs.survival.recover-drops)]]
+   :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :abandoned :reason :window-closed}} :within-s 30 :of-job true}]}]}

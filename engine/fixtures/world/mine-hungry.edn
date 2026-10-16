@@ -22,4 +22,19 @@
          [:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :mine.hungry} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
-   :after [[:item "raw_iron" 1]]}]}
+   :after [[:item "raw_iron" 1]]}
+  ;; 177832d8: hungry is a limit on the food line; a worn last tool is a missing tool (condition-failed), neither is the other's ending
+  {:name "hungry-ends-limit-reached-not-condition-failed"
+   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:wait-s 10]
+         [:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :limit-reached}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:kind :condition-failed}} :for-s 40 :of-job true}]
+   :after [[:item "raw_iron" 0]]}
+  {:name "last-pickaxe-worn-out-ends-condition-failed-no-tool"
+   :blocks [[:set [21 0 16] "iron_ore"] [:set [22 0 16] "iron_ore"]]
+   :body {:inventory [["cobblestone" 16] ["torch" 8] ["bread" 4]]}
+   :memory []
+   :act [[:rcon "item replace entity $BODY hotbar.0 with minecraft:stone_pickaxe[minecraft:damage=130]"]
+         [:job (jobs.gather.mine {:block "iron_ore" :level false :count 3 :direction :east :tunnel-length 8 :radius 16 :mend false :fetch false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:kind :limit-reached}} :for-s 30 :of-job true}]}]}
