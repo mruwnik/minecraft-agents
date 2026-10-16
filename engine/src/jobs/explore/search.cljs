@@ -46,8 +46,8 @@
   :failed [{:pos :reason}] :skipped :farthest} :why :text} and the ending:
   - :done: :count found.
   - :nothing-possible :distance (no leg left), :legs (:max-legs walked) or :stuck (three failed walks in a row).
-  - :limit-reached :job-time (the call's :spend :job-time, default ::job-time-s; the engine ends it, round time only, so go-to's wait for day in a shelter does not count), with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
-  - A call with no :target waits (condition :no-target).
+  - :limit-reached :job-time (the call's :spend :job-time, default ::job-time-s; the engine ends it), with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
+  - A call with no :target never runs (:bad-args).
 
   Memory: :origin :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :blocked (the ways legs
   failed since the last arrival) :deferred (unloaded legs set aside while a sweep goes on), and :leg while
@@ -71,13 +71,14 @@
   {::seen-ttl-s {:default 259200 :doc "Seconds a note of a block seen lasts." :spec (a/num-in 0 nil)}
    ::entity-ttl-s {:default 600 :doc "Seconds a note of an entity seen lasts." :spec (a/num-in 0 nil)}
    ::searched-ttl-s {:default 86400 :doc "Seconds a note of searched ground lasts." :spec (a/num-in 0 nil)}
-   ::job-time-s {:default 600 :doc "Seconds from the first round before a search gives up, not counting the time go-to holds for day in a shelter." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 600 :doc "Seconds from the first round before a search gives up." :spec (a/num-in 0 nil)}
    ::max-failed-in-row {:default 3 :doc "Failed attempts in a row before the search gives up." :spec (a/int-in 0 nil)}
    ::wait-ms {:default 2000 :doc "How long the search waits for the world to settle, in ms." :spec (a/int-in 0 nil)}
    ::descent {:default 40 :doc "How far below its feet a leg's ground is looked for, in blocks (go-to does the descent)." :spec (a/int-in 0 nil)}
    ::reach {:default 12 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::held-angle {:default 60 :doc "A leg lies the way a failed leg went when the angle between them, seen from the body, is under this many degrees." :spec (a/num-in 0 180)}
    ::held-near {:default 4 :doc "Blocks from where a leg failed within which its way still holds others back." :spec (a/num-in 0 nil)}
+   ::near-sight {:default 6 :doc "Within this many blocks a look misses no animal: a noted animal not seen there is taken as gone." :spec (a/num-in 0 nil)}
    ::stand-cap {:default 48 :doc "Stand cells one choice reads; past it :more says candidates are left for the next step." :spec (a/int-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 (defn max-failed-in-row [] (settings/get settings ::max-failed-in-row))
@@ -177,11 +178,22 @@
         seen (when-not (:id n) (u/seen-name p {:x x :y y :z z}))]
     (boolean (and seen (not= seen (:what n))))))
 
+(defn departed
+  "The ids of entity notes lying within near blocks of the body at [x y z] whose animal is not among the entities seen
+  there now (killed or gone), since a look this close misses none."
+  [ns seen [x y z] near]
+  (let [here (set (keep :id seen))]
+    (into #{} (comp (filter #(and (= :seen (:kind %)) (:id %) (not (here (:id %)))
+                                  (<= (js/Math.hypot (- ((:pos %) 0) x) (- ((:pos %) 1) y) (- ((:pos %) 2) z)) near)))
+                    (map :id))
+          ns)))
+
 (defn noted
   "Findings from live :seen notes of names within max-distance (XZ) of the origin [x y z], leaving out a block note the
-  body now sees something else at."
-  [p ns names [ox _ oz] max-distance]
+  body now sees something else at and the entity notes of the departed ids."
+  [p ns names [ox _ oz] max-distance gone]
   (->> ns
+       (remove #(gone (:id %)))
        (filter #(and (= :seen (:kind %)) (some #{(:what %)} names)
                      (<= (xz-dist [((:pos %) 0) ((:pos %) 2)] [ox oz]) max-distance)
                      (not (outdated? p %))))
@@ -190,10 +202,10 @@
 ;; ------------------------------------------------------------------ the body
 
 (defn no-target
-  "Later :no-target while no target is named."
+  "Never :bad-args while no target is named."
   [c]
   (if (empty? (targets c))
-    (contract/later :no-target "no target is named")
+    (contract/never :bad-args "no target is named" :text "no target is named")
     (contract/ok :target "a target is named")))
 
 (def can-start? no-target)
@@ -242,22 +254,27 @@
                         :text (if (= :found reason)
                                 (str "found " (count found) " " what " at " (str/join ", " (map #(str/join "," (:pos %)) found)))
                                 (str "no " what " found (" (name why) ") after " (:legs m 0) " legs, "
-                                     (:scans m 0) " looks, " (:farthest m 0) " blocks out"))}
+                                     (:scans m 0) " looks, " (:farthest m 0) " blocks out"
+                                     (when (pos? (:skipped m 0)) (str ", " (:skipped m) " legs skipped as already searched"))))}
                  why (assoc :why why))]
     (case why
       nil (ctx/end c :done nil result)
       (ctx/end c :nothing-possible why result))))
 
 (defn takeable
-  "found without the blocks in :avoid columns and :avoid-boxes, the noted entities standing in a zone or plan of the body's own (its pens),
+  "found without the blocks in :avoid columns and :avoid-boxes, the blocks on the footprint of a plan the body made (its
+  posts and walls are not material to cut), the noted entities standing in a zone or plan of the body's own (its pens),
   and (when :takeable is on) those a zone, claim or plan footprint bars taking."
   [c found]
   (let [{:keys [takeable avoid avoid-boxes]} (:args c)
         avoid (set (map vec avoid))
         boxes (map (fn [[[x1 z1] [x2 z2]]] [(min x1 x2) (min z1 z2) (max x1 x2) (max z1 z2)]) avoid-boxes)
         avoided? (fn [[x z]] (or (avoid [x z]) (some (fn [[x1 z1 x2 z2]] (and (<= x1 x x2) (<= z1 z z2))) boxes)))
-        in (when takeable (access/rules-input c))]
-    (cond->> (remove #(and (:noted %) (:id %) (access/in-own-area? c (zipmap [:x :y :z] (:pos %)))) found)
+        in (when takeable (access/rules-input c))
+        own (access/rules-input c {:spare-own? true})]
+    (cond->> found
+      true (remove #(and (not (:id %)) (access/own-keep own (zipmap [:x :y :z] (:pos %)))))
+      true (remove #(and (:noted %) (:id %) (access/in-own-area? c (zipmap [:x :y :z] (:pos %)))))
       (or (seq avoid) (seq boxes)) (remove #(and (not (:id %)) (avoided? [((:pos %) 0) ((:pos %) 2)])))
       takeable (filter #(or (:id %) (:ok (access/may? in :harvest (:pos %))))))))
 
@@ -293,6 +310,7 @@
       (spiral-points [ox oz] spacing max-distance))))
 
 (defn stand-cap [] (settings/get settings ::stand-cap))
+(defn near-sight [] (settings/get settings ::near-sight))
 
 (defn step-toward
   "Where to walk toward the unseen column [x z] from the body at [bx y bz]: the seen stand cell on the line 12, 6 or 3
@@ -387,7 +405,9 @@
         _ (when-not (or resumed (breath/in-water? (:primitives c))) (await (scan! c names)))
         ns (notes/notes c)
         m (ctx/mem c)
-        found (cond-> (:found m) use-notes (add-found (takeable c (noted (:primitives c) ns names (:origin m) max-distance)) want))]
+        near (min (:scan-radius (:args c)) (near-sight))
+        gone (if (pos? near) (departed ns (sense (:primitives c) names near) (here c) near) #{})
+        found (cond-> (:found m) use-notes (add-found (takeable c (noted (:primitives c) ns names (:origin m) max-distance gone)) want))]
     (ctx/update-mem! c assoc :found found)
     (cond
       (>= (count found) want) (finish! c :found nil)

@@ -19,6 +19,7 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.world-files :as world]
             [jobs.lib.child :as child]
+            [plan.shape :as shape]
             [jobs.explore.search :as search]))
 
 (def ground
@@ -32,7 +33,7 @@
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         dir (tu/tmp-dir)
-        p (tu/fake (update (dissoc spec :cone? :zones) :blocks #(merge (ground (or ground-r 64)) %)))
+        p (tu/fake (update (dissoc spec :cone? :zones :plans) :blocks #(merge (ground (or ground-r 64)) %)))
         _ (.override (.-world p) "wait" (fn [token a impl] (swap! clock + (.-ms a)) (impl token a)))
         p (if (:cone? spec)
             (let [w (perception/wrap p (perception/create (fake-raw/create p) {:radius 16 :ray-deg 2}))]
@@ -41,7 +42,7 @@
             (tu/seeing-all p))
         store (notes/open {:world-dir dir :body "Fake" :emit (fn [_])})
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
-                          :world (assoc (world/of-data {} {} (:zones spec [])) :notes store)
+                          :world (assoc (world/of-data (:plans spec {}) {} (:zones spec [])) :notes store)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock :dir dir :store store}))
 
@@ -476,11 +477,27 @@
   (is (re-find #":heading must be one of :east, :north, :south, :west, got :up"
                (expr/problem registry/jobs '(jobs.explore.search {:target "diamond_block" :pattern :outward :heading :up})))))
 
-(deftest a-call-without-a-target-waits-at-its-start
+(deftest a-call-without-a-target-can-never-run
   (with-redefs [ctx/frozen-call (constantly nil)]
-    (is (= [:later :no-target] ((juxt first #(:reason (nth % 2))) (search/no-target {:args {:target nil}}))))
-    (is (= [:later :no-target] ((juxt first #(:reason (nth % 2))) (search/no-target {:args {:target []}}))))
+    (is (= [:never :bad-args] ((juxt first #(:reason (nth % 2))) (search/no-target {:args {:target nil}}))))
+    (is (= [:never :bad-args] ((juxt first #(:reason (nth % 2))) (search/no-target {:args {:target []}}))))
     (is (= :ok (first (search/no-target {:args {:target "diamond_block"}}))))))
+
+(deftest blocks-in-the-footprint-of-the-bodys-own-plan-are-no-find
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (shape/with-author {:id "hut" :parts [{:id "post" :cells [[10 64 0]] :want "oak_log"}]} "Fake")
+              s (await (search! {:target "oak_log"} {:blocks {"10,64,0" "oak_log" "0,64,12" "oak_log"} :plans {"hut" plan}}))]
+          (is (= [[0 64 12]] (map :pos (:found (found-of s))))))))))
+
+(deftest a-killed-animal-noted-close-by-is-no-find
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [note [{:kind :seen :what "cow" :id "dead" :pos [3 64 3] :by "Fake" :t 1 :until 9e15}]
+              s (await (search! {:target "cow" :max-distance 20 :max-legs 0} {} 20 #(write-other! % "Other" note)))]
+          (is (nil? (found-of s)) (pr-str (:found (ended-of s)))))))))
 
 (deftest ore-the-body-has-not-seen-is-neither-found-nor-noted
   (async done
