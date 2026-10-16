@@ -57,9 +57,7 @@
 (defn ^:async ticks
   "Tick the engine n times, 700 ms apart."
   [eng n]
-  (dotimes [_ n]
-    (swap! h/clock + 700)
-    (await (core/tick! eng))))
+  (await (tu/run-ticks eng h/clock n 700)))
 
 (defn ^:async run
   "Submit the job with args in a world over plans and tick it n times: the start map."

@@ -60,9 +60,7 @@
   [args spec n]
   (let [s (setup spec)]
     (core/submit! (:eng s) (list 'jobs.farm.tend (merge {:box box} args)) {})
-    (dotimes [_ n]
-      (swap! (:clock s) + 700)
-      (await (core/tick! (:eng s))))
+    (await (tu/run-ticks (:eng s) (:clock s) n 700))
     s))
 
 (defn calls [{:keys [p]} name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
@@ -316,9 +314,7 @@
         (let [s (setup (world (ground "dirt" [[2 2]]) {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 3)]}))]
           (.override (.-world (:p s)) "useOn" (fn [_ _ _] (js/Promise.resolve #js {:status "unchanged"})))
           (core/submit! (:eng s) (list 'jobs.farm.tend {:box box}) {})
-          (dotimes [_ 60]
-            (swap! (:clock s) + 700)
-            (await (core/tick! (:eng s))))
+          (await (tu/run-ticks (:eng s) (:clock s) 60 700))
           (is (true? (finished? s)))
           (is (<= (count (calls s "useOn")) 2) "one till child per cell, which tries twice")
           (is (= "dirt" (block-at s 2 63 2))))))))
@@ -486,9 +482,7 @@
         (let [s (setup (world (farm "wheat" 7 all-cells [[2 2] [3 2]]) wheat-drops))
               _ (tu/seeing-after-look (:p s))]
           (core/submit! (:eng s) (list 'jobs.farm.tend {:box box}) {})
-          (dotimes [_ 80]
-            (swap! (:clock s) + 700)
-            (await (core/tick! (:eng s))))
+          (await (tu/run-ticks (:eng s) (:clock s) 80 700))
           (is (seq (calls s "look")))
           (is (= #{[2 2] [3 2]} (dug s)))
           (is (true? (finished? s))))))))
@@ -500,9 +494,7 @@
         (let [s (setup (world (farm "wheat" 3 all-cells all-cells)))
               _ (tu/seeing-after-look (:p s))]
           (core/submit! (:eng s) (list 'jobs.farm.tend {:box box}) {})
-          (dotimes [_ 6]
-            (swap! (:clock s) + 700)
-            (await (core/tick! (:eng s))))
+          (await (tu/run-ticks (:eng s) (:clock s) 6 700))
           (is (seq (calls s "look")))
           (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
           (is (empty? (dug s))))))))
@@ -516,9 +508,7 @@
               s (setup terrain)
               _ (tu/seeing-after-look (:p s))]
           (core/submit! (:eng s) (list 'jobs.farm.tend {:box box :till true}) {})
-          (dotimes [_ 6]
-            (swap! (:clock s) + 700)
-            (await (core/tick! (:eng s))))
+          (await (tu/run-ticks (:eng s) (:clock s) 6 700))
           (let [w (last (events-of s :waiting))]
             (is (= :nothing-to-do (:reason w)))
             (is (= 9 (:covered w)) "9 tillable cells have a block over them: the box sits too low")))))))
@@ -535,7 +525,7 @@
   (let [s (setup far-ripe)]
     (when listed? (core/submit! (:eng s) '(jobs.time.wait-for-dusk) {}))
     (core/submit! (:eng s) (list 'jobs.farm.tend {:box far-box}) {})
-    (dotimes [_ 3] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
+    (await (tu/run-ticks (:eng s) (:clock s) 3 700))
     s))
 
 (deftest a-tend-far-from-its-field-declines-while-another-job-is-listed
@@ -560,7 +550,7 @@
       (fn ^:async t []
         (let [s (setup far-ripe)]
           (core/submit! (:eng s) (list 'jobs.farm.tend {:box high-box}) {})
-          (dotimes [_ 3] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
+          (await (tu/run-ticks (:eng s) (:clock s) 3 700))
           (is (empty? (events-of s :round_started)))
           (is (some #(= :away (:reason %)) (events-of s :waiting))))))))
 
@@ -575,9 +565,7 @@
                            (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data])) (ctx/end c :done nil)))))}
         eng (assoc-in (:eng s) [:jobs 'recording-parent] parent)]
     (core/submit! eng '(recording-parent) {})
-    (dotimes [_ n]
-      (swap! (:clock s) + 700)
-      (await (core/tick! eng)))
+    (await (tu/run-ticks eng (:clock s) n 700))
     @out))
 
 (deftest tend-exports-the-contract-and-quotes-validly

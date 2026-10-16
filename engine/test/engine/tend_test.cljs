@@ -38,9 +38,7 @@
   [args world n]
   (let [s (h/setup world 50)]
     (core/submit! (:eng s) (spec args) {})
-    (dotimes [_ n]
-      (swap! (:clock s) + 700)
-      (await (core/tick! (:eng s))))
+    (await (tu/run-ticks (:eng s) (:clock s) n 700))
     s))
 
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
@@ -129,9 +127,7 @@
           (.override (.-world (:p s)) "interact"
                      (fn [_token _args _impl] (js/Promise.resolve #js {:status "out-of-reach"})))
           (core/submit! (:eng s) (spec {:target 4}) {})
-          (dotimes [_ 30]
-            (swap! (:clock s) + 700)
-            (await (core/tick! (:eng s))))
+          (await (tu/run-ticks (:eng s) (:clock s) 30 700))
           (is (= {:ended :nothing-possible :cause :unreachable :fed 0 :reason :unreachable}
                  (get-in (done-event s) [:steps :breed])))
           (is (true? (finished? s))))))))
@@ -295,9 +291,7 @@
         (let [{:keys [eng clock] :as s} (h/setup {:self {:pos {:x 40 :y 64 :z 0}} :entities [(cow 1 2) (cow 2 3) (cow 3 4) (cow 4 5)]} 50)]
           (track-range! s 20)
           (core/submit! eng (spec {:target 4}) {})
-          (dotimes [_ 60]
-            (swap! clock + 700)
-            (await (core/tick! eng)))
+          (await (tu/run-ticks eng clock 60 700))
           (is (true? (finished? s)))
           (is (= 4 (:adults (done-event s)))))))))
 
@@ -307,9 +301,7 @@
       (fn ^:async t []
         (let [{:keys [eng clock] :as s} (h/setup {:self {:pos {:x 40 :y 64 :z 0}} :entities []} 50)]
           (core/submit! eng (spec {:target 4}) {})
-          (dotimes [_ 60]
-            (swap! clock + 700)
-            (await (core/tick! eng)))
+          (await (tu/run-ticks eng clock 60 700))
           (is (true? (finished? s)))
           (is (< (.-x (.-pos (.self (:p s)))) 12) "it walked to the box to look")
           (is (= 0 (:adults (done-event s)))))))))
@@ -323,9 +315,7 @@
   [form plans world n]
   (let [s (h/setup world 50 (ew/of-data plans {} []))]
     (core/submit! (:eng s) form {})
-    (dotimes [_ n]
-      (swap! (:clock s) + 700)
-      (await (core/tick! (:eng s))))
+    (await (tu/run-ticks (:eng s) (:clock s) n 700))
     s))
 
 (deftest a-pen-part-of-a-plan-gives-the-box-the-kind-and-the-target
@@ -366,5 +356,5 @@
           (is (= 1 (passes s)) "one pass, then the pen rests")
           (is (some #(= ["pen/cows"] (:backed-off %)) (events-of s :waiting)) "the wait names the pen")
           (swap! (:clock s) + 660000)
-          (dotimes [_ 40] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
+          (await (tu/run-ticks (:eng s) (:clock s) 40 700))
           (is (= 2 (passes s)) "after the back-off it tries again"))))))

@@ -29,9 +29,7 @@
   [args world n]
   (let [s (h/setup world 50)]
     (core/submit! (:eng s) (spec args) {})
-    (dotimes [_ n]
-      (swap! (:clock s) + 700)
-      (await (core/tick! (:eng s))))
+    (await (tu/run-ticks (:eng s) (:clock s) n 700))
     s))
 
 (defn attacked [{:keys [p]}] (mapv #(.-id (.-args %)) (h/calls p "attack")))
@@ -208,9 +206,7 @@
                  [nil {} [] []]]]
           (let [{:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2) (cow 2 3)]} 50 (h/zone-store 2 owner))]
             (core/submit! eng (list 'jobs.animals.cull (merge {:keep 0} extra)) {})
-            (dotimes [_ 20]
-              (swap! (:clock s) + 700)
-              (await (core/tick! eng)))
+            (await (tu/run-ticks eng (:clock s) 20 700))
             (is (= acted (vec (sort (distinct (attacked s))))) (pr-str owner extra))
             (is (= declined (mapv :reason (events-of s :cull.declined))) (pr-str owner extra))))))))
 
@@ -221,9 +217,7 @@
         (doseq [[owner reason] [["Miles" :refused] [nil :no-zones]]]
           (let [{:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2)]} 50 (h/zone-store 2 owner))]
             (core/submit! eng (list 'jobs.animals.cull {:keep 0}) {})
-            (dotimes [_ 20]
-              (swap! (:clock s) + 700)
-              (await (core/tick! eng)))
+            (await (tu/run-ticks eng (:clock s) 20 700))
             (is (= 0 (rounds s)) (pr-str owner reason))
             (is (empty? (attacked s)) (pr-str owner reason))))))))
 
@@ -233,9 +227,7 @@
       (fn ^:async t []
         (let [{:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2) (cow 2 3)]} 50 (h/zone-store 2 "Miles"))]
           (core/submit! eng (list 'jobs.animals.cull {:keep 0 :count 2 :least 2}) {})
-          (dotimes [_ 30]
-            (swap! (:clock s) + 700)
-            (await (core/tick! eng)))
+          (await (tu/run-ticks eng (:clock s) 30 700))
           (is (= [2] (vec (distinct (attacked s)))) "the allowed cow is killed")
           (is (not (finished? s)) "the refused one is waited for")
           (is (= :refused (:reason (first (events-of s :waiting))))))))))
@@ -255,9 +247,7 @@
           (let [plan (shape/with-author {:id "pen" :parts [{:id "p" :box [[2 64 0] [2 64 0]] :want "stone"}]} author)
                 {:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2)]} 50 (ew/of-data {"pen" plan} {} []))]
             (core/submit! eng (list 'jobs.animals.cull {:keep 0}) {})
-            (dotimes [_ 20]
-              (swap! (:clock s) + 700)
-              (await (core/tick! eng)))
+            (await (tu/run-ticks eng (:clock s) 20 700))
             (is (= acted (vec (distinct (attacked s)))) author)))))))
 
 (defn sheep [id x color] (animal id "sheep" x 0 {:color color :drops [{:name (str color "_wool") :count 1}]}))
@@ -288,8 +278,6 @@
         (let [{:keys [p eng clock] :as s} (h/setup {:inventory h/sword :entities [(cow 1 3)]} 50)]
           (.override (.-world p) "collect" (fn [_ _ _] #js {:status "unreachable" :reason "no-path" :gained #js []}))
           (core/submit! eng (spec {:count 1 :keep 0}) {})
-          (dotimes [_ 40]
-            (swap! clock + 700)
-            (await (core/tick! eng)))
+          (await (tu/run-ticks eng clock 40 700))
           (is (= 1 (:killed (done-event s))))
           (is (finished? s)))))))

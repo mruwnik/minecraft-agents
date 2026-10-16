@@ -68,13 +68,8 @@
     {:eng eng :p p :seen seen :clock clock}))
 
 (defn ^:async run-ticks
-  "Up to n ticks, fewer once no job is left: later ticks would only idle."
   [{:keys [eng clock]} n]
-  (loop [i 0]
-    (when (< i n)
-      (swap! clock + 700)
-      (await (core/tick! eng))
-      (when (seq (:list (core/state eng))) (recur (inc i))))))
+  (await (tu/run-ticks eng clock n 700)))
 
 (defn ^:async scenario
   "Submit the job with args in a world; run n ticks; the setup map."
@@ -351,9 +346,7 @@
               parent (tu/recording-parent 'jobs.gather.mine {:block "sand" :count 2} out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'mining-parent parent))]
           (core/submit! eng '(mining-parent) {})
-          (dotimes [_ 120]
-            (swap! clock + 700)
-            (await (core/tick! eng)))
+          (await (tu/run-ticks eng clock 120 700))
           (is (= :count (:reason @out)))
           (is (>= (:got @out) 2)))))))
 
@@ -612,9 +605,7 @@
               parent (tu/recording-parent 'jobs.gather.mine {:block "stone" :count 2} out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'mining-parent parent))]
           (core/submit! eng '(mining-parent) {})
-          (dotimes [_ 10]
-            (swap! clock + 700)
-            (await (core/tick! eng)))
+          (await (tu/run-ticks eng clock 10 700))
           (is (= {:status :stopped :got 0 :reason :no-tool :tool "pickaxe"} (select-keys @out [:status :got :reason :tool]))))))))
 
 (deftest no-tool-warns-and-never-digs

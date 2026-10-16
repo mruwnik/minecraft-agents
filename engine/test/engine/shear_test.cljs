@@ -14,9 +14,7 @@
 
 (defn ^:async run-ticks
   [{:keys [eng clock]} n step]
-  (dotimes [_ n]
-    (swap! clock + step)
-    (await (core/tick! eng))))
+  (await (tu/run-ticks eng clock n step)))
 
 (defn ^:async scenario
   "Submit (jobs.animals.shear args) in a world; run n ticks 700 ms apart; the setup map."
@@ -177,9 +175,7 @@
                  [nil {} [] [:no-zones]]]]
           (let [{:keys [eng] :as s} (h/setup {:inventory shears :entities [(sheep 1 2) (sheep 2 3)]} 0 (h/zone-store 2 owner))]
             (core/submit! eng (list 'jobs.animals.shear (merge {:collect false} extra)) {})
-            (dotimes [_ 20]
-              (swap! (:clock s) + 700)
-              (await (core/tick! eng)))
+            (await (tu/run-ticks eng (:clock s) 20 700))
             (is (= acted (vec (sort (map #(.-id (.-args %)) (calls-of s "interact"))))) (pr-str owner extra))
             (is (= declined (mapv :reason (events-of s :shear.declined))) (pr-str owner extra))))))))
 
@@ -190,9 +186,7 @@
         (doseq [[owner reason] [["Miles" :refused] [nil :no-zones]]]
           (let [{:keys [eng] :as s} (h/setup {:inventory shears :entities [(sheep 1 2)]} 0 (h/zone-store 2 owner))]
             (core/submit! eng (list 'jobs.animals.shear {:collect false}) {})
-            (dotimes [_ 20]
-              (swap! (:clock s) + 700)
-              (await (core/tick! eng)))
+            (await (tu/run-ticks eng (:clock s) 20 700))
             (is (= reason (:reason (done-event s))) (pr-str owner))))))))
 
 (def chest-at "-2,64,3")

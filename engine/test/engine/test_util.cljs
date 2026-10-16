@@ -266,6 +266,15 @@
    (cond-> {:round (or round #(ctx/end % :done nil))}
      (seq checks) (assoc :can-start? (fn [c] (contract/all (mapv #(% c) checks)))))))
 
+(defn ^:async run-ticks
+  "Up to n ticks, clock atom moving step ms before each, fewer once no job is left: later ticks would only idle."
+  [eng clock n step]
+  (loop [i 0]
+    (when (< i n)
+      (swap! clock + step)
+      (await (core/tick! eng))
+      (when (seq (:list (core/state eng))) (recur (inc i))))))
+
 (defn ^:async run-until-empty
   "Tick eng until its job list is empty, at most n ticks; the ticks run."
   [eng n]

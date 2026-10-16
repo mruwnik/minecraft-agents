@@ -349,9 +349,7 @@
                            :containers {seed-chest [{:name "wheat_seeds" :count 6}]}} nil)]
     (perception/pass! (aget (:p s) "perception"))
     (core/submit! (:eng s) (list job (merge {:ignore-zones? true} args)) {})
-    (dotimes [_ n]
-      (swap! (:clock s) + 700)
-      (await (core/tick! (:eng s))))
+    (await (tu/run-ticks (:eng s) (:clock s) n 700))
     s))
 
 (deftest plant-fetches-seeds-from-a-seen-chest-by-default

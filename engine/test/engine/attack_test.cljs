@@ -26,9 +26,7 @@
 (defn ^:async run-ticks
   "Tick n times, the clock moving step ms before each."
   [{:keys [eng clock]} n step]
-  (dotimes [_ n]
-    (swap! clock + step)
-    (await (core/tick! eng))))
+  (await (tu/run-ticks eng clock n step)))
 
 (defn ^:async scenario-seeing
   "As scenario, over a body that sees through perception."
