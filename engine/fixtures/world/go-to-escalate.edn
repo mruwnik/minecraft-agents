@@ -280,8 +280,7 @@
   {:name "own-shelter-by-day-is-left-and-the-goal-reached"
    ;; card 5fe309b7: the same dug-in pit once day comes: go-to (no way out of the shelter) leaves it first (go-to.escalated
    ;; :leave-shelter) and arrives; the night case above stays
-   ;; :night-exclusive: in a shared :night pass its :time-set to day was set back to night by the next case at once
-   :time :night-exclusive
+   :time :night
    :plot {:height 20}
    :blocks [[:fill [8 0 8] [24 9 24] "dirt"]]
    :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1] ["iron_shovel" 1]]}

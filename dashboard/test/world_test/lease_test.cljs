@@ -150,12 +150,13 @@
 
 (deftest a-case-holds-the-phase-it-needs
   (is (= :day (l/time-phase {:time :day})))
-  (is (= :night (l/time-phase {:time :night :act [[:time-set 1000]]})))
+  (is (= :night-x (l/time-phase {:time :night :act [[:time-set 1000]]})))
+  (is (= :night (l/time-phase {:time :night :act [[:wait-s 1]]})))
   (is (= :night (l/time-phase {:time :any :act [[:wait-s 1] [:time-set 14000]]})))
   (is (nil? (l/time-phase {:time :any :act [[:wait-s 1]]}))))
 
 (deftest a-day-case-that-sets-dusk-or-later-runs-solo
-  (is (= [:night-x :night-x :night-x :night-x :day :night]
+  (is (= [:night-x :night-x :night-x :night-x :day :night-x]
          [(l/time-phase {:time :day :act [[:time-set 11500]]})
           (l/time-phase {:time :day :act [[:time-set 12000]]})
           (l/time-phase {:time :day :act [[:time-set 23500]]})

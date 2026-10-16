@@ -142,7 +142,7 @@
   (boolean (some (fn [[op ticks]] (and (= :time-set op) (>= (mod ticks 24000) 11500))) (:act c))))
 
 (defn time-phase
-  "The phase (:day, :night, :night-x or :weather-x, a case with its own :weather) whose time lock case c holds: its :time, else the phase of its first :time-set step (a day one with a :time-set to dusk or later: :night-x, solo, started at day); nil
+  "The phase (:day, :night, :night-x or :weather-x, a case with its own :weather) whose time lock case c holds: its :time, else the phase of its first :time-set step (a day one with a :time-set to dusk or later, or a :night one with any :time-set: :night-x, solo); nil
   when it does not depend on the time of day."
   [c]
   (if (weather-x? c)
@@ -152,7 +152,10 @@
                   :night :night
                   :night-exclusive :night-x
                   (some (fn [[op ticks]] (when (= :time-set op) (phase-of-ticks ticks))) (:act c)))]
-      (if (and (= :day phase) (dusk-set? c)) :night-x phase))))
+      (cond
+        (and (= :day phase) (dusk-set? c)) :night-x
+        (and (= :night (:time c)) (some (fn [[op]] (= :time-set op)) (:act c))) :night-x
+        :else phase))))
 
 (defn barrier-ticks
   "The time a :night-exclusive case sets with its one :time-set step when that ends the night (a day time), else nil. Cases
