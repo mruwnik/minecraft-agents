@@ -5,7 +5,7 @@ import { EventEmitter } from 'node:events'
 import { spawn } from 'node:child_process'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseNss, expectedMs, runTimeoutS, needMb, lastFinished, isolate, narrowBundle, missingNss, sweepStale, cleanupOnExit, killTree } from './test-run.mjs'
+import { parseNss, nsOf, expectedMs, runTimeoutS, needMb, lastFinished, isolate, narrowBundle, missingNss, sweepStale, cleanupOnExit, killTree } from './test-run.mjs'
 
 test('parseNss: space- and comma-separated namespaces, blanks dropped', () => {
   assert.deepEqual(parseNss(['engine.a-test,engine.b-test', 'engine.c-test', '']), ['engine.a-test', 'engine.b-test', 'engine.c-test'])
@@ -212,4 +212,16 @@ test('sweepStale: a dir that cannot be removed is skipped, the others still go',
   const removed = sweepStale(root, () => false)
   assert.ok(removed.includes('mc-test-run-222'))
   assert.ok(!removed.includes('mc-test-run-111'))
+})
+
+test('nsOf: a namespace/deftest spec runs in its namespace', () => {
+  assert.deepEqual(['engine.a-test', 'engine.a-test/some-test?'].map(nsOf), ['engine.a-test', 'engine.a-test'])
+})
+
+test('missingNss: a namespace/deftest spec is missing when the deftest is not defined in the bundle (shadow would run 0 tests)', (t) => {
+  const src = fs.mkdtempSync('/tmp/test-run-missing-var-')
+  t.after(() => fs.rmSync(src, { recursive: true, force: true }))
+  fs.mkdirSync(`${src}/out/test/cljs-runtime`, { recursive: true })
+  fs.writeFileSync(`${src}/out/test/cljs-runtime/engine.a_test.js`, 'engine.a_test.go_to_works = (function (){})\nengine.a_test.ready_QMARK__is_set = 1\n')
+  assert.deepEqual(missingNss(src, ['engine.a-test/go-to-works', 'engine.a-test/ready?-is-set', 'engine.a-test/nope', 'engine.b-test/x']), ['engine.a-test/nope', 'engine.b-test/x'])
 })

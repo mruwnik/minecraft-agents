@@ -15,6 +15,12 @@ const engine = path.join(repo, 'engine')
 
 export const parseNss = (argv) => argv.flatMap((a) => a.split(',')).filter(Boolean)
 
+// An arg is a namespace or <namespace>/<deftest> (shadow's --test takes both); narrowing, sizing and timings go by namespace.
+export const nsOf = (spec) => spec.split('/')[0]
+
+const MUNGE = { '-': '_', '?': '_QMARK_', '!': '_BANG_', '*': '_STAR_', '>': '_GT_', '<': '_LT_', '=': '_EQ_', '+': '_PLUS_' }
+const mungeName = (name) => name.replace(/[-?!*><=+]/g, (c) => MUNGE[c])
+
 // Mean ms per namespace in a full run (411 s / 196 namespaces), used when no timings exist yet (fresh worktree).
 export const DEFAULT_NS_MS = 2100
 
@@ -159,18 +165,25 @@ export const narrowBundle = (runDir, nss) => {
   return dropped
 }
 
-// Requested namespaces the :test bundle does not contain (e.g. the opt-in -golden ones, built by --golden): shadow runs 0 tests and exits 0.
-export const missingNss = (engineDir, nss) =>
-  nss.filter((n) => !fs.existsSync(path.join(engineDir, 'out/test/cljs-runtime', `${n.replaceAll('-', '_')}.js`)))
+// Requested specs the :test bundle does not contain (e.g. the opt-in -golden namespaces, built by --golden; a deftest that is not defined): shadow runs 0 tests and exits 0.
+export const missingNss = (engineDir, specs) =>
+  specs.filter((spec) => {
+    const [ns, name] = spec.split('/')
+    const f = path.join(engineDir, 'out/test/cljs-runtime', `${ns.replaceAll('-', '_')}.js`)
+    if (!fs.existsSync(f)) return true
+    if (name === undefined) return false
+    return !fs.readFileSync(f, 'utf8').split('\n').some((l) => l.startsWith(`${ns.replaceAll('-', '_')}.${mungeName(name)} = `))
+  })
 
 const readJson = (f, d) => fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : d
 
 const main = async () => {
-  const nss = parseNss(process.argv.slice(2))
-  if (!nss.length) { console.error('usage: tools/test-run.mjs <ns>...'); process.exit(2) }
-  const missing = missingNss(engine, nss)
+  const specs = parseNss(process.argv.slice(2))
+  const nss = [...new Set(specs.map(nsOf))]
+  if (!nss.length) { console.error('usage: tools/test-run.mjs <ns|ns/deftest>...'); process.exit(2) }
+  const missing = missingNss(engine, specs)
   if (missing.length) {
-    console.error(`test-engine: not in the :test bundle (a run would pass with 0 tests): ${missing.join(' ')}${missing.some((n) => n.endsWith('-golden')) ? ' (the -golden ones run with tools/test-engine --golden)' : ''}`)
+    console.error(`test-engine: not in the :test bundle (a run would pass with 0 tests): ${missing.join(' ')}${missing.some((n) => nsOf(n).endsWith('-golden')) ? ' (the -golden ones run with tools/test-engine --golden)' : ''}`)
     process.exit(2)
   }
   const res = readJson(path.join(tools, 'res-slot.json'), null)
@@ -185,7 +198,7 @@ const main = async () => {
   fs.writeFileSync(timings, '')
   child = spawn(path.join(tools, 'res-slot'),
     ['tests', '--need', String(needMb(nss.length, res.kinds.tests)), '--',
-      'timeout', '-k', '10', String(limit), 'node', `--max-old-space-size=${res.kinds.tests.heapMb}`, path.join(runDir, 'out/test.cjs'), `--test=${nss.join(',')}`],
+      'timeout', '-k', '10', String(limit), 'node', `--max-old-space-size=${res.kinds.tests.heapMb}`, path.join(runDir, 'out/test.cjs'), `--test=${specs.join(',')}`],
     { cwd: engine, stdio: 'inherit', env: { ...process.env, MC_TEST_TIMINGS: timings, NODE_PATH: path.join(repo, 'node_modules') } })
   const code = await new Promise((resolve) => child.on('exit', (status) => resolve(status ?? 1)))
   if (code === 124 || code === 137)
