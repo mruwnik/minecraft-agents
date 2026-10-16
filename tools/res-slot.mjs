@@ -33,7 +33,7 @@ export const hasHeavyMarker = (cwd) => {
 }
 export const usableSlots = (free, max, reserve, heavy) => heavy ? free : free.filter((i) => i < max - reserve)
 
-// A world sweep (tools/world-test-pool.mjs) writes its pid to <dir>/sweep-active; while that pid lives, a light run of a kind with `sweepCap` starts only while fewer than that many slots are held.
+// A world sweep (tools/world-test-pool.mjs) writes its pid to <dir>/sweep-active; while that pid lives, a light run of a kind with `sweepCap` starts only while fewer than that many slots are held by light runs (heavy holders have the reserve).
 export const capDuringSweep = (free, heldCount, cap, sweeping) => !sweeping || cap === undefined || heldCount < cap ? free : []
 const sweepActive = () => {
   try { return pidAlive(Number(fs.readFileSync(path.join(dir(), 'sweep-active'), 'utf8'))) } catch { return false }
@@ -48,17 +48,19 @@ const lockFile = (kind, i) => path.join(dir(), `${kind}.${i}`)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const held = (kind, i) => spawnSync('flock', ['-n', '-E', '213', lockFile(kind, i), 'true']).status === 213
 const heldSlots = (kind, max) => [...Array(max).keys()].filter((i) => held(kind, i))
+const lightHeldCount = (kind, max) => heldSlots(kind, max).filter((i) => !fs.existsSync(lockFile(kind, i) + '.heavy')).length
 
 // Runs cmd under slot i; resolves to its exit code, or null when the slot was taken meanwhile. The holder records pid/start/command in <slot>.info.
 // flock(1) arguments that run cmd under slot i, exiting `busyCode` when the slot is taken (tools/test-shards.mjs uses them too).
-export const slotArgs = (kind, i, cmd, busyCode = 213, marker = '') =>
-  ['-n', '-E', String(busyCode), lockFile(kind, i), 'sh', '-c', 'printf "%s %s %s\\n" "$$" "$(date +%s)" "$1" > "$0.info"; [ -z "$2" ] || : > "$2"; shift 2; exec "$@"', lockFile(kind, i), cmd.join(' '), marker, ...cmd]
+// A heavy holder leaves <slot>.heavy, a light one removes it, so the file exists only while a heavy run holds the slot.
+export const slotArgs = (kind, i, cmd, busyCode = 213, marker = '', heavy = false) =>
+  ['-n', '-E', String(busyCode), lockFile(kind, i), 'sh', '-c', 'printf "%s %s %s\\n" "$$" "$(date +%s)" "$1" > "$0.info"; if [ -n "$3" ]; then : > "$0.heavy"; else rm -f "$0.heavy"; fi; [ -z "$2" ] || : > "$2"; shift 3; exec "$@"', lockFile(kind, i), cmd.join(' '), marker, heavy ? '1' : '', ...cmd]
 let runSeq = 0
-const tryRun = (kind, i, cmd, onStart = () => {}) => new Promise((res) => {
+const tryRun = (kind, i, cmd, onStart = () => {}, heavy = false) => new Promise((res) => {
   // The wrapper creates the marker only once it holds the lock, so a 213 with no marker is flock's "slot taken", and one with a marker is the command's own exit code.
   const marker = `${lockFile(kind, i)}.run.${process.pid}.${runSeq++}`
   fs.rmSync(marker, { force: true }) // a stale one from a killed parent whose pid was reused
-  const p = spawn('flock', slotArgs(kind, i, cmd, 213, marker), { stdio: 'inherit', env: { ...process.env, RES_SLOT_HELD: [process.env.RES_SLOT_HELD, kind].filter(Boolean).join(',') } })
+  const p = spawn('flock', slotArgs(kind, i, cmd, 213, marker, heavy), { stdio: 'inherit', env: { ...process.env, RES_SLOT_HELD: [process.env.RES_SLOT_HELD, kind].filter(Boolean).join(',') } })
   // start line as soon as the command holds the slot (the holder stays visible in log.jsonl even if it is SIGKILLed); p.pid is the command's pid (flock and sh exec it)
   let announced = false
   const announce = () => {
@@ -166,7 +168,7 @@ const main = async () => {
     const blockers = () => free.length ? '' : sweeping && k.sweepCap !== undefined && open.length ? `; a world sweep is running: other agents' ${kind} runs are capped to ${k.sweepCap}` : open.length ? '; free slots kept for a waiting heavy run' : `; held by ${holders(kind, k.max)}`
     const gated = await withGate(() => {
       const reserved = currentReserved()
-      free = heavy ? open : capDuringSweep(freeForLight(open, heavyWaits(kind)), heldSlots(kind, k.max).length, k.sweepCap, sweeping)
+      free = heavy ? open : capDuringSweep(freeForLight(open, heavyWaits(kind)), lightHeldCount(kind, k.max), k.sweepCap, sweeping)
       const d = decide({ freeSlots: free.length, availableMb: availableMb(), needMb, floorMb: cfg.floorMb, waitedMs: Date.now() - t0, maxWaitMs, reservedMb: reserved })
       if (d.action === 'run') fs.mkdirSync(grantDir(), { recursive: true }), fs.writeFileSync(path.join(grantDir(), `${process.pid}.json`), JSON.stringify({ needMb, t: Date.now() }))
       return d
@@ -176,7 +178,7 @@ const main = async () => {
       const t1 = Date.now()
       const dropGrant = () => fs.rmSync(path.join(grantDir(), `${process.pid}.json`), { force: true })
       for (const i of free) {
-        const code = await tryRun(kind, i, cmd, () => fs.rmSync(heavyWaitFile(kind), { force: true })) // the marker stays until the command holds the slot, else a light waiter takes it in the gap
+        const code = await tryRun(kind, i, cmd, () => fs.rmSync(heavyWaitFile(kind), { force: true }), heavy) // the marker stays until the command holds the slot, else a light waiter takes it in the gap
         if (code === null) continue
         logRun({ kind, needMb, waitedS: Math.round((t1 - t0) / 1000), ranS: Math.round((Date.now() - t1) / 1000), code, cmd: cmd.join(' ') })
         process.exit(code)

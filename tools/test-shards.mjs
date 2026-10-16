@@ -121,7 +121,7 @@ export const runInSlot = async (slotsNow, cmd, opts, onOut = () => {}, onWait = 
         const t1 = Date.now()
         const r = await new Promise((res) => {
           let out = ''
-          const p = spawn('flock', slotArgs('tests', i, cmd, 99), { ...opts, stdio: ['ignore', 'pipe', 'pipe'] })
+          const p = spawn('flock', slotArgs('tests', i, cmd, 99, '', heavy), { ...opts, stdio: ['ignore', 'pipe', 'pipe'] })
           onSpawn(p)
           p.stdout.on('data', (d) => { out += d; onOut(String(d)) }); p.stderr.on('data', (d) => { out += d })
           p.on('close', (code) => res({ code, out }))

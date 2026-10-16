@@ -339,3 +339,16 @@ test('integration: while the sweep marker names a live pid a second light run is
   } finally { process.kill(-holder.pid, 'SIGKILL') }
   fs.rmSync(dir, { recursive: true, force: true })
 })
+test('integration: a heavy holder does not use up the light cap during a sweep', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'res-slot-test-'))
+  const cfg = path.join(dir, 'cfg.json')
+  fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 3, sweepCap: 1 } } }))
+  const env = { RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '1500', RES_SLOT_POLL_MS: '200' }
+  fs.writeFileSync(path.join(dir, 'sweep-active'), String(process.pid))
+  const holder = spawn('node', [script, 't', '--heavy', '--', 'sleep', '30'], { cwd: os.tmpdir(), env: plainEnv(env), stdio: 'ignore', detached: true })
+  try {
+    await new Promise((r) => setTimeout(r, 1000))
+    assert.equal(run(['t', '--', 'echo', 'ran'], env).status, 0, 'one light run fits beside the heavy holder')
+  } finally { process.kill(-holder.pid, 'SIGKILL') }
+  fs.rmSync(dir, { recursive: true, force: true })
+})
