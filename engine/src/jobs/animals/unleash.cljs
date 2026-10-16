@@ -93,18 +93,18 @@
   began, so a lead picked up the moment it dropped counts too."
   ([c reason] (finish! c reason nil))
   ([c reason cause]
-    (let [m (ctx/mem c)
-          leads (leads-carried c)
-          result {:reason reason
-                  :freed (vec (:freed m))
-                  :given-up (:given-up m {})
-                  :collected (max 0 (- leads (:leads-at-start m leads)))
-                  :leads leads
-                  :text (str "unleash done: " (name reason) ", freed " (count (:freed m)))}]
-      (when (not= :unleashed reason)
-        (ctx/emit! c :unleash.gave-up :warn {:reason reason :text (str "unleashing stopped: " (name reason))}))
-      (let [[kind ending-cause] (get ending-of reason [:nothing-possible reason])]
-        (ctx/end c kind (or cause ending-cause) result)))))
+  (let [m (ctx/mem c)
+        leads (leads-carried c)
+        result {:reason reason
+                :freed (vec (:freed m))
+                :given-up (:given-up m {})
+                :collected (max 0 (- leads (:leads-at-start m leads)))
+                :leads leads
+                :text (str "unleash done: " (name reason) ", freed " (count (:freed m)))}]
+    (when (not= :unleashed reason)
+      (ctx/emit! c :unleash.gave-up :warn {:reason reason :text (str "unleashing stopped: " (name reason))}))
+    (let [[kind ending-cause] (get ending-of reason [:nothing-possible reason])]
+      (ctx/end c kind (or cause ending-cause) result)))))
 
 (defn go-collect! [c reason]
   (if-not (:collect (:args c))
