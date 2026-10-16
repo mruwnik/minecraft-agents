@@ -47,8 +47,8 @@
             {:no-event {:source :job :kind :child_started :data {:slot :air}} :for-s 30}
             {:no-event {:source :job :kind :stopped :data {:reason :no-air}} :for-s 30}]
    :after [[:not-block [16 4 16] "dirt"] [:block [17 0 16] "glass"] [:body-near [16.5 3 16.5] 3]]}
-  ;; card 7c2712c5: a two-cell dirt cap is dug on one budget of the air left
-  {:name "two-cell-dirt-cap-is-dug-within-the-air"
+  ;; card 7c2712c5: a two-cell dirt cap is dug a cell a pass; the air in the first dug cell ends the run, the cell over it is never peeked at
+  {:name "two-cell-dirt-cap-is-dug-one-cell-and-stops-at-air"
    :blocks [[:fill [16 0 16] [16 3 16] "water"]
             [:fill [16 4 16] [16 5 16] "dirt"]
             [:fill [16 6 16] [16 8 16] "air"]]
@@ -56,7 +56,7 @@
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:no-event {:source :job :kind :stopped :data {:reason :no-air}} :for-s 40}
             {:no-event {:source :body :kind :died} :for-s 40}]
-   :after [[:not-block [16 4 16] "dirt"] [:not-block [16 5 16] "dirt"]]}
+   :after [[:not-block [16 4 16] "dirt"] [:block [16 5 16] "dirt"] [:body-near [16.5 4 16.5] 2]]}
   {:name "dirt-cap-is-dug"
    :blocks [[:fill [16 0 16] [16 3 16] "water"]
             [:set [16 4 16] "dirt"]
