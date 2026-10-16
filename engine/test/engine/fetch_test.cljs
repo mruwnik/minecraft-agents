@@ -589,6 +589,22 @@
 (defn tables [s]
   (filterv (fn [[_ n]] (= "crafting_table" n)) (:blocks @(fake/state (:p s)))))
 
+(deftest get-tool-passes-its-for-plan-to-the-craft-children
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig ctx/call
+              seen (atom [])
+              s (start (bare [{:name "oak_log" :count 12}]) [own-zone])]
+          (set! ctx/call (fn [c slot j args]
+                           (when (= 'jobs.items.craft j) (swap! seen conj args))
+                           (orig c slot j args)))
+          (try
+            (await (get-tool! s {:kind "pickaxe" :for-plan "house"} 60))
+            (finally (set! ctx/call orig)))
+          (is (seq @seen) "not rejected as bad-args")
+          (is (every? #(= "house" (:for-plan %)) @seen) (pr-str @seen)))))))
+
 (deftest get-tool-crafts-a-wooden-pickaxe-from-logs
   (async done
     (tu/run-async done
