@@ -222,11 +222,14 @@
         (tick-online! eng))))
 
 (defn do-now!
-  "Cut a running listed job, open sections or not, and list the job spec directly before it, holding the body: the new
-  job runs now and the cut one, memory kept, continues once it ends. A running reflex is not cut; the new job waits behind it."
+  "Cut a running listed job, open sections or not, and list the job spec directly before it as a normal job: it runs
+  next, and the cut one, memory kept, continues right after it yields or ends. A running reflex is not cut; the new job
+  waits behind it."
   [eng spec]
   (expr/parse-spec (:jobs eng) spec)
   (let [r (running eng)]
     (when (and r (not (:reflex r)))
       (cut! eng r :do-now nil))
-    (submit! eng spec {:hold? true :now? true :by :agent})))
+    (let [id (submit! eng spec {:now? true :by :agent})]
+      (swap! (:state eng) assoc :resume id)
+      id)))

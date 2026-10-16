@@ -85,7 +85,6 @@
           (await (core/tick! eng))
           (is (contains? (:failed (core/state eng)) "j2"))
           (is (seq (core/outstanding eng)))
-          (is (= "j1" (:resume (core/state eng))))
           (let [resumed (core/tick! eng)]
             (is (= "j1" (:id (core/running eng))))
             (command eng "cancel-first" :cancel {:id "j1"})

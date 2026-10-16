@@ -846,7 +846,7 @@ Every workspace `bin/` call appends a `:start` and an `:end` line (tool, argv, o
 - `jobs.mjs show jID` of a job the scheduler no longer holds answers from the event history, as `observe job` does.
 - `jobs.mjs submit` of a plain job call is held back (exit 1, `:reason :job-clash`, `:clashes`, `:hint`) while a job of the same name is running, queued or resuming on the body; `--alongside` overrides, a `(repeat ...)` or combinator spec is never held (tool only; the engine accepts both).
 - `jobs.mjs submit` appends to the list; `--next` lists after the current job without cutting; `--now` cuts the current
-  listed job and runs the new one as a holder (a running reflex is not cut); `--hold` keeps the body while the check
+  listed job and runs the new one next as a normal job; the cut job continues right after it yields or ends (a running reflex is not cut); `--hold` keeps the body while the check
   declines; `--survive-death` keeps the job listed through a death (it runs again after the respawn reflexes); a `(repeat ...)` spec gets it by default. `--wait` blocks until the job ends (or a wake) and prints the result and a bounded summary. Mutations carry a
   request id (`--request-id` to retry safely); the engine keeps the latest 128 ids and a duplicate returns the original
   result. A manual lease rejects `--now` with `:manual-control`.

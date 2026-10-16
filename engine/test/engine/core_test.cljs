@@ -701,7 +701,7 @@
     (is (true? (core/remove-reflex! eng :never)))
     (is (= [:hurt] (mapv :id (:register (core/state eng)))))))
 
-(deftest do-now-cuts-and-holds-at-the-front-and-cancel-removes
+(deftest do-now-cuts-and-the-cut-job-continues-once-the-new-one-yields
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -715,9 +715,9 @@
           (is (= ["j2" "j1"] (listed eng)))
           (await (core/tick! eng))
           (await (core/tick! eng))
+          (is (= ["j1" "j2" "j1"] (ran seen)) "the new job yields after one round, then the cut job runs: no hold")
+          (is (= ["j2"] (listed eng)) "the cut job walked on and is done; the new job stays listed")
           (core/cancel! eng "j2")
-          (await (core/tick! eng))
-          (is (= ["j1" "j2" "j2" "j1"] (ran seen)))
           (is (some #(= :cancelled (:kind %)) @seen)))))))
 
 (deftest cancelling-a-cut-job-clears-its-round-entry
@@ -753,14 +753,14 @@
               a (core/submit! eng '(count) {})
               _ (await (core/tick! eng))
               a-round (core/tick! eng)
-              b (core/do-now! eng '(child {:rounds 2}))
+              b (core/do-now! eng '(child {:rounds 1}))
               _ (await a-round)
               b-round (core/tick! eng)
-              c (core/do-now! eng '(child {:rounds 2}))]
+              c (core/do-now! eng '(child {:rounds 1}))]
           (await b-round)
           (is (= [x c b a] (listed eng)) "each job done now sits directly before the job it cut")
-          (dotimes [_ 5] (await (core/tick! eng)))
-          (is (= [x a b c c b b a] (ran seen)) "C, then B, then the job cut first continues")
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= [x a b c b a] (ran seen)) "C, then B, then the job cut first continues")
           (is (= [x a] (listed eng)) "B and C are done")
           (is (= {:n 1} (job-mem eng a)) "its one round that was not cut"))))))
 
