@@ -58,7 +58,7 @@
   "A combinator, named label in errors, as a contract job: its can-run? passes on a child's status, which the scheduler asks of a listed one
   (ctx/check-status) and a parent combinator of a child one."
   [label status round]
-  {:label label :can-run? status :round round})
+  {:label label :can-run? status :safe? (constantly ready) :fit? (constantly ready) :round round})
 
 (defn seq-def
   "Children in order, one call per round; :at in memory is the next

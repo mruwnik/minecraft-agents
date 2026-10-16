@@ -4,6 +4,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
             [engine.core :as core]
+            [engine.core.ending :as ending]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.job-api :as api]
@@ -32,6 +33,10 @@
             (let [e (await (ctx/call c :leaf (leaf check-key) {}))]
               (swap! world assoc :after-child e)
               (if (= :continue e) :continue (ctx/end c :done nil))))})
+
+(deftest a-def-without-safe-or-fit-is-an-error
+  (is (thrown-with-msg? js/Error #":safe?" (ending/run-status {:sym 'bare :fit? (gate :go :dark)} {:quote-call {}})))
+  (is (thrown-with-msg? js/Error #":fit?" (ending/run-status {:sym 'bare :safe? (gate :go :dark)} {:quote-call {}}))))
 
 (deftest a-queued-job-waits-and-a-started-one-yields-with-the-reason
   (async done

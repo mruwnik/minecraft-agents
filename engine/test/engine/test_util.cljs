@@ -6,6 +6,7 @@
             ["path" :as path]
             [engine.contract :as contract]
             [engine.core :as core]
+            [engine.core.ending :as ending]
             [engine.ctx :as ctx]
             [engine.fake :as fake-world]
             [engine.fake.node :as node]
@@ -257,13 +258,23 @@
                        (js/Promise.reject (core/cut-error)))
                    (impl token a))))))
 
+(defn ready
+  "def with nothing-to-check safe? and fit? when it lacks them: the engine asks every job for both."
+  [def]
+  (merge {:safe? (fn [_] (contract/ok :ready "nothing to check")) :fit? (fn [_] (contract/ok :ready "nothing to check"))} def))
+
+(defonce ready-defs
+  ;; Test defs are inline maps; the engine takes a def without safe? or fit? as an error, so every def the engine wraps is made ready here.
+  (let [wrap ending/wrap]
+    (set! ending/wrap #(wrap (if (ending/contract-job? %) (ready %) %)))))
+
 (defn job
   "A contract job for tests: round under checks, each a fn of ctx giving a status, asked as its can-start?. The default
   round ends done."
   ([] (job [] nil))
   ([round] (job [] round))
   ([checks round]
-   (cond-> {:round (or round #(ctx/end % :done nil))}
+   (cond-> (ready {:round (or round #(ctx/end % :done nil))})
      (seq checks) (assoc :can-start? (fn [c] (contract/all (mapv #(% c) checks)))))))
 
 (defn ^:async run-ticks

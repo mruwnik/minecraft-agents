@@ -49,7 +49,7 @@
     (merge (inherited-checks c) (:checks (:defaults def)) (:checks (:args c)))))
 
 (defn run-status
-  "def's can-run?, safe? and fit? statuses for c as one (contract/all); an export it lacks holds. A :checks form of the
+  "def's can-run?, safe? and fit? statuses for c as one (contract/all); a def lacking :safe? or :fit? is an error. A :checks form of the
   frame's call (its own, else the nearest caller's, per key) replaces the export; c carries the def, with its exports
   as checker fns, for the forms' (job-safe) and (exposed)."
   [def c]
@@ -58,7 +58,9 @@
         c (assoc c :def own)]
     (contract/all (for [k [:can-run? :safe? :fit?]
                         :let [form (get checks k)
-                              f (if form (compiled form (str (name k) " of " (:sym def) " :checks")) (if (= k :can-run?) (export-check def k) (get own k)))]
+                              f (cond form (compiled form (str (name k) " of " (:sym def) " :checks"))
+                                      (= k :can-run?) (export-check def k)
+                                      :else (or (get own k) (throw (js/Error. (str "job " (or (:sym def) (:label def)) " lacks " k " (ready/ok for a job with nothing to check)")))))]
                         :when f]
                     (contract/asked c def k f)))))
 

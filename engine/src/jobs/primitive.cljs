@@ -59,12 +59,14 @@
   [args]
   (clj->js (apply dissoc (into {} (remove (comp nil? val)) args) (keys contract/call-keys))))
 
+(defn nothing-to-check "The safe? and fit? of a primitive: the act is bounded and the caller judges it." [_] (contract/ok :ready "nothing to check"))
+
 (defn job
   "The registry entry of primitive k, the job sym (engine.registry names it): one round is one act, ended by the table's
   ending of its result (the result's fields are the ending's data)."
   [k sym]
   (let [{:keys [target quote-of ending]} (get primitive/table k)]
-    {:can-start? (missing-args k) :target target :args (a/declare! sym (args-data k))
+    {:can-start? (missing-args k) :safe? nothing-to-check :fit? nothing-to-check :target target :args (a/declare! sym (args-data k))
      :doc (str "The primitive " k " as a job: one act, which cannot be stopped midway. Takes the act's args (engine/README,"
                " Acting). Ends done when the act's status is a success, else with the ending its status maps to; the result"
                " fields are the ending's data.")
