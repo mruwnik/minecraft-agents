@@ -1241,7 +1241,7 @@
                                                              do-set)
                                               (do-set)))
                                           (fn [ok] (if ok ids (throw (js/Error. "a :time-set step needs --allow-time")))))
-                         :await (.then (await-event opts offset (dissoc a :of-job) (await-since a t0 @cli-ms) (* 1000 b) ids)
+                         :await (.then (await-event opts offset a (await-since a t0 @cli-ms) (* 1000 b) ids)
                                        (fn [ev] (if ev (do (reset! event-job (get-in ev [:context :job-id])) ids) (throw (js/Error. (str ":await " (pr-str a) " timed out after " b " s"))))))
                          :restart-body (.then (restart-body! opts origin c) (constantly ids))
                          :until (.then (until-step! opts a b @last-job @event-job) (constantly ids))

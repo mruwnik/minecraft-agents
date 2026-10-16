@@ -182,6 +182,24 @@
                          (fn [e] (is (re-find #"timed out" (.-message e))))))
           (.finally (fn [] (cleanup) (done)))))))
 
+(deftest an-await-of-job-ignores-events-of-other-jobs
+  (let [opts {:world "wt-await-of-job-52bfb309" :body "Probe"}
+        file (r/events-file opts)
+        window {:offset {:ino nil :pos 0} :from-ms 500}
+        run (fn [pattern]
+              (r/run-steps! opts [0 0 0] {:act [[:await pattern 1]]} (:offset window) (:from-ms window)))
+        cleanup #(fs/rmSync (path/join (r/repo-path "worlds" "wt-await-of-job-52bfb309")) #js {:recursive true :force true})]
+    (fs/mkdirSync (path/dirname file) #js {:recursive true})
+    (fs/writeFileSync file "{:kind :slept :time-ms 1000 :context {:job-id 7}}\n")
+    (async done
+      (-> (js/Promise.resolve)
+          (.then #(run {:kind :slept}))
+          (.then (fn [ids] (is (= #{} ids) "without :of-job any job's event satisfies it")))
+          (.then #(.then (run {:kind :slept :of-job true})
+                         (fn [_] (is false ":of-job: another job's event must not satisfy it"))
+                         (fn [e] (is (re-find #"timed out" (.-message e))))))
+          (.finally (fn [] (cleanup) (done)))))))
+
 (deftest a-reload-await-after-a-tool-step-ignores-reloads-from-before-it
   (is (= 5000 (r/await-since {:kind :world.reloaded} 1000 5000)))
   (is (= 1000 (r/await-since {:kind :world.reloaded} 1000 nil)) "no tool step before it")
