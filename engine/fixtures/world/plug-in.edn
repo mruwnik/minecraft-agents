@@ -1,0 +1,28 @@
+;; Card 4db0f8dc S2: jobs.survival.plug-in shuts the body in where it stands, called directly (no reflex registered).
+;; Stone mass x 2..30, z 10..22, y 0..4; tunnel 1x2 along z 16 from x 5 (closed end, body) to x 30.
+{:defaults
+ {:tags [:survival :cornered]
+  :time :any
+  :register []
+  :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [5 0 16] [29 1 16] "air"]]
+  :body {:at [5.5 0 16.5]}}
+ :cases
+ [{:name "walls-seal-the-open-end"
+   :body {:inventory [["cobblestone" 20]]}
+   :act [[:job (jobs.survival.plug-in {:ways #{:walls}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
+   :after [[:block [6 0 16] "cobblestone"] [:block [6 1 16] "cobblestone"] [:body-near [5.5 0 16.5] 1.5]]
+   :limit-s 60}
+  {:name "pocket-is-dug-and-sealed"
+   :plot {:floor "obsidian"}
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.survival.plug-in {:ways #{:pocket}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 50 :of-job true}]
+   :after [[:body-near [5.5 0 16.5] 2.0]]
+   :limit-s 70}
+  {:name "no-blocks-and-no-tool-is-nothing-possible"
+   :act [[:job (jobs.survival.plug-in {})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :round_started :round [:> 20]} :for-s 30 :until {:source :job :kind :completed} :of-job true}]
+   :after [[:not-block [6 0 16] "cobblestone"]]
+   :limit-s 40}]}

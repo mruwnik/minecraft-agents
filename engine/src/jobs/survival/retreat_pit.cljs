@@ -158,7 +158,7 @@
 
 (defn ^:async plug!
   "Place a carried block at the pit's first open plug cell (the side beside the head, then the roof over it), ledgered
-  as :retreat-plug: :again, :hidden once all are sealed, :failed when none is carried or the place is refused."
+  as flight/plug-purpose: :again, :hidden once all are sealed, :failed when none is carried or the place is refused."
   [c {:keys [plugs roof]}]
   (let [p (:primitives c)
         item (lb/pick c (flight/blocks c))
@@ -168,7 +168,7 @@
       (nil? item) :failed
       :else
       (let [l (ledger/intend (ledger/open-entries (ctx/view c))
-                             {:cell (lb/cell cell) :item item :before (u/seen-name p cell) :job (:id c) :purpose :retreat-plug})
+                             {:cell (lb/cell cell) :item item :before (u/seen-name p cell) :job (:id c) :purpose (flight/plug-purpose c)})
             _ (ledger/remember! c l)
             r (await (tidy/place! c cell item true))]
         (ledger/remember! c (ledger/reconcile l (escape/block-at-of p)))

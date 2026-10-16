@@ -18,7 +18,7 @@
 (defn occupied? [c cell] (contains? (:seal-occupied (ctx/mem c)) cell))
 
 (defn ^:async place-seal!
-  "Place carried blocks at cells in order, each ledgered as :retreat-plug for the cleanup. :ok, :wait while a mob stands in a cell (the place is refused and tried again
+  "Place carried blocks at cells in order, each ledgered (flight/plug-purpose) for the cleanup. :ok, :wait while a mob stands in a cell (the place is refused and tried again
   for dig-cells/mob-wait-ms), or :failed at the first placement refused or with nothing left to place. A cell with
   nothing to place against yet goes to the end of the order (its neighbours may be placed first); :failed once every
   cell left has none. A door, gate or trapdoor standing open is shut instead
@@ -35,7 +35,7 @@
         :else (let [door (await (dig-cells/shut-open! c cell))
                     l (when-not door (ledger/intend (ledger/open-entries (ctx/view c))
                                                     {:cell [(:x cell) (:y cell) (:z cell)] :item item :before (u/seen-name (:primitives c) cell)
-                                                     :job (:id c) :purpose :retreat-plug}))
+                                                     :job (:id c) :purpose (flight/plug-purpose c)}))
                     _ (some->> l (ledger/remember! c))
                     r (when-not door (await (tidy/place! c cell item true)))
                     _ (some->> l (#(ledger/reconcile % (escape/block-at-of (:primitives c)))) (ledger/remember! c))

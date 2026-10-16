@@ -13,7 +13,7 @@
   '#{jobs.survival.breathe jobs.survival.unwedge jobs.survival.extinguish
      jobs.survival.respond-to-hostile jobs.survival.fight-back jobs.survival.retreat
      jobs.food.fish jobs.survival.eat jobs.survival.get-food jobs.survival.go-home
-     jobs.survival.sleep jobs.survival.set-spawn jobs.survival.night jobs.survival.bed-down jobs.survival.dig-in jobs.survival.dig-niche jobs.survival.log-out
+     jobs.survival.sleep jobs.survival.set-spawn jobs.survival.night jobs.survival.bed-down jobs.survival.dig-in jobs.survival.plug-in jobs.survival.dig-niche jobs.survival.log-out
      jobs.combat.attack jobs.animals.breed jobs.animals.shear jobs.animals.cull jobs.animals.tend jobs.animals.pen-check jobs.animals.shut-gate jobs.animals.leash jobs.animals.unleash jobs.animals.lead-to jobs.animals.lure-to jobs.survival.recover-drops jobs.survival.restore-broken jobs.maintenance.shut-doors jobs.storage.make-room
      jobs.animals.herd
      jobs.forestry.fell-tree jobs.forestry.fell-from-pillar jobs.forestry.collect-drops jobs.forestry.plant-sapling jobs.forestry.tidy

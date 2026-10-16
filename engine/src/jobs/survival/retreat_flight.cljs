@@ -36,6 +36,11 @@
   [c]
   (or (ctx/use c :blocks) (choose/fillers :build)))
 
+(defn plug-purpose
+  "The ledger purpose of the blocks a seal or plug places: the call's :purpose, else :retreat-plug (jobs.access.cleanup)."
+  [c]
+  (or (:purpose (:args c)) :retreat-plug))
+
 (defn floor
   "The lowest feet height a flight step may end at under rock: retreat-walk/max-descent below where the flight began."
   [c]
