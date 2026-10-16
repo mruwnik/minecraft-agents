@@ -121,14 +121,14 @@
           (is (= {:reason :no-item} @out) "fails its :no-item condition")
           (is (empty? (calls p "toss"))))))))
 
-(deftest a-player-who-is-never-there-is-gone-after-two-seconds
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [p out clock] :as s} (await (give bread {:player "Steve" :item "bread"} 12 true))]
-          (is (= {:given 0 :reason :gone :text "Steve is not here"} @out))
-          (is (<= 2000 (- @clock 1000000)))
-          (is (empty? (calls p "toss"))))))))
+(deftest can-run-asks-the-item-and-the-player-until-the-toss
+  (let [c (fn [world mem] (with-redefs [ctx/mem (constantly mem)]
+                            (give/can-run? {:primitives (tu/fake-on-floor world) :args {:player "Steve" :item "bread" :radius 32}})))
+        reason (comp :reason last)]
+    (is (= [:ok nil] [(first (c (assoc bread :entities [(steve 10)]) {})) nil]))
+    (is (= [:later :gone] [(first (c bread {})) (reason (c bread {}))]))
+    (is (= [:later :no-item] [(first (c {:entities [(steve 10)]} {})) (reason (c {:entities [(steve 10)]} {}))]))
+    (is (= :ok (first (c {} {:tossed 2}))))))
 
 (deftest three-blocked-walks-are-unreachable
   (async done

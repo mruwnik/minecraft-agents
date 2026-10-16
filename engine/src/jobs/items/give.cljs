@@ -15,9 +15,7 @@
   "Walk to the player :player, toss them :count of :item (everything carried when nil) and confirm the drop was
   taken. Needs the item carried and the player in sight. Quote: A, walks, the toss and the wait.
   Impossible: :bad-args (a player and an item name are needed). Conditions (a listed root job waits): :no-item (nothing is
-  carried before the toss). Ends before the toss as a failed
-  condition with data {:given 0}:
-  - :gone, the player is not seen within :radius for 2 s.
+  carried before the toss), :gone (the player is not seen within :radius); can-run? asks both before the toss.
   Nothing-possible, {:given 0}:
   - :unreachable, three walks in a row are blocked.
   - :out-of-range, three arrivals in a row are still out of reach.
@@ -44,7 +42,6 @@
 
 (a/defargs settings
   {::job-time-s {:default 60 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
-   ::grace-ms {:default 2000 :doc "How long the job waits before it acts on what it sees, in ms." :spec (a/int-in 0 nil)}
    ::idle-ms {:default 500 :doc "Wait while there is nothing to do, in ms." :spec (a/int-in 0 nil)}
    ::walk-leg-s {:default 5 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
    ::max-blocked {:default 3 :doc "Blocked attempts before the job gives up." :spec (a/int-in 0 nil)}
@@ -52,7 +49,6 @@
    ::head-height {:default 1.6 :doc "Height of a player's head above its position, in blocks." :spec (a/num-in 0 nil)}
    ::walk-s {:default 10 :doc "Seconds the walk to the player takes (the quote)." :spec (a/num-in 0 nil)}
    ::toss-s {:default 2 :doc "Seconds the toss and the confirmation take (the quote)." :spec (a/num-in 0 nil)}})
-(defn grace-ms [] (settings/get settings ::grace-ms))
 (defn idle-ms [] (settings/get settings ::idle-ms))
 (defn walk-leg-s [] (settings/get settings ::walk-leg-s))
 (defn max-blocked [] (settings/get settings ::max-blocked))
@@ -77,7 +73,30 @@
 (defn carried "Later :no-item while none of the item is carried." [c]
   ((cond/because :no-item (cond/> (cond/inventory (:item (:args c))) 0)) c))
 
+(defn find-player
+  "The position {:x :y :z} of player named name within radius, or nil."
+  [p name radius]
+  (some->> (array-seq (.entities p #js {:radius radius :kind "player"}))
+           (filter #(or (= name (.-username %)) (= name (.-name %))))
+           first
+           .-pos
+           u/pos-of))
+
+(defn in-sight "Later :gone while the player is not seen within :radius." [c]
+  (let [{:keys [player radius]} (:args c)]
+    (if (find-player (:primitives c) player radius)
+      (contract/ok :in-sight (str player " is in sight"))
+      (contract/later :gone (str player " is not here")))))
+
 (def can-start? (cond/and named carried))
+
+(defn can-run?
+  "Before the toss the item is carried (later :no-item) and the player in sight (later :gone); once tossed nothing
+  more is asked."
+  [c]
+  (if (some? (:tossed (ctx/mem c)))
+    (contract/ok :tossed "the item was thrown")
+    ((cond/and carried in-sight) c)))
 
 (defn given-so-far
   "Items given and not taken back so far."
@@ -103,15 +122,6 @@
         toss (settings/get settings ::toss-s)]
     {:uses {:job-time [toss (+ toss walk) (+ toss (* 2 walk) (:wait-s (:args c)))]}
      :done [0 n n]}))
-
-(defn find-player
-  "The position {:x :y :z} of player named name within radius, or nil."
-  [p name radius]
-  (some->> (array-seq (.entities p #js {:radius radius :kind "player"}))
-           (filter #(or (= name (.-username %)) (= name (.-name %))))
-           first
-           .-pos
-           u/pos-of))
 
 (defn finish!
   "The ending of kind with cause; data carries what was given (0 unless said)."
@@ -236,22 +246,16 @@
       (await (collect! c lying given back)))))
 
 (defn ^:async before-toss!
-  "Nothing thrown yet: end when nothing is carried or the player is gone or out
-  of reach for good, walk when too far, else toss."
-  [c now]
+  "Nothing thrown yet: wait when nothing is carried or the player is not seen (can-run? answers), walk when too far,
+  else toss."
+  [c]
   (let [{:keys [player item radius reach]} (:args c)
         p (:primitives c)
         have (storage/carried (u/inventory p) item)
         pos (find-player p player radius)]
     (cond
-      (zero? have)
-      (finish! c :condition-failed :no-item {:text (str "no " item " to give")})
-
-      (and (nil? pos) (< (- now (:started (ctx/mem c))) (grace-ms)))
+      (or (zero? have) (nil? pos))
       (await (idle! c))
-
-      (nil? pos)
-      (finish! c :condition-failed :gone {:text (str player " is not here")})
 
       (not (u/within? (u/self-pos c) pos reach))
       (await (walk! c pos))
@@ -263,12 +267,9 @@
   "One piece: before the toss walk and toss, after it watch the drop. :again, :continue (waiting for the player or the
   world) or :done."
   [c]
-  (let [now (ctx/now c)
-        _ (when-not (contains? (ctx/mem c) :started)
-            (ctx/update-mem! c assoc :started now))]
-    (if (some? (:tossed (ctx/mem c)))
-      (await (after-toss! c))
-      (await (before-toss! c now)))))
+  (if (some? (:tossed (ctx/mem c)))
+    (await (after-toss! c))
+    (await (before-toss! c))))
 
 (defn ^:async cleanup
   "However the call ends: the drop of this call's toss that still lies is collected back, never more than was tossed.
