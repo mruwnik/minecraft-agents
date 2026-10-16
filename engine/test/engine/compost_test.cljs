@@ -102,15 +102,23 @@
           (is (= {} (:fed result)))
           (is (= 1 (count (calls p "useOn")))))))))
 
+;; the body never idles in the round: a level-7 composter is waited out by yielding, and a stuck one is given up on
+(deftest compost-waits-out-level-7-by-yielding
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory (inv "oak_leaves" 4) :blocks comp-block :states {pos-key {:level 7}}})
+              result (await (child-outcome eng job {:at at} 60))]
+          (is (empty? (calls p "wait")))
+          (is (= :gave-up (:reason result))))))))
+
 (deftest compost-no-composter
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:inventory (inv "oak_leaves" 4)})
+        (let [{:keys [eng]} (setup {:inventory (inv "oak_leaves" 4)})
               result (await (child-outcome eng job {} 10))]
-          (is (= :no-composter (:reason result)))
-          (is (= 0 (:bone-meal result)))
-          (is (= 1 (count (kinds seen :compost.no-composter)))))))))
+          (is (= :no-composter (:reason result)) "ends once the look found none"))))))
 
 (deftest compost-block-at-is-not-a-composter
   (async done
@@ -127,7 +135,6 @@
         (let [{:keys [eng p]} (setup {:inventory (inv "stick" 4) :blocks comp-block})
               result (await (child-outcome eng job {:at at} 10))]
           (is (= :nothing-to-feed (:reason result)))
-          (is (= 0 (:bone-meal result)))
           (is (empty? (calls p "useOn"))))))))
 
 (deftest compost-gives-up-after-three-refusals
@@ -152,8 +159,8 @@
       (fn ^:async t []
         (doseq [[owner at-arg extra meal reason declined seeds]
                 [["Fake" {:at at} {} 1 nil [] 3] ["FAKE" {} {} 1 nil [] 3]
-                 ["Miles" {:at at} {} 0 :no-composter [{:reason :refused :zones ["farm"]}] 10]
-                 ["Miles" {} {} 0 :no-composter [{:reason :refused :zones ["farm"]}] 10]
+                 ["Miles" {:at at} {} nil :no-composter [{:reason :refused :zones ["farm"]}] 10]
+                 ["Miles" {} {} nil :no-composter [{:reason :refused :zones ["farm"]}] 10]
                  ["Miles" {:at at} {:ignore-zones? true} 1 nil [] 3]]]
           (let [{:keys [eng p seen]} (setup {:inventory (inv "wheat_seeds" 10) :blocks comp-block}
                                             (ew/of-data {} {} [(assoc zone-over-composter :owner owner)]))

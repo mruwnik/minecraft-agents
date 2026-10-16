@@ -3,6 +3,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.job-common :as common]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
@@ -18,7 +19,9 @@
   Walks to the composter (a go-to child), feeds it, empties it when full and picks up the bone meal.
   Zones: a composter in another owner's zone or claim, or inside a plan's footprint, is not used (it counts as a
   :harvest), with a compost.declined warn once (:reason :refused). :ignore-zones? true skips the check.
-  Refused before it starts as a failed condition: {:reason :no-zones} (no zone list read, unless :ignore-zones?).
+  Waits before it starts (a listed call waits with the reason): {:reason :no-zones} (no zone list read, unless
+  :ignore-zones?), :nothing-to-feed (nothing carried to feed), :no-composter (none seen and allowed; a :look first).
+  A composter at level 7 is waited out by yielding.
   Ends when :times bone meal is taken (done), nothing is left to feed, there is no composter, or three failures in a row.
   Data {:fed {name n} :bone-meal n :level}, plus :reason when it stopped early. Stopped early with at least :least bone meal
   taken (default 1) it is done; with less it is condition-failed :no-composter or :nothing-to-feed, or nothing-possible
@@ -75,8 +78,6 @@
 (def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
 
-(def can-start? (checks/zones-read :compost.declined "compost"))
-
 (defn done?
   "Ok once :times bone meal is taken; else later with the bone meal taken and the rest of :times."
   [c]
@@ -111,6 +112,40 @@
          (sort-by #(u/dist me %))
          first)))
 
+(defn composter-at
+  "The composter the job works at: the one it settled on, else the call's :at (when allowed) or the nearest allowed
+  one, and its block when seen as a composter; else nil."
+  [c]
+  (let [{:keys [at]} (:args c)
+        pos (or (:composter (ctx/mem c)) (if at (when (composter-allowed? c at) at) (nearest-composter c)))
+        block (when pos (u/seen-block (:primitives c) pos))]
+    (when (and block (= "composter" (.-name block))) pos)))
+
+(defn meal-near
+  "The nearest bone_meal item entity within 3 blocks of the composter, or nil."
+  [c at]
+  (->> (look/seen-items (:primitives c) {:radius 20})
+       (filter #(= "bone_meal" (some-> (.-item %) .-name)))
+       (filter #(<= (u/dist at (u/pos-of (.-pos %))) 3))
+       first))
+
+(defn problem
+  "The cause the job cannot start: no composter seen or allowed, else nothing to feed to one that has no bone meal
+  to give (level 7 or 8, or meal lying by it)."
+  [c]
+  (if-let [pos (composter-at c)]
+    (when (and (empty? (feedable (u/inventory (:primitives c)) (:args c)))
+               (< (level-of (u/seen-block (:primitives c) pos)) 7)
+               (nil? (meal-near c pos)))
+      {:reason :nothing-to-feed})
+    {:reason :no-composter}))
+
+(def can-start?
+  "Zones read, a composter seen (:look until the body has looked around) and something to feed it."
+  (cond/and (checks/zones-read :compost.declined "compost")
+            (checks/refusing #(if (or (look/surveyed? %) (composter-at %)) :later :look) :ready
+                             "a composter and something to feed" problem)))
+
 (defn finish!
   "End the call. Taking :times bone meal is done; an early stop (extra's :reason) is done when it took the call's least,
   else the reason is the cause: condition-failed for :no-composter and :nothing-to-feed, nothing-possible :gave-up."
@@ -137,14 +172,6 @@
       (do (ctx/emit! c :compost.gave-up :warn {:text "the composter keeps refusing, giving up"})
           (finish! c {:level level :reason :gave-up})))))
 
-(defn meal-near
-  "The nearest bone_meal item entity within 3 blocks of the composter, or nil."
-  [c at]
-  (->> (look/seen-items (:primitives c) {:radius 20})
-       (filter #(= "bone_meal" (some-> (.-item %) .-name)))
-       (filter #(<= (u/dist at (u/pos-of (.-pos %))) 3))
-       first))
-
 (defn ^:async step
   "One step: collect bone meal lying by the composter, finish when enough
   is taken, else walk up, empty a full composter, wait out level 7, or feed it
@@ -153,13 +180,13 @@
   (let [p (:primitives c)
         {:keys [times items at] reserve :keep} (:args c)
         mem (ctx/mem c)
-        pos (or (:composter mem) (when at (when (composter-allowed? c at) at)) (when-not at (nearest-composter c)))
+        pos (composter-at c)
         block (when pos (u/seen-block p pos))]
     (cond
       (and (nil? pos) (not (look/surveyed? c)))
       (do (await (look/survey! c)) :again) ; a composter behind the body is not seen until it looks
 
-      (not (and pos block (= "composter" (.-name block))))
+      (nil? pos)
       (do (ctx/emit! c :compost.no-composter :warn {:text "no composter to feed"})
           (finish! c {:reason :no-composter}))
 
@@ -198,12 +225,11 @@
 
                   (= 7 level)
                   (let [waits (inc (:waits mem 0))]
-                    (await (ctx/act c :wait #js {:ms 500}))
                     (if (>= waits 6)
                       (do (ctx/update-mem! c assoc :waits 0)
                           (strike! c level))
                       (do (ctx/update-mem! c assoc :waits waits)
-                          :again)))
+                          :continue)))
 
                   (empty? todo)
                   (finish! c {:level level :reason :nothing-to-feed})
