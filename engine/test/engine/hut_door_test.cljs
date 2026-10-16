@@ -100,8 +100,9 @@
       (fn ^:async t []
         (let [{:keys [p]} (await (ct/first-round ct/retreat {:blocks torch-tunnel
                                                            :inventory [{:name "cobblestone" :count 20}]
-                                                           :entities [(ct/skeleton 3 64 0)]}))]
-          (is (<= (count (ct/calls p "place")) 2) "each torch cell is tried once")
+                                                           :entities [(ct/skeleton 3 64 0)]
+                                                           :zones [{:name "keep-out" :min [1 64 0] :max [1 65 0]}]}))]
+          (is (<= (count (ct/calls p "place")) 4) "each torch cell is tried twice, then left alone")
           (is (pos? (count (ct/calls p "attack"))) "the seal failed: it fights back"))))))
 
 (deftest dig-in-shuts-an-open-door-beside-the-body-instead-of-digging-it
