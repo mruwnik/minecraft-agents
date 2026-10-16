@@ -333,7 +333,10 @@
           (if-not item
           (do (when (ctx/alive? c) (leave-unseen! c))
               (if (ctx/alive? c) (swept!) (done! :cut-off :cut (data))))
-          (let [hole? (in-hole? c item)
+          (let [item-name (some-> (.-item item) .-name)
+                held (fn [] (transduce (comp (filter #(= item-name (:name %))) (map :count)) + 0 (u/inventory (:primitives c))))
+                start-held (held)
+                hole? (in-hole? c item)
                 moving? (and hole? (settling? c item))
                 why (when (and hole? (not moving?)) (await (hole-problem! c item)))
                 walk (when (and (not hole?) (deep? c item)) (await (walk-down! c item)))
@@ -342,9 +345,7 @@
                 dig-why (when-not (#{nil :dug :continue} dug) dug)
                 walk (if (= :dug dug) (await (walk-down! c item)) walk)
                 why (if (= :dug dug) nil why)]
-            (let [item-name (some-> (.-item item) .-name)
-                  held (fn [] (transduce (comp (filter #(= item-name (:name %))) (map :count)) + 0 (u/inventory (:primitives c))))
-                  collect! (fn ^:async collect* []
+            (let [collect! (fn ^:async collect* []
                              (let [before (held)
                                    r (await (ctx/act c :collect (clj->js (cond-> {:id (.-id item)} hole? (assoc :maxDropDown 1)))))
                                    got (- (held) before)]
@@ -367,8 +368,14 @@
                       dig2-why (leave! c item dig2-why)
                       (and stuck? (not= :dug dug2)) (leave! c item :unreachable)
                       r2-stuck? (leave! c item :unreachable))
-                    (ctx/update-mem! c (fn [m] (reduce (fn [m r] (-> m (update :collected (fnil + 0) (gained-count r))
-                                                                    (update :wanted (fnil + 0) (gained-count r (some-> (:want-items (:args c)) set)))))
-                                                       m (remove nil? [r r2]))))
+                    ;; the walk down can pick the drop up before the collect act runs
+                    (let [acts (reduce + 0 (map gained-count (remove nil? [r r2])))
+                          extra (max 0 (- (held) start-held acts))
+                          wants? (or (nil? (:want-items (:args c))) ((set (:want-items (:args c))) item-name))]
+                      (ctx/update-mem! c (fn [m] (reduce (fn [m r] (-> m (update :collected (fnil + 0) (gained-count r))
+                                                                      (update :wanted (fnil + 0) (gained-count r (some-> (:want-items (:args c)) set)))))
+                                                         (cond-> (update m :collected (fnil + 0) extra)
+                                                           wants? (update :wanted (fnil + 0) extra))
+                                                         (remove nil? [r r2])))))
                     (ctx/update-mem! c update :skipped (fnil conj []) (.-id item))
                     (recur)))))))))))

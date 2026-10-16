@@ -303,6 +303,22 @@
             (is (= 1 (:collected result)))
             (is (empty? (:left result)))))))))
 
+(deftest a-drop-that-entered-the-inventory-without-the-collect-act-reporting-it-is-counted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body :blocks steps})]
+          (drop! p [3 61 0] "porkchop")
+          (seen-from-above! p)
+          (.override (.-world p) "collect"
+                     (fn [token args impl]
+                       (impl token args)
+                       #js {:status "ok" :gained #js []}))
+          (let [result (await (tu/child-outcome eng job {:radius 6 :filter ["porkchop"]} 30))]
+            (is (= 1 (bd/carried p "porkchop")))
+            (is (= 1 (:collected result)))
+            (is (= :done (:status result)))))))))
+
 (deftest a-hole-drop-the-collect-action-calls-unreachable-is-dug-to-and-collected-again-with-dig-true
   (async done
     (tu/run-async done
