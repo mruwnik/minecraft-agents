@@ -78,7 +78,7 @@ test('all tool routing preserves arguments and binds shared tools without a body
   const f = fixture(t)
   for (const command of commands) {
     const input = ['literal with spaces', '{:note "--world is text"}', '-10']
-    const expected = [...(bodyTools.has(command) ? ['B'] : []), '--world', 'w', '--worlds', f.worlds]
+    const expected = [...(bodyTools.has(command) ? ['B'] : []), ...(command === 'time' ? ['--body', 'B'] : []), '--world', 'w', '--worlds', f.worlds]
     if (['plans', 'blueprints'].includes(command)) expected.push('--repo', path.resolve(repo))
     if (['map', 'world-changes'].includes(command)) expected.push('--repo-root', path.resolve(repo))
     if (command === 'world-changes') expected.push('--observer', 'B')
