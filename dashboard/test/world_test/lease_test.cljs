@@ -155,7 +155,7 @@
   (is (= :night (l/time-phase {:time :any :act [[:wait-s 1] [:time-set 14000]]})))
   (is (nil? (l/time-phase {:time :any :act [[:wait-s 1]]}))))
 
-(deftest a-day-case-that-sets-dusk-or-later-runs-solo
+(deftest a-day-case-that-sets-dusk-or-later-is-exclusive
   (is (= [:night-x :night-x :night-x :night-x :day :night-x]
          [(l/time-phase {:time :day :act [[:time-set 11500]]})
           (l/time-phase {:time :day :act [[:time-set 12000]]})
@@ -163,8 +163,8 @@
           (l/time-phase {:time :any :act [[:time-set 11500]]})
           (l/time-phase {:time :day :act [[:time-set 6000]]})
           (l/time-phase {:time :night :act [[:time-set 12000]]})]))
-  (is (= :solo (l/night-class {:time :day :act [[:time-set 11500]]})))
-  (is (nil? (l/barrier-ticks {:time :day :act [[:time-set 23500]]}))))
+  (is (= :barrier (l/night-class {:time :day :act [[:time-set 11500]]})))
+  (is (= 23500 (l/barrier-ticks {:time :day :act [[:time-set 23500]]}))))
 
 (deftest an-exclusive-night-holder-shares-with-nobody-not-even-night
   (let [files (atom {10 (hold :night-x)})]
@@ -375,8 +375,8 @@
     (is (= {:waiting-on [10]} (l/try-share (fake-share files #{10 11}) 11 :day 5)))
     (is (= {:waiting-on [10]} (l/try-share (fake-share files #{10 11}) 11 :weather-x 5)))))
 
-(deftest a-case-with-one-day-time-set-joins-the-barrier-of-that-time
-  (is (= [1000 nil nil nil nil]
+(deftest a-case-with-one-time-set-joins-the-barrier-of-that-time
+  (is (= [1000 nil 14000 nil nil]
          [(l/barrier-ticks {:time :night-exclusive :act [[:job 'x] [:time-set 1000]]})
           (l/barrier-ticks {:time :night-exclusive :act [[:time-set 1000] [:time-set 1000]]})
           (l/barrier-ticks {:time :night-exclusive :act [[:time-set 14000]]})

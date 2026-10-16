@@ -1117,8 +1117,9 @@
           (r/lock-batch {:night-batch "n1"} {:time :night})
           (r/lock-batch {} {:time :night-exclusive})])))
 
-(deftest a-day-case-setting-dusk-starts-at-day-and-is-not-batched
-  (is (nil? (r/lock-batch {:night-batch "n1"} {:time :day :act [[:time-set 12000]]})))
+(deftest a-day-case-setting-dusk-starts-at-day-in-its-batch
+  (is (= "n1" (r/lock-batch {:night-batch "n1"} {:time :day :act [[:time-set 12000]]})))
+  (is (= [14000 1000] [(r/batch-start-ticks {:time :night-exclusive}) (r/batch-start-ticks {:time :day :act [[:time-set 12000]]})]))
   (is (false? (r/starts-night? {:time :day :act [[:time-set 12000]]})))
   (is (true? (r/starts-night? {:time :night-exclusive})))
   (is (true? (r/starts-night? {:time :any :act [[:time-set 14000]]}))))
@@ -1133,7 +1134,8 @@
 (deftest the-night-class-line-names-the-class
   (is (= "a/b  natural" (r/night-class-line {:id "a/b" :time :night-exclusive :act []})))
   (is (= "a/c  barrier:1000" (r/night-class-line {:id "a/c" :time :night-exclusive :act [[:time-set 1000]]})))
-  (is (= "a/d  solo" (r/night-class-line {:id "a/d" :time :night-exclusive :act [[:time-set 1000] [:time-set 14000]]}))))
+  (is (= "a/d  solo" (r/night-class-line {:id "a/d" :time :night-exclusive :act [[:time-set 1000] [:time-set 14000]]})))
+  (is (= "a/e  barrier:day-11500" (r/night-class-line {:id "a/e" :time :day :act [[:time-set 11500]]}))))
 
 (deftest set-weather-sends-and-logs-only-when-allowed
   (async done

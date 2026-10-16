@@ -525,21 +525,21 @@ test('durationsById: the elapsed seconds of each id in the earlier results (the 
   const m = durationsById([vec(form('a/1', 'pass', 5), form('a/2', 'pass', 9)), vec(form('a/1', 'pass', 7))])
   assert.deepEqual([...m], [['a/1', 7], ['a/2', 9]])
 })
-test('nightBatches: natural cases pack longest first into batches of at most the bodies; a skip batch; every solo case alone, last', () => {
+test('nightBatches: natural cases form one rolling batch, longest first, with the night budget and their durations; a skip batch; every solo case alone, last', () => {
   const cs = classes(['a/1', 'natural'], ['a/2', 'natural'], ['a/3', 'natural'], ['b/1', 'solo'], ['c/1', 'skip'], ['b/2', 'solo'])
   const dur = new Map([['a/1', 10], ['a/2', 30], ['a/3', 20]])
   const b = nightBatches(cs, dur, { bodies: 2, budgetS: 300, defaultS: 60 })
-  assert.deepEqual(b, [{ kind: 'natural', ids: ['a/2', 'a/3'] }, { kind: 'natural', ids: ['a/1'] }, { kind: 'skip', ids: ['c/1'] }, { kind: 'solo', ids: ['b/1'] }, { kind: 'solo', ids: ['b/2'] }])
+  assert.deepEqual(b, [{ kind: 'natural', ids: ['a/2', 'a/3', 'a/1'], budgetS: 300, secs: { 'a/2': 30, 'a/3': 20, 'a/1': 10 } }, { kind: 'skip', ids: ['c/1'] }, { kind: 'solo', ids: ['b/1'] }, { kind: 'solo', ids: ['b/2'] }])
 })
 test('nightBatches: a natural case longer than the night budget runs alone; unseen cases count as defaultS', () => {
   const cs = classes(['a/long', 'natural'], ['a/new', 'natural'], ['a/s', 'natural'])
   const b = nightBatches(cs, new Map([['a/long', 400], ['a/s', 5]]), { bodies: 3, budgetS: 300, defaultS: 60 })
-  assert.deepEqual(b, [{ kind: 'long', ids: ['a/long'] }, { kind: 'natural', ids: ['a/new', 'a/s'] }])
+  assert.deepEqual(b, [{ kind: 'long', ids: ['a/long'] }, { kind: 'natural', ids: ['a/new', 'a/s'], budgetS: 300, secs: { 'a/new': 60, 'a/s': 5 } }])
 })
-test('nightBatches: a batch is never larger than the bodies, and skip cases never mix with natural ones', () => {
-  const cs = classes(...Array.from({ length: 7 }, (_, i) => [`n/${i}`, 'natural']), ...Array.from({ length: 3 }, (_, i) => [`k/${i}`, 'skip']))
+test('nightBatches: a skip batch is never larger than the bodies, and skip cases never mix with natural ones', () => {
+  const cs = classes(...Array.from({ length: 7 }, (_, i) => [`n/${i}`, 'natural']), ...Array.from({ length: 4 }, (_, i) => [`k/${i}`, 'skip']))
   const b = nightBatches(cs, new Map(), { bodies: 3, budgetS: 300, defaultS: 10 })
-  assert.deepEqual(b.map((x) => [x.kind, x.ids.length]), [['natural', 3], ['natural', 3], ['natural', 1], ['skip', 3]])
+  assert.deepEqual(b.map((x) => [x.kind, x.ids.length]), [['natural', 7], ['skip', 3], ['skip', 1]])
 })
 test('parsePoolArgs: --night-batches is the pool\'s own and not passed on', () => {
   const p = parsePoolArgs(['d', '--phase', 'night-exclusive', '--night-batches', '--allow-time'])
@@ -561,7 +561,7 @@ test('runNightBatches: batches run one after the other, the cases of one batch t
   assert.notEqual(log[0].worker.body, log[1].worker.body)
   assert.equal(splitForms(r.text).length, 3)
 })
-test('runNightBatches: a failed case reruns alone in its own batch after the others; a pass is flaky', { timeout: 10000 }, async () => {
+test('runNightBatches: a failed case reruns in a batch of its own after the others; a pass is flaky', { timeout: 10000 }, async () => {
   const log = []
   let n = 0
   const run = async (unit) => { log.push(unit); n++; return { code: 0, text: vec(form(unit.id, unit.id === 'a/2' && n < 3 ? 'fail' : 'pass')) } }
@@ -571,7 +571,7 @@ test('runNightBatches: a failed case reruns alone in its own batch after the oth
   assert.deepEqual(splitForms(r.text).map(summarize).map((s) => [s.id, s.status]), [['a/1', 'pass'], ['a/2', 'flaky'], ['b/1', 'pass']])
   assert.equal(r.code, 0)
 })
-test('runNightBatches: a case inconclusive for overrunning dawn reruns alone and keeps its first reason; other inconclusive cases do not rerun', { timeout: 10000 }, async () => {
+test('runNightBatches: a case inconclusive for overrunning dawn reruns and keeps its first reason; other inconclusive cases do not rerun', { timeout: 10000 }, async () => {
   const log = []
   const over = ', :overran true, :first-why "boom"'
   const run = async (unit) => {
@@ -606,18 +606,56 @@ test('runNightBatches: events carry the fixed total and one result per case', { 
   assert.deepEqual(ev.filter((e) => e.event === 'progress').map((e) => [e.done, e.total]), [[1, 2], [2, 2]])
 })
 
-test('nightBatches: cases that set the same time group into barrier batches (before the solo ones); a batch carries its barrier size', () => {
-  const cs = classes(['a/1', 'barrier:1000'], ['a/2', 'barrier:1000'], ['a/3', 'barrier:1000'], ['b/1', 'barrier:2000'], ['c/1', 'solo'])
+test('nightBatches: cases that start alike and set the same time group into barrier batches (before the solo ones); a batch carries its barrier size and class', () => {
+  const cs = classes(['a/1', 'barrier:1000'], ['a/2', 'barrier:1000'], ['a/3', 'barrier:1000'], ['b/1', 'barrier:day-11500'], ['b/2', 'barrier:11500'], ['c/1', 'solo'])
   const b = nightBatches(cs, new Map(), { bodies: 2, budgetS: 300, defaultS: 60 })
-  assert.deepEqual(b, [{ kind: 'barrier', ids: ['a/1', 'a/2'], barrier: 2 }, { kind: 'barrier', ids: ['a/3'], barrier: 1 }, { kind: 'barrier', ids: ['b/1'], barrier: 1 }, { kind: 'solo', ids: ['c/1'] }])
+  assert.deepEqual(b, [{ kind: 'barrier', ids: ['a/1', 'a/2'], barrier: 2, key: 'barrier:1000' }, { kind: 'barrier', ids: ['a/3'], barrier: 1, key: 'barrier:1000' },
+    { kind: 'barrier', ids: ['b/1'], barrier: 1, key: 'barrier:day-11500' }, { kind: 'barrier', ids: ['b/2'], barrier: 1, key: 'barrier:11500' }, { kind: 'solo', ids: ['c/1'] }])
 })
-test('runNightBatches: a barrier batch hands its size to each case; a rerun has none; onBatchEnd gets every batch id', { timeout: 10000 }, async () => {
+test('runNightBatches: a barrier batch hands its size to each case; a rerun meets the other failures of its batch; onBatchEnd gets every batch id', { timeout: 10000 }, async () => {
   const log = []
   const ended = []
   const run = async (unit) => { log.push(unit); return { code: 0, text: vec(form(unit.id, unit.id === 'a/2' && log.length < 3 ? 'fail' : 'pass')) } }
   await runNightBatches({ batches: [{ kind: 'barrier', ids: ['a/1', 'a/2'], barrier: 2 }], workers: workerSpecs(2, 19, 'P', 0), runUnit: run, retries: 1, onBatchEnd: async (b) => { ended.push(b) } })
-  assert.deepEqual(log.map((u) => u.barrier), [2, 2, undefined])
+  assert.deepEqual(log.map((u) => u.barrier), [2, 2, 1])
   assert.equal(ended.length, 2)
+})
+test('runNightBatches: a natural batch keeps every body busy in one night: a freed body starts the next case while its duration fits the budget; the rest go to the next night', { timeout: 10000 }, async () => {
+  const log = []
+  let t = 0
+  let openGate
+  const gate = new Promise((r) => { openGate = r })
+  const secs = { 'a/long': 90, 'a/1': 10, 'a/2': 10, 'a/3': 85 }
+  const run = async (unit) => {
+    log.push(unit)
+    if (unit.id === 'a/long') await gate
+    else { await sleepy(); t += secs[unit.id]; if (unit.id === 'a/2') openGate() }
+    return { code: 0, text: vec(form(unit.id, 'pass')) }
+  }
+  const batches = [{ kind: 'natural', ids: ['a/long', 'a/1', 'a/2', 'a/3'], budgetS: 100, secs }]
+  const r = await runNightBatches({ batches, workers: workerSpecs(2, 19, 'P', 0), runUnit: run, now: () => t * 1000 })
+  assert.deepEqual(log.map((u) => u.id), ['a/long', 'a/1', 'a/2', 'a/3'])
+  assert.deepEqual(log.slice(0, 3).map((u) => u.batch), Array(3).fill(log[0].batch))
+  assert.notEqual(log[3].batch, log[0].batch, '20 s in, 85 s more does not fit the 100 s night')
+  assert.equal(log[1].worker.body, log[2].worker.body)
+  assert.deepEqual(splitForms(r.text).map(summarize).map((s) => s.id), ['a/long', 'a/1', 'a/2', 'a/3'])
+})
+test('runNightBatches: failed cases rerun after the others, batched by class: natural failures share one night, barrier failures meet again, solo ones alone', { timeout: 10000 }, async () => {
+  const log = []
+  const failFirst = new Set(['a/1', 'a/3', 'b/1', 'b/2', 'c/1', 'c/2'])
+  const run = async (unit) => { log.push(unit); return { code: 0, text: vec(form(unit.id, unit.attempt === 0 && failFirst.has(unit.id) ? 'fail' : 'pass')) } }
+  const batches = [{ kind: 'natural', ids: ['a/1', 'a/2', 'a/3'], budgetS: 300, secs: {} }, { kind: 'barrier', ids: ['b/1', 'b/2'], barrier: 2, key: 'barrier:1000' }, { kind: 'solo', ids: ['c/1'] }, { kind: 'solo', ids: ['c/2'] }]
+  const r = await runNightBatches({ batches, workers: workerSpecs(3, 19, 'P', 0), runUnit: run, retries: 1 })
+  const reruns = log.filter((u) => u.attempt === 1)
+  const batchOf = (id) => reruns.find((u) => u.id === id).batch
+  assert.deepEqual(reruns.map((u) => u.id).sort(), ['a/1', 'a/3', 'b/1', 'b/2', 'c/1', 'c/2'])
+  assert.equal(batchOf('a/1'), batchOf('a/3'))
+  assert.equal(batchOf('b/1'), batchOf('b/2'))
+  assert.deepEqual(reruns.filter((u) => u.id.startsWith('b/')).map((u) => u.barrier), [2, 2])
+  assert.notEqual(batchOf('c/1'), batchOf('c/2'))
+  assert.equal(new Set(reruns.map((u) => u.batch)).size, 4)
+  assert.deepEqual(splitForms(r.text).map(summarize).map((s) => s.status), ['flaky', 'pass', 'flaky', 'flaky', 'flaky', 'flaky', 'flaky'])
+  assert.equal(r.code, 0)
 })
 
 test('nightBatchEndArgs: the batch end gets the time-change flags of the run, nothing else', () => {

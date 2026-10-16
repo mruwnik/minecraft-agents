@@ -158,17 +158,16 @@
         :else phase))))
 
 (defn barrier-ticks
-  "The time a :night-exclusive case sets with its one :time-set step when that ends the night (a day time), else nil. Cases
-  with the same barrier-ticks wait for each other at that step, so one body sets it for all."
+  "The time an exclusive night case sets with its one :time-set step, else nil. Cases that start alike with the same
+  barrier-ticks wait for each other at that step, so one body sets it for all."
   [c]
-  (let [sets (filter #(= :time-set (first %)) (:act c))
-        ticks (second (first sets))]
-    (when (and (= 1 (count sets)) (not (weather-x? c)) (= :day (phase-of-ticks ticks)) (not (dusk-set? c)))
-      ticks)))
+  (let [sets (filter #(= :time-set (first %)) (:act c))]
+    (when (and (= 1 (count sets)) (not (weather-x? c)))
+      (second (first sets)))))
 
 (defn night-class
-  "How a :night-exclusive case may share a night: :barrier (its one :time-set step ends the night: batches with the cases
-  that set the same time, meeting at the step), :solo (other :time-set steps flip the time for everyone, so it runs alone),
+  "How a :night-exclusive case may share a night: :barrier (one :time-set step: batches with the cases that start alike and
+  set the same time, meeting at the step), :solo (several :time-set steps flip the time for everyone, so it runs alone),
   :skip (:sleep-skip true: needs the vanilla night skip, so it runs in a batch where every body sleeps), else :natural
   (needs only night, batches with other natural cases)."
   [c]

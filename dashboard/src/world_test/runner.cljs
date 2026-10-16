@@ -534,10 +534,10 @@
                 (not (night? t1)))))
 
 (defn mark-night-overran
-  "A failed result becomes :inconclusive when its night batch case ended after dawn (the pool reruns it alone)."
+  "A failed result becomes :inconclusive when its night batch case ended after dawn (the pool reruns it)."
   [r overran?]
   (if (and overran? (= :fail (:status r)))
-    (assoc r :status :inconclusive :overran true :first-why (:why r) :why "the night ended during the batch case (dawn); rerun it alone")
+    (assoc r :status :inconclusive :overran true :first-why (:why r) :why "the night ended during the batch case (dawn); rerun it")
     r))
 
 ;; ------------------------------------------------------------------ plot leases (parallel runners)
@@ -667,9 +667,14 @@
   (or (contains? #{:night :night-exclusive} (:time rc)) (= :night (lease/time-phase rc))))
 
 (defn lock-batch
-  "The batch id a case locks with: only a :night-exclusive case shares its night, with the cases of the same --night-batch."
+  "The batch id a case locks with: only an exclusive night case (:night-x) shares, with the cases of the same --night-batch."
   [opts rc]
-  (when (and (= :night-x (lease/time-phase rc)) (= :night-exclusive (:time rc))) (:night-batch opts)))
+  (when (= :night-x (lease/time-phase rc)) (:night-batch opts)))
+
+(defn batch-start-ticks
+  "The time the first case of a night batch sets: night, or morning for a batch that starts at day (and sets dusk itself)."
+  [rc]
+  (if (starts-night? rc) 14000 1000))
 
 (defn joiner-refresh?
   "Whether a joiner of phase re-sets a drifted time of day: not for :any, without --allow-time, for a case that sets the time itself,
@@ -679,9 +684,11 @@
            (and (= :night-x phase) (:night-batch opts)))))
 
 (defn night-class-line
-  "The --list --night-classes line of an exclusive night case: its id and lease/night-class (a barrier case adds :ticks)."
+  "The --list --night-classes line of an exclusive night case: its id and lease/night-class (a barrier case adds :ticks,
+  :day-ticks when it starts at day: only cases that start alike share a barrier)."
   [c]
-  (str (:id c) "  " (name (lease/night-class c)) (when-let [t (lease/barrier-ticks c)] (str ":" t))))
+  (str (:id c) "  " (name (lease/night-class c))
+       (when-let [t (lease/barrier-ticks c)] (str ":" (when-not (starts-night? c) "day-") t))))
 
 ;; Machine-wide and outside every checkout: sweeps run in throwaway worktrees, and /tmp does not survive a reboot.
 (def machine-state-dir (path/join (os/homedir) ".local" "state" "minecraft-claude"))
@@ -1577,7 +1584,7 @@
                               (.then (fn [_] (cond
                                 (= :any phase) true
                                 (and batch (night-batch-set? batch)) (js/Promise.resolve true)
-                                batch (.then (set-time! opts 14000 (str (:id c) " starts night batch " batch))
+                                batch (.then (set-time! opts (batch-start-ticks rc) (str (:id c) " starts night batch " batch))
                                              (fn [ok] (if ok
                                                         (.then (start-sleep-rule! rcon! opts rc batch nil (str (:id c) " starts night batch " batch)) (constantly ok))
                                                         ok)))

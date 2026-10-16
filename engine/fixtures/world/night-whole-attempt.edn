@@ -12,7 +12,6 @@
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 3}}
  :cases
  [{:name "dug-in-ends-the-night-in-one-round"
-   :time :night-exclusive
    :act [[:job (jobs.survival.night)]
          [:await {:source :job :kind :dig-in.sealed} 60]
          [:wait-s 10]] ; deliberate hold: the sealed body must sit through it with no hold/idle/re-dig before dawn
@@ -61,7 +60,6 @@
   ;; A hostile reflex cuts the night: a NoAI zombie 6 away fires hostile-near as the night starts, the reflex fights it, and the
   ;; night job resumes, digs in and ends the night.
   {:name "reflex-cut-night-resumes-and-holds"
-   :time :night-exclusive
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
