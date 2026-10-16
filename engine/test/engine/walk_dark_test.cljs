@@ -29,7 +29,7 @@
   (let [p (seen-world 18000)
         ^js dark (.-dark (options-of p {:dark? true}))]
     (is (fn? (.-at dark)))
-    (is (< (js/Math.abs (- 2 (.-factor dark))) 1e-9) "a kit with no weapon or armour pays the floor 1 and 1 more")
+    (is (< (js/Math.abs (- 1 (.-factor dark))) 1e-9) "a kit with no weapon or armour pays 1 extra: a dark cell costs 2x a lit one")
     (is (nil? (.-night dark)) "the planner no longer takes a night flag")))
 
 (deftest no-dark-cost-when-off-or-without-perception

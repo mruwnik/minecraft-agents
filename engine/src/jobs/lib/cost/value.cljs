@@ -53,8 +53,8 @@
                 :doc "One block walked, there and back about a second of a player's time per 3 blocks."}
    ::per-climb {:default 2 :spec (a/num-in 0 nil)
                 :doc "One block climbed past the first on a detour (stairs or a pillar back out of a drop, or up to a ledge), in seconds."}
-   ::per-dark {:default 0.3 :spec (a/num-in 0 nil)
-               :doc "One block walked in the dark, on top of per-block: a dark block costs twice a lit one."}
+   ::per-dark {:default 0 :spec (a/num-in 0 nil)
+               :doc "Floor of one block walked in the dark, on top of per-block; the hp a zombie would cost the kit (dark-factor) comes on top, so a bare body pays a dark block twice a lit one and an armed one less."}
    ::spawn-chance-per-s {:default 0.005 :spec (a/num-in 0 nil)
                          :doc "Chance a mob spawns and reaches the body each second it stands on a cell where one can spawn (jobs.lib.cost/spawn-chance)."}
    ::dark-hurt-cap {:default 20 :spec (a/num-in 0 nil)

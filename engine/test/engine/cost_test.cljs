@@ -196,7 +196,8 @@
         unarmed (cost/dark-factor {:weapon nil :equipment nil})
         sword (cost/dark-factor {:weapon "iron_sword" :equipment nil})
         armed-armoured (cost/dark-factor {:weapon "iron_sword" :equipment iron-set})]
-    (is (< (js/Math.abs (- 1 floor)) 1e-9) "the bare factor is the flat floor")
+    (is (zero? floor) "the bare factor is the flat floor")
+    (is (< (js/Math.abs (- 1 unarmed)) 1e-9) "an unarmed body pays a dark cell 2x a lit one")
     (is (> unarmed sword armed-armoured floor) "a bare body pays most, armour and a sword less, never below the floor")))
 
 (deftest spawn-chance-is-zero-where-a-mob-cannot-spawn
