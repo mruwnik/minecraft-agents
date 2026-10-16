@@ -1,7 +1,7 @@
 ;; Card 77935add: jobs.farm.irrigate wets the field cells with no seen water within 4. A row of nine farmland cells at
 ;; [12..20 -1 16] (ground layer y -1), one water bucket carried. Should-succeed: the middle cell [16 -1 16] (it wets all nine) is dug and
 ;; filled, the job completes with nothing dry. Should-fail: a field with water beside it is left alone (no pour, bucket kept);
-;; with no bucket and :fetch false the job stops :need.
+;; with no bucket and :fetch false the job stops :need; a box over bare air has no field cell and stops :nothing-seen (never completed).
 {:defaults
  {:tags [:farm :irrigate :jobs]
   :time :any
@@ -23,4 +23,9 @@
    :body {:inventory []}
    :act [[:job (jobs.farm.irrigate {:from #xyz [12 -1 16] :to #xyz [20 -1 16] :fetch false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :need :cause {:item "water_bucket"}}} :within-s 30 :of-job true}]
-   :after [[:block [16 -1 16] "farmland[moisture=0]"]]}]}
+   :after [[:block [16 -1 16] "farmland[moisture=0]"]]}
+  {:name "box-over-air-sees-no-field-and-stops"
+   :act [[:job (jobs.farm.irrigate {:from #xyz [12 4 16] :to #xyz [20 4 16]})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :nothing-seen}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 10 :until {:source :job :kind :stopped}}]
+   :after [[:item "water_bucket" 1]]}]}

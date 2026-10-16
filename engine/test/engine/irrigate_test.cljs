@@ -8,12 +8,12 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]))
 
-(defn setup [world]
+(defn setup [world & [zones]]
   (let [clock (atom 1000000)
         [_ sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake world))]
     {:eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
-                        :world (ew/of-data {} {} [])
+                        :world (ew/of-data {} {} (or zones []))
                         :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
      :p p}))
 
@@ -69,3 +69,55 @@
               r (await (tu/child-outcome eng job (assoc (args 5) :fetch false) 10))]
           (is (= {:reason :need :item "water_bucket"} (select-keys (:cause (:ending r)) [:reason :item]))))))))
 
+
+(defn ending-of [r] (select-keys r [:status :reason]))
+
+(deftest a-box-with-no-field-cell-seen-is-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:inventory bucket :blocks (strip 0)})
+              r (await (tu/child-outcome eng job (args 3) 20))]
+          (is (= {:status :stopped :reason :nothing-seen} (ending-of r))))))))
+
+(deftest a-cell-with-unseen-reach-is-unknown-not-dry
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory bucket :blocks (strip 3)})
+              _ (tu/seeing-within p 3)
+              r (await (tu/child-outcome eng job (args 3) 20))]
+          (is (empty? (calls p "place")))
+          (is (= [] (:dry r)))
+          (is (= 3 (count (:unknown r))))
+          (is (= {:status :stopped :reason :unseen} (ending-of r))))))))
+
+(deftest a-spot-whose-side-is-open-is-not-used
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [open ["4,63,1" "4,63,-1" "4,62,0"]]
+          (let [{:keys [eng p]} (setup {:inventory bucket :blocks (assoc (strip 9) open "air")})
+                r (await (tu/child-outcome eng job (args 9) 40))
+                water (filterv #(= "water" (block-at p {:x % :y 63 :z 0})) (range 9))]
+            (is (not-any? #{4} water) open)
+            (is (= 1 (count (:poured r))) open)))))))
+
+(deftest a-spot-in-anothers-zone-is-skipped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory bucket :blocks (strip 9)} [{:name "farm" :min [4 60 0] :max [4 70 0] :owner "Miles"}])
+              r (await (tu/child-outcome eng job (args 9) 40))]
+          (is (not= "water" (block-at p {:x 4 :y 63 :z 0})))
+          (is (= 1 (count (:poured r)))))))))
+
+(deftest a-failed-pour-after-the-dig-names-the-open-hole
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory bucket :blocks (strip 9)})
+              _ (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "failed" :reason "no"}))
+              r (await (tu/child-outcome eng job (args 9) 40))]
+          (is (= 1 (count (:holes r))))
+          (is (= [] (:poured r))))))))

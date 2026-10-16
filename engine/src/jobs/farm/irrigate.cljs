@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [jobs.farm.find-spot :as find-spot]
             [jobs.farm.till :as till]
+            [jobs.lib.blocks :as b]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.gate :as gate]
@@ -17,18 +18,21 @@
 
 (def doc
   "Give the farm cells of a box (:from/:to) or square (:center/:radius, the cells of jobs.farm.till) water: a cell of
-  the field the body has seen, farmland or ground a hoe would till, is dry when no seen water lies within 4 blocks in x and z
-  of it, at its height or one above. For the spot that wets the most dry cells (one of the field's own cells under open air, nearest
+  the field the body has seen, farmland or ground a hoe would till, is dry when every block within 4 in x and z of it, at its height
+  and one above, is seen and none is water; a cell with an unseen block in reach and no water is unknown, never dry. For the spot
+  that wets the most dry cells (one of the field's own cells under open air whose four sides and underside are seen solid, nearest
   first) it digs the cell (a jobs.blocks.dig child) and pours a water bucket in it (a jobs.blocks.use-on child), then
-  looks again; one bucket wets one spot, so it ends when no cell is dry, no water bucket is left or no spot helps. Blocks
-  never seen are never counted. A water bucket is fetched (jobs.lib.need, :fetch) when dry cells are left and none is carried; a
+  looks again (a pour that fails ends the call, naming the hole left open); one bucket wets one spot, so it ends when no cell is dry, no water bucket is left or no spot helps. A pour
+  counts only once the cell is seen as water. A water bucket is fetched (jobs.lib.need, :fetch) when dry cells are left and none is carried; a
   failed fetch ends the call with its ending as the :because. Zones: a spot in another owner's zone or claim, or in a
   plan's footprint (unless :for-plan), is not used, with an irrigate.declined warn once.
   Refused before it starts: impossible {:reason :bad-args :why}; failed conditions {:reason :no-zones} (unless :ignore-zones?)
   and {:reason :need :item \"water_bucket\"} (dry cells, none carried, :fetch false).
-  Ends with data {:poured [cells] :dry [cells still dry] :failed [spots given up]}: done when no cell is dry, or the cells
-  wetted meet :least (default 1; :all: every dry cell); else condition-failed :need (no bucket), nothing-possible :no-spot.
-  done? is ok when no cell is dry after a look and no child is under way; it counts the dry cells left.")
+  Ends with data {:poured [cells] :dry [cells still dry] :unknown [cells with unseen reach] :failed [spots given up] :holes
+  [dug cells left open after a failed pour]}: done when no cell is dry (and, if none was poured, none is unknown), or the cells
+  wetted meet :least (default 1; :all: every dry cell); else condition-failed :need (no bucket), nothing-possible
+  :nothing-seen (no field cell seen), :unseen (only unknown cells left) or :no-spot.
+  done? is ok when a field cell is seen, none is dry or unknown after a look and no child is under way; it counts the dry cells left.")
 
 (a/defargs args
   {:from {:doc "box corner (inclusive); with :to, any order" :spec ::a/pos :default nil}
@@ -57,20 +61,39 @@
     (filterv #(field-ground (u/seen-name p %)) cs)))
 
 (defn waters
-  "The seen water as a set of [x y z] near the cells, with the cells poured in this call."
+  "The seen water as a set of [x y z] near the cells; a cell poured is water only once it is seen as such."
   [c cs]
   (let [me (u/self-pos c)
         reach (min 64 (+ (find-spot/water-reach) 1 (apply max 0 (map #(u/dist me %) cs))))]
-    (into (set (map (juxt :x :y :z) (:poured (ctx/mem c))))
+    (into #{}
           (map (fn [{:keys [x y z]}] [x y z]))
           (map :pos (look/seen-blocks (:primitives c) {:names ["water"] :radius reach :max 4096 :live? true})))))
 
-(defn dry-cells
-  "The field cells with no water within reach."
+(defn reach-seen?
+  "Whether every block a water source could wet the cell from is seen."
+  [p {:keys [x y z]}]
+  (let [r (find-spot/water-reach)]
+    (every? #(u/seen-name p {:x (+ x %1) :y (+ y %3) :z (+ z %2)})
+            (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy [0 1]] [dx dz dy]))))
+
+(defn readings
+  "The field cells by state: :dry (reach seen, no water), :unknown (water absent, reach partly unseen), :wet."
   [c]
   (let [cs (field-cells c)
-        ws (waters c cs)]
-    (vec (remove (fn [{:keys [x y z]}] (find-spot/hydrated? ws x y z)) cs))))
+        ws (waters c cs)
+        p (:primitives c)]
+    (group-by (fn [{:keys [x y z] :as cell}]
+                (cond (find-spot/hydrated? ws x y z) :wet
+                      (reach-seen? p cell) :dry
+                      :else :unknown))
+              cs)))
+
+(defn dry-cells
+  "The field cells with the whole reach seen and no water in it."
+  [c]
+  (vec (:dry (readings c))))
+
+(defn unknown-cells [c] (vec (:unknown (readings c))))
 
 (defn covers
   "How many of dry a water cell at spot wets."
@@ -81,16 +104,26 @@
 (defn permitted? [c pos]
   (gate/allowed? c :irrigate.declined "irrigate" :dig pos {:except (:for-plan (:args c))}))
 
+(defn contained?
+  "Whether the cell's four sides and underside are seen solid, so a source poured there stays put."
+  [p {:keys [x y z]}]
+  (every? (fn [[dx dy dz]]
+            (let [n (u/seen-name p {:x (+ x dx) :y (+ y dy) :z (+ z dz)})]
+              (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n)))))
+          [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 -1 0]]))
+
 (defn spot
   "The field cell to turn into water: the one that wets the most of dry, nearest first; nil when none helps. Only a
-  cell with air above, not given up, that the zone rules let the body dig."
+  cell with air above and a contained hole, not given up, that the zone rules let the body dig."
   [c dry]
   (let [p (:primitives c)
         me (u/self-pos c)
         failed (:failed (ctx/mem c) #{})
         open (->> (field-cells c)
                   (remove failed)
+                  (remove (set (:poured (ctx/mem c))))
                   (filter #(= "air" (u/seen-name p (update % :y inc))))
+                  (filter #(contained? p %))
                   (filter #(permitted? c %)))]
     (->> open
          (keep (fn [pos] (let [n (covers dry pos)] (when (pos? n) [n pos]))))
@@ -119,16 +152,20 @@
                           (checks/refusing :bucket "water bucket carried or fetchable" no-bucket-source)))
 
 (defn result-of [c]
-  (let [m (ctx/mem c)]
-    {:poured (vec (:poured m)) :dry (dry-cells c) :failed (vec (:failed m))}))
+  (let [m (ctx/mem c)
+        {:keys [dry unknown]} (readings c)]
+    {:poured (vec (:poured m)) :dry (vec dry) :unknown (vec unknown) :failed (vec (:failed m)) :holes (vec (:holes m))}))
 
 (defn done?
   [c]
-  (let [dry (count (dry-cells c))
+  (let [{:keys [dry unknown wet]} (readings c)
+        dry (count dry)
         data [:units :cells :done (count (:poured (ctx/mem c))) :left dry :result (result-of c)]]
     (cond
       (pos? dry) (apply contract/later :dry (str "irrigate: " dry " cells dry") data)
       (not (look/surveyed? c)) (apply contract/later :looking "irrigate: no cell dry, looking round" data)
+      (seq unknown) (apply contract/later :unseen (str "irrigate: " (count unknown) " cells with unseen reach") data)
+      (empty? wet) (apply contract/later :nothing-seen "irrigate: no field cell seen" data)
       (checks/child-under-way? c) (apply contract/later :wrapping-up "irrigate: wrapping up" data)
       :else (apply contract/ok :irrigated "irrigate: every cell has water in reach" data))))
 
@@ -140,14 +177,24 @@
 (defn conclude!
   "The ending when no more can be poured: reason is why dry cells remain (:need or :no-spot)."
   [c reason]
-  (let [{:keys [dry] :as result} (result-of c)
+  (let [{:keys [dry unknown holes poured] :as result} (result-of c)
         dry0 (:dry0 (ctx/mem c) (count dry))
-        text (str "irrigated " (count (:poured result)) " spots, " (count dry) " cells dry")
+        text (str "irrigated " (count poured) " spots, " (count dry) " cells dry"
+                  (when (seq unknown) (str ", " (count unknown) " unseen"))
+                  (when (seq holes) (str ", " (count holes) " dug holes left open")))
         data (assoc result :text text)]
     (cond
-      (or (empty? dry) (common/enough? c (- dry0 (count dry)) dry0)) (ctx/end c :done nil data)
+      (and (empty? (field-cells c)) (empty? poured)) (ctx/end c :nothing-possible :nothing-seen data)
+      (and (empty? dry) (or (empty? unknown) (seq poured))) (ctx/end c :done nil data)
+      (and (seq dry) (common/enough? c (- dry0 (count dry)) dry0)) (ctx/end c :done nil data)
       (= :need reason) (ctx/end c :condition-failed :need data)
+      (empty? dry) (ctx/end c :nothing-possible :unseen data)
       :else (ctx/end c :nothing-possible reason data))))
+
+(defn leave-hole!
+  "Give the hole up: a dug cell the pour did not fill stays open, so the ending says so."
+  [c hole why]
+  (ctx/update-mem! c #(-> (dissoc % :hole) (update why (fnil conj #{}) hole) (update :holes (fnil conj #{}) hole))))
 
 (defn ^:async pour!
   "Pour the bucket in the dug hole. :again, or :continue while the child waits."
@@ -156,7 +203,7 @@
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (ctx/update-mem! c #(-> (dissoc % :hole) (update :poured (fnil conj #{}) hole))) :again)
-      :else (do (ctx/update-mem! c #(-> (dissoc % :hole) (update :failed (fnil conj #{}) hole))) :again))))
+      :else (do (leave-hole! c hole :failed) :again))))
 
 (defn ^:async dig!
   "Dig the field cell at hole; the pour waits in memory (:hole) so a restart finishes it."
@@ -172,12 +219,13 @@
   [c]
   (let [p (:primitives c)
         hole (:hole (ctx/mem c))
-        _ (when-not hole (when (empty? (field-cells c)) (await (look/survey! c :cell))))
+        _ (when (and (not hole) (empty? (dry-cells c)) (not (look/surveyed? c :cell))) (await (look/survey! c :cell)))
         dry (when-not hole (dry-cells c))
         _ (when (and dry (not (:dry0 (ctx/mem c)))) (ctx/update-mem! c assoc :dry0 (count dry)))]
     (cond
-      hole (if (has-bucket? p) (await (pour! c hole)) (do (ctx/update-mem! c dissoc :hole) :again))
+      hole (if (has-bucket? p) (await (pour! c hole)) (do (leave-hole! c hole :failed) :again))
       (empty? dry) (conclude! c nil)
+      (seq (:holes (ctx/mem c))) (conclude! c :no-spot)
       (not (has-bucket? p))
       (let [e (await (need/item! c "water_bucket" 1 (fetch-opts c)))]
         (cond
