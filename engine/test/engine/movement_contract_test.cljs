@@ -123,8 +123,8 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label world args kind reason]
-                [["not a boat" {:blocks lake :entities [(assoc boat :name "minecart" :pos {:x 2.5 :y 63.5 :z 2.5})] :self {:vehicle 9}} {:pos [10 63 2]} :condition-failed :not-a-boat]
-                 ["not water" {:blocks lake :entities [(assoc boat :pos {:x 2.5 :y 63.5 :z 2.5})] :self {:vehicle 9}} {:pos [10 64 2]} :condition-failed :not-water]]]
+                [["not a boat" {:blocks lake :entities [(assoc boat :name "minecart" :pos {:x 2.5 :y 63.5 :z 2.5})] :self {:vehicle 9}} {:pos [10 63 2]} :impossible :not-a-boat]
+                 ["not water" {:blocks lake :entities [(assoc boat :pos {:x 2.5 :y 63.5 :z 2.5})] :self {:vehicle 9}} {:pos [10 64 2]} :impossible :not-water]]]
           (is (= {:event :stopped :kind kind :reason reason}
                  (await (ending-of world (list 'jobs.movement.boat-drive args)))) label))))))
 

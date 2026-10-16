@@ -98,7 +98,7 @@
           (await (tu/run-until-empty eng 30))
           (is (empty? (filterv #(= :waiting (:kind %)) @seen)))
           (is (= [:no-shore] (mapv :reason (filterv #(= :stopped (:kind %)) @seen))))
-          (is (some #(= :boat.driven (:kind %)) @seen) "drove nearer first"))))))
+          (is (some #(= "paddle" (:name %)) @seen) "drove nearer first"))))))
 
 (deftest a-failed-approach-drive-is-the-because-of-no-shore
   (async done
@@ -217,7 +217,7 @@
           (mem/write! (:store eng) boat-land/landed-kind {:job id :land {:x 21 :y 64 :z 10} :boat 9} boat-land/landed-policy)
           (await (tu/run-until-empty eng 90))
           (is (empty? (:list (core/state eng))))
-          (is (= 0 (kinds seen :boat.driven)) "no second drive")
+          (is (empty? (filter #(= "paddle" (:name %)) @seen)) "no second drive")
           (is (= [true] (mapv :recovered (filter #(= :boat.landed (:kind %)) @seen))) "the one landing is the recovered one"))))))
 
 (deftest conditions-name-the-start-facts

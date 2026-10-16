@@ -4,7 +4,6 @@
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.library-test :as lt]
-            [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.movement.boat-drive :as boat-drive]))
 
@@ -35,11 +34,10 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [target [[10 63 2] [2 63 12] [0 63 0] [15 63 15]]]
-          (let [{:keys [res p seen]} (await (run {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos target}))]
+          (let [{:keys [res p]} (await (run {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos target}))]
             (is (= :done (:status res)) (pr-str [target res]))
             (is (<= (dist-to (boat-pos p) target) 1.5) (pr-str [target (boat-pos p)]))
-            (is (pos? (:strokes res)))
-            (is (some #(= :boat.driven (:kind %)) @seen))))))))
+            (is (not (:already? res)) "it took strokes")))))))
 
 (deftest already-there-is-done-without-a-stroke
   (async done
@@ -54,21 +52,23 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label world args reason]
-                [["not a boat" {:blocks lake :entities [(boat-at 2.5 2.5 :name "minecart")] :self {:vehicle 9}} {:pos [10 63 2]} :not-a-boat]
-                 ["the cell is not water" {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [10 64 2]} :not-water]
-                 ["land in the way" {:blocks (merge (pond 0 10 0 3) (pond 0 10 8 12)) :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [5 63 10]} :blocked]
+                [["land in the way" {:blocks (merge (pond 0 10 0 3) (pond 0 10 8 12)) :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [5 63 10]} :blocked]
                  ["out of time" {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [18 63 18] :spend {:job-time 0}} :job-time]]]
           (let [{:keys [res]} (await (run world args))]
             (is (= {:status :stopped :reason reason} (select-keys res [:status :reason])) (pr-str [label res]))))))))
 
-(deftest the-strokes-setting-bounds-the-drive
+(deftest can-run-asks-the-boat-and-the-cell-between-strokes
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (settings/with-settings {:jobs.movement.boat-drive/max-strokes 2}
-                 (fn ^:async few-strokes []
-                   (let [{:keys [res]} (await (run {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [18 63 18]}))]
-                     (is (= {:status :stopped :reason :strokes} (select-keys res [:status :reason])) (pr-str res))))))))))
+        (doseq [[label world args expect]
+                [["aboard a boat" {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [10 63 2]} [:ok :aboard]]
+                 ["on foot" {:blocks lake :entities [(boat-at 2.5 2.5)]} {:pos [10 63 2]} [:later :not-aboard]]
+                 ["not a boat" {:blocks lake :entities [(boat-at 2.5 2.5 :name "minecart")] :self {:vehicle 9}} {:pos [10 63 2]} [:never :not-a-boat]]
+                 ["land cell" {:blocks lake :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}} {:pos [10 64 2]} [:never :not-water]]]]
+          (let [{:keys [p]} (lt/setup world)
+                s (boat-drive/can-run? {:primitives p :args args})]
+            (is (= expect [(first s) (:reason (nth s 2))]) label)))))))
 
 (deftest on-foot-fails-its-condition-not-aboard
   (async done
@@ -93,7 +93,7 @@
           (core/submit! eng '(jobs.movement.boat-drive {:pos [10 63 2]}) {})
           (await (tu/run-until-empty eng 30))
           (is (empty? (filterv #(= :waiting (:kind %)) @seen)))
-          (is (some #(= :boat.driven (:kind %)) @seen)))))))
+          (is (some #(= :completed (:kind %)) @seen)))))))
 
 (deftest a-target-that-turns-unsensed-on-the-way-is-still-steered-to
   (async done
@@ -107,7 +107,7 @@
           (await (tu/run-until-empty eng 30))
           (is (empty? (filterv #(= :stopped (:kind %)) @seen)) (pr-str (mapv #(select-keys % [:kind :reason :data]) @seen)))
           (is (empty? (filterv #(= :waiting (:kind %)) @seen)))
-          (is (some #(= :boat.driven (:kind %)) @seen)))))))
+          (is (some #(= :completed (:kind %)) @seen)))))))
 
 (deftest a-call-naming-no-cell-is-impossible
   (is (= [:never :bad-args] ((juxt first (comp :reason #(nth % 2))) (boat-drive/bad-args {:args {}}))))
