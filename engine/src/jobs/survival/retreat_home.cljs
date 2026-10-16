@@ -83,23 +83,26 @@
 
 (defn closed?
   "Whether cell pos holds a closed room (refuge-room?), kept in mem :refuge-rooms for the job; no closed room at all
-  (reach/room nil) also in body memory (known-open?) for a while, not one judged by what the body has not seen yet."
+  (reach/room nil) also in body memory (known-open?) for a while. :unseen, kept nowhere, when a cell of the room is not
+  seen yet (reach/unseen-room?): judged again at the next look."
   [c pos]
   (let [k (cell-key pos)
         known (get (:refuge-rooms (ctx/mem c)) k)]
     (cond
       (some? known) known
       (known-open? c pos) false
-      :else (let [v (refuge-room? (:primitives c) pos)]
-              (ctx/update-mem! c assoc-in [:refuge-rooms k] v)
-              (when-not (or v (reach/room (:primitives c) pos)) (mem/write! (:store (:engine c)) :refuge-open {:cell k} open-policy))
-              v))))
+      :else (let [p (:primitives c) v (refuge-room? p pos)]
+              (if (and (not v) (reach/unseen-room? p pos))
+                :unseen
+                (do (ctx/update-mem! c assoc-in [:refuge-rooms k] v)
+                    (when-not (or v (reach/room p pos)) (mem/write! (:store (:engine c)) :refuge-open {:cell k} open-policy))
+                    v))))))
 
 (defn survey
   "The closed rooms to flee to, {:rooms [...]} (jobs.lib.reach/room plus :start and :home?): the home's (home
   {:x :y :z} or nil) and those behind the doors the body has seen (starts), at most max-rooms, the home first then the
   nearest; and {:dropped [{:at [x y z] :own? :why}]}, the cells that are none: :run-failed (a run to it failed this
-  flight), :not-closed, or :unjudged (a door side not judged this flight beyond the fresh ones it may flood now; the
+  flight), :not-closed, :unseen (a cell of the room not seen yet), or :unjudged (a door side not judged this flight beyond the fresh ones it may flood now; the
   home is always judged)."
   ([c home] (survey c home js/Infinity))
   ([c home fresh]
@@ -111,7 +114,8 @@
                  (let [known (get (:refuge-rooms (ctx/mem c)) (cell-key pos))]
                    (cond
                      (some? known) (when-not known :not-closed)
-                     (or home? (pos? @left)) (do (when-not home? (vswap! left dec)) (when-not (closed? c pos) :not-closed))
+                     (or home? (pos? @left)) (do (when-not home? (vswap! left dec))
+                                                 (case (closed? c pos) true nil :unseen :unseen :not-closed))
                      :else :unjudged)))
          judged (mapv (fn [{:keys [pos home?] :as s}]
                         (assoc s :why (if (failed (cell-key pos)) :run-failed (judge pos home?))))
@@ -140,7 +144,7 @@
   "Whether the body is in the closed room that holds home ({:x :y :z} or nil); no other room is looked at."
   [c home]
   (let [p (:primitives c)]
-    (boolean (when (and home (closed? c home))
+    (boolean (when (and home (true? (closed? c home)))
                (some->> (reach/room p home) (inside? p))))))
 
 (defn way-in

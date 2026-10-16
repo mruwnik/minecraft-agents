@@ -434,13 +434,20 @@
                   (and (not (passable? kind-at nx y nz)) (passable? kind-at x (+ y 2) z) (unseen? nx (inc y) nz)))))
           [[1 0] [-1 0] [0 1] [0 -1]])))
 
+(defn room-flood
+  "{:cells [...] :unseen? bool}: the cells a walker at cell [x y z] reaches (room-kind-at) fewer than room-cells, and
+  whether any is an unseen-edge?; nil when the flood is open."
+  [p kind-at x y z]
+  (let [kind-at (room-kind-at p kind-at)]
+    (when-let [cells (flood-cells (partial forward kind-at) [x y z] room-cells)]
+      {:cells cells :unseen? (boolean (some #(unseen-edge? p kind-at %) cells))})))
+
 (defn room-from
   "The closed room a walker at cell [x y z] reaches (room*'s answer), nil when it is no closed room or any cell of it is
   an unseen-edge?."
   [p kind-at x y z]
-  (let [kind-at (room-kind-at p kind-at)]
-    (when-let [cells (let [cells (flood-cells (partial forward kind-at) [x y z] room-cells)]
-                       (when-not (some #(unseen-edge? p kind-at %) cells) cells))]
+  (let [{:keys [cells unseen?]} (room-flood p kind-at x y z)]
+    (when (and cells (not unseen?))
       (let [cells (set (map vec cells))
             doors (for [[cx cy cz] cells
                         [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
@@ -470,6 +477,15 @@
     (if in-door?
       (some (fn [[dx dz]] (room-from p kind-at (+ x dx) y (+ z dz))) [[1 0] [-1 0] [0 1] [0 -1]])
       (room-from p kind-at x y z))))
+
+(defn unseen-room?
+  "Whether the cell pos {:x :y :z} holds a room that closes over what the body has seen but has a cell it has not seen
+  beside it (room* nil for that reason, not because the room is open): it is unknown, look first."
+  [p {:keys [x y z]}]
+  (let [kind-at (shut-kind-at p)
+        in-door? (some-> (u/seen-block p {:x x :y y :z z}) .-name openable?)
+        starts (if in-door? (map (fn [[dx dz]] [(+ x dx) y (+ z dz)]) [[1 0] [-1 0] [0 1] [0 -1]]) [[x y z]])]
+    (boolean (some (fn [[sx sy sz]] (:unseen? (room-flood p kind-at sx sy sz))) starts))))
 
 (defn unroofed-cell
   "{:cell :closed?}: the first cell a walker flood from pos {:x :y :z} (doors shut, within room-cells) reaches with no

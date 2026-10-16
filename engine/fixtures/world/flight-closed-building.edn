@@ -17,12 +17,16 @@
   :limit-s 60}
  :cases
  [{:name "runs-into-a-foreign-closed-building-and-shuts-the-door"
-   :act [[:summon "zombie" [16.5 0 31.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :body {:at [16.5 0 17.5] :effects [["resistance" 600 4]]}
+   :act [[:job (jobs.movement.look-around {})] [:await {:source :job :kind :completed} 30] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16.5 ~ ~25.5"] [:wait-s 1]
+         [:summon "zombie" [16.5 0 31.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.home :data {:own? false}} :within-s 25}
             {:event {:source :job :kind :retreat.door-shut} :within-s 40}]
    :after [[:body-near [16.5 0 16.5] 3.5]]}
   {:name "own-home-ahead-of-a-chaser-beside-the-door"
-   :act [[:job (jobs.memory.set-place {:name :home :pos #at [16 0 16]})]
+   :body {:at [16.5 0 17.5] :effects [["resistance" 600 4]]}
+   :act [[:job (jobs.movement.look-around {})] [:await {:source :job :kind :completed} 30] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16.5 ~ ~25.5"] [:wait-s 1]
+         [:job (jobs.memory.set-place {:name :home :pos #at [16 0 16]})]
          [:summon "zombie" [22.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.home :data {:own? true}} :within-s 25}
             {:event {:source :job :kind :retreat.door-shut} :within-s 40}]
@@ -36,7 +40,9 @@
    :after [[:body-far [16.5 0 16.5] 3.5]]}
   ;; 31887403: :home in the far corner of the hut, 7 cells from the door: the door is still shut on the way in
   {:name "own-home-in-the-far-corner-still-shuts-the-door"
-   :act [[:job (jobs.memory.set-place {:name :home :pos #at [13 0 13]})]
+   :body {:at [16.5 0 17.5] :effects [["resistance" 600 4]]}
+   :act [[:job (jobs.movement.look-around {})] [:await {:source :job :kind :completed} 30] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16.5 ~ ~25.5"] [:wait-s 1]
+         [:job (jobs.memory.set-place {:name :home :pos #at [13 0 13]})]
          [:summon "zombie" [22.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.home :data {:own? true}} :within-s 25}
             {:event {:source :job :kind :retreat.door-shut} :within-s 40}]
@@ -44,7 +50,8 @@
   ;; 31887403: already inside the hut, on a cell other than the :home cell: that is at home, the body does not run out again
   {:name "inside-the-room-away-from-the-home-cell-stays-and-shuts-the-door"
    :body {:at [14.5 0 14.5]}
-   :act [[:job (jobs.memory.set-place {:name :home :pos #at [18 0 18]})]
+   :act [[:job (jobs.movement.look-around {})] [:await {:source :job :kind :completed} 30]
+         [:job (jobs.memory.set-place {:name :home :pos #at [18 0 18]})]
          [:summon "zombie" [17.5 0 23.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.door-shut} :within-s 40}]
    :after [[:block [16 0 20] "oak_door[half=lower,open=false]"] [:body-near [16.5 0 16.5] 4.5]]}

@@ -421,3 +421,18 @@
               second-flight (flight "j9" "t9")]
           (is (pos? first-flight))
           (is (< second-flight (/ first-flight 10)) (str "cells read by the first flight " first-flight ", the next " second-flight)))))))
+
+(deftest a-room-with-an-unseen-cell-is-judged-again-once-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [hidden (atom true)
+              {:keys [eng p]} (setup (assoc (hut {:x 5.5 :y 64 :z 6.5} hs/door-states []) :home false))
+              _ (seeing-all-but p (fn [[x y z]] (and @hidden (= [5 64 0] [x y z]))))
+              c (core/make-ctx eng {:root "j8" :slots [] :chain ["j8"] :token "t8" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "t8")
+              home-why #(some (fn [d] (when (= [5 64 0] (:at d)) (:why d))) (:dropped (retreat-home/survey c home)))]
+          (is (= :unseen (home-why)) "a cell not seen leaves the home neither closed nor open")
+          (reset! hidden false)
+          (is (nil? (home-why)) "seen, the home is a refuge")
+          (is (= 1 (count (:rooms (retreat-home/survey c home))))))))))
