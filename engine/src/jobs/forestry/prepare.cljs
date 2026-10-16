@@ -1,5 +1,6 @@
 (ns jobs.forestry.prepare
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [jobs.lib.cond :as cond]
             [engine.ctx :as ctx]
@@ -407,6 +408,10 @@
 (def target [:plan :part])
 
 (def defaults {:spend {:job-time ::job-time-s}})
+
+(def safe? (ready/safe-at (fn [c] (some-> (field/planned c) :trees keys first))))
+
+(def fit? ready/fit?)
 
 (defn can-run? [c] (maintain/trouble-status (field/planned c)))
 

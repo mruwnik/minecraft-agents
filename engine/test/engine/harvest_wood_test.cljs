@@ -1,6 +1,7 @@
 (ns engine.harvest-wood-test
   "jobs.forestry.harvest-wood ends when it has no sapling to plant (BaseMiner trial: it sat queued with the body idle)."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is async use-fixtures]]
+            [engine.lit-support :as lit]
             [engine.ctx :as ctx]
             [engine.core :as core]
             [engine.fake :as fake]
@@ -10,6 +11,8 @@
             [jobs.forestry.harvest-wood :as hw]
             [jobs.forestry.plant-sapling :as ps]
             [jobs.lib.trees :as trees]))
+
+(use-fixtures :once lit/fixture)
 
 (def harvest '(jobs.forestry.harvest-wood {:species "oak" :radius 10}))
 

@@ -1,5 +1,6 @@
 (ns jobs.gather.make-obsidian
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -225,6 +226,10 @@
 (def target [])
 
 (def defaults {:spend {:job-time ::job-time-s}})
+
+(def safe? ready/safe-if-lit)
+
+(def fit? ready/fit?)
 
 (defn bucket-cause
   "Cause :no-bucket before the start (the round's own ending covers it later): no obsidian seen to mine, no water bucket carried and no bucket with water seen to fill; none when a bucket can be fetched."

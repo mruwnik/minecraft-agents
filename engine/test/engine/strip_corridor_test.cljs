@@ -1,11 +1,13 @@
 (ns engine.strip-corridor-test
   "jobs.strip.corridor: one mineshaft corridor segment stripped, in the fake world."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is async use-fixtures]]
+            [engine.lit-support :as lit]
             [engine.blocks-dig-test :as bd]
             [engine.fake :as fake]
-            [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.lib.strip :as strip]))
+
+(use-fixtures :once lit/fixture)
 
 (def job 'jobs.strip.corridor)
 (def seg {:y 64 :axis :x :line 0 :from 0 :to 12 :open-ends #{}})
@@ -76,20 +78,14 @@
           (is (= {:status :done :taken {:wood 21 :rail 13 :cobweb 1 :torch 2}} (select-keys r [:status :taken])))
           (is (= 2 (bd/carried (:p env) "torch"))))))))
 
-(deftest a-zombie-in-the-corridor-declines-danger-with-nothing-dug
+(deftest a-zombie-in-the-corridor-holds-the-job-back-with-nothing-dug
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [env (world :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0} :health 20}])
               why (await (bd/waiting-after env (list job args) 3))]
-          (is (= :danger (:reason why)))
+          (is (= :hostile-near (:reason why)))
           (is (empty? (bd/calls (:p env) "dig"))))))))
-
-(deftest a-danger-is-asked-between-steps-by-can-run
-  (let [can-run? (:can-run? (get registry/jobs job))
-        asked (fn [entities] (first (can-run? {:primitives (:p (world :entities entities)) :args (assoc args :danger-check true)})))]
-    (is (= :later (asked [{:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0} :health 20}])))
-    (is (= :ok (asked [])))))
 
 (deftest a-long-corridor-is-one-round-not-cut-at-a-step-count
   (async done
@@ -182,13 +178,13 @@
         (let [r (await (run! (world) {:segment "nonsense"}))]
           (is (= {:status :stopped :reason :bad-args} (select-keys r [:status :reason]))))))))
 
-(deftest spawner-break-with-a-cave-spider-near-declines-danger-and-digs-nothing
+(deftest spawner-break-with-a-cave-spider-near-waits-and-digs-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [env (world :entities [spider] :blocks spawner-corridor)
               why (await (bd/waiting-after env (list job (assoc args :spawner :break)) 3))]
-          (is (= :danger (:reason why)))
+          (is (= :hostile-near (:reason why)))
           (is (empty? (bd/calls (:p env) "dig")))
           (is (= "spawner" (bd/block-at (:p env) spawner-cell))))))))
 

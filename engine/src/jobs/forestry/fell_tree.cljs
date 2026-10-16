@@ -1,5 +1,6 @@
 (ns jobs.forestry.fell-tree
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.ready :as ready]
+            [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -9,13 +10,11 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.choose :as choose]
             [jobs.lib.child :as child]
-            [jobs.lib.cond :as cond]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
-            [jobs.lib.shelter :as sh]
             [jobs.lib.targets :as targets]
             [jobs.lib.trees :refer [axe-worth-fetching? axe-fetch-limits trees-near tree-near tree-at unreachable-set debts replant-kind
                                     replant-policy default-radius max-partials]]
@@ -55,8 +54,8 @@
   skips the check.
 
   Conditions: :no-tree (none in sight after one look around from where it stands, the condition's look; data :radius,
-  :species; a listed job waits; with :at and no log there it is impossible, data :at) and
-  :night-sheltered (shut in a shelter at night: the trees are outside).
+  :species; a listed job waits; with :at and no log there it is impossible, data :at).
+  Its safe? is ready/safe-at :at with :at, else ready/safe-if-lit.
   Ends :done with {:base pos :logs n :axe why} of the tree it felled: n logs dug; :axe is :carried, :skipped-fetch-off,
   :skipped-small-tree or :none-found (fetch failed: chopped by hand). Condition-failed :no-tree when the look found none;
   limit-reached {:line :food :reason :hungry} when no food is carried and get-food found none; nothing-possible :tree-unreachable when every tree in sight proved out of
@@ -151,12 +150,6 @@
   (ctx/update-mem! c #(-> % (merge (select-keys t [:column :species :base])) (assoc :partials 0)))
   t)
 
-(defn night-sheltered
-  "The kind of shelter the body is shut in at night (jobs.lib.shelter/night-sheltered), else nil; never under a reflex job."
-  [c]
-  (when-not (:reflex c)
-    (sh/night-sheltered (:primitives c) (:data (ctx/latest c :shelter)))))
-
 (defn mark-all-unreachable!
   "Remember the columns of trees as unreachable."
   [c trees]
@@ -176,7 +169,7 @@
           :found (commit-tree! c (nth ts (:index a)))
           :searching :searching
           (if (and (:proved a) (not (reach/enclosed? (:primitives c))))
-            (do (when-not (night-sheltered c) (mark-all-unreachable! c ts)) nil)
+            (do (mark-all-unreachable! c ts) nil)
             (commit-tree! c (first ts))))))))
 
 (defn mark-unreachable!
@@ -390,10 +383,11 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def sheltered
-  "Later :night-sheltered at night in a shelter: the trees are outside, and a search from inside proves none reachable."
-  (checks/refusing :not-sheltered "not shut in a shelter by night"
-                   (fn [c] (when-let [k (night-sheltered c)] {:reason :night-sheltered :shelter k}))))
+(defn place "The cell of :at, nil without it." [c] (a/cell (:at (:args c))))
+
+(def safe? (ready/safe-at-or-if-lit place))
+
+(def fit? ready/fit?)
 
 (defn tree-missing
   "The cause :no-tree while no tree is chosen or marked unreachable, none is in sight and no unseen :at is to be walked
@@ -411,7 +405,7 @@
   (checks/refusing #(cond (:at (:args %)) :never (look/surveyed? % :near) :later :else :look)
                    :tree-found "a tree to fell" tree-missing))
 
-(def can-start? (cond/and sheltered no-tree))
+(def can-start? no-tree)
 
 (defn done?
   "Ok once the chosen tree is down: logs were dug, none of its column is left and the body is off the canopy, no child

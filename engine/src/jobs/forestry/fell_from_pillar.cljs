@@ -1,5 +1,6 @@
 (ns jobs.forestry.fell-from-pillar
-  (:require [engine.contract :as contract]
+  (:require [jobs.lib.ready :as ready]
+            [engine.contract :as contract]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -59,6 +60,10 @@
 (def target [:base])
 
 (def defaults {:spend {:job-time ::job-time-s}})
+
+(def safe? (ready/safe-at (fn [c] (a/cell (or (:at (:args c)) (:base (:args c)))))))
+
+(def fit? ready/fit?)
 
 (def pillar-items (choose/fillers :pillar))
 

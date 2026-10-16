@@ -1,5 +1,6 @@
 (ns jobs.gather.mine
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.ready :as ready]
+            [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -216,6 +217,10 @@
 (def target [:block :heading])
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
+
+(def safe? ready/safe-if-lit)
+
+(def fit? ready/fit?)
 
 ;; ------------------------------------------------------------------ the contract
 

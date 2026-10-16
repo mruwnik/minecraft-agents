@@ -1,5 +1,6 @@
 (ns jobs.forestry.tidy
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -23,7 +24,7 @@
   Ends :done {:tidied n} (plus :replant-owed k when k felled trunks were not replanted: no seen ground, or plant-sapling
   would not run; their replant debts stay owed) after :max-trees trunks or when none is left in sight. With nothing to tidy
   (done? true once the first round has looked round) it ends done {:tidied 0}. A fell child that ends for want of a tool, blocks or food (a need, a limit,
-  :hungry, :night-sheltered) ends the job with that ending (:tidied n in its data), done when trunks were tidied first;
+  :hungry) ends the job with that ending (:tidied n in its data), done when trunks were tidied first;
   a trunk it cannot reach is left. A missing axe, a pillar's blocks or a sapling are fetched by the children (:fetch).
   Quote: time by the trunks to fell, at most :max-trees.")
 
@@ -146,7 +147,7 @@
 
 (def fell-stops
   "Causes of a fell child's ending that are the body's or the world's, not the trunk's: they end the job."
-  #{:need :tool :free-slots :night-sheltered :hungry})
+  #{:need :tool :free-slots :hungry})
 
 (defn fell-ended!
   "What the fell child's ending e means for the trunk: done with logs goes on to collect, done with none leaves the
@@ -187,6 +188,10 @@
 (def target [:species])
 
 (def defaults {:spend {:job-time ::job-time-s}})
+
+(def safe? ready/safe-if-lit)
+
+(def fit? ready/fit?)
 
 (defn done?
   "No trunk is chosen or in sight, the body has looked round and no child is under way; the trunks tidied and the

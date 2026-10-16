@@ -211,7 +211,7 @@
           (let [id (core/submit! eng '(jobs.gather.get-seeds {:count 2}) {})]
             (await (ticks eng 6))
             (is (= inside (st/pos-of p)))
-            (is (= :exposed (:reason (waiting-of eng id))))))))))
+            (is (= :dark (:reason (waiting-of eng id))))))))))
 
 (deftest a-parent-walking-with-run!-shows-the-night-wait-and-yields
   (async done

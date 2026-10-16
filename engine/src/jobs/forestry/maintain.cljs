@@ -1,5 +1,6 @@
 (ns jobs.forestry.maintain
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [jobs.lib.access.rules :as rules]
             [engine.contract :as contract]
             [jobs.lib.cond :as cond]
@@ -493,6 +494,12 @@
 (def target [:plan :part])
 
 (def defaults {:spend {:job-time ::job-time-s}})
+
+(defn plan-place "A tree cell of the plan, nil when it cannot be worked." [c] (some-> (planned c) :trees keys first))
+
+(def safe? (ready/safe-at plan-place))
+
+(def fit? ready/fit?)
 
 (defn can-run? [c] (trouble-status (planned c)))
 

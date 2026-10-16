@@ -1,12 +1,12 @@
 (ns jobs.forestry.harvest-wood
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [clojure.string :as str]
             [jobs.forestry.fell-tree :as fell-tree]
             [jobs.lib.checks :as checks]
-            [jobs.lib.cond :as cond]
             [jobs.lib.need :as need]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
@@ -133,7 +133,7 @@
 
 (defn fell-ended!
   "What the :fell child's ending e means: a tree felled goes on to collect, none in sight before the first tree waits
-  (:continue), a night shelter waits, any other ending ends the job."
+  (:continue), any other ending ends the job."
   [c e]
   (let [why (contract/cause-key e)]
     (cond
@@ -142,7 +142,6 @@
           (ctx/update-mem! c assoc :want (max 0 (- (:logs (:data e) 1) (- (logs-carried c) (:logs-before (ctx/mem c) 0)))))
           (ctx/update-mem! c assoc :phase :collect)
           :again)
-      (= :night-sheltered why) :continue
       (and (= :no-tree why) (not (pos? (:felled (ctx/mem c) 0))))
       (do (ctx/update-mem! c assoc :looked (look/cell-of (u/self-pos c)))
           :continue)
@@ -188,11 +187,11 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(defn with-fell-args [check] (fn [c] (check (assoc c :args (fell-args (:args c))))))
+(def safe? ready/safe-if-lit)
 
-(def sheltered
-  "The fell child's night status before the job starts: the trees are outside the shelter."
-  (with-fell-args fell-tree/sheltered))
+(def fit? ready/fit?)
+
+(defn with-fell-args [check] (fn [c] (check (assoc c :args (fell-args (:args c))))))
 
 (def no-tree-to-fell
   "fell-tree's :no-tree while nothing is felled yet and the next tree is still to be felled; the other phases are the
@@ -203,7 +202,7 @@
         (no-tree c)
         (contract/ok :tree-found "a tree is felled or not wanted now")))))
 
-(def can-start? (cond/and sheltered no-tree-to-fell))
+(def can-start? no-tree-to-fell)
 
 (defn done?
   "Ok once the last tree is planted, or (with :count) the logs are carried and no tree is under way; else later with the

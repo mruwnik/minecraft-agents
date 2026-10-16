@@ -1,7 +1,8 @@
 (ns engine.forest-prepare-test
   "jobs.forestry.prepare: a forest plan's planting spots made ready (cleared, soiled, planted), against the fake world."
   (:require [engine.child-ends :as ce]
-            [cljs.test :refer [deftest is are async]]
+            [cljs.test :refer [deftest is are async use-fixtures]]
+            [engine.lit-support :as lit]
             [clojure.string :as str]
             [engine.core :as core]
             [engine.fake :as fake]
@@ -12,6 +13,8 @@
             [jobs.forestry.prepare :as prepare]
             [jobs.forestry.prepare-field :as field]
             [jobs.forestry.prepare-rule :as rule]))
+
+(use-fixtures :once lit/fixture)
 
 (def job 'jobs.forestry.prepare)
 

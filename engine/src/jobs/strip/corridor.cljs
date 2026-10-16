@@ -1,5 +1,6 @@
 (ns jobs.strip.corridor
-  (:require [jobs.lib.checks :as checks]
+  (:require [jobs.lib.ready :as ready]
+            [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -7,7 +8,6 @@
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
-            [jobs.lib.danger :as danger]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
@@ -35,8 +35,7 @@
   the rest outward from the :entry end, each with a carried tool of its kind (shears, axe, pickaxe). With no target left it
   walks to the far end (8 cells a step, so a spawner on the way is seen and lit) and looks round there, so crossings and new corridors come into view, then takes back the torches
   standing in the segment (the caller seals behind it).
-  It does not start (a skipped job) while a real danger is near (jobs.lib.danger, unless :danger-check is false: :danger)
-  or the body is short of food (:food-short); a run under way waits :danger (can-run?, asked between steps) while one is near. A :segment that
+  It does not start (a skipped job) while the body is short of food (:food-short). Its safe? is ready/safe-at the end of the segment nearest :entry. A :segment that
   is neither a map nor a readable id is never possible (:bad-args).
   A spawner seen at any step stays in the result (the far end may be out of sight of it). A spawner follows :spawner: :light (default) hangs torches on the dark standable centre-line cells of the segment inside its
   spawn box (4 either side, 1 up or down; light 8), leaves the spawner and those torches, and lists it in :kept {:why :spawner :lit true};
@@ -55,7 +54,6 @@
    :take {:doc "classes taken: :wood :cobweb :rail :ore" :spec (a/coll-of #{:wood :cobweb :rail :ore}) :default [:wood :cobweb :rail :ore]}
    :spawner {:doc "a spawner in the segment: :light lights its spawn box and leaves it, :break lights it and digs it, :seal stops the trip :spawner, :skip leaves it unlit" :spec #{:light :break :seal :skip} :default :light}
    :want-free {:doc "free slots under which the trip turns back; nil: jobs.lib.trip/want-free" :spec (a/int-in 0 36) :default nil}
-   :danger-check {:doc "decline while a real danger is near" :spec boolean? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims" :spec boolean? :default false}})
 
 (defn seg-of
@@ -66,10 +64,6 @@
     (when-let [[_ axis y line from to] (some->> s (re-matches #"([xz])(-?\d+)-(-?\d+):(-?\d+)\.\.(-?\d+)"))]
       {:id s :axis (keyword axis) :y (js/parseInt y) :line (js/parseInt line) :from (js/parseInt from) :to (js/parseInt to) :open-ends #{}})))
 
-(defn danger-near? [c]
-  (and (:danger-check (:args c))
-       (danger/danger-near? (:primitives c) (danger/hostile-radius) (danger/ranged-radius))))
-
 (defn bad-segment
   "Never :bad-args: the :segment arg is neither a map nor a readable id."
   [c]
@@ -78,10 +72,8 @@
     (contract/never :bad-args "the :segment is neither a map nor a readable id")))
 
 (def not-now
-  "Later :danger or :food-short: a real danger near, or no food and none to eat."
-  (checks/refusing :trip "no danger near and food to eat"
-                   (fn [c] (cond (danger-near? c) :danger
-                                 (trip/food-short? c) :food-short))))
+  "Later :food-short: no food and none to eat."
+  (checks/refusing :trip "food to eat" (fn [c] (when (trip/food-short? c) :food-short))))
 
 (def failed-conditions "Stop reasons that end condition-failed: a fact of the body or the world. The rest are nothing-possible."
   #{:bag-full :food-short :no-torches :no-tool :spawner :refused})
@@ -279,10 +271,20 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def can-start? (cond/and bad-segment not-now))
+(defn place
+  "The end of the segment nearest :entry (its :from end without one)."
+  [c]
+  (when-let [{:keys [axis y line from to]} (seg-of (:segment (:args c)))]
+    (let [cell (fn [v] (if (= axis :x) {:x v :y y :z line} {:x line :y y :z v}))
+          entry (a/cell (:entry (:args c)))
+          d (fn [v] (if entry (u/dist entry (cell v)) 0))]
+      (cell (if (< (d to) (d from)) to from)))))
 
-(def can-run?
-  (checks/refusing :trip "no danger near" (fn [c] (when (danger-near? c) :danger))))
+(def safe? (ready/safe-at place))
+
+(def fit? ready/fit?)
+
+(def can-start? (cond/and bad-segment not-now))
 
 (defn done?
   "The segment is stripped: nothing left to take or light, the far end looked at. The result is what it leaves behind."

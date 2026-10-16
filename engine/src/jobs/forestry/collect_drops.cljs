@@ -1,5 +1,6 @@
 (ns jobs.forestry.collect-drops
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -54,6 +55,10 @@
 (def target [:ids :near])
 
 (def defaults {:least 1})
+
+(def safe? ready/safe-if-lit)
+
+(def fit? ready/ok)
 
 (a/defargs settings
   {::max-settle-waits {:default 10 :doc "Checks of a hole drop that still moves before it counts as settled." :spec (a/int-in 0 nil)}

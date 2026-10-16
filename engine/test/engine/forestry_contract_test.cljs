@@ -1,7 +1,8 @@
 (ns engine.forestry-contract-test
   "jobs.forestry.harvest-wood, forestry.tidy and gather.make-obsidian as contract jobs: they export the contract and end
   with a kind and a cause (0 of N is never done); a child's failed ending is read, not taken for success."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is async use-fixtures]]
+            [engine.lit-support :as lit]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -14,6 +15,8 @@
             [engine.obtain-obsidian-test :as ot]
             [engine.registry :as registry]
             [engine.test-util :as tu]))
+
+(use-fixtures :once lit/fixture)
 
 (defn kc [e] {:kind (:kind e) :cause (contract/cause-key e)})
 

@@ -1,7 +1,8 @@
 (ns engine.forest-maintain-test
   "jobs.forestry.maintain (a forest plan's tree cells) and fell-tree's :at, against the fake world."
   (:require [engine.child-ends :as ce]
-            [cljs.test :refer [deftest is are async]]
+            [cljs.test :refer [deftest is are async use-fixtures]]
+            [engine.lit-support :as lit]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.events :as events]
@@ -17,6 +18,8 @@
             [jobs.lib.trees :as trees]
             [jobs.lib.pace :as pace]
             [plan.shape :as shape]))
+
+(use-fixtures :once lit/fixture)
 
 (def job 'jobs.forestry.maintain)
 

@@ -1,11 +1,14 @@
 (ns engine.forestry-tidy-test
   "jobs.forestry.tidy against the fake world: it fells the part-cut trunks (natural, raised off the ground) it has seen."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is async use-fixtures]]
+            [engine.lit-support :as lit]
             [engine.core :as core]
             [engine.forest-maintain-test :as fm]
             [engine.harvest-test :as h]
             [engine.library-test :as lt]
             [engine.test-util :as tu]))
+
+(use-fixtures :once lit/fixture)
 
 (def job 'jobs.forestry.tidy)
 

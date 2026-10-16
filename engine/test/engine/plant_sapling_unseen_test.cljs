@@ -1,6 +1,7 @@
 (ns engine.plant-sapling-unseen-test
   "jobs.forestry.plant-sapling looks at a planting spot it has never seen before it drops the spot."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is async use-fixtures]]
+            [engine.lit-support :as lit]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [jobs.forestry.plant-sapling :as plant-sapling]
@@ -11,6 +12,8 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]))
+
+(use-fixtures :once lit/fixture)
 
 (def spot #js {:x 3 :y 64 :z 0})
 

@@ -1,5 +1,6 @@
 (ns jobs.forestry.plant-sapling
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -50,6 +51,10 @@
 (def target [:at :near])
 
 (def defaults {:spend {:job-time ::job-time-s}})
+
+(def safe? (ready/safe-at (fn [c] (a/cell (or (:at (:args c)) (:near (:args c)))))))
+
+(def fit? ready/fit?)
 
 (defn sapling-at?
   "True when the block at pos is a sapling, mangrove propagule or fungus."

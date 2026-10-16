@@ -3,7 +3,8 @@
   engine.strip-test (stem z-27-0:0..20 into x-27-20:-20..0 and x-27-20:0..20)."
   (:require [cljs.reader :as reader]
             [engine.contract :as contract]
-            [cljs.test :refer [deftest is async]]
+            [cljs.test :refer [deftest is async use-fixtures]]
+            [engine.lit-support :as lit]
             ["fs" :as fs]
             ["path" :as path]
             [engine.core :as core]
@@ -17,6 +18,8 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]))
+
+(use-fixtures :once lit/fixture)
 
 (def job 'jobs.strip.site)
 (def blueprint
@@ -426,15 +429,15 @@
           (is (= [[:impossible :bad-args] [:impossible :bad-args] [:impossible :bad-args]]
                  (mapv (juxt (comp :kind :ending) :reason) [no-site no-base no-at]))))))))
 
-(deftest a-danger-near-in-the-strip-phase-holds-the-strip-back
+(deftest a-danger-near-holds-the-site-back-from-the-start
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [env (setup :triggers {} :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 0 :y -27 :z 13} :health 20 :visible true}])
               r (await (start! env args))]
           (is (= :not-done r) "the job yields every round")
-          (is (= :danger (:reason (first (filter #(= :waiting (:kind %)) @(:seen env))))) "waiting with its reason")
-          (is (= ["from-plan" "set-spawn" "set-place" "get-tool"] (mapv #(last (re-find #"\.([a-z-]+)$" %)) (names env))) "the base phases ran, no corridor"))))))
+          (is (= :hostile-near (:reason (first (filter #(= :waiting (:kind %)) @(:seen env))))) "waiting with its reason")
+          (is (empty? (names env)) "no phase ran"))))))
 
 (deftest a-danger-that-comes-while-stripping-waits-with-its-reason
   (async done
@@ -447,7 +450,7 @@
               r (await (start! env args))]
           (is (= :not-done r))
           (is (empty? (called env 'jobs.strip.corridor)) "no corridor with the zombie near")
-          (is (= :danger (:reason (first (filter #(= :waiting (:kind %)) @(:seen env)))))))))))
+          (is (= :hostile-near (:reason (first (filter #(= :waiting (:kind %)) @(:seen env)))))))))))
 
 (deftest a-cut-site-puts-home-and-spawn-back-in-its-cleanup
   (async done

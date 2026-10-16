@@ -1,7 +1,8 @@
 (ns engine.fell-contract-test
   "jobs.forestry.fell-tree and jobs.forestry.fell-from-pillar as contract jobs: they export the contract and end with a
   kind and a cause (0 of N is never done); the pillar is a child of the felling."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [cljs.test :refer [deftest is are async use-fixtures]]
+            [engine.lit-support :as lit]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.event-api :as event-api]
@@ -21,6 +22,8 @@
             [jobs.lib.access :as access]
             [engine.core.activity :as activity]
             [engine.memory :as mem]))
+
+(use-fixtures :once lit/fixture)
 
 (def jobs '[jobs.forestry.fell-tree jobs.forestry.fell-from-pillar])
 

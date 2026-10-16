@@ -1,15 +1,14 @@
 (ns jobs.strip.loot-cart
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
-            [jobs.lib.danger :as danger]
             [jobs.lib.stock :as stock]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.checks :as checks]
-            [jobs.lib.cond :as cond]
             [jobs.lib.util :as u]
             [engine.settings :as settings]))
 
@@ -18,7 +17,7 @@
   (a jobs.storage.withdraw-entity child), then break it (a jobs.combat.attack child) and pick up what falls (a
   jobs.forestry.collect-drops child, radius 4 round the cart): the cart item, and the stacks the bag had no room for.
   The cart is :id (an entity id) or the nearest chest_minecart within :radius of :near (default the body). It starts
-  only when no real danger is near (jobs.lib.danger) and a cart is in sight (conditions :danger, :gone; start only). A cart in
+  only when a cart is in sight (condition :gone; start only). Its safe? is ready/safe-at :near, else ready/safe-if-lit. A cart in
   another owner's zone or claim is refused (:ignore-zones? true skips that). Broken-and-gone carts are not looked for again:
   a restart re-reads the world and goes on from there.
   Ends :done {:collected n :items {name n}} (what came into the bag, counted from the inventory at the start), with :full true
@@ -39,6 +38,10 @@
 (def target [:id :near])
 
 (def defaults {:spend {:job-time ::job-time-s}})
+
+(def safe? (ready/safe-at-or-if-lit #(a/cell (:near (:args %)))))
+
+(def fit? ready/fit?)
 
 (defn carts
   "The chest minecarts in sight within radius of the anchor (:near, else the body), nearest first."
@@ -79,10 +82,7 @@
     (do (ctx/update-mem! c assoc :looted true)
         (or (ctx/done c) :continue))))
 
-(def can-start?
-  (cond/and (checks/refusing :no-danger "no danger near"
-                             (fn [c] (when (danger/danger-near? (:primitives c) (danger/hostile-radius) (danger/ranged-radius)) :danger)))
-            (checks/refusing :cart "a cart in sight" (fn [c] (when (empty? (carts c)) :gone)))))
+(def can-start? (checks/refusing :cart "a cart in sight" (fn [c] (when (empty? (carts c)) :gone))))
 
 (defn done?
   "The cart is broken and its drops collected; the items counted are the gain since the first round."

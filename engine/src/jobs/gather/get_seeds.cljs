@@ -1,5 +1,6 @@
 (ns jobs.gather.get-seeds
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.ready :as ready]
+            [clojure.string :as str]
             [engine.contract :as contract]
             [engine.settings :as settings]
             [engine.args :as a]
@@ -79,6 +80,10 @@
 (def target [:item :chest :plan])
 
 (def defaults {:spend {:job-time ::job-time-s}})
+
+(def safe? ready/safe-if-lit)
+
+(def fit? ready/fit?)
 
 (def materials
   {"wheat_seeds" {:from :grass :sources ["short_grass" "tall_grass"]}

@@ -1,6 +1,7 @@
 (ns engine.library-test
   "The job and trigger library end to end against the fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [cljs.test :refer [deftest is are async use-fixtures]]
+            [engine.lit-support :as lit]
             ["fs" :as fs]
             [engine.registry :as registry]
             [engine.core :as core]
@@ -19,6 +20,8 @@
             [jobs.lib.world-files :as ew]
             [jobs.movement.look-around :as look-around]
             [jobs.storage.deposit :as dep]))
+
+(use-fixtures :once lit/fixture)
 
 (defn setup
   ([world] (setup world (tu/tmp-dir)))
@@ -736,7 +739,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {})]
-          (set! (.-entities p) (fn [_] #js [#js {:id 7 :name "item" :kind "item" :item nil :distance 2}]))
+          (set! (.-entities p) (fn [_] #js [#js {:id 7 :name "item" :kind "item" :item nil :distance 2 :pos #js {:x 2 :y 64 :z 0}}]))
           (core/submit! eng (list 'jobs.forestry.collect-drops {:filter ["oak_log"]}) {})
           (await (core/tick! eng))
           (is (= [] (calls p "collect")) "an unknown stack is not collected when a filter is set")

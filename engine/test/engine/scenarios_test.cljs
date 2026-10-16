@@ -1,6 +1,7 @@
 (ns engine.scenarios-test
   "The shipped scenarios run end to end against the fake primitives."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is async use-fixtures]]
+            [engine.lit-support :as lit]
             [clojure.set :as set]
             [clojure.string :as str]
             ["fs" :as fs]
@@ -13,6 +14,8 @@
             [engine.test-util :as tu]
             [engine.trigger-api :as trigger-api]
             [engine.triggers :as triggers]))
+
+(use-fixtures :once lit/fixture)
 
 (def all-triggers
   "The shipped triggers plus the condition language, as a body has them (ad hoc :when entries)."

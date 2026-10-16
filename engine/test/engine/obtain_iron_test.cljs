@@ -142,7 +142,7 @@
           (is (empty? (tu/walk-calls (:p s))) "no search walk at 0.5 hp")
           (is (= [:low-health] (distinct (map :reason (f/events-of s :waiting))))))))))
 
-(deftest a-tree-seen-while-sheltered-at-night-waits-night-sheltered-not-no-source
+(deftest a-tree-seen-while-sheltered-at-night-waits-dark-not-no-source
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -153,9 +153,9 @@
           (is (some? (sh/night-sheltered (:p s) nil)) "sheltered at the start")
           (await (obtain! s {:any-of ["oak_log" "spruce_log" "birch_log"] :count 2 :ways #{:gather} :explore true} 8))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the tree is seen")
-          (is (some #(= :night-sheltered (:reason %)) (f/events-of s :waiting))))))))
+          (is (some #(= :dark (:reason %)) (f/events-of s :waiting))))))))
 
-(deftest a-pickaxe-whose-logs-wait-out-the-night-makes-the-stone-wait-night-sheltered-not-no-source
+(deftest a-pickaxe-whose-logs-wait-out-the-night-makes-the-stone-wait-dark-not-no-source
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -166,7 +166,7 @@
           (is (some? (sh/night-sheltered (:p s) nil)) "sheltered at the start")
           (await (obtain! s {:item "cobblestone" :count 3 :ways #{:gather :craft}} 8))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the stone and the logs are seen")
-          (is (some #(= :night-sheltered (:reason %)) (f/events-of s :waiting))))))))
+          (is (some #(= :dark (:reason %)) (f/events-of s :waiting))))))))
 
 (deftest an-iron-ingot-with-raw-iron-carried-is-smelted-by-a-smelt-child
   (async done

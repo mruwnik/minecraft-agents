@@ -1,5 +1,6 @@
 (ns jobs.strip.seal
-  (:require [engine.contract :as contract]
+  (:require [jobs.lib.ready :as ready]
+            [engine.contract :as contract]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -43,6 +44,10 @@
 (def target [:at :axis :side])
 
 (def defaults {:spend {:job-time ::job-time-s} :use {:blocks :seal}})
+
+(def safe? (ready/safe-at #(a/cell (:at (:args %)))))
+
+(def fit? ready/ok)
 
 (a/defargs args
   {:at {:doc "the bottom centre cell of the section, [x y z]" :spec ::a/pos :default nil}

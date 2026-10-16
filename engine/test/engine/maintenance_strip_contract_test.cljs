@@ -1,13 +1,16 @@
 (ns engine.maintenance-strip-contract-test
   "survival.restore-broken, maintenance.shut-doors, strip.loot-cart and strip.seal as contract jobs: they export the
   contract, quote validly, and end with a kind and a cause."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [cljs.test :refer [deftest is are async use-fixtures]]
+            [engine.lit-support :as lit]
             [engine.blocks-dig-test :as bd]
             [engine.contract :as contract]
             [engine.registry :as registry]
             [engine.strip-seal-test :as ss]
             [engine.test-util :as tu]
             [jobs.strip.seal :as seal]))
+
+(use-fixtures :once lit/fixture)
 
 (defn job [sym] (get registry/jobs sym))
 

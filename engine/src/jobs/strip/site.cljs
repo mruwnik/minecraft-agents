@@ -1,5 +1,6 @@
 (ns jobs.strip.site
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.ready :as ready]
+            [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -7,14 +8,11 @@
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
-            [jobs.lib.danger :as danger]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.shafts :as shafts]
             [jobs.lib.shelter :as sh]
-            [jobs.lib.checks :as checks]
-            [jobs.lib.cond :as cond]
             [jobs.lib.strip :as strip]
             [jobs.lib.torch :as torch]
             [jobs.lib.trip :as trip]
@@ -45,8 +43,7 @@
           storage.haul from the base chests to the main storage (not with :haul false).
   The cleanup export puts :home and the respawn bed back to :was however the call ends (a cut included). The torches the
   corridor took back are carried.
-  Needs :site and :base (a new site also :at), else impossible :bad-args. A start in the strip phase with a real danger near
-  waits (:danger), and a running strip phase waits :danger while one is near (can-run?).
+  Needs :site and :base (a new site also :at), else impossible :bad-args. Its safe? is ready/safe-at :at.
   Ends :done with data {:segments {state n} :taken {class n} :hauled {item n} :smelted {raw-item n} :smelt-failed [{:furnace :reason}]},
   or condition-failed (:bad-plan :no-site :no-shears :no-torches :food-short :base-full, or :child-failed), nothing-possible
   (:unreachable when the walk down found no way, :trips-exhausted, :all-skipped with :skipped {reason n} when no segment was
@@ -69,7 +66,6 @@
    :want-free {:doc "free slots under which a trip turns back; nil: jobs.lib.trip/want-free" :spec (a/int-in 0 36) :default nil}
    :max-trips {:doc "trips to the base before it stops :trips-exhausted" :spec (a/int-in 0 100) :default 12}
    :stop-limit {:doc "stops of one segment for one reason before it is skipped" :spec (a/int-in 1 10) :default 3}
-   :danger-check {:doc "wait while a real danger is near in the strip phase" :spec boolean? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims" :spec boolean? :default false}})
 
 (a/defargs settings
@@ -96,22 +92,14 @@
 
 (defn vec3 [v] (let [{:keys [x y z]} (a/cell v)] [x y z]))
 
-(defn danger-wait?
-  "Whether a real danger is near in the strip phase and :danger-check asks to wait for it."
-  [c]
-  (and (:danger-check (:args c))
-       (= :strip (:phase (site c)))
-       (danger/danger-near? (:primitives c) (danger/hostile-radius) (danger/ranged-radius))))
-
 (defn counts [s] (frequencies (map :state (vals (:segments s)))))
 
 (defn ^:async call!
-  "Run a child one round: :continue while it waits on the world (a danger decline too: the round yields for the reflex),
-  else its result as an old parent reads it, {:status :stopped :reason its cause :ending e} when it did not end :done."
+  "Run a child one round: :continue while it waits on the world, else its result as an old parent reads it,
+  {:status :stopped :reason its cause :ending e} when it did not end :done."
   [c slot job args]
   (let [e (await (ctx/call c slot job args))]
     (cond (= :continue e) :continue
-          (= :danger (contract/cause-key e)) :continue
           (= :done (:kind e)) (assoc (:data e) :status :done)
           :else (assoc (:data e) :status :stopped :reason (if (map? (:cause e)) (contract/cause-key e) (or (:cause e) (:kind e))) :ending e))))
 
@@ -342,10 +330,10 @@
 
 (defn ^:async corridor! [c s t seg]
   (let [{:keys [entry]} (mouth s t seg)
-        {:keys [take spawner want-free stop-limit ignore-zones? danger-check]} (:args c)
+        {:keys [take spawner want-free stop-limit ignore-zones?]} (:args c)
         res (await (call! c :corridor 'jobs.strip.corridor
                           (cond-> {:segment seg :entry entry :take take :spawner spawner
-                                   :danger-check danger-check :ignore-zones? ignore-zones?}
+                                   :ignore-zones? ignore-zones?}
                             want-free (assoc :want-free want-free))))
         id (:id seg)
         why (:reason res)
@@ -462,6 +450,10 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
+(def safe? (ready/safe-at #(a/cell (:at (:args %)))))
+
+(def fit? ready/fit?)
+
 (defn bad-args
   "Never :bad-args: no :site or :base, and a new site without :at (the site is saved after the start)."
   [c]
@@ -470,12 +462,7 @@
           (and (nil? at) (nil? (site c))) (contract/never :bad-args "a new site needs :at")
           :else (contract/ok :args "site, base and at given"))))
 
-(def danger
-  (checks/refusing :no-danger "no danger to wait for" (fn [c] (when (danger-wait? c) :danger))))
-
-(def can-start? (cond/and bad-args danger))
-
-(def can-run? danger)
+(def can-start? bad-args)
 
 (defn done?
   "The strip is over (phase :done); the segments settled so far are the progress."
