@@ -307,7 +307,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "diamond_block" :max-distance 20 :spend {:job-time 60}}
+        (let [s (await (search! {:target "diamond_block" :max-distance 20 :spend {:wall-time 60}}
                                 {:unloaded ["0,63,-16"] :unreachable ["16,64,0"]}))
               failed (get-in (event-of s :stopped) [:coverage :failed])]
           (is (= #{{:pos [16 64 0] :reason :unreachable}} (set failed)))
@@ -333,9 +333,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "diamond_block" :max-distance 20 :spend {:job-time 60}} {:unloaded ring-1-cells}))]
-          (is (= :job-time (:reason (event-of s :stopped))) "no clock of its own: the engine's time limit ends the wait")
-          (is (= "stopped: job-time" (:text (ended-of s))))
+        (let [s (await (search! {:target "diamond_block" :max-distance 20 :spend {:wall-time 60}} {:unloaded ring-1-cells}))]
+          (is (= :wall-time (:reason (event-of s :stopped))) "no clock of its own: the engine's wall-time limit ends the wait")
+          (is (= "stopped: wall-time" (:text (ended-of s))))
           (is (= [] (walks s))))))))
 
 ;; a leg whose goal lies by a mob the body would flee is not walked: go-to gives it up (:goal-danger :end), it is recorded
@@ -503,7 +503,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "diamond_block" :max-distance 20 :spend {:job-time 60}} {:blocks {"10,64,0" "diamond_block"}}
+        (let [s (await (search! {:target "diamond_block" :max-distance 20 :spend {:wall-time 60}} {:blocks {"10,64,0" "diamond_block"}}
                                 400 (fn [{:keys [p]}] (tu/blind p))))
               e (event-of s :stopped)]
           (is (= [] (:found e)))

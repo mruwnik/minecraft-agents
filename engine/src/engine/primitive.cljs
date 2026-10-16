@@ -130,9 +130,9 @@
    :dismount (fixed [:yaw :pitch] [] #{"dismounted"} 2)
    :paddle (fixed [:ticks :turn :forward] [] #{"ok"} 4)
    :wait (entry [:ms] [] #{"ok"}
-                (fn [_ {:keys [ms]}]
+                (fn [_ {:keys [ms why]}]
                   (let [s (/ (min (max (if (number? ms) ms 0) 0) (js-setting "prim/wait-max-ms" 10000)) 1000)]
-                    {:uses {:job-time [s s s]}})))
+                    (if why {:uses {:job-time [0 0 0] :wall-time [s s s]}} {:uses {:job-time [s s s]}}))))
    :offline (entry [:ms :why] [] #{"ok"}
                    (fn [_ {:keys [ms]}]
                      (let [s (/ (min (or ms (js-setting "prim/offline-default-ms" 300000))

@@ -291,7 +291,7 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 debt or intent with `update-mem!` before the `act` it protects. After every `moveTo` it writes a `:moved` body-memory entry.
 
 **Tally.** Each act's uses and yields go to every frame of its chain (`:contract` in job memory, hidden from `ctx/mem`),
-a round's time to its own frame (`:job-time`, time spent); `:wall-time` is the wall seconds since the frame's call
+a round's time to its own frame (`:job-time`, time spent running; an act `:wait` with a `:why` is a pause, taken off); `:wall-time` is the wall seconds since the frame's call
 started, yields and waits included (both spend lines). Endings and a root's `completed`/`stopped`/`cancelled`/`reflex.ended` carry `:report`;
 a finished job's goes to body memory `:job-report` (cap 256), with its ending's `:kind` and `:cause`.
 

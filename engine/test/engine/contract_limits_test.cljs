@@ -70,6 +70,59 @@
           (is (= {:kind :limit-reached :cause {:line :wall-time :spend 10}} (stopped seen)))
           (is (= {:job-time 0 :wall-time 11} (get-in (first (job-ev seen :limit_reached)) [:data :report :uses]))))))))
 
+(defn slow-wait!
+  "Make the fake body's wait take ms of the test clock."
+  [p ms]
+  (aset p "wait" (fn [_token _args] (swap! clock + ms) #js {:status "ok"})))
+
+(def sheltering
+  {:defaults {:spend {:job-time 5}}
+   :round (fn ^:async r [c]
+            (swap! clock + 4000)
+            (await (ctx/act c :wait #js {:ms 3000 :why :sheltering}))
+            (swap! world update :rounds (fnil inc 0))
+            :continue)})
+
+(def idling
+  (assoc sheltering :round (fn ^:async r [c]
+                             (await (ctx/act c :wait #js {:ms 3000}))
+                             (swap! world update :rounds (fnil inc 0))
+                             :continue)))
+
+(deftest a-held-wait-spends-no-job-time-but-a-plain-wait-does
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup {'sheltering sheltering})]
+          (slow-wait! p 60000)
+          (core/submit! eng '(sheltering) {})
+          (await (core/tick! eng))
+          (is (= 1 (:rounds @world)) "the held wait is not refused for the 3 s it quotes, nor counted for the 60 s it took")
+          (is (empty? (job-ev seen :limit_reached)))
+          (await (core/tick! eng))
+          (is (= {:kind :limit-reached :cause {:line :job-time :spend 5}} (stopped seen)) "only the 4 s of its own work add up: the second round crosses 5")
+          (is (= 8 (get-in (first (job-ev seen :limit_reached)) [:data :report :uses :job-time]))))))))
+
+(deftest a-plain-wait-spends-job-time
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup {'idling idling})]
+          (slow-wait! p 6000)
+          (core/submit! eng '(idling) {})
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (= {:kind :limit-reached :cause {:line :job-time :spend 5}} (stopped seen))))))))
+
+(deftest a-held-wait-still-spends-wall-time
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup {'sheltering (assoc sheltering :defaults {:spend {:wall-time 20}})})]
+          (slow-wait! p 60000)
+          (core/submit! eng '(sheltering) {})
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (= {:kind :limit-reached :cause {:line :wall-time :spend 20}} (stopped seen))))))))
+
 (deftest the-limit-that-ends-a-job-is-told-with-its-amount-and-report
   (async done
     (tu/run-async done
