@@ -51,12 +51,7 @@
                                 :world (world/of-data {"base" plan} {"field-base" blueprint} [])})
               result (await (tu/child-outcome eng 'jobs.build.from-plan {:plan "base"} 1500))]
           (is (every? #(<= 66 (second %)) (:missing result)) "only wall tops and roof cells the fake body cannot reach are left")
-          (is (= #{[1 65 1] [2 65 1] [4 65 1] [5 65 1]} (set (map :pos (:wrong result))))
-              "the fake does not join chests, so only their type differs")
-          (is (= ["left" "right" "left" "right"]
-                 (mapv #(re-find #"left|right" (:want (first (filter (fn [w] (= (spot %) (:pos w))) (:wrong result)))))
-                       ["chest-1" "chest-2" "chest-3" "chest-4"]))
-              "each pair is asked for as a left and a right half")
+          (is (empty? (:wrong result)) "the server joins the chests, so their type is no claim")
           (is (every? #(not (:sneak %)) (clicks p "chest")) "no sneak, so a chest joins its neighbour")
           (is (every? #(= "chest" (name-at p (spot %))) ["chest-1" "chest-2" "chest-3" "chest-4"]))
           (is (every? #(= ["furnace" "west"] [(name-at p (spot %)) (:facing (state-at p (spot %)))]) ["furnace-1" "furnace-2"]))

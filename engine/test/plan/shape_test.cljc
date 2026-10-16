@@ -320,6 +320,13 @@
     {:block "oak_door"} {:name "oak_door"} :match
     "oak_door" {:name "oak_door" :state {:facing "south"}} :match))
 
+(deftest a-chests-type-is-the-servers-to-decide
+  (are [want block answer] (= answer (shape/judge want block))
+    {:block "chest" :facing :south :type :left} {:name "chest" :state {:facing "south" :type "right"}} :match
+    {:block "chest" :facing :south :type :left} {:name "chest" :state {:facing "south" :type "single"}} :match
+    {:block "chest" :facing :south :type :left} {:name "chest" :state {:facing "north" :type "left"}} :wrong
+    {:block "furnace" :facing :south :type :left} {:name "furnace" :state {:facing "south" :type "right"}} :wrong))
+
 (deftest any-of-matches-any-option
   (are [want block answer] (= answer (shape/judge want block))
     [:any "cobblestone" "stone_bricks"] {:name "stone_bricks"} :match

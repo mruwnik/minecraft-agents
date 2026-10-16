@@ -391,12 +391,17 @@
 (defn state-of [state k]
   (if (contains? state k) (get state k) (get state (name k))))
 
+(def server-decided-state
+  "State the server sets from the neighbours at placement, so a want's value is no claim: a chest joins a neighbour of
+  its facing as it likes."
+  {"chest" #{:type} "trapped_chest" #{:type}})
+
 (defn judge-block
   "A block want (name or block with state) against a non-air block: :match, :wrong, or :unknown when the name
   matches, the want names state and the world gave names only."
   [want {:keys [name state]}]
   (let [{wanted :block :as want} (if (string? want) {:block want} want)
-        wanted-state (dissoc want :block)]
+        wanted-state (apply dissoc want :block (server-decided-state (:block want)))]
     (cond
       (not= wanted name) :wrong
       (empty? wanted-state) :match
