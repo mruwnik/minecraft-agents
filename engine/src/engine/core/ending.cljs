@@ -5,7 +5,8 @@
   call keys at the first round, asks done? before every round and between steps (an :ok ends the job :done; at the first round of a
   call with a :least other than 1 it asks its quote for the least check) and adds :because to the ending the job's round returns.
   Every ending the engine makes carries done?'s :result and count."
-  (:require [engine.contract :as contract]
+  (:require [engine.condition :as condition]
+            [engine.contract :as contract]
             [engine.core.base :refer [cut-error exclusive-job now owner?]]
             [engine.core.limits :as limits]
             [engine.ctx :as ctx]
@@ -20,7 +21,25 @@
 
 (defn started? [c] (some? (ctx/frozen-call c)))
 
-(defn run-status "def's can-run? status for c (contract/verdict)." [def c] (contract/verdict c (select-keys def [:can-run?])))
+(def compiled-forms "{form checker}: a condition form an export is, compiled when first asked." (atom {}))
+
+(defn export-check
+  "The checker fn of def's export k (:safe? or :fit?: a checker fn or a quoted condition form), or nil when it has none."
+  [def k]
+  (let [x (get def k)]
+    (if-not (seq? x)
+      x
+      (or (get @compiled-forms x)
+          (let [r (condition/compile x)]
+            (when (condition/refusal? r)
+              (throw (js/Error. (str (name k) " of " (:sym def) ": " (:message r)))))
+            (swap! compiled-forms assoc x (:check r))
+            (:check r))))))
+
+(defn run-status
+  "def's can-run?, safe? and fit? statuses for c as one (contract/all); an export it lacks holds."
+  [def c]
+  (contract/all (for [k [:can-run? :safe? :fit?] :let [f (export-check def k)] :when f] (contract/asked c def k f))))
 
 (defn statuses
   "[start run] for c: start def's can-start? status until it has started (:ok after); run its can-run?'s
@@ -261,8 +280,8 @@
        done? (done-ending d fresh?)
        (= :never (first s)) (contract/ending :impossible (contract/status-cause s) nil)
        (= :later (first start-s)) (if (stays-listed? c) :continue (failed start-s))
-       (= :later (first run-s)) (cond (:reflex c) (failed run-s)
-                                      (seq (:slots c)) (do (some-> (:child-wait c) (reset! (contract/status-cause run-s))) :continue)
+       (= :later (first run-s)) (cond (seq (:slots c)) (do (some-> (:child-wait c) (reset! (contract/status-cause run-s))) :continue)
+                                      (:reflex c) (failed run-s)
                                       :else :continue)
        :else (if-let [floor (when-not (started? c) (limits/floor-cause c #(first (call-of c def))))]
                (counted (contract/ending :condition-failed floor nil))

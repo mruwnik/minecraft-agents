@@ -166,7 +166,7 @@
                  [(list 'quote ns) (cond-> {:check (ref 'check) :round (ref 'round)
                                             :doc (ref 'doc) :args (ref 'args) :idle-ok (ref 'idle-ok)}
                                      (job? defines)
-                                     (merge {:can-start? (ref 'can-start?) :can-run? (ref 'can-run?)
+                                     (merge {:can-start? (ref 'can-start?) :can-run? (ref 'can-run?) :safe? (ref 'safe?) :fit? (ref 'fit?)
                                              :target (ref 'target) :ways (ref 'ways)
                                              :defaults (ref 'defaults) :done? (ref 'done?) :quote-of (ref 'quote-of)
                                              :cleanup (ref 'cleanup) :cleanup-defaults (ref 'cleanup-defaults)

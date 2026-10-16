@@ -140,8 +140,7 @@
   [eng {:keys [id] :as run} {:keys [status child-wait error] :as outcome}]
   (if (= id (exclusive-job eng))
     (case status
-      (:continue :declined) (end-slot! eng id (if (= :declined status) (or (:reason child-wait) :declined) :yielded)
-                                       (when (= :declined status) child-wait))
+      (:continue :declined) (end-slot! eng id (or (:reason child-wait) (if (= :declined status) :declined :yielded)) child-wait)
       :cut (end-slot! eng id :cut nil)
       :error (fail-slot! eng id error)
       (settle-listed-job! eng run outcome))

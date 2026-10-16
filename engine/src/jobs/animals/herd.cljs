@@ -293,7 +293,7 @@
     (led-now c)
     (into [] (comp (filter animals/led-by-me?) (map animals/key-of)) (adults c))))
 
-(defn safe?
+(defn free-to-leave?
   "True when the body may be given away: before the survey has chosen the gate (nothing touched yet), else no animal
   on this body's lead, the gate shut and the body neither on a pen cell nor on the gate cell. Read from the world."
   [c]
@@ -337,7 +337,7 @@
   [c]
   (animals/reserve-bait! c (:mob (:args c)))
   (ctx/update-mem! c update :origin #(or % (u/self-pos c)))
-  (when-not (safe? c) (restart! c))
+  (when-not (free-to-leave? c) (restart! c))
   (loop []
     (let [before (ctx/mem c)
           from (ctx/now c)
@@ -353,7 +353,7 @@
   shut, by the run's own ending phases, a step per round. Done when the body is safe (animal free, gate shut, body
   outside)."
   [c _]
-  (if (or (:finished (ctx/mem c)) (safe? c))
+  (if (or (:finished (ctx/mem c)) (free-to-leave? c))
     (ctx/end c :done nil {})
     (do (when-not (:ending (ctx/mem c)) (end! c :cancelled))
         (let [r (await (step-once! c))]
