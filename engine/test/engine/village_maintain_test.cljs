@@ -81,7 +81,6 @@
           (is (= [['jobs.build.from-plan {:plan "village"}]] (ran s 'jobs.build.from-plan)))
           (is (= 3 (:placed (step s :repair))))
           (is (= [['jobs.village.breed {:target 4 :radius 48}]] (ran s 'jobs.village.breed)))
-          (is (= {:skipped :no-transport} (step s :import)))
           (is (true? (finished? s)))
           (is (= ['jobs.build.from-plan 'jobs.village.breed] (mapv first (remove #(= :check (first %)) @(:calls s))))))))))
 
@@ -126,16 +125,14 @@
           (is (= {:skipped :no-villager} (step s :roll-0)))
           (is (empty? (ran s 'jobs.village.roll))))))))
 
-(deftest a-failing-child-is-booked-and-the-pass-goes-on
+(deftest a-throwing-child-fails-the-pass-instead-of-ending-it-quietly
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:plan "p" :target 4} (apply world pair) {'jobs.build.from-plan :boom}))]
-          (is (= :failed (:skipped (step s :repair))))
-          (is (= 1 (count (ran s 'jobs.village.breed))))
-          (is (= 1 (count (ran s 'jobs.build.from-plan))) "run once, not retried")
-          (is (= :incomplete (:reason (done-event s))))
-          (is (true? (finished? s))))))))
+          (is (= ["Error: boom"] (mapv :error (vals (:failed (core/state (:eng s)))))))
+          (is (empty? (ran s 'jobs.village.breed)))
+          (is (nil? (done-event s))))))))
 
 (deftest a-stopped-child-makes-the-pass-stopped
   (async done

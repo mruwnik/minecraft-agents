@@ -21,14 +21,13 @@
     :filled when a villager holds the profession, :no-villager when none is near, :no-pos without one (the pass
     ends stopped, the role cannot be rolled). A roll
     already begun goes on while a villager is near.
-  - :import: bringing villagers in needs passenger transport, which does not exist yet; always skipped :no-transport.
   Villagers are those the body sees within :radius. Every call re-reads the villagers: a step the world no longer needs is skipped.
-  A step whose child declines is booked {:skipped :declined :reason why} (the child's wait reason), one that
-  throws {:skipped :failed :error text}; the pass goes on either way.
+  A step whose child declines is booked {:skipped :declined :reason why} (the child's wait reason); the pass goes on.
+  A child that throws fails the pass (parked failed, like any job whose round throws).
   A village where no step would run is in order: done at once (:already). A started run always continues.
   It ends :done with {:villagers n :target :steps {step summary}} when some step ran to its end
   and none was incomplete. A summary is the child's :reason, :placed, :missing, :fed, :rolled, :born and :count (a
-  child that ended other than :done carries :stopped kind). A child that ended other than :done, declined or failed,
+  child that ended other than :done carries :stopped kind). A child that ended other than :done, or declined,
   or a role without :pos, ends the pass nothing-possible :incomplete; a started pass where, by its end, no step ran
   (the world changed under it) ends condition-failed :nothing-to-do; a child that reached a limit ends the pass limit-reached with it.
   The job names of breed and roll are used, not their internals: their args are as listed above.
@@ -47,7 +46,7 @@
    :roll 'jobs.village.roll})
 
 (defn job-of
-  "The job of a step slot (:roll-N is jobs.village.roll), nil for :import."
+  "The job of a step slot (:roll-N is jobs.village.roll)."
   [slot]
   (jobs (if (str/starts-with? (name slot) "roll-") :roll slot)))
 
@@ -55,8 +54,7 @@
   "The steps of a pass for these args, in order."
   [{:keys [roles]}]
   (vec (concat [:repair :breed]
-               (map #(keyword (str "roll-" %)) (range (count roles)))
-               [:import])))
+               (map #(keyword (str "roll-" %)) (range (count roles))))))
 
 (defn role-of [args slot]
   (nth (:roles args) (js/parseInt (subs (name slot) 5))))
@@ -91,7 +89,6 @@
                (>= (count villagers) target) {:skip :at-target}
                (< (count adults) 2) {:skip :too-few-adults}
                :else {:call {:target target :radius radius}})
-      :import {:skip :no-transport}
       (let [{:keys [profession trade pos]} (role-of args slot)]
         (cond
           (empty? villagers) {:skip :no-villager}
@@ -124,7 +121,7 @@
 
 (defn incomplete?
   [entry]
-  (or (some? (:stopped entry)) (contains? #{:failed :declined :no-pos} (:skipped entry))))
+  (or (some? (:stopped entry)) (contains? #{:declined :no-pos} (:skipped entry))))
 
 (defn finish!
   "End the pass: nothing-possible :incomplete when a step was incomplete, done when some step ran, else
@@ -155,16 +152,6 @@
     (empty? (:data e)) {:skipped :declined :reason (contract/cause-key e)}
     :else (assoc (summary (merge {:reason (contract/cause-key e)} (:data e))) :stopped (:kind e))))
 
-(defn ^:async run-child!
-  "One round of the child in slot. A child that throws is booked failed instead of failing the pass; a cut or a limit passes through."
-  [c slot call-args]
-  (try
-    (await (ctx/call c slot (job-of slot) call-args))
-    (catch :default e
-      (when (contract/passes-through? e) (throw e))
-      (ctx/update-mem! c booked slot {:skipped :failed :error (str e)})
-      :failed)))
-
 (defn roll? [slot] (str/starts-with? (name slot) "roll-"))
 
 (defn resume
@@ -192,10 +179,9 @@
       (finish! c (:report p))
       (let [slot (first (:todo p))
             _ (ctx/update-mem! c assoc :call-args call :call-slot slot)
-            r (await (run-child! c slot call))]
+            r (await (ctx/call c slot (job-of slot) call))]
         (case r
           :continue :continue
-          :failed :again
           (do (ctx/update-mem! c booked slot (entry-of r))
               (if (= :limit-reached (:kind r))
                 (ctx/end c :limit-reached (:cause r) {:steps (:report (ctx/mem c))})

@@ -75,9 +75,9 @@
   (are [args world m want] (= want (tu/kind-reason (done-of 'jobs.village.maintain world args m)))
     {} {} {} [:ok :in-order]
     {:plan "p"} {} {} [:later :steps]
-    {:plan "p"} {} {:todo [:breed :import] :report {:repair {:placed 3}}} [:ok :in-order]
-    {:plan "p"} {} {:todo [:breed :import] :report {:repair {:stopped :nothing-possible}}} [:later :steps]
-    {:plan "p"} {} {:todo [:breed :import] :report {:repair {:placed 3}} :call-args {:plan "p"}} [:later :steps]
+    {:plan "p"} {} {:todo [:breed] :report {:repair {:placed 3}}} [:ok :in-order]
+    {:plan "p"} {} {:todo [:breed] :report {:repair {:stopped :nothing-possible}}} [:later :steps]
+    {:plan "p"} {} {:todo [:breed] :report {:repair {:placed 3}} :call-args {:plan "p"}} [:later :steps]
     {:roles [librarian]} {} {} [:later :steps]
     {:roles [librarian]} {} {:looked {:x 0 :y 64 :z 0}} [:ok :in-order]
     {:roles [librarian]} {:entities [(villager 1 {:profession "none"})]} {} [:later :steps]

@@ -9,8 +9,7 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.test-util :as tu]
-            [jobs.apiary.maintain :as apiary-maintain]
-            [jobs.village.maintain :as village-maintain]))
+            [jobs.apiary.maintain :as apiary-maintain]))
 
 (def world (atom {}))
 (def clock (atom 0))
@@ -368,8 +367,7 @@
           (is (contract/passes-through? (doto (js/Error. "cut") (aset "code" "cut"))))
           (is (not (contract/passes-through? (js/Error. "boom"))))
           (let [runs (with-redefs [ctx/call (fn [_ _ _ _] (js/Promise.reject e))]
-                       [(rejected (village-maintain/run-child! c :roll-1 {}))
-                        (rejected (apiary-maintain/run-child! c :hives {}))])
+                       [(rejected (apiary-maintain/run-child! c :hives {}))])
                 thrown (await (js/Promise.all (clj->js runs)))]
             (is (every? #(identical? e %) thrown))
             (is (nil? (:booked @world)) "not booked as a failed step")))))))
