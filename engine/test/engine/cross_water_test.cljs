@@ -217,3 +217,8 @@
           (is (false? (:recovered res)))
           (is (not (aboard? p)))
           (is (not-any? #(= :boat.launched (:kind %)) @seen)))))))
+
+(deftest a-failed-child-keeps-its-data-and-renamed-cause
+  (let [r {:kind :nothing-possible :cause :blocked :data {:spots 2 :drive :blocked}}]
+    (is (= {:spots 2 :drive :blocked} (:data (cw/failure {} r {}))))
+    (is (= :no-boat (contract/cause-key (cw/failure {} {:kind :condition-failed :cause :need} {:need :no-boat}))))))

@@ -98,11 +98,11 @@
 
 (defn failure
   "This call's ending for a child's ending r that is no :done: its kind (an impossible one is nothing-possible here) and
-  its cause, renamed by `renames`; a limit keeps the child's cause."
+  its cause, renamed by `renames`; a limit keeps the child's cause; the child's data is kept."
   [c r renames]
   (let [kind (if (#{:condition-failed :limit-reached} (:kind r)) (:kind r) :nothing-possible)
         key (contract/cause-key r)]
-    (ctx/end c kind (if (= :limit-reached kind) (:cause r) (get renames key key)) nil)))
+    (ctx/end c kind (if (= :limit-reached kind) (:cause r) (get renames key key)) (:data r))))
 
 (defn ^:async land! [c land]
   (let [{:keys [recover]} (:args c)

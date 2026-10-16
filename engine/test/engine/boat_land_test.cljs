@@ -100,6 +100,14 @@
           (is (= [:no-shore] (mapv :reason (filterv #(= :stopped (:kind %)) @seen))))
           (is (some #(= :boat.driven (:kind %)) @seen) "drove nearer first"))))))
 
+(deftest a-failed-approach-drive-is-the-because-of-no-shore
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res]} (await (run (-> world (assoc :unloaded ["21,64,12"]) (update :blocks assoc "20,63,12" "stone")) {:pos [21 64 12]}))]
+          (is (= :no-shore (:reason res)) (pr-str res))
+          (is (= :not-water (contract/cause-key (:because (:ending res)))) (pr-str res)))))))
+
 (deftest recover-takes-the-boat-back
   (async done
     (tu/run-async done
