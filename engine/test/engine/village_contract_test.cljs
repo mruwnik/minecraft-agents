@@ -78,6 +78,13 @@
     (is (= [:look :no-pair] ((juxt first (comp :reason last)) (status false))))
     (is (= [:later :no-pair] ((juxt first (comp :reason last)) (status true))))))
 
+(deftest breed-can-run-answers-a-lost-pair-until-one-was-tried
+  (let [c {:primitives (tu/fake {:entities [(villager [])]}) :args {:target 3 :radius 48}}
+        status (fn [m] (with-redefs [look/surveyed? (fn ([_] true) ([_ _] true)) ctx/mem (constantly m)] (breed/can-run? c)))]
+    (is (= [:later :no-pair] ((juxt first (comp :reason last)) (status {}))))
+    (are [m] (= :ok (first (status m)))
+      {:tried ["v-1" "v-2"]} {:pair ["v-1" "v-2"]} {:waiting true})))
+
 (deftest trade-ends-with-a-kind-and-a-cause
   (async done
     (tu/run-async done

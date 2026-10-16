@@ -22,9 +22,8 @@
   (:bad-args). Quote: time from :wait-s and the births still missing.
   Ends with the data {:population n :target t :births b}: done when the target is met (done? holds; an already
   met target is done with 0 births), else with the cause:
-  - condition-failed :no-pair: no two untried adult villagers in sight and none tried (they left since the start).
   - condition-failed :no-food: a feed child ended without food.
-  - nothing-possible :no-births: three attempts in a row without a birth, or no untried pair left after an attempt.
+  - nothing-possible :no-births: max-fruitless (3) attempts in a row without a birth, or no untried pair left after an attempt.
   A pair a feed could not complete (villager gone, unreachable, would not take food) counts as an attempt without a
   birth. What was tried, the birth baseline and the wait are kept in job memory, so a cut and restart re-checks the
   count and goes on. It yields :continue while a feed, walk or the wait is under way.")
@@ -105,6 +104,16 @@
       (contract/later :no-food "no food carried and no fetch for it" :need need)
       (contract/ok :food "the meal is carried or fetched"))))
 
+(defn pair-lost
+  "Later :no-pair mid-run while no pair was ever chosen (or is being fed or waited for) and fewer than two adults are in
+  sight: they may come back; once a pair was tried the round ends :no-births instead."
+  [c]
+  (let [m (ctx/mem c)]
+    (if (or (:pair m) (:waiting m) (seq (:tried m)))
+      (contract/ok :pair "a pair was chosen")
+      (no-pair c))))
+
+(def can-run? pair-lost)
 (def can-start? (cond/and bad-args no-pair no-food))
 
 (declare data-of)
@@ -147,7 +156,7 @@
   (ctx/end c kind reason (data-of c seen)))
 
 (defn choose!
-  "Pick the two nearest untried adults and book them with the baseline count, or end without a pair. :again or an ending."
+  "Pick the two nearest untried adults and book them with the baseline count; none left after an attempt ends :no-births, none at all yields (can-run? answers). :again, :continue or an ending."
   [c vs seen]
   (let [m (ctx/mem c)
         me (u/self-pos c)
@@ -155,9 +164,7 @@
         pair (->> vs (filter adult?) (remove #(tried (.-uuid %)))
                   (sort-by #(u/dist me (u/pos-of (.-pos %)))) (take 2))]
     (cond
-      (< (count pair) 2) (if (seq tried)
-                           (stop! c seen :nothing-possible :no-births)
-                           (stop! c seen :condition-failed :no-pair))
+      (< (count pair) 2) (if (seq tried) (stop! c seen :nothing-possible :no-births) :continue)
       :else (do (ctx/update-mem! c #(assoc % :pair (mapv (fn [e] (.-uuid e)) pair) :fed [] :baseline (:kids seen)
                                            :tried (into (vec (:tried %)) (map (fn [e] (.-uuid e))) pair)))
                 :again))))
