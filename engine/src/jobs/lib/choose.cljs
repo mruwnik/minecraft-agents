@@ -2,42 +2,26 @@
   "Choosers: what a body may use for a purpose, in order. (tools-for c [:dig block] amount) answers
   {:list [{:item name :uses-left n}] :short n}: the carried tools that harvest block and are not reserved, cheapest
   material first (opts {:fast true}: best first; [:attack] always best first, swords over axes), and the uses the amount still lacks once the list is used up (the
-  caller's :fetch). `reserved` is the one filter over the reserves that name an item: the bait reserve, the food
-  reserve, the never-spent items and a body's :choose/override entries {:chooser :tools :avoid [names] :prefer [names]}.
+  caller's :fetch). `reserved` is the register's held units (jobs.lib.reserve) and a body's :choose/override entries {:chooser :tools :avoid [names] :prefer [names]}.
   (fillers-for c purpose amount) answers {:list [{:item name :count n}] :short n} the same way for the blocks a
   purpose places (:build :shelter :pillar :climb :cover :seal), in the purpose's order (common first). Zones judge cells, not items: the caller asks them for the cell it digs."
   (:require [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.cost :as cost]
-            [jobs.lib.cost.food :as food]
             [jobs.lib.cost.weapon :as weapon]
-            [jobs.lib.foods :as foods]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.tool-kind :as kind]
             [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]))
 
 (def whole "Uses of a tool with no known durability: counts as whole." 1000000)
 
-(defn overrides
-  "The body's :choose/override data for chooser, merged: {:avoid #{...} :prefer [...]}."
-  [c chooser]
-  (let [mine (filter #(= chooser (:chooser %)) (map :data (ctx/entries c :choose/override)))]
-    {:avoid (into #{} (mapcat :avoid) mine)
-     :prefer (vec (distinct (mapcat :prefer mine)))}))
+(def overrides reserve/overrides)
 
 (defn reserved
-  "{name count}: how much of each carried item is off limits to a chooser (the bait foods, the food reserve and the
-  never-spent items whole stacks), plus the override's :avoid names, whole."
+  "{name count}: how much of each carried item is off limits to a chooser (jobs.lib.reserve/held)."
   [c chooser]
-  (let [inv (u/inventory (:primitives c))
-        carried (fn [n] (transduce (comp (filter #(= n (:name %))) (map :count)) + 0 inv))
-        bait (foods/reserved (ctx/view c))
-        whole-of (fn [names] (into {} (map (fn [n] [n (carried n)])) names))]
-    (merge-with max
-                (whole-of bait)
-                (whole-of (filter foods/precious (map :name inv)))
-                (food/food-reserve inv)
-                (whole-of (:avoid (overrides c chooser))))))
+  (reserve/held c chooser))
 
 (def kind-purposes
   "Tool purposes besides [:dig block]: the tool kinds that serve each."

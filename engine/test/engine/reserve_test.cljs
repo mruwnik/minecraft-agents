@@ -1,0 +1,64 @@
+(ns engine.reserve-test
+  "jobs.lib.reserve: the register of reserved carried items, its built-in rules and the price of using a reserved unit."
+  (:require [cljs.test :refer [deftest is are]]
+            [engine.memory :as mem]
+            [engine.test-util :as tu]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.reserve :as reserve]))
+
+(defn item [name count] {:name name :count count})
+
+(defn body
+  "A ctx holding items, with register entries (maps) at time 1000 and live job instances (ids)."
+  [items entries & {:keys [jobs]}]
+  (let [add (fn [d kind data policy] (mem/add-entry d kind {:t 0 :data data} policy))
+        data (as-> mem/empty-data d
+               (reduce #(add %1 :reserve %2 reserve/policy) d entries)
+               (reduce #(add %1 (mem/job-kind %2) {} mem/job-policy) d jobs))]
+    {:primitives (tu/fake {:inventory items}) :view (fn [] {:data data :now 1000})}))
+
+(deftest reserve-cost-is-value-times-odds
+  (are [s cost-of] (= cost-of (Math/round (cost/reserve-cost 10 s)))
+    0 0
+    0.5 10
+    0.9 90
+    1 ##Inf))
+
+(deftest an-item-entry-holds-up-to-its-count-of-what-is-carried
+  (are [carried count held] (= held (reserve/held (body [(item "diamond" carried)] [{:item "diamond" :count count :strength 1}]) :tools))
+    5 3 {"diamond" 3}
+    2 3 {"diamond" 2}
+    0 3 {}))
+
+(deftest a-tag-entry-holds-the-carried-names-of-the-tag
+  (is (= {"raw_iron" 2 "iron_ore" 1}
+         (reserve/held (body [(item "raw_iron" 4) (item "iron_ore" 1) (item "stick" 9)] [{:tag :ore :count 3}]) :tools))))
+
+(deftest entries-expire-by-time-and-by-dead-job
+  (are [entry jobs live] (= live (boolean (seq (reserve/held (body [(item "diamond" 1)] [(merge {:item "diamond"} entry)] :jobs jobs) :tools))))
+    {:until 2000} [] true
+    {:until 1000} [] false
+    {:by "agent"} [] true
+    {:by "j1"} ["j1"] true
+    {:by "j1"} [] false))
+
+(deftest the-built-in-rules-hold-through-the-same-answer
+  (let [c (body [(item "golden_apple" 2) (item "stone_pickaxe" 1) (item "bread" 4)]
+                [])]
+    (is (= {"golden_apple" 2 "bread" 4} (reserve/held c :tools)))))
+
+(deftest rows-are-strongest-first-and-capped-by-what-is-carried
+  (let [c (body [(item "diamond" 4)] [{:item "diamond" :count 3 :strength 0.5} {:item "diamond" :count 3 :strength 0.8}])]
+    (is (= [{:name "diamond" :count 3 :strength 0.8} {:name "diamond" :count 1 :strength 0.5}] (reserve/rows c :tools)))))
+
+(deftest price-is-for-the-units-over-the-free-surplus-lowest-strength-first
+  (let [c (body [(item "diamond" 5)] [{:item "diamond" :count 2 :strength 0.5} {:item "diamond" :count 1 :strength 0.9}])
+        each (:value (cost/item-value [(item "diamond" 1)]))]
+    (are [n expected] (= expected (reserve/price c :tools "diamond" n))
+      2 0
+      3 (cost/reserve-cost each 0.5)
+      4 (* 2 (cost/reserve-cost each 0.5))
+      5 (+ (* 2 (cost/reserve-cost each 0.5)) (cost/reserve-cost each 0.9)))))
+
+(deftest a-strength-one-unit-is-never-for-sale
+  (is (= ##Inf (reserve/price (body [(item "diamond" 3)] [{:item "diamond" :count 3 :strength 1}]) :tools "diamond" 1))))

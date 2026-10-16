@@ -13,7 +13,7 @@
              planner dangers; reach-first?, outruns-at?: a body's race to a refuge against its chasers (jobs.lib.cost.danger).
     health   hp-seconds, health-scale, drown-prices, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
     food     food-reserve: the food a body keeps carried, 3 days of it; cook-worth?, cook-gain: whether cooking raw food beats eating it now; meat-factor, meat-animal: raw meat's replacement cost, dear for hunted, 1 with a working pen (jobs.lib.cost.food).
-    value    item-value, fetch-cost, walk-cost, detour-cost: what items are worth, what fetching them, walking or a pick-up detour costs; tour-cost, tour-worth: a tour of
+    value    item-value, reserve-cost (using a reserved unit: value x s/(1-s)), fetch-cost, walk-cost, detour-cost: what items are worth, what fetching them, walking or a pick-up detour costs; tour-cost, tour-worth: a tour of
              frontiers against what its goal is worth; light-cost: a torch go-to places; dig-cost: the seconds a block takes to dig (jobs.lib.cost.value);
              per-dark, dark-factor: the one price of a dark block, which go-to's planner costs.
     planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; swim-profile: its swimH from Depth Strider on the boots; swim-factor: a swim block in walk blocks (a flight's water price); gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's prices of unseen cells (jobs.lib.cost.planner).
@@ -93,6 +93,7 @@
 
 (def item-value value/item-value)
 (def fetch-cost value/fetch-cost)
+(def reserve-cost value/reserve-cost)
 (def walk-cost value/walk-cost)
 (defn walk-blocks-per-s [] (value/walk-blocks-per-s))
 (def dig-cost value/dig-cost)

@@ -375,6 +375,12 @@
 
 ;; ---------------------------------------------------------------- the cost
 
+(defn reserve-cost
+  "What using one unit worth value costs against a reservation of strength s (0..1): value x s/(1-s), so 0.5 counts the
+  item twice and 0.9 ten times; strength 1 is ##Inf (never)."
+  [value s]
+  (if (>= s 1) ##Inf (* value (/ s (- 1 s)))))
+
 (defn trip [] (settings/get settings ::trip))
 (defn per-block [] (settings/get settings ::per-block))
 (defn per-dark [] (settings/get settings ::per-dark))
