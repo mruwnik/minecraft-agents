@@ -1,6 +1,7 @@
 (ns jobs.memory.remember
   (:require [engine.args :as a]
             [jobs.lib.checks :as checks]
+            [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
@@ -75,6 +76,9 @@
   "Never done before it runs: it writes a fresh entry each call."
   [c]
   (contract/later :unwritten "remember writes a fresh entry each call" :units :entries :done 0 :left 1 :result {:kind (:kind (:args c))}))
+
+(def safe? ready/ok)
+(def fit? ready/ok)
 
 (defn round [c]
   (let [r (resolve-args (ctx/view c) (:args c))]

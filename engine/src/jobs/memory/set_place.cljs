@@ -1,6 +1,7 @@
 (ns jobs.memory.set-place
   (:require [engine.args :as a]
             [jobs.lib.checks :as checks]
+            [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]
@@ -69,6 +70,9 @@
                       :result (select-keys r [:name :pos])))))
 
 (defn quote-of [_c] {:uses {:job-time [0 0 1]}})
+
+(def safe? ready/ok)
+(def fit? ready/ok)
 
 (defn round [c]
   (let [p (:primitives c)

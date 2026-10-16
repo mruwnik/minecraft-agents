@@ -3,6 +3,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
+            [jobs.lib.ready :as ready]
             [jobs.lib.reserve :as reserve]))
 
 (def doc
@@ -61,6 +62,9 @@
       (contract/later :not-reserved (str (:id e) " is not in the register") :units :entries :done 0 :left 1 :result {:id (:id e)}))))
 
 (defn quote-of [_c] {:uses {:job-time [0 0 1]}})
+
+(def safe? ready/ok)
+(def fit? ready/ok)
 
 (defn round [c]
   (if-let [cause (bad-args (:args c))]

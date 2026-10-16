@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.ready :as ready]
             [jobs.lib.shelter :as sh]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.plug-way :as way]
@@ -38,5 +39,8 @@
         open (count (dig-cells/open-cells p (sh/feet p)))]
     (way/quote-of c (if (lb/pick c (flight/blocks c)) (* open (settings/get settings ::place-s)) ##Inf)
                   (settings/get settings ::job-time-s))))
+
+(def safe? ready/ok)
+(def fit? ready/ok)
 
 (defn ^:async round [c] (await (way/run! c :walls way/walls-step!)))

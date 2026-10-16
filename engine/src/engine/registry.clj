@@ -63,7 +63,7 @@
 
 (defn describe
   "{:ns sym :defines #{...}} for a job file, nil for a helper file (job?), or throws when a job file's ns does not match
-  its path or a file defines round and check but none of check-names (an old job)."
+  its path, a file defines round and check but none of check-names (an old job), or a job lacks safe? or fit?."
   [dir file]
   (let [forms (read-forms file)
         ns-form (first forms)
@@ -78,6 +78,9 @@
       (not= want ns-sym)
       (throw (ex-info (str "job file " (.getPath file) " must declare (ns " want " ...), found " (pr-str ns-sym))
                       {:file (.getPath file)}))
+      (not (and (defines 'safe?) (defines 'fit?)))
+      (throw (ex-info (str "job " want " must export " (str/join " and " (map str (remove defines '[safe? fit?]))) " (ready/ok for a job with nothing to check)")
+                      {:file (.getPath file) :job want}))
       :else {:ns want :defines defines})))
 
 (defn job-namespaces

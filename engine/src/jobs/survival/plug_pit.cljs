@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.ready :as ready]
             [jobs.lib.shelter :as sh]
             [jobs.survival.plug-way :as way]
             [jobs.survival.retreat-pit :as pit]))
@@ -52,5 +53,8 @@
             (if (:stop r)
               (way/stop! c r)
               (case r :hidden :done :again :again nil)))))))
+
+(def safe? ready/ok)
+(def fit? ready/ok)
 
 (defn ^:async round [c] (await (way/run! c :pit step!)))

@@ -5,6 +5,7 @@
             [engine.chat :as chat]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
+            [jobs.lib.ready :as ready]
             [jobs.lib.combat :as combat]))
 
 (def doc
@@ -52,6 +53,9 @@
   "Time of the chat, when it will be sent (the chat act's own bound is 3 s)."
   [c]
   {:uses {:job-time [0 0 (if (:chat? (:args c)) 3 1)]}})
+
+(def safe? ready/ok)
+(def fit? ready/ok)
 
 (defn ^:async round [c]
   (let [{:keys [text chat? to]} (:args c)

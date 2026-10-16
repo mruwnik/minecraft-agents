@@ -1,6 +1,7 @@
 (ns jobs.memory.forget-place
   (:require [engine.args :as a]
             [jobs.lib.checks :as checks]
+            [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.places :as places]))
@@ -48,6 +49,9 @@
       (contract/later :recorded (str "place " (:name (:args c)) " recorded") :units :places :done 0 :left 1 :result {:name (:name (:args c))}))))
 
 (defn quote-of [_c] {:uses {:job-time [0 0 1]}})
+
+(def safe? ready/ok)
+(def fit? ready/ok)
 
 (defn round [c]
   (let [r (places/resolve-forget (ctx/view c) (:name (:args c)))]

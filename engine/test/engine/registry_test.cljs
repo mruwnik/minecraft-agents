@@ -141,10 +141,18 @@
 (deftest a-job-file-with-a-check-and-no-can-start-or-can-run-fails-to-load
   (is (re-find #"defines check but no can-start\? or can-run\?"
                (describe-message "(ns jobs.probe)\n(defn check [c] nil)\n(defn round [c] :continue)")))
-  (is (nil? (describe-message "(ns jobs.probe)\n(def conditions [])\n(defn round [c] :continue)"))))
+  (is (nil? (describe-message "(ns jobs.probe)\n(def safe? 1)\n(def fit? 1)\n(def conditions [])\n(defn round [c] :continue)"))))
+
+(deftest a-job-without-safe-or-fit-fails-to-load-naming-the-missing-export
+  (is (re-find #"job jobs.probe must export safe\? and fit\?"
+               (describe-message "(ns jobs.probe)\n(defn round [c] :continue)")))
+  (is (re-find #"must export fit\? "
+               (describe-message "(ns jobs.probe)\n(def safe? 1)\n(defn round [c] :continue)")))
+  (is (re-find #"must export safe\? "
+               (describe-message "(ns jobs.probe)\n(def fit? 1)\n(defn round [c] :continue)"))))
 
 (deftest a-file-with-only-a-round-is-a-job-and-one-without-is-a-helper
-  (is (describes-job? "(ns jobs.probe)\n(defn round [c] :continue)"))
+  (is (describes-job? "(ns jobs.probe)\n(def safe? 1)\n(def fit? 1)\n(defn round [c] :continue)"))
   (is (not (describes-job? "(ns jobs.probe)\n(defn helper [c] :continue)"))))
 
 (deftest every-job-default-passes-its-own-args-spec

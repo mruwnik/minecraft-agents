@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.ready :as ready]
             [jobs.lib.shelter :as sh]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.plug-way :as way]
@@ -48,5 +49,8 @@
     (when (await (pit/pocket! c))
       (ctx/update-mem! c assoc :dug true)
       :again)))
+
+(def safe? ready/ok)
+(def fit? ready/ok)
 
 (defn ^:async round [c] (await (way/run! c :pocket step!)))

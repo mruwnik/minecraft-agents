@@ -5,6 +5,7 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
+            [jobs.lib.ready :as ready]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -87,6 +88,9 @@
 (defn tally [vs action]
   (let [{ok true no false} (frequencies (map #(:ok (action %)) vs))]
     {:ok (or ok 0) :refused (or no 0)}))
+
+(def safe? ready/ok)
+(def fit? ready/ok)
 
 (defn ^:async round [c]
   (let [p (:primitives c)
