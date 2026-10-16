@@ -481,16 +481,21 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p eng] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50)
-              cow-x (atom nil)]
+              cow-x (atom nil)
+              waits (atom 0)]
           (after-acts! p (fn [p act]
                            (when (and (nil? @cow-x) (<= 8 (self-x p))) (reset! cow-x (- (self-x p) 12)))
+                           (when (= "wait" act) (swap! waits inc))
                            (when @cow-x
                              (when (= "wait" act) (swap! cow-x + 0.0015))
+                             ;; the cow swims in for 20 s (twice the stall time), then keeps up
+                             (when (< 400 @waits) (reset! cow-x (- (self-x p) 2)))
                              (set-cow-x! p @cow-x))))
           (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
           (await (run-until-done s 60))
           (is (some? @cow-x) "the cow fell behind")
-          (is (not= :animal-stalled (:reason (done-event s))) "a third of a block in 10 s is still closing in"))))))
+          (is (< 300 @waits) "the body waited for it")
+          (is (= :arrived (:reason (done-event s))) "a third of a block in 10 s is still closing in"))))))
 
 (deftest a-cow-out-of-sight-is-walked-back-toward-where-it-was-last-seen
   (async done
