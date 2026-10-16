@@ -113,6 +113,18 @@
           (is (= {:tilled 3 :skipped {{:x 1 :y 63 :z 1} :not-tillable}} result))
           (is (= 1 (count (kinds seen :till.skipped)))))))))
 
+(deftest till-looks-at-a-cell-remembered-as-untillable-before-skipping-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory hoe :blocks four})
+              real (.-sensedAt p)
+              stale (clj->js {:name "stone" :visible false :age-ms 60000})]
+          (aset p "sensedAt" (fn [pos] (if (and (= 1 (.-x pos)) (= 1 (.-z pos)) (empty? (calls p "look"))) stale (real pos))))
+          (let [result (await (child-outcome eng job box 30))]
+            (is (= {:tilled 4 :skipped {}} result) "the remembered stone is a stale read: look, see dirt, till")
+            (is (seq (calls p "look")))))))))
+
 (deftest till-skips-a-cell-covered-by-a-solid-block
   (async done
     (tu/run-async done
