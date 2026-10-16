@@ -17,7 +17,7 @@
    :after [[:block [26 0 16] "air"] [:item "cobblestone" [:>= 1]]]}
   {:name "dig-without-pickaxe-waits"
    :blocks [[:set [18 0 16] "stone"]]
-   :act [[:job (jobs.blocks.dig {:pos #at [18 0 16]})]]
+   :act [[:until-seen {:block "iron_ore"} 10] [:job (jobs.blocks.dig {:pos #at [18 0 16]})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-tool}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:dug [:any]}} :for-s 20}]
    :after [[:block [18 0 16] "stone"]]}
@@ -36,7 +36,7 @@
   {:name "dig-iron-ore-with-a-wooden-pickaxe-waits-for-the-drop"
    :blocks [[:set [18 0 16] "iron_ore"]]
    :body {:inventory [["wooden_pickaxe" 1]]}
-   :act [[:job (jobs.blocks.dig {:pos #at [18 0 16]})]]
+   :act [[:until-seen {:block "iron_ore"} 10] [:job (jobs.blocks.dig {:pos #at [18 0 16]})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-tool}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:dug [:any]}} :for-s 20}]
    :after [[:block [18 0 16] "iron_ore"]]}]}
