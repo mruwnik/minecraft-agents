@@ -1,9 +1,11 @@
 (ns engine.access.ledger-test
   "jobs.lib.ledger: the scaffold ledger's lifecycle as pure functions, and its place in body memory."
-  (:require [cljs.test :refer [deftest is are]]
+  (:require [cljs.test :refer [use-fixtures deftest is are]]
             [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]
             [engine.test-util :as tu]))
+
+(use-fixtures :once tu/real-memory-disk-fixture)
 
 (def a [0 64 0])
 (def b [0 65 0])

@@ -1,6 +1,6 @@
 (ns engine.contract-report-test
   "The tally of what a job's acts used and yielded, kept on every frame of the chain, and the report it ends with."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [cljs.test :refer [use-fixtures deftest is are async]]
             [cljs.reader :as reader]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -11,6 +11,8 @@
             [engine.test-util :as tu]
             ["fs" :as fs]
             ["path" :as path]))
+
+(use-fixtures :once tu/real-memory-disk-fixture)
 
 (defn snap
   ([inventory] (snap inventory {} {}))

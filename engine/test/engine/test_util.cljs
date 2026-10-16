@@ -10,6 +10,7 @@
             [engine.fake :as fake-world]
             [engine.fake.node :as node]
             [engine.fast-pace]
+            [engine.fsutil :as fsu]
             [engine.memory :as mem]
             [jobs.lib.near :as near]))
 
@@ -22,6 +23,26 @@
 (defonce remove-dirs-on-exit
   (.on js/process "exit"
        (fn [] (run! #(fs/rmSync % #js {:recursive true :force true}) @made-dirs))))
+
+(defonce real-memory-disk (atom false))
+
+(defonce memory-files
+  (let [write! fsu/write-edn!
+        read-edn fsu/read-edn
+        mem-file? #(and (not @real-memory-disk) (= "memory.edn" (path/basename %)))
+        saved (atom {})]
+    (set! fsu/write-edn! (fn [file data]
+                           (if (mem-file? file)
+                             (do (swap! saved assoc file data) {:bytes 0 :ms 0})
+                             (write! file data))))
+    (set! fsu/read-edn (fn [file] (if (and (mem-file? file) (contains? @saved file)) (@saved file) (read-edn file))))
+    saved))
+
+(def real-memory-disk-fixture
+  "A :once fixture for the namespaces that read or break memory.edn on disk: the engine's memory saves are otherwise
+  kept in RAM (serialising the whole memory every round dominated the engine tests' run time)."
+  {:before #(reset! real-memory-disk true)
+   :after #(reset! real-memory-disk false)})
 
 (defn tmp-dir
   "A fresh temp dir, removed when the test process exits."

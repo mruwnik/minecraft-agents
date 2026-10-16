@@ -1,6 +1,6 @@
 (ns engine.core-test
   (:require [engine.contract :as contract]
-            [cljs.test :refer [deftest is are async testing]]
+            [cljs.test :refer [use-fixtures deftest is are async testing]]
             [cljs.reader :as reader]
             [engine.core :as core]
             [engine.core.base :as base]
@@ -18,6 +18,8 @@
             ["path" :as path]))
 
 ;; ---------------------------------------------------------------- test jobs
+
+(use-fixtures :once tu/real-memory-disk-fixture)
 
 (defn done [c] (ctx/end c :done nil))
 

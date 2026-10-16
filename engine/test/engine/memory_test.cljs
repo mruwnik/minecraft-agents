@@ -1,11 +1,13 @@
 (ns engine.memory-test
   (:require [jobs.lib.stock :as stock]
-            [cljs.test :refer [deftest is]]
+            [cljs.test :refer [use-fixtures deftest is]]
             [cljs.reader :as reader]
             [engine.memory :as mem]
             [engine.test-util :as tu]
             ["fs" :as fs]
             ["path" :as path]))
+
+(use-fixtures :once tu/real-memory-disk-fixture)
 
 (def hour (* 60 60 1000))
 
