@@ -92,7 +92,8 @@
           (core/register-reflex! eng {:trigger :r})
           (await (core/tick! eng))
           (is (nil? (:leaf-rounds @world)))
-          (is (= [:declined] (mapv #(get-in % [:data :outcome] (:outcome %)) (filter #(= [:reflex :ended] [(:source %) (:kind %)]) @seen)))))))))
+          (is (not= :continue (:after-child @world)) "the child's wait ends the call instead of yielding")
+          (is (= 1 (count (filter #(= [:reflex :ended] [(:source %) (:kind %)]) @seen)))))))))
 
 (deftest a-child-wait-under-an-exclusive-root-ends-the-run-with-its-reason
   (async done
