@@ -354,7 +354,7 @@
 (defn last-plot-file [opts] (path/join (run-dir opts) "last-origin.edn"))
 
 (defn note-last-plot!
-  "Records the plot the body is about to be put on, so a later start can clear it first (the body is saved there)."
+  "Records the plot the body is about to be put on, so a later start can clear it first (a run that broke may have left the body there)."
   [opts origin grid]
   (fs/mkdirSync (path/dirname (last-plot-file opts)) #js {:recursive true})
   (fs/writeFileSync (last-plot-file opts) (pr-str {:origin origin :dims (f/dims grid)})))

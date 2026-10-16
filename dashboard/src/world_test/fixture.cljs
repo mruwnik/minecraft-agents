@@ -686,17 +686,22 @@
 (defn summon-command [origin [_ type pos nbt]]
   (str "summon " type " " (xyz-str (abs-pos origin pos)) " " (nbt-with-tag nbt)))
 
+(def park-height
+  "How far above a plot's origin the body waits between cases: beyond its sight (48) over the tallest plot (31), so a
+  restarted body, which logs in where it stood, never sees a plot before its blocks are built (memory would keep air)."
+  100)
+
 (defn cleanup-commands
-  "Leave the plot: its entities killed, the plot cleared to its floor and the body put back on it (a restarted body
-  starts where it last stood, so no hut or bed of this case may remain), its inventory and effects cleared, the
-  forceload removed."
+  "Leave the plot: its entities killed, the plot cleared to its floor, the body's inventory and effects cleared, the
+  body parked as a spectator park-height above the plot, the forceload removed."
   [grid origin body c]
   (let [{:keys [height floor]} (:plot c)]
     (-> [(kill-command grid origin height)]
         (into (clear-commands grid origin height floor))
         (into [(str "clear " body)
                (str "effect clear " body)
-               (str "tp " body " " (xyz-str (abs-pos origin [1.5 0 1.5])) " 0 0")])
+               (str "gamemode spectator " body)
+               (str "tp " body " " (xyz-str (abs-pos origin [1.5 park-height 1.5])) " 0 0")])
         (into (forceload-commands "remove" grid origin)))))
 
 (defn plan-file-text
