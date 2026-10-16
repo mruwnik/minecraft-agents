@@ -52,7 +52,7 @@
     :bed-placed for the morning (info night.bed-placed {:pos :own-zone} says where). No room writes :bed-place-failed (10 minutes, or until the body is 6+ blocks away).
   - someone else asleep (sh/log-out-for-sleepers?): jobs.survival.log-out, a 30 s stint at most until morning, again
     while anyone sleeps or nothing is known. A log-out that is not ok or cut is not tried again tonight.
-  - a closed room around the body (roofed within :room-roof-height) with an open door: the door is shut (retreat-doors/shut-home-door!,
+  - a closed room around the body (roofed within :room-roof-height) with an open door (an iron one too, which no hand shuts): the door is shut (retreat-doors/shut-home-door!,
     walking to it when out of reach); a door that stays open writes :night-door-failed (shelter.door-failed warn) and the
     night goes on as below.
   - a roof over a room with a hole (a fresh :bed-open entry within sh/breach-near and no closed room, sh/breached-home?): says so once

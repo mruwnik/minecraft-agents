@@ -117,6 +117,16 @@
           (is (not-any? #(= :shelter.exposed (:kind %)) @seen))
           (is (seq (st/entries eng :shelter)) "a shelter is written"))))))
 
+(deftest an-open-iron-door-no-hand-shuts-is-named-and-the-night-digs-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {"5,64,2" "iron_door" "5,65,2" "iron_door"}) {:inventory st/dirt-stack}))]
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 12))
+          (is (= 1 (count (filterv #(= :shelter.door-failed (:kind %)) @seen))) "the open iron door is named")
+          (is (seq (st/calls p "place")) "dug in: the roofed hut is not shut"))))))
+
 (defn zoned-setup
   "st/setup over the same world with a zone list in the engine."
   [world zones]

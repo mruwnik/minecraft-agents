@@ -33,7 +33,8 @@
    :act [[:job (jobs.survival.night)]
          [:await {:source :job :kind :dig-in.sealed} 60]
          [:until [:memory {:entries {:shelter [{:data {:state :built}}]}}] 10]
-         [:time-set 1000]]
+         [:time-set 1000]
+         [:job (jobs.survival.night)]]
    :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60}
             {:event {:source :job :level :debug :kind :dig-in.take-back-skipped :data {:reason :no-tool}} :within-s 120}
             {:no-event {:source :job :kind :dig-in.took-back} :for-s 150}]

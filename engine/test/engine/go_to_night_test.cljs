@@ -5,7 +5,7 @@
   (:require [engine.child-ends :as ce]
             [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
-            [engine.ctx :as ctx]
+                        [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.hut-shelter-test :as hut]
             [engine.registry :as registry]
@@ -63,6 +63,17 @@
         goal {:x 15 :y 64 :z 0}]
     (is (= :underground (sh/walk-leaves-shelter? in-open nil goal 1)) "the table down a hillside is outdoors")
     (is (nil? (sh/walk-leaves-shelter? covered nil goal 1)))))
+
+(deftest a-solid-goal-with-nothing-seen-over-it-is-a-wall-in-the-rock-not-the-open
+  (let [world {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,66,0" "stone" "15,64,0" "stone"}}
+        goal {:x 15 :y 64 :z 0}
+        p (tu/seeing-all (tu/fake world))
+        sensed-at (aget p "sensedAt")
+        hide-over-goal (fn [pos] (if (and (= 15 (.-x pos)) (> (.-y pos) 64)) #js {:unknown true} (sensed-at pos)))]
+    (is (= :underground (sh/walk-leaves-shelter? p nil goal 1)) "air seen over the goal: the open")
+    (aset p "sensedAt" hide-over-goal)
+    (is (nil? (sh/walk-leaves-shelter? p nil goal 1)) "nothing seen over it: rock")
+    (is (= :underground (sh/walk-leaves-shelter? p nil (assoc goal :y 66) 1)) "an air goal keeps the old rule")))
 
 ;; ------------------------------------------------------------------ a listed go-to
 

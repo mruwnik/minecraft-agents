@@ -599,11 +599,16 @@
   [p goal y]
   (every? #(let [n (u/seen-name p (update goal :y + %))] (and n (not (solid/solid? n)))) (range 1 (inc (- y (:y goal))))))
 
+(defn seen-open-over?
+  "Whether some cell within default-roof-height over goal is seen and not solid: rock shows no cell beyond its face."
+  [p goal]
+  (boolean (some #(some-> (u/seen-name p (update goal :y + %)) solid/solid? not) (range 1 (inc default-roof-height)))))
+
 (defn walk-leaves-shelter?
   "At night, awake and safe from it (roofed or buried, or shut-in-room?), the shelter a walk to goal ({:x :y :z}, or {:x
   :z} a column) within dist would leave, else nil. A goal within dist of the feet leaves none. :dug-in: shelter (the
   latest :shelter entry) is the one the body is shut in. :room: no cell of the closed room is within dist of the goal.
-  :underground: buried, and the goal is not below the feet (unless open-air-above?) and has nothing solid within default-roof-height over it (a walk deeper stays underground). :roofed: any other roof."
+  :underground: buried, and the goal is not below the feet (unless open-air-above?), has nothing solid within default-roof-height over it, and is no solid block with no open cell seen over it (a wall in the rock: a walk deeper stays underground). :roofed: any other roof."
   [p shelter goal dist]
   (when (and (night? p) (not (sleeping? p)) (safe-from-night? p))
     (let [goal (update-vals goal js/Math.floor)
@@ -614,7 +619,8 @@
         (in-own-shelter p shelter) :dug-in
         room (when-not (some (fn [[x y z]] (near? {:x x :y y :z z})) (:cells room)) :room)
         (buried? p) (when-not (and (:y goal) (or (and (< (:y goal) (:y (feet p))) (not (open-air-above? p goal (:y (feet p)))))
-                                                 (some #(solid-at? p (update goal :y + %)) (range 1 (inc default-roof-height)))))
+                                                 (some #(solid-at? p (update goal :y + %)) (range 1 (inc default-roof-height)))
+                                                 (and (solid-at? p goal) (not (seen-open-over? p goal)))))
                       :underground)
         :else :roofed))))
 
@@ -718,7 +724,7 @@
   "Whether the {:cell} door entry stands open (a door or gate seen open)."
   [p {:keys [cell]}]
   (let [b (u/seen-block p cell)]
-    (and b (= :openable (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))))
+    (and b (#{:openable :iron} (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))))
 
 (defn open-room-doors
   "[{:cell :inside} ...]: the doors and gates standing open in the closed room around the body, the nearest first."
