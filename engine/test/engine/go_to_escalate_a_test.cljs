@@ -68,6 +68,13 @@
                           [2 61 0] [10 64 0] (constantly false)))
         "a roofed pit has no rim to step onto")))
 
+(deftest escape-choose-rim-pillars-though-the-cells-over-the-rim-are-not-seen-from-the-pit
+  ;; sweep 4410 wide-pit-no-dig-pillars-out: at the wall the rim hides the cells over it
+  (let [p (tu/fake {:self {:pos {:x 2 :y 61 :z 0}} :blocks wide-pit :inventory [{:name "dirt" :count 8}]})
+        over-rim? (fn [[x y _]] (and (= 3 x) (>= y 64)))]
+    (aset p "sensedAt" (fn [pos] (if (over-rim? [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
+    (is (= {:step :pillar :height 2 :item "dirt"} (escape/choose p [2 61 0] [10 64 0] (constantly false))))))
+
 (deftest escape-choose-rim-pillars-on-the-side-toward-the-goal
   (let [low-south (apply dissoc wide-pit (for [x (range -3 4)] (str x ",63,3")))
         p (tu/fake {:self {:pos {:x 2 :y 61 :z 2}} :blocks low-south :inventory [{:name "dirt" :count 9}]})]

@@ -109,20 +109,22 @@
 
 (defn rim-height
   "How many levels h (2 to max-depth) the side of feet along d ([dx dz]) is solid from the feet up, with a floor on top
-  and room for the body above it; nil when it is not such a wall."
-  [block-at feet d]
+  and room for the body above it; nil when it is not such a wall. A cell over the top the body has not sensed
+  (unseen?) counts as room: the wall hides it from below, and the pillar shows it before the step."
+  [block-at unseen? feet d]
   (let [side (ahead feet d 1)
-        h (count (take-while #(solid? (block-at (up side %))) (range (inc (max-depth)))))]
-    (when (and (<= 2 h (max-depth)) (rules/solid-floor? block-at (up side (dec h)))
-               (passable? (block-at (up side h))) (passable? (block-at (up side (inc h)))))
+        h (count (take-while #(let [cell (up side %)] (and (not (unseen? cell)) (solid? (block-at cell))))
+                             (range (inc (max-depth)))))
+        room? #(let [cell (up side %)] (or (unseen? cell) (passable? (block-at cell))))]
+    (when (and (<= 2 h (max-depth)) (rules/solid-floor? block-at (up side (dec h))) (room? h) (room? (inc h)))
       h)))
 
 (defn rim-pillar
   "The pillar beside a wall that leaves the body a step below the wall's top: h - 1 for a wall h high (rim-height),
   with the feet column clear up to the head of a body on the rim. The wall along dir (toward the goal) when it is
   one, else the lowest; nil when none."
-  [block-at feet dir]
-  (let [n-of (fn [d] (when-let [h (rim-height block-at feet d)]
+  [block-at unseen? feet dir]
+  (let [n-of (fn [d] (when-let [h (rim-height block-at unseen? feet d)]
                        (when (every? #(passable? (block-at (up feet %))) (range 2 (+ h 2)))
                          (dec h))))]
     (or (some-> dir n-of) (some->> cardinals (keep n-of) seq (apply min)))))
@@ -335,7 +337,7 @@
          dir (heading feet goal)
          depth (pit-depth block-at (unseen-of p) feet)
          {:keys [item count]} (pillar-item p)
-         rim-n (when (and item (not (skip :pillar))) (rim-pillar block-at feet dir))
+         rim-n (when (and item (not (skip :pillar))) (rim-pillar block-at (unseen-of p) feet dir))
          height (when (pos? depth) (min depth (or rim-n depth)))
          pillar-blocks? (and (not (skip :pillar)) height item (>= count height))
          rise (min (max-depth) (max depth (- (second goal) (second feet))))
