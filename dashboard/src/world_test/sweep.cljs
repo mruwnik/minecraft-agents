@@ -11,8 +11,8 @@
             [engine.test-events :as ev]))
 
 (def usage
-  (str "usage: node tools/world-sweep.mjs [--dir DIR] [--bodies 16] [--min-bodies 8] [--no-night-batches] [--durations RESULTS.edn ...] [--match-ids FILE] [--run-known] [--retry-failed 1] [fixture paths ...]\n"
-       "a case whose last result in --durations was a failure is skipped (:skipped-known) unless named by --match-ids; --run-known runs those too.\n"
+  (str "usage: node tools/world-sweep.mjs [--dir DIR] [--bodies 16] [--min-bodies 8] [--no-night-batches] [--durations RESULTS.edn ...] [--match-ids FILE] [--run-known] [--unskip-ids FILE] [--unskip-id ID] [--retry-failed 1] [fixture paths ...]\n"
+       "a case whose last result in --durations was a failure is skipped (:skipped-known) unless named by --match-ids; --run-known runs those too; --unskip-ids FILE (one case id per line) runs just those known failures without limiting the run.\n"
        "runs --phase day, night, night-exclusive (--allow-time, --time-log DIR/time-log-PASS.txt, --results DIR/sweep-PASS.edn), then time-set day; writes DIR/sweep-summary.edn.\n"
        "INT/TERM go to the running pass, then time-set day runs and the exit is 130/143.\n"
        "exit: 6 / 5 / 4 when a pass stopped the sweep with it, else 1 when any pass had failures or errors, else 0."))
@@ -29,6 +29,8 @@
       (= a "--retry-failed") (recur (rest more) (assoc o :retry-failed (first more)))
       (= a "--match-ids") (recur (rest more) (assoc o :match-ids (first more)))
       (= a "--night-batches") (recur more (assoc o :night-batches true))
+      (= a "--unskip-ids") (recur (rest more) (assoc o :unskip-ids (first more)))
+      (= a "--unskip-id") (recur (rest more) (update o :unskip-id (fnil conj []) (first more)))
       (= a "--run-known") (recur more (assoc o :run-known true))
       (= a "--no-night-batches") (recur more (assoc o :night-batches false))
       (= a "--durations") (let [[files rest-args] (split-with #(not (str/starts-with? % "--")) more)]
@@ -39,7 +41,7 @@
 
 (defn passes
   "Options -> the three passes [{:name :argv :results :time-log}] in order; argv is for tools/world-test.mjs. The fixture paths (default engine/fixtures/world) come before the flags: the pool reads every word after --durations as a durations file."
-  [{:keys [dir bodies min-bodies retry-failed night-batches durations match-ids run-known paths] :or {dir "."}}]
+  [{:keys [dir bodies min-bodies retry-failed night-batches durations match-ids unskip-ids unskip-id run-known paths] :or {dir "."}}]
   (for [pass [:day :night :night-exclusive]
         :let [n (name pass)
               results (str dir "/sweep-" n ".edn")
@@ -53,6 +55,8 @@
                          "--retry-failed" retry-failed]
                         (when (seq durations) (cons "--durations" durations))
                         (when match-ids ["--match-ids" match-ids])
+                        (when unskip-ids ["--unskip-ids" unskip-ids])
+                        (mapcat #(vector "--unskip-id" %) unskip-id)
                         (when run-known ["--run-known"])))}))
 
 (defn counts

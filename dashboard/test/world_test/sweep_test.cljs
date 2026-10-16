@@ -201,3 +201,8 @@
 (deftest run-known-reaches-every-pass
   (is (every? #(some #{"--run-known"} (:argv %)) (s/passes (s/parse-args ["--run-known"]))))
   (is (not-any? #(some #{"--run-known"} (:argv %)) (s/passes (s/parse-args [])))))
+
+(deftest unskip-ids-reach-every-pass
+  (let [ps (s/passes (s/parse-args ["--unskip-ids" "u.txt"]))]
+    (is (every? #(= ["--unskip-ids" "u.txt"] (take-last 2 (:argv %))) ps)))
+  (is (every? #(= ["--unskip-id" "a/x" "--unskip-id" "b/y"] (take-last 4 (:argv %))) (s/passes (s/parse-args ["--unskip-id" "a/x" "--unskip-id" "b/y"])))))

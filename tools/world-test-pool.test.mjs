@@ -5,7 +5,7 @@ import net from 'node:net'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches, waitForBodies, PRECHECK_EXIT, BOOT_EXIT, traceDirOf, durationFiles, main, parseMspt, gateLoad, SWEEP_MIN_BODIES, markSweep, skipKnown } from './world-test-pool.mjs'
+import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches, waitForBodies, PRECHECK_EXIT, BOOT_EXIT, traceDirOf, durationFiles, main, parseMspt, gateLoad, SWEEP_MIN_BODIES, markSweep, skipKnown, withoutUnskipped } from './world-test-pool.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -856,4 +856,16 @@ test('runNightBatches: preSettled results are in the text and the events, and th
   assert.deepEqual(splitForms(r.text).map(summarize).map((s) => [s.id, s.status]), [['a/1', 'skipped-known'], ['a/2', 'pass']])
   assert.deepEqual(resultsOf(ev).map((e) => e.outcome), ['skipped', 'passed'])
   assert.equal(r.code, 1)
+})
+
+test('unskip: --unskip-id and --unskip-ids FILE name known failures that run anyway, without limiting the run', () => {
+  const p = parsePoolArgs(['engine/fixtures/world', '--unskip-id', 'a/c1', '--unskip-ids', 'u.txt'])
+  assert.deepEqual(p.unskipIds, ['a/c1'])
+  assert.equal(p.unskipIdsFile, 'u.txt')
+  assert.deepEqual(p.matchIds, [])
+  assert.deepEqual(p.passthrough, [])
+  const known = new Map([['a/c1', ''], ['a/c2', ''], ['a/c3', '']])
+  const r = skipKnown(['a/c1', 'a/c2', 'a/c3'], withoutUnskipped(known, ['a/c1', 'a/c3']))
+  assert.deepEqual(r.keep, ['a/c1', 'a/c3'])
+  assert.deepEqual(r.forms.map(summarize).map((s) => s.id), ['a/c2'])
 })

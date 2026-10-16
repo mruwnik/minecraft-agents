@@ -111,3 +111,11 @@
     (is (= ["c1" "c2"] (:hold r)))
     (is (= [] (:tick r)))
     (is (= [] (:new-bugs r)))))
+
+(deftest unskip-ids-are-the-known-failures-named-by-live-cards-whose-commits-are-in
+  (let [cards [{:id "c1" :column "live" :title "one" :commits ["aaa"] :description "live: a/x, a/z"}
+               {:id "c2" :column "live" :title "two" :commits ["bbb"] :description "live: b/w"}
+               {:id "c3" :column "needs_fixture" :title "three" :commits ["aaa"] :description "live: a/y"}
+               {:id "c4" :column "pending" :title "four" :commits ["aaa"] :description "live: b/e"}]]
+    (is (= ["a/x"] (t/unskip-ids {:previous [prev] :cards cards :ancestor? #(not= % "bbb")})))
+    (is (= ["a/x" "b/w"] (t/unskip-ids {:previous [prev] :cards cards :ancestor? (constantly true)})))))

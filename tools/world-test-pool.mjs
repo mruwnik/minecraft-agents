@@ -16,7 +16,7 @@
 //   --night-batches  (with --phase night-exclusive --allow-time) runs the cases in night batches instead of one file per body: cases that only need a night run together, at most --bodies at once,
 //                     packed longest first so a batch fits one night; the case that needs the vanilla night skip (:sleep-skip) runs in its own batch; every case that sets the time itself runs alone.
 //                     Each batch has one `time set 14000`, made by its first case, and the next batch waits for all of it. A failed case reruns alone in a batch of its own (--retry-failed); no --repeat above 1.
-// A case whose last result in the --durations files was a fail is a known failure and is not run (--run-known runs it; so does naming it with --match-id/--match-ids): its result is :status :skipped-known
+// A case whose last result in the --durations files was a fail is a known failure and is not run (--run-known runs it; so does naming it with --match-id/--match-ids, or --unskip-id / --unskip-ids FILE, which do not limit the run): its result is :status :skipped-known
 // with :previous-failure (the check it failed), carried on by the next sweep. A known failure that does run and fails on the same first failing check again is not rerun, :known-failure true in its result (and knownFailure in its event).
 //   --retry-failed N the pool owns retries (children never get it): a failed case (not an error or inconclusive one, as in the single-body runner)
 //                     is rerun up to N times (default 1; exactly its --match-id, one run) on a different body when the pool has one; a pass is :flaky.
@@ -44,7 +44,7 @@ export const SWEEP_MIN_BODIES = 8
 export const BOOT_EXIT = 6 // a child's results end in repeated boot failures (the body dies at start): the pool stops at once, keeping them
 export const PRECHECK_EXIT = 5 // a child's refusal that holds for every case (a stranger near the plot grid): the pool stops at once
 const here = path.dirname(fileURLToPath(import.meta.url))
-const POOL_VALUE_FLAGS = ['--min-bodies', '--min-bodies-wait-s', '--bodies', '--body', '--first-plot', '--results', '--durations', '--max-parallel', '--retry-failed', '--server-wait-s', '--server-settle-s', '--match-id', '--match-ids']
+const POOL_VALUE_FLAGS = ['--min-bodies', '--min-bodies-wait-s', '--bodies', '--body', '--first-plot', '--results', '--durations', '--max-parallel', '--retry-failed', '--server-wait-s', '--server-settle-s', '--match-id', '--match-ids', '--unskip-id', '--unskip-ids']
 const VALUE_FLAGS = ['--tag', '--match', '--repeat', '--world', '--card', '--time-log', '--phase']
 const CLOSERS = { '{': '}', '[': ']', '(': ')' }
 
@@ -187,7 +187,7 @@ export const unitOrder = (files, previousTexts) => {
 }
 
 export const parsePoolArgs = (args) => {
-  const p = { bodies: 1, prefix: 'ProbePool', firstPlot: 0, results: null, maxParallel: null, durations: [], retries: 1, serverWaitS: 300, serverSettleS: 10, minBodies: 0, minBodiesWaitS: 1800, paths: [], passthrough: [], matchIds: [], matchIdsFile: null, nightBatches: false, runKnown: false }
+  const p = { bodies: 1, prefix: 'ProbePool', firstPlot: 0, results: null, maxParallel: null, durations: [], retries: 1, serverWaitS: 300, serverSettleS: 10, minBodies: 0, minBodiesWaitS: 1800, paths: [], passthrough: [], matchIds: [], matchIdsFile: null, unskipIds: [], unskipIdsFile: null, nightBatches: false, runKnown: false }
   for (let i = 0; i < args.length; i++) {
     const a = args[i]
     if (!a.startsWith('--')) { p.paths.push(a); continue }
@@ -203,6 +203,8 @@ export const parsePoolArgs = (args) => {
     else if (a === '--results') p.results = v
     else if (a === '--match-id') p.matchIds.push(v)
     else if (a === '--match-ids') p.matchIdsFile = v
+    else if (a === '--unskip-id') p.unskipIds.push(v)
+    else if (a === '--unskip-ids') p.unskipIdsFile = v
     else if (a === '--max-parallel') p.maxParallel = Number(v)
     else if (a === '--retry-failed') p.retries = Number(v)
     else if (a === '--server-wait-s') p.serverWaitS = Number(v)
@@ -271,6 +273,8 @@ export const knownFailures = (previousTexts) => {
   }
   return new Map([...last].filter(([, sig]) => sig !== null))
 }
+// the known failures minus the unskipped ids, which run again (their fix has landed)
+export const withoutUnskipped = (known, ids) => new Map([...known].filter(([id]) => !ids.includes(id)))
 // the ids that have a known failure are not run; each gets a :skipped-known form per run that carries the failure -> {keep: ids to run, forms}
 export const skipKnown = (ids, known, repeat = 1) => ({
   keep: ids.filter((id) => !known.has(id)),
@@ -655,7 +659,7 @@ const nightMain = async (p, byStem, previous, script) => {
   const workers = workerSpecs(cap, bodyCap(), p.prefix, p.firstPlot)
   if (!refreshBuild(script)) return 2
   stopStaleBodies(script, p.prefix)
-  const known = knownFailures(previous)
+  const known = withoutUnskipped(knownFailures(previous), p.unskipIds)
   const skip = p.runKnown || p.matchIds.length ? { keep: cases.map((c) => c.id), forms: [] } : skipKnown(cases.map((c) => c.id), known)
   const batches = nightBatches(cases.filter((c) => skip.keep.includes(c.id)), durationsById(previous), { bodies: workers.length })
   if (skip.forms.length) console.error(`world-test pool: ${skip.forms.length} known failures skipped (--run-known runs them)`)
@@ -692,6 +696,7 @@ export const main = async (args) => {
   const p = parsePoolArgs(args)
   if (!p.paths.length) { console.error('world-test pool: no fixture file or directory given (e.g. engine/fixtures/world)'); return 2 }
   if (p.matchIdsFile) p.matchIds.push(...matchIdsFrom(fs.readFileSync(p.matchIdsFile, 'utf8')))
+  if (p.unskipIdsFile) p.unskipIds.push(...matchIdsFrom(fs.readFileSync(p.unskipIdsFile, 'utf8')))
   if (p.matchIdsFile && !p.matchIds.length) { console.error(`world-test pool: ${p.matchIdsFile} holds no ids`); return 2 }
   const byStem = new Map(fixtureFiles(p.paths).map((f) => [path.basename(f, '.edn'), f]))
   const previous = readDurations(p.durations)
@@ -699,7 +704,7 @@ export const main = async (args) => {
   if (p.nightBatches) return nightMain(p, byStem, previous, script)
   const listing = listCases(script, p)
   const listed = listing === null ? null : parseListed(listing)
-  const known = knownFailures(previous)
+  const known = withoutUnskipped(knownFailures(previous), p.unskipIds)
   const skip = listed === null || p.runKnown || p.matchIds.length ? { keep: null, forms: [] } : skipKnown([...listed.values()].flat(), known, repeatOf(p))
   const units = unitsWithCases(unitOrder([...byStem.keys()], previous), listed)
   if (noCasesSelected(units, listed)) {

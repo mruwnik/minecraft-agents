@@ -10,6 +10,7 @@
 
 (def usage
   (str "usage: node tools/sweep-triage.mjs --dir DIR [--previous RESULTS.edn ...] [--rev R] [--repo PATH] [--plans PLANS.edn] [--db FILE] [--board ID | --board-file BOARD.edn] [--out report.edn]\n"
+       "       node tools/sweep-triage.mjs --unskip-list --previous RESULTS.edn ... [--repo PATH] [--rev R] [--db FILE] [--board ID] --out FILE: the known failures named by the live plans of `live` cards whose commits are in the revision, one id per line, for world-sweep --unskip-ids.\n"
        "DIR holds sweep-<pass>.edn (day, night, night-exclusive, any sweep-*.edn except sweep-summary.edn). --previous: the earlier sweep's result files, as the pool's --durations.\n"
        "--plans: EDN map of card id prefix -> text naming fixtures/cases, for a card whose own plan names none. "
        "--rev (default HEAD) and --repo (default .): a card is covered when its commits are ancestors of the revision. Prints a text summary; --out writes the full EDN report."))
@@ -98,6 +99,15 @@
       (some #(or (#{:inconclusive} (:class %)) (#{:error :fail :skipped-known} (:status %))) named) :hold
       :else :tick)))
 
+(defn unskip-ids
+  "{:previous [vector ...] :cards :ancestor?} -> sorted ids of the known failures that the live plans of `live` cards name, for the cards whose commits are all in the revision: they wait for a run with the fix in."
+  [{:keys [previous cards ancestor?]}]
+  (let [failing (set (keys (last-results previous)))
+        cases (into [] (comp (map :id) (distinct) (filter failing) (map (fn [id] {:id id :file (first (str/split id #"/"))})))
+                    (apply concat previous))
+        waiting (filter #(and (= "live" (:column %)) (every? ancestor? (:commits %))) cards)]
+    (vec (sort (distinct (mapcat #(map :id (named-cases (card-plan-text %) cases)) waiting))))))
+
 (defn bug-matches [bugs {:keys [id file]}]
   (mapv :id (filter #(let [toks (tokens (:title %))] (or (toks id) (toks file))) bugs)))
 
@@ -183,6 +193,7 @@
       (empty? args) o
       (= a "--previous") (let [[files rst] (split-with #(not (str/starts-with? % "--")) more)] (recur rst (update o :previous into files)))
       (#{"--dir" "--rev" "--repo" "--db" "--board" "--board-file" "--plans" "--out"} a) (recur (rest more) (assoc o (keyword (subs a 2)) (first more)))
+      (= a "--unskip-list") (recur more (assoc o :unskip-list true))
       :else (recur more (update o :extra (fnil conj []) a)))))
 
 (defn result-files [dir]
@@ -197,6 +208,13 @@
   (let [args (vec (array-seq argv))
         o (parse-args args)]
     (cond
+      (and (:unskip-list o) (not (:extra o)) (:out o))
+      (let [ids (unskip-ids (merge {:previous (mapv read-results (:previous o))
+                                    :ancestor? (ancestor-fn (:repo o) (:rev o))}
+                                   (read-board (:db o) (:board o))))]
+        (fs/writeFileSync (:out o) (apply str (map #(str % "\n") ids)))
+        (js/console.log (str (count ids) " ids -> " (:out o)))
+        0)
       (or (some #{"--help" "-h"} args) (not (:dir o)) (:extra o)) (do (js/console.log usage) (if (some #{"--help" "-h"} args) 0 2))
       :else
       (let [report (triage (merge {:results (vec (mapcat read-results (result-files (:dir o))))
