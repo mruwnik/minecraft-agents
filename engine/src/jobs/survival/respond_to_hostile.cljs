@@ -14,6 +14,7 @@
             [jobs.lib.goal :as goal]
             [jobs.lib.shelter :as sh]
             [jobs.lib.threats :as threats]
+            [jobs.lib.look :as look]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
 
@@ -252,17 +253,26 @@
     (and (sh/roofed? p sh/default-roof-height)
          (<= cover-sides (count (filter walled? [[1 0] [-1 0] [0 1] [0 -1]]))))))
 
-(defn gap-wanted?
-  "Whether to stop arrows with a block rather than fight or flee: only ranged mobs near, the body in cover (covered?), building blocks
-  carried and a tool that digs stone (the way out of a sealed doorway), and the gap job not yet tried
-  (tried?)."
+(defn gap-possible?
+  "Whether the gap job could stop the arrows but for cover: only ranged mobs near, building blocks and a tool that digs stone
+  (the way out of a sealed doorway) carried, and the gap job not yet tried (tried?)."
   [c hs tried?]
   (let [p (:primitives c)]
     (boolean (and (not tried?)
                   (every? combat/ranged? hs)
-                  (covered? p)
                   (choose/filler c :build)
                   (tools/can-harvest? p "stone")))))
+
+(defn gap-wanted?
+  "Whether to stop arrows with a block rather than fight or flee: gap-possible? and the body in cover (covered?)."
+  [c hs tried?]
+  (boolean (and (gap-possible? c hs tried?) (covered? (:primitives c)))))
+
+(defn cover-unseen?
+  "Whether the gap job is possible and the body has not looked around yet while the cover it holds may be walls it has not seen
+  (its view cone leaves the sides and back): it looks before it flees."
+  [c hs tried?]
+  (boolean (and (gap-possible? c hs tried?) (not (look/surveyed? c)) (not (covered? (:primitives c))))))
 
 (defn ^:async gap!
   "One call of block-arrow-gap (never fetching): :continue or its ending's kind; nothing placed lets the round decide as usual.
@@ -321,6 +331,7 @@
                     (hiding? c) (await (run-child c :flee (:args c) false))
                     (empty? hs) nil
                     (gap-wanted? c hs (:gap-tried (ctx/mem c))) (await (gap! c))
+                    (cover-unseen? c hs (:gap-tried (ctx/mem c))) (await (look/look-around! c))
                     :else (await (respond c hs)))
           after (near c)]
       (if (contract/ending? outcome)

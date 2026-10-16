@@ -76,6 +76,14 @@
           (is (= 7 (g/cobble p)) "one block ended the line of fire")
           (is (empty? (g/shot-at p))))))))
 
+(deftest cover-not-yet-seen-is-looked-for-before-the-body-flees
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (await (respond! {:inventory [cobble8 pickaxe] :seeing tu/seeing-after-look}))]
+          (is (placed? s) "the walls behind the body are seen after one look around, then the doorway is stopped")
+          (is (= 7 (g/cobble p))))))))
+
 (defn wanted?
   "gap-wanted? for the body of a doorway cell setup with the spec, the dangers it sees."
   [spec tried?]

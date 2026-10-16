@@ -15,7 +15,7 @@
   walked to or hit. With only heard mobs in range it does not start (:no-target); one that goes unseen mid-fight is turned toward and the job declines, so the retreat takes over.
   With :hold the body stays where it is: a melee hostile beyond reach is waited for, 15 s at most, then the job declines (a ranged one is still walked up to).
   A ranged hostile farther than ::ranged-chase (6) is not walked to while another is in range (the job declines).
-  A hostile more than :leash blocks from the point the job started at is not chased (the job declines, so the retreat takes over).
+  A hostile more than :leash blocks from the point the job started at is not chased: with none other in range the job is not started (:no-target); one that falls past the leash mid-fight ends the job as a decline, so the retreat takes over.
   Done (:already before the start) when no hostile is within :range, with the result {:killed [ids]}.
   Every other ending is a decline, so the retreat takes over: :nothing-possible with the cause :hold-timeout (the :hold wait ran out), :too-far, :heard-only, :given-up;
   its data are {:killed :struck :memory}, the job memory as it ended.

@@ -73,10 +73,11 @@
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]
    :after [[:block [20 0 16] "poppy"]]}
-;; Owner Q240: in the open a groan counts as seen (the rough spot 4 toward it, outside the box, has a way).
+;; Owner Q240: in the open a groan counts as seen (the rough spot 4 toward it, x 20.5, is open ground outside the box, which starts at
+  ;; x 21 with its floor at y -1, and has a way).
   {:name "zombie-stone-box-heard-in-the-open-fires"
-   :blocks [[:fill [20 0 14] [24 2 18] "stone" :hollow]]
-   :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :blocks [[:fill [21 -1 14] [25 2 18] "stone" :hollow]]
+   :act [[:summon "zombie" [23.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]}
   ;; Card 876c2ac8 (fix 5aea0a88, owner Q78): a ranged mob only heard counts as a danger in the open, not in a tunnel.
   ;; Heard only = a clear arrow line but unseen: a sealed dark stone box (light 0) puts a skeleton beyond dark-sight (4) out of

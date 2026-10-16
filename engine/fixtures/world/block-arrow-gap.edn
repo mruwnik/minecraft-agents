@@ -1,5 +1,5 @@
 ;; Card 6a70b865 (jobs.survival.block-arrow-gap): the body stands in a closed stone room (x 14..19, z 14..18, roof y 3) whose east wall has
-;; a 1x1 slit at head height [19 1 16]; a NoAI helmeted skeleton stands 10 east of the body with an arrow line through the slit.
+;; a 1x1 slit at head height [19 1 16] (the hollow box has its floor at y -1, so the body's feet row is open); a NoAI helmeted skeleton stands 10 east of the body with an arrow line through the slit.
 ;; The only placeable cell on the line is the slit (the cells in front of the body touch no solid block). The job places there and
 ;; ends done {:placed [cell]}; with no block carried (and :fetch false) it stops :no-blocks and places nothing; behind a wall with
 ;; no slit there is no line of fire, so it declines and places nothing.
@@ -7,7 +7,7 @@
  {:tags [:survival :hostile :jobs]
   :time :any
   :plot {:height 8}
-  :blocks [[:fill [14 0 14] [19 3 18] "stone" :hollow] [:set [19 1 16] "air"] [:set [15 1 15] "torch"]]
+  :blocks [[:fill [14 -1 14] [19 3 18] "stone" :hollow] [:set [19 1 16] "air"] [:set [15 1 15] "torch"]]
   :body {:at [17.5 0 16.5] :inventory [["cobblestone" 10]] :effects [["resistance" 600 4]]}
   :act [[:summon "skeleton" [27.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
   :limit-s 60}
