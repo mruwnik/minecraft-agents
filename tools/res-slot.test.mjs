@@ -30,14 +30,17 @@ test('decide: a runnable case never reports busy', () => {
   assert.equal(decide({ ...base, waitedMs: 9e9 }).action, 'run')
 })
 
-const run = (args, env) => spawnSync('node', ['tools/res-slot.mjs', ...args], { cwd: new URL('..', import.meta.url).pathname, encoding: 'utf8', env: { ...process.env, ...env } })
+const script = new URL('./res-slot.mjs', import.meta.url).pathname
+// Hermetic: a .res-slot-heavy marker in the repo (integration worktrees) or RES_SLOT_HEAVY would make every run heavy.
+const plainEnv = (env) => { const { RES_SLOT_HEAVY: _, ...rest } = process.env; return { ...rest, ...env } }
+const run = (args, env) => spawnSync('node', [script, ...args], { cwd: os.tmpdir(), encoding: 'utf8', env: plainEnv(env) })
 
 test('integration: a held slot makes the next command busy (75), then it runs once released', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'res-slot-test-'))
   const cfg = path.join(dir, 'cfg.json')
   fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 1 } } }))
   const env = { RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '1500', RES_SLOT_POLL_MS: '200' }
-  const holder = spawn('node', ['tools/res-slot.mjs', 't', '--', 'sleep', '30'], { cwd: new URL('..', import.meta.url).pathname, env: { ...process.env, ...env }, stdio: 'ignore', detached: true })
+  const holder = spawn('node', [script, 't', '--', 'sleep', '30'], { cwd: os.tmpdir(), env: plainEnv(env), stdio: 'ignore', detached: true })
   try {
     await new Promise((r) => setTimeout(r, 1000))
     const st = run(['status'], env)
@@ -59,7 +62,7 @@ test('waiting: TEST_EVENTS prints one phase line per change of reason; exit 75 s
   const cfg = path.join(dir, 'cfg.json')
   fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 1 } } }))
   const env = { RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '1500', RES_SLOT_POLL_MS: '100', TEST_EVENTS: '1' }
-  const holder = spawn('node', ['tools/res-slot.mjs', 't', '--', 'sleep', '30'], { cwd: new URL('..', import.meta.url).pathname, env: { ...process.env, ...env }, stdio: 'ignore', detached: true })
+  const holder = spawn('node', [script, 't', '--', 'sleep', '30'], { cwd: os.tmpdir(), env: plainEnv(env), stdio: 'ignore', detached: true })
   try {
     await new Promise((r) => setTimeout(r, 1000))
     const busy = run(['t', '--', 'echo', 'ran'], env)
@@ -198,11 +201,10 @@ test('integration: with the other slot held a plain run is busy, a heavy run (--
   const cfg = path.join(dir, 'cfg.json')
   fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 2, reserve: 1 } } }))
   const env = { RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '1500', RES_SLOT_POLL_MS: '200' }
-  const holder = spawn('node', ['tools/res-slot.mjs', 't', '--', 'sleep', '30'], { cwd: new URL('..', import.meta.url).pathname, env: { ...process.env, ...env }, stdio: 'ignore', detached: true })
+  const holder = spawn('node', [script, 't', '--', 'sleep', '30'], { cwd: os.tmpdir(), env: plainEnv(env), stdio: 'ignore', detached: true })
   try {
     await new Promise((r) => setTimeout(r, 1000))
-    const { RES_SLOT_HEAVY: _, ...plainEnv } = { ...process.env, ...env }
-    const plain = spawnSync('node', [new URL('./res-slot.mjs', import.meta.url).pathname, 't', '--', 'echo', 'ran'], { cwd: dir, encoding: 'utf8', env: plainEnv })
+    const plain = run(['t', '--', 'echo', 'ran'], env)
     assert.equal(plain.status, 75)
     const flag = run(['t', '--heavy', '--', 'echo', 'ran'], env)
     assert.equal(flag.status, 0); assert.match(flag.stdout, /ran/)
@@ -319,7 +321,7 @@ test('integration: while the sweep marker names a live pid a second light run is
   const cfg = path.join(dir, 'cfg.json')
   fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 3, sweepCap: 1 } } }))
   const env = { RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '1500', RES_SLOT_POLL_MS: '200' }
-  const holder = spawn('node', ['tools/res-slot.mjs', 't', '--', 'sleep', '30'], { cwd: new URL('..', import.meta.url).pathname, env: { ...process.env, ...env }, stdio: 'ignore', detached: true })
+  const holder = spawn('node', [script, 't', '--', 'sleep', '30'], { cwd: os.tmpdir(), env: plainEnv(env), stdio: 'ignore', detached: true })
   try {
     await new Promise((r) => setTimeout(r, 1000))
     const before = run(['t', '--', 'echo', 'ran'], env)
