@@ -1,6 +1,6 @@
 (ns jobs.lib.ready
   "The readiness checkers a job binds as its safe? and fit? exports: fns of the ctx giving a status (engine.contract).
-  safe-at, safe-here and safe-if-lit are :later while the place is exposed (the estimate of jobs.lib.cost/exposure is
+  safe-at, safe-at-by-night and safe-if-lit are :later while the place is exposed (the estimate of jobs.lib.cost/exposure is
   above ::risk-limit; :look while the light there is unseen, :never when nothing lowers it) or a danger is near
   (threatened); fit? is :later below the risky health; ok never refuses."
   (:require [engine.args :as a]
@@ -61,7 +61,7 @@
   Its meta ::exposure is the exposed half alone, which (exposed) of a :checks form asks."
   [f]
   (with-meta (fn [c] (contract/all [(threatened c) (exposed c (f c))]))
-    {::exposure (fn [c] (exposed c (f c)))}))
+    {::exposure (fn [c] (exposed c (f c))) ::plain true}))
 
 (defn safe-at-by-night
   "The checker of a job that goes to the place (f c): at night safe-at it, by day or when body and place are both
@@ -82,8 +82,6 @@
 (def safe-at-chest
   "The checker of a job that goes to its chest (the :chest arg or the known :chest place)."
   (safe-at-by-night #(storage/chest-of (ctx/view %) (:args %))))
-
-(def safe-here "The checker of a job that stays put." (safe-at (constantly nil)))
 
 (def safe-here-by-night "safe-at-by-night where the job stands." (safe-at-by-night (constantly nil)))
 

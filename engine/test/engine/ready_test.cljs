@@ -76,11 +76,11 @@
 (deftest safe-at-open-ground-by-day-is-ok-where-the-light-is-seen
   (is (= :ok (lit 0 15 #(kind (ready/safe-at (constantly outside)) (assoc open-night :time st/noon))))))
 
-(deftest safe-here-is-ok-in-the-hut
-  (is (= :ok (kind ready/safe-here night-hut))))
+(deftest safe-here-by-night-is-ok-in-the-hut
+  (is (= :ok (kind ready/safe-here-by-night night-hut))))
 
-(deftest safe-here-outside-at-night-is-later
-  (is (= :later (lit 0 15 #(kind ready/safe-here open-night)))))
+(deftest safe-here-by-night-outside-at-night-is-later
+  (is (= :later (lit 0 15 #(kind ready/safe-here-by-night open-night)))))
 
 (deftest safe-if-lit-waits-at-night-above-ground-even-from-a-hut
   (are [world expected] (= expected (kind ready/safe-if-lit world))
@@ -97,6 +97,10 @@
     kitchen/safe? {:furnace outside}
     pick-up-loose/safe? {}
     set-spawn/safe? {:bed [15 64 0]}))
+
+;; plain safe-at counts darkness by day too (it broke set-spawn); the debug probe wraps it, so it is not caught
+(deftest no-job-binds-plain-safe-at
+  (is (empty? (for [[j d] registry/jobs :when (::ready/plain (meta (:safe? d)))] j))))
 
 (def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}})
 (def wall (tu/box 2 64 -2 2 66 2 "stone"))
