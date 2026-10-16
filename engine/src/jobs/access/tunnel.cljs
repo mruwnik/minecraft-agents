@@ -1,5 +1,6 @@
 (ns jobs.access.tunnel
   (:require [engine.args :as a]
+            [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
@@ -133,6 +134,10 @@
    :spent-ok {:doc "dig on with tools down to 3 uses instead of stopping :tool-spent (see jobs.access.stair)" :spec boolean? :default false}
    :spare-own-builds {:doc "a cell of a plan this body made is never dug; false: it may be (see jobs.access.stair)" :spec boolean? :default true}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}})
+
+(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:target (:args c))))))
+
+(def fit? ready/ok)
 
 (def target [:target])
 

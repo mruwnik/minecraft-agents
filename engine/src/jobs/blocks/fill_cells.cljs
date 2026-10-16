@@ -1,5 +1,6 @@
 (ns jobs.blocks.fill-cells
   (:require [engine.args :as a]
+            [jobs.lib.ready :as ready]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.choose :as choose]
@@ -33,6 +34,10 @@
 
 (a/defargs settings
   {::job-time-s {:default 600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
+
+(def safe? (ready/safe-at-by-night (fn [c] (a/cell (first (:cells (:args c)))))))
+
+(def fit? ready/ok)
 
 (def target [:cells])
 

@@ -1,6 +1,7 @@
 (ns engine.stair-test
   "jobs.access.stair: step geometry, the stop rules, and whole stairs against the fake world."
   (:require [engine.child-ends :as ce]
+            [jobs.lib.shelter :as sh]
             [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [engine.core :as core]
@@ -1194,14 +1195,29 @@
           (is (= "coal_ore" (block-at (:p off) [1 64 1])) "opted out")
           (is (= "coal_ore" (block-at (:p wet) [1 64 1])) "lava beside it"))))))
 
+(defn ^:async with-sight-of-no-sky
+  "(f) with the body underground whatever the fake's missing light data say (the column fallback of sh/buried? sees only
+  the cell over the head, which a stair's own clearance opens)."
+  [f]
+  (with-redefs [sh/buried? (constantly true)] (await (f))))
+
 (deftest a-stair-goes-on-cutting-and-walking-its-own-steps-at-night-from-a-dug-in-start-underground
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out] :as s} (await (stair! {:blocks (dissoc ground "0,60,0" "0,61,0") :self {:pos {:x 0 :y 60 :z 0}} :time 18000} east (fn [p] (swap! (fake/state p) assoc :light-default [0 0]))))]
+        (let [{:keys [out] :as s} (await (with-sight-of-no-sky #(stair! {:blocks (dissoc ground "0,60,0" "0,61,0") :self {:pos {:x 0 :y 60 :z 0}} :time 18000} east (fn [p] (tu/seeing-all p) (swap! (fake/state p) assoc :light-default [0 0])))))]
           (is (= :done (:status @out)) "not held night-sheltered between its steps")
           (is (= 3 (:steps @out)))
           (is (nil? (waiting s))))))))
+
+(deftest a-stair-from-open-ground-at-night-waits-exposed-and-digs-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p] :as s} (await (stair! {:blocks ground :time 18000} east (fn [p] (tu/seeing-all p) (swap! (fake/state p) assoc :light-default [0 0]))))]
+          (is (= :not-done @out))
+          (is (= :exposed (:reason (waiting s))))
+          (is (empty? (digs p))))))))
 
 (deftest a-stair-with-only-a-spent-pickaxe-stops-tool-spent-unless-told-otherwise
   (async done

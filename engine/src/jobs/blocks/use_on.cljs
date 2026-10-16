@@ -1,6 +1,7 @@
 (ns jobs.blocks.use-on
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
@@ -26,6 +27,10 @@
    :see {:doc "true: click only from where the eye sees the block (jobs.lib.aim), walking to such a stand first (go-to :see; none: :unreachable); false: within reach is enough, though a wall in between refuses the click" :spec boolean? :default false}
    :enter-pens {:doc "true: the walk may go through the gate of a pen holding animals; false: it keeps out of those gates and, with no other way, declines (a :blocks.pen-kept-out warn names the pen)" :spec boolean? :default false}
    :face {:doc "the face clicked: up down north south east west" :spec #{"up" "down" "north" "south" "east" "west"} :default "up"}})
+
+(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
+
+(def fit? ready/ok)
 
 (def target [:pos])
 (def defaults {:spend {:job-time ::job-time-s}})

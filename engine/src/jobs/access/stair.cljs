@@ -1,5 +1,6 @@
 (ns jobs.access.stair
   (:require [engine.args :as a]
+            [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
@@ -134,6 +135,10 @@
    ::cell-s {:default 1.2 :doc "Mean seconds one cut cell of a step takes (look, dig, walk), for the quote." :spec (a/num-in 0 nil)}})
 (defn max-steps [] (settings/get settings ::max-steps))
 (defn max-returns [] (settings/get settings ::max-returns))
+
+(def safe? ready/safe-at-from)
+
+(def fit? ready/ok)
 
 (def target [:dir :heading :y])
 

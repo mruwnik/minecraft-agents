@@ -7,6 +7,9 @@
             [engine.test-util :as tu]
             [jobs.debug.walk-plan :as walk-plan]
             [jobs.explore.search :as search]
+            [jobs.access.stair :as stair]
+            [jobs.blocks.fill-cells :as fill-cells]
+            [jobs.blocks.place :as place]
             [jobs.lib.ready :as ready]
             [jobs.movement.boat-drive :as boat-drive]
             [jobs.movement.follow :as follow]
@@ -191,6 +194,7 @@
 (deftest safe-at-by-night-waits-for-an-unseen-place-only-at-night
   (are [world expected] (= expected (kind (ready/safe-at-by-night (constantly outside)) world))
     (assoc open-night :time st/noon) :ok
+    tunnel :ok
     night-hut :later))
 
 (deftest explore-search-underground-at-night-is-ok
@@ -215,3 +219,12 @@
     (doseq [check [log-out/safe? log-out/fit? eat/safe? eat/fit? noop/safe? noop/fit? wait-for-day/safe? wait-for-day/fit?
                    wait-for-dusk/safe? wait-for-dusk/fit? shut-doors/fit?]]
       (is (= :ok (kind check world))))))
+
+(deftest the-work-jobs-bind-their-place-by-night
+  (are [world job args expected] (= expected (lit 0 15 #(first ((:safe? job) (assoc (ctx-of world) :args args)))))
+    open-night {:safe? place/safe?} {:pos [15 64 0]} :later
+    night-hut {:safe? place/safe?} {:pos [6 64 0]} :ok
+    open-night {:safe? fill-cells/safe?} {:cells [[15 64 0]]} :later
+    night-hut {:safe? fill-cells/safe?} {:cells [[6 64 0]]} :ok
+    open-night {:safe? stair/safe?} {:from {:x 0 :y 64 :z 0}} :later
+    night-hut {:safe? stair/safe?} {} :ok))

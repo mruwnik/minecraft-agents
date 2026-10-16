@@ -5,6 +5,7 @@
             [jobs.lib.submitted :as submitted]
             [engine.settings :as settings]
             [engine.args :as a]
+            [jobs.lib.ready :as ready]
             [jobs.access.pillar :as pillar]
             [jobs.lib.pillar :as pl]
             [jobs.lib.access :as access]
@@ -65,6 +66,10 @@
    ::max-failures {:default 3 :doc "Failed moves or recoveries before the bridge gives up." :spec (a/int-in 0 nil)}})
 (defn max-length [] (settings/get settings ::max-length))
 (defn time-s [] (settings/get settings ::job-time-s))
+
+(def safe? ready/safe-at-from)
+
+(def fit? ready/ok)
 
 (def target [:heading])
 

@@ -8,7 +8,6 @@
             [jobs.lib.cost.health :as cost-health]
             [jobs.lib.need :as need]
             [jobs.lib.ready :as ready]
-            [jobs.lib.shelter :as sh]
             [jobs.lib.pace :as pace]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.walk.watch :as wwatch]
@@ -286,12 +285,11 @@
   (let [t (aim/target c)] (when-not (:reason t) (:pos t))))
 
 (def safe?
-  "At night safe at the goal (ready/safe-at), by day only not threatened (an unseen goal's light is no reason to wait),
-  and no retreat plug wait."
-  (let [at (ready/safe-at goal-of)]
+  "Safe at the goal (ready/safe-at-by-night), and no retreat plug wait."
+  (let [at (ready/safe-at-by-night goal-of)]
     (with-meta (fn [c]
                  (if (goal-of c)
-                   (contract/all [(if (sh/night? (:primitives c)) (at c) (ready/threatened c)) (plug-hold c)])
+                   (contract/all [(at c) (plug-hold c)])
                    (contract/ok :no-goal "no goal to judge")))
       {:jobs.lib.ready/exposure (fn [c]
                                   (if (sh/night? (:primitives c))

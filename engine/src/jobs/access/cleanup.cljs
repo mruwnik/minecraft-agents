@@ -2,6 +2,7 @@
   (:require [engine.contract :as contract]
             [engine.settings :as settings]
             [engine.args :as a]
+            [jobs.lib.ready :as ready]
             [engine.game :as game]
             [engine.memory :as mem]
             [jobs.access.cleanup.step :refer [centre distance plan-cells blocker next-step]]
@@ -212,6 +213,10 @@
   (not (or (:collect (ctx/mem c)) (seq (offered-now c)) (and (not (look/surveyed? c)) (unseen-entries? c)))))
 
 (def can-start? (cond/and bad-args no-zones))
+
+(def safe? ready/safe-if-lit)
+
+(def fit? ready/ok)
 
 (def target [:job :near])
 

@@ -464,7 +464,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:entities [(assoc cow :name "zombie" :kind "hostile" :height 1.95)]})]
           (refuse-while-a-mob-stands-in! p nil)
-          (core/submit! eng (list job {:height 3}) {})
+          (core/submit! eng (list job {:height 3 :checks {:safe? '(always)}}) {})
           (await (ticks s eng 20))
           (is (finished? eng))
           (is (= 3 (count (calls p "jumpPlace"))))

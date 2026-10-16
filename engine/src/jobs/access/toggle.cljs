@@ -1,6 +1,7 @@
 (ns jobs.access.toggle
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [jobs.lib.ready :as ready]
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
@@ -54,6 +55,10 @@
    ::max-closer {:default 2 :doc "How often a click the game answers out of reach is followed by a walk one cell closer." :spec (a/int-in 0 nil)}})
 (defn max-closer [] (settings/get settings ::max-closer))
 (defn time-s [] (settings/get settings ::job-time-s))
+
+(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
+
+(def fit? ready/ok)
 
 (def target [:pos])
 

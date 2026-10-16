@@ -64,11 +64,12 @@
     {::exposure (fn [c] (exposed c (f c)))}))
 
 (defn safe-at-by-night
-  "The checker of a job that goes to the place (f c): at night safe-at it, by day only not threatened (an unseen place's
-  light is no reason to wait)."
+  "The checker of a job that goes to the place (f c): at night above ground safe-at it, by day or underground only not
+  threatened (an unseen place's light is no reason to wait, and darkness underground does not end at dawn)."
   [f]
   (let [at (safe-at f)]
-    (with-meta (fn [c] (if (sh/night? (:primitives c)) (at c) (threatened c))) (meta at))))
+    (with-meta (fn [c] (let [p (:primitives c)] (if (and (sh/night? p) (not (sh/buried? p))) (at c) (threatened c))))
+      (meta at))))
 
 (def safe-at-chest
   "The checker of a job that goes to its chest (the :chest arg or the known :chest place)."
@@ -77,6 +78,10 @@
 (def safe-here "The checker of a job that stays put." (safe-at (constantly nil)))
 
 (def safe-here-by-night "safe-at-by-night where the job stands." (safe-at-by-night (constantly nil)))
+
+(def safe-at-from
+  "safe-at-by-night for a job that works where the body stood at submit (:from), here with none or with :here."
+  (safe-at-by-night (fn [c] (let [args (:args c)] (when-not (:here args) (a/cell (:from args)))))))
 
 (defn dark-sky
   "Later :dark at night above ground."

@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [engine.settings :as settings]
             [engine.args :as a]
+            [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -178,6 +179,10 @@
 (def refused (checks/refusing :allowed "the cell may be dug" #(let [r (problem %)] (when-not (fluid-hazard % r) r))))
 
 (def no-tool-unfetched (checks/refusing :tool "a tool is carried or fetched" #(when-not (fetch-limits %) (tool-problem %))))
+
+(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
+
+(def fit? ready/ok)
 
 (def target [:pos])
 

@@ -295,6 +295,16 @@
           (is (= [{:cell [-1 62 0] :block "stone"} {:cell [-1 61 0] :block "stone"} {:cell [0 62 0] :block "stone"}]
                  (:dug @out))))))))
 
+(deftest a-tunnel-underground-goes-on-walking-and-cutting-its-legs-at-night
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [corridor (apply dissoc ground (for [x (range -12 -1) y [61 62] z (range -3 4)] (str x "," y "," z)))
+              {:keys [out p]} (await (tunnel! {:blocks corridor :self {:pos {:x -5 :y 61 :z 0}} :time 18000}
+                                              {:target [0 61 0]} (fn [p] (tu/seeing-all p) (swap! (fake/state p) assoc :light-default [0 0]))))]
+          (is (= :reached (:reason @out)))
+          (is (= [-1 61 0] (feet p))))))))
+
 (deftest lava-showing-up-ahead-stops-and-walks-back-out
   (async done
     (tu/run-async done

@@ -1,6 +1,7 @@
 (ns jobs.blocks.place
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [jobs.lib.ready :as ready]
             [engine.ctx :as ctx]
             [engine.contract :as contract]
             [jobs.lib.access.rules :as rules]
@@ -55,6 +56,10 @@
    :clear {:doc "dig a plant, flower or snow layer out of the cell first; false places into what a placement overwrites" :spec boolean? :default true}
    :click {:doc "how to place it ({:against [x y z] :cursor [x y z] :yaw :pitch :sneak}, jobs.lib.placement/click); nil: plainly" :spec map? :default nil}
    :fetch {:doc "get the missing block item instead of waiting :need (jobs.lib.need): true, a set of kinds or a map of limits" :spec need/option? :default true}})
+
+(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
+
+(def fit? ready/ok)
 
 (def target [:pos])
 (def defaults {:use {:blocks :build} :spend {:job-time ::job-time-s}})

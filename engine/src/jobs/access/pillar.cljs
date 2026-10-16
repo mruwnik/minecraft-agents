@@ -3,6 +3,7 @@
             [jobs.lib.submitted :as submitted]
             [engine.settings :as settings]
             [engine.args :as a]
+            [jobs.lib.ready :as ready]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
@@ -82,6 +83,10 @@
 (defn max-height [] (settings/get settings ::max-height))
 
 (def purpose :pillar)
+
+(def safe? ready/safe-here-by-night)
+
+(def fit? ready/ok)
 
 (def target [])
 

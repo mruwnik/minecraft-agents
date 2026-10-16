@@ -2,6 +2,7 @@
   (:require [engine.contract :as contract]
             [jobs.lib.choose :as choose]
             [engine.args :as a]
+            [jobs.lib.ready :as ready]
             [engine.settings :as settings]
             [jobs.lib.need :as need]
             [jobs.lib.ledger :as ledger]
@@ -71,6 +72,10 @@
 (a/defargs settings
   {::job-time-s {:default 900 :doc "Seconds a way out may take: the torches, the escape, the seal." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
+
+(def safe? ready/safe-if-lit)
+
+(def fit? ready/ok)
 
 (def target [:tunnel])
 
