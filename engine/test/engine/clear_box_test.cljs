@@ -346,3 +346,30 @@
             (is (= 1 (:dug result)))
             (is (= ["air" "cobblestone"] (mapv #(block-at p %) [{:x 1 :y 63 :z 1} {:x 1 :y 62 :z 1}]))
                 "the cell stays cleared and the lava under it is sealed")))))))
+
+;; ------------------------------------------------------------------ the wall of a stocked pen
+
+(def stocked-pit
+  (apply dissoc (tu/box -2 60 -3 8 63 5 "dirt") (for [x (range 3) y [61 62 63] z (range 3)] (str x "," y "," z))))
+(def pit-rim-row {:from {:x 3 :y 63 :z 1} :to {:x 6 :y 63 :z 1}})
+(def pit-zone {:name "pit" :owner "Fake" :min [0 61 0] :max [2 63 2]})
+(def pit-cow {:id 7 :name "cow" :kind "passive" :pos {:x 1.5 :y 61 :z 1.5}})
+
+(deftest clear-box-leaves-the-wall-of-a-pen-with-animals-unless-told-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [run (fn ^:async r [entities args]
+                    (let [{:keys [eng p seen]} (setup {:blocks stocked-pit :entities entities :self {:pos {:x 8.5 :y 64 :z 1.5}}}
+                                                      (ew/of-data {} {} [pit-zone]))
+                          result (await (child-outcome eng job (merge pit-rim-row args) 60))]
+                      {:result result :p p :seen seen}))
+              stocked (await (run [pit-cow] {}))
+              forced (await (run [pit-cow] {:open-pens? true}))
+              empty-pen (await (run [] {}))]
+          (is (= {{:x 3 :y 63 :z 1} :own-pen} (:skipped (:result stocked))) "only the rim cell beside the pit is left")
+          (is (= 3 (:dug (:result stocked))))
+          (is (= "dirt" (block-at (:p stocked) {:x 3 :y 63 :z 1})))
+          (is (= [:own-pen] (map :reason (kinds (:seen stocked) :clear-box.refused))))
+          (is (= {:dug 4 :skipped {}} (select-keys (:result forced) [:dug :skipped])))
+          (is (= {:dug 4 :skipped {}} (select-keys (:result empty-pen) [:dug :skipped]))))))))

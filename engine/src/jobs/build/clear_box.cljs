@@ -8,6 +8,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.choose :as choose]
+            [jobs.lib.own-pen :as own-pen]
             [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
@@ -24,6 +25,8 @@
   the body (:inventory-full) the job yields :continue.
   Zones and plans: loaded cells that a zone or an active plan's footprint refuses are skipped for good (reason
   :zone or :footprint, one clear-box.refused info per round). The chosen cell is checked again before the dig.
+  A cell that is the wall of an own pen holding livestock is skipped for good (reason :own-pen, one clear-box.refused
+  info) unless :open-pens?.
   A dig hazard not in :accept counts a try (reason :hazard after two).
   Refused before it starts: {:reason :bad-args :why} (impossible: a missing corner or too many cells), as can-start?
   refusals {:reason :no-zones} (no zone list read, unless :ignore-zones?, also in the middle of the job) and
@@ -39,6 +42,7 @@
    :to {:doc "opposite box corner (inclusive); at most 400 cells" :spec ::a/pos :default nil}
    :keep {:doc "extra block names to leave alone" :spec (a/coll-of a/name?) :default []}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :open-pens? {:doc "true: cells that are the wall of an own pen holding livestock may be dug (the animals walk out)" :spec boolean? :default false}
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block)"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}})
 
@@ -192,6 +196,13 @@
     (ctx/emit! c :clear-box.refused :info (assoc fields :cells (count refused)
                                                  :text (str "left " (count refused) " cells: " (access/refusal-text fields))))))
 
+(defn skip-pen-walls!
+  "Skip the cells that are the wall of an own pen holding livestock for good (reason :own-pen), with one info."
+  [c poss]
+  (ctx/update-mem! c update :skipped merge (zipmap poss (repeat :own-pen)))
+  (ctx/emit! c :clear-box.refused :info {:reason :own-pen :cells (count poss)
+                                         :text (str "left " (count poss) " cells: the wall of a pen with animals in it (:open-pens? true digs it)")}))
+
 (defn bump! [c pos reason]
   (let [n (inc (get-in (ctx/mem c) [:cell-tries pos] 0))]
     (if (>= n (max-tries))
@@ -237,7 +248,7 @@
 
 (def condition-skips
   "Skip reasons that name a cell the job may not or cannot dig; any other skip is nothing-possible."
-  #{:zone :footprint :cannot})
+  #{:zone :footprint :cannot :own-pen})
 
 (defn nothing-dug
   "The cause (the one skip reason, :nothing-dug when they are mixed) and text of a run that dug nothing."
@@ -305,11 +316,14 @@
 (defn ^:async step
   "One step: a round of the dig child on the cell under way (until it has picked up the drop), else skip the
   refused cells and start on the highest nearest pending cell; an unloaded one is walked to first."
-  [c]
+  [c pen-wall?]
   (if-let [t (:target (ctx/mem c))]
     (await (dig! c t))
-    (let [{:keys [allowed refused]} (sort-out c (pending c))]
+    (let [{:keys [allowed refused]} (sort-out c (pending c))
+          {open true walled false} (group-by (fn [[pos _]] (not (pen-wall? [(:x pos) (:y pos) (:z pos)]))) allowed)
+          allowed (vec open)]
       (when (seq refused) (skip-refused! c refused))
+      (when (seq walled) (skip-pen-walls! c (map first walled)))
       (if (empty? allowed)
         (finish! c)
         (if-let [[pos n] (top-cell c allowed)]
@@ -324,4 +338,5 @@
 (defn ^:async round
   "The whole attempt: loop the steps until the box is cleared or declined; :continue only while a walk or the body waits."
   [c]
-  (await (pace/steps! c (fn ^:async s [] (await (step c))))))
+  (let [pen-wall? (if (:open-pens? (:args c)) (constantly false) (own-pen/box-wall? c (cells (:args c))))]
+    (await (pace/steps! c (fn ^:async s [] (await (step c pen-wall?)))))))

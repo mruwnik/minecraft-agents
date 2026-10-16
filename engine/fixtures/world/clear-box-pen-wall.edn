@@ -1,0 +1,24 @@
+;; Card a0467649: build.clear-box leaves the wall of the body's own pen that holds animals. Pit pen as go-to-own-pit-pen.edn (hole x 14..18, z 14..18,
+;; walls x 19..22), the body outside at x 26; the box is the wall row x 19..22 at z 16.
+;; Should-succeed: with no animals the whole row is dug ([19 0 16] air); should-fail: with two cows in the pit [19 0 16], the wall beside the hole, stays stone
+;; and the cows stay, while [20 0 16] is dug.
+{:defaults
+ {:tags [:build :animals]
+  :time :any
+  :plot {:height 8 :floor "grass_block"}
+  :blocks [[:fill [10 0 10] [22 1 22] "stone"] [:fill [14 0 14] [18 1 18] "air"]]
+  :plans [{:id "pit" :metadata {:by "$body"} :parts [{:id "inside" :box [#at [14 0 14] #at [18 1 18]] :want [:any "air"]}]}]
+  :body {:at [26.5 0 16.5] :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "wall-beside-a-stocked-pit-is-kept"
+   :act [[:summon "cow" [15.5 0 15.5]]
+         [:summon "cow" [17.5 0 17.5]]
+         [:until [:cli "entities" ["$body" "--world" "$world" "--type" "cow"] {:total 2}] 10]
+         [:job (jobs.build.clear-box {:from #at [19 0 16] :to #at [22 0 16]})]]
+   :expect [{:event {:source :job :kind :clear-box.refused :reason :own-pen} :within-s 90 :of-job true}]
+   :after [[:block [19 0 16] "stone"] [:block [20 0 16] "air"] [:entities "type=cow,tag=wt" [[14 0 14] [18 2 18]] 2]]}
+  {:name "wall-beside-an-empty-pit-is-dug"
+   :act [[:job (jobs.build.clear-box {:from #at [19 0 16] :to #at [22 0 16]})]]
+   :expect [{:event {:source :action :kind :done :data {:name "dig"}} :within-s 90 :of-job true}]
+   :after [[:block [19 0 16] "air"] [:block [22 0 16] "air"]]}]}
