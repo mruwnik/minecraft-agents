@@ -5,6 +5,7 @@
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
+            [jobs.lib.shelter :as sh]
             [jobs.survival.retreat :as retreat]))
 
 (defn round2 [x] (/ (js/Math.round (* 100 x)) 100))
@@ -223,7 +224,17 @@
 
 (deftest exposure-of-a-walk-in-the-open-is-the-spawn-chance-at-its-end
   (let [night (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}}})
-        day (tu/fake {:floor tu/walk-floor :time st/noon :self {:pos {:x 0 :y 64 :z 0}}})]
-    (is (= {:chance (cost/spawn-chance [15 64 0]) :lowered-by #{}} (cost/exposure day {:x 0 :y 64 :z 0} {:x 15 :y 64 :z 0}))
-        "an unseen cell by day is dark: only light lowers that, not dawn")
-    (is (= #{} (:lowered-by (cost/exposure night {:x 0 :y 64 :z 0} {:x 15 :y 64 :z 0}))) "an unseen cell is dark by day too: dawn changes nothing")))
+        day (tu/fake {:floor tu/walk-floor :time st/noon :self {:pos {:x 0 :y 64 :z 0}}})
+        seen (fn [p block sky] (with-redefs [sh/block-light-at (constantly block) sh/sky-light-at (constantly sky) sh/walk-leaves-shelter? (constantly nil)]
+                                 (cost/exposure p {:x 0 :y 64 :z 0} {:x 15 :y 64 :z 0})))]
+    (is (= {:chance (cost/spawn-chance [15 64 0]) :lowered-by #{:look} :look-at [{:x 15 :y 64 :z 0}]}
+           (cost/exposure night {:x 0 :y 64 :z 0} {:x 15 :y 64 :z 0}))
+        "an unseen cell is guessed dark, and looking is what lowers that")
+    (is (= {:chance 0.0 :lowered-by #{}} (seen night 8 15)) "a seen lit cell spawns nothing")
+    (is (= #{} (:lowered-by (seen day 0 0))) "a seen dark cave cell by day: nothing foreseeable lowers it")))
+
+(deftest exposure-takes-the-shelter-entry-of-the-body
+  (let [p (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone"}})]
+    (with-redefs [sh/walk-leaves-shelter? (fn [_ shelter _ _] (when (= :entry shelter) :dug-in))]
+      (is (= #{:dawn} (:lowered-by (cost/exposure p {:x 0 :y 64 :z 0} {:x 15 :y 64 :z 0} :entry))))
+      (is (= #{:look} (:lowered-by (cost/exposure p {:x 0 :y 64 :z 0} {:x 15 :y 64 :z 0})))))))

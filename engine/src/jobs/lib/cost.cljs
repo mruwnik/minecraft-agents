@@ -111,18 +111,24 @@
 (defn exposure
   "{:chance :lowered-by} of the walk of p from `from` to `to` ({:x :y :z}): the mob spawn chance per second it meets and
   what lowers it, data the readiness checks read (empty: nothing foreseeable does, so never). A walk that leaves shelter
-  (sh/walk-leaves-shelter?) meets the open-sky night figure, any other the spawn-chance at `to` from the light p has seen;
-  :dawn lowers a chance that night alone puts there. Lava and the like are not spawn chance. A crude stub."
-  [p _from to]
-  (let [cell [(:x to) (:y to) (:z to)]
-        seen (fn [c] (let [[x y z] c
-                           at {:x x :y y :z z}]
-                       (when-let [block (sh/block-light-at p at)] {:block block :sky (or (sh/sky-light-at p at) 0)})))
-        open-sky (fn [_] {:block 0 :sky 15})
-        [light night?] (if (sh/walk-leaves-shelter? p nil to 1) [open-sky true] [seen (sh/night? p)])
-        chance (spawn-chance cell {:light light :night? night?})]
-    {:chance chance
-     :lowered-by (if (and night? (> chance (spawn-chance cell {:light light :night? false}))) #{:dawn} #{})}))
+  (sh/walk-leaves-shelter?, with the body's latest :shelter entry data when given) meets the open-sky night figure, any
+  other the spawn-chance at `to` from the light p has seen; :dawn lowers a chance that night alone puts there. A cell p
+  has no light data of is guessed dark and lowered by #{:look}, with :look-at [to]. Lava and the like are not spawn
+  chance. A crude stub."
+  ([p from to] (exposure p from to nil))
+  ([p _from to shelter]
+   (let [cell [(:x to) (:y to) (:z to)]
+         seen (fn [c] (let [[x y z] c
+                            at {:x x :y y :z z}]
+                        (when-let [block (sh/block-light-at p at)] {:block block :sky (or (sh/sky-light-at p at) 0)})))
+         open-sky (fn [_] {:block 0 :sky 15})
+         leaves? (sh/walk-leaves-shelter? p shelter to 1)
+         [light night?] (if leaves? [open-sky true] [seen (sh/night? p)])
+         chance (spawn-chance cell {:light light :night? night?})]
+     (if (and (not leaves?) (nil? (seen cell)))
+       {:chance chance :lowered-by #{:look} :look-at [to]}
+       {:chance chance
+        :lowered-by (if (and night? (> chance (spawn-chance cell {:light light :night? false}))) #{:dawn} #{})}))))
 (defn per-dark [] (value/per-dark))
 (defn dark-factor ([] (value/dark-factor)) ([kit] (value/dark-factor kit)))
 
