@@ -1,0 +1,21 @@
+;; Cards 34fd075a, 807fe291: jobs.blocks.dig has no default health floor: a hurt body (4 hp) digs a block; a caller that passes
+;; :floor {:health 6} still refuses it. A hunger effect first drops food to 8 (no regeneration), then `damage` leaves 4 hp.
+;; Stone block at [16 0 14] north of the body at [16.5 0 16.5], iron pickaxe carried.
+{:defaults
+ {:tags [:blocks :survival] :time :any
+  :plot {:height 8}
+  :blocks [[:set [16 0 14] "stone"]]
+  :body {:at [16.5 0 16.5] :yaw 180 :inventory [["iron_pickaxe" 1]] :settle-s 2}
+  :limit-s 50}
+ :cases
+ [{:name "hurt-body-digs-by-default"
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:wait-s 7] [:rcon "damage $BODY 16 minecraft:generic"]
+         [:job (jobs.blocks.dig {:pos #at [16 0 14]})]]
+   :expect [{:event {:source :job :kind :completed :data {:dug true}} :within-s 40 :of-job true}]
+   :after [[:block [16 0 14] "air"]]}
+  {:name "explicit-health-floor-refuses-a-hurt-body"
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:wait-s 7] [:rcon "damage $BODY 16 minecraft:generic"]
+         [:job (jobs.blocks.dig {:pos #at [16 0 14] :floor {:health 6}})]]
+   :expect [{:no-event {:source :job :kind :completed :data {:dug true}} :for-s 15 :of-job true}]
+   :after [[:block [16 0 14] "stone"]]
+   :limit-s 40}]}
