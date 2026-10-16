@@ -129,21 +129,33 @@
          [dx dz])
        (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz))))))
 
+(defn walk-cells
+  "The columns [x z] the straight walk from (fx, fz) to (x, z) crosses, the target included. A diagonal step crosses both
+  cells beside it too: the body may cut either corner."
+  [fx fz x z]
+  (let [n (max (js/Math.abs (- x fx)) (js/Math.abs (- z fz)))
+        at (fn [i] [(js/Math.round (+ fx (* (- x fx) (/ i n)))) (js/Math.round (+ fz (* (- z fz) (/ i n))))])]
+    (mapcat (fn [i]
+              (let [[ax az] (at (dec i)) [bx bz :as b] (at i)]
+                (if (and (not= ax bx) (not= az bz)) [[bx az] [ax bz] b] [b])))
+            (range 1 (inc n)))))
+
 (defn drag-between?
   "A downward bubble column lies in a cell the straight walk from the feet column (fx, fz) to (x, z) crosses, at the feet's
-  height or the one above (the target column itself included). A diagonal step crosses both cells beside it too: the
-  body may cut either corner."
+  height or the one above (the target column itself included)."
   [p fx fz x z fy]
-  (let [n (max (js/Math.abs (- x fx)) (js/Math.abs (- z fz)))
-        at (fn [i] [(js/Math.round (+ fx (* (- x fx) (/ i n)))) (js/Math.round (+ fz (* (- z fz) (/ i n))))])
-        cells (mapcat (fn [i]
-                        (let [[ax az] (at (dec i)) [bx bz :as b] (at i)]
-                          (if (and (not= ax bx) (not= az bz)) [[bx az] [ax bz] b] [b])))
-                      (range 1 (inc n)))]
-    (boolean
-     (some (fn [[cx cz]]
-             (some #(= "bubble_column_down" (seen-water-name p {:x cx :y % :z cz})) [fy (inc fy)]))
-           cells))))
+  (boolean
+   (some (fn [[cx cz]]
+           (some #(= "bubble_column_down" (seen-water-name p {:x cx :y % :z cz})) [fy (inc fy)]))
+         (walk-cells fx fz x z))))
+
+(defn walk-open?
+  "Every cell the straight walk from (fx, fz) to (x, z) crosses is seen water or air at the feet's height and the one
+  above: a window or a wall between the columns is no way there."
+  [p fx fz x z fy]
+  (every? (fn [[cx cz]]
+            (every? #(passable-water-or-air? (seen-water-name p {:x cx :y % :z cz})) [fy (inc fy)]))
+          (walk-cells fx fz x z)))
 
 (defn surface-in-column
   "The feet cell in column x z, at or above fy and within reach, whose head
@@ -162,20 +174,46 @@
            (contains? swimmable head) (recur (inc k))
            :else nil))))))
 
+(def neighbours [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+
+(defn joined-cells
+  "The seen water and air cells joined to the feet by a walk through such cells, at most radius sideways of the feet and
+  from one below to reach above."
+  [p fx fy fz radius reach]
+  (let [open? (fn [{:keys [x y z] :as cell}]
+                (and (<= (js/Math.abs (- x fx)) radius) (<= (js/Math.abs (- z fz)) radius) (<= (dec fy) y (+ fy reach))
+                     (passable-water-or-air? (seen-water-name p cell))))
+        start {:x fx :y fy :z fz}]
+    (loop [frontier [start] seen #{start}]
+      (if (empty? frontier)
+        seen
+        (let [next (->> (for [c frontier [dx dy dz] neighbours] (-> c (update :x + dx) (update :y + dy) (update :z + dz)))
+                        (remove seen)
+                        distinct
+                        (filter open?))]
+          (recur next (into seen next)))))))
+
 (defn nearest-air
   "The surface cell of the nearest column within radius that reaches air, not one of failed (a seq of cells); nil if none.
-  Every column is read only through cells the body has seen or feels, never through stone. With straight? (the default)
-  a column whose straight walk crosses a downward bubble column (drag-between?) is skipped: a raw move walks straight; a
-  go-to leg passes false, as its planner routes round one."
+  Every column is read only through cells the body has seen or feels, never through stone, and joined to the body by seen
+  water and air. With straight? (the default) a column whose straight walk crosses a downward bubble column
+  (drag-between?) or a cell that is not seen water or air (walk-open?) is skipped: a raw move walks straight; a go-to
+  leg passes false, as its planner routes round one."
   ([p self-pos radius reach] (nearest-air p self-pos radius reach nil true))
   ([p self-pos radius reach failed straight?]
    (let [fx (js/Math.floor (:x self-pos))
          fy (js/Math.floor (:y self-pos))
          fz (js/Math.floor (:z self-pos))
-         skip (set failed)]
+         skip (set failed)
+         joined (when-not straight? (joined-cells p fx fy fz radius reach))]
      (some (fn [[dx dz]]
              (let [cell (surface-in-column p (+ fx dx) (+ fz dz) fy reach)]
-               (when-not (or (contains? skip cell) (and straight? (drag-between? p fx fz (+ fx dx) (+ fz dz) fy))) cell)))
+               (when-not (or (contains? skip cell)
+                             (if straight?
+                               (or (drag-between? p fx fz (+ fx dx) (+ fz dz) fy)
+                                   (not (walk-open? p fx fz (+ fx dx) (+ fz dz) fy)))
+                               (not (contains? joined cell))))
+                 cell)))
            (columns radius)))))
 
 (a/defargs settings
@@ -184,8 +222,6 @@
    ::swim-ms {:default 500 :doc "Milliseconds a swimmer takes per block, to price a swim to a pocket of air." :spec (a/num-in 0 nil)}})
 
 (defn swim-ms [] (settings/get settings ::swim-ms))
-
-(def neighbours [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
 
 (defn nearest-pocket
   "The nearest seen pocket of air below the feet: {:cell :steps}, the cell (head cell air, feet cell water or air, not

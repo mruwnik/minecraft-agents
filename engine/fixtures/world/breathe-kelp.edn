@@ -1,5 +1,5 @@
 ;; Cards 7ae7068b, 8fad6e13: a body drowning in a 1x1 water column grown with kelp (kelp_plant below, a kelp head under the surface) swims up to the air:
-;; kelp is water for breathe, never a cap. Stone mass, column x 16 z 16 water y 0..3, open air above (y 4..8), body at the bottom.
+;; kelp is water for breathe, never a cap; a one-block ledge east of the surface (level with the water) is the way out. Stone mass, column x 16 z 16 water y 0..3, open air above (y 4..8), body at the bottom.
 {:defaults
  {:tags [:survival :water] :time :any
   :plot {:height 12}
@@ -7,7 +7,8 @@
               :job (jobs.survival.breathe {:min-oxygen 12})}]
   :blocks [[:fill [0 0 0] [31 8 31] "stone"]
            [:fill [16 0 16] [16 3 16] "water"]
-           [:fill [16 4 16] [16 8 16] "air"]]
+           [:fill [16 4 16] [16 8 16] "air"]
+           [:fill [17 4 16] [18 5 16] "air"]]
   :body {:at [16.5 1 16.5] :effects [["resistance" 600 4]] :settle-s 1}
   :limit-s 70}
  :cases

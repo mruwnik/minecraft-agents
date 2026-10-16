@@ -1538,3 +1538,32 @@
       (fn ^:async t []
         (is (= {:event :stopped :kind :nothing-possible :reason :no-air}
                (await (ending {:self {:inWater true :oxygen 4} :swimFails true :blocks water-column} defaults))))))))
+
+(defn glass-shaft
+  "A water shaft (feet y 64..67) under a one-cell dirt cap (y 68) with air over it, in stone; a seen air pocket two columns
+  east behind a glass window."
+  []
+  (merge (into {} (for [x (range -9 9) z (range -8 9) y (range 63 72)] [(str x "," y "," z) "stone"]))
+         (into {} (for [y (range 64 68)] [(str "0," y ",0") "water"]))
+         {"0,68,0" "dirt" "1,64,0" "glass" "1,65,0" "glass" "2,64,0" "air" "2,65,0" "air" "3,64,0" "air" "3,65,0" "air"}
+         (into {} (for [y (range 69 72)] [(str "0," y ",0") "air"]))))
+
+(deftest a-pocket-behind-glass-is-not-a-target-the-cap-is-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}} :blocks (glass-shaft)})]
+          (await (one-run! eng defaults))
+          (is (not-any? #{[:stopped :no-air]} (ended seen)))
+          (is (= "air" (.-name (.blockAt p (tu/pos 0 68 0)))) "the cap is dug"))))))
+
+(deftest a-down-bubble-column-cutting-the-only-way-to-air-is-not-gone-through
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup (-> (crossing-world true) (assoc-in [:blocks "0,68,0"] "oak_planks") (assoc-in [:self :pos] {:x 0 :y 64 :z 0})
+                          (update :blocks merge (into {} (for [x (range -2 4) z (range -2 3)] [(str x ",63," z) "stone"])))))]
+          (await (one-run! eng (assoc defaults :radius 2 :air-radius 4)))
+          (is (= [[:stopped :no-air]] (ended seen)))
+          (is (> 1 (js/Math.floor (:x (core/self-pos p)))) "never past the dragging column")
+          (is (not-any? #{"steer"} (call-names p)) "no go-to child was sent through it"))))))

@@ -1,7 +1,7 @@
 ;; Breathe in water columns (cards f9cf9494, aef12976, 94eea0ca, 8d927d51 swim up; f303ad2d, 27fe2fc6, 8842e30c magma (drag) bubble columns): stone mass, 1x1 water columns,
 ;; the body is put at a column's foot, its air runs out, the breathe reflex fires.
 ;; Should-succeed: deep-open-column (28 deep, several swims of the 3 s bound, none counted a failed try); dark-sealed-column (the air pocket above is sealed and dark, the body swims up
-;; the own column unseen); deep-dirt-cap (swim up 12 cells to a dirt cap, dig it); magma-neighbour (the capped own column is dug, the neighbour column over magma that reaches air is never entered);
+;; the own column unseen); deep-dirt-cap (swim up 12 cells to a dirt cap, dig it with a shovel: bare-handed the dig is slower than the air left and is not started); magma-neighbour (the capped own column is dug, the neighbour column over magma that reaches air is never entered);
 ;; go-air-routes-round-magma (a seen air pocket behind a drag column in a 3 wide tunnel is gone to round it).
 ;; Should-fail: magma-between-is-not-crossed (planks cap, the only air column lies behind a drag column: stops :no-air, never crosses).
 ;; Live risk: magma over water makes a bubble column only after a block update; the magma cases check the stop or the dug cap, not the column state.
@@ -41,7 +41,7 @@
             [:fill [16 0 16] [16 11 16] "water"]
             [:set [16 12 16] "dirt"]
             [:fill [16 13 16] [16 14 16] "air"]]
-   :body {:at [16.5 1 16.5]}
+   :body {:at [16.5 1 16.5] :inventory [["iron_shovel" 1]]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:no-event {:source :job :kind :stopped :data {:reason :no-air}} :for-s 60 :until {:source :reflex :kind :ended}}]
    :after [[:not-block [16 12 16] "dirt"] [:body-near [16.5 12.5 16.5] 3]]}
