@@ -237,6 +237,14 @@
           (is (nil? (found-of s)))
           (is (= [] (:found (not-found-of s)))))))))
 
+(deftest a-dense-target-out-of-range-beside-the-body-does-not-hide-one-in-range
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "diamond_block" :scan-radius 10 :max-distance 10 :max-legs 1}
+                                {:blocks (merge (tu/box 11 64 -4 28 64 4 "diamond_block") {"0,80,0" "diamond_block"}) :seen-r 64}))]
+          (is (= [{:what "diamond_block" :pos [0 80 0]}] (:found (found-of s)))))))))
+
 (deftest nothing-within-the-distance-ends-not-found-with-the-coverage
   (async done
     (tu/run-async done
@@ -399,7 +407,7 @@
                           (let [at (.-sensedAt p)]
                             (aset p "sensedAt" (fn [pos] (if (or (> (js/Math.abs (.-x pos)) 8) (> (js/Math.abs (.-z pos)) 8)) #js {:unknown true} (at pos))))))
               s (await (search! {:target "diamond_block" :max-distance 20}
-                                {:self {:pos [0 100 0]} :blocks (tu/box -2 99 -2 8 99 2 "stone")} 60 blind-far))
+                                {:self {:pos [0 80 0]} :blocks (tu/box -2 99 -2 8 99 2 "stone")} 60 blind-far))
               e (not-found-of s)]
           (is (finished? s) "the search ends within 60 rounds, not at the time bound")
           (is (not= :time (:why e)))

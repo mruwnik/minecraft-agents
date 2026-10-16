@@ -252,9 +252,11 @@
 
 (defn remembered
   "Findings from blocks the body saw earlier anywhere within max-distance (XZ) of the origin [x y z], beyond what a look
-  reaches, nearest the body first."
+  reaches, nearest the body first. The memory read is capped after the sort by distance from the body, so the cap is
+  generous: a dense target near the body must not cut those in range.
+  Read once per look (not again when choosing a leg resumes): the seen memory only grows when the body sees more."
   [p names [ox _ oz] max-distance]
-  (->> (look/seen-blocks p {:names names :radius (* 2 max-distance) :max 64 :live? true})
+  (->> (look/seen-blocks p {:names names :radius (* 2 max-distance) :max 512 :live? true})
        (map (fn [b] {:what (:name b) :pos (cell-of (:pos b))}))
        (filter #(<= (xz-dist [((:pos %) 0) ((:pos %) 2)] [ox oz]) max-distance))))
 
@@ -421,7 +423,8 @@
         m (ctx/mem c)
         near (min (:scan-radius (:args c)) (near-sight))
         gone (if (pos? near) (departed ns (sense (:primitives c) names near) (here c) near) #{})
-        found (cond-> (add-found (:found m) (takeable c (remembered (:primitives c) names (:origin m) max-distance)) want)
+        found (cond-> (cond-> (:found m)
+                        (not resumed) (add-found (takeable c (remembered (:primitives c) names (:origin m) max-distance)) want))
                 use-notes (add-found (takeable c (noted (:primitives c) ns names (:origin m) max-distance gone)) want))]
     (ctx/update-mem! c assoc :found found)
     (cond
