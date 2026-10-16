@@ -1028,6 +1028,38 @@
           (is (= "stone" (at [0 68 0])))
           (is (not (some #{"dig"} (call-names p)))))))))
 
+(defn slow-cap-run!
+  "A drowning body under a stone cap it cannot dig in time; the column floor is floor, a still pool with a stone floor
+  lies beside it at x 1."
+  [floor level]
+  (let [world (merge (capped-world "stone") {"0,63,0" floor "1,64,0" "water" "1,65,0" "water" "1,63,0" "stone"})
+        {:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0.5 :y 66 :z 0.5}} :blocks world
+                                     :states (when level {"0,64,0" {:level level} "0,65,0" {:level level} "0,66,0" {:level level} "0,67,0" {:level level}})})]
+    (swap! (fake/state p) assoc :dig-ms 60000)
+    (-> (one-run! eng cap-args) (.then (fn [_] {:p p :ended (ended seen)})))))
+
+(deftest a-body-too-slow-for-the-cap-moves-off-a-lava-floor-to-a-still-pool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (slow-cap-run! "lava" nil))]
+          (is (<= 1 (:x (core/self-pos p))) "moved to the pool"))))))
+
+(deftest a-body-too-slow-for-the-cap-moves-out-of-flowing-water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (slow-cap-run! "stone" 1))]
+          (is (<= 1 (:x (core/self-pos p))) "moved to the pool"))))))
+
+(deftest a-body-too-slow-for-the-cap-stays-over-a-still-stone-floor
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p ended]} (await (slow-cap-run! "stone" nil))]
+          (is (= [[:stopped :no-air]] ended))
+          (is (< (:x (core/self-pos p)) 1) "no better spot, stays"))))))
+
 (deftest a-cap-dig-holds-the-best-tool-and-is-bounded-by-the-air-left
   (async done
     (tu/run-async done

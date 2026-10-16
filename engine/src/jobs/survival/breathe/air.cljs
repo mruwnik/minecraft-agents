@@ -196,6 +196,38 @@
                     ok?))]
         (or dug :dig-failed)))))
 
+(defn recovery-spot?
+  "A seen still-water cell with room above it over a solid floor that does not burn: a pile left there lies where it can be fetched."
+  [p cell]
+  (let [b (u/seen-block p cell)
+        floor (u/sensed p (update cell :y dec))]
+    (boolean (and b (not (breath/suffocates? p (update cell :y inc))) (= "water" (.-name b)) (zero? (js/Number (or (some-> (.-properties b) .-level) 0)))
+                  (not (true? (.-unknown floor))) (.-fullCube floor) (not (contains? breath/harmful-in-cell (.-name floor)))))))
+
+(defn recovery-spot
+  "The nearest recovery-spot? cell joined to from by seen water within steps cells; nil when from is one itself or none is."
+  [p from steps]
+  (when-not (recovery-spot? p from)
+    (loop [frontier [from] seen #{from} k 0]
+      (when (and (seq frontier) (< k steps))
+        (let [next (->> (for [c frontier [dx dy dz] breath/neighbours] (-> c (update :x + dx) (update :y + dy) (update :z + dz)))
+                        (remove seen)
+                        distinct
+                        (filter #(contains? breath/swimmable (breath/seen-water-name p %))))]
+          (or (first (filter #(recovery-spot? p %) next))
+              (recur next (into seen next) (inc k))))))))
+
+(defn ^:async settle!
+  "Drowning for good (the cap dig is too slow): with the air left, swim to the nearest recovery-spot? within it, so the
+  drops can be fetched after; nothing when the body already lies in one or none is near."
+  [c]
+  (let [p (:primitives c)
+        self (.self p)
+        steps (js/Math.floor (/ (* (cap-dig-share) (breath/air-left-ms self)) (breath/swim-ms)))]
+    (when-let [spot (recovery-spot p (breath/feet-cell self) steps)]
+      ;; raw moveTo: the planner refuses a swim past the oxygen to a cell that is no air, and this one spends the health left
+      (await (ctx/act c :moveTo (clj->js {:pos spot :range 0}))))))
+
 (defn ^:async drown-out!
   "Drowning: to seen air near; with none seen (or after a failed try) a dry pocket where it stands, after the go-to to
   seen air further out; else swim up a column not seen capped, go-to air further out, dig up through a natural cap;
@@ -223,6 +255,7 @@
               (await (pocket/footing! c)) true
               :else (let [d (if (= :too-slow d) (await (dig-cap! c 1)) d)]
                       (when-not (true? d) (ctx/update-mem! c assoc :cap d))
+                      (when (= :too-slow d) (await (settle! c)))
                       (true? d)))))))))
 
 (defn ^:async go!
