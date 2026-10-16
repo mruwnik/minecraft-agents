@@ -136,17 +136,23 @@
   [c]
   (contains? #{:rain :thunder} (:weather c)))
 
+(defn dusk-set?
+  "Whether case c has a :time-set step to dusk (11500) or later in the day: it brings hostiles, so it may not share a pass."
+  [c]
+  (boolean (some (fn [[op ticks]] (and (= :time-set op) (>= (mod ticks 24000) 11500))) (:act c))))
+
 (defn time-phase
-  "The phase (:day, :night, :night-x or :weather-x, a case with its own :weather) whose time lock case c holds: its :time, else the phase of its first :time-set step; nil
+  "The phase (:day, :night, :night-x or :weather-x, a case with its own :weather) whose time lock case c holds: its :time, else the phase of its first :time-set step (a day one with a :time-set to dusk or later: :night-x, solo, started at day); nil
   when it does not depend on the time of day."
   [c]
   (if (weather-x? c)
     :weather-x
-    (case (:time c)
-      :day :day
-      :night :night
-      :night-exclusive :night-x
-      (some (fn [[op ticks]] (when (= :time-set op) (phase-of-ticks ticks))) (:act c)))))
+    (let [phase (case (:time c)
+                  :day :day
+                  :night :night
+                  :night-exclusive :night-x
+                  (some (fn [[op ticks]] (when (= :time-set op) (phase-of-ticks ticks))) (:act c)))]
+      (if (and (= :day phase) (dusk-set? c)) :night-x phase))))
 
 (defn barrier-ticks
   "The time a :night-exclusive case sets with its one :time-set step when that ends the night (a day time), else nil. Cases
@@ -154,7 +160,7 @@
   [c]
   (let [sets (filter #(= :time-set (first %)) (:act c))
         ticks (second (first sets))]
-    (when (and (= 1 (count sets)) (not (weather-x? c)) (= :day (phase-of-ticks ticks)))
+    (when (and (= 1 (count sets)) (not (weather-x? c)) (= :day (phase-of-ticks ticks)) (not (dusk-set? c)))
       ticks)))
 
 (defn night-class

@@ -154,6 +154,17 @@
   (is (= :night (l/time-phase {:time :any :act [[:wait-s 1] [:time-set 14000]]})))
   (is (nil? (l/time-phase {:time :any :act [[:wait-s 1]]}))))
 
+(deftest a-day-case-that-sets-dusk-or-later-runs-solo
+  (is (= [:night-x :night-x :night-x :night-x :day :night]
+         [(l/time-phase {:time :day :act [[:time-set 11500]]})
+          (l/time-phase {:time :day :act [[:time-set 12000]]})
+          (l/time-phase {:time :day :act [[:time-set 23500]]})
+          (l/time-phase {:time :any :act [[:time-set 11500]]})
+          (l/time-phase {:time :day :act [[:time-set 6000]]})
+          (l/time-phase {:time :night :act [[:time-set 12000]]})]))
+  (is (= :solo (l/night-class {:time :day :act [[:time-set 11500]]})))
+  (is (nil? (l/barrier-ticks {:time :day :act [[:time-set 23500]]}))))
+
 (deftest an-exclusive-night-holder-shares-with-nobody-not-even-night
   (let [files (atom {10 (hold :night-x)})]
     (is (= {:waiting-on [10]} (l/try-share (fake-share files #{10 11}) 11 :night-x 5)))

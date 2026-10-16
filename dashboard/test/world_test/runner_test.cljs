@@ -1084,6 +1084,12 @@
           (r/lock-batch {:night-batch "n1"} {:time :night})
           (r/lock-batch {} {:time :night-exclusive})])))
 
+(deftest a-day-case-setting-dusk-starts-at-day-and-is-not-batched
+  (is (nil? (r/lock-batch {:night-batch "n1"} {:time :day :act [[:time-set 12000]]})))
+  (is (false? (r/starts-night? {:time :day :act [[:time-set 12000]]})))
+  (is (true? (r/starts-night? {:time :night-exclusive})))
+  (is (true? (r/starts-night? {:time :any :act [[:time-set 14000]]}))))
+
 (deftest a-batch-joiner-never-re-sets-the-time
   (is (= [false true false false]
          [(r/joiner-refresh? {:allow-time true :night-batch "n1"} :night-x {:act []})

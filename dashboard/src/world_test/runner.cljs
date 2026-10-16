@@ -661,10 +661,15 @@
   [opts rc]
   (or (lease/time-phase rc) (if (:allow-time opts) :day :any)))
 
+(defn starts-night?
+  "Whether case rc starts in a night (a :night-x case that only sets dusk itself starts at day)."
+  [rc]
+  (or (contains? #{:night :night-exclusive} (:time rc)) (= :night (lease/time-phase rc))))
+
 (defn lock-batch
   "The batch id a case locks with: only a :night-exclusive case shares its night, with the cases of the same --night-batch."
   [opts rc]
-  (when (= :night-x (lease/time-phase rc)) (:night-batch opts)))
+  (when (and (= :night-x (lease/time-phase rc)) (= :night-exclusive (:time rc))) (:night-batch opts)))
 
 (defn joiner-refresh?
   "Whether a joiner of phase re-sets a drifted time of day: not for :any, without --allow-time, for a case that sets the time itself,
@@ -1524,7 +1529,7 @@
         t-start (atom nil)
         clock (stall-clock (js/Date.now))
         stop-monitor (start-stall-monitor! clock)
-        natural (f/natural-hostiles-commands grid origin rc (contains? #{:night :night-x} (lease/time-phase rc)))
+        natural (f/natural-hostiles-commands grid origin rc (starts-night? rc))
         stop-sweep (atom (fn []))
         pre-register (atom nil)
         setup-cursor (atom nil)
@@ -1549,11 +1554,11 @@
                                              (fn [ok] (if ok
                                                         (.then (start-sleep-rule! rcon! opts rc batch nil (str (:id c) " starts night batch " batch)) (constantly ok))
                                                         ok)))
-                                :else (time-ok! opts (if (lease/time-phase rc) rc (assoc rc :time :day))))))
+                                :else (time-ok! opts (if (and (lease/time-phase rc) (not (and (= :night-x phase) (= :any (:time rc))))) rc (assoc rc :time :day))))))
                               (.then (fn [ok]
                                        (if (or (not ok) (= :any phase))
                                          ok
-                                         (.then (confirm-phase! (if (or (#{:night :night-x} phase) (and (= :weather-x phase) (#{:night :night-exclusive} (:time rc)))) :night :day))
+                                         (.then (confirm-phase! (if (starts-night? rc) :night :day))
                                                 (fn [_] ok)))))
                               (.then (fn [ok]
                                        (if (or (not ok) (= :any phase))
