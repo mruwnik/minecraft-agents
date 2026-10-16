@@ -1,6 +1,7 @@
-;; Card cad380e8: a go-to that is within range while hanging in a floorless vine is no arrival (the next act freed the controls and the body slid off and fell).
-;; Should-succeed: vine 2 cells over a 1 block drop, goal 2 blocks off at the floor: go-to.hanging names a stand and the body arrives on the floor.
-;; Should-fail: vine 6 up a tower, goal in the air beside it with no floor within range: the call ends :unreachable :why :hanging, and the body does not die.
+;; Card cad380e8: a go-to whose walk ends on a floorless vine within range is no arrival (the next act freed the controls and the body slid off and fell).
+;; The body starts on the floor and climbs the vine itself: a body placed on a vine slides down it before the job starts.
+;; Should-succeed: the goal is in range of a vine cell beside a pillar: the planner climbs on to the pillar top and the body arrives there (the planner takes a stand over a hanging cell, so go-to.hanging fires only in the next case).
+;; Should-fail: the goal is in the air beside the vine top with no floor within range: the call ends :unreachable :why :hanging, and the body does not die.
 {:defaults
  {:tags [:movement :go-to :fall]
   :time :any
@@ -8,17 +9,16 @@
   :body {:effects [["resistance" 600 4]]}
   :limit-s 90}
  :cases
- [{:name "low-vine-walks-on-to-the-floor"
-   :blocks [[:fill [12 0 11] [12 3 11] "stone"] [:fill [11 1 11] [11 2 11] "vine[east=true]"]]
-   :body {:at [11.5 1 11.5] :settle-s 0}
-   :act [[:job (jobs.movement.go-to {:pos #at [9 0 11] :range 3})]]
-   :expect [{:event {:source :job :kind :go-to.hanging :data {:stand [:any]}} :within-s 30 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
-   :after [[:body-near [9.5 0 11.5] 3.5]]}
+ [{:name "vine-climb-ends-on-the-pillar-top"
+   :blocks [[:fill [12 0 11] [12 6 11] "stone"] [:fill [10 0 11] [10 3 11] "stone"] [:fill [11 1 11] [11 5 11] "vine[east=true]"]]
+   :body {:at [11.5 0 11.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [11 6 11] :range 2.5})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [10.5 4 11.5] 1.5]]}
   {:name "high-vine-with-no-floor-in-range-is-unreachable-hanging"
-   :blocks [[:fill [12 0 11] [12 8 11] "stone"] [:fill [11 5 11] [11 7 11] "vine[east=true]"]]
-   :body {:at [11.5 6 11.5] :settle-s 0}
-   :act [[:job (jobs.movement.go-to {:pos #at [9 6 11] :range 3})]]
+   :blocks [[:fill [12 0 11] [12 8 11] "stone"] [:fill [11 1 11] [11 7 11] "vine[east=true]"]]
+   :body {:at [11.5 0 11.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [10 7 11] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.hanging :data {:stand nil}} :within-s 30 :of-job true}
             {:event {:source :job :kind :result :data {:arrived false :reason :unreachable :why :hanging}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :died} :for-s 20 :until {:source :job :kind :result}}]}]}
