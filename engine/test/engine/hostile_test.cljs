@@ -415,6 +415,27 @@
         (let [{:keys [p]} (await (first-round-ms '(jobs.survival.fight-back {:range 12 :leash 10}) {:inventory sword :entities [(zombie 8 0)]} 20))]
           (is (pos? (count (calls p "attack"))) "inside the leash it is fought"))))))
 
+(deftest fight-back-measures-its-leash-from-where-the-round-began
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:inventory sword :entities [(zombie 2 0)]} 2000)
+              hurt (atom false)]
+          (.override (.-world p) "attack"
+                     (fn [token a impl]
+                       (when-not @hurt
+                         (reset! hurt true)
+                         (swap! (fake/state p) update-in [:self :health] - 1))
+                       (impl token a)))
+          (core/submit! eng '(jobs.survival.fight-back {:range 8 :leash 5}) {})
+          (await (core/tick! eng))
+          (swap! (fake/state p) assoc-in [:self :pos] [30.5 64 0])
+          (set-entities! p [(zombie 33 0)])
+          (dotimes [_ 3]
+            (swap! clock + 3000)
+            (await (core/tick! eng)))
+          (is (< 1 (count (calls p "attack"))) "the body fled 30 blocks and the mob followed: it is fought where it stands now"))))))
+
 (deftest fight-back-is-already-done-for-a-hidden-ranged-mob
   (async done
     (tu/run-async done
