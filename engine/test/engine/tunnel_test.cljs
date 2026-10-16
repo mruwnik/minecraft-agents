@@ -838,6 +838,24 @@
           (is (= :reached (:reason @out)) (pr-str (:reason @out)))
           (is (= [5 20 0] (feet p))))))))
 
+(deftest a-run-cell-gravel-keeps-refilling-ends-refills-naming-the-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [row (merge (stone -12 12 0 64 -3 8) {"0,20,0" "air" "0,21,0" "air" "6,20,0" "iron_ore"})
+              prep (fn [p]
+                     (let [world (.-world p)]
+                       (.override world "dig"
+                                  (fn ^:async f [token a impl]
+                                    (let [r (await (impl token a))]
+                                      (set-block! p "1,20,0" "gravel")
+                                      (set-block! p "1,21,0" "gravel")
+                                      r)))))
+              {:keys [out]} (await (tunnel! {:self {:pos {:x 0.5 :y 20 :z 0.5}} :blocks row :inventory pick}
+                                            {:target [6 20 0] :max-length 24} prep))]
+          (is (= :refills (:reason @out)) (pr-str @out))
+          (is (= [1 21 0] (:cell @out)) "the head cell, dug first, is named"))))))
+
 (deftest a-level-run-is-remembered-as-a-tunnel-way
   (async done
     (tu/run-async done
