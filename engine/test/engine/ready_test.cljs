@@ -24,6 +24,8 @@
             [jobs.survival.eat :as eat]
             [jobs.survival.get-food :as get-food]
             [jobs.survival.log-out :as log-out]
+            [jobs.survival.recover-drops :as recover-drops]
+            [jobs.survival.set-spawn :as set-spawn]
             [jobs.survival.restore-broken :as restore-broken]
             [jobs.time.noop :as noop]
             [jobs.time.wait-for-day :as wait-for-day]
@@ -88,7 +90,8 @@
     storage-kit/safe? {:chest outside}
     smelt/safe? {:furnace outside}
     kitchen/safe? {:furnace outside}
-    pick-up-loose/safe? {}))
+    pick-up-loose/safe? {}
+    set-spawn/safe? {:bed [15 64 0]}))
 
 (def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}})
 (def wall (tu/box 2 64 -2 2 66 2 "stone"))
@@ -199,8 +202,10 @@
       restore-broken/safe? open-night :later
       restore-broken/safe? (assoc open-night :time st/noon) :ok
       restore-broken/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 5}} :later
-      get-food/safe? by-day-hostile :later
+      get-food/safe? by-day-hostile :ok
       get-food/safe? open-night :ok
+      recover-drops/safe? by-day-hostile :ok
+      recover-drops/safe? open-night :ok
       get-food/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 5}} :ok
       shut-doors/safe? by-day-hostile :later
       shut-doors/safe? open-night :ok)))

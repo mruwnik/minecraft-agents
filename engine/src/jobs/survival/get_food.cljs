@@ -53,7 +53,7 @@
   A go-to that waits on the world, or a child still going after jobs.lib.child's call cap, yields :continue; a reflex
   call (it never yields) waits it out in the round.
   More than 12 ways in one call without getting fed ends nothing-possible :still-hungry.
-  Ready: safe? is not threatened, fit? always. The defaults :checks let a body at food 0 with no danger near walk and search at night; a merely hungry body waits for dawn in the open (intended).
+  Ready: safe? and fit? always ok: it eats carried food whatever is near. Its walks and searches run under :checks (job-safe-or-starving); a merely hungry body waits for dawn in the open (intended).
   Fragile (health at or below foods/::fragile-health, 6) with no food carried, it walks out (a search, a source, its pen,
   an animal, a furnace to cook at) only on a calm day (jobs.lib.dawn/calm?) and not past known hostiles whose route
   danger (jobs.lib.cost/route-danger) is its health or more; with nothing else to try it then ends condition-failed
@@ -152,10 +152,10 @@
 
 (def ways [:bake :cook :source :collect :hunt :crops :fish :pen])
 
-(def defaults {:checks {:safe? '(or (and (starving) (not (threatened))) (job-safe)) :fit? '(always)}
+(def defaults {:checks {:safe? '(job-safe-or-starving) :fit? '(always)}
                :spend {:job-time ::job-time-s} :ways (set ways)})
 
-(def safe? ready/threatened)
+(def safe? ready/ok)
 
 (def fit? ready/ok)
 
@@ -326,15 +326,13 @@
         (when (way? c :pen) (await (pen! c))))))
 
 (defn night-blocks-search?
-  "Whether the search would wait: the search child's checker under defaults :checks (starving and unthreatened, else its own
-  safe-if-lit) is not ok, or the night handler holds and the body is not starving with no danger near. Asked here so a
-  child's :later does not end this job."
+  "Whether the search would wait: the search child's own safe-if-lit under the children's default (ready/or-starving) is not ok, or the night handler holds and the body is not starving with no
+  danger near. Asked here so a child's :later does not end this job."
   [c]
   (let [calm? (= :ok (first (ready/threatened c)))]
     (boolean
      (or (and (cook/night-holds? c) (not (and (starving? c) calm?)))
-         (not (or (and (zero? (.-food (.self (:primitives c)))) calm?)
-                  (= :ok (first (ready/safe-if-lit c)))))))))
+         (not= :ok (first (ready/or-starving ready/safe-if-lit c)))))))
 
 (defn explore-done?
   "Whether this job's search is over: it ran, and a starving body's foods/::starving-rest-ms has not passed since."

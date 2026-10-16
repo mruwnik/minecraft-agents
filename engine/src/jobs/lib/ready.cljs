@@ -97,6 +97,12 @@
     (with-meta (fn [c] (if (f c) (at c) (safe-if-lit c)))
       {::exposure (fn [c] (if (f c) ((::exposure (meta at)) c) (dark-sky c)))})))
 
+(defn or-starving
+  "The status of `safe` for c, or at food 0 (a starving body walks by night) the status of threatened when `safe` is not ok."
+  [safe c]
+  (let [s (safe c)]
+    (if (and (not= :ok (first s)) (zero? (.-food (.self (:primitives c))))) (threatened c) s)))
+
 (def fit? "Later :low-health below the risky health." checks/low-health)
 
 (defn ok "The checker of a job with nothing to check." [_] (contract/ok :ready "nothing to check"))
@@ -119,5 +125,7 @@
    'exposed {:args [] :type :status :doc "the place of the frame's own safe? is exposed (dark)"
              :fn #(lcond/not exposure-of)}
    'threatened {:args [] :type :status :doc "a hostile is near (ready/threatened)" :fn #(lcond/not threatened)}
+   'job-safe-or-starving {:args [] :type :status :doc "the frame's own safe? holds, or at food 0 no hostile is near"
+                          :fn (fn [] #(or-starving (own-export :safe?) %))}
    'starving {:args [] :type :status :doc "food is 0" :fn #(lcond/= (lcond/food) 0)}
    'always {:args [] :type :status :doc "always holds" :fn (fn [] (fn [_] (contract/ok :always "always")))}})
