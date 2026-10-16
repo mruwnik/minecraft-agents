@@ -220,7 +220,8 @@ for (const [name, args, over, status] of statuses) {
 }
 
 test('sleep waits for the head half of a bed whose block update is late, then sleeps', async () => {
-  const { bot, p } = rig({ ...world, entities: {} })
+  // real time: at SCALE the 2 s retry window is 20 ms, which a loaded machine can burn before the third try
+  const { bot, p } = rig({ ...world, entities: {} }, 1)
   let tries = 0
   bot.sleep = async () => {
     tries += 1
