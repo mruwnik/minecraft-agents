@@ -33,9 +33,10 @@
     13000 [[:home 100 0]] false
     11000 [[:home 2 0]] false))
 
-(deftest a-body-underground-has-no-reason-to-go-home
-  (is (false? (holds? 11000 [[:home 100 0]]
-                      {:blocks {"0,66,0" "stone"}}))))
+(deftest a-body-underground-or-under-a-roof-has-no-reason-to-go-home
+  (are [block] (false? (holds? 11000 [[:home 100 0]] {:blocks {block "stone"}}))
+    "0,66,0"
+    "0,67,0"))
 
 (deftest go-home-walks-to-the-home-by-day-and-waits-at-night-or-with-none
   (async done

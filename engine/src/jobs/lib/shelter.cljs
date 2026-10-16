@@ -100,6 +100,11 @@
   [p]
   (buried-at? p (feet p)))
 
+(defn sheltered-here?
+  "Whether a roof lies within default-roof-height over the body or it is underground: night finds it safe where it stands."
+  [p]
+  (or (roofed? p default-roof-height) (buried? p)))
+
 (defn night? [p] (not (.-isDay (.self p))))
 
 (defn sleeping? [p] (boolean (.-isSleeping (.self p))))
