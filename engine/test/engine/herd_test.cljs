@@ -77,9 +77,7 @@
 
 (defn ^:async run-ticks
   [{:keys [eng clock]} n]
-  (dotimes [_ n]
-    (swap! clock + 700)
-    (await (core/tick! eng))))
+  (tu/run-ticks eng clock n 700))
 
 (defn submit! [s args]
   (core/submit! (:eng s) (list job (merge {:mob "cow" :box box} args)) {})

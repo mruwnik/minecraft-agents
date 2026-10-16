@@ -102,7 +102,7 @@
                           :world (world/of-data {} {} zones)
                           :events (events/make {:sinks [sink] :now #(deref clock)})})]
     (core/submit! eng spec {})
-    (dotimes [_ 3] (swap! clock + 500) (await (core/tick! eng)))
+    (await (tu/run-ticks eng clock 3 500))
     (let [of (fn [k] (filterv #(= [:job k] [(:source %) (:kind %)]) @seen))
           out {:reasons (vec (distinct (map #(get-in % [:data :reason]) (of :waiting))))
                :rounds (count (of :round_started))

@@ -27,9 +27,7 @@
 (defn ^:async run-ticks
   "Tick n times, the clock moving step ms before each."
   [{:keys [eng clock]} n step]
-  (dotimes [_ n]
-    (swap! clock + step)
-    (await (core/tick! eng))))
+  (tu/run-ticks eng clock n step))
 
 (defn ^:async scenario
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
@@ -249,9 +247,7 @@
               parent (tu/recording-parent 'jobs.combat.hunt {:count 2 :keep 0} out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'hunting-parent parent))]
           (core/submit! eng '(hunting-parent) {})
-          (dotimes [_ 60]
-            (swap! clock + 700)
-            (await (core/tick! eng)))
+          (await (tu/run-ticks eng clock 60 700))
           (is (= {:killed 2 :reason :count :spared 0 :remaining 0 :status :done} (dissoc @out :text))))))))
 
 (defn baby-cow [id x] (animal id "cow" x {:drops cow-drops :baby true}))

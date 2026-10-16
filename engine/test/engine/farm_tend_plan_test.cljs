@@ -59,9 +59,7 @@
   ([args spec plans zones n]
    (let [s (setup spec plans zones)]
      (core/submit! (:eng s) (list job args) {})
-     (dotimes [_ n]
-       (swap! (:clock s) + 700)
-       (await (core/tick! (:eng s))))
+     (await (tu/run-ticks (:eng s) (:clock s) n 700))
      s)))
 
 (defn calls [{:keys [p]} name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
@@ -141,7 +139,7 @@
           (is (= 1 (count (pass-ends s))) "one pass, then the part rests")
           (is (some #(= [:wheat] (map keyword (:backed-off %))) (events-of s :waiting)) "the wait names the part")
           (swap! (:clock s) + 660000)
-          (dotimes [_ 40] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
+          (await (tu/run-ticks (:eng s) (:clock s) 40 700))
           (is (= 2 (count (pass-ends s))) "after the back-off it tries again"))))))
 
 (deftest a-missing-seed-leaves-its-cells-bare-with-one-note-and-the-other-crop-is-still-sown
@@ -351,9 +349,7 @@
           (swap! (:clock s) + 700)
           (await (core/tick! (:eng s)))
           (let [before (count (calls s "place"))]
-            (dotimes [_ 20]
-              (swap! (:clock s) + 700)
-              (await (core/tick! (:eng s))))
+            (await (tu/run-ticks (:eng s) (:clock s) 20 700))
             (is (pos? before))
             (is (= before (count (calls s "place"))) "nothing is placed after the plan was deleted")
             (is (empty? (filterv #(= :completed (:kind %)) (done-events s))))))))))
@@ -398,9 +394,7 @@
         parent (tu/recording-parent job-ns args out)
         eng (assoc (:eng s) :jobs (assoc (:jobs (:eng s)) 'recording-parent parent))]
     (core/submit! eng '(recording-parent) {})
-    (dotimes [_ n]
-      (swap! (:clock s) + 700)
-      (await (core/tick! eng)))
+    (await (tu/run-ticks eng (:clock s) n 700))
     [@out s]))
 
 (deftest plant-over-a-plan-names-what-it-refused-and-what-it-lacked
@@ -421,9 +415,7 @@
               late (foreign-plan [[8 64 0]])]
           (.override (.-world (:p s)) "steer" (fn [token args impl] (world/set-data! (:w s) {"mix" plan "other" late} {}) (impl token args)))
           (core/submit! (:eng s) (list 'jobs.farm.plant {:plan "mix"}) {})
-          (dotimes [_ 6]
-            (swap! (:clock s) + 700)
-            (await (core/tick! (:eng s))))
+          (await (tu/run-ticks (:eng s) (:clock s) 6 700))
           (is (seq (tu/walk-calls (:p s))))
           (is (empty? (calls s "place")))
           (is (= "air" (block-at s 8 64 0))))))))
@@ -443,9 +435,7 @@
               zone {:name "late" :min [8 60 0] :max [8 70 0] :owner "x" :allow #{}}]
           (.override (.-world (:p s)) "steer" (fn [token args impl] (world/set-zones! (:w s) [zone]) (impl token args)))
           (core/submit! (:eng s) (list 'jobs.farm.till {:from {:x 8 :y 63 :z 0} :to {:x 8 :y 63 :z 0} :for-plan "mix"}) {})
-          (dotimes [_ 6]
-            (swap! (:clock s) + 700)
-            (await (core/tick! (:eng s))))
+          (await (tu/run-ticks (:eng s) (:clock s) 6 700))
           (is (seq (tu/walk-calls (:p s))))
           (is (empty? (calls s "useOn")))
           (is (= "dirt" (block-at s 8 63 0))))))))
@@ -470,9 +460,7 @@
                                                        (world/set-zones! (:w s) [ground-zone])
                                                        (impl token args)))
           (core/submit! (:eng s) (list job {:plan "mix"}) {})
-          (dotimes [_ 30]
-            (swap! (:clock s) + 700)
-            (await (core/tick! (:eng s))))
+          (await (tu/run-ticks (:eng s) (:clock s) 30 700))
           (is (seq (tu/walk-calls (:p s))))
           (is (empty? (calls s "useOn")))
           (is (empty? (calls s "place")))

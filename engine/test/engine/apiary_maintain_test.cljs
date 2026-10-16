@@ -47,9 +47,7 @@
    (let [s (doto (h/setup w) (-> :p tu/seeing-all))
          s (update s :eng #(update % :jobs tweak-jobs))]
      (core/submit! (:eng s) (spec args) {})
-     (dotimes [_ n]
-       (swap! (:clock s) + 700)
-       (await (core/tick! (:eng s))))
+     (await (tu/run-ticks (:eng s) (:clock s) n 700))
      s)))
 
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
@@ -215,9 +213,7 @@
       (fn ^:async t []
         (let [s (doto (h/setup (world {:inventory kit})) (-> :p tu/seeing-after-look))]
           (core/submit! (:eng s) (spec {}) {})
-          (dotimes [_ 60]
-            (swap! (:clock s) + 700)
-            (await (core/tick! (:eng s))))
+          (await (tu/run-ticks (:eng s) (:clock s) 60 700))
           (is (seq (calls s "look")))
           (is (= 1 (:harvested (step s :harvest))))
           (is (true? (finished? s))))))))
@@ -228,9 +224,7 @@
       (fn ^:async t []
         (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true})) (-> :p tu/seeing-after-look))]
           (core/submit! (:eng s) (spec {:fetch false}) {})
-          (dotimes [_ 10]
-            (swap! (:clock s) + 700)
-            (await (core/tick! (:eng s))))
+          (await (tu/run-ticks (:eng s) (:clock s) 10 700))
           (is (= 8 (count (calls s "look"))) "one look around")
           (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
           (is (nil? (done-event s))))))))
@@ -242,9 +236,7 @@
         (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true}))
                   (-> :p (doto tu/blind (aset "sensedAt" (fn [_] #js {:unknown true})))))]
           (core/submit! (:eng s) (spec {:fetch false}) {})
-          (dotimes [_ 10]
-            (swap! (:clock s) + 700)
-            (await (core/tick! (:eng s))))
+          (await (tu/run-ticks (:eng s) (:clock s) 10 700))
           (is (= 8 (count (calls s "look"))) "one look around, not one per run")
           (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
           (is (nil? (done-event s))))))))
@@ -255,9 +247,7 @@
       (fn ^:async t []
         (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true})) (-> :p tu/seeing-all))]
           (core/submit! (:eng s) (spec {:fetch false}) {})
-          (dotimes [_ 10]
-            (swap! (:clock s) + 700)
-            (await (core/tick! (:eng s))))
+          (await (tu/run-ticks (:eng s) (:clock s) 10 700))
           (is (empty? (calls s "look")) "every cell of the area is already seen")
           (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting))))))))))
 

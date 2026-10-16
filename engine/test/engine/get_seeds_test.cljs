@@ -29,9 +29,7 @@
 
 (defn ^:async run-ticks
   [{:keys [eng clock]} n step]
-  (dotimes [_ n]
-    (swap! clock + step)
-    (await (core/tick! eng))))
+  (tu/run-ticks eng clock n step))
 
 (defn ^:async scenario
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
@@ -248,9 +246,7 @@
               parent (tu/recording-parent 'jobs.gather.get-seeds {:count 2} out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'seeding-parent parent))]
           (core/submit! eng '(seeding-parent) {})
-          (dotimes [_ 40]
-            (swap! clock + 700)
-            (await (core/tick! eng)))
+          (await (tu/run-ticks eng clock 40 700))
           (is (= :count (:reason @out)))
           (is (>= (:got @out) 2)))))))
 

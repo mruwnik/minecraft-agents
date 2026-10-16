@@ -274,7 +274,7 @@
       (fn ^:async t []
         (let [{:keys [eng p w]} (start tidy-spec {"field" field-plan} nil)]
           (core/submit! eng (list job {:plan "field"}) {})
-          (dotimes [_ 3] (swap! clock + 700) (await (core/tick! eng)))
+          (await (tu/run-ticks eng clock 3 700))
           (is (zero? (count (calls p "dig"))))
           (world/set-zones! w [])
           (await (run-until-empty eng 200))

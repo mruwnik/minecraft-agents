@@ -320,7 +320,7 @@
       (fn ^:async t []
         (let [s (setup {:unloaded ring-1-cells} 28)]
           (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :max-distance 20}) {})
-          (dotimes [_ 8] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
+          (await (tu/run-ticks (:eng s) (:clock s) 8 700))
           (is (not (finished? s)) "still waiting for the chunks")
           (is (= [] (walks s)))
           (swap! (fake/state (:p s)) assoc :unloaded #{})
