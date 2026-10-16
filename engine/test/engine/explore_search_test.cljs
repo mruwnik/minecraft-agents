@@ -401,28 +401,12 @@
     {:reason :unreachable :why :goal-not-standable} false
     {:arrived true} false))
 
-(deftest time-a-leg-spends-waiting-for-day-in-a-shelter-does-not-count-toward-the-timeout
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [calls (atom 0)
-              real child/call-walk-reason*
-              night (fn ^:async night-walk [c slot args]
-                      (if (< (swap! calls inc) 150)
-                        [:continue :night-sheltered]
-                        (await (real c slot args))))
-              s (with-redefs [child/call-walk-reason* night]
-                  (await (search! {:target "diamond_block" :max-distance 20 :spend {:job-time 60}} {} 400)))
-              e (not-found-of s)]
-          (is (finished? s))
-          (is (not= :time (:why e)) (:text e)))))))
-
 (deftest a-plain-search-still-ends-at-the-timeout
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [clock (atom nil)
-              s (with-redefs [child/call-walk-reason* (fn [_ _ _] (swap! @clock + 5000) (js/Promise.resolve [:continue nil]))]
+              s (with-redefs [child/call-walk* (fn [_ _ _] (swap! @clock + 5000) (js/Promise.resolve :continue))]
                   (await (search! {:target "diamond_block" :max-distance 20 :spend {:job-time 60}} {} 400 #(reset! clock (:clock %)))))
               e (event-of s :limit_reached)]
           (is (finished? s))
@@ -619,8 +603,8 @@
         (let [prims (atom nil)
               walk (fn [_ _ _]
                      (swap! (fake/state @prims) update-in [:self :pos 0] inc)
-                     (js/Promise.resolve [{:kind :nothing-possible :cause :unreachable :data {}} nil]))
-              s (with-redefs [child/call-walk-reason* walk]
+                     (js/Promise.resolve {:kind :nothing-possible :cause :unreachable :data {}}))
+              s (with-redefs [child/call-walk* walk]
                   (await (search! {:target "diamond_block" :max-distance 23} {} 60 #(reset! prims (:p %)))))
               e (not-found-of s)]
           (is (= :stuck (:why e)))

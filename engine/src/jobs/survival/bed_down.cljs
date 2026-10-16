@@ -22,7 +22,7 @@
   A bed in the open is slept in only by a body overdue for sleep or one that just put the bed down; a sleep that stops :bed-open writes :bed-open (shelter.bed_open info) and ends condition-failed :bed-open.
   A sleep that ends otherwise without sleeping writes :sleep-failed (5 minutes, shelter.sleep_failed warn) and ends nothing-possible :sleep-failed.
   A bed item carried and no bed to use: put down beside the body (roofed cells first, else in the open unless :roofed-only; never in a doorway, on a chest, table or other kept block, or in another's zone, claim or plan footprint), recorded as :bed unless a live :bed is, and as :bed-placed outside the body's own zones (info night.bed-placed {:pos :own-zone}). A placement the server refuses is tried again (twice at most on one foot cell, three in all). No room, or a failed placement, writes :bed-place-failed (10 minutes, shelter.bed_place_failed warn) and ends nothing-possible :bed-place-failed.
-  Walks use :at-night :go. Ends done {:slept true :bed pos} when asleep, condition-failed :not-night when the day came first or :bed-open {:slept false :bed-open true}; :continue while walking or sleeping. Quote: time by the walk to the bed, done 1 sleep.")
+  Ends done {:slept true :bed pos} when asleep, condition-failed :not-night when the day came first or :bed-open {:slept false :bed-open true}; :continue while walking or sleeping. Quote: time by the walk to the bed, done 1 sleep.")
 
 (a/defargs args
   {:bed {:doc "bed position [x y z] or {:x :y :z} to sleep in; default: the bed to use within the radius" :spec ::a/pos :default nil}
@@ -55,7 +55,7 @@
   (or (some-> (:bed (:args c)) places/parse-pos :pos)
       (sh/bed-to-use (:primitives c) (ctx/view c) (radius c) (bed-permit c))))
 
-(def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
+(def defaults {:checks {:safe? '(not (threatened)) :fit? '(always)} :spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 
 (def target [])
 
@@ -197,7 +197,7 @@
               (ctx/emit! c :night.bed-placed :info {:pos foot :own-zone own?
                                                     :text (str "put the carried bed down at " (pr-str foot) (if own? " (in its own zone: it stays)" ", picked up by day unless sleeping in it made it the respawn bed"))})
               foot)))
-        (let [w (await (child/call-walk* c :bed-walk {:pos stand :range 0 :at-night :go}))]
+        (let [w (await (child/call-walk* c :bed-walk {:pos stand :range 0}))]
           (when (or (= :continue w) (= :done (:kind w))) :continue))))))
 
 (defn ^:async place-bed-and-sleep!

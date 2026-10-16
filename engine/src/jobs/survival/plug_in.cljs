@@ -37,7 +37,7 @@
 
 (def target [])
 
-(def defaults {:spend {:job-time ::job-time-s} :ways #{:walls :pit :pocket}})
+(def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s} :ways #{:walls :pit :pocket}})
 
 (def ways [:walls :pit :pocket])
 

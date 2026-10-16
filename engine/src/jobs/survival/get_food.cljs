@@ -151,7 +151,8 @@
 
 (def ways [:bake :cook :source :collect :hunt :crops :fish :pen])
 
-(def defaults {:spend {:job-time ::job-time-s} :ways (set ways)})
+(def defaults {:checks {:safe? '(or (and (starving) (not (threatened))) (job-safe)) :fit? '(always)}
+               :spend {:job-time ::job-time-s} :ways (set ways)})
 
 (defn way?
   "Whether the call allows way k."

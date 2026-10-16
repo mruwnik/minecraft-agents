@@ -31,7 +31,7 @@
 
 (def target [])
 (def ways [:step :dig])
-(def defaults {:spend {:job-time ::job-time-s} :ways #{:step :dig}})
+(def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s} :ways #{:step :dig}})
 
 
 (defn done? [c]

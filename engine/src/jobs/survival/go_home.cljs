@@ -47,7 +47,7 @@
 
 (def target [])
 
-(def defaults {:spend {:job-time ::job-time-s}})
+(def defaults {:checks {:safe? '(not (threatened)) :fit? '(always)} :spend {:job-time ::job-time-s}})
 
 (defn at-home? [c] (let [pos (place c)] (boolean (and pos (<= (u/dist (u/self-pos c) pos) arrive-range)))))
 
@@ -61,7 +61,7 @@
     {:uses {:job-time [0 s (max (* 3 s) 10)]} :done [0 1 1]}))
 
 (defn ^:async walk! [c pos]
-  (let [e (await (child/call-walk* c :walk {:pos pos :range arrive-range :at-night :go}))]
+  (let [e (await (child/call-walk* c :walk {:pos pos :range arrive-range}))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (places/offer! c :home pos)

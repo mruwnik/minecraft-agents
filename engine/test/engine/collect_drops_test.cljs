@@ -194,18 +194,6 @@
                          (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60)))]
             (is (= 1 (:collected result)))))))))
 
-(deftest a-search-held-by-the-night-gives-up-with-a-reason
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (bd/setup {:self body :time night-ms :blocks (assoc leaf-wall "0,67,0" "stone")})]
-          (drop! p [4 64 0] "oak_log")
-          (let [result (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60))]
-            (is (= 0 (:collected result)))
-            (is (= :search-waited (:reason result)))
-            (is (= :nothing-possible (get-in result [:ending :kind])) "a search that waited too long found nothing it could do")
-            (is (some #(= :go-to.night-sheltered (:kind %)) @seen) "the hold was the night's")))))))
-
 (deftest only-the-want-items-count-towards-want
   (async done
     (tu/run-async done

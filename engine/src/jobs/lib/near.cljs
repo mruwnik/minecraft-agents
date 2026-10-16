@@ -231,9 +231,9 @@
   caller chasing something that moves; default one 60 s steer), :look-round (default true; false for a caller that keeps moving),
   :one-way (go-to's arg, default :closed here: no drop the body cannot climb back; not the :one-way key of a give-up
   result), :see (go-to's: in range only where the eye sees the block at pos), always :retry false (the job counts its own
-  tries), :at-night (go-to's arg; :go walks on at night), :y-margin (go-to's); :ignore-zones? comes from the job's args."
+  tries), :checks (go-to's call key), :y-margin (go-to's); :ignore-zones? comes from the job's args."
   ([c pos range] (go-near! c pos range nil))
-  ([c pos range {:keys [doors dangers tolls zone-tolls ways spend look-round one-way see at-night y-margin] :or {doors :shut dangers true look-round true one-way :closed}}]
+  ([c pos range {:keys [doors dangers tolls zone-tolls ways spend look-round one-way see checks y-margin] :or {doors :shut dangers true look-round true one-way :closed}}]
    (let [cell (cell-of pos)]
      (cond
        (nil? cell) (do (ctx/emit! c :refused :warn {:reason :bad-pos :text (:message (places/parse-pos pos))})
@@ -242,7 +242,7 @@
        :else (let [e (await (child/call-walk* c :walk
                                               (cond-> {:pos cell :range range :doors doors :dangers dangers :tolls tolls :zone-tolls (boolean zone-tolls)
                                                        :look-round look-round :one-way one-way :see (boolean see) :warn false :retry false :ignore-zones? (boolean (:ignore-zones? (:args c)))}
-                                                at-night (assoc :at-night at-night)
+                                                checks (assoc :checks checks)
                                                 y-margin (assoc :y-margin y-margin)
                                                 ways (assoc :ways ways)
                                                 spend (assoc :spend spend))))]

@@ -167,11 +167,10 @@
 (defn ^:async walk-request
   "[pens go-to-args] of the walk to pos: range 3, no escalation, and (unless the job's :enter-pens) keeping out of the
   gates of the pens holding animals, after a look at the cells of those not yet seen."
-  [c pos see? at-night]
+  [c pos see?]
   (let [pens (when-not (:enter-pens (:args c)) (await (pen-entry/pens! c)))
         keep-out (vec (mapcat :gates pens))]
     [pens (cond-> {:pos pos :range 3 :see (boolean see?) :ways #{:walk :clear-seal} :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}
-            at-night (assoc :at-night at-night)
             (seq keep-out) (assoc :keep-out keep-out))]))
 
 (defn warn-kept-out! [c pens]
@@ -182,9 +181,9 @@
   "walk! through ctx/call: :arrived, :continue (go-to waits on the world; the round holds still with its reason), else
   an ending: go-to's when it did not end :done, else nothing-possible :out-of-reach, or go-to's :why (:unreachable)
   when it ended not having arrived."
-  [c pos & [see? at-night]]
-  (let [[pens args] (await (walk-request c pos see? at-night))
-        [r] (await (child/call-walk-reason* c :walk args))
+  [c pos & [see?]]
+  (let [[pens args] (await (walk-request c pos see?))
+        r (await (child/call-walk* c :walk args))
         arrived? (and (= :done (:kind r)) (:arrived (:data r)))]
     (cond
       (= :continue r) :continue

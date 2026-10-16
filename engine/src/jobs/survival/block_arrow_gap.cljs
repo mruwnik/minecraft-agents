@@ -53,7 +53,7 @@
 
 (def target [])
 
-(def defaults {:spend {:job-time ::job-time-s} :use {:blocks :shelter}})
+(def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s} :use {:blocks :shelter}})
 
 (defn blocks
   "The blocks it may place: the call's :use :blocks, else (nothing carried when the call began) the shelter fillers."

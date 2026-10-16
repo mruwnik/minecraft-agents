@@ -17,15 +17,13 @@
 
   Ends with data {:used true|false :pos :item :face :reason}, plus :spawn-set true when a bed answered \"respawn point set\" (a bed is used by day to set the spawn; not in the Nether or End). :reason is the primitive's
   status (:used, :unchanged, :no-item, :no-room, :missing, :cannot, :occupied, :unreachable, :failed); only :used is done.
-  condition-failed: :no-item, :missing, :cannot, :occupied (a bucket's cell is filled), a walk that would leave a night shelter (:night-sheltered, :at-night :go walks
-  out). Impossible: a bad :pos or :face (:bad-args, from can-start?). nothing-possible: :unreachable (a walk
+  condition-failed: :no-item, :missing, :cannot, :occupied (a bucket's cell is filled). Impossible: a bad :pos or :face (:bad-args, from can-start?). nothing-possible: :unreachable (a walk
   that failed twice, :why), :unchanged, :no-room, :failed.")
 
 (a/defargs args
   {:pos {:doc "the block to click, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
    :item {:doc "the item to hold for the click; nil: keep the hand as it is; none: the empty hand" :spec a/item? :default nil}
    :see {:doc "true: click only from where the eye sees the block (jobs.lib.aim), walking to such a stand first (go-to :see; none: :unreachable); false: within reach is enough, though a wall in between refuses the click" :spec boolean? :default false}
-   :at-night {:doc "go-to's :at-night for the walk: wait (default) stops the call :night-sheltered when the walk would leave a night shelter; go walks out" :spec #{"wait" "go" :wait :go} :default :wait}
    :enter-pens {:doc "true: the walk may go through the gate of a pen holding animals; false: it keeps out of those gates and, with no other way, declines (a :blocks.pen-kept-out warn names the pen)" :spec boolean? :default false}
    :face {:doc "the face clicked: up down north south east west" :spec #{"up" "down" "north" "south" "east" "west"} :default "up"}})
 
@@ -56,13 +54,13 @@
     (ctx/end c kind (when-not used (select-keys result [:reason :why])) result)))
 
 (defn ^:async walk!
-  "The walk to pos: :arrived, :continue, {:held reason} (go-to waits on a night shelter) or {:unreachable why}."
-  [c pos see? at-night]
-  (let [[pens args] (await (b/walk-request c pos see? at-night))
-        [r held] (await (child/call-walk-reason* c :walk args))
+  "The walk to pos: :arrived, :continue or {:unreachable why}."
+  [c pos see?]
+  (let [[pens args] (await (b/walk-request c pos see?))
+        r (await (child/call-walk* c :walk args))
         arrived? (and (= :done (:kind r)) (:arrived (:data r)))]
     (cond
-      (= :continue r) (if held {:held held} :continue)
+      (= :continue r) :continue
       (and arrived? (b/in-reach? c pos see?)) :arrived
       :else (do (b/warn-kept-out! c pens)
                 {:unreachable (cond (not= :done (:kind r)) :declined
@@ -90,14 +88,12 @@
 (def can-start? bad-args)
 
 (defn ^:async round [c]
-  (let [{:keys [item face see at-night] :or {face "up"}} (:args c)
+  (let [{:keys [item face see] :or {face "up"}} (:args c)
         {:keys [pos]} (b/parse (:args c))]
     (loop [fails 0]
-      (let [w (when-not (b/in-reach? c pos see) (await (walk! c pos see at-night)))]
+      (let [w (when-not (b/in-reach? c pos see) (await (walk! c pos see)))]
         (cond
           (= :continue w) :continue
-          (:held w) (finish! c :condition-failed {:used false :pos pos :item item :face face :reason (:held w)
-                                                  :text (str "held: " (name (:held w)) "; pass :at-night :go to walk out anyway")})
           (map? w) (if (>= (inc fails) (max-walks))
                      (finish! c :nothing-possible {:used false :pos pos :item item :face face :reason :unreachable :why (:unreachable w)})
                      (recur (inc fails)))

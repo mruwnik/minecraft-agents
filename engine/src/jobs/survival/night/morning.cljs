@@ -15,7 +15,7 @@
 (defn ^:async walk!
   "A go-to child in slot to pos within range, at night too: :continue while it walks, else whether it arrived."
   [c slot pos range]
-  (let [w (await (ctx/call c slot 'jobs.movement.go-to {:pos pos :range range :at-night :go}))]
+  (let [w (await (ctx/call c slot 'jobs.movement.go-to {:pos pos :range range}))]
     (if (= :continue w) :continue (boolean (:arrived (:data w))))))
 
 (defn ^:async collect-bed!

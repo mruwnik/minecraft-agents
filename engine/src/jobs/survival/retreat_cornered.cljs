@@ -203,7 +203,7 @@
   ([c slot target range leg-s y-margin]
   (let [from (u/self-pos c)
         t0 (ctx/now c)
-        r (await (ctx/call c slot 'jobs.movement.go-to {:pos target :range range :ways #{:walk :clear-seal} :y-margin y-margin :at-night :go
+        r (await (ctx/call c slot 'jobs.movement.go-to {:pos target :range range :ways #{:walk :clear-seal} :y-margin y-margin
                                                               :warn false :spend {:job-time leg-s}
                                                               :leg-alert-within (close-radius) :leg-alert-s (close-leg-s)
                                                               :retry false :look-round false :floor {:health 1}}))

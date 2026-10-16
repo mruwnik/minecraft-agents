@@ -389,7 +389,8 @@
 (defn backer
   "A job that backs off once from the zombie and keeps what back-off! answered and whether the option stays tried."
   [out]
-  {:round (fn ^:async backer-round [c]
+  {:defaults {:checks {:safe? '(always) :fit? '(always)}}
+   :round (fn ^:async backer-round [c]
             (let [threat (first (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30}))
                   r (await (cornered/back-off! c threat))]
               (reset! out {:r r :tried (retreat-flight/tried? c :back-off)})
@@ -412,7 +413,8 @@
 (defn stepper
   "A job that takes one flee step to a fixed cell and keeps the refused ends the flight remembers."
   [out]
-  {:round (fn ^:async stepper-round [c]
+  {:defaults {:checks {:safe? '(always) :fit? '(always)}}
+   :round (fn ^:async stepper-round [c]
             (await (cornered/leg-step! c :step {:x 7 :y 64 :z 2} 0 5))
             (reset! out (:refused (ctx/mem c)))
             (ctx/end c :done nil))})

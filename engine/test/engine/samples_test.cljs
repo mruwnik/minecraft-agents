@@ -12,7 +12,7 @@
 
 (def scenario-text
   "{:register [{:trigger :hungry}]
-    :queue [(jobs.movement.go-to {:pos {:x 30 :y 64 :z 0}})
+    :queue [(jobs.movement.go-to {:pos {:x 30 :y 64 :z 0} :checks {:safe? (not (threatened))}})
             (jobs.time.wait-for-day)]}")
 
 (defn setup [world]

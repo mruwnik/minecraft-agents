@@ -54,21 +54,21 @@
           (is (zero? (:failures (job-mem s) 0)) "a waiting walk is no failure")
           (is (zero? (dig-count s))))))))
 
-(deftest a-mine-started-on-its-own-stair-walks-on-at-night
+(deftest a-mine-started-on-its-own-stair-ignores-the-dark
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [opts (await (walk-options {:dim "overworld" :floors (vec (for [y (range 58 68)] [0 y 0]))}))]
           (is (seq opts))
-          (is (= [:go] (distinct (map :at-night opts)))))))))
+          (is (= [{:safe? '(not (threatened))}] (distinct (map :checks opts)))))))))
 
-(deftest a-mine-started-off-its-stair-keeps-the-default-at-night
+(deftest a-mine-started-off-its-stair-keeps-the-default-checks
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [opts (await (walk-options nil))]
           (is (seq opts))
-          (is (= [nil] (distinct (map :at-night opts)))))))))
+          (is (= [nil] (distinct (map :checks opts)))))))))
 
 (deftest no-tool-names-the-kind-the-block-needs
   (async done
@@ -505,4 +505,4 @@
   (is (= 8 (:y-margin (mine/dig-walk-opts {:stay-level true} false false))) "a way round over a hill is no way for a run that stays level")
   (is (nil? (:y-margin (mine/dig-walk-opts {} false false))))
   (is (= #{:walk :clear-seal} (:ways (mine/dig-walk-opts {:stay-level true} true false))))
-  (is (= :go (:at-night (mine/dig-walk-opts {} false true)))))
+  (is (= {:safe? '(not (threatened))} (:checks (mine/dig-walk-opts {} false true)))))

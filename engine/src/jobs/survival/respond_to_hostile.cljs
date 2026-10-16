@@ -72,7 +72,7 @@
 
 (def target [])
 
-(def defaults {:spend {:job-time ::job-time-s} :use {:tools :attack}})
+(def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s} :use {:tools :attack}})
 
 (defn weapons
   "The weapons of the call: its :use :tools, else the default substrings."

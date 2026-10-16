@@ -29,7 +29,8 @@
 (defn leaver
   "A caller job, as the night-shelter job is by day: dig-leave/leave! every round until it hands a result over."
   [out toward]
-  {:round (fn ^:async leaver-round [c]
+  {:defaults {:checks {:safe? '(always) :fit? '(always)}}
+   :round (fn ^:async leaver-round [c]
             (let [r (await (dig-leave/leave! c (merge {:toward toward} (:leave-args (:args c)))))]
               (if (map? r) (do (reset! out r) (ctx/end c :done nil)) :continue)))})
 

@@ -23,8 +23,6 @@
    :jobs.movement.go-to.tuning/climb-rise {:default 16 :doc "Blocks a goal must lie above a body under ground for its go-to to plan no dive (:jobs.movement.go-to.tuning/climb-dip)." :spec (a/num-in 0 nil)}
    :jobs.movement.go-to.tuning/climb-dip {:default 24 :doc "Blocks below where it began that a go-to of a body under ground to a goal far above (:jobs.movement.go-to.tuning/climb-rise) may plan; a way that dives deeper is not walked (:way-dives)." :spec (a/num-in 0 nil)}
    :jobs.movement.go-to.tuning/climb-stair {:default true :doc "Whether a go-to that would give up :way-dives cuts a stair up instead (its escalation, when the call allows :stair)." :spec boolean?}
-   :jobs.movement.go-to.tuning/at-night {:default :wait :doc "A go-to's :at-night when the call gives none: :wait (a walk out of the shelter the body stands in waits for day) or :go." :spec #{:wait :go}}
-   :jobs.movement.go-to.tuning/night-wait-ms {:default 1000 :doc "Milliseconds a go-to waits before it yields :continue while it holds for day inside a shelter." :spec (a/int-in 0 nil)}
    :jobs.movement.go-to.tuning/plug-wait-ms {:default 180000 :doc "Milliseconds a go-to shut in by its retreat plug holds for a known hostile (:sealed-hostile-near) before it walks on as without the hold." :spec (a/int-in 0 nil)}
    :jobs.movement.go-to.tuning/plug-wait-min-food {:default 6 :doc "Food at or under which a go-to shut in by its retreat plug no longer holds for a hostile: starving beats waiting." :spec (a/num-in 0 20)}
    :jobs.movement.go-to.tuning/plug-wait-min-health {:default 8 :doc "Health at or under which a go-to shut in by its retreat plug no longer holds for a hostile." :spec (a/num-in 0 20)}
@@ -47,8 +45,6 @@
 (defn wet-restarts [] (settings/get settings :jobs.movement.go-to.tuning/wet-restarts))
 (defn dry-radius [] (settings/get settings :jobs.movement.go-to.tuning/dry-radius))
 (defn dry-walk-rounds [] (settings/get settings :jobs.movement.go-to.tuning/dry-walk-rounds))
-(defn at-night [] (settings/get settings :jobs.movement.go-to.tuning/at-night))
-(defn night-wait-ms [] (settings/get settings :jobs.movement.go-to.tuning/night-wait-ms))
 (defn climb-rise [] (settings/get settings :jobs.movement.go-to.tuning/climb-rise))
 (defn climb-dip [] (settings/get settings :jobs.movement.go-to.tuning/climb-dip))
 (defn climb-stair [] (settings/get settings :jobs.movement.go-to.tuning/climb-stair))

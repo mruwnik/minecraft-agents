@@ -124,7 +124,7 @@
 
 (def target [])
 
-(def defaults {:spend {:job-time ::job-time-s}})
+(def defaults {:checks {:safe? '(not (threatened)) :fit? '(always)} :spend {:job-time ::job-time-s}})
 
 (defn done? [c]
   (let [d (and (not (checks/running? c)) (sh/sleeping? (:primitives c)))]
@@ -203,7 +203,7 @@
       :else
       (let [taken? #(not ((sh/bed-permit p (:world (:engine c))) bed))
             _ (await (sense/decide! c ::bed-taken #(not (taken?)) {:retry? still-permitted?}))
-            walk (when-not (taken?) (await (child/call-walk* c :go {:pos bed :range 2 :at-night :go})))]
+            walk (when-not (taken?) (await (child/call-walk* c :go {:pos bed :range 2})))]
         (cond
           (taken?) (await (hold! c {:reason :bed-occupied :pos bed}))
           (= :continue walk) :continue

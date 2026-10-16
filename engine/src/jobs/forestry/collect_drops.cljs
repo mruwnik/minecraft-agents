@@ -66,9 +66,9 @@
 (defn search-waits [] (settings/get settings ::search-waits))
 
 (defn walk-args
-  "go-to args for a walk of this job: underground it goes on at night (:at-night :go), like the digs that made the hole."
+  "go-to args for a walk of this job: underground it ignores the dark (not (threatened) only), like the digs that made the hole."
   [c args]
-  (cond-> args (sh/buried? (:primitives c)) (assoc :at-night :go)))
+  (cond-> args (sh/buried? (:primitives c)) (assoc :checks {:safe? '(not (threatened))})))
 
 (defn gained-count
   "The items an act result says entered the inventory (only those named in names when given)."

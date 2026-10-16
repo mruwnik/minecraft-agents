@@ -7,6 +7,8 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.health :as cost-health]
             [jobs.lib.need :as need]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.shelter :as sh]
             [jobs.lib.pace :as pace]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.walk.watch :as wwatch]
@@ -17,14 +19,13 @@
             [jobs.movement.go-to.cut :refer [approaches cut-loop? nearest-hostile note-restart! start-attempt! way-hostiles]]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.restore :as restore]
-            [jobs.movement.go-to.holds :refer [night-wait plug-since plug-wait wait-reason]]
+            [jobs.movement.go-to.holds :refer [plug-hold plug-since]]
             [jobs.movement.go-to.preview :as preview]
             [jobs.movement.go-to.result :as end]
-            [jobs.movement.go-to.tuning :refer [max-cut-resets night-wait-ms]]
+            [jobs.movement.go-to.tuning :refer [max-cut-resets]]
             [jobs.movement.go-to.torch :as torch]
             [jobs.movement.go-to.walk :as walk]
-            [jobs.movement.go-to.way-steps :as ways]
-            [jobs.lib.child :as child]))
+            [jobs.movement.go-to.way-steps :as ways]))
 
 (def doc
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
@@ -44,8 +45,9 @@
     goal it cannot reach taken back, one jobs.access.cleanup child a call), :pillar (a pillar, a gap filled with a
     block), :clear-path (a door dug through a wall), :stair (a stair up, its own stair cut again) and :dig-out (out of
     its own shelter).
-  - A listed go-to waits (its condition, before it starts) while it would wait on the night or a retreat plug (below);
-    once started such a wait is a :continue yield, kept in its memory as :hold for a parent's jobs.lib.child walk.
+  - Its safe? is: at night jobs.lib.ready/safe-at the goal (a hostile near, or the goal or the walk to it exposed: later,
+    waiting for dawn), by day not threatened; and the retreat plug wait (below). A caller's :checks (an escape job's
+    defaults, an agent's own) replace it.
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
     most 60 s each) until it arrives or gives up. A search that needs more slices walks on toward where it has got
     to, or not at all while it goes on; every iteration awaits a pace-ms timer. A goal in unloaded land is walked
@@ -73,10 +75,7 @@
     with none and no fetch it gives up :unseen-floor-dark saying so. A torch that cannot go there is not tried there again.
   - :dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
     longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
-  - :at-night :wait (default: the setting ::tuning/at-night): at night a walk that would take the body out of the shelter it stands in
-    (jobs.lib.shelter/walk-leaves-shelter?: a closed room, its dug-in shelter, a roof, underground; a walk down to open air leaves a roofed hut) waits for day: go-to waits 1 s and yields :continue (cause carries :shelter; info
-    go-to.night-sheltered, once a call). :go walks anyway; a reflex job's go-to always walks.
-  - A walk with no escalating way from a body shut in by its own retreat plug (ledger) with a known hostile near waits the same way, {:reason :sealed-hostile-near}, until the hostile goes (a heard-only one counts not beyond the near band, 8 blocks, nor while heard mobs are muted, jobs.lib.body/heard-muted?), :plug-wait-ms (3 min, in all across the go-to children of one root job) pass, or food or health fall to :plug-wait-min-food or -health (it never holds a starving or hurt body).
+  - A walk with no escalating way from a body shut in by its own retreat plug (ledger) with a known hostile near waits, {:reason :sealed-hostile-near}, until the hostile goes (a heard-only one counts not beyond the near band, 8 blocks, nor while heard mobs are muted, jobs.lib.body/heard-muted?), :plug-wait-ms (3 min, in all across the go-to children of one root job) pass, or food or health fall to :plug-wait-min-food or -health (it never holds a starving or hurt body).
   - :goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
   - :dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). A
     :spend :job-time of n walks one leg of at most n s and, when it got more than 1 block nearer, ends limit-reached
@@ -202,7 +201,6 @@
    :air-looks {:doc "under water with no air known: rounds of looking again for air (goal head, open water ahead), the aim shifted a little each round, before giving up :air" :spec (a/int-in 0 nil) :default air/default-air-looks}
    :air-look-min {:doc "seconds of air left below which it looks again for air no more (:air-looks), the fallback (swim up, breathe) needs them" :spec (a/num-in 0 nil) :default air/default-air-look-min}
    :leave-water {:doc "false: an arrival within range in water stays there (a swim target, a boat), no walk on to a dry stand" :spec boolean? :default true}
-   :at-night {:doc ":wait: at night a walk out of the shelter the body stands in waits for day; :go: walk anyway (a reflex job's go-to always walks); nil: the setting jobs.movement.go-to.tuning/at-night (:wait)" :spec #{:wait :go "wait" "go"} :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims in the escalation (pillar, stair, clear-path); the rules of the game allow it" :spec boolean? :default false}
    :spare-own-builds {:doc "the escalation never digs a cell of a plan this body made (stops :own-build); false: it may, and warns of each cell dug" :spec boolean? :default true}})
 
@@ -282,20 +280,22 @@
     (contract/never :bad-args message)
     (contract/ok :args "args fit")))
 
-(defn waits
-  "Later while wait-reason holds, for a listed go-to not yet started; a started call, or a child, yields instead (attempt)."
-  [c]
-  (if-let [{:keys [reason] :as w} (when (and (empty? (:slots c)) (nil? (ctx/frozen-call c))) (wait-reason c))]
-    (apply contract/later reason (name reason) (mapcat identity (dissoc w :reason)))
-    (contract/ok :no-hold "nothing to wait for")))
+(def can-start? limits-fit)
 
-(def can-start? (cond/and limits-fit waits))
+(defn goal-of "The cell go-to walks to, nil when its target is refused (the round says why)." [c]
+  (let [t (aim/target c)] (when-not (:reason t) (:pos t))))
 
-(defn hold!
-  "Keep in memory what the call waits on (:hold, nil when it walks), for a parent's jobs.lib.child walk to read."
-  [c reason]
-  (when-not (= reason (:hold (ctx/mem c)))
-    (ctx/update-mem! c assoc :hold reason)))
+(def safe?
+  "At night safe at the goal (ready/safe-at), by day only not threatened (an unseen goal's light is no reason to wait),
+  and no retreat plug wait."
+  (let [at (ready/safe-at goal-of)]
+    (with-meta (fn [c]
+                 (if (goal-of c)
+                   (contract/all [(if (sh/night? (:primitives c)) (at c) (ready/threatened c)) (plug-hold c)])
+                   (contract/ok :no-goal "no goal to judge")))
+      (meta at))))
+
+(def fit? ready/ok)
 
 (defn ^:async run-steps!
   "step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps; goal aimed again each
@@ -316,27 +316,11 @@
   (let [u (:unknown (:args c0))
         c (cond-> c0 u (assoc :unknown (wworld/unknown-spec (when (map? u) u))))
         refusal (args-refusal c)
-        night (when-not refusal (night-wait c))
-        plug (when-not (or refusal night) (plug-wait c))
-        goal (when-not (or refusal night plug) (:pos (aim/target c)))
+        goal (when-not refusal (:pos (aim/target c)))
         pos (goal-pos c goal)]
-    (hold! c (or (:reason night) (:reason plug)))
     (cond
       refusal (end/refuse! c refusal)
       (not (ways/way? c :walk)) (end/refuse! c {:reason :no-way :message "the call's :ways leave out :walk"})
-      night (do (when-not (:night-said (ctx/mem c))
-                  (ctx/update-mem! c assoc :night-said true)
-                  (ctx/emit! c :go-to.night-sheltered :info
-                             (assoc night :text (str "night: waiting for day in its shelter (" (name (:shelter night)) ") instead of walking out"))))
-                (await (child/pause! c (/ (night-wait-ms) 1000) :night-sheltered))
-                :continue)
-      plug (do (when-not (:plug-said (ctx/mem c))
-                 (ctx/update-mem! c assoc :plug-said true)
-                 (ctx/emit! c :go-to.sealed-hostile-near :info
-                            (assoc (select-keys plug [:mob :band :sensed])
-                                   :text (str "sealed in: waiting for a " (name (:sensed plug)) " " (:mob plug) " (" (name (:band plug)) ") to go"))))
-               (await (child/pause! c (/ (night-wait-ms) 1000) (:reason plug)))
-               :continue)
       :else
       (let [state (note-restart! c pos)
             spent? (and (cut-loop? state) (>= (:resets state) (max-cut-resets)))

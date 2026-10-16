@@ -120,7 +120,7 @@
 
 (def target [])
 
-(def defaults {:spend {:job-time ::job-time-s}})
+(def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s}})
 
 
 (defn done?

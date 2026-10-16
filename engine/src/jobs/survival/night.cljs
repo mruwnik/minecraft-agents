@@ -110,7 +110,7 @@
 
 (def ways [:bed :shelter :flee])
 
-(def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s} :ways (set ways)})
+(def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s :wall-time ::wall-time-s} :ways (set ways)})
 
 (defn quiet-night
   "While the night trigger's condition fails: {:shelter} with the shelter the body is in (nil when none), else nil."
@@ -194,7 +194,7 @@
   "Walk (go-to :place) to the roofed place; :again. A walk that ends without arriving, or arrives and is still not roofed (or its room is breached), is marked :roof-walk-failed."
   [c {:keys [name]}]
   (hold/busy! c)
-  (let [w (await (ctx/call c :roof-walk 'jobs.movement.go-to {:place name :range 0 :at-night :go}))]
+  (let [w (await (ctx/call c :roof-walk 'jobs.movement.go-to {:place name :range 0}))]
     (when (and (not= :continue w)
                (not (and (:arrived (:data w)) (sh/roofed? (:primitives c) (:roof-height (:args c)))
                          (not (sh/breached-home? (:primitives c) (ctx/view c))))))
@@ -294,7 +294,7 @@
       :else
       (do (hold/busy! c)
           (ctx/update-mem! c #(-> % (assoc :relocating site) (dissoc :dig-out)))
-          (let [w (await (ctx/call c :relocate 'jobs.movement.go-to {:pos site :range 0 :at-night :go}))]
+          (let [w (await (ctx/call c :relocate 'jobs.movement.go-to {:pos site :range 0}))]
             (if (= :continue w)
               :again
               (do (ctx/update-mem! c dissoc :relocating)

@@ -186,7 +186,7 @@
   [c pos]
   (if-let [d (threatened? c)]
     [:danger d]
-    [(await (child/call-walk* c :go {:pos pos :range (cfg/arrive-range) :at-night :go :spend {:job-time (:leg-s (:args c))}}))]))
+    [(await (child/call-walk* c :go {:pos pos :range (cfg/arrive-range) :checks {:safe? '(always)} :spend {:job-time (:leg-s (:args c))}}))]))
 
 (defn ^:async go!
   "Walk one leg (:leg-s) toward the death point: :next once there (the collect phase) or after a leg (the danger and the

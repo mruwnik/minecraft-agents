@@ -1,9 +1,9 @@
 ;; Gates and a body shut in for the night. Card 4bf8de7b: (B) a by-hand use-on on a gate in a night shelter is not held silently: it
-;; ends at once :night-sheltered naming the :at-night :go override, and with :at-night :go it walks out and clicks; (C) the pen-gate
+;; waits :exposed (go-to's safe? at night), and with a :checks {:safe? (not (threatened))} override it walks out and clicks; (C) the pen-gate
 ;; reflex, with the body shut in a room for the night, cannot reach an own-pen gate left open 6 blocks away: its give-up warn names
 ;; the blocker instead of a bare "unreachable", and the gate stays open (the east wall is glass so the body sees the gate).
 ;; Night room: stone x 14..18, z 14..18, roof y 2, torch inside, a door in the east wall at [18 0 16]. Gate in a fence line at [24 0 16].
-;; Should-succeed: use-on :at-night :go walks out and opens the gate. Should-fail: the default use-on stops :night-sheltered with the gate
+;; Should-succeed: use-on with the :checks override walks out and opens the gate. Should-fail: the default use-on waits :exposed with the gate
 ;; shut; the reflex's shut-gate gives up naming a blocker, gate open.
 {:defaults
  {:tags [:animals :pen-gate :night]
@@ -15,14 +15,23 @@
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 900 4]]}
   :limit-s 90}
  :cases
- [{:name "by-hand-use-on-in-the-shelter-stops-at-once-naming-the-override"
+ [{:name "by-hand-use-on-in-the-shelter-waits-naming-the-reason"
    :act [[:job (jobs.blocks.use-on {:pos #at [24 0 16]})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :night-sheltered}} :within-s 20 :of-job true}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 20 :of-job true}]
    :after [[:block [24 0 16] "oak_fence_gate[open=false]"] [:body-near [16.5 0 16.5] 2]]}
-  {:name "use-on-at-night-go-walks-out-and-opens-the-gate"
-   :act [[:job (jobs.blocks.use-on {:pos #at [24 0 16] :at-night :go})]]
+  {:name "use-on-with-a-checks-override-walks-out-and-opens-the-gate"
+   :act [[:job (jobs.blocks.use-on {:pos #at [24 0 16] :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 70 :of-job true}]
    :after [[:block [24 0 16] "oak_fence_gate[open=true]"]]}
+  {:name "go-to-out-of-the-room-at-night-waits-exposed"
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
+   :after [[:body-near [16.5 0 16.5] 2]]}
+  {:name "go-to-out-of-the-room-with-a-checks-override-walks"
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :checks {:safe? (not (threatened))}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 70 :of-job true}]
+   :after [[:body-near [22.5 0 16.5] 2.5]]}
   {:name "reflex-shut-gate-from-a-sealed-room-names-the-blocker"
    :register [{:trigger :pen-gate}]
    :blocks [[:fill [18 0 14] [18 1 18] "glass"] [:set [24 0 16] "oak_fence_gate[facing=east,open=true]"]]

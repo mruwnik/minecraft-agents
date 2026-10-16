@@ -365,11 +365,11 @@
                  (contains? (ledger/ways-of c) (access/cell (update feet :y dec)))))))
 
 (defn dig-walk-opts
-  "The go-near! options of the walk to a dig: other ways only beyond reach, night walks inside own cuts, a level bound with :stay-level."
+  "The go-near! options of the walk to a dig: other ways only beyond reach, walks inside own cuts ignore the dark, a level bound with :stay-level."
   [args in-reach? underground?]
   (cond-> {:zone-tolls true}
     in-reach? (assoc :ways #{:walk :clear-seal})
-    underground? (assoc :at-night :go)
+    underground? (assoc :checks {:safe? '(not (threatened))})
     (:stay-level args) (assoc :y-margin (settings/get settings ::stay-margin))))
 
 (defn ^:async walk-to-dig!

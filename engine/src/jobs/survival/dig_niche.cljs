@@ -61,7 +61,7 @@
    ::walk-s {:default 5 :doc "Seconds the walk to the face takes, for the quote." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 
-(def defaults {:spend {:job-time ::job-time-s}})
+(def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s}})
 
 
 (defn done?
@@ -209,7 +209,7 @@
 (defn ^:async go!
   "One go-to to cell; :continue while it waits, :arrived, or :failed."
   [c slot cell]
-  (let [e (await (child/call-walk* c slot {:pos cell :range 0 :at-night :go}))]
+  (let [e (await (child/call-walk* c slot {:pos cell :range 0}))]
     (cond (= :continue e) :continue
           (= :done (:kind e)) :arrived
           :else :failed)))

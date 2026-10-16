@@ -109,7 +109,7 @@
   [c t]
   (hold/busy! c)
   (ctx/update-mem! c assoc :fleeing t)
-  (let [w (await (ctx/call c :flee 'jobs.movement.go-to (assoc (flee-args t) :at-night :go)))]
+  (let [w (await (ctx/call c :flee 'jobs.movement.go-to (flee-args t)))]
     (if (= :continue w)
       :again
       (let [arrived (:arrived (:data w))]

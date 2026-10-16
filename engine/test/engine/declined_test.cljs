@@ -91,21 +91,6 @@
         (is (= [:nothing-possible :out-of-reach]
                ((juxt :kind :cause) (await (in-parent walker (fn ^:async f [c] (await (b/walk!* c [4 65 4]))))))) "arrived, still out of reach")))))
 
-(def night-walker
-  {:ways [:walk :clear-seal]
-   :round (fn ^:async w [c] (ctx/update-mem! c assoc :hold :night-sheltered) :continue)})
-
-(deftest a-walk-that-waits-on-the-world-holds-still-with-its-reason
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [f [#(child/call-walk* % :walk {:pos [1 65 0]})
-                   #(b/walk!* % [1 65 0])]]
-          (let [seen (atom [])]
-            (is (= :continue (await (in-parent night-walker (fn ^:async g [c] (await (f c))) seen))))
-            (is (= [:night-sheltered] (->> @seen (filter #(= :holding (:kind %))) (map :reason) distinct))
-                "the hold-still reason reaches the board")))))))
-
 (deftest walk!*-keeps-out-of-pen-gates-and-warns-when-the-walk-fails
   (async done
     (tu/run-async done
@@ -123,8 +108,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[slot expect] [[:walk {:at-night :go}] [:in {:y-margin child/entry-depth}] [:other {}]]]
+        (doseq [[slot expect] [[:walk {}] [:in {:y-margin child/entry-depth}] [:other {}]]]
           (let [args (atom nil)
                 go-to (assoc walker :round (fn ^:async w [c] (reset! args (:args c)) (ctx/end c :done nil {:arrived true})))]
             (await (in-parent go-to (fn ^:async g [c] (await (child/walk-into!* c slot [1 65 0])))))
-            (is (= (merge {:pos [1 65 0] :range 0 :ways #{:walk :clear-seal}} expect) (select-keys @args [:pos :range :ways :at-night :y-margin])) (str slot))))))))
+            (is (= (merge {:pos [1 65 0] :range 0 :ways #{:walk :clear-seal}} expect) (select-keys @args [:pos :range :ways :checks :y-margin])) (str slot))))))))
