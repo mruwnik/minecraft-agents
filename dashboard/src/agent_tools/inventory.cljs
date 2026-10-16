@@ -39,5 +39,6 @@
              (seq counts) (assoc :counts counts)
              (seq equipment) (assoc :equipment equipment)
              (and include-slots? (seq stacks)) (assoc :slots stacks)
+             (seq (:reserved value)) (assoc :reserved (:reserved value))
              (true? (:more? value)) (assoc :more? true)
              (:last-known value) (assoc :last-known true :offline (:offline value)))))))))

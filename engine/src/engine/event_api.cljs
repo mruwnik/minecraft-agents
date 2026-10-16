@@ -128,8 +128,17 @@
   (when (fn? (.-lastKnown p))
     (some-> (.lastKnown p) (js->clj :keywordize-keys true))))
 
+(defn reserved-view
+  "The reserve register's entries (body memory :reserve) not past their :until, as written by jobs.lib.reserve."
+  [eng]
+  (when-let [store (:store eng)]
+    (let [view (mem/view store)]
+      (vec (filter (fn [{:keys [until]}] (or (nil? until) (< (:now view) until)))
+                   (map :data (mem/entries view :reserve)))))))
+
 (defn inventory-view
-  "Read-only player inventory and worn slots, bounded to the vanilla player-window capacity."
+  "Read-only player inventory and worn slots, bounded to the vanilla player-window capacity. :reserved lists the
+  reserve register."
   [eng]
   (let [offline? (core/offline? eng)
         known (when offline? (last-known (:primitives eng)))]
@@ -144,6 +153,7 @@
                                        (when (armour-slots slot) [slot :empty])))) equipment-slots)]
       (cond-> {:ok true :inventory stacks}
         (seq equipment) (assoc :equipment equipment)
+        (seq (reserved-view eng)) (assoc :reserved (reserved-view eng))
         (> (count all-stacks) (setting "inventory-stack-limit")) (assoc :more? true)
         offline? (assoc :last-known true :offline (core/away eng)))))))
 

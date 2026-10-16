@@ -33,3 +33,9 @@
           :offline {:by :connection :why :connection-lost}}
          (inventory/compact {:ok true :last-known true :offline {:by :connection :why :connection-lost}
                              :inventory [{:name "bread" :count 5 :slot 9}]} :inventory))))
+
+(deftest compact-inventory-shows-the-reserve-register-in-the-inventory-view-only
+  (let [source {:ok true :inventory [{:name "diamond" :count 5}]
+                :reserved [{:id "k" :item "diamond" :count 3 :strength 1 :why "beacon"}]}]
+    (is (= [{:id "k" :item "diamond" :count 3 :strength 1 :why "beacon"}] (:reserved (inventory/compact source :inventory))))
+    (is (not (contains? (inventory/compact source :equipment) :reserved)))))

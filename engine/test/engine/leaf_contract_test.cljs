@@ -9,7 +9,7 @@
             [engine.test-util :as tu]))
 
 (def leaves
-  '[jobs.memory.forget-place jobs.memory.remember jobs.memory.set-place jobs.time.wait-for-day
+  '[jobs.memory.forget-place jobs.memory.remember jobs.memory.set-place jobs.memory.reserve jobs.memory.unreserve jobs.time.wait-for-day
     jobs.time.wait-for-dusk jobs.time.noop jobs.debug.notify jobs.explore.look jobs.movement.look-around])
 
 (deftest every-leaf-exports-the-contract-and-quotes-validly
@@ -55,6 +55,9 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[spec reason] [['(jobs.memory.remember {:kind :hurt}) :reserved-kind]
+                               ['(jobs.memory.remember {:kind :reserve}) :reserved-kind]
+                               ['(jobs.memory.reserve {}) :no-target]
+                               ['(jobs.memory.unreserve {}) :no-target]
                                ['(jobs.memory.remember {}) :bad-kind]
                                ['(jobs.memory.set-place {:name :home :pos [2 999 3]}) :bad-pos]
                                ['(jobs.memory.forget-place {:name "Bad Name"}) :bad-name]
@@ -66,5 +69,6 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [spec ['(jobs.memory.remember {:kind :bred-cows}) '(jobs.debug.notify {}) '(jobs.explore.look {})
-                    '(jobs.memory.forget-place {:name :nowhere})]]
+                    '(jobs.memory.forget-place {:name :nowhere}) '(jobs.memory.unreserve {:id "nowhere"})
+                    '(jobs.memory.reserve {:item "diamond"})]]
           (is (= {:event :completed :kind :done} (await (stopped-data spec))) (pr-str spec)))))))

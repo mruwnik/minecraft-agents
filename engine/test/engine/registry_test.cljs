@@ -34,7 +34,7 @@
      jobs.access.stair jobs.access.tunnel jobs.access.toggle jobs.farm.tidy
      jobs.access.cleanup jobs.access.leave-tunnel jobs.access.clear-path jobs.strip.seal jobs.strip.corridor jobs.strip.site
      jobs.blocks.dig jobs.blocks.fill-cells jobs.blocks.place jobs.blocks.use-on jobs.items.interact
-     jobs.memory.set-place jobs.memory.forget-place jobs.memory.remember})
+     jobs.memory.set-place jobs.memory.forget-place jobs.memory.remember jobs.memory.reserve jobs.memory.unreserve})
 
 (def primitive-names
   "The table's keys as job names: jobs.primitive.<kebab-case>."

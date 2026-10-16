@@ -502,6 +502,16 @@
     (is (false? (m "bed_rock")))
     (is (nil? (event-api/seen-matcher nil)))))
 
+(deftest inventory-view-lists-the-live-reserve-entries
+  (let [store (atom {:now (constantly 1000) :data {}})
+        eng {:store store :primitives #js {:isOffline (fn [] false) :self (fn [] #js {:inventory #js []})}}
+        kept {:id "k" :item "diamond" :count 3 :strength 1 :by "agent" :why "beacon" :until nil}]
+    (swap! store assoc :data {:entries {:reserve [{:t 0 :data kept}
+                                                   {:t 0 :data {:id "old" :item "bread" :strength 0.5 :until 500}}]}})
+    (is (= [kept] (:reserved (event-api/inventory-view eng))))
+    (swap! store assoc :data {})
+    (is (not (contains? (event-api/inventory-view eng) :reserved)))))
+
 (deftest chests-view-lists-remembered-chest-stock-nearest-first-with-age
   (let [store (atom {:now (constantly 100000) :data {}})
         eng {:store store

@@ -1,0 +1,19 @@
+;; Reserve register step 2: memory.reserve writes an entry (info reserve.set), unreserve drops it (reserve.cleared with the count),
+;; a call naming neither or both of :item and :tag is refused with no round.
+{:defaults
+ {:tags [:memory :reserve :jobs]
+  :time :any
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :inventory [["diamond" 5]] :settle-s 2}
+  :limit-s 40}
+ :cases
+ [{:name "reserve-then-unreserve-an-item"
+   :act [[:job (jobs.memory.reserve {:id "wt-keep" :item "diamond" :count 3 :why "world test"})]
+         [:await {:source :job :kind :completed} 20]
+         [:job (jobs.memory.unreserve {:id "wt-keep"})]]
+   :expect [{:event {:source :job :kind :reserve.set :data {:id "wt-keep" :item "diamond" :count 3 :strength 1}} :within-s 20}
+            {:event {:source :job :kind :reserve.cleared :data {:removed 1}} :within-s 30}]}
+  {:name "reserve-with-no-target-is-refused-without-a-round"
+   :act [[:job (jobs.memory.reserve {})]]
+   :expect [{:event {:source :job :kind #{:waiting :stopped} :data {:reason :no-target}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :round_started} :for-s 5 :of-job true}]}]}

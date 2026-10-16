@@ -19,7 +19,7 @@
     :restart :moved :slept :fed :hungry :hostile :hazard :looked :recovered :breathe :extinguish :log-out
     :needs-bed :shelter :dig-in-futile :gate-gave-up :no-bake :notify :bed-unreachable :chest-unusable
     :scaffold :heal-ended :recover-trip :sleep-status :spawn-set :spawn-reset :spawn-bed :bed-placed :doorway-filled :doorway-stuck-warned
-    :opened :watched :watch-turned :sleep-failed :bed-place-failed :shelter-trapped :weather-changed})
+    :opened :watched :watch-turned :sleep-failed :bed-place-failed :shelter-trapped :weather-changed :reserve})
 
 (def owned-kinds
   "Every unnamespaced memory kind the engine or a job writes for itself, and the place names: jobs.memory.remember
