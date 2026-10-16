@@ -318,7 +318,9 @@
           (is (empty? (the-ledger eng)) "the intents of blocks that never went in are dropped")
           (let [g (first (of-kind seen :pillar.gave-up))]
             (is (= :place-failed (:reason g)))
-            (is (= "not-raised" (:detail g)))))))))
+            (is (= "not-raised" (:detail g)))
+            (is (= [0 64 0] (:at g)) "the give-up names the cell it could not place on")
+            (is (re-find #"at \[0 64 0\] \(not-raised\)" (:text g)))))))))
 
 (deftest a-job-that-sees-its-own-earlier-blocks-does-not-place-them-again
   (async done

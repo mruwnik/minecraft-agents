@@ -207,7 +207,8 @@
                      (assoc result :text (str "pillar gave up at " (count cells) " of " height ": " (name (:reason step))
                                               (when (:short step) (str ", " (:short step) " blocks short"))
                                               (when (:mob step) (str ", " (:mob step) " stays in the cell"))
-                                              (when (:at step) (str " at " (pr-str (:at step)))))))
+                                              (when (:at step) (str " at " (pr-str (:at step))))
+                                              (when (:detail step) (str " (" (:detail step) ")")))))
           (ctx/end c (cond (= :bad-args (:reason step)) :impossible (nothing-possible (:reason step)) :nothing-possible :else :condition-failed)
                    (dissoc step :step) result)))))
 
@@ -364,7 +365,7 @@
             (ledger/remember! c settled)
             (finish! c settled (if (< failures (max-failures))
                                  (give-up :off-column :at (pl/feet-cell c) :detail (.-reason r))
-                                 (give-up :place-failed :detail (.-reason r))))))))))
+                                 (give-up :place-failed :at cell :detail (.-reason r))))))))))
 
 (defn ^:async shoved-back!
   "Before a round: a body off the base column (whatever the last place did) counts one knockback and walks back
