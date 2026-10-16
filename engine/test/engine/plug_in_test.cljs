@@ -163,8 +163,6 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [walls-step way/walls-step!]
-          (set! way/walls-step! (fn ^:async fail [_] nil))
+        (with-redefs [way/walls-step! (fn ^:async fail [_] nil)]
           (let [{:keys [digs-at-first]} (await (plug! {:blocks ct/dead-end :inventory (into cobble pick) :entities [(ct/zombie 1 64 0)]} {:ways #{:walls :pocket}}))]
-            (set! way/walls-step! walls-step)
             (is (= 0 digs-at-first) "the round ended :continue before the pocket dug")))))))

@@ -17,6 +17,8 @@
             [engine.triggers :as triggers]
             [jobs.survival.retreat :as retreat]
             [jobs.survival.retreat-cornered :as cornered]
+            [jobs.survival.retreat-flight :as flight]
+            [jobs.survival.retreat-refuge :as refuge]
             [jobs.survival.retreat-cover :as cover]
             [jobs.survival.retreat-walk :as retreat-walk]
             [jobs.lib.seal :as seal]
@@ -1160,3 +1162,35 @@
           (let [hostiles (:hostiles (first (filter #(= :retreat.hide-hurt (:kind %)) @seen)))]
             (is (= ["zombie"] (map :name hostiles)) "the hit names who was near")
             (is (every? number? (:pos (first hostiles))) "and where")))))))
+
+(defn stub-ctx
+  "A ctx over a fake world whose job memory is the atom m."
+  [p m]
+  {:primitives p :mem m :remember (fn [& _]) :forget (fn [& _]) :emit (fn [& _])})
+
+(defn with-stub-mem [f]
+  (with-redefs [ctx/mem (fn [c] @(:mem c))
+                ctx/update-mem! (fn [c f & args] (apply swap! (:mem c) f args))
+                ctx/latest (constantly nil)]
+    (f)))
+
+(deftest a-flight-ends-without-the-plug-it-had-under-way
+  (let [m (atom {:plugging {:at {:x 0 :y 64 :z 0} :option :plug :ways #{:walls}}})
+        p (tu/fake-on-floor {:blocks dead-end})]
+    (with-stub-mem #(flight/end-flight! (stub-ctx p m) :hidden))
+    (is (nil? (:plugging @m)) "the next flight does not resume it")))
+
+(deftest a-plug-dig-is-refused-in-a-body-already-shut-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [m (atom {})
+              p (tu/fake-on-floor {:blocks (rock [-3 9] [62 67] #{[0 64 0] [0 65 0]})})
+              plugs (atom 0)
+              out (with-redefs [ctx/call (fn ^:async f [& _] (swap! plugs inc) :continue)
+                                ctx/use (constantly nil)
+                                ctx/mem (fn [c] @(:mem c))
+                                ctx/update-mem! (fn [c f & args] (apply swap! (:mem c) f args))]
+                    (await (refuge/plug-option! (assoc (stub-ctx p m) :args {}) :plug-dig #{:pit :pocket})))]
+          (is (nil? out))
+          (is (zero? @plugs) "no pit or pocket is dug in a sealed cell, the hide-hold loop"))))))
