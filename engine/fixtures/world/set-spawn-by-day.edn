@@ -47,4 +47,25 @@
    :act [[:job (jobs.survival.set-spawn {:bed #at [20 0 16]})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :night}} :within-s 20 :of-job true}]
    :after [[:body-near [8.5 0 16.5] 2]]
-   :limit-s 30}]}
+   :limit-s 30}
+  ;; card 2cca880d: a remembered :bed whose block is gone is dropped and the bed the body sees is used (no :bed arg)
+  {:name "stale-remembered-bed-gives-way-to-the-seen-bed"
+   :memory [{:kind :bed :data {:pos #xyz [4 0 20]}}]
+   :act [[:job (jobs.survival.set-spawn {})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.set-spawn"}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 40 :until {:source :job :kind :completed :data {:name "jobs.survival.set-spawn"}} :of-job true}]
+   :after [[:body-near [20.5 0 16.5] 4] [:memory {:entries {:spawn-bed [{:data {:pos [:any]}}]}}]]
+   :limit-s 50}
+  ;; a bed right outside a hut's door (reached from outside, the door shut) is clicked
+  {:name "bed-outside-the-door-is-clicked-from-outside"
+   :blocks [[:set [20 0 16] "air"] [:set [21 0 16] "air"]
+            [:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+            [:set [12 0 8] "oak_door[facing=north,half=lower,hinge=left,open=false]"]
+            [:set [12 1 8] "oak_door[facing=north,half=upper,hinge=left,open=false]"]
+            [:set [12 0 7] "red_bed[facing=north,part=foot]"] [:set [12 0 6] "red_bed[facing=north,part=head]"]]
+   :body {:at [12.5 0 2.5]}
+   :act [[:job (jobs.survival.set-spawn {:bed #at [12 0 7]})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.set-spawn"}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :not-set}} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.survival.set-spawn"}}}]
+   :after [[:memory {:entries {:spawn-bed [{:data {:pos [:any]}}]}}]]
+   :limit-s 70}]}

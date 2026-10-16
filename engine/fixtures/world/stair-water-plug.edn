@@ -29,4 +29,15 @@
    :expect [{:event {:source :job :kind :mine.flooded} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :flooded}} :within-s 90 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 60 :until {:source :job :kind :mine.flooded}}]
-   :after [[:block [17 0 16] "coal_ore"] [:block [17 1 16] "coal_ore"]]}]}
+   :after [[:block [17 0 16] "coal_ore"] [:block [17 1 16] "coal_ore"]]}
+  ;; card 3d2cac21: a second stair run along the cut never digs the plug the first one placed against the water
+  {:name "second-run-does-not-dig-the-plug"
+   :blocks [[:set [13 7 17] "water"]]
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]
+         [:await {:source :job :kind :stair.plugged} 120]
+         [:wait-s 3]
+         [:job (jobs.access.stair {:dir :down :heading :east :steps 6})]]
+   :expect [{:event {:source :job :kind :stair.plugged} :within-s 120 :of-job true}
+            {:event {:source :job :kind :stopped :data {:reason :plugged}} :within-s 170 :of-job true}]
+   :after [[:not-block [13 7 16] "air"] [:block [13 7 17] "water"]]
+   :limit-s 200}]}

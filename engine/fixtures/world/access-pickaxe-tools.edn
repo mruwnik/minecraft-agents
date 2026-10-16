@@ -53,4 +53,14 @@
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]
          [:await {:source :job :kind :stair.step} 30]
          [:rcon "execute at $BODY run tp $BODY ~-5 ~1 ~-3"]]
-   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :off-stair :origin [:any] :offset [:any]}} :within-s 40 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :off-stair :origin [:any] :offset [:any]}} :within-s 40 :of-job true}]}
+  ;; card 8397ad3f: the same worn pickaxe (14 uses left) with cobblestone, sticks and a table carried: the next pickaxe is crafted
+  ;; (tool.spare) and the stair goes on to its 10 steps instead of stopping :tool-spent
+  {:name "pickaxe-wears-out-next-one-is-crafted"
+   :body {:at [8.5 10 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 12] ["stick" 4] ["crafting_table" 1]]}
+   :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=117]"]
+         [:job (jobs.access.stair {:dir :down :heading :east :steps 10 :stock-torches false})]]
+   :expect [{:event {:source :job :kind :tool.spare} :within-s 120 :of-job true}
+            {:event {:source :job :kind :stair.done :data {:steps 10}} :within-s 220 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :tool-spent}} :for-s 220 :until {:source :job :kind :stair.done}}]
+   :limit-s 240}]}

@@ -1,0 +1,26 @@
+;; Card 2512db7a: jobs.build.from-plan judges a rail want by block name, so a rail whose shape changed after the place (it curves
+;; once the neighbour is laid) is not taken for misplaced. A bend: rails east along z 16 (x 8..15), the corner [16 0 16]
+;; (north_west), then north along x 16 (z 10..15).
+;; Should-succeed: the whole bend is laid and the job completes, the corner a curved rail. Should-fail: a stone block in a rail cell is
+;; still wrong, so it is dug and the rail placed.
+{:defaults
+ {:tags [:build :rail :jobs] :time :any
+  :plot {:height 8}
+  :plans [{:id "bend" :metadata {:by "$body"}
+           :parts [{:id "east" :cells [#at [8 0 16] #at [9 0 16] #at [10 0 16] #at [11 0 16] #at [12 0 16] #at [13 0 16] #at [14 0 16] #at [15 0 16]]
+                    :want {:block "rail" :shape :east_west}}
+                   {:id "corner" :cells [#at [16 0 16]] :want {:block "rail" :shape :north_west}}
+                   {:id "north" :cells [#at [16 0 15] #at [16 0 14] #at [16 0 13] #at [16 0 12] #at [16 0 11] #at [16 0 10]]
+                    :want {:block "rail" :shape :north_south}}]}]
+  :body {:at [10.5 0 20.5] :settle-s 2 :inventory [["rail" 20] ["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "bend-is-laid-with-a-curved-corner"
+   :act [[:job (jobs.build.from-plan {:plan "$plan:bend"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 140 :of-job true}]
+   :after [[:block [16 0 16] "rail[shape=north_west]"] [:block [12 0 16] "rail[shape=east_west]"] [:block [16 0 12] "rail[shape=north_south]"]]}
+  {:name "stone-in-a-rail-cell-is-dug-and-the-rail-placed"
+   :blocks [[:set [12 0 16] "stone"]]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:bend"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 140 :of-job true}]
+   :after [[:block [12 0 16] "rail[shape=east_west]"] [:block [16 0 16] "rail[shape=north_west]"]]}]}

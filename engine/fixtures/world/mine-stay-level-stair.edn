@@ -1,0 +1,45 @@
+;; Card 01550f65: jobs.gather.mine :stay-level started at the top of the body's own stair does not take the stair's air for a
+;; cave breach (no 0-block :breach-sealed / :breach-open), and a second run along an earlier tunnel goes on.
+;; Rock x 2..30, z 6..26, y 0..9; the body stands in a 1x2 cell at [16 0 16], cuts a 4 step stair up east (top feet y 4 at
+;; [20 4 16]) and then mines level from there with cobblestone carried.
+{:defaults
+ {:tags [:mine :jobs] :time :any
+  :plot {:height 14}
+  :blocks [[:fill [2 0 6] [30 9 26] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
+  :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 2] ["cobblestone" 16]] :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "east-from-the-stair-top-cuts-its-length"
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]
+         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :stay-level true :tunnel-length 5 :mend false})]]
+   :expect [{:event {:source :job :kind :mine.tunnel-end :data {:reason :tunnel-length}} :within-s 180 :of-job true}
+            {:no-event {:source :job :kind :mine.tunnel-end :data {:reason #{:breach-sealed :breach-open}}} :for-s 120}]
+   :after [[:block [20 4 16] "air"] [:block [19 3 16] "air"]]}
+  {:name "north-from-the-stair-top-cuts-its-length"
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]
+         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :north :stay-level true :tunnel-length 5 :mend false})]]
+   :expect [{:event {:source :job :kind :mine.tunnel-end :data {:reason :tunnel-length}} :within-s 180 :of-job true}
+            {:no-event {:source :job :kind :mine.tunnel-end :data {:reason #{:breach-sealed :breach-open}}} :for-s 120}]
+   :after [[:block [20 4 16] "air"] [:block [19 3 16] "air"]]}
+  {:name "south-from-the-stair-top-cuts-its-length"
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]
+         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :south :stay-level true :tunnel-length 5 :mend false})]]
+   :expect [{:event {:source :job :kind :mine.tunnel-end :data {:reason :tunnel-length}} :within-s 180 :of-job true}
+            {:no-event {:source :job :kind :mine.tunnel-end :data {:reason #{:breach-sealed :breach-open}}} :for-s 120}]
+   :after [[:block [20 4 16] "air"] [:block [19 3 16] "air"]]}
+  {:name "west-back-over-the-stair-never-seals-it"
+   ;; the heading back over the body's own stair: whatever it ends with, the stair's own air is never sealed as a breach
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]
+         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :west :stay-level true :tunnel-length 5 :mend false})]]
+   :expect [{:event {:source :job :kind :mine.tunnel-end} :within-s 180 :of-job true}
+            {:no-event {:source :job :kind :mine.tunnel-end :data {:reason #{:breach-sealed :breach-open}}} :for-s 120}]
+   :after [[:block [19 3 16] "air"] [:block [18 2 16] "air"]]}
+  {:name "second-run-along-the-earlier-tunnel-goes-on"
+   ;; the first run cuts 3 blocks east (remembered as the body's own tunnel); the second run's cut cells touch that air and
+   ;; still ends by its length, not as a breach
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]
+         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :stay-level true :tunnel-length 3 :mend false})]
+         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :stay-level true :tunnel-length 3 :mend false})]]
+   :expect [{:count-event {:source :job :kind :mine.tunnel-end :data {:reason :tunnel-length}} :for-s 190 :at-least 2}
+            {:no-event {:source :job :kind :mine.tunnel-end :data {:reason #{:breach-sealed :breach-open}}} :for-s 120}]
+   :limit-s 220}]}

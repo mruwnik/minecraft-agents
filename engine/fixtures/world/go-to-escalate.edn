@@ -208,4 +208,85 @@
    :act [[:job (jobs.movement.go-to {:pos #at [26 1 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 60 :of-job true}
             {:event {:source :job :kind :go-to.retrying} :within-s 120 :of-job true}]
-   :limit-s 150}]}
+   :limit-s 150}
+  {:name "stair-top-under-rock-one-way-behind-digs-up-and-arrives"
+   ;; card 0b5a5f4f: the mine behind the body's own stair is reached by a 3 drop (U feet y 3 -> L feet y 0 at x 12), so the
+   ;; planner's nearer nodes (L, under the goal) lie behind a one-way drop; shut in at the dead end of the stair under
+   ;; 2 rock, go-to digs the last steps out (stair) instead of giving up :one-way. Rock x 2..30, z 8..24, y 0..11.
+   :plot {:height 16}
+   :blocks [[:fill [2 0 8] [30 11 24] "stone"]
+            [:fill [3 0 16] [12 2 16] "air"] [:fill [12 3 16] [12 5 16] "air"]
+            [:fill [13 3 16] [22 5 16] "air"]
+            [:fill [23 4 16] [23 6 16] "air"] [:fill [24 5 16] [24 7 16] "air"] [:fill [25 6 16] [25 8 16] "air"] [:fill [26 7 16] [26 9 16] "air"]]
+   :body {:at [26.5 7 16.5] :inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [3 12 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 200 :of-job true}
+            {:no-event {:source :job :kind :result :data {:why :one-way}} :for-s 200 :until {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}}}]
+   :after [[:body-near [3.5 12 16.5] 2]]
+   :limit-s 240}
+  {:name "stair-top-one-way-without-stair-way-still-gives-up"
+   ;; same mine, :ways #{:walk}: the walk may not dig, so the one-way drop ends the call with :why :one-way and nothing is dug
+   :plot {:height 16}
+   :blocks [[:fill [2 0 8] [30 11 24] "stone"]
+            [:fill [3 0 16] [12 2 16] "air"] [:fill [12 3 16] [12 5 16] "air"]
+            [:fill [13 3 16] [22 5 16] "air"]
+            [:fill [23 4 16] [23 6 16] "air"] [:fill [24 5 16] [24 7 16] "air"] [:fill [25 6 16] [25 8 16] "air"] [:fill [26 7 16] [26 9 16] "air"]]
+   :body {:at [26.5 7 16.5] :inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [3 12 16] :range 1 :ways #{:walk}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :why :one-way}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated} :for-s 90 :until {:source :job :kind :result :data {:arrived false}}}]
+   :after [[:block [26 10 16] "stone"] [:block [26 11 16] "stone"]]}
+  {:name "plateau-cliff-open-land-is-one-way-never-dug"
+   ;; a body on open ground (not shut in) whose goal lies below a 3 drop it cannot climb back: it gives up :one-way, no escalation
+   :plot {:height 16}
+   :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [16 2 24] "stone"]]
+   :body {:at [12.5 3 16.5] :inventory [["iron_pickaxe" 1] ["dirt" 8]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :why :one-way}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated} :for-s 90 :until {:source :job :kind :result :data {:arrived false}}}]
+   :after [[:body-near [12.5 3 16.5] 6]]}
+  {:name "shut-in-own-hut-walls-are-not-dug"
+   ;; card 6fa0c797: the pit shaft is walled by the body's own plan (the hut's corner and door cells): the escalation digs
+   ;; none of them and ends with the named reason :own-build
+   :plans [{:id "hut" :metadata {:by "$body"}
+            :parts [{:id "wall" :cells [#at [17 0 16] #at [17 1 16] #at [17 2 16] #at [17 3 16]
+                                        #at [15 0 16] #at [15 1 16] #at [15 2 16] #at [15 3 16]
+                                        #at [16 0 17] #at [16 1 17] #at [16 2 17] #at [16 3 17]
+                                        #at [16 0 15] #at [16 1 15] #at [16 2 15] #at [16 3 15]]
+                    :want [:any "stone"]}]}]
+   :body {:inventory [["stone_pickaxe" 1] ["dirt" 8]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :escalation {:step :none :why :own-build}}} :within-s 90 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :result :data {:arrived false :escalation {:step :none :why :own-build}}}}]
+   :after [[:block [17 1 16] "stone"] [:block [15 1 16] "stone"] [:block [16 1 17] "stone"] [:block [16 1 15] "stone"] [:body-near [16.5 0 16.5] 1]]}
+  {:name "shut-in-own-hut-walls-dug-only-when-allowed-and-warned"
+   ;; the same walls with :spare-own-builds false: the stair digs out through them, warns go-to.dug-own-build, and arrives
+   :plans [{:id "hut" :metadata {:by "$body"}
+            :parts [{:id "wall" :cells [#at [17 0 16] #at [17 1 16] #at [17 2 16] #at [17 3 16]
+                                        #at [15 0 16] #at [15 1 16] #at [15 2 16] #at [15 3 16]
+                                        #at [16 0 17] #at [16 1 17] #at [16 2 17] #at [16 3 17]
+                                        #at [16 0 15] #at [16 1 15] #at [16 2 15] #at [16 3 15]]
+                    :want [:any "stone"]}]}]
+   :body {:inventory [["stone_pickaxe" 1] ["dirt" 8]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1 :spare-own-builds false})]]
+   :expect [{:event {:source :job :kind :go-to.dug-own-build} :within-s 120 :of-job true}
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 200 :of-job true}]
+   :after [[:body-near [20.5 4 16.5] 2]]
+   :limit-s 240}
+  {:name "own-shelter-by-day-is-left-and-the-goal-reached"
+   ;; card 5fe309b7: the same dug-in pit once day comes: go-to (no way out of the shelter) leaves it first (go-to.escalated
+   ;; :leave-shelter) and arrives; the night case above stays
+   :time :night
+   :plot {:height 20}
+   :blocks [[:fill [8 0 8] [24 9 24] "dirt"]]
+   :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1] ["iron_shovel" 1]]}
+   :act [[:job (jobs.survival.dig-in {})]
+         [:await {:source :job :kind :dig-in.sealed} 90]
+         [:time-set 1000]
+         [:wait-s 3]
+         [:job (jobs.movement.go-to {:pos #at [22 10 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :leave-shelter}} :within-s 140 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 160 :of-job true}]
+   :after [[:body-near [22.5 10 16.5] 3]]
+   :limit-s 200}]}

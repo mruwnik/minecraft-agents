@@ -44,4 +44,20 @@
          [:job (jobs.movement.go-to {:pos #at [16 11 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :result :data {:why :air}} :for-s 60 :until {:source :job :kind :result}}]
-   :after [[:body-near [16.5 11 16.5] 3]]}]}
+   :after [[:body-near [16.5 11 16.5] 3]]}
+  ;; card 33b39e3a: a body pressed on a bank face at a power of two (plot x or z 16 here; the plot origin is a multiple of 16) in water
+  ;; 1 deep climbs out: it arrives, no walker fault. East bank face at x 16 (the pool x 6..15, z 8..24, 1 deep); north bank face at z 16.
+  {:name "shallow-pool-pressed-on-the-east-bank-face-climbs-out"
+   :blocks [[:fill [16 0 8] [30 0 24] "stone"] [:fill [6 0 8] [15 0 24] "water"]]
+   :body {:at [15.69 0 16.5] :settle-s 2}
+   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind #{:walker-fault :go-to.walker-fault}} :for-s 60 :until {:source :job :kind :result}}]
+   :after [[:body-near [24.5 1 16.5] 3]]}
+  {:name "shallow-pool-pressed-on-the-north-bank-face-climbs-out"
+   :blocks [[:fill [8 0 0] [24 0 15] "stone"] [:fill [8 0 16] [24 0 24] "water"]]
+   :body {:at [16.5 0 16.31] :settle-s 2}
+   :act [[:job (jobs.movement.go-to {:pos #at [16 1 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind #{:walker-fault :go-to.walker-fault}} :for-s 60 :until {:source :job :kind :result}}]
+   :after [[:body-near [16.5 1 8.5] 3]]}]}

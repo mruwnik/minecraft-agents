@@ -25,4 +25,18 @@
    :body {:inventory [["cobblestone" 4]]}
    :act [[:job (jobs.blocks.place {:pos #at [18 0 18] :item "cobblestone"})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:placed [:any]}} :within-s 60 :of-job true}]
-   :after [[:block [18 0 18] "cobblestone"] [:item "cobblestone" 3]]}]}
+   :after [[:block [18 0 18] "cobblestone"] [:item "cobblestone" 3]]}
+  {:name "dig-stone-by-hand-when-the-drop-is-not-needed"
+   ;; card 21f32f58: :need-drop false digs a block no carried tool harvests (slow, the drop is lost)
+   :blocks [[:set [18 0 16] "stone"]]
+   :act [[:job (jobs.blocks.dig {:pos #at [18 0 16] :need-drop false})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :dug}} :within-s 60 :of-job true}]
+   :after [[:block [18 0 16] "air"] [:item "cobblestone" 0]]
+   :limit-s 90}
+  {:name "dig-iron-ore-with-a-wooden-pickaxe-waits-for-the-drop"
+   :blocks [[:set [18 0 16] "iron_ore"]]
+   :body {:inventory [["wooden_pickaxe" 1]]}
+   :act [[:job (jobs.blocks.dig {:pos #at [18 0 16]})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-tool}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind #{:completed :stopped} :data {:dug [:any]}} :for-s 20}]
+   :after [[:block [18 0 16] "iron_ore"]]}]}

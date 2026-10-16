@@ -41,4 +41,18 @@
    :expect [{:event {:source :job :kind :shut-doors.stopped} :within-s 60}
             {:event {:source :reflex :kind :ended :context {:reflex-id :door-left} :data {:outcome :done}} :within-s 120}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=false]"]]
-   :limit-s 140}]}
+   :limit-s 140}
+  ;; card 1d24e006: the trigger reads the door as last seen, so a door seen open and shut out of sight keeps it holding; the job
+  ;; looks, finds it shut, and drops the entry: the reflex fires once or twice, not nine times with :already. :open-s 12 gives the
+  ;; body time to see the open door, turn away and have it shut before the trigger first holds.
+  {:name "door-shut-out-of-sight-is-looked-at-once-then-dropped"
+   :register [{:trigger :door-left :args {:open-s 12} :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut-doors)}]
+   :memory [{:kind :opened :data {:cell #xyz [16 0 16] :by "j0" :shut? true}}]
+   :act [[:wait-s 4]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 0"]
+         [:rcon "execute positioned $X $Y $Z run setblock ~16 ~1 ~16 oak_door[facing=south,half=upper,hinge=left,open=false]"]
+         [:rcon "execute positioned $X $Y $Z run setblock ~16 ~0 ~16 oak_door[facing=south,half=lower,hinge=left,open=false]"]]
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :door-left}} :within-s 70}
+            {:count-event {:source :reflex :kind :fired :context {:reflex-id :door-left}} :for-s 90 :at-least 1 :at-most 2}]
+   :after [[:block [16 0 16] "oak_door[half=lower,open=false]"]]
+   :limit-s 100}]}
