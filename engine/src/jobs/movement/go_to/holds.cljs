@@ -13,7 +13,7 @@
             [jobs.movement.go-to.way-steps :as ways]))
 
 (defn exclusive-run?
-  "Whether this call runs for the driver of a manual lease (its slot job): the agent's own order."
+  "Whether this call runs for the exclusive run's job: the agent's own order."
   [c]
   (let [slot (some-> (:exclusive (:engine c)) deref)]
     (and (some? slot) (= slot (:root c)))))

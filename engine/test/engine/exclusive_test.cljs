@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.job-api :as api]
+            [engine.takeover :as takeover]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as real-triggers]))
@@ -197,6 +198,13 @@
     (swap! state assoc :offline true)
     (is (= :offline (:reason (exclusive eng '(spin)))))
     (is (empty? (:list (core/state eng))))))
+
+(deftest a-takeover-is-refused-during-a-run-and-leaves-it-exclusive
+  (let [{:keys [eng]} (setup)]
+    (exclusive eng '(spin))
+    (is (= {:ok false :reason "exclusive-run"} (takeover/take! eng {:who "x" :why "y"})))
+    (is (not (core/manual? eng)))
+    (is (= "j1" (core/exclusive-job eng)) "the run is still exclusive")))
 
 (deftest a-run-takes-no-queue-position-or-hold-or-survive-death
   (let [{:keys [eng]} (setup)]

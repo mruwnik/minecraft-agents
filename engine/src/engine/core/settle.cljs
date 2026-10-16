@@ -62,7 +62,7 @@
   (request-attention! eng {:job-id id :reason :round-failed :kind :failed
                            :context (select-keys (job-fields eng id) [:round :chain])
                            :data {:error (str error)}
-                           :message (str "Manual job failed: " error)
+                           :message (str "Job failed: " error)
                            :state-update #(remove-listed % id)}))
 
 (defn ending-data

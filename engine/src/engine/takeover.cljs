@@ -12,17 +12,17 @@
   (and (core/manual? eng) (= who (:who @(:manual eng)))))
 
 (defn take!
-  "Take the body for who. {:ok true}, or {:ok false :reason r} (offline, settling, held-by <who>)."
+  "Take the body for who. {:ok true}, or {:ok false :reason r} (offline, settling, exclusive-run, held-by <who>)."
   [eng {:keys [who why]}]
   (cond
     (core/offline? eng) {:ok false :reason "offline"}
     (core/settling? eng) {:ok false :reason "settling"}
     (core/manual? eng) {:ok false :reason (str "held-by " (:who @(:manual eng)))}
+    (core/exclusive-job eng) {:ok false :reason "exclusive-run"}
     :else
     (let [token (str "m" (swap! (:tokens eng) inc))]
       (when-let [h (core/holder eng)] (core/cut! eng h :takeover nil))
       (core/set-owner! eng token)
-      (reset! (:exclusive eng) nil)
       (reset! (:manual eng) {:who who :why why :since (core/now eng) :token token})
       (core/emit! eng {:source :system :kind :takeover_started :level :info :who who :why why
                        :text (str "manual control by " who ": " why "; jobs and reflexes paused")})
