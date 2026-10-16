@@ -33,10 +33,17 @@
     13000 [[:home 100 0]] false
     11000 [[:home 2 0]] false))
 
-(deftest a-body-underground-or-under-a-roof-has-no-reason-to-go-home
-  (are [block] (false? (holds? 11000 [[:home 100 0]] {:blocks {block "stone"}}))
-    "0,66,0"
-    "0,67,0"))
+(def hut
+  "A closed stone hut around the body at (0 64 0): 3x3 inside, roof at y 67."
+  (apply dissoc (tu/box -2 64 -2 2 67 2 "stone") (keys (tu/box -1 64 -1 1 66 1 "stone"))))
+
+(deftest a-body-underground-or-shut-in-a-hut-has-no-reason-to-go-home
+  (are [blocks] (false? (holds? 11000 [[:home 100 0]] {:blocks blocks}))
+    {"0,66,0" "stone"}
+    hut))
+
+(deftest a-body-under-a-lone-overhead-block-still-goes-home
+  (is (true? (holds? 11000 [[:home 100 0]] {:floor [-20 -20 20 20] :blocks {"0,67,0" "stone"}}))))
 
 (deftest go-home-walks-to-the-home-by-day-and-waits-at-night-or-with-none
   (async done

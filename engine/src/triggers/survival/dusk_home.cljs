@@ -2,7 +2,7 @@
   "The dusk-home trigger: before night, a body under the open sky whose remembered :home (else :bed) is within :limit
   blocks leaves for it once the day left no longer covers the walk (:slack times the straight line at :speed blocks a
   second) plus :margin-s seconds. A place beyond :limit (go-home's own) never fires it: the body digs in where night finds it. Stored args missing a key (an older entry) fall back to defaults. It does not hold at night (the night job has it), within :arrive
-  blocks of the place, or already sheltered (a roof within sh/default-roof-height, or underground)."
+  blocks of the place, or already sheltered (underground, or shut in a closed room)."
   (:require [jobs.lib.body :as body]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]))
@@ -20,4 +20,4 @@
           (let [d (u/dist (u/self-pos {:primitives p}) pos)]
             (and (< arrive d) (<= d limit)
                  (<= left-s (+ margin-s (/ (* slack d) speed)))
-                 (not (sh/sheltered-here? p))))))))
+                 (not (or (sh/buried? p) (sh/shut-in-room? p)))))))))
