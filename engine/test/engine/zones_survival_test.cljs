@@ -114,11 +114,13 @@
 
 (def night-world {:floor tu/walk-floor :time st/night :inventory st/dirt-stack :blocks st/floor})
 
+(def pit-world "night-world over flat ground, where a pit can be dug." (update night-world :blocks #(merge st/ground %)))
+
 (deftest dig-in-digs-down-when-the-walls-would-be-in-a-foreign-zone
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup night-world [(zone "Miles" [1 64 -1] [1 66 1])])]
+        (let [{:keys [eng p seen]} (setup pit-world [(zone "Miles" [1 64 -1] [1 66 1])])]
           (core/submit! eng '(jobs.survival.dig-in) {})
           (await (run-until-empty eng 10))
           (is (= [{:x 0 :y 63 :z 0} {:x 0 :y 62 :z 0} {:x 0 :y 61 :z 0}] (mapv arg-pos (calls p "dig"))) "the pit, not the walls")
@@ -171,7 +173,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [no-blocks (dissoc night-world :inventory)
+        (let [no-blocks (dissoc pit-world :inventory)
               pit (zone "Fake" [0 60 0] [0 63 0])]
           (doseq [[label world zones plan digs?]
                   [["no zone" no-blocks [] nil true]
@@ -212,7 +214,7 @@
       (fn ^:async t []
         (let [breathe (setup {:blocks {"0,65,0" "stone" "0,66,0" "stone"}} [(whole-zone "Miles")])
               pour (setup (assoc burning-with-bucket :blocks (merge st/floor pool)) [feet-zone])
-              dig (setup night-world [(zone "Miles" [1 64 -1] [1 66 1])])
+              dig (setup pit-world [(zone "Miles" [1 64 -1] [1 66 1])])
               unwedge (setup {:blocks (merge wt/boxed {"0,64,0" "sand"})} [(whole-zone "Miles")])]
           (core/submit! (:eng breathe) '(jobs.survival.breathe {:min-oxygen 12 :ignore-zones? true}) {})
           (await (core/tick! (:eng breathe)))

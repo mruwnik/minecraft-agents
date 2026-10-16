@@ -36,7 +36,7 @@
   "The first cell of the pit that lies in a plan the body made (access/own-keep), as its verdict, else nil."
   [c pit]
   (let [in (access/rules-input c {:spare-own? true})]
-    (some #(access/own-keep in %) (pit/plan-cells pit))))
+    (some #(access/own-keep in %) (concat (:prep pit) (mapcat :dig (:steps pit))))))
 
 (defn ^:async choose-mode
   "Record in job memory how this shelter is built, once. Chosen again only when the body leaves a dig-mode column.
