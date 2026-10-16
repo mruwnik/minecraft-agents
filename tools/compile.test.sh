@@ -207,7 +207,7 @@ export MC_COMPILE_POOL_DIR="$T/pool" MC_COMPILE_POOL_SIZE=1 MC_COMPILE_MIN_START
 printf '{:builds\n {:test {:target :node-test\n         :output-to "../engine/out/test.cjs"\n         :output-dir "../engine/out/test"}}}\n' > "$T/wt/dashboard/shadow-cljs.edn"
 mkdir -p "$T/wt/engine/src" "$T/wt/engine/out"
 echo one > "$T/wt/engine/src/a.cljs"; echo two > "$T/wt/engine/src/gone.cljs"
-printf '#!/bin/sh\ncase "$1 $2" in "shadow-cljs server") echo $$ > .shadow-cljs/server.pid; echo 1 > .shadow-cljs/nrepl.port; echo 1 > .shadow-cljs/http.port; exec sleep 300;; esac\necho "$PWD $(cat ../engine/src/a.cljs) $(ls ../engine/src | tr "\\n" " ")" >> "%s/pool-npx.log"\nmkdir -p ../engine/out/test; echo "built $PWD" > ../engine/out/test/x.js; echo "$PWD" > ../engine/out/test.cjs\ncase $PWD in */pool/*) while [ -e "%s/hold" ]; do sleep 0.1; done;; esac\n' "$T" "$T" > "$T/bin/npx"
+printf '#!/bin/sh\ncase "$1 $2" in "shadow-cljs server") [ -z "$NO_SERVER" ] || exit 1; echo $$ > .shadow-cljs/server.pid; echo 1 > .shadow-cljs/nrepl.port; echo 1 > .shadow-cljs/http.port; exec sleep 300;; esac\necho "$PWD $(cat ../engine/src/a.cljs) $(ls ../engine/src | tr "\\n" " ")" >> "%s/pool-npx.log"\nmkdir -p ../engine/out/test; echo "built $PWD" > ../engine/out/test/x.js; echo "$PWD" > ../engine/out/test.cjs\ncase $PWD in */pool/*) while [ -e "%s/hold" ]; do sleep 0.1; done;; esac\n' "$T" "$T" > "$T/bin/npx"
 timeout 60 "$T/wt/tools/compile" engine test >"$T/pool.out" 2>&1; check "pool compile rc" "$?" 0
 check "pool: compiled in the slot with the worktree's sources" "$(cat "$T/pool-npx.log")" "$T/pool/0/dashboard one a.cljs gone.cljs "
 check "pool: output dir copied back" "$(cat "$T/wt/engine/out/test/x.js")" "built $T/pool/0/dashboard"
@@ -217,14 +217,27 @@ timeout 60 "$T/wt/tools/compile" engine test >/dev/null 2>&1
 check "pool: changed and deleted sources follow the worktree" "$(cat "$T/pool-npx.log")" "$T/pool/0/dashboard three a.cljs "
 PSRV=$(cat "$T/pool/0/dashboard/.shadow-cljs/server.pid"); kill -0 "$PSRV" 2>/dev/null; check "pool: slot server stays warm" "$?" 0
 # one compile per slot: while one holds it, a second finds no slot within the wait and compiles one-shot
-touch "$T/hold"
-timeout 60 "$T/wt/tools/compile" engine test >/dev/null 2>&1 & H=$!
-seen "$T/pool-npx.log" "three" 5; sleep 0.5
+flock "$T/pool/0/.pool.lock" sleep 4 & H=$!; sleep 0.5
 printf '#!/bin/sh\nshift 2\nexec "$@"\n' > "$T/wt/tools/res-slot"
 out=$(timeout 60 "$T/wt/tools/compile" engine test 2>&1); check "pool busy: fallback rc" "$?" 0
 check "pool busy: says one-shot" "$(grep -c 'compiling one-shot' <<<"$out")" 1
-rm "$T/hold"; wait $H; check "pool: holder finished" "$?" 0
-kill "$PSRV" 2>/dev/null
+wait $H
+# a test macro (.clj on the source paths) changed: the warm slot server restarts before compiling
+mkdir -p "$T/wt/engine/test"; echo macro > "$T/wt/engine/test/m.clj"
+out=$(timeout 60 "$T/wt/tools/compile" engine test 2>&1); check "pool macro: rc" "$?" 0
+check "pool macro: server restarted" "$(grep -c 'build-time .clj file changed' <<<"$out")" 1
+rm "$T/wt/engine/test/m.clj"
+# the worktree's own lock serializes its compiles
+: > "$T/pool-npx.log"
+flock "$T/wt/dashboard/.shadow-cljs/compile.lock" sleep 3 & L=$!; sleep 0.5
+timeout 60 "$T/wt/tools/compile" engine test >/dev/null 2>&1 & H=$!
+sleep 1.5; check "pool: same-worktree compile waits for the worktree lock" "$(wc -c < "$T/pool-npx.log")" 0
+wait $L; wait $H; check "pool: same-worktree compile ran after the lock" "$(grep -c . "$T/pool-npx.log")" 1
+kill "$(cat "$T/pool/0/dashboard/.shadow-cljs/server.pid")" 2>/dev/null
+# slot server fails to start: one-shot
+rm -rf "$T/pool"
+out=$(NO_SERVER=1 timeout 60 "$T/wt/tools/compile" engine test 2>&1); check "pool server start failure: fallback rc" "$?" 0
+check "pool server start failure: says one-shot" "$(grep -c 'compiling one-shot' <<<"$out")" 1
 # no server in the slot and too little memory to start one: one-shot
 rm -rf "$T/pool"
 out=$(MC_COMPILE_MIN_START_MB=99999999 timeout 60 "$T/wt/tools/compile" engine test 2>&1); check "pool low memory: fallback rc" "$?" 0

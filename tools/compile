@@ -14,7 +14,7 @@
 #   --priority  jump the queue: ahead of every waiting normal compile (it still waits for the compile now running).
 #               For the owner's UI rebuilds (dashboard ui/server) and nothing else.
 #   --release   `shadow-cljs release` instead of `compile` (the :viewer build); the engine :body-release build always does.
-#   A build-time .clj (engine/src, dashboard/src) newer than the running server restarts it before the compile (shadow-cljs does not reload macros).
+#   A build-time .clj on the build source paths newer than the running server restarts it before the compile (shadow-cljs does not reload macros).
 #   --stop      stop the checkout's server (waits for the checkout's compile; for restarts; no build argument).
 #
 # Queue: a ticket file <lane>-<ns>-<pid> per waiter in /tmp/mc-compile.queue (lane 0 priority, 1 normal; content "<wait|ready> <dir>"),
@@ -95,7 +95,7 @@ start_server() {
     if [ -n "$bg" ] && ! kill -0 "$bg" 2>/dev/null && ! server_pid >/dev/null; then break; fi
     sleep 0.5
   done
-  server_pid >/dev/null || { echo "tools/compile: the shadow-cljs server did not start (see $dir/.shadow-cljs/server.log)" >&2; exit 1; }
+  server_pid >/dev/null || { echo "tools/compile: the shadow-cljs server did not start (see $dir/.shadow-cljs/server.log)" >&2; [ -z "${MC_COMPILE_IN_POOL:-}" ] || exit 76; exit 1; }
   # idle watcher: a server must not outlive its use (every JVM holds ~2 GB)
   touch "$dir/.shadow-cljs/last-use"
   sp=$(server_pid)
@@ -108,7 +108,7 @@ start_server() {
 # macros (bogus "undeclared" errors until a restart). Called holding the checkout lock, so no compile of it is running.
 restart_if_stale() {
   local p
-  p=$(server_pid) && [ -n "$(find "$repo/engine/src" "$repo/dashboard/src" "$repo/dashboard/bench-src" -name '*.clj' -newer "/proc/$p" -print -quit 2>/dev/null)" ] || return 0
+  p=$(server_pid) && [ -n "$(find "$repo/engine/src" "$repo/engine/test" "$repo/engine/test-support" "$repo/dashboard/src" "$repo/dashboard/test" "$repo/dashboard/bench-src" -name '*.clj' -newer "/proc/$p" -print -quit 2>/dev/null)" ] || return 0
   echo "tools/compile: a build-time .clj file changed since the server started; restarting it" >&2
   kill "$p"
   for _ in $(seq 1 100); do kill -0 "$p" 2>/dev/null || break; sleep 0.2; done
@@ -116,13 +116,13 @@ restart_if_stale() {
   return 0
 }
 
-# Pool: a worktree compile runs in one of MC_COMPILE_POOL_SIZE (default 2; 0 = off) warm checkout-shaped copies under MC_COMPILE_POOL_DIR
+# Pool: a worktree compile runs in one of MC_COMPILE_POOL_SIZE (default 4; 0 = off) warm checkout-shaped copies under MC_COMPILE_POOL_DIR
 # (default ~/.cache/mc-compile-pool/<i>), each with its own server run by this same script as if it were a main checkout. Under the slot's
 # .pool.lock (held for the whole compile, so two compiles never share a slot) the worktree's sources are rsynced in (--delete, by content, changed
 # files get a fresh mtime so shadow and the macro-restart check see them), the compile runs there, and the builds' output dirs are rsynced back.
-# No free slot within MC_COMPILE_POOL_WAIT_S (60), a slot whose server is down with memory below MIN_START_MB, or a failed sync fall back to the one-shot JVM below.
+# No free slot within MC_COMPILE_POOL_WAIT_S (60), a slot whose server is down with memory below MIN_START_MB, or a failed sync or a slot server that does not start (exit 76 inside the slot) fall back to the one-shot JVM below.
 pool_dir=${MC_COMPILE_POOL_DIR:-$HOME/.cache/mc-compile-pool}
-pool_size=${MC_COMPILE_POOL_SIZE:-2}
+pool_size=${MC_COMPILE_POOL_SIZE:-4}
 
 # build output paths (relative to dashboard/) of the given builds, from dashboard/shadow-cljs.edn
 pool_outputs() {
@@ -151,20 +151,22 @@ pool_pick() {
 
 pool_compile() {
   local slot p code out o
-  pool_pick || return 1
+  # the worktree's own checkout lock: two compiles of one worktree must not race on the slot sync or the output rsync back
+  mkdir -p "$dir/.shadow-cljs"; exec 7>>"$dir/.shadow-cljs/compile.lock"; flock 7
+  pool_pick || { exec 7>&-; return 1; }
   p=$(cat "$slot/dashboard/.shadow-cljs/server.pid" 2>/dev/null)
   if { [ -z "$p" ] || ! kill -0 "$p" 2>/dev/null; } && [ "$(available_mb)" -lt "$MIN_START_MB" ]; then
-    exec 8>&-; return 1
+    exec 8>&- 7>&-; return 1
   fi
   mkdir -p "$slot/dashboard/.shadow-cljs"
   [ -d "$slot/dashboard/.shadow-cljs/builds" ] || "$repo/tools/seed-shadow-cache.sh" "$slot" >/dev/null 2>&1
   rsync -rlpc --delete --exclude .git --exclude .claude --exclude .shadow-cljs --exclude docs --exclude worlds --exclude state --exclude textures --exclude viaproxy --exclude blueprints \
-    --exclude /engine/out --exclude /dashboard/out --exclude /tools/view/web/cljs --exclude .pool.lock --exclude .last "$repo/" "$slot/" || { exec 8>&-; return 1; }
+    --exclude /engine/out --exclude /dashboard/out --exclude /tools/view/web/cljs --exclude .pool.lock --exclude .last "$repo/" "$slot/" || { exec 8>&- 7>&-; return 1; }
   echo "$repo" > "$slot/.last"
   echo "tools/compile: pool slot $slot" >&2
   # fd 8 is closed for the compile: a server it starts must not inherit the slot lock
   # slot paths in the output (warning "File:" lines, which test-engine checks for edits) are shown as the worktree's
-  MC_COMPILE_IN_POOL=1 MC_COMPILE_MAIN_IDLE_S=${MC_COMPILE_POOL_IDLE_S:-900} "$slot/tools/compile" "$project" "${args[@]}" 8>&- 2>&1 | sed -u "s|$slot|$repo|g"
+  MC_COMPILE_IN_POOL=1 MC_COMPILE_MAIN_IDLE_S=${MC_COMPILE_POOL_IDLE_S:-300} "$slot/tools/compile" "$project" "${args[@]}" 7>&- 8>&- 2>&1 | sed -u "s|$slot|$repo|g"
   code=${PIPESTATUS[0]}
   if [ "$code" = 0 ]; then
     out=$(pool_outputs "${builds[@]}")
@@ -176,7 +178,8 @@ pool_compile() {
       if [ -d "$slot/dashboard/$o" ]; then rsync -a --delete "$slot/dashboard/$o/" "$dir/$o/"; else rsync -a "$slot/dashboard/$o" "$dir/$o" && sed -i "s|$slot/dashboard|$dir|g" "$dir/$o"; fi
     done
   fi
-  exec 8>&-
+  exec 8>&- 7>&-
+  [ "$code" = 76 ] && return 1
   exit $code
 }
 if [ "$worktree" = 1 ] && [ "$stop" = 0 ] && [ "$pool_size" -gt 0 ] && [ -z "${MC_COMPILE_IN_SLOT:-}" ]; then
