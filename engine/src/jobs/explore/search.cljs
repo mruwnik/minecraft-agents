@@ -259,7 +259,7 @@
                         :text (if (= :found reason)
                                 (str "found " (count found) " " what " at " (str/join ", " (map #(str/join "," (:pos %)) found)))
                                 (str "no " what " found (" (name why) ") after " (:legs m 0) " legs, "
-                                     (:scans m 0) " looks, " (:farthest m 0) " blocks out"
+                                     (:scans m 0) " looks of " (:scan-radius (:args c)) " blocks round, " (:farthest m 0) " blocks out"
                                      (when (pos? (:skipped m 0)) (str ", " (:skipped m) " legs skipped as already searched"))))}
                  why (assoc :why why))]
     (case why
