@@ -22,7 +22,7 @@
   "Walk to the chest (one go-to) and deposit every stack in one call: the named :items in the order named, or everything but tools
   and armour (saplings included) and the body's 3-day food reserve (jobs.lib.cost/food-reserve) in inventory order.
   :keep leaves at least that many of a name carried. :free ends the call, clean, once that many slots are free. With explicit :items the reserve is ignored.
-  Needs: a chest, the :chest argument or the known :chest place; none known waits :no-chest (can-start?).
+  Needs: a chest, the :chest argument or the known :chest place; none known waits :no-chest (can-start? and can-run?: a chest place lost mid-job waits, a reflex ends condition-failed).
   Ends done when nothing is left to put away (also at once when nothing is), or at any other ending when at least the
   call's :least items are put in (:all wants every one). The data of every other ending is
   {:gave-up true :moved n}, n the items put in; the report counts the items still to put away.
@@ -83,6 +83,7 @@
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
 (def can-start? checks/chest-known)
+(def can-run? checks/chest-known)
 
 (defn spare-items
   "{name n} the call would put away now: the carried names the pick rules allow, each by its spare over the keep."

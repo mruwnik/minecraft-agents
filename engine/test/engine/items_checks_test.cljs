@@ -59,6 +59,9 @@
 (deftest a-started-withdraw-waits-when-its-chest-is-gone
   (is (= [:later :no-chest] (kind+reason (verdict-of :can-run? 'jobs.storage.withdraw {} {:items {"bread" 1}})))))
 
+(deftest a-started-deposit-waits-when-its-chest-is-gone
+  (is (= [:later :no-chest] (kind+reason (verdict-of :can-run? 'jobs.storage.deposit {} {})))))
+
 (deftest a-known-chest-passes
   (is (= :ok (first (verdict-of :can-start? 'jobs.storage.deposit {} {:chest {:x 3 :y 64 :z 0}})))))
 
