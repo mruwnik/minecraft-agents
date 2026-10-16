@@ -159,6 +159,17 @@
             {:no-event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :for-s 30 :until {:source :job :kind :waiting :data {:reason :night-sheltered}}}]
    :after [[:body-near [14.5 0 16.5] 1.5]]
    :limit-s 40}
+  ;; 122e3c60: a parent job whose walk waits for day in a shelter holds with the reason itself (job.holding :night-sheltered), not an unexplained idle
+  {:name "buried-from-plan-walk-holds-with-the-night-reason"
+   :blocks [[:fill [6 -1 12] [26 8 20] "stone"] [:fill [14 0 16] [15 1 16] "air"]]
+   :plot {:height 14}
+   :body {:at [14.5 0 16.5] :inventory [["cobblestone" 4]]}
+   :plans [{:id "roof" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [20 9 16]] :want "cobblestone"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:roof" :fetch false})]]
+   :expect [{:event {:source :job :kind :holding :data {:reason :night-sheltered}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind #{:completed :stopped}} :for-s 30 :until {:source :job :kind :holding :data {:reason :night-sheltered}} :of-job true}]
+   :after [[:body-near [14.5 0 16.5] 1.5]]
+   :limit-s 50}
   ;; 87aee1d1: a bed in a hut with no door cannot be reached; sleep says the hut is walled in, not a bare "cannot reach"
   {:name "sleep-to-a-walled-in-bed-says-why"
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]

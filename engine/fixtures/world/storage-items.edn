@@ -88,4 +88,43 @@
    :act [[:job (jobs.gather.mine {:block "stone" :count 2 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :trip.deposited :data {:free [:>= 5]}} :within-s 60 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 95 :of-job true}]
-   :after [[:item "raw_iron" 5] [:item "coal" 3] [:item "gravel" 0] [:item "tuff" 0]]}]}
+   :after [[:item "raw_iron" 5] [:item "coal" 3] [:item "gravel" 0] [:item "tuff" 0]]}
+  ;; card a8858f79: depositing into another body's chest (zone bars it, :ignore-zones? given) never records it as the body's own :chest place
+  {:name "deposit-into-another-bodys-zoned-chest-is-not-recorded-as-mine"
+   :blocks [[:set [20 0 16] "chest[facing=west]"]]
+   :zones [{:name "other-chest" :min [19 -1 15] :max [21 2 17] :owner "Other" :allow #{}}]
+   :body {:inventory [["dirt" 20]]}
+   :act [[:job (jobs.storage.deposit {:chest #xyz [20 0 16] :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind #{:place.set :place.kept}} :for-s 60 :until {:source :job :kind :completed}}]
+   :after [[:item "dirt" 0]]
+   :limit-s 80}
+  {:name "deposit-into-an-unzoned-chest-records-it-as-mine"
+   :blocks [[:set [20 0 16] "chest[facing=west]"]]
+   :body {:inventory [["dirt" 20]]}
+   :act [[:job (jobs.storage.deposit {:chest #xyz [20 0 16]})]]
+   :expect [{:event {:source :job :kind :place.set :data {:name :chest}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "dirt" 0]]
+   :limit-s 80}
+  ;; card 26f68f59: stacks the body picked up from a destroyed chest (:picked-up memory, 574 sugar cane) are found goods: kept, one goods.found notice
+  {:name "deposit-keeps-found-cane-and-reports-it-once"
+   :blocks [[:set [20 0 16] "chest[facing=west]"]]
+   :memory [{:kind :chest :data {:pos #xyz [20 0 16]} :policy {:cap 1 :ttl :forever}}
+            {:kind :picked-up :data {:item "sugar_cane" :count 574 :pos #xyz [23 0 12]}}]
+   :body {:inventory [["sugar_cane" 574] ["dirt" 40]]}
+   :act [[:job (jobs.storage.deposit {:chest #xyz [20 0 16]})]]
+   :expect [{:count-event {:source :job :kind :goods.found :data {:item "sugar_cane"}} :for-s 60 :at-least 1 :at-most 1 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "sugar_cane" 574] [:item "dirt" 0]]
+   :limit-s 80}
+  {:name "deposit-of-mined-cobblestone-is-not-found-goods"
+   :blocks [[:set [20 0 16] "chest[facing=west]"]]
+   :memory [{:kind :chest :data {:pos #xyz [20 0 16]} :policy {:cap 1 :ttl :forever}}
+            {:kind :picked-up :data {:item "cobblestone" :count 500 :pos #xyz [23 0 12]}}]
+   :body {:inventory [["cobblestone" 500] ["dirt" 40]]}
+   :act [[:job (jobs.storage.deposit {:chest #xyz [20 0 16]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :goods.found} :for-s 60 :until {:source :job :kind :completed}}]
+   :after [[:item "dirt" 0]]
+   :limit-s 80}]}

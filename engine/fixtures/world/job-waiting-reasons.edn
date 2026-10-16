@@ -61,4 +61,21 @@
    :mobs :keep
    :act [[:summon "zombie" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"] [:wait-s 2]
          [:job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})]]
-   :expect [{:event {:source :job :kind :round_started} :within-s 40 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :round_started} :within-s 40 :of-job true}]}
+  ;; card 1a708c35: the state goals that already hold end done, not condition-failed or waiting (eat, block-arrow-gap, night)
+  {:name "eat-fed-with-food-carried-is-done-already-and-eats-nothing"
+   :body {:inventory [["bread" 3]]}
+   :act [[:job (jobs.survival.eat {})]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind #{:stopped :waiting}} :for-s 5 :until {:source :job :kind :completed} :of-job true}]
+   :after [[:item "bread" 3]]}
+  {:name "block-arrow-gap-no-ranged-danger-is-done-already"
+   :act [[:job (jobs.survival.block-arrow-gap {})]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}]}
+  {:name "night-in-a-closed-roofed-room-is-done-at-once"
+   :time :night
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"] [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
+   :body {:at [13.5 0 13.5]}
+   :act [[:job (jobs.survival.night {})]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 25 :of-job true}
+            {:no-event {:source :job :kind #{:stopped :waiting}} :for-s 5 :until {:source :job :kind :completed} :of-job true}]}]}
