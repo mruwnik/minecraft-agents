@@ -28,6 +28,15 @@
           (is (= 3 (:got res)))
           (is (= 3 (+ (carried p "cod") (carried p "salmon")))))))))
 
+(deftest a-body-already-carrying-the-count-is-done-without-casting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res p]} (await (run (world [rod {:name "cod" :count 2} {:name "salmon" :count 1}] {:catch ["cod"] :misses 0}) {:count 3}))]
+          (is (= :done (:status res)) (pr-str res))
+          (is (= 3 (:got res)))
+          (is (= 2 (carried p "cod"))))))))
+
 (deftest no-rod-and-no-fetch-fails-its-condition-no-rod
   (async done
     (tu/run-async done

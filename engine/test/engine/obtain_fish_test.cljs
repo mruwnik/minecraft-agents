@@ -7,6 +7,7 @@
             [engine.test-util :as tu]
             [engine.game :as game]
             [jobs.items.obtain :as obtain]
+            [jobs.items.obtain.seen :as seen]
             [jobs.items.obtain.table :as table]
             [jobs.items.recipes :as recipes]))
 
@@ -33,3 +34,8 @@
 
 (deftest a-cooked-fish-plan-gathers-the-raw-fish
   (is (= {"cod" 2} (:gather (recipes/plan game/default-version {} "cooked_cod" 2 (merge (table/source-opts) {:gather? true :table? true}))))))
+
+(deftest the-fish-gather-carries-the-shortfall-on-top-of-all-fish-carried
+  (let [p (tu/fake {:inventory [{:name "salmon" :count 2} {:name "cod" :count 1}]})
+        need (first (table/gather-needs {"cod" 2}))]
+    (is (= 5 (get-in (seen/with-count p need) [:args :count])))))

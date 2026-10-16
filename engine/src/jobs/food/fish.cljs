@@ -15,19 +15,20 @@
             [jobs.lib.util :as u]))
 
 (def doc
-  "Catch :count fish with a fishing rod from a bank beside seen water.
+  "Carry :count fish, caught with a fishing rod from a bank beside seen water.
   The bank is a land cell with seen water (two deep) beside it at the level below, within :radius of the body (:pos names the water cell
   to cast at instead). The body walks there (go-to), holds the rod and casts: one cast waits for a bite up to :cast-s, then reels.
   A body with no rod gets one first (jobs.lib.need, unless :fetch is false).
   Ends with the data {:got n :text}, info fish.caught per fish, and the ending:
-  - :done: :count fish (cod, salmon, tropical fish, pufferfish) came in, or the call's :least (default 1, :all = :count)
+  - :done: :count fish (cod, salmon, tropical fish, pufferfish) are carried, or the call's :least (default 1, :all = :count)
     before any stop below, or when the time ends it (the engine's rule: report :limit).
   Before the first cast it waits (can-start?) on :no-rod (none carried and :fetch false) and :no-water (no seen water with a bank
   within :radius).
   - :condition-failed :no-water (the water gone mid-run), or a failed rod fetch (the cause names the rod, :because the fetch's ending).
   - :nothing-possible :unreachable (the bank could not be walked to) or :no-bite (:max-misses casts in a row caught nothing).
   - :limit-reached: the call's :spend :job-time (default ::job-time-s) is used up with fewer than :least caught; the engine ends it, with {:got}.
-  Resumes from the carried fish: the goal is the count carried at the first round plus :count.")
+  The goal is to carry :count fish: the carried fish are counted at every round, so a body already carrying them is done,
+  and fish eaten or stored mid-job are caught again.")
 
 (a/defargs args
   {:count {:doc "fish to catch" :spec (a/int-in 1 nil) :default 3}
@@ -54,7 +55,7 @@
 
 (defn rod-carried? [c] (boolean (some #(= "fishing_rod" (:name %)) (u/inventory (:primitives c)))))
 
-(defn got [c] (- (fish-carried c) (:base (ctx/mem c) (fish-carried c))))
+(defn got "The fish carried: the goal is to carry :count, whatever was eaten or stored on the way." [c] (fish-carried c))
 
 (defn spots
   "The banks {:land :water} to cast from: the one beside :pos when given, else the seen ones within :radius, nearest first;
@@ -147,5 +148,4 @@
             (stop! c :condition-failed :no-water "no seen water with a bank in reach"))))))
 
 (defn ^:async round [c]
-  (ctx/update-mem! c update :base #(or % (fish-carried c)))
   (await (pace/steps! c #(step c))))
