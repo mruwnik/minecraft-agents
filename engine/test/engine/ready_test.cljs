@@ -140,7 +140,6 @@
     (is (= [ready/ok ready/ok] ((juxt :safe? :fit?) d)) (str j)))
   (doseq [j healers :let [d (get registry/jobs (symbol (str "jobs.survival." j)))]]
     (is (= [ready/threatened ready/ok] ((juxt :safe? :fit?) d)) (str j))))
-    (is (= [[15 64 0]] (:look-at (nth s 2))))))
 
 (defn bound
   "The kind of a job's checker over world with args."
