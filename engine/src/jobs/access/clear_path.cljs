@@ -11,6 +11,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.child :as child]
             [jobs.lib.escape :as escape]
+            [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
@@ -35,13 +36,14 @@
   clear-path.done info or clear-path.stopped warn event.
   It does not put the blocks back: jobs.movement.go-to does that once through.
   :need-drop false: a block no carried tool harvests is dug bare-handed (slow, the drop is lost) instead of stopping :dig-waits
-  :no-tool; go-to's last resort when it has no pickaxe.")
+  :no-tool; go-to's last resort when it has no pickaxe. A tool the dig lacks is fetched (:fetch, jobs.lib.need) unless :fetch is off.")
 
 (a/defargs args
   {:heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
    :max-thick {:doc "the thickest wall it digs through, in blocks" :spec (a/int-in 0 nil) :default 3}
    :note {:doc "a map: each cell dug is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!; go-to's escalation)" :spec map? :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :fetch {:doc "get a missing tool for the dig children with jobs.lib.need: true, a set of kinds or a map of limits; false waits :dig-waits" :spec need/option? :default true}
    :need-drop {:doc "false: dig a block no carried tool harvests bare-handed (slow, the drop is lost)" :spec boolean? :default true}
    :spare-own-builds {:doc "a cell of a plan this body made is never dug (stops :footprint naming the plan); false: it may be" :spec boolean? :default true}})
 
@@ -168,7 +170,7 @@
   call goes on with it). :again, :continue while the child waits on the world, or the ending."
   [c {:keys [cell block collect]}]
   (let [hand? (and (false? (:need-drop (:args c))) (not (tools/can-harvest? (:primitives c) block)))
-        args {:pos cell :collect (and collect (not hand?)) :need-drop (not hand?) :fetch false
+        args {:pos cell :collect (and collect (not hand?)) :need-drop (not hand?) :fetch (:fetch (:args c))
               :ignore-zones? (:ignore-zones? (:args c))}
         done! (fn [] (ctx/update-mem! c dissoc :digging))]
     (cond
