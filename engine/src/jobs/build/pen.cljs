@@ -14,6 +14,8 @@
             [jobs.lib.sense :as sense]
             [jobs.build.from-plan.plan :as plan]
             [jobs.lib.pace :as pace]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.storage :as storage]
             [jobs.lib.world :as known]))
@@ -170,6 +172,8 @@
              {:reason :uneven :why why})))))))
 
 (def defaults {:spend {:job-time ::job-time-s}})
+(def safe? (ready/safe-at-by-night work-place/spot))
+(def fit? ready/fit?)
 
 (def can-start? (cond/and plan-problem uneven-problem from-plan/no-items))
 (def can-run? plan-problem)

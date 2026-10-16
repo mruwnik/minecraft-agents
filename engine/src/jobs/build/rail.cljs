@@ -7,6 +7,8 @@
             [engine.ctx :as ctx]
             [jobs.lib.pace :as pace]
             [jobs.lib.world :as known]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.storage :as storage]
             [jobs.lib.near :as near]
@@ -48,6 +50,8 @@
 (def can-run? build/plan-problem)
 
 (def defaults {:spend {:job-time ::job-time-s}})
+(def safe? (ready/safe-at-by-night work-place/spot))
+(def fit? ready/fit?)
 
 (defn quote-of [_c]
   {:uses {:job-time [30 300 (settings/get settings ::job-time-s)]}})

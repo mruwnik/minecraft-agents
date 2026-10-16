@@ -9,6 +9,7 @@
             [engine.farm-contract-test :refer [ending-of]]
             [engine.hostile-test :as h]
             [engine.settings :as settings]
+            [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [jobs.combat.hunt :as hunt]
             [jobs.lib.hunting :as hunting]
@@ -502,6 +503,14 @@
         (let [s (await (scenario {:count 1 :keep 0} {:inventory h/sword :self {:health 0.5} :entities [(cow 1 3)]} 10))]
           (is (empty? (attacked s)) "nothing attacked at 0.5 hp")
           (is (= [:low-health] (distinct (map :reason (events-of s :waiting))))))))))
+
+(deftest a-hunt-at-night-in-the-open-waits-for-dawn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:count 1 :keep 0} {:inventory h/sword :time st/night :entities [(cow 1 3)]} 10))]
+          (is (empty? (attacked s)) "nothing attacked at night")
+          (is (= [:dark] (distinct (map :reason (events-of s :waiting))))))))))
 
 (deftest a-hunt-under-way-waits-when-hurt-and-is-not-ended-by-it
   (async done

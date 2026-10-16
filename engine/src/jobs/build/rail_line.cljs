@@ -14,6 +14,8 @@
             [jobs.build.from-plan.plan :as plan]
             [plan.rail :as rail]
             [plan.shape :as shape]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.storage :as storage]
             [jobs.lib.world :as known]))
@@ -210,6 +212,8 @@
          (check-cache/cached c :ready #(not-ready c cells)))))))
 
 (def defaults {:spend {:job-time ::job-time-s}})
+(def safe? (ready/safe-at-by-night work-place/spot))
+(def fit? ready/fit?)
 
 (def can-start? (cond/and plan-problem ready-problem))
 (def can-run? plan-problem)

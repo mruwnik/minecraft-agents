@@ -7,6 +7,8 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.checks :as checks]
             [jobs.lib.look :as look]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
@@ -328,6 +330,8 @@
 (def target [:plan :part])
 
 (def defaults {:spend {:job-time ::job-time-s}})
+(def safe? (ready/safe-at-by-night work-place/spot))
+(def fit? ready/fit?)
 
 (def can-start? can-run?)
 

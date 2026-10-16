@@ -15,6 +15,8 @@
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.farm.field :as fld]
             [jobs.farm.till :as till]
@@ -117,6 +119,8 @@
 (def job-sym 'jobs.farm.plant)
 (def target [:box :plan :part])
 (def defaults {:least 1})
+(def safe? (ready/safe-at-by-night work-place/spot))
+(def fit? ready/fit?)
 
 (defn count-fail
   "Count a fail of kind k (:fails or :walk-fails) on the cell at pos; the cell is skipped at the max-fails-th."

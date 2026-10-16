@@ -6,6 +6,8 @@
             [jobs.lib.job-common :as common]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.places :as places]
@@ -70,6 +72,8 @@
 (def target [:at])
 
 (def defaults {:spend {:job-time ::job-time-s}})
+(def safe? (ready/safe-at-by-night work-place/spot))
+(def fit? ready/fit?)
 
 (def can-start? (checks/zones-read :compost.declined "compost"))
 

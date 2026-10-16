@@ -11,6 +11,7 @@
             [jobs.lib.vantage :as vantage]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.ready :as ready]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]))
@@ -61,7 +62,9 @@
 
 (def target [:targets])
 
-(def defaults {:spend {:job-time ::job-time-s} :use {:tools :attack}})
+(def defaults {:spend {:job-time ::job-time-s} :use {:tools :attack} :checks {:safe? '(not (exposed))}})
+(def safe? ready/safe-if-lit)
+(def fit? ready/fit?)
 
 (def absent-grace-ms
   "How long a job that has seen nothing waits for the world's entities to arrive."

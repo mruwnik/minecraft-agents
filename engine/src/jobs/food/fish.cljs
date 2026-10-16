@@ -10,6 +10,8 @@
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.shore :as shore]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -42,6 +44,8 @@
 (def target [:pos])
 
 (def defaults {:spend {:job-time ::job-time-s}})
+(def safe? (fn [c] (if (:pos (:args c)) ((ready/safe-at-by-night work-place/spot) c) (ready/safe-if-lit c))))
+(def fit? ready/fit?)
 
 (def fish-items #{"cod" "salmon" "tropical_fish" "pufferfish"})
 

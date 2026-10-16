@@ -14,6 +14,8 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.tools :as tools]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.storage :as storage]
             [jobs.lib.watch :as watch]
@@ -97,6 +99,8 @@
 
 (def target [:plan :part])
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
+(def safe? (ready/safe-at-by-night work-place/spot))
+(def fit? ready/fit?)
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one build may take." :spec (a/int-in 1 nil)}

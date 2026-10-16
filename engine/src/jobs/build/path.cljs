@@ -9,6 +9,8 @@
             [jobs.lib.access.rules :as rules]
             [jobs.lib.gate :as gate]
             [jobs.lib.need :as need]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.places :as places]
@@ -57,6 +59,8 @@
 (def no-shovel {:reason :no-tool :kind "shovel"})
 (def target [:from :to :center :radius])
 (def defaults {:use {:tools :shovel} :spend {:job-time ::job-time-s}})
+(def safe? (ready/safe-at-by-night work-place/spot))
+(def fit? ready/fit?)
 
 (defn span [a b] (range (min a b) (inc (max a b))))
 (defn span-size [a b] (inc (js/Math.abs (- a b))))

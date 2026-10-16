@@ -14,6 +14,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.trip :as trip]
             [jobs.lib.checks :as checks]
+            [jobs.lib.ready :as ready]
             [jobs.lib.util :as u]
             [jobs.lib.vantage :as vantage]))
 
@@ -28,7 +29,7 @@
   Babies are never targets and never counted. Animals the body spares (jobs.lib.animal-spare: kinds in :off-limits, animals in
   a zone or plan of its own or a closed enclosure unless :spare-pens is false) are never targets either; when only such animals
   are left it ends :spared (the data has :spared-by, a count per rule, and the ending's text names them when nothing was killed).
-  A hunt waits (can-run?) while the body is too hurt (:low-health, jobs.lib.body/too-hurt), also once begun, and (can-start?) at its start (one kind
+  A hunt waits (fit?) while the body is too hurt (:low-health, jobs.lib.body/too-hurt), also once begun, and (can-start?) at its start (one kind
   only) while :no-color (a :color and none of it in range; :seen-colors) or :too-few (:keep or fewer adults within :radius; the
   cause has :in-range, :radius, :keep and :nearest, the distance of the nearest adult of the kind in sight up to ::sight-radius).
   A hostile kind with no weapon of the call's :use :tools carried gets a sword first (jobs.lib.need, :fetch; a failed fetch ends the job with its cause), else with :fetch off the first round ends :condition-failed :unarmed.
@@ -72,7 +73,9 @@
 
 (def target [:mob])
 
-(def defaults {:spend {:job-time ::job-time-s} :least 1 :use {:tools :attack}})
+(def defaults {:spend {:job-time ::job-time-s} :least 1 :use {:tools :attack} :checks {:safe? '(not (exposed))}})
+(def safe? ready/safe-if-lit)
+(def fit? ready/fit?)
 
 (defn adults-within
   "The adult entities named :mob within radius blocks, nearest first, never players, items or babies
@@ -222,8 +225,6 @@
 (def can-start?
   "Waits on a start fact (start-fact: not for a several-kinds call, whose kinds each check theirs)."
   start-fact)
-
-(def can-run? checks/low-health)
 
 (defn done?
   "Done once the count asked is killed (of each kind) and the drops are collected; the data is the animals killed."

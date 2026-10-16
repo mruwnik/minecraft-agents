@@ -12,6 +12,8 @@
             [jobs.lib.job-common :as common]
             [jobs.lib.gate :as gate]
             [jobs.lib.need :as need]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.places :as places]
@@ -85,6 +87,8 @@
 
 (def target [:from :to :center :radius])
 (def defaults {:use {:tools :till}})
+(def safe? (ready/safe-at-by-night work-place/spot))
+(def fit? ready/fit?)
 
 (defn hoe-of
   "The name of a carried item ending in _hoe, or nil."

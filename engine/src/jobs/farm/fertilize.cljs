@@ -7,6 +7,8 @@
             [jobs.lib.job-common :as common]
             [jobs.lib.gate :as gate]
             [jobs.lib.need :as need]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
@@ -64,6 +66,8 @@
 (def target [:at :center :grass])
 
 (def defaults {:spend {:job-time ::job-time-s}})
+(def safe? (ready/safe-at-by-night work-place/spot))
+(def fit? ready/fit?)
 
 (defn raw-targets
   "The positions to fertilize (unripe crops, or open grass with :grass), before the zone rules and the refused ones."

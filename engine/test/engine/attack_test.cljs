@@ -10,6 +10,7 @@
             [engine.perception :as perception]
             [engine.fake.raw-world :as fake-raw]
             [engine.registry :as registry]
+            [engine.shelter-support :as st]
             [engine.events :as events]
             [engine.triggers :as triggers]
             [engine.test-util :as tu]
@@ -54,6 +55,17 @@
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
 
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
+
+;; the target may be the danger: only the dark sky holds an attack
+(deftest an-attack-on-a-zombie-in-reach-is-not-held-by-the-threat-and-waits-at-night
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [day (await (scenario {:targets [1]} {:inventory h/sword :entities [(zed 1 2)]} 6))
+              night (await (scenario {:targets [1]} {:inventory h/sword :time st/night :entities [(zed 1 2)]} 6))]
+          (is (seq (attacked day)) "a zombie next to the body is attacked by day")
+          (is (empty? (attacked night)))
+          (is (= [:dark] (distinct (map :reason (events-of night :waiting))))))))))
 
 ;; ------------------------------------------------------------ pure helpers
 

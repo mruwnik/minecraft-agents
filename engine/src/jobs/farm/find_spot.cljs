@@ -7,6 +7,7 @@
             [jobs.lib.job-common :as common]
             [jobs.farm.till :as till]
             [jobs.lib.look :as look]
+            [jobs.lib.ready :as ready]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [clojure.string :as str]))
@@ -179,6 +180,8 @@
 (def target [:center :w :h])
 
 (def defaults {:spend {:job-time ::job-time-s}})
+(def safe? ready/safe-if-lit)
+(def fit? ready/fit?)
 
 (defn done?
   "Ok once spots are found (and, with :walk, the body stands at the best one); else later."

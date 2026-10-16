@@ -8,6 +8,8 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.choose :as choose]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.checks :as checks]
@@ -152,6 +154,8 @@
 
 (def target [:from :to])
 (def defaults {:spend {:job-time ::job-time-s}})
+(def safe? (ready/safe-at-by-night work-place/spot))
+(def fit? ready/fit?)
 (def can-start? (cond/and bad-args no-zones all-refused))
 (def can-run? no-zones)
 

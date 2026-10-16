@@ -12,6 +12,8 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.world :as known]))
@@ -244,6 +246,8 @@
 
 (def target [:center :radius :plan :part])
 (def defaults {:least 1})
+(def safe? (ready/safe-at-by-night work-place/spot))
+(def fit? ready/fit?)
 
 (defn problem
   "Why the call cannot start now, a cause map, or nil: no zone list read (unless :ignore-zones?), a plan that cannot be

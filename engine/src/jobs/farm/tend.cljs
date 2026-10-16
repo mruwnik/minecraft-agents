@@ -12,6 +12,8 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.standing :as standing]
             [jobs.lib.steps :as steps]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.storage :as storage]
             [jobs.farm.fertilize :as fertilize]
@@ -93,6 +95,8 @@
 
 (def target [:box :plan :part :parts])
 (def defaults {:least 1})
+(def safe? (ready/safe-at-by-night work-place/spot))
+(def fit? ready/fit?)
 
 (a/defargs settings
   {::max-cells {:default 2048 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}})
