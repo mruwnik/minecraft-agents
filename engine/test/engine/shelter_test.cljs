@@ -236,6 +236,19 @@
         (is (pos? (await (places-at-night cave-blocks))) "an open cave: sealed in where it stands")
         (is (zero? (await (places-at-night tunnel-blocks))) "its own tunnel: nothing to do")))))
 
+(deftest a-dig-at-the-end-of-its-own-closed-tunnel-is-done-at-night
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (merge tunnel-blocks {"-3,64,0" "stone" "-3,65,0" "stone" "10,64,0" "stone" "10,65,0" "stone"})
+              {:keys [eng p seen]} (setup {:time night :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]})]
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+          (core/submit! eng '(jobs.blocks.dig {:pos {:x 10 :y 64 :z 0}}) {})
+          (await (run-until-empty eng 200))
+          (is (= "air" (.-name (.blockAt p #js {:x 10 :y 64 :z 0}))) "dug")
+          (is (= [] (calls p "place")) "no dig-in")
+          (is (empty? (emitted seen :go-to.night-sheltered))))))))
+
 (deftest night-without-light-data-falls-back-to-the-seen-roof
   (is (sh/buried-by-column? (seen-fake {:time night :blocks (stone-above 2 1)})) "one seen block over the head, air above it")
   (is (not (sh/buried-by-column? (seen-fake {:time night :blocks (stone-above 5 3)}))) "air over the head")

@@ -788,12 +788,16 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home (-> lit-world (assoc :light-default [15 0])
-                                                        (update :blocks merge {"30,66,0" "stone"}))
-                                                    {:x 30 :y 64 :z 0}))]
+        (let [{:keys [eng p seen]} (await (night-at-home (-> lit-world (assoc :light-default [15 0])
+                                                             (update :blocks merge {"30,66,0" "stone"}))
+                                                         {:x 30 :y 64 :z 0}))]
           (await (core/tick! eng))
           (is (seq (st/calls p "place")) "go-to's planned cost of the dark route beats digging in: dug in")
-          (is (< (:x (st/pos-of p)) 5)))))))
+          (is (< (:x (st/pos-of p)) 5))
+          (let [[e & more] (filter #(= :night.roof-walk-declined (:kind %)) @seen)]
+            (is (empty? more) "said once")
+            (is (= [:home 8] [(:place e) (:limit e)]))
+            (is (< 8 (:seconds e)) "the quoted route cost, for a run that digs in to show why")))))))
 
 (deftest a-short-lit-route-with-one-dark-cell-is-walked
   (async done

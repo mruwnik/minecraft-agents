@@ -110,13 +110,14 @@
 (defn take-back-skip
   "Why the placed block at cell must stay: :floor (the cell under the feet), a refusal reason (another's zone, claim or
   plan: :zone :claim :footprint, or any other the rules give), :hazard (lava or fluid beside it, or nothing solid under
-  it); nil when it may be dug."
-  [c cell]
+  it), :no-tool (no carried tool harvests item: a dig would lose it); nil when it may be dug."
+  [c cell item]
   (let [p (:primitives c)
         {:keys [x y z]} (sh/feet p)
         v (access/may? (access/rules-input c {:ignore-zones? false}) :dig cell)]
     (cond
       (= [(:x cell) (:y cell) (:z cell)] [x (dec y) z]) :floor
+      (not (tools/can-harvest? p item)) :no-tool
       (and (not (:ok v)) (not= :no-zones (:reason v))) (:reason v)
       (seq (:hazards v)) :hazard)))
 
@@ -161,8 +162,8 @@
           (= :continue r) :continue
           (= :done (:kind r)) :continue
           :else (do (skip-cell! c cell :unreachable) :continue)))
-      (take-back-skip c cell)
-      (do (skip-cell! c cell (take-back-skip c cell)) :continue)
+      (take-back-skip c cell item)
+      (do (skip-cell! c cell (take-back-skip c cell item)) :continue)
       :else
       (let [_ (await (tools/equip-for! c item {:fast true}))
             r (await (tidy/dig! c cell))]

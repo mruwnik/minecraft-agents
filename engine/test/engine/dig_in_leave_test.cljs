@@ -304,6 +304,16 @@
           (is (every? #{:zone :refused} (mapv :reason (emitted seen :dig-in.take-back-skipped))))
           (is (seq (emitted seen :dig-in.take-back-skipped))))))))
 
+(deftest take-back-without-a-harvesting-tool-leaves-the-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:blocks (assoc (ground) "3,64,0" "cobblestone") :inventory []})]
+          (remember-cells! eng [[[3 64 0] "cobblestone"]])
+          (await (leave-at-dawn! s))
+          (is (= "cobblestone" (block-at p [3 64 0])) "a dig by hand would lose it")
+          (is (= [:no-tool] (mapv :reason (emitted seen :dig-in.take-back-skipped)))))))))
+
 (deftest take-back-false-leaves-the-blocks
   (async done
     (tu/run-async done

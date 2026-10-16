@@ -123,17 +123,23 @@
 
 (defn ^:async cheap-route?
   "Whether go-to's planned route to place costs no more than digging in (dig-in-seconds). Cells the body has not seen read
-  dark at night, so a route dearer than that is quoted again after one look round per body cell."
+  dark at night, so a route dearer than that is quoted again after one look round per body cell. A dear route says so
+  (info night.roof-walk-declined {:place :seconds :limit}; :seconds nil: no route)."
   [c place]
   (let [cheap? #(some-> % (<= (dig-in-seconds)))
         cost (await (route-cost c place))
-        cell (sh/feet (:primitives c))]
-    (cond
-      (cheap? cost) true
-      (or (nil? cost) (= cell (:route-looked (ctx/mem c)))) false
-      :else (do (ctx/update-mem! c assoc :route-looked cell)
-                (await (sense/look-round! c []))
-                (boolean (cheap? (await (route-cost c place))))))))
+        cell (sh/feet (:primitives c))
+        cost (if (or (cheap? cost) (nil? cost) (= cell (:route-looked (ctx/mem c))))
+               cost
+               (do (ctx/update-mem! c assoc :route-looked cell)
+                   (await (sense/look-round! c []))
+                   (await (route-cost c place))))]
+    (or (cheap? cost)
+        (do (ctx/emit! c :night.roof-walk-declined :info
+                       {:place (:name place) :seconds cost :limit (dig-in-seconds)
+                        :text (str "the walk to " (name (:name place)) (if cost (str " costs " (js/Math.round cost) " s") " has no route")
+                                   ", more than digging in (" (dig-in-seconds) " s)")})
+            false))))
 
 (defn ^:async roofed-place!
   "The nearest of places (roofed-places-in, nearest first) reached over a route no dearer than digging in (cheap-route?), as {:name :pos}, or
