@@ -60,9 +60,14 @@
 
 (defn slug [id] (subs id (inc (.indexOf id "/"))))
 
-(defn tokens [text]
-  (into #{} (comp (map #(str/replace % #"[-_]+$" "")) (remove str/blank?))
-        (str/split (str/lower-case (or text "")) #"[^a-z0-9_/-]+")))
+(defn tokens
+  "Words of a plan text; a fixture path and its .edn suffix are cut off, so engine/fixtures/world/a.edn/x reads a/x."
+  [text]
+  (into #{} (comp (map #(str/replace % #"[-_/]+$" "")) (remove str/blank?))
+        (-> (str/lower-case (or text ""))
+            (str/replace #"(?:[\w./-]*/)?fixtures/world/" "")
+            (str/replace #"\.edn\b" "")
+            (str/split #"[^a-z0-9_/-]+"))))
 
 (defn case-plan-lines
   "The lines under each note's 'Live plan (cases):' heading, up to the next blank line; empty when no note has one."
@@ -86,11 +91,13 @@
                            (if (seq notes) notes (if (seq from-live) from-live lines)))))))
 
 (defn missing-cases
-  "The refs (file/case, case may be cut short) on a card's 'Live plan (cases):' lines that match no case of the run."
+  "The refs (file/case, case may be cut short) on a card's 'Live plan (cases):' lines that name a fixture file of the run but match none of its cases; other slashed tokens are no case refs."
   [{:keys [plan-notes]} cases]
-  (let [ids (map (comp str/lower-case :id) cases)]
+  (let [ids (map (comp str/lower-case :id) cases)
+        files (into #{} (map :file) cases)]
     (vec (remove (fn [r] (some #(str/starts-with? % r) ids))
-                 (filter #(str/includes? % "/") (mapcat tokens (case-plan-lines plan-notes)))))))
+                 (filter #(and (str/includes? % "/") (files (first (str/split % #"/"))))
+                         (mapcat tokens (case-plan-lines plan-notes)))))))
 
 (defn named-cases
   "Plan text + all classified cases -> the cases the plan names. A fixture token alone names all its cases; fixture/slug (slug may be cut short) or a bare slug of a named fixture's case narrows it to those."

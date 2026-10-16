@@ -151,3 +151,14 @@
 (deftest only-lines-under-the-live-plan-heading-name-cases
   (is (= ["a/x" "b/w"] (map :id (t/named-cases (t/card-plan-text {:title "mentions b/f" :plan-notes [cases-note]})
                                               (t/classify [(ok "a/x") (ok "a/z") (ok "b/w") (ok "b/f")] []))))))
+
+(deftest plan-tokens-that-are-no-fixture-case-are-not-missing
+  (let [note "Live plan (cases):\nengine/fixtures/world/a.edn/x\nb.edn/\nunit/integration/review\nengine/fixtures/world/b.edn\nnot-a-fixture/case"
+        r (t/triage {:results [(ok "a/x") (ok "b/w") (ok "b/f")] :previous []
+                     :cards [{:id "c1" :column "live" :title "one" :commits [] :plan-notes [note]}]
+                     :bugs [] :ancestor? (constantly true)})
+        card (first (:cards r))]
+    (is (= [] (:missing card)))
+    (is (= ["c1"] (:tick r)))
+    (is (= ["a/x" "b/f" "b/w"] (sort (map :id (t/named-cases (t/card-plan-text {:plan-notes [note]})
+                                                           (t/classify [(ok "a/x") (ok "b/w") (ok "b/f")] []))))))))
