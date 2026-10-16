@@ -173,7 +173,10 @@ test('dig of a fluid cell says it is not a block: water and lava are not dug', a
 })
 
 test('plain results are plain objects', async () => {
-  const { p } = rig(world)
+  // a loaded machine stalls the event loop past a scaled bound; the stall is injected so the case is deterministic
+  const { p, bot } = rig(world, 1)
+  const look = bot.look
+  bot.look = (...a) => { for (const end = Date.now() + 30; Date.now() < end;); return look(...a) }
   const r = await p.look('t1', { yaw: 1, pitch: 0 })
   assert.deepEqual(r, { status: 'ok' })
 })
