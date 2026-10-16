@@ -9,7 +9,6 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
             [jobs.lib.shelter :as sh]
-            [jobs.lib.shore :as shore]
             [jobs.lib.util :as u]
             [jobs.lib.foods :as foods]
             [jobs.survival.eat :as eat]
@@ -39,7 +38,7 @@
   :collect  Harvest items lying within 8 blocks (collect-drops).
   :hunt  The nearest passive food animal within :hunt-radius (combat.attack, then collect-drops).
   :crops  Mature crops, sweet berry bushes or melons within :hunt-radius (blocks.dig).
-  :fish  Nothing left: with a fishing rod carried and a bank beside seen water two deep within ::fish-radius (48), once per job it fishes two (jobs.food.fish) and eats or cooks them.
+  :fish  Nothing left: with a fishing rod carried, once per job it fishes two (jobs.food.fish, which looks for a bank beside water within ::fish-radius (48)) and eats or cooks them.
   :pen   The surplus of its own pens: an animal in a zone or plan of its own in sight, else it walks (go-to) to the
          nearest zone or plan of its own within :source-radius it has not visited in this job and hunts there (the
          same keep rules; the kill's rule is :own-pen). Its stock is its reserve: taken after the wild food in reach, before fishing and the search.
@@ -367,20 +366,17 @@
                                     (when (:why res) (str ", " (name (:why res))))))
               (when (= :done (:kind e)) :again))))))))
 
-(defn fish-spot?
-  "Whether a fishing rod is carried and a bank beside seen water two deep lies within ::fish-radius."
+(defn rod-carried?
+  "Whether a fishing rod is carried: jobs.food.fish itself looks for a bank beside seen water two deep within ::fish-radius."
   [c]
-  (let [p (:primitives c)]
-    (boolean (and (some #(= "fishing_rod" (:name %)) (u/inventory p))
-                  (some #(= "water" (u/seen-name p (update (:water %) :y dec)))
-                        (shore/spots p (u/self-pos c) {:radius (settings/get settings ::fish-radius)}))))))
+  (boolean (some #(= "fishing_rod" (:name %)) (u/inventory (:primitives c)))))
 
 (defn ^:async fish!
   "With nothing else to do, a rod carried and a bank in sight: jobs.food.fish for two fish, once per job (:fished), not at
   night unless starving with no danger near. :again when it caught any (they are eaten or cooked next), :continue while
   the child waits on the world, else nil."
   [c]
-  (when (and (not (:fished (ctx/mem c))) (not (night-blocks-search? c)) (fish-spot? c))
+  (when (and (not (:fished (ctx/mem c))) (not (night-blocks-search? c)) (rod-carried? c))
     (let [e (await (child/run!* c :fish 'jobs.food.fish {:count 2 :least 1 :radius (settings/get settings ::fish-radius) :fetch false} {:max-calls 1}))]
       (if (= :continue e)
         :continue

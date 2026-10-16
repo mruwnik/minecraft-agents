@@ -1007,6 +1007,15 @@
           (is (> (food p) 3) "ate the catch")
           (is (empty? (calls p "attack"))))))))
 
+(deftest water-not-yet-seen-with-a-rod-is-looked-for-before-giving-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (fishing-world [{:name "fishing_rod" :count 1}]))
+              _ (tu/seeing-after-look p)]
+          (await (one-round! eng {:explore false}))
+          (is (pos? (count (calls p "fish"))) "looked around, then cast"))))))
+
 (deftest without-a-rod-or-water-in-sight-it-does-not-fish
   (async done
     (tu/run-async done
