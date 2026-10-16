@@ -16,7 +16,7 @@
   "Pick where a :w x :h farm would go. Ranks patches by flatness first, then water within 4,
   open sky and nearness to :center. It tries patches nearest-first and stops once :limit flat open-sky ones are found (with water within 4, when water is in range).
   A patch of 8 or more is tried at every fourth corner. Reads blocks only: it never digs or marks anything.
-  A scan reads at most about 30000 blocks, then settles for the best spots so far.
+  A scan reads at most about 45000 blocks, then settles for the best spots so far.
   With :walk true it then walks to the best spot (a go-to child).
   Ends with data {:spot pos-or-nil :spots [...] :walked bool}: done with the spots, nothing-possible :none (no patch found)
   or :unreachable (spots found, the walk failed; :walked false). :spots best first up to :limit, each {:pos :score :level :work
@@ -86,7 +86,7 @@
 
 (def max-reads
   "blockAt reads one attempt may spend on scanning (a cut and restart keeps the count); then it settles for the best spots found."
-  30000)
+  45000)
 
 (defn sky-extra [] (settings/get settings ::sky-extra))
 
@@ -130,20 +130,22 @@
   "Scan patches ring by ring (nearest the centre first) from (:next-ring state)
   until the read count reaches budget, the last ring is done, or :limit good
   spots are in hand (the ring it is in is finished first). Returns {:next-ring
-  :found :done :reads}; found is the best :limit spots so far. Caches live within
-  this call."
-  [p {:keys [w h range depth limit] :as a} from {:keys [next-ring found]} budget]
+  :found :done :reads :cache}; found is the best :limit spots so far. The column
+  caches (:cache) are passed back in the state, so a later slice reads no column twice."
+  [p {:keys [w h range depth limit] :as a} from {:keys [next-ring found cache]} budget]
   (let [reads (volatile! 0)
         name-fn (fn [pos] (vswap! reads inc) (u/seen-name p pos))
         waters (->> (look/seen-blocks p {:names ["water"] :radius (+ range w h 4) :max 4096 :live? true})
                     (into #{} (map (fn [{{:keys [x y z]} :pos}] [x y z]))))
-        memo (fn [f] (let [cache (volatile! {})]
-                       (fn [& k] (if-let [e (find @cache k)]
-                                   (val e)
-                                   (let [r (apply f k)] (vswap! cache assoc k r) r)))))
-        top-of (memo (fn [x z] (surface/column-top name-fn x z (:y from) depth)))
-        sky-of (memo (fn [x z t] (sky-above? name-fn x z t (:y from) depth)))
-        wet? (memo (fn [x z y] (hydrated? waters x y z)))
+        tops (volatile! (:tops cache {}))
+        skies (volatile! (:skies cache {}))
+        memo (fn [store f]
+               (fn [& k] (if-let [e (find @store k)]
+                           (val e)
+                           (let [r (apply f k)] (vswap! store assoc k r) r))))
+        top-of (memo tops (fn [x z] (surface/column-top name-fn x z (:y from) depth)))
+        sky-of (memo skies (fn [x z t] (sky-above? name-fn x z t (:y from) depth)))
+        wet? (fn [x z y] (hydrated? waters x y z))
         fx (:x from) fz (:z from)
         by-ring (corners-by-ring a from)
         rings (sort (keys by-ring))
@@ -168,7 +170,7 @@
                          vec)]
           (cond
             (and (= limit (count found)) (every? (partial good? (seq waters)) found)) {:next-ring (inc r) :found found :done true :reads @reads}
-            (>= @reads budget) {:next-ring (inc r) :found found :done false :reads @reads}
+            (>= @reads budget) {:next-ring (inc r) :found found :done false :reads @reads :cache {:tops @tops :skies @skies}}
             :else (recur (rest rs) found)))))))
 
 (defn scan
@@ -228,7 +230,7 @@
         spent (+ (:reads state 0) (:reads r))]
     (if (or (:done r) (>= spent max-reads))
       (finish-scan! c a from (:found r))
-      (do (ctx/update-mem! c assoc :scan (assoc (select-keys r [:next-ring :found]) :from from :reads spent))
+      (do (ctx/update-mem! c assoc :scan (assoc (select-keys r [:next-ring :found :cache]) :from from :reads spent))
           :again))))
 
 (defn water-unseen?
