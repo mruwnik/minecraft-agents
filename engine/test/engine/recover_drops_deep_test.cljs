@@ -167,4 +167,5 @@
           (core/submit! eng job {})
           (await (run-until-empty eng 120))
           (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason])) (pr-str (recovered eng)))
-          (is (= 1 (count (filter #(= :recover-drops.deep (:kind %)) @seen)))))))))
+          (is (= 1 (count (filter #(= :recover-drops.deep (:kind %)) @seen))))
+          (is (re-find #":no-tool \(no pickaxe could be got\)" (:detail (recovered eng))) (pr-str (recovered eng))))))))

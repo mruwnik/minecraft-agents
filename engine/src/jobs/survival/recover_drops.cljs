@@ -449,7 +449,8 @@
               (not (ctx/alive? c)) :continue
               (and (= :continue r) (< n (child/default-max-calls))) (do (await (pace/pace!)) (recur (inc n)))
               (= :continue r) (decline! c :unreachable "the stair down to the pile is waiting on the world" {:pos pos})
-              :else (give-up! :unreachable (str "no stair down to the pile: " (pr-str (contract/cause-key r)))))))))))
+              :else (give-up! :unreachable (str "no stair down to the pile: " (pr-str (contract/cause-key r))
+                                                    (when (get-in r [:cause :fetch]) " (no pickaxe could be got)"))))))))))
 
 (defn ^:async trip!
   "The decision, then the walk and the collect passes of a trip inside its window."
