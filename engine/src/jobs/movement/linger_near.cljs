@@ -1,5 +1,6 @@
 (ns jobs.movement.linger-near
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -40,6 +41,9 @@
   {::job-time-s {:default 3600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (defn budget-s [] (settings/get settings ::job-time-s))
+
+(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
+(def fit? ready/fit?)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

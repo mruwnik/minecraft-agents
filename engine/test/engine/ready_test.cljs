@@ -5,7 +5,13 @@
             [engine.registry :as registry]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
+            [jobs.debug.walk-plan :as walk-plan]
+            [jobs.explore.search :as search]
             [jobs.lib.ready :as ready]
+            [jobs.movement.boat-drive :as boat-drive]
+            [jobs.movement.follow :as follow]
+            [jobs.movement.linger-near :as linger-near]
+            [jobs.movement.mount :as mount]
             [jobs.lib.shelter :as sh]
             [jobs.lib.danger :as danger]))
 
@@ -122,7 +128,7 @@
 (deftest an-unseen-cell-asks-for-a-look-at-it
   (let [s ((ready/safe-at (constantly outside)) (ctx-of open-night))]
     (is (= :look (first s)))
-    (is (= [outside] (:look-at (nth s 2))))))
+    (is (= [[15 64 0]] (:look-at (nth s 2))))))
 
 (def escapes
   '[respond-to-hostile fight-back block-arrow-gap unwedge breathe extinguish night dig-niche])
@@ -134,3 +140,32 @@
     (is (= [ready/ok ready/ok] ((juxt :safe? :fit?) d)) (str j)))
   (doseq [j healers :let [d (get registry/jobs (symbol (str "jobs.survival." j)))]]
     (is (= [ready/threatened ready/ok] ((juxt :safe? :fit?) d)) (str j))))
+    (is (= [[15 64 0]] (:look-at (nth s 2))))))
+
+(defn bound
+  "The kind of a job's checker over world with args."
+  [checker world args]
+  (first (checker (assoc (ctx-of world) :args args))))
+
+(deftest sweep-c-jobs-bind-the-checker-their-audit-row-names
+  (are [checker world args expected] (= expected (lit 0 15 #(bound checker world args)))
+    search/safe? open-night {} :later
+    follow/safe? open-night {} :later
+    boat-drive/safe? open-night {:pos [15 64 0]} :later
+    boat-drive/safe? (assoc open-night :time st/noon) {:pos [15 64 0]} :ok
+    walk-plan/safe? open-night {:to [15 64 0]} :later
+    linger-near/safe? open-night {:pos [15 64 0]} :later
+    mount/safe? open-night {} :later
+    mount/safe? (assoc open-night :time st/noon) {} :ok
+    search/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 5}} {} :later
+    follow/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 5}} {} :later
+    linger-near/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 5}} {} :later
+    mount/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 5}} {} :ok))
+
+(deftest safe-at-by-night-waits-for-an-unseen-place-only-at-night
+  (are [world expected] (= expected (kind (ready/safe-at-by-night (constantly outside)) world))
+    (assoc open-night :time st/noon) :ok
+    night-hut :later))
+
+(deftest explore-search-underground-at-night-is-ok
+  (is (= :ok (bound search/safe? tunnel {}))))

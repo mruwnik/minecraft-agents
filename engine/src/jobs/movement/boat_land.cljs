@@ -1,5 +1,6 @@
 (ns jobs.movement.boat-land
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
@@ -71,6 +72,9 @@
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
+
+(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
+(def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

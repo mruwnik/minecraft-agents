@@ -1,5 +1,6 @@
 (ns jobs.explore.search
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.ready :as ready]
+            [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
             [engine.contract :as contract]
@@ -87,6 +88,9 @@
 (defn reach [] (settings/get settings ::reach))
 (defn descent [] (settings/get settings ::descent))
 (def target [:target])
+
+(def safe? ready/safe-if-lit)
+(def fit? ready/fit?)
 
 (def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 

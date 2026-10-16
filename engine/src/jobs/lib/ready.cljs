@@ -62,7 +62,16 @@
   (with-meta (fn [c] (contract/all [(threatened c) (exposed c (f c))]))
     {::exposure (fn [c] (exposed c (f c)))}))
 
+(defn safe-at-by-night
+  "The checker of a job that goes to the place (f c): at night safe-at it, by day only not threatened (an unseen place's
+  light is no reason to wait)."
+  [f]
+  (let [at (safe-at f)]
+    (with-meta (fn [c] (if (sh/night? (:primitives c)) (at c) (threatened c))) (meta at))))
+
 (def safe-here "The checker of a job that stays put." (safe-at (constantly nil)))
+
+(def safe-here-by-night "safe-at-by-night where the job stands." (safe-at-by-night (constantly nil)))
 
 (defn dark-sky
   "Later :dark at night above ground."

@@ -227,7 +227,7 @@
         day (tu/fake {:floor tu/walk-floor :time st/noon :self {:pos {:x 0 :y 64 :z 0}}})
         seen (fn [p block sky] (with-redefs [sh/block-light-at (constantly block) sh/sky-light-at (constantly sky) sh/walk-leaves-shelter? (constantly nil)]
                                  (cost/exposure p {:x 15 :y 64 :z 0})))]
-    (is (= {:chance (cost/spawn-chance [15 64 0]) :lowered-by #{:look} :look-at [{:x 15 :y 64 :z 0}]}
+    (is (= {:chance (cost/spawn-chance [15 64 0]) :lowered-by #{:look} :look-at [[15 64 0]]}
            (cost/exposure night {:x 15 :y 64 :z 0}))
         "an unseen cell is guessed dark, and looking is what lowers that")
     (is (= {:chance 0.0 :lowered-by #{}} (seen night 8 15)) "a seen lit cell spawns nothing")
@@ -241,5 +241,5 @@
 
 (deftest exposure-floors-the-goal-and-takes-a-column-at-the-feet-height
   (let [p (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}}})]
-    (is (= {:chance (cost/spawn-chance [15 64 0]) :lowered-by #{:look} :look-at [{:x 15 :y 64 :z 0}]}
+    (is (= {:chance (cost/spawn-chance [15 64 0]) :lowered-by #{:look} :look-at [[15 64 0]]}
            (cost/exposure p {:x 15.5 :z 0.2})))))

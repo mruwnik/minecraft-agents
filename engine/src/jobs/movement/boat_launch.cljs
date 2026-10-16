@@ -1,5 +1,6 @@
 (ns jobs.movement.boat-launch
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -43,6 +44,9 @@
    :radius {:doc "how far to look for water or a boat" :spec (a/num-in 0 nil) :default 12}})
 
 (def target [:action :pos :id])
+
+(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
+(def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

@@ -1,5 +1,6 @@
 (ns jobs.movement.cross-water
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -156,6 +157,9 @@
     (and (not (vehicle/mounted? (:primitives c))) (not (water-in-sight? c)))
     (checks/unseen-later c :not-water "no water in sight to launch a boat on")
     :else (contract/ok :start "a shore to cross to")))
+
+(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
+(def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

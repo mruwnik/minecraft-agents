@@ -1,5 +1,6 @@
 (ns jobs.explore.look
-  (:require [engine.args :as a] [engine.entity-observations :as obs] [jobs.lib.util :as u]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a] [engine.entity-observations :as obs] [jobs.lib.util :as u]
             ["minecraft-data" :as minecraft-data] [engine.contract :as contract] [engine.ctx :as ctx] [engine.game :as game] [jobs.lib.look :as look] [jobs.lib.places :as places]))
 (def doc
   "Observe the nearby blocks and entities the body has seen, once, without moving or changing the world. :at inspects one exact
@@ -19,6 +20,9 @@
   {::job-time-s {:default 10 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
 
 (def target [:at])
+
+(def safe? ready/safe-here-by-night)
+(def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 (defn done? "An act with no goal state: a look is never done before it is made." [_c]

@@ -1,5 +1,6 @@
 (ns jobs.movement.boat-drive
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.settings :as settings]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -30,6 +31,9 @@
    :range {:doc "done when the boat is within this many blocks (horizontally) of the middle of the cell" :spec (a/num-in 0 nil) :default 1.5}})
 
 (def target [:pos])
+
+(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
+(def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

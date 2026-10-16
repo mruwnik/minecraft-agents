@@ -1,5 +1,6 @@
 (ns jobs.movement.follow
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
@@ -43,6 +44,9 @@
 (a/defargs settings
   {::job-time-s {:default 3600 :doc "Seconds one call may take before it gives up (:limit-reached), pauses not counted." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the idle pauses beside the player included (:limit-reached)." :spec (a/num-in 0 nil)}})
+
+(def safe? ready/safe-if-lit)
+(def fit? ready/fit?)
 
 (def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 

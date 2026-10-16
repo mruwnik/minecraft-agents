@@ -113,7 +113,7 @@
   what lowers it, data the readiness checks read (empty: nothing foreseeable does, so never). A walk that leaves shelter
   (sh/walk-leaves-shelter?, with the body's latest :shelter entry data when given) meets the open-sky night figure, any
   other the spawn-chance at `to` from the light p has seen; :dawn lowers a chance that night alone puts there. A cell p
-  has no light data of is guessed dark and lowered by #{:look}, with :look-at [to]. Lava and the like are not spawn
+  has no light data of is guessed dark and lowered by #{:look}, with :look-at [[x y z]]. Lava and the like are not spawn
   chance. A crude stub."
   ([p to] (exposure p to nil))
   ([p to shelter]
@@ -127,7 +127,7 @@
          [light night?] (if leaves? [open-sky true] [seen (sh/night? p)])
          chance (spawn-chance cell {:light light :night? night?})]
      (if (and (not leaves?) (nil? (seen cell)))
-       {:chance chance :lowered-by #{:look} :look-at [to]}
+       {:chance chance :lowered-by #{:look} :look-at [cell]}
        {:chance chance
         :lowered-by (if (and night? (> chance (spawn-chance cell {:light light :night? false}))) #{:dawn} #{})}))))
 (defn per-dark [] (value/per-dark))

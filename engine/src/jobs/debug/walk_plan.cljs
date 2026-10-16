@@ -1,5 +1,6 @@
 (ns jobs.debug.walk-plan
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [clojure.set :as set]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
@@ -34,6 +35,9 @@
 
 (a/defargs settings
   {::job-time-s {:default 300 :doc "Seconds one walk may take." :spec (a/int-in 1 nil)}})
+
+(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:to (:args c))))))
+(def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
