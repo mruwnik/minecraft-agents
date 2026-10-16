@@ -105,8 +105,8 @@ const readGrants = () => {
     try { return [{ ...JSON.parse(fs.readFileSync(path.join(grantDir(), f), 'utf8')), pid: Number(f.split('.')[0]), file: f }] } catch { return [] }
   })
 }
-// Resident MB of pid and all its descendants, from /proc (0 where unreadable).
-const treeRssMb = (root) => {
+// {kids, rss} of every process, read from /proc once per gate check (rss counts shared pages per process, so a tree is slightly overcounted).
+const procTable = () => {
   const kids = new Map()
   const rss = new Map()
   for (const p of fs.readdirSync('/proc').filter((f) => /^\d+$/.test(f))) {
@@ -117,6 +117,10 @@ const treeRssMb = (root) => {
       rss.set(Number(p), Number(fs.readFileSync(`/proc/${p}/statm`, 'utf8').split(' ')[1]) * 4096 / 1048576)
     } catch { /* process gone */ }
   }
+  return { kids, rss }
+}
+// Pure: resident MB of root and all its descendants in a procTable.
+export const treeRssMb = ({ kids, rss }, root) => {
   const sum = (pid) => (rss.get(pid) ?? 0) + (kids.get(pid) ?? []).reduce((a, k) => a + sum(k), 0)
   return sum(root)
 }
@@ -125,7 +129,9 @@ const currentReserved = () => {
   const grants = readGrants()
   const live = grants.filter((g) => Date.now() - g.t < rampMs() && pidAlive(g.pid))
   for (const g of grants) if (!live.includes(g)) fs.rmSync(path.join(grantDir(), g.file), { force: true })
-  return reservedMb(live, Date.now(), rampMs(), pidAlive, treeRssMb)
+  if (!live.length) return 0
+  const table = procTable()
+  return reservedMb(live, Date.now(), rampMs(), pidAlive, (pid) => treeRssMb(table, pid))
 }
 // Short mkdir lock so check and grant are one step across waiters; a lock older than 10 s is stale.
 const withGate = async (f) => {

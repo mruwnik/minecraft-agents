@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync, spawn } from 'node:child_process'
-import { candidateSlots, capDuringSweep, decide, freeForLight, hasHeavyMarker, loadConfig, reservedMb, usableSlots } from './res-slot.mjs'
+import { candidateSlots, capDuringSweep, decide, freeForLight, hasHeavyMarker, loadConfig, reservedMb, treeRssMb, usableSlots } from './res-slot.mjs'
 
 const base = { freeSlots: 1, availableMb: 10000, needMb: 700, floorMb: 6144, waitedMs: 0, maxWaitMs: 540000 }
 
@@ -356,4 +356,11 @@ test('integration: a heavy holder does not use up the light cap during a sweep',
     assert.equal(run(['t', '--', 'echo', 'ran'], env).status, 0, 'one light run fits beside the heavy holder')
   } finally { process.kill(-holder.pid, 'SIGKILL') }
   fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('treeRssMb: sums the root and all descendants of a process table, ignoring others', () => {
+  const table = { kids: new Map([[1, [2, 3]], [2, [4]], [9, [10]]]), rss: new Map([[1, 10], [2, 20], [3, 30], [4, 40], [9, 500], [10, 500]]) }
+  assert.equal(treeRssMb(table, 1), 100)
+  assert.equal(treeRssMb(table, 2), 60)
+  assert.equal(treeRssMb(table, 77), 0)
 })
