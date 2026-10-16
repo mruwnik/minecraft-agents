@@ -56,10 +56,10 @@
   Ready: safe? and fit? always ok: it eats carried food whatever is near. Its walks and searches run under :checks (job-safe-or-starving); a merely hungry body waits for dawn in the open (intended).
   Fragile (health at or below foods/::fragile-health, 6) with no food carried, it walks out (a search, a source, its pen,
   an animal, a furnace to cook at) only on a calm day (jobs.lib.dawn/calm?) and not past known hostiles whose route
-  danger (jobs.lib.cost/route-danger) is its health or more; with nothing else to try it then ends condition-failed
-  :too-dangerous (no :hungry written; a :food-too-dangerous entry) and the hungry trigger waits for a calm day
+  danger (jobs.lib.cost/route-danger) is its health or more; with nothing else to try it writes a :food-too-dangerous entry (no :hungry) and yields (a reflex ends condition-failed
+  :too-dangerous); can-run? is then :later and the hungry trigger waits for a calm day
   (jobs.survival.get-food.risk). Not shut in a shelter, it first looks around from where it stands (once per place) so hostiles outside its view count. For ::danger-rest-s (300) after that, while still fragile, above food 0, with nothing to eat, a call
-  ends so at once (condition :too-dangerous) without acting, so the hungry reflex backs off.
+  is :later :too-dangerous (can-start?, can-run?) without acting, so the hungry reflex backs off.
   Wheat is never harvested. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own (but for the :pen way) or inside a closed enclosure (:spare-pens, default true), kinds in :off-limits (default the jobs.lib.animal-spare setting), and the last :keep-adults (2) adults of a kind in sight (for breeding; never hunted, even when starving, unless ::kept-lifted-below lifts it) are never hunted (:ignore-zones? lifts the others' zone only). Each animal attacked is a food.killed info with its name, cell, adults counted, :keep-adults, food and the rule that allowed it; the data carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
   (one get-food.skipped warning). A crop in another's zone or claim is dug only when no other is (one
   get-food.trespass-last-resort warning). :ignore-zones? lifts both.
@@ -274,6 +274,8 @@
 
 (def can-start? (cond/and no-food-found too-dangerous))
 
+(def can-run? too-dangerous)
+
 (defn done?
   "Fed (fed?); the food points still wanted."
   [c]
@@ -471,6 +473,8 @@
                   (:too-dangerous (ctx/mem c))
                   (let [why (str "hungry (food " (food-level c) "), " (:too-dangerous (ctx/mem c)))]
                     (ctx/remember! c :food-too-dangerous {:why why} danger-policy)
-                    (ctx/end c :condition-failed {:reason :too-dangerous :why why} {:food (food-level c)}))
+                    (if (:reflex c)
+                      (ctx/end c :condition-failed {:reason :too-dangerous :why why} {:food (food-level c)})
+                      :continue))
                   (gave-up-recently? c) (ctx/end c :condition-failed (no-food-cause c) {:food (food-level c)})
                   :else (none! c)))))))
