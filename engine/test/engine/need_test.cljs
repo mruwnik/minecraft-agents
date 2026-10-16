@@ -176,3 +176,17 @@
       (fn ^:async t []
         (let [r (await (run! #(need/item! % "coal" 1 {:minutes 2}) nil 1))]
           (is (= {:job-time 120} (:spend (first @(:obtain r))))))))))
+
+(deftest a-different-need-in-the-same-slot-starts-the-child-afresh
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [round (atom 0)
+              mems (atom [])
+              step (fn [c]
+                     (swap! mems conj (:start (ctx/mem c)))
+                     (ctx/update-mem! c assoc :start {:have 0 :target 26})
+                     :continue)]
+          (await (run! (fn [c] (need/item! c (if (= 1 (swap! round inc)) "cobblestone" "birch_planks") 16))
+                       {:obtain-step step} 2))
+          (is (= [nil nil] @mems) "the second need does not inherit the first one's booked target"))))))

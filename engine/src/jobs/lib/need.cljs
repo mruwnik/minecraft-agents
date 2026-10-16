@@ -156,6 +156,8 @@
   (let [slot (or slot :need)
         args (merge (assoc args :explore (boolean explore)) (child-limits job {:how how :minutes minutes}))
         want [job args]
+        _ (when (not= [job args] (get-in (ctx/mem c) [:need/slot-want slot]))
+            (ctx/update-mem! c #(-> (update % :children dissoc slot) (assoc-in [:need/slot-want slot] [job args]))))
         fresh? (nil? (get-in (ctx/mem c) [:children slot]))]
     (if (and fresh? (repeat-done? c want))
       (contract/ending :condition-failed (assoc wanted :reason cause-reason :why :not-solved) nil)
