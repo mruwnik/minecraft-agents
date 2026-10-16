@@ -45,6 +45,7 @@ export const SPECS = {
   'prim/fish-reach': { default: 6, spec: ['num-in', 0, null], doc: "How far from the eye the water cell of a cast may be, in blocks." },
   'prim/fish-pickup-ms': { default: 2500, spec: ['int-in', 0, null], doc: "How long after the reel the catch is waited for in the inventory, in ms." },
   'prim/bucket-wait-s': { default: 2, spec: ['int-in', 0, null], doc: "How long a bucket use waits for the world to change, in seconds." },
+  'prim/place-consume-wait-ms': { default: 300, spec: ['int-in', 0, null], doc: "How long place waits for the carried count to drop after the block is placed (slot updates can lag), in ms." },
   'use-on/reach': { default: 4.5, spec: ['num-in', 0, null], doc: "Reach for using an item on a block, in blocks." },
   'use-on/poll-ms': { default: 50, spec: ['int-in', 1, null], doc: "How often use-on polls the world, in ms." },
   'use-on/wait-ms': { default: 1000, spec: ['int-in', 0, null], doc: "How long use-on waits for the block change, in ms." },

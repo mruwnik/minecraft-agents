@@ -232,6 +232,8 @@ export function createDig (env) {
       if (there && !isAir(there.name) && !isReplaceable(there.name) && there.name !== 'water' && there.name !== 'lava') return { status: 'occupied', block: there.name }
       const item = inventory().find(i => i.name === a.item)
       if (!item) return { status: 'no-item' }
+      const carried = () => inventory().filter(i => i.name === a.item).reduce((sum, i) => sum + i.count, 0)
+      const carriedBefore = carried()
       const support = a.click ? clickSupport(a.click, p) : supportFor(p)
       if (!support) return { status: 'no-support' }
       if (dist(eye(), center(p)) > setting('prim/reach')) return { status: 'unreachable' }
@@ -247,6 +249,12 @@ export function createDig (env) {
         const near = refusal.entities.map(e => `${e.name ?? e.kind}#${e.id}`).join(', ') || 'none'
         const at = v => `${v.x},${v.y},${v.z}`
         return { status: 'failed', reason: `${err.message} (against ${at(refusal.against)} face ${at(refusal.face)}, body at ${at(refusal.stand)}, entities near the cell: ${near})`, refusal }
+      }
+      // The inventory update for the placed item can trail the block; the act's after-snapshot (the tally) must see it.
+      const deadline = Date.now() + setting('prim/place-consume-wait-ms') * timeScale
+      while (carried() >= carriedBefore && Date.now() < deadline) {
+        await sleepMs(setting('prim/poll-ms') * timeScale)
+        ctx.alive()
       }
       const now = env.bot.blockAt(vec(p))
       return { status: 'placed', block: a.item, placed: { name: now?.name, properties: now ? stateProperties(now) : {} } }

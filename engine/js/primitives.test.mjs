@@ -1709,6 +1709,14 @@ test('a call whose owner is cut while waiting for the reconnect rejects with cut
   assert.deepEqual(acted(bots[1]), [])
 })
 
+test('place resolves only once the carried count has dropped (the slot update trails the block)', async () => {
+  const items = [{ name: 'cobblestone', count: 3, slot: 36 }]
+  const { p } = rig({ blocks: { '1,63,0': 'stone' }, items, onPlace: () => { setImmediate(() => { items[0].count -= 1 }) } })
+  const result = await p.place('t1', { pos: at(1, 64, 0), item: 'cobblestone' })
+  assert.equal(result.status, 'placed')
+  assert.equal(items[0].count, 2)
+})
+
 // ---- replaceable cells: the game replaces them, so place treats them as free ----
 
 const replaceable = ['fire', 'soul_fire', 'short_grass', 'tall_grass', 'grass', 'snow', 'leaf_litter', 'fern', 'large_fern', 'dead_bush', 'vine', 'glow_lichen', 'hanging_roots']
