@@ -25,7 +25,7 @@
   [c to]
   (let [p (:primitives c)
         shelter (:data (ctx/latest c :shelter))
-        {:keys [chance lowered-by look-at]} (cost/exposure p (sh/feet p) to shelter)
+        {:keys [chance lowered-by look-at]} (cost/exposure p to shelter)
         where (place-text to)]
     (cond
       (and (sh/night? p) (sh/safe-from-night? p) (not (sh/walk-leaves-shelter? p shelter to 1)))
