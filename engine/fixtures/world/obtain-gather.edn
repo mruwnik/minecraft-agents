@@ -9,43 +9,39 @@
   :plot {:height 12 :floor "grass_block"}
   :blocks [[:set [16 0 18] "crafting_table"]]
   :body {:at [16.5 0 12.5] :settle-s 2 :effects [["resistance" 600 4]]}
-  :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]
-        [:job (jobs.items.get-tool {:item "stone_pickaxe"})]]
+  :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]]
   :limit-s 90}
  :cases
  [{:name "logs-and-stone-in-view-stone-pickaxe-made"
    :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]
             [:fill [10 4 21] [12 5 23] "oak_leaves[persistent=true]"] [:fill [11 0 22] [11 4 22] "oak_log"]
             [:fill [20 0 22] [22 1 23] "stone"]]
+   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe"})]]
    :limit-s 280
    :expect [{:event {:source :job :kind :completed} :within-s 270 :of-job true}]
    :after [[:item "stone_pickaxe" 1]]}
   {:name "logs-only-waits-naming-the-unseen-stone"
    :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]]
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]
-         [:job (jobs.items.get-tool {:item "stone_pickaxe" :explore false})]]
+   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe" :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "cobblestone (from stone)"]}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "log,"]}} :for-s 20}]
    :after [[:item "stone_pickaxe" 0] [:block [9 0 22] "oak_log"]]}
   {:name "andesite-diorite-granite-are-no-cobblestone-source"
    :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]
             [:fill [20 0 22] [20 1 23] "andesite"] [:fill [21 0 22] [21 1 23] "diorite"] [:fill [22 0 22] [22 1 23] "granite"]]
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]
-         [:job (jobs.items.get-tool {:item "stone_pickaxe" :explore false})]]
+   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe" :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "cobblestone (from stone)"]}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-source}}}]
    :after [[:item "stone_pickaxe" 0] [:item "cobblestone" 0] [:block [20 0 22] "andesite"]]}
   {:name "nothing-in-view-waits-naming-both-needs"
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]
-         [:job (jobs.items.get-tool {:item "stone_pickaxe" :explore false})]]
+   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe" :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "log, cobblestone (from stone)"]}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-source}}}]
    :after [[:item "stone_pickaxe" 0]]}
   {:name "how-without-gather-waits-no-source-with-no-gather-text"
    :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]
             [:fill [20 0 22] [22 1 23] "stone"]]
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]
-         [:job (jobs.items.get-tool {:item "stone_pickaxe" :ways #{:chest :craft} :explore false})]]
+   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe" :ways #{:chest :craft} :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:not [:contains "nothing seen to gather"]]}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-source}}}]
    :after [[:item "stone_pickaxe" 0] [:block [20 0 22] "stone"]]}]}
