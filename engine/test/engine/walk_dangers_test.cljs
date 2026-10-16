@@ -74,8 +74,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [steps (await (plan-past {} [{:mob "zombie" :id 9 :uuid "u9" :pos {:x 20.5 :y 64 :z 0.5} :ended 1}] true))]
+        (let [steps (await (plan-past {:entities [(assoc zombie :visible false)]} [{:mob "zombie" :id 9 :uuid "u9" :pos {:x 20.5 :y 64 :z 0.5} :ended 1}] true))]
           (is (>= (nearest steps) 8) (str "nearest " (nearest steps))))))))
+
+(deftest a-remembered-threat-spot-of-a-mob-the-world-no-longer-has-is-forgotten
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [steps (await (plan-past {} [{:mob "creeper" :id 9 :uuid "u9" :pos {:x 20.5 :y 64 :z 0.5} :ended 1}] true))]
+          (is (< (nearest steps) 1) (str "nearest " (nearest steps))))))))
 
 (deftest a-kept-search-is-new-once-a-danger-moved-died-or-came
   (let [pw #js {:snapshot nil :table nil :space nil}

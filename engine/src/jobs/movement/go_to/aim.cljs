@@ -232,7 +232,7 @@
   within its full-cost radius, as {:mob :mob-pos :mob-distance}, else nil."
   [c pos]
   (let [p (:primitives c)
-        spots (keep #(when-let [at (threats/rough-pos (:data %))] (assoc (:data %) :pos at)) (ctx/entries c :threat))
+        spots (threats/remembered-spots c)
         body (threats/body-of p)]
     (->> (threats/known-dangers p spots (cost/danger-opts (:args c)))
          (keep (fn [{:keys [mob close] :as d}]

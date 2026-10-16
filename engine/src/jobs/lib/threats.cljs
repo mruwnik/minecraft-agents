@@ -104,6 +104,17 @@
   (mapv (fn [e] {:key (mob-key e) :name (.-name e) :pos (danger-q/mob-pos p e)})
         (danger-q/dangers p (sensed-radius) {:ranged-radius (sensed-radius)} danger-opts)))
 
+(defn remembered-spots
+  "The places of the :threat entries of c whose mob the client still tracks, as {:pos ..} data with a :pos (a mob
+  that blew up or died is gone; a hidden one is still listed), for known-dangers."
+  [c]
+  (let [p (:primitives c)
+        listed (set (map #(.-id %) (array-seq (.entities p #js {:radius 1000 :kind "hostile" :max 1000}))))]
+    (keep #(let [d (:data %)]
+             (when (contains? listed (:id d))
+               (when-let [at (rough-pos d)] (assoc d :pos at))))
+          (ctx/entries c :threat))))
+
 (defn known-dangers
   "danger-list of the body of primitives p: sensed-mobs and the remembered :threat entries' data."
   ([p remembered] (known-dangers p remembered nil))
@@ -113,6 +124,5 @@
   "The planner's options.dangers for the body of c (JS array, nil for none): known-dangers with the :threat spots its
   flights left."
   [c]
-  (let [spots (keep #(when-let [pos (rough-pos (:data %))] (assoc (:data %) :pos pos)) (ctx/entries c :threat))
-        ds (known-dangers (:primitives c) spots (cost/danger-opts (:args c)))]
+  (let [ds (known-dangers (:primitives c) (remembered-spots c) (cost/danger-opts (:args c)))]
     (when (seq ds) (clj->js ds))))
