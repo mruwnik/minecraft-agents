@@ -200,7 +200,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen clock]} (boot "scenarios/survival.edn" {:time 14000 :floor [-30 -10 260 10] :blocks dirt-ground} 1000)
+        ;; morning comes before the pile despawns, so the pile is held; earlier at night recover-drops walks for a pile that would not last
+        (let [{:keys [eng p seen clock]} (boot "scenarios/survival.edn" {:time 21000 :floor [-30 -10 260 10] :blocks dirt-ground} 1000)
               store (:store eng)
               pile (for [i (range 3)] {:name "iron_ingot" :count 30 :slot i})]
           (mem/write! store :home {:pos {:x 200 :y 64 :z 0}} mem/place-policy)
