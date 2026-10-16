@@ -1,5 +1,6 @@
 (ns jobs.items.pick-up-loose
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.ready :as ready]
+            [clojure.string :as str]
             [jobs.lib.checks :as checks]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -28,6 +29,9 @@
    :cost {:doc "jobs.lib.cost detour-cost options (:per-block :per-climb)" :spec map? :default nil}})
 
 (def target [])
+
+(def safe? ready/safe-if-lit)
+(def fit? ready/ok)
 
 (def defaults {:least 1})
 

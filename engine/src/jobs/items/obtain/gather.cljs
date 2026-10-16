@@ -8,8 +8,7 @@
             [jobs.items.obtain.need :refer [explore-opts gather-viable? pickaxe-first? search-names tools-wanted]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
-            [jobs.items.obtain.table :refer [animal? gather-need]]
-            [jobs.lib.body :as body]))
+            [jobs.items.obtain.table :refer [animal? gather-need]]))
 
 (defn declined?
   "Whether child ending e is a refusal before it ran: a failed condition with no result of its own."
@@ -93,13 +92,6 @@
                               (:why res) (assoc :why (:why res))
                               (:coverage res) (assoc :legs (:legs (:coverage res)) :farthest (:farthest (:coverage res))))))))))
 
-(defn ^:async explore-step!
-  "explore-walk! unless the body is too hurt (jobs.lib.body/too-hurt): then :continue until it has healed."
-  [c need]
-  (if (body/too-hurt (:primitives c))
-    :continue
-    (await (explore-walk! c need))))
-
 (defn ^:async gather-step!
   "One round of the gather source: the child for the first raw item the chain lacks, until it ends."
   [c names have target]
@@ -113,7 +105,7 @@
       (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (not (animal? need)) (not (:tunnel? need))
            (or (not (seen-of c need)) (get-in (ctx/mem c) [:gather :unreachable (:key need)]))
            (< (get-in (ctx/mem c) [:explored (:key need)] 0) (max-fruitless)))
-      (await (explore-step! c need))
+      (await (explore-walk! c need))
       (and (not (get-in (ctx/mem c) [:gather :before]))
            (not (if (explore-opts c)
                   (and (or (:tunnel? need) (seen-of c need)) (= :ok (first (ctx/child-status c (gather-slot need) (:job need) (:args need)))))

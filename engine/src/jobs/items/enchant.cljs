@@ -1,5 +1,6 @@
 (ns jobs.items.enchant
-  (:require [engine.contract :as contract]
+  (:require [jobs.lib.ready :as ready]
+            [engine.contract :as contract]
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -53,6 +54,9 @@
 (defn reach [] (settings/get settings ::reach))
 
 (def target [:item :table :slot :choice])
+
+(def safe? ready/safe-here-by-night)
+(def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

@@ -12,7 +12,8 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger]
-            [jobs.lib.shelter :as sh]))
+            [jobs.lib.shelter :as sh]
+            [jobs.lib.storage :as storage]))
 
 (a/defargs settings
   {::risk-limit {:default 0.001 :spec (a/num-in 0 nil)
@@ -68,6 +69,10 @@
   [f]
   (let [at (safe-at f)]
     (with-meta (fn [c] (if (sh/night? (:primitives c)) (at c) (threatened c))) (meta at))))
+
+(def safe-at-chest
+  "The checker of a job that goes to its chest (the :chest arg or the known :chest place)."
+  (safe-at-by-night #(storage/chest-of (ctx/view %) (:args %))))
 
 (def safe-here "The checker of a job that stays put." (safe-at (constantly nil)))
 

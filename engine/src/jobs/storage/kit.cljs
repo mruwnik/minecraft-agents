@@ -1,5 +1,6 @@
 (ns jobs.storage.kit
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [clojure.string :as str]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -64,6 +65,9 @@
    ::kind-s {:default 20 :doc "Seconds a quote counts for each kind of the kit." :spec (a/num-in 0 nil)}})
 
 (def target [:chest])
+
+(def safe? ready/safe-at-chest)
+(def fit? ready/ok)
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 

@@ -250,6 +250,7 @@
               _ (advance! p 1)
               _ (await (ticks eng 2))
               _ (advance! p (* 64 200))
+              _ (swap! (fake/state p) assoc :time 1000)
               _ (swap! clock + 650000)
               _ (await (ticks eng 4))]
           (is (= 64 (get (inv-of p) "iron_ingot")) "all 64 were taken")

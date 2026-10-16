@@ -1,5 +1,6 @@
 (ns jobs.items.kitchen
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.ready :as ready]
+            [clojure.string :as str]
             [jobs.lib.checks :as checks]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -58,6 +59,9 @@
    ::food-s {:default 10 :doc "Seconds a quote counts for each raw food carried: its time in the furnace." :spec (a/num-in 0 nil)}})
 
 (def target [:stock])
+
+(def safe? (ready/safe-at-by-night #(:furnace (:args %))))
+(def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 

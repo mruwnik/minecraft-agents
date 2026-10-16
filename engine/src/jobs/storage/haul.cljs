@@ -1,5 +1,6 @@
 (ns jobs.storage.haul
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -40,6 +41,9 @@
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (def target [:from])
+
+(def safe? ready/threatened)
+(def fit? ready/ok)
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
 (defn no-source [c]

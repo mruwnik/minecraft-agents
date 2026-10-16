@@ -1,5 +1,6 @@
 (ns jobs.items.interact
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.ready :as ready]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -31,6 +32,9 @@
 (defn max-walks [] (settings/get settings ::max-walks))
 
 (def target [:id :item])
+
+(def safe? ready/safe-here-by-night)
+(def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

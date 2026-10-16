@@ -1,5 +1,6 @@
 (ns jobs.items.get-kit
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
@@ -55,6 +56,9 @@
    ::min-food {:default 20 :doc "Food points carried before the kit job starts work or a new piece." :spec (a/int-in 0 nil)}})
 
 (def target [:items])
+
+(def safe? ready/threatened)
+(def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

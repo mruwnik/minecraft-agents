@@ -1,5 +1,6 @@
 (ns jobs.items.get-tool
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             ["minecraft-data" :as minecraft-data]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -57,6 +58,9 @@
     (first (filter held names))))
 
 (def target [:block :item :kind])
+
+(def safe? ready/threatened)
+(def fit? ready/ok)
 
 (def ways [:chest :craft :gather])
 

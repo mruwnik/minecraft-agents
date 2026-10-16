@@ -1,5 +1,6 @@
 (ns jobs.items.smelt
-  (:require [jobs.lib.checks :as checks]
+  (:require [jobs.lib.ready :as ready]
+            [jobs.lib.checks :as checks]
             [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -434,6 +435,9 @@
 ;; ------------------------------------------------------------------ the contract
 
 (def target [:item])
+
+(def safe? (ready/safe-at-by-night furnace-of))
+(def fit? ready/ok)
 
 (defn default-time
   "The call's default :spend :job-time: ::job-time-s for the walk and fetch plus the furnace's cook of the count (a stack when

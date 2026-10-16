@@ -139,8 +139,8 @@
       (fn ^:async t []
         (let [s (f/start (assoc-in (ore-world {} []) [:self :health] 0.5) [f/own-zone])]
           (await (obtain! s {:item "oak_log" :count 2 :ways #{:gather} :explore true} 8))
-          (is (empty? (f/events-of s :obtain.exploring)) "no search walk at 0.5 hp")
-          (is (some #(= :low-health (:reason %)) (f/events-of s :waiting))))))))
+          (is (empty? (tu/walk-calls (:p s))) "no search walk at 0.5 hp")
+          (is (= [:low-health] (distinct (map :reason (f/events-of s :waiting))))))))))
 
 (deftest a-tree-seen-while-sheltered-at-night-waits-night-sheltered-not-no-source
   (async done

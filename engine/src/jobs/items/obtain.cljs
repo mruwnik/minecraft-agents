@@ -1,5 +1,6 @@
 (ns jobs.items.obtain
-  (:require [jobs.lib.checks :as checks]
+  (:require [jobs.lib.ready :as ready]
+            [jobs.lib.checks :as checks]
             [engine.contract :as contract]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -11,7 +12,6 @@
             [jobs.items.obtain.need :refer [explorable? gather-held gather-viable?]]
             [jobs.items.obtain.plan :refer [craft-plan gather-plan]]
             [jobs.items.obtain.why :refer [no-source-why tried-text]]
-            [jobs.lib.body :as body]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
@@ -55,7 +55,7 @@
   each way lacks; an unseen oak_log names other species of log seen) when no usable chest that might hold it is seen
   (with chests allowed, checked once the round has looked around), no craft chain makes it from what is carried, and
   nothing seen to gather what a chain lacks (with :explore, a chain whose raw needs are unseen passes: the search child
-  solves it; then a body too hurt to walk off fails :low-health); when every raw need is seen and the gather child's
+  solves it, and waits while the body is too hurt); when every raw need is seen and the gather child's
   own check declines (night in a shelter), that cause stands instead.
   Ends :done {:got n :item name} only with the count carried. Nothing-possible {:reason :no-source :why} or
   :table-unreachable when every allowed way was tried, data {:got n :tried {way why} :why}. Limit-reached {:line :job-time
@@ -78,6 +78,9 @@
 
 (def target [:item :any-of])
 
+(def safe? ready/threatened)
+(def fit? ready/ok)
+
 (def ways [:chest :craft :smelt :gather])
 
 (def walk-causes
@@ -91,7 +94,7 @@
 (defn source-cause
   "nil when a way would start: a usable seen chest that might hold one of the names, a chain made from what is
   carried, a gather of seen raw needs, or a search for unseen ones. Else the cause: the gather child's own decline,
-  :low-health for a search the body is too hurt for, or {:reason :no-source :why ..}."
+  or {:reason :no-source :why ..}."
   [c]
   (let [a (:args c)
         names (names-of a)
@@ -100,7 +103,7 @@
       (and (way? c :chest) (seq (candidates c names))) nil
       (and (makes? c) (craft-plan c names n)) nil
       (and (way? c :gather) (gather-viable? c names n)) nil
-      (and (way? c :gather) (explorable? c names n)) (body/too-hurt (:primitives c))
+      (and (way? c :gather) (explorable? c names n)) nil
       :else (or (when (way? c :gather) (gather-held c names n))
                 (merge {:reason :no-source :why (no-source-why c names n)} (wanted-fields a))))))
 

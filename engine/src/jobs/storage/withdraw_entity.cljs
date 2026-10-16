@@ -1,5 +1,6 @@
 (ns jobs.storage.withdraw-entity
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -19,6 +20,9 @@
   {::job-time-s {:default 30 :doc "Seconds the emptying may take." :spec (a/num-in 0 nil)}})
 
 (def target [:id])
+
+(def safe? ready/safe-here-by-night)
+(def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

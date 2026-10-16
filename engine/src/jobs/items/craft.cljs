@@ -1,5 +1,6 @@
 (ns jobs.items.craft
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.ready :as ready]
+            [clojure.string :as str]
             [jobs.lib.least :as least]
             [engine.args :as a]
             [jobs.items.shortfall :as craft]
@@ -65,6 +66,9 @@
 (defn batch-s [] (settings/get settings ::batch-s))
 
 (def target [:item])
+
+(def safe? ready/safe-here-by-night)
+(def fit? ready/ok)
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 

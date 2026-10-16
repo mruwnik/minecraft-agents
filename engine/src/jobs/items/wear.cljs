@@ -1,5 +1,6 @@
 (ns jobs.items.wear
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [jobs.lib.armour :as armour]
             [jobs.lib.checks :as checks]
             [engine.contract :as contract]
@@ -25,6 +26,9 @@
    ::piece-s {:default 0.5 :doc "Seconds to put one armour piece on (the quote)." :spec (a/num-in 0 nil)}})
 
 (def target [:item])
+
+(def safe? ready/ok)
+(def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

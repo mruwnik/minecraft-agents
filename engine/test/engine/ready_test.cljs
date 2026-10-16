@@ -12,6 +12,12 @@
             [jobs.movement.follow :as follow]
             [jobs.movement.linger-near :as linger-near]
             [jobs.movement.mount :as mount]
+            [jobs.items.kitchen :as kitchen]
+            [jobs.items.pick-up-loose :as pick-up-loose]
+            [jobs.items.smelt :as smelt]
+            [jobs.storage.deposit :as deposit]
+            [jobs.storage.kit :as storage-kit]
+            [jobs.storage.withdraw :as withdraw]
             [jobs.lib.shelter :as sh]
             [jobs.lib.danger :as danger]))
 
@@ -66,6 +72,15 @@
     night-hut :later
     tunnel :ok
     (assoc open-night :time st/noon) :ok))
+
+(deftest a-job-that-goes-to-its-place-binds-safe-at-that-place
+  (are [check args] (= :later (lit 0 15 #(first (check (assoc (ctx-of open-night) :args args)))))
+    deposit/safe? {:chest outside}
+    withdraw/safe? {:chest outside}
+    storage-kit/safe? {:chest outside}
+    smelt/safe? {:furnace outside}
+    kitchen/safe? {:furnace outside}
+    pick-up-loose/safe? {}))
 
 (def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}})
 (def wall (tu/box 2 64 -2 2 66 2 "stone"))
@@ -124,6 +139,7 @@
     8 15 open-night :ok
     0 15 open-night :later
     0 0 (assoc open-night :time st/noon) :never))
+
 
 (deftest an-unseen-cell-asks-for-a-look-at-it
   (let [s ((ready/safe-at (constantly outside)) (ctx-of open-night))]

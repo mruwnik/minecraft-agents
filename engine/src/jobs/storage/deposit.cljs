@@ -1,5 +1,6 @@
 (ns jobs.storage.deposit
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -76,6 +77,9 @@
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (def target [:chest])
+
+(def safe? ready/safe-at-chest)
+(def fit? ready/ok)
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
 (def can-start? checks/chest-known)

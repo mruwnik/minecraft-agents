@@ -1,5 +1,6 @@
 (ns jobs.items.equip
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             ["minecraft-data" :as minecraft-data]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -37,6 +38,9 @@
   (some-> (.-equipment (.self p)) (aget (name (slots hand))) .-name))
 
 (def target [:item :hand])
+
+(def safe? ready/ok)
+(def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

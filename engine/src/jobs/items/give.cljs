@@ -1,5 +1,6 @@
 (ns jobs.items.give
-  (:require [engine.contract :as contract]
+  (:require [jobs.lib.ready :as ready]
+            [engine.contract :as contract]
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -59,6 +60,9 @@
 (defn head-height [] (settings/get settings ::head-height))
 
 (def target [:player :item :count])
+
+(def safe? ready/threatened)
+(def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

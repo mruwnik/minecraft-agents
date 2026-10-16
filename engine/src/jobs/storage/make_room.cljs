@@ -1,5 +1,6 @@
 (ns jobs.storage.make-room
-  (:require [jobs.lib.choose :as choose]
+  (:require [jobs.lib.ready :as ready]
+            [jobs.lib.choose :as choose]
             [engine.contract :as contract]
             [engine.args :as a]
             [engine.settings :as settings]
@@ -381,6 +382,9 @@
    ::step-s {:default 3 :doc "Seconds a quote counts for one deposit call, swap or toss." :spec (a/num-in 0 nil)}})
 
 (def target [:free])
+
+(def safe? ready/safe-here-by-night)
+(def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
