@@ -68,7 +68,7 @@
   (compat/to-js (inventory/compact (compat/from-js value) (keyword mode) slots)))
 
 (defn time-options [argv] (compat/to-js (time-tool/options (vec argv))))
-(defn time-clock [ctx now] (compat/to-js (time-tool/clock (compat/from-js ctx) now)))
+(defn time-clock [ctx now asker] (compat/to-js (time-tool/clock (compat/from-js ctx) now asker)))
 (defn time-execute [request]
   (.then (time-tool/execute! (compat/from-js request)) compat/to-js))
 (defn time-main [argv] (time-tool/main! (vec argv)))
