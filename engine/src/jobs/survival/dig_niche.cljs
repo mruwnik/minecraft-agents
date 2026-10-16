@@ -1,5 +1,6 @@
 (ns jobs.survival.dig-niche
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.ready :as ready]
+            [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string]
             [jobs.lib.blocks :as lb]
@@ -62,6 +63,10 @@
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s}})
+
+(def safe? ready/ok)
+
+(def fit? ready/ok)
 
 
 (defn done?

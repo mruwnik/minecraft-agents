@@ -1,5 +1,6 @@
 (ns jobs.survival.respond-to-hostile
-  (:require [jobs.lib.choose :as choose]
+  (:require [jobs.lib.ready :as ready]
+            [jobs.lib.choose :as choose]
             [engine.args :as a]
             [jobs.lib.checks :as checks]
             [jobs.lib.body :as body]
@@ -73,6 +74,10 @@
 (def target [])
 
 (def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s} :use {:tools :attack}})
+
+(def safe? ready/ok)
+
+(def fit? ready/ok)
 
 (defn weapons
   "The weapons of the call: its :use :tools, else the default substrings."

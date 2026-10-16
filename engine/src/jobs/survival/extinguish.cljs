@@ -1,5 +1,6 @@
 (ns jobs.survival.extinguish
-  (:require [jobs.lib.checks :as checks]
+  (:require [jobs.lib.ready :as ready]
+            [jobs.lib.checks :as checks]
             [jobs.lib.choose :as choose]
             [engine.settings :as settings]
             [engine.args :as a]
@@ -104,6 +105,10 @@
 (def target [])
 
 (def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s} :use {:blocks :cover}})
+
+(def safe? ready/ok)
+
+(def fit? ready/ok)
 
 
 (defn done?

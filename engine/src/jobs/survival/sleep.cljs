@@ -1,5 +1,6 @@
 (ns jobs.survival.sleep
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.ready :as ready]
+            [clojure.string :as str]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -125,6 +126,10 @@
 (def target [])
 
 (def defaults {:checks {:safe? '(not (threatened)) :fit? '(always)} :spend {:job-time ::job-time-s}})
+
+(def safe? ready/threatened)
+
+(def fit? ready/ok)
 
 (defn done? [c]
   (let [d (and (not (checks/running? c)) (sh/sleeping? (:primitives c)))]

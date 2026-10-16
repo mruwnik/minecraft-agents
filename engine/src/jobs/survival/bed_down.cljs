@@ -1,5 +1,6 @@
 (ns jobs.survival.bed-down
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -56,6 +57,10 @@
       (sh/bed-to-use (:primitives c) (ctx/view c) (radius c) (bed-permit c))))
 
 (def defaults {:checks {:safe? '(not (threatened)) :fit? '(always)} :spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
+
+(def safe? ready/threatened)
+
+(def fit? ready/ok)
 
 (def target [])
 

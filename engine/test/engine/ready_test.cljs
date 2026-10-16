@@ -2,6 +2,7 @@
   "jobs.lib.ready: the safe? and fit? checkers a job binds, as statuses over the shelter, the light and the mobs."
   (:require [cljs.test :refer [deftest is are]]
             [engine.hut-shelter-test :as hut]
+            [engine.registry :as registry]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [jobs.lib.ready :as ready]
@@ -122,3 +123,14 @@
   (let [s ((ready/safe-at (constantly outside)) (ctx-of open-night))]
     (is (= :look (first s)))
     (is (= [outside] (:look-at (nth s 2))))))
+
+(def escapes
+  '[respond-to-hostile fight-back block-arrow-gap unwedge breathe extinguish night dig-niche])
+
+(def healers '[bed-down sleep go-home])
+
+(deftest escapes-bind-ok-and-the-night-walkers-bind-threatened
+  (doseq [j escapes :let [d (get registry/jobs (symbol (str "jobs.survival." j)))]]
+    (is (= [ready/ok ready/ok] ((juxt :safe? :fit?) d)) (str j)))
+  (doseq [j healers :let [d (get registry/jobs (symbol (str "jobs.survival." j)))]]
+    (is (= [ready/threatened ready/ok] ((juxt :safe? :fit?) d)) (str j))))

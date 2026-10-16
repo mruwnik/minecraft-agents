@@ -1,5 +1,6 @@
 (ns jobs.survival.block-arrow-gap
-  (:require [jobs.lib.checks :as checks]
+  (:require [jobs.lib.ready :as ready]
+            [jobs.lib.checks :as checks]
             [jobs.lib.choose :as choose]
             [engine.settings :as settings]
             [engine.args :as a]
@@ -54,6 +55,10 @@
 (def target [])
 
 (def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s} :use {:blocks :shelter}})
+
+(def safe? ready/ok)
+
+(def fit? ready/ok)
 
 (defn blocks
   "The blocks it may place: the call's :use :blocks, else (nothing carried when the call began) the shelter fillers."

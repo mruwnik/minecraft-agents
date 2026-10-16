@@ -1,5 +1,6 @@
 (ns jobs.survival.night
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
@@ -111,6 +112,10 @@
 (def ways [:bed :shelter :flee])
 
 (def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s :wall-time ::wall-time-s} :ways (set ways)})
+
+(def safe? ready/ok)
+
+(def fit? ready/ok)
 
 (defn quiet-night
   "While the night trigger's condition fails: {:shelter} with the shelter the body is in (nil when none), else nil."

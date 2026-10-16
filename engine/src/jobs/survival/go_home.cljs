@@ -1,5 +1,6 @@
 (ns jobs.survival.go-home
-  (:require [engine.args :as a]
+  (:require [jobs.lib.ready :as ready]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [engine.contract :as contract]
@@ -48,6 +49,10 @@
 (def target [])
 
 (def defaults {:checks {:safe? '(not (threatened)) :fit? '(always)} :spend {:job-time ::job-time-s}})
+
+(def safe? ready/threatened)
+
+(def fit? ready/ok)
 
 (defn at-home? [c] (let [pos (place c)] (boolean (and pos (<= (u/dist (u/self-pos c) pos) arrive-range)))))
 

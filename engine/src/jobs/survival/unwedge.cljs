@@ -1,5 +1,6 @@
 (ns jobs.survival.unwedge
-  (:require [jobs.lib.checks :as checks]
+  (:require [jobs.lib.ready :as ready]
+            [jobs.lib.checks :as checks]
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -32,6 +33,10 @@
 (def target [])
 (def ways [:step :dig])
 (def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s} :ways #{:step :dig}})
+
+(def safe? ready/ok)
+
+(def fit? ready/ok)
 
 
 (defn done? [c]

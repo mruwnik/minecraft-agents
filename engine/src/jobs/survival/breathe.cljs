@@ -1,5 +1,6 @@
 (ns jobs.survival.breathe
-  (:require [jobs.lib.checks :as checks]
+  (:require [jobs.lib.ready :as ready]
+            [jobs.lib.checks :as checks]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -121,6 +122,10 @@
 (def target [])
 
 (def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s}})
+
+(def safe? ready/ok)
+
+(def fit? ready/ok)
 
 
 (defn done?

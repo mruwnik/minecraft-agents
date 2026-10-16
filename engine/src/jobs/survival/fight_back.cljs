@@ -1,5 +1,6 @@
 (ns jobs.survival.fight-back
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.ready :as ready]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -42,6 +43,10 @@
 (def target [])
 
 (def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s} :use {:tools :attack}})
+
+(def safe? ready/ok)
+
+(def fit? ready/ok)
 
 (defn reach [] (settings/get settings ::reach))
 (defn ranged-chase [] (settings/get settings ::ranged-chase))
