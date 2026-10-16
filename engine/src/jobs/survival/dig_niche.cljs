@@ -274,6 +274,7 @@
           (cond
             r r
             w (fail! c :no-tool (str "no tool for the " (:block w) " of the hillside"))
+            (not (look/surveyed? c)) (await (look/look-around! c))
             :else (fail! c :no-site "no hillside or wall to cut a niche into"))))
       (let [_ (ctx/update-mem! c assoc :site site)
             shown (shown-stop p site)

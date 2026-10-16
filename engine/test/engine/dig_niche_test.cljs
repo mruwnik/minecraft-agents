@@ -64,10 +64,10 @@
   ([zones spec]
    (let [clock (atom 1000000)
          [seen sink] (tu/legacy-capture-sink)
-         p (tu/seeing-all (tu/fake (merge {:offlineScale 0.0001 :time 14000 :blocks (merge ground hill)
+         p ((:seeing spec tu/seeing-all) (tu/fake (merge {:offlineScale 0.0001 :time 14000 :blocks (merge ground hill)
                                            :drops {"stone" "cobblestone"}
                                            :inventory [{:name "iron_pickaxe" :count 1}]}
-                                          (dissoc spec :plans))))
+                                          (dissoc spec :plans :seeing))))
          eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
                            :world (ew/of-data (:plans spec {}) {} zones)
                            :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -254,6 +254,16 @@
           (await (run! s {}))
           (is (some #(and (= :child_started (:kind %)) (= :need (:slot %))) @seen) "a tool is asked for")
           (is (= :no-tool (:reason (failed seen)))))))))
+
+(deftest a-hill-not-yet-seen-is-looked-for-before-no-site-then-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen] :as s} (setup [] {:seeing tu/seeing-after-look})]
+          (await (run! s {}))
+          (is (nil? (failed seen)))
+          (is (some #(= :completed (:kind %)) @seen))
+          (is (= "air" (block-at p [5 64 0]))))))))
 
 (deftest flat-ground-without-a-pickaxe-is-still-no-site
   (async done
