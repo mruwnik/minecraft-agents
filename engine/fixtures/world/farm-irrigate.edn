@@ -1,0 +1,26 @@
+;; Card 77935add: jobs.farm.irrigate wets the field cells with no seen water within 4. A row of nine farmland cells at
+;; [12..20 -1 16] (ground layer y -1), one water bucket carried. Should-succeed: the middle cell [16 -1 16] (it wets all nine) is dug and
+;; filled, the job completes with nothing dry. Should-fail: a field with water beside it is left alone (no pour, bucket kept);
+;; with no bucket and :fetch false the job stops :need.
+{:defaults
+ {:tags [:farm :irrigate :jobs]
+  :time :any
+  :plot {:height 8 :floor "grass_block"}
+  :body {:at [16.5 0 14.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["water_bucket" 1]]}
+  :blocks [[:fill [12 -1 16] [20 -1 16] "farmland[moisture=0]"]]
+  :limit-s 90}
+ :cases
+ [{:name "dry-row-gets-one-water-cell-in-the-middle"
+   :act [[:job (jobs.farm.irrigate {:from #xyz [12 -1 16] :to #xyz [20 -1 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:dry []}} :within-s 70 :of-job true}]
+   :after [[:block [16 -1 16] "water"] [:block [12 -1 16] "farmland[moisture=0]"] [:item "water_bucket" 0]]}
+  {:name "row-with-water-beside-it-is-left-alone"
+   :blocks [[:set [16 -1 17] "water"]]
+   :act [[:job (jobs.farm.irrigate {:from #xyz [12 -1 16] :to #xyz [20 -1 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:poured []}} :within-s 40 :of-job true}]
+   :after [[:block [16 -1 16] "farmland[moisture=7]"] [:item "water_bucket" 1]]}
+  {:name "no-bucket-fetch-false-stops-need"
+   :body {:inventory []}
+   :act [[:job (jobs.farm.irrigate {:from #xyz [12 -1 16] :to #xyz [20 -1 16] :fetch false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :need :cause {:item "water_bucket"}}} :within-s 30 :of-job true}]
+   :after [[:block [16 -1 16] "farmland[moisture=0]"]]}]}
