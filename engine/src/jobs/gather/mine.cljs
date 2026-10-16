@@ -98,7 +98,8 @@
      :descent {:steps :stop}); the mend and the walk home follow.
   6b. Still none, a tunnel level set (:level, else the ore's mine.descent/ore-levels entry, e.g. iron_ore 16; :level false: none) and the
      body above it: a stair down the same way until the feet are at the level; the stair stopping ends the descent there
-     (info mine.descent-stopped {:steps :stop :y :level}) and the tunnel runs at that height.
+     (info mine.descent-stopped {:steps :stop :y :level}) and the tunnel runs at that height; more than mine.descent/level-slack (12) above the level
+     (warn, same event) the dig phase ends :descent-stopped instead.
   7. Else the strip tunnel, at the level then stood on.
 
   A descent (6, 6b) goes by a mineshaft instead when one is usable (:shaft, jobs.lib.shafts): the body walks to the shaft's top (not when it stands on a step of the shaft: it goes on from there), a
@@ -164,7 +165,7 @@
   Ends :done when :got meets :count (or the call's :least; default :all) and the body got home. Else the cause is
   {:reason r} (:tool, :why): condition-failed for the facts :none :wet :refused :own-zone :no-shaft :flooded
   :no-tool (also a worn last tool), limit-reached {:line :food} for :hungry, nothing-possible for the tries that failed (:no-drops
-  :gave-up :tunnel-length :tunnel-stopped :no-stone-found :spent-on-mend :not-home :not-back :zone-exit). 0 of :count
+  :gave-up :tunnel-length :tunnel-stopped :no-stone-found :descent-stopped :spent-on-mend :not-home :not-back :zone-exit). 0 of :count
   is never done. Quote: about ::item-s s an item, open-ended; yields up to :count of the item.
 
   Data {:got n :reason r} (text: mine got n of m: reason) plus

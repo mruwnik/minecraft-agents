@@ -18,9 +18,11 @@
   {::ore-levels {:default {"iron_ore" 16 "copper_ore" 48 "gold_ore" -16 "lapis_ore" 0 "redstone_ore" -54 "diamond_ore" -54}
                  :doc "The feet height a strip tunnel for an ore runs at when :level is nil, by the ore's stone kind; an ore not listed tunnels where the body stands."
                  :spec (a/map-of string? (a/int-in nil nil))}
+   ::level-slack {:default 12 :doc "Blocks above the tunnel level a stopped stair may leave the body and the strip tunnel still run there; higher, the run ends :descent-stopped (ore is not found that far above its level)." :spec (a/int-in 0 nil)}
    ::max-restairs {:default 3 :doc "Times the descent starts a new stair where the body stands after the stair found it off its line (a reflex, a fall or a drop pick-up moved it) before the stop stands." :spec (a/int-in 0 nil)}})
 
 (defn max-restairs [] (settings/get settings ::max-restairs))
+(defn level-slack [] (settings/get settings ::level-slack))
 
 (defn tunnel-level
   "The feet height the strip tunnel should run at (args a): :level, else the ore's ::ore-levels entry; nil for none (:level false)."
@@ -78,15 +80,18 @@
     (to-mend! c :no-stone-found)))
 
 (defn stair-stopped!
-  "The stair down to the tunnel level stopped above it: one info mine.descent-stopped, and the tunnel runs where the body stands."
+  "The stair down to the tunnel level stopped above it: one mine.descent-stopped, then the tunnel runs where the body stands,
+  or, more than ::level-slack above the level, the mend and the walk home with :reason :descent-stopped."
   [c]
   (let [{:keys [steps stop]} (:descent (ctx/mem c))
         y (:y (cell-of (u/self-pos c)))
-        level (tunnel-level (:args c))]
-    (ctx/emit! c :mine.descent-stopped :info {:steps (or steps 0) :stop stop :y y :level level
-                                              :text (str "mine's stair down stopped at y " y " (" (name stop) "), short of y " level
-                                                         "; it tunnels there")})
-    :again))
+        level (tunnel-level (:args c))
+        far? (> (- y level) (level-slack))]
+    (ctx/emit! c :mine.descent-stopped (if far? :warn :info)
+               {:steps (or steps 0) :stop stop :y y :level level
+                :text (str "mine's stair down stopped at y " y " (" (name stop) "), short of y " level
+                           (if far? "; too high to tunnel there" "; it tunnels there"))})
+    (if far? (to-mend! c :descent-stopped) :again)))
 
 (defn stair-in-own-zone?
   "The own zone the stair's next step (the cell ahead along the heading, its head and the one below) lies in, else nil."

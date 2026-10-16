@@ -283,6 +283,16 @@
             (is (= stops? (boolean (some #(= :hazard (:stop %)) (events-of s :mine.descent-stopped)))) (pr-str accept))
             (is (= (not stops?) (boolean (some #(< (second %) 64) (dug-cells s)))) "the stair cut below the start")))))))
 
+(deftest a-stair-stopped-far-above-the-level-ends-the-run-instead-of-tunnelling-there
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :level 40 :tunnel-length 3 :mend false :accept #{}}
+                                 (deep-rock {"1,66,0" "gravel" "0,66,0" "air"}) 60))
+              e (done-event s)]
+          (is (= :descent-stopped (:reason e)))
+          (is (nil? (:tunnel e))))))))
+
 (deftest gravel-that-falls-into-the-cut-is-dug-until-the-line-is-clear
   (async done
     (tu/run-async done
