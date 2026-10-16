@@ -209,6 +209,11 @@
     (is (false? (fires? p (trigger-store [(entry [0 54 0])] []) [])) "ten below: cleanup holds it :far-below each time the hold runs out")
     (is (true? (fires? p (trigger-store [(entry [0 54 0]) (entry [0 62 0])] []) [])) "another, in reach, still fires")))
 
+(deftest the-trigger-ignores-scaffold-too-high-for-a-walk
+  (let [p (tu/fake {:blocks {"0,70,0" "dirt" "0,66,0" "dirt"}})]
+    (is (false? (fires? p (trigger-store [(entry [0 70 0])] []) [])) "up a tree: cleanup holds it :too-high each time the hold runs out")
+    (is (true? (fires? p (trigger-store [(entry [0 70 0]) (entry [0 66 0])] []) [])) "another, in range, still fires")))
+
 (deftest the-trigger-waits-for-day-and-for-no-hostile-near
   (let [dirt (trigger-store [(entry [0 64 0])] [])
         night #(tu/fake {:blocks {"0,64,0" "dirt"} :time 14000})
@@ -257,6 +262,14 @@
     (is (= :walk (:step (go :feet [3 62 0]))) "two below is a walk")
     (is (= :walk (:step (go :feet [3 66 0] :max-below 8))))
     (is (= :walk (:step (go :feet [3 70 0] :guard-walks? false))) "an owner's or a caller's cleanup goes anyway")))
+
+(deftest a-scaffold-high-above-the-body-is-not-walked-to
+  (let [e (entry [10 70 0])
+        world (fn [pos] (if (= pos [10 70 0]) "dirt" "air"))
+        go #(apply step :entries [e] :block-at world :walk-range 3 %&)]
+    (is (= [:finish [{:cell [10 70 0] :item "dirt" :reason :too-high}]] ((juxt :step :open) (go :feet [3 64 0]))))
+    (is (= :walk (:step (go :feet [3 67 0]))) "three up is a walk")
+    (is (= :walk (:step (go :feet [3 64 0] :guard-walks? false))) "an owner's or a caller's cleanup goes anyway")))
 
 (deftest a-scaffold-where-the-body-died-is-not-walked-to
   (let [s (step :feet [3 64 0] :entries [(entry [10 64 0])] :block-at (lookup [10 64 0] "dirt") :died-near? #(= [10 64 0] %))]

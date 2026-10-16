@@ -68,7 +68,7 @@
   never dug, unless :spare-own-builds is false.
 
   An unowned entry (:job nil, no :near) out of reach is walked to only when safe, else held with the reason: :unarmed / :low-health (no weapon carried,
-  or health under jobs.lib.body/risky-min-health: ::hold-unarmed?), :far-below (more than jobs.lib.ledger/max-below under the feet),
+  or health under jobs.lib.body/risky-min-health: ::hold-unarmed?), :far-below (more than jobs.lib.ledger/max-below under the feet), :too-high (more than ::walk-range over the feet: up a tree, no way a walk finds),
   :died-near (within ::died-radius of a :died entry in body memory), :roofed (a solid non-scaffold block within
   ::roof-height above it while the body is in the open). A walk leg also stops while a mob the body fled from within
   jobs.lib.threats/fled-memory-ms was last known within jobs.lib.threats/fled-radius of the cell or the body (:danger).
@@ -175,7 +175,7 @@
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
             :spare-own-builds (:spare-own-builds (:args c))
             :guard-walks? (and (nil? (:job (:args c))) (nil? (:near (:args c))))
-            :max-below (ledger/max-below) :roof-height (roof-height)
+            :max-below (ledger/max-below) :walk-range (walk-range) :roof-height (roof-height)
             :died-near? (died-near-of (ctx/view c)) :walk-hold (walk-hold-of (:primitives c))
             :held (:held (ctx/mem c) {}) :retreats (:retreats (ctx/mem c) 0)})))
 
