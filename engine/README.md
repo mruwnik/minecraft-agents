@@ -292,7 +292,7 @@ debt or intent with `update-mem!` before the `act` it protects. After every `mov
 
 **Tally.** Each act's uses and yields go to every frame of its chain (`:contract` in job memory, hidden from `ctx/mem`),
 a round's time to its own frame (`:job-time`, time spent running; an act `:wait` with a `:why` is a pause, taken off); `:wall-time` is the wall seconds since the frame's call
-started, yields and waits included (both spend lines). `:spend {:failures n}` caps the children that ended other than `:done` (not `:cut-off`) under the frame, across rounds; past it the frame ends `:limit-reached` with the cause `{:line :failures :spend n :last {:job :reason}}`; no default (herd sets one). Endings and a root's `completed`/`stopped`/`cancelled`/`reflex.ended` carry `:report`;
+started, yields and waits included (both spend lines). `:spend {:tries n}` caps the children that ended (any ending but `:cut-off`) under the frame, across rounds; past it the frame ends `:limit-reached` with the cause `{:line :tries :spend n :last {:job :reason}}`; no default. Endings and a root's `completed`/`stopped`/`cancelled`/`reflex.ended` carry `:report`;
 a finished job's goes to body memory `:job-report` (cap 256), with its ending's `:kind` and `:cause`.
 
 **Contract jobs.** Export `round` (`:continue` or `(ctx/end ...)`), optionally `target`, `ways`,

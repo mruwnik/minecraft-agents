@@ -216,10 +216,10 @@
          :spec (a/map-of keyword? (a/coll-of (a/or-of a/item? map?)))}
    :ways {:doc "the ways allowed, a set of the job's way keywords; default the job's defaults, else all" :default nil
           :spec (a/set-of keyword?)}
-   :spend {:doc "what the job may use up: {:job-time s (its rounds ran) :wall-time s (since it started) :failures n (children ended other than :done, this frame and below, across rounds) :health hp :food pts :items {name n} :wear {tool uses}}"
+   :spend {:doc "what the job may use up: {:job-time s (its rounds ran) :wall-time s (since it started) :tries n (children ended other than :cut-off, this frame and below, across rounds) :health hp :food pts :items {name n} :wear {tool uses}}"
            :default nil
-           :spec (a/valid-by "a map {:job-time s :wall-time s :failures n :health hp :food pts :items {name n} :wear {tool uses}} of numbers >= 0"
-                             (partial lines-problem #{:job-time :wall-time :failures :health :food} #{:items :wear}))}
+           :spec (a/valid-by "a map {:job-time s :wall-time s :tries n :health hp :food pts :items {name n} :wear {tool uses}} of numbers >= 0"
+                             (partial lines-problem #{:job-time :wall-time :tries :health :food} #{:items :wear}))}
    :floor {:doc "levels the job does not go below: {:health hp :food pts}" :default nil
            :spec (a/valid-by "a map {:health hp :food pts} of numbers >= 0" (partial lines-problem #{:health :food} #{}))}
    :deadline {:doc "the wall-clock ms by which the call must have ended; default the caller's" :default nil
@@ -310,10 +310,10 @@
                   :let [f (get floor k) l (get levels k)]
                   :when (and f (number? l) (< l f))]
               [{:line k :floor f} {k l}])
-            (for [k [:job-time :wall-time :failures :health :food]
+            (for [k [:job-time :wall-time :tries :health :food]
                   :let [s (get spend k) x (get u k 0)]
                   :when (and s (> x s))]
-              [(cond-> {:line k :spend s} (and (= :failures k) (:last-failure state)) (assoc :last (:last-failure state)))
+              [(cond-> {:line k :spend s} (and (= :tries k) (:last-try state)) (assoc :last (:last-try state)))
                {:used x}])
             (for [[k what] [[:items :item] [:wear :tool]]
                   [n s] (get spend k)

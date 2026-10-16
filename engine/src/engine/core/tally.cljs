@@ -36,12 +36,12 @@
     (when (seq delta)
       (update-frames! eng root (frame-paths slots) #(update % :tally contract/add delta)))))
 
-(defn count-failure!
-  "Book child ending reason of job as a failure on every frame from root down to slots (the :failures spend line), the
+(defn count-try!
+  "Book a child ending (reason of job) as a try on every frame from root down to slots (the :tries spend line), the
   last one kept for the cause."
   [eng root slots job reason]
   (update-frames! eng root (frame-paths slots)
-                  #(-> % (update-in [:tally :uses :failures] (fnil inc 0)) (assoc :last-failure {:job job :reason reason}))))
+                  #(-> % (update-in [:tally :uses :tries] (fnil inc 0)) (assoc :last-try {:job job :reason reason}))))
 
 (defn add-time!
   "Book ms of round time on the frame at slots only: a parent's round already holds its children's."

@@ -168,7 +168,7 @@
           (let [ended (first (filter #(= :child_ended (:kind %)) @seen))
                 completed (first (filter #(= :completed (:kind %)) @seen))]
             (is (= {:uses {:job-time 0.3 :wall-time 0.3}} (:report ended)) "the child's own round")
-            (is (= {:uses {:job-time 0.45 :wall-time 0.45}} (:report completed)) "the parent's round holds the child's once")))))))
+            (is (= {:uses {:tries 1 :job-time 0.45 :wall-time 0.45}} (:report completed)) "the parent's round holds the child's once")))))))
 
 (deftest a-finished-job-reports-and-is-remembered
   (async done

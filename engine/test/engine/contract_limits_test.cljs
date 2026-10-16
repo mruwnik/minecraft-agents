@@ -382,31 +382,42 @@
     (is (empty? (crossed {:job-time [6 6 6] :wall-time [3 3 3]})))
     (is (= [{:line :wall-time :spend 10}] (crossed {:job-time [12 12 12]})))))
 
-;; ---------------------------------------------------------------- failures
+;; ---------------------------------------------------------------- tries
 
 (def failing-kid
   {:round (fn [c] (ctx/end c :condition-failed :already-closed))})
 
 (def retrier
-  {:defaults {:spend {:failures 3}}
+  {:defaults {:spend {:tries 3}}
    :round (fn ^:async retrier-round [c]
             (let [e (await (ctx/call c :kid (quote kid) {}))]
               (swap! world update :kid-calls (fnil inc 0))
               (swap! world assoc :kid-ending e)
               :continue))})
 
-(deftest children-ending-other-than-done-spend-the-failures-line-across-rounds
+(deftest children-ending-other-than-done-spend-the-tries-line-across-rounds
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'retrier retrier 'kid failing-kid})]
           (core/submit! eng '(retrier) {})
           (dotimes [_ 6] (await (core/tick! eng)))
-          (is (= 3 (:kid-calls @world)) "the 4th failure ends the job inside its call, before the caller goes on")
-          (is (= {:kind :limit-reached :cause {:line :failures :spend 3 :last {:job 'kid :reason :already-closed}}}
+          (is (= 3 (:kid-calls @world)) "the 4th try ends the job inside its call, before the caller goes on")
+          (is (= {:kind :limit-reached :cause {:line :tries :spend 3 :last {:job 'kid :reason :already-closed}}}
                  (stopped seen)))
-          (is (= 4 (get-in (first (job-ev seen :limit_reached)) [:data :report :uses :failures]))))))))
+          (is (= 4 (get-in (first (job-ev seen :limit_reached)) [:data :report :uses :tries]))))))))
 
-(deftest a-failures-line-must-be-a-number
-  (is (some? (contract/call-problem 'x nil {:spend {:failures -1}})))
-  (is (nil? (contract/call-problem 'x nil {:spend {:failures 2}}))))
+(deftest a-tries-line-must-be-a-number
+  (is (some? (contract/call-problem 'x nil {:spend {:tries -1}})))
+  (is (nil? (contract/call-problem 'x nil {:spend {:tries 2}}))))
+
+(deftest a-child-that-succeeds-spends-a-try-too
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'retrier retrier 'kid {:round (fn [c] (ctx/end c :done :ok))}})]
+          (core/submit! eng '(retrier) {})
+          (dotimes [_ 6] (await (core/tick! eng)))
+          (is (= 3 (:kid-calls @world)))
+          (is (= {:kind :limit-reached :cause {:line :tries :spend 3 :last {:job 'kid :reason :ok}}} (stopped seen))
+              "the cause names the last ending, done or not"))))))

@@ -522,20 +522,26 @@
           (is (empty? (on-lead s)))
           (is (in-pen? (cow-of s 1)) "the cow let go inside stays in"))))))
 
-(deftest a-gate-that-keeps-failing-to-shut-spends-the-failures-budget-and-ends-the-run
+(deftest a-gate-that-keeps-failing-to-shut-spends-the-tries-budget-and-ends-the-run
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (submit! (setup (world {:entities [(cow 1 4 3)]})) {:target 1 :spend {:failures 0}})]
+        (let [s (submit! (setup (world {:entities [(cow 1 4 3)]})) {:target 1 :spend {:tries 0}})]
           (refuse-shuts-from! s 11)
           (await (run-ticks s 600))
           (is (finished? s))
           (let [e (first (events-of s :limit_reached))]
-            (is (= {:line :failures :spend 0} (select-keys (:cause e) [:line :spend])))
+            (is (= {:line :tries :spend 0} (select-keys (:cause e) [:line :spend])))
             (is (some? (get-in e [:cause :last :reason])) "the last failure is named")))))))
 
-(deftest herd-takes-a-failures-budget-by-default
-  (is (= ::herd/max-failures (get-in herd/defaults [:spend :failures]))))
+(deftest herd-spends-a-try-on-every-child-ending-done-ones-too
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (setup (world {:entities [(cow 1 4 3)]})) {:target 1 :spend {:tries 2}})]
+          (await (run-ticks s 600))
+          (is (finished? s))
+          (is (= {:line :tries :spend 2} (select-keys (:cause (first (events-of s :limit_reached))) [:line :spend]))))))))
 
 (deftest a-retry-from-out-shuts-the-gate-before-the-walk-out
   (async done

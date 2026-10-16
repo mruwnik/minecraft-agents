@@ -334,9 +334,9 @@
           (tally/remember! eng (:sym def) (some->> (:target def) (select-keys args)) (:report e) e)
           (cut-off! eng (:root base) slots (mem/job-mem (mem/view store) (:root base) slots) :ended)
           (mem/update-job! store (:root base) (:slots base) update :children dissoc slot)
-          (if done? (quote/clear-way! eng base) (do (reset! child-ending e) (quote/book-failure! eng base e)
-                                      (when-not (= :cut-off (:kind e))
-                                        (tally/count-failure! eng (:root base) (:slots base) (:sym def) (contract/cause-key e)))))
+          (if done? (quote/clear-way! eng base) (do (reset! child-ending e) (quote/book-failure! eng base e)))
+          (when-not (= :cut-off (:kind e))
+            (tally/count-try! eng (:root base) (:slots base) (:sym def) (contract/cause-key e)))
           (limits/check! eng base)
           e)))))))
 
