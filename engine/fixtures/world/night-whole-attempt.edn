@@ -14,8 +14,7 @@
  [{:name "dug-in-ends-the-night-in-one-round"
    :time :night-exclusive
    :act [[:job (jobs.survival.night)]
-         [:await {:source :job :kind :dig-in.sealed} 60]
-         [:wait-s 10]]
+         [:await {:source :job :kind :dig-in.sealed} 60]]
    :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60}
             {:no-event {:source :job :kind :holding :data {:reason :sheltered}} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}
             {:no-event {:source :job :kind :idle} :for-s 120 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}
@@ -35,7 +34,7 @@
    :blocks [[:fill [8 -6 8] [24 -1 24] "air"] [:fill [12 -1 12] [20 -1 20] "stone"]]
    :act [[:job (jobs.survival.night {:ways #{:bed :shelter}})]
          [:await {:source :job :kind :shelter.exposed} 60]
-         [:wait-s 15]
+         [:await {:source :job :kind :holding :data {:reason [:contains "exposed: "]}} 30]
          [:time-set 1000]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 60}
             {:event {:source :job :kind :holding :data {:reason [:contains "exposed: "]}} :within-s 60 :of-job true}
@@ -53,8 +52,7 @@
          ;; integer execute coordinates are block centres, so ~16 ~ ~16 is the start cell's centre (~16.5 lands on [17 0 17])
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16"]
          [:time-set 14000]
-         [:job (jobs.survival.night)]
-         [:wait-s 60]]
+         [:job (jobs.survival.night)]]
    :expect [{:event {:source :job :kind :shelter.relocated} :within-s 150}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 300 :of-job true}]
    :after [[:not-block [16 -1 16] "dirt"]]
@@ -67,8 +65,7 @@
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.survival.night)]
-         [:await {:source :job :kind :dig-in.sealed} 120]
-         [:wait-s 5]]
+         [:await {:source :job :kind :dig-in.sealed} 120]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 30}
             {:event {:source :reflex :kind :ended :context {:reflex-id :hostile-near}} :within-s 90}
             {:event {:source :job :kind :dig-in.sealed} :within-s 120}
@@ -82,7 +79,7 @@
    :blocks [[:fill [8 -6 8] [24 -1 24] "stone"]]
    :act [[:job (jobs.survival.night {:flee-radius 0})]
          [:await {:source :job :kind :shelter.exposed} 90]
-         [:wait-s 10]
+         [:await {:source :job :kind :holding :data {:reason [:contains "exposed: "]}} 30]
          [:time-set 1000]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 90}
             {:no-event {:source :job :kind :dig-in.sealed} :for-s 90 :until {:source :job :kind :stopped :data {:reason :exposed}}}

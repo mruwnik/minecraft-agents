@@ -17,7 +17,7 @@
  [{:name "roofed-body-sleeps-in-its-bed-and-respawns-there"
    :act [[:job (jobs.memory.set-place {:name :bed :pos #at [10 0 12]})]
          [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 90]
-         [:wait-s 3]
+         [:until-rcon "data get entity $BODY SleepTimer" "data: (6[0-9]|[7-9][0-9]|[0-9]{3})s" 10]
          [:rcon "data get entity $BODY respawn"]
          [:kill-body]
          [:await {:source :body :kind :respawned} 30]]

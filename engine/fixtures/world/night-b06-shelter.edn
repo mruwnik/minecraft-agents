@@ -17,7 +17,7 @@
    :body {:inventory [["cobblestone" 16] ["wooden_pickaxe" 1]]}
    :act [[:job (jobs.survival.night)]
          [:await {:source :job :kind :dig-in.sealed} 60]
-         [:wait-s 5]
+         [:until [:memory {:entries {:shelter [{:data {:state :built}}]}}] 10]
          [:time-set 1000]
          [:job (jobs.survival.night)]]
    :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60}
@@ -32,7 +32,7 @@
    :body {:inventory [["cobblestone" 16]]}
    :act [[:job (jobs.survival.night)]
          [:await {:source :job :kind :dig-in.sealed} 60]
-         [:wait-s 5]
+         [:until [:memory {:entries {:shelter [{:data {:state :built}}]}}] 10]
          [:time-set 1000]]
    :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60}
             {:event {:source :job :level :debug :kind :dig-in.take-back-skipped :data {:reason :no-tool}} :within-s 120}
@@ -46,7 +46,7 @@
    :body {:inventory [["oak_log" 12]]}
    :act [[:job (jobs.survival.night)]
          [:await {:source :job :kind :dig-in.sealed} 60]
-         [:wait-s 5]
+         [:until [:memory {:entries {:shelter [{:data {:state :built}}]}}] 10]
          [:time-set 1000]
          [:job (jobs.survival.night)]]
    :expect [{:event {:source :job :kind :dig-in.sealed :message [:contains "oak_log"]} :within-s 60}
@@ -78,8 +78,7 @@
             [:set [12 0 8] "oak_door[facing=north,half=lower,hinge=left,open=true]"]
             [:set [12 1 8] "oak_door[facing=north,half=upper,hinge=left,open=true]"]]
    :body {:at [13.5 0 13.5] :inventory [["cobblestone" 16]]}
-   :act [[:job (jobs.survival.night)]
-         [:wait-s 25]]
+   :act [[:job (jobs.survival.night)]]
    :expect [{:no-event {:source :job :kind :shelter.door-failed} :for-s 25}
             {:no-event {:source :job :kind :dig-in.sealed} :for-s 25}]
    :after [[:block [12 0 8] "oak_door[open=false]"]]
@@ -104,7 +103,7 @@
    :act [[:summon "zombie" [28.5 0 16.5] "{UUID:[I;2006101,1,1,1],NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.survival.night)]
          [:await {:source :job :kind :dig-in.sealed} 60]
-         [:wait-s 5]
+         [:until [:memory {:entries {:shelter [{:data {:state :built}}]}}] 10]
          [:time-set 1000]
          [:await {:source :job :kind :night.dawn-hold} 60]
          [:wait-s 5]

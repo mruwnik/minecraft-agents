@@ -39,7 +39,7 @@
    :act [[:rcon "give $BODY red_bed 1"]
          [:job (jobs.survival.night {:flee-radius 0})]
          [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 90]
-         [:wait-s 3]
+         [:until-rcon "data get entity $BODY SleepTimer" "data: (6[0-9]|[7-9][0-9]|[0-9]{3})s" 10]
          [:time-set 1000]]
    :expect [{:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 70}
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}
@@ -48,7 +48,7 @@
    :limit-s 180}
   {:name "no-bed-anywhere-stays-exposed-one-warn"
    :time :night
-   :act [[:job (jobs.survival.night {:flee-radius 0})] [:wait-s 60]]
+   :act [[:job (jobs.survival.night {:flee-radius 0})]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 40}
             {:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 60}
             {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 60}
@@ -70,8 +70,7 @@
          [:rcon "kill @e[type=spider,$BOX]"]
          [:rcon "kill @e[type=skeleton,$BOX]"]
          [:rcon "kill @e[type=creeper,$BOX]"]
-         [:rcon "kill @e[type=zombie,$BOX]"]
-         [:wait-s 30]]
+         [:rcon "kill @e[type=zombie,$BOX]"]]
    :expect [{:event {:source :job :kind :holding :data {:reason :monsters-near}} :within-s 60}
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 400}]
    :after [[:body-near [10.5 0 12.5] 6]]
