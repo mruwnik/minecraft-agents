@@ -64,11 +64,17 @@
     {::exposure (fn [c] (exposed c (f c)))}))
 
 (defn safe-at-by-night
-  "The checker of a job that goes to the place (f c): at night above ground safe-at it, by day or underground only not
-  threatened (an unseen place's light is no reason to wait, and darkness underground does not end at dawn)."
+  "The checker of a job that goes to the place (f c): at night safe-at it, by day or when body and place are both
+  underground only not threatened (an unseen place's light is no reason to wait, and darkness underground does not end
+  at dawn; a walk from a tunnel to open ground is exposed)."
   [f]
   (let [at (safe-at f)
-        by-night? (fn [c] (let [p (:primitives c)] (and (sh/night? p) (not (sh/buried? p)))))]
+        by-night? (fn [c]
+                    (let [p (:primitives c)
+                          feet (sh/feet p)
+                          at (f c)
+                          to (if at (update-vals (assoc at :y (or (:y at) (:y feet))) js/Math.floor) feet)]
+                      (and (sh/night? p) (not (and (sh/buried? p) (sh/buried-at? p to))))))]
     (with-meta (fn [c] (if (by-night? c) (at c) (threatened c)))
       {::exposure (fn [c] (if (by-night? c) ((::exposure (meta at)) c) (contract/ok :day "an unseen place's light is no reason to wait")))})))
 

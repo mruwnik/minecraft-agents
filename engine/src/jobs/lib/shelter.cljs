@@ -69,22 +69,26 @@
       (bit-shift-right (.lightAt ^js raw x y z) 4))))
 
 (defn buried-by-column?
-  "Fallback without light data: the cell over the head is a block the body has seen (only that one shows from inside)."
-  [p]
-  (let [{:keys [x y z]} (feet p)
-        above (look/seen-block p {:x x :y (+ y 2) :z z})]
-    (boolean (and above (not (:unknown above)) (solid/solid? (:name above))))))
+  "Fallback without light data: the cell two over the feet cell is a block the body has seen (only that one shows from inside)."
+  ([p] (buried-by-column? p (feet p)))
+  ([p {:keys [x y z]}]
+   (let [above (look/seen-block p {:x x :y (+ y 2) :z z})]
+     (boolean (and above (not (:unknown above)) (solid/solid? (:name above)))))))
+
+(defn buried-at?
+  "Whether the cell is underground: no sky light at it and the cell over it. A cell at 0 is sealed from the sky, so the
+  night changes nothing there. A ravine, shaft or cave mouth keeps sky light and stays unsafe. Without light data,
+  buried-by-column? decides."
+  [p {:keys [x y z] :as cell}]
+  (let [lights (keep #(sky-light-at p %) [cell {:x x :y (inc y) :z z}])]
+    (if (empty? lights)
+      (buried-by-column? p cell)
+      (every? zero? lights))))
 
 (defn buried?
-  "The body is underground: no sky light at its feet and head cells. A cell at 0 is sealed from the sky, so the night
-  changes nothing there. A ravine, shaft or cave mouth keeps sky light and stays unsafe. Without light data,
-  buried-by-column? decides."
+  "The body is underground (buried-at? its feet)."
   [p]
-  (let [{:keys [x y z] :as f} (feet p)
-        lights (keep #(sky-light-at p %) [f {:x x :y (inc y) :z z}])]
-    (if (empty? lights)
-      (buried-by-column? p)
-      (every? zero? lights))))
+  (buried-at? p (feet p)))
 
 (defn night? [p] (not (.-isDay (.self p))))
 

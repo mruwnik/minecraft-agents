@@ -197,8 +197,13 @@
 (deftest safe-at-by-night-waits-for-an-unseen-place-only-at-night
   (are [world expected] (= expected (kind (ready/safe-at-by-night (constantly outside)) world))
     (assoc open-night :time st/noon) :ok
-    tunnel :ok
     night-hut :later))
+
+(deftest safe-at-by-night-judges-the-goal-of-a-buried-body
+  (are [goal expected] (= expected (kind (ready/safe-at-by-night (constantly goal)) tunnel))
+    {:x 4 :y 64 :z 0} :ok
+    nil :ok
+    outside :later))
 
 (deftest explore-search-underground-at-night-is-ok
   (is (= :ok (bound search/safe? tunnel {}))))

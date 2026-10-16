@@ -1199,7 +1199,7 @@
   "(f) with the body underground whatever the fake's missing light data say (the column fallback of sh/buried? sees only
   the cell over the head, which a stair's own clearance opens)."
   [f]
-  (with-redefs [sh/buried? (constantly true)] (await (f))))
+  (with-redefs [sh/buried? (constantly true) sh/buried-at? (constantly true)] (await (f))))
 
 (deftest a-stair-goes-on-cutting-and-walking-its-own-steps-at-night-from-a-dug-in-start-underground
   (async done

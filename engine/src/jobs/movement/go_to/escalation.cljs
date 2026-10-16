@@ -91,7 +91,7 @@
   stays open."
   [{:keys [step] :as e} tag ignore-zones? by-hand? spare-own? fetch?]
   (case step
-    :pillar ['jobs.access.pillar (cond-> {:height (:height e) :fetch false :ignore-zones? ignore-zones?} (:item e) (assoc :use {:blocks [(:item e)]}))]
+    :pillar ['jobs.access.pillar (cond-> {:height (:height e) :fetch false :ignore-zones? ignore-zones? :checks {:safe? '(not (exposed))}} (:item e) (assoc :use {:blocks [(:item e)]}))]
     :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :accept #{:falling-block} :fetch fetch? :spent-ok true :ignore-zones? ignore-zones? :need-drop (not by-hand?) :spare-own-builds spare-own?}]
     :clear-path ['jobs.access.clear-path {:heading (:heading e) :note tag :ignore-zones? ignore-zones? :need-drop (not by-hand?) :spare-own-builds spare-own? :fetch false}]
     :approach ['jobs.movement.go-to {:pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk :clear-seal}}]
