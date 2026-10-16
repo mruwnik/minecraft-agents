@@ -27,7 +27,7 @@
   "Planner reasons of a search that ran out of land to search: no target is reachable within the box and abilities."
   #{:exhausted :box :ladder-gap :air :air-lethal})
 
-(defonce ^{:doc "The unfinished search of each [body tag]: {:key :t :plan}. key is [body cell, targets, range]; t when
+(defonce ^{:doc "The unfinished search of each [body primitives, tag]: {:key :t :plan}. key is [body cell, targets, range]; t when
   it began (ms); plan the planner's create-plan."}
   searches (atom {}))
 
@@ -81,7 +81,7 @@
        (= 1 (count targets)) {:status :found :target (first targets) :index 0}
        (nil? pw) {:status :none :reason :no-path-world :proved false}
        :else
-       (let [who [(wworld/body-name c) tag]
+       (let [who [(:primitives c) tag]
              k [(wworld/body-cell c) targets range]
              kept (get @searches who)
              search (if (and (= k (:key kept)) (< (- (js/Date.now) (:t kept)) wsearch/search-max-age-ms))

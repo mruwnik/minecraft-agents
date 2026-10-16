@@ -59,9 +59,17 @@
   (let [p (tu/fake {:blocks high-deck :self {:pos {:x 0.5 :y 64 :z 0.5}}})
         c {:primitives p}]
     (wsearch/goal-flood! c [20 71 20] 0 walk/default-weight nil nil)
-    (is (some? (get @wsearch/goal-floods "Fake")))
+    (is (some? (get @wsearch/goal-floods p)))
     (wsearch/forget-known! c)
-    (is (nil? (get @wsearch/goal-floods "Fake")))))
+    (is (nil? (get @wsearch/goal-floods p)))))
+
+(deftest another-body-of-the-same-name-keeps-nothing-of-the-first
+  (let [mk #(tu/fake {:blocks high-deck :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        [p1 p2] [(mk) (mk)]
+        flood #(wsearch/goal-flood! {:primitives %} [20 71 20] 0 walk/default-weight nil nil)
+        first-memo (flood p1)]
+    (is (identical? first-memo (flood p1)) "one body keeps its flood")
+    (is (not (identical? first-memo (flood p2))) "a new body of the same name starts clean")))
 
 ;; a stone room x 5..18, z -7..6 (12 x 12 inside, feet y 64) on a floor; the goal (17 64 0) beside its east wall at z 0
 (def room-floor (merge (box -2 63 -10 24 63 10 "stone")

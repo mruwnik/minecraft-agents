@@ -34,13 +34,13 @@
   "Blocks nearer the goal an unfinished search's progress end must be for a budgeted plan-walk! to walk to it."
   8)
 
-(defonce ^{:doc "The unfinished budgeted search of each body (by name): {:key :t :walled :limited :r :unlimited}. key says
+(defonce ^{:doc "The unfinished budgeted search of each body (keyed by its primitives, so a new body of the same name starts clean): {:key :t :walled :limited :r :unlimited}. key says
   what it plans (start cell, goal, range, weight, policy, walls); t when it began (ms); walled the pathWorld it plans over;
   limited the search within the walker's limits (planner/create-plan), r its result once over, unlimited the search
   without them when that is needed (beyond-needed?)."}
   searches (atom {}))
 
-(defonce ^{:doc "Land go-to's ended searches knew to their end, per body (by name): {:goal [to range] :cells :edges},
+(defonce ^{:doc "Land go-to's ended searches knew to their end, per body (keyed by its primitives): {:goal [to range] :cells :edges},
   cells a js/Set of the planner's knownKey (options.knownCells), edges one of the cells those searches found at the loaded
   edge and none has known since (options.knownEdges). The loaded land follows the body, so a search from afar reads
   land searched before as a loaded edge again once it has unloaded: without this memory its frontier swings back there
@@ -52,7 +52,7 @@
 (defn known-cells!
   "The body's known land toward to within range (known-land), {:cells :edges}, a new empty one when it held another goal."
   [c to range]
-  (let [who (.-username (.self (:primitives c)))
+  (let [who (:primitives c)
         goal [to range]
         kept (get @known-land who)]
     (if (= goal (:goal kept))
@@ -76,14 +76,14 @@
 (defn forget-known!
   "Forget the body's known land (known-land) and its kept goal flood (goal-floods)."
   [c]
-  (let [who (.-username (.self (:primitives c)))]
+  (let [who (:primitives c)]
     (swap! known-land dissoc who)
     (swap! goal-floods dissoc who)))
 
 (defn release!
   "Forget everything the planner kept for the body (searches, known-land, goal-floods): a go-to call has ended."
   [c]
-  (let [who (.-username (.self (:primitives c)))]
+  (let [who (:primitives c)]
     (swap! searches dissoc who)
     (forget-known! c)))
 
@@ -127,7 +127,7 @@
   "The body's kept goal flood memo for searches of to within range (goal-floods), a new one when it held another goal or
   is older than search-max-age-ms. mask: the pathWorld's wworld/unknown-key (a masked flood leaks at unseen cells)."
   [c to range weight policy walls & [mask]]
-  (let [who (wworld/body-name c)
+  (let [who (:primitives c)
         k [to range weight (policy-key policy) walls mask]
         kept (get @goal-floods who)]
     (if (and (= k (:key kept)) (< (- (js/Date.now) (:t kept)) search-max-age-ms))
@@ -241,7 +241,7 @@
   knew to its end is walked to only when there is no other (:frontier-taken :known)."
   [c pw to range weight {:keys [policy walls one-way frontier budget progress] :or {progress true}}]
   (let [t (js/performance.now)
-        who (wworld/body-name c)
+        who (:primitives c)
         k (search-key c to range weight policy walls pw)
         kept (get @searches who)
         known (when frontier (known-cells! c to range))

@@ -18,8 +18,6 @@
             [jobs.items.obtain.seen :as seen]
             [jobs.items.obtain.table :as table]
             [jobs.lib.need :as need]
-            [jobs.lib.targets :as targets]
-            [jobs.lib.walk.search :as wsearch]
             [jobs.lib.stock :as stock]
             [engine.memory :as mem]
             [engine.perception :as perception]
@@ -35,10 +33,6 @@
   ([world zones] (start world zones sight-opts))
   ([world zones sight] (start world zones sight {}))
   ([world zones sight plans]
-  (reset! wsearch/searches {})
-  (reset! wsearch/known-land {})
-  (reset! wsearch/goal-floods {})
-  (reset! targets/searches {})
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         raw (tu/fake-on-floor (assoc world :floor-block "andesite"))
