@@ -14,6 +14,9 @@
   entity in sight, walk into reach (a go-to child, range 2, no escalation), interact. It yields :continue only when
   the walk waits on the world. Quote: A, a click and the walks.
 
+  An entity that drops out of sight (the pit rim, a wall) between the sighting and the click is walked to at its last
+  seen place and clicked there (the click finds it by id); it is :gone when the click does not.
+
   Ends with data {:used true|false :id :item :text}. The primitive's status :used is done.
   Impossible: :bad-args (no :id). Condition-failed: :gone (no such entity in sight), :no-item, :full, :cannot. Nothing-possible:
   :unreachable (the walk failed twice, data :why), :no-effect, :out-of-reach, :failed.")
@@ -81,11 +84,13 @@
   [c fails]
   (let [{:keys [id item]} (:args c)
         p (:primitives c)
-        e (entity-of p id)]
+        seen (entity-of p id)
+        _ (when seen (ctx/update-mem! c assoc :last-pos (u/pos-of (.-pos seen))))
+        target (if seen (u/pos-of (.-pos seen)) (:last-pos (ctx/mem c)))]
     (cond
-      (nil? e) (finish! c id item :gone)
-      (> (u/dist (u/self-pos c) (u/pos-of (.-pos e))) (reach))
-      (let [r (await (child/call-walk* c :walk {:pos (u/pos-of (.-pos e)) :range 2 :ways #{:walk :clear-seal}}))]
+      (nil? target) (finish! c id item :gone)
+      (> (u/dist (u/self-pos c) target) (reach))
+      (let [r (await (child/call-walk* c :walk {:pos target :range 2 :ways #{:walk :clear-seal}}))]
         (cond
           (= :continue r) :continue
           (and (= :done (:kind r)) (:arrived (:data r))) :again

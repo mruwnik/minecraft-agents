@@ -64,6 +64,25 @@
           (is (= {:kind :condition-failed :cause :no-item}
                  (kc (await (ending-of world 'jobs.items.interact {:id 7 :item "lead"}))))))))))
 
+(deftest interact-walks-to-where-an-entity-dropped-out-of-sight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (merge {:entities [(cow 7 6)]} (stacks "wheat"))
+              reads (atom 0)
+              wrap (fn [p] (let [raw (.-entities p)]
+                             (aset p "entities" (fn [a] (if (and (= 64 (.-radius a)) (= 3 (swap! reads inc))) #js [] (raw a))))
+                             p))
+              out (atom nil)
+              parent {:round (fn ^:async recording-round [c]
+                               (let [e (await (ctx/call c :kid 'jobs.items.interact {:id 7 :item "wheat"}))]
+                                 (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :data])) (ctx/end c :done nil)))))}
+              eng (core/create {:primitives (wrap (tu/seeing-all (tu/fake-on-floor world))) :jobs (assoc registry/jobs 'recording-parent parent)
+                                :dir (tu/tmp-dir)})]
+          (core/submit! eng '(recording-parent) {})
+          (await (tu/run-until-empty eng 40))
+          (is (= {:kind :done :data {:used true :id 7 :item "wheat" :text "used wheat on entity 7"}} @out)))))))
+
 (deftest give-ends-before-the-toss-with-the-fact
   (async done
     (tu/run-async done
