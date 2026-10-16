@@ -33,7 +33,7 @@
       (and (sh/night? p) (sh/safe-from-night? p) (not (sh/walk-leaves-shelter? p shelter to 1)))
       (contract/ok :sheltered (str "sheltered at " where))
       (<= chance (settings/get settings ::risk-limit)) (contract/ok :unexposed (str "no spawn risk at " where))
-      (contains? lowered-by :look) (contract/look :exposed (str "light at " where " not seen") :look-at (mapv (fn [{:keys [x y z]}] [x y z]) look-at))
+      (contains? lowered-by :look) (contract/look :exposed (str "light at " where " not seen") :look-at look-at)
       (contains? lowered-by :dawn) (contract/later :exposed (str "dark at " where " until dawn") :lowered-by lowered-by :chance chance)
       :else (contract/never :exposed (str "exposed at " where ", nothing lowers it") :chance chance))))
 

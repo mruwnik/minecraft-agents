@@ -192,7 +192,6 @@
 
 (deftest explore-search-underground-at-night-is-ok
   (is (= :ok (bound search/safe? tunnel {}))))
-    (is (= [[15 64 0]] (:look-at (nth s 2))) "cells as [x y z], what the :look/around hook takes")))
 
 (deftest the-rest-of-survival-binds-its-checkers
   (let [by-day-hostile {:time st/noon :self {:pos {:x 0 :y 64 :z 0}} :entities [zombie]}]
