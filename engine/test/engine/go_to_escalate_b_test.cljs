@@ -246,6 +246,17 @@
           (is (= #{[2 63 0]} (holes eng)) "the one it had nothing for stays in the ledger")
           (is (every? #(= "air" (block p %)) (holes eng))))))))
 
+(deftest go-to-stair-with-no-tool-for-its-heading-tries-another-heading-before-digging-by-hand
+  ;; sweep 6763 go-to-stair-heading/obsidian-east-and-north-arrives: the stair met obsidian and dug it by hand (64 s a cell)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stone-east (merge pit (box 1 61 0 1 64 0 "stone"))
+              {:keys [out p seen]} (await (run-job! (merge in-pit {:blocks stone-east}) {:pos [10 64 0] :range 1}))]
+          (is (= {:arrived true} @out))
+          (is (empty? (events-of seen :go-to.by-hand)))
+          (is (= "stone" (block p [1 62 0])) "the stone is left"))))))
+
 (deftest go-to-cancelled-mid-escalation-leaves-its-holes-in-the-ledger
   (async done
     (tu/run-async done

@@ -568,12 +568,29 @@
                         (= :stair step) (update :fruitless dec)))
   (await (escalate! c pos detail)))
 
+(defn other-heading?
+  "Whether escalation e is a stair (not the body's own) and escape/choose finds another way with its heading skipped
+  that cuts no block (the one it had no tool for)."
+  [c pos {:keys [step own] :as e} block]
+  (and (= :stair step) (not own)
+       (let [p (:primitives c)
+             goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
+             block-at (escape/block-at-of p)
+             may-dig? (may-dig-fn c)]
+         (not= :none (:step (escape/choose p (end/feet-cell c) goal #(and (may-dig? %) (not= block (block-at %)))
+                                           {:own? (own-placed-fn c) :skip (conj (skips c) (skip-key e))}))))))
+
 (defn ^:async escalation-failed!
   "The child stopped or would wait: when it changed something, walk again (escalation-stopped!); when it had no tool
-  and has not dug by hand yet, run it again by hand (by-hand!); else try the next method (escalation-next!), or after
-  the body's own stair walk again (own-failed!)."
+  and has not dug by hand yet, take another stair heading clear of that block when there is one (other-heading?), else
+  run it again by hand (by-hand!); else try the next method (escalation-next!), or after the body's own stair walk
+  again (own-failed!)."
   [c pos detail]
-  (let [hand? (and (no-tool? detail) (not (:by-hand (ctx/mem c))))]
+  (let [e (:escalation (ctx/mem c))
+        no-tool (and (no-tool? detail) (not (:by-hand (ctx/mem c))))
+        other? (and no-tool (other-heading? c pos e (or (:block detail) (:block (:wait detail)))))
+        hand? (and no-tool (not other?))]
+    (when other? (ctx/update-mem! c update :skipped-steps (fnil conj #{}) (skip-key e)))
     (when hand? (by-hand! c detail))
     (cond
       (partly-made? c) (escalation-stopped! c pos detail)
