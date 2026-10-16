@@ -72,7 +72,7 @@
   A mob that attacks at close range within :radius and outruns the body (jobs.lib.cost/outruns?: a spider at any food;
   not a creeper or an enderman): no flee step. After the door and room steps (1., 2., the race at each chaser's own
   speed) it takes the cornered options (4.) without the back-off.
-  4. Cornered (no open direction worth a walk, or the walk is blocked, or a melee hostile within 3 hit the body since the last step: it cannot be outrun, and the fight is weighed over those hostiles alone; checked afresh every step) with no hostile within
+  4. Cornered (no open direction worth a walk, or the walk is blocked, or a melee hostile within 3 hit the body since the last step, or melee mobs within close-radius hit it retreat-cornered/::beaten-hits (2) times within its ::hurt-window-s: it cannot be outrun, and the fight is weighed over those hostiles alone; checked afresh every step) with no hostile within
      :radius: holds a second (wait, why cornered) and looks again; after :no-gain-steps such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
      - an angry enderman near (one the client flags angry, that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else a seen 2-high gap under a roof within 8 blocks (a 3-tall enderman cannot enter; walks there and holds), else seal, pit, pocket, last of all fight.
      - a drowned near while the body is in water (and no fight wins): swims to the nearest seen dry stand within 16 blocks first (past the mob if need be), before seal, pillar or a fist fight.
@@ -98,6 +98,7 @@
        A pillared body that is hit raises the pillar `retreat-pillar/::pillar-extend` (2) blocks, once, before the refuge fails.
      Order: fight if it wins, then seal, pillar (not against a ranged mob or a spider), back off (not from a mob that outruns the body), pit, pocket, fight.
      Against a creeper back off comes first.
+     Hit ::beaten-hits times in ::hurt-window-s by melee mobs within close-radius, the fight comes first, armed or not.
      Under fire (::fire-hits hits within ::hurt-window-s whose attacker is a ranged mob, or arrow damage: the mob need not be seen or known) cover comes before any fight: the order is
      seal, back off, pit, pocket, fight, though a melee mob is at the body; the fight is weighed over every hostile near, and never counts as won
      while no ranged hostile near has been seen. With none seen the last-resort fight swings only at a mob within 3 blocks, none walked to. In another cell than the
@@ -274,7 +275,7 @@
         p (:primitives c)
         threats (flight/look! c)
         threat (first threats)
-        hit? (cornered/hit-on-the-run! c)
+        hit? (or (cornered/hit-on-the-run! c) (cornered/beaten? c))
         door (when threat (retreat-doors/door-to-shut c (danger-q/mob-pos p threat)))
         early (when (and threat (not hit?) (not door)) (await (early-refuge! c)))
         covered? (cover/cover-fn p threats)

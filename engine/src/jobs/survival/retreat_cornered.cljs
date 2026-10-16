@@ -173,6 +173,7 @@
    :jobs.survival.retreat-cornered/close-leg-s {:default 1 :doc "Seconds a flee step may search or walk while a close-range hostile is within close-radius, or the body was hurt: a body that stands searching there is hit for the whole leg." :spec (a/num-in 0 nil)}
    :jobs.survival.retreat-cornered/hurt-window-s {:default 5 :doc "Seconds after the body lost health in which a flee step is bounded to close-leg-s, even with no hostile seen in reach (an unseen attacker hits as hard)." :spec (a/num-in 0 nil)}
    :jobs.survival.retreat-cornered/fire-hits {:default 1 :doc "Hits by a ranged mob (the damage's attacker, or an arrow) within hurt-window-s that put a cornered body under fire: cover comes before any fight, and a shooter it has not seen is never weighed as beaten. 0: never." :spec (a/int-in 0 nil)}
+   :jobs.survival.retreat-cornered/beaten-hits {:default 2 :doc "Hits by a melee mob near (the damage names one within close-radius; not a creeper or an enderman) within hurt-window-s that show the flight is failing: the body fights it first, armed or not. 0: never." :spec (a/int-in 0 nil)}
    :jobs.survival.retreat-cornered/press-gap {:default 2 :doc "Blocks within which a melee mob (not a creeper or an enderman) makes a cornered armed body fight before it builds a seal or pillar, hit or not: the mob strikes before a block is placed and stands in the cells to fill." :spec (a/num-in 0 nil)}
    :jobs.survival.retreat-cornered/refuge-gap {:default 10 :doc "Blocks within which a lone melee hostile the body cannot outfight is pillared against (else sealed against) before any flee step, when blocks are carried; 0 never." :spec (a/num-in 0 nil)}})
 (defn glance-reach [] (settings/get settings :jobs.survival.retreat-cornered/glance-reach))
@@ -356,6 +357,26 @@
                       (recently-hurt? c)
                       (some #(<= (danger-q/mob-distance p %) (press-gap)) near))))))
 
+(defn beaten-hits [] (settings/get settings :jobs.survival.retreat-cornered/beaten-hits))
+
+(defn beaten?
+  "Whether melee mobs within close-radius hit the body beaten-hits times within hurt-window-s: knocked back and
+  stepping away, it is out of hit-reach at each step, yet the flight is failing."
+  [c]
+  (let [n (beaten-hits)
+        p (:primitives c)
+        names (->> (near-hostiles c)
+                   (filter #(and (not (combat/ranged? %)) (not (combat/creeper? %)) (not (combat/enderman? %))
+                                 (<= (danger-q/mob-distance p %) (close-radius))))
+                   (map #(.-name %))
+                   set)]
+    (and (pos? n)
+         (seq names)
+         (<= n (->> (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s))))
+                    (filter #(some names (:causes (:data %))))
+                    (map #(:hits (:data %) 1))
+                    (reduce + 0))))))
+
 (defn fire-hits [] (settings/get settings :jobs.survival.retreat-cornered/fire-hits))
 
 (defn shot?
@@ -390,6 +411,7 @@
         hostiles (near-hostiles c)
         threat (first hostiles)
         fire? (under-fire? c)
+        beaten (and (not fire?) (beaten? c))
         blind? (and fire? (not-any? #(and (combat/ranged? %) (danger-q/seen-only? %)) hostiles))
         _ (when fire? (ctx/update-mem! c retry-covers (let [{:keys [x y z]} (sh/feet (:primitives c))] [x y z])))
         win? (and (not blind?)
@@ -401,13 +423,13 @@
                              :ranged? (boolean (or fire? (and threat (combat/ranged? threat))))
                              :climber? (boolean (some combat/climber? hostiles))
                              :faster? (not (outrun? c hostiles))
-                             :pressed? (and (not fire?) (pressed? c hostiles))
+                             :pressed? (or beaten (and (not fire?) (pressed? c hostiles)))
                              :swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (in-water? c))
                              :home? home?})]
     (loop [[option & more] order]
       (let [r (when-not (flight/tried? c option)
                 (case option
-                  :fight (if (fist-hold? {:armed? (some? (combat/best-weapon (:primitives c) weapons)) :win? win?
+                  :fight (if (fist-hold? {:armed? (or beaten (some? (combat/best-weapon (:primitives c) weapons))) :win? win?
                                           :sweeps (:sweeps (ctx/mem c) 0) :fist-sweeps fist-sweeps})
                            (await (fist-look! c))
                            (await (fight! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons)) blind?)))

@@ -950,6 +950,26 @@
   (is (= :back-off (first (cornered/escape-order {:pressed? true :creeper? true}))) "a creeper is never fought first")
   (is (= :water (first (cornered/escape-order {:pressed? true :enderman? true})))))
 
+(deftest an-unarmed-body-hit-twice-on-the-run-fights-instead-of-fleeing-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:entities [(zombie 4 64 0)]})
+              follow-and-hit! (fn [r]
+                                (let [[x y z] (:pos (fake/self p))]
+                                  (swap! (fake/state p) #(-> % (update-in [:self :health] - 0.5) (assoc :entities [])))
+                                  (fake/add-entity! p (zombie (+ x 4) y z))
+                                  (mem/write! (:store eng) :hurt {:amount 0.5 :causes ["zombie"]} {:cap 50 :ttl 60000})
+                                  r))
+              leave! (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r))))]
+          (.override (.-world p) "steer" (fn [token a impl] (-> (impl token a) (.then follow-and-hit!))))
+          (.override (.-world p) "attack" leave!)
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (is (seq (calls p "attack")) "it swings at the zombie that keeps hitting it")
+          (is (<= (count (filter #(= :retreat.target (:kind %)) @seen)) 2)
+              "no flee step after the second hit"))))))
+
 (defn ^:async beset-round
   "A retreat of an armed body that carries blocks, at 8 health with zombies about and every walk blocked ((on-walk
   setup-map) runs at each); the mobs leave at its first place or attack. The setup map."
