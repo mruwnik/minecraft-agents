@@ -44,7 +44,7 @@
 (def target [:pos])
 
 (def defaults {:spend {:job-time ::job-time-s}})
-(def safe? (fn [c] (if (:pos (:args c)) ((ready/safe-at-by-night work-place/spot) c) (ready/safe-if-lit c))))
+(def safe? (ready/safe-at-or-if-lit #(when (:pos (:args %)) (work-place/spot %))))
 (def fit? ready/fit?)
 
 (def fish-items #{"cod" "salmon" "tropical_fish" "pufferfish"})

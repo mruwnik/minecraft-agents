@@ -1,5 +1,6 @@
 (ns jobs.apiary.harvest
   (:require [jobs.lib.ready :as ready]
+            [jobs.lib.work-place :as work-place]
             [engine.contract :as contract]
             [engine.settings :as settings]
             [jobs.lib.game-facts :as facts]
@@ -245,7 +246,7 @@
 
 (def target [:box :center])
 
-(def safe? (ready/safe-at-by-night apiary/area-cell))
+(def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
 
 

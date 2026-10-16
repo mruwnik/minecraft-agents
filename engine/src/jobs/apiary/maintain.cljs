@@ -1,5 +1,6 @@
 (ns jobs.apiary.maintain
   (:require [jobs.lib.ready :as ready]
+            [jobs.lib.work-place :as work-place]
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -270,7 +271,7 @@
 
 (def target [:box :center])
 
-(def safe? (ready/safe-at-by-night apiary/area-cell))
+(def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
 
 

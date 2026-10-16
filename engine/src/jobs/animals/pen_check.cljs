@@ -1,5 +1,6 @@
 (ns jobs.animals.pen-check
   (:require [jobs.lib.ready :as ready]
+            [jobs.lib.work-place :as work-place]
             [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -54,8 +55,8 @@
 (def target [:at :box :plan])
 
 (def safe?
-  "Not exposed at the middle of the pen box (:box, else the box of :plan), else at :at."
-  (ready/safe-at-by-night (fn [c] (if-let [box (:box (pen-box c))] (animals/box-middle box) (some-> (:at (:args c)) a/cell)))))
+  "Not exposed at the pen: :at, else the middle of its :box or of the cells of :plan."
+  (ready/safe-at-by-night work-place/spot))
 (def fit? ready/ok)
 
 
@@ -134,10 +135,15 @@
   (let [n (count (filter inside remembered))]
     {:unseen-cells n :animals-complete? (zero? n)}))
 
+(defn start-near
+  "[x y z] the unloaded leaks are listed nearest to: the pen's spot, else the body."
+  [c]
+  (u/cell-vec (or (work-place/spot c) (u/self-pos c))))
+
 (defn ^:async read-pen! [c]
   (let [{:keys [at max-cells]} (:args c)
         box (:box (pen-box c))
-        near (or (:near (ctx/mem c)) (u/cell-vec (u/self-pos c)))
+        near (or (:near (ctx/mem c)) (start-near c))
         _ (ctx/update-mem! c assoc :near near)
         checked (await (pen-read/read! c {:at at :box box :max-cells max-cells :near near}))
         unseen (when (= :unloaded (:reason checked)) (unseen-leak checked))

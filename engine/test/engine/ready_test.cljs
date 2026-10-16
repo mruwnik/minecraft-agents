@@ -11,6 +11,8 @@
             [jobs.blocks.fill-cells :as fill-cells]
             [jobs.blocks.place :as place]
             [jobs.lib.ready :as ready]
+            [jobs.lib.world :as known]
+            [jobs.strip.site :as strip-site]
             [jobs.movement.boat-drive :as boat-drive]
             [jobs.movement.follow :as follow]
             [jobs.movement.linger-near :as linger-near]
@@ -239,3 +241,54 @@
     night-hut {:safe? fill-cells/safe?} {:cells [[6 64 0]]} :ok
     open-night {:safe? stair/safe?} {:from {:x 0 :y 64 :z 0}} :later
     night-hut {:safe? stair/safe?} {} :ok))
+
+(def work-jobs
+  '[jobs.farm.till jobs.farm.plant jobs.farm.harvest jobs.farm.tend jobs.farm.fertilize jobs.farm.compost jobs.farm.tidy
+    jobs.build.path jobs.build.pen jobs.build.from-plan jobs.build.clear-box jobs.build.rail jobs.build.rail-line])
+
+(defn safe-of [job] (:safe? (get registry/jobs job)))
+
+(def plans
+  {"far" {:id "far" :cells [{:pos [15 64 0] :part "p"}]}
+   "near" {:id "near" :cells [{:pos [6 64 0] :part "p"}]}})
+
+(def box-at (fn [x] {:min {:x (dec x) :y 64 :z -1} :max {:x (inc x) :y 64 :z 1}}))
+(def corners-at (fn [x] {:from {:x (dec x) :y 64 :z -1} :to {:x (inc x) :y 64 :z 1}}))
+
+(deftest work-jobs-bind-the-place-their-args-name-by-night
+  (with-redefs [known/plan (fn [_ id] (get plans id))
+                strip-site/site (constantly {:at [15 64 0]})]
+    (are [job args world expected] (= expected (lit 0 15 #(bound (safe-of job) world args)))
+      'jobs.animals.cull {:box (box-at 15)} night-hut :later
+      'jobs.animals.cull {:box (box-at 5)} night-hut :ok
+      'jobs.animals.cull {:center {:x 15 :z 0}} night-hut :later
+      'jobs.animals.tend {:box (box-at 15)} night-hut :later
+      'jobs.animals.tend {:box (box-at 5)} night-hut :ok
+      'jobs.animals.pen-check {:box (box-at 15)} night-hut :later
+      'jobs.animals.pen-check {:plan "far"} night-hut :later
+      'jobs.animals.pen-check {:plan "near"} night-hut :ok
+      'jobs.animals.pen-check {:at [15 64 0]} night-hut :later
+      'jobs.apiary.guard {:box (corners-at 15)} night-hut :later
+      'jobs.apiary.maintain {:box (corners-at 5)} night-hut :ok
+      'jobs.apiary.harvest {:center [15 64 0]} night-hut :later
+      'jobs.village.maintain {:plan "far"} night-hut :later
+      'jobs.village.maintain {:plan "near"} night-hut :ok
+      'jobs.village.maintain {:plan "gone"} night-hut :ok
+      'jobs.strip.site {:site "t" :base "b"} night-hut :later
+      'jobs.food.fish {:pos [15 64 0]} night-hut :later
+      'jobs.food.fish {:pos [6 64 0]} night-hut :ok)))
+
+(deftest farm-and-build-jobs-bind-the-place-of-their-args
+  (doseq [job work-jobs]
+    (are [args world expected] (= expected (lit 0 15 #(bound (safe-of job) world args)))
+      {:at [15 64 0]} night-hut :later
+      {:at [6 64 0]} night-hut :ok)))
+
+(deftest roaming-jobs-wait-for-dawn-above-ground
+  (are [job args] (= :later (lit 0 15 #(bound (safe-of job) night-hut args)))
+    'jobs.farm.find-spot {}
+    'jobs.food.fish {}))
+
+(deftest jobs-that-go-to-a-place-keep-its-exposure-for-exposed-checks
+  (doseq [job (into work-jobs '[jobs.food.fish jobs.farm.find-spot jobs.animals.pen-check jobs.strip.site jobs.village.maintain])]
+    (is (contains? (meta (safe-of job)) ::ready/exposure) (str job))))

@@ -13,11 +13,6 @@
   (let [fx (js/Math.floor x) fy (js/Math.floor (+ y 0.01)) fz (js/Math.floor z)]
     (and (<= (:x min) fx (:x max)) (<= (:y min) fy (:y max)) (<= (:z min) fz (:z max)))))
 
-(defn box-middle
-  "The middle column {:x :z} of the box ({:min :max}, cells, inclusive), at the height of the body's feet."
-  [{:keys [min max]}]
-  {:x (js/Math.floor (/ (+ (:x min) (:x max)) 2)) :z (js/Math.floor (/ (+ (:z min) (:z max)) 2))})
-
 (def breeding-food bait/breeding-food)
 
 (defn food-carried

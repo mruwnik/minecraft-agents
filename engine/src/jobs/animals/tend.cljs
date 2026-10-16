@@ -1,5 +1,6 @@
 (ns jobs.animals.tend
   (:require [jobs.lib.ready :as ready]
+            [jobs.lib.work-place :as work-place]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -202,7 +203,7 @@
 
 (def safe?
   "Not exposed at the middle of the pen: its :box, else the box of its plan part."
-  (ready/safe-at-by-night (fn [c] (some-> (or (:box (:args (pen-of c))) (:box (:args c))) animals/box-middle))))
+  (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
 
 

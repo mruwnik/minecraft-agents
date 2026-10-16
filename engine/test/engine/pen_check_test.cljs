@@ -352,3 +352,8 @@
               (swap! (:clock s) + 700)
               (await (core/tick! (:eng s))))
             (is (<= 3 (nth (fake/vec-pos (:pos (fake/self (:p s)))) 2)) (str "yaw " yaw))))))))
+
+(deftest unloaded-leaks-are-listed-nearest-the-pen-not-the-body
+  (are [args expected] (= expected (pen-check/start-near {:args args}))
+    {:box {:min {:x 0 :y 64 :z 0} :max {:x 4 :y 64 :z 4}}} [2 64 2]
+    {:at [7 64 3]} [7 64 3]))

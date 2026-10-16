@@ -126,7 +126,7 @@
                           :world (world/of-data (merge {"base" plan} plans) {"field-base" blueprint} [])})]
     (mem/write! (:store eng) :home {:pos old-home} mem/place-policy)
     (mem/write! (:store eng) :spawn-bed {:pos old-bed} {:cap 1 :ttl :forever})
-    {:eng eng :p p :calls calls :results results :seen seen :furnaces furnaces}))
+    {:eng eng :p p :calls calls :results results :seen seen :furnaces furnaces :clock clock}))
 
 (defn start! [{:keys [eng]} a] (tu/child-outcome eng job a 600))
 (defn names [{:keys [calls]}] (mapv (comp name first) @calls))
@@ -435,6 +435,25 @@
           (is (= :not-done r) "the job yields every round")
           (is (= :hostile-near (:reason (first (filter #(= :waiting (:kind %)) @(:seen env))))) "waiting with its reason")
           (is (empty? (names env)) "no phase ran"))))))
+
+(deftest a-danger-arriving-after-the-start-holds-the-resume
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env-at (atom nil)
+              zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 0 :y -27 :z 13} :health 20 :visible true}
+              env (setup :triggers {}
+                         :results {'jobs.strip.corridor (fn [_]
+                                                          (fake/add-entity! (:p @env-at) zombie)
+                                                          (core/cancel! (:eng @env-at) (first (:list (core/state (:eng @env-at)))))
+                                                          {:status :done :taken {} :new-segments []})})
+              _ (reset! env-at env)]
+          (core/submit! (:eng env) (list job args) {})
+          (await (tu/run-until-empty (:eng env) 600))
+          (is (= 1 (count (called env 'jobs.strip.corridor))) "cut after the first corridor")
+          (is (= :not-done (await (start! env (dissoc args :at)))) "the resume yields every round")
+          (is (= 1 (count (called env 'jobs.strip.corridor))) "no corridor ran with the hostile near")
+          (is (= :hostile-near (:reason (last (filter #(= :waiting (:kind %)) @(:seen env)))))))))))
 
 (deftest a-cut-site-puts-home-and-spawn-back-in-its-cleanup
   (async done

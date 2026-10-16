@@ -121,13 +121,6 @@
 (defn center-of [c]
   (or (:center (:args c)) (:center (ctx/mem c)) (u/self-pos c)))
 
-(defn area-cell
-  "The middle column {:x :z} of the area: its :box, else its centre."
-  [c]
-  (if-let [{:keys [from to]} (:box (:args c))]
-    {:x (js/Math.floor (/ (+ (:x from) (:x to)) 2)) :z (js/Math.floor (/ (+ (:z from) (:z to)) 2))}
-    (select-keys (center-of c) [:x :z])))
-
 (defn corners [{:keys [from to]}]
   (for [x [(:x from) (:x to)] y [(:y from) (:y to)] z [(:z from) (:z to)]]
     {:x x :y y :z z}))

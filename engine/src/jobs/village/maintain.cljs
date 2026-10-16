@@ -1,6 +1,6 @@
 (ns jobs.village.maintain
   (:require [jobs.lib.ready :as ready]
-            [jobs.lib.world :as known]
+            [jobs.lib.work-place :as work-place]
             [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
@@ -216,14 +216,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(defn plan-middle
-  "The middle column {:x :z} of the box round the cells of the plan, nil without a plan or cells."
-  [c]
-  (when-let [ps (seq (keep :pos (:cells (some->> (:plan (:args c)) (known/plan c)))))]
-    (let [mid (fn [i] (js/Math.floor (/ (+ (apply min (map #(nth % i) ps)) (apply max (map #(nth % i) ps))) 2)))]
-      {:x (mid 0) :z (mid 2)})))
-
-(def safe? (ready/safe-at-by-night plan-middle))
+(def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
 
 (defn done?
