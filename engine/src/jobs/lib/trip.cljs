@@ -121,12 +121,12 @@
 
 (defn spent-tool?
   "Whether every carried tool that digs block-name is down to ::spent-uses uses or fewer (a tool with no known durability counts as whole) and some is carried:
-  the spare was not had, so one more dig may leave the body without any."
+  the spare was not had, so one more dig may leave the body without any. Never for a block that needs no tool (dirt): a worn shovel only costs speed."
   [p block-name]
   (let [harvest (some-> (.harvestTools p block-name) js->clj)
         suffix (str "_" (kind/tool-kind block-name))
         ok (set harvest)
-        usable (filter #(and (str/ends-with? (:name %) suffix) (or (empty? ok) (ok (:name %)))) (u/inventory p))]
+        usable (filter #(and (str/ends-with? (:name %) suffix) (ok (:name %))) (u/inventory p))]
     (boolean (and (seq usable) (every? #(and (:durability %) (<= (:durability %) (settings/get spare-settings ::spent-uses))) usable)))))
 
 (defn spare-name

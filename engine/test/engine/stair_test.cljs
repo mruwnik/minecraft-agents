@@ -1230,6 +1230,15 @@
             (is (= dug? (boolean (seq (digs p)))) (pr-str uses args))
             (is (= [status reason] [(:status @out) (:reason @out)]) (pr-str uses args))))))))
 
+(deftest a-stair-through-dirt-goes-on-with-only-a-worn-shovel
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dirt (update-vals ground (constantly "dirt"))
+              {:keys [out p]} (await (stair! {:blocks dirt :inventory [{:name "stone_shovel" :count 1 :durability 3}]} east (fn [_])))]
+          (is (seq (digs p)))
+          (is (= [:done nil] [(:status @out) (:reason @out)])))))))
+
 (deftest a-stair-submitted-far-from-where-the-body-stands-fails-moved-since-submit-unless-told-here
 
   (async done
