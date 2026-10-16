@@ -29,24 +29,25 @@
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :tool.spare :data {:tool "iron_pickaxe"}} :for-s 60}]}
   {:name "fell-tree-with-a-worn-last-axe-gets-a-stone-spare"
-   :blocks [[:fill [16 10 16] [16 13 16] "oak_log"] [:fill [14 12 14] [18 14 18] "oak_leaves[persistent=true]"] [:fill [16 12 16] [16 13 16] "oak_log"]]
+   :blocks [[:fill [16 10 16] [16 17 16] "oak_log"] [:fill [14 16 14] [18 18 18] "oak_leaves[persistent=true]"] [:fill [16 16 16] [16 17 16] "oak_log"]]
    :body {:at [16.5 10 21.5] :yaw 180 :inventory [["iron_axe[damage=248]" 1] ["oak_planks" 12] ["stick" 4] ["cobblestone" 4]]}
    :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 10 16]})]]
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_axe"}} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed} :within-s 190 :of-job true}]
-   :after [[:not-block [16 13 16] "oak_log"]]}
+   :after [[:not-block [16 17 16] "oak_log"]]}
   {:name "craft-puts-its-table-outside-the-body-box"
    :body {:at [16.01 10 16.5] :inventory [["oak_planks" 8] ["stick" 4] ["cobblestone" 4]]}
    :act [[:job (jobs.items.craft {:item "stone_pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 90 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "stone_pickaxe" 1]]}
+  ;; the spare step makes a stone pickaxe before the mine (tool.spare), so the worn last pick is replaced before it can break
   {:name "obtain-raw-iron-last-pick-breaks-new-one-crafted"
    :blocks [[:set [23 10 16] "iron_ore"] [:set [23 10 18] "iron_ore"]
             [:set [12 10 14] "torch"] [:set [20 10 14] "torch"] [:set [16 10 18] "torch"]]
    :body {:at [12.5 10 16.5] :inventory [["stone_pickaxe[damage=130]" 1] ["oak_log" 4] ["torch" 8] ["cobblestone" 8]]}
    :act [[:job (jobs.items.obtain {:item "raw_iron" :count 2})]]
-   :expect [{:event {:source :job :kind :tool.broke} :within-s 150 :of-job true}
+   :expect [{:event {:source :job :kind :tool.spare} :within-s 150 :of-job true}
             {:event {:source :job :kind :completed} :within-s 280 :of-job true}]
    :after [[:item "raw_iron" 2]]
    :limit-s 300}

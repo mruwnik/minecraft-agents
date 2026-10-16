@@ -24,9 +24,9 @@
             {:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 120 :of-job true}]
    :after [[:body-near [14.5 0 10.5] 1.5]]
    :limit-s 160}
-  ;; cards 0b44e1ac, 4252e02e: a queued craft whose table lies outside the hut, and a queued walk from a dug-in body, wait for day
+  ;; cards 0b44e1ac, 4252e02e: a queued craft whose table lies outside the hut (lit, seen through a glass window), and a queued walk from a dug-in body, wait for day
   {:name "queued-craft-with-the-table-outside-waits-for-day"
-   :blocks [[:set [20 0 12] "crafting_table"]]
+   :blocks [[:set [20 0 12] "crafting_table"] [:set [21 0 12] "torch"] [:fill [16 0 12] [16 1 12] "glass"]]
    :body {:inventory [["oak_planks" 3] ["stick" 2]]}
    :act [[:job (jobs.memory.set-place {:name :bed :pos #at [10 0 12]})]
          [:job (hold (jobs.survival.night {}))]

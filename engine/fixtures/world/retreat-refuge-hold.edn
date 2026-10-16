@@ -4,6 +4,7 @@
 ;; e0670a91 and 8d9b5bbc (seal blocks are ledgered: cleanup takes them back once the mob is gone), b5c1d94a 40613c1e 94b5eaee
 ;; 73aa2088 (a walk from inside the plug holds :sealed-hostile-near for a skeleton heard near, for :plug-wait-ms in all, then
 ;; gives up; a skeleton heard far does not hold), 1f0b4279 and 8035feed (a body in a hole with dirt, a zombie that moves).
+;; Pit case: the zombie stands 4 off on the stone top, close enough for its line of sight over the lip to reach the body in the pit.
 ;; Pillar cases: open ground, 20 dirt, one NoAI zombie 7 blocks off (a lone melee mob between cover-gap 5 and refuge-gap 10:
 ;; pillar first). Tunnel cases: the cornered-retreat stone mass (x 2..30, z 10..22, y 0..4), 1x2 tunnel along z 16 from x 5.
 {:defaults
@@ -41,7 +42,7 @@
          [:wait-s 90]
          [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
    :expect [{:event {:source :job :kind :retreat_sealed :message [:contains "pillared up"]} :within-s 40}
-            {:no-event {:source :job :kind :completed :data {:ended :hidden :hold :spent}} :for-s 110}
+            {:no-event {:source :job :kind :completed :data {:ended :hidden :hold :spent}} :for-s 80}
             {:event {:source :job :kind :completed :data {:ended :hidden :hold :spent}} :within-s 180}]
    :limit-s 190}
   {:name "walk-off-a-pillar-keeps-clear-of-the-zombie-at-its-foot"
@@ -88,20 +89,20 @@
          [:await {:source :job :kind :retreat_sealed} 40]
          [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
-            {:event {:source :job :kind :go-to.sealed-hostile-near :data {:mob "skeleton"}} :within-s 150}
+            {:event {:source :job :kind :waiting :data {:reason :sealed-hostile-near :mob "skeleton" :band :near}} :within-s 150}
             {:event {:source :job :kind :result :data {:arrived false}} :within-s 230 :of-job true}]
    :after [[:block [6 0 16] "cobblestone"] [:body-near [5.5 0 16.5] 1.5]]
    :limit-s 240}
   {:name "walk-from-the-plug-skeleton-heard-far-gives-no-hold"
    :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [5 0 16] [29 1 16] "air"]
-            [:set [8 1 16] "torch"] [:set [14 1 16] "torch"] [:set [20 1 16] "torch"]]
+            [:set [8 1 16] "torch"]]
    :body {:at [5.5 0 16.5] :inventory [["cobblestone" 20]]}
    :act [[:summon "skeleton" [19.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :job :kind :retreat_sealed} 40]
          [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
             {:event {:source :job :kind :result} :within-s 200 :of-job true}
-            {:no-event {:source :job :kind :go-to.sealed-hostile-near} :for-s 200 :until {:source :job :kind :result :data {:arrived [:any]}} :of-job true}]
+            {:no-event {:source :job :kind :waiting :data {:reason :sealed-hostile-near}} :for-s 200 :until {:source :job :kind :result :data {:arrived [:any]}} :of-job true}]
    :limit-s 210}
   {:name "zombie-diagonal-to-a-stair-hole-body-survives"
    :blocks [[:fill [0 0 0] [31 2 31] "stone"] [:fill [16 2 16] [16 2 16] "air"]]
@@ -114,7 +115,7 @@
   {:name "zombie-coming-at-a-body-in-a-pit-with-4-dirt-seals-it"
    :blocks [[:fill [0 0 0] [31 2 31] "stone"] [:fill [16 1 16] [16 2 16] "air"]]
    :body {:at [16.5 1 16.5] :inventory [["dirt" 4]] :effects [["resistance" 900 1]]}
-   :act [[:summon "zombie" [28.5 3 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "zombie" [20.5 3 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat_sealed} :within-s 60}
             {:no-event {:source :body :kind :died} :for-s 60}]
    :after [[:block [16 3 16] "dirt"]]

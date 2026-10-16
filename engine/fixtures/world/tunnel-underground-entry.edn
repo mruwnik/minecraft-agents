@@ -12,7 +12,7 @@
  [{:name "body-in-the-room-enters-the-line-where-it-stands"
    :blocks [[:fill [11 4 15] [13 5 17] "air"] [:set [12 6 16] "sea_lantern"]]
    :act [[:job (jobs.access.tunnel {:target #at [16 1 16] :max-length 6 :keep true})]]
-   :expect [{:event {:source :job :kind :tunnel.plan :data {:entry [12 4 16]}} :within-s 30 :of-job true}
+   :expect [{:event {:source :job :kind :tunnel.plan :data {:entry #at [12 4 16]}} :within-s 30 :of-job true}
             {:event {:source :job :kind :tunnel.done} :within-s 100 :of-job true}]
    :after [[:body-near [15.5 1 16.5] 2] [:body-far [12.5 10 16.5] 5]]}
   {:name "body-off-the-line-column-is-too-far"

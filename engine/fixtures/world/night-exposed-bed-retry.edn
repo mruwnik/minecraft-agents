@@ -64,7 +64,7 @@
          [:rcon "execute positioned $X $Y $Z run setblock ~10 ~ ~12 red_bed[facing=east,part=foot]"]
          [:rcon "execute positioned $X $Y $Z run setblock ~11 ~ ~12 red_bed[facing=east,part=head]"]
          [:job (jobs.survival.night)]
-         [:await {:source :job :kind :shelter.sleep_failed} 60]
+         [:await {:source :job :kind :holding :data {:reason :monsters-near}} 60]
          [:rcon "kill @e[type=zombie,$BOX]"]
          [:wait-s 285]
          [:rcon "kill @e[type=spider,$BOX]"]
@@ -72,7 +72,7 @@
          [:rcon "kill @e[type=creeper,$BOX]"]
          [:rcon "kill @e[type=zombie,$BOX]"]
          [:wait-s 30]]
-   :expect [{:event {:source :job :kind :shelter.sleep_failed} :within-s 60}
+   :expect [{:event {:source :job :kind :holding :data {:reason :monsters-near}} :within-s 60}
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 400}]
    :after [[:body-near [10.5 0 12.5] 6]]
    :limit-s 420}]}

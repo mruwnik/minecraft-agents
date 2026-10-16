@@ -30,6 +30,7 @@
             {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [20 12 16] 3]}} :for-s 40}]
    :limit-s 60}
   {:name "flight-keeps-away-from-a-recent-death"
+   :body {:yaw 90}
    :memory [{:kind :died :data {:pos #xyz [26 0 16]}}]
    :act [[:summon "zombie" [11.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.target} :within-s 20}

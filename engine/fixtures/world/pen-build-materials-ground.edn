@@ -1,6 +1,7 @@
 ;; jobs.build.pen: which fences it uses and where it puts them. Cards 04ac01e3 (an :any want is met by the other wood carried), a9b3a6f8 (fences
 ;; are crafted from logs it fetches, exploring for more trees), 24cde5af (:fetch false waits for materials), 8c74eba0 (the ring follows rising
 ;; ground), d943725f (a leaf canopy above the ring is not ground). Ring plan: outline x 10..17, z 10..17 at y 0 (28 fences).
+;; The ring has no gate: the body stands outside it when it is meant to be built (a body inside would be walled in).
 ;; Should-succeed: ring closed in each case. Should-fail: no fences and :fetch false waits :no-items, nothing placed.
 {:defaults
  {:tags [:build :pen :animals]
@@ -22,7 +23,7 @@
    :after [[:not-block [10 0 10] "oak_fence"]]
    :limit-s 60}
   {:name "ring-on-rising-ground-follows-the-surface"
-   :body {:at [13.5 0 13.5] :settle-s 2 :inventory [["oak_fence" 40]] :effects [["resistance" 600 4]]}
+   :body {:at [6.5 0 13.5] :settle-s 2 :inventory [["oak_fence" 40]] :effects [["resistance" 600 4]]}
    :blocks [[:fill [14 0 0] [31 0 31] "dirt"]]
    :act [[:job (jobs.build.pen {:plan "$plan:ring" :fetch false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 140 :of-job true}
@@ -30,15 +31,19 @@
    :after [[:block [10 0 10] "oak_fence"] [:block [17 1 14] "oak_fence"] [:not-block [17 0 14] "oak_fence"]]
    :limit-s 170}
   {:name "leaf-canopy-above-the-ring-is-not-ground"
-   :body {:at [13.5 0 13.5] :settle-s 2 :inventory [["oak_fence" 40]] :effects [["resistance" 600 4]]}
+   :body {:at [6.5 0 13.5] :settle-s 2 :inventory [["oak_fence" 40]] :effects [["resistance" 600 4]]}
    :blocks [[:fill [8 4 8] [19 4 19] "oak_leaves[persistent=true]"]]
    :act [[:job (jobs.build.pen {:plan "$plan:ring" :fetch false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]
    :after [[:block [10 0 10] "oak_fence"] [:not-block [10 5 10] "oak_fence"] [:block [17 0 14] "oak_fence"]]}
   {:name "fences-crafted-from-logs-fetched-from-trees"
-   :body {:at [13.5 0 13.5] :settle-s 2 :inventory [["oak_log" 6]] :effects [["resistance" 600 4]]}
-   :blocks [[:fill [4 0 4] [4 4 4] "oak_log"] [:fill [4 0 8] [4 4 8] "oak_log"] [:fill [4 0 20] [4 4 20] "oak_log"] [:fill [4 0 24] [4 4 24] "oak_log"]
-            [:fill [24 0 6] [24 4 6] "oak_log"] [:fill [24 0 24] [24 4 24] "oak_log"]]
+   :body {:at [6.5 0 13.5] :settle-s 2 :inventory [["oak_log" 6]] :effects [["resistance" 600 4]]}
+   :blocks [[:fill [4 0 4] [4 4 4] "oak_log"] [:fill [3 4 3] [5 5 5] "oak_leaves[persistent=true]"] [:set [4 4 4] "oak_log"]
+            [:fill [4 0 8] [4 4 8] "oak_log"] [:fill [3 4 7] [5 5 9] "oak_leaves[persistent=true]"] [:set [4 4 8] "oak_log"]
+            [:fill [4 0 20] [4 4 20] "oak_log"] [:fill [3 4 19] [5 5 21] "oak_leaves[persistent=true]"] [:set [4 4 20] "oak_log"]
+            [:fill [4 0 24] [4 4 24] "oak_log"] [:fill [3 4 23] [5 5 25] "oak_leaves[persistent=true]"] [:set [4 4 24] "oak_log"]
+            [:fill [24 0 6] [24 4 6] "oak_log"] [:fill [23 4 5] [25 5 7] "oak_leaves[persistent=true]"] [:set [24 4 6] "oak_log"]
+            [:fill [24 0 24] [24 4 24] "oak_log"] [:fill [23 4 23] [25 5 25] "oak_leaves[persistent=true]"] [:set [24 4 24] "oak_log"]]
    :act [[:job (jobs.build.pen {:plan "$plan:ring"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 340 :of-job true}
             {:no-event {:source :job :kind :fetch.failed :data {:reason :no-source}} :for-s 340 :until {:source :job :kind :completed}}]

@@ -1,5 +1,6 @@
 ;; The night hold (jobs.survival.night, hungry reflexes cannot reach a held body) eats and cooks: cards 08af40de, d6d5acb3.
-;; A closed stone hut x 8..16, z 8..16 (no bed): the body is held, hungry by RCON (food 8, hp 15). Needs night: run with
+;; A stone hut x 8..16, z 8..16 (no bed) with a doorway at [8 0..1 12] and the home set inside: the body starts outside, so the night
+;; is not already done (a body sheltered at its start has nothing for the night to do), walks in, and is held, hungry by RCON (food 8, hp 15). Needs night: run with
 ;; --allow-time --time-log <the shared time log>.
 ;; Should-succeed: raw beef is smelted at the furnace inside the hut, then eaten (shelter.ate).
 ;; Should-fail: carrots reserved as bait are not eaten while food is above 3; the body keeps all of them.
@@ -8,11 +9,12 @@
   :time :night-exclusive
   :plot {:height 6}
   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
-           [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
-  :body {:at [13.5 0 13.5] :settle-s 2}
-  :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+           [:set [9 1 9] "torch"] [:set [15 1 15] "torch"] [:fill [8 0 12] [8 1 12] "air"] [:set [5 0 10] "torch"] [:set [5 0 14] "torch"]]
+  :body {:at [4.5 0 12.5] :yaw 270 :settle-s 2}
+  :act [[:job (jobs.memory.set-place {:name :home :pos #at [10 0 12]})]
+        [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
         [:rcon "damage $BODY 3 minecraft:generic"]
-        [:job (jobs.survival.night {})]]
+        [:job (jobs.survival.night {:walk-radius 8})]]
   :limit-s 120}
  :cases
  [{:name "hold-cooks-beef-at-the-furnace-inside-then-eats"
@@ -27,7 +29,7 @@
    :body {:inventory [["beef" 2] ["coal" 2]]}
    :expect [{:event {:source :job :kind :holding} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :for-s 60}]
-   :after [[:body-near [13.5 0 13.5] 3.5]]
+   :after [[:body-near [12.5 0 12.5] 5]]
    :limit-s 80}
   {:name "hold-leaves-reserved-bait-carrots-alone"
    :body {:inventory [["carrot" 6]]}

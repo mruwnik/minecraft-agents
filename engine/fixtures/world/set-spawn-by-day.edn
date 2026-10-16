@@ -45,7 +45,8 @@
   {:name "night-refuses-to-set-spawn"
    :time :night
    :act [[:job (jobs.survival.set-spawn {:bed #at [20 0 16]})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :night}} :within-s 20 :of-job true}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :night}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
    :after [[:body-near [8.5 0 16.5] 2]]
    :limit-s 30}
   ;; card 2cca880d: a remembered :bed whose block is gone is dropped and the bed the body sees is used (no :bed arg)

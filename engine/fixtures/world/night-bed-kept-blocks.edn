@@ -1,12 +1,12 @@
 ;; jobs.survival.night with a carried bed on a floor of kept blocks (card 6850dcdf): a carried bed is never put down on a chest, a crafting
 ;; table or another kept block; the failure is booked (:bed-place-failed memory) and the bed stays in the bag.
-;; Floor x 8..24, z 8..24 is crafting tables with chests among them. Needs night: run with --allow-time.
+;; Floor x 0..31, z 0..31 (the whole plot: the night relocates off a refused bed floor, so no stone is left to put it on) is crafting tables with chests among them. Needs night: run with --allow-time.
 ;; Should-fail: no bed is placed on the plot.
 {:defaults
  {:tags [:night :survival :bed]
   :time :night-exclusive
   :plot {:height 8}
-  :blocks [[:fill [8 -1 8] [24 -1 24] "crafting_table"] [:fill [12 -1 12] [20 -1 12] "chest"] [:fill [12 -1 20] [20 -1 20] "chest"]
+  :blocks [[:fill [0 -1 0] [31 -1 31] "crafting_table"] [:fill [12 -1 12] [20 -1 12] "chest"] [:fill [12 -1 20] [20 -1 20] "chest"]
            [:set [8 0 8] "torch"] [:set [24 0 8] "torch"] [:set [8 0 24] "torch"] [:set [24 0 24] "torch"]]
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 3}}
  :cases
