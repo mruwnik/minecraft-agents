@@ -244,21 +244,28 @@
            (animals/in-box? box there)
            (<= (u/flat-dist there pos) (+ range arrive-slack))))))
 
-(defn candidates
-  "The adults within radius of the start, on nobody's lead, the zone rules allowing, nearest first; none already in :box."
+(defn free-adults
+  "The adults within radius of the start, on nobody's lead, none already in :box, nearest first. The animal sighted at the
+  start stays one when it wandered past the radius while the food was fetched."
   [c]
   (let [{:keys [mob radius uuid watch-radius include-penned?]} (:args c)
-        origin (:origin (ctx/mem c))
+        {:keys [origin sighting]} (ctx/mem c)
         pens (atom #{})
-        free? (fn [e] (and (not (animals/leashed? e)) (<= (u/flat-dist origin (u/pos-of (.-pos e))) radius)
+        in-reach? (fn [e] (or (= (:key sighting) (animals/key-of e))
+                              (<= (u/flat-dist origin (u/pos-of (.-pos e))) radius)))
+        free? (fn [e] (and (not (animals/leashed? e)) (in-reach? e)
                            (not (and (:box (:args c)) (animals/in-box? (:box (:args c)) (u/pos-of (.-pos e)))))
                            (or include-penned? (not (spare/enclosed? c pens e)))))]
     (->> (if uuid
            (filterv #(and (str/starts-with? (str (animals/key-of %)) uuid) (not (animals/leashed? %))) (animals/adults (:primitives c) mob watch-radius))
-           (filterv free? (animals/adults (:primitives c) mob (+ radius (u/flat-dist origin (u/self-pos c))))))
+           (filterv free? (animals/adults (:primitives c) mob (+ radius (if sighting radius 0) (u/flat-dist origin (u/self-pos c))))))
          (sort-by #(u/flat-dist (u/self-pos c) (u/pos-of (.-pos %))))
-         vec
-         (animals/allowed c :lure-to.declined "lure-to" :take))))
+         vec)))
+
+(defn candidates
+  "free-adults the zone rules allow."
+  [c]
+  (animals/allowed c :lure-to.declined "lure-to" :take (free-adults c)))
 
 (defn successor
   "Another adult the zone rules allow, within follow-reach of the body: it follows the food as well as the lost one."
@@ -313,7 +320,7 @@
         cands (candidates c)
         target (first cands)
         tries (:equip-tries (ctx/mem c) 0)]
-    (when target (ctx/update-mem! c assoc :sighting {:pos (u/pos-of (.-pos target)) :at (ctx/now c)}))
+    (when target (ctx/update-mem! c assoc :sighting {:key (animals/key-of target) :pos (u/pos-of (.-pos target)) :at (ctx/now c)}))
     (cond
       (nil? food) (await (get-food! c))
       (empty? cands) (or (await (look-for! c)) (finish! c :no-animal))

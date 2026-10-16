@@ -56,6 +56,12 @@
     {:entities [(cow 1 30)]} {} {} [:later :luring]
     {:entities [(cow 1 30)]} {:uuid "u1"} {:animal "u1"} [:later :luring]))
 
+(deftest the-animal-sighted-at-the-start-stays-a-candidate-after-it-wandered-past-the-radius
+  (are [m expected] (= expected (mapv #(.-uuid %) (lure-to/free-adults (ctx-of {:self {:pos {:x 0 :y 64 :z 0}} :entities [(cow 1 12)]} {:radius 8} (merge {:origin {:x 0 :y 64 :z 0}} m)))))
+    {} []
+    {:sighting {:key "u1" :pos {:x 9 :y 64 :z 0} :at 1000}} ["u1"]
+    {:sighting {:key "u2" :pos {:x 9 :y 64 :z 0} :at 1000}} []))
+
 (deftest lures-the-cow-to-the-spot-and-puts-the-food-away
   (async done
     (tu/run-async done
