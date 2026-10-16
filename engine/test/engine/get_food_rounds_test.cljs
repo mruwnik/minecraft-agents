@@ -653,6 +653,22 @@
           (is (re-find #"too-dangerous" (stop-text seen)))
           (is (re-find #"passes creeper" (stop-text seen))))))))
 
+(deftest a-body-on-low-health-looks-around-before-walking-out-and-refuses-a-creeper-it-finds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup (merge bread-chest {:self {:food 5 :health 2} :time 6000}) :step-ms 5)
+              look (.-look p)
+              added (atom false)]
+          (set! (.-look p) (fn [& args]
+                             (when (compare-and-set! added false true)
+                               (fake/add-entity! p (assoc creeper :pos {:x 50.5 :y 64 :z 0.5})))
+                             (.apply look p (to-array args))))
+          (know-source! eng {:x 60 :y 64 :z 0} :chest)
+          (await (one-round! eng {:explore false}))
+          (is (= [] (calls p "transfer")))
+          (is (re-find #"passes creeper" (stop-text seen))))))))
+
 (deftest after-a-too-dangerous-ending-the-next-call-acts-nothing-so-the-reflex-backs-off
   (async done
     (tu/run-async done
