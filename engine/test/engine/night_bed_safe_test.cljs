@@ -25,10 +25,11 @@
   {[5 64 0] [0 0] [5 65 0] [0 0]})
 
 (defn tunnel-world
-  "A miner at x 5 in the one-wide stone tunnel (x 0..20), at night, with a bed block at far-bed in the open."
+  "A miner at x 5 in the one-wide stone tunnel (x 0..20, both ends stopped, else its unseen ends flood into the open
+  field and count as a room), at night, with a bed block at far-bed in the open."
   [light]
   {:floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 0}} :time st/night :offlineScale 0.0001
-   :blocks (merge hut/tunnel {"40,64,0" "red_bed"}) :light light})
+   :blocks (merge hut/tunnel {"-1,64,0" "stone" "-1,65,0" "stone" "21,64,0" "stone" "21,65,0" "stone" "40,64,0" "red_bed"}) :light light})
 
 (defn lit-fake
   "{:raw :p}: a fake body and its perception wrap, so the raw world's sky light is read (sh/buried?). :sees-all in the
@@ -102,16 +103,26 @@
   (let [world (merge (hut/hut-world {:x 5 :y 64 :z 0} {"30,64,0" "red_bed"}) {:time st/night})]
     (is (false? (hut/holds-with world (fn [eng] (st/know-bed! eng {:x 30 :y 64 :z 0})))))))
 
+(defn lcg
+  "A repeatable stand-in for Math.random (the looks and ray jitter pick which cells the body has seen)."
+  [seed]
+  (let [a (atom (+ 12345 (* 7919 seed)))]
+    (fn [] (/ (swap! a #(mod (+ (* % 1103515245) 12345) 2147483648)) 2147483648))))
+
 (deftest a-buried-body-asked-for-the-night-stays-in-the-tunnel
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p raw]} (setup (tunnel-world buried-light))]
-          (core/submit! eng '(jobs.survival.night) {})
-          (await (st/tick-n eng 12))
-          (is (= {:x 5 :y 64 :z 0} (update-vals (st/pos-of p) js/Math.floor)) "the body stays in the tunnel")
-          (is (empty? (st/calls raw "sleep")))
-          (is (empty? (st/calls raw "moveTo")) "no walk toward the far bed"))))))
+        (let [random js/Math.random]
+          (doseq [seed [0 1 5 7]]
+            (set! js/Math.random (lcg seed))
+            (let [{:keys [eng p raw]} (setup (tunnel-world buried-light))]
+              (core/submit! eng '(jobs.survival.night) {})
+              (await (st/tick-n eng 12))
+              (is (= {:x 5 :y 64 :z 0} (update-vals (st/pos-of p) js/Math.floor)) (str "the body stays in the tunnel, seed " seed))
+              (is (empty? (st/calls raw "sleep")))
+              (is (empty? (st/calls raw "moveTo")) "no walk toward the far bed")))
+          (set! js/Math.random random))))))
 
 (def hut-light
   "A closed hut: sky light 0 at the body's feet and head cells."
