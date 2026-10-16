@@ -388,7 +388,7 @@ trigger is a fn plus one line:
 ```
 
 The **register** is an ordered vector of entries `{:id :trigger :job :args :persistence :cooldown-s :level :backoff :builtin?}`.
-Each tick the engine fires the first entry whose `:when` holds, which is not muted or cooling down and whose job would start: its `can-start?`, `can-run?`, `safe?` and `fit?` say neither `:later` nor `:never` (asked every tick through `check-cache`). A trigger held by them cuts nothing; `GET /triggers` shows `:held` with the reason, and info `reflex.held` tells it once per reason.
+Each tick the engine fires the first entry whose `:when` holds, which is not muted or cooling down and whose job would start: its `can-start?`, `can-run?`, `safe?` and `fit?` say neither `:later` nor `:never` (a held trigger's checks are asked again only after `::held-recheck-ms`, 2 s). A trigger held by them cuts nothing; `GET /triggers` shows `:held` with the reason, and info `reflex.held` tells it once per reason.
 
 - A firing reflex cuts a running listed job (which stays listed and runs again once no reflex holds the body). It cuts a
   running reflex job only if it sits above that one. A reflex whose job is running does not fire again.

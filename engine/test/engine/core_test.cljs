@@ -1453,7 +1453,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [trigger [:gated-any :gated-seq :gated-repeat]]
-          (let [{:keys [eng seen]} (declined-setup)]
+          (let [{:keys [eng seen clock]} (declined-setup)]
             (reset! flag false)
             (core/register-reflex! eng {:trigger trigger})
             (await (core/tick! eng))
@@ -1461,6 +1461,7 @@
             (is (empty? (filter #(= [:reflex :fired] [(:source %) (:kind %)]) @seen)))
             (is (some? (core/held-trigger eng trigger)))
             (reset! flag true)
+            (swap! clock + 5000)
             (await (core/tick! eng))
             (is (= ["j1"] (ran seen)) (str trigger " fires once the child's check passes"))))))))
 

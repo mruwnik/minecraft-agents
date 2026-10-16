@@ -22,7 +22,9 @@
   {::urgent-wait-s {:default 15 :spec (a/num-in 0 nil)
                     :doc "Seconds an urgent reflex (night, food near 0, low health) waits for the running job's urgent section (ctx/atomic) before it cuts it."}
    ::comfort-wait-s {:default 90 :spec (a/num-in 0 nil)
-                     :doc "Seconds a comfort reflex (hunger, a full bag, tidying, doors, loose items) waits for the running job's section (ctx/atomic) before it cuts it."}})
+                     :doc "Seconds a comfort reflex (hunger, a full bag, tidying, doors, loose items) waits for the running job's section (ctx/atomic) before it cuts it."}
+   ::held-recheck-ms {:default 2000 :spec (a/num-in 0 nil)
+                      :doc "How long a held trigger's job checks are not asked again, in ms of body clock."}})
 
 (defn note-waiting!
   "Listed job id's check declined with reason (or none): emit job.waiting when the reason is new for this wait, and
@@ -120,7 +122,7 @@
 
 (defn trigger-status
   "The status entry's job would start with now: its start and run checks as one (contract/all), over a ctx of the job
-  as it would be fired. A check that throws holds the trigger."
+  as it would be fired. A check that throws holds the trigger (:check-threw, told by startable-trigger?)."
   [eng entry]
   (try (let [node (expr/parse (:jobs eng) (:job entry))
              inst {:id (str "trigger:" (name (:id entry))) :spec node :reflex (:id entry)}
@@ -128,26 +130,28 @@
              c (check-ctx eng inst args)]
          (contract/all [(ctx/check-status c def) (run-status def c)]))
        (catch :default e
-         (emit! eng {:source :system :kind :error :level :warn :reflex (:id entry)
-                     :text (str "check of trigger " (name (:id entry)) " threw: " e)})
          (contract/later :check-threw (str e)))))
 
 (defn startable-trigger?
   "Whether the job of firing entry would start (trigger-status says neither :later nor :never). A held trigger is kept
-  for /triggers, and told once per reason as reflex.held."
+  for /triggers and told once per reason as reflex.held (a warn when the check threw); its checks are not asked again
+  for held-recheck-ms."
   [eng entry]
   (let [id (:id entry)
-        [kind :as s] (trigger-status eng entry)
-        ok? (not (#{:later :never} kind))
-        r (when-not ok? (contract/status-cause s))
+        t (now eng)
         before (get @(:held-triggers eng) id)]
-    (if ok?
-      (swap! (:held-triggers eng) dissoc id)
-      (when (not= before r)
-        (swap! (:held-triggers eng) assoc id r)
-        (emit! eng {:source :reflex :kind :held :level :info :reflex id :data r
-                    :text (str "trigger " (name id) " held: " (:text r))})))
-    ok?))
+    (if (and before (< (- t (:t (meta before))) (settings/get settings ::held-recheck-ms)))
+      false
+      (let [[kind :as s] (trigger-status eng entry)
+            ok? (not (#{:later :never} kind))
+            r (when-not ok? (contract/status-cause s))]
+        (if ok?
+          (swap! (:held-triggers eng) dissoc id)
+          (do (swap! (:held-triggers eng) assoc id (with-meta r {:t t}))
+              (when (not= before r)
+                (emit! eng {:source :reflex :kind :held :level (if (= :check-threw (:reason r)) :warn :info) :reflex id :data r
+                            :text (str "trigger " (name id) " held: " (:text r))}))))
+        ok?))))
 
 (defn fire! [eng entry h]
   (let [id (new-id! eng)
@@ -183,7 +187,11 @@
         before @(:deferred eng)
         since #(get before (:id %) t)
         held-off? #(and (under-section? eng h %) (< (- t (since %)) (wait-cap-ms (:level %))))
-        [held [entry]] (split-with held-off? (filter #(and (preempts? order h %) (startable-trigger? eng %)) firing))
+        [held entry] (loop [[e & more] firing held []]
+                       (cond (nil? e) [held nil]
+                             (not (and (preempts? order h e) (startable-trigger? eng e))) (recur more held)
+                             (held-off? e) (recur more (conj held e))
+                             :else [held e]))
         section (some-> (sections eng (:token h)) last :section)]
     (swap! (:held-triggers eng) select-keys (map :id firing))
     (reset! (:deferred eng) (into {} (map (fn [e] [(:id e) (since e)])) held))

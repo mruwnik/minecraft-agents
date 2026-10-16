@@ -19,7 +19,7 @@
         eng (core/create {:primitives (tu/fake (or fake {})) :dir (tu/tmp-dir) :now #(deref clock) :jobs jobs
                           :triggers (or triggers {})
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :seen seen}))
+    {:eng eng :seen seen :clock clock}))
 
 (defn gate [k reason] (fn [_] (if (get @world k) (contract/ok :open "open") (contract/later reason (name reason)))))
 
@@ -110,10 +110,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [k [:can-start? :safe? :fit?]]
+        (doseq [k [:can-start? :can-run? :safe? :fit?]]
           (reset! world {})
           (let [triggers {:r {:name :r :job '(reflex) :persistence :retry :when (fn [_ _ _] true)}}
-                {:keys [eng seen]} (setup {'reflex (assoc (leaf k) :round (count-round :reflex-rounds))
+                {:keys [eng seen clock]} (setup {'reflex (assoc (leaf k) :round (count-round :reflex-rounds))
                                            'other {:round (count-round :other-rounds)}}
                                           triggers)]
             (core/submit! eng '(other) {})
@@ -127,6 +127,7 @@
             (await (core/tick! eng))
             (is (= 1 (count (filter #(= [:reflex :held] [(:source %) (:kind %)]) @seen))) "told once")
             (swap! world assoc :go true)
+            (swap! clock + 5000)
             (await (core/tick! eng))
             (is (= 1 (:reflex-rounds @world)) (str k " fires once the check passes"))
             (is (nil? (core/held-trigger eng :r)))))))))
@@ -190,3 +191,58 @@
       '(health))
     (is (= :bad-spec (:reason (submit '(root {:checks {:other (always)}}) "k2"))) "the shape is checked too")
     (is (true? (:ok (submit '(root {:checks {:safe? (and (job-safe) (not (threatened)))}}) "k3"))))))
+
+(defn counting [k f] (fn [_] (swap! world update k (fnil inc 0)) (f)))
+
+(def always {:name :r :persistence :retry :when (fn [_ _ _] true)})
+
+(deftest a-held-trigger-asks-its-check-once-per-window
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock]} (setup {'reflex {:can-start? (counting :asked #(contract/later :dark "dark")) :round (count-round :reflex-rounds)}}
+                                         {:r (assoc always :job '(reflex))})]
+          (core/register-reflex! eng {:trigger :r})
+          (dotimes [_ 5] (await (core/tick! eng)))
+          (is (= 1 (:asked @world)) "ticks inside the window reuse the answer")
+          (swap! clock + 5000)
+          (await (core/tick! eng))
+          (is (= 2 (:asked @world)) "asked again once the window is over"))))))
+
+(deftest a-throwing-check-warns-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (setup {'reflex {:can-start? (fn [_] (throw (js/Error. "boom"))) :round (count-round :reflex-rounds)}}
+                                              {:r (assoc always :job '(reflex))})
+              warns #(count (filter (fn [e] (and (= [:reflex :held] [(:source e) (:kind e)]) (= :warn (:level e)))) @seen))]
+          (core/register-reflex! eng {:trigger :r})
+          (await (core/tick! eng))
+          (swap! clock + 5000)
+          (await (core/tick! eng))
+          (is (= 1 (warns)) "one warn for the same reason across windows")
+          (is (nil? (:reflex-rounds @world))))))))
+
+(deftest only-entries-up-to-the-chosen-one-are-asked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'first {:can-start? (counting :first #(contract/ok :ok "ok")) :round (count-round :first-rounds)}
+                                    'second {:can-start? (counting :second #(contract/ok :ok "ok")) :round (count-round :second-rounds)}}
+                                   {:a (assoc always :name :a :job '(first)) :b (assoc always :name :b :job '(second))})]
+          (core/register-reflex! eng {:trigger :a})
+          (core/register-reflex! eng {:trigger :b})
+          (await (core/tick! eng))
+          (is (pos? (:first @world)))
+          (is (nil? (:second @world)) "the entry after the chosen one is not asked"))))))
+
+(deftest a-look-status-does-not-hold-a-trigger
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'reflex {:can-start? (fn [_] (contract/look :unseen "unseen")) :round (count-round :reflex-rounds)}}
+                                   {:r (assoc always :job '(reflex))})]
+          (core/register-reflex! eng {:trigger :r})
+          (await (core/tick! eng))
+          (is (= 1 (count (filter #(= [:reflex :fired] [(:source %) (:kind %)]) @seen))) "a :look is not a hold: the trigger fires")
+          (is (nil? (core/held-trigger eng :r))))))))
