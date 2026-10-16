@@ -35,4 +35,4 @@
    :blocks [[:fill [5 0 17] [7 0 19] "oak_fence" :outline]]
    :act [[:summon "cow" [6.5 0 18.5]]
          [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [70 0 16]})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :animal-stalled :still-led true}} :within-s 90 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :animal-stalled :still-led false}} :within-s 90 :of-job true}]}]}

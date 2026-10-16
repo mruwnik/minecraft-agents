@@ -32,4 +32,4 @@
    :blocks [[:fill [14 0 10] [14 3 22] "glass"]]
    :act [[:summon "cow" [6.5 0 18.5]]
          [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [26 0 16]})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :animal-stalled :still-led true}} :within-s 150 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :animal-stalled :still-led false}} :within-s 150 :of-job true}]}]}

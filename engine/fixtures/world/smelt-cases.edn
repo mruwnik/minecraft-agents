@@ -36,7 +36,8 @@
             [:set [12 0 18] "chest[facing=east]{Items:[{Slot:0b,id:\"minecraft:raw_iron\",count:4},{Slot:1b,id:\"minecraft:oak_planks\",count:6}]}"]]
    :act [[:job (seq (jobs.storage.withdraw {:chest #xyz [12 0 18] :items {"raw_iron" 4 "oak_planks" 6}})
                     (jobs.items.smelt {:furnace #xyz [20 0 14] :item "raw_iron" :count 4}))]]
-   :expect [{:event {:source :job :kind :completed :data {:smelted 4}} :within-s 110 :of-job true}]
+   :expect [{:event {:source :job :kind :child_ended :data {:ending {:data {:smelted 4}}}} :within-s 110 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 110 :of-job true}]
    :after [[:item "iron_ingot" 4]]}
   {:name "no-fuel-gives-up"
    :blocks [[:set [20 0 14] "furnace[facing=west]"]]
