@@ -142,13 +142,13 @@
           (is (= {:kind :condition-failed :cause :no-lava} (kc end))))))))
 
 (defn ^:async obsidian-with-slow-lava
-  "make-obsidian on a lava lake where the poured water never turns it, the engine's clock moving a second with every
+  "make-obsidian on a lava lake where the poured water never turns it, the engine's clock moving 20 seconds with every
   primitive call; the 'wait' calls it made, and the end state."
   [args]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake-on-floor (ot/world ot/lava-lake [ot/pick {:name "water_bucket" :count 1}])))
-        now (tu/act-clock clock p 1000)
+        now (tu/act-clock clock p 20000)
         eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})
         s {:eng eng :p p :seen seen}
@@ -166,9 +166,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [waits placed seen]} (await (obsidian-with-slow-lava {:count 1 :spend {:job-time 6}}))]
+        (let [{:keys [waits placed seen]} (await (obsidian-with-slow-lava {:count 1 :spend {:wall-time 61}}))]
           (is (= 1 placed))
-          (is (= [:job-time] (mapv :reason (filter #(= :stopped (:kind %)) @seen))) "the engine's limit ends it")
+          (is (= [:wall-time] (mapv :reason (filter #(= :stopped (:kind %)) @seen))) "the engine's limit ends it")
           (is (< waits 6) "the limit cuts the wait between its half-second looks"))))))
 
 (defn ^:async obsidian-cut-after-the-pour
