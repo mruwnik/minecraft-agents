@@ -198,6 +198,15 @@
                       (mapv #(select-keys % [:event :name :outcome]) (filter #(= "result" (:event %)) @evs))))
                (done))))))
 
+(deftest pass-lines-relay-case-events
+  (let [r (fn [l] (s/pass-line :day l))
+        ev (fn [l] (js->clj (js/JSON.parse (subs l 7)) :keywordize-keys true))]
+    (is (= {:event "plan" :total 5} (ev (r "@@test {\"event\":\"plan\",\"total\":5}"))))
+    (is (= {:event "result" :name "day:a/x#1" :outcome "failed"} (ev (r "@@test {\"event\":\"result\",\"name\":\"a/x#1\",\"outcome\":\"failed\"}"))))
+    (is (nil? (r "@@test {\"event\":\"progress\",\"done\":1,\"total\":5,\"unit\":\"fixtures\"}")))
+    (is (= "PASS a/x" (r "PASS a/x")))
+    (is (= "@@test {bad" (r "@@test {bad")))))
+
 (deftest run-known-reaches-every-pass
   (is (every? #(some #{"--run-known"} (:argv %)) (s/passes (s/parse-args ["--run-known"]))))
   (is (not-any? #(some #{"--run-known"} (:argv %)) (s/passes (s/parse-args [])))))

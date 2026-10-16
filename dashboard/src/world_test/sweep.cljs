@@ -114,7 +114,6 @@
                                                                          :else (str "exit " code))
                                                                      ", " (pr-str (:counts r))
                                                                      (when (seq failing) (str ", failing: " (str/join " " failing)))))))
-                           (emit! {:event "progress" :done (count done) :total (count ps) :unit "passes"})
                            (if (stop-codes code)
                              (finish done)
                              (go more done))))))))]
@@ -147,15 +146,42 @@
 
 (defn- repo [] (or js/process.env.WORLD_TEST_REPO "."))
 
+(def event-prefix "@@test ")
+
+(defn pass-line
+  "One stdout line of a pass's child -> the line to print. Its @@test plan and phase lines pass (plans add up in live-tests), a result is named
+  `pass:name`, a progress line is dropped (its total is the pass's own); other lines pass unchanged."
+  [pass line]
+  (let [at (str/index-of line event-prefix)
+        e (when at (try (js->clj (js/JSON.parse (subs line (+ at (count event-prefix)))) :keywordize-keys true) (catch :default _ nil)))]
+    (case (:event e)
+      "progress" nil
+      "result" (str (subs line 0 at) event-prefix (js/JSON.stringify (clj->js (update e :name #(str (name pass) ":" %)))))
+      line)))
+
+(defn- relay-lines!
+  "Prints the complete lines of `stream` through (f line) as they arrive."
+  [stream f]
+  (let [buf (atom "")
+        out! (fn [l] (when-let [x (f l)] (js/console.log x)))]
+    (.setEncoding stream "utf8")
+    (.on stream "data" (fn [chunk]
+                         (let [lines (str/split (str @buf chunk) #"\n" -1)]
+                           (reset! buf (peek lines))
+                           (run! out! (pop lines)))))
+    (.on stream "end" #(when (seq @buf) (out! @buf)))))
+
 (defn- spawn-node!
-  "Runs `node tools/SCRIPT args` with the output passed through; no TEST_EVENTS in the child (the sweep prints the events). `current` holds the running child. -> promise of the exit code."
-  [script args current]
+  "Runs `node tools/SCRIPT args` with the output passed through. With `pass` the child keeps TEST_EVENTS and its @@test lines are relayed through `pass-line`
+  (case progress over all passes); else none. `current` holds the running child. -> promise of the exit code."
+  [script args current pass]
   (js/Promise.
    (fn [resolve _]
      (let [env (js/Object.assign #js {} js/process.env)
-           _ (js-delete env "TEST_EVENTS")
+           _ (when-not pass (js-delete env "TEST_EVENTS"))
            child (cp/spawn js/process.execPath (clj->js (into [(path/join (repo) "tools" script)] args))
-                           #js {:stdio "inherit" :env env})]
+                           #js {:stdio (if pass #js ["inherit" "pipe" "inherit"] "inherit") :env env})]
+       (when pass (relay-lines! (.-stdout child) #(pass-line pass %)))
        (reset! current child)
        (.on child "error" (fn [e] (reset! current nil) (js/console.error (str script ": " (.-message e))) (resolve 1)))
        (.on child "close" (fn [code] (reset! current nil) (resolve (or code 1))))))))
@@ -180,9 +206,9 @@
         (js/console.error (str "world-sweep: results in " dir))
         (.then (run-sweep ps {:run-pass! (fn [p]
                                            (js/console.error (str "world-sweep: pass " (name (:name p))))
-                                           (.then (spawn-node! "world-test.mjs" (:argv p) current)
+                                           (.then (spawn-node! "world-test.mjs" (:argv p) current (:name p))
                                                   (fn [code] {:code code :results (read-results (:results p))})))
-                              :time-set! #(spawn-node! "time-set.mjs" ["day"] (atom nil))
+                              :time-set! #(spawn-node! "time-set.mjs" ["day"] (atom nil) nil)
                               :interrupted #(deref interrupted)
                               :now #(js/Date.now)
                               :emit! emit!})
