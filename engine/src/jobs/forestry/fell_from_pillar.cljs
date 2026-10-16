@@ -29,10 +29,12 @@
   The build and dig, and the cleanup's take-back, are urgent sections (ctx/atomic): reflexes at or below that level wait for them, up to their caps.
   Zones: a pillar a zone, claim or footprint refuses warns fell-tree.declined (:reason :refused, :why :pillar), as does
   one the planner finds no way for (its :reason).
+  Done? is ok once a log was dug from a pillar, the ledger is closed and no log is left in dig reach of its stand.
   Ends :done with {:logs n} when a log was dug (a pillar the cleanup could not take back is its :cleanup-open).
+  A scaffold of an earlier call still open when the call starts is taken back first.
   Condition-failed {:reason :need ...} when the blocks cannot be had (the fetch's cause is the :because; with :fetch false, :any-of and :count in the cause) and
   :refused; nothing-possible :no-stand (or the planner's reason), :walk, :build, :dig or :no-log-in-reach after the
-  pillar was taken back; :resumed when the call began with a scaffold of an earlier call open and dug nothing.
+  pillar was taken back.
   Quote: time by the logs standing.")
 
 (a/defargs args
@@ -77,11 +79,21 @@
 
 (declare result)
 
-(defn done?
-  "Always :later: the round ends the call once the pillar is taken back."
+(defn logs-left-in-reach?
+  "Whether a log of the tree is still within dig reach of the stand the pillar was planned for."
   [c]
-  (contract/later :felling (str "fell-from-pillar: " (:dug (ctx/mem c) 0) " logs dug") :units :trees :done 0 :left 1
-                  :result (result c)))
+  (let [[sx sy sz] (get-in (ctx/mem c) [:pillar :plan :stand])
+        here {:x (+ sx 0.5) :y sy :z (+ sz 0.5)}]
+    (boolean (some #(<= (u/eye-dist here (:pos %)) dig-reach) (tree-logs c)))))
+
+(defn done?
+  "Ok when a log was dug from a pillar, the ledger is closed and no log of the tree is left in dig reach of its stand;
+  else :later (the round ends the call once the pillar is taken back)."
+  [c]
+  (let [ok? (and (:dug (ctx/mem c)) (get-in (ctx/mem c) [:pillar :plan :stand]) (not (log/open-scaffold? c)) (not (logs-left-in-reach? c)))]
+    ((if ok? contract/ok contract/later)
+     :felling (str "fell-from-pillar: " (:dug (ctx/mem c) 0) " logs dug") :units :trees :done (if ok? 1 0) :left (if ok? 0 1)
+     :result (result c))))
 
 (defn quote-of [c]
   (let [n (count (when (base c) (tree-logs c)))]
@@ -101,13 +113,13 @@
 
 (defn pillar-plan
   "The approach plan (jobs.lib.access.approach/plan) for the highest logs: every log, then without the lowest one at a
-  time until the planner finds a stand or a pillar (a zone refusal ends the tries)."
+  time until the planner finds a stand or a pillar (a zone refusal included)."
   [c logs]
   (let [in (assoc (access/rules-input c {:except (:for-plan (:args c)) :own-plans-ok? true}) :reach dig-reach)
         top-down (vec (sort-by #(- (:y (:pos %))) logs))]
     (loop [n (count top-down)]
       (let [r (approach/plan (assoc in :targets (set (map log-cell (take n top-down)))))]
-        (if (and (:reason r) (not= :zone (:reason r)) (> n 1))
+        (if (and (:reason r) (> n 1))
           (recur (dec n))
           r)))))
 
@@ -236,17 +248,20 @@
     (ctx/end c :nothing-possible failed (result c))
     (ctx/end c :done nil (result c))))
 
-(defn ^:async cleanup
-  "However the call ends: take the pillar back (jobs.access.cleanup child for this job's blocks) when its scaffold is
-  open. Done when the ledger is closed, else nothing-possible :cleanup-open."
-  [c _]
-  (if-not (log/open-scaffold? c)
-    (ctx/end c :done nil)
+(defn ^:async take-back!
+  "Take the pillar back (jobs.access.cleanup child for this job's blocks) when its scaffold is open: nil once the
+  ledger is closed, :continue while the child waits, else the nothing-possible :cleanup-open ending."
+  [c]
+  (when (log/open-scaffold? c)
     (let [e (await (ctx/atomic c :urgent :pillar #(ctx/call c :cleanup 'jobs.access.cleanup {:job (:id c)})))]
       (cond
         (= :continue e) :continue
-        (log/open-scaffold? c) (ctx/end c :nothing-possible :cleanup-open (result c))
-        :else (ctx/end c :done nil)))))
+        (log/open-scaffold? c) (ctx/end c :nothing-possible :cleanup-open (result c))))))
+
+(defn ^:async cleanup
+  "However the call ends: take the pillar back. Done when the ledger is closed, else nothing-possible :cleanup-open."
+  [c _]
+  (or (await (take-back! c)) (ctx/end c :done nil)))
 
 (defn ^:async pillar-phase!
   "One phase of the pillar: pick up the logs, walk to its base (or stand), build it, dig from it, take it back."
@@ -279,9 +294,7 @@
   [c]
   (cond
     (nil? (:pillar (ctx/mem c)))
-    (if (log/open-scaffold? c)
-      (do (set-pillar! c {:phase :clean :failed :resumed}) :again)
-      (await (start-pillar! c)))
+    (or (await (take-back! c)) (await (start-pillar! c)))
 
     :else
     (or (await (blocks! c))

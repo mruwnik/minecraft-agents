@@ -17,6 +17,8 @@
             [jobs.lib.look :as look]
             [jobs.forestry.fell-tree :as fell-tree]
             [jobs.forestry.fell-tree.log :as log]
+            [jobs.forestry.fell-from-pillar :as pillar]
+            [jobs.lib.access :as access]
             [engine.core.activity :as activity]
             [engine.memory :as mem]))
 
@@ -201,6 +203,28 @@
                        (and (= k (:kind r)) (= cause (:cause r)) (= {:kind :nothing-possible :cause :cleanup-open} (get-in r [:data :cleanup]))))
       (contract/ending :limit-reached :job-time {:cleanup {:kind :nothing-possible :cause :cleanup-open}}) :limit-reached :job-time
       (contract/ending :condition-failed :need {:cleanup {:kind :nothing-possible :cause :cleanup-open}}) :condition-failed :need)))
+
+(deftest the-pillar-plan-keeps-dropping-the-lowest-log-past-a-zone-refusal
+  (let [logs (mapv (fn [y] {:pos {:x 0 :y y :z 0}}) [64 65 66 67 68])
+        asked (atom [])]
+    (with-redefs [access/rules-input (fn ([_] {}) ([_ _] {}))
+                  approach/plan (fn [in]
+                                  (swap! asked conj (count (:targets in)))
+                                  (if (> (count (:targets in)) 2) {:reason :zone} {:pillar {:height 3}}))]
+      (is (= {:pillar {:height 3}} (pillar/pillar-plan {:args {}} logs)))
+      (is (= [5 4 3 2] @asked)))))
+
+(deftest fell-from-pillar-done-is-ok-only-with-a-closed-ledger-and-no-log-in-reach-of-the-stand
+  (let [c {:args {:base {:x 0 :y 64 :z 0}}}
+        mem {:pillar {:phase :clean :plan {:stand [0 70 0]}} :dug 1}
+        near [{:pos {:x 0 :y 71 :z 1}}]
+        status (fn [m open? logs]
+                 (with-redefs [ctx/mem (constantly m) log/open-scaffold? (constantly open?) pillar/tree-logs (constantly logs)]
+                   (first (pillar/done? c))))]
+    (is (= :ok (status mem false [])))
+    (is (= :later (status mem true [])) "the ledger is open")
+    (is (= :later (status mem false near)) "a log is still in reach")
+    (is (= :later (status {} false [])) "no pillar was stood on")))
 
 (deftest fell-tree-quotes-axe-wear-and-no-logs
   (async done

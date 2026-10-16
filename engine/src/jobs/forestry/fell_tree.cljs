@@ -221,7 +221,6 @@
                       (ctx/update-mem! c assoc :partials 0)
                       (u/progress! c)
                       :again)
-      (= :resumed why) :again
       :else (do (mark-unreachable! c) :again))))
 
 (defn walk-failed!
