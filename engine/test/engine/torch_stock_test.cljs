@@ -2,7 +2,7 @@
   "jobs.lib.trip/torches-ready!: a stair down that carries few torches stocks up first, or says it digs dark."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
-            [engine.mine-test :as mt]
+            [engine.mine-support :as mt]
             [engine.stair-test :as st]
             [engine.test-util :as tu]
             [jobs.lib.trip :as trip]))

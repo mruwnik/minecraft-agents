@@ -2,7 +2,7 @@
   "jobs.lib.trip/tool-ready!: a stair that would dig with the last worn pickaxe gets a spare first, or says why not."
   (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
-            [engine.mine-test :as m]
+            [engine.mine-support :as m]
             [engine.stair-test :as st]
             [engine.test-util :as tu]))
 

@@ -4,7 +4,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.memory :as mem]
-            [engine.mine-test :as mt]
+            [engine.mine-support :as mt]
             [engine.test-util :as tu]))
 
 (deftest a-torch-craft-does-not-read-the-stock-ups-leftover-memory

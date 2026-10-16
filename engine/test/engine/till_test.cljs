@@ -9,7 +9,7 @@
             [engine.expr :as expr]
             [engine.takeover :as takeover]
             [engine.fake :as fake]
-            [engine.go-to-escalate-test :as pit-world]
+            [engine.go-to-escalate-support :as pit-world]
             [engine.hostile-test :as h]
             [engine.memory :as mem]
             [engine.perception :as perception]

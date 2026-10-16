@@ -3,7 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
-            [engine.go-to-escalate-test :as e :refer [in-pit pit stone-pit]]
+            [engine.go-to-escalate-support :as e :refer [in-pit pit stone-pit]]
             [engine.test-util :refer [floor]]
             [jobs.lib.near :as near]))
 

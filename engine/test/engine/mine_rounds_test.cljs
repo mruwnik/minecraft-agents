@@ -5,7 +5,7 @@
             [engine.fake :as fake]
             [engine.get-seeds-test :as gs]
             [engine.memory :as mem]
-            [engine.mine-test :as m]
+            [engine.mine-support :as m]
             [engine.test-util :as tu]))
 
 (deftest mine-digs-a-patch-mends-and-ends-in-one-round

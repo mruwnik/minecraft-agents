@@ -7,7 +7,7 @@
             [engine.ctx :as ctx]
             [engine.hut-shelter-test :as hut]
             [engine.memory :as mem]
-            [engine.night-test :as nt]
+            [engine.night-support :as nt]
             [engine.registry :as registry]
             [engine.shelter-test :as st]
             [engine.test-util :as tu]
