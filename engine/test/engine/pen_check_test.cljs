@@ -299,7 +299,7 @@
           (is (true? (:closed? (await (run-seeing {:at [5 65 5]} (at-pillar (walled-water 1)) 0))))
               "one deep: the wall holds")
           (is (= {:closed? false :reason :leak}
-                 (select-keys (await (run-seeing {:at [5 65 5]} (at-pillar (assoc (walled-water 2) "5,65,5" "air")) 0)) [:closed? :reason]))
+                 (select-keys (await (run-seeing {:at [5 65 5]} (at-pillar (assoc (walled-water 2) "5,65,5" "air")) 0 30)) [:closed? :reason]))
               "two deep lifts an animal over the wall"))))))
 
 (deftest a-gap-in-the-fence-is-a-leak-though-the-ground-beyond-stays-unseen
@@ -309,3 +309,46 @@
         (let [event (await (run-seeing {:at [2 64 2]} (world {"2,64,-1" "air"}) 0))]
           (is (= :leak (:reason event)))
           (is (some #{{:x 2 :y 64 :z -1}} (map :pos (:leaks event)))))))))
+
+(defn ring
+  "A pen the way the world fixtures build it: a block ring x, z 2..8 of height high on stone ground (feet y 64), body at the middle."
+  [block height]
+  (merge ground
+         (into {} (for [x (range 2 9) z (range 2 9) y (range 64 (+ 64 height)) :when (or (#{2 8} x) (#{2 8} z))] [(str x "," y "," z) block]))))
+
+(def ring-cases
+  [["an open gate in a fence ring" (assoc (ring "oak_fence" 1) "5,64,2" "oak_fence_gate") {"5,64,2" {:open true}} 0 :leak]
+   ["a doorway under a lintel, facing it" (-> (ring "stone" 3) (dissoc "5,64,2" "5,65,2")) {} 180 :leak]
+   ["a doorway under a lintel, looking away" (-> (ring "stone" 3) (dissoc "5,64,2" "5,65,2")) {} 0 :leak]])
+
+(deftest a-ring-read-by-sight-from-inside-ends-with-the-leak-not-no-start
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[why blocks states yaw reason] ring-cases]
+          (let [w {:self {:pos {:x 5.5 :y 64 :z 5.5}} :blocks blocks :states states}
+                event (await (run-seeing {:at [5 64 5]} w yaw 10))]
+            (is (= reason (:reason event)) why)))))))
+
+(deftest a-pool-one-deep-in-a-two-high-wall-reads-closed-from-a-pillar
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (merge (ring "stone" 2)
+                            (into {} (for [x (range 3 8) z (range 3 8)] [(str x ",64," z) "water"]))
+                            {"5,64,5" "stone"})
+              event (await (run-seeing {:at [5 65 5]} {:self {:pos {:x 5.5 :y 65 :z 5.5}} :blocks blocks :states {}} 0 10))]
+          (is (true? (:closed? event))))))))
+
+(deftest a-body-reading-a-doorway-pen-stays-inside-the-wall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [yaw [0 180]]
+          (let [blocks (-> (ring "stone" 3) (dissoc "5,64,2" "5,65,2"))
+                s (h/setup-seeing {:self {:pos {:x 5.5 :y 64 :z 5.5}} :blocks blocks :states {} :yaw yaw :rand (constantly 0.5)} nil)]
+            (core/submit! (:eng s) (list job {:at [5 64 5]}) {})
+            (dotimes [_ 10]
+              (swap! (:clock s) + 700)
+              (await (core/tick! (:eng s))))
+            (is (<= 3 (nth (fake/vec-pos (:pos (fake/self (:p s)))) 2)) (str "yaw " yaw))))))))

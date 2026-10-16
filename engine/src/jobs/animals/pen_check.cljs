@@ -137,7 +137,9 @@
 (defn ^:async read-pen! [c]
   (let [{:keys [at max-cells]} (:args c)
         box (:box (pen-box c))
-        checked (await (pen-read/read! c {:at at :box box :max-cells max-cells}))
+        near (or (:near (ctx/mem c)) (u/cell-vec (u/self-pos c)))
+        _ (ctx/update-mem! c assoc :near near)
+        checked (await (pen-read/read! c {:at at :box box :max-cells max-cells :near near}))
         unseen (when (= :unloaded (:reason checked)) (unseen-leak checked))
         {:keys [walks last-unseen] :or {walks 0}} (ctx/mem c)
         stuck (if (= unseen last-unseen) walks 0)
