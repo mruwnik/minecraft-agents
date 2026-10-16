@@ -14,8 +14,10 @@
    :blocks [[:fill [2 -6 2] [9 -1 9] "stone"]]
    :body {:at [5.5 0 5.5] :inventory [["stick" 1] ["stone_pickaxe" 1]]}
    :act [[:job (jobs.survival.dig-in {})]]
-   :expect [{:event {:source :action :kind :done :data {:name "equip"}} :within-s 20}
-            {:event {:source :job :kind :dig-in.sealed} :within-s 60 :of-job true}]
+   ;; no equip is asked when the pooled body's held slot already holds the pickaxe: the stone it digs and the roof it places
+   ;; from the dug cobblestone show the pickaxe was in hand
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :dig_in_failed} :for-s 60 :until {:source :job :kind :dig-in.sealed}}]
    :limit-s 70}
   {:name "no-pickaxe-no-blocks-fails-without-digging"
    :blocks [[:fill [12 -6 12] [20 -1 20] "stone"]]

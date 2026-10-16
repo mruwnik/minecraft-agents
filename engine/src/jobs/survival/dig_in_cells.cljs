@@ -121,6 +121,13 @@
   (boolean (some (fn [[dx dy dz]] (:full-cube? (u/seen-facts p {:x (+ x dx) :y (+ y dy) :z (+ z dz)})))
                  rules/neighbour-deltas)))
 
+(a/defargs settings
+  {::mob-wait-ticks {:default 200 :doc "Game ticks a shelter's place refused for a mob in its cell is retried before the shelter gives up."
+                     :spec (a/int-in 0 nil)}
+   ::pickup-reach {:default 1 :doc "How far from the body, along the ground, an item is picked up without a walk." :spec (a/int-in 0 nil)}
+   ::support-depth {:default 3 :doc "How many cells under a wall cell with nothing beside it a shelter fills to give it a block to be placed against." :spec (a/int-in 0 nil)}
+   ::rock-depth {:default 3 :doc "How far behind a seen solid face a cell the body has not sensed is taken for rock." :spec (a/int-in 0 nil)}})
+
 (defn support-chain
   "The cells to fill, lowest first, so a block can then be placed in cell: [] when cell is placeable? already, the cells
   under it down to one that is (at most depth of them), nil when none is (or one is wet or in avoid, the body's cells)."
@@ -139,7 +146,7 @@
         ready (filterv #(placeable? p %) cells)]
     (if (or (seq ready) (empty? cells))
       ready
-      (conj (vec (support-chain p (first cells) avoid 3)) (first cells)))))
+      (conj (vec (support-chain p (first cells) avoid (settings/get settings ::support-depth))) (first cells)))))
 
 (defn door
   "The door cells [feet head] of one side among the placed cells: the first side
@@ -151,12 +158,6 @@
         both (first (filter #(contains? placed (at % 1)) feet-placed))
         side (or both (first feet-placed))]
     (when side [(at side 0) (at side 1)])))
-
-(a/defargs settings
-  {::mob-wait-ticks {:default 200 :doc "Game ticks a shelter's place refused for a mob in its cell is retried before the shelter gives up."
-                     :spec (a/int-in 0 nil)}
-   ::pickup-reach {:default 1 :doc "How far from the body, along the ground, an item is picked up without a walk." :spec (a/int-in 0 nil)}
-   ::rock-depth {:default 3 :doc "How far behind a seen solid face a cell the body has not sensed is taken for rock." :spec (a/int-in 0 nil)}})
 
 (defn mob-wait-ms [] (settings/ticks->ms (settings/get settings ::mob-wait-ticks)))
 

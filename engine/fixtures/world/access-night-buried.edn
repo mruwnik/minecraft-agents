@@ -73,7 +73,8 @@
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night}} :within-s 20}]}
   {:name "dig-in-walls-run-out-falls-back-to-pit"
    :register []
-   :body {:inventory [["cobblestone" 9] ["stone_pickaxe" 1]]}
+   ;; on the open mass top the walls need 10 blocks (4 sides x 2, the roof support, the roof): fewer and the pit is chosen at once
+   :body {:inventory [["cobblestone" 12] ["stone_pickaxe" 1]]}
    :act [[:job (jobs.survival.dig-in {:max-places 2})]
          [:await {:source :action :kind :done :data {:name "place"}} 30]
          [:rcon "clear $BODY cobblestone"]]

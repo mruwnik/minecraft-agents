@@ -3,7 +3,9 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.fake :as fake]
+            [engine.settings :as settings]
             [engine.shelter-support :as st]
+            [jobs.survival.dig-in-cells :as dig-cells]
             [engine.test-util :as tu :refer [run-until-empty]]))
 
 (def pillar
@@ -66,3 +68,28 @@
           (await (run-until-empty eng 30))
           (is (empty? (st/emitted seen :dig-in.unsealed)))
           (is (= 1 (count (st/emitted seen :dig-in.sealed)))))))))
+
+(def cell {:x 0 :y 64 :z 0})
+(def avoid #{{:x 0 :y 63 :z 0} {:x 0 :y 64 :z 0}})
+
+(defn chain [blocks depth]
+  (dig-cells/support-chain (tu/fake {:blocks blocks}) cell #{} depth))
+
+(deftest support-chain-is-the-cells-under-up-to-the-first-with-a-block-beside
+  (is (= [] (chain {"1,64,0" "stone"} 3)) "placeable already")
+  (is (= [{:x 0 :y 63 :z 0}] (chain {"1,63,0" "stone"} 3)))
+  (is (= [{:x 0 :y 62 :z 0} {:x 0 :y 63 :z 0}] (chain {"1,62,0" "stone"} 3)) "lowest first")
+  (is (nil? (chain {"1,61,0" "stone"} 2)) "a chain longer than the depth is none")
+  (is (= [{:x 0 :y 61 :z 0} {:x 0 :y 62 :z 0} {:x 0 :y 63 :z 0}] (chain {"1,61,0" "stone"} 3))))
+
+(deftest support-chain-stops-at-fluid-and-at-the-bodys-cells
+  (is (nil? (chain {"0,63,0" "lava" "1,62,0" "stone"} 3)) "lava under")
+  (is (nil? (chain {"0,63,0" "water" "1,62,0" "stone"} 3)) "water under")
+  (is (nil? (dig-cells/support-chain (tu/fake {:blocks {"1,62,0" "stone"}}) {:x 0 :y 65 :z 0} avoid 3)) "never into the feet or head cells"))
+
+(deftest walls-fill-the-support-depth-setting-cells-under-a-wall-cell
+  (let [p (tu/fake {:blocks {"1,61,0" "stone"}})
+        cells [cell]]
+    (is (= 4 (count (dig-cells/bottom-up p cells {:x 5 :y 64 :z 5}))) "default 3 under plus the cell")
+    (is (= [cell] (settings/with-settings {:jobs.survival.dig-in-cells/support-depth 1}
+                    #(dig-cells/bottom-up p cells {:x 5 :y 64 :z 5}))) "too deep for 1: the cell alone, which the server then refuses")))
