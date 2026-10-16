@@ -4,7 +4,8 @@
             [jobs.lib.shelter :as sh]
             [jobs.survival.dig-in.site :as site]
             [jobs.survival.dig-in.walls :as walls]
-            [jobs.survival.dig-in.mode :as mode]))
+            [jobs.survival.dig-in.mode :as mode]
+            [jobs.survival.retreat-pit :as pit]))
 
 (defn stop-round
   "A pit that cannot be dug or went on no further (a stop: {:reason :text :needs}): its reason is the call's ending, a
@@ -34,6 +35,8 @@
           (if (= :done (:kind e))
             (do (ctx/update-mem! c merge (select-keys (:data e) [:roof :start]))
                 :done)
-            (stop-round c (merge {:reason :no-floor :text (str "cannot dig the pit: " (:text (:data e)))}
-                                 (get-in e [:data :stops :pit])
-                                 (when-let [why (get-in e [:data :why :pit])] {:text why}))))))))
+            (let [dropped (await (pit/plan-of! c (mode/blocks c)))]
+              (stop-round c (merge {:reason :no-floor :text (str "cannot dig the pit: " (:text (:data e)))}
+                                   (when (:stop dropped) {:reason (:stop dropped) :text (:text dropped) :needs (:needs dropped)})
+                                   (get-in e [:data :stops :pit])
+                                   (when-let [why (get-in e [:data :why :pit])] {:text why})))))))))

@@ -29,7 +29,7 @@
   room) is :done before anything is placed.
   One call is a whole attempt. It ends :done {:pos :mode :roof} when the world shows the body shut in. Otherwise a fact of the
   site is condition-failed (:no-blocks, :no-tool, :spared, :no-roof-support, :no-floor, :fluid-here, :fluid-adjacent,
-  :fluid-above, :hazard-below, :lays-open) and a try that failed is nothing-possible (:walls-server-refused,
+  :fluid-above, :hazard-below, :lays-open, :hostile-near) and a try that failed is nothing-possible (:walls-server-refused,
   :walls-failed, :dig-failed, :descent-stalled, :roof-failed, :plug-failed, :no-progress, :unsealed); the data is
   {:text :pos}.
   The mode is the first of these whose cells the zone rules permit. If none is permitted it takes the first
@@ -194,7 +194,7 @@
 
 (def fact-stops
   "The stops that name a fact of the site (condition-failed); the others are tries that failed (nothing-possible)."
-  #{:no-blocks :no-tool :spared :no-roof-support :no-floor :fluid-here :fluid-adjacent :fluid-above :hazard-below :lays-open})
+  #{:no-blocks :no-tool :spared :no-roof-support :no-floor :fluid-here :fluid-adjacent :fluid-above :hazard-below :lays-open :hostile-near})
 
 (defn stop-ending
   "The ending of a call that left the body unroofed, by the reason noted in memory (:unsealed when none)."

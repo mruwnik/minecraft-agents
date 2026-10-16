@@ -12,7 +12,7 @@
   block to plug with, carried or dug (a block the tools cannot harvest is dug by hand once one is in hand and the hand breaks it within :hand-clear-ms).
   One call is a whole attempt: :done {:pos :way :pit :roof :start} once enclosed, at once when it already is; nothing-possible :failed
   {:reason :text :needs} when a pit fails, the reason a stop of jobs.survival.retreat-pit: :no-floor, :fluid-here, :fluid-adjacent,
-  :fluid-above, :hazard-below, :no-tool (:needs the block), :no-blocks, :dig-failed, :descent-stalled, :roof-failed, :lays-open (a dig
+  :fluid-above, :hazard-below, :no-tool (:needs the block), :hostile-near (a melee hostile stands in the way), :no-blocks, :dig-failed, :descent-stalled, :roof-failed, :lays-open (a dig
   laid a cave or fluid open). The pit is never dug into what the body sees as fluid, a hazard or open air, and it is planned again
   when the body has left its column. Lava a dig lays open is filled first (:on-lava :seal). Every plug goes to the scaffold ledger
   with :purpose (default :retreat-plug, taken back by jobs.access.cleanup once no hostile is near; :shelter is left alone). Quote:
@@ -21,7 +21,7 @@
 (a/defargs args
   {:purpose {:doc "ledger purpose of the placed blocks (:retreat-plug: taken back by the cleanup near no hostile; :shelter: left alone)" :spec #{:retreat-plug :shelter} :default :retreat-plug}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh/default-roof-height}
-   :radius {:doc "melee hostiles within this many blocks stand in the way of a cell" :spec (a/num-in 0 nil) :default 8}
+   :radius {:doc "melee hostiles within this many blocks stand in the way of a cell" :spec (a/num-in 0 nil) :default pit/default-radius}
    :hand-clear-ms {:doc "a block the carried tools cannot harvest is dug by hand, once a block to roof with is in hand, when the hand breaks it within this many ms; default jobs.lib.tools quick-clear-ms" :spec (a/int-in 0 nil)}
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pit is dropped and the lava left" :spec #{:seal :stop} :default :seal}})
 
