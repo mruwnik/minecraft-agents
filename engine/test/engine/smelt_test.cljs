@@ -781,7 +781,7 @@
         (let [{:keys [eng p seen] :as s} (seeing-setup {:inventory iron-and-coal})]
           (core/submit! eng '(jobs.items.smelt {:item "raw_iron" :count 3 :fetch false}) {})
           (await (seeing-ticks s 4))
-          (is (= 8 (count (calls p "look"))) "four headings, level and down, once")
+          (is (= 12 (count (calls p "look"))) "four headings, level, down and up, once")
           (is (= [:no-furnace-seen] (mapv :reason (of-kind seen :stopped)))))))))
 
 (deftest the-wait-counts-game-ticks-at-the-live-rate

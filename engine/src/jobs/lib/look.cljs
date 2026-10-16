@@ -1,6 +1,6 @@
 (ns jobs.lib.look
   "Looking around like a player. A job that needs a block it has seen turns the body through the four headings (level,
-  then down at the floor ahead) with a sight pass after each look, so what lies beside or behind it enters
+  then down at the floor ahead, then up) with a sight pass after each look, so what lies beside or behind it enters
   perception's memory. Nothing is sensed through walls: jobs read blocks and entities through the seen-* helpers here
   (memory of what the body saw, players, hostiles it saw or heard), never through blocks/entities as a scan."
   (:require [engine.args :as a]
@@ -60,10 +60,11 @@
 
 (defn glances
   "The points a look along [dx dz] takes in from eye: level, 4 blocks ahead, then down (about 50 degrees) at the
-  floor ahead."
+  floor ahead, then up (about 60 degrees) beyond the level look's field of view."
   [eye [dx dz]]
   [{:x (+ (:x eye) (* (glance-ahead) dx)) :y (:y eye) :z (+ (:z eye) (* (glance-ahead) dz))}
-   {:x (+ (:x eye) (* (glance-near) dx)) :y (- (:y eye) game/body-height) :z (+ (:z eye) (* (glance-near) dz))}])
+   {:x (+ (:x eye) (* (glance-near) dx)) :y (- (:y eye) game/body-height) :z (+ (:z eye) (* (glance-near) dz))}
+   {:x (+ (:x eye) (* (glance-near) dx)) :y (+ (:y eye) (* 1.7 (glance-near))) :z (+ (:z eye) (* (glance-near) dz))}])
 
 (defn see!
   "A sight pass now at effort (default glance-effort), so what the last look faced is in memory before the next decision."

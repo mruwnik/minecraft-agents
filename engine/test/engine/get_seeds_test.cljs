@@ -133,7 +133,7 @@
       (fn ^:async t []
         (let [s (await (scenario {} {:blocks {"2,64,0" "dirt"}} 10))]
           (is (= :none (:reason (done-event s))))
-          (is (= 8 (count (h/calls (:p s) "look"))) "exactly one look-around (8 glances) before concluding there is nothing")
+          (is (= 12 (count (h/calls (:p s) "look"))) "exactly one look-around (12 glances) before concluding there is nothing")
           (is (zero? (dig-count s))))))))
 
 (deftest the-none-text-names-the-radius-and-the-nearest-grass-beyond-it

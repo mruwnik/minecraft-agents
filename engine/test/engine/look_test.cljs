@@ -80,7 +80,7 @@
           (is (= ["iron_ore"] (names-of (await (look/find-seen! c q)))))
           (let [n (count (.-calls (.-world p)))]
             (is (empty? (await (look/find-seen! c (assoc q :names ["gold_ore"])))))
-            (is (= 8 (- (count (.-calls (.-world p))) n)) "one look around, four headings by two glances")))))))
+            (is (= 12 (- (count (.-calls (.-world p))) n)) "one look around, four headings by three glances")))))))
 
 (deftest seen-blocks-rejects-a-query-that-is-not-names-or-match
   (let [p (seeing {:blocks {"0,64,2" "iron_ore"}})]
