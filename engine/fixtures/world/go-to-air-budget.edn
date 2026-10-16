@@ -104,7 +104,7 @@
             [:fill [4 0 8] [20 1 8] "water"]
             [:fill [11 2 8] [13 2 8] "air"] [:set [12 3 8] "sea_lantern"]]
    :body {:at [5.5 0 8.5] :yaw 270}
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
          [:rcon "effect give $BODY minecraft:instant_damage 1 1 true"] [:rcon "effect give $BODY minecraft:instant_damage 1 0 true"]
          [:rcon "effect give $BODY minecraft:resistance 600 4 true"] [:wait-s 6]
          [:job (jobs.movement.go-to {:pos #at [12 1 8] :range 1 :ways #{:walk :clear-seal}})]]
