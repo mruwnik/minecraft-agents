@@ -303,8 +303,6 @@
 (deftest an-approach-walk-may-take-back-its-own-seal
   (is (= #{:walk :clear-seal} (:ways (second (esc/escalation-job {:step :approach :pos [1 64 0]} nil false false true false))))))
 
-(deftest an-escalation-pillar-ignores-hostiles-the-pillar-is-the-way-out
-  (is (= {:safe? '(not (exposed))} (:checks (second (esc/escalation-job {:step :pillar :height 3} nil false false true false))))))
 
 (deftest walker-faults-past-the-retries-feed-the-escalation-ladder
   (async done

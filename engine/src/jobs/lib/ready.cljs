@@ -24,6 +24,12 @@
   "The :reason of every :later these checkers give: a job that declines for one is waiting out the world, not failing."
   #{:exposed :dark :hostile-near :low-health})
 
+(defn unforced
+  "The :checks forms a child would be forced with, minus the keys c's own frame runs under a form for: a call key beats
+  the inherited form, so a forced one would replace the caller's."
+  [c forms]
+  (apply dissoc forms (keys (:checks (ctx/frozen-call c)))))
+
 (defn place-text [{:keys [x y z]}] (str x " " y " " z))
 
 (defn at-status

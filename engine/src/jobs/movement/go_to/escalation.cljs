@@ -7,6 +7,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.cost :as cost]
+            [jobs.lib.ready :as ready]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
@@ -628,7 +629,7 @@
   (let [{:keys [step] :as e} (:escalation (ctx/mem c))
         [job args] (escalation-job e (hole-tag c) (boolean (:ignore-zones? (:args c))) (boolean (:by-hand (ctx/mem c))) (spare-own? c) (fetch-tool? c))
         _ (await (torch/return-torch! c))
-        r (await (ctx/call c :escalation job args))]
+        r (await (ctx/call c :escalation job (update args :checks #(some->> % (ready/unforced c)))))]
     (let [dug (concat (:planned (ctx/mem c)) (when (not= :continue r) (:dug (:data r))))]
       (forget-dug-own! c dug)
       (when-not (:own e) (note-holes! c dug)))

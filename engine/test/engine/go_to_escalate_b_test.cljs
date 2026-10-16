@@ -384,3 +384,21 @@
           (is (= #{[[1 62 0] "cobblestone"] [[1 63 0] "cobblestone"]}
                  (set (map (comp (juxt :cell :block) :data) (mem/entries (mem/view (:store eng)) :escalation-placed)))
                )))))))
+
+(defn ^:async pillar-call-checks
+  "The :checks go-to's escalation pillar child is called with when go-to is called with go-checks."
+  [go-checks]
+  (let [seen-args (atom nil)
+        real ctx/call
+        zones [{:name "pen" :owner "Fake" :min [-3 60 -3] :max [3 64 3]}]]
+    (with-redefs [ctx/call (fn [c k job args] (when (= 'jobs.access.pillar job) (reset! seen-args (:checks args))) (real c k job args))]
+      (await (run-job! {:self {:pos {:x 0 :y 61 :z 0}} :blocks wide-pit :inventory [{:name "dirt" :count 5}]}
+                       'jobs.movement.go-to (cond-> {:pos [10 64 0] :range 1} go-checks (assoc :checks go-checks)) zones)))
+    @seen-args))
+
+(deftest an-escalation-pillar-takes-the-callers-safe-form-else-ignores-hostiles
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:safe? '(not (exposed))} (await (pillar-call-checks nil))) "no caller form: a hostile does not stall the way out")
+        (is (nil? (:safe? (await (pillar-call-checks {:safe? '(always)})))) "a caller's form reaches the pillar (card 02b795f1)")))))
