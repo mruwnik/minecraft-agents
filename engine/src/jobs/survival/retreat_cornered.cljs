@@ -65,7 +65,7 @@
       (ctx/update-mem! c update :dead #(into (vec %) (concat (get-in (ctx/mem c) [:children :cornered :killed])
                                                              (:killed (:data ended)))))
       (if (and ended (not= :done (:kind ended)))
-        (do (when-let [m (:memory (:data ended))] (ctx/update-mem! c assoc-in [:children :cornered] m))
+        (do (when-let [m (:memory (:data ended))] (ctx/update-mem! c assoc-in [:children :cornered] (dissoc m :start)))
             (flight/tried! c :fight)
             nil)
         :again))))

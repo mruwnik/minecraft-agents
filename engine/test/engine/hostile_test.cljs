@@ -415,7 +415,7 @@
         (let [{:keys [p]} (await (first-round-ms '(jobs.survival.fight-back {:range 12 :leash 10}) {:inventory sword :entities [(zombie 8 0)]} 20))]
           (is (pos? (count (calls p "attack"))) "inside the leash it is fought"))))))
 
-(deftest fight-back-measures-its-leash-from-where-the-round-began
+(deftest fight-back-keeps-its-leash-anchor-when-resumed-after-a-hurt-yield
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -434,7 +434,7 @@
           (dotimes [_ 3]
             (swap! clock + 3000)
             (await (core/tick! eng)))
-          (is (< 1 (count (calls p "attack"))) "the body fled 30 blocks and the mob followed: it is fought where it stands now"))))))
+          (is (= 1 (count (calls p "attack"))) "the resumed fight still measures its leash from the first round's start: a mob 30 blocks on is not chased"))))))
 
 (deftest fight-back-is-already-done-for-a-hidden-ranged-mob
   (async done

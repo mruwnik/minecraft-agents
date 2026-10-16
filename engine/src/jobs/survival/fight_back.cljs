@@ -202,6 +202,7 @@
   (let [p (:primitives c)
         target (first (targets c))
         last-attack (:last-attack (ctx/mem c))]
+    (when-not (:start (ctx/mem c)) (ctx/update-mem! c assoc :start (u/self-pos c)))
     (cond
       (held-too-long? c) (declined c :nothing-possible :hold-timeout)
       (and target (too-far-to-chase? c target)) (declined c :nothing-possible :too-far)
@@ -222,5 +223,5 @@
 (defn ^:async round
   "The whole fight: steps until no hostile is left (:done) or the retreat should take over (an ending other than :done)."
   [c]
-  (ctx/update-mem! c assoc :health0 (.-health (.self (:primitives c))) :start (u/self-pos c))
+  (ctx/update-mem! c assoc :health0 (.-health (.self (:primitives c))))
   (await (pace/steps! c #(step c))))
