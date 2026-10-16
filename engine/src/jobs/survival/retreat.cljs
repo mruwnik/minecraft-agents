@@ -151,12 +151,11 @@
 
 (a/defargs settings
   {::job-time-s {:default 420 :doc "Seconds of a flight's time spend (its pauses not counted): past it the flight ends limit-reached and the hostile trigger fires again while the danger stays." :spec (a/num-in 0 nil)}
-   ::wall-time-s {:default 900 :doc "Seconds a flight may last from its start, its pauses (a hide up to retreat-refuge ::hide-max-s) included: past it the flight ends limit-reached." :spec (a/num-in 0 nil)}
    ::mean-s {:default 20 :doc "Seconds a flight is guessed to take, the mean of its quote." :spec (a/num-in 0 nil)}})
 
 (def target [])
 
-(def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 
 (defn done?

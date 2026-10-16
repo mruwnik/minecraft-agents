@@ -112,7 +112,7 @@
 
 (defn quote
   "A promise of what job (a definition map, or a job namespace symbol) expects to use and yield for a call with args:
-  {:uses {:job-time [least mean most] :wall-time fig (paused time, on top of :job-time) :health .. :food .. :items {name fig} :wear {tool fig}} :yields {:items {name fig}}
+  {:uses {:job-time [least mean most] :wall-time fig (seconds paused beyond :job-time; the :wall-time spend line counts both) :health .. :food .. :items {name fig} :wear {tool fig}} :yields {:items {name fig}}
   :done fig :moves-to [x y z]} (:done in the job's done? units), ##Inf allowed; or the condition-failed :duplicate-call
   ending when the call would be refused. Runs its quote-of export under a quote ctx (no acts, calls or writes), else
   time (0, the mean of its :job-report times or ::contract/default-time-s, ##Inf). quote-deadline: wall-clock ms,
