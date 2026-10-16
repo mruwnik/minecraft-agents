@@ -73,6 +73,15 @@
     (is (= 11 (:health view)))
     (is (= 7 (:food view)))))
 
+(deftest status-of-a-body-whose-connection-dropped-says-offline-by-connection
+  (let [view (event-api/status
+              (status-engine #js {:isOffline (fn [] true) :isSettling (fn [] false)
+                                  :self (fn [] #js {:status "offline"}) :lastKnown (fn [] nil)}
+                             {} nil)
+              nil)]
+    (is (= :offline (:mode view)))
+    (is (= {:by :connection :why :connection-lost} (:offline view)))))
+
 (deftest status-of-an-offline-body-with-nothing-read_has_no_last-known
   (let [view (event-api/status
               (status-engine #js {:isOffline (fn [] true) :isSettling (fn [] false)
