@@ -37,13 +37,14 @@
   (vec (concat (job-entries) (trigger-entries))))
 
 (defn submitted-job-ids
-  "Ids of the jobs whose ns requires jobs.lib.submitted: the ones that take the submit-time :from."
+  "Ids of the jobs whose ns requires jobs.lib.submitted: the ones that take the submit-time :from. A job file not found is an error (the primitives share one file and never require it)."
   []
   (set (for [m (registry/job-metadata)
-             :let [file (io/resource (str (str/replace (str/replace (:id m) "." "/") "-" "_") ".cljs"))]
-             :when (and file
-                        (some #{'jobs.lib.submitted}
-                              (tree-seq coll? seq (first (registry/read-forms (io/file file))))))]
+             :when (not (str/starts-with? (:id m) "jobs.primitive."))
+             :let [file (or (io/resource (str (str/replace (str/replace (:id m) "." "/") "-" "_") ".cljs"))
+                            (throw (ex-info "job source not found on the classpath" {:id (:id m)})))]
+             :when (some #{'jobs.lib.submitted}
+                         (tree-seq coll? seq (first (registry/read-forms (io/file file)))))]
          (:id m))))
 
 (defmacro submitted-jobs

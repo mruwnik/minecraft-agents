@@ -3,6 +3,7 @@
             [agent-tools.fake-socket :as fake]
             [agent-tools.jobs :as jobs]
             [agent-tools.world-data :as data]
+            [dashboard.jobs-registry :as reg]
             [clojure.string :as str]
             ["node:fs" :as fs]
             ["node:os" :as os]
@@ -480,8 +481,22 @@
                                 ['(repeat (jobs.farm.tend)) true '(repeat (jobs.farm.tend))]]]
       (is (= want (jobs/stamp-from spec pos takes?)) (pr-str spec takes?)))))
 
-(deftest the-jobs-that-take-from-are-the-ones-requiring-jobs-lib-submitted
-  (is (= #{"jobs.access.stair" "jobs.access.bridge" "jobs.access.pillar" "jobs.gather.mine"} jobs/from-jobs)))
+(defn- job-sources
+  "{job id source} of every job file, from the compiled-in registry entries."
+  []
+  (let [root (loop [d (js/process.cwd)]
+               (cond (.existsSync fs (.join path d "engine" "src" "jobs")) d
+                     (= d (.dirname path d)) (throw (js/Error. "repo root not found"))
+                     :else (recur (.dirname path d))))]
+    (into {} (for [e reg/entries :when (= :job (:kind e)) :when (:file e)]
+               [(:id e) (.readFileSync fs (.join path root (:file e)) "utf8")]))))
+
+(deftest from-jobs-are-exactly-the-jobs-whose-from-arg-is-the-submitted-position
+  (let [sources (job-sources)
+        submitted? #(re-find #":from \{:doc \"where the body stood at submit[^\n]*:spec a/position\?" %)
+        declares-here? #(re-find #":here \{[^\n]*:spec boolean\?" %)]
+    (is (= (set (keys (filter (comp submitted? val) sources))) jobs/from-jobs))
+    (is (every? #(declares-here? (get sources %)) jobs/from-jobs))))
 
 (deftest the-jobs-that-take-from-are-named-not-read-from-the-truncated-catalog
   (doseq [spec ['(jobs.access.stair {:dir :down}) '(jobs.access.bridge) '(jobs.access.pillar) '(jobs.gather.mine {:block "coal_ore"})]]
