@@ -201,9 +201,17 @@
 
 (defn with-pen [c pen] (update c :args merge (:args pen)))
 
+(defn pen-spot
+  "work-place/spot of c with the :box of its plan part (pen-of) in place of the plan."
+  [c]
+  (work-place/spot
+   (if-let [box (:box (:args (pen-of c)))]
+     (update c :args #(-> % (dissoc :plan) (assoc :box box)))
+     c)))
+
 (def safe?
   "Not exposed at the middle of the pen: its :box, else the box of its plan part."
-  (ready/safe-at-by-night work-place/spot))
+  (ready/safe-at-by-night pen-spot))
 (def fit? ready/fit?)
 
 

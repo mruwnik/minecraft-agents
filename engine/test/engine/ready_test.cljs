@@ -252,15 +252,23 @@
     open-night {:safe? stair/safe?} {:from {:x 0 :y 64 :z 0}} :later
     night-hut {:safe? stair/safe?} {} :ok))
 
-(def work-jobs
-  '[jobs.farm.till jobs.farm.plant jobs.farm.harvest jobs.farm.tend jobs.farm.fertilize jobs.farm.compost jobs.farm.tidy
-    jobs.build.path jobs.build.pen jobs.build.from-plan jobs.build.clear-box jobs.build.rail jobs.build.rail-line])
+(defn jobs-under
+  "The registry's jobs in the namespaces under the prefixes, but find-spot (which roams)."
+  [& prefixes]
+  (for [j (sort (keys registry/jobs))
+        :when (some #(.startsWith (str j) %) prefixes)
+        :when (not= j 'jobs.farm.find-spot)]
+    j))
+
+(def work-jobs (jobs-under "jobs.farm." "jobs.build."))
 
 (defn safe-of [job] (:safe? (get registry/jobs job)))
 
 (def plans
   {"far" {:id "far" :cells [{:pos [15 64 0] :part "p"}]}
-   "near" {:id "near" :cells [{:pos [6 64 0] :part "p"}]}})
+   "near" {:id "near" :cells [{:pos [6 64 0] :part "p"}]}
+   "pen-far" {:id "pen-far" :cells [] :plan {:parts [{:id "p" :box [[14 64 -1] [16 64 1]] :herd {:mob "cow"}}]}}
+   "pen-near" {:id "pen-near" :cells [] :plan {:parts [{:id "p" :box [[5 64 -1] [7 64 1]] :herd {:mob "cow"}}]}}})
 
 (def box-at (fn [x] {:min {:x (dec x) :y 64 :z -1} :max {:x (inc x) :y 64 :z 1}}))
 (def corners-at (fn [x] {:from {:x (dec x) :y 64 :z -1} :to {:x (inc x) :y 64 :z 1}}))
@@ -274,10 +282,13 @@
       'jobs.animals.cull {:center {:x 15 :z 0}} night-hut :later
       'jobs.animals.tend {:box (box-at 15)} night-hut :later
       'jobs.animals.tend {:box (box-at 5)} night-hut :ok
+      'jobs.animals.tend {:plan "pen-far" :part "p"} night-hut :later
+      'jobs.animals.tend {:plan "pen-near" :part "p"} night-hut :ok
       'jobs.animals.pen-check {:box (box-at 15)} night-hut :later
       'jobs.animals.pen-check {:plan "far"} night-hut :later
       'jobs.animals.pen-check {:plan "near"} night-hut :ok
       'jobs.animals.pen-check {:at [15 64 0]} night-hut :later
+      'jobs.animals.pen-check {:at [6 64 0] :box (box-at 15)} night-hut :ok
       'jobs.apiary.guard {:box (corners-at 15)} night-hut :later
       'jobs.apiary.maintain {:box (corners-at 5)} night-hut :ok
       'jobs.apiary.harvest {:center [15 64 0]} night-hut :later
@@ -300,5 +311,6 @@
     'jobs.food.fish {}))
 
 (deftest jobs-that-go-to-a-place-keep-its-exposure-for-exposed-checks
-  (doseq [job (into work-jobs '[jobs.food.fish jobs.farm.find-spot jobs.animals.pen-check jobs.strip.site jobs.village.maintain])]
+  (doseq [job (concat work-jobs (jobs-under "jobs.animals." "jobs.apiary." "jobs.village." "jobs.strip." "jobs.food.")
+                      '[jobs.farm.find-spot])]
     (is (contains? (meta (safe-of job)) ::ready/exposure) (str job))))
