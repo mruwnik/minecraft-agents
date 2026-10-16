@@ -79,8 +79,8 @@
                            (box 9 64 0 9 65 0 "stone") (box 11 64 0 11 65 0 "stone"))
               {:keys [out p eng]} (await (walk! {:blocks (merge flat walls)} [{:x 10 :y 64 :z 0} 0]))]
           (is (= :blocked @out))
-          (is (= [0 64 0] (at p)))
-          (is (= ["blocked"] (mapv :status (moved eng)))))))))
+          (is (= [8 64 0] (at p)) "walked up to the wall round the goal, the nearest it gets")
+          (is (= "blocked" (:status (last (moved eng))))))))))
 
 (deftest without-path-sensing-it-is-blocked
   (async done
@@ -181,10 +181,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[label world prep] [["no path" {:blocks (merge flat walled-in)} identity]
-                                    ["a steer that does not move" {:blocks flat} still-steer]]]
-          (let [{:keys [eng p]} (await (walk-rounds! world [{:x 10 :y 64 :z 0} 0] prep 3))]
-            (is (= [0 64 0] (mapv js/Math.floor (at p))) label)
+        ;; a walled-in goal's first round walks up to the wall; the three that get nowhere come after it
+        (doseq [[label world prep end] [["no path" {:blocks (merge flat walled-in)} identity [8 64 0]]
+                                        ["a steer that does not move" {:blocks flat} still-steer [0 64 0]]]]
+          (let [{:keys [eng p]} (await (walk-rounds! world [{:x 10 :y 64 :z 0} 0] prep 4))]
+            (is (= end (mapv js/Math.floor (at p))) label)
             (is (not (backing-off? eng)) (str label ": a listed job is never backed off"))
             (is (= 1 (count (fruitless-requests eng))) label)))))))
 

@@ -301,7 +301,7 @@
         (let [{:keys [eng p filled look-round!]} (await (doorway-shut-early))]
           (is (seq filled))
           (doseq [cell filled] (fake/set-block! p cell "oak_planks"))
-          (fake/swap-self! p assoc :pos [10 64 -3]) ; outside the room, so not shut in by the planks
+          (fake/swap-self! p assoc :pos [6 64 0]) ; outside the room, looking at the filled cells in its west wall
           (look-round!)
           (is (not (night-holds-now? eng p)) "no doorway of its own to open")
           (core/submit! eng (list 'jobs.survival.night {}) {})
