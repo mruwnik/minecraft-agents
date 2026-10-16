@@ -53,7 +53,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def safe? (ready/safe-at bed-of))
+(def safe? (ready/safe-at-by-night bed-of))
 
 (def fit? ready/ok)
 
