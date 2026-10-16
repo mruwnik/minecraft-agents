@@ -1165,6 +1165,20 @@
 
 (declare judge-file-check)
 
+(defn until-rcon-step!
+  "Sends cmd every 500 ms until its reply matches the regex pattern; throws with the last reply after limit-s seconds.
+  io: {:send :sleep :now} (:now defaults to the clock)."
+  [{:keys [send sleep now] :or {now #(js/Date.now)}} cmd pattern limit-s]
+  (let [until (+ (now) (* 1000 limit-s))]
+    (letfn [(poll []
+              (.then (send [cmd])
+                     (fn [[reply]]
+                       (cond
+                         (f/rcon-reply-matches? reply pattern) nil
+                         (> (now) until) (throw (js/Error. (str ":until-rcon " (pr-str cmd) " " (pr-str pattern) " not met after " limit-s " s: last reply " (str/trim (str reply)))))
+                         :else (.then (sleep 500) poll)))))]
+      (poll))))
+
 (defn until-step!
   "Polls check (a :memory / :file after check or a :cli step) every 500 ms until it passes; throws with its last evidence
   after limit-s seconds."
@@ -1212,6 +1226,8 @@
                                        (fn [ev] (if ev (do (reset! event-job (get-in ev [:context :job-id])) ids) (throw (js/Error. (str ":await " (pr-str a) " timed out after " b " s"))))))
                          :restart-body (.then (restart-body! opts origin c) (constantly ids))
                          :until (.then (until-step! opts a b @last-job @event-job) (constantly ids))
+                         :until-seen (.then (until-step! opts (f/seen-check a) b @last-job @event-job) (constantly ids))
+                         :until-rcon (.then (until-rcon-step! {:send rcon! :sleep sleep} (f/substitute a (:body opts) origin box) b (nth step 3)) (constantly ids))
                          (:cli :http) (.then (do (reset! cli-ms (js/Date.now)) (tool-step! opts step @last-job @event-job))
                                              (fn [out] (if-let [id (and (= [:http :submit] (take 2 step)) (f/submitted-id out))]
                                                          (do (reset! last-job id) (conj ids id))

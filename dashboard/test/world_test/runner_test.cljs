@@ -719,6 +719,28 @@
                   (is (re-find #"never.edn does not exist" (.-message e)))))
         (.finally done))))
 
+(deftest until-rcon-polls-the-reply-until-it-matches
+  (async done
+    (let [replies (atom ["food 20" "food 12" "food 5"])
+          sent (atom [])
+          io {:send (fn [cmds] (swap! sent into cmds) (js/Promise.resolve [(let [r (first @replies)] (swap! replies #(if (next %) (vec (rest %)) %)) r)]))
+              :sleep (fn [_] (js/Promise.resolve nil))}]
+      (-> (r/until-rcon-step! io "q B" "food [0-9]$" 10)
+          (.then (fn [_] (is (= ["q B" "q B" "q B"] @sent))))
+          (.catch (fn [e] (is false (.-message e))))
+          (.finally done)))))
+
+(deftest until-rcon-times-out-with-the-last-reply
+  (async done
+    (let [now (atom 0)
+          io {:send (fn [_] (js/Promise.resolve ["food 20"]))
+              :sleep (fn [ms] (swap! now + ms) (js/Promise.resolve nil))
+              :now (fn [] @now)}]
+      (-> (r/until-rcon-step! io "q" "food 5" 2)
+          (.then (fn [_] (is false "should have thrown")))
+          (.catch (fn [e] (is (re-find #":until-rcon \"q\" \"food 5\" not met after 2 s: last reply food 20" (.-message e)))))
+          (.finally done)))))
+
 (defn log-reload!
   "Appends a world.reloaded event for files to the body's event log, as the engine writes it."
   [opts files]

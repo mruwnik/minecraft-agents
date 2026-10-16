@@ -223,16 +223,30 @@
         kept (.filter arr (fn [m] (not= tag (.-by m))))]
     (if (= (.-length kept) (.-length arr)) text (markers-text kept))))
 
-(def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set :restart-body :cli :http :until})
+(def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set :restart-body :cli :http :until :until-seen :until-rcon})
 (def after-kinds #{:block :not-block :any-not-block :body-near :body-far :item :entities :memory :file})
 (def http-ops #{:submit :cancel :cancel-all :take :release})
 (def cli-tools #{"jobs" "drive" "plans" "map" "world" "say" "time" "triggers" "entities" "observe" "workspace" "blueprints" "quote"})
+
+(defn seen-check
+  "The :until check of an :until-seen target: {:entity type} (entities the body has seen) or {:block name} (blocks in its memory)."
+  [{:keys [entity block]}]
+  (if entity
+    [:cli "entities" ["$body" "--world" "$world" "--type" entity] {:total [:> 0]}]
+    [:cli "observe" ["$body" "--world" "$world" "seen" "--names" block] {:ok true :blocks [:has {:name block}]}]))
+
+(defn rcon-reply-matches?
+  "Whether the server's reply contains a match of the regex pattern."
+  [reply pattern]
+  (boolean (and reply (re-find (re-pattern pattern) (str reply)))))
 
 (defn step-problem?
   "Whether an :act step has a kind or shape the runner cannot run (kinds without extra shape are only checked by name)."
   [[op a b :as step]]
   (case op
     :until (not (and (= 3 (count step)) (number? b) (vector? a) (or (#{:memory :file} (first a)) (and (= :cli (first a)) (not (step-problem? a))))))
+    :until-seen (not (and (= 3 (count step)) (number? b) (map? a) (string? (or (:entity a) (:block a)))))
+    :until-rcon (not (and (= 4 (count step)) (string? a) (string? b) (number? (nth step 3))))
     :cli (not (and (cli-tools a) (vector? b) (every? #(or (string? %) (map? %) (vector? %)) b)))
     :http (not (http-ops a))
     (not (step-kinds op))))
@@ -243,7 +257,7 @@
   (the plot's box) instead. @p/@s/@a target the test's own body and are not checked; `if entity` reads are allowed."
   [c]
   (->> (:act c)
-       (filter (comp #{:rcon :rcon-until} first))
+       (filter (comp #{:rcon :rcon-until :until-rcon} first))
        (map second)
        (remove #(re-find #"(?:if|unless) entity @e" (str %)))
        (filter #(some (fn [[_ sel]] (not (or (str/includes? (or sel "") "dx=") (str/includes? (or sel "") "$BOX"))))

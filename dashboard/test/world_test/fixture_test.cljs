@@ -663,6 +663,24 @@
     (is (ps [:until [:block [0 0 0] "air"] 20]) "only checks the runner can re-run")
     (is (ps [:until [:memory {}]]) "a bound is required")))
 
+(deftest poll-acts-are-checked-and-seen-expands-to-an-until-check
+  (let [ps #(f/step-problem? %)]
+    (is (not (ps [:until-seen {:entity "cow"} 20])))
+    (is (not (ps [:until-seen {:block "crafting_table"} 20])))
+    (is (ps [:until-seen "cow" 20]) "the target says block or entity")
+    (is (ps [:until-seen {:entity "cow"}]) "a bound is required")
+    (is (not (ps [:until-rcon "data get entity $BODY foodLevel" "foodLevel.*\\b(1|2)\\b" 60])))
+    (is (ps [:until-rcon "data get entity $BODY foodLevel" 60]) "a pattern is required"))
+  (is (= [:cli "entities" ["$body" "--world" "$world" "--type" "cow"] {:total [:> 0]}]
+         (f/seen-check {:entity "cow"})))
+  (is (= [:cli "observe" ["$body" "--world" "$world" "seen" "--names" "wheat"] {:ok true :blocks [:has {:name "wheat"}]}]
+         (f/seen-check {:block "wheat"}))))
+
+(deftest rcon-reply-matching-is-a-regex-search
+  (is (f/rcon-reply-matches? "has the following entity data: 7" "data: [0-9]"))
+  (is (not (f/rcon-reply-matches? "has the following entity data: 20" "data: [0-9]$")))
+  (is (not (f/rcon-reply-matches? nil "x"))))
+
 (deftest entity-uuids-are-read-in-nbt-and-string-forms
   (is (= #{"I;1,2,3,4" "0000000a-0000-0000-0000-000000000001"}
          (f/case-uuids {:act [[:summon "villager" [1 0 1] "{NoAI:1b,UUID:[I; 1, 2,3,4]}"]

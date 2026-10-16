@@ -146,7 +146,7 @@
    :tags [:animals :jobs :access :zones]
    :body {:at [17.5 0 16.5] :inventory [["lead" 2]]}
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [20 0 10] #at [32 1 22]] :want "dirt"}]}]
-   :act [[:summon "cow" [17.5 0 16.5]] [:wait-s 2]
+   :act [[:summon "cow" [17.5 0 16.5]] [:until-seen {:entity "cow"} 10]
          [:job (jobs.animals.leash {:mob "cow"})]
          [:await {:source :job :kind :completed} 40]
          [:rcon "execute as $BODY at @s run tp @s ~9 ~ ~"] [:wait-s 6]
@@ -158,7 +158,7 @@
    :tags [:animals :jobs :access :zones]
    :body {:at [17.5 0 16.5] :inventory [["lead" 2]]}
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [20 0 10] #at [32 1 22]] :want "dirt"}]}]
-   :act [[:summon "cow" [17.5 0 16.5]] [:wait-s 2]
+   :act [[:summon "cow" [17.5 0 16.5]] [:until-seen {:entity "cow"} 10]
          [:job (jobs.animals.leash {:mob "cow"})]
          [:await {:source :job :kind :completed} 40]
          [:rcon "execute as $BODY at @s run tp @s ~9 ~ ~"] [:wait-s 6]
