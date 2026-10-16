@@ -7,7 +7,7 @@
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.triggers :as triggers]
-            [engine.shelter-test :as st]
+            [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.memory :as mem]
             [jobs.lib.body :as body]

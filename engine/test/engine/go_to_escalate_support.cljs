@@ -4,8 +4,7 @@
             [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
-            [engine.go-to-test :as gt]
-            [engine.go-to-column-test :refer [hiding]]
+            [engine.go-to-support :as gts :refer [hiding]]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
@@ -38,7 +37,7 @@
   [out job args]
   {:round (fn ^:async recording-round [c]
             (let [e (await (ctx/call c :kid job args))]
-              (if (= :continue e) :continue (do (reset! out (gt/result-of e)) (ctx/end c :done nil)))))})
+              (if (= :continue e) :continue (do (reset! out (gts/result-of e)) (ctx/end c :done nil)))))})
 
 (defn ^:async tick-out! [eng n]
   (loop [i 0]

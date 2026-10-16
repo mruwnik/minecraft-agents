@@ -3,7 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.fake :as fake]
-            [engine.shelter-test :as st]
+            [engine.shelter-support :as st]
             [engine.test-util :as tu :refer [run-until-empty]]))
 
 (def pillar

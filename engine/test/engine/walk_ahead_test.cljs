@@ -6,6 +6,7 @@
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.go-to-support :as gts]
             [engine.go-to-test :as gt]
             [engine.events :as events]
             [engine.memory :as mem]
@@ -270,7 +271,7 @@
         out (atom :not-done)
         parent {:round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid 'jobs.movement.go-to args))]
-                           (if (= :continue e) :continue (do (reset! out (gt/result-of e)) (ctx/end c :done nil)))))}
+                           (if (= :continue e) :continue (do (reset! out (gts/result-of e)) (ctx/end c :done nil)))))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]

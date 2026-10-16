@@ -6,7 +6,7 @@
             [engine.hostile-test :as h]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
-            [engine.shelter-test :as st]
+            [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [engine.fake :as fake]))

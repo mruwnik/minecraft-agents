@@ -3,7 +3,7 @@
   (:require [cljs.test :refer [deftest is are]]
             [engine.memory :as mem]
             [engine.registry :as registry]
-            [engine.shelter-test :as st]
+            [engine.shelter-support :as st]
             [engine.test-util :as tu]))
 
 (defn start-of

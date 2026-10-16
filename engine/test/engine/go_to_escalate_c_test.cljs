@@ -6,7 +6,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.go-to-test :as gt]
-            [engine.go-to-column-test :refer [hiding]]
+            [engine.go-to-support :refer [hiding]]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]

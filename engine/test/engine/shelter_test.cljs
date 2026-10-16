@@ -14,116 +14,8 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
             [engine.test-util :as tu :refer [run-until-empty]]
+            [engine.shelter-support :refer [day-ms night noon on-wait! dawn-after! mid-night! default-dawn setup tick-n night-then-day calls arg-pos entries know-bed! looked-round! pos-of teleport! emitted emitted-by floor bed-room dirt-stack sleeper awake declined-events always-shelter refuse-placing! after-first! fires? ground stone-ground ms-of-offline notified refuse-cell!]]
             [engine.triggers :as triggers]))
-
-(def day-ms 1200000)
-(def night 14000)
-(def noon 1000)
-
-;; the night is one round until morning: a test ends it by setting the time at a hold
-(defn on-wait!
-  "Call (f n) on the nth hold of the night (a wait act of hold-ms, from 1) before it runs."
-  [p f]
-  (let [n (atom 0)]
-    (.override (.-world p) "wait" (fn ^:async g [token a impl]
-                                    (when (= 5000 (.-ms a)) (f (swap! n inc)))
-                                    (await (impl token a))))))
-
-(defn dawn-after!
-  "Day comes at the kth hold; (f n) runs at every hold before it."
-  ([p k] (dawn-after! p k (fn [_])))
-  ([p k f] (on-wait! p (fn [n] (if (>= n k) (.setTime (.-world p) noon) (f n))))))
-
-(defn mid-night!
-  "Day comes at hold n+1; at hold n, (f) is kept in the atom it returns: a look at the night while it holds."
-  [p n f]
-  (let [a (atom nil)]
-    (dawn-after! p (inc n) (fn [i] (when (= i n) (reset! a (f)))))
-    a))
-
-(def default-dawn
-  "Holds after which setup's night turns to day, so a test that does not care when the night ends still ends."
-  12)
-
-(defn setup [world]
-  (let [clock (atom 1000000)
-        [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} world))
-        _ (dawn-after! p default-dawn)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
-                          :now #(deref clock)
-                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :p p :seen seen :clock clock}))
-
-(defn ^:async tick-n [eng n]
-  (loop [i 0]
-    (when (< i n)
-      (await (core/tick! eng))
-      (recur (inc i)))))
-
-;; a body that is safe is not held: the night ends, and a test brings the day itself
-(defn ^:async night-then-day
-  "Tick eng n times of night, keep (f) from then, set the day and tick m more times; the kept value."
-  [eng p n f m]
-  (await (tick-n eng n))
-  (let [kept (f)]
-    (.setTime (.-world p) noon)
-    (await (tick-n eng m))
-    kept))
-
-(defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
-
-(defn arg-pos [call] (js->clj (.-pos (.-args call)) :keywordize-keys true))
-
-(defn entries [eng kind] (mapv :data (mem/entries (mem/view (:store eng)) kind)))
-
-(defn know-bed! [eng pos] (mem/write! (:store eng) :bed {:pos pos} mem/place-policy))
-
-(defn looked-round!
-  "The night's look pass from p's cell, as the body remembers it: a trigger check after it is not held by the look."
-  [eng p]
-  (mem/write! (:store eng) :night-looked {:cell (sh/feet p)} sh/night-looked-policy))
-
-(defn pos-of [p] (js->clj (.-pos (.self p)) :keywordize-keys true))
-
-(defn teleport! [p x y z] (fake/swap-self! p assoc :pos [x y z]))
-
-(defn emitted [seen kind] (filterv #(= kind (:kind %)) @seen))
-
-(defn emitted-by [seen source reflex] (filterv #(= [source reflex] [(:source %) (:reflex %)]) @seen))
-
-(def floor {"0,63,0" "dirt" "0,62,0" "stone" "0,61,0" "stone" "0,60,0" "stone"})
-(def bed-room
-  "A closed stone room (inside x -1..7, y 64..65, z -1..1, roof at 66) around the body's start and a bed at 6,64,0."
-  (assoc (apply dissoc (tu/box -2 64 -2 8 66 2 "stone") (keys (tu/box -1 64 -1 7 65 1 "stone"))) "6,64,0" "red_bed"))
-
-(def dirt-stack [{:name "dirt" :count 12}])
-(def sleeper {:id 5 :name "Alex" :kind "player" :sleeping true :pos {:x 10 :y 64 :z 0}})
-(def awake {:id 6 :name "Sam" :kind "player" :pos {:x 10 :y 64 :z 0}})
-
-(defn declined-events [seen reflex]
-  (filterv #(= [:reflex :declined reflex] [(:source %) (:kind %) (:reflex %)]) @seen))
-
-(def always-shelter
-  {:name :always-shelter :job '(jobs.survival.night) :args {:roof-height 4}
-   :persistence :cooldown :cooldown-s 10 :when (constantly true)})
-
-(defn refuse-placing! [p]
-  (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "no-support"})))
-
-(defn after-first!
-  "Run (f) once, right after the first act named act-name returns."
-  [p act-name f]
-  (let [done? (atom false)]
-    (.override (.-world p) act-name (fn ^:async g [token a impl]
-                                      (let [r (await (impl token a))]
-                                        (when-not @done? (reset! done? true) (f))
-                                        r)))))
-
-;; ------------------------------------------------------------------ trigger
-
-(defn fires? [world args]
-  (boolean ((:when (get triggers/all :night)) (tu/fake-on-floor world) {} args)))
 
 (deftest night-holds-at-night-in-the-open
   (are [world args held] (= held (fires? world args))
@@ -818,16 +710,6 @@
           (is (= [] (calls p "dig")))
           (is (= 1 (count (emitted seen :dig_in_failed)))))))))
 
-(defn refuse-cell!
-  "Make place at cell (a [x y z] vector) fail the way the server's \"still air\" refusal does; others work as usual."
-  [p [x y z]]
-  (.override (.-world p) "place"
-             (fn ^:async f [token a impl]
-               (let [pos (.-pos a)]
-                 (if (and (= x (.-x pos)) (= y (.-y pos)) (= z (.-z pos)))
-                   #js {:status "failed" :reason "Server refused to place dirt: the block is still air"}
-                   (await (impl token a)))))))
-
 (deftest dig-in-does-not-claim-sealed-when-a-wall-is-refused
   (async done
     (tu/run-async done
@@ -877,8 +759,6 @@
     1000 0
     0 0))
 
-(def ms-of-offline (fn [p] (mapv #(.-ms (.-args %)) (calls p "offline"))))
-
 (deftest another-player-online-and-awake-is-no-reason-to-log-out
   (async done
     (tu/run-async done
@@ -912,8 +792,6 @@
           (is (= [{:gone true :was {:x 6 :y 64 :z 0}}] (entries eng :bed)))
           (is (= [] (calls p "offline")) "nobody else online: no log-out"))))))
 
-(defn notified [seen] (count (emitted seen :job.notify)))
-
 (deftest a-dug-in-shelter-holds-the-body-until-day-then-the-queued-job-runs
   (async done
     (tu/run-async done
@@ -931,10 +809,6 @@
           (is (not= {:x 0 :y 64 :z 0} (pos-of p)) "the body stepped out of its walls")
           (is (= 1 (notified seen)) "then the queued job ran"))))))
 
-(def ground
-  "Dirt (no tool needed) from y 60 to 63 over x and z -4..4: room for a pit and a stair out of it."
-  (into {} (for [x (range -4 5) z (range -4 5) y (range 60 64)] [(str x "," y "," z) "dirt"])))
-
 (deftest a-pit-shelter-holds-until-day-then-ends-with-the-body-out-of-the-pit
   (async done
     (tu/run-async done
@@ -948,8 +822,6 @@
           (is (>= (:y (pos-of p)) 64) "the body stands on the surface, out of the pit")
           (is (empty? (emitted seen :shelter.failed)) "out: done, not failed")
           (is (= 1 (notified seen)) "then the queued job ran"))))))
-
-(def stone-ground (into {} (map (fn [[k _]] [k "stone"])) ground))
 
 (deftest a-pit-shelter-with-no-way-out-ends-failed-by-day-and-the-queued-job-runs
   (async done

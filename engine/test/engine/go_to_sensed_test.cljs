@@ -5,6 +5,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.go-to-support :as gts]
             [engine.go-to-test :as gt]
             [engine.event-api :as event-api]
             [engine.events :as events]
@@ -185,7 +186,7 @@
         out (atom :not-done)
         parent {:round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid job args))]
-                           (if (= :continue e) :continue (do (reset! out (gt/result-of e)) (ctx/end c :done nil)))))}
+                           (if (= :continue e) :continue (do (reset! out (gts/result-of e)) (ctx/end c :done nil)))))}
         eng (core/create (cond-> {:primitives w :jobs (assoc registry/jobs 'recording-parent parent) :triggers {}
                                   :dir (tu/tmp-dir) :now #(deref clock) :backoff false
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}

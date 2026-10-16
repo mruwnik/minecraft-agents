@@ -2,6 +2,7 @@
   "jobs.movement.go-to's column goals ([x z], y left out) and its re-aim of a y with nothing standable in range."
   (:require [cljs.test :refer [deftest is async]]
             [engine.go-to-test :as gt :refer [go! at events-of refusal]]
+            [engine.go-to-support :refer [hiding]]
             [engine.core :as core]
             [engine.memory :as mem]
             [engine.registry :as registry]
@@ -128,13 +129,6 @@
   (is (re-find #":pos must be \[x y z\]" (refusal {:pos [10]})))
   (is (re-find #":pos must be \[x y z\]" (refusal {:pos {:x 1 :y 2}})))
   (is (re-find #":y-slack must be a whole number" (refusal {:pos [10 64 0] :y-slack -1}))))
-
-(defn hiding
-  "p (tu/fake over blocks) that sees every cell but those hidden? [x y z] answers true for (unknown, never seen)."
-  [blocks hidden?]
-  (let [p (tu/fake {:blocks blocks})]
-    (aset p "sensedAt" (fn [pos] (if (hidden? [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
-    p))
 
 ;; a hill at x 28..32 with its ground at feet 75, a cave in it at feet 60 (nearer feet 64 than the ground is)
 (def hill-with-cave

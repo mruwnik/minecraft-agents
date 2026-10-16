@@ -11,7 +11,7 @@
             [engine.registry :as registry]
             [engine.scenario :as scenario]
             [engine.settings :as settings]
-            [engine.shelter-test :as st]
+            [engine.shelter-support :as st]
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]

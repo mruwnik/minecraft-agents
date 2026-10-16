@@ -9,7 +9,7 @@
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.scenario :as scenario]
-            [engine.shelter-test :as st]
+            [engine.shelter-support :as st]
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]

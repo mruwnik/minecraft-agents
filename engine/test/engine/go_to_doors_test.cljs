@@ -5,6 +5,7 @@
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.go-to-support :as gts]
             [engine.go-to-test :as gt]
             [engine.events :as events]
             [engine.memory :as mem]
@@ -52,7 +53,7 @@
          out (atom :not-done)
          parent {:round (fn ^:async recording-round [c]
                           (let [e (await (ctx/call c :kid 'jobs.movement.go-to args))]
-                            (if (= :continue e) :continue (do (reset! out (gt/result-of e)) (ctx/end c :done nil)))))}
+                            (if (= :continue e) :continue (do (reset! out (gts/result-of e)) (ctx/end c :done nil)))))}
          eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
      (core/submit! eng '(recording-parent) {})
      (await (tick-out! eng clock 40))
@@ -604,7 +605,7 @@
                 out (atom :not-done)
                 parent {:round (fn ^:async sealed-round [c]
                                  (let [e (await (ctx/call c :kid 'jobs.movement.go-to {:pos [10 64 0] :range 0 :ways #{:walk :clear-seal}}))]
-                                   (if (= :continue e) :continue (do (reset! out (gt/result-of e)) (ctx/end c :done nil)))))}
+                                   (if (= :continue e) :continue (do (reset! out (gts/result-of e)) (ctx/end c :done nil)))))}
                 eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
             (ledger/write! (:store eng) entries)
             (core/submit! eng '(recording-parent) {})
@@ -624,7 +625,7 @@
                 out (atom :not-done)
                 parent {:round (fn ^:async plug-round [c]
                                  (let [e (await (ctx/call c :kid 'jobs.movement.go-to {:pos [10 64 0] :range 0 :ways #{:walk :clear-seal}}))]
-                                   (if (= :continue e) :continue (do (reset! out (gt/result-of e)) (ctx/end c :done nil)))))}
+                                   (if (= :continue e) :continue (do (reset! out (gts/result-of e)) (ctx/end c :done nil)))))}
                 eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
             (ledger/write! (:store eng) entries)
             (core/submit! eng '(recording-parent) {})

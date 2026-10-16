@@ -3,7 +3,7 @@
   them, walls with them only when no pit can be dug, and says which blocks it spent."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
-            [engine.shelter-test :as st]
+            [engine.shelter-support :as st]
             [engine.test-util :as tu :refer [run-until-empty]]))
 
 (def pick {:name "iron_pickaxe" :count 1})

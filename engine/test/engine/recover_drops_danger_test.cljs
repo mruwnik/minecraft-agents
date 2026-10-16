@@ -9,7 +9,7 @@
             [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]
             [engine.settings :as settings]
-            [engine.shelter-test :as st]
+            [engine.shelter-support :as st]
             [jobs.survival.recover-drops.estimate :as estimate]
             [jobs.survival.recover-drops :as recover-drops]
             [engine.test-util :as tu :refer [run-until-empty]]

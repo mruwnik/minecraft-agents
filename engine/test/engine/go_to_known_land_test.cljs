@@ -5,6 +5,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.go-to-support :as gts]
             [engine.go-to-test :as gt]
             [engine.events :as events]
             [engine.fake :as fake]
@@ -25,7 +26,7 @@
 (defn recording-parent [out args]
   {:round (fn ^:async recording-round [c]
             (let [e (await (ctx/call c :kid 'jobs.movement.go-to args))]
-              (if (= :continue e) :continue (do (reset! out (gt/result-of e)) (ctx/end c :done nil)))))})
+              (if (= :continue e) :continue (do (reset! out (gts/result-of e)) (ctx/end c :done nil)))))})
 
 (defn ^:async tick-out! [eng n]
   (loop [i 0]

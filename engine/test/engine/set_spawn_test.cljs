@@ -5,7 +5,7 @@
             [engine.job-api :as job-api]
             [engine.memory :as mem]
             [engine.test-util :as tu :refer [run-async run-until-empty]]
-            [engine.shelter-test :as st :refer [setup know-bed! calls entries emitted noon night]]))
+            [engine.shelter-support :as st :refer [setup know-bed! calls entries emitted noon night]]))
 
 (def bed {:x 6 :y 64 :z 0})
 (def far-bed {:x 90 :y 64 :z 0})

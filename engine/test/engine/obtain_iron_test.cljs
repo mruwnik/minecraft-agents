@@ -6,7 +6,7 @@
             [engine.fetch-test :as f]
             [engine.game :as game]
             [engine.perception :as perception]
-            [engine.shelter-test :as st]
+            [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.base :as base]

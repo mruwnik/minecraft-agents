@@ -9,7 +9,7 @@
             [engine.memory :as mem]
             [engine.night-support :as nt]
             [engine.registry :as registry]
-            [engine.shelter-test :as st]
+            [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [jobs.lib.shelter :as sh]))
 

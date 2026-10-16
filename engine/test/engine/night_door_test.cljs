@@ -10,7 +10,7 @@
             [engine.registry :as registry]
             [jobs.lib.world-files :as ew]
             [jobs.lib.shelter :as sh]
-            [engine.shelter-test :as st]
+            [engine.shelter-support :as st]
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]))
 

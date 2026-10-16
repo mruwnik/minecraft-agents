@@ -17,7 +17,7 @@
             [engine.settings :as settings]
             [engine.registry :as registry]
             [engine.scenario :as scenario]
-            [engine.shelter-test :as st]
+            [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.shelter :as sh]

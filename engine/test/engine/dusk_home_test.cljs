@@ -3,7 +3,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.job-api :as job-api]
-            [engine.shelter-test :as st]
+            [engine.shelter-support :as st]
             [engine.memory :as mem]
             [engine.test-util :as tu]
             [triggers.survival.dusk-home :as dh]))

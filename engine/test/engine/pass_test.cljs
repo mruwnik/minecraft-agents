@@ -10,7 +10,7 @@
             [engine.test-util :as tu :refer [box floor]]
             [engine.hut-shelter-test :as hut]
             [engine.moved-test :as ut]
-            [engine.shelter-test :as st]
+            [engine.shelter-support :as st]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]))
 

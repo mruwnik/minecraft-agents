@@ -1,10 +1,10 @@
 (ns engine.go-to-test
   "jobs.movement.go-to over the path planner and the executor, against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.go-to-support :refer [result-of]]
             [clojure.string :as str]
             [engine.registry :as registry]
             [engine.core :as core]
-            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.expr :as expr]
@@ -48,15 +48,6 @@
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
                            shared (assoc :world shared)))]
     {:eng eng :p p :seen seen})))
-
-(defn result-of
-  "go-to's ending e as the result map it handed over before the contract: its data, and for a stop :status :stopped
-  and the cause's :reason. The ending is its meta :ending."
-  [e]
-  (with-meta (if (= :done (:kind e))
-               (:data e)
-               (assoc (:data e) :status :stopped :reason (contract/cause-key e)))
-    {:ending e}))
 
 (defn recording-parent
   "A parent that runs go-to with args as its child (ctx/call) and keeps the child's result (result-of) in out."

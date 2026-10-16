@@ -5,7 +5,7 @@
             [engine.core :as core]
             [engine.harvest-test :as h]
             [engine.hut-shelter-test :as hut]
-            [engine.shelter-test :as st]
+            [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.moved-test :as ut]))
 

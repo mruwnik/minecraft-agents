@@ -11,7 +11,7 @@
             [engine.memory :as mem]
             [engine.perception :as perception]
             [engine.registry :as registry]
-            [engine.shelter-test :as st]
+            [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.reach :as reach]

@@ -1,7 +1,8 @@
 (ns engine.go-to-waypoint-test
   "go-to's waypoints toward a far column whose ground is only guessed (jobs.movement.go-to.column/waypoint)."
   (:require [cljs.test :refer [deftest is async]]
-            [engine.go-to-column-test :refer [hiding slope stub-ctx]]
+            [engine.go-to-column-test :refer [slope stub-ctx]]
+            [engine.go-to-support :refer [hiding]]
             [engine.fake :as fake]
             [engine.go-to-test :refer [go! at]]
             [engine.settings :as settings]
