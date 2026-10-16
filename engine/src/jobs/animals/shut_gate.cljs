@@ -92,6 +92,13 @@
   [shut]
   (if (pos? shut) (str shut " gate(s) shut") "no gate open"))
 
+(defn end-text
+  "The call's closing text: what was shut and what stays open, never \"no gate open\" beside a gate left open."
+  [shut n-left]
+  (cond (zero? n-left) (shut-text shut)
+        (zero? shut) (str n-left " left open")
+        :else (str (shut-text shut) ", " n-left " left open")))
+
 (defn nearest [c cells]
   (let [here (u/self-pos c)]
     (first (sort-by #(pg/distance here %) cells))))
@@ -101,7 +108,7 @@
   [c shut left]
   (let [result {:shut shut :left left}
         _ (ctx/update-mem! c assoc :shut shut)
-        text (str (shut-text shut) (when (seq left) (str ", " (count left) " left open")))]
+        text (end-text shut (count left))]
     (if (empty? left)
       (ctx/end c :done nil (assoc result :text text))
       (do (ctx/emit! c :shut-gate.stopped :warn (assoc result :text text))

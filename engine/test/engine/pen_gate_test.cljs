@@ -517,3 +517,10 @@
   (are [n text] (= text (shut-gate/shut-text n))
     0 "no gate open"
     2 "2 gate(s) shut"))
+
+(deftest end-text-is-never-self-contradictory
+  (are [shut n-left text] (= text (shut-gate/end-text shut n-left))
+    0 0 "no gate open"
+    2 0 "2 gate(s) shut"
+    0 2 "2 left open"
+    1 2 "1 gate(s) shut, 2 left open"))
