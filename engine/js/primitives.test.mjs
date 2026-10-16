@@ -1334,7 +1334,7 @@ test('moveTo: a body that moved three blocks and then stopped is partial, stalle
 const waterAbove = { ...world, blocks: { ...world.blocks, '0,65,0': 'water', '0,64,0': 'water' }, oxygen: 4 }
 const controls = bot => bot.calls.filter(c => c.name === 'setControlState').map(c => c.args)
 
-test('swim: holds jump until the head is out of the water, then releases and reports surfaced with oxygen', async () => {
+test('swim: holds jump until the head is out of the water, then releases and reports surfaced with oxygen', () => virtually(async () => {
   const blocks = { '0,65,0': 'water', '0,64,0': 'water' }
   const { bot, p } = rig({ blocks, oxygen: 4 })
   setTimeout(() => { delete blocks['0,65,0']; bot.oxygenLevel = 20 }, 5)
@@ -1342,9 +1342,9 @@ test('swim: holds jump until the head is out of the water, then releases and rep
   assert.equal(result.status, 'surfaced')
   assert.deepEqual(result.oxygen, { before: 4, after: 20 })
   assert.deepEqual(controls(bot), [['jump', true], ['jump', false]])
-})
+}))
 
-test('swim: a head in kelp, seagrass or a bubble column is still under water: jump is held until the head is in air', async () => {
+test('swim: a head in kelp, seagrass or a bubble column is still under water: jump is held until the head is in air', () => virtually(async () => {
   for (const plant of ['kelp', 'kelp_plant', 'seagrass', 'tall_seagrass', 'bubble_column']) {
     const blocks = { '0,65,0': plant, '0,64,0': 'water' }
     const { bot, p } = rig({ blocks, oxygen: 4 })
@@ -1353,16 +1353,16 @@ test('swim: a head in kelp, seagrass or a bubble column is still under water: ju
     assert.equal(result.status, 'surfaced', plant)
     assert.deepEqual(controls(bot), [['jump', true], ['jump', false]], plant)
   }
-})
+}))
 
-test('swim: a head in a waterlogged block is still under water: jump is held until the head is in air', async () => {
+test('swim: a head in a waterlogged block is still under water: jump is held until the head is in air', () => virtually(async () => {
   const blocks = { '0,65,0': 'oak_slab', '0,64,0': 'water' }
   const { bot, p } = rig({ blocks, props: { '0,65,0': { waterlogged: true } }, oxygen: 4 })
   setTimeout(() => { delete blocks['0,65,0']; bot.oxygenLevel = 20 }, 5)
   const result = await p.swim('t1', { ms: 3000 })
   assert.equal(result.status, 'surfaced')
   assert.deepEqual(controls(bot), [['jump', true], ['jump', false]])
-})
+}))
 
 test('swim: already surfaced returns at once without pressing jump', async () => {
   const { bot, p } = rig(world)
@@ -1787,7 +1787,7 @@ for (const event of ['death', 'respawn']) {
 const rim = at(3, 65, 0)
 const pool = () => ({ '0,63,0': 'stone', '0,64,0': 'water', '0,65,0': 'water' })
 
-test('swim toward: looks at the target, holds jump and forward until the feet stand on solid ground, then releases both', async () => {
+test('swim toward: looks at the target, holds jump and forward until the feet stand on solid ground, then releases both', () => virtually(async () => {
   const blocks = pool()
   const { bot, p } = rig({ blocks })
   setTimeout(() => { delete blocks['0,64,0'] }, 5)
@@ -1795,13 +1795,13 @@ test('swim toward: looks at the target, holds jump and forward until the feet st
   assert.equal(result.status, 'landed')
   assert.deepEqual(names(bot).filter(n => n === 'lookAt'), ['lookAt'])
   assert.deepEqual(controls(bot), [['jump', true], ['forward', true], ['jump', false], ['forward', false]])
-})
+}))
 
-test('swim toward: clear of the water within a block of the target but with no footing is not landed', async () => {
+test('swim toward: clear of the water within a block of the target but with no footing is not landed', () => virtually(async () => {
   const { bot, p } = rig({ blocks: pool() })
   setTimeout(() => { bot.entity.position = new Vec3(3.2, 65, 0.3) }, 5)
   assert.equal((await p.swim('t1', { ms: 3000, toward: rim })).status, 'timeout')
-})
+}))
 
 test('swim toward: already standing on solid ground lands at once without pressing anything', async () => {
   const { bot, p } = rig({ blocks: { '0,63,0': 'stone' } })
@@ -1837,11 +1837,11 @@ test('a scoop succeeds when the held bucket became a water_bucket though the cel
   assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'bucket' }), { status: 'placed', block: 'bucket' })
 })
 
-test('a scoop succeeds when the cell turns to air shortly after the activation', async () => {
+test('a scoop succeeds when the cell turns to air shortly after the activation', () => virtually(async () => {
   const blocks = { '0,63,0': 'stone', '1,64,0': 'water' }
   const { p } = rig({ blocks, items: [{ name: 'bucket', count: 1, slot: 36 }], onActivate: () => { setTimeout(() => { delete blocks['1,64,0'] }, 5) } })
   assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'bucket' })).status, 'placed')
-})
+}))
 
 test('a pour succeeds when the water_bucket became a bucket though the cell still reads air', async () => {
   const items = [{ name: 'water_bucket', count: 1, slot: 36 }]
@@ -1908,13 +1908,13 @@ test('a bound bot reads blocks through the server-shape wrapper, once per reconn
   assert.equal(first.blockAt(new Vec3(2, 64, 0)).name, 'oak_log')
 })
 
-test('swim toward leaves the half-width alone', async () => {
+test('swim toward leaves the half-width alone', () => virtually(async () => {
   const blocks = pool()
   const { bot, p } = rig({ blocks })
   setTimeout(() => { delete blocks['0,64,0'] }, 5)
   await p.swim('t1', { ms: 3000, toward: rim })
   assert.equal(bot.physics.playerHalfWidth, BODY_HALF_WIDTH)
-})
+}))
 
 test('swim toward is not landed while still in the water next to the target', async () => {
   const { p } = rig({ blocks: { '1,63,0': 'stone', '1,64,0': 'water' }, pos: [1.2, 64, 0] })
@@ -2277,21 +2277,21 @@ test('toss does not look anywhere itself', async () => {
   assert.deepEqual(names(bot).filter(n => n === 'lookAt' || n === 'look'), [])
 })
 
-test('toss with watchS reports who picked the drop up, by uuid, and ends once all of it is taken', async () => {
+test('toss with watchS reports who picked the drop up, by uuid, and ends once all of it is taken', () => virtually(async () => {
   const { bot, p } = rig(world)
   const done = p.toss('t1', { item: 'bread', count: 2, watchS: 1.5 })
   setTimeout(() => bot.emit('playerCollect', { uuid: 'v1' }, { getDroppedItem: () => ({ name: 'bread', count: 2 }) }), 5)
   assert.deepEqual(await done, { status: 'tossed', count: 2, takenBy: { v1: 2 } })
-})
+}))
 
-test('toss with watchS counts only the item tossed and gives an empty receipt when nobody takes it', async () => {
+test('toss with watchS counts only the item tossed and gives an empty receipt when nobody takes it', () => virtually(async () => {
   const { bot, p } = rig(world, 0.01)
   const done = p.toss('t1', { item: 'bread', count: 1, watchS: 0.5 })
   setTimeout(() => bot.emit('playerCollect', { uuid: 'v1' }, { getDroppedItem: () => ({ name: 'stick', count: 1 }) }), 1)
   assert.deepEqual(await done, { status: 'tossed', count: 1, takenBy: {} })
-})
+}))
 
-test('toss with watchS waits past the 2 s pickup delay: a pickup at 2.5 s is reported, and watchS is capped at 5', async () => {
+test('toss with watchS waits past the 2 s pickup delay: a pickup at 2.5 s is reported, and watchS is capped at 5', () => virtually(async () => {
   const { bot, p } = rig(world, 0.01)
   const done = p.toss('t1', { item: 'bread', count: 1, watchS: 4 })
   setTimeout(() => bot.emit('playerCollect', { uuid: 'v1' }, { getDroppedItem: () => ({ name: 'bread', count: 1 }) }), 25)
@@ -2300,7 +2300,7 @@ test('toss with watchS waits past the 2 s pickup delay: a pickup at 2.5 s is rep
   const t0 = Date.now()
   await late.p.toss('t1', { item: 'bread', count: 1, watchS: 60 })
   assert.ok(Date.now() - t0 < 500, 'watchS 60 ends at the 5 s cap (50 ms at this time scale)')
-})
+}))
 
 test('toss without watchS has no receipt', async () => {
   const { p } = rig(world)
