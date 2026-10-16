@@ -229,10 +229,10 @@
 (def cli-tools #{"jobs" "drive" "plans" "map" "world" "say" "time" "triggers" "entities" "observe" "workspace" "blueprints" "quote"})
 
 (defn seen-check
-  "The :until check of an :until-seen target: {:entity type} (entities the body has seen) or {:block name} (blocks in its memory)."
-  [{:keys [entity block]}]
+  "The :until check of an :until-seen target: {:entity type} (at least :min, default 1, entities the body has seen) or {:block name} (blocks in its memory)."
+  [{:keys [entity block min]}]
   (if entity
-    [:cli "entities" ["$body" "--world" "$world" "--type" entity] {:total [:> 0]}]
+    [:cli "entities" ["$body" "--world" "$world" "--type" entity] {:total [:>= (or min 1)]}]
     [:cli "observe" ["$body" "--world" "$world" "seen" "--names" block] {:ok true :blocks [:has {:name block}]}]))
 
 (defn rcon-reply-matches?
@@ -245,7 +245,7 @@
   [[op a b :as step]]
   (case op
     :until (not (and (= 3 (count step)) (number? b) (vector? a) (or (#{:memory :file} (first a)) (and (= :cli (first a)) (not (step-problem? a))))))
-    :until-seen (not (and (= 3 (count step)) (number? b) (map? a) (string? (or (:entity a) (:block a)))))
+    :until-seen (not (and (= 3 (count step)) (number? b) (map? a) (string? (or (:entity a) (:block a))) (or (nil? (:min a)) (number? (:min a)))))
     :until-rcon (not (and (= 4 (count step)) (string? a) (string? b) (number? (nth step 3))))
     :until-pos (not (and (= 3 (count step)) (map? a) (number? b)))
     :cli (not (and (cli-tools a) (vector? b) (every? #(or (string? %) (map? %) (vector? %)) b)))

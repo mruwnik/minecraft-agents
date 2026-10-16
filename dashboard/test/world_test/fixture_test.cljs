@@ -678,12 +678,16 @@
   (let [ps #(f/step-problem? %)]
     (is (not (ps [:until-seen {:entity "cow"} 20])))
     (is (not (ps [:until-seen {:block "crafting_table"} 20])))
+    (is (not (ps [:until-seen {:entity "cow" :min 2} 20])))
+    (is (ps [:until-seen {:entity "cow" :min "2"} 20]) "min is a number")
     (is (ps [:until-seen "cow" 20]) "the target says block or entity")
     (is (ps [:until-seen {:entity "cow"}]) "a bound is required")
     (is (not (ps [:until-rcon "data get entity $BODY foodLevel" "foodLevel.*\\b(1|2)\\b" 60])))
     (is (ps [:until-rcon "data get entity $BODY foodLevel" 60]) "a pattern is required"))
-  (is (= [:cli "entities" ["$body" "--world" "$world" "--type" "cow"] {:total [:> 0]}]
+  (is (= [:cli "entities" ["$body" "--world" "$world" "--type" "cow"] {:total [:>= 1]}]
          (f/seen-check {:entity "cow"})))
+  (is (= [:cli "entities" ["$body" "--world" "$world" "--type" "cow"] {:total [:>= 2]}]
+         (f/seen-check {:entity "cow" :min 2})))
   (is (= [:cli "observe" ["$body" "--world" "$world" "seen" "--names" "wheat"] {:ok true :blocks [:has {:name "wheat"}]}]
          (f/seen-check {:block "wheat"}))))
 
