@@ -94,6 +94,15 @@
           (is (empty? (:list (core/state eng))) "impossible: it leaves the queue")
           (is (empty? (calls p "useOn"))))))))
 
+(deftest path-does-not-shovel-a-cell-whose-cover-is-unseen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory shovel :blocks {"1,63,1" "dirt"} :unloaded ["1,64,1"]})
+              args {:from {:x 1 :y 63 :z 1} :to {:x 1 :y 63 :z 1}}]
+          (is (= {:status :stopped :reason :unloaded :pathed 0 :skipped {{:x 1 :y 63 :z 1} :unloaded}} (dissoc (await (child-outcome eng job args 8)) :text)))
+          (is (empty? (calls p "useOn"))))))))
+
 (deftest path-skips-a-cell-the-use-refuses-after-two-tries
   (async done
     (tu/run-async done

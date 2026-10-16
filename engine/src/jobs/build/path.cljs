@@ -16,6 +16,7 @@
             [jobs.lib.places :as places]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.toll-cells :as tc]))
 
 (def doc
@@ -256,6 +257,8 @@
     (if (= :continue w)
       :continue
       (let [above-pos (update target :y inc)
+            above-xyz ((juxt :x :y :z) above-pos)
+            _ (when (dig-look/unknown? p above-xyz) (await (dig-look/look-at! c above-xyz)))
             above (u/seen-name p above-pos)]
         (cond
           (= :blocked w) (do (bump! c target :unreachable) :again)
@@ -270,7 +273,8 @@
               (do (bump! c target :cover-stuck) :again)
               :else :again))
 
-          (not (or (nil? above) (air above))) (do (skip! c [target] :covered) :again)
+          (nil? above) (do (bump! c target :unloaded) :again)
+          (not (air above)) (do (skip! c [target] :covered) :again)
           :else (await (use-shovel! c target tool)))))))
 
 (defn ^:async path-step!
