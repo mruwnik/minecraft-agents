@@ -16,6 +16,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.tools :as tools]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.world :as known]
             [jobs.lib.need :as need]
             [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]
@@ -162,18 +163,30 @@
 
 (defn solid? [n] (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n))))
 
+(defn home-cell?
+  "Whether a table in pos would spoil a room: on a bed, or in the cell beside a door (the way in and out)."
+  [p {:keys [x y z] :as pos}]
+  (let [name-at #(or (u/seen-name p %) "")
+        ends? (fn [n suffix] (str/ends-with? n suffix))]
+    (or (ends? (name-at (update pos :y dec)) "_bed")
+        (some (fn [[dx dz]] (some #(ends? (name-at {:x (+ x dx) :y (+ y %) :z (+ z dz)}) "_door") [0 1]))
+              [[1 0] [-1 0] [0 1] [0 -1]]))))
+
 (defn spot-cells
-  "The candidate table cells beside the body, outside its box (the server refuses a place the body touches), not in :avoid and not in a stair or tunnel this body cut (its way out): [pos floor-pos] for each offset at its level, then (a 1-wide stair has
+  "The candidate table cells beside the body, outside its box (the server refuses a place the body touches), not in :avoid, not in a plan's cells, not over a bed or beside a door (home-cell?) and not in a stair or tunnel this body cut (its way out): [pos floor-pos] for each offset at its level, then (a 1-wide stair has
   no free cell at its level) each one level up. dig-spot-cells keeps to the level ones."
   [c]
   (let [{:keys [x y z]} (u/self-pos c)
         cols (access/body-columns x z)
         avoid (into (ledger/own-cells c) (map (comp (juxt :x :y :z) a/cell)) (:avoid (:args c)))
+        plan-cells (known/footprints c)
         [x y z] (mapv #(js/Math.floor %) [x y z])]
     (for [dy [0 1]
           [dx dz] table-offsets
           :let [pos {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
-          :when (and (not (cols [(:x pos) (:z pos)])) (not (avoid [(:x pos) (:y pos) (:z pos)])))]
+          :when (and (not (cols [(:x pos) (:z pos)])) (not (avoid [(:x pos) (:y pos) (:z pos)]))
+                     (not (contains? plan-cells [(:x pos) (:y pos) (:z pos)]))
+                     (not (home-cell? (:primitives c) pos)))]
       [pos (update pos :y dec)])))
 
 (defn table-spot

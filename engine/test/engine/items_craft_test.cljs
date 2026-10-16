@@ -403,6 +403,15 @@
           (is (= 1 (count (placed-at p2))))
           (is (not= {:x 1 :y 64 :z 0} (first (placed-at p2))) "the avoided cell is left free"))))))
 
+(deftest craft-never-puts-its-table-over-a-bed-or-in-a-doorway
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [blocks [{"1,63,0" "red_bed"} {"2,64,0" "oak_door"} {"2,65,0" "oak_door"}]]
+          (let [[_ p] (await (craft {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}] :blocks blocks} {:item "bread"}))]
+            (is (= 1 (count (placed-at p))))
+            (is (not= {:x 1 :y 64 :z 0} (first (placed-at p))) (pr-str blocks))))))))
+
 (deftest craft-in-a-one-wide-tunnel-puts-its-table-in-a-side-niche-not-the-corridor
   (async done
     (tu/run-async done
