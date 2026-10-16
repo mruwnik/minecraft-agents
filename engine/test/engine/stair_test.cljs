@@ -837,7 +837,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [full (into pick (repeat 35 {:name "dirt" :count 64}))
-              {:keys [out] :as s} (await (stair! {:blocks (dissoc (stone -3 12 60 80) "0,65,0" "0,66,0") :inventory full}
+              {:keys [out] :as s} (await (stair! {:blocks (apply dissoc (stone -3 12 60 80) (for [x [0 -1 -2] y [65 66]] (str x "," y ",0"))) :inventory full}
                                                  {:dir :up :heading :east :steps 6} (fn [_])))]
           (is (= :done (:status @out)) (pr-str @out))
           (is (= 6 (:steps @out)))
