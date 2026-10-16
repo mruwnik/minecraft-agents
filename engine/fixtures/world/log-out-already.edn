@@ -10,7 +10,7 @@
  :cases
  [{:name "second-queued-log-out-ends-done-without-acting"
    :act [[:http :submit (jobs.survival.log-out {:offline-ms 3000 :news-ms 500}) [] {:ok true}]
-         [:http :submit (jobs.survival.log-out {:offline-ms 3000 :news-ms 500}) [] {:ok true}]
+         [:http :submit (jobs.survival.log-out {:offline-ms 3000 :news-ms 500}) [:alongside] {:ok true}]
          [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 90]]
    :expect [{:count-event {:source :job :kind :completed :data {:name "jobs.survival.log-out"}} :for-s 90 :at-least 2}]
    :after [[:memory {:entries {:log-out [{:data {:status "ok"}}]}}]]}]}

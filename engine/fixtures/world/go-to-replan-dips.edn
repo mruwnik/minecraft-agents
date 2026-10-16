@@ -10,7 +10,8 @@
   :time :any
   :plot {:length 64 :height 31}
   :settings {:jobs.movement.go-to.tuning/climb-dip 8}
-  :blocks [[:fill [2 0 2] [61 29 29] "stone"]
+  :blocks [[:fill [2 0 2] [61 29 15] "stone"]
+           [:fill [2 0 16] [61 29 29] "stone"]
            [:fill [4 12 16] [60 13 16] "air"]
            [:fill [60 14 16] [60 29 16] "air"]
            [:fill [60 12 16] [60 29 16] "ladder[facing=west]"]

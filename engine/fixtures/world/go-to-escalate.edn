@@ -245,20 +245,20 @@
    :plot {:height 16}
    :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [16 2 24] "stone"]]
    :body {:at [12.5 3 16.5] :inventory [["iron_pickaxe" 1] ["dirt" 8]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :one-way :closed})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false :why :one-way}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :go-to.escalated} :for-s 90 :until {:source :job :kind :result :data {:arrived false}}}]
    :after [[:body-near [12.5 3 16.5] 6]]}
   {:name "shut-in-own-hut-walls-are-not-dug"
    ;; card 6fa0c797: the pit shaft is walled by the body's own plan (the hut's corner and door cells): the escalation digs
-   ;; none of them and ends with the named reason :own-build
+   ;; none of them and ends with the named reason :own-build (no dirt: the open shaft would be pillared out of)
    :plans [{:id "hut" :metadata {:by "$body"}
             :parts [{:id "wall" :cells [#at [17 0 16] #at [17 1 16] #at [17 2 16] #at [17 3 16]
                                         #at [15 0 16] #at [15 1 16] #at [15 2 16] #at [15 3 16]
                                         #at [16 0 17] #at [16 1 17] #at [16 2 17] #at [16 3 17]
                                         #at [16 0 15] #at [16 1 15] #at [16 2 15] #at [16 3 15]]
                     :want [:any "stone"]}]}]
-   :body {:inventory [["stone_pickaxe" 1] ["dirt" 8]]}
+   :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false :escalation {:step :none :why :own-build}}} :within-s 90 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :result :data {:arrived false :escalation {:step :none :why :own-build}}}}]
@@ -271,7 +271,7 @@
                                         #at [16 0 17] #at [16 1 17] #at [16 2 17] #at [16 3 17]
                                         #at [16 0 15] #at [16 1 15] #at [16 2 15] #at [16 3 15]]
                     :want [:any "stone"]}]}]
-   :body {:inventory [["stone_pickaxe" 1] ["dirt" 8]]}
+   :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1 :spare-own-builds false})]]
    :expect [{:event {:source :job :kind :go-to.dug-own-build} :within-s 120 :of-job true}
             {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 200 :of-job true}]

@@ -7,7 +7,7 @@
  {:tags [:movement :go-to :stairs]
   :time :any
   :plot {:length 64 :height 28}
-  :blocks [[:fill [2 0 2] [61 21 29] "stone"] [:fill [4 0 16] [50 1 16] "air"]
+  :blocks [[:fill [2 0 2] [61 21 15] "stone"] [:fill [2 0 16] [61 21 29] "stone"] [:fill [4 0 16] [50 1 16] "air"]
            [:fill [8 0 16] [8 1 16] "air"] [:fill [9 1 16] [9 2 16] "air"] [:fill [10 2 16] [10 3 16] "air"] [:fill [11 3 16] [11 4 16] "air"] [:fill [12 4 16] [12 5 16] "air"] [:fill [13 5 16] [13 6 16] "air"]
            [:fill [38 0 16] [38 1 16] "air"] [:fill [39 1 16] [39 2 16] "air"] [:fill [40 2 16] [40 3 16] "air"] [:fill [41 3 16] [41 4 16] "air"] [:fill [42 4 16] [42 5 16] "air"] [:fill [43 5 16] [43 6 16] "air"] [:fill [44 6 16] [44 7 16] "air"] [:fill [45 7 16] [45 8 16] "air"] [:fill [46 8 16] [46 9 16] "air"] [:fill [47 9 16] [47 10 16] "air"] [:fill [48 10 16] [48 11 16] "air"] [:fill [49 11 16] [49 12 16] "air"] [:fill [50 12 16] [50 13 16] "air"] [:fill [51 13 16] [51 14 16] "air"] [:fill [52 14 16] [52 15 16] "air"] [:fill [53 15 16] [53 16 16] "air"] [:fill [54 16 16] [54 17 16] "air"] [:fill [55 17 16] [55 18 16] "air"] [:fill [56 18 16] [56 19 16] "air"] [:fill [57 19 16] [57 20 16] "air"] [:fill [58 20 16] [58 21 16] "air"] [:fill [59 21 16] [59 22 16] "air"] [:fill [60 22 16] [60 23 16] "air"]
            [:set [5 0 15] "torch"]]

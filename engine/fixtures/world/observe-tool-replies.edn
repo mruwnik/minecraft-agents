@@ -21,7 +21,7 @@
   {:name "now-submit-by-day-has-no-reflex-hint"
    :time :day
    :act [[:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.set-place {:name :wt-a :pos [6 150 6]})" "--now"]
-          {:ok true :hint [:not [:any]]}]]
+          {:ok true :hint [:not [:contains "reflex"]]}]]
    :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}]}
   {:name "weather-change-is-logged-both-ways"
    :weather :rain
@@ -33,8 +33,8 @@
             {:event {:source :body :kind :weather-changed :data {:raining true}} :within-s 60}]}
   {:name "a-fresh-body-knows-no-job-of-the-case-before"
    :act [[:http :submit (jobs.debug.notify {:text "a"}) [] {:ok true}]
-         [:http :submit (jobs.debug.notify {:text "b"}) [] {:ok true}]
-         [:http :submit (jobs.debug.notify {:text "c"}) [] {:ok true}]
+         [:http :submit (jobs.debug.notify {:text "b"}) [:alongside] {:ok true}]
+         [:http :submit (jobs.debug.notify {:text "c"}) [:alongside] {:ok true}]
          [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 30]]
    :expect [{:count-event {:source :job :kind :completed} :for-s 20 :at-least 3}]}
   {:name "second-case-asks-for-a-job-of-the-first"
