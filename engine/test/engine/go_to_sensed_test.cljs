@@ -563,17 +563,75 @@
           (is (= {:arrived true} out) (pr-str (last seen)))
           (is (= [:fill-gap] (steps seen))))))))
 
-(defn slime-shaft
-  "Stone x -12..2, y 54..59, z -4..4 with a 1x1 shaft at x 1 (slime at y 55, the shaft cells over it walled h high), the body on top (feet y 60): a 4-block drop whose pad shows only from the lip."
-  [h]
-  (-> (merge (box -12 54 -4 2 59 4 "stone") {"1,55,0" "slime_block"})
-      (as-> w (apply dissoc w (for [y (range 56 60)] (str "1," y ",0"))))
-      (as-> w (apply dissoc w (for [x [0 1 2] z [-1 0 1] y (range (+ 56 h) 60) :when (not (and (= x 1) (= z 0)))] (str x "," y "," z))))))
+(defn slime-pit
+  "Stone x -12..6, y 54..59, z -4..4 with a 3x3 pit at x 0..2 (floor y 55 of pad, the cells over it open), the body on the stone at its west edge (feet y 60): a 4-block drop whose pad shows only from the lip. pad: the pit's floor blocks, a map of [x z] -> block."
+  [pad]
+  (let [pit (for [x (range 0 3) z (range -1 2)] [x z])]
+    (-> (box -12 54 -4 6 59 4 "stone")
+        (as-> w (apply dissoc w (for [[x z] pit y (range 55 60)] (str x "," y "," z))))
+        (as-> w (reduce (fn [w [x z]] (assoc w (str x ",55," z) (get pad [x z] "stone"))) w pit)))))
 
-(deftest go-to-takes-a-slime-shaft-drop-walled-to-the-bounce
+(def slime-floor (into {} (for [x (range 0 3) z (range -1 2)] [[x z] "slime_block"])))
+
+(deftest go-to-takes-a-slime-pad-drop-it-looks-at-from-the-lip
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out seen]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :blocks (slime-shaft 4)}
+        (let [{:keys [out seen]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks (slime-pit slime-floor)}
                                                    {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
           (is (= {:arrived true} out) (pr-str (last seen))))))))
+
+(defn record-moves!
+  "Keeps in atom a every raw moveTo and every steer tick's controls of the world {:p p} (steer ticks as [:steer controls])."
+  [a]
+  (fn [{:keys [p]}]
+    (let [w (.-world p)]
+      (.override w "moveTo" (fn [token args impl] (swap! a conj [:move-to]) (impl token args)))
+      (.override w "steer"
+                 (fn [token args impl]
+                   (let [d (.-decide args)
+                         args' (js/Object.defineProperty (js/Object.assign #js {} args) "decide"
+                                                         #js {:value (fn [pose] (let [r (d pose)] (swap! a conj [:steer (js->clj (.-controls r))]) r))})]
+                     (impl token args')))))))
+
+(deftest the-look-over-a-drop-edge-keeps-the-box-on-the-floor-by-sneaking
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [acts (atom [])
+              {:keys [out]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks (slime-pit slime-floor)}
+                                              {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}
+                                              (record-moves! acts)))
+              steers (filter (comp #{:steer} first) @acts)]
+          (is (= {:arrived true} out))
+          (is (not-any? #{[:move-to]} @acts) "no raw moveTo to the lip: it overhangs the drop")
+          (is (some #(get-in % [1 "sneak"]) steers) "the step to the lip sneaks"))))))
+
+(deftest a-hostile-near-holds-back-the-look-over-a-drop-edge
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [acts (atom [])
+              {:keys [out]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks (slime-pit slime-floor)
+                                               :entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x -9 :y 60 :z 0}}]}
+                                              {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}
+                                              (record-moves! acts)))]
+          (is (not-any? #(get-in % [1 "sneak"]) @acts) (pr-str out)))))))
+
+(deftest go-to-refuses-a-drop-onto-one-slime-block-ringed-by-stone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true
+                                               :blocks (slime-pit {[1 0] "slime_block"})}
+                                              {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
+          (is (not= {:arrived true} out)))))))
+
+(deftest go-to-refuses-a-drop-onto-a-stone-pit-floor
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true
+                                               :blocks (slime-pit {})}
+                                              {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
+          (is (not= {:arrived true} out)))))))

@@ -371,9 +371,9 @@
 (defn landing-seen
   "The planner's options.landingSeen for the body of primitives p: (fn [x y z wall?]) true when the body sees or feels the
   block, or saw it landing-memory-ms ago or less, so a bounce is priced only on a pad it has looked at (an older memory
-  or an unknown block is not); nil without a perception. As a wall of the pad (wall?) a block the body has not seen counts too, taken for rock as everywhere
-  (jobs.lib.access/hidden-guess): the walls of a 1x1 shaft face away from the edge a body drops from. An unloaded
-  block never counts."
+  or an unknown block is not); nil without a perception. As a wall of the pad (wall?) a block remembered at any age
+  counts: the walls of a 1x1 shaft face away from the edge a body drops from. A block never seen or an unloaded one
+  never counts."
   [p]
   (when (some? (.-sensedAt p))
     (let [memo (js/Map.)]
@@ -382,7 +382,7 @@
           (if (.has memo k)
             (.get memo k)
             (let [^js b (u/sensed p {:x x :y y :z z})
-                  seen (boolean (and b (or wall? (true? (.-visible b)) (true? (.-felt b))
-                                   (and (not (true? (.-unknown b))) (<= (or (.-ageMs b) js/Infinity) landing-memory-ms)))))]
+                  seen (boolean (and b (or (true? (.-visible b)) (true? (.-felt b))
+                                   (and (not (true? (.-unknown b))) (or wall? (<= (or (.-ageMs b) js/Infinity) landing-memory-ms))))))]
               (.set memo k seen)
               seen)))))))

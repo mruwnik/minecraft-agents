@@ -95,7 +95,7 @@
                  4 #js {:unknown true} 5 nil}
         seen (wworld/landing-seen #js {:sensedAt (fn [^js pos] (get answers (.-x pos)))})]
     (is (= [true true true false false false] (mapv #(seen % 64 0 false) (range 6))) "seen, felt, seen lately; an old memory, unknown, unloaded are not")
-    (is (= [true true true true true false] (mapv #(seen % 64 0 true) (range 6))) "as a wall of the pad: any block the body has a read of, hidden ones taken for rock")
+    (is (= [true true true true false false] (mapv #(seen % 64 0 true) (range 6))) "as a wall of the pad: a block remembered at any age; never one unseen")
     (is (nil? (wworld/landing-seen #js {})) "no perception: nil, the planner reads the snapshot")))
 
 (deftest air-profile-follows-the-helmet

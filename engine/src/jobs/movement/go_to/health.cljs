@@ -12,6 +12,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.health :as health]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
@@ -88,7 +89,20 @@
 
 (def look-drop-min "Blocks of a drop from which its landing is looked at before the way is judged too dear." 4)
 
-(def lip-reach "How far from the middle of its cell toward a drop the body steps to look over the edge (its box still stands on the cell)." 0.44)
+(def lip-reach "How far from the middle of its cell toward a drop the body leans to look over the edge: sneaking holds its box on the cell." 0.44)
+
+(def lean-ticks "Ticks a lean to the lip may take." 60)
+
+(defn lean-to!
+  "Sneaks to the point x z (the game's sneak keeps the body from going off the edge), within a tenth of a block."
+  [c x z]
+  (let [ticks (volatile! 0)]
+    (ctx/act c :steer (walk/steer-args (walk/steer-s c 3)
+                                       (fn [pose]
+                                         (let [dx (- x (.-x pose)) dz (- z (.-z pose))]
+                                           (if (or (and (< (js/Math.abs dx) 0.1) (< (js/Math.abs dz) 0.1)) (> (vswap! ticks inc) lean-ticks))
+                                             #js {:done true}
+                                             #js {:controls #js {:forward true :sneak true} :yaw (js/Math.atan2 (- dx) (- dz))})))))))
 
 (defn drops
   "The drops of look-drop-min blocks or more in steps (a planner path's JS steps), as {:from cell :floor the cell under the landing}."
@@ -97,20 +111,29 @@
              :when (>= (- (.-y a) (.-y b)) look-drop-min)]
          {:from [(.-x a) (.-y a) (.-z a)] :floor [(.-x b) (dec (.-y b)) (.-z b)]})))
 
+(defn lip-unsafe?
+  "Whether looking over the edge of drop is held back: a hostile the body knows of near the lip, or lava seen in the drop's column."
+  [c {:keys [from floor]}]
+  (let [p (:primitives c)
+        [fx fy fz] from
+        [tx ty tz] floor]
+    (or (seq (danger-q/hostiles-near-way p {:x fx :y fy :z fz} (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)}))
+        (some #(some-> (u/seen-block p {:x tx :y % :z tz}) .-name (= "lava")) (range ty (inc fy))))))
+
 (defn ^:async look-at-drops!
   "A drop the budget refuses may be priced by what the body has not looked at: a bounce counts only on a pad in view
-  (landing-seen), and a floor far below shows only from the lip. Once per drop of the probed way, steps to the lip and
-  looks at the floor: true when it did (the walk plans again)."
+  (landing-seen), and a floor far below shows only from the lip. Once per drop of the probed way, leans to the lip
+  (sneaking, the box on its cell) and looks at the floor: true when it did (the walk plans again). Not while a hostile is
+  near or lava is seen in the drop; the drop is looked at on a later probe."
   [c]
   (let [m (ctx/mem c)
         {:keys [from floor] :as drop} (first (remove (set (:drops-looked m)) (:probe-drops m)))]
-    (when drop
+    (when (and drop (not (lip-unsafe? c drop)))
       (ctx/update-mem! c update :drops-looked (fnil conj []) drop)
       (let [[fx _ fz] from
             [tx _ tz] floor
             lip (fn [f t] (+ f 0.5 (* lip-reach (compare t f))))]
-        ;; raw moveTo kept: a step inside the body's own cell, as jobs.lib.seal/centre!
-        (await (ctx/act c :moveTo #js {:pos #js {:x (lip fx tx) :y (second from) :z (lip fz tz)} :range 0.05}))
+        (await (lean-to! c (lip fx tx) (lip fz tz)))
         (await (dig-look/look-at! c floor))
         (look/see! c)
         true))))
