@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.registry :as registry]
             [engine.fake :as fake]
+            [engine.look-support :as ls]
             [engine.village-trade-test :as vt]
             [engine.contract :as contract]
             [jobs.lib.look :as look]
@@ -166,6 +167,14 @@
         (let [[result p] (await (roll {:entities []} {}))]
           (is (= {:found false :status :stopped :reason :gone} (select-keys result [:found :status :reason])))
           (is (zero? (digs p))))))))
+
+(deftest a-villager-behind-the-body-is-looked-for-before-it-is-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result] (await (roll {:entities [(librarian [(offer "enchanted_book")])]
+                                     :wrap #(do (ls/entities-after-look (:p %)) %)} {}))]
+          (is (= {:found true :rolls 0} (select-keys result [:found :rolls]))))))))
 
 (deftest no-claim-when-the-villager-never-takes-the-workstation
   (async done

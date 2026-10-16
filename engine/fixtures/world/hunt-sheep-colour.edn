@@ -56,7 +56,7 @@
    :act [[:summon "sheep" [20.5 0 14.5] "{NoAI:1b,Color:12b}"] [:summon "sheep" [21.5 0 14.5] "{NoAI:1b,Color:12b}"]
          [:summon "sheep" [20.5 0 18.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [21.5 0 18.5] "{NoAI:1b,Color:0b}"]
          [:summon "sheep" [22.5 0 18.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [23.5 0 18.5] "{NoAI:1b,Color:0b}"]
-         [:wait-s 2] [:job (jobs.animals.cull {:mob "sheep" :color "white" :keep 3 :count 2})]]
+         [:job (jobs.animals.cull {:mob "sheep" :color "white" :keep 3 :count 2})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.animals.cull"}} :within-s 90 :of-job true}
             {:count-event {:source :job :kind :animal.killed :data {:rule :cull}} :for-s 90 :at-least 2}]
    :after [[:entities "type=sheep,tag=wt,nbt={Color:12b}" [[0 0 0] [31 3 31]] 2]

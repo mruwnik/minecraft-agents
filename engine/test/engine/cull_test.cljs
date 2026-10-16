@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.hostile-test :as h]
             [engine.fake :as fake]
+            [engine.look-support :as ls]
             [engine.test-util :as tu]
             [jobs.animals.cull :as cull]
             [jobs.lib.animals :as animals]
@@ -281,3 +282,13 @@
           (await (tu/run-ticks eng clock 40 700))
           (is (= 1 (:killed (done-event s))))
           (is (finished? s)))))))
+
+(deftest a-cow-behind-the-body-is-looked-for-before-the-cull-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory h/sword :entities [(cow 1 3)]} 50)]
+          (ls/entities-after-look (:p s))
+          (core/submit! (:eng s) (spec {:keep 0 :count 1}) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 40 700))
+          (is (= #{1} (set (attacked s))) "it looked round, saw the cow and culled it"))))))

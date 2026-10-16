@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.hostile-test :as h]
             [engine.fake :as fake]
+            [engine.look-support :as ls]
             [engine.test-util :as tu]
             [jobs.animals.tend :as tend]
             [jobs.lib.world-files :as ew]))
@@ -210,10 +211,11 @@
           (is (true? (finished? s))))))))
 
 (defn declines?
-  "True when the job is submitted, the first tick does nothing and nothing is walked to, fed or attacked."
+  "True when the job is submitted, the tick after its first look does nothing and nothing is walked to, fed or attacked."
   [args entities]
   (let [{:keys [eng p] :as s} (h/setup {:inventory [(wheat 4) {:name "iron_sword" :count 1}] :entities entities})]
     (core/submit! eng (list 'jobs.animals.tend args) {})
+    (core/tick! eng)
     (and (nil? (core/tick! eng))
          (empty? (interacts s))
          (empty? (attacked s))
@@ -358,3 +360,13 @@
           (swap! (:clock s) + 660000)
           (await (tu/run-ticks (:eng s) (:clock s) 40 700))
           (is (= 2 (passes s)) "after the back-off it tries again"))))))
+
+(deftest animals-behind-the-body-in-the-box-are-looked-for-before-the-pass-concludes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3)]} 50)]
+          (ls/entities-after-look (:p s))
+          (core/submit! (:eng s) (spec {:target 4}) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 20 700))
+          (is (= ["wheat" "wheat"] (mapv #(.-item (.-args %)) (interacts s)))))))))

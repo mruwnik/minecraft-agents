@@ -14,13 +14,11 @@
  :cases
  [{:name "roll-librarian"
    :act [[:summon "villager" [16.5 1 17.5] "{UUID:[I;20260,7,5,1],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
-         [:wait-s 3]
          [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000001" :pos #at [16 0 16] :item "lectern" :want "enchanted_book" :tries 12})]]
    :expect [{:event {:source :job :kind :completed} :within-s 220 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}
   {:name "nitwit-cannot-be-rolled"
    :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,2],VillagerData:{profession:\"minecraft:nitwit\",level:1,type:\"minecraft:plains\"}}"]
-         [:wait-s 2]
          [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000002" :pos #at [16 0 16] :item "lectern" :want "enchanted_book"})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :nitwit}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}
@@ -31,6 +29,5 @@
   {:name "other-block-on-the-cell-waits-occupied"
    :blocks [[:fill [16 0 16] [16 0 16] "stone"]]
    :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,4],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
-         [:wait-s 2]
          [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000004" :pos #at [16 0 16] :item "lectern" :want "enchanted_book"})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :occupied}} :within-s 40 :of-job true}]}]}

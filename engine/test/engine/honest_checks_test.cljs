@@ -11,12 +11,13 @@
             [engine.test-util :as tu]))
 
 (defn waiting-reason
-  "Submit job with args in an empty world, tick once; the :reason of the job.waiting event, or nil."
-  [job args]
-  (let [{:keys [eng seen]} (h/setup {})]
+  "Submit job with args in an empty world (or the given one), tick once; the :reason of the job.waiting event, or nil."
+  ([job args] (waiting-reason job args {}))
+  ([job args world]
+  (let [{:keys [eng seen]} (h/setup world)]
     (core/submit! eng (list job args) {})
     (core/tick! eng)
-    (some #(when (= :waiting (:kind %)) (:reason %)) @seen)))
+    (some #(when (= :waiting (:kind %)) (:reason %)) @seen))))
 
 (defn waiting-event
   "Like waiting-reason: the job.waiting events' fields, as a vector."
@@ -32,8 +33,10 @@
   (are [job args reason] (= reason (waiting-reason job args))
     'jobs.animals.leash {:mob "cow" :fetch false} :no-lead
     'jobs.animals.breed {:mob "cow" :fetch false} :no-food
-    'jobs.animals.tend {:box box :target 4} :nothing-to-do
-    'jobs.combat.attack {:targets ["zombie"] :absent :wait} :no-target))
+    'jobs.combat.attack {:targets ["zombie"] :absent :wait} :no-target)
+  (is (= :nothing-to-do (waiting-reason 'jobs.animals.tend {:box box :target 2}
+                                        {:entities [{:id 1 :name "cow" :kind "passive" :pos {:x 2 :y 64 :z 0}}
+                                                    {:id 2 :name "cow" :kind "passive" :pos {:x 3 :y 64 :z 0}}]}))))
 
 (deftest build-checks-say-why-they-decline
   (are [job reason] (= reason (waiting-reason job {:plan "no-such-plan"}))

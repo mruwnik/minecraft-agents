@@ -165,13 +165,13 @@
     {:skip :todo}))
 
 (defn look-due?
-  "Whether the body, outside the box, lists no animal of the kind in it and has not walked there to look yet: the
-  server lists animals only near the body, and sound gives a direction, not a place."
+  "Whether the body lists no animal of the kind in the box and has not looked there yet (walking to the box first when
+  outside it): the server lists animals only near the body, sound gives a direction, not a place, and animals behind
+  the body are not in view."
   [c]
   (let [{:keys [adults babies]} (cull/census c)]
     (boolean (and (not (:looked (ctx/mem c)))
-                  (empty? adults) (empty? babies)
-                  (not (cull/in-bound? c (u/self-pos c)))))))
+                  (empty? adults) (empty? babies)))))
 
 (defn look-pos
   "The middle column of the box, as the [x z] go-to takes (the ground of that column)."
@@ -293,11 +293,13 @@
 (defn ^:async step
   "One step: first a look at the box when the body lists no animal in it, else the next step child (step-steps)."
   [c]
-  (if (look-due? c)
+  (cond
+    (not (look-due? c)) (await (step-steps c))
+    (cull/in-bound? c (u/self-pos c)) (do (await (look/survey! c)) :again)
+    :else
     (let [r (await (child/call-walk* c :look {:pos (look-pos (:box (:args c))) :range 3}))]
       (when-not (= :continue r) (ctx/update-mem! c assoc :looked true))
-      (if (= :continue r) :yield :again))
-    (await (step-steps c))))
+      (if (= :continue r) :yield :again))))
 
 (defn ^:async round
   "The whole pass: each step's child once, until the run ends; yields only while a child waits on the world."

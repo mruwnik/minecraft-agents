@@ -22,7 +22,6 @@
    :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"] [:fill [19 0 14] [23 0 18] "air"]
             [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
    :act [[:summon "sheep" [21.5 0 16.5] "{NoAI:1b}"]
-         [:wait-s 2]
          [:until [:cli "entities" ["$body" "--world" "$world" "--type" "sheep"] {:total 1}] 30]]
    :after [[:entities "type=sheep,tag=wt" [[19 0 14] [23 1 18]] 1]]}
   {:name "tend-from-outside-a-walled-pen-looks-and-counts"
@@ -30,7 +29,6 @@
             [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"] [:set [18 1 16] "air"]]
    :body {:at [10.5 0 16.5] :yaw 90}
    :act [[:summon "chicken" [20.5 0 15.5] "{NoAI:1b}"] [:summon "chicken" [21.5 0 16.5] "{NoAI:1b}"] [:summon "chicken" [22.5 0 17.5] "{NoAI:1b}"]
-         [:wait-s 2]
          [:job (jobs.animals.tend {:mob "chicken" :target 3 :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do :adults 3}} :within-s 100 :of-job true}]
    :limit-s 140}]}

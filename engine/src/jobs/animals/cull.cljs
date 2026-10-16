@@ -5,6 +5,7 @@
             [jobs.lib.animals :as animals]
             [jobs.lib.util :as u]
             [jobs.lib.hunting :as hunting]
+            [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.trip :as trip]))
 
@@ -151,7 +152,8 @@
         {:keys [killed collecting]} (ctx/mem c)
         killed (or killed 0)
         adults (count (:adults (census c)))
-        reason (cond (and wanted (>= killed wanted)) :count (<= adults keep) :keep)
+        reason (cond (and wanted (>= killed wanted)) :count
+                     (and (<= adults keep) (or (pos? adults) (look/surveyed? c))) :keep)
         left (cond-> (max 0 (- adults keep)) wanted (min (- wanted killed)) reason (* 0))
         data [:units :animals :done killed :left left :result (result c reason)]]
     (cond
@@ -205,6 +207,7 @@
       (let [next-target (first (candidates c (:adults (census c))))]
         (cond
           (and (nil? next-target) (seq skipped)) (give-up! c :unreachable)
+          (and (nil? next-target) (not (look/surveyed? c))) (await (look/survey! c)) ; cows count only while in view
           (nil? next-target) (await (hunting/search! c none!))
           :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
                     (await (hunting/attack! c (attack-opts c)))))))))
