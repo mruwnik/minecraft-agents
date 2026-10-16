@@ -298,7 +298,7 @@
   "A free body's way into a walled-in goal: escape/choose from where it stands, or, while the cell it can walk to
   nearest the goal (a flood of at most reach/room-cells cells) is more than a block nearer, from there, as
   {:step :approach :pos cell} first. Only a door, or a stair or pillar up to a higher goal, leads in (a walk along
-  the wall too, from where it stands), else the fewest cells dug (dig-way); else {:step :none :why :no-dig}."
+  the wall too, from where it stands, to a goal not below it), else the fewest cells dug (dig-way); else {:step :none :why :no-dig}."
   [c feet goal may-dig? opts]
   (let [p (:primitives c)
         kind-at (reach/lookup p reach/body-kind-of)
@@ -312,7 +312,7 @@
         in? (case (:step e)
               :clear-path true
               (:stair :pillar) (> (second goal) (second from))
-              :approach here?
+              :approach (and here? (>= (second goal) (second from)))
               false)
         e (cond in? e
                 :else (or (dig-way p from goal may-dig? opts)
