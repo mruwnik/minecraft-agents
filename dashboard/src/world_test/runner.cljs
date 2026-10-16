@@ -950,12 +950,13 @@
 (defn plans-dir [opts] (repo-path "worlds" (:world opts) "plans"))
 
 (defn clear-stale-plans!
-  "Deletes the plan files this body's earlier cases wrote (test-<body>-*.edn) and a killed or failed run left behind, so a
-  case sees only the plans it writes itself."
+  "Deletes the plan files this body's earlier cases wrote (test-<body>-*.edn, or <name>-<shared tag>.edn added by a CLI
+  step) and a killed or failed run left behind, so a case sees only the plans it writes itself."
   [opts]
   (when (fs/existsSync (plans-dir opts))
     (doseq [name (array-seq (fs/readdirSync (plans-dir opts)))
-            :when (and (str/starts-with? name (plan-prefix opts)) (str/ends-with? name ".edn"))]
+            :when (or (and (str/starts-with? name (plan-prefix opts)) (str/ends-with? name ".edn"))
+                      (str/ends-with? name (str "-" (f/shared-tag (:body opts)) ".edn")))]
       (fs/rmSync (path/join (plans-dir opts) name) #js {:force true}))))
 
 (defn write-plans! [opts c]

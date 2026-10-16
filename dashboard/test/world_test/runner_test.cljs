@@ -824,11 +824,11 @@
     (-> (with-body-dir
     (fn [opts _]
       (let [plans (r/plans-dir opts)
-            names ["test-b-deep.edn" "test-b-pen.edn" "test-bb-x.edn" "test-c-deep.edn" "real.edn"]]
+            names ["test-b-deep.edn" "test-b-pen.edn" "test-bb-x.edn" "test-c-deep.edn" "real.edn" "late-wt-b.edn" "late-wt-bb.edn"]]
         (fs/mkdirSync plans #js {:recursive true})
         (doseq [n names] (fs/writeFileSync (path/join plans n) "{}"))
         (r/clear-stale-plans! opts)
-        (is (= ["real.edn" "test-bb-x.edn" "test-c-deep.edn"] (vec (sort (fs/readdirSync plans)))))
+        (is (= ["late-wt-bb.edn" "real.edn" "test-bb-x.edn" "test-c-deep.edn"] (vec (sort (fs/readdirSync plans)))) "also a plan a case added by the CLI under the body's shared tag")
         (r/clear-stale-plans! {:body "B" :world "nope"})
         (js/Promise.resolve nil))))
         (.catch (fn [e] (is false (.-message e))))
