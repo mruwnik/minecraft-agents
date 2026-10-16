@@ -56,7 +56,7 @@
    :box {:doc "the pen: {:min {:x :y :z} :max {:x :y :z}}, inclusive; required without :plan" :spec a/box? :default nil}
    :target {:doc "adult herd size wanted; babies count toward it, they grow" :spec (a/int-in 0 nil) :default 4}
    :chest {:doc "chest position {:x :y :z} for the produce; nil: do not store" :spec ::a/pos :default nil}
-   :carry {:doc "{item-name count}: how many of a produce item deposit leaves carried" :spec (a/map-of string? number?) :default {}}}
+   :carry {:doc "{item-name count}: how many of a produce item deposit leaves carried" :spec (a/map-of string? number?) :default {}}
    :fetch {:doc "get breeding food and shears that are not carried (passed to breed and shear; see their :fetch): true, a set of kinds or a map of limits; false skips the step" :spec need/option? :default true}})
 
 (def target [:plan :part :box])
