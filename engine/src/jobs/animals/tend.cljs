@@ -34,7 +34,7 @@
   :no-food and :no-shears (only with :fetch off), :within-target, :not-sheep, :none-shearable, :no-drops, :no-chest, :nothing-to-store,
   or :declined when the child declined.
 
-  It starts when some step would run. Without a :box and a :plan it can never start (impossible :no-box). Otherwise it
+  Done (:already before the start) when the box needs no look, no step would run and the herd is at :target. It starts when some step would run. Without a :box and a :plan it can never start (impossible :no-box). Otherwise it
   waits, so the job is cheap under repeat: :nothing-to-do with the census {:adults :babies :target} and
   {:skipped {step reason}}.
 
@@ -257,11 +257,16 @@
       :else (pen-fact c))))
 
 (defn done?
-  "Later with the steps still to run against those of a pass: the steps left are decided from the facts at each step, so
-  the pass ends itself."
+  "Ok when the pen holds the goal: the box is not waiting for a look, no step would run and the herd is at :target
+  (before the start: already), with the census as data; else later with the steps that would still run."
   [c]
-  (let [left (count (get (ctx/mem c) :todo steps))]
-    (contract/later :steps (str left " steps left") :units :steps :done (- (count steps) left) :left left)))
+  (let [{:keys [target] :as args} (:args c)
+        f (facts c)
+        left (count (filter #(:call (decide % args f)) steps))]
+    (if (or (look-due? c) (pos? left) (< (+ (:adults f) (:babies f)) target))
+      (contract/later :steps (str left " steps left") :units :steps :done (- (count steps) left) :left left)
+      (contract/ok :tended "the pen is as wanted" :units :steps :done (count steps) :left 0
+                   :result {:mob (:mob args) :target target :adults (:adults f) :babies (:babies f) :steps (:report (ctx/mem c))}))))
 
 (defn quote-of [_c]
   {:uses {:job-time [0 90 600]}})

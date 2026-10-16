@@ -236,8 +236,9 @@
         (is (= {:event :completed} (select-keys (await (ending (list 'jobs.animals.tend {:box pen :target 4}) {:inventory wheat :entities [(cow-at 1 2) (cow-at 2 3)]})) [:event])))
         (is (= {:event :stopped :kind :impossible :reason :no-box}
                (await (ending '(jobs.animals.tend {}) {:entities [(cow-at 1 2)]}))) "no box and no plan: it can never start")
-        (is (= {:event :waiting :reason :nothing-to-do}
-               (await (ending (list 'jobs.animals.tend {:box pen :target 2}) {:entities [(cow-at 1 2) (cow-at 2 3)]}))))))))
+        (is (= {:event :completed}
+               (select-keys (await (ending (list 'jobs.animals.tend {:box pen :target 2}) {:entities [(cow-at 1 2) (cow-at 2 3)]})) [:event]))
+            "at target with nothing to do: done at once")))))
 
 (deftest lead-to-ends-with-a-kind-and-a-cause
   (async done

@@ -33,10 +33,7 @@
   (are [job args reason] (= reason (waiting-reason job args))
     'jobs.animals.leash {:mob "cow" :fetch false} :no-lead
     'jobs.animals.breed {:mob "cow" :fetch false} :no-food
-    'jobs.combat.attack {:targets ["zombie"] :absent :wait} :no-target)
-  (is (= :nothing-to-do (waiting-reason 'jobs.animals.tend {:box box :target 2}
-                                        {:entities [{:id 1 :name "cow" :kind "passive" :pos {:x 2 :y 64 :z 0}}
-                                                    {:id 2 :name "cow" :kind "passive" :pos {:x 3 :y 64 :z 0}}]}))))
+    'jobs.combat.attack {:targets ["zombie"] :absent :wait} :no-target))
 
 (deftest build-checks-say-why-they-decline
   (are [job reason] (= reason (waiting-reason job {:plan "no-such-plan"}))

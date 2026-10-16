@@ -268,17 +268,14 @@
 (deftest the-check-declines-when-the-only-drops-lie-outside-the-box
   (is (declines? {:box box :target 4} (conj four-cows (drop-at 90 "leather" 9)))))
 
-(defn waiting-fields [args entities]
-  (let [{:keys [eng seen]} (h/setup {:inventory [(wheat 4)] :entities entities})]
-    (core/submit! eng (list 'jobs.animals.tend args) {})
-    (core/tick! eng)
-    (first (events-of {:seen seen} :waiting))))
-
-(deftest nothing-to-do-says-the-census-and-why-each-step-is-skipped
-  (let [w (waiting-fields {:box box :target 2} [(cow 1 2) (cow 2 3) (calf 3 4)])]
-    (is (= :nothing-to-do (:reason w)))
-    (is (= {:adults 2 :babies 1 :target 2} (select-keys w [:adults :babies :target])))
-    (is (= {:breed :at-target :cull :within-target :shear :not-sheep :collect :no-drops :deposit :no-chest} (:skipped w)))))
+(deftest a-pen-at-target-with-nothing-to-do-is-done-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 2} {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3) (calf 3 4)]} 3))]
+          (is (finished? s))
+          (is (empty? (interacts s)))
+          (is (= {:adults 2 :babies 1} (select-keys (done-event s) [:adults :babies]))))))))
 
 (defn track-range!
   "Entities farther than r from the body are not listed, as a server loads animals only near the player."
