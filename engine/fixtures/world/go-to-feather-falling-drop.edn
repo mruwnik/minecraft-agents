@@ -45,11 +45,11 @@
             {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 80 :until {:source :job :kind :result}}]
    :after [[:body-near [22.5 0 16.5] 2]]}
   {:name "feather-falling-iv-low-health-still-arrives-over-the-4-drop"
-   ;; instant damage 6 + 12 hp leaves 2 hp, under the walk's floor: the planner refuses the drop, go-to heals or goes over its budget
+   ;; one 18 hp magic damage (no armour or invulnerability-frame discount, unlike two instant_damage effects) leaves 2 hp, under the walk's floor: the planner refuses the drop, go-to heals or goes over its budget
    ;; (all but 1 hp, go-to.health), and a 4 drop with feather falling IV costs 0.5 hp, so it arrives
    :blocks [[:fill [1 0 1] [15 3 30] "stone"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"]
-         [:rcon "effect give $BODY minecraft:instant_damage 1 0 true"] [:rcon "effect give $BODY minecraft:instant_damage 1 1 true"] [:until-rcon "data get entity $BODY Health" "data: [0-3]\\." 5]
+         [:rcon "damage $BODY 18 minecraft:magic"] [:until-rcon "data get entity $BODY Health" "data: [0-3]\\." 5]
          [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]}]}

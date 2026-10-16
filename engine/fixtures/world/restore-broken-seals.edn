@@ -16,8 +16,8 @@
  :cases
  [{:name "hut-east-doorway-kept-then-restored"
    :plans [{:id "other" :parts [{:id "door" :cells [#at [12 0 10] #at [12 1 10]] :want [:any "cobblestone"]}]}]
-   :act [[:job (jobs.blocks.dig {:pos #at [12 0 10] :ignore-zones? true})] [:until-rcon "execute positioned $X $Y $Z positioned ~12 ~0 ~10 if block ~ ~ ~ air" "passed" 20]
-         [:job (jobs.blocks.dig {:pos #at [12 1 10] :ignore-zones? true})] [:until-rcon "execute positioned $X $Y $Z positioned ~12 ~1 ~10 if block ~ ~ ~ air" "passed" 20]
+   :act [[:job (jobs.blocks.dig {:pos #at [12 0 10] :ignore-zones? true})] [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]
+         [:job (jobs.blocks.dig {:pos #at [12 1 10] :ignore-zones? true})] [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]
          [:job (jobs.survival.restore-broken {})] [:await {:source :job :kind :stopped :data {:not-restored [:any]}} 30]
          [:job (jobs.movement.go-to {:pos #xyz [15 0 10] :range 1})] [:await {:source :job :kind :result :data {:arrived true}} 25]
          [:job (jobs.survival.restore-broken {})]]
@@ -26,8 +26,8 @@
    :after [[:block [12 0 10] "cobblestone"] [:block [12 1 10] "cobblestone"]]}
   {:name "hut-south-doorway-kept-then-restored"
    :plans [{:id "other" :parts [{:id "door" :cells [#at [10 0 12] #at [10 1 12]] :want [:any "cobblestone"]}]}]
-   :act [[:job (jobs.blocks.dig {:pos #at [10 0 12] :ignore-zones? true})] [:until-rcon "execute positioned $X $Y $Z positioned ~10 ~0 ~12 if block ~ ~ ~ air" "passed" 20]
-         [:job (jobs.blocks.dig {:pos #at [10 1 12] :ignore-zones? true})] [:until-rcon "execute positioned $X $Y $Z positioned ~10 ~1 ~12 if block ~ ~ ~ air" "passed" 20]
+   :act [[:job (jobs.blocks.dig {:pos #at [10 0 12] :ignore-zones? true})] [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]
+         [:job (jobs.blocks.dig {:pos #at [10 1 12] :ignore-zones? true})] [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]
          [:job (jobs.survival.restore-broken {})] [:await {:source :job :kind :stopped :data {:not-restored [:any]}} 30]
          [:job (jobs.movement.go-to {:pos #xyz [10 0 15] :range 1})] [:await {:source :job :kind :result :data {:arrived true}} 25]
          [:job (jobs.survival.restore-broken {})]]
@@ -38,8 +38,8 @@
    :blocks [[:fill [24 0 5] [24 1 5] "cobblestone"]]
    :plans [{:id "other" :parts [{:id "wall" :cells [#at [24 0 5] #at [24 1 5]] :want [:any "cobblestone"]}]}]
    :body {:at [22.5 0 5.5]}
-   :act [[:job (jobs.blocks.dig {:pos #at [24 0 5] :ignore-zones? true})] [:until-rcon "execute positioned $X $Y $Z positioned ~24 ~0 ~5 if block ~ ~ ~ air" "passed" 20]
-         [:job (jobs.blocks.dig {:pos #at [24 1 5] :ignore-zones? true})] [:until-rcon "execute positioned $X $Y $Z positioned ~24 ~1 ~5 if block ~ ~ ~ air" "passed" 20]
+   :act [[:job (jobs.blocks.dig {:pos #at [24 0 5] :ignore-zones? true})] [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]
+         [:job (jobs.blocks.dig {:pos #at [24 1 5] :ignore-zones? true})] [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]
          [:job (jobs.survival.restore-broken {})]]
    :expect [{:event {:source :job :kind :completed :data {:cells [[:any] [:any]]}} :within-s 80}
             {:no-event {:source :job :kind :stopped :data {:not-restored [:any]}} :for-s 80 :until {:source :job :kind :completed :data {:cells [[:any] [:any]]}}}]
@@ -47,7 +47,7 @@
   {:name "window-in-hut-with-doorway-restored"
    :blocks [[:set [12 0 10] "air"] [:set [12 1 10] "air"]]
    :plans [{:id "other" :parts [{:id "window" :cells [#at [8 1 10]] :want [:any "cobblestone"]}]}]
-   :act [[:job (jobs.blocks.dig {:pos #at [8 1 10] :ignore-zones? true})] [:until-rcon "execute positioned $X $Y $Z positioned ~8 ~1 ~10 if block ~ ~ ~ air" "passed" 20]
+   :act [[:job (jobs.blocks.dig {:pos #at [8 1 10] :ignore-zones? true})] [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]
          [:job (jobs.survival.restore-broken {})]]
    :expect [{:event {:source :job :kind :completed :data {:cells [[:any]]}} :within-s 70}
             {:no-event {:source :job :kind :stopped :data {:not-restored [:any]}} :for-s 70 :until {:source :job :kind :completed :data {:cells [[:any]]}}}]
