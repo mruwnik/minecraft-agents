@@ -32,4 +32,27 @@
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 120}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 300 :of-job true}]
    :after [[:not-block [12 0 16] "cobblestone"] [:not-block [12 1 16] "cobblestone"]]
-   :limit-s 320}]}
+   :limit-s 320}
+  ;; b67c973b: a carried wooden door shuts the doorway before the bed goes down under the roof
+  {:name "carried-door-shuts-the-doorway-before-the-bed-goes-down"
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
+            [:fill [12 0 16] [12 1 16] "air"]]
+   :body {:at [13.5 0 13.5] :inventory [["red_bed" 1] ["oak_door" 1]]}
+   :act [[:job (jobs.survival.night)]
+         [:await {:source :job :kind :night.bed-placed} 120]]
+   :expect [{:event {:source :action :kind :done :data {:name "place" :status "placed" :block "oak_door"}} :within-s 90}
+            {:event {:source :job :kind :night.bed-placed} :within-s 120 :of-job true}]
+   :after [[:item "red_bed" 0] [:item "oak_door" 0]]
+   :limit-s 140}
+  ;; b67c973b: nothing to shut the doorway with: it stays open and the bed still goes down under the roof, never outside
+  {:name "no-blocks-the-doorway-stays-open-the-bed-is-still-under-the-roof"
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
+            [:fill [12 0 16] [12 1 16] "air"]]
+   :body {:at [13.5 0 13.5] :inventory [["red_bed" 1]]}
+   :act [[:job (jobs.survival.night)]
+         [:await {:source :job :kind :night.bed-placed} 120]]
+   :expect [{:event {:source :job :kind :night.bed-placed} :within-s 120 :of-job true}]
+   :after [[:item "red_bed" 0] [:not-block [12 0 17] "red_bed"] [:not-block [12 0 18] "red_bed"] [:body-near [12.5 0 12.5] 5]]
+   :limit-s 140}]}

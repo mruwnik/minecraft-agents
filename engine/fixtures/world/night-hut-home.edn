@@ -1,0 +1,77 @@
+;; The night job and a hut (cards aedc6ef7 724f7976 9570fa13): a carried bed outside a roofed :home is walked in and put down
+;; inside; a walled home keeps the bed in the bag; a hut with a hole in its wall is no shelter (room_open, walled in) while an intact
+;; one with a stale :bed-open entry still ends :roofed; the night sleeps in the hut's live respawn bed whatever stale :bed place is
+;; remembered far off, and ignores a respawn bed that is gone.
+;; Hut: stone x 8..16, z 8..16, y 0..3, room 9..15 (torches inside, one outside); a case that sleeps is :night-exclusive.
+;; Needs night: run with --allow-time --time-log <the shared time log>.
+{:defaults
+ {:tags [:night :survival :sleep]
+  :time :night
+  :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+           [:set [9 1 9] "torch"] [:set [15 1 15] "torch"] [:set [12 0 18] "torch"]]
+  :body {:at [13.5 0 13.5] :effects [["resistance" 600 4]] :settle-s 2}}
+ :cases
+ [;; aedc6ef7: the doorway at [12 0..1 16]; body 3.5 outside it, :home inside
+  {:name "carried-bed-outside-a-roofed-home-walks-in-and-is-put-down-inside"
+   :blocks [[:fill [12 0 16] [12 1 16] "air"]]
+   :body {:at [12.5 0 19.5] :inventory [["red_bed" 1]]}
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [12 0 12]}) [:now]]
+         [:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :place.set :data {:name :bed :auto true :pos [:near #at [12 0 12] 4.5]}} :within-s 90}]
+   :after [[:item "red_bed" 0] [:body-near [12.5 0 12.5] 5]]
+   :limit-s 100}
+  ;; aedc6ef7: no way in (stone bricks are built blocks, go-to never digs them): the carried bed is not put down outside
+  {:name "walled-home-keeps-the-carried-bed-in-the-bag"
+   :blocks [[:fill [8 0 8] [16 3 16] "stone_bricks" :hollow]]
+   :body {:at [12.5 0 19.5] :inventory [["red_bed" 1] ["cobblestone" 16]]}
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [12 0 12]}) [:now]]
+         [:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :place.set :data {:name :bed}} :for-s 120 :until {:source :job :kind :dig-in.sealed}}]
+   :after [[:item "red_bed" 1]]
+   :limit-s 130}
+  ;; 724f7976: a 2-high hole in the east wall and a fresh :bed-open entry in the room: the room_open warn, then walled in under the roof
+  {:name "hut-with-a-hole-is-walled-in-not-left-roofed"
+   :blocks [[:fill [16 0 12] [16 1 12] "air"]]
+   :memory [{:kind :bed-open :data {:pos #xyz [12 0 12]} :policy {:cap 5 :ttl 600000}}]
+   :body {:inventory [["dirt" 24]]}
+   :act [[:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :shelter.room_open} :within-s 60 :of-job true}
+            {:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 90}
+            {:no-event {:source :job :kind :completed :data {:name "jobs.survival.night" :night :roofed}} :for-s 60}]
+   :limit-s 100}
+  ;; 724f7976: the same hole and nothing to close it with: the night does not end roofed
+  {:name "hut-with-a-hole-and-no-blocks-is-not-roofed"
+   :blocks [[:fill [16 0 12] [16 1 12] "air"]]
+   :memory [{:kind :bed-open :data {:pos #xyz [12 0 12]} :policy {:cap 5 :ttl 600000}}]
+   :act [[:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :shelter.room_open} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :completed :data {:name "jobs.survival.night" :night :roofed}} :for-s 60}]
+   :limit-s 80}
+  ;; 724f7976: an intact hut with an old :bed-open entry is still shelter
+  {:name "intact-hut-with-a-stale-bed-open-entry-ends-roofed"
+   :memory [{:kind :bed-open :data {:pos #xyz [12 0 12]} :policy {:cap 5 :ttl 600000}}]
+   :act [[:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :shelter.room_open} :for-s 20}]
+   :after [[:body-near [13.5 0 13.5] 1.5]]
+   :limit-s 60}
+  ;; 9570fa13: a stale :bed place far off, the hut bed live as the respawn bed (spawn point set at its head)
+  {:name "stale-far-bed-place-the-hut-spawn-bed-is-slept-in"
+   :time :night-exclusive
+   :blocks [[:set [10 0 12] "red_bed[facing=east,part=foot]"] [:set [11 0 12] "red_bed[facing=east,part=head]"]]
+   :memory [{:kind :spawn-bed :data {:pos #xyz [10 0 12]} :policy {:cap 1 :ttl :forever}}]
+   :body {:spawnpoint [11 0 12]}
+   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [150 0 16]}) [:now]]
+         [:job (jobs.survival.night)]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}
+            {:no-event {:source :job :kind :night.bed-too-far} :for-s 90 :until {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}}]
+   :limit-s 100}
+  ;; 9570fa13: the respawn bed block is gone: it is not slept in, spawn_lost says so
+  {:name "gone-spawn-bed-is-not-used"
+   :memory [{:kind :spawn-bed :data {:pos #xyz [10 0 12]} :policy {:cap 1 :ttl :forever}}]
+   :body {:spawnpoint [11 0 12]}
+   :act [[:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :spawn_lost} :within-s 40}
+            {:no-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :for-s 40}]
+   :limit-s 60}]}

@@ -1,0 +1,26 @@
+;; Card 6186b2dd (8062eebc): a lone melee mob 5..10 blocks away that a fight would not win, with 3+ blocks carried: the retreat pillars
+;; up before any flee step (a walk gains little on a zombie). Open flat ground, a helmeted zombie 7 blocks east, the body at 10 hp
+;; with no weapon. Should-succeed: dirt 24: a pillar, retreat_sealed "pillared up", no flee step first. Should-fail (flees as before):
+;; 2 blocks carried: flee steps, no pillar.
+{:defaults
+ {:tags [:hostile :survival :cornered]
+  :time :any
+  :plot {:height 16}
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :body {:at [10.5 0 16.5]}
+  :act [[:rcon "damage $BODY 10 minecraft:generic"]
+        [:summon "zombie" [17.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+  :limit-s 90}
+ :cases
+ [{:name "lone-zombie-at-seven-low-health-pillars-up-first"
+   :body {:inventory [["dirt" 24]]}
+   :expect [{:event {:source :job :kind :pillar.done} :within-s 40}
+            {:event {:source :job :kind :retreat_sealed :message [:contains "pillared up"]} :within-s 40}
+            {:no-event {:source :job :kind :retreat.target} :for-s 40 :until {:source :job :kind :pillar.done}}]
+   :after [[:body-near [10.5 3 16.5] 3]]}
+  {:name "two-blocks-only-flees-as-before"
+   :body {:inventory [["dirt" 2]]}
+   :expect [{:event {:source :job :kind :retreat.target} :within-s 40}
+            {:no-event {:source :job :kind :pillar.done} :for-s 30}]
+   :limit-s 60}]}
