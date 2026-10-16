@@ -10,7 +10,6 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.job-common :as common]
-            [jobs.lib.look :as look]
             [jobs.lib.gate :as gate]
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]
@@ -25,7 +24,6 @@
   fetches one (jobs.lib.need, :fetch; a failed fetch ends the call with its ending as the :because, tilled and skipped
   in the data), with :fetch false the call is refused {:reason :no-tool :kind \"hoe\"}. Ground cover over a cell (grass,
   ferns, flowers, snow layer) is dug first with a jobs.blocks.dig child; a cover dig that does not clear it counts a try.
-  A cell remembered as not tillable but out of sight is looked at once before it is skipped.
   Cells are skipped with a reason: :not-tillable, :covered (something else above), :not-permitted (zone rules),
   :unreachable, :gone, :refused (the hoe failed twice), :no-hoe (the hoe is gone) or :cover-stuck (two failed cover
   digs).
@@ -265,38 +263,19 @@
       (let [[reason text] (if (pos? tilled) [:partial (str "tilled " tilled ", skipped " (count skipped))] (nothing-tilled skipped))]
         (ctx/end c (if (condition-skips reason) :condition-failed :nothing-possible) reason (assoc result :text text))))))
 
-(defn fresh?
-  "Whether the body sees or feels the cell now: a remembered answer may predate the ground being changed out of view."
-  [p pos]
-  (let [b (u/sensed p pos)]
-    (not (false? (some-> b .-visible)))))
-
-(defn ^:async look-at!
-  "Look at a cell remembered as untillable and take a sight pass, once per cell, before it is skipped on that memory."
-  [c pos]
-  (ctx/update-mem! c update :looked-cells (fnil conj #{}) pos)
-  (await (ctx/act c :look (clj->js {:pos (update pos :x + 0.5) :y (+ (:y pos) 0.5) :z (+ (:z pos) 0.5)})))
-  (look/see! c))
-
 (defn ^:async till-step!
   "One step: skip what cannot be tilled, else walk to the nearest cell, clear ground cover above it or use the hoe on it."
   [c]
   (let [p (:primitives c)
         todo (pending c)
-        untillable (into [] (comp (filter (fn [[_ n]] (and (some? n) (not (tillable n))))) (map first)) todo)
-        looked (:looked-cells (ctx/mem c) #{})
-        stale (remove #(or (contains? looked %) (fresh? p %)) untillable)
-        bad untillable]
-    (when (seq stale) (await (look-at! c (first stale))))
-    (when (and (empty? stale) (seq bad)) (skip! c bad :not-tillable))
+        bad (into [] (comp (filter (fn [[_ n]] (and (some? n) (not (tillable n))))) (map first)) todo)]
+    (when (seq bad) (skip! c bad :not-tillable))
     (let [unpermitted (into [] (comp (map first) (remove (set bad)) (remove #(permitted? c :dig %))) todo)
           _ (when (seq unpermitted) (skip! c unpermitted :not-permitted))
           bad? (into (set bad) unpermitted)
           cands (remove (fn [[pos _]] (bad? pos)) todo)
           tool (hoe c)]
       (cond
-        (seq stale) :again
-
         (empty? cands) (conclude! c)
 
         (nil? tool)
