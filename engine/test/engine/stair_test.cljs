@@ -311,13 +311,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [snow (update-vals ground (constantly "snow_block"))
-              s (await (stair! {:blocks snow :inventory []} (assoc east :fetch false) (fn [_])))]
-          (is (= :done (:status @(:out s))))
-          (is (= 3 (:steps @(:out s))))
-          (is (seq (digs (:p s))) "dug by hand")
-          (is (empty? (events-of s :fetch.started)))
-          (is (nil? (waiting s))))))))
+        (let [snow (update-vals ground (constantly "snow_block"))]
+          (doseq [args [(assoc east :fetch false) east]]
+            (let [s (await (stair! {:blocks snow :inventory []} args (fn [_])))]
+              (is (= :done (:status @(:out s))))
+              (is (= 3 (:steps @(:out s))))
+              (is (seq (digs (:p s))) "dug by hand")
+              (is (empty? (events-of s :fetch.started)))
+              (is (empty? (filter #(= :need (:slot %)) (events-of s :child_started))) "no tool is fetched for a hand-breakable block")
+              (is (nil? (waiting s))))))))))
 
 (deftest a-stair-queued-in-a-farm-stops-before-digging-the-crop
   (async done

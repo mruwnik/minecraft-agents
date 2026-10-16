@@ -56,7 +56,7 @@
 (defn ^:async spare!
   "Before a dig of block-name that makes many cuts: when the pickaxe-kind tool for it is the last that harvests it and is
   worn (trip/spare-need; amount, the cuts to make, optional), get the cheapest lasting tool of that kind with a
-  jobs.items.obtain child (slot :spare). Resolves nil to go on, :continue while the get waits. Once per tool name
+  jobs.items.obtain child (slot :spare; a table is never put in the dig line). Resolves nil to go on, :continue while the get waits. Once per tool name
   (:spare-tried): info tool.spare, or warn tool.no-spare with the cause. Skipped when :fetch lacks :tool or under a
   spare get (no spare of a spare)."
   [c block-name amount]
@@ -64,7 +64,7 @@
         worn (when (and block-name (not (trip/in-spare? c)) (fetch-allows? c :tool)) (trip/spare-need c block-name amount))
         tool-name (when worn (trip/spare-name p block-name worn))]
     (when (and worn (not (contains? (:spare-tried (ctx/mem c)) tool-name)))
-      (let [e (await (need/item! c tool-name 1 {:slot :spare}))]
+      (let [e (await (need/fetch! c 'jobs.items.obtain {:item tool-name :count 1 :avoid (trip/line-ahead c)} :need {:item tool-name :count 1} {:slot :spare}))]
         (if (= :continue e)
           :continue
           (let [why (cause-why e)]

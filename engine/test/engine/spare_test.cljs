@@ -104,3 +104,11 @@
               s (await (st/stair! (assoc spare-chest :inventory [{:name "iron_pickaxe" :count 1 :durability 240 :max-durability 250}]) east (fn [p] (tu/seeing-all p) (wear p))))]
           (is (= :done (:status @(:out s))) (pr-str @(:out s)))
           (is (contains? (kinds s) :tool.spare) (pr-str (kinds s))))))))
+
+(deftest a-spare-is-crafted-with-the-dig-line-kept-clear-of-the-table
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (st/stair! {:blocks st/ground :inventory [worn {:name "cobblestone" :count 12} {:name "stick" :count 4} {:name "crafting_table" :count 1}]}
+                                  east tu/seeing-all))]
+          (is (= :done (:status @(:out s))) (pr-str (st/events-of s :stair.stopped))))))))
