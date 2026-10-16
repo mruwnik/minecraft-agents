@@ -493,6 +493,15 @@
           (is (= [{:x -3 :y 65.5 :z 0}] (mapv #(js->clj (arg-of "pos" %) :keywordize-keys true) (calls p "look")))
               "east is walled at eye level: west is the first free direction"))))))
 
+(deftest a-body-walled-in-on-all-four-sides-tosses-nothing-since-the-items-would-come-straight-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory (many "junk" 35)
+                                      :blocks {"1,65,0" "stone" "-1,65,0" "stone" "0,65,1" "stone" "0,65,-1" "stone"}})]
+          (await (run-reflex eng {:free 2} {}))
+          (is (zero? (count (calls p "toss")))))))))
+
 (deftest tosses-that-never-make-room-end-by-the-call-time
   (async done
     (tu/run-async done

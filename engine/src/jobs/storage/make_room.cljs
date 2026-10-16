@@ -39,7 +39,8 @@
   3. Without a usable chest, the stack of least worth is thrown. A stack qualifies when item-worth is
      below :toss-below, and it is thrown whole and only while the name's floor stays carried. Cheapest first,
      then the one picked up longest ago (:picked-up entries), then the smaller stack. The body turns to the first
-     of the four directions with two free cells ahead at eye level and tosses.
+     of the four directions with two free cells ahead at eye level and tosses; with none (walled in) nothing is
+     thrown or swapped, since it would come straight back.
   After tossing, the cleanup export (however the call ends) walks up to :away blocks from where the items were thrown (a go-to child; the farthest cell back
   that is no seen obstacle, none: no walk), so it does not pick them up again.
   Resume: a toss or swap writes its intent first; a run that finds one (after a cut or a restart) checks the
@@ -206,14 +207,14 @@
           [1 2]))
 
 (defn direction
-  "The first cardinal [dx dz] with free cells ahead, else [1 0]. With away
+  "The first cardinal [dx dz] with free cells ahead, else nil: a toss into a wall comes straight back. With away
   (a position) the cardinals are tried most opposite to it first."
   [p away]
   (let [feet (sh/feet p)
         order (if away
                 (sort-by (fn [[dx dz]] (+ (* dx (- (:x away) (:x feet))) (* dz (- (:z away) (:z feet))))) cardinals)
                 cardinals)]
-    (or (first (filter #(free-cell? p feet %) order)) [1 0])))
+    (first (filter #(free-cell? p feet %) order))))
 
 (defn unusable?
   [c chest]
@@ -467,14 +468,15 @@
         {:keys [inventory keep recency] :as st} (state c)
         chest (when-not (:chest-done @run) (usable-chest c))
         names (deposit-names inventory keep recency)
-        swap (when (zero? free-now) (swap-target c st))
-        order (toss-order inventory keep recency toss-below)]
+        dir (direction p nil)
+        swap (when (and dir (zero? free-now)) (swap-target c st))
+        order (when dir (toss-order inventory keep recency toss-below))]
     (cond
       (>= free-now free) (await (finish-end! c nil))
       (>= (:toss-fails m 0) 3) (await (finish-end! c :toss-failed))
       (and chest (seq names)) (do (await (put-away! c run chest names keep)) :again)
       swap (do (await (swap-in! c swap)) :again)
-      (seq order) (do (await (toss! c (first order) (direction p nil) {})) :again)
+      (seq order) (do (await (toss! c (first order) dir {})) :again)
       :else (await (finish-end! c (if (:acted m) :short :nothing-to-go))))))
 
 (defn ^:async round
