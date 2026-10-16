@@ -219,6 +219,9 @@
     (cond
       (or (:top d) (contains? #{:none :done :failed} state)) nil
       (nil? state) (let [way (own-stair-bottom c)]
+                     (ctx/emit! c :mine.stair-plan :info (if way
+                                                          {:own-stair (:cell way) :text (str "mine walks down its stair at " (str/join "," (:cell way)) " and goes on from its foot")}
+                                                          {:text "mine cuts a new stair down"}))
                      (ctx/update-mem! c assoc-in [:descent :own-stair] (if way (assoc way :state :walking) {:state :none}))
                      :again)
       :else (let [r (await (child/walk-into!* c :stair-own cell))]
@@ -227,7 +230,7 @@
                 (not= cell (access/cell (cell-of (u/self-pos c)))) (do (ctx/update-mem! c assoc-in [:descent :own-stair :state] :failed) :again)
                 :else (do (ctx/update-mem! c #(cond-> (-> % (assoc-in [:descent :own-stair :state] :done)
                                                           (update :descent assoc :top cell :top-heading (keyword heading)))
-                                                heading (assoc :heading heading)))
+                                                (and heading (nil? (:heading (:args c)))) (assoc :heading heading)))
                           :again))))))
 
 (defn ^:async back-on-stair!

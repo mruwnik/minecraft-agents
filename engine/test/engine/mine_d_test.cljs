@@ -503,7 +503,31 @@
           (await (run-ticks s 300))
           (is (every? (fn [[x]] (> x 4)) (dug-cells s)) "nothing is cut from the lawn or along the old stair")
           (is (seq (dug-cells s)) "the new steps go on past its foot")
-          (is (<= (apply min (map second (dug-cells s))) 58) "it digs down to the level"))))))
+          (is (<= (apply min (map second (dug-cells s))) 58) "it digs down to the level")
+          (is (= [[4 60 0]] (map :own-stair (events-of s :mine.stair-plan))) "the plan is stated once at the start"))))))
+
+(deftest a-given-heading-is-kept-when-the-descent-reuses-a-stair
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (stair-down-east 4) :drops {"iron_ore" "raw_iron" "stone" "cobblestone"} :inventory pickaxe
+                                :self {:pos [0.5 64 0.5]}}})]
+          (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors (vec (for [i (range 1 5)] [i (- 63 i) 0]))})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level 58 :heading "north" :count 1 :tunnel-length 3 :mend false :torch-interval 0}) {})
+          (await (run-ticks s 300))
+          (is (some (fn [[_ _ z]] (neg? z)) (dug-cells s)) "the new steps turn north from the old foot"))))))
+
+(deftest a-walk-down-the-old-stair-that-fails-cuts-from-where-the-body-stands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (assoc (stair-down-east 4) "2,62,0" "stone" "2,63,0" "stone" "2,64,0" "stone") :drops {"iron_ore" "raw_iron" "stone" "cobblestone"} :inventory pickaxe
+                                :self {:pos [0.5 64 0.5]}}})]
+          (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors (vec (for [i (range 1 5)] [i (- 63 i) 0]))})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level 58 :heading "east" :count 1 :tunnel-length 3 :mend false :torch-interval 0}) {})
+          (await (run-ticks s 300))
+          (is (= 1 (count (events-of s :mine.stair-plan))))
+          (is (some (fn [[x]] (<= x 4)) (dug-cells s)) "it cut its own stair where it stood"))))))
 
 ;; Juniper j108: a tunnel run from the foot of a stair back under it would cut its lowest steps' floors.
 (deftest a-tunnel-under-the-stair-it-came-down-stops-before-it-cuts-the-way-up
