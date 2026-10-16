@@ -296,7 +296,7 @@
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
           (reset! mid {:at (st/pos-of p) :holder (some? (core/holder eng))})
-          (is (= {:at {:x 5 :y 64 :z -1} :holder false} @mid) "shut in at the end of the niche (the stair out of the failed pit went north), safe: not held")
+          (is (= {:at {:x 5.5 :y 64 :z -0.5} :holder false} @mid) "shut in at the middle of the niche (the stair out of the failed pit went north), safe: not held")
           (is (= #{{:x 4 :y 64 :z -1} {:x 4 :y 65 :z -1}}
                  (set (filterv #(= 4 (:x %)) (mapv st/arg-pos (st/calls p "place")))))
               "the opening, feet and head, plugged")
