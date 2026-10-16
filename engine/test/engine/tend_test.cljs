@@ -116,7 +116,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:target 4} {:entities [(cow 1 2) (cow 2 3) leather-on-the-ground]} 12))]
+        (let [s (await (scenario {:target 4 :fetch false} {:entities [(cow 1 2) (cow 2 3) leather-on-the-ground]} 12))]
           (is (empty? (interacts s)))
           (is (= {:skipped :no-food} (get-in (done-event s) [:steps :breed])))
           (is (true? (finished? s))))))))
@@ -167,7 +167,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:mob "sheep" :target 2} {:entities [(sheep 1 2) (sheep 2 3) leather-on-the-ground]} 20))]
+        (let [s (await (scenario {:mob "sheep" :target 2 :fetch false} {:entities [(sheep 1 2) (sheep 2 3) leather-on-the-ground]} 20))]
           (is (= {:skipped :no-shears} (get-in (done-event s) [:steps :shear]))))))))
 
 (deftest cows-are-not-sheared
@@ -251,6 +251,12 @@
     :too-few-adults {:adults 1 :babies 0}
     :no-food {:adults 2 :babies 0 :food nil}
     nil {:adults 2 :babies 0 :food "wheat" :reach 5})
+  (is (= {:call {:slot :breed :job 'jobs.animals.breed :args {:mob "cow" :count 2 :radius 5 :fetch true}}}
+         (tend/decide :breed {:mob "cow" :target 4 :fetch true} {:adults 2 :babies 0 :food nil :reach 5}))
+      "no food but :fetch on: breed is called and fetches")
+  (is (= {:call {:slot :shear :job 'jobs.animals.shear :args {:radius 5 :fetch true}}}
+         (tend/decide :shear {:mob "sheep" :fetch true} {:shears false :shearable 2 :reach 5}))
+      "no shears but :fetch on: shear is called and fetches")
   (are [expected facts] (= expected (:skip (tend/decide :cull {:mob "cow" :target 4} facts)))
     :within-target {:adults 4 :babies 0}
     :within-target {:adults 2 :babies 3}

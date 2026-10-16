@@ -249,7 +249,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen eng]} (await (run {:blocks (ground [[3 0]]) :inventory [(item "birch_sapling" 2)]} {"forest" oak-cell}
-                                             {:plan "forest"} 12))]
+                                             {:plan "forest" :fetch false} 12))]
           (is (= [] (warns seen :forest.no-sapling)) "the check writes no warn")
           (is (= [:no-sapling] (waiting-reasons seen)))
           (is (listed? eng)))))))
@@ -347,7 +347,7 @@
       (fn ^:async t []
         (let [plan (forest-plan ["a" [[3 64 0] [5 64 0] [7 64 0]] "oak"])
               {:keys [p eng seen]} (await (run {:blocks (merge (ground [[3 0] [5 0] [7 0]]) {"3,64,0" "oak_sapling" "5,64,0" "stone"})}
-                                               {"forest" plan} {:plan "forest"} 40))]
+                                               {"forest" plan} {:plan "forest" :fetch false} 40))]
           (is (= [] (vec (.-calls (.-world p)))) "40 ticks, not one act")
           (is (listed? eng) "still listed, waiting")
           (set-block! p 3 64 0 "oak_log")
@@ -361,7 +361,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p eng seen]} (await (run {:blocks (ground [[3 0]])} {"forest" oak-cell} {:plan "forest"} 40))]
+        (let [{:keys [p eng seen]} (await (run {:blocks (ground [[3 0]])} {"forest" oak-cell} {:plan "forest" :fetch false} 40))]
           (is (= [] (vec (.-calls (.-world p)))))
           (is (= [:no-sapling] (waiting-reasons seen)) "the wait says why")
           (give! p "oak_sapling" 1)

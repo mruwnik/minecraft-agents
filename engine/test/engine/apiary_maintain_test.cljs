@@ -164,11 +164,18 @@
                  ["at target" {:target 2} {:inventory carpet-and-flowers :entities bees} :at-target]
                  ["night" {:target 4} {:inventory carpet-and-flowers :entities bees :time 15000} :night]
                  ["rain" {:target 4} {:inventory carpet-and-flowers :entities bees :raining true} :raining]
-                 ["no flowers" {:target 4} {:inventory (inv "white_carpet" 1) :entities bees} :no-food]
+                 ["no flowers" {:target 4 :fetch false} {:inventory (inv "white_carpet" 1) :entities bees} :no-food]
                  ["one bee" {:target 4} {:inventory carpet-and-flowers :entities [(bee 1 3)]} :too-few-adults]]]
           (let [s (await (scenario args (world (assoc w :level 2)) 12))]
             (is (empty? (calls s "interact")) label)
             (is (= {:skipped reason} (step s :breed)) label)))))))
+
+(deftest breeding-without-flowers-is-called-so-breed-fetches-them
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 4} (world {:inventory (inv "white_carpet" 1) :entities bees :level 2}) 12))]
+          (is (nil? (:skipped (step s :breed))) "breed is called, not skipped :no-food"))))))
 
 (deftest babies-count-toward-the-bee-target
   (async done
