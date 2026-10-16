@@ -730,6 +730,17 @@
           (.catch (fn [e] (is false (.-message e))))
           (.finally done)))))
 
+(deftest until-pos-polls-until-the-body-is-inside-the-plot-relative-bounds
+  (async done
+    (let [replies (atom ["B: [20003.5d, 150.0d, 20016.5d]" "B: [20022.5d, 150.0d, 20016.5d]"])
+          sent (atom [])
+          io {:send (fn [cmds] (swap! sent into cmds) (js/Promise.resolve [(let [r (first @replies)] (swap! replies #(if (next %) (vec (rest %)) %)) r)]))
+              :sleep (fn [_] (js/Promise.resolve nil))}]
+      (-> (r/until-pos-step! io "data get entity B Pos" [20000 150 20000] {:x-min 20} 10)
+          (.then (fn [_] (is (= 2 (count @sent)))))
+          (.catch (fn [e] (is false (.-message e))))
+          (.finally done)))))
+
 (deftest until-rcon-times-out-with-the-last-reply
   (async done
     (let [now (atom 0)

@@ -14,7 +14,8 @@
  [{:name "dug-in-ends-the-night-in-one-round"
    :time :night-exclusive
    :act [[:job (jobs.survival.night)]
-         [:await {:source :job :kind :dig-in.sealed} 60]]
+         [:await {:source :job :kind :dig-in.sealed} 60]
+         [:wait-s 10]] ; deliberate hold: the sealed body must sit through it with no hold/idle/re-dig before dawn
    :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60}
             {:no-event {:source :job :kind :holding :data {:reason :sheltered}} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}
             {:no-event {:source :job :kind :idle} :for-s 120 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}
@@ -80,6 +81,7 @@
    :act [[:job (jobs.survival.night {:flee-radius 0})]
          [:await {:source :job :kind :shelter.exposed} 90]
          [:await {:source :job :kind :holding :data {:reason [:contains "exposed: "]}} 30]
+         [:wait-s 10] ; deliberate hold: exposed with no pickaxe, a pit must not start before dawn
          [:time-set 1000]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 90}
             {:no-event {:source :job :kind :dig-in.sealed} :for-s 90 :until {:source :job :kind :stopped :data {:reason :exposed}}}

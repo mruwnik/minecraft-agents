@@ -1165,19 +1165,29 @@
 
 (declare judge-file-check)
 
-(defn until-rcon-step!
-  "Sends cmd every 500 ms until its reply matches the regex pattern; throws with the last reply after limit-s seconds.
+(defn until-reply!
+  "Sends cmd every 500 ms until (match? reply); throws what + the last reply after limit-s seconds.
   io: {:send :sleep :now} (:now defaults to the clock)."
-  [{:keys [send sleep now] :or {now #(js/Date.now)}} cmd pattern limit-s]
+  [{:keys [send sleep now] :or {now #(js/Date.now)}} cmd match? what limit-s]
   (let [until (+ (now) (* 1000 limit-s))]
     (letfn [(poll []
               (.then (send [cmd])
                      (fn [[reply]]
                        (cond
-                         (f/rcon-reply-matches? reply pattern) nil
-                         (> (now) until) (throw (js/Error. (str ":until-rcon " (pr-str cmd) " " (pr-str pattern) " not met after " limit-s " s: last reply " (str/trim (str reply)))))
+                         (match? reply) nil
+                         (> (now) until) (throw (js/Error. (str what " not met after " limit-s " s: last reply " (str/trim (str reply)))))
                          :else (.then (sleep 500) poll)))))]
       (poll))))
+
+(defn until-rcon-step!
+  "Polls cmd until its reply matches the regex pattern (see until-reply!)."
+  [io cmd pattern limit-s]
+  (until-reply! io cmd #(f/rcon-reply-matches? % pattern) (str ":until-rcon " (pr-str cmd) " " (pr-str pattern)) limit-s))
+
+(defn until-pos-step!
+  "Polls the Pos reply of cmd until it lies inside bounds (plot-relative, see f/pos-in-bounds?)."
+  [io cmd origin bounds limit-s]
+  (until-reply! io cmd #(f/pos-in-bounds? % origin bounds) (str ":until-pos " (pr-str bounds)) limit-s))
 
 (defn until-step!
   "Polls check (a :memory / :file after check or a :cli step) every 500 ms until it passes; throws with its last evidence
@@ -1228,6 +1238,7 @@
                          :until (.then (until-step! opts a b @last-job @event-job) (constantly ids))
                          :until-seen (.then (until-step! opts (f/seen-check a) b @last-job @event-job) (constantly ids))
                          :until-rcon (.then (until-rcon-step! {:send rcon! :sleep sleep} (f/substitute a (:body opts) origin box) b (nth step 3)) (constantly ids))
+                         :until-pos (.then (until-pos-step! {:send rcon! :sleep sleep} (f/substitute "data get entity $BODY Pos" (:body opts) origin box) origin a b) (constantly ids))
                          (:cli :http) (.then (do (reset! cli-ms (js/Date.now)) (tool-step! opts step @last-job @event-job))
                                              (fn [out] (if-let [id (and (= [:http :submit] (take 2 step)) (f/submitted-id out))]
                                                          (do (reset! last-job id) (conj ids id))

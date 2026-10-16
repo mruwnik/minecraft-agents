@@ -19,7 +19,7 @@
    :act [[:job (jobs.blocks.dig {:pos #at [12 0 10] :ignore-zones? true})] [:until-rcon "execute positioned $X $Y $Z positioned ~12 ~0 ~10 if block ~ ~ ~ air" "passed" 20]
          [:job (jobs.blocks.dig {:pos #at [12 1 10] :ignore-zones? true})] [:until-rcon "execute positioned $X $Y $Z positioned ~12 ~1 ~10 if block ~ ~ ~ air" "passed" 20]
          [:job (jobs.survival.restore-broken {})] [:await {:source :job :kind :stopped :data {:not-restored [:any]}} 30]
-         [:job (jobs.movement.go-to {:pos #xyz [15 0 10] :range 1})] [:until-rcon "execute positioned $X $Y $Z positioned ~15 ~0 ~10 if entity @a[name=$BODY,distance=..2.5]" "passed" 25]
+         [:job (jobs.movement.go-to {:pos #xyz [15 0 10] :range 1})] [:await {:source :job :kind :result :data {:arrived true}} 25]
          [:job (jobs.survival.restore-broken {})]]
    :expect [{:event {:source :job :kind :stopped :data {:not-restored [{:why :seals} {:why :seals}]}} :within-s 60}
             {:event {:source :job :kind :completed :data {:cells [[:any] [:any]]}} :within-s 85}]
@@ -29,7 +29,7 @@
    :act [[:job (jobs.blocks.dig {:pos #at [10 0 12] :ignore-zones? true})] [:until-rcon "execute positioned $X $Y $Z positioned ~10 ~0 ~12 if block ~ ~ ~ air" "passed" 20]
          [:job (jobs.blocks.dig {:pos #at [10 1 12] :ignore-zones? true})] [:until-rcon "execute positioned $X $Y $Z positioned ~10 ~1 ~12 if block ~ ~ ~ air" "passed" 20]
          [:job (jobs.survival.restore-broken {})] [:await {:source :job :kind :stopped :data {:not-restored [:any]}} 30]
-         [:job (jobs.movement.go-to {:pos #xyz [10 0 15] :range 1})] [:until-rcon "execute positioned $X $Y $Z positioned ~10 ~0 ~15 if entity @a[name=$BODY,distance=..2.5]" "passed" 25]
+         [:job (jobs.movement.go-to {:pos #xyz [10 0 15] :range 1})] [:await {:source :job :kind :result :data {:arrived true}} 25]
          [:job (jobs.survival.restore-broken {})]]
    :expect [{:event {:source :job :kind :stopped :data {:not-restored [{:why :seals} {:why :seals}]}} :within-s 60}
             {:event {:source :job :kind :completed :data {:cells [[:any] [:any]]}} :within-s 85}]

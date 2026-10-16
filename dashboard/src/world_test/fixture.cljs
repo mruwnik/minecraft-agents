@@ -223,7 +223,7 @@
         kept (.filter arr (fn [m] (not= tag (.-by m))))]
     (if (= (.-length kept) (.-length arr)) text (markers-text kept))))
 
-(def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set :restart-body :cli :http :until :until-seen :until-rcon})
+(def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set :restart-body :cli :http :until :until-seen :until-rcon :until-pos})
 (def after-kinds #{:block :not-block :any-not-block :body-near :body-far :item :entities :memory :file})
 (def http-ops #{:submit :cancel :cancel-all :take :release})
 (def cli-tools #{"jobs" "drive" "plans" "map" "world" "say" "time" "triggers" "entities" "observe" "workspace" "blueprints" "quote"})
@@ -247,6 +247,7 @@
     :until (not (and (= 3 (count step)) (number? b) (vector? a) (or (#{:memory :file} (first a)) (and (= :cli (first a)) (not (step-problem? a))))))
     :until-seen (not (and (= 3 (count step)) (number? b) (map? a) (string? (or (:entity a) (:block a)))))
     :until-rcon (not (and (= 4 (count step)) (string? a) (string? b) (number? (nth step 3))))
+    :until-pos (not (and (= 3 (count step)) (map? a) (number? b)))
     :cli (not (and (cli-tools a) (vector? b) (every? #(or (string? %) (map? %) (vector? %)) b)))
     :http (not (http-ops a))
     (not (step-kinds op))))
@@ -797,6 +798,16 @@
   [reply]
   (when-let [[_ x y z] (re-find #"\[(-?[\d.E-]+)d, (-?[\d.E-]+)d, (-?[\d.E-]+)d\]" reply)]
     [(js/Number x) (js/Number y) (js/Number z)]))
+
+(defn pos-in-bounds?
+  "Whether the Pos reply lies inside bounds, offsets from the plot origin: any of :x-min :x-max :y-min :y-max :z-min :z-max."
+  [reply [ox oy oz] {:keys [x-min x-max y-min y-max z-min z-max]}]
+  (if-let [[x y z] (reply-pos (str reply))]
+    (let [[dx dy dz] [(- x ox) (- y oy) (- z oz)]]
+      (and (or (nil? x-min) (>= dx x-min)) (or (nil? x-max) (<= dx x-max))
+           (or (nil? y-min) (>= dy y-min)) (or (nil? y-max) (<= dy y-max))
+           (or (nil? z-min) (>= dz z-min)) (or (nil? z-max) (<= dz z-max))))
+    false))
 
 (def leave-margin
   "Blocks beyond the plot a body may stand before the runner fails its case: the next plot's setup would build over it."
