@@ -29,8 +29,8 @@
   room) is :done before anything is placed.
   One call is a whole attempt. It ends :done {:pos :mode :roof} when the world shows the body shut in. Otherwise a fact of the
   site is condition-failed (:no-blocks, :no-tool, :spared, :no-roof-support, :no-floor, :fluid-here, :fluid-adjacent,
-  :fluid-above, :hazard-below) and a try that failed is nothing-possible (:walls-server-refused,
-  :walls-failed, :dig-failed, :descent-stalled, :left-pit, :roof-failed, :plug-failed, :no-progress, :unsealed); the data is
+  :fluid-above, :hazard-below, :lays-open) and a try that failed is nothing-possible (:walls-server-refused,
+  :walls-failed, :dig-failed, :descent-stalled, :roof-failed, :plug-failed, :no-progress, :unsealed); the data is
   {:text :pos}.
   The mode is the first of these whose cells the zone rules permit. If none is permitted it takes the first
   as a last resort, with one dig-in.trespass-last-resort warning.
@@ -41,24 +41,25 @@
   - walls: enough of the call's :use :blocks (default the shelter fillers) are carried for every open cell. Calls jobs.survival.plug-in (walls way, :purpose :shelter), which places the four sides at feet height, the four at head height,
     a support beside the roof cell, then the roof cell, at most :max-places per step, and takes the open cells from the current feet cell. If the blocks run out, it chooses again; a walls attempt that fails ends the call.
   - :enclose: walls mode only, for a body under an overhang or in a cave: the walls it needs, else :no-blocks.
-  - dig: digs a pit two deep (three on flat ground, where the start cell has no solid side to roof against),
-    then places one block at the roof cell from a carried or dug block.
+  - dig: calls jobs.survival.plug-in (pit way, :purpose :shelter), which digs a pit two deep (three on flat ground, where the
+    start cell has no solid side to roof against) and places one block at the roof cell from a carried or dug block.
     The body never drops onto a floor it has not seen solid (it cannot see under the block it stands on): straight down
     only when every floor is known, else it zigzags between its column and an open side column (every dig beside or
     below-beside it, lava a dig lays open sealed while it stands above), plugs the side cell by its head, then roofs.
-    With no such pit it ends :no-floor.
-    It digs only where the block under is solid, the feet and head cells are dry, and no fluid borders the cell
-    (water, lava, bubble column, kelp, seagrass, or a waterlogged block), nor the roof cell or the cell above it
-    (:fluid-above).
-    It holds the best carried tool for each block first. After each dig it looks at what the dig laid open and does
-    not walk into the hole when the cell under it is seen not solid (:no-floor; rock it cannot see counts as stone).
+    The pit is planned whole before the first dig and not dug when a cell shows fluid, a hazard or open air, fluid
+    borders a cell (water, lava, bubble column, kelp, seagrass, or a waterlogged block), fluid is at the roof cell or the
+    cell above it (:fluid-above), no floor is seen solid under it (:no-floor), or nothing roofs it (:no-blocks): the stop
+    is the call's reason (retreat-pit/stop-of). A block the carried tools cannot harvest is dug by hand once a block to
+    roof with is in hand and the hand breaks it within :hand-clear-ms, else :no-tool.
+    It holds the best carried tool for each block first. After each dig it looks at what the dig laid open and stops
+    when fluid shows in or beside the cell or a cave opens beside it (:lays-open); rock it cannot see counts as stone.
     If the body leaves the column, it chooses again.
   With no full block beside the roof cell at either height (a flower or crop is no support) it does not dig
   (dig_in_failed warning, :no-roof-support).
   Walls: a cell the server refuses is retried after the others, and given up after two refusals; a cell occupied by a block a mob walks through (torch, sapling, cobweb) is dug once and placed again;
   a door, gate or trapdoor beside the body counts as a wall only when shut, an open one is shut with one click, an iron one is given up on.
-  Fails (dig_in_failed warning) after three failures in a row to dig, or at once when a walls attempt fails or:
-  a hazard is below, no floor is under the pit, no block can roof the pit, or the carried tools cannot harvest the block below.
+  Fails (dig_in_failed warning) after three failures in a row to dig, to descend or to place the roof, or at once when a walls
+  attempt fails or the pit is ruled out (see dig).
   Every end with no roof over the body leaves a :dig-in-futile {:pos :reason} entry,
   and the start declines while one lies within 8 blocks. An entry with no :reason (a lack of blocks or tools)
   is retried once blocks are carried or a carried tool harvests the block.
@@ -73,14 +74,14 @@
   :take-back lists the placed {:cell :item} dearer than :take-back-value, and any within 2 of a fence gate a plan wants, which leave! digs again by day.
   Plug mode adds :room true. A shelter sealed again where the latest entry stood keeps that entry's :start and :door.
   Leaving is jobs.lib.dig-in-leave/leave!, which jobs.survival.night calls by day.
-  Quote: time by the open cells to place or the pit to dig; done 1 shelter. The pit's step into its own cell is a raw moveTo
-  (the planner has no standable goal inside the pit being dug).")
+  Quote: time by the open cells to place or the pit to dig; done 1 shelter.")
 
 (a/defargs args
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh/default-roof-height}
    :wall-value {:doc "a block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85, stone 2.85, planks 3.4, log 12.8) walls the body in only when no pit can be dug" :spec (a/num-in 0 nil) :default 3}
    :take-back-value {:doc "a placed block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85) is dug again and collected when the shelter is left by day" :spec (a/num-in 0 nil) :default 0.5}
    :max-places {:doc "placements per step" :spec (a/int-in 1 nil) :default 4}
+   :hand-clear-ms {:doc "a block the carried tools cannot harvest is dug by hand, once a block to roof with is in hand, when the hand breaks it within this many ms (stone by hand takes 7500)" :spec (a/int-in 0 nil) :default 10000}
    :on-lava {:doc ":seal: lava the dig lays open in or beside the hole is filled with a carried block; :stop: the dig is given up (:fluid-adjacent)" :spec #{:seal :stop} :default :seal}
    :enclose {:doc "wall in under a roof already overhead: walls only, never a pit; ends :no-blocks when too few blocks are carried" :spec boolean? :default false}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
@@ -179,23 +180,21 @@
 
 (defn ^:async step [c]
   (await (mode/choose-mode c))
-  (let [{:keys [mode target-y]} (ctx/mem c)]
+  (let [{:keys [mode]} (ctx/mem c)]
     (cond
       (= :plug mode) (await (walls/plug-round c))
       (= :walls mode) (await (walls/walls-round c))
-      (= :no-roof-support mode) (mode/no-roof-round c)
-      (= :no-floor mode) (mode/no-floor-round c)
+      (= :pit-stop mode) (pit/pit-stop-round c)
       (= :spared mode) (mode/spared-round c)
       (= :no-blocks mode) (do (site/remember-material! c {:pos (sh/feet (:primitives c))}) :done)
-      (> (:y (sh/feet (:primitives c))) target-y) (await (if (seq (:plugs (:shape (ctx/mem c)))) (pit/zigzag-round c) (pit/descend-round c)))
-      :else (await (pit/roof-round c)))))
+      :else (await (pit/pit-round c)))))
 
 (defn spent-text [spent]
   (str/join ", " (map (fn [[item n]] (str n " " item)) (sort-by (comp - val) spent))))
 
 (def fact-stops
   "The stops that name a fact of the site (condition-failed); the others are tries that failed (nothing-possible)."
-  #{:no-blocks :no-tool :spared :no-roof-support :no-floor :fluid-here :fluid-adjacent :fluid-above :hazard-below})
+  #{:no-blocks :no-tool :spared :no-roof-support :no-floor :fluid-here :fluid-adjacent :fluid-above :hazard-below :lays-open})
 
 (defn stop-ending
   "The ending of a call that left the body unroofed, by the reason noted in memory (:unsealed when none)."

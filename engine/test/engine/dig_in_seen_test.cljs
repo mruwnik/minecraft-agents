@@ -106,7 +106,7 @@
       (fn ^:async t []
         (let [{:keys [p] :as s} (await (run-hover! {:blocks (assoc ground "0,62,0" "air")}))]
           (is (= 64 (feet-y p)))
-          (is (re-find #"air under" (str (:text (first (failed s)))))))))))
+          (is (re-find #"air.*laid open" (str (:text (first (failed s)))))))))))
 
 (deftest rock-seen-under-the-hole-is-stepped-into-after-the-look
   (async done

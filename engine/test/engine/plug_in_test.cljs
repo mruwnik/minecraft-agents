@@ -71,6 +71,26 @@
           (is (= [:done :pit] [(:kind out) (:way (:data out))]))
           (is (= [[0 63 0] [0 62 0]] (cells-of p "dig"))))))))
 
+(deftest a-pit-that-cannot-be-planned-is-dropped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[world inventory] [[(assoc ct/deep-dead-end "0,63,0" "water") pick]
+                                   [ct/deep-dead-end [{:name "wooden_hoe" :count 1}]]]
+                :let [world {:blocks world :inventory inventory :entities [(ct/zombie 1 64 0)]}]]
+          (let [{:keys [out p]} (await (plug! world {:ways #{:pit}}))]
+            (is (= [:nothing-possible :no-way [:pit]] [(:kind out) (:cause out) (get-in out [:data :dropped])]))
+            (is (empty? (cells-of p "dig")) "nothing dug")))))))
+
+(deftest a-pit-that-stops-names-its-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[status reason] [["no-support" :roof-failed] ["failed" :roof-failed]]
+                :let [refuse (fn [p] (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status status})))
+                      {:keys [out]} (await (plug! {:blocks ct/deep-dead-end :inventory pick :entities [(ct/zombie 1 64 0)]} {:ways #{:pit}} refuse))]]
+          (is (= [:nothing-possible reason] [(:kind out) (get-in out [:data :stops :pit :reason])])))))))
+
 (deftest a-pocket-is-dug-and-its-way-in-sealed
   (async done
     (tu/run-async done

@@ -12,11 +12,24 @@
 (defn enclosed? [c]
   (dig-cells/sealed-in? (:primitives c) :walls (:roof-height (:args c))))
 
-(defn done? [c way]
+(defn placed
+  "The spent summary and the blocks placed so far ({:cell [x y z] :item name}), for an ending's data."
+  [c]
+  (assoc (spent/summary (spent/log c)) :placed (:placed-cells (ctx/mem c) [])))
+
+(defn result
+  "What a way's ending carries beyond the position: the blocks placed (placed) and, for a pit, its :roof and :start (the cell dug from)."
+  [c]
+  (merge (placed c) (when-let [pit (:pit (ctx/mem c))] {:roof (:roof pit) :start (:anchor pit)})))
+
+(defn done?
+  "The goal of a way: enclosed. Its result is the position and way with what extra (default the way's own result) adds."
+  ([c way] (done? c way (result c)))
+  ([c way extra]
   (let [done (enclosed? c)]
     (checks/goal done [:enclosed "the body is enclosed"] [:open "the body is not enclosed"]
                  {:units :enclosures :done (if done 1 0) :left (if done 0 1)
-                  :result {:pos (sh/feet (:primitives c)) :way way}})))
+                  :result (merge {:pos (sh/feet (:primitives c)) :way way} extra)}))))
 
 (defn quote-of
   "Time of a way: 0 once enclosed, else seconds (##Inf when it cannot be done here, which plug-in drops)."
@@ -32,10 +45,11 @@
     :again :again
     nil))
 
-(defn placed
-  "The spent summary and the blocks placed so far ({:cell [x y z] :item name}), for an ending's data."
-  [c]
-  (assoc (spent/summary (spent/log c)) :placed (:placed-cells (ctx/mem c) [])))
+(defn stop!
+  "Job memory: why the way ends nothing-possible ({:stop reason :text :needs} of retreat-pit/stop), for run!."
+  [c {:keys [stop text needs]}]
+  (ctx/update-mem! c assoc :stop (cond-> {:reason stop :text text} needs (assoc :needs needs)))
+  nil)
 
 (defn ^:async run!
   "Steps of the way (step!: :done, :again, or nil when it fails) with a timer between, to the call's end. A place refused for a mob
@@ -43,6 +57,11 @@
   [c way step!]
   (await (pace/steps! c (fn ^:async way-step []
                           (case (await (step! c))
-                            :done (ctx/end c :done nil (merge {:pos (sh/feet (:primitives c)) :way way} (placed c)))
+                            :done (ctx/end c :done nil (merge {:pos (sh/feet (:primitives c)) :way way} (result c)))
                             :again (if (:seal-mob-since (ctx/mem c)) :continue :again)
-                            (ctx/end c :nothing-possible :failed (merge {:text (or (:seal-refusal (ctx/mem c)) (str "the " (name way) " cannot enclose the body here")) :status (:seal-status (ctx/mem c))} (placed c))))))))
+                            (let [{:keys [reason text needs]} (:stop (ctx/mem c))]
+                                     (ctx/end c :nothing-possible :failed
+                                              (merge {:text (or text (:seal-refusal (ctx/mem c)) (str "the " (name way) " cannot enclose the body here")) :status (:seal-status (ctx/mem c))}
+                                                     (when reason {:reason reason})
+                                                     (when needs {:needs needs})
+                                                     (result c)))))))))

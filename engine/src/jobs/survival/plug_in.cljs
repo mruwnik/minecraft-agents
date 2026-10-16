@@ -19,7 +19,7 @@
   It quotes the ways the call allows, starts the cheapest (ties in the order walls, pit, pocket) and, when that one ends other than
   :done, the next cheapest (after a :continue step when a hostile is within 2 blocks); a way that cannot be done here (quote ##Inf) is dropped. Blocks are the call's :use :blocks, else every
   :build filler, carried or dug. None left is nothing-possible :no-way {:text :tried [ways that failed] :dropped [ways that cannot be done]
-  :why {way the child's cause}}.
+  :why {way the child's cause} :stops {way {:reason :needs}} (plug-pit's stop reason)}.
   :placed the blocks placed ({:cell [x y z] :item}), also with an ending other than :done. Every placed block goes to the scaffold ledger with :purpose (default :retreat-plug, taken back by jobs.access.cleanup once no
   hostile is near; :shelter is left alone). A cell in another's zone is used only as a last resort (retreat.trespass-last-resort).
   Quote: time.")
@@ -31,6 +31,7 @@
    :radius {:doc "melee hostiles within this many blocks decide which side is walled first and stand in the way of a cell" :spec (a/num-in 0 nil) :default 8}
    :ranged-radius {:doc "ranged hostiles within this many blocks decide which side is walled first" :spec (a/num-in 0 nil) :default 16}
    :max-places {:doc "placements per step" :spec (a/int-in 1 nil) :default 4}
+   :hand-clear-ms {:doc "a pit digs a block the carried tools cannot harvest by hand, once a block to roof with is in hand, when the hand breaks it within this many ms (stone by hand takes 7500); default jobs.lib.tools quick-clear-ms" :spec (a/int-in 0 nil)}
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pit or pocket is dropped and the lava left" :spec #{:seal :stop} :default :seal}})
 
 (a/defargs settings
@@ -50,10 +51,10 @@
 (def children
   "Each way's job and the args of this call it takes."
   {:walls ['jobs.survival.plug-walls [:purpose :roof-height :radius :ranged-radius :max-places]]
-   :pit ['jobs.survival.plug-pit [:purpose :roof-height :radius :on-lava]]
+   :pit ['jobs.survival.plug-pit [:purpose :roof-height :radius :on-lava :hand-clear-ms]]
    :pocket ['jobs.survival.plug-pocket [:purpose :roof-height :radius :ranged-radius :max-places :on-lava]]})
 
-(defn done? [c] (way/done? c (:way (ctx/mem c))))
+(defn done? [c] (way/done? c (:way (ctx/mem c)) (merge (spent/summary (spent/log c)) (select-keys (ctx/mem c) [:placed :roof :start]))))
 
 (defn quote-of [c]
   (let [mean (if (way/enclosed? c) 0 (settings/get settings ::mean-s))]
@@ -83,13 +84,13 @@
 (defn end!
   "The call's ending with what the children placed."
   [c kind cause data]
-  (ctx/end c kind cause (merge data (spent/summary (spent/log c)) (select-keys (ctx/mem c) [:placed]))))
+  (ctx/end c kind cause (merge data (spent/summary (spent/log c)) (select-keys (ctx/mem c) [:placed :roof :start]))))
 
 (defn absorb!
   "A child's ending: what it placed goes in the log and in :placed."
   [c data]
   (spent/absorb! c data)
-  (ctx/update-mem! c update :placed (fnil into []) (:placed data)))
+  (ctx/update-mem! c #(-> % (update :placed (fnil into []) (:placed data)) (merge (select-keys data [:roof :start])))))
 
 (def adjacent-reach
   "Blocks within which a hostile is at the body: a way that failed ends the step so the round and the triggers see it before the next way starts."
@@ -99,19 +100,19 @@
   "Start the cheapest way; one that ends other than :done is dropped for this call and the next is chosen on the next step when a hostile is at the body, else at once."
   [c]
   (loop []
-    (if (way/enclosed? c)
+    (if (and (way/enclosed? c) (not (:way (ctx/mem c))))
       (end! c :done nil {:pos (sh/feet (:primitives c)) :way (:way (ctx/mem c))})
       (let [chosen (when-not (:way (ctx/mem c)) (await (choose c)))
             _ (when chosen (ctx/update-mem! c #(-> % (assoc :way (:way chosen)) (update :dropped (fn [d] (vec (distinct (into (or d []) (:dropped chosen)))))))))
             way (:way (ctx/mem c))]
         (if (nil? way)
           (end! c :nothing-possible :no-way {:text (str "cannot enclose the body: " (if-let [why (seq (vals (:why (ctx/mem c))))] (str/join "; " why) "no way left that can be done here"))
-                                             :tried (vec (:failed-ways (ctx/mem c))) :dropped (:dropped (ctx/mem c)) :why (:why (ctx/mem c)) :statuses (:statuses (ctx/mem c))})
+                                             :tried (vec (:failed-ways (ctx/mem c))) :dropped (:dropped (ctx/mem c)) :why (:why (ctx/mem c)) :statuses (:statuses (ctx/mem c)) :stops (:stops (ctx/mem c))})
           (let [e (await (ctx/call c way (first (children way)) (child-args c way)))]
             (cond
               (= :continue e) :continue
               (= :done (:kind e)) (do (absorb! c (:data e))
                                       (end! c :done nil {:pos (sh/feet (:primitives c)) :way way}))
               :else (do (absorb! c (:data e))
-                        (ctx/update-mem! c #(-> % (dissoc :way) (update :failed-ways (fnil conj #{}) way) (assoc-in [:why way] (or (:text (:data e)) (:cause e))) (assoc-in [:statuses way] (:status (:data e)))))
+                        (ctx/update-mem! c #(-> % (dissoc :way) (update :failed-ways (fnil conj #{}) way) (assoc-in [:why way] (or (:text (:data e)) (:cause e))) (assoc-in [:statuses way] (:status (:data e))) (assoc-in [:stops way] (select-keys (:data e) [:reason :needs]))))
                         (if (seq (combat/hostiles (:primitives c) adjacent-reach)) :continue (recur))))))))))

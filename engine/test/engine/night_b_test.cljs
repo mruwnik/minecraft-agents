@@ -206,7 +206,7 @@
           (await (core/tick! eng))
           (is (= 10 (count (st/calls p "place"))) "walled and roofed in one call")
           (is (= [] (:list (core/state eng)))))
-        (let [{:keys [eng p seen]} (st/setup {:time night :blocks st/floor})]
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks (merge st/ground st/floor)})]
           (st/refuse-placing! p)
           (core/submit! eng '(jobs.survival.dig-in) {})
           (await (core/tick! eng))

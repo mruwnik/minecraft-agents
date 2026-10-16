@@ -4,7 +4,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.test-util :as tu]
             [engine.dig-in-seen-test :as seen]
-            [jobs.survival.dig-in.mode :as dig-mode]))
+            [jobs.survival.retreat-pit :as pit]))
 
 (def tunnel
   "Rock round an east-west tunnel: air at x 0..3, y 65..66, z 0."
@@ -46,7 +46,7 @@
 
 (deftest only-a-bad-cell-in-the-first-two-of-the-column-keeps-the-straight-shape
   (let [start {:x 0 :y 65 :z 0}
-        shape (fn [bad] (dig-mode/refused-column (tu/fake {:self {:pos {:x 0 :y 65 :z 0}}
+        shape (fn [bad] (pit/refused-column (tu/fake {:self {:pos {:x 0 :y 65 :z 0}}
                                                          :blocks (assoc seen/ground bad "lava")})
                                                start {:depth 3}))]
     (is (some? (shape "0,64,0")))
@@ -65,8 +65,8 @@
   (let [zombie {:id 1 :uuid "u1" :name "zombie" :kind "hostile" :pos {:x 1.5 :y 65 :z 0.5}}
         cell {:x 1 :y 65 :z 0}
         p (fn [es] (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :blocks seen/ground :entities es}))]
-    (is (true? (dig-mode/side-ok? (p []) cell)))
-    (is (false? (dig-mode/side-ok? (p [zombie]) cell)))))
+    (is (true? (pit/side-open? {:primitives (p []) :args {:radius 8}} cell)))
+    (is (false? (pit/side-open? {:primitives (p [zombie]) :args {:radius 8}} cell)))))
 
 (deftest a-plug-answered-occupied-by-a-block-that-does-not-seal-ends-the-call
   (async done

@@ -1,6 +1,5 @@
 (ns jobs.survival.dig-in.site
-  "What the dig-in modes share: the stop reason of a call, the :dig-in-futile entries a failed site leaves, and the
-  refusal count of one cell."
+  "What the dig-in modes share: the stop reason of a call, and the :dig-in-futile entries a failed site leaves."
   (:require [engine.ctx :as ctx]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]))
@@ -28,10 +27,6 @@
   (let [result (u/fail! c :dig_in_failed text)]
     (when (= :done result) (remember-failed-site! c reason))
     result))
-
-(def max-refusals
-  "Times the place primitive may refuse one wall cell before it is given up on."
-  2)
 
 (defn open-text [cells]
   (str "open cells " (pr-str (mapv (juxt :x :y :z) cells))))

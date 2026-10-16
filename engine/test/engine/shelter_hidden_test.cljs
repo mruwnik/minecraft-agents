@@ -55,7 +55,7 @@
       (fn ^:async t []
         (let [p (await (seen-world {}))
               plan (pit/pit-plan (ctx-of p) {:x -1 :y 64 :z 0})]
-          (is (= 61 (:target-y plan)) "three deep on flat ground, every cell read as stone behind the seen floor"))))))
+          (is (= 61 (:y (:to (peek (:steps plan))))) "three deep on flat ground, every cell read as stone behind the seen floor"))))))
 
 (deftest a-seen-fluid-beside-the-pit-still-rules-it-out
   (async done
