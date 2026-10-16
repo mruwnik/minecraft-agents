@@ -462,10 +462,6 @@
   (let [{:keys [stream-id last-seq]} @stream]
     {:stream-id stream-id :seq last-seq}))
 
-(defn cursor-map [stream]
-  (let [{:keys [stream-id last-seq]} @stream]
-    {:stream-id stream-id :seq last-seq}))
-
 (defn first-start-after
   "Byte offset of the first line whose :seq exceeds after, or size when there is
   none. Binary search over byte offsets; reads one line per probe."

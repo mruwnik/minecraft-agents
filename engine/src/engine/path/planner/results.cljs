@@ -19,8 +19,6 @@
 
 (defn- phrase [verb noun n] (when (pos? n) (str verb " " n " " noun (if (> n 1) "s" ""))))
 
-(defn- move-of [^js step] (.-move step))
-
 (defn- climbing-move? [m] (and (>= m MOVE-CLIMB-UP) (<= m MOVE-OPEN)))
 
 (defn- swimming-move? [m] (>= m MOVE-SWIM))

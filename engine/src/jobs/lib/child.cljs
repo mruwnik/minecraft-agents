@@ -73,15 +73,6 @@
   [c slot args]
   (first (await (call-walk-reason c slot args))))
 
-(defn ^:async call-walk-leg
-  "One leg of a walk: resolves to [:danger d] when (danger) answers d (the walk is not made, the caller yields so the
-  reflex can act), else [r] of call-walk in slot with args and :spend {:job-time leg-s}. The leg ends {:arrived false :leg true} in the go-to
-  result while the goal is still ahead; the caller weighs danger again by calling it again."
-  [c slot args leg-s danger]
-  (if-let [d (danger)]
-    [:danger d]
-    [(await (call-walk c slot (assoc-in args [:spend :job-time] leg-s)))]))
-
 (def entry-depth "Blocks below both ends a walk to or from a line's entry may plan." 16)
 
 (defn walk-into-args [slot cell]

@@ -9,7 +9,6 @@
   direction it runs, line the other horizontal coordinate. The id comes from the geometry (\"x-27-290:-180..-160\").
   Memory is a map id -> segment, with :state kept by the caller.")
 
-(def sea-level 63)
 (def run-gap "Evidence further apart than this on one line belongs to different runs." 9)
 (def join "Reach at which two perpendicular runs count as crossing." 7)
 (def end-reach "Cells walked past the last evidence looking for a corridor's end." 6)
@@ -52,17 +51,6 @@
                    [:z (or (rail? (idx [x y (inc z)])) (rail? (idx [x y (dec z)])))]]
         :when ok]
     {:axis axis :y y :line (if (= axis :x) z x) :a (if (= axis :x) x z) :kind :rail}))
-
-(defn site?
-  "Whether the blocks within :radius (32) of cell look like an abandoned mineshaft: two supports, or one support and a
-  rail or cobweb, all below :sea-level (63). Houses, fences and a lone rail are not."
-  [blocks cell {:keys [radius sea-level-y] :or {radius 32 sea-level-y sea-level}}]
-  (let [near? (fn [{:keys [pos]}] (every? #(<= (js/Math.abs (- (% pos) (% cell))) radius) [:x :z]))
-        idx (index (filter near? blocks))
-        sup (filter #(< (:y %) sea-level-y) (supports idx))
-        sup-n (count (distinct (map (juxt :axis :y :line :a) sup)))
-        extra (count (filter (fn [[[_ y _] n]] (and (< y sea-level-y) (or (rail? n) (= n "cobweb")))) idx))]
-    (or (>= sup-n 2) (and (= sup-n 1) (pos? extra)))))
 
 (defn runs
   "Runs of evidence in idx: [{:axis :y :line :from :to}], each holding a support or min-rails rails."

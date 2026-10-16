@@ -43,10 +43,3 @@
   ([c kind job-name action pos] (allowed? c kind job-name action pos {}))
   ([c kind job-name action pos opts] (boolean (seq (allowed c kind job-name action [pos] opts)))))
 
-(defn wait-unless-set
-  "For a check's last resort: waits with reason unless a wait is already set (a decline warn from the gate
-  names the refusal), so the more specific reason is the one the body reports. Returns false."
-  [c reason]
-  (if (some-> (:wait c) deref)
-    false
-    (ctx/wait c reason)))

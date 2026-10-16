@@ -31,15 +31,6 @@
 (defn body-dir [state-dir world name]
   (path/join (worlds-dir state-dir) (checked "world" world) "agents" (checked "name" name)))
 
-(defn account-dir [state-dir name]
-  (path/join (if (string? state-dir) (path/join state-dir "accounts")
-                (path/join (worlds-dir state-dir) ".accounts")) (checked "name" name)))
-
-(defn world-of-body-dir
-  "The world of a body folder: the name of the folder two levels up."
-  [dir]
-  (path/basename (path/dirname (path/dirname (path/resolve dir)))))
-
 (defn- dir-names [dir]
   (if-not (fs/existsSync dir)
     []

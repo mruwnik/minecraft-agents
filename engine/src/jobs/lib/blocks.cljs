@@ -123,14 +123,6 @@
   (and (<= (u/eye-dist (u/self-pos c) pos) forestry/dig-reach)
        (or (not see?) (aim/body-sees? c (if (vector? pos) pos (u/cell-vec pos))))))
 
-(defn unreachable-wait
-  "The wait reason {:reason :unreachable :pos :why} for the failed walk remembered in memory m, while the body still
-  stands in the cell it gave up from. Once the body has moved, nil (it tries again)."
-  [c m pos]
-  (when-let [{:keys [from why]} (:unreachable m)]
-    (when (= from (feet-cell c))
-      {:reason :unreachable :pos pos :why why})))
-
 (defn fresh-mem
   "Job memory m for target pos: m when it is about pos, else emptied (children too) and marked for pos. Gives a
   parent that reuses one slot a clean child per cell."
@@ -166,19 +158,6 @@
 (def cell-reasons
   "Wait reasons about the cell that can appear mid-call (a zone added, a block moved in): the call declines."
   #{:not-allowed :hazard :not-loaded :own-body :no-support})
-
-(defn refused-now
-  "Whether wait reason w (a job's problem, or nil) is one the cell turned into during the call; the wait is noted for
-  the caller's check."
-  [c w]
-  (when (contains? cell-reasons (:reason w))
-    (ctx/wait c w)
-    true))
-
-(defn unreachable!
-  "Remember the failed walk (why a keyword) as :unreachable {:from feet :why}, which the check waits on."
-  [c why]
-  (ctx/update-mem! c assoc :unreachable {:from (feet-cell c) :why why}))
 
 (defn kept-out-text [pens]
   (str "the walk failed while keeping out of the gate of a pen holding animals: "

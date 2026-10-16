@@ -14,7 +14,6 @@
         custom (bodies/storage-root {:worlds "/data/custom-name"} "/repo")]
     (is (= "/repo/worlds/w/agents/Bob" (bodies/body-dir root "w" "Bob")))
     (is (= "/data/custom-name/w/agents/Bob" (bodies/body-dir custom "w" "Bob")))
-    (is (= "/repo/worlds/.accounts/Bob" (bodies/account-dir root "Bob")))
     (is (= "/legacy/worlds/w/agents/Bob" (bodies/body-dir (bodies/storage-root {:state "/legacy"} "/repo") "w" "Bob")))
     (is (thrown-with-msg? js/Error #"choose" (bodies/storage-root {:state "/legacy" :worlds "/data"} "/repo")))))
 
@@ -27,12 +26,7 @@
     "w" ".." #"name"
     ".." "Bob" #"world"))
 
-(deftest account-dir-is-outside-every-world
-  (is (= (path/join "/s" "accounts" "Bob") (bodies/account-dir "/s" "Bob")))
-  (is (re-find #"name" (try (bodies/account-dir "/s" "../x") "" (catch :default e (ex-message e))))))
-
-(deftest world-of-body-dir-and-missing-world-text
-  (is (= "test" (bodies/world-of-body-dir (bodies/body-dir "/s" "test" "Bob"))))
+(deftest missing-world-text
   (is (re-find #"--world <world>" (bodies/missing-world-error "--world"))))
 
 (deftest list-bodies-reads-every-world

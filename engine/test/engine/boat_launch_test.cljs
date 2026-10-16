@@ -227,11 +227,6 @@
     (is (= [:look :no-water] ((juxt first #(:reason (nth % 2))) (bl/no-water (c {})))))
     (is (= [:look :no-room] ((juxt first #(:reason (nth % 2))) (bl/no-water (c {:blocks channel})))))))
 
-(deftest recover-is-out-of-time-when-the-calls-time-line-is-spent
-  (are [left out?] (= out? (boolean (u/out-of-time? {:left (constantly {:spend {:job-time left}})})))
-    0 true
-    5 false))
-
 (deftest done-carries-the-result-so-far-for-a-limit-ending
   (let [c (fn [m args] {:primitives (tu/fake {}) :root "j1" :slots [] :args args
                         :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data m}]}}})})]

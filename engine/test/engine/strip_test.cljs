@@ -55,19 +55,6 @@
              ["z-27-0:0..20" :z 0 20 #{}]}
            (summary segs)))))
 
-(deftest site-needs-supports
-  (let [site (t-world (constantly false))
-        house (blocks-of (merge (into {} (for [x (range 3) z (range 3) h [0 3]] [[x (+ 70 h) z] "oak_planks"]))
-                                {[1 71 1] "oak_fence" [1 72 1] "oak_fence"}))
-        lone-rail (blocks-of {[0 -27 0] "rail"})]
-    (are [blocks cell yes] (= yes (strip/site? blocks cell {}))
-      site [0 y 8] true
-      house [1 71 1] false
-      lone-rail [0 -27 0] false)))
-
-(deftest fences-and-planks-above-the-sea-are-not-a-site
-  (is (not (strip/site? (t-world (constantly false)) [0 y 8] {:sea-level-y -40}))))
-
 (deftest merge-extends-an-open-end-and-never-shrinks
   (let [first-read (strip/segments (t-world (fn [[x]] (> x 12))))
         mem (strip/merge-segments {} first-read)

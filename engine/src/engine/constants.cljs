@@ -16,8 +16,3 @@
 (def step-height "The highest rise a body walks up without a jump." (unchecked-get values "stepHeight"))
 (def gravity "The speed a falling body gains each tick, before air-drag." (unchecked-get values "gravity"))
 (def air-drag "What is left of a body's vertical speed each tick." (unchecked-get values "airDrag"))
-(def clip-tolerance
-  "Boxes this close count as touching in the client physics' collision clip, on every axis (vanilla's own 1e-7): a box a
-  rounding step into a block face is held at the face, and one resting a rounding step into a floor is not stopped by the
-  next floor block."
-  (unchecked-get values "clipTolerance"))
