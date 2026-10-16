@@ -1,0 +1,100 @@
+;; Readiness live cases L1-L6 (docs/readiness-checks-design.md): jobs.debug.ready-probe binds safe-at (:at) or safe-if-lit (:lit?) and only emits
+;; job.ready-probe once started. Register empty (no hostile reflex, no night trigger) unless a case says so; no bed anywhere.
+;; Night cases need --allow-time --time-log <the shared time log>. A stone hut x 8..16, z 8..16 with a doorway at [8 0..1 12]; the :at cell [4 0 12]
+;; lies outside it in line with the doorway.
+;; L3 (the probe run exclusive ends in one round with the reason) has no case: the runner has no exclusive step; hand probe, the engine side is run-checks-test.
+{:defaults
+ {:tags [:readiness :survival :night]
+  :time :night
+  :plot {:height 6}
+  :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"] [:fill [8 0 12] [8 1 12] "air"]
+           [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
+  :body {:at [10.5 0 12.5] :yaw 90 :settle-s 2}
+  :limit-s 100}
+ :cases
+ [;; L1: queued at night from the hut to open ground the probe waits :exposed, the body stays in, and starts once the day comes
+  {:name "l1-queued-at-night-waits-exposed-then-starts-at-day"
+   :act [[:job (jobs.debug.ready-probe {:at #at [4 0 12]})]
+         [:await {:source :job :kind :waiting :data {:reason :exposed}} 30]
+         [:wait-s 10]
+         [:time-set 1000]]
+   :expect [{:no-event {:source :job :kind :job.ready-probe} :for-s 10}
+            {:event {:source :job :kind :job.ready-probe} :within-s 90 :of-job true}]
+   :after [[:body-near [10.5 0 12.5] 5]]
+   :limit-s 120}
+  {:name "l1-stays-queued-all-night"
+   :act [[:job (jobs.debug.ready-probe {:at #at [4 0 12]})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :job.ready-probe} :for-s 25}]
+   :after [[:body-near [10.5 0 12.5] 5]]
+   :limit-s 60}
+  ;; L2: a call's :checks {:safe? (not (threatened))} replaces the exposure check: it starts at night
+  {:name "l2-override-without-the-exposure-check-starts-at-night"
+   :act [[:job (jobs.debug.ready-probe {:at #at [4 0 12] :checks {:safe? (not (threatened))}})]]
+   :expect [{:event {:source :job :kind :job.ready-probe} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 20}]
+   :limit-s 60}
+  {:name "l2-override-keeping-the-jobs-own-check-still-waits"
+   :act [[:job (jobs.debug.ready-probe {:at #at [4 0 12] :checks {:safe? (job-safe)}})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :job.ready-probe} :for-s 25}]
+   :limit-s 60}
+  ;; L4: a seen zombie (NoAI, helmeted: no sun burn, no fight) that can reach the body, no hostile reflex registered
+  {:name "l4-waits-on-the-hostile-and-starts-once-it-is-gone"
+   :time :day
+   :tags [:readiness :survival :hostile]
+   :body {:at [16.5 0 16.5] :settle-s 2}
+   :blocks [[:fill [8 0 8] [16 3 16] "air"]]
+   :act [[:summon "zombie" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.debug.ready-probe {})]
+         [:await {:source :job :kind :waiting :data {:reason :hostile-near}} 30]
+         [:rcon "kill @e[type=zombie,$BOX]"]]
+   :expect [{:event {:source :job :kind :job.ready-probe} :within-s 60 :of-job true}]}
+  {:name "l4-keeps-waiting-while-the-hostile-stays"
+   :time :day
+   :tags [:readiness :survival :hostile]
+   :body {:at [16.5 0 16.5] :settle-s 2}
+   :blocks [[:fill [8 0 8] [16 3 16] "air"]]
+   :act [[:summon "zombie" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.debug.ready-probe {})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :hostile-near}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :job.ready-probe} :for-s 25}]
+   :limit-s 60}
+  ;; L5: the night trigger is true for a body in the open; its job (safe-if-lit) holds at night above ground, so the trigger is held, not fired
+  {:name "l5-night-trigger-with-a-lit-bound-job-is-held"
+   :body {:at [4.5 0 12.5] :settle-s 2}
+   :register [{:trigger :night :persistence :cooldown :cooldown-s 2 :job (jobs.debug.ready-probe {:lit? true})}]
+   :expect [{:event {:source :reflex :kind :held :data {:reason :dark}} :within-s 40}
+            {:no-event {:source :reflex :kind :fired} :for-s 30}
+            {:no-event {:source :job :kind :job.ready-probe} :for-s 30}]
+   :limit-s 60}
+  {:name "l5-night-trigger-whose-job-overrides-the-check-fires"
+   :body {:at [4.5 0 12.5] :settle-s 2}
+   :register [{:trigger :night :persistence :cooldown :cooldown-s 2 :job (jobs.debug.ready-probe {:lit? true :checks {:safe? (always)}})}]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night}} :within-s 40}
+            {:event {:source :job :kind :job.ready-probe} :within-s 40}
+            {:no-event {:source :reflex :kind :held} :for-s 20}]
+   :limit-s 60}
+  ;; L6: a queued job's :checks survive a body restart: with the zombie gone the override starts it (without it the walk out stays :exposed)
+  {:name "l6-queued-override-is-kept-over-a-restart"
+   :tags [:readiness :survival :night :hostile]
+   :mobs :keep
+   :act [[:summon "zombie" [4.5 0 12.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.debug.ready-probe {:at #at [4 0 12] :checks {:safe? (not (threatened))}})]
+         [:await {:source :job :kind :waiting :data {:reason :hostile-near}} 30]
+         [:restart-body]
+         [:wait-s 8]
+         [:rcon "kill @e[type=zombie,$BOX]"]]
+   :expect [{:event {:source :job :kind :job.ready-probe} :within-s 90}
+            {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 40}]
+   :limit-s 120}
+  {:name "l6-queued-override-still-waits-after-a-restart-while-the-hostile-stays"
+   :tags [:readiness :survival :night :hostile]
+   :mobs :keep
+   :act [[:summon "zombie" [4.5 0 12.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.debug.ready-probe {:at #at [4 0 12] :checks {:safe? (not (threatened))}})]
+         [:await {:source :job :kind :waiting :data {:reason :hostile-near}} 30]
+         [:restart-body]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :hostile-near}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :job.ready-probe} :for-s 40}]
+   :limit-s 80}]}
