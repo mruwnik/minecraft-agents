@@ -217,6 +217,19 @@
         (let [{:keys [eng]} (bd/setup {:self body})]
           (is (= {:kind :impossible :cause :bad-args} (update (await (ending-of {:eng eng} {:pos at} 3)) :cause :reason))))))))
 
+(deftest a-facing-turns-the-body-so-the-block-is-oriented-that-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [facing ["north" "south" "east" "west"]]
+          (let [{:keys [eng]} (bd/setup {:self body :inventory [{:name "oak_stairs" :count 1}]})
+                result (await (tu/child-outcome eng job {:pos [2 64 0] :item "oak_stairs" :facing facing} 5))]
+            (is (= facing (get-in result [:block :state :facing])))))))))
+
+(deftest facing-with-click-is-bad-args
+  (are [args] (= [:never :bad-args] (tu/kind-reason (place/can-start? {:args (merge {:pos [2 64 0] :item "oak_stairs"} args) :primitives (:p (bd/setup {:self body}))})))
+    {:facing "east" :click {:against [2 63 0] :cursor [0.5 1 0.5]}}))
+
 (deftest a-cell-of-the-bodys-own-plan-is-placed-another-bodys-plan-refuses
   (async done
     (tu/run-async done

@@ -55,6 +55,7 @@
    :enter-pens {:doc "true: the walk to the cell may go through the gate of a pen holding animals; false: it keeps out of those gates and, with no other way, declines (a :blocks.pen-kept-out warn names the pen)" :spec boolean? :default false}
    :clear {:doc "dig a plant, flower or snow layer out of the cell first; false places into what a placement overwrites" :spec boolean? :default true}
    :click {:doc "how to place it ({:against [x y z] :cursor [x y z] :yaw :pitch :sneak}, jobs.lib.placement/click); nil: plainly" :spec map? :default nil}
+   :facing {:doc "north, south, east or west: the way a facing block (bed head, gate, door, stairs) is oriented; the body looks that way as it places (jobs.lib.placement); not with :click; nil: as the body stands" :spec (a/pred "north, south, east or west" #{"north" "south" "east" "west"}) :default nil}
    :fetch {:doc "get the missing block item instead of waiting :need (jobs.lib.need): true, a set of kinds or a map of limits" :spec need/option? :default true}})
 
 (def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
@@ -81,6 +82,7 @@
         items (wanted c)]
     (cond
       error {:error error}
+      (and (:facing (:args c)) (:click (:args c))) {:error "takes :facing or :click, not both"}
       (not (and (seq items) (every? string? items))) {:error "needs :item, or a :use {:blocks [names]} listing one"}
       :else {:pos pos :items items})))
 
@@ -208,19 +210,33 @@
         "no-item" "the item is not carried"
         (str "the primitive answered " (.-status r)))))
 
+(defn click-for
+  "{:click} of the call's :click, else the one that turns a :facing block (jobs.lib.placement); {:refused kw} when no
+  click gives that facing; {} to place plainly."
+  [c pos item]
+  (let [{:keys [click facing]} (:args c)
+        p (:primitives c)
+        block-at (fn [cell] (some-> (u/seen-block p (zipmap [:x :y :z] cell)) .-name (->> (hash-map :name))))]
+    (cond
+      click {:click click}
+      facing (select-keys (placement/click {:block item :facing facing} [(:x pos) (:y pos) (:z pos)] (placement/eye (u/self-pos c)) block-at) [:click :refused])
+      :else {})))
+
 (defn ^:async place!
   "Place the chosen item. Resolves to the ending, or :unreachable (the primitive says out of reach)."
   [c pos items]
   (let [item (b/chosen c items)
-        click (:click (:args c))
-        r (await (tidy/place! c pos item false (some-> click placement/js-click)))
-        status (.-status r)]
-    (case status
-      "placed" (finish! c :done nil (cond-> {:placed true :pos pos :item item :reason :placed}
-                                      (.-placed r) (assoc :block {:name (.-name (.-placed r))
-                                                                  :state (js->clj (.-properties (.-placed r)) :keywordize-keys true)})))
-      "unreachable" :unreachable
-      (stop! c :nothing-possible {:placed false :pos pos :item item :reason :failed :primitive status :why (refusal-why r)}))))
+        {:keys [click refused]} (click-for c pos item)]
+    (if refused
+      (stop! c :nothing-possible {:placed false :pos pos :item item :reason :failed
+                                  :why (str "no way to place " item " facing " (:facing (:args c)) ": " (name refused))})
+      (let [r (await (tidy/place! c pos item false (some-> click placement/js-click)))]
+        (case (.-status r)
+          "placed" (finish! c :done nil (cond-> {:placed true :pos pos :item item :reason :placed}
+                                          (.-placed r) (assoc :block {:name (.-name (.-placed r))
+                                                                      :state (js->clj (.-properties (.-placed r)) :keywordize-keys true)})))
+          "unreachable" :unreachable
+          (stop! c :nothing-possible {:placed false :pos pos :item item :reason :failed :primitive (.-status r) :why (refusal-why r)}))))))
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
