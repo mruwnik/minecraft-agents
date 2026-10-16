@@ -95,7 +95,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (world [{:name "iron_ingot" :count 8} {:name "stick" :count 2}] {})
+        (let [s (start (world [{:name "stick" :count 2}] {})
                        {:items ["iron_pickaxe" "iron_helmet" "iron_boots"] :explore false :min-food 0})]
           (await (f/run-ticks s 120))
           (is (not-any? #{"iron_pickaxe" "iron_helmet" "iron_boots"} (crafted s)))
@@ -103,6 +103,18 @@
                  (select-keys @(:out s) [:status :item :reason])))
           (is (re-find #"^kit stopped at iron_ingot: no-source" (str (:text @(:out s)))))
           (is (re-find #"iron_ingot" (str (:why @(:out s))))))))))
+
+(deftest carried-ingots-short-of-the-list-make-the-pieces-they-cover
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world [{:name "iron_ingot" :count 3} {:name "stick" :count 2}] {})
+                       {:items ["iron_pickaxe" "iron_helmet"] :explore false :min-food 0})]
+          (await (f/run-ticks s 120))
+          (is (= 1 (get (f/inv s) "iron_pickaxe")))
+          (is (nil? (get (f/inv s) "iron_helmet")))
+          (is (= {:status :stopped :item "iron_helmet" :reason :no-source}
+                 (select-keys @(:out s) [:status :item :reason]))))))))
 
 (deftest items-before-the-furnace-material-are-made-first
   (async done

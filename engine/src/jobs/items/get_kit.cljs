@@ -20,7 +20,7 @@
   Each round starts from the world: an item carried or worn (or a better armour piece worn in its slot) is skipped.
   When the next missing item needs furnace material, one jobs.items.obtain child gets what all missing pieces need together (iron_ingot: 32 for the
   whole kit, less what is carried), so the ore is mined and smelted in one go; if it cannot, the job stops at once
-  naming the material, unless raw input of it is carried: then that is smelted, the pieces it covers are made in
+  naming the material, unless some of it (raw input, or the material itself) is carried: then raw input is smelted, the pieces it covers are made in
   order and the job stops at the first one it cannot make. Then one obtain child per missing piece, in order, with :explore and a :spend :job-time of the ::minutes setting
   (longer than the fetch limit). Each piece got is an info kit.progress.
   While furnace material is still short (mining or smelting ahead; pure crafting needs no food) and fewer than
@@ -257,9 +257,9 @@
           short
           (let [[mat n] short
                 r (await (run-obtain! c :materials mat n))
-                carried-raw (get (:carried st) (get smelt-plan/made-from mat) 0)]
+                carried-some (+ (get (:carried st) (get smelt-plan/made-from mat) 0) (get (:carried st) mat 0))]
             (cond (= :continue r) :continue
-                  (and (some? r) (pos? carried-raw)) (do (ctx/update-mem! c assoc :partial (assoc r :item mat))
+                  (and (some? r) (pos? carried-some)) (do (ctx/update-mem! c assoc :partial (assoc r :item mat))
                                                          :again)
                   (some? r) (finish! c items have (assoc r :item mat))
                   :else :again))

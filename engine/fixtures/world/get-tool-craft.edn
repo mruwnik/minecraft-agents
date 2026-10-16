@@ -60,9 +60,10 @@
   {:name "stone-pick-no-cobble"
    ;; dirt over bedrock: the chain crafts a wooden pickaxe, gather's stair finds no stone (mine.no-stone-found) three times
    ;; and the job ends :stopped :no-source; stone anywhere in view would be mined for cobblestone instead (fetch by default)
-   :plot {:height 12 :floor "dirt"}
-   :blocks [[:fill [0 -2 0] [31 -2 31] "bedrock"]]
-   :body {:inventory [["oak_log" 12] ["stick" 4]]}
+   ;; a 64 plot: stone of a neighbouring plot on the 32 grid lies within sight of the 32 plot's middle
+   :plot {:height 12 :floor "dirt" :length 64 :width 64}
+   :blocks [[:fill [0 -2 0] [63 -2 63] "bedrock"]]
+   :body {:at [32.5 0 32.5] :inventory [["oak_log" 12] ["stick" 4]]}
    :act [[:job (jobs.items.get-tool {:item "stone_pickaxe" :explore false})]]
    :limit-s 150
    :expect [{:event {:source :job :level :warn :kind :stopped :data {:reason :no-source}} :within-s 140 :of-job true}]
@@ -87,8 +88,9 @@
    :after [[:item "stone_pickaxe" 1] [:item "cobbled_deepslate" 0]]}
   {:name "no-material-seen-waits-no-source"
    ;; card fd6e381b should-fail: no cobblestone/deepslate/blackstone seen: waits :no-source naming cobblestone
-   :plot {:floor "grass_block"}
-   :body {:inventory [["wooden_pickaxe" 1] ["stick" 4] ["oak_planks" 8]]}
+   ;; a 64 plot: stone of a neighbouring plot on the 32 grid lies within sight of the 32 plot's middle
+   :plot {:floor "grass_block" :length 64 :width 64}
+   :body {:at [32.5 0 32.5] :inventory [["wooden_pickaxe" 1] ["stick" 4] ["oak_planks" 8]]}
    :act [[:job (jobs.items.get-tool {:item "stone_pickaxe" :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "cobblestone"]}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-source}}}]
