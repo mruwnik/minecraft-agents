@@ -21,4 +21,10 @@
    :body {:inventory [["iron_axe" 1]]}
    :expect [{:event {:source :job :kind :harvest-wood.replant-owed :data {:reason :no-sapling}} :within-s 100 :of-job true}
             {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
-   :after [[:not-block [16 0 16] "mangrove_propagule"]]}]}
+   :after [[:not-block [16 0 16] "mangrove_propagule"]]}
+  {:name "stray-item-in-radius-not-taken"
+   :body {:inventory [["iron_axe" 1] ["mangrove_propagule" 1]]}
+   :act [[:summon "item" [3.5 0 16.5] "{Item:{id:\"minecraft:red_bed\",count:1}}"]
+         [:job (jobs.forestry.harvest-wood {:radius 32})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:item "red_bed" 0] [:block [16 0 16] "mangrove_propagule"]]}]}

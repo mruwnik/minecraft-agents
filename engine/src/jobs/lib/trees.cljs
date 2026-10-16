@@ -164,5 +164,12 @@
          (filter #(if want (= want %) (or (str/ends-with? % "_sapling") (= "mangrove_propagule" %))))
          first)))
 
-(defn drop-filter [species]
-  (when species [(str species "_log") (sapling-of species) "stick" "apple"]))
+(def all-drops
+  (vec (concat log-names (map #(sapling-of %) species) ["stick" "apple"])))
+
+(defn drop-filter
+  "The items a felled tree of the species (any species when nil) leaves: its log, planting item, sticks and apples."
+  [sp]
+  (if sp
+    [(str sp "_log") (sapling-of sp) "stick" "apple"]
+    all-drops))

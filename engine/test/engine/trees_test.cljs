@@ -19,4 +19,6 @@
 
 (deftest drop-filter-keeps-the-planting-item-of-the-species
   (is (= ["mangrove_log" "mangrove_propagule" "stick" "apple"] (trees/drop-filter "mangrove")))
-  (is (nil? (trees/drop-filter nil))))
+  (let [all (set (trees/drop-filter nil))]
+    (is (every? all ["oak_log" "oak_sapling" "mangrove_propagule" "crimson_fungus" "stick" "apple"]))
+    (is (not (all "red_bed")) "a stranger's item is not a tree drop")))
