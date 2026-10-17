@@ -534,13 +534,33 @@
           (is (= (set (map (fn [[x z]] [x 71 z]) stones)) (set (:unreached e))))
           (is (re-find #"seen ore out of reach" (:text e))))))))
 
-;; The ore is seen over the platform's rim, so only go-to's health floor decides the drop: 13 blocks (7 hp left) is refused, 5 is taken.
-(deftest a-drop-to-a-seen-ore-is-taken-only-above-the-health-floor
+;; The ore is seen over the platform's rim (radius 16: it is 14.6 away from a platform 13 high), so only go-to's health floor decides the drop.
+(defn ^:async drop-to-ore [top]
+  (await (scenario {:block "iron_ore" :count 1 :radius 16 :tunnel-length 0 :descend-limit 0 :mend false}
+                   {:blocks (assoc (merge (cells "stone" (range -4 1) (range 64 top) (range -4 5)) (cells "stone" (range 1 13) [62] (range -4 5)))
+                                   "6,63,0" "iron_ore")
+                    :bodyHitbox true :drops {"iron_ore" "raw_iron"} :self {:pos [0.5 top 0.5]} :inventory pickaxe}
+                   120)))
+
+(defn walk-texts [s] (keep :text (events-of s :unreachable)))
+
+(deftest a-drop-of-thirteen-blocks-to-a-seen-ore-is-refused-for-its-health-cost
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[top got] [[77 0] [69 1]]]
-          (let [platform (cells "stone" (range -4 1) (range 64 top) (range -4 5))
-                s (await (scenario {:block "iron_ore" :count 1 :radius 12 :tunnel-length 0 :descend-limit 0 :mend false}
-                                   {:blocks (assoc (merge platform (cells "stone" (range 1 13) [62] (range -4 5))) "6,63,0" "iron_ore") :bodyHitbox true :drops {"iron_ore" "raw_iron"} :self {:pos [0.5 top 0.5]} :inventory pickaxe} 120))]
-            (is (= got (:got (done-event s))) (str "platform top " top))))))))
+        (let [s (await (drop-to-ore 77))
+              e (done-event s)]
+          (is (= [:stopped 0] ((juxt :status :got) e)))
+          (is (= [[6 63 0]] (:unreached e)))
+          (is (= :needs-health (get-in e [:because :cause :why])))
+          (is (= 10 (get-in e [:because :data :hp-cost])))
+          (is (empty? (filter #(re-find #"stuck on drop" %) (walk-texts s))))
+          (is (= "iron_ore" (block-at s 6 63 0))))))))
+
+(deftest a-drop-of-five-blocks-to-a-seen-ore-is-taken
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (drop-to-ore 69))]
+          (is (= 1 (:got (done-event s))))
+          (is (empty? (filter #(re-find #"stuck on drop" %) (walk-texts s)))))))))
