@@ -104,14 +104,19 @@
   (let [found (grounded p cands)]
     (if (seq found) found cands)))
 
-(defn stands-for
-  "The stand cells to place or dig cell-pos from: those standable at the first of stand-levels that has any, else the
-  cell-height candidates as they are (unloaded land); never a planned cell or one in bad."
+(defn grounded-stands
+  "The stand cells to place or dig cell-pos from that can be stood on, at the first of stand-levels that has any; nil
+  when none (a cell above the ground's reach, or unloaded land)."
   [p cell-pos body-y facing planned bad]
-  (let [at (fn [y] (remove bad (stand-cells cell-pos y facing planned)))
-        cell-y (second cell-pos)]
-    (or (some #(seq (remove bad (grounded p (at %)))) (stand-levels body-y cell-y))
-        (remove bad (ground-stands p (at cell-y))))))
+  (let [at (fn [y] (remove bad (stand-cells cell-pos y facing planned)))]
+    (some #(seq (remove bad (grounded p (at %)))) (stand-levels body-y (second cell-pos)))))
+
+(defn stands-for
+  "The stand cells to place or dig cell-pos from: those standable (grounded-stands), else the cell-height candidates as
+  they are (unloaded land); never a planned cell or one in bad."
+  [p cell-pos body-y facing planned bad]
+  (or (grounded-stands p cell-pos body-y facing planned bad)
+      (remove bad (ground-stands p (remove bad (stand-cells cell-pos (second cell-pos) facing planned))))))
 
 (defn shortage
   "{item n} of the missing cells' items beyond what is carried (carried {item n})."
@@ -180,6 +185,14 @@
       :else :place)))
 
 (defn rules-input [c] (access/rules-input c {:except (:plan (:args c))}))
+
+(defn count-fail
+  "m with one more failure on pos; given up as reason at the give-up-th."
+  [m pos reason give-up]
+  (let [n (inc (get-in m [:fails pos] 0))]
+    (if (>= n give-up)
+      (-> m (update :fails dissoc pos) (assoc-in [:given-up pos] reason))
+      (assoc-in m [:fails pos] n))))
 
 (defn refuse
   "m with pos refused for good, as {:reason ...why}."

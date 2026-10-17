@@ -165,16 +165,16 @@
         stand (or (stand-behind c ps from cell) beside)
         give-up (:give-up (:args c))]
     (if-not stand
-      (do (ctx/update-mem! c build/count-fail (:pos cell) :unreachable give-up)
+      (do (ctx/update-mem! c plan/count-fail (:pos cell) :unreachable give-up)
           :again)
       (let [w (await (near/go-near! c (zipmap [:x :y :z] stand) 0 {:zone-tolls true :ways #{:walk :clear-seal}}))]
         (when (= :blocked w)
-          (ctx/update-mem! c #(-> (build/count-fail % (:pos cell) :unreachable give-up)
+          (ctx/update-mem! c #(-> (plan/count-fail % (:pos cell) :unreachable give-up)
                                   (update :bad-stands (fnil conj []) stand))))
         (when (and (= :there w) (nil? (:found cell)))
-          (ctx/update-mem! c build/count-fail (:pos cell) :unloaded give-up))
+          (ctx/update-mem! c plan/count-fail (:pos cell) :unloaded give-up))
         (when (and (= :there w) (:found cell) (empty? (build/in-reach c [cell])))
-          (ctx/update-mem! c build/count-fail (:pos cell) :unreachable give-up))
+          (ctx/update-mem! c plan/count-fail (:pos cell) :unreachable give-up))
         (if (= :partial w) :continue :again)))))
 
 (defn ^:async place-run!
@@ -209,7 +209,7 @@
           (= :cut-off (:kind r)) :continue
           (and (= :done (:kind r)) (:dug (:data r))) (do (ctx/update-mem! c update-in [:fixes pos] (fnil inc 0)) :again)
           (or (= :done (:kind r)) (#{:hazard :fluid-adjacent :cannot :unreachable} (contract/cause-key r)))
-          (do (ctx/update-mem! c build/count-fail pos :shape (:give-up (:args c))) :again)
+          (do (ctx/update-mem! c plan/count-fail pos :shape (:give-up (:args c))) :again)
           :else (ctx/end c (:kind r) (:cause r)))))))
 
 (defn ^:async fix-step!

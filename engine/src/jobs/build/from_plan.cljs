@@ -24,7 +24,8 @@
             [jobs.lib.reach :as reach]
             [plan.shape :as shape]
             [jobs.lib.check-cache :as check-cache]
-            [jobs.lib.build.plan :as plan :refer [retry-distance max-retries facing-of facing-ok? body-cells stands-for plan-trouble owed need-of shortage hazards decide rules-input refuse permitted judged no-zones planned how placeable misplaced missing digging unseen buildable problem]]
+            [jobs.lib.build.plan :as plan :refer [retry-distance max-retries facing-of facing-ok? body-cells count-fail stands-for plan-trouble owed need-of shortage hazards decide rules-input refuse permitted judged no-zones planned how placeable misplaced missing digging unseen buildable problem]]
+            [jobs.lib.build.scaffold :as scaffold]
             [jobs.lib.build.text :refer [summary announce! stopped-text assoc-fetch-failed]]))
 
 (def doc
@@ -54,6 +55,11 @@
   2. Dig the wrong blocks within reach.
   3. Walk to a stand cell one to three blocks beside the nearest buildable (or diggable) cell, on the ground there
      (the body's feet height, or one up or down on a slope).
+  3b. A cell no ground stand reaches (above reach) gets a temporary pillar (jobs.lib.build.scaffold: jobs.access.pillar
+     from a base outside every footprint, this plan's too; every block in the scaffold ledger). The cells in reach of it
+     are placed, then jobs.access.cleanup takes it back, however the call ends. A zone or footprint that refuses every base
+     refuses the cell (:refused :zone); too few pillar blocks (dirt, cobblestone) are fetched, else the call ends
+     condition-failed {:reason :needs :needs :scaffold-item}.
   4. Walk toward the nearest unloaded cell. Unseen cells are never taken as built.
   5. Finish.
   A cell whose state no neighbour gives, or with no block to click beside it yet, waits for one. If still missing at
@@ -179,14 +185,6 @@
      :done [0 n n]}))
 
 ;; ------------------------------------------------------------------ steps
-
-(defn count-fail
-  "m with one more failure on pos; given up as reason at the give-up-th."
-  [m pos reason give-up]
-  (let [n (inc (get-in m [:fails pos] 0))]
-    (if (>= n give-up)
-      (-> m (update :fails dissoc pos) (assoc-in [:given-up pos] reason))
-      (assoc-in m [:fails pos] n))))
 
 (defn walk-fail
   "count-fail for a failed walk or an out-of-reach arrival, which the job's own stand choice caused: a cell it gives up
@@ -380,6 +378,12 @@
              {:placed (:placed (ctx/mem c) 0)
               :text (str "build of " (:plan (:args c)) " stopped: the body is shut in a hole and cannot climb out")})))
 
+(defn reaching
+  "The stands from which the body reaches cell pos wherever it stands in the stand cell (its eye within :reach, less the
+  half diagonal of a cell, from the cell's centre)."
+  [c stands pos]
+  (filter (fn [[x y z]] (<= (u/eye-dist {:x (+ x 0.5) :y y :z (+ z 0.5)} pos) (- (:reach (:args c)) 0.71))) stands))
+
 (defn ^:async walk-to!
   "Walk to a stand cell beside cell (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as
   :unloaded) on arrival, counts a failure."
@@ -388,7 +392,8 @@
         planned (set (map :pos cells))
         bad (set (:bad-stands (ctx/mem c)))
         facing (when-not (or (:click cell) (:dig? cell)) (facing-of (:want cell)))
-        stands (stands-for (:primitives c) (:pos cell) (js/Math.floor (:y body)) facing planned bad)
+        all (stands-for (:primitives c) (:pos cell) (js/Math.floor (:y body)) facing planned bad)
+        stands (or (seq (reaching c all (:pos cell))) all)
         stand (first (sort-by #(u/dist body (zipmap [:x :y :z] %)) stands))
         give-up (:give-up (:args c))]
     (if-not stand
@@ -436,6 +441,16 @@
     (announce! c result)
     (ending-of c result)))
 
+(defn ^:async reach-cell!
+  "Walk to a stand for the buildable cell; where no ground stand within :reach of it exists, raise a temporary one (jobs.lib.build.scaffold)."
+  [c cells cell]
+  (let [body (u/self-pos c)
+        facing (when-not (or (:click cell) (:dig? cell)) (facing-of (:want cell)))
+        stands (plan/grounded-stands (:primitives c) (:pos cell) (js/Math.floor (:y body)) facing (set (map :pos cells)) (set (:bad-stands (ctx/mem c))))
+        grounded (reaching c stands (:pos cell))]
+    (or (when-not (seq grounded) (await (scaffold/start! c cells cell (result-data c cells))))
+        (await (walk-to! c cells cell)))))
+
 (defn ^:async build-step!
   "One step of the build (:again, or :continue while a walk waits): place or dig what is in reach, else walk, else finish."
   [c cells]
@@ -453,6 +468,8 @@
         dig-near (in-dig-reach c digs)
         nearest #(first (sort-by (fn [cell] (u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos cell)))) %))]
     (cond
+      (scaffold/working? c) (await (scaffold/step! c))
+      (scaffold/stale? c) (do (scaffold/begin-clean! c) :again)
       (:leave (ctx/mem c)) (await (leave! c))
       (and underfoot (not= (:pos underfoot) (:stepped-off (ctx/mem c))))
       (do (ctx/update-mem! c assoc :leave (exit-point cells (u/self-pos c)) :stepped-off (:pos underfoot))
@@ -472,7 +489,8 @@
                            :continue
                            (recur (rest left)))
                          :again))
-      (seq todo) (await (walk-to! c cells (nearest todo)))
+      (= :up (scaffold/phase c)) (do (scaffold/finish-up! c todo) :again)
+      (seq todo) (await (reach-cell! c cells (nearest todo)))
       (seq digs) (await (walk-to! c cells (nearest digs)))
       (seq (unseen cells given-up)) (await (walk-to! c cells (nearest (unseen cells given-up))))
       :else (let [before (ctx/mem c)]
@@ -526,3 +544,8 @@
   walk or a fetch waits on the world."
   [c]
   (await (pace/steps! c (fn ^:async s [] (await (step c))))))
+
+(defn ^:async cleanup
+  "However the call ends: take the scaffold back."
+  [c _]
+  (or (await (scaffold/take-back! c)) (ctx/end c :done nil {})))

@@ -1,0 +1,149 @@
+(ns jobs.lib.build.scaffold
+  "A temporary stand for jobs.build.from-plan where no ground stand reaches a cell: a pillar (jobs.access.pillar) whose
+  base lies outside every plan's footprint, this plan's included (jobs.lib.access.approach/plan, which also prefers a
+  stand that needs no pillar). Every block of it is in the scaffold ledger and jobs.access.cleanup takes it back once the
+  cells in reach are placed, or however the call ends, so a scaffold block is never a plan block. Job memory :scaffold is
+  {:phase :walk|:build|:up|:clean :cell pos :plan {:base :height :stand} :failed true}."
+  (:require [engine.ctx :as ctx]
+            [jobs.lib.access :as access]
+            [jobs.lib.access.approach :as approach]
+            [jobs.lib.build.plan :as plan]
+            [jobs.lib.child :as child]
+            [jobs.lib.choose :as choose]
+            [jobs.lib.ledger :as ledger]
+            [jobs.lib.need :as need]
+            [jobs.lib.pillar :as pl]
+            [jobs.lib.ready :as ready]))
+
+(defn phase [c] (:phase (:scaffold (ctx/mem c))))
+
+(defn open?
+  "Whether this job's scaffold ledger entries (its own or a child's) are still open."
+  [c]
+  (boolean (some #(ledger/of-instance? (:id c) %) (ledger/open-entries (ctx/view c)))))
+
+(defn avoid-cells
+  "The cells no stand or base may be: a planned cell, or the one below it (its head would be in the plan), and the
+  cells of earlier walks that failed."
+  [c cells]
+  (into (set (:scaffold-avoid (ctx/mem c))) (mapcat (fn [{:keys [pos]}] [pos (update pos 1 dec)])) cells))
+
+(defn plan-for
+  "The approach plan (jobs.lib.access.approach/plan) for placing pos, with the plan's own footprint refusing a base."
+  [c cells pos]
+  (approach/plan (assoc (access/rules-input c) :targets #{pos} :reach (:reach (:args c)) :avoid (avoid-cells c cells))))
+
+(defn blocks [c] (choose/filler-names c :pillar))
+
+(defn carried-count [c]
+  (let [have (pl/carried (:primitives c))]
+    (reduce + (map #(get have % 0) (blocks c)))))
+
+(defn fetch-opts
+  "The limits {:how :explore} for getting the pillar's blocks, nil when :fetch does not allow items."
+  [c]
+  (when-let [o (need/opts c plan/fetch-job)]
+    (when (contains? (:what o) :item) (select-keys o [:how :explore]))))
+
+(defn ^:async fetch-blocks!
+  "Get the n blocks the pillar lacks: :continue while the fetch waits, :again once had, else the ending of the call
+  (condition-failed :needs :scaffold-item, with result as data)."
+  [c n result]
+  (let [short #(ctx/end c :condition-failed {:reason :needs :needs :scaffold-item :any-of (blocks c) :count n} result)]
+    (if-let [o (fetch-opts c)]
+      (let [e (await (need/blocks! c (blocks c) n o))]
+        (cond (= :continue e) :continue
+              (= :done (:kind e)) :again
+              :else (short)))
+      (short))))
+
+(defn ^:async start!
+  "Plan a stand above the ground's reach for cell and remember it: nil when none applies (the caller walks on), :again
+  once planned, :continue while blocks are fetched, an ending when a zone refuses every base (cell refused) or no
+  blocks can be had."
+  [c cells cell result]
+  (let [pos (:pos cell)
+        r (plan-for c cells pos)
+        height (get-in r [:pillar :height])
+        lack (when height (- height (carried-count c)))]
+    (cond
+      (= :zone (:reason r)) (do (ctx/update-mem! c plan/refuse pos {:reason :zone :why :scaffold}) :again)
+      (not (or (:pillar r) (:stand r))) nil
+      (pos? (or lack 0)) (await (fetch-blocks! c lack result))
+      :else (do (ctx/update-mem! c assoc :scaffold {:phase :walk :cell pos :plan (or (:pillar r) {:stand (first (:stand r))})})
+                :again))))
+
+(defn set-phase! [c k] (ctx/update-mem! c assoc-in [:scaffold :phase] k))
+
+(defn fail-cell!
+  "Drop the scaffold plan and count a failure on its cell."
+  [c m]
+  (ctx/update-mem! c #(-> (plan/count-fail (dissoc % :scaffold) (:cell m) :unreachable (:give-up (:args c)))
+                          (update :scaffold-avoid (fnil conj #{}) (or (get-in m [:plan :base]) (get-in m [:plan :stand]))))))
+
+(defn ^:async walk!
+  [c {:keys [plan] :as m}]
+  (let [[x y z] (or (:base plan) (:stand plan))
+        e (await (child/call-walk* c :swalk {:pos {:x x :y y :z z} :range 0 :ways #{:walk :clear-seal} :zone-tolls true
+                                             :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+    (cond
+      (= :continue e) :continue
+      (and (= :done (:kind e)) (:arrived (:data e))) (do (set-phase! c (if (:height plan) :build :up)) :again)
+      :else (do (fail-cell! c m) :again))))
+
+(defn ^:async build!
+  [c {:keys [plan]}]
+  (let [e (await (ctx/call c :pillar 'jobs.access.pillar {:height (:height plan) :use {:blocks (blocks c)} :fetch false
+                                                          :ignore-zones? (:ignore-zones? (:args c))
+                                                          :checks (ready/unforced c {:safe? '(not (exposed))})}))]
+    (cond
+      (= :continue e) :continue
+      (= :done (:kind e)) (do (set-phase! c :up) :again)
+      :else (do (ctx/update-mem! c assoc-in [:scaffold :failed] true) (set-phase! c :clean) :again))))
+
+(defn ^:async take-back!
+  "Take the scaffold back (a jobs.access.cleanup child for this job's blocks) when it is open: nil once closed,
+  :continue while the child waits."
+  [c]
+  (when (open? c)
+    (let [e (await (ctx/atomic c :urgent :scaffold #(ctx/call c :cleanup 'jobs.access.cleanup {:job (:id c)})))]
+      (when (= :continue e) :continue))))
+
+(defn ^:async clean!
+  "Take the scaffold back, then drop its plan (a failed one counts on its cell)."
+  [c {:keys [failed] :as m}]
+  (or (await (take-back! c))
+      (do (if failed (fail-cell! c m) (ctx/update-mem! c dissoc :scaffold)) :again)))
+
+(defn ^:async step!
+  "One step of the scaffold in its walk, build or clean phase: :again or :continue."
+  [c]
+  (let [m (:scaffold (ctx/mem c))]
+    (case (:phase m)
+      :walk (await (walk! c m))
+      :build (await (build! c m))
+      :clean (await (clean! c m)))))
+
+(defn working?
+  "Whether the scaffold is in a phase that step! runs; the :up phase is the build's own, placing from the stand."
+  [c]
+  (contains? #{:walk :build :clean} (phase c)))
+
+(defn stale?
+  "Whether an earlier call left scaffold blocks open that this one has not yet tried to take back."
+  [c]
+  (and (nil? (:scaffold (ctx/mem c))) (not (:stale-cleaned (ctx/mem c))) (open? c)))
+
+(defn begin-clean!
+  "Start a clean phase; for a stale scaffold it is tried once."
+  [c]
+  (ctx/update-mem! c #(-> (assoc % :scaffold {:phase :clean}) (cond-> (not (:scaffold %)) (assoc :stale-cleaned true)))))
+
+(defn finish-up!
+  "The body stands on its scaffold with nothing in reach to place or dig: a buildable cell still out of reach counts a
+  failure (so a stand that does not reach it is not raised again for ever), and the scaffold is taken back."
+  [c todo]
+  (let [cell (:cell (:scaffold (ctx/mem c)))]
+    (when (some #(= cell (:pos %)) todo)
+      (ctx/update-mem! c plan/count-fail cell :unreachable (:give-up (:args c))))
+    (set-phase! c :clean)))

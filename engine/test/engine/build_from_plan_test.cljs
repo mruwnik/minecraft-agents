@@ -8,6 +8,7 @@
             [engine.takeover :as takeover]
             [engine.memory :as mem]
             [engine.events :as events]
+            [jobs.lib.ledger :as ledger]
             [engine.blocks-dig-test :as bd]
             [engine.harvest-test :as h]
             [engine.registry :as registry]
@@ -1192,3 +1193,48 @@
                             (for [x (range 10 14) y [64 65] z [10 13]] [x y z])
                             (for [z (range 11 13) y [64 65] x [10 13]] [x y z]))))
           (is (not (reach/enclosed? p))))))))
+
+(def tall-wall-plan
+  "A stone wall 3 wide and 5 high at z 6, its lowest row at y 64 over the floor."
+  {:id "wall" :parts [{:id "w" :cells (vec (for [x [2 3 4] y (range 64 69)] [x y 6])) :want "stone"}]})
+
+(defn tall-wall-start [inventory zones]
+  (start {:inventory inventory :self {:pos {:x 3.5 :y 64 :z 2.5}}} {"wall" tall-wall-plan} zones))
+
+(defn tall-wall-built [p] (every? #(= "stone" (block p %)) (for [x [2 3 4] y (range 64 69)] [x y 6])))
+
+(defn scaffold-left [p]
+  (->> (:blocks @(engine.fake/state p)) (filter (fn [[[x y z] n]] (and (>= y 64) (not= "stone" n) (not= "air" n)))) vec))
+
+(deftest a-wall-above-reach-is-built-from-a-pillar-that-is-taken-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (tall-wall-start [{:name "stone" :count 15} {:name "dirt" :count 10}] [])
+              result (await (child-outcome eng job {:plan "wall" :reach 3} 600))]
+          (is (= 15 (:placed result)))
+          (is (tall-wall-built p))
+          (is (seq (h/calls p "jumpPlace")) "a pillar was raised")
+          (is (empty? (scaffold-left p)) "no scaffold block stands afterwards")
+          (is (empty? (ledger/open-entries (mem/view (:store eng))))))))))
+
+(deftest a-zone-over-every-pillar-base-refuses-the-cells-above-reach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zones [{:name "keep-out" :min [-30 60 -10] :max [40 80 10]}]
+              {:keys [eng p]} (tall-wall-start [{:name "stone" :count 15} {:name "dirt" :count 10}] zones)
+              result (await (child-outcome eng job {:plan "wall" :reach 3} 600))]
+          (is (= :refused (:reason result)))
+          (is (seq (:refused result)))
+          (is (empty? (h/calls p "jumpPlace")))
+          (is (not (tall-wall-built p))))))))
+
+(deftest nothing-carried-for-a-pillar-waits-for-a-scaffold-item
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (tall-wall-start [{:name "stone" :count 15}] [])
+              result (await (child-outcome eng job {:plan "wall" :reach 3 :fetch false} 600))]
+          (is (= :needs (:reason result)))
+          (is (empty? (h/calls p "jumpPlace"))))))))
