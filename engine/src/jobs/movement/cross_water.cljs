@@ -21,8 +21,8 @@
   The far shore is :pos (a land cell: it must be a seen shore), else a seen shore within :radius of the body, at least :min-cross blocks away, with water between it and the body
   (not the start bank): the one nearest :goal when given, else the farthest.
   A given :pos is looked at first; one the body still cannot make out is crossed toward all the same (boat-land drives nearer to it).
-  Impossible: :bad-args (:pos names no cell, :item is no boat). Conditions at the start (a listed call waits on them; the engine looks round once first): :no-far-shore (:pos is no shore,
-  or none far enough is in sight), :not-water (no water in sight to launch on, unless already aboard). A restart with a crossing under way skips them.
+  Impossible: :bad-args (:pos names no cell, :item is no boat). Conditions, asked before every round (a listed call waits on them; the engine looks round once first): :no-far-shore (:pos is no shore,
+  or none far enough is in sight), :not-water (no water in sight to launch on, unless already aboard). A crossing under way skips them.
   Ends done (data {:land {:x :y :z} :boat id :recovered bool}), info boat.landed (from boat-land), or the failed child's kind with its ending as the :because:
   condition-failed :no-boat (none carried and none could be fetched), :boat-not-seen (the placed boat is not in sight), the launch's other causes (:refused, :no-support,
   :unreachable, :occupied, :board-failed, :failed) and the landing's (:blocked, :drive-failed, :not-landed, :recover-failed, :no-shore); or nothing-possible :not-landed (on foot after the launch, not on the far shore).
@@ -165,6 +165,8 @@
 
 (def can-start? (cond/and bad-args start-fact))
 
+(def can-run? start-fact)
+
 (defn done?
   "Ok when the body stands on the far shore (the crossing's, else the given :pos) with no recovery owed: no crossing
   under way, or :recover false. With one under way the landing still wraps up (the boat is taken back)."
@@ -195,7 +197,7 @@
           (and (or (nil? spot) (not (water-in-sight? c))) (not (look/surveyed? c)))
           (await (look/survey! c)) ; a shore or water behind the body is not seen until it looks
 
-          (nil? spot) (ctx/end c :condition-failed :no-far-shore {:text (if (given-pos c) "the given cell is no seen shore" "no far shore in sight")})
+          (nil? spot) :continue ; can-run? asks again
           mounted (await (land! c (:land spot)))
-          (not (water-in-sight? c)) (ctx/end c :condition-failed :not-water)
+          (not (water-in-sight? c)) :continue
           :else (await (launch! c spot)))))))

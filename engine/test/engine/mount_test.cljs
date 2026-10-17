@@ -1,6 +1,6 @@
 (ns engine.mount-test
   "jobs.movement.mount against the fake world: every mount status maps to a job status."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
             [engine.core.legacy :as legacy]
             [engine.test-util :as tu]
@@ -64,8 +64,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label spec reason]
-                [["gone" {:entities []} :gone]
-                 ["not-mountable" {:entities [(assoc boat :name "cow" :id 9)]} :not-mountable]
+                [["not-mountable" {:entities [(assoc boat :name "cow" :id 9)]} :not-mountable]
                  ["timeout" {:entities [boat] :mountFails true} :timeout]]]
           (let [o (await (run spec {:id 9}))]
             (is (= {:status :stopped :reason reason} (select-keys (result-of o) [:status :reason])) label)
@@ -86,12 +85,15 @@
               o (await (run {:entities [far boat]} {:name "oak_boat"}))]
           (is (= 9 (:id (result-of o)))))))))
 
-(deftest a-name-with-nothing-of-that-name-is-gone
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [o (await (run {:entities [boat]} {:name "pig"}))]
-          (is (= :gone (:reason (result-of o)))))))))
+(deftest nothing-of-that-id-or-name-in-sight-is-no-vehicle-for-can-run
+  (are [spec args] (= [:later :no-vehicle] (tu/kind-reason (mount/can-run? (bare-ctx (tu/fake spec) args))))
+    {:entities []} {:id 9}
+    {:entities [boat]} {:name "pig"}
+    {:entities [(dissoc boat :pos)]} {:id 9}))
+
+(deftest aboard-another-vehicle-is-aboard-other-for-can-run
+  (is (= [:later :aboard-other]
+         (tu/kind-reason (mount/can-run? (bare-ctx (tu/fake {:self {:vehicle 5} :entities [boat (assoc boat :id 5 :name "minecart")]}) {:id 9}))))))
 
 (deftest a-name-skips-an-occupied-nearer-vehicle
   (async done
@@ -117,13 +119,6 @@
           (let [o (await (run {:entities [boat]} {:id 9} status))]
             (is (= reason (:reason (result-of o))) status)))))))
 
-(deftest aboard-another-vehicle-is-aboard-other
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [o (await (run {:self {:vehicle 5} :entities [boat (assoc boat :id 5 :name "minecart")]} {:id 9}))]
-          (is (= :aboard-other (:reason (result-of o)))))))))
-
 (deftest a-walk-that-waits-on-the-world-continues
   (async done
     (tu/run-async done
@@ -145,10 +140,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [heard (-> boat (assoc :id 5) (dissoc :pos))
-              o (await (run {:entities [heard boat]} {:name "oak_boat"}))
-              g (await (run {:entities [heard]} {:id 5}))]
-          (is (= 9 (:id (result-of o))))
-          (is (= :gone (:reason (result-of g)))))))))
+              o (await (run {:entities [heard boat]} {:name "oak_boat"}))]
+          (is (= 9 (:id (result-of o)))))))))
 
 (defn condition-with [spec args]
   (let [c {:primitives (tu/fake spec) :args args :view (fn [] {:data {:entries {}} :now 0}) :root "j1" :slots []}]

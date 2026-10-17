@@ -31,6 +31,12 @@
     (is (some? (:done? (job sym))) (str sym " has done?"))
     (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args args :quote-call {:spend {:job-time 60}}}))) (str sym))))
 
+(deftest mount-boat-land-and-cross-water-ask-their-world-facts-before-every-round
+  (are [sym args world expect] (= expect (tu/kind-reason ((:can-run? (job sym)) {:primitives (tu/fake world) :args args :view (constantly {:data {} :now 0})})))
+    'jobs.movement.mount {:id 9} {} [:later :no-vehicle]
+    'jobs.movement.boat-land {} {} [:later :not-aboard]
+    'jobs.movement.cross-water {:pos [7 64 0]} {} [:look :no-far-shore]))
+
 (deftest every-movement-access-block-job-has-a-time-line-default
   (let [syms (->> (keys registry/jobs)
                   (filter #(re-find #"^jobs\.(movement|access|blocks|primitive)\." (str %)))

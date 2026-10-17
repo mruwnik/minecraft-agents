@@ -18,7 +18,7 @@
   (a spot the boat cannot reach is dropped for the next, up to :max-spots), then jobs.movement.leave-vehicle steps off facing the land cell.
   With :recover the boat is then taken back (jobs.movement.boat-launch :recover; it needs the boat in sight).
   A given :pos the body cannot make out after a look is driven nearer once (boat-drive to the water cell on the boat's side of it), then decided again.
-  Impossible: :bad-args (:pos names no cell). Conditions at the start: :not-aboard (on foot, with no landing of this call remembered: jobs.movement.boat-launch
+  Impossible: :bad-args (:pos names no cell). Conditions (the not-aboard one before every round too): :not-aboard (on foot, with no landing of this call remembered: jobs.movement.boat-launch
   puts the body in a boat), :no-shore (no :pos given and no shore in sight; the engine looks round once first). A listed call waits on them.
   Ends done (data {:land {:x :y :z} :boat id :recovered bool}), info boat.landed, or
   condition-failed :no-shore (a given :pos is no shore, or could not be made out even from near), :not-aboard (got out on the way), or
@@ -79,6 +79,8 @@
 (def defaults {:spend {:job-time ::job-time-s}})
 
 (def can-start? (cond/and bad-args not-aboard no-shore))
+
+(def can-run? not-aboard)
 
 (defn done?
   "Never done? itself: off the boat the landing is still to be recorded (event, recovery), by the round."
@@ -189,6 +191,5 @@
             spots (take (:max-spots (:args c)) found)]
         (cond
           (= :continue approached) :continue
-          (not (vehicle/mounted? p)) (ctx/end c :condition-failed :not-aboard)
           (empty? spots) (ctx/end c :condition-failed {:reason :no-shore :hint (no-shore-text c reads)})
           :else (await (try-spots! c spots (:id (vehicle/vehicle-of (.self p))))))))))

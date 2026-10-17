@@ -16,11 +16,11 @@
   Holds the vehicle (jobs.lib.vehicle) while the job lives, so the :mounted trigger does not step the body off:
   the body stays aboard only in manual mode, otherwise the hold ends with the job and the trigger steps it off ~30 s later.
   By :name it prefers a vehicle with no rider.
-  Impossible: :bad-args. Conditions: at the start :no-vehicle while none is in sight and :aboard-other while on another vehicle (a listed call waits). The round yields :continue only when the walk waits on the world.
+  Impossible: :bad-args. Conditions, asked before every round: :no-vehicle while none is in sight and :aboard-other while on another vehicle (a listed call waits, a called one ends condition-failed with that cause). The round yields :continue only when the walk waits on the world.
 
   Ends done (data {:id :vehicle name}, plus :already true when aboard it already and the root job did not yet hold it; cause :already when it did), or
-  condition-failed: :gone (no such entity in sight), :not-mountable, :occupied, :hand-full
-  (a mob, with an item in hand that cannot be put away), :aboard-other (got on another vehicle on the way), or
+  condition-failed: :gone (the server found no such entity), :not-mountable, :occupied, :hand-full
+  (a mob, with an item in hand that cannot be put away), or
   nothing-possible: :timeout (the server never seated the body), :unreachable (the walk failed twice),
   :failed (any other status, data :mount the primitive's).")
 
@@ -102,6 +102,8 @@
 
 (def can-start? (cond/and bad-args no-vehicle aboard-other))
 
+(def can-run? (cond/and no-vehicle aboard-other))
+
 (defn quote-of [c]
   (let [p (:primitives c)
         {:keys [id name]} (:args c)
@@ -123,18 +125,18 @@
         id (if (and (nil? (:id a)) (string? name)) (nearest-named c name) (:id a))
         p (:primitives c)]
     (cond
-      (and (nil? (:id a)) (string? name) (nil? id)) (stop! c nil :condition-failed :gone)
+      (and (nil? (:id a)) (string? name) (nil? id)) :continue
       (not (and (integer? id) (pos? id))) (stop! c id :condition-failed :bad-args)
       (some? (vehicle/vehicle-of (.self p)))
       (let [v (vehicle/vehicle-of (.self p))]
         (if (= id (:id v))
           (do (vehicle/hold! c) (done! c {:id id :vehicle (:name v) :already true}))
-          (stop! c id :condition-failed :aboard-other {:vehicle (:name v)})))
+          :continue))
       :else
       (loop [fails 0]
         (let [e (entity-of p id)]
           (cond
-            (nil? e) (stop! c id :condition-failed :gone)
+            (nil? e) :continue
             (> (u/dist (u/self-pos c) (u/pos-of (.-pos e))) reach)
             (let [r (await (child/call-walk* c :walk {:pos (u/pos-of (.-pos e)) :range 2 :ways #{:walk :clear-seal}}))]
               (cond
