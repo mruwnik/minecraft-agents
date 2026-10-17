@@ -180,11 +180,22 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[spend at] [[nil [5 64 0]] [{:wall-time 0.5} [0 64 0]]]]
+        (doseq [[spend at] [[nil [4 64 0]] [{:wall-time 0.5} [0 64 0]]]]
           (let [{:keys [out p]} (await (run-job! free-by-pocket (cond-> {:pos [8 64 0] :range 0 :ways #{:walk}} spend (assoc :spend spend))))]
             (is (= :goal-enclosed (:why @out)) (pr-str spend @out))
             (is (= at (feet p)) (str spend ": the nearest cell to the goal, when the walk there fits the budget"))
             (is (empty? (calls p "dig")))))))))
+
+(deftest a-wall-walk-takes-the-short-walk-among-near-equal-cells
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; west face one block thicker than the north face: the cell north of the goal is 1 nearer, but 8 blocks of walking farther
+        (let [blocks (apply dissoc (merge (box -20 63 -20 20 63 20 "stone") (box 5 64 -2 10 66 2 "stone")) ["8,64,0" "8,65,0"])
+              {:keys [out p]} (await (run-job! {:self {:pos {:x 0 :y 64 :z 0}} :blocks blocks}
+                                               {:pos [8 64 0] :range 0 :ways #{:walk}}))]
+          (is (= :goal-enclosed (:why @out)) (pr-str @out))
+          (is (= [4 64 0] (feet p))))))))
 
 (deftest a-free-body-far-from-a-walled-in-goal-walks-to-the-nearest-cell-first
   (async done

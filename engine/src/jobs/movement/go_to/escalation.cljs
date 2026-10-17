@@ -296,14 +296,18 @@
       {:step :dig-route :cells (vec cells)})))
 
 (defn nearest-stand
-  "The cell [x y z] nearest goal that the body can walk to (a flood of at most reach/room-cells cells), of equally near
-  ones the first the flood reaches (the shortest walk)."
-  [p goal]
-  (let [kind-at (reach/lookup p reach/body-kind-of)
-        to-goal #(u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] goal))]
-    (->> (:cells (reach/flood-visit #(reach/forward kind-at %1 %2 %3) (reach/standing-vec p) reach/room-cells))
-         (map vec)
-         (reduce (fn [a b] (if (< (to-goal b) (to-goal a)) b a))))))
+  "A cell [x y z] the body can walk to (a flood of at most reach/room-cells cells) nearest goal: of the cells no farther
+  than slack (default 0) beyond the nearest, in the whole distance and in the distance along the ground, the first the
+  flood reaches (the shortest walk)."
+  ([p goal] (nearest-stand p goal 0))
+  ([p goal slack]
+   (let [kind-at (reach/lookup p reach/body-kind-of)
+         to-goal #(u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] goal))
+         across #(u/flat-dist {:x (% 0) :z (% 2)} {:x (goal 0) :z (goal 2)})
+         cells (->> (:cells (reach/flood-visit #(reach/forward kind-at %1 %2 %3) (reach/standing-vec p) reach/room-cells))
+                    (map vec))
+         best (reduce (fn [a b] (if (< (to-goal b) (to-goal a)) b a)) cells)]
+     (first (filter #(and (<= (to-goal %) (+ (to-goal best) slack)) (<= (across %) (+ (across best) slack))) cells)))))
 
 (defn goal-way
   "A free body's way into a walled-in goal: escape/choose from where it stands, or, while the cell it can walk to

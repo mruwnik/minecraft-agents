@@ -223,15 +223,17 @@
     (apply min ##Inf (cond-> (keep spend [:job-time :wall-time])
                        deadline (conj (/ (- deadline (ctx/now c)) 1000))))))
 
+(def wall-walk-slack "Blocks farther from the goal than the nearest cell that a wall walk still takes, for a shorter walk." 1.5)
+
 (defn ^:async walk-to-wall!
   "A walled-in goal (result :goal-enclosed, :goal-cut-off) that no escalation will open: once a call (mem :wall-walked, set once the walk arrived or got nowhere),
-  walk to the cell nearest it the body can reach (escalation/nearest-stand) when that is more than a block nearer and
+  walk to a cell near it the body can reach (escalation/nearest-stand: the shortest walk within wall-walk-slack of the nearest) when that is more than a block nearer and
   the walk there (jobs.lib.cost/walk-cost) fits budget-s. True when it walked."
   [c pos tries result opts]
   (let [p (:primitives c)
         feet (end/feet-cell c)
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
-        near (delay (esc/nearest-stand p goal))
+        near (delay (esc/nearest-stand p goal wall-walk-slack))
         to (fn [a b] (u/dist (zipmap [:x :y :z] a) (zipmap [:x :y :z] b)))]
     (when (and (#{:goal-enclosed :goal-cut-off} (:reason result))
                (not (:wall-walked (ctx/mem c)))

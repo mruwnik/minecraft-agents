@@ -470,7 +470,7 @@
         (let [walled (merge (box -2 63 -2 10 63 4 "stone") (box 5 64 -2 5 65 4 "stone"))
               {:keys [out eng p]} (await (go! {:blocks walled} {:pos [8 64 1] :range 0 :ways #{:walk :clear-seal}}))]
           (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (dissoc @out :at :near :text :status :shut-in)))
-          (is (= [4 64 1] (at p)) "the cell nearest the goal it can reach")
+          (is (= [3 64 0] (at p)) "the shortest walk among the cells within 1.5 of the nearest the goal it can reach")
           (is (= ["blocked" "arrived" "blocked"] (mapv :status (moved eng))) "no try again after the walk to the wall"))))))
 
 (deftest go-to-walks-to-where-the-loaded-land-runs-on-when-it-holds-no-way
