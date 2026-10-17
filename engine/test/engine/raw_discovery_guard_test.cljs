@@ -18,11 +18,7 @@
 
 (def owed
   (into {} (map (fn [[f n]] [f [n "raw read to move onto jobs.lib.look (card 8a976e90)"]]))
-        {"village/maintain.cljs" 1 "village/breed.cljs" 1 "village/trade.cljs" 1 "village/feed.cljs" 1 "village/roll.cljs" 1
-         "movement/mount.cljs" 1 "lib/shelter.cljs" 2 "lib/combat.cljs" 2 "lib/bait.cljs" 1 "lib/hunting.cljs" 1
-         "lib/animals.cljs" 2 "lib/util.cljs" 1 "animals/cull.cljs" 1 "animals/unleash.cljs" 2
-         "survival/dig_in_cells.cljs" 1 "survival/get_food/animals.cljs" 1 "survival/get_food/cook.cljs" 1
-         "survival/recover_drops/pile.cljs" 1 "combat/hunt.cljs" 2}))
+        {"lib/shelter.cljs" 2 "lib/util.cljs" 1}))
 
 (def raw-read #"\(\.(?:entities|blockAt|blocks|findBlocks)[\s)]|\.findBlocks")
 

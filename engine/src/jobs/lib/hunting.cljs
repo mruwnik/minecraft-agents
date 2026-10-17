@@ -2,6 +2,7 @@
   "The kill-and-collect steps combat.hunt and animals.cull share: the drops table, the attack child call, the
   drop collection and the search wait. Memory keys: :target, :killed, :skipped, :skips, :collecting, :misses."
   (:require [engine.ctx :as ctx]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]))
 
 (def raw-meats
@@ -34,7 +35,7 @@
   "Remember the passive target as last seen (:animal, :entity id, :uuid, :cell, :by job and the rule that allowed the kill, from (rule-fn c entity)),
   for the kill event: the entity is gone once it is dead."
   [c target {:keys [radius job rule-fn]}]
-  (when-let [e (->> (array-seq (.entities (:primitives c) #js {:radius radius :names #js [(:mob (:args c))] :max 64}))
+  (when-let [e (->> (look/seen-objs (:primitives c) {:radius radius :names [(:mob (:args c))] :max 64})
                     (filter #(and (= target (.-id %)) (= "passive" (.-kind %))))
                     first)]
     (let [p (u/pos-of (.-pos e))]

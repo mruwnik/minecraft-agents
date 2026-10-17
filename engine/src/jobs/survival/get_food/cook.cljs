@@ -45,8 +45,8 @@
   "{:wild n :penned n}: the adult animals of a kind in sight within ::meat-radius, outside and inside a zone or enclosure of the body's own."
   [c animal]
   (let [pens (atom [])
-        adults (->> (array-seq (.entities (:primitives c) #js {:radius (settings/get settings ::meat-radius) :kind "passive"
-                                                               :names #js [animal] :max 32}))
+        adults (->> (look/seen-objs (:primitives c) {:radius (settings/get settings ::meat-radius) :kind "passive"
+                                                        :names [animal] :max 32})
                     (remove #(true? (.-baby %))))
         penned (count (filter #(spare/penned? c pens %) adults))]
     {:wild (- (count adults) penned) :penned penned}))

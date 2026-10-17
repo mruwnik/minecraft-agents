@@ -64,7 +64,7 @@
 (defn facts
   "The villagers the body sees: {:villagers [{:baby :profession}]}."
   [c]
-  (let [v (array-seq (.entities (:primitives c) #js {:radius (:radius (:args c)) :names #js ["villager"]}))]
+  (let [v (look/seen-objs (:primitives c) {:radius (:radius (:args c)) :names ["villager"]})]
     {:villagers (mapv (fn [e] {:baby (true? (.-baby e)) :profession (.-profession e)}) v)}))
 
 ;; ------------------------------------------------------------------ what is decided

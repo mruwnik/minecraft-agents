@@ -17,8 +17,7 @@
   own? (the :pen way): an animal in a zone or plan of its own is no pen, and its rule is :own-pen."
   [c {:keys [radius lift own?]}]
   (let [skipped (set (:skipped-animals (ctx/mem c)))
-        seen (array-seq (.entities (:primitives c) #js {:radius radius :kind "passive"
-                                                        :names (clj->js food-animals) :max 16}))
+        seen (look/seen-objs (:primitives c) {:radius radius :kind "passive" :names food-animals :max 16})
         adults (frequencies (map #(.-name %) (remove #(true? (.-baby %)) seen)))
         self (.self (:primitives c))
         pens (atom [])

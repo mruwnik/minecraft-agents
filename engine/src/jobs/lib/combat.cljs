@@ -4,6 +4,7 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.cost.weapon :as weapon]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]))
 
@@ -19,13 +20,13 @@
   [p radius]
   (if-let [known (.-knownMobs p)]
     (filter #(and (= "hostile" (.-kind %)) (<= (.-distance %) radius)) (array-seq (.call known p)))
-    (array-seq (.entities p #js {:radius radius :kind "hostile" :max 16}))))
+    (look/seen-objs p {:radius radius :kind "hostile" :max 16})))
 
 (defn sensed
   "The entities a player would place within radius (opts :radius, :max, :ids and :names filter before the cap), as JS entities: known hostiles (seen or
   heard), players (listed through walls), and every other kind only when not hidden (visible false). Items included. Nearest first."
   [p {:keys [radius max ids] :as opts}]
-  (let [others (->> (array-seq (.entities p (clj->js opts)))
+  (let [others (->> (look/seen-objs p opts)
                     (remove #(= "hostile" (.-kind %)))
                     (remove #(and (not= "player" (.-kind %)) (false? (.-visible %)))))]
     (vec (sort-by #(.-distance %) (concat others (take (or max 64) (cond->> (known-or-raw p radius) ids (filter #(some #{(.-id %)} ids)))))))))

@@ -2,6 +2,7 @@
   "The food animals follow, and putting it out of the hand: a body that walks out through a gate with it in hand takes
   the penned animals along."
   (:require [engine.ctx :as ctx]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]))
 
 (def breeding-food
@@ -36,5 +37,5 @@
   [c]
   (let [p (:primitives c)
         mobs (vec (for [[mob foods] breeding-food :when (some #{(held c)} foods)] mob))]
-    (when (and (seq mobs) (pos? (.-length (.entities p #js {:radius near-range :names (clj->js mobs) :max 1}))))
+    (when (and (seq mobs) (seq (look/seen-objs p {:radius near-range :names mobs :max 1})))
       (await (put-away! c (into [] (mapcat breeding-food) mobs))))))

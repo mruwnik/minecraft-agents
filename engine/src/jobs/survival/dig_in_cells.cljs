@@ -14,6 +14,7 @@
             [jobs.lib.shelter :as sh]
             [jobs.lib.solid :as solid]
             [jobs.lib.tools :as tools]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]))
 
 (def sides [[1 0] [-1 0] [0 1] [0 -1]])
@@ -368,7 +369,7 @@
   (let [p (:primitives c)
         at (u/self-pos c)
         wanted (set ids)]
-    (->> (array-seq (.entities p #js {:radius 4 :kind "item" :max 64}))
+    (->> (look/seen-items p {:radius 4 :max 64})
          (filter #(wanted (.-id %)))
          (filter (fn [e] (let [q (u/pos-of (.-pos e))]
                            (and (<= (js/Math.hypot (- (:x q) (:x at)) (- (:z q) (:z at))) (pickup-reach))

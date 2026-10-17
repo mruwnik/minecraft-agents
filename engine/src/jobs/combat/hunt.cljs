@@ -15,6 +15,7 @@
             [jobs.lib.trip :as trip]
             [jobs.lib.checks :as checks]
             [jobs.lib.ready :as ready]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.vantage :as vantage]))
 
@@ -79,7 +80,7 @@
   "The adult entities named :mob within radius blocks, nearest first, never players, items or babies
   (an entity is an adult unless its baby field is true)."
   [c radius]
-  (->> (array-seq (.entities (:primitives c) #js {:radius radius :names #js [(:mob (:args c))] :max 64}))
+  (->> (look/seen-objs (:primitives c) {:radius radius :names [(:mob (:args c))] :max 64})
        (remove #(contains? #{"player" "item"} (.-kind %)))
        (remove #(true? (.-baby %)))
        vec))
@@ -125,7 +126,7 @@
         p (:primitives c)]
     (boolean (or (cost/hostile? (game/version-of p) {:name mob})
                  (some #(= "hostile" (.-kind %))
-                       (array-seq (.entities p #js {:radius radius :names #js [mob] :max 64})))))))
+                       (look/seen-objs p {:radius radius :names [mob] :max 64}))))))
 
 (defn keep-of
   "Adults of the kind never taken: the :keep arg when a number, else the value

@@ -205,3 +205,11 @@
     (is (true? (:heard? heard)))
     (is (not (contains? heard :pos)))
     (is (= {:direction :east :band :near} (select-keys heard [:direction :band])))))
+
+(deftest seen-objs-hides-what-sits-behind-a-wall-but-not-players-or-hostiles
+  (let [p (mob-stub [{:id 1 :name "cow" :kind "passive" :pos [0 64 3] :visible true}
+                     {:id 2 :name "cow" :kind "passive" :pos [0 64 4] :visible false}
+                     {:id 3 :name "zombie" :kind "hostile" :pos [0 64 5] :visible false}
+                     {:id 4 :name "Bob" :kind "player" :pos [0 64 6] :visible false}] [])]
+    (is (= [1 3 4] (map #(.-id %) (look/seen-objs p {:radius 10}))))
+    (is (= [1] (map #(.-id %) (look/seen-objs p {:radius 10 :max 1}))) "max counts after the hiding")))

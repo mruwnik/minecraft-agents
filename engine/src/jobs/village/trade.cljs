@@ -137,7 +137,7 @@
 (defn find-villager
   "The entity named villager with uuid within the search radius, or nil."
   [p uuid]
-  (->> (array-seq (.entities p #js {:radius (search-radius) :names #js ["villager"]}))
+  (->> (look/seen-objs p {:radius (search-radius) :names ["villager"]})
        (filter #(= uuid (.-uuid %)))
        first))
 

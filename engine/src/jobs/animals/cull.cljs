@@ -96,7 +96,7 @@
 (defn herd
   "The entities named :mob in the bound, never players or items."
   [c]
-  (->> (array-seq (.entities (:primitives c) #js {:radius (reach c) :names #js [(:mob (:args c))] :max 64}))
+  (->> (look/seen-objs (:primitives c) {:radius (reach c) :names [(:mob (:args c))] :max 64})
        (remove #(contains? #{"player" "item"} (.-kind %)))
        (filter #(in-bound? c (u/pos-of (.-pos %))))
        vec))

@@ -116,7 +116,7 @@
   (let [{:keys [mob radius]} (:args c)]
     (if mob
       (animals/herd (:primitives c) mob radius)
-      (vec (array-seq (.entities (:primitives c) #js {:radius radius :kind "passive" :max 64}))))))
+      (vec (look/seen-objs (:primitives c) {:radius radius :kind "passive" :max 64})))))
 
 (defn on-a-lead
   "The animals in radius on a lead (this body's or a knot's) that the call is about, nearest first."
@@ -149,7 +149,7 @@
   [c a]
   (let [holder (.-leashHolder a)]
     (when (number? holder)
-      (->> (array-seq (.entities (:primitives c) #js {:radius (+ (knot-margin) (:radius (:args c))) :max 64}))
+      (->> (look/seen-objs (:primitives c) {:radius (+ (knot-margin) (:radius (:args c))) :max 64})
            (filter #(and (= holder (.-id %)) (= knot-name (.-name %))))
            first))))
 

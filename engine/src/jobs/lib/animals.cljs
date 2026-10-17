@@ -3,6 +3,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.bait :as bait]
             [jobs.lib.gate :as gate]
+            [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.pen :as pen]
             [jobs.lib.util :as u]))
@@ -29,7 +30,7 @@
 (defn herd
   "The JS entities named mob within radius of the body, nearest first, as a vector."
   [p mob radius]
-  (vec (array-seq (.entities p #js {:radius radius :names #js [mob] :max 64}))))
+  (vec (look/seen-objs p {:radius radius :names [mob] :max 64})))
 
 
 (def livestock (vec (remove #{"bee"} (keys breeding-food))))
@@ -38,7 +39,7 @@
   "The livestock listed within radius of the body that stand on the pen's cells (answer of jobs.lib.pen/check), as
   {:kind :id :pos [x y z]} rows, so a log line dates a loss."
   [p answer radius]
-  (->> (array-seq (.entities p #js {:radius radius :names (clj->js livestock) :max 64}))
+  (->> (look/seen-objs p {:radius radius :names livestock :max 64})
        (filter #(pen/in-pen? answer (u/pos-of (.-pos %))))
        (mapv (fn [e] (let [{:keys [x y z]} (u/pos-of (.-pos e))]
                        {:kind (.-name e) :id (.-id e) :pos [(/ (js/Math.round (* 10 x)) 10) y (/ (js/Math.round (* 10 z)) 10)]})))))

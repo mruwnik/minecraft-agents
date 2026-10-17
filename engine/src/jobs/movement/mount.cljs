@@ -6,6 +6,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]))
 
@@ -37,7 +38,7 @@
 (defn sensed
   "The entities in sight with a position (heard mobs have none)."
   [p]
-  (filter #(some? (.-pos %)) (array-seq (.entities p #js {:radius 64 :max 64}))))
+  (filter #(some? (.-pos %)) (look/seen-objs p {:radius 64 :max 64})))
 
 (defn entity-of [p id]
   (first (filter #(= id (.-id %)) (sensed p))))

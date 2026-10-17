@@ -49,7 +49,7 @@
 (defn villagers
   "The villagers in sight within radius."
   [p radius]
-  (array-seq (.entities p #js {:radius radius :names #js ["villager"]})))
+  (look/seen-objs p {:radius radius :names ["villager"]}))
 
 (defn adult? [e] (not (.-baby e)))
 

@@ -168,7 +168,7 @@
   "Without :villager, choose the nearest adult villager within :radius that is no nitwit and keep it. The uuid or nil."
   [c]
   (or (chosen c)
-      (when-let [e (->> (array-seq (.entities (:primitives c) #js {:radius (:radius (:args c)) :names #js ["villager"]}))
+      (when-let [e (->> (look/seen-objs (:primitives c) {:radius (:radius (:args c)) :names ["villager"]})
                         (remove #(or (.-baby %) (= "nitwit" (.-profession %))))
                         first)]
         (ctx/update-mem! c assoc :chosen (.-uuid e))

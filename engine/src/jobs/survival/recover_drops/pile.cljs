@@ -2,6 +2,7 @@
   "A pile in the inventory and on the ground: what of it is back, what is left, which of its items are in sight."
   (:require [engine.ctx :as ctx]
             [jobs.lib.storage :as storage]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.survival.recover-drops.config :as cfg]))
 
@@ -19,8 +20,7 @@
   "Ids of the item entities in sight lying within radius of pos whose name is one of names."
   [c pos names radius]
   (let [wanted (set names)]
-    (->> (array-seq (.entities (:primitives c) #js {:radius (+ radius (cfg/stray-range) 4) :kind "item" :max 64}))
-         (remove #(false? (.-visible %)))
+    (->> (look/seen-items (:primitives c) {:radius (+ radius (cfg/stray-range) 4) :max 64})
          (filter #(wanted (some-> (.-item %) .-name)))
          (filter #(<= (u/dist pos (u/pos-of (.-pos %))) radius))
          (mapv #(.-id %)))))
