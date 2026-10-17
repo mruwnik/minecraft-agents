@@ -151,7 +151,7 @@
   "The {:reason :no-tool ...} the body meets at the block: no carried tool harvests it (with :need-drop), or nil."
   [c]
   (let [{:keys [pos error]} (b/parse (:args c))]
-    (when-not (or error (:dug (b/mem-for c pos)) (b/to-see? c pos))
+    (when-not (or error (:dug (b/mem-for c pos)) (look/unknown? (:primitives c) (b/cell pos)))
       (let [block (b/target-name (:primitives c) pos b/hidden-guess)]
         (when (and block (not (b/air block)) (not (b/fluids block)))
           (when-let [{:keys [tool listed]} (needs c block)]

@@ -189,14 +189,15 @@
           (is (empty? (listed s)))
           (is (= "cobblestone" (block-at s 1 64 1))))))))
 
-(deftest dig-without-fetch-ends-no-tool-and-touches-no-chest
+(deftest dig-without-fetch-waits-no-tool-and-touches-no-chest
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world pickaxe-stock) [own-zone])]
           (core/submit! (:eng s) (dig-spec {:fetch false}) {})
           (await (run-ticks s 10))
-          (is (= [:no-tool] (stopped-reasons s)))
+          (is (= [:no-tool] (distinct (mapv :reason (events-of s :waiting)))))
+          (is (empty? (stopped-reasons s)))
           (is (empty? (inspects s)))
           (is (empty? (transfers s)))
           (is (= "stone" (block-at s 2 64 3))))))))
@@ -254,7 +255,8 @@
         (let [s (start (world pickaxe-stock) [own-zone])]
           (core/submit! (:eng s) (dig-spec {:fetch #{:item}}) {})
           (await (run-ticks s 10))
-          (is (= [:no-tool] (stopped-reasons s)))
+          (is (= [:no-tool] (distinct (mapv :reason (events-of s :waiting)))))
+          (is (empty? (stopped-reasons s)))
           (is (empty? (inspects s))))))))
 
 (deftest a-bad-fetch-arg-is-refused-at-submit
