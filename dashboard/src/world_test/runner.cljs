@@ -384,9 +384,12 @@
              (fs/rmSync (run-dir opts) #js {:recursive true :force true})))))
 
 (defn body-argv
-  "node argv for a body: V8 flags must be on the command line (heap cap: RSS 335 -> ~255 MB)."
-  [opts scenario]
-  #js ["--max-old-space-size=128" "--max-semi-space-size=8" "out/body-release.cjs" "--agent" (:body opts) "--world" (:world opts) "--scenario" scenario "--fresh"])
+  "node argv for a body: V8 flags must be on the command line (heap cap: RSS 335 -> ~255 MB). --fresh drops engine.edn
+  (the queue and register), unless restore?."
+  ([opts scenario] (body-argv opts scenario false))
+  ([opts scenario restore?]
+   (into-array (concat ["--max-old-space-size=128" "--max-semi-space-size=8" "out/body-release.cjs" "--agent" (:body opts) "--world" (:world opts) "--scenario" scenario]
+                       (when-not restore? ["--fresh"])))))
 
 (defn await-online!
   "Polls the server's player list (every 250 ms, up to 10 s) until the body is on it (the start check polls the rest)."
@@ -416,8 +419,9 @@
 (defn start-body!
   "Starts the body with a scenario holding register, --fresh; resolves once it logged :system :started. The body's own
   engine/memory.edn is deleted first unless keep-memory? (--fresh only drops engine.edn), then written from
-  memory-data when given (the case's :memory seed; the body reads the file as it starts)."
-  [opts register keep-memory? memory-data]
+  memory-data when given (the case's :memory seed; the body reads the file as it starts). restore?: starts without
+  --fresh, so the body restores its engine.edn."
+  [opts register keep-memory? memory-data restore?]
   (when-not keep-memory?
     (clear-stale-plans! opts)
     (clear-body-notes! opts)
@@ -436,7 +440,7 @@
     (fs/mkdirSync dir #js {:recursive true})
     (fs/writeFileSync scenario (pr-str {:register [] :queue []}))
     (let [fd (fs/openSync out "a")
-          child (cp/spawn "node" (body-argv opts scenario)
+          child (cp/spawn "node" (body-argv opts scenario restore?)
                           #js {:cwd (repo-path "engine") :stdio #js ["ignore" fd fd]})]
       (swap! bodies assoc (:body opts) child)
       (.then (await-event opts offset {:source :system :kind :started} since 90000 #{})
@@ -1142,12 +1146,11 @@
 (declare put-register!)
 
 (defn restart-body!
-  "Stops this runner's body and starts it again keeping engine/memory.edn, seen.bin and the world position; the case's
-  register is put again (the restart drops engine.edn)."
-  [opts origin c]
+  "Stops this runner's body and starts it again keeping engine/memory.edn, seen.bin, the world position and the queue
+  and register of engine.edn (a restart as a player's is)."
+  [opts]
   (-> (stop-body! opts)
-      (.then #(start-body! opts nil true nil))
-      (.then #(when (seq (:register c)) (put-register! opts (:register c) origin)))))
+      (.then #(start-body! opts nil true nil true))))
 
 (defn settling-reply?
   "True when a tool's answer is the lease's refusal of a body that has just started: {:ok false :reason \"settling\"}."
@@ -1250,7 +1253,7 @@
                                           (fn [ok] (if ok ids (throw (js/Error. "a :time-set step needs --allow-time")))))
                          :await (.then (await-event opts offset a (await-since a t0 @cli-ms) (* 1000 b) ids)
                                        (fn [ev] (if ev (do (reset! event-job (get-in ev [:context :job-id])) ids) (throw (js/Error. (str ":await " (pr-str a) " timed out after " b " s"))))))
-                         :restart-body (.then (restart-body! opts origin c) (constantly ids))
+                         :restart-body (.then (restart-body! opts) (constantly ids))
                          :until (.then (until-step! opts a b @last-job @event-job) (constantly ids))
                          :until-seen (.then (until-step! opts (f/seen-check a) b @last-job @event-job) (constantly ids))
                          :until-rcon (.then (until-rcon-step! {:send rcon! :sleep sleep} (f/substitute a (:body opts) origin box) b (nth step 3)) (constantly ids))
@@ -1917,7 +1920,7 @@
                                                                          (fn [] (if (= :keep plan)
                                                                                   (js/Promise.resolve nil)
                                                                                   (-> (if (= :restart-keep plan) (js/Promise.resolve nil) (reset-last-plot! opts))
-                                                                                      (.then (fn [] (write-body-settings! opts c) (start-body! opts register (= :restart-keep plan) memory))))))))
+                                                                                      (.then (fn [] (write-body-settings! opts c) (start-body! opts register (= :restart-keep plan) memory false))))))))
                                                            (.then (fn [r] (on-result! c r)))
                                                            (.finally #(release-plot! i))))))))
                                        (js/Promise.resolve nil)

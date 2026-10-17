@@ -1,14 +1,14 @@
 ;; Readiness live cases L1-L6 (docs/readiness-checks-design.md): jobs.debug.ready-probe binds safe-at (:at) or safe-if-lit (:lit?) and only emits
 ;; job.ready-probe once started. Register empty (no hostile reflex, no night trigger) unless a case says so; no bed anywhere.
 ;; Night cases need --allow-time --time-log <the shared time log>. A stone hut x 8..16, z 8..16 with a doorway at [8 0..1 12]; the :at cell [4 0 12]
-;; lies outside it in line with the doorway.
+;; lies outside it in line with the doorway. The torches sit far from the doorway so no light reaches the :at cell (a lit cell is not exposed).
 ;; L3 (the probe run exclusive ends in one round with the reason) has no case: the runner has no exclusive step; hand probe, the engine side is run-checks-test.
 {:defaults
  {:tags [:readiness :survival :night]
   :time :night
   :plot {:height 6}
   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"] [:fill [8 0 12] [8 1 12] "air"]
-           [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
+           [:set [15 1 9] "torch"] [:set [15 1 15] "torch"]]
   :body {:at [10.5 0 12.5] :yaw 90 :settle-s 2}
   :limit-s 100}
  :cases

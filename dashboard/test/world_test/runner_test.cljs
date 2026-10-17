@@ -15,6 +15,9 @@
     (is (= ["--agent" "B" "--world" "w" "--scenario" "/tmp/s.edn" "--fresh"]
            (vec (drop (inc script) argv))))))
 
+(deftest a-restoring-launch-keeps-engine-edn-by-leaving-out-fresh
+  (is (not-any? #{"--fresh"} (r/body-argv {:body "B" :world "w"} "/tmp/s.edn" true))))
+
 (deftest build-plot-retries-an-unloaded-plot-then-fails-as-a-setup-error
   (let [origin [20000 150 20000]
         c {:plot {:height 4 :floor "stone"} :blocks [[:fill [0 0 0] [1 1 1] "water"]]}
