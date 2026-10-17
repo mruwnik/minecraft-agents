@@ -17,7 +17,7 @@
               {:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
    :body {:effects [["resistance" 900 2]]}
-   :act [[:summon "zombie" [18.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1},mainhand:{id:\"minecraft:iron_sword\",count:1,components:{\"minecraft:enchantments\":{\"minecraft:fire_aspect\":2}}}}}"]]
+   :act [[:summon "zombie" [18.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1},mainhand:{id:\"minecraft:iron_sword\",count:1,components:{\"minecraft:enchantments\":{\"minecraft:fire_aspect\":2}}}},active_effects:[{id:\"minecraft:speed\",amplifier:3b,duration:2400}]}"]]
    :expect [{:event {:source :body :kind :hurt :data {:causes [:has "fire"]}} :within-s 30}
             {:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 15}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :burning}} :for-s 40 :until {:source :reflex :kind :ended :context {:reflex-id :hostile-near}}}]

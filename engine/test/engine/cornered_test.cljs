@@ -958,6 +958,21 @@
           (is (= {:x 3 :y 64 :z 0} (first (tu/walked-to eng))) "walks under the roof, digs and places nothing")
           (is (zero? (count (calls p "place")))))))))
 
+(deftest a-body-with-an-enderman-near-looks-up-before-it-takes-the-sky-for-a-roof
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :entities [(enderman 2.5 64 0.5)]})
+              sensed (.-sensedAt p)
+              looked? #(pos? (count (calls p "look")))]
+          (aset p "sensedAt" (fn [pos] (if (and (>= (.-y pos) 66) (not (looked?))) #js {:unknown true} (sensed pos))))
+          (.override (.-world p) "place"
+                     (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (is (looked?) "the cells overhead are looked at, not read as rock")
+          (is (pos? (count (calls p "place"))) "open sky is no roof: it walls itself in"))))))
+
 (deftest nearest-first-orders-the-sides-by-the-melee-chaser-and-keeps-support-before-roof
   (let [feet {:x 0 :y 64 :z 0}
         east {:x 1 :y 64 :z 0} west {:x -1 :y 64 :z 0}

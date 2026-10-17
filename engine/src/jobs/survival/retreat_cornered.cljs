@@ -11,6 +11,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.escape :as escape]
+            [jobs.lib.look :as look]
             [jobs.lib.result :as result]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.step-off :as step-off]
@@ -294,12 +295,15 @@
          first)))
 
 (defn ^:async roof!
-  "Stand under a roof an enderman cannot enter: a step to the nearest roof-cell, a short hold once there. :again, nil when
-  there is none or the walk is blocked."
+  "Stand under a roof an enderman cannot enter: a step to the nearest roof-cell, a short hold once there (the cell over the
+  head is looked at first: an unseen one reads as rock). :again, nil when there is none or the walk is blocked."
   [c]
   (let [block-at (block-at-fn (:primitives c))
         self (u/self-pos c)
         here {:x (js/Math.floor (:x self)) :y (js/Math.floor (:y self)) :z (js/Math.floor (:z self))}]
+    (when (true? (some-> (u/sensed (:primitives c) (update here :y + 2)) .-unknown))
+      (await (ctx/act c :look (clj->js {:pos {:x (+ 0.1 (:x self)) :y (+ 6 (:y self)) :z (:z self)}})))
+      (look/see! c))
     (if (and (escape/passable? (block-at (update here :y inc))) (escape/solid? (block-at (update here :y + 2))))
       (await (hold! c :roof "under a roof, out of the enderman's reach"))
       (when-let [cell (roof-cell block-at self roof-reach)]
