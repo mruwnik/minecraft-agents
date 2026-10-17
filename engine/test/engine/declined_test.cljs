@@ -137,3 +137,16 @@
                                    [(child/exhausted? c :a)
                                     (do (child/fruitless! c :a) (child/exhausted? c :a))
                                     (do (child/progress! c :a) (child/exhausted? c :a))])))))))))
+
+(deftest a-per-call-max-and-the-give-up-ending
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= [false true {:kind :nothing-possible :cause :no-births :data {:n 1} :because {:kind :nothing-possible :cause :x}}]
+               (await (in-parent walker
+                                 (fn ^:async f [c]
+                                   (child/fruitless! c :a)
+                                   [(child/exhausted? c :a 2)
+                                    (child/exhausted? c :a 1)
+                                    (do (child/fruitless! c :a {:kind :nothing-possible :cause :x :report {:uses {}}})
+                                        (select-keys (child/give-up c :a :no-births {:n 1}) [:kind :cause :data :because]))])))))))))

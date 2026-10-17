@@ -57,7 +57,7 @@
   seal): once per trip they are taken back (jobs.access.cleanup, event recover-drops.seal) and the walk goes on.
   Ends by writing a :recovered entry {:decision :skip|:collected|:partial|:abandoned}.
   :collected counts the pile's items that entered the inventory since the decision, those picked up on the walk too.
-  :abandoned with :reason :unreachable (the walk was blocked, or did not arrive or got no nearer :max-blocked-retries times; a pile too far to walk after such walks ends so, not :skip), :danger
+  :abandoned with :reason :unreachable (the walk was blocked, or did not arrive or got no nearer the shared max-fruitless times; a pile too far to walk after such walks ends so, not :skip), :danger
   (the trip was cut by a hostile, or declined for a danger, :max-hostile-cuts times), :nothing-found or :window-closed
   (the five minute despawn window closed). :partial carries :left and :reason :unreachable or :not-visible.
   Endings (data :decision :text :pos :items :left): :collected is done; a skip for value condition-failed :not-worth; :partial nothing-possible :unreachable or :not-visible; :abandoned by its reason, :window-closed limit-reached (line :time), :danger and :nothing-found condition-failed, :unreachable nothing-possible; a danger or a walk that did not arrive leave the death open (see above). The abandoned text names the pile and what to do.
@@ -183,8 +183,9 @@
   (jobs.access.cleanup :near) and walk again, after a walk to within ::seal-sight of the nearest of them (the cleanup offers only blocks the body has seen). Tried twice a trip at most; :seal-cleared is set once a run finished.
   :next when it ran, else nil."
   [c pos]
-  (when-let [seal (and (not (:seal-cleared (ctx/mem c))) (< (:seal-tries (ctx/mem c) 0) 2) (seq (own-seal-near c pos)))]
-    (ctx/update-mem! c #(-> % (update :seal-tries (fnil inc 0)) (assoc :phase :go)))
+  (when-let [seal (and (not (:seal-cleared (ctx/mem c))) (not (child/exhausted? c :seal 2)) (seq (own-seal-near c pos)))]
+    (child/fruitless! c :seal)
+    (ctx/update-mem! c assoc :phase :go)
     (dth/save-trip! c)
     (ctx/emit! c :recover-drops.seal :info {:pos pos :text "the pile is out of reach behind blocks this body placed: taking them back"})
     (let [[x y z] (:cell (apply min-key #(u/dist (u/self-pos c) (zipmap [:x :y :z] (:cell %))) seal))]
@@ -222,11 +223,12 @@
       (:leg walked)
       (let [nearer? (< (u/dist (u/self-pos c) pos) (- before 1))]
         (ctx/update-mem! c #(cond-> (assoc % :recheck true)
-                              (not nearer?) (-> (assoc :blocked true) (update :blocked-retries (fnil inc 0)))))
-        (when-not nearer? (dth/save-trip! c))
+                              (not nearer?) (assoc :blocked true)))
+        (when-not nearer? (child/fruitless! c :go) (dth/save-trip! c))
         :next)
       (not (:arrived walked))
-      (do (ctx/update-mem! c #(-> % (assoc :blocked true) (update :blocked-retries (fnil inc 0))))
+      (do (ctx/update-mem! c assoc :blocked true)
+          (child/fruitless! c :go)
           (dth/save-trip! c)
           (decline! c :unreachable (str "the walk to " (pr-str pos) " did not arrive") {:pos pos}))
       :else (do (ctx/update-mem! c assoc :phase :collect :blocked false) (dth/save-trip! c) :next))))
@@ -472,14 +474,14 @@
       (<= (:value decided) (+ (if (= :infinite (:cost decided)) js/Infinity (:cost decided)) margin))
       (if (est/danger-only? decided margin)
         (await (retry-later! c entry decided))
-        (if (and (= :too-far (:reason decided)) (pos? (:blocked-retries (ctx/mem c) 0)))
+        (if (and (= :too-far (:reason decided)) (pos? (child/fruitless c :go)))
           (finish! c :abandoned (assoc decided :reason :unreachable :detail (est/unreachable-detail c pos)))
           (finish! c :skip decided)))
 
       (>= (:cuts (ctx/mem c) 0) (cfg/max-hostile-cuts))
       (finish! c :abandoned (assoc decided :reason :danger))
 
-      (>= (:blocked-retries (ctx/mem c) 0) (cfg/max-blocked-retries))
+      (child/exhausted? c :go)
       (finish! c :abandoned (assoc decided :reason :unreachable :detail (est/unreachable-detail c pos)))
 
       (hit-since? c decided) (do (ctx/update-mem! c assoc :recheck true) :next)

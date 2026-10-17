@@ -112,7 +112,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (await ((resume-run {:blocked true :blocked-retries 3})))]
+        (let [{:keys [eng]} (await ((resume-run {:blocked true :fruitless {:go 3}})))]
           (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason]))))))))
 
 (deftest a-trip-cut-once-goes-on

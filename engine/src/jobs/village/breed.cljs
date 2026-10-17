@@ -163,16 +163,16 @@
         pair (->> vs (filter adult?) (remove #(tried (.-uuid %)))
                   (sort-by #(u/dist me (u/pos-of (.-pos %)))) (take 2))]
     (cond
-      (< (count pair) 2) (if (seq tried) (stop! c seen :nothing-possible :no-births) :continue)
+      (< (count pair) 2) (if (seq tried) (child/give-up c :pair :no-births (data-of c seen)) :continue)
       :else (do (ctx/update-mem! c #(assoc % :pair (mapv (fn [e] (.-uuid e)) pair) :fed [] :baseline (:kids seen)
                                            :tried (into (vec (:tried %)) (map (fn [e] (.-uuid e))) pair)))
                 :again))))
 
 (defn failed-pair!
-  "The pair could not be fed: an attempt without a birth."
-  [c]
+  "The pair could not be fed (feed ending e): an attempt without a birth."
+  [c e]
   (ctx/update-mem! c dissoc :pair :fed)
-  (child/fruitless! c :pair)
+  (child/fruitless! c :pair e)
   :again)
 
 (defn ^:async feed-pair!
@@ -191,7 +191,7 @@
         (cond
           (= :continue r) :continue
           (= :no-food (contract/cause-key r)) (stop! c seen :condition-failed :no-food)
-          (not= :done (:kind r)) (failed-pair! c)
+          (not= :done (:kind r)) (failed-pair! c r)
           :else (do (ctx/update-mem! c update :fed conj next) :again))))))
 
 (defn ^:async wait!
@@ -217,7 +217,7 @@
       (>= (:pop seen) (:target (:args c)))
       (do (ctx/update-mem! c #(-> % (dissoc :waiting :pair :fed :at) (update :births (fnil + 0) (born c seen)))) :again)
       (:waiting m) (await (wait! c seen))
-      (child/exhausted? c :pair) (stop! c seen :nothing-possible :no-births)
+      (child/exhausted? c :pair) (child/give-up c :pair :no-births (data-of c seen))
       (:pair m) (await (feed-pair! c vs seen))
       :else (choose! c vs seen))))
 

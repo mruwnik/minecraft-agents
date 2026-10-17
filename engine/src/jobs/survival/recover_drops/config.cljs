@@ -10,7 +10,6 @@
    ::stray-range {:default 5 :doc "A body this far from the death point in the collect phase (a flee cut the trip) walks back first." :spec (a/int-in 0 nil)}
    ::search-radius {:default 3 :doc "Blocks out from the pile, on the four compass sides, at which the body looks for items that are not in sight at the pile." :spec (a/int-in 1 nil)}
    ::max-hostile-cuts {:default 2 :doc "Resumes of one trip that followed a cut by a hostile reflex, or a decline for a danger, before it is given up as :danger." :spec (a/int-in 1 nil)}
-   ::max-blocked-retries {:default 3 :doc "Walks of one trip that did not arrive before it is given up as :unreachable." :spec (a/int-in 1 nil)}
    ::wet-danger {:default 30 :doc "Points of route danger added for a pile in water or lost to drowning (a swim with the air running out); 10 cost each." :spec (a/num-in 0 nil)}
    ::seal-radius {:default 4 :doc "Scaffold blocks this body placed within this many blocks of the pile (a flee seal) are taken back when they keep it out of reach." :spec (a/num-in 0 nil)}
    ::seal-sight {:default 4 :doc "The body walks to within this many blocks of the nearest own seal block, to see it, before the seal is taken back." :spec (a/num-in 0 nil)}
@@ -38,7 +37,6 @@
 
 (defn max-hostile-cuts [] (settings/get settings ::max-hostile-cuts))
 
-(defn max-blocked-retries [] (settings/get settings ::max-blocked-retries))
 
 (def settle-ms
   "After a respawn the client needs this long to re-receive nearby entities;

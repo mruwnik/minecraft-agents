@@ -2,6 +2,7 @@
   "Run a child job to its end inside the parent's round, for children that still answer :continue per step."
   (:require [engine.args :as a]
             [engine.settings :as settings]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]))
 
 (a/defargs settings
@@ -31,20 +32,29 @@
   (get-in (ctx/mem c) [:fruitless slot] 0))
 
 (defn fruitless!
-  "Count one more round of slot's child that brought nothing; the count so far, this one included."
-  [c slot]
-  (ctx/update-mem! c update-in [:fruitless slot] (fnil inc 0))
-  (fruitless c slot))
+  "Count one more round of slot's child that brought nothing, keeping its ending e (if given) for give-up; the count so
+  far, this one included."
+  ([c slot] (fruitless! c slot nil))
+  ([c slot e]
+   (ctx/update-mem! c #(cond-> (update-in % [:fruitless slot] (fnil inc 0))
+                         (map? e) (assoc-in [:fruitless-ending slot] (dissoc e :report))))
+   (fruitless c slot)))
 
 (defn exhausted?
-  "Whether slot's child has brought nothing max-fruitless rounds in a row."
-  [c slot]
-  (>= (fruitless c slot) (max-fruitless)))
+  "Whether slot's child has brought nothing max rounds in a row (default max-fruitless)."
+  ([c slot] (exhausted? c slot (max-fruitless)))
+  ([c slot max] (>= (fruitless c slot) max)))
+
+(defn give-up
+  "The ending of a caller whose slot's child is exhausted: nothing-possible with cause reason and data, the child's last
+  fruitless ending (counted with fruitless!) as its :because."
+  [c slot reason data]
+  (contract/with-because (ctx/end c :nothing-possible reason data) (get-in (ctx/mem c) [:fruitless-ending slot])))
 
 (defn progress!
   "slot's child brought something: its fruitless rounds start again from none."
   [c slot]
-  (ctx/update-mem! c update :fruitless dissoc slot))
+  (ctx/update-mem! c #(-> % (update :fruitless dissoc slot) (update :fruitless-ending dissoc slot))))
 
 (defn ^:async call-walk*
   "A go-to child in slot with args through ctx/call: :continue while the walk goes on (or waits: go-to's safe? says

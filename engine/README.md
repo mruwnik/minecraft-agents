@@ -64,7 +64,7 @@ Layout:
   Search jobs (`harvest-wood`, `combat.hunt`, `gather.mine`, `explore.search`) take the `:center` arg (nil: where the body stands; `jobs.lib.area`) and name it in `target`; the first three wait `:outside-area` while the body is farther than `:radius` from it, search legs radiate from it.
   Results: `jobs.lib.result` (`permanent-walk?`, `unreachable-walk?`, `why` read go-to's ending).
   `jobs.lib.child/run!*` calls a child (through `ctx/call`) until it ends (50 ms timer between calls; `:continue` after a call cap; a slot run with other args starts afresh).
-  `child/fruitless!`, `child/fruitless`, `child/progress!` count a slot's rounds in a row that brought nothing in job memory; `child/exhausted?` is true at the one shared `jobs.lib.child/max-fruitless` (3). Obtain's craft and gather, breed's pair, lure-to/herd-trip's equip and herd-run's shut-gate use them.
+  `child/fruitless!`, `child/fruitless`, `child/progress!` count a slot's rounds in a row that brought nothing in job memory; `child/exhausted?` is true at the one shared `jobs.lib.child/max-fruitless` (3) or a per-call max; `child/give-up` ends nothing-possible with the last `fruitless!` ending as :because. Obtain's craft and gather, breed's pair, lure-to/herd-trip's equip, herd-run's shut-gate and recover-drops' walk and seal use them.
   The ctx/call versions `child/call-walk*`, `run!*`, `walk-into!*`, `blocks/walk!*` return the child's ending (or `:continue`).
 - `src/triggers/` the triggers, plain fns by area (`triggers.survival.hungry`); `defaults.edn` is the default set.
 - `scenarios/*.edn` scenarios (`survival.edn`, `woodcutter.edn`, ...; `scratch/` is git-ignored for hand-run probe starts; `idle.edn` is the idle template).

@@ -43,7 +43,8 @@
 
     :else
     (let [why (if (and (= :no-stone-found why) (seen-of c need)) :unreachable why)]
-      (when (>= (child/fruitless! c :gather) (fruitless-limit need e)) (tried! c :gather (or why :failed)))
+      (child/fruitless! c :gather e)
+      (when (child/exhausted? c :gather (fruitless-limit need e)) (tried! c :gather (or why :failed)))
       :again)))
 
 (defn pickaxe-args

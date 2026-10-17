@@ -130,6 +130,7 @@
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
+   ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the waits on checks and the jobs that run between its rounds included (:limit-reached)." :spec (a/num-in 0 nil)}
    ::max-steps {:default 400 :doc "Digs, steps, bridges and fetch rounds of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
    ::max-returns {:default 3 :doc "Walks back onto the stair's line (after a reflex moved the body off it) one call makes before it stops :off-stair." :spec (a/int-in 0 nil)}
    ::cell-s {:default 1.2 :doc "Mean seconds one cut cell of a step takes (look, dig, walk), for the quote." :spec (a/num-in 0 nil)}})
@@ -235,7 +236,7 @@
   [f]
   (fn [c] (f (with-heading c))))
 
-(def defaults {:spend {:job-time ::job-time-s}})
+(def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 
 (defn target-fit
   "Never :bad-args for a target the args do not give; later :y-not-beyond-feet for a :y that lies at or behind the feet."
