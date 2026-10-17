@@ -2,7 +2,7 @@
 ;; stands and however many there are. Three cows in the open are a surplus by the keep-2 rule alone. Hunger is drained by RCON
 ;; (food 9-10), hp 15; no food carried, only a sword.
 ;; Should-succeed: with only sheep off limits one of the three cows is killed (food.killed :rule :surplus), two stay.
-;; Should-fail: with cows off limits none is killed (food.none), all three stay.
+;; Should-fail: with cows off limits none is killed (the :no-food ending), all three stay.
 {:defaults
  {:tags [:survival :get-food :animals]
   :time :day
@@ -19,6 +19,6 @@
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}
   {:name "cows-off-limits-are-never-hunted"
    :act [[:job (jobs.survival.get-food {:off-limits ["cow"]})]]
-   :expect [{:event {:source :job :kind :food.none :level :warn} :within-s 90}
-            {:no-event {:source :job :kind :food.killed} :for-s 90 :until {:source :job :kind :food.none}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 90}
+            {:no-event {:source :job :kind :food.killed} :for-s 90 :until {:source :job :kind :stopped :data {:reason :no-food}}}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 3]]}]}

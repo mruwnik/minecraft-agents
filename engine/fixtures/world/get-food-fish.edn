@@ -29,6 +29,6 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
-   :expect [{:event {:source :job :kind :food.none :level :warn} :within-s 40}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 40}
             {:no-event {:source :job :kind :fish.caught} :for-s 40}]
    :limit-s 60}]}

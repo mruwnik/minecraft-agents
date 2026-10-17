@@ -94,6 +94,8 @@
 
 ;; ------------------------------------------- the hungry reflex with nothing to eat
 
+(defn none-events [seen] (filterv #(and (= :stopped (:kind %)) (= :no-food (:reason %))) @seen))
+
 (defn hungry-fired [seen]
   (filterv #(and (= [:reflex :fired] [(:source %) (:kind %)]) (= :hungry (:reflex %))) @seen))
 
@@ -102,7 +104,7 @@
     (swap! clock + 1000)
     (await (core/tick! eng))))
 
-;; Owner: eat "should not continuously fire with no food at hand". After get-food finds nothing (food.none, which
+;; Owner: eat "should not continuously fire with no food at hand". After get-food finds nothing (ends :no-food, which
 ;; says why), the trigger rests: not every tick, not every cooldown.
 (deftest hungry-reflex-rests-after-finding-no-food-and-says-why
   (async done
@@ -112,7 +114,7 @@
           (core/register-reflex! eng {:trigger :hungry})
           (await (tick-for! eng clock 5))
           (is (= 1 (count (hungry-fired seen))))
-          (let [none (filterv #(= :food.none (:kind %)) @seen)]
+          (let [none (none-events seen)]
             (is (= 1 (count none)))
             (is (re-find #"hungry reflex rests" (:text (first none))) "the agent is told why it stops"))
           (await (tick-for! eng clock 300))
@@ -125,7 +127,7 @@
         (let [{:keys [eng seen clock]} (setup {:self {:food 8 :health 14} :inventory [{:name "chicken" :count 2} {:name "rotten_flesh" :count 5}]})]
           (core/register-reflex! eng {:trigger :hungry})
           (await (tick-for! eng clock 5))
-          (let [text (:text (first (filterv #(= :food.none (:kind %)) @seen)))]
+          (let [text (:text (first (none-events seen)))]
             (is (re-find #"2 chicken" text))
             (is (re-find #"5 rotten_flesh" text))
             (is (re-find #"skipped on purpose" text))))))))
@@ -517,7 +519,7 @@
               "only the mature ones, the young carrots are left")
           (is (= 2 (count (calls p "eat"))))
           (is (= 10 (food p)))
-          (is (not-any? #(= :food.none (:kind %)) @seen)))))))
+          (is (empty? (none-events seen))))))))
 
 (deftest get-food-ignores-a-source-beyond-its-radius
   (async done
@@ -561,7 +563,7 @@
         (let [{:keys [eng p seen]} (hunt-world (take 2 three-cows) nil)]
           (await (run-until-empty eng 40))
           (is (= [] (calls p "attack")))
-          (is (some #(and (= :food.none (:kind %)) (re-find #"cow: kept for breeding" (str (:text %)))) @seen)
+          (is (some #(and (= :no-food (:reason %)) (re-find #"cow: kept for breeding" (str (:text %)))) @seen)
               "the text says the cows were kept"))))))
 
 (def own-farm [{:name "farm" :owner "Fake" :min [0 60 -3] :max [20 70 3]}])
@@ -586,7 +588,7 @@
           (core/submit! eng '(jobs.survival.get-food {:attack-gap-ms 0 :explore false}) {})
           (await (run-until-empty eng 40))
           (is (= [] (calls p "attack")))
-          (is (some #(= :food.none (:kind %)) @seen)))))))
+          (is (seq (none-events seen))))))))
 
 (deftest get-food-hunts-wild-animals-before-its-own-pen
   (async done
@@ -622,7 +624,7 @@
         (let [{:keys [eng p seen]} (hunt-world-with {:off-limits ["cow"]} three-cows nil)]
           (await (run-until-empty eng 40))
           (is (= [] (calls p "attack")))
-          (is (some #(and (= :food.none (:kind %)) (re-find #"cow: off-limits" (str (:text %)))) @seen)))))))
+          (is (some #(and (= :no-food (:reason %)) (re-find #"cow: off-limits" (str (:text %)))) @seen)))))))
 
 (deftest get-food-takes-penned-animals-when-asked
   (async done
@@ -665,7 +667,7 @@
           (core/submit! eng '(jobs.survival.get-food {:attack-gap-ms 0}) {})
           (await (run-until-empty eng 40))
           (is (= [] (calls p "attack")))
-          (is (some #(and (= :food.none (:kind %)) (re-find #"cow: kept for breeding" (str (:text %)))) @seen)))))))
+          (is (some #(and (= :no-food (:reason %)) (re-find #"cow: kept for breeding" (str (:text %)))) @seen)))))))
 
 (deftest get-food-names-the-starvation-lift-as-the-rule
   (async done
@@ -691,7 +693,7 @@
                                      w)]
           (await (run-until-empty eng 40))
           (is (= [] (calls p "attack")))
-          (is (some #(and (= :food.none (:kind %)) (re-find #"cow: pen" (str (:text %)))) @seen)))))))
+          (is (some #(and (= :no-food (:reason %)) (re-find #"cow: pen" (str (:text %)))) @seen)))))))
 
 (deftest get-food-hunts-an-animal-when-no-source-is-known
   (async done
@@ -704,7 +706,7 @@
           (is (= [7 7 7 7] (call-args p "attack" "id")) "20 health, 5 a swing")
           (is (= ["beef"] (call-args p "eat" "item")))
           (is (= 7 (food p)))
-          (is (not-any? #(= :food.none (:kind %)) @seen)))))))
+          (is (empty? (none-events seen))))))))
 
 (deftest get-food-hunts-at-the-held-weapons-cooldown
   (async done
@@ -746,7 +748,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen clock]} (setup {:self {:food 1}})
-              none #(filterv (fn [e] (= :food.none (:kind e))) @seen)
+              none #(none-events seen)
               run! (fn ^:async run! []
                      (core/submit! eng '(jobs.survival.get-food) {})
                      (await (run-until-empty eng 10)))]
@@ -774,14 +776,14 @@
           (core/submit! eng '(jobs.survival.get-food) {})
           (await (run-until-empty eng 20))
           (is (= [] (calls p "dig")))
-          (is (= 1 (count (filterv #(= :food.none (:kind %)) @seen)))))))))
+          (is (= 1 (count (none-events seen)))))))))
 
 (deftest get-food-forgets-a-source-found-empty
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:self {:food 1} :containers {"20,64,0" [{:name "cobblestone" :count 3}]}})
-              none #(filterv (fn [e] (= :food.none (:kind e))) @seen)]
+              none #(none-events seen)]
           (know-source! eng {:x 20 :y 64 :z 0} :chest)
           (core/submit! eng '(jobs.survival.get-food) {})
           (await (run-until-empty eng 20))
@@ -802,7 +804,7 @@
           (await (run-until-empty eng 20))
           (is (= [{:x 6 :y 64 :z 0}] (call-args p "dig" "pos")))
           (is (= ["carrot"] (call-args p "eat" "item")))
-          (is (not-any? #(= :food.none (:kind %)) @seen)))))))
+          (is (empty? (none-events seen))))))))
 
 (deftest get-food-declines-in-its-ask-cooldown-with-nothing-in-sight
   (async done
@@ -816,7 +818,7 @@
           (await (core/tick! eng))
           (is (= [] (tu/walk-calls p)) "does not walk to remembered sources")
           (is (= 1 (count (entries eng :hungry))))
-          (is (not-any? #(= :food.none (:kind %)) @seen)))))))
+          (is (empty? (none-events seen))))))))
 
 (def bread-chest {"20,64,0" [{:name "cobblestone" :count 30} {:name "bread" :count 4}]})
 
@@ -838,7 +840,7 @@
           (is (= ["bread"] (call-args p "transfer" "item")))
           (is (= 20 (food p)) "eats the bread")
           (is (= 1 (count (entries eng :hungry))))
-          (is (not-any? #(= :food.none (:kind %)) @seen)))))))
+          (is (empty? (none-events seen))))))))
 
 (deftest get-food-skips-a-source-known-before-it-gave-up-during-its-ask-cooldown
   (async done
@@ -853,7 +855,7 @@
           (await (core/tick! eng))
           (is (= [] (tu/walk-calls p)))
           (is (= 1 (count (entries eng :hungry))))
-          (is (not-any? #(= :food.none (:kind %)) @seen)))))))
+          (is (empty? (none-events seen))))))))
 
 (deftest get-food-forgets-a-fresh-source-found-empty-during-its-ask-cooldown
   (async done
@@ -868,7 +870,7 @@
           (await (run-until-empty eng 20))
           (is (= [] (entries eng :food-source)))
           (is (= 1 (count (entries eng :hungry))))
-          (is (not-any? #(= :food.none (:kind %)) @seen)))))))
+          (is (empty? (none-events seen))))))))
 
 ;; ---------------------------------------------------------------- bread rung
 
@@ -877,7 +879,6 @@
 (defn carried [p name]
   (transduce (comp (filter #(= name (.-name %))) (map #(.-count %))) + 0 (array-seq (.-inventory (.self p)))))
 
-(defn none-events [seen] (filterv #(= :food.none (:kind %)) @seen))
 
 (defn ^:async run-food!
   "A new firing of get-food (hungry below 14, so food 12 is hungry), run until it ends."

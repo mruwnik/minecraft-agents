@@ -1,7 +1,7 @@
 ;; survival.get-food's :pen way: the surplus of the body's own pens (a zone it owns or a plan it made) is food, keeping 2 adults.
 ;; Another's pen stays spared. Hunger is drained by RCON (food 9-10), hp 15; no food carried, only a sword.
 ;; Should-succeed: 3 cows on the footprint of the body's own plan: one is killed, 2 stay.
-;; Should-fail: the same cows on another body's plan: none is killed (food.none), all 3 stay.
+;; Should-fail: the same cows on another body's plan: none is killed (the :no-food ending), all 3 stay.
 {:defaults
  {:tags [:survival :get-food :animals]
   :time :day
@@ -21,13 +21,13 @@
   {:name "other-plan-pen-is-spared"
    :plans [{:id "pen" :metadata {:by "SomeoneElse"}
             :parts [{:id "pen" :cells [#at [22 0 22] #at [27 0 27]] :want [:any "dirt"]}]}]
-   :expect [{:event {:source :job :kind :food.none :level :warn} :within-s 90}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 90}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 3]]}
-  ;; Card 1557a519: a hand-built fenced pen (a ring: :hollow on a one-layer box fills every cell) with no zone or plan still spares its cows (food.none names it); wild cows in the open
+  ;; Card 1557a519: a hand-built fenced pen (a ring: :hollow on a one-layer box fills every cell) with no zone or plan still spares its cows (the :no-food ending names it); wild cows in the open
   ;; are surplus (food.killed :rule :surplus), two stay.
   {:name "fenced-pen-without-a-plan-is-spared"
    :blocks [[:fill [22 0 22] [27 0 27] "oak_fence"] [:fill [23 0 23] [26 0 26] "air"]]
-   :expect [{:event {:source :job :kind :food.none :level :warn} :within-s 90}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 90}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 3]]}
   {:name "three-cows-in-the-open-one-killed-as-surplus"
    :expect [{:event {:source :job :kind :food.killed :data {:rule :surplus}} :within-s 90}]

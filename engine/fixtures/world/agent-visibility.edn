@@ -1,5 +1,5 @@
 ;; Agent-visible texts and results (card 1cc804ec, fixes 9cae4999): the mine result says where the tunnel ended and that the
-;; body walked back; the hungry food.none text names raw/rotten food carried and skipped on purpose; make-room tosses are
+;; body walked back; the hungry the :no-food ending text names raw/rotten food carried and skipped on purpose; make-room tosses are
 ;; events with item and count. (The observe tool's unfinished/queued answer and wait summary are hand-run through the tools.)
 {:defaults
  {:tags [:visibility :jobs]
@@ -19,8 +19,8 @@
    :body {:inventory [["chicken" 2] ["rotten_flesh" 5]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY foodLevel" "data: ([0-9]|1[01])$" 20]
          [:job (jobs.survival.get-food {:food 12 :hunt-radius 4 :ask-cooldown-ms 0 :explore false})]]
-   :expect [{:event {:source :job :kind :food.none :message [:contains "carrying 2 chicken, 5 rotten_flesh, skipped on purpose"]} :within-s 60 :of-job true}
-            {:event {:source :job :kind :food.none :message [:contains "searched for animals"]} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food :text [:contains "carrying 2 chicken, 5 rotten_flesh, skipped on purpose"]}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :stopped :data {:reason :no-food :text [:contains "searched for animals"]}} :within-s 60 :of-job true}]
    :limit-s 70}
   {:name "make-room-tosses-are-events-with-item-and-count"
    :body {:inventory [["dirt" 640] ["gravel" 640] ["sand" 640] ["andesite" 384]]}

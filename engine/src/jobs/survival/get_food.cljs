@@ -44,7 +44,7 @@
          same keep rules; the kill's rule is :own-pen). Its stock is its reserve: taken after the wild food in reach, before fishing and the search.
   Then, once per job (:explore, default on; a starving body again after foods/::starving-rest-ms) it searches for food animals and crops (jobs.explore.search, the
   ::explore setting; not while the search would wait (dark sky, danger near) nor while the night handler holds) and goes on if it found some; at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
-  flesh, with :allow-bad). Still nothing: it ends nothing-possible :no-food with a food.none warning (what was searched, the nearest known source) and writes
+  flesh, with :allow-bad). Still nothing: it ends nothing-possible :no-food (the text says what was searched, the nearest known source) and writes
   :hungry. For :ask-cooldown-ms after that a call still eats and still does the ways :bake, :cook, :collect, :hunt and :crops, but not a source it
   already knew when it gave up (one learned since is tried first; a starving body, food 0 or health below 7, rests only foods/::starving-rest-ms).
   :stock n: a fed body also takes the ways until the pack holds n food points, else ends nothing-possible :no-stock; while the pack is short of it the ask cooldown does not block the search.
@@ -420,18 +420,17 @@
   (ctx/end c :nothing-possible reason (merge {:text text} extra)))
 
 (defn none!
-  "End :no-food with a food.none warn and write :hungry, which starts the ask cooldown."
+  "End :no-food (what was searched, what was passed over) and write :hungry, which starts the ask cooldown."
   [c]
   (let [food (food-level c)
         around (animals/nearby c (hunt-radius c))
         passed (animals/passed-over c (animal-opts c false))
         text (report/none-text c {:radius (hunt-radius c) :passed passed :around around :explored (:explored (ctx/mem c))})]
-    (ctx/emit! c :food.none :warn {:food food :animals passed :nearby around
-                                   :text (str text "; the hungry reflex rests for "
-                                              (js/Math.round (/ (:ask-cooldown-ms (:args c)) 60000))
-                                              " min unless food is carried, wheat to bake is, or a food source is learned")})
     (ctx/remember! c :hungry {:food food} hungry-policy)
-    (stop! c :no-food text :food food)))
+    (stop! c :no-food (str text "; the hungry reflex rests for "
+                           (js/Math.round (/ (:ask-cooldown-ms (:args c)) 60000))
+                           " min unless food is carried, wheat to bake is, or a food source is learned")
+           :food food :animals passed :nearby around)))
 
 (defn stock-stop!
   "Fed but the pack cannot be filled: end :no-stock (no :hungry entry, the body is not hungry)."

@@ -3,7 +3,7 @@
 ;; (hungry), or hp 5 with food 0 (starving: foods/starving? is food 0, or hp 6 or less and hungry). The jobs are submitted
 ;; directly; a :hungry entry seeded 90 s old is a give-up inside the 10 min ask cooldown and past the 60 s starving rest.
 ;; Should-succeed: a starving body past one give-up widens its hunt radius (24 -> 48) and kills a cow 40 blocks off; the
-;; give-ups widen the radius in the food.none text (24, 72); an explore search runs for a body with a stale give-up while it
+;; give-ups widen the radius in the the :no-food ending text (24, 72); an explore search runs for a body with a stale give-up while it
 ;; is starving or asked for a :stock; a melon seen is dug and eaten; a chest booked with bread 100 blocks off is walked to;
 ;; 3 cows lose one, 2 are kept.
 ;; A fragile body (hp 6 or less) waits sheltered at night, so the night cases take only 8 damage (get-food-fragile.edn covers the fragile stop).
@@ -23,19 +23,19 @@
          [:rcon "damage $BODY 14 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
    :expect [{:event {:source :job :kind :food.killed} :within-s 100}
-            {:no-event {:source :job :kind :food.none} :for-s 100 :until {:source :job :kind :food.killed}}]}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-food}} :for-s 100 :until {:source :job :kind :food.killed}}]}
   {:name "radius-in-the-no-food-text-grows-with-give-ups"
    :memory [{:kind :hungry :data {:food 3} :age-s 120 :policy {:cap 10 :ttl 3600000}}
             {:kind :hungry :data {:food 3} :age-s 100 :policy {:cap 10 :ttl 3600000}}]
    :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
          [:rcon "damage $BODY 14 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
-   :expect [{:event {:source :job :kind :food.none :message [:contains "within 72 blocks"]} :within-s 60}]}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food :text [:contains "within 72 blocks"]}} :within-s 60}]}
   {:name "no-give-up-keeps-the-24-block-radius"
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
-   :expect [{:event {:source :job :kind :food.none :message [:contains "within 24 blocks"]} :within-s 40}]}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food :text [:contains "within 24 blocks"]}} :within-s 40}]}
   {:name "starving-with-a-stale-give-up-explores-with-a-clamped-distance"
    :memory [{:kind :hungry :data {:food 0} :age-s 90 :policy {:cap 10 :ttl 3600000}}
             {:kind :hungry :data {:food 0} :age-s 100 :policy {:cap 10 :ttl 3600000}}]
@@ -79,7 +79,7 @@
          [:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
          [:rcon "damage $BODY 8 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore true})]]
-   :expect [{:event {:source :job :kind :food.none :message [:contains "not searched"]} :within-s 60}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food :text [:contains "not searched"]}} :within-s 60}
             {:no-event {:source :job :kind :child_started :data {:slot :explore}} :for-s 40}]}
   {:name "melon-seen-is-dug-and-eaten"
    :blocks [[:set [20 0 16] "melon"]]
@@ -105,14 +105,14 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false :source-radius 8})]]
-   :expect [{:event {:source :job :kind :food.none :level :warn} :within-s 40}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 40}]
    :after [[:body-far [109.5 0 16.5] 60]]}
   ;; 1bda3325: one hungry line for get-food and get-kit: food 8 at full health is not hungry, so get-food ends already
   {:name "food-8-at-full-health-is-not-hungry"
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
          [:job (jobs.survival.get-food {:explore false})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :food.none} :for-s 25 :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind :stopped :data {:reason :no-food}} :for-s 25 :until {:source :job :kind :completed}}]
    :limit-s 40}
   {:name "three-cows-lose-one"
    :act [[:summon "cow" [20.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [21.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [20.5 0 18.5] "{NoAI:1b}"]
@@ -126,12 +126,12 @@
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
-   :expect [{:event {:source :job :kind :food.none :message [:contains "kept for breeding"]} :within-s 60}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food :text [:contains "kept for breeding"]}} :within-s 60}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}
   {:name "starving-hungry-reflex-fires-again-after-a-give-up"
    :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
    :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
          [:rcon "damage $BODY 14 minecraft:generic"]]
-   :expect [{:event {:source :job :kind :food.none :level :warn} :within-s 40}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 40}
             {:count-event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :for-s 130 :at-least 2}]
    :limit-s 150}]}
