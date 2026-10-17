@@ -1,5 +1,5 @@
 ;; Stay alive and otherwise idle. The reflexes are registered in priority
-;; order, most urgent first: air, fire, a block at the feet, hostiles, night (the shelter, and getting out of it by day), the walk home before dusk, food (which heals),
+;; order, most urgent first: air, fire, a block at the feet, hostiles, a poison to cure, night (the shelter, and getting out of it by day), the walk home before dusk, food (which heals),
 ;; logging out when another player sleeps, a door a walk left open, then a death's drops, then a full
 ;; inventory, then the safety nets: scaffold a job left (taken back only once its job is no longer live, so it
 ;; never cuts the job that built it) and trespass digs to restore. Between reflexes the body looks around, one look per round, so it visibly idles. A reflex job that
@@ -18,6 +18,7 @@
              :job (jobs.survival.recover-drops {:collect-radius 6})}
             {:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}
+            {:trigger :poisoned :persistence :cooldown :cooldown-s 10}
             {:trigger :night :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
              :job (jobs.survival.night {:roof-height 4})}
             {:trigger :dusk-home :persistence :cooldown :cooldown-s 60

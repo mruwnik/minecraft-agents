@@ -1,0 +1,14 @@
+;; Card c8476d30: a poisoned body below 10 hp that carries milk drinks it (the poisoned reflex, survival.cure) and the effect is gone.
+{:defaults
+ {:tags [:survival :poisoned] :time :day
+  :plot {:height 8}
+  :body {:at [16.5 1 16.5] :settle-s 2}
+  :limit-s 60}
+ :cases
+ [{:name "poisoned-body-drinks-carried-milk"
+   :register [{:trigger :poisoned :persistence :cooldown :cooldown-s 10 :job (jobs.survival.cure)}]
+   :body {:at [16.5 1 16.5] :inventory [["milk_bucket" 1]]}
+   :act [[:rcon "damage $BODY 14 minecraft:generic"] [:rcon "effect give $BODY minecraft:poison 30 0 true"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :poisoned}} :within-s 20}
+            {:event {:source :reflex :kind :ended :data {:outcome :done}} :within-s 30}]
+   :after [[:item "bucket" 1]]}]}

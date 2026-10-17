@@ -2,7 +2,7 @@
   "The readiness checkers a job binds as its safe? and fit? exports: fns of the ctx giving a status (engine.contract).
   safe-at, safe-at-by-night and safe-if-lit are :later while the place is exposed (the estimate of jobs.lib.cost/exposure is
   above ::risk-limit; :look while the light there is unseen and the body has not looked round, then :later; :never when nothing lowers it) or a danger is near
-  (threatened); fit? is :later below the risky health; ok never refuses."
+  (threatened); fit? is :later below the risky health or while poisoned; ok never refuses."
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -21,7 +21,7 @@
 
 (def wait-reasons
   "The :reason of every :later these checkers give: a job that declines for one is waiting out the world, not failing."
-  #{:exposed :dark :hostile-near :low-health})
+  #{:exposed :dark :hostile-near :low-health :poisoned})
 
 (defn unforced
   "The :checks forms a child would be forced with, minus the keys c's own frame runs under a form for: a call key beats
@@ -124,7 +124,7 @@
   (let [s (safe c)]
     (if (and (not= :ok (first s)) (zero? (.-food (.self (:primitives c))))) (threatened c) s)))
 
-(def fit? "Later :low-health below the risky health." checks/low-health)
+(def fit? "Later :low-health below the risky health, :poisoned while poisoned." checks/low-health)
 
 (defn ok "The checker of a job with nothing to check." [_] (contract/ok :ready "nothing to check"))
 

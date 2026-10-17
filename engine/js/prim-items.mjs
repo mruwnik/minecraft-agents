@@ -196,7 +196,7 @@ export function createItems (env) {
     return act(token, { boundS: 5, onTimeout: () => env.bot.food > startFood ? { status: 'ate', item: a.item, food: env.bot.food } : { status: 'timeout' } }, async ctx => {
       const item = inventory().find(i => i.name === a.item)
       if (!item) return { status: 'no-food' }
-      if (env.bot.food >= 20) return { status: 'full' }
+      if (env.bot.food >= 20 && !a.always) return { status: 'full' }
       ctx.onAbort(() => env.bot.deactivateItem())
       await env.bot.equip(item, 'hand')
       ctx.alive()

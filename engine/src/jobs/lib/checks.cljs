@@ -86,7 +86,7 @@
 (defn day "Day, else :later with reason." [reason] (cond/because reason "night" (cond/daytime)))
 
 (defn low-health
-  "Health at jobs.lib.body/risky-min-health or above, else :later :low-health {:health :min-health}."
+  "Health at jobs.lib.body/risky-min-health or above and not poisoned, else :later :low-health {:health :min-health} or :poisoned."
   [c]
   (if-let [hurt (body/too-hurt (:primitives c))]
     (cause-status :later hurt)

@@ -584,12 +584,14 @@
                old (update :inventory add-to (:name old) (:count old 1)))
              {:status "equipped"}])))
 
-(defn eat [w {:keys [item]}]
+(defn eat [w {:keys [item always]}]
   (let [food (or item (first (filter #(pos? (carried (:inventory w) %)) foods)))
         hunger (get-in w [:self :food])]
     (cond
-      (>= hunger 20) [w {:status "full" :food hunger}]
+      (and (>= hunger 20) (not always)) [w {:status "full" :food hunger}]
       (or (nil? food) (zero? (carried (:inventory w) food))) [w {:status "no-food"}]
+      (= food "milk_bucket")
+      [(-> w (take-one food) (assoc-in [:self :effects] [])) {:status "ate" :item food :food hunger}]
       :else (let [now (min 20 (+ hunger 5))]
               [(-> w (take-one food) (assoc-in [:self :food] now)) {:status "ate" :item food :food now}]))))
 

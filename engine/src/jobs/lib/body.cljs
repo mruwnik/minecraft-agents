@@ -6,6 +6,7 @@
             [engine.game :as game]
             [engine.memory :as mem]
             [engine.settings :as settings]
+            [jobs.lib.cost.health :as cost-health]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -20,6 +21,21 @@
 (defn risky-min-health [] (settings/get settings ::risky-min-health))
 
 (def fires #{"fire" "soul_fire"})
+
+(def cures
+  "Carried items that end or outweigh a poison, best first: milk clears every effect, a golden apple regenerates."
+  ["milk_bucket" "golden_apple" "enchanted_golden_apple"])
+
+(defn poisoned?
+  "Whether the body (primitives p) has an effect that keeps costing hp (poison, wither)."
+  [p]
+  (boolean (some #(contains? cost-health/ticking-effects (.-name %)) (array-seq (.-effects (.self p))))))
+
+(defn cure-carried
+  "The first of cures (or of those named in only) the inventory [{:name}] holds, else nil."
+  [inventory only]
+  (let [held (set (map :name inventory))]
+    (first (filter #(and (contains? held %) (or (nil? only) (= only %))) cures))))
 
 (defn fire-resistant? [p]
   (boolean (some #(= "fire_resistance" (.-name %)) (array-seq (.-effects (.self p))))))
@@ -107,11 +123,17 @@
 
 (defn too-hurt
   "The wait reason {:reason :low-health :health :min-health :text} of a risky job while the body's health (primitives
-  p) is below risky-min-health, else nil. Healing is up to the body: carried food (the hungry trigger eats it), or rest
+  p) is below risky-min-health, or {:reason :poisoned :health :text} while it is poisoned or withered, else nil.
+  Healing is up to the body: carried food (the hungry trigger eats it), a cure (the poisoned trigger drinks it), or rest
   at food 18+."
   [p]
   (let [health (.-health (.self p))
         floor (risky-min-health)]
-    (when (< health floor)
+    (cond
+      (< health floor)
       {:reason :low-health :health health :min-health floor
-       :text (str "health " (.toFixed health 1) " of 20 is below " floor ": eat or rest to heal first (natural healing needs food 18+)")})))
+       :text (str "health " (.toFixed health 1) " of 20 is below " floor ": eat or rest to heal first (natural healing needs food 18+)")}
+
+      (poisoned? p)
+      {:reason :poisoned :health health
+       :text "poisoned: drink milk or wait until the effect is gone before the risk (natural healing stops)"})))
