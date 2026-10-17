@@ -1238,7 +1238,8 @@
                       (swap! polls inc)
                       (when has (reset! seen true))
                       (when (and (not @seen) (> @polls 6))
-                        (throw (js/Error. (str ":until-effect-gone " (pr-str effect) " never seen: last reply " (str/trim (str reply))))))
+                        (throw (js/Error. (str ":until-effect-gone " (pr-str effect) " never seen: effects listed " (mapv second (re-seq #"id: \"([^\"]+)\"" (str reply)))
+                                               ", last reply " (str/trim (str reply))))))
                       (and @seen (not has))))
                   (str ":until-effect-gone " (pr-str effect)) limit-s)))
 

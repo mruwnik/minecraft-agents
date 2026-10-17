@@ -772,11 +772,11 @@
 
 (deftest until-effect-gone-throws-when-the-effect-never-shows
   (async done
-    (let [io {:send (fn [_] (js/Promise.resolve ["Found no elements"]))
+    (let [io {:send (fn [_] (js/Promise.resolve ["B has the following entity data: [{show_particles: 0b, id: \"minecraft:resistance\", duration: 11899}]"]))
               :sleep (fn [_] (js/Promise.resolve nil))}]
       (-> (r/until-effect-gone-step! io "q" "hunger" 10)
           (.then (fn [_] (is false "should have thrown")))
-          (.catch (fn [e] (is (re-find #"\"hunger\" never seen: last reply Found no elements" (.-message e)))))
+          (.catch (fn [e] (is (re-find #"\"hunger\" never seen: effects listed \[\"minecraft:resistance\"\], last reply B has" (.-message e)))))
           (.finally done)))))
 
 (deftest until-pos-polls-until-the-body-is-inside-the-plot-relative-bounds
