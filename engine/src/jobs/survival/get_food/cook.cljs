@@ -7,6 +7,7 @@
             [engine.memory :as mem]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.child :as child]
+            [jobs.lib.pace :as pace]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.shelter :as sh]
@@ -154,7 +155,7 @@
             loaded? (some? (:loaded (nth (ctx/child-status c :cook 'jobs.items.smelt args) 2)))]
         (cond
           (not (ctx/alive? c)) :continue
-          (and (= :continue e) (not loaded?) (< n (child/default-max-calls))) (do (await (child/pace!)) (recur (inc n)))
+          (and (= :continue e) (not loaded?) (< n (child/default-max-calls))) (do (await (pace/pace!)) (recur (inc n)))
           (= :continue e) :continue
           :else (do (ctx/update-mem! c dissoc :cooking)
                     (if (pos? (:smelted (:data e) 0))

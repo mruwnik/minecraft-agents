@@ -7,6 +7,7 @@
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.pace :as pace]
             [jobs.survival.retreat-doors :as retreat-doors]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.look :as look]
@@ -489,5 +490,5 @@
   (loop []
     (let [r (await (pass c))]
       (if (= :again r)
-        (do (await (child/pace!)) (recur))
+        (do (await (pace/pace!)) (recur))
         r))))

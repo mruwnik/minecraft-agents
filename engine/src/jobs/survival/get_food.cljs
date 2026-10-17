@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.pace :as pace]
             [jobs.lib.cond :as cond]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -476,7 +477,7 @@
       (cond
         (not (ctx/alive? c)) :continue
         (= :again cooked) (recur n)
-        (or (= :continue eaten) (= :continue way)) (if (:reflex c) (do (await (child/pace!)) (recur n)) :continue)
+        (or (= :continue eaten) (= :continue way)) (if (:reflex c) (do (await (pace/pace!)) (recur n)) :continue)
         (= ::fed way) (ctx/end c :done nil (cond-> {:food (food-level c)} (seq (:killed (ctx/mem c))) (assoc :killed (:killed (ctx/mem c)))))
         (= ::enough way) (stop! c :still-hungry (str "still hungry (food " (food-level c) ") after " n " ways")
                                 :food (food-level c))
@@ -485,7 +486,7 @@
                     more (cond fished fished (or (gave-up-recently? c) (not (:explore (:args c)))) nil :else (await (explore! c)))
                     bad (when-not more (await (eat-bad! c)))]
                 (cond
-                  (or (= :continue more) (= :continue bad)) (if (:reflex c) (do (await (child/pace!)) (recur n)) :continue)
+                  (or (= :continue more) (= :continue bad)) (if (:reflex c) (do (await (pace/pace!)) (recur n)) :continue)
                   (or more bad) (recur (inc n))
                   (not (hungry-now? c)) (stock-stop! c)
                   (:too-dangerous (ctx/mem c))

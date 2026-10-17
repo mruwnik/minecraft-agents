@@ -8,6 +8,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.pace :as pace]
             [jobs.lib.dig-look :as dl]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.look :as look]
@@ -318,5 +319,5 @@
   (loop [i 0]
     (let [r (if (< i (max-steps)) (await (step c)) (fail! c :no-progress "the niche took too many steps"))]
       (if (= :again r)
-        (do (await (child/pace!)) (recur (inc i)))
+        (do (await (pace/pace!)) (recur (inc i)))
         r))))

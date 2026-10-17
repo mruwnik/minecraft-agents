@@ -3,22 +3,16 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [engine.contract :as contract]
-            [engine.ctx :as ctx]))
+            [engine.ctx :as ctx]
+            [jobs.lib.pace :as pace]))
 
 (a/defargs settings
   {::max-fruitless {:default 3 :doc "Rounds in a row of one child that bring nothing before its caller gives up." :spec (a/int-in 1 nil)}
    ::default-max-calls {:default 400 :doc "Calls of one run!* before it gives the round back with :continue." :spec (a/int-in 1 nil)}})
 
-(def pace-ms "The timer awaited between two calls, so a loop with no act never starves the event loop." 50)
-
 (defn max-fruitless [] (settings/get settings ::max-fruitless))
 
 (defn default-max-calls [] (settings/get settings ::default-max-calls))
-
-(defn pace!
-  "A promise that resolves after pace-ms (a timer, never a microtask)."
-  []
-  (js/Promise. (fn [resolve] (js/setTimeout resolve pace-ms))))
 
 (defn pause!
   "An intentional pause of seconds, holding still with why: a jobs.time.noop child in slot :pause, so reflexes still
@@ -70,7 +64,7 @@
   (loop [n 1]
     (let [r (await (call c slot job args))]
       (if (and (= :continue r) (nil? (some-> (:child-wait c) deref)) (< n max-calls) (ctx/alive? c))
-        (do (await (pace!)) (recur (inc n)))
+        (do (await (pace/pace!)) (recur (inc n)))
         r))))
 
 (defn run!*

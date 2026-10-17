@@ -16,6 +16,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.child :as child]
+            [jobs.lib.pace :as pace]
             [jobs.survival.get-food :as get-food]))
 
 (defn setup
@@ -428,11 +429,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [paces (atom 0)
-              pace child/pace!
+              pace pace/pace!
               n (atom 0)]
-          (set! child/pace! (fn [] (swap! paces inc) (pace)))
+          (set! pace/pace! (fn [] (swap! paces inc) (pace)))
           (let [{:keys [out]} (await (run-parent! (counting-child 3 n) {} {}))]
-            (set! child/pace! pace)
+            (set! pace/pace! pace)
             (is (= [[:done nil]] @out) "one call of run! ran it to :done, its memory cleared")
             (is (= 4 @n))
             (is (= 3 @paces) "a timer between calls, never a microtask")))))))
