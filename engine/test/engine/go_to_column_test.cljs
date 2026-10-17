@@ -121,6 +121,16 @@
                  (mapv #(select-keys % [:to :provisional]) ((juxt first last) (events-of s :goal-resolved))))
               "first the estimate, last resolved on approach"))))))
 
+(deftest an-unseen-block-goal-inside-a-mound-at-night-is-walked-to-not-waited-for
+  ;; its light cannot be seen from the start (the cell is inside the mound), so safe? must not hold the walk for a look
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [mound (merge flat (box 28 64 -3 32 64 3 "stone"))
+              {:keys [out p]} (await (go! {:blocks mound :light [15 0] :time 18000} {:pos [30 64 0] :range 0 :unknown true}))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (= [30 65 0] (mapv #(js/Math.floor %) (at p)))))))))
+
 (deftest a-column-pos-is-accepted-at-submit-and-a-bad-one-refused
   (is (nil? (refusal {:pos [10 0]})))
   (is (nil? (refusal {:pos {:x 10 :z 0}})))

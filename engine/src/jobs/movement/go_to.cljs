@@ -45,7 +45,7 @@
     block), :clear-path (a door dug through a wall), :stair (a stair up, its own stair cut again) and :dig-out (out of
     its own shelter).
   - Its safe? is: at night jobs.lib.ready/safe-at the goal (a hostile near, or the goal or the walk to it exposed: later,
-    waiting for dawn), by day not threatened; and the retreat plug wait (below). A caller's :checks (an escape job's
+    waiting for dawn; a goal whose light is unseen is walked to), by day not threatened; and the retreat plug wait (below). A caller's :checks (an escape job's
     defaults, an agent's own) replace it.
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
     most 60 s each) until it arrives or gives up. A search that needs more slices walks on toward where it has got
@@ -284,12 +284,18 @@
 (defn goal-of "The cell go-to walks to, nil when its target is refused (the round says why)." [c]
   (let [t (aim/target c)] (when-not (:reason t) (:pos t))))
 
+(defn unseen-goal-ok
+  "A :look for the goal's light becomes ok: the walk is what brings the goal into sight (a cell inside a mound is seen
+  only from near), so waiting for a look from here would never end."
+  [[kind :as status]]
+  (if (= :look kind) (contract/ok :unseen-goal "the goal's light is seen on the way") status))
+
 (def safe?
-  "Safe at the goal (ready/safe-at-by-night), and no retreat plug wait."
+  "Safe at the goal (ready/safe-at-by-night; its light unseen is no reason to wait), and no retreat plug wait."
   (let [at (ready/safe-at-by-night goal-of)]
     (with-meta (fn [c]
                  (if (goal-of c)
-                   (contract/all [(at c) (plug-hold c)])
+                   (contract/all [(unseen-goal-ok (at c)) (plug-hold c)])
                    (contract/ok :no-goal "no goal to judge")))
       (meta at))))
 
