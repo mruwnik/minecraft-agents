@@ -7,6 +7,7 @@
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
+            [jobs.lib.near :as near]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.build.rail :as builder]
@@ -33,7 +34,8 @@
      jobs.build.from-plan's (its args :reach :give-up :accept apply).
      With nothing left to build the builder is skipped and the line goes straight to the proof.
   2. :switch turns on every planned lever that is off (jobs.access.toggle as a child, once per lever).
-  3. :check runs plan.rail/judge-line over the world. A sturdy block where the plan wants bed or buffer fill is
+  3. :check runs plan.rail/judge-line over the world. A powered rail found unlit (or lit) only in the body's memory is
+     first walked to once, to read its power as it is now. A sturdy block where the plan wants bed or buffer fill is
      no fault.
   Needs: the plan, a zone list (unless :ignore-zones?), and the items for every cell still to build carried (unless
   :all-carried false); those lacking are fetched first (jobs.lib.need, :fetch; a failed fetch ends the job with its cause). Returns, as the data of its ending, {:ok? :breaks :hazards :built {:placed :missing :short
@@ -288,6 +290,29 @@
         kept? #(and (wrong-now %) (not (and (ground %) (rail/sturdy? (block-at %)))))]
     (update built :wrong (fn [wrong] (filterv #(kept? (:pos %)) wrong)))))
 
+(defn stale-power
+  "The first powered-rail cell the proof finds on the wrong side of its power whose state the body only remembers (not
+  in view, not touched) and has not gone to look at: a torch placed after the rail lights it out of sight."
+  [c cells]
+  (let [p (:primitives c)
+        looked (set (:looked (ctx/mem c)))
+        stale? (fn [pos] (when-let [b (u/sensed p (zipmap [:x :y :z] pos))]
+                           (not (or (.-felt b) (.-visible b) (.-unknown b)))))]
+    (->> (:breaks (rail/judge-line cells (block-at c)))
+         (filter #(and (#{:unlit :lit-brake} (:why %)) (not (looked (:pos %))) (stale? (:pos %))))
+         first :pos)))
+
+(defn ^:async look-step!
+  "Walk to within sight of a powered rail whose remembered power state is the only fault, once each, so the proof reads
+  it as it is now. :continue while the walk waits, :again once looked, nil when nothing is due."
+  [c cells]
+  (when-let [pos (stale-power c cells)]
+    (let [r (await (near/go-near! c (zipmap [:x :y :z] pos) 3 {:see true :zone-tolls true}))]
+      (if (= :partial r)
+        :continue
+        (do (ctx/update-mem! c update :looked (fnil conj []) pos)
+            :again)))))
+
 (defn break-text [{:keys [pos why]}] (str (name why) " " (pr-str pos)))
 
 (a/defargs settings
@@ -333,7 +358,7 @@
         phase (:phase (ctx/mem c))]
     (cond
       trouble :continue
-      (= :check phase) (finish! c cells)
+      (= :check phase) (or (await (look-step! c cells)) (finish! c cells))
       (= :switch phase) (await (switch-step! c cells))
       :else (do (when-not phase (ctx/update-mem! c assoc :phase :build))
                 (or (await (fetch-step! c cells))

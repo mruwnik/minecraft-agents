@@ -633,3 +633,22 @@
           (is (true? (:powered (props p [3 64 0]))))
           (is (= {:kind :nothing-possible :cause :broken} (kc failed)))
           (is (= [:unlit] (distinct (map :why (get-in failed [:data :breaks]))))))))))
+
+(deftest a-powered-rail-read-only-from-memory-as-unlit-is-walked-to-before-the-proof
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              {:keys [eng p]} (b/start (spec "stone" 63 (kit {})) {"line" (line-plan {})} [])
+              real (.-sensedAt p)]
+          (aset p "sensedAt"
+                (fn [q]
+                  (let [b (real q)]
+                    (if (and (= [3 64 0] [(.-x q) (.-y q) (.-z q)]) (not-any? (fn [[_ _ o]] (:see o)) @calls))
+                      (js/Object.assign #js {} b #js {:properties (js/Object.assign #js {} (.-properties b) #js {:powered false})
+                                                      :visible false :felt false})
+                      b))))
+          (let [result (await (tu/with-near-spy calls (fn ^:async f [] (await (outcome eng job {:plan "line"} 400)))))]
+            (is (true? (:ok? result)) "the line is sound once the cell is read afresh")
+            (is (= [[3 64 0]] (mapv (fn [[q]] [(:x q) (:y q) (:z q)]) (filter (fn [[_ _ o]] (:see o)) @calls)))
+                "the one stale cell is walked to, within sight, once")))))))
