@@ -3,7 +3,7 @@
 // tools/test-run.mjs <ns>...   (called by tools/test-engine after the compile; namespaces space- or comma-separated)
 //  Runs a private copy of out/test.cjs + out/test/cljs-runtime (/tmp/mc-test-run-<pid>, so a concurrent compile cannot swap it) under one
 //  res-slot 'tests' slot sized by the namespace count (needMb), killed when no test has finished for stallLimitS (MC_TEST_STALL_S overrides; a spinning test too, the watchdog is this parent) so a hung test frees its slot, and after WHOLE_RUN_CAP_S (MC_TEST_TIMEOUT_S overrides).
-//  Only the requested -test namespaces are loaded (narrowBundle: imports and shadow.test registry cut in the private copy; engine.timing-test, the timing / TEST_EVENTS=1 @@test reporter, always stays); full and shard runs keep the whole bundle.
+//  Only the requested -test namespaces are loaded (narrowBundle: imports and shadow.test registry cut from the source, only the imported files copied; engine.timing-test, the timing / TEST_EVENTS=1 @@test reporter, always stays); full and shard runs keep the whole bundle.
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
@@ -80,12 +80,22 @@ export const lastFinished = (lines) =>
   lines.filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.var).at(-1)?.var ?? null
 
 // Private copy of the bundle; fixtures resolve as <out>/../test, npm deps through node_modules.
-export const isolate = (engineDir, tag, root = '/tmp') => {
+// With nss (targeted run) the bundle is narrowed from the source dir first and only the files it imports (+ .map) are copied.
+export const isolate = (engineDir, tag, root = '/tmp', nss = null) => {
   const runDir = path.join(root, `mc-test-run-${tag}`)
+  const srcRuntime = path.join(engineDir, 'out/test/cljs-runtime')
+  const runtime = path.join(runDir, 'out/test/cljs-runtime')
   fs.rmSync(runDir, { recursive: true, force: true })
-  fs.mkdirSync(path.join(runDir, 'out/test'), { recursive: true })
-  fs.copyFileSync(path.join(engineDir, 'out/test.cjs'), path.join(runDir, 'out/test.cjs'))
-  fs.cpSync(path.join(engineDir, 'out/test/cljs-runtime'), path.join(runDir, 'out/test/cljs-runtime'), { recursive: true })
+  fs.mkdirSync(runtime, { recursive: true })
+  if (nss) narrowBundle(engineDir, nss, runDir)
+  else fs.copyFileSync(path.join(engineDir, 'out/test.cjs'), path.join(runDir, 'out/test.cjs'))
+  const wanted = nss
+    ? [...fs.readFileSync(path.join(runDir, 'out/test.cjs'), 'utf8').matchAll(/^SHADOW_IMPORT\("(.+)"\);$/gm)].flatMap((m) => [m[1], `${m[1]}.map`])
+    : fs.readdirSync(srcRuntime)
+  for (const f of wanted) {
+    if (fs.existsSync(path.join(runtime, f)) || !fs.existsSync(path.join(srcRuntime, f))) continue
+    fs.copyFileSync(path.join(srcRuntime, f), path.join(runtime, f))
+  }
   fs.symlinkSync(path.join(engineDir, 'node_modules'), path.join(runDir, 'node_modules'))
   fs.symlinkSync(path.join(engineDir, 'test'), path.join(runDir, 'test'))
   return { runDir, cleanup: () => fs.rmSync(runDir, { recursive: true, force: true }) }
@@ -175,10 +185,13 @@ const narrowRegistry = (js, keep) => {
 }
 
 // A targeted run loads only the requested -test namespaces (and the -test namespaces they require): drops the other SHADOW_IMPORT lines
-// and test-registry entries from the private bundle (2.2 s of the 3.6 s load for all 412). Returns how many imports it dropped (0 = untouched).
-export const narrowBundle = (runDir, nss) => {
-  const bundle = path.join(runDir, 'out/test.cjs')
-  const runtime = path.join(runDir, 'out/test/cljs-runtime')
+// and test-registry entries (2.2 s of the 3.6 s load for all 412). Reads srcDir, writes the bundle (and the narrowed registry file) under outDir, which
+// may be srcDir itself. Returns how many imports it dropped (0 = bundle unchanged).
+export const narrowBundle = (srcDir, nss, outDir = srcDir) => {
+  const bundle = path.join(srcDir, 'out/test.cjs')
+  const outBundle = path.join(outDir, 'out/test.cjs')
+  const runtime = path.join(srcDir, 'out/test/cljs-runtime')
+  const unchanged = () => { if (outDir !== srcDir) fs.copyFileSync(bundle, outBundle); return 0 }
   const queue = nss.map((n) => n.replaceAll('-', '_'))
   const keep = new Set([...queue, 'engine.timing_test']) // the timing and @@test reporter hooks are not requested but must load
   while (queue.length) {
@@ -189,10 +202,11 @@ export const narrowBundle = (runDir, nss) => {
       if (!keep.has(dep)) { keep.add(dep); queue.push(dep) }
   }
   const nodeJs = path.join(runtime, 'shadow.test.node.js')
-  if (!fs.existsSync(nodeJs)) return 0
+  if (!fs.existsSync(nodeJs)) return unchanged()
   const narrowed = narrowRegistry(fs.readFileSync(nodeJs, 'utf8'), keep)
-  if (narrowed === null) return 0
-  fs.writeFileSync(nodeJs, narrowed)
+  if (narrowed === null) return unchanged()
+  fs.mkdirSync(path.join(outDir, 'out/test/cljs-runtime'), { recursive: true })
+  fs.writeFileSync(path.join(outDir, 'out/test/cljs-runtime/shadow.test.node.js'), narrowed)
   let dropped = 0
   const lines = fs.readFileSync(bundle, 'utf8').split('\n').filter((l) => {
     const m = /^SHADOW_IMPORT\("(.+_test)\.js"\);$/.exec(l)
@@ -200,7 +214,7 @@ export const narrowBundle = (runDir, nss) => {
     dropped++
     return false
   })
-  fs.writeFileSync(bundle, lines.join('\n'))
+  fs.writeFileSync(outBundle, lines.join('\n'))
   return dropped
 }
 
@@ -231,10 +245,9 @@ const main = async () => {
   const limit = Number(process.env.MC_TEST_TIMEOUT_S) || WHOLE_RUN_CAP_S
   const stallS = Number(process.env.MC_TEST_STALL_S) || stallLimitS(slowestPriorMs(nss, (readText(path.join(engine, 'out/test-timings.jsonl'))).split('\n')))
   sweepStale()
-  const { runDir, cleanup } = isolate(engine, process.pid)
+  const { runDir, cleanup } = isolate(engine, process.pid, '/tmp', nss)
   let child = null
   cleanupOnExit(process, cleanup, (sig) => child && killTree(child.pid, sig))
-  narrowBundle(runDir, nss)
   const timings = path.join(runDir, 'timings.jsonl')
   fs.writeFileSync(timings, '')
   child = spawn(path.join(tools, 'res-slot'),

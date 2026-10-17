@@ -175,6 +175,26 @@ test('narrowBundle: an unrecognised registry leaves the bundle untouched', (t) =
   assert.equal(fs.readFileSync(`${dir}/out/test.cjs`, 'utf8'), 'SHADOW_IMPORT("engine.b_test.js");\n')
 })
 
+test('isolate with namespaces: narrows from the source and copies only the imported files and their maps', (t) => {
+  const src = fs.mkdtempSync('/tmp/test-run-src-')
+  t.after(() => fs.rmSync(src, { recursive: true, force: true }))
+  const rt = `${src}/out/test/cljs-runtime`
+  fs.mkdirSync(rt, { recursive: true }); fs.mkdirSync(`${src}/test`); fs.mkdirSync(`${src}/node_modules`)
+  const imp = (f) => `SHADOW_IMPORT("${f}.js");`
+  const bundle = ['goog.base', 'engine.a_test', 'engine.b_test', 'shadow.test.node'].map(imp).join('\n') + '\n})();\n'
+  fs.writeFileSync(`${src}/out/test.cjs`, bundle)
+  for (const f of ['goog.base', 'engine.a_test', 'engine.b_test']) fs.writeFileSync(`${rt}/${f}.js`, f)
+  fs.writeFileSync(`${rt}/engine.a_test.js.map`, 'map'); fs.writeFileSync(`${rt}/engine.b_test.js.map`, 'map')
+  const registry = `${testData(['engine.a_test', 'engine.b_test'])}\n`
+  fs.writeFileSync(`${rt}/shadow.test.node.js`, registry)
+  const { runDir, cleanup } = isolate(src, 'unit-narrow', '/tmp', ['engine.a-test'])
+  t.after(cleanup)
+  assert.deepEqual(fs.readdirSync(`${runDir}/out/test/cljs-runtime`).sort(), ['engine.a_test.js', 'engine.a_test.js.map', 'goog.base.js', 'shadow.test.node.js'])
+  assert.equal(fs.readFileSync(`${runDir}/out/test/cljs-runtime/shadow.test.node.js`, 'utf8'), `${testData(['engine.a_test'])}\n`)
+  assert.equal(fs.readFileSync(`${src}/out/test.cjs`, 'utf8'), bundle)
+  assert.equal(fs.readFileSync(`${rt}/shadow.test.node.js`, 'utf8'), registry)
+})
+
 test('missingNss: requested namespaces absent from the compiled :test bundle (a run of them would pass with 0 tests)', (t) => {
   const src = fs.mkdtempSync('/tmp/test-run-missing-')
   t.after(() => fs.rmSync(src, { recursive: true, force: true }))
