@@ -82,6 +82,7 @@
        :offline (offline-view (:offline s) now)
        :last-known (when (:last-known s) true)
        :idle (when-not current true)
+       :build (:build s)
        :pos (position (:position s))
        :died (when (:died s) (died-view (:died s)))
        :health (:health s)

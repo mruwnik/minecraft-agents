@@ -131,6 +131,14 @@ pool_outputs() {
     index(want, " " cur " ") { l=$0; while (match(l, /:output-(dir|to) "[^"]*"/)) { v=substr(l, RSTART, RLENGTH); sub(/^[^"]*"/, "", v); sub(/"$/, "", v); print v; l=substr(l, RSTART+RLENGTH) } }' "$dir/shadow-cljs.edn"
 }
 
+# engine/out/build-id.edn: the commit a body bundle was built from (engine.build reads it at start); the pool slot has no .git, so the checkout writes it
+write_build_id() {
+  local b
+  for b in "${builds[@]}"; do
+    case "$b" in body|body-release) printf '{:commit "%s"}\n' "$(git -C "$repo" rev-parse --short HEAD)" > "$repo/engine/out/build-id.edn"; return ;; esac
+  done
+}
+
 # sets slot to a free slot dir and holds its .pool.lock on fd 8 (affine slot first); 1 when none frees up in time
 pool_pick() {
   local i s order=() deadline=$((SECONDS + ${MC_COMPILE_POOL_WAIT_S:-60}))
@@ -169,6 +177,7 @@ pool_compile() {
   MC_COMPILE_IN_POOL=1 MC_COMPILE_MAIN_IDLE_S=${MC_COMPILE_POOL_IDLE_S:-300} "$slot/tools/compile" "$project" "${args[@]}" 7>&- 8>&- 2>&1 | sed -u "s|$slot|$repo|g"
   code=${PIPESTATUS[0]}
   if [ "$code" = 0 ]; then
+    write_build_id
     out=$(pool_outputs "${builds[@]}")
     [ -z "${extra[1]:-}" ] || out="$out"$'\n'"$(sed -E 's/^\{:output-dir "(.*)"\}$/\1/' <<<"${extra[1]}")"
     for o in $out; do
@@ -248,6 +257,7 @@ if [ "$code" = 0 ] && grep -qE 'WARNING #[0-9]+ - :(undeclared-(var|ns)|fn-arity
   code=1
 fi
 rm -f "$out"; out=
+[ "$code" = 0 ] && [ -z "${MC_COMPILE_IN_POOL:-}" ] && write_build_id
 touch .shadow-cljs/last-use; rm -f .shadow-cljs/last-use.compiling
 t2=$(date +%s.%N)
 [ -z "${MC_COMPILE_LOG:-}" ] || awk -v a="$t0" -v b="$t1" -v c="$t2" 'BEGIN{printf "tools/compile: waited %.1fs, compiled %.1fs\n", b-a, c-b}' >&2

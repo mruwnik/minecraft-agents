@@ -8,6 +8,7 @@
             [engine.event-api :as event-api]
             [engine.backoff :as backoff]
             [engine.events :as events]
+            [engine.build :as build]
             [engine.game :as game]
             [engine.heap :as heap]
             [engine.hurt :as hurt]
@@ -214,7 +215,7 @@
                           (fn []))
         stop-heap (heap/start! #(core/emit! eng %) (:stats-ms eng))]
     (let [event-socket (event-api/create (path/join (:engine-dir cfg) "events.sock") eng
-                                             {:died game/death-status})]
+                                             {:died game/death-status :build build/status-extra})]
       (try
         (await ((:listen event-socket)))
         (let [lease-opts {:idle-ms (* 1000 (:drive-idle-s opts))}

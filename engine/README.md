@@ -554,7 +554,7 @@ HTTP over `worlds/<world>/agents/<name>/engine/events.sock` (mode 0600; all bodi
 | `GET /events?stream-id=&after=&limit=` | an event page after a cursor, with gap indication |
 | `POST /attention/resolve` | `{:request-id :reason :handled}`; does not retry or cancel its job |
 | `POST /chat` | one public line or whisper, sharing the chat limits |
-| `GET /status?limit=` | compact body/job/attention projection (includes `:died` while a death is under 6000 game ticks of world age old; `engine.game/death-status`, a status extra main passes to event-api/create) |
+| `GET /status?limit=` | compact body/job/attention projection (`:build {:commit :started-at}`: the git hash `tools/compile` wrote to engine/out/build-id.edn for a body build; main's `build/status-extra`, and the process start; includes `:died` while a death is under 6000 game ticks of world age old; `engine.game/death-status`, a status extra main passes to event-api/create) |
 | `GET /inventory` | carried stacks and worn equipment (with a short enchants list), read-only |
 | `GET /seen?names=a,*_ore&radius=&max=` | blocks remembered by perception (never x-ray), nearest first with `:pos`, `:distance` and `:age-ms` (air left out when no names); radius and max capped at 64; offline: `{:ok false :reason :offline}`; read-only |
 | `GET /chests?max=` | chest stock the body saw (memory `:fetch/stock`, kept 6 h, latest per chest), nearest first with `:pos`, `:distance`, `:age-ms`, `:items {name n}`; max capped at 64; read-only (`observe <agent> chests`) |

@@ -241,6 +241,9 @@
    ["a queued job shows why it waits"
     "{:mode :scheduled :current nil :jobs {:total 1 :items [{:id \"j2\" :name \"smelt\" :status :queued :waiting {:reason :cooking :ready-at 5}}]}}"
     "{:mode :scheduled :idle true :jobs {:total 1 :items [{:id \"j2\" :name \"smelt\" :status :queued :waiting {:reason :cooking :ready-at 5}}]}}"]
+   ["the engine build is kept"
+    "{:mode :scheduled :build {:commit \"abc1234\" :started-at 5}}"
+    "{:mode :scheduled :idle true :build {:commit \"abc1234\" :started-at 5}}"]
    ["an error answer passes through"
     "{:ok false :reason :nope}"
     "{:ok false :reason :nope}"]])

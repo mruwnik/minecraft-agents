@@ -1,6 +1,7 @@
 (ns engine.event-api-test
   (:require [cljs.test :refer [async deftest is testing]]
             [cljs.reader :as reader]
+            [engine.build :as build]
             [engine.chat :as chat]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -59,6 +60,18 @@
    :running (atom running)
    :manual (atom nil)
    :now (constantly 123)})
+
+(deftest status-names-the-engine-build-and-its-start
+  (let [view (event-api/status (status-engine #js {:isOffline (fn [] false) :isSettling (fn [] false) :self (fn [] #js {})} {} nil) nil {:build build/status-extra})]
+    (is (= #{:commit :started-at} (set (keys (:build view)))))
+    (is (number? (:started-at (:build view))))))
+
+(deftest read-commit-reads-the-build-id-beside-the-bundle
+  (let [dir (fs/mkdtempSync (path/join (.tmpdir (js/require "os")) "build-id-"))]
+    (is (nil? (build/read-commit dir)))
+    (fs/writeFileSync (path/join dir "build-id.edn") "{:commit \"abc1234\"}")
+    (is (= "abc1234" (build/read-commit dir)))
+    (fs/rmSync dir #js {:recursive true})))
 
 (deftest status-of-an-offline-body-shows-its-last-known-position-health-and-food
   (let [view (event-api/status
