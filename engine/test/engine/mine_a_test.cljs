@@ -449,6 +449,16 @@
           (is (= :count (:reason (done-event s))))
           (is (= 6 (:got (done-event s)))))))))
 
+(deftest stone-floor-beyond-the-start-is-dug-after-the-stone-at-the-feet
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "stone" :count 6}
+                                 {:blocks (merge stone-floor stone-hill (cells "stone" (range 3 9) [62 63] (range -2 3)))
+                                  :drops cobble :inventory pickaxe} 80))]
+          (is (= 6 (get (inv s) "cobblestone")))
+          (is (every? #(>= (second %) 64) (dug-cells s)) "no hole is opened in the floor while stone stands at the feet"))))))
+
 (deftest the-mend-fills-with-other-filler-before-the-mined-item
   (async done
     (tu/run-async done

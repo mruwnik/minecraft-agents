@@ -91,8 +91,16 @@
   (let [{:keys [start]} (ctx/mem c)]
     (boolean (and start (contains? soil-blocks (:block (:args c))) (< (:y pos) (dec (:y start)))))))
 
+(defn floor-hole?
+  "Whether digging pos would open a hole below the body's feet whose drop is lost: not for soil or ores, which are dug where they lie."
+  [c pos]
+  (let [block (:block (:args c))]
+    (and (< (:y pos) (js/Math.floor (:y (u/self-pos c))))
+         (not (contains? soil-blocks block))
+         (not (contains? blocks/ores (base-ore block))))))
+
 (defn scan
-  "{:targets [pos] nearest first (the higher of two as near), those over the ground snapshot after all others, :refused [verdict] of blocks a
+  "{:targets [pos] nearest first (the higher of two as near), those below the feet after all level or higher ones (a hole in the floor loses its drop; not soil or ores) and those over the ground snapshot after all others, :refused [verdict] of blocks a
   zone or plan refuses, :wet? true when an unskipped block was rejected only for water, :wet-n how many}. Only seen blocks that are
   still there count."
   [c]
@@ -123,7 +131,7 @@
                     (map (fn [[pos]] (let [v (access/may-dig? in pos)] [pos v (access/judge v accept)]))))]
     {:side side
      :far (when stay? (into [] (comp (remove #(stay/beside-body? (cell-of here) %)) (remove (set (map :pos side))) (map access/cell)) seen))
-     :targets (->> judged (filter #(= :ok (nth % 2))) (map first) (sort-by (juxt #(if (ground %) 1 0) #(u/dist here %) #(- (:y %)))) vec)
+     :targets (->> judged (filter #(= :ok (nth % 2))) (map first) (sort-by (juxt #(if (ground %) 1 0) #(if (floor-hole? c %) 1 0) #(u/dist here %) #(- (:y %)))) vec)
      :refused (into [] (comp (filter #(= :refused (nth % 2))) (map second)) judged)
      :wet? (boolean (some #(= :wet (second %)) graded))
      :wet-n (count (filter #(= :wet (second %)) graded))}))
@@ -282,6 +290,7 @@
         under (update (cell-of (u/self-pos c)) :y dec)
         pool (or (not-empty (filterv #(not= under %) targets)) targets)
         off (vec (remove ground pool))
+        off (or (not-empty (filterv #(not (floor-hole? c %)) off)) off)
         group (in-line c (if (seq off) off pool))]
     (when (seq group)
       (let [a (await (targets/nearest! c group (reach) {:tag :mine}))]

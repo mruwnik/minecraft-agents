@@ -84,7 +84,7 @@
   4. Dig the nearest target by walking (one bounded search, jobs.lib.targets, going on in the next step; a seen
      block out of every stand's reach is passed over; when the search finds none reachable, the nearest in a straight
      line is tried; targets over the ground snapshot come last, so the floor
-     under the start is dug last, the block under the feet after all others; a block under the feet whose floor
+     under the start is dug last, and so is any block below the feet (not soil or ore: its hole loses the drop) when one level with them or higher is seen, the block under the feet after all others; a block under the feet whose floor
      is unseen is dug from a cell beside it (the jobs.blocks.dig child), never from above, and skipped when there is
      none (info mine.refused, no failure); targets whose drop lies in a clear line from the eye come first, and a body
      whose line is blocked walks to within 1 when it can). Walk within 3: blocked skips the target and counts a failure, partial tries
