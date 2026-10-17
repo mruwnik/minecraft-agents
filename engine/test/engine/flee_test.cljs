@@ -302,7 +302,7 @@
     (with-redefs [near/walk-round! (fn [c _ _ _]
                                      (swap! searches inc)
                                      (swap! (:clock s) + 1000)
-                                     (when (.endsWith (:id c) "/step") (swap! longest max (- (ctx/now c) (:leg-t0 (ctx/mem c)))))
+                                     (when (.endsWith (:id c) "/step") (swap! longest max (* 1000 (- (:leg-s (:args c)) (get-in (ctx/left c) [:spend :job-time])))))
                                      (act (fake/state p) @searches)
                                      (js/Promise.resolve {:result {:status :searching :fresh false} :status "searching"
                                                           :from (:pos c) :to (:pos c)}))]

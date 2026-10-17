@@ -262,12 +262,13 @@
                             (danger-q/known-hostiles p leg-alert-within {:ranged-radius 0})))))))
 
 (defn leg-search-spent?
-  "Whether a call with :leg-s has used its seconds since start-attempt!: a leg is bounded in search as in walking, by
-  :leg-alert-s while leg-alert? holds."
+  "Whether a call with :leg-s has used its seconds: its :spend :job-time is gone (the engine only notices at the next
+  act or round, and a search makes none), or, while leg-alert? holds, :leg-alert-s of it."
   [c]
   (let [{:keys [leg-s leg-alert-s]} (:args c)
-        bound (if (leg-alert? c) (min (or leg-s js/Infinity) leg-alert-s) leg-s)]
-    (boolean (and bound (:leg-t0 (ctx/mem c)) (>= (- (ctx/now c) (:leg-t0 (ctx/mem c))) (* 1000 bound))))))
+        left (get-in (ctx/left c) [:spend :job-time])]
+    (boolean (and leg-s left
+                  (or (<= left 0) (and (leg-alert? c) (>= (- leg-s left) leg-alert-s)))))))
 
 (defn retrying!
   "A fruitless round that plans again: an info go-to.retrying says why (the result's reason, which try), so the gap before the
