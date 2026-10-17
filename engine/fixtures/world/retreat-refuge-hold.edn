@@ -97,9 +97,9 @@
    :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [5 0 16] [29 1 16] "air"]
             [:set [8 1 16] "torch"]]
    :body {:at [5.5 0 16.5] :inventory [["cobblestone" 20]]}
-   :act [[:summon "skeleton" [19.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+   :act [[:summon "skeleton" [19.5 0 18.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :job :kind :retreat_sealed} 40]
-         [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1 :ways #{:walk}})]]
+         [:job (jobs.movement.go-to {:pos #at [28 0 18] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
             {:event {:source :job :kind :result} :within-s 200 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :sealed-hostile-near}} :for-s 200 :until {:source :job :kind :result :data {:arrived [:any]}} :of-job true}]
