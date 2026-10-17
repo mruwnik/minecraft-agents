@@ -134,10 +134,12 @@
 (defn has-bucket? [p] (boolean (some #(= "water_bucket" (:name %)) (u/inventory p))))
 
 (defn fetch-opts
-  "The limits {:how :explore} for fetching a water bucket, nil when :fetch does not allow items."
+  "The limits {:how :explore} for fetching a water bucket, nil when :fetch does not allow items or leaves only
+  :gather (which would scoop back the water just poured)."
   [c]
   (when-let [o (need/opts c 'jobs.farm.irrigate)]
-    (when (contains? (:what o) :item) (select-keys o [:how :explore]))))
+    (let [how (disj (set (or (:how o) need/sources)) :gather)]
+      (when (and (contains? (:what o) :item) (seq how)) (assoc (select-keys o [:explore]) :how how)))))
 
 (defn needs-bucket?
   "Whether a bucket is to be got: dry cells, none carried and no pour waiting."

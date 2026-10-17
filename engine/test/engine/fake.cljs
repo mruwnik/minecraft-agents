@@ -440,7 +440,8 @@
       (let [w (-> w (take-one item) (give "bucket" 1) (put-block pos "water"))
             lava-below (for [d [[0 0 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1]]
                              :let [below (mapv + pos d [0 -1 0])]
-                             :when (= "lava" (block-name w below))]
+                             :when (and (= "lava" (block-name w below))
+                                        (or (= [0 0 0] d) (#{"air" "water"} (block-name w (mapv + pos d)))))]
                          below)
             w (reduce #(put-block %1 %2 "obsidian") w lava-below)]
         [(cond-> w (= pos (body-pos w)) settle) {:status "placed" :block "water"}])

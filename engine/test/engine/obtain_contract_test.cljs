@@ -142,6 +142,23 @@
           (is (= {:kind :condition-failed :cause :no-source} (kc e)))
           (is (re-find #"water" (get-in e [:cause :why]))))))))
 
+(deftest an-empty-bucket-is-filled-at-seen-water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (update (f/bare [{:name "bucket" :count 1}]) :blocks merge {"4,63,0" "water"}) [f/own-zone])
+              e (await (ending-of s 'jobs.items.obtain {:item "water_bucket" :explore false} 60))]
+          (is (= :done (:kind e)))
+          (is (= {:got 1 :item "water_bucket"} (select-keys (:data e) [:got :item]))))))))
+
+(deftest water-seen-but-no-bucket-carried-is-no-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (update (f/bare []) :blocks merge {"4,63,0" "water"}) [f/own-zone])
+              e (await (ending-of s 'jobs.items.obtain {:item "water_bucket" :explore false} 20))]
+          (is (= {:kind :condition-failed :cause :no-source} (kc e))))))))
+
 (deftest a-reflex-obtain-steps-on-where-a-listed-one-yields
   (are [c r expected] (= expected (obtain/reflex-step c r))
     {:reflex :needs-weapon} :continue :again

@@ -239,6 +239,16 @@
        (is (nil? (get-in b [:properties :level])))
        (is (= "placed" (.-status r2)))))))
 
+(deftest a-water-pour-turns-only-the-lava-it-can-reach-to-obsidian
+  (async-test
+   (fn ^:async t []
+     (let [p (owned {:inventory [{:name "water_bucket" :count 1}]
+                     :blocks {"1,63,0" "stone" "2,64,0" "stone" "2,63,0" "lava" "1,63,1" "lava"}})
+           r (await (act p "place" {:pos (at 1 64 0) :item "water_bucket"}))]
+       (is (= "placed" (.-status r)))
+       (is (= "lava" (:name (block-at p 2 63 0))) "a solid cell beside the pour shuts the water out of that column")
+       (is (= "obsidian" (:name (block-at p 1 63 1))) "an open cell beside it lets the water run down onto the lava")))))
+
 (deftest containers-can-be-inspected-and-transferred-to-and-from
   (async-test
    (fn ^:async t []

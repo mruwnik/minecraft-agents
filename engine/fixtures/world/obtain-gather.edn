@@ -4,6 +4,7 @@
 ;; Should-succeed: the stone pickaxe is carried. Should-fail: without stone in view the obtain ends :no-source and the text names the
 ;; raw need not seen (cobblestone from stone), not the log that is seen; andesite/diorite/granite are no cobblestone source
 ;; (only stone drops cobblestone); with nothing in view the text names both needs; :how without :gather has no gather text.
+;; An empty bucket carried and a pond in view (a water source at [18 -1 20]) is filled there; with no pond in view the obtain waits :no-source naming water.
 {:defaults
  {:tags [:fetch :gather :mining] :time :day
   :plot {:height 12 :floor "grass_block"}
@@ -38,6 +39,18 @@
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "log, cobblestone (from stone)"]}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-source}}}]
    :after [[:item "stone_pickaxe" 0]]}
+  {:name "an-empty-bucket-is-filled-at-a-seen-pond"
+   :body {:inventory [["bucket" 1]]}
+   :blocks [[:set [18 -1 20] "water"]]
+   :act [[:job (jobs.items.obtain {:item "water_bucket" :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "water_bucket" 1] [:item "bucket" 0]]}
+  {:name "an-empty-bucket-with-no-pond-in-view-waits-naming-water"
+   :body {:inventory [["bucket" 1]]}
+   :act [[:job (jobs.items.obtain {:item "water_bucket" :explore false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "water"]}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-source}}}]
+   :after [[:item "water_bucket" 0] [:item "bucket" 1]]}
   {:name "how-without-gather-waits-no-source-with-no-gather-text"
    :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]
             [:fill [20 0 22] [22 1 23] "stone"]]

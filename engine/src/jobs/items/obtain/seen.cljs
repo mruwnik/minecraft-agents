@@ -55,7 +55,7 @@
     :else (first (seen-blocks-of c need false))))
 
 (defn with-block
-  "The need with :block of its args the kind of block seen when it could be either (a coal ore, dirt or grass); a wool need shears when shears are carried, craftable from 2 iron ingots or in a booked chest, else hunts."
+  "The need with the nearest seen water as the :pos a bucket is filled at, :block of its args the kind of block seen when it could be either (a coal ore, dirt or grass); a wool need shears when shears are carried, craftable from 2 iron ingots or in a booked chest, else hunts."
   [c need]
   (cond
     (and (:sheep need) (shears-source c))
@@ -64,6 +64,9 @@
     (and (= "obsidian" (:key need))
          (empty? (look/seen-blocks (:primitives c) {:names ["obsidian"] :radius (seen-radius) :max 1})))
     (assoc need :job 'jobs.gather.make-obsidian :args {:count (:count need) :radius (seen-radius) :fetch #{:tool}})
+
+    (= "water_bucket" (:key need))
+    (cond-> need (seen-of c need) (assoc-in [:args :pos] (:pos (seen-of c need))))
 
     :else
     (if-let [name (when (or (:ore? need) (= "dirt" (:key need))) (:name (seen-of c need)))]
