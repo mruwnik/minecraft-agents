@@ -141,19 +141,38 @@ write_build_id() {
   done
 }
 
-# sets slot to a free slot dir and holds its .pool.lock on fd 8 (affine slot first); 1 when none frees up in time
+# rsync options shared by the sync into a slot and the dry-run that scores it
+pool_sync_opts=(-rl --delete --exclude .git --exclude .claude --exclude .shadow-cljs --exclude docs --exclude worlds --exclude state --exclude textures --exclude viaproxy --exclude blueprints
+  --exclude /engine/out --exclude /dashboard/out --exclude /tools/view/web/cljs --exclude .pool.lock --exclude .last)
+
+# files a sync of the worktree into slot $1 would change (dry run by size, ~0.1 s): the fewer, the more of the slot's warm shadow cache stays valid
+pool_distance() {
+  mkdir -p "$1"
+  rsync -n --size-only --stats "${pool_sync_opts[@]}" "$repo/" "$1/" 2>/dev/null |
+    awk -F': ' '/^Number of regular files transferred/ {n += $2} /^Number of deleted files/ {gsub(/,/, "", $2); n += $2 + 0} END {print n + 0}'
+}
+
+# sets slot to the free slot nearest the worktree's sources and holds its .pool.lock on fd 8; 1 when none frees up in time.
+# A busy slot much nearer than the best free one is waited for up to MC_COMPILE_POOL_CLOSE_WAIT_S (5).
 pool_pick() {
-  local i s order=() deadline=$((SECONDS + ${MC_COMPILE_POOL_WAIT_S:-180}))
-  for ((i = 0; i < pool_size; i++)); do
-    if [ "$(cat "$pool_dir/$i/.last" 2>/dev/null)" = "$repo" ]; then order=("$i" "${order[@]}"); else order+=("$i"); fi
-  done
+  local i s d best bestd busyd near=${MC_COMPILE_POOL_CLOSE_GAP:-100} start=$SECONDS deadline=$((SECONDS + ${MC_COMPILE_POOL_WAIT_S:-180}))
   while :; do
-    for i in "${order[@]}"; do
+    best=; bestd=; busyd=
+    for ((i = 0; i < pool_size; i++)); do
       s=$pool_dir/$i
-      mkdir -p "$s"; exec 8>>"$s/.pool.lock"
-      if flock -n 8; then slot=$s; return 0; fi
-      exec 8>&-
+      d=$(pool_distance "$s")
+      if ( flock -n 8 ) 8>>"$s/.pool.lock"; then
+        [ -n "$bestd" ] && [ "$bestd" -le "$d" ] || { best=$s; bestd=$d; }
+      else
+        [ -n "$busyd" ] && [ "$busyd" -le "$d" ] || busyd=$d
+      fi
     done
+    if [ -n "$best" ] && { [ -z "$busyd" ] || [ $((bestd - busyd)) -lt "$near" ] || [ $((SECONDS - start)) -ge "${MC_COMPILE_POOL_CLOSE_WAIT_S:-5}" ]; }; then
+      exec 8>>"$best/.pool.lock"
+      if flock -n 8; then slot=$best; return 0; fi
+      exec 8>&-
+      continue
+    fi
     [ "$SECONDS" -lt "$deadline" ] || return 1
     sleep 0.5
   done
@@ -172,8 +191,7 @@ pool_compile() {
   fi
   mkdir -p "$slot/dashboard/.shadow-cljs"
   [ -d "$slot/dashboard/.shadow-cljs/builds" ] || "$repo/tools/seed-shadow-cache.sh" "$slot" >/dev/null 2>&1
-  rsync -rlpc --delete --exclude .git --exclude .claude --exclude .shadow-cljs --exclude docs --exclude worlds --exclude state --exclude textures --exclude viaproxy --exclude blueprints \
-    --exclude /engine/out --exclude /dashboard/out --exclude /tools/view/web/cljs --exclude .pool.lock --exclude .last "$repo/" "$slot/" || { fallback="rsync into slot failed"; exec 8>&- 7>&-; return 1; }
+  rsync -c -p "${pool_sync_opts[@]}" "$repo/" "$slot/" || { fallback="rsync into slot failed"; exec 8>&- 7>&-; return 1; }
   echo "$repo" > "$slot/.last"
   echo "tools/compile: pool slot $slot" >&2
   # fd 8 is closed for the compile: a server it starts must not inherit the slot lock

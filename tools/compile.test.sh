@@ -244,6 +244,15 @@ check "pool server start failure: says one-shot" "$(grep -c 'compiling one-shot'
 rm -rf "$T/pool"
 out=$(MC_COMPILE_MIN_START_MB=99999999 timeout 60 "$T/wt/tools/compile" engine test 2>&1); check "pool low memory: fallback rc" "$?" 0
 check "pool low memory: says one-shot" "$(grep -c 'compiling one-shot' <<<"$out")" 1
+# the free slot nearest the worktree is taken, not the first free one or the last used one
+rm -rf "$T/pool"; mkdir -p "$T/pool/0"
+flock "$T/pool/0/.pool.lock" sleep 6 & H=$!; sleep 0.5
+MC_COMPILE_POOL_SIZE=2 timeout 60 "$T/wt/tools/compile" engine test >/dev/null 2>&1
+echo elsewhere > "$T/pool/1/.last"; kill "$(cat "$T/pool/1/dashboard/.shadow-cljs/server.pid")" 2>/dev/null; wait $H
+: > "$T/pool-npx.log"
+MC_COMPILE_POOL_SIZE=2 timeout 60 "$T/wt/tools/compile" engine test >/dev/null 2>&1
+check "pool pick: nearest free slot wins over first and last-used" "$(cut -d' ' -f1 "$T/pool-npx.log")" "$T/pool/1/dashboard"
+kill "$(cat "$T/pool/1/dashboard/.shadow-cljs/server.pid")" 2>/dev/null
 export MC_COMPILE_POOL_SIZE=0; unset MC_COMPILE_POOL_DIR MC_COMPILE_MIN_START_MB MC_COMPILE_POOL_WAIT_S
 
 # the idle watcher kills only the server it was started for (pid + start time), and never while a compile runs
