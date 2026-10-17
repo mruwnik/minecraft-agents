@@ -2,7 +2,7 @@
 ;; the drop is east of its edge at x 16 onto slime_block laid in the floor (y -1); the planner prices a drop onto slime as free when the pad is 3x3 or a 1x1 shaft walled to the first bounce peak
 ;; (about 0.63 x the fall, rounded up), else as the full fall. :floor {:health 14} leaves a budget of 5 hp (18: 2 hp), so only a free landing may be taken.
 ;; Should-succeed: a 10 drop onto a 3x3 pad then a walk on (no hurt, no walker-fault: the bounce is on plan, also when it drifts over the pad); a 10 drop into a 1x1 shaft walled 10 high at floor 14;
-;; a 6 drop into a shaft walled 6 high at floor 18. Should-fail: a 10 drop into a shaft walled only 2 or only 4 high at floor 18 (2 hp: the 8 and 6 hops to the wall tops cost 5 and 3 hp, so the walls are no stepping stones).
+;; a 6 drop into a shaft walled 6 high at floor 18. These two shafts are walled with glass in the stone top (3x3 of glass round the shaft cell): the body sees stone walls of a 1x1 shaft only on three sides, never the one under its feet, and prices no bounce on a wall it has not seen. Should-fail: a 10 drop into a shaft walled only 2 or only 4 high at floor 18 (2 hp: the 8 and 6 hops to the wall tops cost 5 and 3 hp, so the walls are no stepping stones).
 ;; Live risk: whether a body that bounces on a 1x1 pad stays in the shaft (the walls hold it); the result of the walled cases is judged by arrival at the shaft floor, not by the bounce.
 {:defaults
  {:tags [:movement :planner]
@@ -21,11 +21,11 @@
             {:no-event {:source :job :level :warn :kind :walker-fault} :for-s 60 :until {:source :job :kind :result}}]
    :after [[:body-near [24.5 0 16.5] 2.5]]}
   {:name "shaft-walled-10-high-is-free-at-floor-14"
-   :blocks [[:fill [16 0 15] [17 9 17] "stone"] [:fill [16 0 16] [16 9 16] "air"] [:set [16 -1 16] "slime_block"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 0 :ways #{:walk :clear-seal} :floor {:health 14}})]]
+   :blocks [[:fill [12 0 15] [14 9 17] "glass"] [:fill [13 0 16] [13 9 16] "air"] [:set [13 -1 16] "slime_block"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [13 0 16] :range 0 :ways #{:walk :clear-seal} :floor {:health 14}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :result}}]
-   :after [[:body-near [16.5 0 16.5] 2]]}
+   :after [[:body-near [13.5 0 16.5] 2]]}
   {:name "shaft-walled-2-high-is-refused-at-floor-18"
    :blocks [[:fill [16 0 15] [17 1 17] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [16 -1 16] "slime_block"]]
    :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 0 :ways #{:walk :clear-seal} :floor {:health 18}})]]
@@ -33,13 +33,11 @@
             {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind :result}}]
    :after [[:body-far [16.5 0 16.5] 4]]}
   {:name "drop-6-shaft-walled-6-high-is-free-at-floor-18"
-   :blocks [[:fill [12 6 1] [15 9 30] "air"]
-            [:fill [16 0 15] [17 5 17] "stone"] [:fill [16 0 16] [16 5 16] "air"] [:set [16 -1 16] "slime_block"]]
-   :body {:at [13.5 6 16.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 0 :ways #{:walk :clear-seal} :floor {:health 18}})]]
+   :blocks [[:fill [12 4 15] [14 9 17] "glass"] [:fill [13 4 16] [13 9 16] "air"] [:set [13 3 16] "slime_block"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [13 4 16] :range 0 :ways #{:walk :clear-seal} :floor {:health 18}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :result}}]
-   :after [[:body-near [16.5 0 16.5] 2]]}
+   :after [[:body-near [13.5 4 16.5] 2]]}
   {:name "shaft-walled-4-high-is-refused-at-floor-18"
    :blocks [[:fill [16 0 15] [17 3 17] "stone"] [:fill [16 0 16] [16 3 16] "air"] [:set [16 -1 16] "slime_block"]]
    :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 0 :ways #{:walk :clear-seal} :floor {:health 18}})]]

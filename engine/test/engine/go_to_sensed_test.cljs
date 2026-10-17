@@ -749,6 +749,20 @@
                                               {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
           (is (= [:needs-health :unreachable] ((juxt :why :reason) out)) (pr-str out)))))))
 
+(def glass-shaft
+  "slime-pit with one slime block at [1 0] and every other pit cell glass from the floor up to the surface: a 1x1 shaft whose walls the body sees through the glass."
+  (let [pit (for [x (range 0 3) z (range -1 2) :when (not= [1 0] [x z])] [x z])]
+    (reduce (fn [w [x z]] (reduce #(assoc %1 (str x "," %2 "," z) "glass") w (range 56 60)))
+            (slime-pit {[1 0] "slime_block"}) pit)))
+
+(deftest go-to-takes-a-drop-onto-one-slime-block-walled-with-glass-it-sees
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks glass-shaft}
+                                                   {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
+          (is (= {:arrived true} out) (pr-str (last seen))))))))
+
 (deftest go-to-refuses-a-drop-onto-a-stone-pit-floor
   (async done
     (tu/run-async done
