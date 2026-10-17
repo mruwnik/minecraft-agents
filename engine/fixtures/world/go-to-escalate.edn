@@ -52,7 +52,7 @@
    :after [[:not-block [20 1 16] "air"] [:not-block [20 2 16] "air"] [:body-near [24.5 1 16.5] 2]]}
   ;; card 66dedc16: sealed in a 1x2 pocket of natural stone with no pick at all: the escape digs the wall toward the goal by hand
   {:name "sealed-pocket-no-pickaxe-digs-out-by-hand"
-   :blocks [[:fill [16 2 16] [16 4 16] "stone"] [:set [18 0 16] "air"]]
+   :blocks [[:fill [16 2 16] [16 4 16] "stone"] [:set [18 0 16] "air"] [:set [18 1 16] "air"]]
    :body {:inventory []}
    :act [[:job (jobs.movement.go-to {:pos #at [18 0 16] :range 0})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 140 :of-job true}]
