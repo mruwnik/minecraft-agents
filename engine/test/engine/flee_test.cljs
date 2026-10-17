@@ -311,6 +311,14 @@
 
 (defn clear-after-6 [st n] (when (>= n 6) (swap! st assoc :entities [])))
 
+(defn first-search-then-clear
+  "A search act that runs first-act at the first search and clear-after-6 at the others."
+  [first-act]
+  (fn [st n] ((get {1 first-act} n clear-after-6) st n)))
+
+(defn close-in [st _] (swap! st update :entities (fn [[e]] [(assoc-in e [:pos 0] 1)])))
+(defn hurt [st _] (swap! st update-in [:self :health] - 2))
+
 (deftest a-flee-leg-is-short-with-a-close-hitter-within-the-close-radius-creeper-included
   (async done
     (tu/run-async done
@@ -338,27 +346,21 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [come-close (fn [st n] (if (= 1 n) (swap! st update :entities (fn [[e]] [(assoc-in e [:pos 0] 1)])) (clear-after-6 st n)))
-              {:keys [longest-ms]} (await (searches-in-flee-leg {:entities [(zombie 7 11 {})]} {:radius 14} come-close))]
+        (let [{:keys [longest-ms]} (await (searches-in-flee-leg {:entities [(zombie 7 11 {})]} {:radius 14} (first-search-then-clear close-in)))]
           (is (<= longest-ms 2000) "searching from 11 blocks off, the zombie reaches the body: within a second"))))))
 
 (deftest a-leg-started-with-the-hostile-far-ends-once-the-body-is-hit
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [hit (fn [st n] (if (= 1 n) (swap! st update-in [:self :health] - 2) (clear-after-6 st n)))
-              {:keys [longest-ms]} (await (searches-in-flee-leg {:entities [(zombie 7 11 {})]} {:radius 14} hit))]
+        (let [{:keys [longest-ms]} (await (searches-in-flee-leg {:entities [(zombie 7 11 {})]} {:radius 14} (first-search-then-clear hurt)))]
           (is (<= longest-ms 2000) "a hit taken in the search bounds the leg"))))))
 
 (deftest an-armed-body-whose-search-runs-while-the-zombie-closes-in-fights
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [come-close (fn [st n] (if (= 1 n)
-                                       (do (swap! st update-in [:self :health] - 2)
-                                           (swap! st update :entities (fn [[e]] [(assoc-in e [:pos 0] 1)])))
-                                       (clear-after-6 st n)))
-              {:keys [attacks]} (await (searches-in-flee-leg {:inventory [{:name "stone_sword" :count 1}] :entities [(zombie 7 11 {})]} {:radius 14} come-close))]
+        (let [{:keys [attacks]} (await (searches-in-flee-leg {:inventory [{:name "stone_sword" :count 1}] :entities [(zombie 7 11 {})]} {:radius 14} (first-search-then-clear (fn [st n] (hurt st n) (close-in st n)))))]
           (is (pos? attacks) "armed with a sword, zombie adjacent, search running: it hits back"))))))
 
 (deftest a-chase-that-gains-no-distance-escalates-and-a-gain-resets-it

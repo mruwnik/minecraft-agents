@@ -45,9 +45,7 @@
   [c]
   (or (ctx/use c :tools) combat/default-weapons))
 
-(def hit-reach
-  "Blocks within which a melee hostile counts as the one that hit the body."
-  3)
+(declare hit-reach)
 
 (defn ^:async fight!
   "Fight back with the best of weapons (the fist when none is carried) whatever
@@ -56,7 +54,7 @@
   swung at, none walked to. A fight that ends other than done keeps its memory (its given-up counts) for the next."
   [c weapons reach-only?]
   (let [{:keys [radius ranged-radius]} (:args c)
-        radius (if reach-only? (min radius hit-reach) radius)
+        radius (if reach-only? (min radius (hit-reach)) radius)
         ranged-radius (if reach-only? radius ranged-radius)]
     (ctx/update-mem! c assoc :cornered true)
     (let [r (await (ctx/call c :cornered 'jobs.survival.fight-back
@@ -128,7 +126,7 @@
   "Of hostiles, the melee ones (not a creeper or an enderman) within hit-reach."
   [c hostiles]
   (filterv #(and (not (combat/ranged? %)) (not (combat/creeper? %)) (not (combat/enderman? %))
-                 (<= (danger-q/mob-distance (:primitives c) %) hit-reach))
+                 (<= (danger-q/mob-distance (:primitives c) %) (hit-reach)))
            hostiles))
 
 (defn hit-on-the-run!
@@ -170,6 +168,7 @@
 
 (a/defargs settings
   {:jobs.survival.retreat-cornered/lost-memory-ms {:default 30000 :doc "Milliseconds a mob the flight lost (its :threat entry) still counts, at the place it was last known, when choosing where to flee; a creeper counts triple." :spec (a/int-in 0 nil)}
+   :jobs.survival.retreat-cornered/hit-reach {:default 3 :doc "Blocks within which a melee hostile counts as the one that hit the body." :spec (a/num-in 0 nil)}
    :jobs.survival.retreat-cornered/glance-reach {:default 3 :doc "Blocks along a direction to the feet cell a glance looks at." :spec (a/int-in 0 nil)}
    :jobs.survival.retreat-cornered/glance-memory {:default 24 :doc "Most glanced cells a flight remembers." :spec (a/int-in 0 nil)}
    :jobs.survival.retreat-cornered/cover-gap {:default 5 :doc "Blocks within which a melee chaser keeps a low body from taking cover where it stands." :spec (a/num-in 0 nil)}
@@ -193,6 +192,7 @@
 
 (defn close-leg-s [] (settings/get settings :jobs.survival.retreat-cornered/close-leg-s))
 
+(defn hit-reach [] (settings/get settings :jobs.survival.retreat-cornered/hit-reach))
 (defn close-radius [] (settings/get settings :jobs.survival.retreat-cornered/close-radius))
 
 (defn lost-memory-ms [] (settings/get settings :jobs.survival.retreat-cornered/lost-memory-ms))

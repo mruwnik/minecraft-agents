@@ -386,3 +386,13 @@
           (is (= [:own-pen] (map :reason (kinds (:seen stocked) :clear-box.refused))))
           (is (= {:dug 4 :skipped {}} (select-keys (:result forced) [:dug :skipped])))
           (is (= {:dug 4 :skipped {}} (select-keys (:result empty-pen) [:dug :skipped]))))))))
+
+(deftest clear-box-spares-the-pen-wall-only-up-to-its-wall-height
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks (assoc stocked-pit "3,68,1" "dirt") :entities [pit-cow] :self {:pos {:x 8.5 :y 64 :z 1.5}}}
+                                     (ew/of-data {} {} [pit-zone]))
+              result (await (child-outcome eng job {:from {:x 3 :y 68 :z 1} :to {:x 3 :y 68 :z 1}} 60))]
+          (is (= {:dug 1 :skipped {}} (select-keys result [:dug :skipped])) "a cell well above the pen is not its wall")
+          (is (= "air" (block-at p {:x 3 :y 68 :z 1}))))))))

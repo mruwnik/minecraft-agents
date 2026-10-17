@@ -13,11 +13,12 @@
   {::max-starts {:default 100 :doc "Most standing cells beside a box tried as the start of a pen check." :spec (a/int-in 1 nil)}
    ::depth {:default 8 :doc "Blocks below a box in which the ground beside it is looked for as a pen floor." :spec (a/int-in 0 nil)}
    ::max-cells {:default 400 :doc "Most cells searched for the pen the body is shut in." :spec (a/int-in 1 nil)}
+   ::wall-height {:default 3 :doc "Blocks above the highest cell inside a pen up to which a cell beside it counts as its wall." :spec (a/int-in 0 nil)}
    ::radius {:default 16 :doc "Blocks round the body in which livestock is looked for inside that pen." :spec (a/int-in 1 nil)}})
 
 (defn wall-fn
   "A fn of a cell [x y z]: whether it is the wall of an own pen holding livestock that closes round one of the feet cells
-  starts (beside a cell of the pen's inside or above it, up to the rim). A start in an own area only; the pen is read once."
+  starts (beside a cell of the pen's inside or above it, up to ::wall-height above the highest inside cell). A start in an own area only; the pen is read once."
   [c starts]
   (let [p (:primitives c)
         block-at (apiary/seen-block-at-fn p)
@@ -31,11 +32,11 @@
                                pens)))))
                      [] starts)
         walls (map (fn [{:keys [inside]}]
-                     {:columns (into #{} (map (fn [[x _ z]] [x z])) inside) :floor (apply min (map second inside))})
+                     {:columns (into #{} (map (fn [[x _ z]] [x z])) inside) :floor (apply min (map second inside)) :ceiling (+ (apply max (map second inside)) (settings/get settings ::wall-height))})
                    pens)]
     (fn [[x y z]]
-      (boolean (some (fn [{:keys [columns floor]}]
-                       (and (>= y floor)
+      (boolean (some (fn [{:keys [columns floor ceiling]}]
+                       (and (<= floor y ceiling)
                             (some (fn [dx] (some (fn [dz] (contains? columns [(+ x dx) (+ z dz)])) [-1 0 1])) [-1 0 1])))
                      walls)))))
 

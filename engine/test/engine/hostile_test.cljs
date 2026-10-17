@@ -349,17 +349,18 @@
       (fn ^:async t []
         (let [heard (zombie 7 0.5 -5.5)
               stay '(jobs.survival.respond-to-hostile {:stay-inside false})]
-          (doseq [[world spec decision why]
-                  [[{:time 14000 :entities [heard]} respond :flee "no roof: it flees"]
-                   [{:time 14000 :blocks roofed-passage :entities [heard]} respond :fight "roofed, heard only: it stays"]
-                   [{:time 14000 :blocks roofed-passage :entities [heard]} stay :flee "stay-inside off: it flees"]
-                   [{:time 1000 :blocks roofed-passage :entities [heard]} respond :flee "day: it flees"]]]
-            (let [{:keys [eng p]} (setup-seeing (assoc world :self {:health 5} :inventory sword :pitch -80) nil 1000)]
+          (doseq [[world spec decision held? why]
+                  [[{:time 14000 :entities [heard]} respond :flee false "no roof: it flees"]
+                   [{:time 14000 :blocks roofed-passage :entities [heard]} respond :fight true "roofed, heard only: it stays"]
+                   [{:time 14000 :blocks roofed-passage :entities [heard]} stay :flee false "stay-inside off: it flees"]
+                   [{:time 1000 :blocks roofed-passage :entities [heard]} respond :flee false "day: it flees"]]]
+            (let [{:keys [eng p seen]} (setup-seeing (assoc world :self {:health 5} :inventory sword :pitch -80) nil 1000)]
               (perception/pass! (aget p "perception"))
               (swap! (fake/state p) assoc :pitch 0)
               (core/submit! eng spec {})
               (await (core/tick! eng))
-              (is (= decision (:decision (first (hostile-entries eng)))) why))))))))
+              (is (= decision (:decision (first (hostile-entries eng)))) why)
+              (is (= held? (boolean (:text (first (filter #(= :hostile.sealed-hold (:kind %)) @seen))))) (str why ": sealed-hold event with its reason")))))))))
 
 (def wide-room
   "A 7x7 room around the body (interior -3..3), walls to y 66, roof at y 67, floor at y 63: too wide for closed quarters."
