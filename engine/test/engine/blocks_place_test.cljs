@@ -267,6 +267,20 @@
           (is (= 2 @walks) "one more try, then it ends")
           (is (= {:kind :nothing-possible :cause {:reason :unreachable :why :no-path}} e)))))))
 
+(deftest a-top-level-place-whose-walk-has-no-way-ends-instead-of-waiting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [go-to (get (:jobs (:eng (bd/setup {:self body}))) 'jobs.movement.go-to)
+              base (bd/setup {:self body :inventory cobble})
+              stub (fn ^:async shut-in-walk [c]
+                     (ctx/end c :nothing-possible {:reason :unreachable :why :exhausted} {:arrived false :why :exhausted :text "the body is shut in and this walk may not dig or build out"}))
+              env (assoc-in base [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round stub))
+              wait (await (bd/waiting-after env (list job {:pos [12 64 0] :item "cobblestone"}) 8))]
+          (is (nil? wait) "a shut-in body is a verdict, not a wait")
+          (is (re-find #"shut in" (:text (:data (:ending (await (tu/child-outcome (:eng env) job {:pos [12 64 0] :item "cobblestone"} 8)))))) "the ending says why")
+          (is (empty? (:list (core/state (:eng env)))) "the job ended"))))))
+
 (deftest a-cut-at-the-place-is-resumed-and-the-block-placed-once
   (async done
     (tu/run-async done

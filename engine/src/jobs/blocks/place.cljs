@@ -181,7 +181,8 @@
   (let [text (str (if (:placed result) "placed " "did not place ") (:item result) " at " (pr-str (b/cell (:pos result)))
                   (when-not (:placed result)
                     (str ": " (name (:reason result)) (when (:block result) (str " by " (:block result)))
-                         (when (string? (:why result)) (str " (" (:why result) ")")))))]
+                         (when (string? (:why result)) (str " (" (:why result) ")"))
+                         (when (:walk-text result) (str ": " (:walk-text result))))))]
     (ctx/end c kind cause (assoc result :text text))))
 
 (defn stop!
@@ -244,10 +245,11 @@
 (defn max-walks [] (settings/get settings ::max-walks))
 
 (defn unreachable
-  "The nothing-possible :unreachable ending, why a keyword."
-  [c pos items why]
-  (ctx/end c :nothing-possible {:reason :unreachable :why why}
-           {:placed false :pos pos :item (first items) :reason :unreachable :why why}))
+  "The nothing-possible :unreachable ending, why a keyword; walk-text is go-to's words for the give-up (the body is shut in...), if any."
+  [c pos items why walk-text]
+  (finish! c :nothing-possible {:reason :unreachable :why why}
+           (cond-> {:placed false :pos pos :item (first items) :reason :unreachable :why why}
+             walk-text (assoc :walk-text walk-text))))
 
 (defn ^:async fetch!
   "Get one of the missing items with the fetch limits of the call: :continue, :done (got it) or the ending."
@@ -288,7 +290,7 @@
         (cond
           (= :continue w) :continue
           (= :arrived w) :again
-          (>= (inc @fails) (max-walks)) (unreachable c pos items (or (get-in w [:data :why]) (contract/cause-key w)))
+          (>= (inc @fails) (max-walks)) (unreachable c pos items (or (get-in w [:data :why]) (contract/cause-key w)) (get-in w [:data :text]))
           :else (do (swap! fails inc) :again)))
       lacking? (finish! c :condition-failed (assoc (needs c items) :reason :need :pos pos)
                         {:placed false :pos pos :item (first items) :reason :need})
@@ -296,7 +298,7 @@
       (or (refusal c)
           (let [d (await (place! c pos items))]
             (if (= :unreachable d)
-              (unreachable c pos items :out-of-reach)
+              (unreachable c pos items :out-of-reach nil)
               d))))))
 
 (defn ^:async round [c]

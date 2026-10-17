@@ -29,7 +29,7 @@
        "  --wait   block until the job ends, or until anything that ends observe --wait (addressed chat, attention, an\n"
        "           engine restart, the --timeout), and print {:job .. :wait <the wake>}: the job's last events and a\n"
        "           bounded summary of what else happened meanwhile (reflexes fired, pickups, hurt, other jobs ended,\n"
-       "           warnings). If the wait ends before the job, :follow names the command that waits on, :note says the job is not lost, and the exit code is 1 (0 only when the job ended). Uses the observer\n"
+       "           warnings). If the wait ends before the job, :follow names the command that waits on, :note says the job is not lost, :now has its status and :waiting reason, and the exit code is 1 (0 only when the job ended). Uses the observer\n"
        "           checkpoint observe --wait uses, so the same events are not reported twice.\n"
        "Without --wait mutations return immediately; observe.mjs <body> --world <world> --wait --watch jID tracks completion."))
 
@@ -352,6 +352,15 @@
     (not (and (= :job-finished (:wake wake)) (= id (:job wake))))
     (assoc :follow (follow-command id) :note (unfinished-note id wake))))
 
+(defn job-now
+  "A promise of the job as show prints it (status, waiting reason), so a wait that ended first says what holds the job; nil when unreadable."
+  [r id get! opts]
+  (-> (get! (:socketPath r) (str "/job?id=" id) opts)
+      (.then (fn [{:keys [status content-type text]}]
+               (when (and (= 200 status) (http/edn-response? content-type))
+                 (job-detail (data/read-edn text)))))
+      (.catch (fn [_] nil))))
+
 (defn submit-and-wait!
   "Submit, then wait for the job as observe --wait --watch does; print one map. A refused submit prints as without
   --wait and does not wait. A promise of the exit code."
@@ -371,9 +380,12 @@
                                                                      {:watch [id] :timeout (get-in r [:wait :timeout])} get!))
                                  (fn [[wake report]]
                                    (let [waited (wait-result answer id wake)]
-                                     (output (str (data/write-edn (-> (with-hint r waited (when (:follow waited) manual))
-                                                                      (assoc :vitals report))) "\n"))
-                                     (if (:follow waited) 1 0))))))))))))
+                                     (.then (if (:follow waited) (job-now r id get! opts) (js/Promise.resolve nil))
+                                            (fn [now]
+                                              (output (str (data/write-edn (-> (with-hint r waited (when (:follow waited) manual))
+                                                                               (cond-> now (assoc :now now))
+                                                                               (assoc :vitals report))) "\n"))
+                                              (if (:follow waited) 1 0))))))))))))))
 
 (defn clash-hint [body {:keys [id name status]}]
   (str id " " name " is " (cljs.core/name status) " on this body; a second " name " can undo its work (two digs undercut each other). "

@@ -267,6 +267,8 @@
                  (= "/snapshot" path) {:generation-id "g" :body "Bob" :outstanding {} :cursor cursor
                                        :state {:instances {"j7" {}}}}
                  (= "/status" path) {:mode :scheduled}
+                 (= "/job?id=j7" path) {:id "j7" :name "jobs.blocks.place" :status :queued
+                                        :waiting {:reason :unreachable :why :exhausted}}
                  :else (let [after (js/Number (.get (.-searchParams (js/URL. (str "http://x" path))) "after"))]
                          {:gap? false :stream-id "s" :latest-seq (count @events) :cursor cursor
                           :events (filterv #(> (:seq %) after) @events)})))})))
@@ -306,7 +308,8 @@
                    (let [result (data/read-edn out)]
                      (is (= 1 code) "a script can tell the job did not end")
                      (is (= :timeout (get-in result [:wait :wake])))
-                     (is (= "./bin/observe --wait --watch j7" (:follow result))))))
+                     (is (= "./bin/observe --wait --watch j7" (:follow result)))
+                     (is (= {:reason :unreachable :why :exhausted} (get-in result [:now :waiting])) "says what holds the job"))))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
 (deftest a-wait-woken-by-body-idle-says-the-job-is-not-lost
