@@ -10,6 +10,8 @@
 ;; Should-succeed: the full strip ends done, rails and cobwebs gone, the branch sealed with cobblestone, the loot hauled
 ;; to the main chest (nothing of it left in the bag); carried raw iron is smelted and hauled; a spawner in the branch under :seal
 ;; stops that segment and the branch is sealed with the spawner left.
+;; The two chest cases pre-place the base's left double chest at [19 0 3]/[20 0 3] (chest-1/2) so the base build finds it; the first holds
+;; raw iron and the body's memory books it (:fetch/stock), as an earlier look or deposit would have.
 ;; Should-fail: an unknown base plan stops :bad-plan; the base is built first (it takes torches: 3 carried), then fewer torches than a
 ;; strip needs (and none to get) stops :no-torches before any digging.
 {:defaults
@@ -39,6 +41,20 @@
    :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false :take [:cobweb]})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:smelted [:any]}} :within-s 650 :of-job true}]
    :after [[:item "raw_iron" 0] [:item "iron_ingot" 0]]}
+  {:name "raw-iron-the-base-chest-holds-is-withdrawn-and-smelted"
+   :blocks [[:set [19 0 3] "chest[facing=south,type=left]{Items:[{Slot:0b,id:\"minecraft:raw_iron\",count:16}]}"] [:set [20 0 3] "chest[facing=south,type=right]"]]
+   :memory [{:kind :fetch/stock :data {:pos #at [19 0 3] :items {"raw_iron" 16}} :policy {:cap 64 :ttl :forever}}]
+   :body {:inventory [["stone_pickaxe" 1] ["stone_axe" 1] ["shears" 1] ["torch" 6] ["bread" 12] ["cobblestone" 64] ["oak_planks" 96] ["chest" 4]
+                      ["furnace" 2] ["crafting_table" 1] ["white_bed" 1] ["oak_door" 1] ["coal" 24] ["stick" 8]]}
+   :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false :take [:cobweb]})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:smelted [:any]}} :within-s 650 :of-job true}]
+   :after [[:item "raw_iron" 0] [:item "iron_ingot" 0]]}
+  {:name "haul-false-still-collects-the-smelted-output-into-the-base-chest"
+   :body {:inventory [["stone_pickaxe" 1] ["stone_axe" 1] ["shears" 1] ["torch" 6] ["bread" 12] ["cobblestone" 64] ["oak_planks" 96] ["chest" 4]
+                      ["furnace" 2] ["crafting_table" 1] ["white_bed" 1] ["oak_door" 1] ["raw_iron" 16] ["coal" 24] ["stick" 8]]}
+   :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false :take [:cobweb] :haul false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:smelted [:any]}} :within-s 650 :of-job true}]
+   :after [[:item "raw_iron" 0] [:item "iron_ingot" 0] [:block [19 0 3] "chest{Items:[{id:\"minecraft:iron_ingot\"}]}"]]}
   {:name "spawner-in-the-branch-under-seal-stops-it-and-the-mouth-is-sealed"
    :blocks [[:fill [19 0 11] [21 2 15] "air"] [:fill [20 0 11] [20 0 15] "rail"]
             [:set [19 0 12] "oak_fence"] [:set [19 1 12] "oak_fence"] [:set [21 0 12] "oak_fence"] [:set [21 1 12] "oak_fence"] [:fill [19 2 12] [21 2 12] "oak_planks"]
