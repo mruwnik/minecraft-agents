@@ -461,7 +461,8 @@
       (fn ^:async t []
         (let [{:keys [p seen]} (await (first-round-ms fight {:inventory sword :entities [(invulnerable-zombie)]} 20))]
           (is (= 3 (count (calls p "attack"))) "three swings without damage, then no more")
-          (is (some #(= "fight_no_damage" (name (:kind %))) @seen) "warned, with the reason"))))))
+          (is (empty? (filter #(= "fight_no_damage" (name (:kind %))) @seen)) "the ending carries the reason")
+          (is (re-find #"do no damage" (str (:text (first (filter #(= :stopped (:kind %)) @seen)))))))))))
 
 (deftest respond-flees-from-a-mob-that-takes-no-damage
   (async done

@@ -11,7 +11,7 @@
          [:until-seen {:entity "skeleton_horse"} 10]
          [:rcon "execute at $BODY run tp @e[type=skeleton_horse,tag=wt,$BOX] ~8 ~ ~"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
-            {:no-event {:kind :fight_no_damage} :for-s 20}]
+            {:no-event {:source :job :kind :child_ended :data {:slot :fight :ending {:cause :given-up}}} :for-s 20}]
    :after [[:entities "type=skeleton" [[0 0 0] [32 4 32]] 0]]
    :limit-s 50}
   {:name "rider-dies-after-horse-moves-south"
@@ -19,6 +19,6 @@
          [:until-seen {:entity "skeleton_horse"} 10]
          [:rcon "execute at $BODY run tp @e[type=skeleton_horse,tag=wt,$BOX] ~ ~ ~-8"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
-            {:no-event {:kind :fight_no_damage} :for-s 20}]
+            {:no-event {:source :job :kind :child_ended :data {:slot :fight :ending {:cause :given-up}}} :for-s 20}]
    :after [[:entities "type=skeleton" [[0 0 0] [32 4 32]] 0]]
    :limit-s 50}]}

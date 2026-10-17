@@ -1,5 +1,6 @@
 (ns jobs.survival.fight-back
-  (:require [jobs.lib.ready :as ready]
+  (:require [clojure.string :as str]
+            [jobs.lib.ready :as ready]
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -21,9 +22,9 @@
   Every other ending is a decline, so the retreat takes over: :nothing-possible with the cause :hold-timeout (the :hold wait ran out), :too-far, :heard-only, :given-up;
   its data are {:killed :struck :memory}, the job memory as it ended.
   The weapons are the call's :use :tools (default the weapons carried).
-  A hostile the walk toward is blocked for three times is given up on, with a fight_unreachable warning, and no longer counts,
+  A hostile the walk toward is blocked for three times is given up on, and no longer counts,
   unless the body lost health since the last blocked walk (the count then starts over).
-  So is one that three swings in a row did no damage to (the attack result says hurt false), with a fight_no_damage warning.
+  So is one that three swings in a row did no damage to (the attack result says hurt false). The decline's :text says why each was given up on.
   When no other hostile is in range the job declines, so respond-to-hostile retreats instead.
   A killed mob, or one whose id is in :skip, is not swung at again while its corpse is listed.
   Job memory (for the parent): :struck {id {:name :hits :health}} for hits that did damage, and :killed.")
@@ -122,14 +123,14 @@
   (or (ctx/use c :tools) combat/default-weapons))
 
 (defn note-blocked!
-  "Count a blocked walk towards target; warn once when it is given up on."
+  "Count a blocked walk towards target; note why when it is given up on."
   [c target]
   (let [health (.-health (.self (:primitives c)))
         n (blocked-count (ctx/mem c) (.-id target) health)]
     (ctx/update-mem! c #(-> % (assoc-in [:blocked (.-id target)] n)
                             (assoc-in [:blocked-health (.-id target)] health)))
     (when (= n (u/max-failures))
-      (ctx/emit! c :fight_unreachable :warn {:text (str "cannot reach the " (.-name target) ", giving up on it")}))))
+      (ctx/update-mem! c assoc-in [:given-up (.-id target)] (str "cannot reach the " (.-name target))))))
 
 (defn note-hit!
   "Record a landed hit on target in :struck {id {:name :hits :health}}, so a
@@ -142,7 +143,7 @@
                                (number? h) (assoc :health h))))))
 
 (defn note-swing!
-  "Count a swing at target that did no damage in a row (reset by one that did); warn once when it is given up on."
+  "Count a swing at target that did no damage in a row (reset by one that did); note why when it is given up on."
   [c target result]
   (if (.-hurt result)
     (do (ctx/update-mem! c assoc-in [:no-damage (.-id target)] 0)
@@ -150,7 +151,7 @@
     (let [n (inc (get-in (ctx/mem c) [:no-damage (.-id target)] 0))]
       (ctx/update-mem! c assoc-in [:no-damage (.-id target)] n)
       (when (= n (u/max-failures))
-        (ctx/emit! c :fight_no_damage :warn {:text (str "swings at the " (.-name target) " do no damage, giving up on it")})))))
+        (ctx/update-mem! c assoc-in [:given-up (.-id target)] (str "swings at the " (.-name target) " do no damage"))))))
 
 (def chase-timeout-s
   "Bound of one walk toward the mob: it moves, so the walk aims again at where it is now this often."
@@ -191,7 +192,8 @@
   memory with the kills and hits a caller reads."
   [c kind cause]
   (let [m (dissoc (ctx/mem c) :contract)]
-    (ctx/end c kind cause {:killed (vec (:killed m)) :struck (:struck m) :memory m})))
+    (ctx/end c kind cause (cond-> {:killed (vec (:killed m)) :struck (:struck m) :memory m}
+                            (seq (:given-up m)) (assoc :text (str/join "; " (sort (vals (:given-up m)))))))))
 
 (defn held-idle?
   "Whether a held fight has waited hold-ms since its last swing (or its start) with no mob coming within reach."
