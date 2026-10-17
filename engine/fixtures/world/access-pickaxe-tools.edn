@@ -56,7 +56,9 @@
    :expect [{:event {:source :job :kind :stair.stopped :data {:reason :off-stair :origin [:any] :offset [:any]}} :within-s 40 :of-job true}]}
   ;; card 8397ad3f: the same worn pickaxe (14 uses left) with cobblestone, sticks and a table carried: the next pickaxe is crafted
   ;; (tool.spare) and the stair goes on to its 10 steps instead of stopping :tool-spent
+  ;; chest-radius 8: neighbouring plots run at once and their chests are in sight; obtain tries a seen chest before it crafts, so the body walked out of its plot
   {:name "pickaxe-wears-out-next-one-is-crafted"
+   :settings {:jobs.lib.stock/chest-radius 8}
    :body {:at [8.5 10 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 12] ["stick" 4] ["crafting_table" 1]]}
    :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=117]"]
          [:job (jobs.access.stair {:dir :down :heading :east :steps 10 :stock-torches false})]]
