@@ -205,6 +205,22 @@
         (is (= {:reason :no-support :pos {:x 2 :y 67 :z 0}}
                (bd/wait-cause (await (bd/waiting-after (bd/setup {:self body :inventory cobble}) (list job {:pos [2 67 0] :item "cobblestone"}) 3)))))))))
 
+(deftest a-floor-remembered-as-air-long-ago-is-looked-at-and-placed-against
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body :blocks {"2,66,0" "stone"} :inventory cobble})
+              floor [2 66 0]
+              shown (atom false)]
+          (aset p "sensedAt" (fn [pos]
+                               (if (and (= floor [(.-x pos) (.-y pos) (.-z pos)]) (not @shown))
+                                 #js {:name "air" :ageMs 5000}
+                                 (.blockAt p pos))))
+          (.override (.-world p) "look" (fn [token a impl] (reset! shown true) (impl token a)))
+          (let [result (await (tu/child-outcome eng job {:pos [2 67 0] :item "cobblestone"} 8))]
+            (is (= :placed (:reason result)))
+            (is (= "cobblestone" (bd/block-at p {:x 2 :y 67 :z 0})))))))))
+
 (deftest bad-args-are-never-from-can-start
   (are [args] (= [:never :bad-args] (tu/kind-reason (place/can-start? {:args args :primitives (:p (bd/setup {:self body}))})))
     {:item "cobblestone"}

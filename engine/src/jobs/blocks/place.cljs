@@ -10,6 +10,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.choose :as choose]
+            [jobs.lib.dig-look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.placement :as placement]
@@ -151,7 +152,7 @@
           (= :not-replaceable (:reason v)) nil
           (not (:ok v)) {:reason (:reason v) :pos pos}
           :else (or (when-not (fetching? c) (when-let [n (needs c items)] (assoc n :reason :need :pos pos)))
-                    (when-not (or (boats? items) (b/support? p pos) (b/unseen-near? p pos) (and (fetching? c) (nil? (b/chosen c items)))) {:reason :no-support :pos pos})))))))
+                    (when-not (or (boats? items) (b/support? p pos) (b/unseen-near? p pos) (b/stale-support? c pos) (and (fetching? c) (nil? (b/chosen c items)))) {:reason :no-support :pos pos})))))))
 
 (defn bad-args [c]
   (if-let [error (:error (parse c))]
@@ -267,11 +268,20 @@
     (when (contains? b/cell-reasons (:reason w))
       (ctx/end c :condition-failed w))))
 
+(defn ^:async see-target!
+  "b/see-target!, and a look once more at a cell whose floor or walls were last sensed long ago, so no-support is judged on
+  what is there now."
+  [c pos]
+  (if (b/stale-support? c pos)
+    (do (ctx/update-mem! c #(assoc (b/fresh-mem % pos) :looked pos))
+        (await (look/look-at! c (b/cell pos))))
+    (await (b/see-target! c pos))))
+
 (defn ^:async attempt!
   "One step of the place: fetch the item if due, clear a plant, walk into reach, or place. A walk that fails or leaves
   the cell out of reach is tried once more, then the call ends :unreachable. :again, :continue or the ending."
   [c pos items fails]
-  (let [_ (await (b/see-target! c pos))
+  (let [_ (await (see-target! c pos))
         block (b/target-name (:primitives c) pos "air")
         full (occupied-by c pos items)
         already (some #{block} items)

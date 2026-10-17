@@ -242,14 +242,28 @@
   (let [carried (set (map :name (u/inventory (:primitives c))))]
     (first (filter carried items))))
 
+(defn support-name?
+  "Whether a block name is one to place against (not air, a fluid or a plant)."
+  [n]
+  (boolean (and n (not (air n)) (not (fluids n)) (not (clearable n)))))
+
 (defn support?
-  "Whether a neighbour of pos is a block to place against (not air, a fluid or a plant); a face the body has not
-  seen is not one."
+  "Whether a neighbour of pos is a block to place against; a face the body has not seen is not one."
   [p {:keys [x y z]}]
-  (boolean (some (fn [[dx dy dz]]
-                   (let [n (u/seen-name p {:x (+ x dx) :y (+ y dy) :z (+ z dz)})]
-                     (and n (not (air n)) (not (fluids n)) (not (clearable n)))))
-                 neighbours)))
+  (boolean (some (fn [[dx dy dz]] (support-name? (u/seen-name p {:x (+ x dx) :y (+ y dy) :z (+ z dz)}))) neighbours)))
+
+(def stale-ms "Age of a sensed cell past which the body looks again before it gives up on what it holds." 1000)
+
+(defn stale-support?
+  "Whether a neighbour of pos that is no support (as far as the body knows) was last sensed over stale-ms ago and the
+  job has not yet looked at pos: it may have been filled since."
+  [c pos]
+  (let [p (:primitives c) {:keys [x y z]} pos]
+    (and (not= pos (:looked (mem-for c pos)))
+         (boolean (some (fn [[dx dy dz]]
+                          (let [s (u/sensed p {:x (+ x dx) :y (+ y dy) :z (+ z dz)})]
+                            (and s (not (true? (.-unknown s))) (not (support-name? (.-name s))) (> (or (.-ageMs s) 0) stale-ms))))
+                        neighbours)))))
 
 (defn place-outcome
   "What one round of a jobs.blocks.place child (:continue, or its ending e) means for the cell: :placed, :already (it
