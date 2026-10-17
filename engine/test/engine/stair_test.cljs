@@ -844,14 +844,14 @@
           (is (seq (events-of s :make-room.tossed)) "dirt was tossed to make room")
           (is (nil? (waiting s))))))))
 
-(deftest a-full-pack-with-nothing-to-toss-ends-before-a-lost-drop
+(deftest a-full-pack-with-nothing-to-toss-waits-before-a-lost-drop
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [full (into pick (repeat 35 {:name "diamond" :count 64}))
               {:keys [out p] :as s} (await (stair! {:blocks ground :inventory full} east (fn [_])))]
-          (is (= [:stopped :no-free-slot] ((juxt :status :reason) @out)) "make-room found nothing to toss")
-          (is (= :nothing-possible (:kind (:because (:ending @out)))) "the make-room ending is its because")
+          (is (= :not-done @out) "make-room found nothing to toss and the stair waits, not ends")
+          (is (= :no-free-slot (:reason (waiting s))))
           (is (empty? (digs p))))))))
 
 (deftest a-stack-with-room-is-room

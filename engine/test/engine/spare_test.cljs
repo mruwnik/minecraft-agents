@@ -6,7 +6,7 @@
             [engine.stair-test :as st]
             [engine.test-util :as tu]))
 
-(def worn {:name "stone_pickaxe" :count 1 :durability 10 :max-durability 131})
+(def worn {:name "stone_pickaxe" :count 1 :durability 4 :max-durability 131})
 (def fresh {:name "stone_pickaxe" :count 1 :durability 120 :max-durability 131})
 (def chest "2,65,1")
 (def spare-chest {:blocks (assoc st/ground chest "chest") :containers {chest [{:name "stone_pickaxe" :count 1}]}})
@@ -36,7 +36,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [inv [[fresh] [worn fresh] [{:name "stone_pickaxe" :count 1 :durability 1}]]]
+        (doseq [inv [[fresh] [worn fresh] [(assoc worn :durability 10)] [{:name "stone_pickaxe" :count 1 :durability 1}]]]
           (let [s (await (st/stair! (assoc spare-chest :inventory inv) east tu/seeing-all))]
             (is (not-any? #{:tool.spare :tool.no-spare} (kinds s)))))))))
 
@@ -44,7 +44,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [worn-iron {:name "iron_pickaxe" :count 1 :durability 10 :max-durability 250}
+        (let [worn-iron {:name "iron_pickaxe" :count 1 :durability 4 :max-durability 250}
               s (await (st/stair! (assoc spare-chest :inventory [worn-iron]) east tu/seeing-all))]
           (is (= :done (:status @(:out s))))
           (is (= ["stone_pickaxe"] (map :tool (st/events-of s :tool.spare)))))))))
@@ -86,7 +86,7 @@
         (let [corridor (-> (m/cells "air" (range 1 7) [64 65] [0]) (assoc "7,64,0" "chest"))
               world (-> (m/rock-world corridor)
                         (assoc :inventory [worn] :containers {"7,64,0" [{:name "stone_pickaxe" :count 1}]}))
-              s (await (m/scenario {:block "iron_ore" :level false :count 1 :tunnel-length 0} world 60))]
+              s (await (m/scenario {:block "iron_ore" :level false :count 5 :tunnel-length 0} world 60))]
           (is (contains? (kinds s) :tool.spare))
           (is (= [0 64 0] (m/feet s))))))))
 

@@ -49,7 +49,7 @@
   (purpose :stair-floor) for jobs.access.cleanup to take back once go-to's job ended (setting take-back-floors?).
 
   Needs a pickaxe for the blocks it cuts and room for the drops. A call starts only when the first step is not refused by a zone, claim or plan, the args give a length (:steps or :y), the next dig lacks nothing this call cannot get, and, when it was submitted with a :from, the body is still near it (conditions :refused, :no-tool, :no-free-slot, :moved-since-submit; start only). Quote: steps x cells of the step x the time of a cell, ending at the last step.
-  - A pack without room is made room in (jobs.storage.make-room child, once per pack content; :make-room), else it ends :no-free-slot.
+  - A pack without room is made room in (jobs.storage.make-room child, once per pack content; :make-room), else it waits :no-free-slot until the pack changes (a call that starts so ends condition-failed).
   - A missing pickaxe is got with jobs.items.get-tool (:fetch, jobs.lib.need), then the body walks back to the cell it stood on and goes on; a fetch that fails, or that changes nothing, is remembered for the call and the block is dug bare-handed. With :fetch off it ends :no-tool.
 
   Each step is judged when chosen and each cell again right before its dig. Stops:
@@ -260,6 +260,16 @@
   (if-let [lack (unmet c)]
     (checks/cause-status :later lack (str "lacks " (name (:reason lack))))
     (contract/ok :supplied "nothing lacking")))
+
+(defn pack-has-room
+  "Later :no-free-slot while the next dig has no room for its drop and no make-room can cure it: the pack can clear (a deposit, a toss), so the stair waits."
+  [c]
+  (let [lack (unmet c)]
+    (if (= :no-free-slot (:reason lack))
+      (checks/cause-status :later lack "the pack has no room for the next drop")
+      (contract/ok :room "the pack has room"))))
+
+(def can-run? (with-heading-check pack-has-room))
 
 (def can-start?
   (cond/and checks/not-moved
@@ -475,7 +485,7 @@
         ;; the spare's fetch may walk the body off: the stair starts where it was asked, not where the fetch ended
         (ctx/update-mem! c assoc :start feet)
         (if (= :continue (or (await (when (and (= :down (:dir (:args c))) (:stock-torches (:args c))) (stock/torches! c)))
-                             (await (stock/spare! c "stone" nil))))
+                             (await (stock/spare! c "stone" (* 3 target)))))
           :continue
           (if (and (not= feet (reach/standing-vec (:primitives c))) (= :continue (await (child/walk-into!* c :start feet))))
             :continue

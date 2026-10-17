@@ -566,12 +566,17 @@
       (:collecting m) (await (collect! c))
       :else (await (dig-round! c)))))
 
+(defn digs-left
+  "The digs the call still has to make: items short of the goal once it is written, else :count (an ore drops at least one item per dig)."
+  [c]
+  (max 1 (if-let [goal (:goal (ctx/mem c))] (- goal (carried c)) (:count (:args c)))))
+
 (defn ^:async round
   [c]
   (submitted/begin! c)
   (when (and (nil? (:phase (ctx/mem c))) (nil? (:pre-start (ctx/mem c))))
     (ctx/update-mem! c assoc :pre-start (cell-of (u/self-pos c))))
-  (if-let [t (or (await (trip/ready! c)) (await (trip/tool-ready! c (:block (:args c))))
+  (if-let [t (or (await (trip/ready! c)) (await (trip/tool-ready! c (:block (:args c)) (digs-left c)))
                  (await (when (and (pos? (or (:torch-interval (:args c)) 0)) (nil? (:tunnel (ctx/mem c))) (or (pos? (:tunnel-length (:args c))) (descent-wanted? c)))
                           (trip/torches-ready! c))))]
     t
