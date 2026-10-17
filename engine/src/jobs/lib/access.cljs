@@ -51,6 +51,18 @@
      (or (some (fn [zn] (and (zones/same-owner? (:owner zn) self) (zones/in-box? cell zn))) (known/zones c))
          (contains? (own-plans c) (get (known/footprints c) cell))))))
 
+(defn foreign-holder
+  "Who else holds pos ({:x :y :z}, floats ok): a zone or active claim of another player, or a plan another body made,
+  as {:kind :zone|:claim|:plan ...}, else nil. A query only: nothing is refused (jobs.lib.access.zones/foreign-holder)."
+  [c {:keys [x y z]}]
+  (let [cell [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]
+        self (ctx/self-name c)
+        plan (get (known/footprints c) cell)
+        by (get (known/plan-authors c) plan)]
+    (or (zones/foreign-holder {:zones (known/zones c) :claims (known/claims c) :self self :now (ctx/now c) :cell cell})
+        (when (and plan by (zones/foreign-owner? by self))
+          {:kind :plan :plan plan :owner by}))))
+
 (def hidden-guess "What a cell the body has not sensed is taken for: rock, so a dig goes ahead and looks." "stone")
 
 (defn sensed-at

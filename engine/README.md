@@ -653,6 +653,7 @@ them: `act!` and the primitives check neither, and a job may ignore them. The he
 4. an active, unexpired claim of another owner holds the cell: `:claim`;
 5. else ok (`:own-zone`, `:own-claim`, `:open`).
 
+- Query without a verdict: `jobs.lib.access/foreign-holder` (ctx, pos) names the zone, active claim or other body's plan holding a cell, else nil (nothing refused); `map.mjs --world W whose --center '[x y z]' --by ME` asks the same of zones and claims.
 - Every job that digs, places or takes accepts `:ignore-zones? true` (default false). By default it skips a refused target
   with one warn naming the zone, claim or plan; a cell two plans share is such a target, and `:ignore-zones? true` acts on it anyway.
 - `withdraw`, `deposit`, `smelt` and jobs built on them give up `:refused` on a foreign container.

@@ -67,3 +67,15 @@
   (is (false? zones/deposit-into-foreign-chest?))
   (is (true? zones/plan-footprint-beats-zone?))
   (is (true? zones/unknown-owner-foreign?)))
+
+(deftest foreign-holder-names-whoever-else-holds-the-cell
+  (are [in expected] (= expected (zones/foreign-holder (merge {:zones [] :claims [] :self "Bot" :now now} in)))
+    {:zones [mine] :cell [1 64 1]} nil
+    {:zones [theirs] :cell [1 64 1]} nil
+    {:zones [theirs] :cell [21 64 1]} {:kind :zone :name "theirs" :owner "Miles"}
+    {:zones [open-to-take] :cell [21 64 1]} {:kind :zone :name "theirs" :owner "Miles"}
+    {:zones [unknown] :cell [41 64 1]} {:kind :zone :name "lib" :owner "unknown"}
+    {:claims [their-claim] :cell [81 64 1]} {:kind :claim :id "c2" :owner "Miles"}
+    {:claims [expired] :cell [81 64 1]} nil
+    {:claims [released] :cell [81 64 1]} nil
+    {:claims [my-claim] :cell [61 64 1]} nil))

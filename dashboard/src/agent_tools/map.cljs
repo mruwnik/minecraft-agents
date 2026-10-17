@@ -1,6 +1,7 @@
 (ns agent-tools.map
   "Agent map command: intent markers, access zones and expiring social claims."
   (:require [engine.bodies :as bodies]
+            [jobs.lib.access.zones :as zones]
             [cljs.tools.reader.edn :as edn]
             [cljs.tools.reader.reader-types :as rt]
             [clojure.string :as str]
@@ -8,7 +9,7 @@
             ["node:path" :as path]
             ["node:util" :refer [parseArgs]]))
 
-(def usage "map.mjs --world WORLD find|show|add|edit|remove|renew|release [marker|zone|claim] [ID] [--data EDN --revision REV --by ACTOR --for 30m --dry-run --raw --center EDN --place ID --radius 128 --type TYPE --owner OWNER --status STATUS --text TEXT --limit 10 --offset 0 --worlds DIR --state LEGACY_PARENT]\nShared map of markers (a point: {:x :y :z :kind :note}, kind is free text such as :base or :farm, default :place, note up to 80 characters), zones ({:name :owner :min [x y z] :max [x y z] :allow :note}, a box others avoid) and claims (a timed hold). find shows a record's :box as [[x y z] [x y z]]; --center is [x y z] or {:x :y :z}; :total counts all matches, :next-offset pages.")
+(def usage "map.mjs --world WORLD find|show|add|edit|remove|renew|release [marker|zone|claim] [ID] [--data EDN --revision REV --by ACTOR --for 30m --dry-run --raw --center EDN --place ID --radius 128 --type TYPE --owner OWNER --status STATUS --text TEXT --limit 10 --offset 0 --worlds DIR --state LEGACY_PARENT]\nwhose --center CELL --by ME tells whether a zone or active claim of someone else holds the cell (answer :foreign? and :holder; nothing is refused).\nShared map of markers (a point: {:x :y :z :kind :note}, kind is free text such as :base or :farm, default :place, note up to 80 characters), zones ({:name :owner :min [x y z] :max [x y z] :allow :note}, a box others avoid) and claims (a timed hold). find shows a record's :box as [[x y z] [x y z]]; --center is [x y z] or {:x :y :z}; :total counts all matches, :next-offset pages.")
 (def default-state-dir (.resolve path js/__dirname "../.."))
 
 (defn coalesce [& values] (first (filter some? values)))
@@ -52,13 +53,14 @@
             values)
         allowed (get {:find #{:center :place :radius :type :owner :status :text :limit :offset :raw}
                       :show #{:raw}
+                      :whose #{:center :by}
                       :add #{:data :by :for :dry-run :preview :raw}
                       :edit #{:data :revision :by :for :dry-run :preview :raw}
                       :remove #{:revision :by :dry-run :preview :raw}
                       :renew #{:revision :by :for :dry-run :preview :raw}
                       :release #{:revision :by :dry-run :preview :raw}} command)]
     (when (or (seq extra) (nil? allowed)
-              (if (= command :find) (some? kind) (or (nil? id) (not (#{:marker :zone :claim} kind)))))
+              (if (#{:find :whose} command) (some? kind) (or (nil? id) (not (#{:marker :zone :claim} kind)))))
       (throw (data/fail :invalid-command usage)))
     (when (and (#{:renew :release} command) (not= kind :claim))
       (throw (data/fail :invalid-command "renew/release apply only to claims")))
@@ -67,10 +69,12 @@
         (throw (data/fail :invalid-option (str "--" (name key) " does not apply to " (name command))))))
     (when (and (:for v) (not= kind :claim))
       (throw (data/fail :invalid-option "--for applies only to claims")))
+    (when (and (= command :whose) (str/blank? (:by v)))
+      (throw (data/fail :actor-required "whose needs --by (the asker)")))
     (let [ctx (data/context (select-keys v [:state :worlds :world :repo-root]))]
-      (when (and (not (#{:find :show} command)) (or (nil? (:by v)) (str/blank? (:by v))))
+      (when (and (not (#{:find :show :whose} command)) (or (nil? (:by v)) (str/blank? (:by v))))
         (throw (data/fail :actor-required "mutations require --by")))
-      (when (and (not (#{:find :show :add} command)) (not (re-matches #"^[0-9a-f]{24}$" (or (:revision v) ""))))
+      (when (and (not (#{:find :show :add :whose} command)) (not (re-matches #"^[0-9a-f]{24}$" (or (:revision v) ""))))
         (throw (data/fail :revision-required "give --revision from show/find")))
       {:command command :kind kind :id id :ctx ctx :values v})))
 
@@ -195,6 +199,12 @@
                                (mapcat #(data/list-documents ctx %) [:marker :zone :claim]))
                   page (data/query docs (filters ctx v))]
               (data/raw-bound (update page :items #(mapv (fn [d] (cond-> (summary d) (:raw v) (assoc :record (:value d)))) %))))
+      :whose (let [cell (center-of (read-edn (or (:center v) "")))
+                   holder (zones/foreign-holder
+                           {:zones (mapv :value (data/list-documents ctx :zone))
+                            :claims (mapv :value (data/list-documents ctx :claim))
+                            :self (:by v) :now (js/Date.now) :cell cell})]
+               (data/raw-bound (cond-> {:ok true :cell cell :foreign? (some? holder)} holder (assoc :holder holder))))
       :show (let [d (data/read-document ctx kind id)]
               (when-not d (throw (data/fail :not-found "object not found" {:kind kind :id id})))
               (data/raw-bound (cond-> (summary d) (:raw v) (assoc :record (:value d)))))

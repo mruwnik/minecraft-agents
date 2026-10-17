@@ -19,3 +19,7 @@
 
 (deftest usage-documents-the-zone-corners
   (is (re-find #":min" map-tool/usage)))
+
+(deftest whose-needs-the-asker-and-takes-no-kind
+  (is (re-find #"--by" (failure #(map-tool/options ["whose" "--center" "[1 2 3]" "--world" "w"]))))
+  (is (re-find #"map.mjs" (failure #(map-tool/options ["whose" "zone" "--by" "Bot" "--world" "w"])))))

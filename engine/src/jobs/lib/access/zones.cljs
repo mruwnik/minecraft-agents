@@ -82,6 +82,18 @@
       (some #(same-owner? (:owner %) self) live) {:ok true :why :own-claim}
       :else {:ok true :why :open})))
 
+(defn foreign-holder
+  "Who else holds cell: {:kind :zone :name :owner} or {:kind :claim :id :owner} for the first zone (whatever its :allow) or
+  active claim of another owner containing it, else nil. Same input keys as verdict (:zones :claims :self :now :cell);
+  never refuses anything, it is a query for jobs, triggers and agents."
+  [{:keys [zones claims self now cell]}]
+  (or (some #(when (and (in-box? cell %) (foreign-owner? (:owner %) self))
+               {:kind :zone :name (:name %) :owner (:owner %)})
+            zones)
+      (some #(when (and (active? now %) (in-box? cell %) (not (same-owner? (:owner %) self)))
+               {:kind :claim :id (:id %) :owner (:owner %)})
+            claims)))
+
 (defn exit-goal
   "The cell outside zone zn's box by margin m + 2 on its nearest side, at the level of here."
   [{:keys [x y z]} zn m]
