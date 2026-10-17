@@ -1,6 +1,6 @@
 ;; jobs.access.stair defaults and floor gaps (cards b21f992b, 80dde49e, 65ac2209): a call with no :heading digs the way the body
 ;; faces (it used to stop :bad-args); a flat run whose floor has a one-cell gap fills it from a neighbour (bridge!) and goes on;
-;; a stair down over a cave places each floor from the step above it.
+;; a stair down over a cave with nothing to place against stops :no-support-floor.
 ;; Stone mass x 2..30, z 8..24, y 0..9 (surface y 10).
 {:defaults
  {:tags [:access :mine] :time :any
@@ -21,14 +21,15 @@
    :expect [{:event {:source :job :kind :stair.done :data {:steps 8}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :stair.stopped} :for-s 120 :until {:source :job :kind :stair.done}}]
    :after [[:not-block [14 7 16] "air"] [:body-near [18.5 8 16.5] 2.5]]}
-  {:name "stair-down-into-a-cave-bridges-each-floor"
-   ;; a cave (x 10..14, y 4..8) under the steps: each step's floor has no face but the cut feet cell, placed first (card 65ac2209)
+  ;; should-fail (card 4567b3f9): a cave (x 10..14, y 4..8) opens straight under the first step; the floor [11 8 16] and the cell under it have no
+  ;; neighbour the body can see (the underside of the cut cell is refused with the eye above it, the cave cells further back are hidden), so the
+  ;; stair stops :no-support-floor before any step and shuts the cut cell
+  {:name "stair-down-into-a-cave-with-no-visible-support-stops-at-the-first-floor"
    :blocks [[:fill [10 4 15] [14 8 17] "air"]]
    :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 4})]]
-   :expect [{:event {:source :job :kind :stair.done :data {:steps 4}} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :stair.stopped} :for-s 120 :until {:source :job :kind :stair.done}}]
-   :after [[:not-block [11 8 16] "air"] [:not-block [12 7 16] "air"] [:body-near [14.5 6 16.5] 2.5]]}
+   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :no-support-floor :steps 0}} :within-s 120 :of-job true}]
+   :after [[:block [11 8 16] "air"] [:not-block [11 9 16] "air"]]}
   ;; should-fail (card 94cba87f): the cave (x 12..13, y 0..6) opens under the floor of step 3 (x 13); its only solid cell in line, [11 6 16],
   ;; lies under the stone floor of step 2 and cannot be seen from the shaft (the cell between is air under that stone), so no cell can be aimed at:
   ;; the stair stops :no-support-floor and shuts the cut cell over the floor
