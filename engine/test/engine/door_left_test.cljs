@@ -9,6 +9,7 @@
             [engine.hut-shelter-test :as hs]
             [engine.hut-door-test :as hd]
             [engine.memory :as mem]
+            [jobs.lib.doors :as doors]
             [jobs.lib.near :as near]
             [jobs.lib.pass :as pass]
             [engine.registry :as registry]
@@ -65,6 +66,13 @@
     (is (false? (holds? (tu/blind (tu/fake (gate-world true 9 0))))) "never seen: not read through the wall")
     (aset p "seenBlockAt" (fn [pos] #js {:name "oak_fence_gate" :properties #js {:open "false"} :pos pos :age-ms 5000}))
     (is (false? (holds? p)) "last seen shut, opened unseen: the last seen state counts")))
+
+(deftest an-open-gate-the-body-stands-in-is-read-though-memory-has-no-state-for-it
+  (let [p (tu/seeing-all (tu/fake (gate-world true 5 0)))]
+    (aset p "seenBlockAt" (fn [pos] #js {:unknown true :pos pos}))
+    (is (= gate-cell (:cell (doors/seen-open-block p gate-cell))) "felt under the body")
+    (aset p "sensedAt" (fn [pos] #js {:unknown true :pos pos}))
+    (is (nil? (doors/seen-open-block p gate-cell)) "neither felt nor remembered: not read")))
 
 (defn with-owner
   "view with job memory for the root job j1 (it lives)."

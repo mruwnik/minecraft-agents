@@ -38,9 +38,11 @@
 
 (defn seen-open-block
   "open-block as the body last saw the block (perception's memory); a block never seen is not open. For the trigger: what
-  the body could not see is not read."
+  the body could not see is not read. A cell that touches the body (it stands in the gate) is felt, never in memory."
   [p cell]
-  (let [{:keys [name properties]} (look/seen-block p cell)]
+  (let [{:keys [name properties]} (let [m (look/seen-block p cell)
+                                         b (when-not (:name m) (u/seen-block p cell))]
+                                    (if b {:name (.-name b) :properties (click/props-of b)} m))]
     (when (and name (= :openable (click/kind-of name)) (click/reached? :open properties))
       {:cell cell :column (pass/column-of cell properties)})))
 
