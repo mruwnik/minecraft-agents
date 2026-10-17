@@ -186,12 +186,13 @@
 
 (defn not-lacking
   "Later with what the next dig lacks that this call cannot make good (:no-tool, :no-free-slot); cells not yet seen are
-  looked at first when no fetch could make good a missing pickaxe and none is carried (else the round would start and
+  looked at first (only those with a seen air face, a look never shows a buried one) when no fetch could make good a missing pickaxe and none is carried (else the round would start and
   end the call)."
   [c]
   (if-let [lack (judge/unmet c)]
     (checks/cause-status :later lack (str "lacks " (name (:reason lack))))
-    (let [unseen (filterv #(unknown? (:primitives c) %) (judge/next-cut c))]
+    (let [p (:primitives c)
+          unseen (filterv #(and (unknown? p %) (some blocks/air (ore-pick/face-names p %))) (judge/next-cut c))]
       (if (and (seq unseen) (:need-drop (:args c)) (not (judge/fetch-limits c)) (sstep/lacks-tool? c blocks/hidden-guess))
         (contract/look :unseen "the cells to cut were not seen" :look-at unseen)
         (contract/ok :supplied "nothing lacking")))))
