@@ -57,7 +57,7 @@
   (near/with-sight), a dark drop as go-to's :unseen-floor-dark."
   [c plan to policy unknown]
   (let [{:keys [r steps status]} plan
-        path (or (.-path r) (some-> (.-oneWay r) .-path))
+        path (or (some-> r .-path) (some-> r .-oneWay .-path))
         no (wplan/no-walk plan 0 policy)
         here (u-dist c to)
         result (cond
