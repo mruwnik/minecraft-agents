@@ -7,6 +7,7 @@
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.proofs :as proofs]
             [engine.perception :as perception]
@@ -22,13 +23,13 @@
 (defn mob [id name x z] {:id id :name name :kind "hostile" :pos {:x (+ x 0.5) :y 64 :z (+ z 0.5)}})
 
 (defn rig
-  "{:p wrapped primitives, :raw p, :clock}: a fake on a floor with the perception over it, its clock in ms."
+  "{:p wrapped primitives, :per perception, :raw p, :clock}: a fake on a floor with the perception over it, its clock in ms."
   ([spec] (rig spec {}))
   ([spec opts]
    (let [clock (atom 1000000)
          raw-p (tu/fake (merge {:self {:pos body} :floor [-50 -50 50 50]} spec))
          per (perception/create (fake-raw/create raw-p) (merge {:now #(deref clock)} opts))]
-     {:p (perception/wrap raw-p per) :raw raw-p :clock clock})))
+     {:p (perception/wrap raw-p per) :per per :raw raw-p :clock clock})))
 
 (defn move! [p id {:keys [x y z]}]
   (swap! (fake/state p) update :entities (fn [es] (mapv #(if (= id (:id %)) (assoc % :pos [x y z]) %) es))))
@@ -56,6 +57,13 @@
     (is (nil? (nearest-id p)))
     (is (false? (hostile-near? p)) "the trigger does not fire")
     (is (nil? (danger-q/nearest-danger p 8 {} {:sight? false})) "unknown even without the sight test")))
+
+(deftest a-sight-pass-facing-a-silent-creeper-remembers-it-after-the-body-turns-away
+  (let [{:keys [p]} (rig {:entities [(mob 1 "creeper" 0 -2)]})]
+    (swap! (fake/state p) assoc :yaw 180)
+    (look/see! {:primitives p})
+    (swap! (fake/state p) assoc :yaw 0)
+    (is (= [1] (danger-ids p)))))
 
 (deftest the-raw-primitives-still-count-every-mob
   (let [{:keys [raw]} (rig {:entities [(mob 1 "creeper" 0 -2)]})]

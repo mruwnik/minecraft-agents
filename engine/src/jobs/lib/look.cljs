@@ -91,11 +91,14 @@
     {:x (+ (:x eye) (* (glance-near) dx)) :y (+ (:y eye) (* 1.7 (glance-near))) :z (+ (:z eye) (* (glance-near) dz))}))
 
 (defn see!
-  "A sight pass now at effort (default glance-effort), so what the last look faced is in memory before the next decision."
+  "A sight pass now at effort (default glance-effort), so what the last look faced is in memory before the next decision.
+  A mob sample too (knownMobs): a silent creeper is sensed only inside the view cone, and the next look may turn away
+  before the timer's sample."
   ([c] (see! c (glance-effort)))
   ([c effort]
    (when-let [per (aget (:primitives c) "perception")]
-     (perception/pass! per {:effort effort}))))
+     (perception/pass! per {:effort effort})
+     (when (fn? (.-knownMobs (:primitives c))) (.knownMobs (:primitives c))))))
 
 (defn ^:async glance!
   "Look along each of dirs ([dx dz]), level and down (look-around! adds the look up), a sight pass at effort (default glance-effort) after each look."
