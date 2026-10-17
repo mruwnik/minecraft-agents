@@ -113,12 +113,17 @@
     (checks/cause-status :later (or (dth/danger-wait (ctx/view c)) (est/decided-wait (ctx/view c))))))
 
 (defn done?
-  "How much of the latest pile is back since the decision. Never done at once: the :recovered entry is the trip's to write."
+  "Ok once the latest death's pile is back or seen gone (its :recovered says :collected or :nothing-found); else how much of the pile is back since the decision."
   [c]
-  (let [pile (:inventory (:data (dth/current-death c)))
-        total (reduce + 0 (map :count pile))
-        n (if (:baseline (ctx/mem c)) (pl/recovered-items c pile) 0)]
-    (contract/later :recovering (str n " of " total " items back") :units :items :done n :left (- total n))))
+  (let [view (ctx/view c)
+        died (mem/latest view :died)
+        recovered (last (filter #(= (:t died) (:death-t (:data %))) (mem/entries view :recovered)))]
+    (if (and died (#{:collected :nothing-found} (:decision (:data recovered))))
+      (contract/ok :recovered (str "the pile is " (if (= :collected (:decision (:data recovered))) "back" "gone")))
+      (let [pile (:inventory (:data (dth/current-death c)))
+            total (reduce + 0 (map :count pile))
+            n (if (:baseline (ctx/mem c)) (pl/recovered-items c pile) 0)]
+        (contract/later :recovering (str n " of " total " items back") :units :items :done n :left (- total n))))))
 
 (defn ^:async trip-s
   "[least mean] seconds of the walk to pos as go-to quotes it, the mean with ::collect-s at the pile."

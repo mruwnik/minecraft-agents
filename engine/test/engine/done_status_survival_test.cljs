@@ -89,3 +89,11 @@
     {} {:killed [7]} [:ok :clear]
     {:entities [(zombie 9 3)]} {} [:later :fighting]
     {:entities [(zombie 9 3)]} {:killed [9]} [:ok :clear]))
+
+(deftest recover-drops-is-done-once-the-latest-pile-is-collected-or-seen-gone
+  (are [entries want] (= want (tu/kind-reason (done-in 'jobs.survival.recover-drops {} {} {} entries)))
+    {:died [{:t 500 :data {:inventory []}}]} [:later :recovering]
+    {:died [{:t 500 :data {}}] :recovered [{:t 900 :data {:death-t 500 :decision :collected}}]} [:ok :recovered]
+    {:died [{:t 500 :data {}}] :recovered [{:t 900 :data {:death-t 500 :decision :nothing-found}}]} [:ok :recovered]
+    {:died [{:t 500 :data {}}] :recovered [{:t 900 :data {:death-t 500 :decision :abandoned}}]} [:later :recovering]
+    {:died [{:t 500 :data {}} {:t 800 :data {}}] :recovered [{:t 900 :data {:death-t 500 :decision :collected}}]} [:later :recovering]))
