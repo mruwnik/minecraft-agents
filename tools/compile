@@ -2,6 +2,7 @@
 # tools/compile <engine|dashboard> <build>... [--priority] [--release]
 # tools/compile <engine|dashboard> --stop
 #   --output-dir DIR  build into DIR instead of the build's :output-dir (shadow-cljs --config-merge; relative to dashboard/).
+#   --ns-regexp RE    build only the namespaces matching RE (a Java regex; :ns-regexp of a :node-test build) and their deps.
 # Both project words use the one shadow-cljs project in dashboard/ (engine builds write to engine/out); `dashboard test` is the :dashboard-test build.
 #
 # Every cljs compile in this repo goes through here: it queues for one of MC_COMPILE_SLOTS (default 3) machine-wide compile
@@ -35,17 +36,18 @@ queue=${MC_COMPILE_QUEUE:-/tmp/mc-compile.queue}
 MIN_START_MB=${MC_COMPILE_MIN_START_MB:-3500}
 slots=${MC_COMPILE_SLOTS:-3}   # compiles at once machine-wide; each runs in its own checkout's server, whose memory res-slot gates
 
-usage() { echo "usage: tools/compile <engine|dashboard> <build>... [--priority] [--release] [--output-dir DIR] | <engine|dashboard> --stop" >&2; exit 2; }
+usage() { echo "usage: tools/compile <engine|dashboard> <build>... [--priority] [--release] [--output-dir DIR] [--ns-regexp RE] | <engine|dashboard> --stop" >&2; exit 2; }
 
 [ $# -ge 2 ] || usage
 project=$1; shift
 case "$project" in engine|dashboard) ;; *) usage ;; esac
 dir="$repo/dashboard"   # one shadow-cljs project (dashboard/shadow-cljs.edn) holds both; one server per checkout
-args=("$@"); lane=1; verb=compile; stop=0; builds=(); extra=()
+args=("$@"); lane=1; verb=compile; stop=0; builds=(); extra=(); outdir=
 while [ $# -gt 0 ]; do
   a=$1; shift
   case "$a" in
-    --output-dir) [ $# -gt 0 ] || usage; extra=(--config-merge "{:output-dir \"$1\"}"); shift ;;
+    --output-dir) [ $# -gt 0 ] || usage; outdir=$1; extra+=(--config-merge "{:output-dir \"$1\"}"); shift ;;
+    --ns-regexp) [ $# -gt 0 ] || usage; extra+=(--config-merge "{:ns-regexp \"${1//\\/\\\\}\"}"); shift ;;
     --priority) lane=0 ;;
     --release) verb=release ;;
     --stop) stop=1 ;;
@@ -201,7 +203,7 @@ pool_compile() {
   if [ "$code" = 0 ]; then
     write_build_id
     out=$(pool_outputs "${builds[@]}")
-    [ -z "${extra[1]:-}" ] || out="$out"$'\n'"$(sed -E 's/^\{:output-dir "(.*)"\}$/\1/' <<<"${extra[1]}")"
+    [ -z "$outdir" ] || out="$out"$'\n'"$outdir"
     for o in $out; do
       case "$o" in /*) continue ;; esac
       [ -e "$slot/dashboard/$o" ] || continue
