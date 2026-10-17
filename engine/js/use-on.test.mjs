@@ -346,7 +346,7 @@ test('window guard: no window leaves no listener behind', async () => {
 test('too far: unreachable carries reason too-far and the eye-to-centre distance', async () => {
   const { bot, p } = rig({ blocks: { '1,64,9': 'dirt' } })
   const r = await p.useOn('t1', { pos: at(1, 64, 9), item: 'diamond_hoe' })
-  const eyeY = 64 + (bot.entity.height ?? 1.62)
+  const eyeY = 64 + (bot.entity.eyeHeight ?? 1.62)
   const want = Math.round(Math.hypot(bot.entity.position.x - 1.5, eyeY - 64.5, bot.entity.position.z - 9.5) * 100) / 100
   assert.deepEqual([r.status, r.reason, r.distance], ['unreachable', 'too-far', want])
 })

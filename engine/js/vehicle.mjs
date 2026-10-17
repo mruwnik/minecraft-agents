@@ -100,7 +100,7 @@ export const selfVehicle = bot => bot.vehicle ? describe(bot.vehicle) : null
 
 const sleepMs = ms => new Promise(resolve => setTimeout(resolve, ms))
 const middle = e => vec3(e.position.x, e.position.y + (e.height ?? 1) / 2, e.position.z)
-const eyeOf = bot => vec3(bot.entity.position.x, bot.entity.position.y + (bot.entity.height ?? constants.eyeHeight), bot.entity.position.z)
+const eyeOf = bot => vec3(bot.entity.position.x, bot.entity.position.y + (bot.entity.eyeHeight ?? constants.eyeHeight), bot.entity.position.z)
 
 const waitFor = async (ctx, done, ms, { every = Infinity, again = () => {} } = {}) => {
   const deadline = Date.now() + ms

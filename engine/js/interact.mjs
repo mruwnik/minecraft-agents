@@ -81,7 +81,7 @@ export async function interactWith (bot, ctx, a, { timeScale = 1, reach }) {
   if (refused) return { status: 'cannot', reason: refused }
   const item = typeof a.item === 'string' ? bot.inventory.items().find(i => i.name === a.item) : null
   if (typeof a.item === 'string' && !item) return { status: 'no-item' }
-  const eye = bot.entity.position.offset(0, bot.entity.height ?? DEFAULT_EYE, 0)
+  const eye = bot.entity.position.offset(0, bot.entity.eyeHeight ?? DEFAULT_EYE, 0)
   if (eye.distanceTo(middle(target)) > reach) return { status: 'out-of-reach' }
 
   if (item) {

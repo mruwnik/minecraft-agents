@@ -50,7 +50,7 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], worn = [], enti
   }
   Object.assign(bot, {
     username: 'Stub',
-    entity: { position: new Vec3(...pos), height: constants.eyeHeight, onGround: true, velocity: new Vec3(0, 0, 0), effects: Object.fromEntries(effects.map(e => [e.id, { id: e.id, amplifier: e.amplifier, duration: e.duration }])) },
+    entity: { position: new Vec3(...pos), height: 1.8, eyeHeight: constants.eyeHeight, onGround: true, velocity: new Vec3(0, 0, 0), effects: Object.fromEntries(effects.map(e => [e.id, { id: e.id, amplifier: e.amplifier, duration: e.duration }])) },
     entities,
     health: 20,
     food,
@@ -96,7 +96,7 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], worn = [], enti
     _client: Object.assign(new EventEmitter(), { write: (name, data) => { calls.push({ name: 'write', args: [name, data] }); if (name === 'entity_action' && data.actionId === 'leave_bed') bot.isSleeping = false } }),
     useOn: act('useOn'),
     lookAt: act('lookAt', point => {
-      const delta = point.minus(bot.entity.position.offset(0, bot.entity.height, 0))
+      const delta = point.minus(bot.entity.position.offset(0, bot.entity.eyeHeight, 0))
       Object.assign(bot.entity, { yaw: Math.atan2(-delta.x, -delta.z), pitch: Math.atan2(delta.y, Math.hypot(delta.x, delta.z)) })
     }),
     look: act('look', (yaw, pitch) => { Object.assign(bot.entity, { yaw, pitch }) }),

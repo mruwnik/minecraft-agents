@@ -138,7 +138,7 @@ export async function tradeWith (bot, ctx, a, { timeScale = 1, reach }) {
   const target = Object.values(bot.entities).find(e => e.uuid === a.villager)
   if (!target) return { status: 'gone' }
   if (target.name !== 'villager') return { status: 'cannot', reason: 'not-villager', name: target.name }
-  const eye = bot.entity.position.offset(0, bot.entity.height ?? constants.eyeHeight, 0)
+  const eye = bot.entity.position.offset(0, bot.entity.eyeHeight ?? constants.eyeHeight, 0)
   const distance = eye.distanceTo(middle(target))
   if (distance > reach) return { status: 'out-of-reach', reason: 'too-far', distance }
 

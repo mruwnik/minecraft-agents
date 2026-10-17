@@ -19,7 +19,7 @@ const ingredientsOf = (bot, recipe) => Object.fromEntries(
 const eyeDistance = (bot, block) => {
   const p = bot.entity.position
   const c = block.position
-  return Math.hypot(c.x + 0.5 - p.x, c.y + 0.5 - (p.y + bot.entity.height), c.z + 0.5 - p.z)
+  return Math.hypot(c.x + 0.5 - p.x, c.y + 0.5 - (p.y + (bot.entity.eyeHeight ?? constants.eyeHeight)), c.z + 0.5 - p.z)
 }
 
 const isTable = block => block?.name === 'crafting_table'
