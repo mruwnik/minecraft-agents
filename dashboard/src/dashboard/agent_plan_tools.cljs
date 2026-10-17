@@ -4,6 +4,8 @@
             [plan.conflicts :as conflicts]
             [plan.parse :as parse]
             [plan.shape :as shape]
+            [engine.constants :as constants]
+            [dashboard.block-height :as height]
             [dashboard.plan-compare :as cmp]))
 
 (defn parse-docs [docs parser key]
@@ -128,6 +130,7 @@
               :plan-errors (:errors saved-result)
               :expansion expansion
               :cells (mapv :pos cells)
+              :warnings (when expansion (shape/entrance-warnings cells height/top-of constants/body-height))
               :region (cmp/bounds cells)
               :spots (:spots expansion)
               :parts (mapv #(select-keys % [:id :where :count :error]) (:parts expansion))

@@ -73,3 +73,24 @@
         score (tools/score-native (:expansion prepared) (constantly {:name "dirt"}) (constantly nil) {} false 0 10)]
     (is (= 10 (count (:wrong-cells score))))
     (is (= 14 (:wrong-total score)))))
+
+(defn hut-plan [bed-state lintel]
+  (str "{:id \"hut\" :parts ["
+       "{:id \"floor\" :cells [[45 70 -595] [44 70 -595]] :want \"oak_planks\"}"
+       "{:id \"door\" :cells [[45 71 -595]] :want {:block \"oak_door\" :half \"lower\" :facing \"east\"}}"
+       "{:id \"door-top\" :cells [[45 72 -595]] :want {:block \"oak_door\" :half \"upper\" :facing \"east\"}}"
+       "{:id \"bed\" :cells [[44 71 -595]] :want " bed-state "}"
+       "{:id \"lintel\" :cells [[44 73 -595]] :want \"" lintel "\"}]}"))
+
+(deftest a-door-onto-a-bed-under-a-full-block-is-warned-about
+  (let [warnings (:warnings (prepare (hut-plan "{:block \"red_bed\" :facing \"west\" :part \"foot\"}" "oak_planks") "hut" [] []))]
+    (is (= 1 (count warnings)))
+    (is (re-find #"door at \[45 71 -595\] opens onto red_bed at \[44 71 -595\] \(0.5625 high\)" (first warnings)))))
+
+(deftest a-higher-lintel-or-a-full-block-floor-gives-no-warning
+  (is (empty? (:warnings (prepare (hut-plan "{:block \"red_bed\" :facing \"west\" :part \"foot\"}" "air") "hut" [] []))))
+  (is (empty? (:warnings (prepare (hut-plan "\"oak_planks\"" "oak_planks") "hut" [] [])))))
+
+(deftest a-bottom-slab-warns-and-a-top-slab-does-not
+  (is (seq (:warnings (prepare (hut-plan "{:block \"oak_slab\" :type \"bottom\"}" "oak_planks") "hut" [] []))))
+  (is (empty? (:warnings (prepare (hut-plan "{:block \"oak_slab\" :type \"top\"}" "oak_planks") "hut" [] [])))))

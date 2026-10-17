@@ -467,3 +467,26 @@
                              "warped" "warped_wart_block"
                              (str (:tree want) "_leaves"))
     :else (:block want)))
+
+;; ---------------------------------------------------------------- entrances
+(defn door-block? [want]
+  (some-> (want-block want) (str/ends-with? "_door")))
+
+(defn entrance-warnings
+  "Texts for each door of the cells whose way in steps onto a part-height block (top-of: want -> collision top in blocks,
+  0 for none) that a standing body of body-height would hit its head on a full block planned two cells above."
+  [cells top-of body-height]
+  (let [wants (into {} (map (juxt :pos :want)) cells)
+        full? (fn [pos] (some-> (wants pos) top-of (>= 1)))
+        passable? (fn [pos] (let [w (wants pos)] (or (nil? w) (= :clear w) (not (pos? (top-of w))))))]
+    (vec
+     (for [{[x y z :as door] :pos want :want} cells
+           :when (and (door-block? want) (not (door-block? (wants [x (dec y) z]))))
+           [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+           :let [at [(+ x dx) y (+ z dz)]
+                 top (some-> (wants at) top-of)
+                 lintel [(+ x dx) (+ y 2) (+ z dz)]]
+           :when (and top (< 0 top 1) (> (+ top body-height) 2)
+                      (passable? [(+ x dx) (inc y) (+ z dz)]) (full? lintel))]
+       (str "the door at " door " opens onto " (want-block (wants at)) " at " at " (" top " high); a body standing on it ("
+            (+ top body-height) ") hits the block planned at " lintel ", so the room cannot be entered")))))

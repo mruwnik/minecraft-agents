@@ -876,7 +876,7 @@ return EDN, cap pages at 10 records (100 with `--limit`, `--offset` pages on), a
 ```
 node engine/tools/plans.mjs --world test list | find home | show home --raw
 node engine/tools/plans.mjs --world test validate home --edn '{:id "home" :parts []}'
-node engine/tools/plans.mjs --world test check home --body Wren --inventory '{:stone 24}'     # material needs and conflicts vs what that body has seen (its seen memory, in the plan's `:dim`, default overworld; `add` by a body stamps its current dimension); never-seen cells count unknown
+node engine/tools/plans.mjs --world test check home --body Wren --inventory '{:stone 24}'     # material needs and conflicts vs what that body has seen (its seen memory, in the plan's `:dim`, default overworld; `add` by a body stamps its current dimension); never-seen cells count unknown; `validate` and `check` list `:warnings` for a door that opens onto a part-height block (bed, bottom slab) under a full block planned two above, where the body cannot step on (minecraft-data collision boxes)
 node engine/tools/plans.mjs --world test add|edit home --edn '...' --by builder [--revision <digest>]
 node engine/tools/plans.mjs --world test mineshaft pit --at=0,64,0 --heading east --to-y 16 --by digger     # declares a stair shaft plan (:at = feet cell of the top step); show names its depth and heading, check counts its steps dug/undug/unseen
 node engine/tools/blueprints.mjs --world test find hut | show starter-hut | validate hut --edn '...' | save hut --edn '...' --by builder [--revision <digest>] | remove hut --by builder --revision <digest>
