@@ -16,7 +16,8 @@
                  drops; kill = the stone sword's hits, hurt = :hurt-hp-per-hp x health x :danger hp, each at health/hp-seconds, find by hostile or passive.
     made         The cheapest recipe: the ingredients plus :craft-step, divided by the result count; or smelting by
                  name rule (raw_X -> X_ingot, X -> cooked_X, ancient_debris -> netherite_scrap, cobblestone -> stone,
-                 sand -> glass, clay_ball -> brick): the input plus :smelt-step. The table is a fixpoint.
+                 sand -> glass, clay_ball -> brick): the input plus :smelt-step. The table is a fixpoint, then each tool
+                 is raised to at least the next weaker material's tool of its kind plus :craft-step.
     unused       A sourced item that is no tool, armour, edible food, block or ingredient is worth :junk-share of that.
     food         An edible food is worth at least its points x :food-point-s.
     no source    :no-source-each (4) x 64 / stack size (a 64-stack 4, a 16-stack 16, an unstackable 256).
@@ -249,6 +250,22 @@
 
 (defn normal-overrides [overrides] (into {} (map (fn [[k o]] [(if (keyword? k) (name k) (str k)) o])) overrides))
 
+(defn tier-floors
+  "table with each tool worth at least the next weaker material's tool of its kind plus a craft step: a stone pickaxe
+  is the upgrade of a wooden one, however cheap cobble is next to a walk to a tree."
+  [basis overrides tools table]
+  (let [ranked (sort-by (comp :rank val) (dissoc weapon/tool-material "golden"))
+        kinds (distinct (keep #(second (str/split % #"_" 2)) tools))]
+    (reduce (fn [t kind]
+              (reduce (fn [t [prev [mat _]]]
+                        (let [floor (+ (:craft-step basis) (get t (str (key prev) "_" kind) js/Infinity))
+                              n (str mat "_" kind)]
+                          (if (and (js/isFinite floor) (contains? tools n) (contains? t n) (not (contains? overrides n)))
+                            (update t n max floor)
+                            t)))
+                      t (map vector ranked (rest ranked))))
+            table kinds)))
+
 (defn build-table
   "{item name worth} for minecraft-data version with name overrides pinned (overrides: {name override}) and the basis
   (default-basis with the deep-merged :basis)."
@@ -285,7 +302,8 @@
         table (loop [t start i 0]
                 (let [t' (step t)]
                   (if (or (= t t') (>= i 60)) t' (recur t' (inc i)))))]
-    (into {} (map (fn [[n w]] [n (if (js/isFinite w) w (pin n (max (no-source n) (food-floor n))))])) table)))
+    (tier-floors basis overrides (set (keep #(when (number? (.-maxDurability %)) (.-name %)) items))
+                 (into {} (map (fn [[n w]] [n (if (js/isFinite w) w (pin n (max (no-source n) (food-floor n))))])) table))))
 
 (def table-for (memoize build-table))
 

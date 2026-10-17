@@ -25,7 +25,8 @@
 (deftest crafted-things-are-worth-their-ingredients
   (is (> (each "stone_pickaxe") (each "cobblestone")))
   (is (> (each "stone_pickaxe") (* 3 (each "cobblestone"))))
-  (is (> (each "diamond_pickaxe") (each "iron_pickaxe") (each "wooden_pickaxe") (each "stone_pickaxe")) "wood costs a walk to a tree, cobble none")
+  (doseq [kind ["pickaxe" "axe" "shovel" "sword" "hoe"]]
+    (is (apply < (map #(each (str % "_" kind)) ["wooden" "stone" "iron" "diamond" "netherite"])) kind))
   (is (> (each "diamond_pickaxe") (* 3 (each "diamond"))))
   (is (> (each "iron_ingot") (each "raw_iron")) "a smelted ingot is its raw ore plus the smelting")
   (is (< (each "oak_planks") (each "oak_log")) "a log makes four planks"))
@@ -80,7 +81,7 @@
   (is (= 50 (value [{:name "raw_iron" :count 1}] :overrides {"raw_iron" 50})))
   (is (= 500 (value [{:name "raw_iron" :count 10}] :overrides {"raw_iron" 50})))
   (is (= 0 (value [{:name "iron_ingot" :count 5}] :overrides {"iron_ingot" 0})))
-  (is (< (value [{:name "iron_pickaxe"}] :overrides {"iron_ingot" 0}) (each "stone_pickaxe"))
+  (is (< (value [{:name "iron_pickaxe"}] :overrides {"iron_ingot" 0}) (each "iron_pickaxe"))
       "worthless iron makes an iron pickaxe worth its sticks")
   (is (= (* 2 (each "diamond")) (value [{:name "diamond"}] :overrides {"diamond" {:times 2}})))
   (is (= (each "dirt") (value [{:name "dirt"}] :overrides {"raw_iron" 50})) "other items keep their value"))
@@ -166,7 +167,7 @@
   (is (= (each "coal") (value [{:name "coal"}] :basis {:find {:ores {"diamond" [600 1.5]}}})) "the other ores are kept")
   (is (not= (value [{:name "diamond"}] :basis {:find {:ores {"diamond" [600 1.5]}}}) (each "diamond"))
       "two bases, two tables")
-  (is (< (value [{:name "iron_pickaxe"}] :overrides {"iron_ingot" 0} :basis {:junk-share 1}) (each "stone_pickaxe"))
+  (is (< (value [{:name "iron_pickaxe"}] :overrides {"iron_ingot" 0} :basis {:junk-share 1}) (each "iron_pickaxe"))
       "a name override still flows through"))
 
 ;; ---------------------------------------------------------------- fetch-cost
