@@ -5,7 +5,8 @@
   call keys at the first round, asks done? before every round and between steps (an :ok ends the job :done; at the first round of a
   call with a :least other than 1 it asks its quote for the least check) and adds :because to the ending the job's round returns.
   Every ending the engine makes carries done?'s :result and count."
-  (:require [engine.condition :as condition]
+  (:require [engine.args :as a]
+            [engine.condition :as condition]
             [engine.contract :as contract]
             [engine.core.base :refer [cut-error exclusive-job now owner?]]
             [engine.core.limits :as limits]
@@ -13,6 +14,10 @@
             [engine.hooks :as hooks]
             [engine.memory :as mem]
             [engine.settings :as settings]))
+
+(a/defargs settings
+  {::max-call-depth {:default 12 :spec (a/int-in 1 nil)
+                     :doc "Nested child calls on one chain before the next call ends condition-failed :too-deep (a same-job chain on ever new targets)."}})
 
 (defn contract-job?
   "A def with can-start? or can-run?, or a round and no old check: the checks default to :ok."
@@ -179,8 +184,11 @@
 (defn duplicate-ending
   "The condition-failed ending of a call or quote of def with args from base, when a frame on base's chain (base
   itself down to the root) or a quote base's quote is asked under ((:quoting base), [[ident id] ...]) has the same
-  job and target, else nil: a loop, so the parent tries another way. Booked nowhere: it is no failure of the way."
+  job and target, else nil: a loop, so the parent tries another way. A chain already max-call-depth frames deep
+  gets condition-failed :too-deep instead. Booked nowhere: it is no failure of the way."
   [eng base def args]
+  (if (>= (count (:slots base)) (settings/get settings ::max-call-depth))
+    (contract/ending :condition-failed {:reason :too-deep :depth (count (:slots base))} nil)
   (when-let [ident (frame-identity def args)]
     (let [view (mem/view (:store eng))
           m (mem/job-mem view (:root base) [])
@@ -190,7 +198,7 @@
                   (let [s (subvec (:slots base) 0 i)]
                     (when (= ident (select-keys (:contract (get-in m (mem/slot-path s))) [:job :target]))
                       (dup (mem/path->id (:root base) s)))))
-                (range (count (:slots base)) -1 -1))))))
+                (range (count (:slots base)) -1 -1)))))))
 
 (defn freeze!
   "Write the call keys of c's call (call-of) and def's symbol to its frame's :contract; the call has started. A clamped

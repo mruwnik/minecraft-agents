@@ -69,3 +69,20 @@
           (let [stopped (:data (first (filter #(= [:job :stopped] [(:source %) (:kind %)]) @seen)))]
             (is (= :condition-failed (:kind stopped)))
             (is (= {:reason :need :why :duplicate-call :item "ping"} (:cause stopped)))))))))
+
+(deftest a-same-job-chain-on-new-targets-ends-too-deep
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [depth (atom 0)
+              {:keys [eng]} (setup {'dive {:target [:pos] :args {:pos {:doc "target" :default 0}}
+                                           :round (fn ^:async dive [c]
+                                                    (swap! depth inc)
+                                                    (let [pos (:pos (:args c))
+                                                          _ (await (call-noting c :next 'dive {:pos (inc pos)}))]
+                                                      (ctx/end c :done nil)))}})]
+          (core/submit! eng '(dive {:pos 0}) {})
+          (await (core/tick! eng))
+          (let [deepest (first (filter #(= :condition-failed (:kind (nth % 2))) @endings))]
+            (is (= 13 @depth) "the root plus 12 nested calls run; the 13th is refused")
+            (is (= :too-deep (contract/cause-key (nth deepest 2))))))))))
