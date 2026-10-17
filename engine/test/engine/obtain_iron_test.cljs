@@ -62,7 +62,11 @@
           (await (obtain! s {:item "raw_iron"} 240))
           (is (empty? (f/listed s)))
           (is (= 1 (get (f/inv s) "stone_pickaxe")))
-          (is (= 1 (get (f/inv s) "raw_iron"))))))))
+          (is (= 1 (get (f/inv s) "raw_iron")))
+          (let [es (f/events-of s :obtain.pickaxe)]
+            (is (= 1 (count es)) "one event for the pickaxe step")
+            (is (= "raw_iron" (:item (first es))) "names the item it is for")
+            (is (= :info (:level (first es))))))))))
 
 (deftest a-pickaxe-that-breaks-mid-mine-is-replaced-with-wood-and-stone-gathered-and-mining-resumes
   (async done

@@ -59,7 +59,13 @@
   while it runs, else the gather source fails."
   [c names need]
   (let [args (pickaxe-args c names need)
+        _ (when-not (:said-pickaxe (ctx/mem c))
+            (ctx/update-mem! c assoc :said-pickaxe true)
+            (ctx/emit! c :obtain.pickaxe :info
+                       {:message (str "getting a " (str/join "/" (:any-of args)) " to harvest " (:key need))
+                        :item (:key need) :tools (:any-of args)}))
         e (await (fetch-need/call! c :pickaxe 'jobs.items.obtain args))]
+    (when-not (= :continue e) (ctx/update-mem! c dissoc :said-pickaxe))
     (cond
       (= :continue e) :continue
       (pickaxe-first? c names need) (tried! c :gather {:pickaxe (contract/cause-key e)})
