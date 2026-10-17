@@ -1,6 +1,7 @@
 ;; Cards 99aab6b1, c82d8238: jobs.access.cleanup never digs a ledger block on the footprint of a plan the body made (cleanup.plan-cell, entry
 ;; dropped; :spare-own-builds false digs it), keeps a shelter's block (:retreat-plug) at night unless :keep-at-night? false, and walks to an
-;; unowned scaffold entry (no :job) 14 blocks off only when armed and healthy and the entry is not 5+ below the feet or within 24 of a death.
+;; unowned scaffold entry (no :job) 14 blocks off only when armed and healthy (an unarmed body waits, :unarmed: the fit? default) and the
+;; entry is not 5+ below the feet or within 24 of a death (a per-cell hold, kept for :job nil only).
 ;; The night cases pass :checks {:safe? (not (threatened))}: the job's dark-sky gate would wait for dawn before its own night rule runs.
 ;; The ledger entry (a pillar block; the night cases a retreat plug) is seeded at [6 0 8] with its block; the body stands at [20.5 0 8.5].
 {:defaults
@@ -31,12 +32,12 @@
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "dirt" :before "air" :purpose :pillar :state :placed}]}}]
    :body {:inventory [["iron_pickaxe" 1]]}
    :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
-   :expect [{:event {:source :job :kind :cleanup.left :data {:open [:has {:reason :unarmed}]}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :unarmed}} :within-s 40 :of-job true}]
    :after [[:block [6 0 8] "dirt"] [:body-far [6.5 0 8.5] 8]]}
   {:name "entry-near-a-death-is-held"
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "dirt" :before "air" :purpose :pillar :state :placed}]}}
             {:kind :died :data {:pos #xyz [8 0 8]}}]
-   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+   :act [[:job (jobs.access.cleanup {:job nil :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :cleanup.left :data {:open [:has {:reason :died-near}]}} :within-s 40 :of-job true}]
    :after [[:block [6 0 8] "dirt"] [:body-far [6.5 0 8.5] 8]]}
   {:name "shelter-block-stays-all-night"
