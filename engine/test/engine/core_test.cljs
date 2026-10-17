@@ -693,6 +693,23 @@
           (is (= 1 (count (filter #(= :reverted (:kind %)) @seen))))
           (is (= 1 (count (ran seen)))))))))
 
+(deftest a-wall-clock-jump-does-not-end-a-mute
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (setup {:self {:health 5}})
+              mono (atom @clock)
+              eng (assoc eng :mono #(deref mono))]
+          (core/register-reflex! eng {:trigger :hurt})
+          (core/mute! eng :hurt 60)
+          (swap! clock + 6000000)
+          (is (nil? (core/tick! eng)) "a host suspend moved the wall clock, the monotonic one stood still")
+          (is (pos? (:clock-lag (core/state eng))) "the lag is saved with the state")
+          (swap! clock + 61000)
+          (swap! mono + 61000)
+          (await (core/tick! eng))
+          (is (= 1 (count (filter #(= :reverted (:kind %)) @seen)))))))))
+
 (deftest built-in-reflexes-cannot-be-removed
   (let [{:keys [eng]} (setup)]
     (core/register-reflex! eng {:trigger :hurt :builtin? true})

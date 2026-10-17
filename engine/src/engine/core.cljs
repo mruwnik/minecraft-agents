@@ -100,6 +100,7 @@
 (def entry-from register/entry-from)
 (def levels register/levels)
 (def live? register/live?)
+(def ttl-now base/ttl-now)
 (def move! register/move!)
 (def mute! register/mute!)
 (def register-reflex! register/register-reflex!)
@@ -222,10 +223,12 @@
     :max-event-bytes   event log size cap (setting :engine.events/max-bytes, 64 MiB)"
   [{:keys [primitives jobs triggers dir now events body idle-s body-idle-s sweep-ms stats-ms world
            max-event-bytes
-           backoff backoff-alert-ms]
-    :or {now js/Date.now idle-s default-idle-s sweep-ms default-sweep-ms
+           backoff backoff-alert-ms mono]
+    :or {idle-s default-idle-s sweep-ms default-sweep-ms
          backoff-alert-ms default-backoff-alert-ms}}]
   (let [_ (game/select! primitives)
+        mono (or mono (when-not now #(.now js/performance)) now)
+        now (or now js/Date.now)
         file (path/join dir "engine.edn")
         saved (fsu/read-edn file)
         username (or body (.-username (.self primitives)))
@@ -241,7 +244,7 @@
                              :world-time #(or (.-timeOfDay (.self primitives)) nil)
                              :world-age #(.worldAge primitives)
                              :live-jobs #(set (keys (:instances @st)))})
-        eng {:primitives primitives :jobs (ending/registry jobs) :triggers triggers :dir dir :now now :events ev
+        eng {:primitives primitives :jobs (ending/registry jobs) :triggers triggers :dir dir :now now :mono mono :clock-mark (atom [(now) (mono)]) :events ev
              :store store
              :hurt (hurt/new-state)
              :world (or world ((:world/blank hooks/all)))

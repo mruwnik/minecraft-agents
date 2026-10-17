@@ -211,14 +211,15 @@
   [eng e]
   (let [s (core/state eng)
         t (core/now eng)
+        tt (core/ttl-now eng)
         id (:id e)
         changes (get-in s [:changes id])
         {:keys [cooldown-until stopped?]} (get-in s [:reflex-state id])
         bo (core/backoff-entry eng id)]
     (cond-> (select-keys e [:id :trigger :when :job :args :persistence :cooldown-s :level :backoff :builtin? :by :until])
       (:when e) (dissoc :args)
-      (core/live? (:mute changes) t) (assoc :muted (select-keys (:mute changes) [:until]))
-      (core/live? (:position changes) t) (assoc :moved (select-keys (:position changes) [:value :until]))
+      (core/live? (:mute changes) tt) (assoc :muted (select-keys (:mute changes) [:until]))
+      (core/live? (:position changes) tt) (assoc :moved (select-keys (:position changes) [:value :until]))
       (and cooldown-until (> cooldown-until t)) (assoc :cooling-until cooldown-until)
       stopped? (assoc :stopped? true)
       (core/held-trigger eng id) (assoc :held (core/held-trigger eng id))
@@ -234,7 +235,7 @@
      (cond-> {:ok true
               :generation-id (:generation-id s)
               :total (count (:register s))
-              :order (mapv :id (core/effective-register s (core/now eng)))
+              :order (mapv :id (core/effective-register s (core/ttl-now eng)))
               :items (mapv #(entry-view eng %) (:register s))}
        (some? id) (assoc :explain (explain eng (keyword id)))))))
 
@@ -249,7 +250,7 @@
                 :args {:id (:id given)} :persistence :stop :cooldown-s 0 :builtin? false}
                (core/entry-from eng given))]
     (cond-> (merge base (select-keys given [:persistence :cooldown-s :level :backoff :builtin? :by]))
-      (:ttl-s given) (assoc :until (+ (core/now eng) (* 1000 (:ttl-s given)))))))
+      (:ttl-s given) (assoc :until (+ (core/ttl-now eng) (* 1000 (:ttl-s given)))))))
 
 (defn attention-job
   "The job id an entry's backoff request is filed under (requests are per job)."
@@ -464,7 +465,7 @@
 (defn expire-entries!
   "Remove entries whose :ttl-s has run out, each with a reflex.expired event."
   [eng]
-  (let [t (core/now eng)]
+  (let [t (core/ttl-now eng)]
     (doseq [e (:register (core/state eng))
             :when (and (:until e) (>= t (:until e)))]
       (core/emit! eng {:source :reflex :kind :expired :level :info :reflex (:id e)

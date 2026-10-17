@@ -1,7 +1,7 @@
 (ns engine.core.register
   "The reflex register: the effective order (TTL mutes and moves), trigger evaluation and eligibility,
   and the agent's edits of entries."
-  (:require [engine.core.base :refer [call-guarded emit! now state trigger-def]]
+  (:require [engine.core.base :refer [call-guarded emit! now state trigger-def ttl-now]]
             [engine.core.fruitless :refer [backoff-entry pass-over?]]
             [engine.backoff :as backoff]
             [engine.expr :as expr]
@@ -113,7 +113,7 @@
           results)))
 
 (defn expire-changes! [eng]
-  (doseq [[rid prop change] (expired-changes (state eng) (now eng))]
+  (doseq [[rid prop change] (expired-changes (state eng) (ttl-now eng))]
     (swap! (:state eng) (fn [s] (let [s (update-in s [:changes rid] dissoc prop)]
                                   (if (empty? (get-in s [:changes rid]))
                                     (update s :changes dissoc rid)
@@ -170,7 +170,7 @@
   (when-not (index-of-id (:register (state eng)) id)
     (throw (ex-info (str "no such reflex " id) {:id id})))
   (swap! (:state eng) assoc-in [:changes id prop]
-         {:value value :until (when ttl-s (+ (now eng) (* 1000 ttl-s)))})
+         {:value value :until (when ttl-s (+ (ttl-now eng) (* 1000 ttl-s)))})
   (emit! eng {:source :reflex :kind :changed :level :info :reflex id :property prop
               :value value :ttl ttl-s :by :agent}))
 

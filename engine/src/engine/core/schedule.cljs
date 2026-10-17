@@ -2,7 +2,7 @@
   "The scheduling pass: readiness of listed jobs (checks, job.waiting, the next one to run), who holds
   the body, cuts, firing reflexes and holding them off during a section (ctx/atomic), tick! and do-now!."
   (:require [engine.args :as a]
-            [engine.core.base :refer [add-instance dead? drop-reflex-job! emit! flush-save-stats! free-owner! job-fields job-of exclusive-job manual? new-id! now paused? reflex-text running save-memory! state wait-reason waiting-text]]
+            [engine.core.base :refer [add-instance dead? drop-reflex-job! emit! flush-save-stats! free-owner! job-fields job-of exclusive-job manual? new-id! now paused? reflex-text running save-memory! state ttl-now wait-reason waiting-text]]
             [engine.core.attention :refer [request-attention!]]
             [engine.core.fruitless :refer [reset-backoff!]]
             [engine.core.register :refer [effective-register evaluate-register! expire-changes! levels preempts?]]
@@ -239,7 +239,7 @@
   [eng]
   (housekeep! eng)
   (check-body-idle! eng)
-  (let [order (effective-register (state eng) (now eng))
+  (let [order (effective-register (state eng) (ttl-now eng))
         h (holder eng)
         paused (paused-reflexes eng)
         firing (choose-firing! eng order (remove #(contains? paused (:id %)) (evaluate-register! eng order)) h)]

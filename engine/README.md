@@ -409,7 +409,7 @@ Each tick the engine fires the first entry whose `:when` holds, which is not mut
   `reflex.ended` carries the ending's `:kind`. An entry's `:job` may carry call keys (`:spend`, `:ways`).
 - **Settling**: after a login, reconnect, respawn or teleport (a forced move over 16 blocks) no trigger is evaluated until
   `settleMs` (1 s) after the column under the body loads. A reflex that ends meanwhile is judged on the first ready tick.
-- Agent-only edits (`engine.core`): `register-reflex!`, `remove-reflex!` (not built-ins), `mute!` (with TTL), `move!`
+- Agent-only edits (`engine.core`): `register-reflex!`, `remove-reflex!` (not built-ins), `mute!` (with TTL; TTLs run on wall time minus host suspends, `core/ttl-now`, lag saved as state `:clock-lag`), `move!`
   (`{:above id}`/`{:below id}`), `clear-change!`. A change expires back to the default and emits `reflex.reverted`.
 
 Built-in triggers, in the order of `triggers/defaults.edn` (the default register's priority, most urgent first). A scenario with no `:register` key registers all of them in that order; `:register []` registers none; a list registers exactly that list:
