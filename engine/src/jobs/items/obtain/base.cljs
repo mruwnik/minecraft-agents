@@ -8,7 +8,6 @@
 (a/defargs settings
   {:jobs.items.obtain.base/max-inspections {:default 4 :doc "Looks at a place before the search for it gives up." :spec (a/int-in 0 nil)}
    :jobs.items.obtain.base/craft-radius {:default 32 :doc "Blocks within which a crafting table is looked for." :spec (a/int-in 0 nil)}
-   :jobs.items.obtain.base/max-fruitless {:default 3 :doc "Rounds without progress before the job gives up." :spec (a/int-in 0 nil)}
    :jobs.items.obtain.base/seen-radius {:default 48 :doc "Blocks within which a seen raw block (ore, dirt, leaves) counts as a source; the gather gets the same radius." :spec (a/int-in 0 64)}
    :jobs.items.obtain.base/sheep-radius {:default 24 :doc "Blocks within which sheep are looked for when wool is gathered." :spec (a/num-in 0 nil)}
    :jobs.items.obtain.base/explore {:default {:max-distance 64 :max-legs 12 :spend {:job-time 300}} :doc "jobs.explore.search options of a search for a raw need (:explore true)." :spec map?}})
@@ -16,7 +15,6 @@
 (defn sheep-radius [] (settings/get settings :jobs.items.obtain.base/sheep-radius))
 (defn seen-radius [] (settings/get settings :jobs.items.obtain.base/seen-radius))
 (defn craft-radius [] (settings/get settings :jobs.items.obtain.base/craft-radius))
-(defn max-fruitless [] (settings/get settings :jobs.items.obtain.base/max-fruitless))
 (defn explore-setting [] (settings/get settings :jobs.items.obtain.base/explore))
 
 (defn names-of [{:keys [item any-of]}]

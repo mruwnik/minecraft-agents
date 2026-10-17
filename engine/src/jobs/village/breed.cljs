@@ -4,6 +4,7 @@
             [engine.args :as a] [jobs.lib.need :as need]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.cond :as cond]
@@ -23,7 +24,7 @@
   Ends with the data {:population n :target t :births b}: done when the target is met (done? holds; an already
   met target is done with 0 births), else with the cause:
   - condition-failed :no-food: a feed child ended without food.
-  - nothing-possible :no-births: max-fruitless (3) attempts in a row without a birth, or no untried pair left after an attempt.
+  - nothing-possible :no-births: 3 attempts in a row without a birth, or no untried pair left after an attempt.
   A pair a feed could not complete (villager gone, unreachable, would not take food) counts as an attempt without a
   birth. What was tried, the birth baseline and the wait are kept in job memory, so a cut and restart re-checks the
   count and goes on. It yields :continue while a feed, walk or the wait is under way.")
@@ -37,11 +38,9 @@
    :fetch {:doc "get food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}})
 
 (a/defargs settings
-  {::max-fruitless {:default 3 :doc "Rounds without progress before the job gives up." :spec (a/int-in 0 nil)}
-   ::wait-range {:default 6 :doc "Blocks within which the body waits for a pair to breed." :spec (a/int-in 0 nil)}
+  {::wait-range {:default 6 :doc "Blocks within which the body waits for a pair to breed." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 3600 :doc "Seconds one breeding may take." :spec (a/int-in 1 nil)}
    ::feed-s {:default 30 :doc "Seconds one pair's feeding takes, for the quote." :spec (a/num-in 0 nil)}})
-(defn max-fruitless [] (settings/get settings ::max-fruitless))
 (defn wait-range [] (settings/get settings ::wait-range))
 (defn feed-s [] (settings/get settings ::feed-s))
 (def job 'jobs.village.breed)
@@ -172,7 +171,8 @@
 (defn failed-pair!
   "The pair could not be fed: an attempt without a birth."
   [c]
-  (ctx/update-mem! c #(-> % (dissoc :pair :fed) (update :fruitless (fnil inc 0))))
+  (ctx/update-mem! c dissoc :pair :fed)
+  (child/fruitless! c :pair)
   :again)
 
 (defn ^:async feed-pair!
@@ -202,9 +202,8 @@
     (if (= :continue r)
       :continue
       (let [born (born c seen)]
-        (ctx/update-mem! c #(-> % (dissoc :waiting :pair :fed :at)
-                                (update :births (fnil + 0) born)
-                                (assoc :fruitless (if (pos? born) 0 (inc (:fruitless % 0))))))
+        (ctx/update-mem! c #(-> % (dissoc :waiting :pair :fed :at) (update :births (fnil + 0) born)))
+        (if (pos? born) (child/progress! c :pair) (child/fruitless! c :pair))
         :again))))
 
 (defn ^:async step!
@@ -218,7 +217,7 @@
       (>= (:pop seen) (:target (:args c)))
       (do (ctx/update-mem! c #(-> % (dissoc :waiting :pair :fed :at) (update :births (fnil + 0) (born c seen)))) :again)
       (:waiting m) (await (wait! c seen))
-      (>= (:fruitless m 0) (max-fruitless)) (stop! c seen :nothing-possible :no-births)
+      (child/exhausted? c :pair) (stop! c seen :nothing-possible :no-births)
       (:pair m) (await (feed-pair! c vs seen))
       :else (choose! c vs seen))))
 

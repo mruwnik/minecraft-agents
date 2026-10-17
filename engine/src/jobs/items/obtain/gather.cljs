@@ -4,7 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
-            [jobs.items.obtain.base :refer [max-fruitless sheep-radius tried! ways-of]]
+            [jobs.items.obtain.base :refer [sheep-radius tried! ways-of]]
             [jobs.items.obtain.need :refer [explore-opts gather-viable? pickaxe-first? search-names tools-wanted trees-unreachable?]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
@@ -27,7 +27,7 @@
   "Fruitless runs that end the gather source: the need's :max-runs, but only for a run that happened; a child that
   was declined (it could not start) broke nothing and counts against the default."
   [need e]
-  (if (declined? e) (max-fruitless) (:max-runs need (max-fruitless))))
+  (if (declined? e) (child/max-fruitless) (:max-runs need (child/max-fruitless))))
 
 (defn gather-failed!
   "A gather run that brought nothing. Trees seen but unreachable (:no-tree) with :explore on send the body to look
@@ -36,7 +36,7 @@
   glass, bedrock) is :unreachable, not a missing source."
   [c names need why e]
   (cond
-    (and (= :no-tree why) (explore-opts c) (< (get-in (ctx/mem c) [:explored (:key need)] 0) (max-fruitless)))
+    (and (= :no-tree why) (explore-opts c) (< (get-in (ctx/mem c) [:explored (:key need)] 0) (child/max-fruitless)))
     (do (ctx/update-mem! c assoc-in [:gather :unreachable (:key need)] true) :again)
 
     (and (= :no-tool why) (pickaxe-first? c names need)) :again
@@ -104,7 +104,7 @@
       (await (pickaxe-step! c names need))
       (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (not (animal? need)) (not (:tunnel? need))
            (or (not (seen-of c need)) (get-in (ctx/mem c) [:gather :unreachable (:key need)]) (trees-unreachable? c need))
-           (< (get-in (ctx/mem c) [:explored (:key need)] 0) (max-fruitless)))
+           (< (get-in (ctx/mem c) [:explored (:key need)] 0) (child/max-fruitless)))
       (await (explore-walk! c need))
       (and (not (get-in (ctx/mem c) [:gather :before]))
            (not (if (explore-opts c)

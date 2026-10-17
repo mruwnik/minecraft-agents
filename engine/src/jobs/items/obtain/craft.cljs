@@ -3,7 +3,7 @@
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.items.craft :as craft]
-            [jobs.items.obtain.base :refer [carried-of max-fruitless old-how tried!]]
+            [jobs.items.obtain.base :refer [carried-of old-how tried!]]
             [jobs.items.obtain.plan :refer [craft-plan]]
             [jobs.items.smelt :as smelt]
             [jobs.lib.child :as child]
@@ -59,7 +59,7 @@
         step (or (:step mem)
                  (some-> (craft-plan c names (- target have)) :steps first))]
     (cond
-      (>= (child/fruitless c :craft) (max-fruitless))
+      (child/exhausted? c :craft)
       (tried! c :craft (or (:why mem) :failed))
 
       ;; no plan without the seen table: try that table again (it may be reachable now); fruitless counts bound the retries

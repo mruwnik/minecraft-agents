@@ -125,3 +125,15 @@
                                      [(n :a) (child/fruitless! c :a) (child/fruitless! c :a)
                                       (do (child/progress! c :a) (n :a))
                                       (child/fruitless! c :a) (n :b)]))))))))))
+
+(deftest a-slot-is-exhausted-at-the-shared-max-fruitless
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= [false true false]
+               (await (in-parent walker
+                                 (fn ^:async f [c]
+                                   (dotimes [_ (dec (child/max-fruitless))] (child/fruitless! c :a))
+                                   [(child/exhausted? c :a)
+                                    (do (child/fruitless! c :a) (child/exhausted? c :a))
+                                    (do (child/progress! c :a) (child/exhausted? c :a))])))))))))

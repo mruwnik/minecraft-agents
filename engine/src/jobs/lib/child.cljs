@@ -5,9 +5,12 @@
             [engine.ctx :as ctx]))
 
 (a/defargs settings
-  {::default-max-calls {:default 400 :doc "Calls of one run!* before it gives the round back with :continue." :spec (a/int-in 1 nil)}})
+  {::max-fruitless {:default 3 :doc "Rounds in a row of one child that bring nothing before its caller gives up." :spec (a/int-in 1 nil)}
+   ::default-max-calls {:default 400 :doc "Calls of one run!* before it gives the round back with :continue." :spec (a/int-in 1 nil)}})
 
 (def pace-ms "The timer awaited between two calls, so a loop with no act never starves the event loop." 50)
+
+(defn max-fruitless [] (settings/get settings ::max-fruitless))
 
 (defn default-max-calls [] (settings/get settings ::default-max-calls))
 
@@ -32,6 +35,11 @@
   [c slot]
   (ctx/update-mem! c update-in [:fruitless slot] (fnil inc 0))
   (fruitless c slot))
+
+(defn exhausted?
+  "Whether slot's child has brought nothing max-fruitless rounds in a row."
+  [c slot]
+  (>= (fruitless c slot) (max-fruitless)))
 
 (defn progress!
   "slot's child brought something: its fruitless rounds start again from none."

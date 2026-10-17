@@ -9,6 +9,7 @@
             [jobs.animals.escort :as escort]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.animals :as animals]
+            [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.need :as need]
@@ -72,7 +73,6 @@
 (def near-spot "An animal this close (flat) to :pos counts as :near." 6)
 (def arrive-slack "Without :box the animal arrives when it is within :range plus this many blocks (flat) of :pos: it follows the food a few blocks behind." 3)
 (def lure-reach "The body walks this close to the animal before it leads the way." 6)
-(def max-equips "Tries to get the food into the hand before the job ends :no-hold." 3)
 
 (def target [:mob :pos])
 
@@ -318,15 +318,14 @@
         p (:primitives c)
         food (animals/food-carried p mob)
         cands (candidates c)
-        target (first cands)
-        tries (:equip-tries (ctx/mem c) 0)]
+        target (first cands)]
     (when target (ctx/update-mem! c assoc :sighting {:key (animals/key-of target) :pos (u/pos-of (.-pos target)) :at (ctx/now c)}))
     (cond
       (nil? food) (await (get-food! c))
       (empty? cands) (or (await (look-for! c)) (finish! c :no-animal))
-      (not= food (.-held (.self p))) (if (>= tries max-equips)
+      (not= food (.-held (.self p))) (if (child/exhausted? c :equip)
                                        (finish! c :no-hold)
-                                       (do (ctx/update-mem! c assoc :equip-tries (inc tries))
+                                       (do (child/fruitless! c :equip)
                                            (await (ctx/act c :equip (clj->js {:item food})))
                                            :again))
       :else (let [k (animals/key-of target)
@@ -337,15 +336,14 @@
 
 (defn ^:async rehold!
   "The food is not in the hand (a cut, another job's equip): hold it again, or end :no-food when none is carried, or
-  :no-hold after max-equips tries in a row."
+  :no-hold after the shared fruitless tries in a row."
   [c]
   (let [p (:primitives c)
-        food (animals/food-carried p (:mob (:args c)))
-        tries (:rehold-tries (ctx/mem c) 0)]
+        food (animals/food-carried p (:mob (:args c)))]
     (cond
       (nil? food) (finish! c :no-food)
-      (>= tries max-equips) (finish! c :no-hold)
-      :else (do (ctx/update-mem! c assoc :rehold-tries (inc tries))
+      (child/exhausted? c :equip) (finish! c :no-hold)
+      :else (do (child/fruitless! c :equip)
                 (await (ctx/act c :equip (clj->js {:item food})))
                 :again))))
 
@@ -383,7 +381,7 @@
 (defn ^:async walk! [c]
   (if-not (hr/holds-food? c)
     (await (rehold! c))
-    (do (ctx/update-mem! c dissoc :rehold-tries)
+    (do (child/progress! c :equip)
         (await (walk-legs! c)))))
 
 (def gate-hold-range "Planned gates this near the spot are held while the lure runs." 10)

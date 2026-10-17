@@ -13,6 +13,7 @@
             [jobs.lib.crafting-table :as crafting-table]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.base :as base]
+            [jobs.lib.child :as child]
             [jobs.items.obtain.gather :as gather]
             [jobs.items.obtain.plan :as plan]
             [jobs.items.obtain.seen :as seen]
@@ -1175,7 +1176,7 @@
 (deftest a-declined-child-is-not-a-fruitless-run
   (let [sapling (table/gather-need {"oak_sapling" 1})]
     (is (= 1 (gather/fruitless-limit sapling {:kind :nothing-possible :cause :no-leaves :data {:broken 0}})))
-    (is (= (base/max-fruitless) (gather/fruitless-limit sapling {:kind :condition-failed :cause :no-source})) "a child that could not start broke no leaves")))
+    (is (= (child/max-fruitless) (gather/fruitless-limit sapling {:kind :condition-failed :cause :no-source})) "a child that could not start broke no leaves")))
 
 (deftest gather-mines-fetch-a-pickaxe-without-gathering
   (is (= table/mine-fetch (get-in (table/gather-need {"cobblestone" 1}) [:args :fetch])))

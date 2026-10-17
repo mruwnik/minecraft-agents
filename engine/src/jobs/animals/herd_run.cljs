@@ -29,8 +29,7 @@
    ::exit-shut-ms {:default 2000 :doc "How long the shut from outside waits before stepping back in." :spec (a/int-in 0 nil)}
    ::crowd-out-radius {:default 2.5 :doc "Radius of crowding outside the gate, in blocks." :spec (a/num-in 0 nil)}
    ::crowd-in-radius {:default 2.0 :doc "Radius of crowding inside the gate, in blocks." :spec (a/num-in 0 nil)}
-   ::max-reopens {:default 2 :doc "How often a gate shut with the body inside is opened again for the body to go out." :spec (a/int-in 0 nil)}
-   ::max-shut-retries {:default 2 :doc "How often a gate that will not shut is tried again before the run gives up on it." :spec (a/int-in 0 nil)}})
+   ::max-reopens {:default 2 :doc "How often a gate shut with the body inside is opened again for the body to go out." :spec (a/int-in 0 nil)}})
 (defn near-pen [] (settings/get settings ::near-pen))
 (defn approach-range [] (settings/get settings ::approach-range))
 (defn watch-radius [] (settings/get settings ::watch-radius))
@@ -246,8 +245,6 @@
 
 (defn max-reopens [] (settings/get settings ::max-reopens))
 
-(defn max-shut-retries [] (settings/get settings ::max-shut-retries))
-
 (defn escaped-count
   "How many animals left the pen between two counts of the adults on its cells."
   [before after]
@@ -256,15 +253,14 @@
 (defn shut-failed!
   "The gate cannot be shut: an animal still led is let go first (phase :let-go, the ending :shut-failed unless one is
   set: :gate-stuck if the gate stays open, judged by the count once it shuts after all), then the shut is tried again
-  from :shut-gate, max-shut-retries times; the next failure leaves the gate to the pen-gate trigger with one warn
+  from :shut-gate, the shared fruitless tries; the next failure leaves the gate to the pen-gate trigger with one warn
   herd.gate-open naming it, and the run ends."
   [c]
   (let [m (ctx/mem c)
-        retries (:shut-retries m 0)
         [x y z] (gate-cell c)]
     (cond
       (seq (led-now c)) (set-phase! c :let-go {:ending (or (:ending m) :shut-failed)})
-      (< retries (max-shut-retries)) (set-phase! c :shut-gate {:shut-retries (inc retries)})
+      (not (child/exhausted? c :shut-gate)) (do (child/fruitless! c :shut-gate) (set-phase! c :shut-gate))
       :else (do (ctx/emit! c :herd.gate-open :warn {:gate (:gate m)
                                                     :text (str "the gate at " x " " y " " z " could not be shut and stays open")})
                 (finish! c (if (= :shut-failed (:ending m)) :gate-stuck (:ending m)))))))

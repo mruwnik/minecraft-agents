@@ -5,6 +5,7 @@
             [engine.settings :as settings]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.animals :as animals]
+            [jobs.lib.child :as child]
             [engine.ctx :as ctx]
             [jobs.lib.need :as need]
             [jobs.lib.pen :as pen]
@@ -133,13 +134,13 @@
           (empty? cands) (if (and (empty? (:brought m)) (empty? (:given-up m)))
                            (finish! c (or (animals/refusal c) :none))
                            (finish! c nil))
-          (and (not= food (.-held (.self p))) (>= (:equip-tries m 0) 3)) (finish! c :no-hold)
-          (not= food (.-held (.self p))) (do (ctx/update-mem! c update :equip-tries (fnil inc 0))
+          (and (not= food (.-held (.self p))) (child/exhausted? c :equip)) (finish! c :no-hold)
+          (not= food (.-held (.self p))) (do (child/fruitless! c :equip)
                                              (await (ctx/act c :equip (clj->js {:item food})))
                                              :continue)
           :else
           (let [k (animals/key-of target)
-                _ (ctx/update-mem! c dissoc :equip-tries)
+                _ (child/progress! c :equip)
                 walked (await (animals/walk! c k target (lure-reach) {:doors :shut}))]
             (if (= :there walked) (start-trip! c k) :continue)))))))
 
