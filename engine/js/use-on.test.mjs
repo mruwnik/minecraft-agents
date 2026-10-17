@@ -2,7 +2,7 @@
 import { test, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { createPrimitivesFromBot } from './primitives.mjs'
-import { stubBot, names, Vec3 } from './stub-bot.mjs'
+import { stubBot, names, Vec3 } from './testing/stub-bot.mjs'
 
 const SCALE = 0.01
 const at = (x, y, z) => ({ x, y, z })

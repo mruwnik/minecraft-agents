@@ -1,5 +1,5 @@
 // Why JavaScript: Mineflayer boundary; captures real light from a live server through a body ProbeView.
-// Captures real light from a live server as oracle fixtures (engine/js/light-fixtures.mjs), acting only as the body ProbeView.
+// Captures real light from a live server as oracle fixtures (engine/js/testing/light-fixtures.mjs), acting only as the body ProbeView.
 //   node tools/light-capture.mjs --regions regions.json --out engine/js/fixtures/light
 // regions.json: [{name, center: [x, y, z], size: [sx, sy, sz]}]. Light is read from column.dumpLight() decoded in vanilla order
 // (prismarine-chunk's getSkyLight/getBlockLight are scrambled for this version).
@@ -10,7 +10,7 @@ import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
 import { encodeColumn } from '../engine/js/view.mjs'
 import { parseColumnFile, decodeLight } from './view/web/decode.mjs'
-import { writeLightFixture } from '../engine/js/light-fixtures.mjs'
+import { writeLightFixture } from '../engine/js/testing/light-fixtures.mjs'
 
 const require = createRequire(import.meta.url)
 const mineflayer = require('mineflayer')

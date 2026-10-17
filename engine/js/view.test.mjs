@@ -10,10 +10,11 @@ import vec3 from 'vec3'
 import prismarineChunk from 'prismarine-chunk'
 import prismarineRegistry from 'prismarine-registry'
 import {
-  encodeColumn, decodeColumnFile, restoreColumn, writeAtomic, columnFile,
+  encodeColumn, decodeColumnFile, restoreColumn, columnFile,
   poseSnapshot, poseKey, hudSnapshot, createView, poseHzFromEnv, coalescedWriter, STATS_MS, POSE_REFRESH_MS, POSE_BODY_MS,
   packNibbles, decodeColumnLight, mergeOverlapping, columnLightSection, columnStateSection
 } from './view.mjs'
+import { writeAtomic } from './write-atomic.mjs'
 import { lightTable, relightBox } from './light.mjs'
 import { decodeLight } from '../../tools/view/web/decode.mjs'
 

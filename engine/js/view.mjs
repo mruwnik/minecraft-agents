@@ -10,6 +10,7 @@ import { promisify } from 'node:util'
 import { relightBox } from './light.mjs'
 import { setting } from './settings.mjs'
 import { bodyDir, worldsDir } from './bodies.mjs'
+import { writeAtomic } from './write-atomic.mjs'
 import { RELIGHT_BUDGET_MS, RELIGHT_MAX_POINTS, RELIGHT_REACH, columnLightSection, columnStateSection, hasSkyLight, tableFor, mergeOverlapping } from './view-light.mjs'
 import { VIEW_VERSION, encodeColumn } from './view-column.mjs'
 import { poseJson, poseSnapshot, bodyKey, poseKey, offlinePose, hudSnapshot, hudKey } from './view-pose.mjs'
@@ -48,22 +49,6 @@ export const columnFile = (stateDir, world, cx, cz, dimension) => {
 export const biomesFile = (stateDir, world) => path.join(worldsDir(stateDir), world, 'biomes.json')
 export const poseFile = (stateDir, world, agent) => path.join(bodyDir(stateDir, world, agent), 'view', 'pose.json')
 export const hudFile = (stateDir, world, agent) => path.join(bodyDir(stateDir, world, agent), 'view', 'hud.json')
-
-// write to <file>.tmp.<pid> then rename, so a reader never sees half a file
-let writeCounter = 0
-export async function writeAtomic (file, data) {
-  const tmp = `${file}.tmp.${process.pid}.${writeCounter++}`
-  const write = () => fs.promises.writeFile(tmp, data)
-  await write().catch(async err => {
-    if (err.code !== 'ENOENT') throw err
-    await fs.promises.mkdir(path.dirname(file), { recursive: true })
-    await write()
-  })
-  await fs.promises.rename(tmp, file).catch(async err => {
-    await fs.promises.rm(tmp, { force: true })
-    throw err
-  })
-}
 
 // One write in flight per file. A write asked for meanwhile replaces any waiting one, so the last data always lands
 // and the intermediate ones are dropped. Resolves when data (or something newer) has been written; never rejects

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { createPrimitives, createPrimitivesFromBot, mcToMineflayerLook, mineflayerToMcLook } from './primitives.mjs'
 import { BODY_HALF_WIDTH } from './prim-base.mjs'
 import { EventEmitter } from 'node:events'
-import { stubBot, names, Vec3 } from './stub-bot.mjs'
+import { stubBot, names, Vec3 } from './testing/stub-bot.mjs'
 import registryFor from 'prismarine-registry'
 import { fixDigMaterials } from './dig-materials.mjs'
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { stubBot } from './stub-bot.mjs'
+import { stubBot } from './testing/stub-bot.mjs'
 import { chatRefusal, say } from './chat.mjs'
 
 const OPTS = () => ({ timeScale: 0.01 })

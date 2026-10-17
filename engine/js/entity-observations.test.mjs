@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createPrimitivesFromBot } from './primitives.mjs'
-import { stubBot } from './stub-bot.mjs'
+import { stubBot } from './testing/stub-bot.mjs'
 
 test('entity observations expose every local tracked entity without radius or32 filters', async () => {
   const entities = Object.fromEntries(Array.from({ length: 64 }, (_, id) => [id, {

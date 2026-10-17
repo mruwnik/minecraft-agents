@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { lightTable, relightBox } from './light.mjs'
-import { readLightFixture, lightBreakdown, formatBreakdown } from './light-fixtures.mjs'
+import { readLightFixture, lightBreakdown, formatBreakdown } from './testing/light-fixtures.mjs'
 
 const require = createRequire(import.meta.url)
 const dir = path.join(import.meta.dirname, 'fixtures/light')

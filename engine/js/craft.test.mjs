@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import { EventEmitter } from 'node:events'
 import assert from 'node:assert/strict'
-import { stubBot } from './stub-bot.mjs'
+import { stubBot } from './testing/stub-bot.mjs'
 import { craftItem } from './craft.mjs'
 
 const REG = {

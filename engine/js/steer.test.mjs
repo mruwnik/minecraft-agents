@@ -5,7 +5,7 @@ import vec3 from 'vec3'
 import prismarineChunk from 'prismarine-chunk'
 import prismarineRegistry from 'prismarine-registry'
 import { createPrimitivesFromBot } from './primitives.mjs'
-import { stubBot } from './stub-bot.mjs'
+import { stubBot } from './testing/stub-bot.mjs'
 
 const { Vec3 } = vec3
 const registry = prismarineRegistry('26.1')

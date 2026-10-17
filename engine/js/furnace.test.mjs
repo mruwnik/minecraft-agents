@@ -1,7 +1,7 @@
 // Why JavaScript: tests furnace.mjs, which stays JS: Mineflayer boundary; drives the furnace window and its bar packets, which are collected before Mineflayer listens.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { stubBot } from './stub-bot.mjs'
+import { stubBot } from './testing/stub-bot.mjs'
 import { furnaceVisit } from './furnace.mjs'
 
 const REG = Object.fromEntries(['coal', 'raw_iron', 'iron_ingot', 'beef', 'cooked_beef', 'oak_planks', 'cobblestone', 'ender_pearl']

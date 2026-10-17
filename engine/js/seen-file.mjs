@@ -7,7 +7,7 @@
 import fs from 'node:fs'
 import zlib from 'node:zlib'
 import { promisify } from 'node:util'
-import { writeAtomic } from './view.mjs'
+import { writeAtomic } from './write-atomic.mjs'
 
 const deflate = promisify(zlib.deflate)
 const FORMAT = 2
