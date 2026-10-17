@@ -519,3 +519,17 @@
           (core/submit! eng '(mining-parent) {})
           (await (tu/run-ticks eng clock 10 700))
           (is (= {:status :stopped :got 0 :reason :no-tool :tool "pickaxe"} (select-keys @out [:status :got :reason :tool]))))))))
+;; stones on 8-high pillars: seen from the floor, no stand beside them
+(deftest seen-ore-with-no-way-to-stand-beside-it-is-listed-unreached
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stones [[-3 0] [3 0] [0 -3] [0 3]]
+              pillars (into {} (for [[x z] stones]
+                                 (into {(str x ",71," z) "stone"} (cells "bedrock" [x] (range 62 71) [z]))))
+              s (await (scenario {:block "stone" :count 3 :radius 10 :tunnel-length 0 :descend-limit 0}
+                                 {:blocks (merge floor pillars) :inventory pickaxe} 60))
+              e (done-event s)]
+          (is (= [:stopped 0] ((juxt :status :got) e)))
+          (is (= (set (map (fn [[x z]] [x 71 z]) stones)) (set (:unreached e))))
+          (is (re-find #"seen ore out of reach" (:text e))))))))

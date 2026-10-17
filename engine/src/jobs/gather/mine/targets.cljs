@@ -219,7 +219,8 @@
   [c pos]
   (ctx/emit! c :mine.unreachable :info {:pos (access/cell pos) :why (result/why (near/last-walk c))
                                         :text (str "mine skips " (str/join "," (access/cell pos)) ": no way to stand beside it")})
-  (skip! c pos))
+  (skip! c pos)
+  (ctx/update-mem! c update :unreached #(into (vec %) (remove (set %)) [(access/cell pos)])))
 
 (defn stall-rounds [] (settings/get settings ::stall-rounds))
 

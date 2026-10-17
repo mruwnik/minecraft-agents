@@ -1,6 +1,6 @@
 ;; Card 1644acdc: gather.mine's walk to a seen ore keeps go-to's default health floor (12 hp): a 13 block drop at 20 hp (7 left) is
 ;; not taken, the ore is skipped, the body stays on its platform and takes no damage; a 5 block drop (4 hp, 16 left) still is.
-;; Stone platform x 12..20, z 12..20 on the flat plot; a single iron ore at [22 0 16] on the ground beside it.
+;; Stone platform x 12..20, z 12..20 on the flat plot (the five block case ends it at x 16, so the body at its edge sees the ore over the rim); a single iron ore at [22 0 16] on the ground beside it.
 {:defaults
  {:tags [:mine :jobs :movement] :time :any
   :plot {:height 18}
@@ -16,7 +16,7 @@
    :after [[:body-near [16.5 13 16.5] 5] [:block [22 0 16] "iron_ore"] [:item "raw_iron" 0]]}
   {:name "five-block-drop-to-a-seen-ore-is-taken"
    :body {:at [16.5 5 16.5]}
-   :blocks [[:fill [12 0 12] [20 4 20] "stone"]]
+   :blocks [[:fill [12 0 12] [16 4 20] "stone"]]
    :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :radius 12 :tunnel-length 0 :descend-limit 0 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 120 :of-job true}]
    :after [[:item "raw_iron" 1]]}]}

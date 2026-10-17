@@ -133,7 +133,7 @@
   (feet or head height, through rock seen solid) is taken by a child mine run: a stay-level side cut that digs it and walks back, its
   mouth then shut with a carried block (info mine.side); the ore is skipped afterwards. Seen ore one column round the feet from one cell below to one over the head is dug from the stand; the hole it leaves is
   shut with a carried block once the drop is collected (the body steps back to the tunnel line first; warn mine.hole-open and
-  :holes-open in the result when it cannot). Seen ore it did not take is listed in the result as :unreached (up to 10).
+  :holes-open in the result when it cannot). Seen ore it did not take (stay-level, or no way to stand beside it) is listed in the result as :unreached (up to 10).
 
   Torches: a dig of seen ore that takes the body 4+ blocks off the tunnel line hangs one torch there the same way
   (none within 4 of an earlier branch torch). The strip tunnel hangs a torch (jobs.access.tunnel/torch-at: a wall torch in the head cell, else a floor
