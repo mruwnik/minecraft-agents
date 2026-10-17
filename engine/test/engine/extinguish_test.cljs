@@ -324,7 +324,7 @@
             (core/submit! eng '(jobs.survival.extinguish) {})
             (await (core/tick! eng))
             (is (= [] (calls p "moveTo")) "does not walk")
-            (is (= 1 (count (filter #(= :extinguish_wait (:kind %)) @seen))) "the agent is told once")
+            (is (empty? (of-kind seen :extinguish_wait)) "the ending carries it")
             (is (= [:burning-wait :burning-wait :burning-wait] @holds) "a declared hold while it waits")
             (is (= [] (:list (core/state eng))) "one run until the fire is out")
             (is (= 1 (count (filter #(= :completed (:kind %)) @seen))))
@@ -417,7 +417,7 @@
           (is (not= "water" (.-name (.blockAt p #js {:x 0 :y 64 :z 0}))))
           (is (some #(= "water_bucket" (:name %)) (u/inventory p))))))))
 
-(deftest a-failed-scoop-warns-with-the-cell
+(deftest a-failed-scoop-is-listed-in-the-ending-with-the-cell
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -430,9 +430,8 @@
           (on-place! p "water_bucket" (fn [s _] (swap! s assoc :inventory [])))   ; no empty bucket to scoop with
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
-          (let [[e & more] (filter #(= :extinguish.scoop_failed (:kind %)) @seen)]
+          (let [[e & more] (:scoop-failed (first (of-kind seen :completed)))]
             (is (empty? more))
-            (is (some? e))
             (is (= {:x 0 :y 64 :z 0} (:pos e)))))))))
 
 (defn ^:async cover-run
@@ -671,7 +670,7 @@
           (is (= [] (entries eng :extinguish-pour)))
           (is (= ["water_bucket" "bucket"] (mapv (comp :item call-args) (calls p "place"))))
           (is (= 0 (count (calls p "moveTo"))) "no walk back")
-          (is (= [] (of-kind seen :extinguish.scoop_failed))))))))
+          (is (nil? (:scoop-failed (first (of-kind seen :completed)))) "no scoop failed"))))))
 
 (deftest a-pour-4-3-blocks-away-is-in-bucket-reach-from-the-eye
   (async done
@@ -679,7 +678,7 @@
       (fn ^:async t []
         (let [{:keys [p seen]} (await (pour-then-flee 4.3))]
           (is (= 0 (count (calls p "moveTo"))) "no walk back")
-          (is (= [] (of-kind seen :extinguish.scoop_failed))))))))
+          (is (nil? (:scoop-failed (first (of-kind seen :completed)))) "no scoop failed"))))))
 
 (deftest a-pour-left-just-past-scoop-reach-is-walked-back-to-and-scooped
   (async done
@@ -689,7 +688,7 @@
           (is (= [] (entries eng :extinguish-pour)))
           (is (= ["water_bucket" "bucket"] (mapv (comp :item call-args) (calls p "place"))))
           (is (<= (u/eye-dist (u/pos-of (.-pos (.self p))) [0 64 0]) u/bucket-reach) "walked back")
-          (is (= [] (of-kind seen :extinguish.scoop_failed))))))))
+          (is (nil? (:scoop-failed (first (of-kind seen :completed)))) "no scoop failed"))))))
 
 (deftest a-pour-left-at-the-walk-back-limit-is-scooped-and-farther-is-dropped
   (async done
@@ -700,7 +699,7 @@
           (is (= ["water_bucket" "bucket"] (mapv (comp :item call-args) (calls (:p near) "place"))))
           (is (= ["water_bucket"] (mapv (comp :item call-args) (calls (:p far) "place"))) "no scoop attempted from afar")
           (is (= [] (entries (:eng far) :extinguish-pour)) "the entry is gone")
-          (is (= 1 (count (of-kind (:seen far) :extinguish.scoop_failed)))))))))
+          (is (= ["far"] (mapv :status (:scoop-failed (first (of-kind (:seen far) :completed))))) "the ending lists the dropped pour"))))))
 
 (deftest a-failed-walk-back-drops-the-pour-with-a-warn-and-ends
   (async done
@@ -721,7 +720,7 @@
           (is (= [] (:list (core/state eng))) "the run ends")
           (is (= ["water_bucket"] (mapv (comp :item call-args) (calls p "place"))) "no scoop from afar")
           (is (= [] (entries eng :extinguish-pour)) "the entry is gone")
-          (is (= ["far"] (mapv :status (of-kind seen :extinguish.scoop_failed)))))))))
+          (is (= ["far"] (mapv :status (:scoop-failed (first (of-kind seen :completed)))))))))))
 
 (deftest a-second-pour-in-the-same-run-is-walked-back-to-as-well
   (async done
@@ -753,7 +752,7 @@
           (await (run-until-empty eng 4))
           (is (= 2 @pours) "poured twice")
           (is (= ["water_bucket" "water_bucket" "bucket"] (mapv (comp :item call-args) (calls p "place"))))
-          (is (= [] (of-kind seen :extinguish.scoop_failed)))
+          (is (nil? (:scoop-failed (first (of-kind seen :completed)))) "no scoop failed")
           (is (= [] (entries eng :extinguish-pour))))))))
 
 (deftest a-fire-the-body-has-not-seen-is-not-scanned

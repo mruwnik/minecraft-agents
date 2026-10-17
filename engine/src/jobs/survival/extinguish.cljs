@@ -1,5 +1,6 @@
 (ns jobs.survival.extinguish
-  (:require [jobs.lib.ready :as ready]
+  (:require [clojure.string :as str]
+            [jobs.lib.ready :as ready]
             [jobs.lib.checks :as checks]
             [jobs.lib.choose :as choose]
             [engine.settings :as settings]
@@ -25,7 +26,7 @@
   2. Once the fire is out, scoops the water back up with the empty bucket so no source block stays.
      It waits (a declared :burning-wait hold) up to 10 quarter seconds for the poured cell to read as water, and up to
      8 while still burning. A pour left more than 4 blocks away is walked back to (one go-to) when within 16 blocks, else dropped.
-     A scoop that fails, or a pour dropped as too far, warns extinguish.scoop_failed with the cell (the entry is dropped).
+     A scoop that fails, or a pour dropped as too far, is dropped and listed in the ending as :scoop-failed [{:pos :status :text}].
   3. With no bucket, on fire and with water within :water-radius, walks into the nearest water.
   4. In lava, or with no water in reach, walks to the best nearby cell within :step blocks.
      It must be passable, solid underfoot and not fire, lava, magma or a campfire.
@@ -36,7 +37,7 @@
   Before each decision from a new cell it looks round (level and down) so the fire at the feet and the lava beside them are seen.
   5. On fire, not in lava, with no water in reach and no hazard within 1.5 blocks, there is nothing useful to do.
      With a real danger near (jobs.lib.danger, the hostile-near radii) it ends :condition-failed :hostile-near instead, never standing still beside it.
-     Otherwise it holds still (:burning-wait): emits info extinguish_wait once, eats (a jobs.survival.eat child) when food is under 18 and food is carried
+     Otherwise it holds still (:burning-wait): eats (a jobs.survival.eat child) when food is under 18 and food is carried
      (to keep regenerating), and waits a second per pass; still burning after 20 seconds ends :limit-reached :still-burning.
   A walk that is blocked (boxed in, perhaps by its own covers) goes through a go-to from then on (it pillars, stairs or digs
   out when shut in); a go-to still working is not a failure. Three failures (no safe cell, or a go-to that fails, with its reason) end :nothing-possible :stuck.
@@ -262,6 +263,11 @@
   (ctx/forget-where! c :extinguish-pour (constantly true))
   (ctx/update-mem! c dissoc :pour-waits :water-waits :returned))
 
+(defn scoop-failed!
+  "Notes a poured cell left in place for the ending (the pass goes on)."
+  [c cell status text]
+  (ctx/update-mem! c update :scoop-failed (fnil conj []) {:pos cell :status status :text text}))
+
 (defn ^:async burning-wait!
   "Pause on purpose for ms (a noop child holding :burning-wait)."
   [c ms]
@@ -298,8 +304,7 @@
 
       (> (u/eye-dist (u/self-pos c) cell) u/bucket-reach)
       (do (clear-pour! c)
-          (ctx/emit! c :extinguish.scoop_failed :warn
-                     {:text (str "left the poured water at " (pr-str cell) ": too far to scoop") :pos cell :status "far"})
+          (scoop-failed! c cell "far" (str "left the poured water at " (pr-str cell) ": too far to scoop"))
           :done)
 
       :else
@@ -308,9 +313,7 @@
                 status (if (= :continue r) "continue" (name (or (get-in r [:data :reason]) :failed)))]
             (clear-pour! c)
             (when-not (= :done (:kind r))
-              (ctx/emit! c :extinguish.scoop_failed :warn
-                         {:text (str "could not scoop the poured water at " (pr-str cell) ": " status)
-                          :pos cell :status status}))
+              (scoop-failed! c cell status (str "could not scoop the poured water at " (pr-str cell) ": " status)))
             :done)))))
 
 (defn ^:async cover!
@@ -338,8 +341,6 @@
   (let [p (:primitives c)
         waits (inc (:stand-waits (ctx/mem c) 0))]
     (ctx/update-mem! c assoc :stand-waits waits)
-    (when (= 1 waits)
-      (ctx/emit! c :extinguish_wait :info {:text "no water near; standing still off the fire until it goes out"}))
     (when (and (eat/carried-best c) (< (.-food (.self p)) (eat-below)))
       (await (child/run!* c :eat 'jobs.survival.eat {:until (eat-below) :max-bites 1})))
     (await (burning-wait! c (stand-wait-ms)))
@@ -468,5 +469,6 @@
       :else (let [r (await (pass! c))]
               (case r
                 :again (do (await (pace/pace!)) (recur (inc i)))
-                :done (ctx/end c :done nil)
+                :done (let [failed (:scoop-failed (ctx/mem c))]
+                        (ctx/end c :done nil (when (seq failed) {:scoop-failed failed :text (str/join "; " (map :text failed))})))
                 r)))))
