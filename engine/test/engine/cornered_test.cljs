@@ -1008,6 +1008,12 @@
   (is (= [:plug :back-off :plug-dig :fight] (cornered/escape-order {:climber? true}))
       "a spider climbs the pillar's side to the body on top"))
 
+(deftest a-pillar-that-leaves-too-few-blocks-comes-after-the-dig-down
+  (is (= [:plug :plug-dig :pillar :back-off :fight] (cornered/escape-order {:lean? true}))
+      "the pillar top cannot be roofed in without blocks; a pit regains them")
+  (is (= [:plug :pillar :back-off :fight] (cornered/escape-order {:lean? true :home? true})) "no dig-down at home")
+  (is (= [:plug :plug-dig :fight] (cornered/escape-order {:lean? true :climber? true :faster? true}))))
+
 (deftest no-step-back-from-a-mob-that-outruns-the-body
   (is (= [:plug :plug-dig :fight] (cornered/escape-order {:climber? true :faster? true})))
   (is (= [:plug :pillar :plug-dig :fight] (cornered/escape-order {:faster? true})) "one that cannot climb is pillared against")

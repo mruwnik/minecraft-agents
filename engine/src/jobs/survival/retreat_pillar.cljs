@@ -14,9 +14,11 @@
 
 (a/defargs settings
   {::pillar-height {:default 3 :doc "Height of the pillar built as a refuge, in blocks." :spec (a/int-in 0 nil)}
+   ::pillar-spare {:default 3 :doc "Blocks a body must carry beyond the pillar's own for it to be the first refuge; with fewer the dig-down comes first (the night's dig-in cannot roof in on a pillar top without blocks)." :spec (a/int-in 0 nil)}
    ::pillar-extend {:default 2 :doc "Blocks a body hit on its pillar raises it by, once, before it gives the refuge up; 0: it gives up at once." :spec (a/int-in 0 nil)}})
 (defn pillar-height [] (settings/get settings ::pillar-height))
 (defn pillar-extend [] (settings/get settings ::pillar-extend))
+(defn pillar-spare [] (settings/get settings ::pillar-spare))
 
 (defn pillar-item
   "The carried block of the call's list with the most, when it is at least n (default pillar-height); else nil."
@@ -27,6 +29,11 @@
        (sort-by :count >)
        first
        :name)))
+
+(defn lean?
+  "Whether a pillar could be built but would leave fewer than pillar-spare blocks."
+  [c]
+  (boolean (and (pillar-item c) (not (pillar-item c (+ (pillar-height) (pillar-spare)))))))
 
 (def climb-radius
   "Blocks round the pillar within which a mob's climb to its top is looked for."

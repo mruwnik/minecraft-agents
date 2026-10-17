@@ -72,6 +72,18 @@
             {:no-event {:source :job :kind :shelter.exposed} :for-s 120}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 200 :of-job true}]
    :limit-s 230}
+  ;; Card 7647c987: unarmed, a fist loses to the helmeted zombie and the body has only its 3 dirt: the flight digs down (a pit regains
+  ;; its blocks) instead of pillaring with the last dirt, so the night's dig-in still seals.
+  {:name "reflex-cut-night-unarmed-few-blocks-seals"
+   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+   :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.survival.night)]
+         [:await {:source :job :kind :dig-in.sealed} 120]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 30}
+            {:event {:source :job :kind :dig-in.sealed} :within-s 120}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 200 :of-job true}]
+   :limit-s 230}
   ;; Card 62278915 (fix b0462852): pit-site? needs ground the carried tools dig. A stone pad and no pickaxe: dig-in refuses at once
   ;; ("cannot harvest stone", no pit dug) and the night holds exposed; the same pad with a stone pickaxe is dug in.
   {:name "stone-pad-no-pickaxe-starts-no-pit"

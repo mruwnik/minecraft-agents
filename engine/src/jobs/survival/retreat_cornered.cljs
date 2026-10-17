@@ -18,6 +18,7 @@
             [jobs.survival.retreat-flight :as flight]
             [jobs.survival.retreat-goal :as retreat-goal]
             [jobs.survival.retreat-home :as retreat-home]
+            [jobs.survival.retreat-pillar :as pillar]
             [jobs.survival.retreat-refuge :as refuge]
             [jobs.survival.retreat-walk :as walk]))
 
@@ -78,8 +79,8 @@
   for a creeper), :flyer? a phantom is near (it outflies a walker: shelter, else fight), :creeper? one is near (it comes first), :enderman? an angry enderman is near (angry-enderman?) (it teleports, so no walk or back-off, and a
   pillar is within its reach: the body enters water within water-reach, which it avoids, else walks under a 2-high roof within roof-reach, which it cannot enter, else shuts itself in), :ranged? the threat shoots, or the body is under fire (under-fire?), :climber? it is a spider (it climbs the pillar), :faster? a mob
   the body cannot outrun is near (no step back: it gains nothing), :home? the body is in its home
-  room: it digs no pit or pocket in its own floor or walls, :pressed? pressed? holds and the body is not under fire (a seal or pillar cannot be built beside the mob: the fight comes first, except against a creeper or an enderman), :swim? the body is in water with a drowned near: swimming out to dry land comes first unless a fight wins}."
-  [{:keys [win? creeper? enderman? flyer? ranged? climber? faster? swim? home? pressed?]}]
+  room: it digs no pit or pocket in its own floor or walls, :lean? the pillar would leave the body too few blocks to roof in on its top (retreat-pillar/lean?): the dig-down comes before it (a pit regains its blocks), :pressed? pressed? holds and the body is not under fire (a seal or pillar cannot be built beside the mob: the fight comes first, except against a creeper or an enderman), :swim? the body is in water with a drowned near: swimming out to dry land comes first unless a fight wins}."
+  [{:keys [win? creeper? enderman? flyer? ranged? climber? faster? swim? home? pressed? lean?]}]
   (cond->> (cond
              creeper? [:back-off :plug :pillar :plug-dig :fight]
              enderman? [:water :roof :plug :plug-dig :fight]
@@ -91,6 +92,9 @@
                                  [:plug-dig]
                                  (when-not pressed? [:fight]))))
     (and swim? (not creeper?) (not enderman?) (not win?)) (into [:swim-out])
+    (and lean? (not home?)) (#(if (some #{:pillar} %)
+                                (vec (mapcat (fn [o] (case o :pillar [:plug-dig :pillar] :plug-dig [] [o])) %))
+                                %))
     home? (filterv #(not= :plug-dig %))))
 
 (defn outrun?
@@ -438,7 +442,8 @@
                              :faster? (not (outrun? c hostiles))
                              :pressed? (or beaten (and (not fire?) (pressed? c hostiles)))
                              :swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (in-water? c))
-                             :home? home?})]
+                             :home? home?
+                             :lean? (pillar/lean? c)})]
     (loop [[option & more] order]
       (let [r (when-not (flight/tried? c option)
                 (case option
