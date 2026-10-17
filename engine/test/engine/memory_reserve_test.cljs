@@ -70,4 +70,6 @@
                   '(jobs.memory.unreserve {})
                   '(jobs.memory.unreserve {:id "a" :item "diamond"})]]
       (await (run-job eng spec)))
-    (is (empty? (live eng)))))))
+    (is (empty? (live eng)))
+    (is (empty? (events-of seen :round_started)))
+    (is (empty? (events-of seen :done_failed)))))))

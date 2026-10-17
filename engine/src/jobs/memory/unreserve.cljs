@@ -9,7 +9,7 @@
 (def doc
   "Drop entries from the body's reserve register, in one round: the entry named :id, or every entry of :item.
   Entries of other jobs are dropped too; they write them again if they still need them.
-  Refused (warn reserve.refused; ends :condition-failed with cause {:reason :text}): :no-target (neither or both of
+  Refused (warn reserve.refused; ends :condition-failed with cause {:reason :text}): :bad-args (neither or both of
   :id and :item).
   Success: info reserve.cleared with :removed; ends :done with data {:removed n}. Nothing to drop is already done.")
 
@@ -26,7 +26,7 @@
 
 (defn bad-args [{:keys [id item]}]
   (when (= (some? id) (some? item))
-    {:reason :no-target :text "name exactly one of :id and :item"}))
+    {:reason :bad-args :text "name exactly one of :id and :item"}))
 
 (defn matching
   "The live entries the call drops."

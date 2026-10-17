@@ -13,7 +13,7 @@
   the units reserved (default :all of what is carried). :strength 0..1 (default 1 = never used; 0.5 = used when it is
   worth twice the item; 0 = no reservation). :ttl-s ends the entry after that many seconds (default: kept until
   unreserved). :id names the entry (default \"agent-<item or tag>\"); writing an id again replaces its entry.
-  Refused (warn reserve.refused; ends :condition-failed with cause {:reason :text}): :no-target (neither or both of
+  Refused (warn reserve.refused; ends :condition-failed with cause {:reason :text}): :bad-args (neither or both of
   :item and :tag).
   Success: info reserve.set with the entry; ends :done with data {:id}. Entries stay until unreserved or expired; see
   `observe inventory` for the register.")
@@ -38,7 +38,7 @@
   "The refusal cause when the call names not exactly one of :item and :tag."
   [{:keys [item tag]}]
   (when (= (some? item) (some? tag))
-    {:reason :no-target :text "name exactly one of :item and :tag"}))
+    {:reason :bad-args :text "name exactly one of :item and :tag"}))
 
 (defn entry-of
   "The register entry the call writes, at time now."
@@ -55,8 +55,8 @@
   "Done when the register holds the entry the call would write."
   [c]
   (let [now (:now (ctx/view c))
-        e (entry-of (:args c) now)
-        held? (some #(= (dissoc e :until) (dissoc % :until)) (reserve/entries (ctx/view c)))]
+        e (when-not (bad-args (:args c)) (entry-of (:args c) now))
+        held? (and e (some #(= (dissoc e :until) (dissoc % :until)) (reserve/entries (ctx/view c))))]
     (if held?
       (contract/ok :reserved (str (:id e) " is in the register") :units :entries :done 1 :left 0 :result {:id (:id e)})
       (contract/later :not-reserved (str (:id e) " is not in the register") :units :entries :done 0 :left 1 :result {:id (:id e)}))))

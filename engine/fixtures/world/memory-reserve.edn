@@ -15,5 +15,5 @@
             {:event {:source :job :kind :reserve.cleared :data {:removed 1}} :within-s 30}]}
   {:name "reserve-with-no-target-is-refused-without-a-round"
    :act [[:job (jobs.memory.reserve {})]]
-   :expect [{:event {:source :job :kind #{:waiting :stopped} :data {:reason :no-target}} :within-s 20 :of-job true}
+   :expect [{:event {:source :job :kind #{:waiting :stopped} :data {:reason :bad-args}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :round_started} :for-s 5 :of-job true}]}]}
