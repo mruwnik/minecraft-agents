@@ -240,9 +240,11 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     // health packet per tick, so a blast and a hit in one tick are one loss; the next health loss reports all of them
     // (damages) and the last one's fields; engine.hurt turns them into the causes.
     let damages = []
+    const fresh = list => list.filter(d => Date.now() - d.at < setting('prim/damage-fresh-ms'))
     const onDamage = packet => {
       if (packet.entityId !== target.entity?.id) return
       const source = packet.sourceCauseId > 0 ? target.entities?.[packet.sourceCauseId - 1] : undefined
+      damages = fresh(damages) // a hit that never lowered health would otherwise stay for good
       damages.push({
         at: Date.now(),
         damageType: target.damageTypeNames?.[packet.sourceTypeId],
@@ -251,7 +253,6 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     }
     target._client?.on('damage_event', onDamage)
     let lastHurt = null // the damage packets of the last health loss, for a death that follows it
-    const fresh = list => list.filter(d => Date.now() - d.at < setting('prim/damage-fresh-ms'))
     const hurtNow = () => {
       const list = fresh(damages)
       damages = []
