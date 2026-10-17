@@ -426,3 +426,22 @@
   (let [state-at (fn [open] (at-state (:snapshot (steer/path-world @(:state (door-rig (:blocks (gate open)) (:states (gate open)))))) [3 64 0]))]
     (is (= (state-id "oak_fence_gate" {:open true :facing "east"}) (state-at true)))
     (is (= (state-id "oak_fence_gate" {:open false :facing "east"}) (state-at false)))))
+
+(defn states-in
+  "snapshot's state ids over x -4..40, y 62..68, z -3..3 (columns 0..2 on x)."
+  [snapshot]
+  (vec (for [x (range -4 41) y (range 62 69) z (range -3 4)] (.stateAt snapshot x y z))))
+
+;; the patched snapshot must answer as a rebuild does, and leave the earlier snapshot as it was
+(deftest path-world-patched-by-few-changes-answers-as-a-rebuild
+  (let [{:keys [state]} (rig {[3 64 0] "oak_fence" [4 64 0] "oak_fence" [6 64 0] "oak_door" [7 64 0] "stone"} [0 64 0])
+        before (steer/path-world @state)
+        before-ids (states-in (:snapshot before))]
+    (doseq [edit [#(assoc-in % [:blocks [5 64 0]] "oak_fence")
+                  #(update % :blocks dissoc [4 64 0])
+                  #(update % :blocks assoc [20 64 1] "stone")
+                  #(update % :blocks dissoc [20 64 1])]]
+      (swap! state edit)
+      (let [patched (steer/path-world @state)]
+        (is (= (states-in (:snapshot (steer/path-world-build @state))) (states-in (:snapshot patched))))))
+    (is (= before-ids (states-in (:snapshot before))))))

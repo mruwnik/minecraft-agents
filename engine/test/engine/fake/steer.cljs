@@ -316,14 +316,57 @@
      [(when (:view-chunks w) [(bit-shift-right (floor bx) 4) (bit-shift-right (floor bz) 4)])
       (when (or (seq (:unreachable w)) (seq (:no-path w))) pos)]]))
 
+(def patch-limit "Most changed cells path-world patches into the last snapshot instead of rebuilding it." 200)
+
+(defn block-changes
+  "[[pos name-or-nil] ...] where new-blocks differs from old-blocks (nil: the cell is gone), nil when more than patch-limit."
+  [old-blocks new-blocks]
+  (let [changes (volatile! (transient []))
+        over? #(> (count @changes) patch-limit)
+        note! (fn [pos name] (vswap! changes conj! [pos name]) (when (over?) (reduced :over)))
+        r1 (reduce-kv (fn [_ pos name] (if (= name (get old-blocks pos)) nil (note! pos name))) nil new-blocks)
+        r2 (when-not (= r1 :over)
+             (reduce-kv (fn [_ pos _] (if (contains? new-blocks pos) nil (note! pos nil))) nil old-blocks))]
+    (when-not (or (= r1 :over) (= r2 :over))
+      (persistent! @changes))))
+
+(defn column-of [[x _ z]] [(bit-shift-right x 4) (bit-shift-right z 4)])
+
+(defn patched
+  "The path-world of w made from last (the result for old-blocks) by changing the cells that differ, on a fork of its
+  snapshot, or nil when a rebuild is needed: too many changes, a block in a column the snapshot has not got, or the
+  last block of a column removed (a rebuild leaves that column unloaded)."
+  [last old-blocks w]
+  (let [blocks (:blocks w)
+        changes (block-changes old-blocks blocks)
+        ^js old-snapshot (:snapshot last)
+        loaded? (fn [[pos]] (let [[cx cz] (column-of pos)] (.hasColumn old-snapshot cx cz)))
+        emptied? (fn [removed]
+                   (let [cols (into #{} (map (comp column-of first)) removed)]
+                     (and (seq cols)
+                          (not-every? (fn [col] (reduce-kv (fn [_ pos _] (when (= col (column-of pos)) (reduced true))) nil blocks))
+                                      cols))))]
+    (when (and changes (every? loaded? changes) (not (emptied? (remove second changes))))
+      (let [^js snapshot (.fork old-snapshot)]
+        (doseq [[[x y z :as pos] name] changes]
+          (.setState snapshot x y z (if name (fx/state-id name (doors/path-props w pos)) 0)))
+        (doseq [[[x y z]] changes] (fx/connect! snapshot [x y z x y z]))
+        (assoc last :snapshot snapshot)))))
+
 (defn path-world
-  "path-world-build, reused while its inputs are the same (callers do not mutate the snapshot)."
+  "path-world-build, reused while its inputs are the same (callers do not mutate the snapshot). When only :blocks differ
+  and few cells, with no buried cells and no view window, the last snapshot is forked and patched (patched)."
   [w]
   (let [[maps where :as inputs] (path-world-inputs w)
-        [[last-maps last-where] result] @path-world-cache]
+        [[last-maps last-where] result] @path-world-cache
+        [blocks & others] maps
+        [last-blocks & last-others] last-maps]
     (if (and last-maps (every? true? (map identical? maps last-maps)) (= where last-where))
       result
-      (let [result (path-world-build w)]
+      (let [result (or (when (and last-maps (every? true? (map identical? others last-others)) (= where last-where)
+                                  (nil? (:view-chunks w)) (empty? (:unreachable w)) (empty? (:no-path w)))
+                         (patched result last-blocks w))
+                       (path-world-build w))]
         (reset! path-world-cache [inputs result])
         result))))
 

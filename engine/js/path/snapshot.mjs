@@ -13,9 +13,11 @@ export const MC_VERSION = '26.1'
 // two 16-bit halves in one int32: collides only beyond +-32767 chunks (+-524k blocks)
 const keyOf = (cx, cz) => (cx & 0xFFFF) * 65536 + (cz & 0xFFFF)
 
-export function createSnapshot ({ minY = -64, height = 384 } = {}) {
+export function createSnapshot ({ minY = -64, height = 384 } = {}, parent = null) {
   const columnsByKey = new Map()
   const sectionCount = height >> 4
+  // a fork shares its parent's section arrays and copies one on its first write (the parent must not be written after)
+  parent?.forEach((e, key) => columnsByKey.set(key, { cx: e.cx, cz: e.cz, sections: e.sections.slice(), flagTable: null, flags: null, shared: new Uint8Array(sectionCount).fill(1) }))
   let lastKey = -1
   let lastEntry = null
 
@@ -34,6 +36,7 @@ export function createSnapshot ({ minY = -64, height = 384 } = {}) {
     const entry = columnsByKey.get(key) ?? { cx, cz, sections: new Array(sectionCount).fill(undefined), flagTable: null, flags: null }
     columnsByKey.set(key, entry)
     entry.sections[sy] = ids
+    if (entry.shared) entry.shared[sy] = 0
     if (entry.flags) entry.flags[sy] = 0
   }
 
@@ -56,10 +59,14 @@ export function createSnapshot ({ minY = -64, height = 384 } = {}) {
   const setState = (x, y, z, id) => {
     const ry = y - minY
     if (ry < 0 || ry >= height) return
-    const section = entryAt(x >> 4, z >> 4)?.sections[ry >> 4]
-    if (section === undefined) return
-    section[((ry & 15) << 8) | ((z & 15) << 4) | (x & 15)] = id
     const entry = entryAt(x >> 4, z >> 4)
+    const sy = ry >> 4
+    if (entry?.sections[sy] === undefined) return
+    if (entry.shared?.[sy]) {
+      entry.sections[sy] = entry.sections[sy].slice()
+      entry.shared[sy] = 0
+    }
+    entry.sections[sy][((ry & 15) << 8) | ((z & 15) << 4) | (x & 15)] = id
     if (entry.flags) entry.flags[ry >> 4] = 0
   }
 
@@ -91,6 +98,7 @@ export function createSnapshot ({ minY = -64, height = 384 } = {}) {
     setState,
     sectionHas,
     hasColumn: (cx, cz) => columnsByKey.has(keyOf(cx, cz)),
+    fork: () => createSnapshot({ minY, height }, columnsByKey),
     columns: () => [...columnsByKey.values()].map(e => [e.cx, e.cz])
   }
 }

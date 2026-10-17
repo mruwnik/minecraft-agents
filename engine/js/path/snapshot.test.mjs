@@ -136,3 +136,15 @@ test('sectionHas: a write into the section is seen, as is replacing the section,
   snap.setSection(0, 4, 0, other)
   assert.deepEqual([snap.sectionHas(table, 0, 4, 0), snap.sectionHas(flagFor([9]), 0, 4, 0)], [false, true])
 })
+
+test('a fork reads as its parent, and writing it leaves the parent as it was', () => {
+  const parent = createSnapshot()
+  parent.setSection(0, 5, 0, new Uint16Array(4096).fill(7))
+  const fork = parent.fork()
+  assert.equal(fork.stateAt(1, 16, 1), 7)
+  fork.setState(1, 16, 1, 9)
+  assert.equal(fork.stateAt(1, 16, 1), 9)
+  assert.equal(parent.stateAt(1, 16, 1), 7)
+  assert.equal(fork.hasColumn(0, 0), true)
+  assert.equal(fork.stateAt(100, 16, 1), UNLOADED)
+})
