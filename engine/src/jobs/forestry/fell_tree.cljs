@@ -271,14 +271,16 @@
     :else :none-found))
 
 (def at-range "Blocks from the :at column the body walks to when it has not seen the cell." 6)
+(def at-close-range "Blocks it walks to when the cell stayed unseen from at-range (a wall hides the foot)." 2)
 
 (defn ^:async walk-to-at!
-  "With :at on a cell the body has not seen, walk to within at-range of it (a go-to child) so the column can be read.
-  :partial while that walk goes on, else nil."
+  "With :at on a cell the body has not seen, walk to within at-range of it (a go-to child; at-close-range once a look from
+  there left it unseen) so the column can be read. :partial while that walk goes on, else nil."
   [c]
   (when-let [at (:at (:args c))]
     (when-not (u/seen-name (:primitives c) at)
-      (when (= :partial (await (log/walk-near! c at at-range true))) :partial))))
+      (let [range (if (:at-looked (ctx/mem c)) at-close-range at-range)]
+        (when (= :partial (await (log/walk-near! c at range true))) :partial)))))
 
 (defn no-tree-cause [c]
   (let [{:keys [radius species at]} (:args c)]
@@ -341,6 +343,9 @@
       (= :partial walked) :continue
 
       (= :searching chosen) :again
+
+      (and (not chosen) (:at (:args c)) (not (:at-looked (ctx/mem c))) (not (u/seen-name (:primitives c) (:at (:args c)))))
+      (do (ctx/update-mem! c assoc :at-looked true) :again)
 
       (and fresh? chosen (trip/food-short? c))
       (do (ctx/emit! c :tree.hungry :warn {:text "felling stopped: hungry, no food carried and get-food found none"})
