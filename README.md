@@ -67,8 +67,8 @@ Build the shared-world commands once with
 continue to work, for example:
 
 ```sh
-node engine/tools/map.mjs --world claude find --limit 10
-node engine/tools/plans.mjs --world claude list
+node engine/tools/map.mjs --world test find --limit 10
+node engine/tools/plans.mjs --world test list
 ```
 
 The archive contains the previous source, action library, dashboard, agent
