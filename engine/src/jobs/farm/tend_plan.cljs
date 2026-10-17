@@ -7,12 +7,11 @@
             [jobs.lib.access :as access]
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
-            [jobs.farm.fertilize :as fertilize]
             [jobs.lib.crops :as crops]
             [jobs.farm.field :as fld]
             [jobs.farm.plant :as plant]
+            [jobs.lib.farm :as farm]
             [jobs.farm.tidy :as tidy]
-            [jobs.farm.till :as till]
             [jobs.farm.tend-stock :as stock]
             [plan.shape :as shape]
             [jobs.lib.world :as known]))
@@ -122,7 +121,7 @@
         {:keys [plan fertilize keep]} (:args c)
         {:keys [answer crops]} (planned c)
         inventory (u/inventory p)
-        have (plant/sowable inventory)
+        have (farm/sowable inventory)
         me (u/self-pos c)
         tried (:till-tried (ctx/mem c) #{})
         bare (fld/planned-bare p crops)
@@ -144,14 +143,14 @@
     {:mid mid
      :radius R
      :ripe (count (fld/planned-ripe p {} crops []))
-     :hoe (some? (till/hoe-of p))
+     :hoe (some? (farm/hoe-of p))
      :untilled (->> tilled-cells (map key) (sort-by #(u/dist me %)) vec)
      :till-short (count dry)
      :till-held (reserve-held inventory dry)
      :bare (- (count bare) (count (:refused sowing)))
      :seed (boolean (seq (:ready sowing)))
      :short (:short sowing)
-     :meal (boolean (fertilize/has-meal? p))
+     :meal (boolean (farm/has-meal? p))
      :unripe (if fertilize (count (unripe-planned p crops)) 0)
      :keep keep
      :waste (stock/surplus inventory keep stock/waste-seeds)

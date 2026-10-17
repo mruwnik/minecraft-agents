@@ -5,7 +5,7 @@
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
-            [jobs.lib.apiary :as apiary]
+            [jobs.lib.apiary :as apiary :refer [survey]]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
@@ -55,17 +55,6 @@
   [c action pos]
   (gate/allowed? c :apiary.guard-declined "apiary guard" action pos))
 
-(defn permitted-fires
-  "The fires of the area whose cell the job may dig and the cell over it place on (quiet?: no decline warn)."
-  [c fires & [quiet?]]
-  (let [ok (fn [action poss]
-             (set (if quiet?
-                    (:allowed (gate/look c action poss {}))
-                    (gate/allowed c :apiary.guard-declined "apiary guard" action poss))))
-        dig (ok :dig (map :pos fires))
-        place (ok :place (map #(update (:pos %) :y inc) fires))]
-    (filterv #(and (dig (:pos %)) (place (update (:pos %) :y inc))) fires)))
-
 (a/defargs settings
   {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::max-strikes {:default 3 :doc "Strikes at one target before the job gives up on it." :spec (a/int-in 0 nil)}
@@ -76,34 +65,6 @@
 (defn max-strikes [] (settings/get settings ::max-strikes))
 
 ;; ------------------------------------------------------------------ the plan
-
-(defn plan-fire
-  "What to do about one fire: nil when it is safe, {:pos :action :kind/:item} when something carried does it,
-  else {:pos :left reason}."
-  [block-at inventory {:keys [pos name]}]
-  (let [ns (apiary/needs block-at pos)
-        kind (apiary/campfire-in inventory name)
-        carpet (apiary/carpet-in inventory)]
-    (cond
-      (empty? ns) nil
-      (and (:sink ns) kind) {:pos pos :action :sink :kind kind}
-      (and (:carpet ns) carpet) {:pos pos :action :carpet :item carpet}
-      :else {:pos pos :left (if (:carpet ns) :no-carpet :no-campfire)})))
-
-(defn survey
-  "{:fires n :todo [action maps, nearest first] :left {key reason}} of the fires not skipped."
-  [c center & [quiet?]]
-  (let [p (:primitives c)
-        block-at (apiary/block-at-fn p)
-        inventory (u/inventory p)
-        skipped (:skipped (ctx/mem c) {})
-        all (permitted-fires c (apiary/fires p {:box (:box (:args c)) :center center :radius (:radius (:args c))}) quiet?)
-        plans (->> all
-                   (remove #(contains? skipped (apiary/pos-key (:pos %))))
-                   (keep #(plan-fire block-at inventory %)))]
-    {:fires (count all)
-     :todo (vec (filter :action plans))
-     :left (into {} (keep (fn [pl] (when (:left pl) [(apiary/pos-key (:pos pl)) (:left pl)])) plans))}))
 
 (defn end-reason
   "Why the run ends with nothing to act on, given the memory and the survey."

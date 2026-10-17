@@ -7,9 +7,8 @@
             [engine.perception :as perception]
             [engine.test-util :as tu]
             [jobs.animals.lead-to :as lead-to]
-            [jobs.apiary.harvest :as apiary-harvest]
             [jobs.farm.field :as fld]
-            [jobs.farm.plant :as plant]
+            [jobs.lib.farm :as farm]
             [jobs.farm.tend :as tend]
             [jobs.farm.tend-plan :as tend-plan]
             [jobs.farm.till :as till]
@@ -39,8 +38,8 @@
 
 (deftest farm-bare-cells-skip-what-is-behind-stone
   (let [box {:min {:x 0 :y 64 :z 4} :max {:x 0 :y 64 :z 4}}]
-    (is (= [] (plant/bare-cells (wrapped far true) box [])) "behind stone: unknown, skipped")
-    (is (= [{:x 0 :y 64 :z 4}] (plant/bare-cells (wrapped far false) box [])) "in view: used")))
+    (is (= [] (farm/bare-cells (wrapped far true) box [])) "behind stone: unknown, skipped")
+    (is (= [{:x 0 :y 64 :z 4}] (farm/bare-cells (wrapped far false) box [])) "in view: used")))
 
 (deftest forestry-sapling-reading-needs-sight
   (let [blocks {"0,64,4" "oak_sapling"}]
@@ -122,7 +121,7 @@
 
 (deftest apiary-harvest-classify-needs-sight
   (let [blocks {"0,64,4" "beehive" "0,63,4" "campfire"}
-        classify (fn [w] (select-keys (apiary-harvest/classify (job-ctx w {}) [{:pos cell :ripe true}]) [:todo :declined]))]
+        classify (fn [w] (select-keys (apiary/classify (job-ctx w {}) [{:pos cell :ripe true}]) [:todo :declined]))]
     (is (= {:todo [] :declined {"0,64,4" :not-smoked}} (classify (wrapped blocks true))) "unseen fire: not smoked")
     (is (= {:todo [cell] :declined {}} (classify (wrapped blocks false))))))
 

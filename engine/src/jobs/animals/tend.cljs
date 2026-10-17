@@ -13,7 +13,6 @@
             [jobs.lib.standing :as standing]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
-            [jobs.animals.cull :as cull]
             [jobs.lib.hunting :as hunting]
             [jobs.lib.world :as known]))
 
@@ -105,8 +104,8 @@
 (defn drops-in-box
   "The distinct names of the items lying inside the box."
   [c]
-  (->> (look/seen-items (:primitives c) {:radius (cull/reach c) :max 32})
-       (filter #(cull/in-bound? c (u/pos-of (.-pos %))))
+  (->> (look/seen-items (:primitives c) {:radius (hunting/reach c) :max 32})
+       (filter #(hunting/in-bound? c (u/pos-of (.-pos %))))
        (keep #(some-> (.-item %) .-name))
        distinct
        vec))
@@ -129,7 +128,7 @@
 (defn facts
   "What the decisions are made from, read live."
   [c]
-  (let [{:keys [adults babies]} (cull/census c)
+  (let [{:keys [adults babies]} (hunting/census c)
         inventory (u/inventory (:primitives c))]
     {:gaps (missing-barrier c)
      :adults (count adults)
@@ -139,7 +138,7 @@
      :shearable (count (remove #(true? (.-sheared %)) adults))
      :stored (to-store inventory (produce (:mob (:args c))) (:carry (:args c)))
      :food (animals/food-carried (:primitives c) (:mob (:args c)))
-     :reach (cull/reach c)}))
+     :reach (hunting/reach c)}))
 
 (defn decide-mend
   [{:keys [plan fetch]} {:keys [gaps]}]
@@ -201,7 +200,7 @@
   the box first when outside it; a walled pen shows a few through a gap): the server lists animals only near the body, sound gives a direction, not a place, and animals behind
   the body are not in view."
   [c]
-  (let [{:keys [adults babies]} (cull/census c)]
+  (let [{:keys [adults babies]} (hunting/census c)]
     (boolean (and (not (:looked (ctx/mem c)))
                   (< (+ (count adults) (count babies)) (:target (:args c)))))))
 
@@ -318,7 +317,7 @@
 (defn finish!
   [c report]
   (let [{:keys [mob target]} (:args c)
-        {:keys [adults babies]} (cull/census c)
+        {:keys [adults babies]} (hunting/census c)
         f (facts c)
         out {:mob mob :target target :adults (count adults) :babies (count babies) :steps report}]
     (when (some #(:call (decide % (:args c) f)) steps)
@@ -350,7 +349,7 @@
   [c]
   (cond
     (not (look-due? c)) (await (step-steps c))
-    (cull/in-bound? c (u/self-pos c)) (do (await (look/survey! c)) :again)
+    (hunting/in-bound? c (u/self-pos c)) (do (await (look/survey! c)) :again)
     :else
     (let [r (await (child/call-walk* c :look {:pos (look-pos (:box (:args c))) :range 3}))]
       (when-not (= :continue r) (ctx/update-mem! c assoc :looked true))

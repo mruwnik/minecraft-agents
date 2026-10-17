@@ -12,6 +12,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.forestry.maintain :as maintain]
+            [jobs.lib.forestry :as flib]
             [jobs.forestry.prepare :as prepare]
             [jobs.forestry.prepare-field :as field]
             [jobs.lib.look :as look]))
@@ -184,7 +185,7 @@
 
 (deftest maintain-with-nothing-ripe-or-plantable-is-a-look-until-the-body-has-looked-round
   (let [c {:primitives (tu/fake {}) :args {}}
-        status (fn [surveyed?] (with-redefs [maintain/planned (constantly {}) maintain/field-cells (constantly [])
+        status (fn [surveyed?] (with-redefs [maintain/planned (constantly {}) flib/field-cells (constantly [])
                                              look/unseen? (constantly true) maintain/classes-of (constantly {})
                                              maintain/ripe-cells (constantly []) maintain/owed-cells (constantly [])
                                              maintain/plantable (constantly []) maintain/blocked-reason (constantly nil)
@@ -195,7 +196,7 @@
 
 (deftest prepare-with-only-an-unseen-cell-asks-a-look-at-it
   (let [c {:primitives (tu/fake {}) :args {}}]
-    (with-redefs [field/planned (constantly {}) prepare/states-of (constantly {}) maintain/field-cells (constantly [])
+    (with-redefs [field/planned (constantly {}) prepare/states-of (constantly {}) flib/field-cells (constantly [])
                   field/todo (constantly []) prepare/unseen-room (constantly [[1 65 2]])]
       (is (= [:look :unseen-room] (tu/kind-reason (prepare/not-ready c))))
       (is (= [[1 65 2]] (:look-at (nth (prepare/not-ready c) 2)))))))

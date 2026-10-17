@@ -2,6 +2,8 @@
   "Helpers for the apiary jobs: reading the smoke and fire under a hive, and
   the fires that stand under the hives."
   (:require [engine.ctx :as ctx]
+            [jobs.lib.game-facts :as facts]
+            [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]))
 
@@ -149,3 +151,95 @@
          (map #(select-keys % [:pos :name]))
          (filter #(in-area? area (:pos %)))
          (sort-by #(u/dist me (:pos %))))))
+
+;; ------------------------------------------------------------------ what the jobs share
+
+(def tool-item {:shears "shears" :bottle "glass_bottle"})
+(def hive-names #js ["beehive" "bee_nest"])
+
+(defn permitted-fires
+  "The fires of the area whose cell the job may dig and the cell over it place on (quiet?: no decline warn)."
+  [c fires & [quiet?]]
+  (let [ok (fn [action poss]
+             (set (if quiet?
+                    (:allowed (gate/look c action poss {}))
+                    (gate/allowed c :apiary.guard-declined "apiary guard" action poss))))
+        dig (ok :dig (map :pos fires))
+        place (ok :place (map #(update (:pos %) :y inc) fires))]
+    (filterv #(and (dig (:pos %)) (place (update (:pos %) :y inc))) fires)))
+
+(defn plan-fire
+  "What to do about one fire: nil when it is safe, {:pos :action :kind/:item} when something carried does it,
+  else {:pos :left reason}."
+  [block-at inventory {:keys [pos name]}]
+  (let [ns (needs block-at pos)
+        kind (campfire-in inventory name)
+        carpet (carpet-in inventory)]
+    (cond
+      (empty? ns) nil
+      (and (:sink ns) kind) {:pos pos :action :sink :kind kind}
+      (and (:carpet ns) carpet) {:pos pos :action :carpet :item carpet}
+      :else {:pos pos :left (if (:carpet ns) :no-carpet :no-campfire)})))
+
+(defn survey
+  "{:fires n :todo [action maps, nearest first] :left {key reason}} of the fires not skipped."
+  [c center & [quiet?]]
+  (let [p (:primitives c)
+        block-at (block-at-fn p)
+        inventory (u/inventory p)
+        skipped (:skipped (ctx/mem c) {})
+        all (permitted-fires c (fires p {:box (:box (:args c)) :center center :radius (:radius (:args c))}) quiet?)
+        plans (->> all
+                   (remove #(contains? skipped (pos-key (:pos %))))
+                   (keep #(plan-fire block-at inventory %)))]
+    {:fires (count all)
+     :todo (vec (filter :action plans))
+     :left (into {} (keep (fn [pl] (when (:left pl) [(pos-key (:pos pl)) (:left pl)])) plans))}))
+
+(defn ripe? [b] (>= (or (get-in b [:properties :honey_level]) 0) facts/ripe-level))
+
+(defn found-hives
+  "Every hive the body has seen in the area, as {:pos :ripe}."
+  [c center]
+  (let [p (:primitives c)
+        me (u/self-pos c)
+        {:keys [radius box]} (:args c)
+        search (if box 64 (+ radius (u/dist me center)))]
+    (->> (look/seen-blocks p {:radius search :names hive-names :properties? true :live? true :max 64})
+         (map (fn [b] {:pos (:pos b) :ripe (ripe? b)}))
+         (filter #(in-area? {:box box :center center :radius radius} (:pos %))))))
+
+(defn hives
+  "Every hive the body has seen in the area that the zone rules let the job use, as {:pos :ripe}, nearest to the
+  body first (quiet?: no decline warn)."
+  [c center & [quiet?]]
+  (let [found (found-hives c center)
+        poss (map :pos found)
+        ok (set (if quiet?
+                  (:allowed (gate/look c :harvest poss {:own-plans-ok? true}))
+                  (gate/allowed c :apiary.declined "apiary harvest" :harvest poss {:own-plans-ok? true})))]
+    (->> found
+         (filter #(ok (:pos %)))
+         (sort-by #(u/dist (u/self-pos c) (:pos %))))))
+
+(defn tool-for
+  "The item name to harvest with under :with, from the inventory, or nil."
+  [with inventory]
+  (let [carried? (fn [n] (some #(= n (:name %)) inventory))
+        wanted (case (keyword with)
+                 :shears [:shears]
+                 :bottle [:bottle]
+                 [:shears :bottle])]
+    (some #(when (carried? (tool-item %)) (tool-item %)) wanted)))
+
+(defn classify
+  "The hives as {:todo [pos] :declined {key reason} :ripe n :hives n}: ripe hives not skipped, sorted by the verdict."
+  [c hs]
+  (let [block-at (seen-block-at-fn (:primitives c))
+        skipped (:skipped (ctx/mem c) {})
+        ripe (->> hs (filter :ripe) (remove #(contains? skipped (pos-key (:pos %)))))
+        verdicts (map (fn [h] [(:pos h) (hive-verdict block-at (:pos h))]) ripe)]
+    {:hives (count hs)
+     :ripe (count (filter :ripe hs))
+     :todo (vec (keep (fn [[pos v]] (when (= :ok v) pos)) verdicts))
+     :declined (into {} (keep (fn [[pos v]] (when-not (= :ok v) [(pos-key pos) v])) verdicts))}))

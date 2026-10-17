@@ -11,6 +11,7 @@
             [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.crops :as crops]
+            [jobs.lib.farm :as farm]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.places :as places]
@@ -97,13 +98,10 @@
     (->> (gate/allowed c :fertilize.declined "fertilize" :harvest (remove refused (raw-targets c)) {:own-plans-ok? true})
          (sort-by #(u/dist me %)))))
 
-(defn has-meal? [p]
-  (some #(= "bone_meal" (:name %)) (u/inventory p)))
-
 (defn lacks-meal?
   "Whether bone meal is to be got: none carried, none used yet and targets left."
   [c]
-  (and (not (has-meal? (:primitives c)))
+  (and (not (farm/has-meal? (:primitives c)))
        (not (pos? (:used (ctx/mem c) 0)))
        (seq (targets c))))
 
@@ -147,7 +145,7 @@
         done (assoc data :text (str "fertilized with " used " bone meal"))]
     (cond
       (and (pos? used) (common/enough? c used (min (:max (:args c)) (+ used left)))) (ctx/end c :done nil done)
-      (pos? used) (if (has-meal? (:primitives c))
+      (pos? used) (if (farm/has-meal? (:primitives c))
                     (ctx/end c :condition-failed :refused data)
                     (ctx/end c :nothing-possible :need data))
       (pos? left) (ctx/end c :condition-failed :refused data)
@@ -157,7 +155,7 @@
   "Finish when nothing is left to fertilize, the budget is spent or the bone meal ran out; else walk to the nearest
   target of todo and use one bone meal."
   [c todo used]
-  (if (or (empty? todo) (>= used (:max (:args c))) (not (has-meal? (:primitives c))))
+  (if (or (empty? todo) (>= used (:max (:args c))) (not (farm/has-meal? (:primitives c))))
     (conclude! c)
     (let [target (first todo)
           refuse! #(ctx/update-mem! c update :refused (fnil conj #{}) target)

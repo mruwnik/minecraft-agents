@@ -13,7 +13,8 @@
             [engine.perception :as perception]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]
-            [jobs.farm.plant :as plant]))
+            [jobs.farm.plant :as plant]
+            [jobs.lib.farm :as farm]))
 
 (def clock (atom 1000000))
 
@@ -81,7 +82,7 @@
                              "4,63,0" "dirt" "5,63,0" "farmland" "1,64,0" "wheat" "2,64,0" "stone"}})
         xs (fn [cells] (mapv :x cells))
         b (fn [x0 x1] {:min {:x x0 :y 63 :z 0} :max {:x x1 :y 63 :z 0}})]
-    (are [box skipped expected] (= expected (xs (plant/bare-cells p box skipped)))
+    (are [box skipped expected] (= expected (xs (farm/bare-cells p box skipped)))
       (b 0 5) [] [0 3 5]
       (b 0 3) [] [0 3]
       (b 1 2) [] []
@@ -91,10 +92,10 @@
 
 (deftest an-unloaded-cell-is-not-bare
   (let [p (tu/fake {:blocks {"0,63,0" "farmland" "1,63,0" "farmland"} :unloaded ["1,64,0"]})]
-    (is (= [0] (mapv :x (plant/bare-cells p (box 0 0 1 0) []))))))
+    (is (= [0] (mapv :x (farm/bare-cells p (box 0 0 1 0) []))))))
 
 (deftest pick-seed-takes-the-named-seed-or-the-largest-carried-stack
-  (are [seed carried expected] (= expected (plant/pick-seed seed (apply inv carried)))
+  (are [seed carried expected] (= expected (farm/pick-seed seed (apply inv carried)))
     nil ["wheat_seeds" 4] "wheat_seeds"
     nil ["wheat_seeds" 4 "carrot" 30 "potato" 1 "bread" 8] "carrot"
     nil ["dirt" 64 "beetroot_seeds" 2] "beetroot_seeds"
@@ -104,7 +105,7 @@
     nil [] nil))
 
 (deftest pick-seed-sows-food-crops-only-above-the-reserve
-  (are [seed carried expected] (= expected (plant/pick-seed seed (apply inv carried)))
+  (are [seed carried expected] (= expected (farm/pick-seed seed (apply inv carried)))
     nil ["carrot" 1] nil
     nil ["carrot" 12] nil
     nil ["carrot" 21] "carrot"

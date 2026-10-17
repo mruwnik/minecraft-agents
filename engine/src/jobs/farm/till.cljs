@@ -89,11 +89,6 @@
 (def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
 
-(defn hoe-of
-  "The name of a carried item ending in _hoe, or nil."
-  [p]
-  (some #(when (.endsWith (:name %) "_hoe") (:name %)) (u/inventory p)))
-
 (defn listed
   "The hoes the call names (:use {:tools [..]}) as a set, or nil when it names none (the engine's default list is not given)."
   [c]

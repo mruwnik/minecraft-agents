@@ -10,6 +10,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.access :as access]
             [jobs.lib.trees :as forestry]
+            [jobs.lib.forestry :refer [cell-vec down feet-cell field-cells plan-trouble soil-for survey-field! tree-cells trouble-status]]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
@@ -66,12 +67,6 @@
 
 ;; ------------------------------------------------------------------ access
 
-(defn cell-vec [{:keys [x y z]}] [x y z])
-
-(defn feet-cell [c]
-  (let [{:keys [x y z]} (u/self-pos c)]
-    [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))
-
 (defn access-input
   "The rules' input for a cell as the body is now."
   [c pos]
@@ -97,30 +92,7 @@
 
 ;; ------------------------------------------------------------------ pure helpers
 
-(defn tree-cells
-  "{pos species} of the cells of a plan answer (of part, when given) that want a tree."
-  [answer part]
-  (into {} (keep (fn [{:keys [pos want] :as cell}]
-                   (when (and (map? want) (string? (:tree want)) (or (nil? part) (= part (:part cell))))
-                     [(u/cell-pos pos) (:tree want)])))
-        (:cells answer)))
-
-(defn plan-trouble
-  "Why a plan answer with these tree cells cannot be worked, or nil."
-  [answer cells]
-  (cond
-    (nil? answer) "no such plan"
-    (:broken answer) (str "the plan cannot be read: " (:broken answer))
-    (empty? cells) "no tree cells"))
-
-(def soil #{"dirt" "grass_block" "coarse_dirt" "podzol" "rooted_dirt" "moss_block"})
-
-(defn soil-for [species]
-  (if (= "mangrove" species) (into soil ["mud" "clay" "muddy_mangrove_roots"]) soil))
-
 (defn up [pos] (update pos :y inc))
-(defn down [pos] (update pos :y dec))
-
 (defn classify
   "What stands on the planned cell pos for species: :ripe (its log), :growing (its sapling), :bare (air over its
   soil, nothing growing below a log), :no-ground (air, but no soil below), :cramped (air over soil with a log
@@ -172,15 +144,6 @@
                           {:plan plan :part part :reason trouble
                            :text (str "forest declines plan " plan (when part (str " part " part)) ": " trouble)})
           {:trouble trouble :later? (or (known/unreadable? answer) (= no-zones trouble))}))))
-
-(defn trouble-status
-  "The status of a planned field: later :plan-trouble while the plan is missing or unreadable or no zone list is loaded
-  (it may be saved or fixed later); never when it has no tree cells."
-  [{:keys [trouble later?]}]
-  (cond
-    (nil? trouble) (contract/ok :plan "no plan trouble")
-    later? (contract/later :plan-trouble trouble :why trouble)
-    :else (contract/never :plan-trouble trouble :why trouble)))
 
 (defn note-cells!
   "Say, once each, which planned cells hold something foreign, cannot take a sapling, or want a sapling not carried."
@@ -245,17 +208,6 @@
       (filterv #(have (forestry/sapling-of (:species %))) owed))))
 
 ;; ------------------------------------------------------------------ check
-
-(defn field-cells
-  "The planned tree cells of field and the ground under them, as {:x :y :z}."
-  [field]
-  (mapcat (fn [pos] [pos (update pos :y dec)]) (keys (:trees field))))
-
-(defn ^:async survey-field!
-  "Before the first step, look around once when a cell of field was never seen: :continue when it looked, else nil."
-  [c field]
-  (when (and (not (:begun (ctx/mem c))) (look/unseen? (:primitives c) (field-cells field)))
-    (await (look/survey! c))))
 
 (defn blocked-reason
   "Why no planned cell can be worked, as a wait reason: cells holding something foreign, cells that cannot take a

@@ -7,6 +7,7 @@
             [engine.look-support :as ls]
             [engine.test-util :as tu]
             [jobs.animals.cull :as cull]
+            [jobs.lib.hunting :as hunting]
             [jobs.lib.animals :as animals]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]))
@@ -237,7 +238,7 @@
   (let [c {:primitives #js {:self (fn [] #js {:pos #js {:x 16.5 :y 0 :z 16.5}})}
            :args {:box {:min {:x 19 :y 0 :z 14} :max {:x 23 :y 1 :z 18}}}}
         far-edge {:x 23.7 :y 0 :z 18.7}]
-    (is (>= (cull/reach c) (js/Math.hypot (- (:x far-edge) 16.5) (- (:z far-edge) 16.5)))
+    (is (>= (hunting/reach c) (js/Math.hypot (- (:x far-edge) 16.5) (- (:z far-edge) 16.5)))
         "a cow at a fractional position in the max row is inside the query")))
 
 (deftest cull-acts-in-the-footprint-of-its-own-plan-but-not-another-bodys

@@ -1,7 +1,7 @@
 (ns jobs.farm.field
   "Reading a farm field: the crop cells of a plan, which are ripe or bare, where to walk."
-  (:require [jobs.lib.cost :as cost]
-            [jobs.lib.crops :as crops]
+  (:require [jobs.lib.crops :as crops]
+            [jobs.lib.farm :as farm]
             [jobs.lib.near :as near]
             [jobs.lib.toll-cells :as tc]
             [jobs.lib.util :as u]))
@@ -62,18 +62,11 @@
             {:pos pos :seed (seed-of crop)}))
         cells))
 
-(defn sowable-counts
-  "{name count} of the carried items that may be sown: food crops only above the food reserve, the rest in full."
-  [inventory]
-  (let [kept (cost/food-reserve inventory)
-        totals (reduce (fn [acc {:keys [name count]}] (update acc name (fnil + 0) count)) {} inventory)]
-    (reduce-kv (fn [acc name n] (assoc acc name (- n (get kept name 0)))) {} totals)))
-
 (defn above-reserve
   "The debts of bare cells without those whose seed is carried but held back by the food reserve."
   [inventory debts]
   (let [carried (into {} (map (juxt :name :count)) inventory)
-        left (volatile! (sowable-counts inventory))]
+        left (volatile! (farm/sowable inventory))]
     (filterv (fn [{:keys [seed]}]
                (or (not (pos? (get carried seed 0)))
                    (when (pos? (get @left seed 0))

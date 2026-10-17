@@ -14,6 +14,7 @@
             [jobs.lib.world-files :as world]
             [jobs.forestry.fell-tree.log :as fell-log]
             [jobs.forestry.maintain :as maintain]
+            [jobs.lib.forestry :as flib]
             [jobs.lib.trees :as trees]
             [jobs.lib.pace :as pace]
             [plan.shape :as shape]))
@@ -85,14 +86,14 @@
 (deftest cells-read-the-tree-cells-of-a-plan-answer
   (let [answer {:cells [{:pos [1 64 1] :want {:tree "oak"} :part "a"} {:pos [2 64 1] :want {:tree "birch"} :part "b"}
                         {:pos [3 64 1] :want "torch" :part "b"} {:pos [4 64 1] :want {:crop "wheat"} :part "c"}]}]
-    (is (= {{:x 1 :y 64 :z 1} "oak" {:x 2 :y 64 :z 1} "birch"} (maintain/tree-cells answer nil)))
-    (is (= {{:x 2 :y 64 :z 1} "birch"} (maintain/tree-cells answer "b")))
-    (is (= {} (maintain/tree-cells answer "c")))))
+    (is (= {{:x 1 :y 64 :z 1} "oak" {:x 2 :y 64 :z 1} "birch"} (flib/tree-cells answer nil)))
+    (is (= {{:x 2 :y 64 :z 1} "birch"} (flib/tree-cells answer "b")))
+    (is (= {} (flib/tree-cells answer "c")))))
 
 (deftest a-large-tree-is-four-cells
   (let [answer {:cells (mapv (fn [pos] {:pos pos :want {:tree "dark_oak"} :part "d"})
                              [[2 64 0] [3 64 0] [2 64 1] [3 64 1]])}]
-    (is (= 4 (count (maintain/tree-cells answer nil))))))
+    (is (= 4 (count (flib/tree-cells answer nil))))))
 
 (deftest a-cell-is-classified-by-what-stands-on-it
   (are [here below above expected]

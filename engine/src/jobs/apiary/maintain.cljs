@@ -11,9 +11,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.steps :as steps]
-            [jobs.lib.util :as u]
-            [jobs.apiary.guard :as guard]
-            [jobs.apiary.harvest :as harvest]))
+            [jobs.lib.util :as u]))
 
 (def doc
   "Keep one apiary in order. The apiary is the :box ({:from :to}), or :center (the body's position at the first
@@ -96,15 +94,15 @@
         inventory (u/inventory p)
         self (.self p)
         block-at (apiary/seen-block-at-fn p)
-        fires (guard/survey c center)
-        hives (harvest/hives c center)
-        seen (harvest/classify c hives)
+        fires (apiary/survey c center)
+        hives (apiary/hives c center)
+        seen (apiary/classify c hives)
         bees (bees-in-area c center)]
     {:center center
      :fires fires
      :hives seen
      :unsafe (unsafe-fires block-at (map :pos (filter :ripe hives)))
-     :tool (harvest/tool-for (:with (:args c)) inventory)
+     :tool (apiary/tool-for (:with (:args c)) inventory)
      :adults (count (remove #(true? (.-baby %)) bees))
      :bees (count bees)
      :day (true? (.-isDay self))

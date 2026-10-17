@@ -15,7 +15,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.step-off :as step-off]
-            [jobs.forestry.maintain :as maintain]
+            [jobs.lib.forestry :as lib]
             [jobs.forestry.prepare-field :as field]
             [jobs.forestry.prepare-rule :as rule]))
 
@@ -86,24 +86,24 @@
 (defn note-cells!
   "Say, once each, what is wrong with a cell, and (when settled) which species are short of saplings."
   [c states settled?]
-  (doseq [{:keys [pos species state found why at block source]} (sort-by (comp maintain/cell-vec :pos) (vals states))]
+  (doseq [{:keys [pos species state found why at block source]} (sort-by (comp lib/cell-vec :pos) (vals states))]
     (case state
       :wrong (ctx/warn-once! c [:wrong pos found] :prepare.wrong
                              {:pos pos :found found :species species
-                              :text (str "prepare leaves " found " at " (pr-str (maintain/cell-vec pos)) " (the plan wants a " species " tree)")})
+                              :text (str "prepare leaves " found " at " (pr-str (lib/cell-vec pos)) " (the plan wants a " species " tree)")})
       :no-soil (ctx/warn-once! c [:no-soil pos why] :prepare.no-soil
                                {:pos pos :why why
-                                :text (str "prepare cannot give " (pr-str (maintain/cell-vec pos)) " soil: " (name why))})
+                                :text (str "prepare cannot give " (pr-str (lib/cell-vec pos)) " soil: " (name why))})
       :wet (ctx/warn-once! c [:wet pos why] :prepare.wet
                            {:pos pos :why why :water-source (some-> source vec)
-                            :text (str "prepare leaves " (pr-str (maintain/cell-vec pos)) " wet: " (name why)
+                            :text (str "prepare leaves " (pr-str (lib/cell-vec pos)) " wet: " (name why)
                                        (when source (str ", water source " (pr-str source))))})
       :no-tool (ctx/warn-once! c [:no-tool pos block] :prepare.no-tool
                                {:pos pos :block block
-                                :text (str "prepare leaves " block " at " (pr-str (maintain/cell-vec pos)) ": no carried tool harvests it")})
+                                :text (str "prepare leaves " block " at " (pr-str (lib/cell-vec pos)) ": no carried tool harvests it")})
       :cramped (ctx/warn-once! c [:cramped pos at] :prepare.cramped
                                {:pos pos :at at :block block
-                                :text (str "prepare leaves " (pr-str (maintain/cell-vec pos)) ": " block " at " (pr-str at) " blocks the growth space")})
+                                :text (str "prepare leaves " (pr-str (lib/cell-vec pos)) ": " block " at " (pr-str at) " blocks the growth space")})
       nil))
   (when settled?
     (doseq [[species cells] (group-by :species (filter #(= :short (:state %)) (vals states)))]
@@ -126,7 +126,7 @@
   (let [by (group-by :state (vals states))]
     (some (fn [[state reason]]
             (when-let [cells (seq (get by state))]
-              {:reason reason :cells (vec (sort (map (comp maintain/cell-vec :pos) cells)))}))
+              {:reason reason :cells (vec (sort (map (comp lib/cell-vec :pos) cells)))}))
           blocked-states)))
 
 (defn unseen-room
@@ -138,7 +138,7 @@
     (vec (distinct
           (for [{:keys [state pos species]} (vals states)
                 :when (= :unloaded state)
-                cell (cons (maintain/down pos)
+                cell (cons (lib/down pos)
                            (map #(update pos :y + %) (range (or (rule/headroom-of species over) 1))))
                 :when (look/unseen? p [cell])]
             ((juxt :x :y :z) cell))))))
@@ -160,7 +160,7 @@
   (let [field (field/planned c)]
     (if (:trouble field)
       (checks/cause-status :later {:reason :plan-trouble :why (:trouble field)})
-      (let [states (states-of c field (maintain/field-cells field))]
+      (let [states (states-of c field (lib/field-cells field))]
         (cond
           (seq (field/todo c states)) (contract/ok :work "a step can be taken on a planned cell")
           (seq (unseen-room c states)) (contract/look :unseen-room "cells never seen are looked at" :look-at (unseen-room c states))
@@ -175,7 +175,7 @@
   (ctx/remember! c field/skip-kind {:pos pos :reason reason} field/skip-policy)
   (ctx/warn-once! c [:refused pos reason] :prepare.refused
                   {:pos pos :reason reason
-                   :text (str "prepare leaves " (pr-str (maintain/cell-vec pos)) " alone: " (name reason))}))
+                   :text (str "prepare leaves " (pr-str (lib/cell-vec pos)) " alone: " (name reason))}))
 
 (defn count-cell-fail!
   "Count a failed try on the cell; skipped at the third. :again."
@@ -218,11 +218,11 @@
 (defn ^:async dig!
   "Dig the block at target (a cell the planned cell owes work on) with a blocks.dig child. on-dug is called with c when it went."
   [c cell target column? on-dug]
-  (let [v (field/dig-verdict c (maintain/cell-vec target))]
+  (let [v (field/dig-verdict c (lib/cell-vec target))]
     (if (vector? v)
       (blocked! c cell v)
       (or (await (ready! c cell target column?))
-          (let [v (field/dig-verdict c (maintain/cell-vec target))]
+          (let [v (field/dig-verdict c (lib/cell-vec target))]
             (if (not= :ok v)
               (blocked! c cell v)
               (let [outcome (await (blocks/dig-cell! c target {:accept (set (:accept (:args c)))
@@ -240,17 +240,17 @@
   (fn [c] (ctx/update-mem! c #(-> % (bump :cleared) (assoc :collect pos)))))
 
 (defn dug-ground [pos under]
-  (fn [c] (ctx/update-mem! c #(-> % (update :holes (fnil conj #{}) (maintain/cell-vec under)) (assoc :collect pos)))))
+  (fn [c] (ctx/update-mem! c #(-> % (update :holes (fnil conj #{}) (lib/cell-vec under)) (assoc :collect pos)))))
 
 (defn ^:async soil-place!
   "Fill the hole under the planned cell with the carried soil. :again."
   [c {:keys [pos item]}]
-  (let [under (maintain/down pos)
-        v (field/place-verdict c (maintain/cell-vec under))]
+  (let [under (lib/down pos)
+        v (field/place-verdict c (lib/cell-vec under))]
     (if (vector? v)
       (blocked! c pos v)
       (or (await (ready! c pos under true))
-          (let [v (field/place-verdict c (maintain/cell-vec under))]
+          (let [v (field/place-verdict c (lib/cell-vec under))]
             (if (not= :ok v)
               (blocked! c pos v)
               (do (await (ctx/act c :equip (clj->js {:item item})))
@@ -258,7 +258,7 @@
                                                                          :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
                     (case outcome
                       :continue :continue
-                      (:placed :already) (do (ctx/update-mem! c #(-> % (bump :soiled) (update :holes disj (maintain/cell-vec under))))
+                      (:placed :already) (do (ctx/update-mem! c #(-> % (bump :soiled) (update :holes disj (lib/cell-vec under))))
                                              :again)
                       (:need :no-item :occupied :no-support) (do (count-cell-fail! c pos (if (= :need outcome) :no-item outcome)) :again)
                       (do (count-cell-fail! c pos :failed) :again))))))))))
@@ -269,7 +269,7 @@
   "Place the carried soil into the water of a wet cell: the source in the cell (:fill), or the source elsewhere
   (:dam, after which the cell is receding for recede-ms). :again."
   [c {:keys [pos target item state]}]
-  (let [at (maintain/cell-vec target)
+  (let [at (lib/cell-vec target)
         fill? (= :fill state)
         v (field/place-verdict c at)]
     (if (vector? v)
@@ -293,11 +293,11 @@
 (defn ^:async plant!
   "Plant the carried sapling in the planned cell with jobs.forestry.plant-sapling as a child. :again."
   [c {:keys [pos species item]}]
-  (let [v (field/place-verdict c (maintain/cell-vec pos))]
+  (let [v (field/place-verdict c (lib/cell-vec pos))]
     (if (vector? v)
       (blocked! c pos v)
       (or (await (ready! c pos pos true))
-          (let [v (field/place-verdict c (maintain/cell-vec pos))]
+          (let [v (field/place-verdict c (lib/cell-vec pos))]
             (if (not= :ok v)
               (blocked! c pos v)
               (let [e (await (ctx/call c :plant 'jobs.forestry.plant-sapling
@@ -325,7 +325,7 @@
   (case state
     (:fill :dam) (await (place-source! c cell))
     :clear (await (dig! c pos pos false (dug-stray pos)))
-    :soil-dig (let [under (maintain/down pos)]
+    :soil-dig (let [under (lib/down pos)]
                 (await (dig! c pos under true (dug-ground pos under))))
     :soil-place (await (soil-place! c cell))
     :plant (await (plant! c cell))))
@@ -343,9 +343,9 @@
   "The refusals: cells skipped in body memory (of this plan's cells) and cells of an unsupported species."
   [c states]
   (by-pos (concat (keep (fn [[pos data]]
-                          (when (contains? states pos) {:pos (maintain/cell-vec pos) :reason (:reason data)}))
+                          (when (contains? states pos) {:pos (lib/cell-vec pos) :reason (:reason data)}))
                         (field/skipped c))
-                  (state-list states :unsupported (fn [{:keys [pos]}] {:pos (maintain/cell-vec pos) :reason :unsupported-species})))))
+                  (state-list states :unsupported (fn [{:keys [pos]}] {:pos (lib/cell-vec pos) :reason :unsupported-species})))))
 
 (defn result-of
   "What was done and what is left, with a :text."
@@ -354,12 +354,12 @@
         missing (frequencies (map :species (filter #(= :short (:state %)) (vals states))))
         result {:cleared (:cleared m 0) :soiled (:soiled m 0) :planted (:planted m 0) :dammed (:dammed m 0)
                 :short missing
-                :wrong (state-list states :wrong (fn [{:keys [pos found species]}] {:pos (maintain/cell-vec pos) :found found :species species}))
-                :no-soil (state-list states :no-soil (fn [{:keys [pos why]}] {:pos (maintain/cell-vec pos) :why why}))
-                :no-tool (state-list states :no-tool (fn [{:keys [pos block]}] {:pos (maintain/cell-vec pos) :block block}))
-                :cramped (state-list states :cramped (fn [{:keys [pos at block]}] {:pos (maintain/cell-vec pos) :at at :block block}))
+                :wrong (state-list states :wrong (fn [{:keys [pos found species]}] {:pos (lib/cell-vec pos) :found found :species species}))
+                :no-soil (state-list states :no-soil (fn [{:keys [pos why]}] {:pos (lib/cell-vec pos) :why why}))
+                :no-tool (state-list states :no-tool (fn [{:keys [pos block]}] {:pos (lib/cell-vec pos) :block block}))
+                :cramped (state-list states :cramped (fn [{:keys [pos at block]}] {:pos (lib/cell-vec pos) :at at :block block}))
                 :wet (state-list states :wet (fn [{:keys [pos why source]}]
-                                               (cond-> {:pos (maintain/cell-vec pos) :why why} source (assoc :source source))))
+                                               (cond-> {:pos (lib/cell-vec pos) :why why} source (assoc :source source))))
                 :refused (refused-list c states)}]
     (assoc result :text (str "prepare done: cleared " (:cleared result) ", soiled " (:soiled result)
                              ", planted " (:planted result) ", short " (reduce + (vals missing))
@@ -383,7 +383,7 @@
   (let [field (field/planned c)]
     (if (:trouble field)
       :continue
-      (or (await (maintain/survey-field! c field))
+      (or (await (lib/survey-field! c field))
           (do
             (when-not (:begun (ctx/mem c))
               (ctx/update-mem! c assoc :begun true))
@@ -415,7 +415,7 @@
 
 (def fit? ready/fit?)
 
-(defn can-run? [c] (maintain/trouble-status (field/planned c)))
+(defn can-run? [c] (lib/trouble-status (field/planned c)))
 
 (def can-start? (cond/and can-run? not-ready))
 
@@ -428,7 +428,7 @@
         worked (reduce + (map #(% m 0) [:cleared :soiled :planted :dammed]))]
     (if (:trouble field)
       (contract/later :plan-trouble (str "prepare: " (:trouble field)) :units :cells :done worked :left 0 :result {})
-      (let [cells (maintain/field-cells field)
+      (let [cells (lib/field-cells field)
             states (states-of c field cells)
             todo (field/todo c states)
             {:keys [refused text] :as result} (result-of c states)

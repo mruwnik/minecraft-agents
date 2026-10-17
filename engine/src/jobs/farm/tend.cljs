@@ -16,11 +16,9 @@
             [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.storage :as storage]
-            [jobs.farm.fertilize :as fertilize]
             [jobs.lib.crops :as crops]
             [jobs.farm.field :as fld]
-            [jobs.farm.plant :as plant]
-            [jobs.farm.till :as till]
+            [jobs.lib.farm :as farm]
             [jobs.farm.tend-decide :as decide]
             [jobs.farm.tend-plan :as tend-plan]
             [jobs.farm.tend-stock :as stock]))
@@ -191,12 +189,12 @@
         tried (:till-tried (ctx/mem c) #{})
         ground (ground-layer p box)
         raw-untilled (->> ground (filter stock/untilled?) (map :pos) (remove tried))
-        bare (count (box-permitted c :sow (plant/bare-cells p box [])))
+        bare (count (box-permitted c :sow (farm/bare-cells p box [])))
         keep-of (stock/keeps (reserve (beds ground) inventory) inventory keep)]
     {:mid mid
      :radius R
      :ripe (count (box-permitted c :harvest (filter #(in-box? box %) (fld/ripe-crops p {:radius R :crops nil} mid []))))
-     :hoe (some? (till/hoe-of p))
+     :hoe (some? (farm/hoe-of p))
      :untilled (->> ground
                     (filter stock/untilled?)
                     (map :pos)
@@ -207,9 +205,9 @@
      :refused (- (count raw-untilled) (count (box-permitted c :dig raw-untilled)))
      :covered (count (filter stock/covered? ground))
      :bare bare
-     :seeds (transduce (map #(get (plant/sowable inventory) % 0)) + 0 seed-items)
-     :seed (some? (plant/pick-seed nil inventory))
-     :meal (boolean (fertilize/has-meal? p))
+     :seeds (transduce (map #(get (farm/sowable inventory) % 0)) + 0 seed-items)
+     :seed (some? (farm/pick-seed nil inventory))
+     :meal (boolean (farm/has-meal? p))
      :bones (boolean (some #(= "bone" (:name %)) inventory))
      :unripe (if fertilize (count (unripe-in-box p box mid R)) 0)
      :keep keep-of
@@ -225,7 +223,7 @@
     {:crops (count (for [x (range (:x min) (inc (:x max))) z (range (:z min) (inc (:z max)))
                          :when (crop-names (u/seen-name p {:x x :y above :z z}))]
                      1))
-     :bare (count (plant/bare-cells p box []))
+     :bare (count (farm/bare-cells p box []))
      :untilled (count (filter stock/untilled? (ground-layer p box)))}))
 
 (defn facts [c] (if (:plan (:args c)) (tend-plan/plan-facts c) (box-facts c)))

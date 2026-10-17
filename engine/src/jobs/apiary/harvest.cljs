@@ -6,7 +6,7 @@
             [jobs.lib.game-facts :as facts]
             [engine.args :as a]
             [engine.ctx :as ctx]
-            [jobs.lib.apiary :as apiary]
+            [jobs.lib.apiary :as apiary :refer [classify found-hives hives tool-for tool-item]]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
@@ -60,68 +60,18 @@
    ::job-time-s {:default 120 :doc "Seconds a harvest run may take." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn max-strikes [] (settings/get settings ::max-strikes))
-(def tool-item {:shears "shears" :bottle "glass_bottle"})
-(def hive-names #js ["beehive" "bee_nest"])
 
 ;; ------------------------------------------------------------------ the world
-
-(defn ripe? [b] (>= (or (get-in b [:properties :honey_level]) 0) facts/ripe-level))
 
 (defn hive-allowed?
   "Whether the job may take honey from the hive at pos (one warn per job when refused)."
   [c pos]
   (gate/allowed? c :apiary.declined "apiary harvest" :harvest pos {:own-plans-ok? true}))
 
-(defn found-hives
-  "Every hive the body has seen in the area, as {:pos :ripe}."
-  [c center]
-  (let [p (:primitives c)
-        me (u/self-pos c)
-        {:keys [radius box]} (:args c)
-        search (if box 64 (+ radius (u/dist me center)))]
-    (->> (look/seen-blocks p {:radius search :names hive-names :properties? true :live? true :max 64})
-         (map (fn [b] {:pos (:pos b) :ripe (ripe? b)}))
-         (filter #(apiary/in-area? {:box box :center center :radius radius} (:pos %))))))
-
-(defn hives
-  "Every hive the body has seen in the area that the zone rules let the job use, as {:pos :ripe}, nearest to the
-  body first (quiet?: no decline warn)."
-  [c center & [quiet?]]
-  (let [found (found-hives c center)
-        poss (map :pos found)
-        ok (set (if quiet?
-                  (:allowed (gate/look c :harvest poss {:own-plans-ok? true}))
-                  (gate/allowed c :apiary.declined "apiary harvest" :harvest poss {:own-plans-ok? true})))]
-    (->> found
-         (filter #(ok (:pos %)))
-         (sort-by #(u/dist (u/self-pos c) (:pos %))))))
-
-(defn tool-for
-  "The item name to harvest with under :with, from the inventory, or nil."
-  [with inventory]
-  (let [carried? (fn [n] (some #(= n (:name %)) inventory))
-        wanted (case (keyword with)
-                 :shears [:shears]
-                 :bottle [:bottle]
-                 [:shears :bottle])]
-    (some #(when (carried? (tool-item %)) (tool-item %)) wanted)))
-
 (defn wanted-tool
   "The item name to fetch for :with: shears unless only :bottle."
   [with]
   (tool-item (if (= :bottle (keyword with)) :bottle :shears)))
-
-(defn classify
-  "The hives as {:todo [pos] :declined {key reason} :ripe n :hives n}: ripe hives not skipped, sorted by the verdict."
-  [c hs]
-  (let [block-at (apiary/seen-block-at-fn (:primitives c))
-        skipped (:skipped (ctx/mem c) {})
-        ripe (->> hs (filter :ripe) (remove #(contains? skipped (apiary/pos-key (:pos %)))))
-        verdicts (map (fn [h] [(:pos h) (apiary/hive-verdict block-at (:pos h))]) ripe)]
-    {:hives (count hs)
-     :ripe (count (filter :ripe hs))
-     :todo (vec (keep (fn [[pos v]] (when (= :ok v) pos)) verdicts))
-     :declined (into {} (keep (fn [[pos v]] (when-not (= :ok v) [(apiary/pos-key pos) v])) verdicts))}))
 
 (defn idle-reason
   "Why there is nothing to do: first what was skipped, then what was declined, then what was not there."

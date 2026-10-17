@@ -6,7 +6,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.util :as u]
-            [jobs.lib.hunting :as hunting]
+            [jobs.lib.hunting :as hunting :refer [census reach]]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.trip :as trip]))
@@ -65,46 +65,6 @@
   {::job-time-s {:default 300 :doc "Seconds a cull may take." :spec (a/num-in 0 nil)}})
 
 (def defaults {:least 1 :spend {:job-time ::job-time-s} :use {:tools :attack}})
-
-(defn corners
-  "The eight corners of a box of cells: the far corners are the outer edges of the max cells."
-  [{lo :min hi :max}]
-  (for [x [(:x lo) (inc (:x hi))] y [(:y lo) (inc (:y hi))] z [(:z lo) (inc (:z hi))]]
-    {:x x :y y :z z}))
-
-(defn reach
-  "How far from the body the entity query must look to cover the bound."
-  [c]
-  (let [{:keys [box center radius]} (:args c)
-        here (u/self-pos c)]
-    (cond
-      box (apply max (map #(u/dist here %) (corners box)))
-      center (+ radius (js/Math.hypot (- (:x center) (:x here)) (- (:z center) (:z here))))
-      :else radius)))
-
-(defn in-bound?
-  "True when the position lies inside the bound (a box, else around the center, else around the body)."
-  [c pos]
-  (let [{:keys [box center radius]} (:args c)
-        {:keys [x y z]} pos]
-    (cond
-      box (animals/in-box? box pos)
-      center (<= (js/Math.hypot (- x (:x center)) (- z (:z center))) radius)
-      :else (<= (u/dist (u/self-pos c) pos) radius))))
-
-(defn herd
-  "The entities named :mob in the bound, never players or items."
-  [c]
-  (->> (look/seen-objs (:primitives c) {:radius (reach c) :names [(:mob (:args c))] :max 64})
-       (remove #(contains? #{"player" "item"} (.-kind %)))
-       (filter #(in-bound? c (u/pos-of (.-pos %))))
-       vec))
-
-(defn census
-  "{:adults [...] :babies [...]} of the herd in the bound."
-  [c]
-  (let [{babies true adults false} (group-by #(true? (.-baby %)) (herd c))]
-    {:adults (vec adults) :babies (vec babies)}))
 
 (defn candidates
   "The adults in the bound not skipped: reachable-looking ones first, then nearest."

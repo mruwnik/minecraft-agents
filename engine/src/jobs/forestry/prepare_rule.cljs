@@ -7,7 +7,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.tidy-rules :as tidy]
-            [jobs.forestry.maintain :as maintain]))
+            [jobs.lib.forestry :as lib]))
 
 (def headroom-table
   {"oak" 7 "birch" 8 "spruce" 9 "jungle" 13 "acacia" 10 "dark_oak" 10 "pale_oak" 10 "cherry" 9})
@@ -43,7 +43,7 @@
 (defn soil-item
   "The soil block of species' soil carried (carried: a set of names), dirt first, or nil."
   [carried species]
-  (first (filter #(and (carried %) ((maintain/soil-for species) %)) soil-preference)))
+  (first (filter #(and (carried %) ((lib/soil-for species) %)) soil-preference)))
 
 (defn plant-like? [n]
   (boolean (re-find #"(_sapling|_propagule|_fungus)$" n)))
@@ -67,22 +67,22 @@
                 n (u/seen-name p at)]
             (cond
               (nil? n) {:state :unloaded}
-              (not (tree-free? n)) {:state :cramped :at (maintain/cell-vec at) :block n})))
+              (not (tree-free? n)) {:state :cramped :at (lib/cell-vec at) :block n})))
         (range 1 (headroom-of species over))))
 
 (defn soil-state
   "{:state ...} for the ground under the planted cell: nil when it is soil the species takes, else :soil-dig (natural
   ground, dirt carried), :soil-place (the hole this job dug, dirt carried), :no-soil with :why, or :unloaded."
   [p pos species {:keys [planned holes carried]}]
-  (let [under (maintain/down pos)
+  (let [under (lib/down pos)
         n (u/seen-name p under)
         dirt (soil-item carried species)
         no-dirt {:state :no-soil :why :no-dirt}]
     (cond
       (nil? n) {:state :unloaded}
-      ((maintain/soil-for species) n) nil
-      (and (contains? holes (maintain/cell-vec under)) (rules/air n)) (if dirt {:state :soil-place :item dirt} no-dirt)
-      (planned (maintain/cell-vec under)) {:state :no-soil :why :planned}
+      ((lib/soil-for species) n) nil
+      (and (contains? holes (lib/cell-vec under)) (rules/air n)) (if dirt {:state :soil-place :item dirt} no-dirt)
+      (planned (lib/cell-vec under)) {:state :no-soil :why :planned}
       (rules/air n) {:state :no-soil :why :hollow}
       (rules/fluids n) {:state :no-soil :why :fluid}
       (tidy/keep-why n) {:state :no-soil :why :kept}
@@ -133,7 +133,7 @@
   :item to place and the :source, or :wet with :why :untraced / :no-dirt."
   [p pos species carried]
   (let [l (water-level p pos)
-        cell (maintain/cell-vec pos)
+        cell (lib/cell-vec pos)
         level-at (fn [[x y z]] (water-level p {:x x :y y :z z}))
         beside (when (and l (zero? l))
                  (let [[x y z] cell]

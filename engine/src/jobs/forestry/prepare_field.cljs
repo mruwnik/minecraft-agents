@@ -6,7 +6,7 @@
             [jobs.forestry.prepare-rule :as rule]
             [jobs.lib.util :as u]
             [jobs.lib.tidy-rules :as tidy]
-            [jobs.forestry.maintain :as maintain]
+            [jobs.lib.forestry :as lib]
             [jobs.lib.world :as known]))
 
 ;; ------------------------------------------------------------------ reading the field
@@ -25,9 +25,9 @@
   [c]
   (let [{:keys [plan part]} (:args c)
         answer (known/plan c plan)
-        trees (maintain/tree-cells answer part)
+        trees (lib/tree-cells answer part)
         no-zones (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list")
-        trouble (or (maintain/plan-trouble answer trees) no-zones)]
+        trouble (or (lib/plan-trouble answer trees) no-zones)]
     (if-not trouble
       {:trees trees :planned (set (map (comp vec :pos) (:cells answer)))}
       (do (ctx/warn-once! c [plan trouble] :prepare.declined
@@ -41,7 +41,7 @@
   "The assessed cell with a water state checked against what is known now: a :fill / :dam the access rules refuse is
   :wet with the reason, and an untraced cell still receding from a dam is :receding."
   [c {:keys [state why pos] :as cell}]
-  (let [v (when (#{:fill :dam} state) (place-verdict c (maintain/cell-vec (:target cell))))
+  (let [v (when (#{:fill :dam} state) (place-verdict c (lib/cell-vec (:target cell))))
         until (get (:recede (ctx/mem c)) pos)]
     (cond
       (vector? v) (assoc cell :state :wet :why (second v))
@@ -72,7 +72,7 @@
 (defn in-column?
   "Whether the body stands in the column of pos."
   [c pos]
-  (let [[x _ z] (maintain/feet-cell c)]
+  (let [[x _ z] (lib/feet-cell c)]
     (and (= x (:x pos)) (= z (:z pos)))))
 
 (defn dig-verdict
@@ -90,7 +90,7 @@
   [c pos]
   (let [p (:primitives c)
         v (rules/may-place? (merge {:block-at (fn [[x y z]] (u/seen-name p {:x x :y y :z z})) :cell pos
-                                    :feet (maintain/feet-cell c) :ledger #{}}
+                                    :feet (lib/feet-cell c) :ledger #{}}
                                    (tidy/access-world c)))]
     (cond
       (:ok v) :ok

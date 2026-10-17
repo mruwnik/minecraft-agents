@@ -20,6 +20,7 @@
             [jobs.lib.util :as u]
             [jobs.farm.field :as fld]
             [jobs.farm.till :as till]
+            [jobs.lib.farm :refer [bare-cells pick-seed sowable]]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -58,17 +59,6 @@
 
 ;; ------------------------------------------------------------------ pure helpers
 
-(defn bare-cells
-  "The bare cells of box (farmland with air above, ground layer y = min y) not in skipped, in x then z order."
-  [p box skipped]
-  (let [skipped (set skipped)
-        {:keys [min max]} box
-        y (:y min)]
-    (->> (for [x (range (:x min) (inc (:x max))) z (range (:z min) (inc (:z max)))] {:x x :y y :z z})
-         (remove skipped)
-         (filter #(and (= "farmland" (u/seen-name p %))
-                       (= "air" (u/seen-name p (update % :y inc))))))))
-
 (defn untilled-cells
   "The cells of box whose ground layer is dirt, grass or a path (farmland that dried back, or never tilled), in x then z order."
   [p box]
@@ -78,25 +68,6 @@
                :let [pos {:x x :y y :z z}]
                :when (contains? till/tillable (u/seen-name p pos))]
            pos))))
-
-(defn sowable
-  "{name count} of the carried items that may be sown: food crops (carrots, potatoes) only above the food reserve,
-  everything else in full. A cell just harvested is replanted by jobs.farm.harvest and ignores the reserve."
-  [inventory]
-  (fld/sowable-counts inventory))
-
-(defn pick-seed
-  "The seed to sow given the inventory: seed when it may be sown, else the largest sowable stack of a known seed;
-  nil when none. Food crops count only above the food reserve."
-  [seed inventory]
-  (let [counts (sowable inventory)
-        carried #(get counts % 0)]
-    (if seed
-      (when (pos? (carried seed)) seed)
-      (->> (vals crops/seed-of)
-           (filter #(pos? (carried %)))
-           (sort-by #(- (carried %)))
-           first))))
 
 (defn held-back
   "{:seed :held :kept :reserve-points} when no seed may be sown but a food-crop seed (seed, else any) is carried and the
