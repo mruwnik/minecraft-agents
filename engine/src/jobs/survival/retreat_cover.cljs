@@ -45,7 +45,8 @@
 
 (defn unseen-before-wall?
   "Whether a cell the body has not sensed lies in the columns along d from the first, up to glance-reach or the first
-  column whose seen feet or head cell blocks the way (the cells behind it cannot change the walk)."
+  column whose seen feet or head cell blocks the way (the cells behind it cannot change the walk, nor can the floor
+  under it)."
   [p from d y]
   (loop [k 1]
     (when (<= k (cornered/glance-reach))
@@ -56,8 +57,8 @@
                                          (not (walk/passable? (u/seen-name p {:x x :y yy :z z})))))
                            [y (inc y)])]
         (cond
-          unknown true
           blocked? false
+          unknown true
           :else (recur (inc k)))))))
 
 (defn ^:async glance-away!

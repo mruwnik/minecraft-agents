@@ -1080,10 +1080,12 @@
                             (let [threats (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30})]
                               (dotimes [_ 3]
                                 (await (cover/flight-target! c threats))
-                                (swap! counts conj (looks @raw-atom)))
+                                (swap! counts conj (looks @raw-atom))
+                                (fake/swap-self! @raw-atom update :pos #(update % 0 inc)))
                               (ctx/end c :done nil)))}
-              s (setup-sensed {:blocks long-tunnel :entities [(zombie 7 8 {})]})
+              s (setup-sensed {:blocks long-tunnel :entities [(zombie 7 3 {})]})
               _ (reset! raw-atom (:raw s))
+              _ (fake/swap-self! (:raw s) update :pos assoc 0 8.5)
               s (assoc-in s [:eng :jobs 'twice] job)]
           (await (run-job! s 'twice {:step 6}))
           (is (pos? (first @counts)) "the first step looks at the walls")
