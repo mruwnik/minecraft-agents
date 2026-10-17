@@ -32,13 +32,16 @@
 
 (defn default-state [name] (.-defaultState ^js (block-by-name name)))
 
+(def state-id-memo
+  (memoize (fn [name props]
+             (let [defaults (.getProperties ^js (.fromStateId ^js Block (default-state name) 0))]
+               (.-stateId ^js (.fromProperties ^js Block name (js/Object.assign #js {} defaults (clj->js props)) 0))))))
+
 (defn state-id
   "The state id of block `name` with props (a cljs map); unspecified properties keep the block's default state values
-  (Block.fromProperties would zero them)."
+  (Block.fromProperties would zero them). Memoized: a fake world's snapshot is rebuilt from thousands of blocks."
   ([name] (state-id name {}))
-  ([name props]
-   (let [defaults (.getProperties ^js (.fromStateId ^js Block (default-state name) 0))]
-     (.-stateId ^js (.fromProperties ^js Block name (js/Object.assign #js {} defaults (clj->js props)) 0)))))
+  ([name props] (state-id-memo name props)))
 
 (defn block-at-id
   "{:name :props} of a state id; props is a cljs map keyword -> the registry's value (strings, booleans)."
@@ -59,22 +62,34 @@
         cz (range (bit-shift-right z0 4) (inc (bit-shift-right z1 4)))]
     [cx cz]))
 
-(defn touched-columns [blocks fills]
-  (set (concat (map (fn [[x _ z]] [(bit-shift-right x 4) (bit-shift-right z 4)]) blocks)
-               (mapcat box-columns fills))))
+(defn touched-columns
+  "The distinct [cx cz] chunk columns of the blocks and fills; deduped through a js Set of packed keys, because a cljs set of
+  vectors was most of a fake world's snapshot rebuild."
+  [blocks fills]
+  (let [seen (js/Set.)
+        cols (volatile! (transient []))
+        add! (fn [cx cz]
+               (let [k (+ (* (+ cx 1048576) 2097152) cz 1048576)]
+                 (when-not (.has seen k)
+                   (.add seen k)
+                   (vswap! cols conj! [cx cz]))))]
+    (run! (fn [[x _ z]] (add! (bit-shift-right x 4) (bit-shift-right z 4))) blocks)
+    (run! (fn [[cx cz]] (add! cx cz)) (mapcat box-columns fills))
+    (persistent! @cols)))
 
 ;; ---- connections: the server joins fences, walls and panes to their neighbours when they are placed; a bare fill would
 ;; leave posts with gaps a body slips through, so the fixture joins them too ----
 
-(defn family-of-name
-  "nil for blocks that do not connect; :nether-fence does not join wooden fences."
-  [name]
-  (cond
-    (= name "nether_brick_fence") :nether-fence
-    (re-find #"(^|_)fence$" name) :fence
-    (re-find #"_wall$" name) :wall
-    (re-find #"_pane$|(^|_)bars$" name) :pane
-    (re-find #"_fence_gate$" name) :gate))
+(def family-of-name
+  "nil for blocks that do not connect; :nether-fence does not join wooden fences. Memoized: every placed block is asked."
+  (memoize
+   (fn [name]
+     (cond
+       (= name "nether_brick_fence") :nether-fence
+       (re-find #"(^|_)fence$" name) :fence
+       (re-find #"_wall$" name) :wall
+       (re-find #"_pane$|(^|_)bars$" name) :pane
+       (re-find #"_fence_gate$" name) :gate))))
 
 (def SIDES [["east" 1 0] ["west" -1 0] ["south" 0 1] ["north" 0 -1]])
 

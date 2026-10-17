@@ -771,7 +771,7 @@
       (aset o "hittable" (if (some? (:hittable e)) (:hittable e) (can-hit? w e))))
     o))
 
-(defn self-view [w]
+(defn self-view-build [w]
   (let [s (:self w)]
     (to-js (merge (dissoc s :vehicle :held :pos :experience)
                   {:username (:username s) :pos (or (steer/sub-pos w) (:pos s)) :settling (:settling w)
@@ -779,6 +779,16 @@
                    :experience (:experience s)
                    :timeOfDay (:time w) :isDay (senses/day-at? (:time w)) :players (:players w) :raining (:raining w) :thundering (:thundering w)
                    :held (:held s) :equipment (equipment-view w) :inventory (with-slots (:inventory w))}))))
+
+(def self-view-cache (atom nil))
+
+(defn self-view
+  "self-view-build for the last world asked about: a body reads its self on every poll, many times per world value (callers only read it)."
+  [w]
+  (let [[last-w view] @self-view-cache]
+    (if (identical? last-w w)
+      view
+      (let [view (self-view-build w)] (reset! self-view-cache [w view]) view))))
 
 ;; ---- the world object's helpers for tests
 

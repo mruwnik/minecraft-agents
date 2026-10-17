@@ -42,7 +42,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (ore-world (into {} (for [x [0 1 2] y [63 64 65]] [(str x "," y ",38") "iron_ore"])) [{:name "stone_pickaxe" :count 1}]) [] (assoc f/sight-opts :radius 48))]
+        (let [s (f/start (ore-world (into {} (for [x [0 1 2] y [63 64 65]] [(str x "," y ",38") "iron_ore"])) [{:name "stone_pickaxe" :count 1}]) [] (assoc f/sight-opts :radius 48 :ray-deg 4))]
           (await (obtain! s {:item "raw_iron" :ways #{:craft :smelt :gather}} 200))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))))
           (is (empty? (f/events-of s :obtain.exploring)))

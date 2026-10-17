@@ -277,8 +277,10 @@
   to their neighbours, as the server does: a lone post is a gap a body slips through. With :view-chunks only the
   columns near the body are loaded (in-view-fn)."
   [w]
-  (let [entries (filter (in-view-fn w) (concat (:blocks w) (buried w)))
-        blocks (map (fn [[[x y z :as pos] name]] [x y z name (doors/path-props w pos)]) entries)]
+  (let [in-view? (in-view-fn w)
+        add (fn [acc [[x y z :as pos] name :as entry]]
+              (if (in-view? entry) (conj! acc [x y z name (doors/path-props w pos)]) acc))
+        blocks (persistent! (reduce add (reduce-kv (fn [acc pos name] (add acc [pos name])) (transient []) (:blocks w)) (buried w)))]
     {:snapshot (fx/fixture-snapshot {:blocks blocks})
      :table (blocks/default-state-table)
      :space space/space}))

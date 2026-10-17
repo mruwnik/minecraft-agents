@@ -26,14 +26,17 @@
                   (= "ladder" (get-in w [:blocks below]))
                   (= (get-in w [:states pos :facing]) (get-in w [:states below :facing]))))))
 
+(def path-named?
+  "Memoized by name: path-props runs for every block of every snapshot rebuild."
+  (memoize (fn [name] (boolean (or (openable? name) (re-find activator-re name) (= name "ladder") (= name "bubble_column"))))))
+
 (defn path-props
   "The properties of the block at pos for a planner state id, {} for a block that is neither openable, a button or
   lever, a ladder, nor a bubble column (a trapdoor over it is judged against its facing)."
   [w pos]
-  (let [name (get-in w [:blocks pos] "")]
-    (if (or (openable? name) (re-find activator-re name) (= name "ladder") (= name "bubble_column"))
-      (select-keys (get-in w [:states pos]) path-keys)
-      {})))
+  (if (path-named? (get-in w [:blocks pos] ""))
+    (select-keys (get-in w [:states pos]) path-keys)
+    {}))
 
 (defn set-open
   "World with `open` set to value on the block at pos and, for a door, on its other half."
