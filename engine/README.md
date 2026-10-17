@@ -61,6 +61,7 @@ Layout:
   A still body in an unchanged world looks again every `:still-ms` (30 s); unchanged means no block or chunk update within 50 blocks, same daylight, and same torch in hand.
 - `src/jobs/` the jobs, one namespace each (`jobs.survival.eat`); the build finds them. Helpers: `jobs.lib.*` (shared,
   including the walker `jobs.lib.walk`/`near`/`pass`), `jobs.<area>.*` (one area's). `jobs/hooks.edn` names the hooks.
+  Search jobs (`harvest-wood`, `combat.hunt`, `gather.mine`, `explore.search`) take the `:center` arg (nil: where the body stands; `jobs.lib.area`) and name it in `target`; the first three wait `:outside-area` while the body is farther than `:radius` from it, search legs radiate from it.
   Results: `jobs.lib.result` (`permanent-walk?`, `unreachable-walk?`, `why` read go-to's ending).
   `jobs.lib.child/run!*` calls a child (through `ctx/call`) until it ends (50 ms timer between calls; `:continue` after a call cap; a slot run with other args starts afresh).
   `child/fruitless!`, `child/fruitless`, `child/progress!` count a slot's rounds in a row that brought nothing in job memory (obtain's craft and gather sources use them).

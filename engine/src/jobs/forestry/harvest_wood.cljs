@@ -3,9 +3,11 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.cond :as cond]
             [engine.settings :as settings]
             [clojure.string :as str]
             [jobs.forestry.fell-tree :as fell-tree]
+            [jobs.lib.area :as area]
             [jobs.lib.checks :as checks]
             [jobs.lib.need :as need]
             [jobs.lib.look :as look]
@@ -20,6 +22,7 @@
   :collect works around the felled tree's base (when fewer logs came in than were felled and no drop is in sight, it walks round the base to look: trunks and terrain hide drops), wherever a reflex has since taken the body. Only replant debts within :radius of where the body stood when :plant began are
   planted; the others (and any when no sapling is carried or the spot is not clear) stay owed, and the job
   warns harvest-wood.debts-owed with their :count and the :nearest one's :pos.
+  :center (default: where the body stands at the first round) with :radius is the area: a call waits (:outside-area, jobs.lib.area) while the body stands farther than :radius from the centre; the caller walks there first.
   Before the first tree it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!; :deposit-first? false skips it).
   Debts within the radius that stay unplanted (no sapling carried, spot refused) warn harvest-wood.replant-owed
   with :count, :pos, :reason (:no-sapling or :not-planted) and :text. Ends :done (the wood is the goal), with {:replant-owed n} when
@@ -36,6 +39,7 @@
 (a/defargs args
   {:species {:doc "log species; any when nil" :spec a/name? :default nil}
    :radius {:doc "search radius in blocks" :spec (a/num-in 0 nil) :default default-radius}
+   :center {:doc "the centre of the area the job works, a cell [x y z] or {:x :y :z}; nil: where the body stands when the job first runs (jobs.lib.area)" :spec a/position? :default nil}
    :filter {:doc "items to collect; the species' log, sapling, stick and apple when nil" :spec (a/coll-of a/item?) :default nil}
    :ignore-zones? :shared
    :avoid {:doc "columns [x z] of trees to leave alone (passed to fell-tree)" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
@@ -183,7 +187,7 @@
 
 ;; ------------------------------------------------------------------ the contract
 
-(def target [:species])
+(def target [:species :center])
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
@@ -202,7 +206,7 @@
         (no-tree c)
         (contract/ok :tree-found "a tree is felled or not wanted now")))))
 
-(def can-start? no-tree-to-fell)
+(def can-start? (cond/and area/inside no-tree-to-fell))
 
 (defn done?
   "Ok once the last tree is planted, or (with :count) the logs are carried and no tree is under way; else later with the

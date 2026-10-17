@@ -13,7 +13,9 @@
             [jobs.lib.shelter :as sh]
             [jobs.lib.pace :as pace]
             [jobs.lib.trip :as trip]
+            [jobs.lib.area :as area]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.ready :as ready]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
@@ -47,6 +49,7 @@
      No candidate (present, not skipped) ends :none, on the second such round in a row, after a 1 s wait.
   6. Otherwise the nearest candidate becomes the :target and is attacked in the same round.
      The target stays until killed or given up on, even when a nearer animal turns up.
+  :center (default: where the body stands) with :radius is the area: the call waits (:outside-area, jobs.lib.area) while the body stands farther than :radius from the centre; the caller walks there first.
   Before the first step it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!; :deposit-first? false skips it).
   Ends with the data {:killed n :reason r :spared s :remaining m}. The ending: :done for :count, and for
   any other reason when the call's :least (default 1) animals were killed; else :nothing-possible with r as the cause
@@ -59,6 +62,7 @@
    :color {:doc "sheep only: kill only sheep of this wool colour (e.g. \"white\"); nil: any" :spec a/name? :default nil}
    :count {:doc "animals to kill" :spec (a/int-in 1 nil) :default 1}
    :radius {:doc "animals within this many blocks of the body count" :spec (a/num-in 0 nil) :default 24}
+   :center {:doc "the centre of the area the job works, a cell [x y z] or {:x :y :z}; nil: where the body stands when the job first runs (jobs.lib.area)" :spec a/position? :default nil}
    :keep {:doc "never kill the last this many adults of the kind within :radius (babies do not count); nil: 2 for animals, 0 for hostile mobs; 0 turns the rule off" :spec (a/int-in 0 nil) :default nil}
    :deposit-first? {:doc "deposit at the known chest first when the bag is fullish and the chest is near (jobs.lib.trip/ready!)" :spec boolean? :default true}
    :drops {:doc "item names to collect after a kill; nil: the kind's entry in the drops table, else every item" :spec (a/coll-of a/item?) :default nil}
@@ -70,7 +74,7 @@
   {::job-time-s {:default 600 :doc "Seconds a hunt may take." :spec (a/num-in 0 nil)}
    ::sight-radius {:default 64 :doc "How far the :too-few wait looks for the nearest adult of the kind, in blocks." :spec (a/num-in 0 nil)}})
 
-(def target [:mob])
+(def target [:mob :center])
 
 (def defaults {:spend {:job-time ::job-time-s} :least 1 :use {:tools :attack} :checks {:safe? '(not (exposed))}})
 (def safe? ready/safe-if-lit)
@@ -222,8 +226,8 @@
          (<= (count (present c)) (keep-of c)) (too-few-cause c))))))
 
 (def can-start?
-  "Waits on a start fact (start-fact: not for a several-kinds call, whose kinds each check theirs)."
-  start-fact)
+  "Waits while the body is outside the call's area, then on a start fact (start-fact: not for a several-kinds call, whose kinds each check theirs)."
+  (cond/and area/inside start-fact))
 
 (defn done?
   "Done once the count asked is killed (of each kind) and the drops are collected; the data is the animals killed."

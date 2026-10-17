@@ -13,6 +13,17 @@
 
 (def harvest '(jobs.forestry.harvest-wood {:species "oak" :radius 10}))
 
+(deftest a-call-waits-while-the-body-is-outside-its-area
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})
+              here (.-pos (.self p))]
+          (core/submit! eng (list 'jobs.forestry.harvest-wood {:species "oak" :radius 10 :center [(+ 500 (.-x here)) (.-y here) (.-z here)]}) {})
+          (await (tu/run-until-empty eng 8))
+          (is (nil? (get (lt/inv p) "oak_log")) "no tree is felled 500 blocks from the area centre")
+          (is (= 1 (count (:list (core/state eng)))) "the call waits"))))))
+
 (deftest no-sapling-carried-ends-the-job-with-the-debt-owed
   (async done
     (tu/run-async done

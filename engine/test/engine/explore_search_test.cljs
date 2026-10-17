@@ -492,6 +492,16 @@
           (is (seq (walks s)))
           (is (every? #(<= (:x %) 0) (walks s)) "no leg east of the origin"))))))
 
+(deftest legs-radiate-from-the-center-when-one-is-given
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [args {:target "diamond_block" :pattern :outward :heading :west :max-distance 40}
+              own (await (search! args {}))
+              centred (await (search! (assoc args :center [30 64 0]) {}))]
+          (is (seq (walks centred)))
+          (is (not= (walks own) (walks centred)) "the legs are laid out from the centre, not from the body"))))))
+
 (deftest an-unknown-pattern-or-heading-is-refused-at-submit
   (is (re-find #":pattern must be one of :outward, :spiral, got :zigzag"
                (expr/problem registry/jobs '(jobs.explore.search {:target "diamond_block" :pattern :zigzag}))))

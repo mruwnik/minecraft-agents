@@ -17,6 +17,7 @@
             [jobs.lib.access.zones :as zones]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.breath :as breath]
+            [jobs.lib.area :as area]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
@@ -40,6 +41,8 @@
   to find more (for an ore at its ore level, :level), then mend the pit under where it started and walk back to the start cell.
   An ore's stone and deepslate kinds both count (:variants): {:block \"iron_ore\" :count 8} gets 8 raw_iron from iron_ore and
   deepslate_iron_ore.
+
+  :center (default: where the body stands) with :radius is the area: the call waits (:outside-area, jobs.lib.area) while the body stands farther than :radius from the centre; the caller walks there first.
 
   Targets come only from perception (the primitives' seenBlocks, never x-ray). A target is a remembered :block
   within :radius that is still there and has at least one of its 6 face neighbours seen as air or cave_air. It is
@@ -187,6 +190,7 @@
    :item {:doc "the item the block drops; nil: the drop-item table, else the block name" :spec a/item? :default nil}
    :count {:doc "how many more to carry than at the start" :spec (a/int-in 0 nil) :default 8}
    :radius {:doc "seen blocks within this many blocks of the body count" :spec (a/num-in 0 nil) :default 16}
+   :center {:doc "the centre of the area the job works, a cell [x y z] or {:x :y :z}; nil: where the body stands when the job first runs (jobs.lib.area)" :spec a/position? :default nil}
    :wet {:doc "dig blocks that touch water, and tunnel beside water" :spec boolean? :default false}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach of where it stands; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
    :fetch {:doc "get a pickaxe when none is carried (jobs.items.get-tool through jobs.lib.need): true, a set of kinds or a map of which only :how and :explore apply; false ends :no-tool" :spec need/option? :default true}
@@ -217,7 +221,7 @@
    ::stay-margin {:default 8 :doc "Blocks over the higher or under the lower of body and ore that a :stay-level walk to ore may plan through (go-to :y-margin): a body a reflex took far off does not climb a hill to get back." :spec (a/num-in 0 nil)}
    ::item-s {:default 6 :doc "Mean seconds one item takes (walk, dig, collect), for the quote." :spec (a/num-in 0 nil)}})
 
-(def target [:block :heading])
+(def target [:block :heading :center])
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
@@ -275,6 +279,7 @@
 
 (def can-start?
   (cond/and (checks/refusing :here "where it was submitted" away)
+            area/inside
             block-given
             (checks/refusing :underground "not in the open" on-surface)
             (checks/refusing :zones-read "zone list read" no-zones)

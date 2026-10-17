@@ -6,6 +6,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.area :as area]
             [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
@@ -15,7 +16,7 @@
 
 (def doc
   "Look for :count things named :target (a block or entity name, or several) by walking legs from where the job
-  starts (the origin).
+  starts (the origin), or from :center when given.
 
   Each step looks around (blocks and entities with those names within :scan-radius; not again within 3 blocks of the
   last look round, nor when what it has seen already makes up :count), notes what it saw (:seen) and
@@ -63,6 +64,7 @@
 (a/defargs args
   {:target {:doc "a block or entity name, or several (a vector or set)" :spec (a/or-of a/name? (a/coll-of a/name?)) :default nil}
    :count {:doc "how many targets end the search" :spec (a/int-in 1 nil) :default 1}
+   :center {:doc "the centre of the area the job works, a cell [x y z] or {:x :y :z}; nil: where the body stands when the job first runs (jobs.lib.area)" :spec a/position? :default nil}
    :max-distance {:doc "how far (XZ) from the origin a leg may go, 1 to 128" :spec (a/int-in 1 128) :default 96}
    :pattern {:doc ":spiral (rings round the origin, the default) or :outward (ahead along :heading); :outward when a :heading is given" :spec #{:spiral :outward} :default nil}
    :heading {:doc "a compass heading (:north, :north-east, :east ...), for :outward (default :north)" :spec (set (keys headings)) :default nil}
@@ -93,7 +95,7 @@
 (defn wait-ms [] (settings/get settings ::wait-ms))
 (defn reach [] (settings/get settings ::reach))
 (defn descent [] (settings/get settings ::descent))
-(def target [:target])
+(def target [:target :center])
 
 (def safe? ready/safe-if-lit)
 (def fit? ready/fit?)
@@ -455,7 +457,7 @@
 (defn ^:async search-step!
   "One pass: end, walk the leg under way, or look and start the next leg. :again goes on, else a round result."
   [c]
-  (ctx/update-mem! c (fn [m] (cond-> m (nil? (:origin m)) (assoc :origin (here c)))))
+  (ctx/update-mem! c (fn [m] (cond-> m (nil? (:origin m)) (assoc :origin (or (some-> (area/center c) cell-of) (here c))))))
   (if (:leg (ctx/mem c))
     (await (walk! c))
     (await (step! c))))
