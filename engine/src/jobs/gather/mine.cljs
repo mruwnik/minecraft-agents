@@ -65,7 +65,7 @@
     hand first (no wear on the pickaxe).
 
   Before a descent or strip tunnel it stocks torches when under 8 are carried (jobs.lib.trip/torches-ready!: obtain, charcoal from logs; warn torch.no-stock, then it digs dark).
-  Before the first round it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!; :deposit-first? false skips it).
+  Before the first round it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!).
 
   The first round writes to job memory before any dig: the goal (carried + :count), the start cell, the
   tunnel heading (:heading, else :direction, else the way the body faces) and the ground (the solid cells of the 5x5 under the
@@ -195,7 +195,6 @@
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach of where it stands; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
    :fetch {:doc "get a pickaxe when none is carried (jobs.items.get-tool through jobs.lib.need): true, a set of kinds or a map of which only :how and :explore apply; false ends :no-tool" :spec need/option? :default true}
    :ignore-zones? :shared
-   :deposit-first? {:doc "deposit at the known chest first when the bag is fullish and the chest is near (jobs.lib.trip/ready!)" :spec boolean? :default true}
    :spare-own-builds {:doc "a cell of a plan this body made is never a target; false: it may be dug" :spec boolean? :default true}
    :mend {:doc "fill the ground under the start again afterwards" :spec boolean? :default true}
    :collect-radius {:doc "how far around to collect drops after a dig" :spec (a/num-in 0 nil) :default 6}

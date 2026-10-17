@@ -55,23 +55,14 @@
     (await (tu/run-ticks (:eng s) (:clock s) 40 700))
     [(count (h/calls (:p s) "transfer")) (count (h/calls (:p s) "attack")) (set (map :kind @(:seen s)))]))
 
-(deftest cull-deposit-first-deposits-then-culls
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [[transfers attacks kinds] (await (cull {:deposit-first? true}))]
-          (is (pos? transfers))
-          (is (pos? attacks))
-          (is (contains? kinds :trip.deposited)))))))
-
-(deftest cull-does-not-deposit-by-default
+(deftest cull-deposits-then-culls
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [[transfers attacks kinds] (await (cull {}))]
-          (is (zero? transfers))
+          (is (pos? transfers))
           (is (pos? attacks))
-          (is (not-any? #{:trip.deposited :trip.no-chest :trip.far} kinds)))))))
+          (is (contains? kinds :trip.deposited)))))))
 
 (deftest the-deposit-before-a-trip-keeps-raw-materials-gathered-for-a-goal
   (async done

@@ -23,7 +23,7 @@
   planted; the others (and any when no sapling is carried or the spot is not clear) stay owed, and the job
   warns harvest-wood.debts-owed with their :count and the :nearest one's :pos.
   :center (default: where the body stands at the first round) with :radius is the area: a call waits (:outside-area, jobs.lib.area) while the body stands farther than :radius from the centre; the caller walks there first.
-  Before the first tree it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!; :deposit-first? false skips it).
+  Before the first tree it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!).
   Debts within the radius that stay unplanted (no sapling carried, spot refused) warn harvest-wood.replant-owed
   with :count, :pos, :reason (:no-sapling or :not-planted) and :text. Ends :done (the wood is the goal), with {:replant-owed n} when
   debts stay owed. With :count, the three phases repeat on the next tree until that many logs are carried; done? holds
@@ -43,7 +43,6 @@
    :filter {:doc "items to collect; the species' log, sapling, stick and apple when nil" :spec (a/coll-of a/item?) :default nil}
    :ignore-zones? :shared
    :avoid {:doc "columns [x z] of trees to leave alone (passed to fell-tree)" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
-   :deposit-first? {:doc "deposit at the known chest first when the bag is fullish and the chest is near (jobs.lib.trip/ready!)" :spec boolean? :default true}
    :count {:doc "logs to carry: another tree is felled while fewer of the species' logs (any log when no species) are carried; nil: one tree" :spec (a/int-in 1 nil) :default nil}
    :fetch {:doc "get a missing sapling or an axe (passed to plant-sapling and fell-tree; see their :fetch): true, a set of kinds or a map of limits; false leaves the replant owed" :spec need/option? :default true}})
 

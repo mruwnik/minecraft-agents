@@ -28,7 +28,7 @@
   - Otherwise it picks the next candidate: adults in the bound not skipped, those that are not unhittable first
     (an animal behind a wall comes last), then nearest first. The target stays until killed or given up on.
 
-  With :deposit-first? true it first deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!).
+  It first deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!).
 
   done? holds once :count are killed or at most :keep adults remain, and the drops of the last kill are picked up; the
   engine then ends it :done. The census is live at every step, so the last :keep are never taken.
@@ -53,7 +53,6 @@
    :color {:doc "sheep only: kill only sheep of this wool colour (e.g. \"white\"); nil: any. :keep still counts every adult" :spec a/name? :default nil}
    :count {:doc "most animals to kill in one run; nil: no cap" :spec (a/int-in 1 nil) :default nil}
    :drops {:doc "item names to collect after a kill; nil: the kind's entry in the drops table, else every item" :spec (a/coll-of a/item?) :default nil}
-   :deposit-first? {:doc "deposit at the known chest first when the bag is fullish and the chest is near (jobs.lib.trip/ready!)" :spec boolean? :default false}
    :ignore-zones? :shared})
 
 (def target [:mob :box :center])
@@ -219,7 +218,7 @@
 (defn ^:async round
   "The whole attempt: loop the steps until one ends or yields."
   [c]
-  (if-let [t (and (:deposit-first? (:args c)) (await (trip/ready! c)))]
+  (if-let [t (await (trip/ready! c))]
     t
     (let [r (await (pace/steps! c #(step c)))]
       (if (= :yield r) :continue r))))
