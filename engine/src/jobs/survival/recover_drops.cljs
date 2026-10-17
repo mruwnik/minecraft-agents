@@ -256,10 +256,11 @@
 
 (defn ^:async search-round!
   "Once: items of the pile are nowhere in sight at the pile (behind a corner, in a hollow). Walk to cells around it
-  (go-to, range 1, 3 blocks out) until some are in sight. True when some are."
+  (go-to, range 1, ::cfg/search-radius out on the four sides) until some are in sight. True when some are."
   [c [x y z] pos names radius]
   (ctx/update-mem! c assoc :searched true)
-  (loop [cells (map-indexed (fn [i [dx dz]] [i {:x (+ x dx) :y y :z (+ z dz)}]) [[3 0] [0 3] [-3 0] [0 -3]])]
+  (loop [cells (let [r (cfg/search-radius)]
+                 (map-indexed (fn [i [dx dz]] [i {:x (+ x dx) :y y :z (+ z dz)}]) [[r 0] [0 r] [(- r) 0] [0 (- r)]]))]
     (when-let [[i cell] (first cells)]
       (await (child/run!* c (keyword (str "search" i)) 'jobs.movement.go-to {:pos cell :range 1 :ways #{:walk :clear-seal} :checks own-checks}))
       (or (seq (pl/pile-ids c pos names radius)) (recur (rest cells))))))

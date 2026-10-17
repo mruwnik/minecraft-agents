@@ -46,8 +46,8 @@
   - the two cells above the head are clear
   - a block is carried: :item, or without it dirt while any is carried, then cobblestone
   - the cell passes jobs.lib.access.rules/may-place?
-  - no seen mob but a hostile stands in the cell: it waits for one to move on (a failed jump while one does is not counted), up to
-    :mob-waits looks, then gives up :mob-in-cell (:mob its name)
+  - a seen mob other than a hostile stands in the cell: it waits for it to move on (a failed jump while one does is not counted), up to
+    :mob-waits looks, then gives up :mob-in-cell (:mob its name); a hostile there is not waited on
 
   A knockback (a failed jump with the body airborne or more than 0.2 off its start point) is not a refusal: it waits to land,
   walks back to where it began (go-to child if off the column, then a short centring nudge) and tries again; up to 8 per pillar, then :off-column.
