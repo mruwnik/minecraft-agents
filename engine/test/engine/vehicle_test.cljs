@@ -135,6 +135,14 @@
           (is (nil? (vehicle/vehicle-of (.self p))))
           (is (some #(= [:vehicle.left :info {:pos {:x 1 :y 64 :z 2} :landed :dry}] %) seen)))))))
 
+(deftest a-stale-in-water-flag-does-not-make-a-dry-landing-water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (aboard {:blocks shore :self {:vehicle 9 :inWater true} :entities [(assoc boat :dismountAt {:x 1 :y 64 :z 2})]})
+              {:keys [r]} (await (run-round p {}))]
+          (is (= :dry (:landed (:data r)))))))))
+
 (deftest toward-wins-over-the-dry-cell
   (async done
     (tu/run-async done

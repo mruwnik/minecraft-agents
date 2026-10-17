@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.look :as look]
             [jobs.lib.cond :as cond]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]))
@@ -64,6 +65,12 @@
         target (or toward (vehicle/nearest-dry-cell (:primitives c) from (or radius 2)))]
     (when target (vehicle/yaw-toward from (vehicle/centre target)))))
 
+(defn landed-in-water?
+  "Whether the landing cell is water. The physics flag keeps its value from the ride (a boat is boarded from the water), so it is read only for a cell not seen."
+  [p pos flag]
+  (let [n (u/seen-name p (look/cell-of pos))]
+    (if n (= "water" n) (boolean flag))))
+
 (defn ^:async round [c]
   (let [p (:primitives c)
         max-tries (:max-tries (:args c) 8)
@@ -76,7 +83,8 @@
                 r (await (ctx/act c :dismount (clj->js (if (some? yaw) {:yaw yaw} {}))))]
             (if (= "dismounted" (.-status r))
               (let [self (.self p)
-                    out {:pos (u/pos-of (.-pos r)) :landed (if (.-inWater self) :in-water :dry)}]
+                    pos (u/pos-of (.-pos r))
+                    out {:pos pos :landed (if (landed-in-water? p pos (.-inWater self)) :in-water :dry)}]
                 (ctx/emit! c :vehicle.left :info out)
                 (ctx/end c :done nil out))
               (let [tries (inc tries)]
