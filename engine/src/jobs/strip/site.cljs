@@ -100,26 +100,20 @@
 
 (defn counts [s] (frequencies (map :state (vals (:segments s)))))
 
-(defn ^:async call!
-  "Run a child one round: :continue while it waits on the world, else its result as an old parent reads it,
-  {:status :stopped :reason its cause :ending e} when it did not end :done."
-  [c slot job args]
-  (let [e (await (ctx/call c slot job args))]
-    (cond (= :continue e) :continue
-          (= :done (:kind e)) (assoc (:data e) :status :done)
-          :else (assoc (:data e) :status :stopped :reason (if (map? (:cause e)) (contract/cause-key e) (or (:cause e) (:kind e))) :ending e))))
-
-(defn failed? [res] (boolean (or (= :stopped (:status res)) (:gave-up res) (false? (:ok res)))))
+(defn reason-of
+  "The reason a child's ending reads as: its cause (a string for the smelt's), a map cause's key."
+  [e]
+  (if (map? (:cause e)) (contract/cause-key e) (or (:cause e) (:kind e))))
 
 (defn ^:async run-all!
-  "The steps [[slot job args] ..] in order: nil when all ended well, :continue while one waits, else the failure with :child."
+  "The steps [[slot job args] ..] in order: nil when all ended :done, :continue while one waits, else {:child job :ending e} of the first that did not."
   [c steps]
   (loop [[[slot job args] & more] steps]
     (if-not slot
       nil
-      (let [res (await (call! c slot job args))]
-        (cond (= :continue res) :continue
-              (failed? res) (assoc res :child (str job))
+      (let [e (await (ctx/call c slot job args))]
+        (cond (= :continue e) :continue
+              (not= :done (:kind e)) {:child (str job) :ending e}
               :else (recur more))))))
 
 (defn ^:async smelt-run!
@@ -129,11 +123,10 @@
   (loop [[[slot args] & more] entries acc {:cooking {} :smelted {} :failed []}]
     (if-not slot
       acc
-      (let [res (await (call! c slot 'jobs.items.smelt args))
-            cooking? (or (= :continue res) (= :cooking (:reason res)))]
-        (recur more (cond cooking? (assoc-in acc [:cooking slot] args)
-                          (failed? res) (update acc :failed conj {:furnace (:furnace args) :reason (:reason res)})
-                          :else (update acc :smelted #(merge-with + % {(:item args) (:smelted res 0)}))))))))
+      (let [e (await (ctx/call c slot 'jobs.items.smelt args))]
+        (recur more (cond (= :continue e) (assoc-in acc [:cooking slot] args)
+                          (not= :done (:kind e)) (update acc :failed conj {:furnace (:furnace args) :reason (reason-of e)})
+                          :else (update acc :smelted #(merge-with + % {(:item args) (:smelted (:data e) 0)}))))))))
 
 (defn smelt-saved
   "The site state after smelt-run! result r: cooking replaced by what still cooks plus what was loaded, the output counted."
@@ -152,7 +145,8 @@
     :again))
 
 (defn child-stop! [c failure]
-  (stop! c :child-failed {:child (:child failure) :because (:reason failure) :child-kind (get-in failure [:ending :kind])}))
+  (let [e (:ending failure)]
+    (stop! c :child-failed {:child (:child failure) :because (reason-of e) :child-kind (:kind e)})))
 
 (defn spot [plan name]
   (some (fn [[k v]] (when (str/ends-with? k (str "/" name)) v)) (:spots plan)))
@@ -365,20 +359,21 @@
 (defn ^:async corridor! [c s t seg]
   (let [{:keys [entry]} (mouth s t seg)
         {:keys [take spawner ignore-zones?]} (:args c)
-        res (await (call! c :corridor 'jobs.strip.corridor
-                          {:segment seg :entry entry :take take :spawner spawner :ignore-zones? ignore-zones?}))
+        e (await (ctx/call c :corridor 'jobs.strip.corridor
+                           {:segment seg :entry entry :take take :spawner spawner :ignore-zones? ignore-zones?}))
+        res (:data e)
         id (:id seg)
-        why (:reason res)
+        why (when-not (= :done (:kind e)) (reason-of e))
         n (inc (get-in s [:stops id why] 0))
         taken #(update % :taken (partial merge-with +) (:taken res))
         radius (:radius (:args c))]
     (cond
-      (= :continue res) :continue
+      (= :continue e) :continue
       (= :spawner why) (do (save! c #(-> % taken
                                          (assoc-in [:segments id] (assoc seg :state :stripped :why :spawner))
                                          (update :segments (fn [m] (reduce (fn [m k] (assoc m k (assoc (get m k) :state :skipped :why :spawner))) m (beyond t id))))))
                            :again)
-      (= :done (:status res)) (do (save! c #(-> % taken (assoc-in [:segments id :state] :stripped)
+      (= :done (:kind e)) (do (save! c #(-> % taken (assoc-in [:segments id :state] :stripped)
                                                 (update :segments strip/merge-segments (filter (fn [g] (<= (strip/gap g (vec3 (:at s))) radius)) (:new-segments res)))))
                                   :again)
       (>= n stop-limit) (do (save! c #(-> % taken (assoc-in [:segments id] (assoc seg :state :skipped :why why)))) :again)
@@ -409,20 +404,22 @@
       :else (do (save! c assoc :phase :haul) :again))))
 
 (defn ^:async haul-chests! [c s]
-  (let [res (await (call! c :haul 'jobs.storage.haul (merge {:from (chests c s)} (select-keys (:args c) [:ignore-zones?]))))]
-    (cond (= :continue res) :continue
-          (failed? res) (child-stop! c (assoc res :child "jobs.storage.haul"))
-          :else (do (save! c assoc :phase :done :hauled (:moved res {})) :again))))
+  (let [e (await (ctx/call c :haul 'jobs.storage.haul (merge {:from (chests c s)} (select-keys (:args c) [:ignore-zones?]))))]
+    (cond (= :continue e) :continue
+          (not= :done (:kind e)) (child-stop! c {:child "jobs.storage.haul" :ending e})
+          :else (do (save! c assoc :phase :done :hauled (:moved (:data e) {})) :again))))
 
 (defn ^:async haul! [c s]
   (cond
     (seq (:cooking s)) (let [r (await (smelt-run! c (:cooking s)))]
                          (save! c smelt-saved r {})
                          (if (seq (:cooking r)) :continue :again))
-    (:bank s) (let [f (if (empty? (chests c s)) {:reason :base-full} (await (deposit! c s 0)))]
-                (cond (= :continue f) :continue
-                      f (child-stop! c f)
-                      :else (do (save! c dissoc :bank) :again)))
+    (:bank s) (if (empty? (chests c s))
+                (stop! c :base-full {})
+                (let [f (await (deposit! c s 0))]
+                  (cond (= :continue f) :continue
+                        f (child-stop! c f)
+                        :else (do (save! c dissoc :bank) :again))))
     (:haul (:args c)) (await (haul-chests! c s))
     :else (do (save! c assoc :phase :done) :again)))
 
@@ -458,7 +455,7 @@
   (let [s (site c)
         f (when (:was s) (await (run-all! c (restore-steps (:was s)))))]
     (cond (= :continue f) :continue
-          f (ctx/end c :nothing-possible (:reason f) (select-keys f [:child]))
+          f (ctx/end c :nothing-possible (reason-of (:ending f)) (select-keys f [:child]))
           :else (ctx/end c :done nil))))
 
 (defn ^:async step! [c]
