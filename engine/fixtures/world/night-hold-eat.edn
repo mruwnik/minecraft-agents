@@ -1,20 +1,19 @@
 ;; The night hold (jobs.survival.night, hungry reflexes cannot reach a held body) eats and cooks: cards 08af40de, d6d5acb3.
-;; A stone hut x 8..16, z 8..16 (no bed) with a doorway at [8 0..1 12] and the home set inside: the body starts outside, so the night
-;; is not already done (a body sheltered at its start has nothing for the night to do), walks in, and is held, hungry by RCON (food 8, hp 15). Needs night: run with
-;; --allow-time --time-log <the shared time log>.
-;; Should-succeed: raw beef is smelted at the furnace inside the hut, then eaten (shelter.ate).
+;; A walled stone yard x 8..16, z 8..16 with no roof and no bed, the body inside with no tool or block to dig in or build with and hungry by
+;; RCON (food 8, hp 15): the night can shelter nowhere (a roofed body with nothing to do ends its night, so the hold needs an exposed
+;; one), so it holds exposed, and the hold eats and cooks. Needs night: run with --allow-time --time-log <the shared time log>.
+;; Should-succeed: raw beef is smelted at the furnace inside the yard, then eaten (shelter.ate).
 ;; Should-fail: carrots reserved as bait are not eaten while food is above 3; the body keeps all of them.
 {:defaults
  {:tags [:night :survival :get-food :cook]
   :time :night
   :plot {:height 6}
   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
-           [:set [9 1 9] "torch"] [:set [15 1 15] "torch"] [:fill [8 0 12] [8 1 12] "air"] [:set [5 0 10] "torch"] [:set [5 0 14] "torch"]]
-  :body {:at [4.5 0 12.5] :yaw 270 :settle-s 2}
-  :act [[:job (jobs.memory.set-place {:name :home :pos #at [10 0 12]})]
-        [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+           [:set [9 1 9] "torch"] [:set [15 1 15] "torch"] [:fill [8 3 8] [16 3 16] "air"]]
+  :body {:at [12.5 0 12.5] :settle-s 2}
+  :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
         [:rcon "damage $BODY 3 minecraft:generic"]
-        [:job (jobs.survival.night {:walk-radius 8})]]
+        [:job (jobs.survival.night {})]]
   :limit-s 120}
  :cases
  [{:name "hold-cooks-beef-at-the-furnace-inside-then-eats"
