@@ -18,7 +18,7 @@
   "Put back what a job broke in another's zone, claim or plan, and the holes a go-to escalation dug there (the :tidy
   entries jobs.lib.tidy and jobs.movement.go-to write; the body's own diggings elsewhere stay). A dug block is placed
   again from an item of the same name carried, or for an escalation hole what the block drops (cobblestone for stone). An escalation hole waits while
-  the body is shut in (:shut-in), as it is the body's way on. A placed block is dug again. Both go through jobs.blocks.place / jobs.blocks.dig children (zones ignored on purpose, nothing fetched), so a cell with nothing solid beside it cannot be placed. It digs nothing else.
+  the body is shut in (:shut-in), as it is the body's way on. A placed block is dug again. Both go through jobs.blocks.place / jobs.blocks.dig children (zones ignored on purpose, nothing fetched, no sight needed: the cell is one the body itself dug), so a cell with nothing solid beside it cannot be placed. It digs nothing else.
   Works only when the body is safe: health at least :min-health and no hostile within :danger-radius (can-run?, asked before every pass); when that stops
   holding mid-run the run yields (a reflex ends condition-failed; no cell is skipped for it).
   Touches only a cell whose block is still what the job left (a changed cell is somebody's, left alone),
@@ -217,7 +217,7 @@
   [c {:keys [cell action was]}]
   (let [pos (zipmap [:x :y :z] cell)
         r (await (if (= :dig action)
-                   (child/run!* c :put 'jobs.blocks.place {:pos pos :item (place-item c cell was) :ignore-zones? true :fetch false :clear false})
+                   (child/run!* c :put 'jobs.blocks.place {:pos pos :item (place-item c cell was) :ignore-zones? true :fetch false :clear false :see false})
                    (child/run!* c :put 'jobs.blocks.dig {:pos pos :ignore-zones? true :fetch false :collect false :need-drop false})))]
     (if (= :continue r) :continue (= :done (:kind r)))))
 
