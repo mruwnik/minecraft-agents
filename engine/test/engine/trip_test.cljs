@@ -46,15 +46,6 @@
           (is (pos? attacks))
           (is (contains? kinds :trip.far)))))))
 
-(deftest deposit-first-false-skips-the-deposit
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [[_ transfers attacks kinds] (await (hunt {:x 10 :y 64 :z 0} {:deposit-first? false}))]
-          (is (zero? transfers))
-          (is (pos? attacks))
-          (is (not-any? #{:trip.deposited :trip.no-chest :trip.far} kinds)))))))
-
 (defn ^:async cull
   "Run a one-cow cull with a nearly full bag and a chest known at 10,64,0; [transfers attacks event-kinds]."
   [args]
