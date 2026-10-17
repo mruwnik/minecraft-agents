@@ -235,6 +235,22 @@
         (is (= {:ok true} (settings/set-key! :jobs.demo/label "x" emit)))
         (is (= {:jobs.demo/wait-ms 70 :jobs.demo/label "x"} (cljs.reader/read-string (fs/readFileSync (:body-file files) "utf8"))))))))
 
+(deftest set-and-unset-keep-the-files-comments-and-write-no-temp-file
+  (settings/with-settings {}
+    (fn []
+      (let [[_ _ files] (load-with nil (str ";; mine\n{:jobs.demo/wait-ms 20 ; slow\n :jobs.demo/label \"a;}\"\n ;; tail\n}\n"))
+            emit (fn [_])
+            read #(fs/readFileSync (:body-file files) "utf8")]
+        (is (= {:ok true} (settings/set-key! :jobs.demo/wait-ms 70 emit)))
+        (is (= 70 (settings/get specs :jobs.demo/wait-ms)))
+        (is (= ";; mine\n{:jobs.demo/wait-ms 70 ; slow\n :jobs.demo/label \"a;}\"\n ;; tail\n}\n" (read)))
+        (is (= {:ok true} (settings/unset-key! :jobs.demo/label emit)))
+        (is (= ";; mine\n{:jobs.demo/wait-ms 70 ; slow\n ;; tail\n}\n" (read)))
+        (is (= {:ok true} (settings/set-key! :jobs.demo/label "x" emit)))
+        (is (= ";; mine\n{:jobs.demo/wait-ms 70 :jobs.demo/label \"x\" ; slow\n ;; tail\n}\n" (read)))
+        (is (= ["body.edn"] (js->clj (fs/readdirSync (path/dirname (:body-file files)))))
+            "the temp file is gone")))))
+
 (deftest set-refuses-a-bad-key-or-value-and-leaves-the-file
   (settings/with-settings {}
     (fn []

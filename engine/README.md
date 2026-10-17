@@ -561,7 +561,7 @@ HTTP over `worlds/<world>/agents/<name>/engine/events.sock` (mode 0600; all bodi
 | `GET /catalog?kind=jobs\|triggers&prefix=` / `kind=job\|trigger&name=` | names page / one description (a contract job's also `:target :ways :defaults`) |
 | `GET /quote?name=jobs.x&args=<EDN map>` | the job's quote for a call with those args; runs no round |
 | `GET /settings` | every key `{:value :layer :doc}` plus `:game-rate`, `:rate-source`, `:frozen?`, `:physics-ms` |
-| `POST /settings/reload` / `/settings/set` `{:key :value}` / `/settings/unset` `{:key}` | re-read the files / validate and write the key in the body's `settings.edn`, then reload; 409 `{:ok false :reason}` on refusal |
+| `POST /settings/reload` / `/settings/set` `{:key :value}` / `/settings/unset` `{:key}` | re-read the files / validate and write the key in the body's `settings.edn` (only that entry is edited, comments kept; temp file + rename), then reload; 409 `{:ok false :reason}` on refusal |
 | `GET /triggers[?id=]` | the register with live mute/move/cooldown/backoff state (`?id=` adds `:explain`) |
 | `POST /triggers` | one register edit |
 | `GET/POST /jobs` | list, `:submit`, `:interrupt`, `:cancel` (also a running reflex job: ends `reflex.ended :cancelled`, its trigger may fire again), `:exclusive`, `:cancel-all`, `:retry` (used by `tools/jobs.mjs`) |

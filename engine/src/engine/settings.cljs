@@ -107,16 +107,99 @@
     (when-not load (throw (ex-info "settings were never loaded" {})))
     (load! (assoc load :specs specs :emit emit))))
 
+(declare form-end)
+
+(defn- skip-blank
+  "Index of the next form in text from i: past whitespace, commas, ; comments and #_ discarded forms."
+  [text i]
+  (let [n (count text)]
+    (loop [i i]
+      (let [c (when (< i n) (nth text i))]
+        (cond
+          (nil? c) i
+          (or (contains? #{\space \tab \newline \return \,} c)) (recur (inc i))
+          (= c \;) (recur (let [e (.indexOf text "\n" i)] (if (neg? e) n e)))
+          (and (= c \#) (= \_ (nth text (inc i) nil))) (recur (form-end text (skip-blank text (+ i 2))))
+          :else i)))))
+
+(defn- form-end
+  "Index just past the form that starts at i."
+  [text i]
+  (let [n (count text)
+        c (nth text i)]
+    (cond
+      (= c \") (loop [j (inc i)]
+                 (cond (>= j n) n
+                       (= \\ (nth text j)) (recur (+ j 2))
+                       (= \" (nth text j)) (inc j)
+                       :else (recur (inc j))))
+      (or (contains? #{\{ \[ \(} c) (and (= c \#) (contains? #{\{ \(} (nth text (inc i) nil))))
+      (loop [j (inc (if (= c \#) (inc i) i))]
+        (let [j (skip-blank text j)
+              d (when (< j n) (nth text j))]
+          (cond (nil? d) n
+                (contains? #{\} \] \)} d) (inc j)
+                :else (recur (form-end text j)))))
+      :else (loop [j (inc i)]
+              (if (and (< j n) (not (contains? #{\space \tab \newline \return \, \; \" \{ \} \[ \] \( \)} (nth text j))))
+                (recur (inc j))
+                j)))))
+
+(defn- map-layout
+  "{:open i :close i :forms [[start end] ...]} of the top-level map in text, or nil when it is not one."
+  [text]
+  (let [open (skip-blank text 0)]
+    (when (= \{ (nth text open nil))
+      (loop [i (inc open) forms []]
+        (let [j (skip-blank text i)]
+          (cond (>= j (count text)) nil
+                (= \} (nth text j)) {:open open :close j :forms forms}
+                :else (let [e (form-end text j)] (recur e (conj forms [j e])))))))))
+
+(defn edit-text
+  "The map text with key k set to v (op :set) or removed (op :unset), every other character kept (comments, layout).
+  nil when the text is not a map the edit can follow."
+  [text op k v]
+  (when-let [{:keys [forms close open]} (map-layout text)]
+    (let [kstr (str k)
+          pairs (partition 2 forms)
+          hit (first (filter (fn [[[ks ke]]] (= kstr (subs text ks ke))) pairs))
+          splice (fn [s e r] (str (subs text 0 s) r (subs text e)))]
+      (cond
+        (odd? (count forms)) nil
+        (and hit (= op :set)) (let [[_ [vs ve]] hit] (splice vs ve (pr-str v)))
+        hit (let [[[ks] [_ ve]] hit
+                  ve (loop [j ve] (if (contains? #{\space \tab \,} (nth text j nil)) (recur (inc j)) j))
+                  line-start (inc (.lastIndexOf text "\n" (dec ks)))
+                  alone? (and (= \newline (nth text ve nil)) (every? #{\space \tab} (subs text line-start ks)))]
+              (if alone? (splice line-start (inc ve) "") (splice ks ve "")))
+        (= op :unset) text
+        (empty? forms) (splice (inc open) (inc open) (str kstr " " (pr-str v)))
+        :else (let [at (second (last forms))] (splice at at (str " " kstr " " (pr-str v))))))))
+
+(defn write-atomic!
+  "Write text to file through a temp file and a rename, so a reader never sees half of it."
+  [file text]
+  (let [temp (str file "." (.-pid js/process) ".tmp")]
+    (try (fs/writeFileSync temp text)
+         (fs/renameSync temp file)
+         (finally (when (fs/existsSync temp) (fs/unlinkSync temp))))))
+
 (defn write-body-key!
-  "Change the body file by f (a map fn) and reload. {:ok true}, or {:ok false :reason} when the file is unreadable."
-  [f emit]
+  "Set (op :set) or remove (op :unset) k in the body file, keeping its comments and layout, then reload. {:ok true},
+  or {:ok false :reason} when the file is unreadable."
+  [op k v emit]
   (let [file (:body-file (:load @state))
         [kind data] (read-layer file)]
     (if (= :bad kind)
       {:ok false :reason (str file " " data "; fix or delete it first")}
-      (do (fs/writeFileSync file (str (pr-str (f (if (= :ok kind) data {}))) "\n"))
-          (reload! emit)
-          {:ok true}))))
+      (let [data (if (= :ok kind) data {})
+            wanted (if (= op :set) (assoc data k v) (dissoc data k))
+            edited (when (= :ok kind) (edit-text (fs/readFileSync file "utf8") op k v))
+            ok? (and edited (= wanted (reader/read-string edited)))]
+        (write-atomic! file (if ok? edited (str (pr-str wanted) "\n")))
+        (reload! emit)
+        {:ok true}))))
 
 (defn set-key!
   "Write k = v into the body's settings.edn after checking it against the key's spec, then reload (events to emit).
@@ -129,7 +212,7 @@
       (not (:body-file load)) {:ok false :reason "no body settings file (settings were never loaded)"}
       (not spec) {:ok false :reason (str "unknown key " k)}
       why {:ok false :reason (str k " must be " why ", got " (pr-str v))}
-      :else (write-body-key! #(assoc % k v) emit))))
+      :else (write-body-key! :set k v emit))))
 
 (defn unset-key!
   "Remove k from the body's settings.edn and reload. {:ok true} or {:ok false :reason}."
@@ -138,7 +221,7 @@
     (cond
       (not (:body-file load)) {:ok false :reason "no body settings file (settings were never loaded)"}
       (not (contains? specs k)) {:ok false :reason (str "unknown key " k)}
-      :else (write-body-key! #(dissoc % k) emit))))
+      :else (write-body-key! :unset k nil emit))))
 
 (defn with-settings
   "Run f with a fresh settings state holding the overrides {k v} (layer :test), then restore the state, also after a
