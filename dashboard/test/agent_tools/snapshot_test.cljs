@@ -108,7 +108,7 @@
            (map (juxt :name :side :distance) (:entities s))))
     (is (str/includes? (:text s) "Facing west"))
     (is (str/includes? (:text s) "Crosshair: stone at 60 19 24, 3.0 blocks"))
-    (is (str/includes? (:text s) "cow 4 (centre)")))
+    (is (str/includes? (:text s) "cow 4 m centre")))
   (let [s (snap/summary {:pose (pose {}) :camera {:yaw 0 :pitch 0} :width 10 :height 10 :center nil :seen []})]
     (is (nil? (:crosshair s)))
     (is (str/includes? (:text s) "Crosshair: nothing within reach of the loaded world"))

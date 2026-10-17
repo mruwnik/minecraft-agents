@@ -171,7 +171,7 @@
                     "Crosshair: nothing within reach of the loaded world (sky or unloaded).")
                   " "
                   (if (seq entities)
-                    (str "In view: " (str/join ", " (map #(str (:name %) " " (:distance %) " (" (:side %) ")") entities)) ".")
+                    (str "In view: " (str/join ", " (map #(str (:name %) " " (:distance %) " m " (:side %)) entities)) ".")
                     "No mobs or players in view.")
                   (when (seq heard)
                     (str " Heard: " (str/join ", " (map #(str (:name %) " " (name (:direction %)) " (" (name (:band %)) ")") heard)) ".")))]
