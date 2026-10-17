@@ -222,8 +222,8 @@
       (contains? #{"campfire" "soul_campfire"} (.-name below-block)) {:op :done}
       (and (contains? #{"campfire" "soul_campfire"} fire-name) (lava-beside? block-at fire)) {:op :hazard}
       (and above-name (apiary/carpet? above-name)) {:op :dig :pos above}
-      (not= "air" (.-name below-block)) {:op :dig :pos below}
       (contains? #{"campfire" "soul_campfire"} fire-name) {:op :dig :pos fire}
+      (not= "air" (.-name below-block)) {:op :dig :pos below}
       :else {:op :place :pos below :item kind})))
 
 (defn ^:async collect-carpet!

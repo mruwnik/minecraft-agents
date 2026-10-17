@@ -385,23 +385,23 @@
 
 (def in-pit {:pos {:x 3.5 :y 63 :z 1.5}})
 
-(deftest with-see-a-block-hidden-from-where-the-body-stands-is-dug-from-where-it-sees-it
+(deftest a-block-hidden-from-where-the-body-stands-is-dug-from-where-it-sees-it
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self in-pit :blocks pit-blocks})
-              result (await (tu/child-outcome eng job {:pos [5 65 0] :see true} 10))
+              result (await (tu/child-outcome eng job {:pos [5 65 0]} 10))
               y (.-y (.-pos (.self p)))]
           (is (= {:dug true :collected 1} (select-keys result [:dug :collected])) (pr-str result))
           (is (>= y 64) (str "walked out of the pit first, feet y " y)))))))
 
-(deftest with-see-a-block-no-stand-sees-waits-unreachable-out-of-sight
+(deftest a-block-no-stand-sees-waits-unreachable-out-of-sight
   ;; the dirt is buried under the surface: no stand within the walk's range sees it, so it is not dug through the stone
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [env (setup {:self in-pit :blocks (assoc pit-blocks "5,62,0" "dirt")})
-              r (await (ending-cause (:eng env) job {:pos [5 62 0] :see true} 15))]
+              r (await (ending-cause (:eng env) job {:pos [5 62 0]} 15))]
           (is (= {:reason :unreachable :why :out-of-sight} (select-keys r [:reason :why])) (pr-str r))
           (is (empty? (calls (:p env) "dig"))))))))
 

@@ -42,7 +42,8 @@
   (let [k (str x "," y "," z)]
     {:inventory inventory
      :self {:pos {:x 0 :y 64 :z 0}}
-     :blocks (merge (around x y z) (around x (dec y) z) {k "campfire" (str x "," (dec y) "," z) "stone"})
+     :blocks (merge (into {} (for [dx (range -3 4) dz (range -3 4)] [(str (+ x dx) "," (dec y) "," (+ z dz)) "stone"]))
+                    (around x y z) {k "campfire" (str x "," (dec y) "," z) "stone"})
      :states {k {:lit true}}}))
 
 (defn open-side [w k] (update w :blocks dissoc k))
@@ -284,21 +285,22 @@
           (await (child-outcome eng job {} 60))
           (is (<= 1 (count (calls p "dig")) (guard/max-sink-steps))))))))
 
-(deftest a-sink-digs-the-ground-below-before-the-fire
-  (let [cells {{:x 2 :y 64 :z 0} "campfire" {:x 2 :y 63 :z 0} "stone"}
-        block-at (fn [pos] (when-let [n (get cells pos "air")] #js {:name n}))
-        s {:fire {:x 2 :y 64 :z 0} :kind "campfire"}]
-    (is (= {:op :dig :pos {:x 2 :y 63 :z 0}} (guard/next-step block-at s))
-        "a failed dig of the ground leaves the fire standing")
-    (is (= {:op :dig :pos {:x 2 :y 64 :z 0}}
-           (guard/next-step (fn [pos] (when-let [n (get (assoc cells {:x 2 :y 63 :z 0} "air") pos "air")] #js {:name n})) s)))))
+(deftest a-sink-digs-the-fire-before-the-ground-below-it
+  (let [fire {:x 2 :y 64 :z 0}
+        ground {:x 2 :y 63 :z 0}
+        cells {fire "campfire" ground "stone"}
+        reading (fn [cells] (fn [pos] (when-let [n (get cells pos "air")] #js {:name n})))
+        s {:fire fire :kind "campfire"}]
+    (is (= {:op :dig :pos fire} (guard/next-step (reading cells) s))
+        "the fire covers the ground: the eye sees the ground only once the fire is gone")
+    (is (= {:op :dig :pos ground} (guard/next-step (reading (dissoc cells fire)) s)))))
 
 (deftest a-sink-beside-lava-digs-nothing-and-ends-refused
   (let [fire {:x 2 :y 64 :z 0}
         cells {fire "campfire" {:x 2 :y 63 :z 0} "stone" {:x 3 :y 64 :z 0} "lava"}
         block-at (fn [pos] (when-let [n (get cells pos "air")] #js {:name n}))]
     (is (= {:op :hazard} (guard/next-step block-at {:fire fire :kind "campfire"})))
-    (is (= {:op :dig :pos {:x 2 :y 63 :z 0}}
+    (is (= {:op :dig :pos fire}
            (guard/next-step (fn [pos] (when-let [n (get (dissoc cells {:x 3 :y 64 :z 0}) pos "air")] #js {:name n})) {:fire fire :kind "campfire"})))))
 
 (deftest the-sink-of-a-fire-beside-lava-never-digs-the-ground

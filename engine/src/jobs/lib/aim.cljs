@@ -40,6 +40,9 @@
     (fn [x y z] (sees-cell? kind-at (eye-at {:x (+ x 0.5) :y y :z (+ z 0.5)}) cell))))
 
 (defn body-sees?
-  "Whether the job's body, where it stands now, sees the block at cell [x y z]."
+  "Whether the job's body, where it stands now, sees the block at cell [x y z]. A whole x or z is a cell, and a body
+  stands at the middle of its cell (the same convention as go-to's stand-sees-fn)."
   [c cell]
-  (sees-cell? (seen-kind-at (:primitives c)) (eye-at (u/self-pos c)) cell))
+  (let [{:keys [x z] :as pos} (u/self-pos c)
+        mid #(if (= % (js/Math.floor %)) (+ % 0.5) %)]
+    (sees-cell? (seen-kind-at (:primitives c)) (eye-at (assoc pos :x (mid x) :z (mid z))) cell)))
