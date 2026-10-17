@@ -3,6 +3,7 @@
             [engine.bodies :as bodies]
             [engine.main :as main]
             [engine.single :as single]
+            [engine.single-child :as child]
             [engine.test-util :as tu]
             [clojure.string :as str]
             ["child_process" :as cp]
@@ -142,51 +143,16 @@
           (.destroy client)
           (await (js/Promise. (fn [resolve] (.close server resolve)))))))))
 
-;; Cross-process lock tests: each child re-runs this test bundle with --test=engine.single-test/lock-child and its
-;; part in SINGLE_LOCK_CHILD. Inside the lock a holder keeps a marker directory; finding it made already means two
-;; processes were inside at once.
+;; Cross-process lock tests: each child runs engine.single-child (loaded by test-support/lean-child.cjs, not the whole bundle)
+;; with its part in SINGLE_LOCK_CHILD. Inside the lock a holder keeps a marker directory; finding it made already means
+;; two processes were inside at once.
 
-(def child-env "SINGLE_LOCK_CHILD")
+(def child-env child/child-env)
 
-(defn sleep [ms] (js/Promise. (fn [r] (js/setTimeout r ms))))
+(def sleep child/sleep)
 
-(defn ^:async inside-alone?
-  "Hold the lock's inside for ms behind marker; false when another holder's marker was already there."
-  [marker ms]
-  (if (try (fs/mkdirSync marker) true (catch :default e (if (= "EEXIST" (.-code e)) false (throw e))))
-    (do (await (sleep ms)) (fs/rmdirSync marker) true)
-    false))
-
-(defn stdin-closed [] (js/Promise. (fn [r] (.on js/process.stdin "end" r) (.resume js/process.stdin))))
-
-(defn ^:async run-child
-  "One child's part: :loop takes the lock iterations times (dying inside on the crash-at'th), :hold keeps it until
-  stdin closes, :die dies inside it."
-  [{:keys [mode sock marker iterations crash-at hold-ms]}]
-  (case mode
-    "loop" (do (loop [i 0]
-                 (when (< i iterations)
-                   (await (single/with-replace-lock
-                            sock (fn ^:async inside []
-                                   (when-not (await (inside-alone? marker hold-ms)) (println "LOCK:overlap"))
-                                   (when (= i crash-at) (.kill js/process js/process.pid "SIGKILL")))))
-                   (recur (inc i))))
-               (println "LOCK:done"))
-    "hold" (await (single/with-replace-lock
-                    sock (fn ^:async inside []
-                           (fs/mkdirSync marker)
-                           (println "LOCK:in")
-                           (await (stdin-closed))
-                           (fs/rmdirSync marker))))
-    "die" (await (single/with-replace-lock
-                   sock (fn [] (println "LOCK:in") (.kill js/process js/process.pid "SIGKILL"))))))
-
-(deftest lock-child
-  ;; Not a test: the body of the child processes below; does nothing without SINGLE_LOCK_CHILD.
-  (when-let [cfg (some-> (aget js/process.env child-env) js/JSON.parse (js->clj :keywordize-keys true))]
-    (async done (tu/run-async done (fn ^:async t [] (await (run-child cfg)))))))
-
-(defn child-command [] [(.-execPath js/process) (aget js/process.argv 1) "--test=engine.single-test/lock-child"])
+(defn child-command []
+  [(.-execPath js/process) (path/join (js/process.cwd) "test-support" "lean-child.cjs") (aget js/process.argv 1)])
 
 (defn start-child
   "Start a child with cfg. {:proc :out (atom of stdout) :exit (promise of [code signal])}. With zombie? the child runs
