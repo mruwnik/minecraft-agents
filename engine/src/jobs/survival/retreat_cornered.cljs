@@ -100,7 +100,7 @@
   (cost/outruns? (retreat-home/food (:primitives c))
                  (->> hostiles
                       (remove #(or (combat/creeper? %) (combat/enderman? %) (combat/ranged? %)))
-                      (map #(.-name %)))))
+                      (map cost/mob-kind))))
 
 (defn near-hostiles
   "The hostiles a cornered body weighs: within :radius, ranged ones within :ranged-radius, the dead skipped."

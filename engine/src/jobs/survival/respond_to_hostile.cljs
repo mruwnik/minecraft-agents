@@ -231,7 +231,7 @@
                    (cost/decide {:health (.-health self)
                                :fighting? (fight-begun? c m)
                                :single? (= 1 (count near))
-                               :cannot-outrun? (not (cost/outruns? (or (.-food self) 20) (map #(.-name %) (remove combat/ranged? near))))
+                               :cannot-outrun? (not (cost/outruns? (or (.-food self) 20) (map cost/mob-kind (remove combat/ranged? near))))
                                :creeper? (boolean (some combat/creeper? near))
                                :reserve reserve
                                :damage (cost/fight-damage {:weapon (combat/best-weapon p (weapons c))

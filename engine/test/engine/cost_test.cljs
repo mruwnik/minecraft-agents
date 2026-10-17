@@ -170,7 +170,16 @@
 (deftest the-race-to-a-refuge-counts-each-chaser-at-its-own-speed
   (are [names expected] (= expected (cost/reach-first? 5 [5] 20 names))
     ["zombie"] true
-    ["spider"] false))
+    ["spider"] false
+    ["baby"] false))
+
+(deftest a-baby-zombie-is-priced-as-a-baby-not-as-an-adult
+  (are [e kind] (= kind (cost/mob-kind e))
+    #js {:name "zombie" :baby true} "baby"
+    #js {:name "zombie" :baby false} "zombie"
+    #js {:name "skeleton"} "skeleton")
+  (is (false? (cost/outruns? 20 [(cost/mob-kind #js {:name "zombie" :baby true})])))
+  (is (true? (cost/outruns? 20 [(cost/mob-kind #js {:name "zombie"})]))))
 
 (deftest a-frontier-tour-costs-its-blocks-walked-and-more-with-each-walk
   (let [tour #(:cost (cost/tour-cost {:explored %1 :walks %2}))]

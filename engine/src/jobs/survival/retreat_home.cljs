@@ -164,7 +164,7 @@
     (cost/reach-first? steps
                        (map (fn [t] (apply min (map #(u/dist (danger-q/mob-pos p t) (mid (:cell %))) (:doors room)))) racers)
                        (food p)
-                       (map #(.-name %) racers))))
+                       (map cost/mob-kind racers))))
 
 (defn verdicts
   "What the flight makes of each of rooms (rooms): [{:room r :inside? true}] alone for the room the body is in, else

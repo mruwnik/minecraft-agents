@@ -72,6 +72,7 @@
 (def reach-first? danger/reach-first?)
 (def outruns-at? danger/outruns-at?)
 (def outruns? danger/outruns?)
+(def mob-kind danger/mob-kind)
 
 (def hp-seconds health/hp-seconds)
 (def health-scale health/health-scale)
