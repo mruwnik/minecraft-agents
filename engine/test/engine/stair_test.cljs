@@ -756,6 +756,21 @@
           (is (= "cobblestone" (block-at p [0 63 0])) "under the floor the body stands on, against the solid cell behind it")
           (is (= "cobblestone" (block-at p [1 63 0])) "the missing floor"))))))
 
+(def cave-beside-wall
+  "cave-below with the cave one cell narrower: the side wall (z -1) stays, so the missing floor (1 63 0) has a solid neighbour in sight."
+  (-> (apply dissoc ground (for [x (range 0 3) y (range 60 64) z (range 0 2)] (str x "," y "," z)))
+      (dissoc "1,64,0" "1,65,0")))
+
+(deftest a-cave-floor-beside-a-seen-wall-is-bridged-against-it-and-the-stair-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inv (conj pick {:name "cobblestone" :count 10})
+              {:keys [out p]} (await (stair! {:blocks cave-beside-wall :inventory inv} (assoc east :steps 1) (fn [_])))]
+          (is (= :done (:status @out)) (pr-str (dissoc @out :dug)))
+          (is (= "cobblestone" (block-at p [1 63 0])) "the missing floor, placed against the side wall")
+          (is (= 1 (count (filter #(= "place" (.-name %)) (.-calls (.-world p))))) "one block, no chain behind it"))))))
+
 (def cave-void
   "The cave of cave-below reaches back past the bridge depth: no solid cell within reach of the floor."
   (apply dissoc cave-below (for [x (range -3 3) y (range 60 64) z (range -1 2)] (str x "," y "," z))))
