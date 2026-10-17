@@ -352,8 +352,8 @@
                                                    {:pos [9 61 0] :range 1 :ways #{:walk :clear-seal} :unknown true} watch!))]
           (is (true? @held) "the off hand held the torch during the walk")
           (is (= 1 (count (filter #(= :go-to.off-hand-torch (:kind %)) seen))) "once per call")
-          (is (= [:unseen-floor-dark [0 64 0] [1 62 0]] [(:why out) (:at out) (vals (:dark-best out))])
-              (str "unseen land counts as open: the body walks to the takeoff before the dark drop is refused " (pr-str out))))))))
+          (is (= [:unseen-floor-dark [0 64 0] [1 61 0]] [(:why out) (:at out) (vals (:dark-best out))])
+              (str "unseen land counts as open: the body walks to the takeoff before the dark drop is refused; a floor shows by any face point, so the best unseen one is a floor deeper " (pr-str out))))))))
 
 (deftest go-to-with-unknown-holds-a-carried-soul-torch-in-the-dark
   (async done
