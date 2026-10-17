@@ -3,6 +3,7 @@
 ;; (a carried furnace is placed), 456e1e50 (a furnace still cooking an abandoned load is waited for, the output taken, then loaded).
 ;; Open plot, body at [16.5 0 16.5] looking east (yaw 270).
 ;; Should-succeed: ingots from a crafted furnace, cooked chicken by product name, ingots from a placed carried furnace, iron after the copper.
+;; Cases that need no furnace seen set a small seen-radius: the pool runs neighbouring plots at once and their furnaces are in sight.
 ;; Should-fail: :fetch false with no furnace seen gives up no-furnace-seen; a diamond is no input (not-smeltable).
 {:defaults
  {:tags [:items :smelt :fetch :jobs]
@@ -12,11 +13,13 @@
   :limit-s 150}
  :cases
  [{:name "no-furnace-seen-crafts-and-places-one"
+   :settings {:jobs.items.smelt/seen-radius 12}
    :body {:inventory [["raw_iron" 2] ["coal" 2] ["crafting_table" 1] ["cobblestone" 16]]}
    :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
    :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}]
    :after [[:item "iron_ingot" 2]]}
   {:name "fetch-false-no-furnace-seen-gives-up"
+   :settings {:jobs.items.smelt/seen-radius 12}
    :body {:inventory [["raw_iron" 2] ["coal" 2] ["crafting_table" 1] ["cobblestone" 16]]}
    :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2 :fetch false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-furnace-seen}} :within-s 30 :of-job true}
@@ -82,6 +85,7 @@
    :limit-s 150}
   ;; card 51c89177: the furnace comes first; when none can be had the logs are still logs (no planks made for fuel first)
   {:name "charcoal-with-no-furnace-to-be-had-leaves-the-logs"
+   :settings {:jobs.items.smelt/seen-radius 12}
    :body {:inventory [["oak_log" 11]]}
    :act [[:job (jobs.items.smelt {:item "charcoal" :count 3 :fetch {:how #{:chest}}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-furnace-seen}} :within-s 40 :of-job true}
@@ -89,6 +93,7 @@
    :after [[:item "oak_log" 11] [:item "oak_planks" 0] [:item "charcoal" 0]]
    :limit-s 60}
   {:name "charcoal-makes-its-furnace-from-mined-cobble-first"
+   :settings {:jobs.items.smelt/seen-radius 12}
    :blocks [[:fill [22 0 12] [24 2 20] "stone"]]
    :body {:inventory [["oak_log" 11] ["stone_pickaxe" 1] ["crafting_table" 1]]}
    :act [[:job (jobs.items.smelt {:item "charcoal" :count 1})]]
