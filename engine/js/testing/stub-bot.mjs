@@ -4,6 +4,7 @@
 // methods named in `reject` ({name: message}) reject with an Error carrying that message.
 import vec3 from 'vec3'
 import { EventEmitter } from 'node:events'
+import constants from '../src/engine/constants.json' with { type: 'json' }
 
 const { Vec3 } = vec3
 
@@ -49,7 +50,7 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], worn = [], enti
   }
   Object.assign(bot, {
     username: 'Stub',
-    entity: { position: new Vec3(...pos), height: 1.62, onGround: true, velocity: new Vec3(0, 0, 0), effects: Object.fromEntries(effects.map(e => [e.id, { id: e.id, amplifier: e.amplifier, duration: e.duration }])) },
+    entity: { position: new Vec3(...pos), height: constants.eyeHeight, onGround: true, velocity: new Vec3(0, 0, 0), effects: Object.fromEntries(effects.map(e => [e.id, { id: e.id, amplifier: e.amplifier, duration: e.duration }])) },
     entities,
     health: 20,
     food,
@@ -58,7 +59,7 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], worn = [], enti
     heldItem: held,
     inventory: { items: () => items, slots: Object.fromEntries([...items, ...worn].map(i => [i.slot, i])), firstEmptyInventorySlot: () => freeSlot },
     registry: { effects: Object.fromEntries(effects.map(e => [e.id, { id: e.id, name: e.name }])), itemsByName: { bread: { id: 1 }, cobblestone: { id: 2 }, iron_helmet: { id: 3, maxDurability: 165 }, iron_boots: { id: 4, maxDurability: 195 }, shield: { id: 5, maxDurability: 336 } }, foodsByName: { bread: { foodPoints: 5 }, apple: { foodPoints: 4 } } },
-    physics: { playerHalfWidth: 0.3 },
+    physics: { playerHalfWidth: constants.hitboxHalfWidth },
     calls,
     loadWorld: () => { notLoaded = false },
     unloadWorld: () => { notLoaded = true },

@@ -10,6 +10,7 @@
   next plan avoids it). A body that ends up on the floor anyway (a push) ends it {:status :replan :why :pushed}.
   The controller predicts with prismarine-physics' own update (the body's client physics): pure, no world reads."
   (:require [engine.args :as a]
+            [engine.game :as game]
             [engine.path.planner.base :as base]
             [engine.settings :as settings]))
 
@@ -31,7 +32,6 @@
 (def slipperiness {"slime_block" 0.8 "ice" 0.98 "packed_ice" 0.98 "frosted_ice" 0.98 "blue_ice" 0.989})
 (def velocity-factors {"soul_sand" 0.4 "honey_block" 0.4})
 (def default-slip 0.6)
-(def eye-height 1.62)
 
 (defn ground
   "The horizontal model of a body on a floor: inertia f (slipperiness x 0.91), the walk's acceleration a (0.1 x
@@ -184,7 +184,7 @@
 (defn look-at
   "[yaw pitch] from the eye of a body at pose to the centre of cell [x y z] (mineflayer's angles)."
   [{px :x py :y pz :z} [x y z]]
-  (let [dx (- (+ x 0.5) px) dz (- (+ z 0.5) pz) dy (- (+ y 0.5) (+ py eye-height))]
+  (let [dx (- (+ x 0.5) px) dz (- (+ z 0.5) pz) dy (- (+ y 0.5) (+ py game/eye-height))]
     [(js/Math.atan2 (- dx) (- dz)) (js/Math.atan2 dy (js/Math.hypot dx dz))]))
 
 (defn hold

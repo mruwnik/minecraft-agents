@@ -4,6 +4,7 @@
 // (the result would be lost), items left in the 2x2 grid, and recipes that differ only in the wood they use.
 
 import vec3 from 'vec3'
+import constants from '../src/engine/constants.json' with { type: 'json' }
 
 const { Vec3 } = vec3
 
@@ -151,7 +152,7 @@ async function mergeStacks (bot, ctx, item) {
   return merged
 }
 
-export async function craftItem (bot, ctx, a, { timeScale = 1, reach = 4.5 } = {}) {
+export async function craftItem (bot, ctx, a, { timeScale = 1, reach = constants.reach } = {}) {
   const item = a.item
   const count = a.count ?? 1
   const info = bot.registry.itemsByName[item]

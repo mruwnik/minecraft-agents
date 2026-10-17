@@ -3,6 +3,7 @@
   "hitboxHalfWidth": 0.3,
   "bodyHeight": 1.8,
   "eyeHeight": 1.62,
+  "reach": 4.5,
   "stepHeight": 0.6,
   "gravity": 0.08,
   "airDrag": 0.98,

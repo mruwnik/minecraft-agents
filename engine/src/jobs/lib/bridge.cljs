@@ -1,6 +1,7 @@
 (ns jobs.lib.bridge
   "Placing a carried block on the air floor of a step (a stair, a tunnel) against a neighbour's face."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.game :as game]
+            [engine.ctx :as ctx]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
@@ -8,7 +9,7 @@
 
 (def face-steps [[1 0 0] [-1 0 0] [0 -1 0] [0 0 1] [0 0 -1]])
 
-(defn eye-y [c] (+ (:y (u/self-pos c)) 1.62))
+(defn eye-y [c] (+ (:y (u/self-pos c)) game/eye-height))
 
 (defn face-support?
   "Whether a block can be placed against a face of cell: some neighbour is solid (seen), or unseen when loose?. The block

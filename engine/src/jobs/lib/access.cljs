@@ -3,6 +3,7 @@
   claims and plan footprints come from ctx, read once per round. Zones are a rule the jobs consult, never enforced
   by the engine. A job given :ignore-zones? acts regardless of zones, claims and footprints."
   (:require [clojure.string :as str]
+            [engine.game :as game]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.access.zones :as zones]
             [engine.ctx :as ctx]
@@ -63,17 +64,13 @@
   [p]
   (fn [[x y z]] (when-let [b (u/sensed p {:x x :y y :z z})] (when-not (true? (.-unknown b)) (.-name b)))))
 
-(def body-half-width
-  "Half the width of the body's box, in blocks."
-  0.3)
-
 (defn body-columns
   "The set of [x z] cells the body's box overlaps when it stands at x, z. A coordinate on a whole number (only a fake
   world puts a body there) counts as inside its own cell."
   [x z]
   (let [span (fn [v] (if (integer? v)
                        [v]
-                       (range (js/Math.floor (- v body-half-width)) (inc (js/Math.floor (+ v body-half-width))))))]
+                       (range (js/Math.floor (- v game/hitbox-half)) (inc (js/Math.floor (+ v game/hitbox-half))))))]
     (set (for [cx (span x) cz (span z)] [cx cz]))))
 
 (defn rules-input

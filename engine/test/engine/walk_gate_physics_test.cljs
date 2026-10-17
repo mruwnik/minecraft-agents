@@ -8,6 +8,7 @@
   the takeoff."
   (:require [cljs.test :refer [deftest is testing]]
             [engine.floor-sight-pin-test :as pin]
+            [engine.game :as game]
             [engine.path.executor :as ex]
             [engine.path.planner.unknown :as unknown]
             [engine.perception.rays :as rays]
@@ -31,7 +32,7 @@
   "A glance from the bot's eye at the cell: in the cone, a clear line to its centre, lit or within near."
   [fills lit? bot [x y z]]
   (let [e (.-entity bot) p (.-position e)
-        ox (.-x p) oy (+ (.-y p) ws/eye-height) oz (.-z p)
+        ox (.-x p) oy (+ (.-y p) game/eye-height) oz (.-z p)
         vx (- (+ x 0.5) ox) vy (- (+ y 0.5) oy) vz (- (+ z 0.5) oz)
         dist (js/Math.hypot vx vy vz)]
     (and (rays/in-cone? (rays/basis (.-yaw e) (.-pitch e)) (:hx cone) (:hy cone) vx vy vz)

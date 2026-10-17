@@ -16,7 +16,8 @@
   cut walk runs nothing. path-world builds the planner's snapshot through engine.path.fixture, engine.path.blocks and
   engine.path.space.
   Test-only; ported from the deleted js/fake-steer.mjs."
-  (:require [engine.fake.doors :as doors]
+  (:require [engine.constants :as k]
+            [engine.fake.doors :as doors]
             [engine.path.blocks :as blocks]
             [engine.path.fixture :as fx]
             [engine.path.space :as space]
@@ -31,7 +32,7 @@
 (def climb 0.2)
 (def slip 0.15)
 (def height 1.8)
-(def half-width 0.3)
+(def half-width k/hitbox-half-width)
 (def scan-down 4)
 (def fall-limit 256)
 (def bury 3)

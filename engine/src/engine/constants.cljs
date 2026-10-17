@@ -13,6 +13,7 @@
 (def hitbox-half-width "Half the width of the body's box as the server has it." (unchecked-get values "hitboxHalfWidth"))
 (def body-height "The height of a standing body's box." (unchecked-get values "bodyHeight"))
 (def eye-height "From a standing body's feet to its eyes." (unchecked-get values "eyeHeight"))
+(def reach "How far from its eyes a body can use a block." (unchecked-get values "reach"))
 (def step-height "The highest rise a body walks up without a jump." (unchecked-get values "stepHeight"))
 (def gravity "The speed a falling body gains each tick, before air-drag." (unchecked-get values "gravity"))
 (def air-drag "What is left of a body's vertical speed each tick." (unchecked-get values "airDrag"))
