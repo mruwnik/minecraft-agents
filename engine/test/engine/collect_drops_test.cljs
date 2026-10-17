@@ -141,25 +141,25 @@
             (is (= [:too-deep] (mapv :reason (bd/left-drops seen))))
             (is (empty? (bd/calls p "collect")))))))))
 
-(def leaf-wall
-  "A wall of leaves at x 2, z -2..2, two high: a drop at (4,64,0) behind it is out of the body's sight."
-  (into {} (for [z (range -2 3) y [64 65]] [(str "2," y "," z) "oak_leaves"])))
+(def wall
+  "A stone wall at x 2, z -2..2, two high: a drop at (4,64,0) behind it is out of the body's sight."
+  (into {} (for [z (range -2 3) y [64 65]] [(str "2," y "," z) "stone"])))
 
-(deftest a-drop-behind-a-leaf-wall-is-found-by-walking-round-it-when-a-search-is-asked
+(deftest a-drop-behind-a-wall-is-found-by-walking-round-it-when-a-search-is-asked
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (bd/setup {:self body :blocks leaf-wall})]
+        (let [{:keys [eng p]} (bd/setup {:self body :blocks wall})]
           (drop! p [4 64 0] "oak_log")
           (let [result (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60))]
             (is (= 1 (:collected result)))
             (is (= 1 (bd/carried p "oak_log")))))))))
 
-(deftest a-drop-behind-a-leaf-wall-stays-unseen-without-a-search
+(deftest a-drop-behind-a-wall-stays-unseen-without-a-search
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (bd/setup {:self body :blocks leaf-wall})]
+        (let [{:keys [eng p]} (bd/setup {:self body :blocks wall})]
           (drop! p [4 64 0] "oak_log")
           (let [result (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0}} 30))]
             (is (= 0 (:collected result)))
@@ -189,7 +189,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (bd/setup {:self body :time night-ms :blocks (assoc leaf-wall "0,66,0" "stone")})]
+        (let [{:keys [eng p]} (bd/setup {:self body :time night-ms :blocks (assoc wall "0,66,0" "stone")})]
           (drop! p [4 64 0] "oak_log")
           (let [result (with-redefs [sh/buried? (constantly true)]
                          (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60)))]
@@ -204,7 +204,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (bd/setup {:self body :blocks leaf-wall})]
+        (let [{:keys [eng p]} (bd/setup {:self body :blocks wall})]
           (drop! p [-1 64 0] "oak_sapling")
           (drop! p [4 64 0] "oak_log")
           (let [result (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log" "oak_sapling"] :want-items ["oak_log"]

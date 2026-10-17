@@ -26,7 +26,7 @@
   the body has seen the floor under it solid and safe and the cells round it (no lava, fluid or cave opening, nothing
   hazardous beside it), the walk dropping one block at most; else it is left, with a debug collect-drops.left
   {:pos :reason :unseen-floor|:unseen-cell|:unsafe-floor|:too-deep}. A drop still falling is judged at rest.
-  With :search, when fewer than :want items (those named in :want-items, else any) were collected and no item is in sight (leaves hide drops beyond them), the body walks (a go-to child, range 0)
+  With :search, when fewer than :want items (those named in :want-items, else any) were collected and no item is in sight (trunks or terrain hide drops), the body walks (a go-to child, range 0)
   to seen standable cells round the anchor, nearest first, and looks again at each, until an item is seen or the cells within :search
   blocks are tried. Underground a walk goes on at night; a search that go-to made wait :search-waits calls in a row ends with :reason :search-waited.
   While it runs it holds its work area (jobs.lib.loose :collecting), so the :loose-items reflex leaves those drops to it.

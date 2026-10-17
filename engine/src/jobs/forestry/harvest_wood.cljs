@@ -17,7 +17,7 @@
 (def doc
   "Fell a tree, collect what dropped and replant. Runs three child jobs in turn, each called once and run to its end:
   :fell (jobs.forestry.fell-tree), :collect (collect-drops) and :plant (plant-sapling).
-  :collect works around the felled tree's base (when fewer logs came in than were felled and no drop is in sight, it walks round the base to look: leaves hide drops), wherever a reflex has since taken the body. Only replant debts within :radius of where the body stood when :plant began are
+  :collect works around the felled tree's base (when fewer logs came in than were felled and no drop is in sight, it walks round the base to look: trunks and terrain hide drops), wherever a reflex has since taken the body. Only replant debts within :radius of where the body stood when :plant began are
   planted; the others (and any when no sapling is carried or the spot is not clear) stay owed, and the job
   warns harvest-wood.debts-owed with their :count and the :nearest one's :pos.
   Before the first tree it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!; :deposit-first? false skips it).
