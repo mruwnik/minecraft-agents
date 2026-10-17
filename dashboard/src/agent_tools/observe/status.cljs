@@ -215,7 +215,8 @@
       (clean-pairs :wake :idle :message (clip (:message e)) :jobs (:jobs d))
 
       (and (= :body source) (= :died kind))
-      (clean-pairs :wake :died :cause (clip (:cause d) 80) :at (position (:pos d)))
+      (clean-pairs :wake :died :cause (clip (:cause d) 80) :at (position (:pos d))
+                   :survived (not-empty (mapv id-str (:survived d))))
 
       (and (= :body source) (:danger opts) (= :hurt kind)
            (let [h (:health d) below (:danger-below opts)] (or (nil? below) (not (number? h)) (<= h below))))

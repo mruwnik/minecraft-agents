@@ -321,6 +321,10 @@
     (is (<= (count noticed) 256))
     (is (observe-status/repeat-notice? noticed (notice "j999" :dig "d")))))
 
+(deftest a-death-wake-passes-on-the-surviving-jobs
+  (is (= ["j14"] (:survived (observe-status/classify (event :body :died {:cause "skeleton" :survived ["j14"]}) defaults "Probe"))))
+  (is (not (contains? (observe-status/classify (event :body :died {:cause "skeleton"}) defaults "Probe") :survived))))
+
 (deftest a-death-wake-names-cause-and-place
   (is (= {:wake :died :cause "skeleton" :at [1 2 3]}
          (observe-status/classify (event :body :died {:cause "skeleton" :pos {:x 1 :y 2 :z 3}}) defaults "Probe"))))

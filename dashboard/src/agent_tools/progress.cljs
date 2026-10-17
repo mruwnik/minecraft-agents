@@ -133,6 +133,7 @@
           (when (= :manual (:mode s)) [(str "manual (" (get-in s [:manual :who]) ")")])
           (when (and died (< (or (:ago-s died) 0) recent-death-s))
             [(str "died " (:ago-s died) "s ago" (when (:cause died) (str " (" (:cause died) ")")))])
+          (when (seq (:muted-triggers s)) [(str "muted " (str/join "," (map word (:muted-triggers s))))])
           (map #(str "attention " (:job %) " " (word (:reason %))) (get-in s [:attention :items]))
           (map #(str "failed " (:id %) " " (clip (:error %) 60)) (get-in s [:failed :items]))
           (keep #(when (and (:waiting %) (not (routine-wait? (:waiting %))))
@@ -180,6 +181,8 @@
 
 ;; Reading the body
 
+(defn fatal? [error] (contains? #{"ABORT_ERR" "EOBSERVERBUSY" "EOBSERVERLIMIT"} (code-of error)))
+
 (defn ^:async read-edn!
   "GET endpoint as EDN: {:status :value}."
   [get! base endpoint signal]
@@ -192,7 +195,10 @@
   [get! {:keys [base goal want]} signal]
   (let [st (await (read-edn! get! base "/status?limit=32" signal))
         _ (when-not (= 200 (:status st)) (throw (coded "EOBSERVEUNAVAILABLE" "no status")))
-        s (status/compact-status (:value st))
+        muted (try (let [r (await (read-edn! get! base "/triggers" signal))]
+                     (when (= 200 (:status r)) (mapv :id (filter :muted (:items (:value r))))))
+                   (catch :default error (when (fatal? error) (throw error))))
+        s (cond-> (status/compact-status (:value st)) (seq muted) (assoc :muted-triggers muted))
         inv (inventory/compact (:value (await (read-edn! get! base "/inventory" signal))) :inventory)
         listed? (some #(= goal (:id %)) (job-rows s))
         goal-job (when (and goal (not listed?))
@@ -242,7 +248,11 @@
   (case (:wake wake)
     :died {:wake :died :text (str/join " " (remove nil? [(:cause wake) (some->> (:at wake) (str "at "))
                                                         (when (seq (:cancelled-jobs wake))
-                                                          (str "cancelled " (str/join "," (map :id (:cancelled-jobs wake)))))]))}
+                                                          (str "cancelled " (str/join "," (map :id (:cancelled-jobs wake)))))
+                                                        (let [kept (set (:survived wake))]
+                                                          (cond (and goal (kept (str goal))) (str "goal " goal " kept")
+                                                                goal (str "goal " goal " lost, re-submit")
+                                                                (seq kept) (str "kept " (str/join "," (sort kept)))))]))}
     :attention {:wake :needs-you
                 :text (str "attention: " (str/join "; " (map #(str (:job %) " " (word (:reason %)) " " (clip (:message %) 80))
                                                              (take 3 (:requests wake)))))}
@@ -285,8 +295,6 @@
                                                                   :watch (clj->js ids) :chatter "addressed" :no-danger (not danger)
                                                                   :danger-below danger-below}))
           get! signal identity)))
-
-(defn fatal? [error] (contains? #{"ABORT_ERR" "EOBSERVERBUSY" "EOBSERVERLIMIT"} (code-of error)))
 
 (defn ^:async wait-progress!
   "Wait until the agent is needed: a promise of {:wake :text :line :items}. r is the request (with :wait-ms,

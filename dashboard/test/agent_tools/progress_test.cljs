@@ -47,6 +47,17 @@
     (is (some #(str/includes? % "fruitless") needs) "an attention request")
     (is (not-any? #(str/includes? % "cooking") needs) "cooking finishes by itself")))
 
+(deftest needs-you-lists-muted-triggers
+  (is (some #(= "muted hostile,eat" %) (progress/needs-you {:muted-triggers [:hostile "eat"] :current {:id "j1"}})))
+  (is (empty? (progress/needs-you {:current {:id "j1"}}))))
+
+(deftest a-death-wake-says-whether-the-goal-job-survived
+  (doseq [[survived goal text] [[["j14"] "j14" "goal j14 kept"]
+                                [[] "j14" "goal j14 lost, re-submit"]
+                                [["j2"] "j14" "goal j14 lost, re-submit"]
+                                [["j2" "j3"] nil "kept j2,j3"]]]
+    (is (str/includes? (:text (progress/wake-verdict {:wake :died :cause "zombie" :survived survived} goal)) text))))
+
 (deftest needs-you-names-idle-death-offline-and-manual
   (is (some #(str/includes? % "no jobs") (progress/needs-you {:idle true :health 20})))
   (is (some #(str/includes? % "died") (progress/needs-you {:died {:ago-s 30 :cause "zombie"} :current {:id "j1"}})))
@@ -125,6 +136,7 @@
                      value (cond
                              (= "/snapshot" endpoint) {:body "Probe" :generation-id "g" :outstanding {} :cursor cursor}
                              (str/starts-with? endpoint "/status") (:status @world)
+                             (= "/triggers" endpoint) (:triggers @world {:items []})
                              (= "/inventory" endpoint) (:inventory @world)
                              (str/starts-with? endpoint "/job?id=") (get (:jobs @world) (subs endpoint 8) {:ok false :reason :job-not-found})
                              (str/starts-with? endpoint "/results") {:results {}}
@@ -184,6 +196,13 @@
                      (is (<= 2 (count lines) 5) text)
                      (is (str/starts-with? (first lines) "WAKE died"))
                      (is (str/includes? (second lines) "hp 20 food 20")))))))))
+
+(deftest the-line-lists-the-muted-triggers-the-engine-reports
+  (with-fixture working-status {:wait-ms 100}
+    (fn [f]
+      (swap! (:world f) assoc :triggers {:items [{:id :hostile :muted {:until 5}} {:id :eat}]})
+      (-> (wait! f)
+          (.then (fn [result] (is (str/includes? (:line result) "muted hostile") (:line result))))))))
 
 (deftest a-goal-job-waiting-for-a-source-wakes-on-body-idle
   (with-fixture working-status {:wait-ms 2000}
