@@ -339,6 +339,19 @@
     (if (seq (sh/open-room-doors (:primitives c))) (min h pit-roof-height) h)))
 
 
+(defn dig-in-inputs
+  "What the night read when it chose to dig in here (the event night.dig-in-why)."
+  [p]
+  {:pos (sh-sense/feet p)
+   :roofed (sh-sense/roofed? p (sh-sense/room-roof-height))
+   :buried (sh-sense/buried? p)
+   :shut-in (sh-sense/shut-in-room? p)
+   :open-cave (sh-sense/open-cave? p)
+   :cave-cells (sh-sense/cave-cells p)
+   :head-in-block (sh-sense/head-in-block? p)
+   :open-doors (count (sh/open-room-doors p))
+   :unseen-roof (sh/unseen-roof-cell p)})
+
 (defn ^:async shelter!
   "No bed, nobody asleep, not roofed: dig in here (jobs.survival.dig-in, one call), unless a site failed here tonight.
   The site is written :interrupted before the call (a firing after a cut mid-pit does not dig it deeper; a listed night
@@ -362,6 +375,7 @@
             start (or resume (sh-sense/feet p))
             _ (hold/busy! c)
             _ (when-not resume
+                (ctx/emit! c :night.dig-in-why :info (dig-in-inputs p))
                 (ctx/update-mem! c assoc :digging start)
                 (sites/site-failed! c start :interrupted))
             d (await (ctx/call c :dig-in 'jobs.survival.dig-in {:roof-height (dig-in-roof-height c) :wall-value (:wall-value (:args c))}))]

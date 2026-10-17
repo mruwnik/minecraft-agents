@@ -168,7 +168,10 @@
           (await (st/tick-n eng 40))
           (is (= [63 62 61] (keep #(when (= [0 0] [(:x %) (:z %)]) (:y %)) (mapv st/arg-pos (st/calls p "dig"))))
               "one pit; the second firing does not dig deeper (the other digs are the stair out by day)")
-          (is (= 2 (fired seen)) "fired again after the cut"))))))
+          (is (= 2 (fired seen)) "fired again after the cut")
+          (is (= [{:roofed false :buried false :open-cave false}]
+                 (mapv #(select-keys % [:roofed :buried :open-cave]) (st/emitted seen :night.dig-in-why)))
+              "the inputs of the choice are recorded once, at the start of the pit"))))))
 
 (deftest with-no-site-left-the-night-holds-exposed-then-stops-at-morning
   (async done
