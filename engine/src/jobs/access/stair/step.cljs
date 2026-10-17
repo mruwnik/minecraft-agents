@@ -186,10 +186,23 @@
       (await (bridge/place-floor! c in item cell (take-back-floor? c))) open
       :else (assoc stop :sealed [cell]))))
 
+(defn ^:async look-back!
+  "Once per cell (memory :back-looked), look at the cells of the bridge chain behind floor that are still unknown: the body
+  looks forward, so the support it would bridge from is often unseen."
+  [c floor]
+  (let [{:keys [back depth]} (bridge-opts c)]
+    (loop [cells (when back (for [j (range 1 (inc depth))] (mapv + floor [(* j (first back)) 0 (* j (second back))])))]
+      (when-let [cell (first cells)]
+        (when (and (unknown? (:primitives c) cell) (not (contains? (:back-looked (ctx/mem c)) cell)))
+          (ctx/update-mem! c update :back-looked (fnil conj #{}) cell)
+          (await (look-at! c cell)))
+        (recur (rest cells))))))
+
 (defn ^:async bridge!
   "Place carried filler on the missing floor of the step (bridge/bridge-plans, a plan whose placing found no support gives way
   to the next). :again, or a stop map (:no-support-floor when no plan works), with the opening shut-opening! leaves."
   [c in {:keys [floor] :as cs}]
+  (await (look-back! c floor))
   (let [item (choose/filler c :build)
         plans (bridge/bridge-plans (:block-at in) floor (bridge/eye-y c) (bridge-opts c))
         stop (cond

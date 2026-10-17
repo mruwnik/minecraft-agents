@@ -88,7 +88,9 @@
   seen a stop :floor-unseen once the cut is open, not a guess. cells :bridged? true: the floor was placed by the stair, what is under it is not judged; :filler? true: air under a solid floor is no stop (the next floor is bridged); :up? true (a stair up or level): it never is (those dig no floor)."
   [{:keys [block-at plugs] :as in} {:keys [cut floor under bridged? up? filler? ways]} accept]
   (let [plug-cell (first (filter #(and (contains? plugs %) (not (rules/air (block-at %)))) cut))
-        floor-cell (known-floor block-at cut (into (set (:ways in)) ways))
+        all-ways (into (set (:ways in)) ways)
+        floor-cell (known-floor block-at cut all-ways)
+        over-stand (when (and (contains? (set (map (fn [[x y z]] [x (inc y) z]) all-ways)) floor) (not (rules/solid-floor? block-at floor))) floor)
         fluid-cell (first (filter #(rules/fluids (block-at %)) cut))
         crop-cell (first (filter #(crop-names (block-at %)) cut))
         unseen-cell (when-let [unseen? (:unseen? in)]
@@ -102,6 +104,8 @@
                  :why "the cell was filled against water by this body; the water is behind it (:dig-plugs true digs it)"}
       floor-cell {:reason :undercuts-way :cell floor-cell :block (block-at floor-cell)
                   :why "the cell is the floor of a stair this body cut earlier; cutting it breaks the way"}
+      over-stand {:reason :undercuts-way :cell over-stand :block (block-at over-stand)
+                  :why "the floor of the step is a step of a stair this body cut earlier; flooring it would block the way"}
       unseen-cell {:reason :floor-unseen :cell unseen-cell}
       (not (rules/solid-floor? block-at floor)) {:reason :no-floor :cell floor :block (block-at floor)}
       (and (not bridged?) (not up?) (let [n (block-at under)] (or (and (rules/air n) (not filler?)) (rules/fluids n))))

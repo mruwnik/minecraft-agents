@@ -43,7 +43,7 @@
 
   A step's floor must be solid, and for a stair down the cell under it not a fluid, nor air when no building block is carried (:cave-below), and everything loaded.
   A floor of air gets a carried building block (jobs.lib.choose/fillers :build, never an ore or valuable) after the
-  rules' may-place?, against a neighbour, or from the cell under it first when only that has a face (jobs.lib.bridge/bridge-plans; a plan whose face was unseen air gives way to the next); a stair down also bridges back along its line, up to setting bridge-depth cells, from a solid cell, seen or else unseen (a cave under its last floor); a cave floor with nothing within that stops :no-support-floor (the underside of the block over it cannot be aimed at).
+  rules' may-place?, against a neighbour, or from the cell under it first when only that has a face (jobs.lib.bridge/bridge-plans; a plan whose face was unseen air gives way to the next); a stair down also bridges back along its line, up to setting bridge-depth cells, from a seen solid cell, looking at unseen ones first (a cave under its last floor); a cave floor with nothing within that stops :no-support-floor (the underside of the block over it cannot be aimed at).
   The cell under a placed floor is not judged. With no such block: :no-floor with :filler :none; with no face to place
   against at any of them (a void pocket): :no-support-floor with :cell, :tried and :why. A stair down that stops so shuts the cut cell over the missing floor with a carried block (:sealed [cell]), else the stop names it (:open-to [cell]). A lava or water floor is never bridged. A go-to stair (:note) writes its placed floors to the scaffold ledger
   (purpose :stair-floor) for jobs.access.cleanup to take back once go-to's job ended (setting take-back-floors?).
@@ -58,7 +58,7 @@
   - :fluid-in-cut: a cut cell holds a fluid.
   - :crop: a crop, stem or farmland in a cut cell (never dug, zone or not).
   - :base-block: a chest, bed, furnace, table, door or other base block in a cut cell, or the block a door stands on (never dug, anyone's).
-  - :undercuts-way: a cut cell is the floor of a stair this body cut earlier (memory :stair-way, written at every
+  - :undercuts-way: a cut cell is the floor of a stair this body cut earlier, or a step's floor is air at a step of such a stair (a level run back over it; flooring it would block the stair) (memory :stair-way, written at every
     end with the floors of the steps walked, joined to the earlier stair it goes on from).
   - :unbreakable: bedrock, barrier, portal frames, command blocks.
   - :no-tool: a pickaxe block with no pickaxe carried.

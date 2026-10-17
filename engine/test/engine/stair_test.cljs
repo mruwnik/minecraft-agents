@@ -17,6 +17,8 @@
             [jobs.access.stair :as stair]
             [jobs.lib.access :as access]
             [jobs.lib.bridge :as bridge]
+            [jobs.lib.dig-look :as dig-look]
+            [jobs.access.stair.step :as sstep]
             [jobs.lib.ledger :as ledger]
             [engine.settings :as settings]
             [engine.contract :as contract]
@@ -68,8 +70,25 @@
     (is (= [[[3 60 0] floor]] (bridge/bridge-plans (solid-at [2 60 0]) floor 70.0 {:back [-1 0] :depth 2}))
         "a solid cell back along the line: the cells between are placed from it")
     (is (empty? (bridge/bridge-plans (solid-at [1 60 0]) floor 70.0 {:back [-1 0] :depth 2})) "but not beyond the depth")
-    (is (= [[[3 60 0] floor]] (bridge/bridge-plans (fn [cell] (when-not (= cell [2 60 0]) "air")) floor 70.0 {:back [-1 0] :depth 2}))
-        "an unseen support behind the body still gives a chain")))
+    (is (empty? (bridge/bridge-plans (fn [cell] (when-not (= cell [2 60 0]) "air")) floor 70.0 {:back [-1 0] :depth 2}))
+        "an unseen support is no support: the stair looks at it first")))
+
+(deftest a-cave-floor-bridge-looks-at-the-unseen-cells-back-along-the-line-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/seeing-within (tu/fake {:self {:pos {:x 10 :y 64 :z 0}} :blocks {}}) 0.5)
+              mem* (atom {})
+              c {:primitives p :args {:dir :down :heading :east} :id "stair-stub" :root "stair-stub" :slots []
+                 :view (fn [] {:now 1000000 :data {:entries {(mem/job-kind "stair-stub") [{:t 1000000 :data @mem*}]}
+                                                    :policies {(mem/job-kind "stair-stub") mem/job-policy}}})
+                 :update-mem (fn [f more] (apply swap! mem* f more))}
+              looks (atom [])]
+          (with-redefs [dig-look/look-at! (fn [_ cell] (swap! looks conj cell) (js/Promise.resolve true))]
+            (await (sstep/look-back! c [14 60 0]))
+            (await (sstep/look-back! c [14 60 0])))
+          (is (= [[13 60 0] [12 60 0]] (take 2 @looks)) "the nearest cell back first")
+          (is (apply distinct? @looks) "each cell once"))))))
 
 (deftest an-unseen-neighbour-is-tried-only-after-the-cells-with-a-known-face
   (let [floor [4 60 0]
@@ -128,6 +147,13 @@
     (is (= :undercuts-way (:reason (sc/stop-of (assoc in :ways #{[1 64 0]}) cells #{}))) "ways in the rules input")
     (is (nil? (sc/stop-of (assoc in :block-at (world-fn {[1 64 0] "air"})) (assoc cells :ways #{[1 64 0]}) #{}))
         "a floor that is air now is no way")))
+
+(deftest a-level-step-whose-floor-is-a-step-of-an-earlier-stair-is-refused-not-floored
+  (let [in {:block-at (world-fn {[1 64 0] "air"}) :feet [0 65 0] :zones [] :footprints #{} :ledger #{}}
+        cells (shape/step-cells [0 65 0] :level :east)]
+    (is (= {:reason :undercuts-way :cell [1 64 0]}
+           (select-keys (sc/stop-of in (assoc cells :ways #{[1 63 0]} :filler? true) #{}) [:reason :cell])))
+    (is (= :no-floor (:reason (sc/stop-of in (assoc cells :ways #{[5 60 0]}) #{}))) "an unrelated stair: the floor is bridged as before")))
 
 (deftest way-floors-are-the-floors-of-the-steps-walked
   (is (= [[1 63 0] [2 62 0]] (sc/way-floors [0 65 0] :down :east 2)))
