@@ -36,6 +36,7 @@
     (contract/verdict (ctx-of sym world args m) (select-keys job [export]))))
 
 (defn kind+reason [[kind _ data]] [kind (:reason data)])
+(defn kind+why [[kind _ data]] [kind (:why data)])
 
 (deftest bad-args-are-never-at-the-start
   (are [sym args reason] (= [:never reason] (kind+reason (verdict-of :can-start? sym {} args)))
@@ -45,8 +46,12 @@
     'jobs.items.interact {} :bad-args
     'jobs.items.get-kit {} :bad-args
     'jobs.items.smelt {:item "diamond"} :not-smeltable
-    'jobs.memory.remember {} :bad-kind
-    'jobs.memory.remember {:kind :hurt} :reserved-kind))
+    'jobs.memory.remember {} :bad-args))
+
+(deftest remember-refuses-a-bad-or-reserved-kind-as-bad-args-with-the-why
+  (are [args why] (= [:never why] (kind+why (verdict-of :can-start? 'jobs.memory.remember {} args)))
+    {} :bad-kind
+    {:kind :hurt} :reserved-kind))
 
 (deftest a-missing-chest-or-item-is-later-at-the-start
   (are [sym world args reason] (= [:later reason] (kind+reason (verdict-of :can-start? sym world args)))
