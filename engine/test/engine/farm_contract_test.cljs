@@ -274,7 +274,7 @@
       (fn ^:async t []
         (let [e (await (ending-of (ht/start {:world ht/wheat-world}) harvest {} 200))]
           (is (= {:kind :done :cause nil} (kc e)))
-          (is (= {:cut 9 :replanted 9 :bare [] :lost [] :gave-up false} (dissoc (:data e) :text))))
+          (is (= {:cut 9 :replanted 9 :bare [] :lost [] :gave-up false} (dissoc (:data e) :text :spent :spent-at))))
         (let [cells (for [x (range 8 13)] (ht/cell-key x 64 0))
               e (await (ending-of (ht/start {:world {:blocks (zipmap cells (repeat "wheat")) :ages (zipmap cells (repeat 7)) :unreachable cells}})
                                   harvest {:radius 14} 400))]
