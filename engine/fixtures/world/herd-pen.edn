@@ -37,6 +37,7 @@
    :blocks [[:fill [0 0 0] [31 0 31] "grass_block"]
             [:fill [19 0 14] [23 0 18] "air"]
             [:fill [18 1 13] [24 1 19] "oak_fence" :outline]
+            [:fill [19 1 14] [23 1 18] "air"]
             [:set [18 1 16] "oak_fence_gate[facing=east,open=false]"]]
    :body {:at [12.5 1 16.5] :yaw 270 :inventory [["lead" 4]]}
    :act [[:summon "cow" [10.5 1 18.5]]
