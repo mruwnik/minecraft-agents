@@ -17,6 +17,7 @@
             [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.cut :refer [approaches cut-loop? nearest-hostile note-restart! start-attempt! way-hostiles]]
             [jobs.movement.go-to.escalation :as esc]
+            [jobs.movement.go-to.health :as health]
             [jobs.movement.go-to.holes :refer [note-holes!]]
             [jobs.movement.go-to.restore :as restore]
             [jobs.movement.go-to.holds :refer [plug-hold plug-since]]
@@ -56,7 +57,8 @@
   - A drop or plant that costs hp is planned only within a damage budget (jobs.lib.cost/damage-budget: the health over
     the call's :floor :health, default 12, less 1, at most its :spend :health; a caller's floor counts only above 12
     unless this call gives one, walk-limits). When that budget is why no way was found, the body that can heal waits
-    (info go-to.waiting-health, :continue; it eats a carried food first when hungry), and one that cannot heal or whose
+    (info go-to.waiting-health, :continue; can-run? is :later :healing {:health :want} until it has regenerated or the wait's
+    time is up, so under a reflex such as a flee the call ends condition-failed instead; it eats a carried food first when hungry), and one that cannot heal or whose
     healing stalled goes over it, down to 1 hp (info go-to.over-budget) only with a given :floor :health of 1 or less;
     otherwise, and with a higher floor or a :spend :health, it gives up :why :needs-health. See jobs.movement.go-to.health.
   - :unknown true (default false) plans over what the body has seen or felt only: a cell it never saw is unknown (air to
@@ -204,18 +206,10 @@
    :ignore-zones? :shared
    :spare-own-builds {:doc "the escalation never digs a cell of a plan this body made (stops :own-build); false: it may, and warns of each cell dug" :spec boolean? :default true}})
 
-(defn with-body-food
-  "c with the :food arg the caller gave, else the body's own food now (a felt fact): the walk counts on it."
-  [c]
-  (if (number? (:food (:args c)))
-    c
-    (let [food (.-food (.self (:primitives c)))]
-      (cond-> c (number? food) (assoc-in [:args :food] food)))))
-
 (defn ^:async step!
   "One iteration of a call: :again to go on in the same call, else what the call returns."
   [c0 pos]
-  (let [c (with-body-food c0)
+  (let [c (health/with-body-food c0)
         m (ctx/mem c)]
     (cond
       (:restore-now m) (await (restore/restore-round! c))
@@ -271,7 +265,7 @@
   limits, walked nowhere (go-to.preview): time from its seconds, health its planned damage, :moves-to the goal cell,
   :route what the planner found."
   [c]
-  (let [c (with-limits (with-body-food c))]
+  (let [c (with-limits (health/with-body-food c))]
     (preview/quote-of-route (await (preview/route! c)) (ways/escalating? c))))
 
 (defn limits-fit
@@ -302,6 +296,8 @@
       (meta at))))
 
 (def fit? ready/ok)
+
+(def can-run? health/can-run?)
 
 (defn ^:async run-steps!
   "pace/steps! over step!, goal aimed again each step (goal-pos), so a column seen on the way resolves; the approach

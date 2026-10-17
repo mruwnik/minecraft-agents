@@ -1,14 +1,17 @@
 (ns jobs.movement.go-to.health
   "go-to when the damage budget (jobs.lib.cost/damage-budget) is why no way was found (the plan's :damage-refused): heal
   first, then go over the budget, so a walk still arrives unless it truly cannot.
-  - A body that can heal (heal-way) waits: with food of 18 or more it regenerates (info go-to.waiting-health {:health},
-    :continue after a one second wait), with a carried food it eats first (a jobs.survival.eat child, ctx/call). Healing that gains
-    no hp in heal-stall-s stops.
+  - A body that can heal (heal-way) waits: with food of 18 or more it regenerates (info go-to.waiting-health {:health}; the
+    round writes mem :heal {:to :until} and yields :continue, and go-to's can-run? says :later :healing until the body is at
+    :to or :until, the regeneration time with slack, passes), with a carried food it eats first (a jobs.survival.eat child,
+    ctx/call). A wait that ends short of :to stops healing.
   - A body that cannot heal, or whose healing stalled, goes over the budget only when the call's :floor :health is 1 or
     less (go-to's walk-limits; mem :over-budget; info go-to.over-budget {:health}): the walks then plan with the
     survivable budget, all but 1 hp. Not with a higher floor (never crossed) or a :spend :health (a cap): those, a call
     that does not allow it, and a body that still has no way, give up :needs-health."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.constants :as constants]
+            [engine.contract :as contract]
+            [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.health :as health]
@@ -21,9 +24,7 @@
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]))
 
-(def heal-stall-s "Seconds of waiting without gaining an hp after which healing is given up." 30)
-
-(def wait-ms "How long each wait for health lasts before the call yields." 1000)
+(def heal-slack "How many times the regeneration time the wait for health may last before healing counts as stalled." 2)
 
 (defn heal-way
   "How a body {:health :food :effects (names) :on-fire :carried-food} can gain hp: :full (nothing to gain), :regen (food
@@ -36,6 +37,14 @@
     (>= food foods/top-up-food) :regen
     carried-food :eat
     :else :none))
+
+(defn with-body-food
+  "c with the :food arg the caller gave, else the body's own food now (a felt fact): the walk counts on it."
+  [c]
+  (if (number? (:food (:args c)))
+    c
+    (let [food (.-food (.self (:primitives c)))]
+      (cond-> c (number? food) (assoc-in [:args :food] food)))))
 
 (defn body-of
   "The body's {:health :food :effects :on-fire :carried-food}: the food is the job's (wworld/food-of), the rest from its primitives."
@@ -51,41 +60,54 @@
   [c result]
   (boolean (and (:damage-refused result) (nil? (:max-damage (wworld/walk-settings c))))))
 
-(def heal-gap-ms "A wait for health older than this is a new one (the call may have been cut or ended)." 10000)
-
 (defn heal-state
-  "The healing in progress, mem's :heal {:health :t :last :ate :stalled} (health at the last gain and when, the last wait,
-  whether it ate, whether it gave up), nil when there is none or its last wait is over heal-gap-ms old."
-  [m now]
+  "The healing in progress, mem's :heal {:to :until :ate} (the health waited for, the time (ms) the wait may last, whether it
+  ate), nil when there is none or the body has reached :to."
+  [m health]
   (let [h (:heal m)]
-    (when (and h (< (- now (:last h)) heal-gap-ms)) h)))
+    (when (and h (or (nil? (:to h)) (< health (:to h)))) h)))
+
+(defn waiting?
+  "Whether st is a wait for regeneration still running at now."
+  [st now]
+  (boolean (and (:until st) (< now (:until st)))))
 
 (defn stalled?
-  "Whether healing at health gained no hp since the state st's last gain for heal-stall-s of now (ms)."
+  "Whether the wait st ran out before the body reached its :to."
   [st health now]
-  (boolean (and st (or (:stalled st) (and (<= health (:health st)) (>= (- now (:t st)) (* 1000 heal-stall-s)))))))
+  (boolean (and (:until st) (>= now (:until st)) (< health (:to st)))))
 
-(defn next-state
-  "The healing state after a step at health and now: the gain time moves with every gain; flags keep their value unless given."
-  [st health now flags]
-  (merge {:health (if (and st (<= health (:health st))) (:health st) health)
-          :t (if (and st (<= health (:health st))) (:t st) now)
-          :last now}
-         (select-keys st [:ate :stalled])
-         flags))
+(defn heal-target
+  "The health at which the planned hp of the drop fit the damage budget: at most 20."
+  [c health planned]
+  (min 20 (+ health (max 1 (js/Math.ceil (- planned (wworld/damage-budget c)))))))
+
+(defn can-run?
+  "A wait for regeneration (mem :heal, written by heal!) is a :later :healing {:health :want} while the body is below its :to,
+  can regenerate and the wait's time is not up."
+  [c]
+  (let [c (with-body-food c)
+        st (:heal (ctx/mem c))
+        health (.-health (.self (:primitives c)))]
+    (if (and (:until st) (< health (:to st)) (waiting? st (ctx/now c)) (= :regen (heal-way (body-of c))))
+      (contract/later :healing (str "healing from " health " hp to " (:to st)) :health health :want (:to st))
+      (contract/ok :not-healing "no wait for health"))))
 
 (defn ^:async heal!
-  "One step of healing for way (:regen or :eat): :continue after waiting or eating."
-  [c way body st]
+  "One step of healing for way (:regen or :eat) toward to hp: eating is a child; regenerating writes mem :heal {:to :until}
+  (the wait's deadline from the regeneration rate) and go-to's can-run? holds the call there. :continue."
+  [c way body st to]
   (let [now (ctx/now c)]
-    (ctx/update-mem! c assoc :heal (next-state st (:health body) now (when (= :eat way) {:ate true})))
-    (if (= :eat way)
-      (await (ctx/call c :eat 'jobs.survival.eat {:until foods/top-up-food}))
-      (do (when-not st
-            (ctx/emit! c :go-to.waiting-health :info {:health (:health body) :food (:food body)
-                                                      :text (str "waiting to heal (" (:health body) " hp) before a drop it cannot afford")}))
-          (await (child/pause! c (/ wait-ms 1000) :healing))))
-    :continue))
+    (cond
+      (= :eat way) (do (ctx/update-mem! c assoc :heal (assoc st :ate true))
+                       (await (ctx/call c :eat 'jobs.survival.eat {:until foods/top-up-food})))
+      (waiting? st now) nil
+      :else (do (when-not (:until st)
+                  (ctx/emit! c :go-to.waiting-health :info {:health (:health body) :food (:food body)
+                                                            :text (str "waiting to heal (" (:health body) " hp) before a drop it cannot afford")}))
+                (ctx/update-mem! c update :heal merge (select-keys st [:ate])
+                                 {:to to :until (+ now (* 1000 heal-slack constants/regen-seconds-per-hp (- to (:health body))))}))))
+  :continue)
 
 (def look-drop-min "Blocks of a drop from which its landing is looked at before the way is judged too dear." 4)
 
@@ -167,14 +189,16 @@
       (ctx/update-mem! c assoc :probe-drops (drops (some-> r .-path .-steps)))
       (or (some-> r .-path .-cost .-damage) 0))))
 
+(def probe-keep-ms "How long a probe is kept while the body waits." 10000)
+
 (defn ^:async probe!
   "The hp of the whole way for a body that may spend all but 1 hp, planned again only when the health or the cell changed
-  since the last probe of this wait (a probe that found no way is not kept) (mem :probe, kept heal-gap-ms): see probe-plan!."
+  since the last probe of this wait (a probe that found no way is not kept) (mem :probe, kept probe-keep-ms): see probe-plan!."
   [c pos range]
   (let [now (ctx/now c)
         key [(.-health (.self (:primitives c))) (mapv #(js/Math.floor (% pos)) [:x :y :z])]
         m (:probe (ctx/mem c))]
-    (if (and m (= key (:key m)) (< (- now (:at m)) heal-gap-ms))
+    (if (and m (= key (:key m)) (< (- now (:at m)) probe-keep-ms))
       (:planned m)
       (let [planned (await (probe-plan! c pos range))]
         ;; a nil (no way) is not kept: it ends the wait, and the world may have changed by the next call
@@ -193,14 +217,12 @@
       (await (look-at-drops! c)) :again
       :else
       (let [now (ctx/now c)
-            st (heal-state (ctx/mem c) now)
-            body (cond-> (body-of c) (:ate st) (assoc :carried-food false))
+            body (cond-> (body-of c) (:ate (:heal (ctx/mem c))) (assoc :carried-food false))
+            st (heal-state (ctx/mem c) (:health body))
             way (heal-way body)
-            way (if (and (= :regen way) (stalled? st (:health body) now))
-                  (do (ctx/update-mem! c assoc :heal (next-state st (:health body) now {:stalled true})) :none)
-                  way)]
+            way (if (and (= :regen way) (stalled? st (:health body) now)) :none way)]
         (cond
-          (#{:regen :eat} way) (await (heal! c way body st))
+          (#{:regen :eat} way) (await (heal! c way body st (heal-target c (:health body) planned)))
           (or (:over-budget (ctx/mem c)) min-health (not (:allow-over-budget (:args c))))
           {:needs-health true :heal way :health (:health body) :hp-cost planned :hp-budget (wworld/damage-budget c)}
           :else (do (ctx/update-mem! c assoc :over-budget true)

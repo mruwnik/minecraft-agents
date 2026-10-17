@@ -7,6 +7,7 @@
   "stepHeight": 0.6,
   "gravity": 0.08,
   "airDrag": 0.98,
+  "regenSecondsPerHp": 4,
   "clipTolerance": 1e-07,
   "mobSpeeds": {
     "zombie": 2.3,

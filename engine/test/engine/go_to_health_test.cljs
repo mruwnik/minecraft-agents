@@ -31,24 +31,22 @@
 (defn world [self & [extra]]
   (merge {:blocks cliff4 :self (merge {:pos g/start} self)} extra))
 
-(defn heal-on-wait!
-  "Every wait act of p heals the body 1 hp (to 20): the regeneration the fake lacks."
-  [p]
-  (let [s (fake/state p)]
-    (.override (.-world p) "wait"
-               (fn [token args impl]
-                 (swap! s update-in [:self :health] #(min 20 (inc %)))
-                 (impl token args)))))
-
 (defn ^:async go-heal!
-  "go-to over world with args as a child; the body heals while it waits when heal? is true; {:out :p :seen :eng}."
+  "go-to over world with args as a child; each tick takes 1 s of the fake clock and, when heal? is true, heals the body 1 hp
+  (to 20), the regeneration the fake lacks; {:out :p :seen :eng :clock}."
   [world args heal?]
-  (let [{:keys [eng p] :as s} (g/setup world)
+  (let [clock (atom 1000000)
+        {:keys [eng p] :as s} (g/setup (assoc world :clock clock))
         out (atom :not-done)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (g/recording-parent out args)))]
-    (when heal? (heal-on-wait! p))
     (core/submit! eng '(recording-parent) {})
-    (assoc s :eng eng :out out :ticks (await (g/tick-out! eng 60)))))
+    (loop [i 0]
+      (when (and (< i 60) (seq (:list (core/state eng))))
+        (swap! clock + 1000)
+        (await (core/tick! eng))
+        (when heal? (swap! (fake/state p) update-in [:self :health] #(min 20 (inc %))))
+        (recur (inc i))))
+    (assoc s :eng eng :out out :clock clock)))
 
 (defn y-of [p] (js/Math.floor (second (g/at p))))
 
@@ -205,14 +203,28 @@
                                                            :danger-shape {:sensed {:radius 9}}}))]
           (is (= {:arrived true} @out)))))))
 
-(deftest healing-that-gains-nothing-stalls-after-the-stall-time
+(deftest a-heal-wait-ends-at-its-health-or-when-its-time-is-up
   (let [now 1000000
-        st (gth/next-state nil 13 now {})]
-    (is (not (gth/stalled? st 13 (+ now 29000))))
-    (is (gth/stalled? st 13 (+ now 30000)))
-    (is (not (gth/stalled? st 14 (+ now 31000))))
-    (is (= {:health 14 :t (+ now 31000)} (select-keys (gth/next-state st 14 (+ now 31000) {}) [:health :t])))
-    (is (nil? (gth/heal-state {:heal (assoc st :last now)} (+ now gth/heal-gap-ms))) "an old state is a new wait")))
+        st {:to 14 :until (+ now 8000)}]
+    (is (gth/waiting? st (+ now 7999)))
+    (is (not (gth/waiting? st (+ now 8000))))
+    (is (not (gth/stalled? st 13 (+ now 7999))))
+    (is (gth/stalled? st 13 (+ now 8000)))
+    (is (not (gth/stalled? st 14 (+ now 9000))) "reached the health: not stalled")
+    (is (nil? (gth/heal-state {:heal st} 14)) "a wait that reached its health is over")
+    (is (= st (gth/heal-state {:heal st} 13)))))
+
+(deftest go-to-can-run-says-later-healing-only-while-a-fed-body-below-its-health-is-within-the-wait
+  (let [now 1000000
+        st {:to 14 :until (+ now 8000)}]
+    (are [self at mem kind] (= kind
+                               (with-redefs [ctx/mem (constantly mem) ctx/now (constantly at)]
+                                 (first (go-to/can-run? {:primitives (tu/fake-on-floor {:floor [-5 -5 20 5] :self self}) :args {}}))))
+      {:health 13 :food 20} now {:heal st} :later
+      {:health 14 :food 20} now {:heal st} :ok
+      {:health 13 :food 20} (+ now 8000) {:heal st} :ok
+      {:health 13 :food 3} now {:heal st} :ok
+      {:health 13 :food 20} now {} :ok)))
 
 (deftest a-probe-that-found-no-way-is-not-kept-a-changed-world-may-have-one
   (async done
