@@ -20,13 +20,13 @@
 
 (def doc
   "Walk to a bed and sleep in it: the :bed argument, else the remembered :bed within :bed-radius, else the live :spawn-bed within it.
-  Conditions (at the start only): night, else condition-failed :not-night; a bed, else :no-bed; the bed not in :bed-unreachable
+  Conditions: night and a bed, also before every round (day came or the bed gone: a listed call waits, a called one ends condition-failed); at the start only: the bed not in :bed-unreachable
   (an unexpired entry with the same position), else :bed-unreachable {:pos}; with :open-bed false and the body within 3 blocks of
   the bed, a roofed room, else :bed-open. A body already asleep is done.
-  Holds (a :pause-s pause holding still with the reason, then :continue) for at most :hold-s seconds in all, then ends nothing-possible with that cause: a bed
+  Holds (a :pause-s pause holding still with the reason, then :continue) until the call's :wall-time ends it (limit-reached): a bed
   occupied by another player (sh-beds/bed-permit; also when it became so mid-round) :bed-occupied {:pos}; a body in a shelter with the bed more
   than 16 blocks away :night-sheltered; a server refusal for monsters near the bed :monsters-near {:pos}.
-  Done {:pos bed} when asleep. Day coming before it slept is condition-failed :not-night; the bed gone is :bed-missing, and a
+  Done {:pos bed} when asleep. A server refusal \"not night\" is condition-failed :not-night; a bed block gone is :bed-missing, and a
   :bed-open bed (with :open-bed false, once the body is beside it) too. A walk that did not
   arrive is retried three times, then warns bed_unreachable and ends nothing-possible :bed-unreachable (the bed goes into
   :bed-unreachable); a bed chunk not loaded (bed_unloaded) and a server refusal (bed_unusable \"cannot sleep: <status> (<reason>)\") the same, as
@@ -80,9 +80,9 @@
       (sh-beds/kept-shelters (sh-inside/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) bed 2)))))
 
 (a/defargs settings
-  {::hold-s {:default 120 :doc "Seconds the call holds for an occupied bed or the night in a shelter, then ends." :spec (a/num-in 0 nil)}
-   ::pause-s {:default 5 :doc "Seconds one hold pauses (jobs.time.noop) before the call looks again." :spec (a/num-in 0 nil)}
+  {::pause-s {:default 5 :doc "Seconds one hold pauses (jobs.time.noop) before the call looks again." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 300 :doc "Seconds the walk to the bed and the sleep may take." :spec (a/num-in 0 nil)}
+   ::wall-time-s {:default 600 :doc "Seconds a sleep may last from its start, the holds for an occupied bed or the night in a shelter included." :spec (a/num-in 0 nil)}
    ::speed {:default 4.3 :doc "Blocks a second the walk to the bed covers, for the quote." :spec (a/num-in 0 nil)}})
 
 (defn bed-block? [c bed]
@@ -121,6 +121,14 @@
 
 (def night (cond/because :not-night "not night" (cond/not (cond/daytime))))
 
+(defn can-run?
+  "Before every round: day came (:later :not-night) or the bed is gone (:later :no-bed)."
+  [c]
+  (cond
+    (not (sh-sense/night? (:primitives c))) (contract/later :not-night "not night")
+    (nil? (bed-of c)) (contract/later :no-bed "no bed given or remembered within the bed radius")
+    :else (contract/ok :bed "night, and a bed")))
+
 (defn can-start?
   "The night, and by night a bed; by day the bed (a room flood fill) is not looked for."
   [c]
@@ -129,7 +137,7 @@
 
 (def target [])
 
-(def defaults {:checks {:safe? '(not (threatened)) :fit? '(always)} :spend {:job-time ::job-time-s}})
+(def defaults {:checks {:safe? '(not (threatened)) :fit? '(always)} :spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 
 (def safe? ready/threatened)
 
@@ -192,22 +200,15 @@
   (true? v))
 
 (defn ^:async hold!
-  "Hold for why ({:reason ...}): a pause of :pause-s (child/pause!), then :continue, until :hold-s seconds since the
-  first hold are gone, then the nothing-possible ending naming what it waited for."
+  "Hold for why ({:reason ...}): a pause of :pause-s (child/pause!), then :continue; the call's :wall-time ends it."
   [c why]
-  (let [now (ctx/now c)
-        since (or (:held-since (ctx/mem c)) now)]
-    (ctx/update-mem! c assoc :held-since since)
-    (if (> (- now since) (* 1000 (settings/get settings ::hold-s)))
-      (ctx/end c :nothing-possible why nil)
-      (do (await (child/pause! c (settings/get settings ::pause-s) (:reason why))) :continue))))
+  (await (child/pause! c (settings/get settings ::pause-s) (:reason why)))
+  :continue)
 
 (defn ^:async round [c]
   (let [p (:primitives c)
         bed (bed-of c)]
     (cond
-      (not (sh-sense/night? p)) (ctx/end c :condition-failed :not-night)
-      (nil? bed) (ctx/end c :condition-failed :no-bed)
       (sheltered-hold c bed) (await (hold! c (sheltered-hold c bed)))
       :else
       (let [taken? #(not ((sh-beds/bed-permit p (:world (:engine c))) bed))

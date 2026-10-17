@@ -10,7 +10,9 @@
             [engine.registry :as registry]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [jobs.survival.bed-down :as bed-down]
+            [jobs.survival.sleep :as sleep]))
 
 (def seen-events (atom nil))
 
@@ -172,6 +174,14 @@
           (await (tu/run-until-empty eng 5))
           (is (= [:bed-open] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
           (is (empty? (filter #(= :stopped (:kind %)) @seen)) "it waits, it does not end"))))))
+
+(deftest day-coming-mid-call-makes-sleep-and-bed-down-wait
+  (let [bed {:bed {:x 6 :y 64 :z 0}}
+        status (fn [can-run? world args] (let [[k _ d] (can-run? {:primitives (spawn-world world) :args args})] [k (:reason d)]))]
+    (is (= [:later :not-night] (status sleep/can-run? {:time st/noon} bed)))
+    (is (= [:ok :bed] (status sleep/can-run? {} bed)))
+    (is (= [:later :not-night] (status bed-down/can-run? {:time st/noon} {})))
+    (is (= [:ok :night] (status bed-down/can-run? {} {})))))
 
 (deftest bed-down-exports-the-contract-and-quotes-validly
   (let [job (get registry/jobs 'jobs.survival.bed-down)]

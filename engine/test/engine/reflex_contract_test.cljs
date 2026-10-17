@@ -14,8 +14,7 @@
             [jobs.survival.extinguish :as extinguish]
             [jobs.survival.fight-back :as fight-back]
             [engine.settings :as settings]
-            [jobs.survival.respond-to-hostile :as respond]
-            [jobs.survival.sleep :as sleep]))
+            [jobs.survival.respond-to-hostile :as respond]))
 
 (defn job [sym] (get registry/jobs sym))
 
@@ -36,13 +35,6 @@
   [args mem]
   {:primitives (tu/fake {}) :args args :root "j1" :slots [] :update-mem (fn [_ _])
    :view (fn [] {:now 100000000 :data {:entries {:job/j1 [{:t 0 :data mem}]} :policies {:job/j1 {:cap 1 :ttl :forever}}}})})
-
-(deftest a-hold-cap-ends-nothing-possible-naming-what-it-waited-for
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [e (await (sleep/hold! (hold-ctx {} {:held-since 0}) {:reason :bed-occupied :pos [1 64 0]}))]
-          (is (= [:nothing-possible :bed-occupied] [(:kind e) (contract/cause-key e)])))))))
 
 (deftest a-held-fight-waits-hold-s-from-its-last-swing-not-from-its-start
   (are [args mem idle?] (= idle? (boolean (fight-back/held-idle? (hold-ctx args mem))))

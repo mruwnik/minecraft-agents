@@ -18,7 +18,7 @@
 
 (def doc
   "Go to bed: sleep in a bed to use, else put a carried bed down beside the body and sleep in it. One step per call, run to its end by the caller (jobs.survival.night).
-  Conditions at the start (a listed call waits on them): night (:not-night), and a bed to use or a bed item to put down (:no-bed; the engine looks round once first; with :fetch on, which is the default, a bed is fetched instead through jobs.lib.need: jobs.items.obtain of any colour, then put down; a failed fetch ends with the cause {:reason :need} and its ending as :because).
+  Conditions at the start (a listed call waits on them): night (:not-night; asked again before every round), and a bed to use or a bed item to put down (:no-bed; the engine looks round once first; with :fetch on, which is the default, a bed is fetched instead through jobs.lib.need: jobs.items.obtain of any colour, then put down; a failed fetch ends with the cause {:reason :need} and its ending as :because).
   The bed: the :bed argument, else sh-beds/bed-to-use (seen, or remembered within :bed-radius, :urgent-bed-radius once :max-days-awake days passed without sleep; never an occupied one or one given up on; unless that long without sleep, never one whose walk leaves an underground, dug-in or room shelter): jobs.survival.sleep on it.
   A bed in the open is slept in only by a body overdue for sleep or one that just put the bed down; a sleep that stops :bed-open writes :bed-open and ends condition-failed :bed-open.
   A sleep that ends otherwise without sleeping writes :sleep-failed (5 minutes) and ends nothing-possible :sleep-failed.
@@ -91,6 +91,13 @@
   [c]
   (let [n (contract/asked c (checks/night :not-night))]
     (if (= :ok (first n)) (contract/all [n (contract/asked c bed-status)]) n)))
+
+(defn can-run?
+  "Before every round: day came (:later :not-night)."
+  [c]
+  (if (sh-sense/night? (:primitives c))
+    (contract/ok :night "night")
+    (contract/later :not-night "not night")))
 
 (defn done? [c]
   (let [d (and (not (checks/running? c)) (sh-sense/sleeping? (:primitives c)))]

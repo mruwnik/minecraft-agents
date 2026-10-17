@@ -311,7 +311,7 @@
           (is (empty? (st/calls p "place")) "no bed on a container floor")
           (is (= 1 (count (st/entries eng :bed-place-failed)))))))))
 
-(deftest sleep-holds-an-occupied-bed-for-a-bounded-time
+(deftest sleep-holds-an-occupied-bed-until-its-wall-time
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -323,5 +323,5 @@
           (is (= [:bed-occupied] (distinct (map :reason (st/emitted seen :holding)))))
           (swap! clock + 3600000)
           (await (st/tick-n eng 3))
-          (is (empty? (:list (core/state eng))) "the hold is bounded")
+          (is (empty? (:list (core/state eng))) "the wall time bounds the hold")
           (is (empty? (st/calls p "sleep"))))))))
