@@ -37,9 +37,12 @@
             {:count-event {:source :job :kind :animal.killed :data {:animal "sheep" :rule :surplus}} :for-s 100 :at-least 2 :at-most 2}
             {:event {:source :job :kind :completed :data {:name "jobs.items.obtain"}} :within-s 100 :of-job true}]
    :after [[:item "white_wool" [:>= 2]] [:entities "type=sheep,tag=wt" [[0 0 0] [31 3 31]] 2]]}
-  {:name "obtain-white-wool-with-only-brown-sheep-takes-brown"
+  ;; the colour fallback needs several wanted names: a single wool item has one plan, so the wanted set is the two beds
+  {:name "obtain-a-white-or-brown-bed-with-only-brown-sheep-takes-brown"
+   :blocks [[:set [8 0 16] "crafting_table"]]
+   :body {:inventory [["iron_sword" 1] ["oak_planks" 3]]}
    :act [[:summon "sheep" [20.5 0 16.5] "{NoAI:1b,Color:12b}"] [:summon "sheep" [21.5 0 16.5] "{NoAI:1b,Color:12b}"] [:summon "sheep" [20.5 0 18.5] "{NoAI:1b,Color:12b}"] [:summon "sheep" [21.5 0 18.5] "{NoAI:1b,Color:12b}"]
-         [:wait-s 2] [:job (jobs.items.obtain {:item "white_wool" :count 1 :explore false})]]
+         [:wait-s 2] [:job (jobs.items.obtain {:any-of ["white_bed" "brown_bed"] :count 1 :explore false})]]
    :expect [{:event {:source :job :kind :obtain.wool-colour} :within-s 60}]}
   ;; fc812a12: a bed (any colour) is made from the wool already carried most: 2 brown carried, 3 brown + 3 white sheep: one brown is hunted
   {:name "obtain-bed-takes-the-colour-carried-most"
@@ -56,7 +59,7 @@
    :act [[:summon "sheep" [20.5 0 14.5] "{NoAI:1b,Color:12b}"] [:summon "sheep" [21.5 0 14.5] "{NoAI:1b,Color:12b}"]
          [:summon "sheep" [20.5 0 18.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [21.5 0 18.5] "{NoAI:1b,Color:0b}"]
          [:summon "sheep" [22.5 0 18.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [23.5 0 18.5] "{NoAI:1b,Color:0b}"]
-         [:job (jobs.animals.cull {:mob "sheep" :color "white" :keep 3 :count 2})]]
+         [:job (jobs.animals.cull {:mob "sheep" :color "white" :keep 3 :count 2 :radius 24})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.animals.cull"}} :within-s 90 :of-job true}
             {:count-event {:source :job :kind :animal.killed :data {:rule :cull}} :for-s 90 :at-least 2}]
    :after [[:entities "type=sheep,tag=wt,nbt={Color:12b}" [[0 0 0] [31 3 31]] 2]

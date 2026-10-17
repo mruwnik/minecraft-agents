@@ -1,7 +1,7 @@
 ;; Card 1d206297: a need above 64 (a plan short of 100 cobblestone) is fetched: the build asks for the cells it has seen so far (a fetch of 40, then
 ;; 60 once the walk showed the rest), obtain takes 64 a trip at most (one fetch above 64: fetch-test a-need-above-64-is-fetched-whole); the 128 in the chest all go in: job.completed :done on 100 cells is the total over 64; it is no longer refused at submit (:count had :max 64). The body stands at [4.5 0 16.5] facing the chest at
 ;; [4 0 12] (turned by RCON so its first sight sees it); the plan is a 10x10 cobblestone floor x 18..27, z 12..21 (100 cells).
-;; Should-fail: no chest and no stone to gather (dirt floor over bedrock, else obtain hands the cobblestone to mine, which stairs down to stone;
+;; Should-fail: no chest and no stone to gather (dirt floor over bedrock, an obsidian ring on the plot edge, else obtain hands the cobblestone to mine, which stairs down to stone;
 ;; the body carries a pickaxe, else the pickaxe's search for logs walks it off the plot): fetch.failed, the build ends short.
 {:defaults
  {:tags [:fetch :build]
@@ -22,7 +22,10 @@
   {:name "no-chest-no-stone-fetch-fails"
    :plot {:floor "dirt"}
    :body {:inventory [["wooden_pickaxe" 1]]}
-   :blocks [[:fill [0 -2 0] [31 -2 31] "bedrock"]]
+   ;; an obsidian ring on the plot edge: the natural stone just outside the plot is neither seen nor reachable
+   :blocks [[:fill [0 -2 0] [31 -2 31] "bedrock"]
+            [:fill [0 -1 0] [0 11 31] "obsidian"] [:fill [31 -1 0] [31 11 31] "obsidian"]
+            [:fill [1 -1 0] [30 11 0] "obsidian"] [:fill [1 -1 31] [30 11 31] "obsidian"]]
    :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
    :expect [{:event {:source :job :kind :fetch.failed :data {:for :need}} :within-s 150 :of-job true}]
    :after [[:not-block [22 0 17] "cobblestone"]]
