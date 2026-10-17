@@ -116,6 +116,7 @@
                        (fn [c]
                          (let [pos (:pos (:args c))
                                [x y z] (if (map? pos) [(:x pos) (:y pos) (:z pos)] pos)]
+                           (swap! calls conj ['jobs.movement.go-to {:pos [x y z]}])
                            (swap! (fake/state p) assoc-in [:self :pos] [x y z])
                            {:arrived true})))
         clock (atom 1000000)
@@ -288,6 +289,15 @@
         (let [env (setup)
               _ (await (start! env (assoc args :fetch #{:tool})))]
           (is (= [#{:tool}] (distinct (map :fetch (called env 'jobs.strip.seal))))))))))
+
+(deftest a-body-inside-the-radius-but-far-from-at-walks-to-at-before-reading-the-site
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup :pos {:x 0 :y -27 :z 50})
+              r (await (start! env args))]
+          (is (= :done (:status r)))
+          (is (= [[0 -27 10]] (mapv :pos (called env 'jobs.movement.go-to)))))))))
 
 (deftest a-shaft-plan-is-taken-down-with-the-stair-through-it
   (async done

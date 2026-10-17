@@ -235,6 +235,13 @@
         [ax ay az] (vec3 (:at s))]
     (and (<= (js/Math.abs (- x ax)) (:radius (:args c))) (<= (js/Math.abs (- z az)) (:radius (:args c))) (<= (js/Math.abs (- y ay)) 4))))
 
+(defn at-site?
+  "Within sight of :at: a body anywhere in the radius (the base it just built) cannot read the corridors."
+  [c s]
+  (let [{:keys [x y z]} (u/self-pos c)
+        [ax ay az] (vec3 (:at s))]
+    (<= (+ (* (- x ax) (- x ax)) (* (- y ay) (- y ay)) (* (- z az) (- z az))) 36)))
+
 (defn shaft-for [c s]
   (let [id (:shaft s)]
     (when-not (false? id)
@@ -369,6 +376,7 @@
         seg (next-open s t)]
     (cond
       (not (in-site? c s)) (if (trip-due? c s) (await (trip! c s)) (await (enter! c s)))
+      (and (empty? (:segments s)) (not (at-site? c s))) (await (enter! c s))
       (empty? (:segments s)) (await (read-site! c s))
       (trip-due? c s) (await (trip! c s))
       ready (await (seal! c s t ready))
