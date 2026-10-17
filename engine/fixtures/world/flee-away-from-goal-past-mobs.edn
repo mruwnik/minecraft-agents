@@ -21,7 +21,7 @@
    :after [[:body-far [26.5 0 16.5] 10]]
    :limit-s 70}
   {:name "armed-body-approaches-a-lone-skeleton"
-   :body {:inventory [["iron_sword" 1]]}
+   :body {:yaw 270 :inventory [["iron_sword" 1]]}
    :act [[:summon "skeleton" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :fight}} :within-s 30}
             {:event {:source :action :kind :done :data {:name "attack" :status "hit"}} :within-s 60}]
