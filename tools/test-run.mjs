@@ -173,18 +173,24 @@ const arrayElements = (s, i) => {
 }
 const closeStr = (s, i) => { let j = i + 1; for (; s[j] !== '"'; j++) if (s[j] === '\\') j++; return j + 1 }
 
-// shadow.test.node.js registers every test namespace in one huge fromArrays([ns symbols],[test vars]) call; keeps only the namespaces in keep.
+// shadow.test.node.js passes every test namespace to reset_test_data_BANG_ as one map: PersistentHashMap.fromArrays([ns symbols],[test vars]) for many namespaces,
+// PersistentArrayMap(null, n, [ns, vars, ns, vars...]) for few (a targeted compile). Keeps only the namespaces in keep; null when the form is not recognised.
 const narrowRegistry = (js, keep) => {
-  const call = 'PersistentHashMap.fromArrays(['
-  const at = js.indexOf(call)
-  if (at < 0) return null
-  const keysAt = at + call.length - 1
-  const keys = arrayElements(js, keysAt)
-  if (js.slice(keys.end, keys.end + 2) !== ',[') return null
-  const vals = arrayElements(js, keys.end + 1)
-  if (keys.elements.length !== vals.elements.length) return null
-  const pick = (els) => els.filter((_, n) => keep.has(/"([^"]+)"/.exec(keys.elements[n])[1].replaceAll('-', '_')))
-  return js.slice(0, keysAt) + `[${pick(keys.elements).join(',')}],[${pick(vals.elements).join(',')}]` + js.slice(vals.end)
+  const m = /reset_test_data_BANG_\((cljs\.core\.PersistentHashMap\.fromArrays\(\[|new cljs\.core\.PersistentArrayMap\(null, (\d+), \[)/.exec(js)
+  if (!m) return null
+  const wanted = (sym) => keep.has(/"([^"]+)"/.exec(sym)[1].replaceAll('-', '_'))
+  const open = m.index + m[0].length - 1
+  const first = arrayElements(js, open)
+  if (m[2] !== undefined) {
+    if (first.elements.length !== 2 * Number(m[2])) return null
+    const kept = first.elements.flatMap((el, n) => n % 2 === 0 && wanted(el) ? [el, first.elements[n + 1]] : [])
+    return js.slice(0, m.index) + `reset_test_data_BANG_(new cljs.core.PersistentArrayMap(null, ${kept.length / 2}, [${kept.join(',')}]` + js.slice(first.end)
+  }
+  if (js.slice(first.end, first.end + 2) !== ',[') return null
+  const vals = arrayElements(js, first.end + 1)
+  if (first.elements.length !== vals.elements.length) return null
+  const pick = (els) => els.filter((_, n) => wanted(first.elements[n]))
+  return js.slice(0, open) + `[${pick(first.elements).join(',')}],[${pick(vals.elements).join(',')}]` + js.slice(vals.end)
 }
 
 // A targeted run loads only the requested -test namespaces (and the -test namespaces they require): drops the other SHADOW_IMPORT lines

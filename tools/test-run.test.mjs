@@ -165,6 +165,20 @@ test('narrowBundle: keeps a test namespace the requested one only references (no
     ['engine.a_test', 'engine.c_test', 'shadow.test.node'].map(imp).concat('})();'))
 })
 
+test('narrowBundle: narrows the PersistentArrayMap registry a few-namespace compile emits', (t) => {
+  const dir = fs.mkdtempSync('/tmp/test-run-narrow-')
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  fs.mkdirSync(`${dir}/out/test/cljs-runtime`, { recursive: true })
+  const imp = (f) => `SHADOW_IMPORT("${f}.js");`
+  fs.writeFileSync(`${dir}/out/test.cjs`, ['engine.a_test', 'engine.b_test', 'shadow.test.node'].map(imp).join('\n') + '\n})();\n')
+  fs.writeFileSync(`${dir}/out/test/cljs-runtime/engine.a_test.js`, 'goog.provide("engine.a_test");')
+  const nodeJs = `${dir}/out/test/cljs-runtime/shadow.test.node.js`
+  const reg = (nss) => `return shadow.test.env.reset_test_data_BANG_(new cljs.core.PersistentArrayMap(null, ${nss.length}, [${nss.map((n) => `${ns(n)},new cljs.core.PersistentArrayMap(null, 1, ["v,]",[(${n}.f)]])`).join(',')}]));`
+  fs.writeFileSync(nodeJs, `var x = 1;\n${reg(['engine.a_test', 'engine.b_test'])}\nvar y = 2;\n`)
+  assert.equal(narrowBundle(dir, ['engine.a-test']), 1)
+  assert.equal(fs.readFileSync(nodeJs, 'utf8'), `var x = 1;\n${reg(['engine.a_test'])}\nvar y = 2;\n`)
+})
+
 test('narrowBundle: an unrecognised registry leaves the bundle untouched', (t) => {
   const dir = fs.mkdtempSync('/tmp/test-run-narrow-')
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
