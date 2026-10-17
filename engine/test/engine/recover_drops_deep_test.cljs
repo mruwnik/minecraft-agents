@@ -2,6 +2,7 @@
   "recover-drops for a pile far below the body: a stair down (jobs.access.tunnel) instead of standing above it."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.death-test :as dt :refer [die! job recovered]]
             [engine.fake :as fake]
             [engine.memory :as mem]
@@ -114,7 +115,8 @@
 (defn walk-script
   "A deep-ground run whose first walks to the pile are scripted (later ones and the stair's are real): walk n moves the
   body to (get at n) and ends as a leg that did not arrive."
-  [at pile-at]
+  ([at pile-at] (walk-script at pile-at #(end/finish! % {:arrived false :leg true})))
+  ([at pile-at finish!]
   (fn ^:async t []
     (let [calls (atom [])
           {:keys [eng p seen]} (setup {:blocks deep-ground :inventory [{:name "iron_pickaxe" :count 1} {:name "torch" :count 16}]
@@ -127,11 +129,19 @@
                                                (await ((:round real) c))
                                                (do (swap! calls conj (:args c))
                                                    (swap! (fake/state p) assoc-in [:self :pos] (get at (dec (count @calls))))
-                                                   (end/finish! c {:arrived false :leg true}))))))]
+                                                   (finish! c))))))]
       (die! eng {:pos pile-at :inventory pile} 5000)
       (core/submit! eng job {})
       (await (run-until-empty eng 40))
-      {:eng eng :p p :seen seen :calls calls})))
+      {:eng eng :p p :seen seen :calls calls}))))
+
+(deftest a-leg-cut-by-the-engine-job-time-limit-is-a-leg-not-a-wait
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (await ((walk-script [[10 64 0]] pile-pos #(ctx/end % :limit-reached {:line :job-time}))))]
+          (is (not-any? #(re-find #"waiting on the world" (str (:text %))) @seen) "no decline for a leg the limit cut")
+          (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng))))))))
 
 (deftest legs-that-bounce-away-from-a-deep-pile-end-in-the-stair-down
   (async done

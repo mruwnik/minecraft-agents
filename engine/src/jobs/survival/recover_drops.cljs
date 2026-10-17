@@ -206,15 +206,20 @@
     [:danger d]
     [(await (child/call-walk* c :go {:pos pos :range (cfg/arrive-range) :checks own-checks :spend {:job-time (:leg-s (:args c))}}))]))
 
+(defn job-time-limit?
+  "Whether r is the engine's own job-time limit ending (no go-to data): the :leg-s spend ran out mid-search or look."
+  [r]
+  (and (= :limit-reached (:kind r)) (= :job-time (:line (:cause r)))))
+
 (defn ^:async go!
-  "Walk one leg (:leg-s) toward the death point: :next once there (the collect phase) or after a leg (the danger and the
+  "Walk one leg (:leg-s) toward the death point: :next once there (the collect phase) or after a leg (a go-to cut by the leg's own job-time limit is a leg too; the danger and the
   cost are weighed again; one that got no nearer counts as a walk that did not arrive), else :declined (go-to waits on the
   world, or it did not arrive: the next run walks again while the pile is worth it, and the window closes it). A walk
   go-to refused for the body's own shelter (:inside-own-shelter) is no failed try: the window closes the trip."
   [c pos]
   (let [before (u/dist (u/self-pos c) pos)
         [r danger] (await (walk-leg! c pos))
-        walked (:data r)]
+        walked (or (:data r) (when (job-time-limit? r) {:leg true}))]
     (cond
       (= :danger r) (meet-danger! c danger)
       (or (= :continue r) (and (not= :done (:kind r)) (nil? walked)))
