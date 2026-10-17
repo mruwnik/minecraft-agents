@@ -99,12 +99,20 @@
     (is (nil? (wworld/landing-seen #js {})) "no perception: nil, the planner reads the snapshot")))
 
 (deftest air-profile-follows-the-helmet
-  (are [equipment expected] (= expected (cost/air-profile equipment))
+  (are [equipment expected] (= expected (cost/air-profile equipment nil))
     nil {}
     {:head {:name "iron_helmet"}} {}
     {:head {:name "diving_helmet" :enchants [{:name "respiration" :level 3}]}} {:air-drain 0.25}
     {:head {:name "turtle_helmet"}} {:air-grace 10}
     {:head {:name "turtle_helmet" :enchants [{:name "respiration" :level 1}]}} {:air-drain 0.5 :air-grace 10}))
+
+(deftest air-profile-counts-water-breathing-time-left
+  (are [effects expected] (= expected (cost/air-profile {:head {:name "turtle_helmet"}} effects))
+    nil {:air-grace 10}
+    [#js {:name "speed" :left 400}] {:air-grace 10}
+    [#js {:name "water_breathing" :left 600}] {:air-grace 40}
+    [#js {:name "water_breathing" :left 0}] {:air-grace 10}
+    [#js {:name "water_breathing" :left -1}] {:air-grace 10}))
 
 (deftest with-drops-sets-the-air-costs-under-the-callers-costs
   (let [o (wplan/with-drops #js {} {:air-drain 0.5 :air-grace 10})]

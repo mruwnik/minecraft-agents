@@ -28,8 +28,17 @@ export function createSense (env) {
     if (!name) return String(id)
     return name.replace(/^minecraft:/, '').replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
   }
+  // Mineflayer keeps the duration of the packet and never counts it down, so the arrival is stamped here (a packet makes
+  // a new effect object); `left` is the ticks remaining, -1 for an infinite effect.
+  const arrivals = new WeakMap()
+  env.bot.on?.('entityEffect', (_entity, effect) => arrivals.set(effect, Date.now()))
+  const effectLeft = e => {
+    if (e.duration < 0) return -1
+    if (!arrivals.has(e)) arrivals.set(e, Date.now())
+    return Math.max(0, e.duration - Math.floor((Date.now() - arrivals.get(e)) / 50))
+  }
   const effects = () => Object.values(env.bot.entity.effects ?? {})
-    .map(e => ({ name: effectName(e.id), amplifier: e.amplifier, duration: e.duration }))
+    .map(e => ({ name: effectName(e.id), amplifier: e.amplifier, duration: e.duration, left: effectLeft(e) }))
 
   // false while the column under the body is not loaded: mineflayer's physics then skips its tick and the body hangs.
   const columnLoaded = () => Boolean(env.bot.blockAt(env.bot.entity.position))

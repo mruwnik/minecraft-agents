@@ -566,9 +566,21 @@ test('self reports active effects by snake_case registry name, empty when none',
   assert.deepEqual(withBot(() => {}).self().effects, [])
   const effects = [{ id: 11, name: 'FireResistance', amplifier: 0, duration: 600 }, { id: 1, name: 'Speed', amplifier: 1, duration: 40 }]
   assert.deepEqual(withBot(() => {}, { ...world, effects }).self().effects, [
-    { name: 'speed', amplifier: 1, duration: 40 },
-    { name: 'fire_resistance', amplifier: 0, duration: 600 }
+    { name: 'speed', amplifier: 1, duration: 40, left: 40 },
+    { name: 'fire_resistance', amplifier: 0, duration: 600, left: 600 }
   ])
+})
+
+test('an effect reports the ticks left since its packet arrived, -1 when infinite, 0 once run out', () => {
+  const effects = [{ id: 1, name: 'Speed', amplifier: 0, duration: 100 }, { id: 2, name: 'Hunger', amplifier: 0, duration: -1 }, { id: 3, name: 'Poison', amplifier: 0, duration: 4 }]
+  const p = withBot(() => {}, { ...world, effects })
+  const first = p.self().effects
+  const realNow = Date.now
+  Date.now = () => realNow() + 1000
+  try {
+    assert.deepEqual(first.map(e => e.left), [100, -1, 4])
+    assert.deepEqual(p.self().effects.map(e => e.left), [80, -1, 0])
+  } finally { Date.now = realNow }
 })
 
 test('self reports vitals from the bot', () => {

@@ -102,7 +102,9 @@
     (is (nil? (:air-drain (policy {:health 20 :food 20}))))
     (is (= 0.5 (:air-drain (policy {:health 20 :food 20} {:head {:name "iron_helmet" :enchants [{:name "respiration" :level 1}]}}))))
     (is (= 10 (:air-grace (policy {:health 20 :food 20} {:head {:name "turtle_helmet"}}))))
-    (is (nil? (:air-grace (policy {:health 20 :food 20 :effects [{:name "water_breathing" :duration 300}]}))) "a sensed effect's duration goes stale")))
+    (is (= 15 (:air-grace (policy {:health 20 :food 20 :effects [{:name "water_breathing" :duration 6000 :left 300}]}))) "the ticks left count, not the packet's duration")
+    (is (= 25 (:air-grace (policy {:health 20 :food 20 :effects [{:name "water_breathing" :duration 6000 :left 300}]} {:head {:name "turtle_helmet"}}))) "a turtle helmet adds its 10 s")
+    (is (nil? (:air-grace (policy {:health 20 :food 20 :effects [{:name "water_breathing" :duration 6000 :left 0}]}))) "run out")))
 
 ;; head under water: the plan starts with the air already used ((20 - oxygen) * 0.75 s) and no turtle grace (it may be spent)
 (deftest body-policy-starts-a-submerged-plan-with-the-air-used
@@ -116,6 +118,7 @@
     (is (= 11 (count (:drown-prices (policy {:inWater true :oxygen 5 :health 10 :absorption 0} column)))) "priced to the last hp")
     (is (true? ((:air-seen (policy {:inWater true :oxygen 5} column)) 0 66 0)) "air it has seen counts")
     (is (nil? (:air-grace (policy {:inWater true :oxygen 20} column turtle))) "under water: no grace")
+    (is (= 15 (:air-grace (policy {:inWater true :oxygen 20 :effects [{:name "water_breathing" :left 300}]} column turtle))) "under water: Water Breathing's pool stays, the turtle grace goes")
     (is (= 10 (:air-grace (policy {:inWater true :oxygen 5} surface turtle))) "head out: as before")
     (is (= 11.625 (:air-used (policy {:inWater true :oxygen 5} surface))) "head out, breath low: it plans with the air it has")
     (is (nil? (:air-used (policy {:inWater true :oxygen 20} surface))))

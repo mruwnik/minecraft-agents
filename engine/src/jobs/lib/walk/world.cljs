@@ -306,7 +306,7 @@
   :max-drop and :fall-factor follow its fall enchantments and the longest drop it survives (the survivable-budget under the job's :max-damage,
   whatever the budget: a drop the budget refuses is a refusal the planner reports as :damageRefused, jobs.lib.cost/fall-profile).
   :air-drain and :air-grace follow the helmet (jobs.lib.cost/air-profile), :swim-h Depth Strider on the boots (swim-profile); with the head under water, or the breath not yet full, :air-used is the air
-  its oxygen says it has used, and under water there is no grace (it may be spent on this dive); :health is the hp drowning to which
+  its oxygen says it has used, and under water there is no turtle grace (it may be spent on this dive), only Water Breathing's seconds left; :health is the hp drowning to which
   is lethal, :drown-prices the price of each hp of drowning (jobs.lib.cost/drown-prices), :air-seen (known-fn) which air counts."
   [c]
   (let [self (.self (:primitives c))
@@ -315,7 +315,7 @@
     (cond-> (merge executor/policy
                    (cost/fall-profile {:damage-budget (cost/survivable-budget (damage-body c) (select-keys (walk-settings c) [:max-damage]))
                                        :equipment (cost/equipment-of (.-equipment self))})
-                   (cost/air-profile (.-equipment self))
+                   (cost/air-profile (.-equipment self) (array-seq (.-effects self)))
                    (cost/swim-profile (.-equipment self))
                    {:damage-budget (damage-budget c)
                     :damage-weight (* (or (:hp-seconds (:args c)) cost/hp-seconds) (cost/health-scale (.-health self)))
@@ -323,7 +323,7 @@
                    (when-some [landing (:landing (:args c))] {:landing landing})
                    (when-some [m (:y-margin (:args c))] {:y-margin m})
                    (when-some [f (:dive-floor c)] {:y-below (max 0 (- (js/Math.floor (.-y (.-pos self))) f))}))
-      (or under? (and (.-inWater self) (number? (.-oxygen self)) (< (.-oxygen self) 20))) (-> (cond-> under? (dissoc :air-grace)) (assoc :air-used (cost/air-used (.-oxygen self)))
+      (or under? (and (.-inWater self) (number? (.-oxygen self)) (< (.-oxygen self) 20))) (-> (cond-> under? (-> (dissoc :air-grace) (merge (cost/air-profile nil (array-seq (.-effects self)))))) (assoc :air-used (cost/air-used (.-oxygen self)))
                                                (merge (drowning self (or (:hp-seconds (:args c)) cost/hp-seconds)))
                                                (merge (some->> (known-fn (:primitives c)) (hash-map :air-seen))))
       (and (number? food) (<= food 6)) (assoc :sprint false)

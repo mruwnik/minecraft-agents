@@ -23,17 +23,25 @@
    :max-water-drop "maxWaterDrop" :dripleaf "dripleaf" :dripleaf-risk "dripleafRisk" :lethal-air "lethalAir"
    :drown-slack "drownSlack"})
 
+(defn water-breathing-s
+  "Seconds of Water Breathing left in self's :effects (their :left ticks), 0 when none or infinite."
+  [effects]
+  (/ (->> effects (filter #(= "water_breathing" (.-name %))) (map #(max 0 (or (.-left %) 0))) (reduce max 0)) 20))
+
 (defn air-profile
   "{:air-drain :air-grace} of the body's helmet, a key only where it differs from no gear. equipment: self's :equipment
   (cljs or JS). Respiration n drains 1/(n+1) a second (the expected value); a turtle helmet gives each dive 10 s in which
-  the air does not drain. Effects are left out: a sensed duration never counts down, and Water Breathing is one pool the
-  walk to a dive uses up (Conduit Power lasts ~13 s once out of the conduit's range)."
-  [equipment]
+  the air does not drain. Water Breathing adds its seconds left (an effect's :left ticks, from self's :effects) to the
+  grace: one pool counted from the dive start, so the walk to the dive is not taken off it. Conduit Power is left out (it
+  lasts ~13 s once out of the conduit's range)."
+  [equipment effects]
   (let [head (get (armour/equipment-of equipment) "head")
+        pool (water-breathing-s effects)
         respiration (->> (:enchants head) (some #(when (= "respiration" (:name %)) (:level %))))]
     (cond-> {}
       (pos? (or respiration 0)) (assoc :air-drain (/ 1 (inc respiration)))
-      (= "turtle_helmet" (:name head)) (assoc :air-grace 10))))
+      (or (= "turtle_helmet" (:name head)) (pos? pool))
+      (assoc :air-grace (+ (if (= "turtle_helmet" (:name head)) 10 0) pool)))))
 
 (defn- swim-s
   "Seconds a block of swimming at the surface takes with Depth Strider level (vanilla water travel: inertia 0.8 and
