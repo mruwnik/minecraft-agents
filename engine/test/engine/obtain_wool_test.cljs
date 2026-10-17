@@ -35,7 +35,11 @@
               s (await (scenario {:any-of beds :count 1 :ways #{:craft :smelt :gather}}
                                  {:inventory inv :entities [(sheep 1 3 "brown") (sheep 2 6 "white") (sheep 3 8 "white") (sheep 4 10 "white") (sheep 5 11 "white")]} 40))]
           (is (seq (attacked s)) "a sheep was attacked")
-          (is (every? #{2 3 4 5} (attacked s)) "only white sheep"))))))
+          (is (every? #{2 3 4 5} (attacked s)) "only white sheep")
+          (let [e (first (filter #(= :obtain.gathering (:kind %)) @(:seen s)))]
+            (is (= :info (:level e)))
+            (is (= "white_wool" (:item e)) "the walk names what it is for")
+            (is (= 'jobs.combat.hunt (:via e)))))))))
 
 (deftest a-colour-with-no-sheep-in-range-falls-back-to-another-and-says-so
   (async done

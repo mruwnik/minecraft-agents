@@ -117,6 +117,11 @@
             (ctx/update-mem! c assoc-in [:gather :item] (:key need))
             (when (= 'jobs.forestry.harvest-wood (:job need))
               (ctx/update-mem! c assoc-in [:gather :tree] (select-keys need [:key :job :args])))
+            (let [at (:pos (seen-of c need))]
+              (ctx/emit! c :obtain.gathering :info
+                         {:message (str "getting " (:key need) " with " (:job need)
+                                        (when at (str " from " (:x at) " " (:y at) " " (:z at))))
+                          :item (:key need) :via (:job need) :at at}))
             (when (:sheep need)
               (let [how (shears-source c)]
                 (ctx/emit! c :obtain.wool-source :info

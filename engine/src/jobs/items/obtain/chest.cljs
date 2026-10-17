@@ -1,7 +1,8 @@
 (ns jobs.items.obtain.chest
   "The chest source: the seen chests worth a look or a withdraw, and the steps that do either."
   (:require [engine.ctx :as ctx]
-            [jobs.items.obtain.base :refer [holds]]
+            [clojure.string]
+            [jobs.items.obtain.base :refer [holds names-of]]
             [jobs.lib.child :as child]
             [jobs.lib.solid :as solid]
             [jobs.lib.stock :as stock]
@@ -20,7 +21,17 @@
                 {:pos pos :stock items})))
           (stock/usable-chests c))))
 
+(defn say-chest!
+  "One info event per chest the walk goes to, naming the item wanted there."
+  [c pos what]
+  (when-not (= pos (:said-chest (ctx/mem c)))
+    (ctx/update-mem! c assoc :said-chest pos)
+    (ctx/emit! c :obtain.chest :info
+               {:message (str what " chest at " (:x pos) " " (:y pos) " " (:z pos))
+                :at pos})))
+
 (defn ^:async withdraw! [c pos items names have]
+  (say-chest! c pos (str "taking " (holds items names) " from the"))
   (let [name (holds items names)
         need (- (:target (:start (ctx/mem c))) have)
         e (await (ctx/call c :take 'jobs.storage.withdraw
@@ -35,6 +46,7 @@
   seen solid block gets the block dug (a jobs.blocks.dig child, which keeps to zones and claims) and is looked into once
   more. :continue while a child waits, else :again."
   [c pos]
+  (say-chest! c pos (str "looking for " (clojure.string/join "/" (names-of (:args c))) " in the"))
   (let [cell (stock/cell-of pos)
         above (update pos :y inc)
         mark! (fn [why]
