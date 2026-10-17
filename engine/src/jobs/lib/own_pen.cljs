@@ -18,7 +18,8 @@
 
 (defn wall-fn
   "A fn of a cell [x y z]: whether it is the wall of an own pen holding livestock that closes round one of the feet cells
-  starts (beside a cell of the pen's inside or above it, up to ::wall-height above the highest inside cell). A start in an own area only; the pen is read once."
+  starts (beside a cell of the pen's inside or above it, up to ::wall-height above the highest inside cell). A start in an own area only; the pen is read once.
+  A pen not fully seen (dark, out of view: only unseen cells left open) counts too, with the livestock standing in the own area as its animals: what cannot be seen is not taken for open."
   [c starts]
   (let [p (:primitives c)
         block-at (apiary/seen-block-at-fn p)
@@ -26,8 +27,10 @@
                        (let [at (zipmap [:x :y :z] feet)]
                          (if (or (some #(contains? (:inside %) feet) pens) (not (access/in-own-area? c at)))
                            pens
-                           (let [answer (pen/check {:block-at block-at :at at :max-cells (settings/get settings ::max-cells)})]
-                             (if (and (:closed? answer) (seq (animals/in-pen-rows p answer (settings/get settings ::radius))))
+                           (let [answer (pen/check {:block-at block-at :at at :max-cells (settings/get settings ::max-cells)})
+                                 unseen? (and (= :unloaded (:reason answer)) (seq (:inside answer)))]
+                             (if (and (or (:closed? answer) unseen?)
+                                      (seq (animals/in-pen-rows p answer (settings/get settings ::radius) #(and unseen? (access/in-own-area? c %)))))
                                (conj pens answer)
                                pens)))))
                      [] starts)

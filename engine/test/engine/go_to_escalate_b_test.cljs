@@ -427,3 +427,18 @@
       (fn ^:async t []
         (is (= {:safe? '(not (exposed))} (await (pillar-call-checks nil))) "no caller form: a hostile does not stall the way out")
         (is (nil? (:safe? (await (pillar-call-checks {:safe? '(always)})))) "a caller's form reaches the pillar (card 02b795f1)")))))
+
+(deftest go-to-spares-the-wall-of-a-pit-pen-that-is-a-plan-of-the-body-seen-or-not
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [sight [nil 3]]
+          (let [blocks (apply dissoc (merge (box 10 59 10 30 59 22 "grass_block") (box 10 60 10 22 61 22 "stone"))
+                              (for [x (range 14 19) z (range 14 19) y [60 61]] (str x "," y "," z)))
+                plan (shape/with-author {:id "pit" :parts [{:id "inside" :box [[14 60 14] [18 61 18]] :want [:any "air"]}]} "Fake")
+                cows [{:id 7 :name "cow" :kind "passive" :pos {:x 15.5 :y 60 :z 15.5}} {:id 8 :name "cow" :kind "passive" :pos {:x 17.5 :y 60 :z 17.5}}]
+                {:keys [out p]} (await (run-job! {:self {:pos {:x 18.4 :y 60 :z 16.5}} :blocks blocks :entities cows :sight sight}
+                                                'jobs.movement.go-to {:pos [26 60 16] :range 1} {:plans {"pit" plan}}))]
+            (is (= false (:arrived @out)) (str "sight " sight))
+            (is (= {:step :none :why :own-pen} (:escalation @out)) (str "sight " sight " " (pr-str @out)))
+            (is (empty? (calls p "dig")) (str "sight " sight))))))))
