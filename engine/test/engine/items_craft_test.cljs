@@ -124,6 +124,16 @@
           (is (= {:made 0 :status :stopped :reason :need :short {"wheat" 1} :text "craft bread is missing {\"wheat\" 1}"} (dissoc result :item)))
           (is (empty? (filter #(str/starts-with? (name (:kind %)) "craft.") @seen)) "the ending carries it"))))))
 
+(deftest craft-does-not-spend-an-ingredient-the-register-holds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks table-block})
+              _ (await (child-outcome eng 'jobs.memory.reserve {:item "wheat" :count 2} 4))
+              result (await (child-outcome eng job {:item "bread" :fetch false} 8))]
+          (is (= {:made 0 :status :stopped :reason :need :short {"wheat" 2}} (dissoc result :item :text)))
+          (is (= {"wheat" 3} (inv p))))))))
+
 (deftest the-nearest-table-is-one-the-body-has-seen
   (are [see expected] (= expected (crafting-table/nearest (see (:p (setup {:blocks table-block}))) 32))
     identity table

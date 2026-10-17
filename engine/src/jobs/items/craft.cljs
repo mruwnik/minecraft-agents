@@ -15,6 +15,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.escape :as escape]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.tools :as tools]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.world :as known]
@@ -102,6 +103,12 @@
     (if (>= made count)
       (apply contract/ok :crafted (str "crafted " made " " item) data)
       (apply contract/later :crafting (str "craft: " made " of " count " " item) data))))
+
+(defn spendable
+  "{name n} of the ingredients this call may use: carried less what the register holds, the item made counted whole."
+  [c]
+  (let [item (:item (:args c))]
+    (assoc (storage/carried-totals (reserve/free c :craft)) item (storage/carried (u/inventory (:primitives c)) item))))
 
 (defn quote-of
   "P: the cheapest recipe for :count more of :item from what is carried. It uses its ingredients (net of the item
@@ -404,7 +411,7 @@
 (defn problem
   "The first ingredient of the last shortage still not carried up to the amount it needed, as {:item :count}, else nil."
   [c]
-  (let [have (u/inventory (:primitives c))]
+  (let [have (reserve/free c :craft)]
     (some (fn [[name want]]
             (let [n (storage/carried have name)]
               (when (< n want) {:item name :count (- want n)})))
@@ -429,15 +436,25 @@
         (do (ctx/update-mem! c dissoc :wants)
             (finish! c made (assoc shortage :reason :need :text (str "craft " item " is missing " (pr-str short)))))))))
 
+(defn makeable
+  "How many of the item the best recipe makes from the spendable ingredients (whole batches, no sub-crafts)."
+  [c]
+  (let [{:keys [item]} (:args c)
+        have (spendable c)
+        rs (get (recipes/recipes-for (game/version-of (:primitives c))) item)]
+    (reduce max 0 (for [r rs
+                        :let [needs (dissoc (:needs r) item)]]
+                    (* (:count r) (reduce min ##Inf (map (fn [[k v]] (quot (get have k 0) v)) needs)))))))
+
 (defn ^:async short-of-ingredients!
   "Before a table is put down or fetched: when no recipe of the item can be made from what is carried, short! (fetch
-  them or end :need), else nil. A table is the last step."
-  [c]
+  them or end :need), else nil. A table is the last step. With n, the shortage is for n more of the item."
+  [c & [n]]
   (let [p (:primitives c)
         {:keys [item count]} (:args c)
-        have (storage/carried-totals (u/inventory p))
+        have (spendable c)
         start (:start (ctx/mem c) (get have item 0))
-        todo (max 1 (- (+ start count) (get have item 0)))
+        todo (or n (max 1 (- (+ start count) (get have item 0))))
         rs (get (recipes/recipes-for (game/version-of p)) item)
         needs (for [r rs :let [b (recipes/ceil-div todo (:count r))]]
                 (into {} (map (fn [[k v]] [k (* v b)])) (dissoc (:needs r) item)))]
@@ -463,9 +480,12 @@
         have (storage/carried (u/inventory p) item)]
     (if (>= have target)
       (finish! c (- have start) {})
-      (let [table (or (:table (ctx/mem c)) (:table (:args c)))]
-        {:r (await (ctx/act c :craft (clj->js {:item item :count (- target have) :table table})))
-         :table table :start start}))))
+      (let [held? (seq (reserve/held c :craft))
+            cap (if held? (makeable c) ##Inf)]
+        (or (when (zero? cap) (await (short-of-ingredients! c 1)))
+            (let [table (or (:table (ctx/mem c)) (:table (:args c)))]
+              {:r (await (ctx/act c :craft (clj->js {:item item :count (min cap (- target have)) :table table})))
+               :table table :start start}))))))
 
 (defn ^:async settle!
   "Act on the craft call's status (a craft-act! map): :again, :continue (go-to waits) or :done. Anything else is
@@ -480,7 +500,9 @@
           made (- (storage/carried (u/inventory p) item) start)]
       (when table (ctx/update-mem! c assoc :table table))
       (case status
-        "crafted" (finish! c made {:text (str "crafted " made " " item)})
+        "crafted" (if (< made (:count (:args c)))
+                    (do (u/progress! c) :again)
+                    (finish! c made {:text (str "crafted " made " " item)}))
         "no-item" (await (short-from! c item r made))
         "partial" (if (= "no-item" (.-reason r))
                     (await (short-from! c item r made))

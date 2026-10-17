@@ -87,11 +87,16 @@
     (+ (js/Math.floor (/ (get-in state [:burn :left] 0) (cook-ticks kind)))
        (if slot (js/Math.floor (* (or (fuel-per-unit kind (:name slot)) 0) (:count slot))) 0))))
 
+(defn spare
+  "How many of name the carried list has beyond what m's :held ({name n}, the register's) keeps back."
+  [{:keys [carried held]} name]
+  (max 0 (- (storage/carried carried name) (get held name 0))))
+
 (defn pick-fuel
   "The fuel item to load: the given one, else the one already in the slot when carried, else the best carried.
   Never the item being smelted. {:give-up reason} when there is none."
-  [{:keys [kind carried item fuel state]}]
-  (let [usable (fn [name] (and (not= name item) (fuel-per-unit kind name) (pos? (storage/carried carried name))))
+  [{:keys [kind carried item fuel state] :as m}]
+  (let [usable (fn [name] (and (not= name item) (fuel-per-unit kind name) (pos? (spare m name))))
         slot-name (:name (:fuel state))]
     (cond
       fuel (cond (nil? (fuel-per-unit kind fuel)) {:give-up "unknown-fuel"}
@@ -118,7 +123,7 @@
           (:give-up picked) picked
           (and slot (not= (:name slot) name)) {:give-up "fuel-busy"}
           :else (let [per (fuel-per-unit kind name)
-                      units (min (js/Math.ceil (/ deficit per)) (storage/carried carried name) (- facts/slot-max (:count slot 0)))
+                      units (min (js/Math.ceil (/ deficit per)) (spare m name) (- facts/slot-max (:count slot 0)))
                       covered (- (js/Math.floor (+ existing (* units per))) e)
                       n' (max 0 (min n covered))]
                   (if (and (pos? n) (zero? n'))
@@ -127,7 +132,7 @@
 
 (defn plan-load
   "What to put in the furnace: {:item :count :fuel {:item :count}|nil}, or {:give-up reason}.
-  m: :kind and :state (a read of the furnace), :carried ({:name :count} each), :item :count :fuel from the args,
+  m: :kind and :state (a read of the furnace), :carried ({:name :count} each), :held ({name n} the fuel may not use), :item :count :fuel from the args,
   :target (the input the furnace must hold, set once a load was planned, so a resumed load adds only the rest)."
   [{:keys [state carried item count target] :as m}]
   (let [kind (:kind state)

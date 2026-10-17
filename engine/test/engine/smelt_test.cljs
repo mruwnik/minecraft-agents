@@ -371,6 +371,19 @@
                     (is (not (some #{"load"} (ops p))) label)
                     (is (= before (inv-of p)) label)))))))))
 
+(deftest fuel-the-register-holds-is-not-loaded
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup base-world)]
+          (core/submit! eng '(jobs.memory.reserve {:item "coal"}) {})
+          (await (ticks eng 2))
+          (core/submit! eng iron-job {})
+          (await (ticks eng 6))
+          (is (= :no-fuel (:reason (first (of-kind seen :stopped)))))
+          (is (not (some #{"load"} (ops p))))
+          (is (= 3 (get (inv-of p) "coal"))))))))
+
 (deftest the-body-walks-to-a-furnace-out-of-reach
   (async done
     (tu/run-async done

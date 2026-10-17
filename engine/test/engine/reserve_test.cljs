@@ -86,3 +86,7 @@
   (let [c (body [(item "diamond" 3)] [{:item "diamond" :count 3 :strength 0}])]
     (is (= {} (reserve/held c :tools)))
     (is (= 0 (reserve/price c :tools "diamond" 3)))))
+
+(deftest free-is-the-inventory-less-the-held-units-across-stacks
+  (is (= [(item "diamond" 1) (item "stick" 4)]
+         (map #(dissoc % :slot) (reserve/free (body [(item "diamond" 2) (item "diamond" 3) (item "stick" 4)] [{:item "diamond" :count 4}]) :craft)))))

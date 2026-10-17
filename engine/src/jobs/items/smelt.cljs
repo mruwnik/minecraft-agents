@@ -16,6 +16,7 @@
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.places :as places]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]))
 
@@ -244,7 +245,7 @@
   (let [m (ctx/mem c)
         {:keys [count fuel]} (:args c)
         item (sp/input-of (:item (:args c)) (carried c))
-        plan (sp/plan-load {:state state :carried (carried c) :item item :count count :fuel fuel :target (:target m)})]
+        plan (sp/plan-load {:state state :carried (carried c) :held (reserve/held c :smelt) :item item :count count :fuel fuel :target (:target m)})]
     (cond
       (and (= "furnace-busy" (:give-up plan)) (= :wait (sp/judge state))) (wait-until! c (wait-ms (:kind state) state))
       (and (= "furnace-busy" (:give-up plan)) (= :take (sp/judge state)))
@@ -275,7 +276,7 @@
   (let [m (ctx/mem c)
         item (:item (:owed m))
         remaining (get-in state [:input :count])
-        plan (sp/plan-load {:state state :carried (carried c) :item item :fuel (:fuel (:args c)) :target remaining})]
+        plan (sp/plan-load {:state state :carried (carried c) :held (reserve/held c :smelt) :item item :fuel (:fuel (:args c)) :target remaining})]
     (if (or (:give-up plan) (nil? (:fuel plan)))
       (await (stop-back! c "out-of-fuel"))
       (let [r (await (visit! c "load" {:fuel {:item (:item (:fuel plan)) :count (:count (:fuel plan))}}))]
