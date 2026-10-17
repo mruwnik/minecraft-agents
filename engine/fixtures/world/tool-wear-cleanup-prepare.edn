@@ -55,8 +55,9 @@
    :plans [{:id "wood" :parts [{:id "t" :cells [#at [16 0 16]] :want {:tree "oak"}}]}]
    :body {:at [16.5 0 12.5] :inventory [["oak_sapling" 1] ["dirt" 2]]}
    :act [[:job (jobs.forestry.prepare {:plan "$plan:wood"})]]
-   ;; no pick: the cobblestone stray is not dug by hand; warn prepare.no-tool, no tool event, no error
-   :expect [{:event {:source :job :kind :prepare.no-tool} :within-s 30}
+   ;; no pick: the cobblestone stray is not dug by hand; the only cell is :no-tool, so prepare waits :cells-no-tool before any round (no warn), no tool event, no error
+   :expect [{:event {:source :job :kind :waiting :data {:reason :cells-no-tool}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :prepare.no-tool} :for-s 20}
             {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 20}
             {:no-event {:source :job :kind #{:failed :error}} :for-s 20}]
    :after [[:block [16 0 16] "cobblestone"]]}]}
