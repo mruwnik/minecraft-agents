@@ -8,6 +8,7 @@
             [engine.settings :as settings]
             [jobs.lib.crafting-table :as crafting-table]
             [jobs.lib.pace :as pace]
+            [jobs.lib.places :as places]
             [jobs.lib.stock :as stock]
             [jobs.lib.standing :as standing]
             [jobs.lib.steps :as steps]
@@ -33,7 +34,8 @@
   :nothing-to-store. A step whose child stops is booked with its summary and the stop as :reason; the pass goes on.
   Needs (can-start?, a listed job waits): a step that would run (raw food carried above the
   reserve with a cooked shortfall, wheat for a loaf), so a body with nothing to cook is not held, and not too far from
-  the chest (:away). There is no rest timer: a pass that cannot cook ends with its stop and repeat decides.
+  the chest (:away). can-run? (between steps): a chest place lost mid-pass waits :no-chest, a chest cell seen to hold
+  another block is never :chest-gone. There is no rest timer: a pass that cannot cook ends with its stop and repeat decides.
   Every pass ends with data {:steps {step summary} :text}, the text naming what was smelted, baked and stored; smelt summaries are keyed by food, the deposit's has :stored {name n}. It ends done
   when something was cooked, baked or stored; otherwise with the ending of the first step that stopped (its kind and
   cause), or nothing-possible {:reason :nothing-to-do} when every step was skipped.
@@ -194,6 +196,18 @@
   "Later while the kitchen is far from its chest or has no step to run."
   [c]
   (contract/all [(checks/cause-status :later (away c)) (checks/cause-status :later (nothing-to-do c))]))
+
+(defn chest-usable
+  "Between steps: never :chest-gone when the body has seen the chest cell hold another block, later :no-chest when
+  no chest is known (a place lost mid-pass), else ok. A chest not seen since is taken as there."
+  [c]
+  (let [pos (storage/chest-of (ctx/view c) (:args c))
+        block (when pos (u/seen-name (:primitives c) pos))]
+    (if (places/gone? :chest block)
+      (contract/never :chest-gone (str "the chest at " (pr-str pos) " is gone, " block " is there"))
+      (checks/chest-known c))))
+
+(def can-run? chest-usable)
 
 (defn quote-of
   "A smelt of each raw food carried; the rest of the pass is a guess."

@@ -14,7 +14,7 @@
 (def job 'jobs.items.kitchen)
 (def furnace {:x 1 :y 64 :z 0})
 (def chest {:x 10 :y 64 :z 0})
-(def kitchen {:blocks {"1,64,0" "furnace" "11,64,0" "crafting_table"}})
+(def kitchen {:blocks {"1,64,0" "furnace" "10,64,0" "chest" "200,64,0" "chest" "300,64,0" "chest" "11,64,0" "crafting_table"}})
 
 (defn item [name n] {:name name :count n})
 
@@ -276,3 +276,12 @@
           (is (contains? #{:condition-failed :nothing-possible} (:kind e)) (pr-str e))
           (is (contains? (:data e) :steps)))))))
 
+
+(deftest can-run-between-steps-follows-the-chest-the-body-has-seen
+  (let [p (tu/seeing-all (tu/fake-on-floor (merge-with merge kitchen {:blocks {"20,64,0" "stone"}})))
+        status (fn [a] (let [s (kitchen/can-run? {:primitives p :args a :view (fn [] {:data {} :now 0})})]
+                         [(first s) (:reason (nth s 2))]))]
+    (are [a expect] (= expect (status a))
+      {:chest chest} [:ok :chest]
+      {:chest {:x 20 :y 64 :z 0}} [:never :chest-gone]
+      {} [:later :no-chest])))
