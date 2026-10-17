@@ -232,12 +232,25 @@
               (is (= [30 65 0] (mapv #(js/Math.floor %) (at p))) (pr-str pos))
               (is (< (count (events-of s :planned)) 30) (str (pr-str pos) " plans: " (count (events-of s :planned)))))))))))
 
+(defn ^:async go-hidden!
+  "go! with the cells hidden? answers true for never seen (hiding), whatever the body looks at."
+  [world hidden? args]
+  (let [{:keys [eng p] :as s} (gt/setup world)
+        out (atom :not-done)
+        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out args)))]
+    (aset p "sensedAt" (fn [pos] (if (hidden? [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
+    (core/submit! eng '(recording-parent) {})
+    (await (gt/tick-out! eng 30))
+    (assoc s :eng eng :out out)))
+
 (deftest a-goal-hidden-in-seen-ground-is-looked-at-from-a-seen-stand-before-planning-to-it
   (async done
     (tu/run-async done
       (fn ^:async t []
+        ;; the mound is seen, the goal cell inside it never is (a face point of it would show it to a real eye from the
+        ;; ground, so the cell is hidden by hand)
         (let [mound (merge flat (box 28 64 -3 32 64 3 "stone"))
-              s (await (go! {:blocks mound :light [15 0] :self {:pos {:x 22 :y 64 :z 0}}} {:pos [30 64 0] :range 0 :unknown true}))
+              s (await (go-hidden! {:blocks mound :light [15 0] :self {:pos {:x 22 :y 64 :z 0}}} #(= [30 64 0] %) {:pos [30 64 0] :range 0 :unknown true}))
               [lookout] (events-of s :go-to.lookout)]
           (is (= {:x 30 :y 64 :z 0} (:goal lookout)) (pr-str lookout))
           (is (<= (apply js/Math.hypot (map - [30 64 0] ((juxt :x :y :z) (:stand lookout)))) gaim/lookout-reach)
@@ -254,17 +267,6 @@
           (is (= {:arrived true :resolved {:x 30 :y 65 :z 0} :why :explicit} @out) (pr-str @out))
           (is (= [30 65 0] (mapv #(js/Math.floor %) (at p))))
           (is (= [{:x 30 :y 65 :z 0}] (mapv :to (events-of s :goal-resolved)))))))))
-
-(defn ^:async go-hidden!
-  "go! with the cells hidden? answers true for never seen (hiding), whatever the body looks at."
-  [world hidden? args]
-  (let [{:keys [eng p] :as s} (gt/setup world)
-        out (atom :not-done)
-        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out args)))]
-    (aset p "sensedAt" (fn [pos] (if (hidden? [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
-    (core/submit! eng '(recording-parent) {})
-    (await (gt/tick-out! eng 30))
-    (assoc s :eng eng :out out)))
 
 (deftest a-column-guess-that-never-resolves-walks-near-looks-then-walks-in-range
   (async done
