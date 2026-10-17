@@ -25,7 +25,7 @@
        "  --next  list it directly after the current job: it gets the next round, nothing is cut\n"
        "  --now    cut the current job and run this one at once (a normal job); the cut job keeps its memory and\n"
        "           continues right after this one yields or ends. Reflexes still come first: --now queues behind a running reflex (night, hostile) and the answer's :hint names it. --now and --next cannot be combined (refused).\n"
-       "  --alongside  submit even when a job of the same name (same job name, running or queued on this body) exists: without it such a submit is held back and the answer names the clashing job; two of one job can undo each other's work. A (repeat ...) submit is never held\n"
+       "  --alongside  submit even when a job of the same job name, or another digging job (mine, stair, tunnel, strip.*), is running or queued on this body: without it such a submit is held back and the answer names the clashing job; two of one job can undo each other's work. A (repeat ...) submit is never held\n"
        "  --wait   block until the job ends, or until anything that ends observe --wait (addressed chat, attention, an\n"
        "           engine restart, the --timeout), and print {:job .. :wait <the wake>}: the job's last events and a\n"
        "           bounded summary of what else happened meanwhile (reflexes fired, pickups, hurt, other jobs ended,\n"
@@ -60,6 +60,17 @@
   [text]
   (let [head (str (first (spec-for text)))]
     (when (str/starts-with? head "jobs.") head)))
+
+(def digging-jobs #{"jobs.gather.mine" "jobs.access.stair" "jobs.access.tunnel"})
+
+(defn digging?
+  "Mine, stair, tunnel and every jobs.strip.* job cut the same rock, so any two undercut each other."
+  [job-name]
+  (boolean (or (contains? digging-jobs job-name) (str/starts-with? (str job-name) "jobs.strip."))))
+
+(defn clashes?
+  [submitted live]
+  (or (= submitted live) (and (digging? submitted) (digging? live))))
 
 (defn request-for [argv]
   (try
@@ -387,12 +398,12 @@
                                                                                (assoc :vitals report))) "\n"))
                                               (if (:follow waited) 1 0))))))))))))))
 
-(defn clash-hint [body {:keys [id name status]}]
-  (str id " " name " is " (cljs.core/name status) " on this body; a second " name " can undo its work (two digs undercut each other). "
+(defn clash-hint [body submitted {:keys [id name label status]}]
+  (str id " " name (when label (str " (" label ")")) " is " (cljs.core/name status) " on this body; submitting " submitted " can undo its work (two digs undercut each other). "
        "Wait for it (observe.mjs " body " --wait --watch " id "), stop it (jobs.mjs " body " cancel " id "), or run both anyway: repeat this submit with --alongside."))
 
 (defn clashes-for
-  "A promise of the live jobs of the body that share the submit's job name (nil when none, or the list is unreadable)."
+  "A promise of the live jobs of the body that share the submit's job name or are both digging jobs (nil when none, or the list is unreadable)."
   [r opts]
   (if-not (:clash-name r)
     (js/Promise.resolve nil)
@@ -400,8 +411,8 @@
         (.then (fn [{:keys [status content-type text]}]
                  (when (and (= 200 status) (http/edn-response? content-type))
                    (->> (:items (data/read-edn text))
-                        (filter #(and (= (:clash-name r) (:name %)) (#{:running :queued :resuming} (:status %)) (not (:reflex %))))
-                        (map #(select-keys % [:id :name :status]))
+                        (filter #(and (clashes? (:clash-name r) (:name %)) (#{:running :queued :resuming} (:status %)) (not (:reflex %))))
+                        (map #(select-keys % [:id :name :label :status]))
                         seq
                         vec))))
         (.catch (fn [_] nil)))))
@@ -417,7 +428,7 @@
   (-> (clashes-for r opts)
       (.then (fn [clashes]
                (if (seq clashes)
-                 (do (output (str (data/write-edn {:ok false :reason :job-clash :clashes clashes :hint (clash-hint (:body r) (first clashes))}) "\n"))
+                 (do (output (str (data/write-edn {:ok false :reason :job-clash :clashes clashes :hint (clash-hint (:body r) (:clash-name r) (first clashes))}) "\n"))
                      1)
                  (run-submit! r output opts))))
       (.catch (fn [error]

@@ -450,6 +450,22 @@
           (.then (fn [{:keys [out]}] (is (= :job-clash (:reason (data/read-edn out))) "--now and --wait do not skip the guard")))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
+(deftest a-submit-clashing-with-another-digging-job-is-held-back-and-names-it
+  (let [state (state-dir)]
+    (async done
+      (-> (js/Promise.resolve nil)
+          (.then (fn [_] (run-main! state ["submit" "(jobs.access.stair {:dir :down})"] (listing-engine [{:id "j5" :name "jobs.strip.corridor" :label "corridor 12" :status :running}]))))
+          (.then (fn [{:keys [out] :as result}]
+                   (let [answer (data/read-edn out)]
+                     (is (false? (posted? result)))
+                     (is (= :job-clash (:reason answer)) out)
+                     (is (= [{:id "j5" :name "jobs.strip.corridor" :label "corridor 12" :status :running}] (:clashes answer)) out)
+                     (is (re-find #"jobs.strip.corridor \(corridor 12\)" (str (:hint answer))) out)
+                     (is (re-find #"jobs.access.stair" (str (:hint answer))) out))))
+          (.then (fn [_] (run-main! state ["submit" "(jobs.gather.chop {})"] (listing-engine [{:id "j5" :name "jobs.access.tunnel" :status :running}]))))
+          (.then (fn [result] (is (posted? result) "a non-digging job does not clash with a dig")))
+          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
 (deftest alongside-or-a-different-or-standing-job-goes-through
   (let [state (state-dir)
         twin {:id "j1" :name "jobs.gather.mine" :status :running}]
