@@ -74,7 +74,12 @@
    :limit-s 230}
   ;; Card 7647c987: unarmed, a fist loses to the helmeted zombie and the body has only its 3 dirt: the flight digs down (a pit regains
   ;; its blocks) instead of pillaring with the last dirt, so the night's dig-in still seals.
+  ;; The NoAI zombie never catches the body: the flight ends keeps-off at the plot's west side and the night digs in there, so the
+  ;; whole plot is dirt (on the default pad the pit at the edge opens onto air and the night walked back into the zombie's range).
   {:name "reflex-cut-night-unarmed-few-blocks-seals"
+   :blocks [[:fill [0 -6 0] [31 -1 31] "dirt"]
+            [:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
+            [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
