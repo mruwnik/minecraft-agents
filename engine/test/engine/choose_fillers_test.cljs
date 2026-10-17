@@ -3,6 +3,8 @@
   (:require [cljs.test :refer [deftest is are]]
             [engine.memory :as mem]
             [engine.test-util :as tu]
+            [jobs.forestry.fell-from-pillar :as fell-from-pillar]
+            [jobs.gather.mine.mend :as mend]
             [jobs.lib.choose :as choose]
             [jobs.lib.escape :as escape]))
 
@@ -42,6 +44,11 @@
     (is (= ["cobblestone"] (choose/filler-names c :pillar)))
     (is (= {:item "dirt" :count 9} (escape/pillar-item (body [(stack "dirt" 9) (stack "cobblestone" 3)]))))
     (is (= {:item "cobblestone" :count 3} (escape/pillar-item c)))))
+
+(deftest the-pillar-and-mend-block-lists-skip-an-avoided-filler
+  (let [c (assoc (body [] {:chooser :fillers :avoid ["dirt"]}) :args {:block "stone"})]
+    (is (= ["cobblestone"] (fell-from-pillar/pillar-items c)))
+    (is (not-any? #{"dirt"} (mend/fillers c)))))
 
 (deftest an-unknown-purpose-throws
   (is (thrown? js/Error (choose/fillers-for (body []) :wall 1))))

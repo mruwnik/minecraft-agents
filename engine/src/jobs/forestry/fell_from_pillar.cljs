@@ -65,7 +65,10 @@
 
 (def fit? ready/fit?)
 
-(def pillar-items (choose/fillers :pillar))
+(defn pillar-items
+  "The dirt and cobblestone names to build the pillar from, less any a :choose/override avoids."
+  [c]
+  (choose/filler-names c :pillar))
 
 (defn base [c] (:base (:args c)))
 
@@ -143,13 +146,13 @@
   "The blocks the pillar is built from: dirt and cobblestone, then every kind of log carried."
   [c]
   (let [have (pl/carried (:primitives c))]
-    (into pillar-items (filter #(and (pos? (get have % 0)) (log-name? %)) (sort (keys have))))))
+    (into (pillar-items c) (filter #(and (pos? (get have % 0)) (log-name? %)) (sort (keys have))))))
 
 (defn logs-carried
   "How many logs are carried."
   [c]
   (let [have (pl/carried (:primitives c))]
-    (reduce + (map #(get have % 0) (remove (set pillar-items) (pillar-blocks c))))))
+    (reduce + (map #(get have % 0) (remove (set (pillar-items c)) (pillar-blocks c))))))
 
 (defn blocks-carried
   "How many pillar blocks (dirt, cobblestone, logs) are carried."
@@ -163,7 +166,7 @@
   [c]
   (let [{:keys [phase plan]} (:pillar (ctx/mem c))]
     (when (and (= :walk phase) (:height plan) (< (blocks-carried c) (:height plan)))
-      {:reason :need :any-of pillar-items :count (- (:height plan) (logs-carried c))})))
+      {:reason :need :any-of (pillar-items c) :count (- (:height plan) (logs-carried c))})))
 
 (defn fetch-opts
   "The limits {:how :explore} for getting the pillar's blocks, nil when :fetch does not allow items."
@@ -177,7 +180,7 @@
   [c]
   (when-let [w (pillar-problem c)]
     (if-let [opts (fetch-opts c)]
-      (let [e (await (need/blocks! c pillar-items (:count w) opts))]
+      (let [e (await (need/blocks! c (pillar-items c) (:count w) opts))]
         (cond (= :continue e) :continue
               (= :done (:kind e)) :again
               :else e))

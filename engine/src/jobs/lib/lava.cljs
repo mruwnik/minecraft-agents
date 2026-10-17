@@ -46,7 +46,7 @@
         (ctx/update-mem! c #(cond-> (assoc % :sealing cell)
                               (not= cell (:sealing %)) (update-in [:seals cell] (fnil inc 0))))
         (let [outcome (await (blocks/place-cell! c {:x x :y y :z z} nil
-                                                 {:use {:blocks (choose/fillers :build)} :fetch fetch
+                                                 {:use {:blocks (choose/filler-names c :build)} :fetch fetch
                                                   :ignore-zones? (boolean ignore-zones?)}))]
           (if (= :continue outcome)
             :continue

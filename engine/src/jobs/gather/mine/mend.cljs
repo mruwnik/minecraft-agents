@@ -39,8 +39,9 @@
   [c]
   (let [{:keys [block] :as a} (:args c)
         item (blocks/item-name a)
-        own (when (or (some #{item} (choose/fillers :build)) (= item block)) [item])]
-    (vec (concat (remove #{item} (choose/fillers :build)) own))))
+        builds (choose/filler-names c :build)
+        own (when (or (some #{item} builds) (= item block)) [item])]
+    (vec (concat (remove #{item} builds) own))))
 
 (defn mend-permitted
   "The owed cells ({:pos ..}) the job may place on (zones and claims; one mine.declined warn per job when refused)."
