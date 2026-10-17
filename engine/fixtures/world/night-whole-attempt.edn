@@ -60,6 +60,7 @@
   ;; A hostile reflex cuts the night: a NoAI zombie 6 away fires hostile-near as the night starts, the reflex fights it, and the
   ;; night job resumes, digs in and ends the night.
   {:name "reflex-cut-night-resumes-and-holds"
+   :body {:inventory [["iron_sword" 1]]} ; a fist loses to the helmeted zombie (flee), and the flight pillars up with the last dirt
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
