@@ -329,8 +329,8 @@
         (let [{:keys [eng seen]} (setup {:self {:food 1} :entities [(assoc cow :baby true)]} :step-ms 5)]
           (await (one-round! eng {}))
           (let [none (first (none-endings seen))]
-            (is (= [{:name "cow" :id 7 :why :baby}] (mapv #(select-keys % [:name :id :why]) (:animals none))))
-            (is (re-find #"passed over 1 animal \(cow: baby\)" (str (:text none))))))))))
+            (is (= [{:name "cow" :id 7 :why :baby :pos [5 64 0]}] (mapv #(select-keys % [:name :id :why :pos]) (:animals none))))
+            (is (re-find #"passed over 1 animal \(cow: baby at \[" (str (:text none))))))))))
 
 (deftest food-none-lists-what-the-scan-saw-when-no-animal-qualified
   (async done
@@ -339,8 +339,8 @@
         (let [{:keys [eng seen]} (setup {:self {:food 1} :entities [(assoc cow :kind "other")]} :step-ms 5)]
           (await (one-round! eng {}))
           (let [none (first (none-endings seen))]
-            (is (= [{:name "cow" :kind "other"}] (mapv #(select-keys % [:name :kind]) (:nearby none))))
-            (is (re-find #"nothing hunted; in range: cow \(other\)" (str (:text none))))))))))
+            (is (= [{:name "cow" :kind "other" :pos [5 64 0]}] (mapv #(select-keys % [:name :kind :pos]) (:nearby none))))
+            (is (re-find #"nothing hunted; in range: cow \(other\) at \[" (str (:text none))))))))))
 
 (deftest food-none-nearby-leaves-out-a-hostile-behind-a-wall
   (async done

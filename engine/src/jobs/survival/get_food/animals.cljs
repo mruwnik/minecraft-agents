@@ -60,15 +60,24 @@
                                                        " (" adults " adults, keep " (:keep why) ", food " food ", " (name rule) ")")}
                                            why))))
 
+(defn cell-of
+  "The rounded cell [x y z] of a position map or JS object, or nil when the sighting gave none."
+  [pos]
+  (when pos
+    (let [p (if (map? pos) pos (u/pos-of pos))]
+      (mapv #(js/Math.round %) [(:x p) (:y p) (:z p)]))))
+
 (defn passed-over
-  "The animals in sight that were not hunted, as {:name :id :why}."
+  "The animals in sight that were not hunted, as {:name :id :why :pos}."
   [c opts]
-  (->> (in-sight c opts) (filter :why) (mapv (fn [{:keys [entity why]}] {:name (.-name entity) :id (.-id entity) :why why}))))
+  (->> (in-sight c opts) (filter :why)
+       (mapv (fn [{:keys [entity why]}] {:name (.-name entity) :id (.-id entity) :why why :pos (cell-of (.-pos entity))}))))
 
 (defn nearby
-  "The mobs of any kind the body sees or heard within radius, as {:name :kind :distance}: tells a hunt filter from
+  "The mobs of any kind the body sees or heard within radius, as {:name :kind :distance :pos}: tells a hunt filter from
   an empty scan when no animal qualified."
   [c radius]
   (->> (look/seen-entities (:primitives c) {:radius radius :max 16})
        (remove #(#{"item" "player"} (:kind %)))
-       (mapv (fn [e] {:name (:name e) :kind (:kind e) :distance (/ (js/Math.round (* 10 (:distance e))) 10)}))))
+       (mapv (fn [e] {:name (:name e) :kind (:kind e) :distance (/ (js/Math.round (* 10 (:distance e))) 10)
+                     :pos (cell-of (:pos e))}))))

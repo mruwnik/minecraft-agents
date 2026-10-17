@@ -41,9 +41,10 @@
            (str "; carrying " wheat " wheat but cannot bake (" reason ")"))
          (when (seq passed)
            (str "; passed over " (count passed) " animal" (when (> (count passed) 1) "s") " ("
-                (str/join ", " (map (fn [a] (str (:name a) ": " (if (= :kept (:why a)) "kept for breeding" (name (:why a))))) passed)) ")"))
+                (str/join ", " (map (fn [a] (str (:name a) ": " (if (= :kept (:why a)) "kept for breeding" (name (:why a)))
+                                         (when (:pos a) (str " at " (pr-str (:pos a)))))) passed)) ")"))
          (when (and (empty? passed) (seq around))
-           (str "; nothing hunted; in range: " (str/join ", " (map (fn [a] (str (:name a) " (" (:kind a) ")")) around))))
+           (str "; nothing hunted; in range: " (str/join ", " (map (fn [a] (str (:name a) " (" (:kind a) ")" (when (:pos a) (str " at " (pr-str (:pos a)))))) around))))
          (if near
            (str "; nearest known source is a " (name (:kind near)) " at " (pr-str (:pos near))
                 ", " (js/Math.round (u/dist (u/self-pos c) (:pos near))) " blocks away")
