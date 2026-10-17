@@ -1163,26 +1163,31 @@
   [out]
   (boolean (re-find #"reason\W+settling" (str out))))
 
+(defn busy-reply?
+  "True when a tool's answer says the body cannot answer yet: settling, or {:reason :timeout} (a busy body)."
+  [out]
+  (boolean (or (settling-reply? out) (re-find #":reason :?\"?timeout" (str out)))))
+
 (defn exec-settled
-  "Runs argv with exec (-> promise of {:code :out}) again every every-ms, up to limit-ms, while the answer is the
-  settling refusal. Resolves to the last result, unchanged."
+  "Runs argv with exec (-> promise of {:code :out}) again every every-ms, up to limit-ms, while the answer is busy-reply?.
+  Resolves to the last result, unchanged."
   [{:keys [exec sleep limit-ms every-ms] :or {exec exec-file sleep sleep limit-ms 10000 every-ms 500}} argv]
   (letfn [(go [waited]
             (.then (exec argv)
                    (fn [res]
-                     (if (and (settling-reply? (:out res)) (< waited limit-ms))
+                     (if (and (busy-reply? (:out res)) (< waited limit-ms))
                        (.then (sleep every-ms) #(go (+ waited every-ms)))
                        res))))]
     (go 0)))
 
 (defn tool-step!
   "Runs a :cli or :http step: the tool's answer must pass f/judge-reply or the step throws. Resolves to the tool's output.
-  An :http step waits (up to 10 s) while the body answers settling."
+  A step waits (up to 10 s) while the body answers settling or timeout (a mutating tool carries its request id, so the repeat is safe)."
   [opts step last-job event-job]
   (let [argv (f/step-argv (:body opts) (:world opts) step last-job event-job)]
     (if-let [why (f/argv-gap argv step last-job event-job)]
       (js/Promise.reject (js/Error. (str (pr-str (vec (take 2 step))) " step: " why)))
-      (.then (if (= :http (first step)) (exec-settled {} argv) (exec-file argv))
+      (.then (exec-settled {} argv)
              (fn [{:keys [code out]}]
                (let [{:keys [pass? evidence]} (f/judge-reply (some-> (f/step-pattern step) (f/fill-pattern last-job event-job)) code out)]
                  (when-not pass? (throw (js/Error. (str (pr-str (vec (take 2 step))) " step: " evidence))))

@@ -980,9 +980,9 @@
         (.catch (fn [e] (is false (.-message e))))
         (.finally done))))
 
-(deftest an-http-tool-answer-of-settling-is-retried-then-passed-on
+(deftest a-tool-answer-of-settling-or-timeout-is-retried-then-passed-on
   (async done
-    (let [answers (atom ["{:ok false :reason \"settling\"}" "{:ok false :reason \"settling\"}" "{:ok true}"])
+    (let [answers (atom ["{:ok false :reason \"settling\"}" "{:ok false :reason :timeout :body \"B\"}" "{:ok true}"])
           slept (atom 0)
           run (fn [replies limit]
                 (reset! answers replies)
