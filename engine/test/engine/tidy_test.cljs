@@ -812,3 +812,11 @@
             (core/submit! eng '(jobs.survival.breathe {:min-oxygen 12}) {})
             (await (core/tick! eng))
             (is (= (map #(some-> % name) plan-recorded) (map :plan (tidy-entries eng))) (str kind))))))))
+
+(deftest decide-looks-past-the-first-window-for-a-cell-that-seals-no-other
+  (let [{:keys [p]} (setup (assoc with-hitbox :floor [-30 -30 30 30] :self {:pos [0 64 0]}) [(zs/whole-zone "Miles")])
+        c {:primitives p :args {:min-health 14 :danger-radius 8 :reach 3}}
+        waiting (holes 6)
+        sixth (last waiting)]
+    (with-redefs [restore-broken/seals-others? (fn [_ e _ _] (not= sixth e))]
+      (is (= [:restore sixth] (restore-broken/decide c waiting))))))

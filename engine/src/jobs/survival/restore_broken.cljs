@@ -22,8 +22,8 @@
   holding mid-run the run yields :continue (no cell is skipped for it).
   Touches only a cell whose block is still what the job left (a changed cell is somebody's, left alone),
   with at most 3 tries per cell.
-  One run over every entry, paced between steps, a cell put back forgotten at once; a step takes the first of the next
-  max-candidates-checked cells whose put-back cuts the body's way to no other it reaches now; a walk is one go-to call and
+  One run over every entry, paced between steps, a cell put back forgotten at once; a step takes the first cell
+  (while the pass's search allowance lasts) whose put-back cuts the body's way to no other it reaches now; a walk is one go-to call and
   a failed try is repeated until the cell gave up. A cell not restored for now (item not carried) keeps its
   entry. The others are forgotten.
   Done at once with no :tidy entry pending. Ends :done {:restored n :cells [cells put back] :not-restored [{:cell :was :why}]}
@@ -44,7 +44,6 @@
 (a/defargs settings
   {::step-radius {:default 4 :doc "Blocks around the body in which a standing cell is looked for." :spec (a/int-in 0 nil)}
    ::max-others-checked {:default 12 :doc "Other broken cells checked per pass for a standing cell." :spec (a/int-in 0 nil)}
-   ::max-candidates-checked {:default 4 :doc "Waiting cells checked per pass for one whose put-back seals no other." :spec (a/int-in 1 nil)}
    ::max-search-cells {:default 6000 :doc "Cells the walk searches of one pass decision expand at most; a search that would pass it answers unknown." :spec (a/int-in 0 nil)}
    ::max-step-cells-checked {:default 3 :doc "Nearest standable cells checked for a walk when stepping clear of a cell." :spec (a/int-in 1 nil)}
    ::job-time-s {:default 300 :doc "Seconds a run may take before it ends." :spec (a/num-in 0 nil)}
@@ -85,7 +84,6 @@
          (some #(when (reach/way? kind-at (reach/cell-of here) (reach/cell-of %)) %)))))
 
 (defn max-others-checked [] (settings/get settings ::max-others-checked))
-(defn max-candidates-checked [] (settings/get settings ::max-candidates-checked))
 (defn max-search-cells [] (settings/get settings ::max-search-cells))
 
 (defn probe
@@ -107,6 +105,11 @@
   (if (< @cells-left reach/node-budget)
     :budget
     (reach/search (fn [x y z] (vswap! cells-left dec) (step kind-at x y z)) from to)))
+
+(defn search-left?
+  "Whether the probe's allowance still covers a full search."
+  [{:keys [cells-left]}]
+  (<= reach/node-budget @cells-left))
 
 (defn way?
   "reach/way? over the probe's searches: a forward search, settled by a backward one when it runs out of budget;
@@ -270,12 +273,12 @@
 (defn decide
   "What one pass does with the waiting entries (synchronous, its searches and floods bounded whatever the number
   waiting): [:done], [:wait] (unsafe now), [:skip e why], [:step-clear e] or [:restore e]. An occupied cell comes first, then the first of
-  the next max-candidates-checked whose put-back seals no other, else the next."
+  the first, in order, whose put-back seals no other (checked while the pass's search allowance lasts), else the first."
   [c waiting]
   (let [a (:args c)
         pr (probe c)
         e (or (first (filter #(= :occupied (why-not c % pr)) waiting))
-              (first (remove #(seals-others? c % waiting pr) (take (max-candidates-checked) waiting)))
+              (first (remove #(seals-others? c % waiting pr) (take-while (fn [_] (search-left? pr)) waiting)))
               (first waiting))
         why (when e (why-not c e pr))]
     (cond
