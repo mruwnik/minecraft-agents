@@ -304,14 +304,12 @@
 (def fit? ready/ok)
 
 (defn ^:async run-steps!
-  "step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps; goal aimed again each
-  step (goal-pos), so a column seen on the way resolves."
+  "pace/steps! over step!, goal aimed again each step (goal-pos), so a column seen on the way resolves; the approach
+  record and :open go when the attempt ends (a cut keeps them)."
   [c goal]
-  (loop []
-    (let [r (await (step! c (goal-pos c goal)))]
-      (cond
-        (= :again r) (if (ctx/alive? c) (do (await (pace/pace!)) (recur)) :continue)
-        :else (do (swap! approaches dissoc (:id c)) (ctx/update-mem! c dissoc :open) r)))))
+  (let [r (await (pace/steps! c (fn [] (step! c (goal-pos c goal)))))]
+    (when (ctx/alive? c) (swap! approaches dissoc (:id c)) (ctx/update-mem! c dissoc :open))
+    r))
 
 (defn ^:async attempt
   "One whole attempt: step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps. A
