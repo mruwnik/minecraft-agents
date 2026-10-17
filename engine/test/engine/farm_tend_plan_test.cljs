@@ -131,16 +131,13 @@
 (def stuck-wheat
   (world-of farmland-all (crops "wheat" 7 wheat-cells) {:unreachable ["2,64,2" "3,64,2"] :inventory [(item "wheat_seeds" 6) (item "bread" 12)]}))
 
-(deftest a-part-whose-pass-leaves-its-check-true-backs-off-and-does-not-starve-the-queue
+(deftest a-part-whose-pass-leaves-its-check-true-is-tried-once-per-run
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (run-standing {:plan "mix" :part "wheat"} stuck-wheat {"mix" (plan-of)} 80))]
-          (is (= 1 (count (pass-ends s))) "one pass, then the part rests")
-          (is (some #(= [:wheat] (map keyword (:backed-off %))) (events-of s :waiting)) "the wait names the part")
-          (swap! (:clock s) + 660000)
-          (await (tu/run-ticks (:eng s) (:clock s) 40 700))
-          (is (= 2 (count (pass-ends s))) "after the back-off it tries again"))))))
+          (is (<= 2 (count (pass-ends s))) "no rest: the next run tries the part again")
+          (is (empty? (filter :backed-off (events-of s :waiting))) "no wait names a back-off"))))))
 
 (deftest a-missing-seed-leaves-its-cells-bare-with-one-note-and-the-other-crop-is-still-sown
   (async done

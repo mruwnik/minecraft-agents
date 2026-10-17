@@ -47,7 +47,7 @@
   A step that ran keeps its summary even if it is skipped later in the same run.
   Start facts, failed conditions: impossible {:reason :no-box} unless the box has a crop layer and at most 2048 cells (or
   :plan is given); {:reason :away :site :limit} far from the field while another job is listed, or deep below it;
-  {:reason :nothing-to-do} (with :backed-off, :covered, :refused, :food-reserve) or {:reason :short-seed :seeds} when no
+  {:reason :nothing-to-do} (with :covered, :refused, :food-reserve) or {:reason :short-seed :seeds} when no
   step would run, after one look round from here when a cell was never seen. A started run always continues. A step under
   way is not re-decided.
   Ends :done with data {:steps {step summary} :field {:crops :bare :untilled}} when some step
@@ -73,9 +73,7 @@
   and again before the act. Untilled ground the rules refuse is left alone with one farm-tend.refused warn.
   When only refused ground remains, the check stays false: the job waits and the reason is on record.
   :parts (a list of part names) works those parts in one job, a pass each in order, and ends :done with
-  {:parts {part {:steps :field}}}. A part (or the whole field) whose pass leaves a step that would
-  still run rests 10 minutes (jobs.lib.standing): its condition fails for that long, the cause names it as :backed-off, and the
-  other parts go on; so the job can stand in the queue under repeat without starving other jobs.
+  {:parts {part {:steps :field}}}. A part is tried once per run; the caller decides when to run again.
   {:reason :plan-trouble :why text} (one farm-tend.declined warn): a wait while the plan is missing or unreadable or no zone
   list has been read; impossible when it has no crop cells, also in a started run if the plan stops being workable.")
 
@@ -306,16 +304,14 @@
 
 (defn problem
   "Why no run can start (a started run decides through its steps), a status: away while the field is far and another
-  job is listed, else the status of the last part not resting (the first to ask for a look), ok when some part has work."
+  job is listed, else the status of the last part (the first to ask for a look), ok when some part has work."
   [c]
   (let [away (standing/away-cause c (site c))]
     (if away
       (checks/cause-status :later away)
-      (let [rested (standing/rested c job-sym)
-            statuses (map #(part-status (for-part c %)) (remove #(contains? rested (key-of %)) (parts-of c)))]
+      (let [statuses (map #(part-status (for-part c %)) (parts-of c))]
         (cond
           (some nil? statuses) (contract/ok :work "a part has work")
-          (empty? statuses) (checks/cause-status :later {:reason :nothing-to-do :backed-off (vec (sort (keys rested)))})
           :else (or (first (filter #(= :look (first %)) statuses)) (last statuses)))))))
 
 (defn can-run?
@@ -409,13 +405,10 @@
     {:steps report :field field}))
 
 (defn finish-part!
-  "The pass over the field c works is made: book its report, clear the pass, and rest the field when a step would still
-  run (the pass could not do it). :again."
+  "The pass over the field c works is made: book its report and clear the pass. :again."
   [c report]
   (let [part (:part (:args c))
         out (part-report c report)]
-    (when (some #(:call (decide/decide % (:args c) (facts c))) decide/steps)
-      (standing/rest! c job-sym (key-of part) :undone))
     (ctx/update-mem! c #(-> % (dissoc :todo :report :call-args :cur :till-tried :tilled)
                             (assoc-in [:results (key-of part)] out)))
     :again))
@@ -516,17 +509,15 @@
   (await (step c)))
 
 (defn next-part
-  "{:part} of the first untried part not resting whose check passes, marking every part looked at as tried; nil when none is left."
+  "{:part} of the first untried part whose check passes, marking every part looked at as tried; nil when none is left."
   [c]
-  (let [rested (standing/rested c job-sym)]
-    (loop [parts (remove #(contains? (:tried (ctx/mem c)) (key-of %)) (parts-of c))]
-      (when (seq parts)
-        (let [part (first parts)]
-          (ctx/update-mem! c update :tried (fnil conj #{}) (key-of part))
-          (if (and (not (contains? rested (key-of part)))
-                   (let [s (part-status (for-part c part))] (or (nil? s) (= :look (first s)))))
-            {:part part}
-            (recur (rest parts))))))))
+  (loop [parts (remove #(contains? (:tried (ctx/mem c)) (key-of %)) (parts-of c))]
+    (when (seq parts)
+      (let [part (first parts)]
+        (ctx/update-mem! c update :tried (fnil conj #{}) (key-of part))
+        (if (let [s (part-status (for-part c part))] (or (nil? s) (= :look (first s))))
+          {:part part}
+          (recur (rest parts)))))))
 
 (defn ^:async run-step
   "One step of the whole run: go on with the part under way, else start the next part, else hand over the result."
