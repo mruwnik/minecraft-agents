@@ -103,19 +103,25 @@
   "The cells to fill around the feet cell, in placement order: sides at feet
   height, sides at head height, a support beside the roof cell (a block needs a
   solid face neighbour to be placed against, and the roof cell has none until
-  the support exists; none when the roof cell is sealed already), then the roof cell above the head; only those the
+  the support exists; none when one of the four is placed already or the roof cell is sealed; else the one farthest from
+  threats ({:x :y :z}), the +x one with none), then the roof cell above the head; only those the
   predicate sealed? (cell -> bool) does not hold for."
-  [sealed? {:keys [x y z]}]
-  (let [roof {:x x :y (+ y 2) :z z}]
-    (filterv #(not (sealed? %))
-             (concat (for [dy [0 1] [dx dz] sides] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
-                     (when-not (sealed? roof) [{:x (inc x) :y (+ y 2) :z z}])
-                     [roof]))))
+  ([sealed? feet] (fill-cells sealed? feet nil))
+  ([sealed? {:keys [x y z]} threats]
+   (let [roof {:x x :y (+ y 2) :z z}
+         supports (for [[dx dz] sides] {:x (+ x dx) :y (+ y 2) :z (+ z dz)})
+         gap (fn [{cx :x cy :y cz :z}]
+               (apply min (map #(u/dist {:x (+ cx 0.5) :y (+ cy 0.5) :z (+ cz 0.5)} %) threats)))
+         support (if (empty? threats) (first supports) (apply max-key gap supports))]
+     (filterv #(not (sealed? %))
+              (concat (for [dy [0 1] [dx dz] sides] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
+                      (when-not (or (sealed? roof) (some sealed? supports)) [support])
+                      [roof])))))
 
 (defn open-cells
-  "The fill-cells around the feet cell that are not sealed? in the world."
-  [p feet]
-  (fill-cells #(sealed? p %) feet))
+  "The fill-cells around the feet cell that are not sealed? in the world; the roof support away from threats."
+  ([p feet] (open-cells p feet nil))
+  ([p feet threats] (fill-cells #(sealed? p %) feet threats)))
 
 (defn placeable?
   "Whether a block placed in cell has a neighbour (any of the six) whose collision shape fills its cell to be placed against."

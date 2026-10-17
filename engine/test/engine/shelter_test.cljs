@@ -1467,6 +1467,15 @@
     (is (= 10 (count (dig-cells/fill-cells none feet))) "sides, support, roof")
     (is (= 8 (count (dig-cells/fill-cells roofed feet))) "a sealed roof cell needs no support")))
 
+(deftest fill-cells-put-the-roof-support-away-from-the-threats
+  (let [feet {:x 0 :y 64 :z 0}
+        none (constantly false)
+        beside? (fn [cell] (= 1 (+ (Math/abs (:x cell)) (Math/abs (:z cell)))))
+        supports (fn [sealed? threats] (filterv #(and (= 66 (:y %)) (beside? %)) (dig-cells/fill-cells sealed? feet threats)))]
+    (is (= [{:x 1 :y 66 :z 0}] (supports none [])) "no threat: the +x side")
+    (is (= [{:x -1 :y 66 :z 0}] (supports none [{:x 4.5 :y 66 :z 0.5}])) "a zombie on the +x side: the -x one")
+    (is (= [] (supports #(= {:x 0 :y 66 :z 1} %) [{:x 4.5 :y 66 :z 0.5}])) "one placed already: no other")))
+
 (deftest dig-in-without-enclose-still-declines-under-a-roof
   (async done
     (tu/run-async done

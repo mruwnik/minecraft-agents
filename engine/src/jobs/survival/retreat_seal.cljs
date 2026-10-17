@@ -155,7 +155,8 @@
   (let [{:keys [radius max-places]} (:args c)
         blocks (flight/blocks c)
         p (:primitives c)
-        open (dig-cells/open-cells p (sh-sense/feet p))
+        threats (into (shooters c) (melee-spots c))
+        open (dig-cells/open-cells p (sh-sense/feet p) threats)
         free (remove #(occupied? c %) open)
         cells (if (seq (shooters c)) (facing-first (sh-sense/feet p) (shooters c) free) (nearest-first (sh-sense/feet p) (melee-spots c) free))
         forget! #(dig-cells/forget-wait! c :seal-mob-since)
@@ -172,7 +173,7 @@
                                                                  (dig-cells/bottom-up p cells (sh-sense/feet p))))))
             :failed :failed
             :wait :again
-            (let [left (dig-cells/open-cells p (sh-sense/feet p))]
+            (let [left (dig-cells/open-cells p (sh-sense/feet p) threats)]
               (cond
                 (empty? left) (do (forget!) :sealed)
                 (every? #(occupied? c %) left) (unfillable)
