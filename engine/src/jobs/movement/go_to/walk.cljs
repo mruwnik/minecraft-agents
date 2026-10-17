@@ -19,6 +19,7 @@
             [jobs.movement.go-to.aim :refer [aimed here? in-seen-ground? look-along! guess-waypoint look-at-column! look-at-goal-air! hidden-in-ground? lookout pre-aim! sight-end see-cell]]
             [jobs.movement.go-to.cut :refer [approach-recorder tour tour-spent?]]
             [jobs.movement.go-to.detour :as detour]
+            [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.restore :as restore]
             [jobs.movement.go-to.faults :refer [note-fault! refused-hang shut-foreign]]
@@ -233,12 +234,12 @@
   (let [p (:primitives c)
         feet (end/feet-cell c)
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
-        near (delay (esc/nearest-stand p goal wall-walk-slack))
-        nearest (delay (esc/nearest-stand p goal))
+        near (delay (choose/nearest-stand p goal wall-walk-slack))
+        nearest (delay (choose/nearest-stand p goal))
         to (fn [a b] (u/dist (zipmap [:x :y :z] a) (zipmap [:x :y :z] b)))]
     (when (and (#{:goal-enclosed :goal-cut-off} (:reason result))
                (not (:wall-walked (ctx/mem c)))
-               (not (esc/escalate? c tries result))
+               (not (choose/escalate? c tries result))
                (<= (to @nearest goal) (dec (to feet goal)))
                (< (to @near goal) (to feet goal))
                (<= (:cost (cost/walk-cost {:distance (to feet @near)})) (budget-s c)))
@@ -306,7 +307,7 @@
       :else
       (let [_ (forget-known-land! c)
             opts (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
-            stair-check (lookout-check c pos (plan-check c pos (esc/stair-check c pos) (straight-from! c d)))
+            stair-check (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d)))
             {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))
             _ (ctx/hold-still! c (when (= "searching" status) :searching))
             fetched (when (= :no-torch (:status walked)) (await (fetch-torches! c)))
@@ -342,7 +343,7 @@
 
           (and (= "stair" status) (:detour (:why walked)))
           (let [why (dissoc (:why walked) :detour)]
-            (if-let [e (esc/detour-way c pos)]
+            (if-let [e (choose/detour-way c pos)]
               (esc/detour-escalate! c (:blocked (ctx/mem c) 0) why e)
               (end/give-up! c pos (:blocked (ctx/mem c) 0) :detour {:status :no-path :reason :detour} why)))
 
@@ -411,7 +412,7 @@
                   :again)
               (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))
                     result (dive-end c pos (dark-end c result))
-                    ended (cond-> (if (esc/escalate? c tries result) result (sight-end c pos (unloaded-end result unloaded?)))
+                    ended (cond-> (if (choose/escalate? c tries result) result (sight-end c pos (unloaded-end result unloaded?)))
                             (:waypoint-why (ctx/mem c)) (assoc :waypoint-why (:waypoint-why (ctx/mem c))))]
                 (cond
                   (await (clear-goal-seal! c pos ended)) :again

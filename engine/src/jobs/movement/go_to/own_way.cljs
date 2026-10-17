@@ -8,6 +8,7 @@
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.detour :as detour]
+            [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.tuning :refer [climb-rise climb-dip max-searching]]))
@@ -47,7 +48,7 @@
         feet (end/feet-cell c)
         top (js/Math.floor (:y pos))
         route (when (and (or floor (:own-way-on m)) (climb/own-way) (not (:own-way-done m))) (climb/own-route c feet top))
-        weighed (when (and route (next route) (not (:own-way-on m))) (climb/weigh route (- top (second feet)) esc/stair-step-s))]
+        weighed (when (and route (next route) (not (:own-way-on m))) (climb/weigh route (- top (second feet)) choose/stair-step-s))]
     (when weighed (ctx/emit! c :go-to.own-way :info weighed))
     (if (false? (:take weighed))
       (do (ctx/update-mem! c assoc :own-way-done true) nil)

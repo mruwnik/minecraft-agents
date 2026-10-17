@@ -13,6 +13,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
             [plan.shape :as shape]
+            [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.escalation :as esc]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box]]
@@ -37,7 +38,7 @@
     (is (= 1 @calls))))
 
 (deftest go-to-escalates-on-a-door-that-doors-never-refuses
-  (let [ok? (fn [result doors] (esc/escalate-reason? result doors))]
+  (let [ok? (fn [result doors] (choose/escalate-reason? result doors))]
     (is (true? (ok? {:reason :exhausted} :shut)))
     (is (true? (ok? {:reason :start-enclosed} :shut)) "a pen sealed in the loaded world, goal far and unloaded (card 5a822a99)")
     (is (true? (ok? {:reason :abilities :kind :open} :never)) "the planner's way through a door, refused as a wall")
@@ -376,7 +377,7 @@
 
 (deftest a-free-body-with-one-pickaxe-or-none-lets-its-stair-fetch-a-tool
   (let [flat {:blocks (box -20 63 -20 20 63 20 "stone") :self {:pos {:x 0 :y 64 :z 0}}}
-        fetch? #(esc/fetch-tool? {:primitives (tu/fake %) :args {}})
+        fetch? #(choose/fetch-tool? {:primitives (tu/fake %) :args {}})
         picks #(vec (repeat % {:name "stone_pickaxe" :count 1}))]
     (is (= [true true false] (map #(fetch? (assoc flat :inventory (picks %))) [0 1 2])))
     (is (false? (fetch? (merge {:blocks room :inventory (picks 1)} in-room))) "shut in: no walk to a tool")
@@ -416,5 +417,5 @@
 (deftest a-dig-route-does-not-step-on-a-floor-the-body-has-not-seen-under-seen-air
   (let [world (apply dissoc (box 0 60 -1 6 70 1 "stone") (for [x (range 3) y [64 65]] (str x "," y ",0")))
         p (hiding world #(= [2 63 0] %))
-        cells (esc/route-cells p [0 64 0] [3 64 0] (constantly true) (constantly false))]
+        cells (choose/route-cells p [0 64 0] [3 64 0] (constantly true) (constantly false))]
     (is (some #(= 1 (nth (:cell %) 2)) cells) "it digs round the seen-open cell whose floor is unseen")))

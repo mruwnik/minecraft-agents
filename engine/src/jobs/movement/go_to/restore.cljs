@@ -6,7 +6,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
-            [jobs.movement.go-to.escalation :refer [note-placed! own-holes]]
+            [jobs.movement.go-to.holes :refer [note-placed! own-holes]]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.torch :as torch]))
 
