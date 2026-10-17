@@ -5,14 +5,14 @@
  {:tags [:animals :night]
   :plot {:floor "grass_block"}
   :blocks [[:fill [19 0 9] [25 0 15] "oak_fence" :hollow]]
-  :body {:at [2.5 0 12.5] :yaw 0 :settle-s 2 :effects [["resistance" 900 4]]}
+  :body {:at [2.5 0 12.5] :yaw 0 :settle-s 2 :inventory [["wheat" 4]] :effects [["resistance" 900 4]]}
   :limit-s 60}
  :cases
  [{:name "tend-at-night-across-open-ground-waits-exposed"
    :time :night
    :act [[:summon "cow" [21.5 0 11.5]]
          [:summon "cow" [23.5 0 13.5]]
-         [:job (jobs.animals.tend {:mob "cow" :target 2 :box {:min #xyz [20 0 10] :max #xyz [24 0 14]}})]]
+         [:job (jobs.animals.tend {:mob "cow" :target 3 :box {:min #xyz [20 0 10] :max #xyz [24 0 14]}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15 :of-job true}]
    :after [[:body-near [2.5 0 12.5] 2]]}
