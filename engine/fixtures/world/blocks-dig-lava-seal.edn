@@ -1,7 +1,7 @@
 ;; Card 41419fb6: in a 1-wide tunnel (case 5) there are fewer than 3 step-off cells; the body still steps away from the lava (escalated walk) and the job says so.
 ;; Cards ba557bb5, abf946bb (seal block fetched from a seen chest): blocks.dig of the cell under the feet that lays hidden lava open seals it from the rim (:on-lava :seal, the
 ;; default) and goes on. Should fail: no block carried and :seal-fetch false stops :lava-unsealed, and the body steps clear of the
-;; lava column. Stone mass x 8..24, z 8..24, y 0..9; lava under the dug cell (16 9 16).
+;; lava column (a cell outside the 3x3 columns around the dug cell: at least 1.5 from its centre). Stone mass x 8..24, z 8..24, y 0..9; lava under the dug cell (16 9 16).
 {:defaults
  {:tags [:blocks :mining :lava :survival]
   :time :any
@@ -28,7 +28,7 @@
    :act [[:job (jobs.blocks.dig {:pos #at [16 9 16] :seal-fetch false})]]
    :expect [{:event {:source :job :kind :stopped :data {:dug true :reason :lava-unsealed}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :blocks.dig.sealed} :for-s 60 :until {:source :job :kind #{:completed :stopped} :data {:dug [:any]}}}]
-   :after [[:block [16 8 16] "lava"] [:body-far [16.5 10 16.5] 1.9]]}
+   :after [[:block [16 8 16] "lava"] [:body-far [16.5 10 16.5] 1.5]]}
   ;; card d925961b: the lava is beside the dug cell, buried in the mass (unseen until the dig opens it); the look-round sees it and the seal covers it
   {:name "dig-seals-lava-beside-the-dug-cell"
    :blocks [[:set [16 8 16] "stone"] [:set [16 9 16] "air"] [:set [17 8 16] "lava"]]
