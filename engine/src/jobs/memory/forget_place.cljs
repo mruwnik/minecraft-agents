@@ -11,6 +11,7 @@
   Emits info place.forgotten with :was; ends :done with data {:name :was}.
   A refusal gives warn place.refused and ends :condition-failed with cause {:reason :text}. :reason is
   :bad-name, :reserved-name or :not-a-place (the name holds other memory, which is left alone).
+  A name no place can have is refused before any round: ends :impossible {:reason :bad-args :why :bad-name|:reserved-name :text}.
   Needs nothing; uses no time to speak of. A name with no place recorded is already done.")
 
 (a/defargs args
@@ -38,7 +39,7 @@
   (let [cause (bad-args c)]
     (if (= :not-a-place (:reason cause))
       (checks/cause-status :later cause)
-      (checks/cause-status :never cause))))
+      (checks/cause-status :never (some-> cause (assoc :reason :bad-args :why (:reason cause)))))))
 
 (defn done?
   "Done when nothing is recorded under the name."

@@ -54,13 +54,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[spec reason] [['(jobs.memory.remember {:kind :hurt}) :reserved-kind]
-                               ['(jobs.memory.remember {:kind :reserve}) :reserved-kind]
+        (doseq [[spec reason] [['(jobs.memory.remember {:kind :hurt}) :bad-args]
+                               ['(jobs.memory.remember {:kind :reserve}) :bad-args]
                                ['(jobs.memory.reserve {}) :bad-args]
                                ['(jobs.memory.unreserve {}) :bad-args]
-                               ['(jobs.memory.remember {}) :bad-kind]
-                               ['(jobs.memory.set-place {:name :home :pos [2 999 3]}) :bad-pos]
-                               ['(jobs.memory.forget-place {:name "Bad Name"}) :bad-name]
+                               ['(jobs.memory.remember {}) :bad-args]
+                               ['(jobs.memory.set-place {:name :home :pos [2 999 3]}) :bad-args]
+                               ['(jobs.memory.forget-place {:name "Bad Name"}) :bad-args]
                                ['(jobs.explore.look {:block-names ["no_such_block"]}) :bad-args]]]
           (is (= {:event :stopped :kind :impossible :reason reason} (await (stopped-data spec))) (pr-str spec)))))))
 

@@ -20,6 +20,7 @@
   Refused (warn memory.refused with :reason and :text; ends :condition-failed with cause {:reason :text}):
   :bad-kind (not a keyword, or namespaced), :reserved-kind (a kind the engine or another job writes, such as
   :hurt, :slept, :scaffold, or the name of a recorded place).
+  A bad :kind or a kind other jobs write is refused before any round: ends :impossible {:reason :bad-args :why :bad-kind|:reserved-kind :text}.
   Success: info memory.remembered with :memory-kind, :entry and :policy; ends :done with data {:kind}.")
 
 (a/defargs args
@@ -65,11 +66,11 @@
     (when reason r)))
 
 (defn can-start?
-  "Never for a kind a job may not write; later for any other refusal."
+  "Never :bad-args for a kind a job may not write; later for any other refusal."
   [c]
   (let [cause (bad-args c)]
-    (if (or (= :bad-kind (:reason cause)) (contains? places/owned-kinds (:kind (:args c))))
-      (checks/cause-status :never cause)
+    (if (and cause (or (= :bad-kind (:reason cause)) (contains? places/owned-kinds (:kind (:args c)))))
+      (checks/cause-status :never (assoc cause :reason :bad-args :why (:reason cause)))
       (checks/cause-status :later cause))))
 
 (defn done?

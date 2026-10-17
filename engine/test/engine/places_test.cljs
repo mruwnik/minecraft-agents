@@ -202,13 +202,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[args reason] [[{:pos [1 64 1]} :bad-name]
-                               [{:name "Home Base" :pos [1 64 1]} :bad-name]
-                               [{:name :hurt :pos [1 64 1]} :reserved-name]
-                               [{:name :home :pos [1 999 1]} :bad-pos]]]
+        (doseq [[args reason] [[{:pos [1 64 1]} :bad-args]
+                               [{:name "Home Base" :pos [1 64 1]} :bad-args]
+                               [{:name :hurt :pos [1 64 1]} :bad-args]
+                               [{:name :home :pos [1 999 1]} :bad-args]]]
           (let [{:keys [eng seen reasons]} (await (try-job identity set-place args))]
             (is (nil? (place eng :home)) (pr-str args))
             (is (= [reason] reasons) (pr-str args))
+            (is (empty? (events-of seen :round_started)) "refused before any round")
             (is (empty? (:list (core/state eng))) "impossible: it leaves the queue")))))))
 
 (deftest set-place-refuses-a-block-that-is-no-name-at-submit
@@ -276,12 +277,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[args prepare! reason] [[{:name :hurt} #(mem/write! (:store %) :hurt {:health 3}) :reserved-name]
+        (doseq [[args prepare! reason] [[{:name :hurt} #(mem/write! (:store %) :hurt {:health 3}) :bad-args]
                                         [{:name :my-notes} #(mem/write! (:store %) :my-notes {:n 1}) :not-a-place]
-                                        [{:name "Not Valid"} identity :bad-name]
-                                        [{} identity :bad-name]]]
+                                        [{:name "Not Valid"} identity :bad-args]
+                                        [{} identity :bad-args]]]
           (let [{:keys [eng seen reasons]} (await (try-job prepare! forget-place args))]
             (is (= [reason] reasons) (pr-str args))
+            (is (empty? (events-of seen :round_started)) "refused or held before any round")
             (is (empty? (events-of seen :place.forgotten)))
             (is (every? #(seq (entries eng %)) (filter #{:hurt :my-notes} [(:name args)]))
                 "another kind of memory is still there")))))))
@@ -301,7 +303,7 @@
           (is (false? (:ok (submit "set-junk" '(jobs.memory.set-place {:name :home :pos [2 3]})))) "a malformed position is refused at submit")
           (is (= true (:ok (submit "set-bad" '(jobs.memory.set-place {:name :home :pos [2 999 3]})))) "an impossible one comes as an event")
           (await (run-until-empty eng 8))
-          (is (= [:bad-pos] (stopped-reasons seen)))
+          (is (= [:bad-args] (stopped-reasons seen)))
           (is (= {:x 2 :y 64 :z 3} (place eng :home)))
           (is (= true (:ok (submit "forget-home" '(jobs.memory.forget-place {:name :home})))))
           (await (run-until-empty eng 8))

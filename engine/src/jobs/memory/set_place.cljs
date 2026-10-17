@@ -19,6 +19,7 @@
   memory kind the engine uses), :not-a-place (the name holds other memory), :bad-pos, :bad-block,
   :no-such-block, :ambiguous (two such blocks lie within 1 and neither at the position: give the exact one),
   :not-loaded.
+  A name, :pos or :block wrong whatever the world holds is refused before any round: ends :impossible {:reason :bad-args :why <that reason> :text}.
   Success: info place.set; ends :done with data {:name :pos}.
   To run it on a body that is running: {:op :submit :next? true :spec (jobs.memory.set-place {...})}. The
   outcome is in the event stream.")
@@ -56,7 +57,7 @@
   (let [cause (bad-args c)]
     (if (= :not-a-place (:reason cause))
       (checks/cause-status :later cause)
-      (checks/cause-status :never cause))))
+      (checks/cause-status :never (some-> cause (assoc :reason :bad-args :why (:reason cause)))))))
 
 (defn done?
   "Done when the place is already recorded at the cell the call resolves to."

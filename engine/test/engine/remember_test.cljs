@@ -98,25 +98,26 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[args reason] [[{} :bad-kind]
-                               [{:kind :bred/cow} :bad-kind]
-                               [{:kind :job/j1} :bad-kind]
-                               [{:kind :hurt} :reserved-kind]
-                               [{:kind :slept} :reserved-kind]
-                               [{:kind :scaffold} :reserved-kind]
-                               [{:kind :bed} :reserved-kind]
-                               [{:kind :home} :reserved-kind]
-                               [{:kind :food-source} :reserved-kind]
-                               [{:kind :opened} :reserved-kind]
-                               [{:kind :watched} :reserved-kind]
-                               [{:kind :watch-turned} :reserved-kind]
-                               [{:kind :sleep-failed} :reserved-kind]
-                               [{:kind :bed-place-failed} :reserved-kind]
-                               [{:kind :shelter-trapped} :reserved-kind]]]
+        (doseq [[args reason] [[{} :bad-args]
+                               [{:kind :bred/cow} :bad-args]
+                               [{:kind :job/j1} :bad-args]
+                               [{:kind :hurt} :bad-args]
+                               [{:kind :slept} :bad-args]
+                               [{:kind :scaffold} :bad-args]
+                               [{:kind :bed} :bad-args]
+                               [{:kind :home} :bad-args]
+                               [{:kind :food-source} :bad-args]
+                               [{:kind :opened} :bad-args]
+                               [{:kind :watched} :bad-args]
+                               [{:kind :watch-turned} :bad-args]
+                               [{:kind :sleep-failed} :bad-args]
+                               [{:kind :bed-place-failed} :bad-args]
+                               [{:kind :shelter-trapped} :bad-args]]]
           (let [{:keys [eng seen]} (setup)]
             (await (run-job eng (list remember args)))
             (is (= [reason] (stopped-reasons seen)) (pr-str args))
             (is (empty? (events-of seen :memory.remembered)) (pr-str args))
+            (is (empty? (events-of seen :round_started)) "refused before any round")
             (is (empty? (:list (core/state eng))) "impossible: it leaves the queue")))))))
 
 (deftest remember-will-not-take-the-name-of-a-recorded-place
