@@ -1,0 +1,25 @@
+;; survival.get-food's :field way: ripe wheat in a zone the body owns is cut, replanted and baked to bread (a crafting table near).
+;; Wheat in another owner's zone stays uncut. A row of 8 ripe wheat x 22..29, z 22 on farmland; the body carries seeds, no food.
+;; Hunger is drained by RCON (food 9-10), hp 15.
+;; Should-succeed: the zone is the body's own: the row is cut and replanted (age 0) and wheat is baked down.
+;; Should-fail: the zone is someone else's: no wheat is cut (the :no-food ending), the row stays ripe.
+{:defaults
+ {:tags [:survival :get-food :farm :zones]
+  :time :day
+  :plot {:height 6 :floor "grass_block"}
+  :blocks [[:fill [22 -1 22] [29 -1 22] "farmland[moisture=7]"] [:fill [22 -2 23] [29 -2 23] "stone"] [:fill [22 -1 23] [29 -1 23] "water"]
+           [:fill [22 0 22] [29 0 22] "wheat[age=7]"] [:set [16 0 20] "crafting_table"]]
+  :body {:at [18.5 0 19.5] :inventory [["wheat_seeds" 8]] :settle-s 2}
+  :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+        [:rcon "damage $BODY 5 minecraft:generic"]
+        [:job (jobs.survival.get-food {:explore false})]]
+  :limit-s 150}
+ :cases
+ [{:name "own-wheat-baked"
+   :zones [{:name "field" :min [21 -2 21] :max [30 3 24] :owner "$body"}]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 140 :of-job true}]
+   :after [[:block [22 0 22] "wheat[age=0]"] [:item "wheat" [:<= 5]]]}
+  {:name "other-zone-wheat-left"
+   :zones [{:name "field" :min [21 -2 21] :max [30 3 24] :owner "SomeoneElse"}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 90}]
+   :after [[:block [22 0 22] "wheat[age=7]"] [:block [29 0 22] "wheat[age=7]"]]}]}
