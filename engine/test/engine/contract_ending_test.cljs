@@ -388,6 +388,18 @@
             (is (nil? (:looks-rounds @world)) "never started")
             (is (= [:unseen] (distinct (mapv #(:reason (:data %)) (job-ev seen :waiting)))))))))))
 
+(deftest a-settled-look-is-asked-again-after-the-look-ttl
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {'looks-blind looks-blind})]
+          (core/submit! eng '(looks-blind) {})
+          (await (core/tick! eng))
+          (let [n (looks-at p)]
+            (swap! clock + ending/look-ttl-ms 1)
+            (await (core/tick! eng))
+            (is (< n (looks-at p)) "it looked again once the ttl passed")))))))
+
 (def looks-at-cell
   "Asks for a look at the cell in :look-cell of the test world, which no look can settle."
   {:can-start? (fn [_] (contract/look :unseen "never seen" :look-at [(:look-cell @world)]))

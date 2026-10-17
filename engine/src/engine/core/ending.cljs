@@ -103,16 +103,21 @@
   [(into [] (comp (filter #(= :look (first %))) (mapcat #(:look-at (nth % 2 nil)))) ss)
    (some->> (some-> (:primitives c) .self .-pos) ((juxt #(.-x %) #(.-y %) #(.-z %))) (mapv js/Math.floor))])
 
+(def look-ttl-ms
+  "Milliseconds a look round settles its :look for: the world changes (a wall mined away) without the body seeing it, so a cell still unseen is looked at again after this."
+  15000)
+
 (defn looked?
-  "Whether a look round already followed a :look of c's frame about key, which no check since has passed without."
+  "Whether a look round within look-ttl-ms already followed a :look of c's frame about key, which no check since has passed without."
   [c key]
-  (= key (some-> (:engine c) :looks deref (get [(:root c) (:slots c)]))))
+  (let [[k t] (some-> (:engine c) :looks deref (get [(:root c) (:slots c)]))]
+    (and (= key k) (< (- (now (:engine c)) t) look-ttl-ms))))
 
 (defn note-look!
   "Record the key of the look c's frame has looked on, or nil to clear it: after a look round that left a :look, the
   next :look about the same cells from the same spot counts as :later (across rounds)."
   [c key]
-  (some-> (:engine c) :looks (swap! (if key assoc dissoc) [(:root c) (:slots c)] key))
+  (some-> (:engine c) :looks (swap! (if key assoc dissoc) [(:root c) (:slots c)] (when key [key (now (:engine c))])))
   nil)
 
 (defn ^:async looked
