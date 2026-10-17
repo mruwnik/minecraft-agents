@@ -5,6 +5,8 @@
             [jobs.lib.blocks :as lb]
             [jobs.lib.choose :as choose]
             [jobs.lib.tools :as tools]
+            [jobs.lib.solid :as solid]
+            [jobs.lib.util :as u]
             [jobs.lib.shelter :as sh]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.dig-in.site :as site]
@@ -29,11 +31,19 @@
     (when (some #(>= (:count %) (count cells)) (lb/carried c dear))
       (* (count cells) place-s))))
 
+(defn priced-name
+  "The block name pit-s prices cell by: what is seen there, else the nearest seen block above it (the ground the pit is
+  dug into: dirt stays dirt below the surface), else the rock guess."
+  [p cell]
+  (or (u/seen-name p cell)
+      (->> (range 1 (inc (dig-cells/rock-depth))) (keep #(u/seen-name p (update cell :y + %))) (filter solid/solid?) first)
+      (dig-cells/rock-name p cell)))
+
 (defn pit-s
   "Seconds the pit's cells take to dig with the best carried tool or the hand."
   [c pit]
   (let [p (:primitives c)]
-    (/ (reduce + (map #(tools/clear-ms p (dig-cells/rock-name p %)) (concat (:prep pit) (mapcat :dig (:steps pit))))) 1000)))
+    (/ (reduce + (map #(tools/clear-ms p (priced-name p %)) (concat (:prep pit) (mapcat :dig (:steps pit))))) 1000)))
 
 (defn mode-choice
   "[mode refusal] for the shelter from start: the first of :plug (only with a room-plug cell), :walls (only when
