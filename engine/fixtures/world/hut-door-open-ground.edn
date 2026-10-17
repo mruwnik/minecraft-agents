@@ -1,5 +1,5 @@
 ;; Door and torch cells on open ground (card b335a1e4, fix ebba1382): a 1-wide dead end whose open cell holds a torch
-;; (seen: one occupied place into the torch, one above it, then the cornered fight gives up; no place loop) and dig-in
+;; (the plug digs the torch once and places over it: no place loop, the body hides behind the stone) and dig-in
 ;; beside an open oak door (the door is shut, the pocket sealed).
 {:defaults
  {:tags [:hostile :survival :door]
@@ -12,8 +12,8 @@
    :body {:at [16.5 0 7.5]}
    :act [[:summon "skeleton" [16.5 0 20.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 15}
-            {:event {:source :job :kind :fight_unreachable} :within-s 20}]
-   :after [[:block [16 0 8] "torch"]]
+            {:event {:source :job :kind :retreat_sealed} :within-s 20}]
+   :after [[:block [16 0 8] "cobblestone"]]
    :limit-s 40}
   {:name "dig-in-shuts-open-door"
    :time :night
