@@ -250,7 +250,13 @@
         fallback))))
 
 (defn pillar-item
-  "{:item :count}: the carried pillar block with the largest count, or nil."
+  "{:item :count}: the carried climb block (choose/fillers-for, so reserves and an :avoid apply) with the largest count, or nil."
+  [c]
+  (when-let [l (seq (:list (choose/fillers-for c :climb 1)))]
+    (let [{:keys [item count]} (apply max-key :count l)] {:item item :count count})))
+
+(defn carried-pillar-item
+  "pillar-item over a bare primitives p: the choose/fillers :climb blocks carried, no reserves."
   [p]
   (let [have (->> (u/inventory p)
                   (filter #(some #{(:name %)} (choose/fillers :climb)))
@@ -307,7 +313,7 @@
 (defn choose
   "How a body at feet (a cell) that cannot walk to goal (a cell) can make a way, cheapest first. It only ever digs
   natural terrain (natural?) and blocks it placed itself (opts :own?, (own? cell block)) in cells (may-dig? cell)
-  allows (go-to: no other owner's zone or claim). opts :skip is a set of steps that already failed (a stair heading
+  allows (go-to: no other owner's zone or claim); opts :pillar-item ({:item :count} or nil, escape/pillar-item) replaces the climb block read from the inventory. opts :skip is a set of steps that already failed (a stair heading
   that failed: [:stair :east]): the next one is chosen.
   - {:step :pillar :height n :item}: in a pit d deep with room above the head and at least n pillar blocks carried: n
     the rim-pillar (d - 1, then a step onto the rim), d when no side has a rim to step onto.
@@ -329,11 +335,11 @@
     the block over the head; :no-dig: nothing natural and allowed to dig; :no-wall: no wall to walk to."
   ([p feet goal] (choose p feet goal (constantly true)))
   ([p feet goal may-dig?] (choose p feet goal may-dig? nil))
-  ([p feet goal may-dig? {:keys [own? skip] :or {own? (constantly false) skip #{}}}]
+  ([p feet goal may-dig? {:keys [own? skip] :or {own? (constantly false) skip #{}} :as opts}]
    (let [block-at (block-at-of p)
          dir (heading feet goal)
          depth (pit-depth block-at (unseen-of p) feet)
-         {:keys [item count]} (pillar-item p)
+         {:keys [item count]} (if (contains? opts :pillar-item) (:pillar-item opts) (carried-pillar-item p))
          rim-n (when (and item (not (skip :pillar))) (rim-pillar block-at (unseen-of p) feet dir))
          height (when (pos? depth) (min depth (or rim-n depth)))
          pillar-blocks? (and (not (skip :pillar)) height item (>= count height))

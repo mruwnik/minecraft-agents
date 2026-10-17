@@ -174,7 +174,7 @@
   pillar block can fill the gap's floor, and no zone refuses the place; else nil."
   [c result skip]
   (let [p (:primitives c)
-        {:keys [item]} (escape/pillar-item p)
+        {:keys [item]} (escape/pillar-item c)
         cell (when (and (= :abilities (some-> (:reason result) keyword)) (= :gap-low-ceiling (some-> (:kind result) keyword))
                         (not (skip :fill-gap)) item (:at result) (:from result))
                (escape/gap-floor (:at result) (:from result)))]
@@ -339,7 +339,7 @@
     (let [p (:primitives c)
           feet (end/feet-cell c)
           goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
-          opts {:own? (own-placed-fn c) :skip (skips c)}
+          opts {:own? (own-placed-fn c) :skip (skips c) :pillar-item (escape/pillar-item c)}
           may-dig? (may-dig-fn c)]
       (or (dig-way p feet goal may-dig? opts)
           (when (> (second goal) (second feet))
@@ -374,7 +374,7 @@
         n (:fruitless counted)
         _ (when (<= n max-escalations) (await (look-round! c feet)))
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
-        opts {:own? (own-placed-fn c) :skip (skips c)}
+        opts {:own? (own-placed-fn c) :skip (skips c) :pillar-item (escape/pillar-item c)}
         into? (goal-walled? c result)
         ;; a shut-in body (a pit, a plateau it cannot walk off) whose goal is walled in digs straight into it when it can
         dig-in? (and (not into?) (= :goal-enclosed (some-> (:reason result) keyword)))
@@ -430,7 +430,7 @@
         cave (when (:dive-stair c) (:cave-floor c))
         back (:own-floor c)
         cheaper? (and (not (:stair-tried m)) (>= (- (second goal) (second feet)) stair-first-rise))
-        stair (delay (let [e (escape/choose (:primitives c) feet goal (may-dig-fn c) {:own? (own-placed-fn c) :skip (skips c)})]
+        stair (delay (let [e (escape/choose (:primitives c) feet goal (may-dig-fn c) {:own? (own-placed-fn c) :skip (skips c) :pillar-item (escape/pillar-item c)})]
                        (when (= :stair (:step e)) e)))]
     (when (and (ways/way? c :stair) (not (sh/sheltered-in c)) (or cave cheaper? back))
       (fn [{:keys [status steps ^js r]} first?]
@@ -590,7 +590,7 @@
              block-at (escape/block-at-of p)
              may-dig? (may-dig-fn c)]
          (not= :none (:step (escape/choose p (end/feet-cell c) goal #(and (may-dig? %) (not= block (block-at %)))
-                                           {:own? (own-placed-fn c) :skip (conj (skips c) (skip-key e))}))))))
+                                           {:own? (own-placed-fn c) :skip (conj (skips c) (skip-key e)) :pillar-item (escape/pillar-item c)}))))))
 
 (defn ^:async escalation-failed!
   "The child stopped or would wait: when it changed something, walk again (escalation-stopped!); when it had no tool

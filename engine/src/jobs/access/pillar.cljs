@@ -423,7 +423,7 @@
     (cond
       back back
       (nil? short) nil
-      :else (let [e (await (need/blocks! c (or (seq (blocks-of c)) (choose/fillers :pillar)) short {:return? true}))]
+      :else (let [e (await (need/blocks! c (or (seq (blocks-of c)) (choose/filler-names c :pillar)) short {:return? true}))]
               (cond
                 (= :continue e) :continue
                 (= :done (:kind e)) nil

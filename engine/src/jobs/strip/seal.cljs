@@ -160,7 +160,7 @@
   [c open]
   (when-not (b/chosen c (blocks c))
     (if-let [o (fetch-opts c)]
-      (let [e (await (need/blocks! c (or (seq (blocks c)) (choose/fillers :seal)) open o))]
+      (let [e (await (need/blocks! c (or (seq (blocks c)) (choose/filler-names c :seal)) open o))]
         (cond (= :continue e) :continue
               (= :done (:kind e)) :again
               :else e))

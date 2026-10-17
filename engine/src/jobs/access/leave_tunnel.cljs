@@ -110,14 +110,14 @@
 (defn seal-item
   "The item to fill a cell that held block with, from the carried item names: the block's drop when it can be placed
   and is no spare, else the first carried building block that is no spare, else the first carried spare that can be
-  placed (a building block, or the dug block itself); nil when there is none."
-  [carried block spare]
+  placed (a building block of builds, or the dug block itself); nil when there is none."
+  [carried block spare builds]
   (let [have? (set carried)
         spare? (set spare)
         drop (blocks/item-name {:block block})
-        placeable? #(or (= % block) (some #{%} (choose/fillers :build)))]
+        placeable? #(or (= % block) (some #{%} builds))]
     (or (when (and (have? drop) (not (spare? drop)) (placeable? drop)) drop)
-        (first (filter #(and (have? %) (not (spare? %))) (choose/fillers :build)))
+        (first (filter #(and (have? %) (not (spare? %))) builds))
         (first (filter #(and (have? %) (placeable? %)) spare)))))
 
 (defn cell-pos [[x y z]] {:x x :y y :z z})
@@ -346,7 +346,7 @@
   "Get building blocks for the open mouth cells: :continue while the fetch waits, :again once got, nil when the fetch
   failed (the cell is then booked open :no-blocks)."
   [c short]
-  (let [e (await (need/blocks! c (choose/fillers :build) short (assoc (fetch-opts c) :return? true)))]
+  (let [e (await (need/blocks! c (choose/filler-names c :build) short (assoc (fetch-opts c) :return? true)))]
     (cond (= :continue e) :continue
           (= :done (:kind e)) :again)))
 
@@ -359,7 +359,7 @@
         block-at (:block-at in)
         verdict (rules/may-place? (assoc in :cell cell))
         block (:block (first (filter #(= cell (:cell %)) (:dug tunnel))))
-        item (seal-item (map :name (filter #(pos? (:count %)) (u/inventory p))) block spare)]
+        item (seal-item (map :name (filter #(pos? (:count %)) (u/inventory p))) block spare (choose/filler-names c :build))]
     (cond
       (> (u/eye-dist (u/self-pos c) cell) reach) (book-open! c cell :out-of-reach)
       (not (:ok verdict)) (book-open! c cell (:reason verdict))

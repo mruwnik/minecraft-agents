@@ -55,7 +55,7 @@
   [c]
   (let [p (:primitives c)
         feet (breath/feet-cell (.self p))
-        item (:item (escape/pillar-item p))
+        item (:item (escape/pillar-item c))
         options (for [[dx dz] sides] (let [f (-> feet (update :x + dx) (update :z + dz))] [f (update f :y inc)]))]
     (cond
       (false? (:pocket (:args c))) {:why :off}
@@ -121,7 +121,7 @@
   (let [p (:primitives c)
         feet (breath/feet-cell (.self p))
         below (update feet :y dec)
-        item (:item (escape/pillar-item p))]
+        item (:item (escape/pillar-item c))]
     (when (and item (not (false? (:pocket (:args c)))) (not (:footing (ctx/mem c)))
                (contains? breath/swimmable (breath/seen-water-name p below)) (blocks/support? p below))
       (ctx/update-mem! c assoc :footing true)

@@ -3,7 +3,8 @@
   (:require [cljs.test :refer [deftest is are]]
             [engine.memory :as mem]
             [engine.test-util :as tu]
-            [jobs.lib.choose :as choose]))
+            [jobs.lib.choose :as choose]
+            [jobs.lib.escape :as escape]))
 
 (defn body
   [items & overrides]
@@ -35,6 +36,12 @@
 (deftest an-override-avoids-a-filler
   (is (= ["dirt" "oak_planks"]
          (map :item (:list (choose/fillers-for (body mixed {:chooser :fillers :avoid ["stone"]}) :build 1))))))
+
+(deftest the-fetch-list-and-the-escape-pillar-block-skip-an-avoided-filler
+  (let [c (body [(stack "dirt" 9) (stack "cobblestone" 3)] {:chooser :fillers :avoid ["dirt"]})]
+    (is (= ["cobblestone"] (choose/filler-names c :pillar)))
+    (is (= {:item "dirt" :count 9} (escape/pillar-item (body [(stack "dirt" 9) (stack "cobblestone" 3)]))))
+    (is (= {:item "cobblestone" :count 3} (escape/pillar-item c)))))
 
 (deftest an-unknown-purpose-throws
   (is (thrown? js/Error (choose/fillers-for (body []) :wall 1))))

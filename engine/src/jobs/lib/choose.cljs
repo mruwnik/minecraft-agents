@@ -96,6 +96,13 @@
     {:list listed
      :short (max 0 (- amount (transduce (map :count) + 0 listed)))}))
 
+(defn filler-names
+  "The block names for purpose to fetch or list, without the ones a :choose/override :avoids (what the body carries is
+  fillers-for's)."
+  [c purpose]
+  (let [avoid (:avoid (overrides c :fillers))]
+    (filterv (complement avoid) (fillers purpose))))
+
 (defn filler
   "The first block name fillers-for lists for purpose, or nil."
   [c purpose]

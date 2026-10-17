@@ -262,7 +262,7 @@
   (let [p (:primitives c)
         block-at (escape/block-at-of p)
         at [(:x cell) (:y cell) (:z cell)]
-        fillers (vec (choose/fillers :climb))
+        fillers (choose/filler-names c :climb)
         args {:pos at :use {:blocks fillers} :fetch false}
         item (blocks/chosen c fillers)
         l (ledger/reconcile (ledger/open-entries (ctx/view c)) block-at)
@@ -308,7 +308,7 @@
             (let [{:keys [start failed]} (initial-search (ctx/entries c :breathe-afloat) pos)]
               (ctx/update-mem! c assoc :start (or start (u/self-pos c)) :failed-headings failed)))
         m (ctx/mem c)
-        carried? (boolean (escape/pillar-item p))
+        carried? (boolean (escape/pillar-item c))
         in-budget? (< (:travelled m 0) (* 3 swim-range))
         ways (fn []
                (let [shore (nearest-land p pos shore-radius (:failed-shores m) shore-cell?)

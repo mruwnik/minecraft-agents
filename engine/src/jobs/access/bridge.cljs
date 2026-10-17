@@ -123,7 +123,7 @@
               refusal (permission-refusal in i)
               unseen (first (filter (or (:unknown? in) (constantly false)) [stand (ahead feet heading 1 1)]))
               blocked (first (remove #(pl/clear? (block-at %)) [stand (ahead feet heading 1 1)]))
-              use (pillar/item-to-use item carried)
+              use (pillar/item-to-use item carried (:items in))
               place (rules/may-place? (-> in (dissoc :body-cols) (assoc :cell target :feet stand)))]
           (cond
             refusal (pillar/refusal->give-up refusal)
@@ -173,7 +173,7 @@
         {:keys [heading length item]} (:args c)]
     (merge (pillar/access-inputs c)
            {:feet feet :start (or (:start (ctx/mem c)) feet) :heading heading :length length :block-at (access/sensed-at p "air") :unknown? #(look/unknown? p %)
-            :carried (pl/carried p) :item item :ledger (ledger/cells l)})))
+            :carried (pl/carried p) :item item :items (mapv :item (:list (choose/fillers-for c :pillar 1))) :ledger (ledger/cells l)})))
 
 (def start-facts
   "Give-up reasons known from the args and the map under the feet, before any look: the call's own mistakes and what permission refuses."
@@ -277,7 +277,7 @@
           n (:short step)
           e (await (if item
                      (need/item! c item n {:return? true})
-                     (need/blocks! c (choose/fillers :pillar) n {:return? true})))]
+                     (need/blocks! c (choose/filler-names c :pillar) n {:return? true})))]
       (cond
         (= :continue e) :continue
         (= :done (:kind e)) :again
