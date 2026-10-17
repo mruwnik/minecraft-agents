@@ -12,7 +12,7 @@
             [jobs.lib.loose :as loose]
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [jobs.lib.trees :refer [default-radius]]))
 
@@ -73,7 +73,7 @@
 (defn walk-args
   "go-to args for a walk of this job: underground it ignores the dark (not (threatened) only), like the digs that made the hole."
   [c args]
-  (let [forms (when (sh/buried? (:primitives c)) (ready/unforced c {:safe? '(not (threatened))}))]
+  (let [forms (when (sh-sense/buried? (:primitives c)) (ready/unforced c {:safe? '(not (threatened))}))]
     (cond-> args (seq forms) (assoc :checks forms))))
 
 (defn gained-count

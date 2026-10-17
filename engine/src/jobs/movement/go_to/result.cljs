@@ -4,7 +4,7 @@
             [engine.ctx :as ctx]
             [jobs.movement.go-to.headroom :as headroom]
             [jobs.lib.reach :as reach]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.solid :as solid]
             [jobs.lib.spent :as spent]
             [jobs.lib.util :as u]))
@@ -166,7 +166,7 @@
   ([c pos tries status result] (give-up! c pos tries status result nil))
   ([c pos tries status result extra]
    (let [{:keys [why kind] :as fields} (merge {:at (feet-cell c) :near (js/Math.round (u/dist (u/self-pos c) pos))}
-                                              (give-up-fields result) (sh/shelter-hint c) extra)
+                                              (give-up-fields result) (sh-inside/shelter-hint c) extra)
          fields (cond-> fields
                   (= :goal-enclosed why) (merge (some->> (headroom/low-passage (:primitives c) (solid/cell (if (map? pos) pos (zipmap [:x :y :z] pos))))
                                                           (hash-map :low-passage))))

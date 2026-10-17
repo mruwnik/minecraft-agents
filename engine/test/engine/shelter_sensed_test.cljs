@@ -7,7 +7,7 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
             [engine.test-util :as tu]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]))
 
@@ -35,6 +35,6 @@
 (deftest an-unknown-cell-under-the-floor-is-the-callers-stated-guess
   (let [{:keys [p w]} (sensed-only {:blocks (merge wall {"0,65,6" "water"})})]
     (is (= "stone" (u/block-name-or w water "stone")))
-    (is (false? (sh/solid-at? w water)))
+    (is (false? (sh-sense/solid-at? w water)))
     (fake/remove-block! p hole)
     (is (= "water" (u/block-name-or w water "stone")))))

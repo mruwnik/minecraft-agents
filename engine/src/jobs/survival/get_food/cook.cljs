@@ -10,6 +10,8 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.beds :as sh-beds]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.survival.get-food.risk :as risk]))
@@ -68,7 +70,7 @@
 (defn night-holds?
   "Whether the night handler would take the body now (jobs.lib.shelter/night-holds?)."
   [c]
-  (boolean (sh/night-holds? (:primitives c) (ctx/view c) {} (sh/bed-permit (:primitives c) (:world (:engine c))))))
+  (boolean (sh/night-holds? (:primitives c) (ctx/view c) {} (sh-beds/bed-permit (:primitives c) (:world (:engine c))))))
 
 (defn raw-carried
   "The cookable raw foods carried, as {:name :count}."
@@ -121,7 +123,7 @@
   own (worth-cooking?); never at night, while the night handler holds or when rushed? (a cook under way is dropped then)."
   [c]
   (boolean
-   (and (not (sh/night? (:primitives c)))
+   (and (not (sh-sense/night? (:primitives c)))
         (not (night-holds? c))
         (not (rushed? c))
         (or (:cooking (ctx/mem c))

@@ -13,6 +13,7 @@
             [jobs.lib.choose :as choose]
             [jobs.lib.pace :as pace]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
@@ -77,7 +78,7 @@
   Quote: time by the open cells to place or the pit to dig; done 1 shelter.")
 
 (a/defargs args
-  {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh/default-roof-height}
+  {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
    :wall-value {:doc "a block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85, stone 2.85, planks 3.4, log 12.8) walls the body in only when placing them (taken back at dawn) is quicker than the pit, or no pit can be dug" :spec (a/num-in 0 nil) :default 3}
    :take-back-value {:doc "a placed block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85) is dug again and collected when the shelter is left by day" :spec (a/num-in 0 nil) :default 0.5}
    :max-places {:doc "placements per step" :spec (a/int-in 1 nil) :default 4}
@@ -114,8 +115,8 @@
   "A dig-in that ends with no roof over the body leaves a :dig-in-futile entry, so a caller that holds the body (the
   night shelter) does not run it again every round: the entry its failure wrote, else {:pos feet :reason :unsealed}."
   [c]
-  (when-not (or (sh/roofed? (:primitives c) (:roof-height (:args c))) (futile-entry-here? c))
-    (ctx/remember! c :dig-in-futile {:pos (sh/feet (:primitives c)) :reason :unsealed} site/futile-policy)))
+  (when-not (or (sh-sense/roofed? (:primitives c) (:roof-height (:args c))) (futile-entry-here? c))
+    (ctx/remember! c :dig-in-futile {:pos (sh-sense/feet (:primitives c)) :reason :unsealed} site/futile-policy)))
 
 (defn futile-site
   "The :dig-in-futile entry data that blocks digging here, or nil. Material-only failures (no :reason) can be retried
@@ -138,7 +139,7 @@
   (let [p (:primitives c)
         roof-height (:roof-height (:args c))]
     (boolean (or (dig-cells/sealed-in? p :walls roof-height)
-                 (and (not (:enclose (:args c))) (sh/roofed? p roof-height) (reach/closed-room? p (sh/feet p)))))))
+                 (and (not (:enclose (:args c))) (sh-sense/roofed? p roof-height) (reach/closed-room? p (sh-sense/feet p)))))))
 
 (defn site-status
   "Not :roofed-not-enclosed (a roof over open sides, without :enclose), nor :futile (a site that failed here, with its
@@ -146,7 +147,7 @@
   [c]
   (let [p (:primitives c)]
     (if (and (not (:enclose (:args c))) (dig-cells/sealed-in? p :open (:roof-height (:args c))))
-      (contract/later :roofed-not-enclosed "roofed but open at the sides" :pos (sh/feet p))
+      (contract/later :roofed-not-enclosed "roofed but open at the sides" :pos (sh-sense/feet p))
       (if-let [site (futile-site c)]
         (contract/status :later :futile "a dig-in failed here" (merge (select-keys site [:pos]) (when (:reason site) {:why (:reason site)})))
         (contract/ok :site "a site to dig in")))))
@@ -174,7 +175,7 @@
 
 (defn quote-of [c]
   (let [p (:primitives c)
-        n (count (dig-cells/open-cells p (sh/feet p)))
+        n (count (dig-cells/open-cells p (sh-sense/feet p)))
         cell-s (settings/get settings ::cell-s)
         pit-s (settings/get settings ::pit-s)
         mean (cond (sheltered? c) 0 (zero? n) cell-s :else (min (* n cell-s) (+ pit-s cell-s)))]
@@ -188,7 +189,7 @@
       (= :walls mode) (await (walls/walls-round c))
       (= :pit-stop mode) (pit/pit-stop-round c)
       (= :spared mode) (mode/spared-round c)
-      (= :no-blocks mode) (do (site/remember-material! c {:pos (sh/feet (:primitives c))}) :done)
+      (= :no-blocks mode) (do (site/remember-material! c {:pos (sh-sense/feet (:primitives c))}) :done)
       :else (await (pit/pit-round c)))))
 
 (defn spent-text [spent]
@@ -211,7 +212,7 @@
   [c]
   (note-unroofed! c)
   (let [p (:primitives c)
-        feet (sh/feet p)
+        feet (sh-sense/feet p)
         placed (:placed (ctx/mem c) #{})
         mode (:mode (ctx/mem c))
         judged (if (:enclose (:args c)) :walls mode)

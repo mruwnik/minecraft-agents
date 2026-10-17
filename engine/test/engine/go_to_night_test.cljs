@@ -1,5 +1,5 @@
 (ns engine.go-to-night-test
-  "go-to at night from a shelter (sh/walk-leaves-shelter?): its safe? is :later (:exposed, until dawn) for a walk that
+  "go-to at night from a shelter (sh-inside/walk-leaves-shelter?): its safe? is :later (:exposed, until dawn) for a walk that
   would take the body out of it (a listed go-to waits, a child call makes its parent wait), so a queued job does not
   lead the body into the dark and the night trigger does not dig it in again and again. A caller's :checks (an escape's
   defaults, an agent's own) decide whether it walks."
@@ -17,7 +17,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.child :as child]
-            [jobs.lib.shelter :as sh]))
+            [jobs.lib.shelter.inside :as sh-inside]))
 
 (def inside {:x 5 :y 64 :z 0})
 (def outside {:x 15 :y 64 :z 0})
@@ -57,7 +57,7 @@
          {"0,66,0" "dirt"}))
 
 (deftest walk-leaves-shelter-names-the-shelter-a-walk-would-leave
-  (are [world shelter goal range kind] (= kind (sh/walk-leaves-shelter? (tu/fake (merge {:floor tu/walk-floor} world)) shelter goal range))
+  (are [world shelter goal range kind] (= kind (sh-inside/walk-leaves-shelter? (tu/fake (merge {:floor tu/walk-floor} world)) shelter goal range))
     (night-hut {}) nil outside 1 :room
     (night-hut {}) nil {:x 6 :y 64 :z -1} 0 nil
     (night-hut {}) nil {:x 4 :y 64 :z 1} 1 nil
@@ -74,15 +74,15 @@
 
 (deftest a-walk-deeper-underground-does-not-leave-the-shelter-a-walk-up-does
   (let [p (tu/seeing-all (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,66,0" "stone"}}))]
-    (is (= :underground (sh/walk-leaves-shelter? p nil outside 1)))))
+    (is (= :underground (sh-inside/walk-leaves-shelter? p nil outside 1)))))
 
 (deftest a-walk-down-to-open-air-leaves-the-roofed-shelter
   (let [world {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 66 :z 0}}}
         in-open (tu/seeing-all (tu/fake (assoc world :blocks {"0,68,0" "stone"})))
         covered (tu/seeing-all (tu/fake (assoc world :blocks {"0,68,0" "stone" "15,67,0" "stone"})))
         goal {:x 15 :y 64 :z 0}]
-    (is (= :underground (sh/walk-leaves-shelter? in-open nil goal 1)) "the table down a hillside is outdoors")
-    (is (nil? (sh/walk-leaves-shelter? covered nil goal 1)))))
+    (is (= :underground (sh-inside/walk-leaves-shelter? in-open nil goal 1)) "the table down a hillside is outdoors")
+    (is (nil? (sh-inside/walk-leaves-shelter? covered nil goal 1)))))
 
 (deftest a-solid-goal-with-nothing-seen-over-it-is-a-wall-in-the-rock-not-the-open
   (let [world {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,66,0" "stone" "15,64,0" "stone"}}
@@ -90,10 +90,10 @@
         p (tu/seeing-all (tu/fake world))
         sensed-at (aget p "sensedAt")
         hide-over-goal (fn [pos] (if (and (= 15 (.-x pos)) (> (.-y pos) 64)) #js {:unknown true} (sensed-at pos)))]
-    (is (= :underground (sh/walk-leaves-shelter? p nil goal 1)) "air seen over the goal: the open")
+    (is (= :underground (sh-inside/walk-leaves-shelter? p nil goal 1)) "air seen over the goal: the open")
     (aset p "sensedAt" hide-over-goal)
-    (is (nil? (sh/walk-leaves-shelter? p nil goal 1)) "nothing seen over it: rock")
-    (is (= :underground (sh/walk-leaves-shelter? p nil (assoc goal :y 66) 1)) "an air goal keeps the old rule")))
+    (is (nil? (sh-inside/walk-leaves-shelter? p nil goal 1)) "nothing seen over it: rock")
+    (is (= :underground (sh-inside/walk-leaves-shelter? p nil (assoc goal :y 66) 1)) "an air goal keeps the old rule")))
 
 ;; ------------------------------------------------------------------ a listed go-to
 

@@ -4,7 +4,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
             [jobs.lib.pace :as pace]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spent :as spent]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.retreat-seal :as seal]))
@@ -29,7 +29,7 @@
   (let [done (enclosed? c)]
     (checks/goal done [:enclosed "the body is enclosed"] [:open "the body is not enclosed"]
                  {:units :enclosures :done (if done 1 0) :left (if done 0 1)
-                  :result (merge {:pos (sh/feet (:primitives c)) :way way} extra)}))))
+                  :result (merge {:pos (sh-sense/feet (:primitives c)) :way way} extra)}))))
 
 (defn quote-of
   "Time of a way: 0 once enclosed, else seconds (##Inf when it cannot be done here, which plug-in drops)."
@@ -57,7 +57,7 @@
   [c way step!]
   (await (pace/steps! c (fn ^:async way-step []
                           (case (await (step! c))
-                            :done (ctx/end c :done nil (merge {:pos (sh/feet (:primitives c)) :way way} (result c)))
+                            :done (ctx/end c :done nil (merge {:pos (sh-sense/feet (:primitives c)) :way way} (result c)))
                             :again (if (:seal-mob-since (ctx/mem c)) :continue :again)
                             (let [{:keys [reason text needs]} (:stop (ctx/mem c))]
                                      (ctx/end c :nothing-possible :failed

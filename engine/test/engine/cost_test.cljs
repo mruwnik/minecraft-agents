@@ -5,7 +5,8 @@
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.inside :as sh-inside]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.survival.retreat :as retreat]))
 
 (defn round2 [x] (/ (js/Math.round (* 100 x)) 100))
@@ -234,7 +235,7 @@
 (deftest exposure-of-a-walk-in-the-open-is-the-spawn-chance-at-its-end
   (let [night (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}}})
         day (tu/fake {:floor tu/walk-floor :time st/noon :self {:pos {:x 0 :y 64 :z 0}}})
-        seen (fn [p block sky] (with-redefs [sh/seen-cell? (constantly true) sh/block-light-at (constantly block) sh/sky-light-at (constantly sky) sh/walk-leaves-shelter? (constantly nil)]
+        seen (fn [p block sky] (with-redefs [sh-sense/seen-cell? (constantly true) sh-sense/block-light-at (constantly block) sh-sense/sky-light-at (constantly sky) sh-inside/walk-leaves-shelter? (constantly nil)]
                                  (cost/exposure p {:x 15 :y 64 :z 0})))]
     (is (= {:chance (cost/spawn-chance [15 64 0]) :lowered-by #{:look} :look-at [[15 64 0]]}
            (cost/exposure night {:x 15 :y 64 :z 0}))
@@ -244,7 +245,7 @@
 
 (deftest exposure-takes-the-shelter-entry-of-the-body
   (let [p (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone"}})]
-    (with-redefs [sh/walk-leaves-shelter? (fn [_ shelter _ _] (when (= :entry shelter) :dug-in))]
+    (with-redefs [sh-inside/walk-leaves-shelter? (fn [_ shelter _ _] (when (= :entry shelter) :dug-in))]
       (is (= #{:dawn} (:lowered-by (cost/exposure p {:x 15 :y 64 :z 0} :entry))))
       (is (= #{:look} (:lowered-by (cost/exposure p {:x 15 :y 64 :z 0})))))))
 

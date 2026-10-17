@@ -1,7 +1,7 @@
 (ns jobs.survival.dig-in.walls
   "dig-in's walls and plug modes: the body walled in by jobs.survival.plug-in, or one block in the roof of a closed room."
   (:require [engine.ctx :as ctx]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.blocks :as lb]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
@@ -32,7 +32,7 @@
             (nil? (lb/pick c (mode/blocks c))) (do (ctx/update-mem! c dissoc :mode :start) :continue)
             :else (do (site/remember-failed-site! c (if (= "failed" (get-in e [:data :statuses :walls])) :walls-server-refused :walls-failed))
                       (ctx/emit! c :dig_in_failed :warn {:text (str "cannot wall the body in: " (:text (:data e)))
-                                                         :open (dig-cells/open-cells (:primitives c) (sh/feet (:primitives c)))})
+                                                         :open (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c)))})
                       :done))))))
 
 (defn ^:async plug-round

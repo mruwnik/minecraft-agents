@@ -12,7 +12,7 @@
             [jobs.items.obtain.base :as base]
             [jobs.items.obtain.table :as table]
             [jobs.items.obtain.why :as why]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.inside :as sh-inside]
             [jobs.items.recipes :as recipes]))
 
 (defn ore-world
@@ -150,7 +150,7 @@
           (doseq [pitch [-80 80 0]]
             (swap! (fake/state (:p s)) assoc :pitch pitch)
             (perception/pass! (aget (:p s) "perception")))
-          (is (some? (sh/night-sheltered (:p s) nil)) "sheltered at the start")
+          (is (some? (sh-inside/night-sheltered (:p s) nil)) "sheltered at the start")
           (await (obtain! s {:any-of ["oak_log" "spruce_log" "birch_log"] :count 2 :ways #{:gather} :explore true} 8))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the tree is seen")
           (is (some #(= :dark (:reason %)) (f/events-of s :waiting))))))))
@@ -163,7 +163,7 @@
           (doseq [pitch [-80 80 0]]
             (swap! (fake/state (:p s)) assoc :pitch pitch)
             (perception/pass! (aget (:p s) "perception")))
-          (is (some? (sh/night-sheltered (:p s) nil)) "sheltered at the start")
+          (is (some? (sh-inside/night-sheltered (:p s) nil)) "sheltered at the start")
           (await (obtain! s {:item "cobblestone" :count 3 :ways #{:gather :craft}} 8))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the stone and the logs are seen")
           (is (some #(= :dark (:reason %)) (f/events-of s :waiting))))))))

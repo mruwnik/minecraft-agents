@@ -12,7 +12,7 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.ledger :as ledger]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
@@ -174,7 +174,7 @@
     (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
            {:feet (reach/standing-vec (:primitives c)) :eye (eye-of c) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :entries entries
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
-            :hostile-near? (hostile-near? (:primitives c)) :night? (sh/night? (:primitives c)) :keep-at-night? (:keep-at-night? (:args c))
+            :hostile-near? (hostile-near? (:primitives c)) :night? (sh-sense/night? (:primitives c)) :keep-at-night? (:keep-at-night? (:args c))
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
             :spare-own-builds (:spare-own-builds (:args c))
             :guard-walks? (and (nil? (:job (:args c))) (nil? (:near (:args c))))

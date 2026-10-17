@@ -1,0 +1,170 @@
+(ns jobs.lib.shelter.sense
+  "Roof, light, cave and closed-room tests of the body's own cell: what the night jobs and the night trigger ask first."
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
+            [jobs.lib.breath :as breath]
+            [jobs.lib.look :as look]
+            [jobs.lib.reach :as reach]
+            [jobs.lib.solid :as solid]
+            [jobs.lib.util :as u]))
+
+(a/defargs settings
+  {::room-roof-height {:default 16 :spec (a/int-in 1 nil)
+                       :doc "How high above the feet a roof may be and still make the closed room around the body a shelter."}})
+
+(defn feet [p] (solid/cell (u/self-pos {:primitives p})))
+
+(defn solid-at? [p pos] (solid/solid? (u/seen-name p pos)))
+
+(defn head-in-block?
+  "Whether the body's eyes are inside a full block (it suffocates): buried in, not sheltered."
+  [p]
+  (breath/suffocates-here? p (breath/eye-cell (.self p))))
+
+(defn roofed?
+  "Whether a solid block lies within height blocks straight above the feet cell, the head not inside one."
+  [p height]
+  (let [{:keys [x y z]} (feet p)]
+    (boolean (and (not (head-in-block? p))
+                  (some #(solid-at? p {:x x :y (+ y %) :z z}) (range 1 (inc height)))))))
+
+(defn sky-light-at
+  "Sky light (0-15, before the night's darkening) of the cell, or nil when no light data is loaded there. Read only for the body's cells and cells it has seen."
+  [p {:keys [x y z]}]
+  (let [raw (some-> (aget p "perception") :raw)]
+    (when (and raw (<= 0 (.stateAt ^js raw x y z)))
+      (bit-shift-right (.lightAt ^js raw x y z) 4))))
+
+(defn buried-by-column?
+  "Fallback without light data: the cell two over the feet cell is a block the body has seen (only that one shows from inside)."
+  ([p] (buried-by-column? p (feet p)))
+  ([p {:keys [x y z]}]
+   (let [above (look/seen-block p {:x x :y (+ y 2) :z z})]
+     (boolean (and above (not (:unknown above)) (solid/solid? (:name above)))))))
+
+(defn seen-cell?
+  "Whether the body has seen the cell (its light data is no sight of it)."
+  [p cell]
+  (let [b (look/seen-block p cell)]
+    (boolean (and b (not (:unknown b))))))
+
+(defn buried-at?
+  "Whether the cell is underground: no sky light at it and the cell over it (a cell at 0 is sealed from the sky, so
+  the night changes nothing there; a ravine, shaft or cave mouth keeps sky light and stays unsafe). The brightness of
+  a cell the body has seen is sensed like the light at its feet; an unseen cell is not buried. Without light data there,
+  buried-by-column? decides."
+  [p {:keys [x y z] :as cell}]
+  (let [own (feet p)
+        own? (= [x y z] [(:x own) (:y own) (:z own)])
+        lights (keep #(sky-light-at p %) [cell {:x x :y (inc y) :z z}])]
+    (cond
+      (not (or own? (seen-cell? p cell))) false
+      (seq lights) (every? zero? lights)
+      :else (buried-by-column? p cell))))
+
+(defn buried?
+  "The body is underground (buried-at? its feet)."
+  [p]
+  (buried-at? p (feet p)))
+
+(defn night? [p] (not (.-isDay (.self p))))
+
+(defn sleeping? [p] (boolean (.-isSleeping (.self p))))
+
+(def default-roof-height 4)
+
+(defn room-roof-height [] (settings/get settings ::room-roof-height))
+
+(def cave-radius 3)
+
+(def cave-width
+  "Standable cells under a ceiling within cave-radius of the feet from which the body counts as in an open cave, not a tunnel it dug."
+  16)
+
+(def cave-ceiling 8)
+
+(def lit-level "Block light at the feet from which a cell is lit enough that the body counts it a lit pocket." 8)
+
+(defn block-light-at
+  "Block light (0-15) of the cell, or nil when no light data is loaded there."
+  [p {:keys [x y z]}]
+  (let [raw (some-> (aget p "perception") :raw)]
+    (when (and raw (<= 0 (.stateAt ^js raw x y z)))
+      (bit-and (.lightAt ^js raw x y z) 15))))
+
+(defn light-at
+  "The brighter of block and sky light (0-15, before the night's darkening) of the cell, or nil when no light data is
+  loaded there."
+  [p cell]
+  (when-let [block (block-light-at p cell)]
+    (max block (sky-light-at p cell))))
+
+(defn cave-cells
+  "How many standable cells (feet, head and the cell over it free, a solid floor, a seen solid within cave-ceiling over them) lie
+  within cave-radius of the feet, a block up or down: a cave is wide and high, what the body digs is 2 high (a tunnel, a mine's room)."
+  [p]
+  (let [{:keys [x y z]} (feet p)
+        solid? (fn [cx cy cz] (solid-at? p {:x cx :y cy :z cz}))]
+    (count (for [dx (range (- cave-radius) (inc cave-radius))
+                 dz (range (- cave-radius) (inc cave-radius))
+                 dy [-1 0 1]
+                 :let [cx (+ x dx) cy (+ y dy) cz (+ z dz)]
+                 :when (and (solid? cx (dec cy) cz) (not (solid? cx cy cz)) (not (solid? cx (inc cy) cz)) (not (solid? cx (+ cy 2) cz))
+                            (some #(solid? cx (+ cy %) cz) (range 2 (inc cave-ceiling))))]
+             1))))
+
+(defn wide-room?
+  "Whether the room has a 2x2 floor patch: a hut, not a one-wide tunnel the body dug."
+  [{:keys [cells]}]
+  (let [in? (set cells)]
+    (boolean (some (fn [[x y z]] (and (in? [(inc x) y z]) (in? [x y (inc z)]) (in? [(inc x) y (inc z)]))) in?))))
+
+(defn shut-in-room?
+  "Whether the body stands in a closed room (reach/closed-room?) with a roof over it within room-roof-height blocks:
+  safe from the night though the roof is above :roof-height. Sealed from the sky (buried?) counts as roofed: the roof
+  over the feet cannot be looked at from inside."
+  [p]
+  (and (or (roofed? p (room-roof-height)) (buried? p)) (reach/closed-room? p (feet p))))
+
+(defn shut-in-hut?
+  "shut-in-room? and wide: a hut, not a one-wide tunnel the body dug."
+  [p]
+  (and (shut-in-room? p) (wide-room? (reach/room p (feet p)))))
+
+(defn open-cave?
+  "Buried in a dark, wide natural cave: no sky light, not shut in a closed room, under lit-level block light at the
+  feet (no light data counts as dark) and cave-cells wide. Mobs spawn there whatever the hour."
+  [p]
+  (boolean (and (buried? p) (not (shut-in-room? p))
+                (< (or (block-light-at p (feet p)) 0) lit-level)
+                (>= (cave-cells p) cave-width))))
+
+(defn unsafe-night?
+  "Night, awake, and not under a roof and not buried underground, or buried in a dark open cave (open-cave?)."
+  [p roof-height]
+  (and (night? p) (not (sleeping? p))
+       (or (and (not (roofed? p roof-height)) (not (buried? p))) (open-cave? p))))
+
+(defn walkable-at?
+  "Whether the cell at pos is one a body stands or walks in: not solid, or a bed."
+  [p pos]
+  (let [n (u/seen-name p pos)]
+    (and (some? n) (or (not (solid/solid? n)) (.endsWith n "_bed")))))
+
+(defn doorway?
+  "Whether the cell is a gap in a wall: solid on both sides along one horizontal axis and free on both ends of the other."
+  [p {:keys [x y z]}]
+  (let [solid (fn [dx dz] (solid-at? p {:x (+ x dx) :y y :z (+ z dz)}))
+        free (fn [dx dz] (not (solid dx dz)))]
+    (boolean (or (and (solid 1 0) (solid -1 0) (free 0 1) (free 0 -1))
+                 (and (solid 0 1) (solid 0 -1) (free 1 0) (free -1 0))))))
+
+(defn open-air-above?
+  "Whether every cell over goal up to height y is seen and not solid: a spot in the open, like a hillside below a roofed hut."
+  [p goal y]
+  (every? #(let [n (u/seen-name p (update goal :y + %))] (and n (not (solid/solid? n)))) (range 1 (inc (- y (:y goal))))))
+
+(defn seen-open-over?
+  "Whether some cell within default-roof-height over goal is seen and not solid: rock shows no cell beyond its face."
+  [p goal]
+  (boolean (some #(some-> (u/seen-name p (update goal :y + %)) solid/solid? not) (range 1 (inc default-roof-height)))))

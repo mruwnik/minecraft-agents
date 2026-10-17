@@ -3,7 +3,7 @@
   (:require [cljs.test :refer [deftest is]]
             [engine.memory :as mem]
             [engine.test-util :as tu]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.clock :as sh-clock]
             [triggers.survival.needs-bed :as nb]))
 
 (def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 0}})
@@ -14,9 +14,9 @@
   (let [clock (atom 0)
         store (mem/open (tu/tmp-dir) {:now #(deref clock)})]
     (doseq [[kind data age] entries]
-      (reset! clock (- (* 10 sh/ms-per-day) (* age sh/ms-per-day)))
-      (mem/write! store kind data {:cap 8 :ttl (* 20 sh/ms-per-day)}))
-    (reset! clock (* 10 sh/ms-per-day))
+      (reset! clock (- (* 10 sh-clock/ms-per-day) (* age sh-clock/ms-per-day)))
+      (mem/write! store kind data {:cap 8 :ttl (* 20 sh-clock/ms-per-day)}))
+    (reset! clock (* 10 sh-clock/ms-per-day))
     (f (tu/seeing-all (tu/fake-on-floor (cond-> {:floor [-10 -10 10 10] :inventory (or inv []) :entities entities :blocks blocks} night (assoc :time 18000) time (assoc :time time))))
        (mem/view store) {})))
 
@@ -33,7 +33,7 @@
   (is (true? (holds? {:entries [[:looked {} 4]]})))
   (is (true? (holds? {:entries [[:looked {} 4] [:respawned {} 3.5]]})))
   (is (false? (holds? {:entries [[:looked {} 4] [:respawned {} 1]]})))
-  (is (false? (holds? {:entries [[:looked {} 4] [:deaths {:death-t (- (* 10 sh/ms-per-day) sh/ms-per-day)} 1]]}))))
+  (is (false? (holds? {:entries [[:looked {} 4] [:deaths {:death-t (- (* 10 sh-clock/ms-per-day) sh-clock/ms-per-day)} 1]]}))))
 
 (deftest a-rested-body-or-one-with-no-memory-does-not
   (is (false? (holds? {:entries [[:slept {:pos {:x 0 :y 64 :z 0}} 1] [:looked {} 4]]})))

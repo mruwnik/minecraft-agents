@@ -10,7 +10,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.seal :as seal]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
@@ -141,7 +141,7 @@
   :again while the walk goes on or after it ends; nil when there is no door beside the body, no spot, or the step was tried."
   [c]
   (let [p (:primitives c)
-        feet (sh/feet p)]
+        feet (sh-sense/feet p)]
     (when (and (not (:door-stepped (ctx/mem c))) (some #(stuck-door? p %) (dig-cells/fill-cells (constantly false) feet)))
       (when-let [spot (door-free-spot p feet)]
         (let [r (await (ctx/call c :door-step 'jobs.movement.go-to {:pos {:x (+ (:x spot) 0.5) :y (:y spot) :z (+ (:z spot) 0.5)} :range 0}))]
@@ -151,13 +151,13 @@
 (defn ^:async seal-cells!
   "The body of seal!: place the open cells round the feet."
   [c]
-  (await (look/look-unknown! c (map lb/cell (dig-cells/open-cells (:primitives c) (sh/feet (:primitives c))))))
+  (await (look/look-unknown! c (map lb/cell (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c))))))
   (let [{:keys [radius max-places]} (:args c)
         blocks (flight/blocks c)
         p (:primitives c)
-        open (dig-cells/open-cells p (sh/feet p))
+        open (dig-cells/open-cells p (sh-sense/feet p))
         free (remove #(occupied? c %) open)
-        cells (if (seq (shooters c)) (facing-first (sh/feet p) (shooters c) free) (nearest-first (sh/feet p) (melee-spots c) free))
+        cells (if (seq (shooters c)) (facing-first (sh-sense/feet p) (shooters c) free) (nearest-first (sh-sense/feet p) (melee-spots c) free))
         forget! #(dig-cells/forget-wait! c :seal-mob-since)
         unfillable (fn [] (forget!) :failed)]
     (cond
@@ -169,10 +169,10 @@
       (do (when (seal/off-centre? p) (await (seal/centre! c)))
           (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
           (case (await (place-seal! c (take max-places (remove #(and (not (some #{%} cells)) (access/trespass-refusal c :place %))
-                                                                 (dig-cells/bottom-up p cells (sh/feet p))))))
+                                                                 (dig-cells/bottom-up p cells (sh-sense/feet p))))))
             :failed :failed
             :wait :again
-            (let [left (dig-cells/open-cells p (sh/feet p))]
+            (let [left (dig-cells/open-cells p (sh-sense/feet p))]
               (cond
                 (empty? left) (do (forget!) :sealed)
                 (every? #(occupied? c %) left) (unfillable)

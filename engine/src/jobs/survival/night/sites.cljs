@@ -6,7 +6,8 @@
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.sense :as sense]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.clock :as sh-clock]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
             [jobs.lib.threats :as threats]
             [jobs.lib.tools :as tools]
@@ -17,7 +18,7 @@
 
 (def site-policy
   "The :night-site entries: failed sites, cleared at the morning the night job sees; a day at most."
-  {:cap 8 :ttl sh/ms-per-day})
+  {:cap 8 :ttl sh-clock/ms-per-day})
 
 (a/defargs settings
   {:jobs.survival.night.sites/max-sites {:default 4 :doc "Failed sites a night tries before holding exposed." :spec (a/int-in 0 nil)}
@@ -53,7 +54,7 @@
 (defn failed-here?
   "Whether a site that failed tonight lies within dig-in's futile radius of the feet."
   [c]
-  (let [here (sh/feet (:primitives c))]
+  (let [here (sh-sense/feet (:primitives c))]
     (boolean (some #(<= (u/dist here %) (dig-in/futile-radius))
                    (map :pos (failed-sites c))))))
 
@@ -88,7 +89,7 @@
   site by a zombie only walks the body back into it), or nil. With :free?, only cells no zone, claim or plan refuses."
   [c & [{:keys [free?]}]]
   (let [p (:primitives c)
-        feet (sh/feet p)
+        feet (sh-sense/feet p)
         here (first (filter #(<= (u/dist feet %) (dig-in/futile-radius)) (map :pos (failed-sites c))))
         danger-near (threats/danger-near-fn c)
         {:keys [x y z]} (or here feet)
@@ -111,7 +112,7 @@
   [c radius]
   (let [p (:primitives c)
         {:keys [roofed-places roof-height]} (:args c)
-        here (sh/feet p)
+        here (sh-sense/feet p)
         roofed? (fn [pos] (some #(solid/solid? (u/block-name-or p (update pos :y + %) "stone")) (range 1 (inc roof-height))))]
     (->> roofed-places
          (keep (fn [nm] (when-let [pos (mem/place (ctx/view c) nm)] {:name nm :pos pos})))
@@ -131,7 +132,7 @@
   [c place]
   (let [cheap? #(some-> % (<= (dig-in-seconds)))
         cost (await (route-cost c place))
-        cell (sh/feet (:primitives c))
+        cell (sh-sense/feet (:primitives c))
         cost (if (or (cheap? cost) (nil? cost) (= cell (:route-looked (ctx/mem c))))
                cost
                (do (ctx/update-mem! c assoc :route-looked cell)
@@ -178,7 +179,7 @@
 (defn pit-start
   "The failed site tonight whose pit the body stands in (below it, within the futile radius), or nil."
   [c]
-  (let [feet (sh/feet (:primitives c))]
+  (let [feet (sh-sense/feet (:primitives c))]
     (first (filter #(and (< (:y feet) (:y %)) (<= (u/dist feet %) (dig-in/futile-radius))) (map :pos (failed-sites c))))))
 
 (defn retry-after-ms [] (settings/get settings :jobs.survival.night.sites/retry-after-ms))
@@ -191,7 +192,7 @@
   [c]
   (let [{:keys [pos at retries]} (:exposed (ctx/mem c))]
     (and pos (< (or retries 0) (max-retries))
-         (or (>= (u/dist (sh/feet (:primitives c)) pos) (inc (dig-in/futile-radius)))
+         (or (>= (u/dist (sh-sense/feet (:primitives c)) pos) (inc (dig-in/futile-radius)))
              (>= (- (ctx/now c) at) (retry-after-ms))))))
 
 (defn max-flees [] (settings/get settings :jobs.survival.night.sites/max-flees))

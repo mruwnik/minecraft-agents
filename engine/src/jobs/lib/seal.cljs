@@ -3,7 +3,7 @@
   body in its own cell."
   (:require [engine.ctx :as ctx]
             [jobs.lib.danger :as danger-q]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
 (def mob-half-width
@@ -33,6 +33,6 @@
 (defn ^:async centre!
   "Step to the middle of the body's own cell, so the side cells around it can take blocks."
   [c]
-  (let [{:keys [x y z]} (sh/feet (:primitives c))]
+  (let [{:keys [x y z]} (sh-sense/feet (:primitives c))]
     ;; raw moveTo kept: a step inside the body's own cell, range 0.15; the planner has no goal finer than a cell.
     (await (ctx/act c :moveTo #js {:pos #js {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0.15}))))

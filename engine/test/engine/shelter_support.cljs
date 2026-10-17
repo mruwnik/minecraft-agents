@@ -7,7 +7,8 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.lib.shelter :as sh]))
+            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]))
 (def day-ms 1200000)
 (def night 14000)
 (def noon 1000)
@@ -74,7 +75,7 @@
 (defn looked-round!
   "The night's look pass from p's cell, as the body remembers it: a trigger check after it is not held by the look."
   [eng p]
-  (mem/write! (:store eng) :night-looked {:cell (sh/feet p)} sh/night-looked-policy))
+  (mem/write! (:store eng) :night-looked {:cell (sh-sense/feet p)} sh/night-looked-policy))
 
 (defn pos-of [p] (js->clj (.-pos (.self p)) :keywordize-keys true))
 

@@ -20,7 +20,7 @@
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.targets :as targets]
             [jobs.survival.night :as night]
             [jobs.survival.night.sites :as sites]
@@ -184,7 +184,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (await (night-at-home bed-world {:x 10 :y 64 :z 0}))
-              _ (mem/write! (:store eng) :bed-open {:pos {:x 10 :y 64 :z 0}} sh/bed-open-policy)
+              _ (mem/write! (:store eng) :bed-open {:pos {:x 10 :y 64 :z 0}} sh-beds/bed-open-policy)
               walks (atom 0)
               log (await (with-child-log #(tu/run-until-empty eng 60)
                            (fn [_ k _ _] (when (and (= :roof-walk k) (< 2 (swap! walks inc)))

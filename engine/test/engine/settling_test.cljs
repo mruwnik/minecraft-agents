@@ -8,7 +8,7 @@
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.fake :as fake]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sleepers :as sh-sleepers]
             [engine.test-util :as tu]
             [engine.triggers :as real-triggers]))
 
@@ -47,7 +47,7 @@
                  :when (fn [w _ _] (pest-near? w))}
           :probe {:name :probe :job '(nop) :when (fn [_ _ _] (swap! probes inc) false)}
           :sleeper-out {:name :sleeper-out :job '(jobs.survival.log-out {:offline-ms 20000 :news-ms 0}) :persistence :cooldown :cooldown-s 30
-                         :when (fn [w _ _] (boolean (seq (sh/sleeping-players w 128))))}}))
+                         :when (fn [w _ _] (boolean (seq (sh-sleepers/sleeping-players w 128))))}}))
 
 (defn setup [spec]
   (let [clock (atom t0)

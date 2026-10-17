@@ -7,7 +7,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.dig-in.site :as site]
             [jobs.survival.retreat-pit :as pit]))
@@ -76,7 +76,7 @@
   [c]
   (let [p (:primitives c)
         {:keys [mode]} (ctx/mem c)
-        {:keys [x z] :as start} (sh/feet p)
+        {:keys [x z] :as start} (sh-sense/feet p)
         moved (and (= :dig mode) (not (contains? (:cols (ctx/mem c)) [x z])))]
     (when moved (ctx/update-mem! c dissoc :mode :roof :cols :pit-drops))
     (when (or moved (not mode))

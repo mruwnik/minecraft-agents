@@ -10,7 +10,8 @@
             [jobs.lib.access :as access]
             [jobs.lib.places :as places]
             [jobs.lib.sense :as sense]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.beds :as sh-beds]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tidy-rules :as tidy-rules]
             [jobs.lib.util :as u]))
@@ -18,7 +19,7 @@
 (def doc
   "Go to bed: sleep in a bed to use, else put a carried bed down beside the body and sleep in it. One step per call, run to its end by the caller (jobs.survival.night).
   Conditions at the start (a listed call waits on them): night (:not-night), and a bed to use or a bed item to put down (:no-bed; the engine looks round once first; with :fetch on, which is the default, a bed is fetched instead through jobs.lib.need: jobs.items.obtain of any colour, then put down; a failed fetch ends with the cause {:reason :need} and its ending as :because).
-  The bed: the :bed argument, else sh/bed-to-use (seen, or remembered within :bed-radius, :urgent-bed-radius once :max-days-awake days passed without sleep; never an occupied one or one given up on; unless that long without sleep, never one whose walk leaves an underground, dug-in or room shelter): jobs.survival.sleep on it.
+  The bed: the :bed argument, else sh-beds/bed-to-use (seen, or remembered within :bed-radius, :urgent-bed-radius once :max-days-awake days passed without sleep; never an occupied one or one given up on; unless that long without sleep, never one whose walk leaves an underground, dug-in or room shelter): jobs.survival.sleep on it.
   A bed in the open is slept in only by a body overdue for sleep or one that just put the bed down; a sleep that stops :bed-open writes :bed-open and ends condition-failed :bed-open.
   A sleep that ends otherwise without sleeping writes :sleep-failed (5 minutes) and ends nothing-possible :sleep-failed.
   A bed item carried and no bed to use: put down beside the body (roofed cells first, else in the open unless :roofed-only; never in a doorway, on a chest, table or other kept block, or in another's zone, claim or plan footprint), recorded as :bed unless a live :bed is, and as :bed-placed outside the body's own zones (info night.bed-placed {:pos :own-zone}). A placement the server refuses is tried again (twice at most on one foot cell, three in all). No room, or a failed placement, writes :bed-place-failed (10 minutes) and ends nothing-possible :bed-place-failed.
@@ -26,12 +27,12 @@
 
 (a/defargs args
   {:bed {:doc "bed position [x y z] or {:x :y :z} to sleep in; default: the bed to use within the radius" :spec ::a/pos :default nil}
-   :roof-height {:doc "a solid block within this many blocks above counts as a roof (where a carried bed is put down)" :spec (a/int-in 0 nil) :default sh/default-roof-height}
-   :bed-radius {:doc "a remembered bed farther than this is not used" :spec (a/num-in 0 nil) :default sh/default-bed-radius}
-   :urgent-bed-radius {:doc "the bed radius once the body is overdue for sleep" :spec (a/num-in 0 nil) :default sh/urgent-bed-radius}
+   :roof-height {:doc "a solid block within this many blocks above counts as a roof (where a carried bed is put down)" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
+   :bed-radius {:doc "a remembered bed farther than this is not used" :spec (a/num-in 0 nil) :default sh-beds/default-bed-radius}
+   :urgent-bed-radius {:doc "the bed radius once the body is overdue for sleep" :spec (a/num-in 0 nil) :default sh-beds/urgent-bed-radius}
    :roofed-only {:doc "put a carried bed down on roofed cells only, never in the open (a body inside a home)" :spec boolean? :default false}
    :fetch {:doc "get a bed when none is to use or carried (jobs.lib.need): true, a set of kinds or a map of limits; false makes :no-bed a start condition" :spec need/option? :default true}
-   :max-days-awake {:doc "in-game days without sleep before a bed in the open is slept in and the urgent radius applies" :spec (a/num-in 0 nil) :default sh/max-days-awake}})
+   :max-days-awake {:doc "in-game days without sleep before a bed in the open is slept in and the urgent radius applies" :spec (a/num-in 0 nil) :default sh-beds/max-days-awake}})
 
 (a/defargs settings
   {::job-time-s {:default 900 :doc "Seconds a bed-down may take: the walk, the bed put down or fetched (an obtain may take its own 600 without a change), the sleep." :spec (a/num-in 0 nil)}
@@ -39,21 +40,21 @@
    ::walk-speed {:default 4.3 :doc "Blocks a second the walk to the bed covers, for the quote." :spec (a/num-in 0 nil)}})
 
 (defn bed-permit
-  "Whether the body may use a bed (sh/bed-permit over the job's world)."
+  "Whether the body may use a bed (sh-beds/bed-permit over the job's world)."
   [c]
-  (sh/bed-permit (:primitives c) (:world (:engine c))))
+  (sh-beds/bed-permit (:primitives c) (:world (:engine c))))
 
-(defn radius [c] (sh/bed-radius (ctx/view c) (:args c)))
+(defn radius [c] (sh-beds/bed-radius (ctx/view c) (:args c)))
 
 (defn overdue? [c]
-  (let [days (sh/days-awake c)]
+  (let [days (sh-beds/days-awake c)]
     (and (some? days) (>= days (:max-days-awake (:args c))))))
 
 (defn bed-to-use
-  "The :bed argument, else the bed sh/bed-to-use picks."
+  "The :bed argument, else the bed sh-beds/bed-to-use picks."
   [c]
   (or (some-> (:bed (:args c)) places/parse-pos :pos)
-      (sh/bed-to-use (:primitives c) (ctx/view c) (radius c) (bed-permit c))))
+      (sh-beds/bed-to-use (:primitives c) (ctx/view c) (radius c) (bed-permit c))))
 
 (def defaults {:checks {:safe? '(not (threatened)) :fit? '(always)} :spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 
@@ -74,7 +75,7 @@
   "The need wait for a bed while there is none to use and none carried to put down, else nil."
   [c]
   (let [p (:primitives c)]
-    (when-not (or (bed-to-use c) (sh/bed-place-wanted? p (ctx/view c) (radius c) (bed-permit c)))
+    (when-not (or (bed-to-use c) (sh-beds/bed-place-wanted? p (ctx/view c) (radius c) (bed-permit c)))
       {:reason :need :any-of bed-names :count 1})))
 
 (defn bed-status
@@ -92,7 +93,7 @@
     (if (= :ok (first n)) (contract/all [n (contract/asked c bed-status)]) n)))
 
 (defn done? [c]
-  (let [d (and (not (checks/running? c)) (sh/sleeping? (:primitives c)))]
+  (let [d (and (not (checks/running? c)) (sh-sense/sleeping? (:primitives c)))]
     (checks/goal d [:sleeping "already asleep"] [:awake "not asleep"] {:units :sleeps :done (if d 1 0) :left (if d 0 1)})))
 
 (defn quote-of [c]
@@ -109,12 +110,12 @@
     (cond
       (= :continue s) :continue
       (= :bed-open (contract/cause-key s))
-      (do (ctx/remember! c :bed-open {:pos bed} sh/bed-open-policy)
+      (do (ctx/remember! c :bed-open {:pos bed} sh-beds/bed-open-policy)
           (ctx/end c :condition-failed :bed-open {:slept false :bed-open true :pos bed
                                                    :text "bed is open (not shut in a roofed room); not lying in it"}))
-      (or (sh/sleeping? p) (seq (ctx/since c :slept started))) (ctx/end c :done nil {:slept true :bed bed})
-      (not (sh/night? p)) (ctx/end c :condition-failed :not-night {:slept false})
-      :else (do (ctx/remember! c :sleep-failed {:pos bed} sh/sleep-failed-policy)
+      (or (sh-sense/sleeping? p) (seq (ctx/since c :slept started))) (ctx/end c :done nil {:slept true :bed bed})
+      (not (sh-sense/night? p)) (ctx/end c :condition-failed :not-night {:slept false})
+      :else (do (ctx/remember! c :sleep-failed {:pos bed} sh-beds/sleep-failed-policy)
                 (ctx/end c :nothing-possible :sleep-failed {:slept false :pos bed
                                                             :text "could not sleep in the bed; not trying again for a while"})))))
 
@@ -137,13 +138,13 @@
   [c roofed?]
   (let [p (:primitives c)
         roof (:roof-height (:args c))
-        {:keys [x y z]} (sh/feet p)
+        {:keys [x y z]} (sh-sense/feet p)
         in (access/rules-input c)
         air? #(#{"air" "cave_air"} (u/seen-name p %))
-        free? (fn [pos] (and (air? pos) (sh/solid-at? p (update pos :y dec))
+        free? (fn [pos] (and (air? pos) (sh-sense/solid-at? p (update pos :y dec))
                              (nil? (tidy-rules/keep-why (u/seen-name p (update pos :y dec))))))
-        covered? (fn [pos] (or (not roofed?) (some #(sh/solid-at? p (update pos :y + %)) (range 1 (inc roof)))))
-        permitted? #(and (nil? (access/trespass-refusal in :place %)) (not (sh/doorway? p %)))
+        covered? (fn [pos] (or (not roofed?) (some #(sh-sense/solid-at? p (update pos :y + %)) (range 1 (inc roof)))))
+        permitted? #(and (nil? (access/trespass-refusal in :place %)) (not (sh-sense/doorway? p %)))
         stands (sort-by (fn [[dx dz]] (+ (js/Math.abs dx) (js/Math.abs dz)))
                         (for [dx (range -3 4) dz (range -3 4)] [dx dz]))]
     (first (for [[sx sz] stands
@@ -155,7 +156,7 @@
                             (air? (update stand :y inc))
                             (free? foot) (free? head) (covered? foot) (covered? head)
                             (permitted? foot) (permitted? head)
-                            (not= foot (sh/feet p))
+                            (not= foot (sh-sense/feet p))
                             (not (refused-twice? c foot)))]
              {:stand stand :foot foot :head head}))))
 
@@ -185,10 +186,10 @@
   :continue while walking or trying again; the foot cell when a bed block stands there after; else nil."
   [c]
   (let [p (:primitives c)
-        item (sh/carried-bed p)
+        item (sh-beds/carried-bed p)
         {:keys [stand foot] :as layout} (await (sense/decide! c ::layout #(or (bed-layout c true) (when-not (:roofed-only (:args c)) (bed-layout c false)))))]
     (when foot
-      (if (= stand (sh/feet p))
+      (if (= stand (sh-sense/feet p))
         (let [r (await (tidy/place! c foot item false (click-for layout)))
               refused (:bed-refused (ctx/mem c))]
           (cond
@@ -196,10 +197,10 @@
             (do (ctx/update-mem! c update-in [:bed-refused [(:x foot) (:y foot) (:z foot)]] (fnil inc 0))
                 :continue)
             (and (= "placed" (.-status r)) (await (bed-visible? c foot)))
-            (let [own? (boolean (sh/in-own-zone? p (:world (:engine c)) foot))]
+            (let [own? (boolean (sh-beds/in-own-zone? p (:world (:engine c)) foot))]
               (places/offer! c :bed foot)
               (when-not own?
-                (ctx/remember! c :bed-placed {:pos foot} sh/bed-placed-policy))
+                (ctx/remember! c :bed-placed {:pos foot} sh-beds/bed-placed-policy))
               (ctx/emit! c :night.bed-placed :info {:pos foot :own-zone own?
                                                     :text (str "put the carried bed down at " (pr-str foot) (if own? " (in its own zone: it stays)" ", picked up by day unless sleeping in it made it the respawn bed"))})
               foot)))
@@ -214,17 +215,17 @@
       (= :continue r) :continue
       r (await (sleep! c r true))
       :else
-      (do (ctx/remember! c :bed-place-failed {:pos (sh/feet (:primitives c))} sh/bed-place-failed-policy)
+      (do (ctx/remember! c :bed-place-failed {:pos (sh-sense/feet (:primitives c))} sh-beds/bed-place-failed-policy)
           (ctx/end c :nothing-possible :bed-place-failed {:slept false
                                                           :text "no room or permission to put the carried bed down; not sleeping in it"})))))
 
 (defn ^:async round [c]
   (let [p (:primitives c)
         bed (or (some-> (:bed (:args c)) places/parse-pos :pos)
-                (await (sense/decide! c ::bed #(sh/bed-to-use p (ctx/view c) (radius c) (bed-permit c)))))]
+                (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (radius c) (bed-permit c)))))]
     (cond
       bed (await (sleep! c bed (overdue? c)))
-      (sh/bed-place-wanted? p (ctx/view c) (radius c) (bed-permit c)) (await (place-bed-and-sleep! c))
+      (sh-beds/bed-place-wanted? p (ctx/view c) (radius c) (bed-permit c)) (await (place-bed-and-sleep! c))
       :else (let [o (need/opts c job)
                   e (when (and (contains? (:what o) :item) (problem c)) (await (need/blocks! c bed-names 1 (select-keys o [:how :explore]))))]
               (cond

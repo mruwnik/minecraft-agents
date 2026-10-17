@@ -12,7 +12,8 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.inside :as sh-inside]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.storage :as storage]))
 
 (a/defargs settings
@@ -40,7 +41,7 @@
         {:keys [chance lowered-by look-at]} (cost/exposure p to shelter)
         where (place-text to)]
     (cond
-      (and (sh/night? p) (sh/safe-from-night? p) (not (sh/walk-leaves-shelter? p shelter to 1)))
+      (and (sh-sense/night? p) (sh-inside/safe-from-night? p) (not (sh-inside/walk-leaves-shelter? p shelter to 1)))
       (contract/ok :sheltered (str "sheltered at " where))
       (<= chance (settings/get settings ::risk-limit)) (contract/ok :unexposed (str "no spawn risk at " where))
       (contains? lowered-by :look) (contract/look :exposed (str "light at " where " not seen") :look-at look-at)
@@ -51,7 +52,7 @@
   "The status of the exposure of c's body at `to` ({:x :y :z}, nil: where it stands), cached."
   [c to]
   (let [p (:primitives c)
-        to (update-vals (or to (sh/feet p)) js/Math.floor)]
+        to (update-vals (or to (sh-sense/feet p)) js/Math.floor)]
     (check-cache/cached c [::exposed to] #(at-status c to))))
 
 (defn trigger-args
@@ -81,11 +82,11 @@
   (let [at (safe-at f)
         by-night? (fn [c]
                     (let [p (:primitives c)
-                          feet (sh/feet p)
+                          feet (sh-sense/feet p)
                           at (f c)
                           to (cond (nil? at) feet
                                    (:y at) (update-vals at js/Math.floor))]
-                      (and (sh/night? p) (not (and to (sh/buried? p) (sh/buried-at? p to))))))]
+                      (and (sh-sense/night? p) (not (and to (sh-sense/buried? p) (sh-sense/buried-at? p to))))))]
     (with-meta (fn [c] (if (by-night? c) (at c) (threatened c)))
       {::exposure (fn [c] (if (by-night? c) ((::exposure (meta at)) c) (contract/ok :day "an unseen place's light is no reason to wait")))})))
 
@@ -103,7 +104,7 @@
   "Later :dark at night above ground."
   [c]
   (let [p (:primitives c)]
-    (if (and (sh/night? p) (not (sh/buried? p)))
+    (if (and (sh-sense/night? p) (not (sh-sense/buried? p)))
       (contract/later :dark "night above ground, waits for dawn")
       (contract/ok :lit "lit or underground"))))
 

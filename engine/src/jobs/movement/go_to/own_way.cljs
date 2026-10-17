@@ -3,7 +3,7 @@
   the detour bound on a whole plan."
   (:require [engine.ctx :as ctx]
             [jobs.lib.near :as near]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.column :as column]
@@ -19,7 +19,7 @@
   legs of one call do not step down floor by floor."
   [c pos]
   (let [y (js/Math.floor (:y (u/self-pos c)))]
-    (when (and (nil? (:y-margin (:args c))) (:y pos) (>= (- (:y pos) y) (climb-rise)) (sh/buried? (:primitives c)))
+    (when (and (nil? (:y-margin (:args c))) (:y pos) (>= (- (:y pos) y) (climb-rise)) (sh-sense/buried? (:primitives c)))
       (or (:dive-floor (ctx/mem c))
           (let [floor (- y (climb-dip))]
             (ctx/update-mem! c assoc :dive-floor floor)
@@ -88,7 +88,7 @@
         bound? (and (not (false? (:detour (:args c)))) (some? (.-sensedAt p)) (< (- (:y pos) (:y (u/self-pos c))) (climb-rise)))]
     (fn [{:keys [status steps] :as plan} first?]
       (or (when stair-check (stair-check plan first?))
-          (when (and bound? (= "found" status) (sh/buried? p)) (detour/refusal steps straight unseen?))))))
+          (when (and bound? (= "found" status) (sh-sense/buried? p)) (detour/refusal steps straight unseen?))))))
 
 (defn straight-from!
   "Blocks from the goal the call's first walk round found the body, d then (memory :detour-from)."

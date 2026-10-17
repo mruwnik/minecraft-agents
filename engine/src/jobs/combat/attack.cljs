@@ -9,7 +9,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.vantage :as vantage]
             [jobs.lib.cost.weapon :as weapon]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.ready :as ready]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
@@ -138,7 +138,7 @@
     (cond-> {:reason reason :killed (vec killed) :given-up given-up :names (or names {})
              :text (str "attack " (name reason) ": killed " (count killed)
                         (apply str (for [[id why] given-up] (str ", gave up on " (get names id id) " " id ": " (name why)))))}
-      (some #{:unreachable} (vals given-up)) (merge (sh/shelter-hint c)))))
+      (some #{:unreachable} (vals given-up)) (merge (sh-inside/shelter-hint c)))))
 
 (defn done?
   "Done once every target seen is killed and none is present; the data is the fight so far."

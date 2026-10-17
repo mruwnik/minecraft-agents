@@ -1,7 +1,7 @@
 (ns engine.stair-test
   "jobs.access.stair: step geometry, the stop rules, and whole stairs against the fake world."
   (:require [engine.child-ends :as ce]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [engine.core :as core]
@@ -1224,10 +1224,10 @@
           (is (= "coal_ore" (block-at (:p wet) [1 64 1])) "lava beside it"))))))
 
 (defn ^:async with-sight-of-no-sky
-  "(f) with the body underground whatever the fake's missing light data say (the column fallback of sh/buried? sees only
+  "(f) with the body underground whatever the fake's missing light data say (the column fallback of sh-sense/buried? sees only
   the cell over the head, which a stair's own clearance opens)."
   [f]
-  (with-redefs [sh/buried? (constantly true) sh/buried-at? (constantly true)] (await (f))))
+  (with-redefs [sh-sense/buried? (constantly true) sh-sense/buried-at? (constantly true)] (await (f))))
 
 (deftest a-stair-goes-on-cutting-and-walking-its-own-steps-at-night-from-a-dug-in-start-underground
   (async done

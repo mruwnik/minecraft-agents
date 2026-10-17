@@ -1,6 +1,6 @@
 (ns engine.night-bed-safe-test
   "A body safe from the night (underground, dug in, shut in a closed room) is not sent through the dark to a remembered
-  bed: sh/bed-to-use skips a bed whose walk leaves that shelter (sh/walk-leaves-shelter?), so the night trigger does not
+  bed: sh-beds/bed-to-use skips a bed whose walk leaves that shelter (sh-inside/walk-leaves-shelter?), so the night trigger does not
   hold for it and the night job does not walk there."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
@@ -16,7 +16,11 @@
             [engine.triggers :as triggers]
             [jobs.lib.reach :as reach]
             [jobs.survival.night.doorway :as doorway]
-            [jobs.lib.shelter :as sh]))
+            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.beds :as sh-beds]
+            [jobs.lib.shelter.clock :as sh-clock]
+            [jobs.lib.shelter.inside :as sh-inside]
+            [jobs.lib.shelter.sense :as sh-sense]))
 
 (def far-bed {:x 40 :y 64 :z 0})
 
@@ -32,7 +36,7 @@
    :blocks (merge hut/tunnel {"40,64,0" "red_bed"}) :light light})
 
 (defn lit-fake
-  "{:raw :p}: a fake body and its perception wrap, so the raw world's sky light is read (sh/buried?). :sees-all in the
+  "{:raw :p}: a fake body and its perception wrap, so the raw world's sky light is read (sh-sense/buried?). :sees-all in the
   world: the fake's own sight (every block seen) with the perception only for its light."
   [world]
   (let [raw-p (tu/fake (dissoc world :light))
@@ -53,7 +57,7 @@
 
 (defn bed-to-use [world]
   (let [{:keys [eng p]} (setup world)]
-    (sh/bed-to-use p (mem/view (:store eng)) 64 (constantly true))))
+    (sh-beds/bed-to-use p (mem/view (:store eng)) 64 (constantly true))))
 
 (defn holds? [world]
   (let [{:keys [eng p]} (setup world)
@@ -80,9 +84,9 @@
   "bed-to-use for a body that last slept `days` in-game days ago."
   [world days]
   (let [{:keys [eng p]} (setup world)
-        _ (mem/write! (:store eng) :slept {:pos {:x 0 :y 64 :z 0}} {:cap 10 :ttl (* 10 sh/ms-per-day)})
-        view (assoc (mem/view (:store eng)) :now (+ 1000000 (* days sh/ms-per-day)))]
-    (sh/bed-to-use p view 128 (constantly true))))
+        _ (mem/write! (:store eng) :slept {:pos {:x 0 :y 64 :z 0}} {:cap 10 :ttl (* 10 sh-clock/ms-per-day)})
+        view (assoc (mem/view (:store eng)) :now (+ 1000000 (* days sh-clock/ms-per-day)))]
+    (sh-beds/bed-to-use p view 128 (constantly true))))
 
 (deftest a-buried-body-overdue-for-sleep-walks-to-its-bed
   (is (= far-bed (bed-to-use-after-days (tunnel-world buried-light) 3))))
@@ -147,7 +151,7 @@
   (let [{:keys [eng p]} (setup (hut-night-world {"6,64,-1" "red_bed"} {}))
         _ (blind-above p)]
     (st/know-bed! eng {:x 6 :y 64 :z -1})
-    (is (= {:x 6 :y 64 :z -1} (sh/bed-to-use p (mem/view (:store eng)) 64 (constantly true))))))
+    (is (= {:x 6 :y 64 :z -1} (sh-beds/bed-to-use p (mem/view (:store eng)) 64 (constantly true))))))
 
 (defn stale-until-looked
   "p whose memory of cell (a [x y z] vector) is air until the body looks: a bed set there since it last saw the cell."
@@ -246,7 +250,7 @@
     (is (nil? (reach/room* unseen-east {:x 13 :y 64 :z 13})) "walls never seen behind the body: no closed room")
     (is (contains? (:cells (reach/room* (seeing p seen-after-a-look) {:x 13 :y 64 :z 13})) [11 64 11])
         "a seen-free cell beside the feet over an unseen floor is a room cell, and the room goes on from it")
-    (is (= {:x 11 :y 64 :z 12} (sh/bed-to-use unseen-east v 48 (constantly true))))
+    (is (= {:x 11 :y 64 :z 12} (sh-beds/bed-to-use unseen-east v 48 (constantly true))))
     (is (true? (sh/night-holds? unseen-east v {} (constantly true))))))
 
 

@@ -12,7 +12,7 @@
             [jobs.lib.body :as body]
             [jobs.lib.breath :as breath]
             [jobs.lib.danger :as danger-q]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
 (def unknown ::unknown)
@@ -184,7 +184,7 @@
 
 (defn night-unsafe []
   (flag :night-unsafe [:night-unsafe "night in the open"] [:night-safe "safe for the night"]
-        (online (fn [c _] (sh/unsafe-night? (world c) sh/default-roof-height)))))
+        (online (fn [c _] (sh-sense/unsafe-night? (world c) sh-sense/default-roof-height)))))
 
 ;; ------------------------------------------------------------------ operators
 

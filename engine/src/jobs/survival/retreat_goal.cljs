@@ -6,7 +6,7 @@
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.survival.retreat-flight :as flight]
@@ -110,7 +110,7 @@
      :why (when goal
             (if (given-up? c goal)
               :given-up
-              (verdict from goal {:hostiles spots :buried? (sh/buried? (:primitives c)) :home home :died (flight/died-spots c)})))}))
+              (verdict from goal {:hostiles spots :buried? (sh-sense/buried? (:primitives c)) :home home :died (flight/died-spots c)})))}))
 
 (defn usable
   "The goal of judged (judge) when nothing speaks against it, else nil."
@@ -124,13 +124,13 @@
   (let [p (:primitives c)
         cell (update-vals (select-keys pos [:x :y :z]) #(js/Math.floor %))]
     (boolean (and (< (:y pos) (flight/floor c))
-                  (or (sh/buried? p) (walk/roofed? #(u/seen-name p %) cell))))))
+                  (or (sh-sense/buried? p) (walk/roofed? #(u/seen-name p %) cell))))))
 
 (defn margin
   "The :y-margin of a leg to the goal: under ground no deeper than walk/max-descent past body and goal, so the plan
   cannot dive through the caves below."
   [c]
-  (if (sh/buried? (:primitives c)) (walk/max-descent) leg-margin))
+  (if (sh-sense/buried? (:primitives c)) (walk/max-descent) leg-margin))
 
 (defn off!
   "Give the walk to goal up for retry-s (body memory :goal-off) and say why (:lost-ground or :height) in a

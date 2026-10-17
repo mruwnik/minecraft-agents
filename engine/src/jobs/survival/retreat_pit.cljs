@@ -9,7 +9,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.seal :as seal]
             [jobs.lib.sense :as sense]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
@@ -161,7 +161,7 @@
   ([c] (plan-of! c (flight/blocks c)))
   ([c blocks]
    (let [p (:primitives c)
-         feet (sh/feet p)
+         feet (sh-sense/feet p)
          _ (await (sense/decide! c ::roof-support #(dig-cells/dig-plan p feet)))
          plan #(pit-plan c feet blocks)]
      (or (plan)
@@ -187,7 +187,7 @@
         (access/trespass! c "retreat" (or (some #(access/trespass-refusal in :dig %) digs)
                                           (some #(access/trespass-refusal (assoc in :feet nil) :place %) (conj (:plugs plan) (:roof plan)))))
         (ctx/update-mem! c dissoc :pit-drops)
-        (assoc plan :kind :pit :anchor (sh/feet (:primitives c)) :cells (plan-cells plan))))))
+        (assoc plan :kind :pit :anchor (sh-sense/feet (:primitives c)) :cells (plan-cells plan))))))
 
 (defn pocket-cells
   "The two cells [feet head] of a side pocket dug from feet towards [dx dz], or nil: both solid, harvestable with what is
@@ -247,7 +247,7 @@
   into it: :again, so the next step seals the way in with them. nil when no side fits or a dig fails."
   [c]
   (let [p (:primitives c)
-        feet (sh/feet p)]
+        feet (sh-sense/feet p)]
     (when-let [cells (some #(pocket-cells c feet %) dig-cells/sides)]
       (let [in (access/rules-input c)]
         (access/trespass! c "retreat" (some #(access/trespass-refusal in :dig %) cells)))
@@ -354,7 +354,7 @@
   knows the floor under that, nor drops onto a floor it has not seen solid: a stop instead (stop). :again, :hidden, or plug!'s result."
   [c {:keys [anchor steps plugs roof prep] :as refuge}]
   (let [p (:primitives c)
-        feet (sh/feet p)
+        feet (sh-sense/feet p)
         at (pit-index refuge feet)
         keep (into #{anchor (update anchor :y inc) roof}
                    (concat plugs prep (mapcat :dig steps) (mapcat (fn [{:keys [to]}] [to (update to :y inc)]) steps)))]
@@ -381,6 +381,6 @@
                 (stop :no-floor (str (or (u/seen-name p floor) "an unseen cell") " under the hole; not stepping into it"))
                 ;; raw moveTo kept: a drop into the body's own pit; the planner has no standable goal there.
                 (let [r (await (ctx/act c :moveTo (clj->js {:pos to :range 0.5})))]
-                  (if (= to (sh/feet p))
+                  (if (= to (sh-sense/feet p))
                     (do (u/progress! c) (ctx/update-mem! c dissoc :refills) :again)
                     (retry-or-stop c :descent-stalled (str "cannot descend into the pit: " (.-status r))))))))))))

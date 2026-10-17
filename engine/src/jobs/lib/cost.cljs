@@ -36,7 +36,8 @@
             [jobs.lib.cost.tolls :as tolls]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.cost.value :as value]
-            [jobs.lib.shelter :as sh]))
+            [jobs.lib.shelter.inside :as sh-inside]
+            [jobs.lib.shelter.sense :as sh-sense]))
 
 (def equipment-of armour/equipment-of)
 (def armour-stats armour/armour-stats)
@@ -115,20 +116,20 @@
 (defn exposure
   "{:chance :lowered-by} of the walk of p to `to` ({:x :y :z}, a column {:x :z} at the feet's height; floored): the mob spawn chance per second it meets and
   what lowers it, data the readiness checks read (empty: nothing foreseeable does, so never). A walk that leaves shelter
-  (sh/walk-leaves-shelter?, with the body's latest :shelter entry data when given) meets the open-sky night figure, any
+  (sh-inside/walk-leaves-shelter?, with the body's latest :shelter entry data when given) meets the open-sky night figure, any
   other the spawn-chance at `to` from the light p has seen; :dawn lowers a chance that night alone puts there. A cell p
   has no light data of is guessed dark and lowered by #{:look}, with :look-at [[x y z]]. Lava and the like are not spawn
   chance. A crude stub."
   ([p to] (exposure p to nil))
   ([p to shelter]
-   (let [to (update-vals (assoc to :y (or (:y to) (:y (sh/feet p)))) js/Math.floor)
+   (let [to (update-vals (assoc to :y (or (:y to) (:y (sh-sense/feet p)))) js/Math.floor)
          cell [(:x to) (:y to) (:z to)]
          seen (fn [c] (let [[x y z] c
                             at {:x x :y y :z z}]
-                        (when-let [block (and (sh/seen-cell? p at) (sh/block-light-at p at))] {:block block :sky (or (sh/sky-light-at p at) 0)})))
+                        (when-let [block (and (sh-sense/seen-cell? p at) (sh-sense/block-light-at p at))] {:block block :sky (or (sh-sense/sky-light-at p at) 0)})))
          open-sky (fn [_] {:block 0 :sky 15})
-         leaves? (sh/walk-leaves-shelter? p shelter to 1)
-         [light night?] (if leaves? [open-sky true] [seen (sh/night? p)])
+         leaves? (sh-inside/walk-leaves-shelter? p shelter to 1)
+         [light night?] (if leaves? [open-sky true] [seen (sh-sense/night? p)])
          chance (spawn-chance cell {:light light :night? night?})]
      (if (and (not leaves?) (nil? (seen cell)))
        {:chance chance :lowered-by #{:look} :look-at [cell]}

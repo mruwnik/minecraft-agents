@@ -5,7 +5,8 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.inside :as sh-inside]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
 
@@ -15,15 +16,15 @@
 
 (def access-reasons #{:zone :claim :footprint :no-zones})
 
-(def shut-in? sh/shut-in?)
+(def shut-in? sh-inside/shut-in?)
 
-(def sheltered-in sh/sheltered-in)
+(def sheltered-in sh-inside/sheltered-in)
 
 (defn leave-unsafe
   "Why the shelter must stay shut now: :night; nil when the body may leave. Hostiles do not keep it shut: by day the
   body leaves whatever is around, and a real danger is the hostile reflex's to deal with, as anywhere else."
   [p]
-  (when (sh/night? p) :night))
+  (when (sh-sense/night? p) :night))
 
 (def headings {:north [0 -1] :east [1 0] :south [0 1] :west [-1 0]})
 
@@ -50,7 +51,7 @@
 (defn leave-result!
   "End leave!: clear its memory, emit the event of its reason, resolve to the result map."
   [c status reason detail]
-  (let [{:keys [x y z]} (sh/feet (:primitives c))
+  (let [{:keys [x y z]} (sh-sense/feet (:primitives c))
         result (merge {:status status :reason reason :at [x y z]} detail)]
     (ctx/update-mem! c dissoc :dig-out)
     (case reason
@@ -73,18 +74,18 @@
   "Dig the first solid :door cell of a walled shelter (its own block); once both are open, step through them."
   [c door]
   (let [p (:primitives c)
-        cell (first (filter #(sh/solid-at? p %) door))]
+        cell (first (filter #(sh-sense/solid-at? p %) door))]
     (if cell
       (let [_ (await (tools/equip-for! c (u/seen-name p cell) {:fast true}))
             r (await (tidy/dig! c cell))]
         (if (= "dug" (.-status r))
           :continue
           (leave-result! c :stopped :no-way-out {:tries [{:cell cell :reason (keyword (.-status r))}]})))
-      (let [{:keys [x y z]} (sh/feet p)
+      (let [{:keys [x y z]} (sh-sense/feet p)
             [d] door
             beyond {:x (+ (:x d) (- (:x d) x)) :y y :z (+ (:z d) (- (:z d) z))}]
         ;; raw moveTo kept: a step into the cell the job is digging, range 0.5, inside its own pit; the planner has no standable goal there.
-        (await (ctx/act c :moveTo (clj->js {:pos (if (sh/solid-at? p (update beyond :y dec)) beyond d) :range 0.5})))
+        (await (ctx/act c :moveTo (clj->js {:pos (if (sh-sense/solid-at? p (update beyond :y dec)) beyond d) :range 0.5})))
         (update-leave! c assoc :stepped true)
         :continue))))
 
@@ -113,7 +114,7 @@
   it), :no-tool (no carried tool harvests item: a dig would lose it); nil when it may be dug."
   [c cell item]
   (let [p (:primitives c)
-        {:keys [x y z]} (sh/feet p)
+        {:keys [x y z]} (sh-sense/feet p)
         v (access/may? (access/rules-input c {:ignore-zones? false}) :dig cell)]
     (cond
       (= [(:x cell) (:y cell) (:z cell)] [x (dec y) z]) :floor
@@ -130,7 +131,7 @@
     (->> (:take-back entry)
          (remove #(contains? skipped (:cell %)))
          (filter #(= (:item %) (u/seen-name p (:cell %))))
-         (sort-by #(u/dist (sh/feet p) (:cell %))))))
+         (sort-by #(u/dist (sh-sense/feet p) (:cell %))))))
 
 (defn skip-cell! [c cell reason]
   (update-take-back! c update :skipped (fnil assoc {}) cell reason)
@@ -156,7 +157,7 @@
                 (ctx/emit! c :dig-in.took-back :info {:dug (:dug tb) :text (str "took back " (:dug tb) " shelter blocks")})
                 nil)))
         (do (update-take-back! c assoc :done true) nil))
-      (> (u/dist (sh/feet p) cell) take-back-reach)
+      (> (u/dist (sh-sense/feet p) cell) take-back-reach)
       (let [r (await (child/call-walk* c :take-back-walk {:pos cell :range 3 :ways #{:walk :clear-seal} :warn false :retry false}))]
         (cond
           (= :continue r) :continue
@@ -174,12 +175,12 @@
 
 (defn ^:async climb!
   "One stair attempt out of a pit (jobs.access.stair :up, a child of the caller): to the :start height, or with no
-  :start one step at a time until nothing solid is within sh/default-roof-height above, at most max-climb steps. A
+  :start one step at a time until nothing solid is within sh-sense/default-roof-height above, at most max-climb steps. A
   stopped stair books its reason and the next heading is tried; so does one that cannot start (it lacks a tool or a slot),
   instead of waiting, because the caller (jobs.survival.night) must end failed, not wait, when trapped."
   [c {:keys [start]} toward]
   (let [{:keys [i order tries climbed] :or {i 0 tries [] climbed 0}} (leave-mem c)
-        order (or order (heading-order (sh/feet (:primitives c)) toward))
+        order (or order (heading-order (sh-sense/feet (:primitives c)) toward))
         _ (update-leave! c assoc :order order)
         attempt (get (exit-attempts order) i)]
     (cond
@@ -237,5 +238,5 @@
        (and (not shut?) take-back? (not (leave-unsafe p)) (= :continue (await (take-back! c)))) :continue
        (not shut?) (leave-result! c :done :out (select-keys (leave-mem c) [:heading]))
        why (leave-result! c :stopped :unsafe {:why why})
-       (some #(sh/solid-at? p %) (:door entry)) (await (open-door! c (:door entry)))
+       (some #(sh-sense/solid-at? p %) (:door entry)) (await (open-door! c (:door entry)))
        :else (await (climb! c entry toward))))))

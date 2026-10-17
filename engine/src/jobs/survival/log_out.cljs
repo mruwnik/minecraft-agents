@@ -7,7 +7,9 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
-            [jobs.lib.shelter :as sh]))
+            [jobs.lib.shelter.clock :as sh-clock]
+            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.shelter.sleepers :as sh-sleepers]))
 
 (def doc
   "Leave the server for a short stint, then come back: the night job's way to let another player's sleep skip the
@@ -24,7 +26,7 @@
    :offline-ms {:doc "how long to stay away at most; the stint ends at morning" :spec (a/num-in 0 nil) :default 30000}
    :news-ms {:doc "back at night, how long to wait for the sleep count" :spec (a/num-in 0 nil) :default 3000}})
 
-(def log-out-policy {:cap 10 :ttl sh/ms-per-day})
+(def log-out-policy {:cap 10 :ttl sh-clock/ms-per-day})
 
 (defn listed? [c] (and (empty? (:slots c)) (nil? (:reflex c))))
 
@@ -45,7 +47,7 @@
     (contract/ok :offline-allowed "logging out allowed")))
 
 (defn supported [c]
-  (if (sh/log-out-unsupported? (ctx/view c))
+  (if (sh-sleepers/log-out-unsupported? (ctx/view c))
     (contract/never :log-out-unsupported "a log-out was unsupported")
     (contract/ok :log-out-supported "log-out not known unsupported")))
 
@@ -69,7 +71,7 @@
     (checks/goal (some? out) [:logged-out "logged out meanwhile"] [:online "not logged out meanwhile"] {:result (when out {:ms (:ms (:data out)) :how (:status (:data out))})})))
 
 (defn away-ms [c]
-  (let [until-morning (sh/ms-until-morning (.-timeOfDay (.self (:primitives c))))]
+  (let [until-morning (sh-clock/ms-until-morning (.-timeOfDay (.self (:primitives c))))]
     (min (:offline-ms (:args c)) (if (pos? until-morning) until-morning js/Infinity))))
 
 (defn ^:async quote-of [c]
@@ -80,7 +82,7 @@
   (let [r (await (ctx/act c :offline #js {:ms (away-ms c) :why "logged-out-for-sleeping-player"}))
         how (.-status r)
         out {:ms (.-ms r) :how how}]
-    (when (and (= "ok" how) (sh/night? (:primitives c)))
+    (when (and (= "ok" how) (sh-sense/night? (:primitives c)))
       (await (child/pause! c (/ (:news-ms (:args c)) 1000) :sleep-news)))
     (ctx/remember! c :log-out {:ms (.-ms r) :status how} log-out-policy)
     (case how

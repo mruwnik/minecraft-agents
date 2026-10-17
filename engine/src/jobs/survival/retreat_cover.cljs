@@ -8,7 +8,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.survival.retreat-flight :as flight]
@@ -114,7 +114,7 @@
   (walk/way-target), else nil."
   [c threats]
   (let [p (:primitives c)]
-    (when (and (seq threats) (sh/buried? p))
+    (when (and (seq threats) (sh-sense/buried? p))
       (walk/way-target (u/self-pos c) (mapv #(danger-q/mob-pos p %) threats) (ledger/ways-of c) way-reach))))
 
 (defn ^:async flight-target!
@@ -173,4 +173,4 @@
   (boolean (and covered?
                 (or (refuge/plugging-here? c)
                     (and (<= (.-health (.self (:primitives c))) (:hide-health (:args c)))
-                         (not (covered? (sh/feet (:primitives c)))))))))
+                         (not (covered? (sh-sense/feet (:primitives c)))))))))

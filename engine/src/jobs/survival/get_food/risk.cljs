@@ -12,7 +12,7 @@
             [jobs.lib.dawn :as dawn]
             [jobs.lib.foods :as foods]
             [jobs.lib.reach :as reach]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
 (defn walk-danger
@@ -34,7 +34,7 @@
         at (str "health " (.toFixed health 1))]
     (cond
       (not (foods/fragile? self)) nil
-      (or (sh/night? p) (not (dawn/calm? p)))
+      (or (sh-sense/night? p) (not (dawn/calm? p)))
       (str at ": waits sheltered for a calm day (night, first light or a hostile known near)")
       (nil? pos) nil
       :else (let [{:keys [danger mobs]} (walk-danger p pos)]

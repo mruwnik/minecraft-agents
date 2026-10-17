@@ -10,6 +10,7 @@
             [engine.registry :as registry]
             [jobs.lib.world-files :as ew]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.beds :as sh-beds]
             [engine.shelter-support :as st]
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]))
@@ -70,7 +71,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {"3,64,0" "air" "3,65,0" "air"}) {:inventory st/dirt-stack}))]
-          (mem/write! (:store eng) :bed-open {:pos {:x 4 :y 64 :z 0}} sh/bed-open-policy)
+          (mem/write! (:store eng) :bed-open {:pos {:x 4 :y 64 :z 0}} sh-beds/bed-open-policy)
           (core/submit! eng '(jobs.survival.night) {})
           (await (tu/run-until-empty eng 8))
           (is (false? (door-open? p)) "the door is shut though the room is open"))))))

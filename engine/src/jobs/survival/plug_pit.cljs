@@ -3,7 +3,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.ready :as ready]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.survival.plug-way :as way]
             [jobs.survival.retreat-pit :as pit]))
 
@@ -21,7 +21,7 @@
 
 (a/defargs args
   {:purpose {:doc "ledger purpose of the placed blocks (:retreat-plug: taken back by the cleanup near no hostile; :shelter: left alone)" :spec #{:retreat-plug :shelter} :default :retreat-plug}
-   :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh/default-roof-height}
+   :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
    :radius {:doc "melee hostiles within this many blocks stand in the way of a cell" :spec (a/num-in 0 nil) :default pit/default-radius}
    :hand-clear-ms {:doc "a block the carried tools cannot harvest is dug by hand, once a block to roof with is in hand, when the hand breaks it within this many ms; default jobs.lib.tools quick-clear-ms" :spec (a/int-in 0 nil)}
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pit is dropped and the lava left" :spec #{:seal :stop} :default :seal}})
@@ -37,7 +37,7 @@
 (defn done? [c] (way/done? c :pit))
 
 (defn quote-of [c]
-  (way/quote-of c (if (pit/pit-plan c (sh/feet (:primitives c))) (settings/get settings ::pit-s) ##Inf)
+  (way/quote-of c (if (pit/pit-plan c (sh-sense/feet (:primitives c))) (settings/get settings ::pit-s) ##Inf)
                 (settings/get settings ::job-time-s)))
 
 (defn ^:async step!
@@ -45,7 +45,7 @@
   :again, or nil with no pit that fits or one that failed (the stop in memory)."
   [c]
   (let [kept (:pit (ctx/mem c))
-        plan (if (and kept (pit/pit-index kept (sh/feet (:primitives c)))) kept (await (pit/plan! c)))]
+        plan (if (and kept (pit/pit-index kept (sh-sense/feet (:primitives c)))) kept (await (pit/plan! c)))]
     (if (:stop plan)
       (way/stop! c plan)
       (do (ctx/update-mem! c assoc :pit plan)

@@ -6,7 +6,7 @@
             [jobs.lib.body :as body]
             [jobs.lib.combat :as combat]
             [jobs.lib.dawn :as dawn]
-            [jobs.lib.shelter :as sh]))
+            [jobs.lib.shelter.sense :as sh-sense]))
 
 (defn weapon-in-pile?
   "Whether a death no :recovered covers, still inside the despawn window, dropped a weapon."
@@ -21,8 +21,8 @@
   [p view _args]
   (boolean
    (and (not (body/dead? view))
-        (not (sh/night? p))
-        (not (sh/sleeping? p))
+        (not (sh-sense/night? p))
+        (not (sh-sense/sleeping? p))
         (dawn/calm? p)
         (not (weapon-in-pile? view))
         (nil? (combat/best-weapon p combat/default-weapons)))))

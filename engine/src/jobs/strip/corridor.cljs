@@ -11,7 +11,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
-            [jobs.lib.shelter :as shelter]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.strip :as strip]
             [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
@@ -95,7 +95,7 @@
 (defn torch-due?
   "The feet are dark and no torch of this trip hangs within torch-gap of them."
   [c feet]
-  (let [dark (some-> (shelter/light-at (:primitives c) (zipmap [:x :y :z] feet)) (< lit))]
+  (let [dark (some-> (sh-sense/light-at (:primitives c) (zipmap [:x :y :z] feet)) (< lit))]
     (boolean (and dark (not-any? #(<= (u/dist (zipmap [:x :y :z] feet) (zipmap [:x :y :z] %)) torch-gap) (:torches (ctx/mem c)))))))
 
 (defn ^:async hang-torch! [c seg feet]
@@ -149,7 +149,7 @@
     (->> (range (max from (- along 4)) (inc (min to (+ along 4))))
          (map #(strip/at axis (:y seg) line %))
          (filter #(and (in-spawn-box? {:x x :y y :z z} %) (let [n (block-at %)] (or (strip/air? n) (strip/rail? n)))
-                       (some-> (shelter/light-at (:primitives c) (zipmap [:x :y :z] %)) (< lit))
+                       (some-> (sh-sense/light-at (:primitives c) (zipmap [:x :y :z] %)) (< lit))
                        (not-any? (fn [h] (<= (u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] h)) torch-gap)) hung)))
          (sort-by d2)
          first)))

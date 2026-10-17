@@ -1,7 +1,7 @@
 (ns jobs.survival.dig-in.site
   "What the dig-in modes share: the stop reason of a call, and the :dig-in-futile entries a failed site leaves."
   (:require [engine.ctx :as ctx]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
 (def futile-policy {:cap 5 :ttl 600000})
@@ -14,7 +14,7 @@
 (defn remember-failed-site! [c reason]
   (stop-reason! c reason)
   (ctx/remember! c :dig-in-futile
-                 {:pos (or (:roof (ctx/mem c)) (sh/feet (:primitives c))) :reason reason}
+                 {:pos (or (:roof (ctx/mem c)) (sh-sense/feet (:primitives c))) :reason reason}
                  futile-policy))
 
 (defn remember-material!

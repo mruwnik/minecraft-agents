@@ -12,7 +12,7 @@
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.shafts :as shafts]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.strip :as strip]
             [jobs.lib.torch :as torch]
             [jobs.lib.trip :as trip]
@@ -183,7 +183,7 @@
     (cond
       (or (nil? plan) (:broken plan) (nil? bed)) (stop! c :bad-plan {:base (:base s)})
       (nil? (:was s)) (do (save! c assoc :was {:home (mem/place (ctx/view c) :home)
-                                               :spawn-bed (:pos (:data (sh/spawn-bed-live (ctx/view c))))})
+                                               :spawn-bed (:pos (:data (sh-spawn/spawn-bed-live (ctx/view c))))})
                           :again)
       :else (let [f (await (run-all! c [[:build 'jobs.build.from-plan (merge {:plan (:base s)} zones)]
                                         [:spawn 'jobs.survival.set-spawn {:bed bed}]

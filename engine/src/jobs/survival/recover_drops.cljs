@@ -13,7 +13,8 @@
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.clock :as sh-clock]
+            [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
             [jobs.survival.recover-drops.danger :as dg]
@@ -92,7 +93,7 @@
   (weighed by its route danger alone), else the exposure of the pile's cell."
   [c]
   (let [d (first (dth/open-deaths c))
-        night-ms (sh/ms-until-morning (.-timeOfDay (.self (:primitives c))))]
+        night-ms (sh-clock/ms-until-morning (.-timeOfDay (.self (:primitives c))))]
     (if (or (nil? d) (zero? night-ms) (>= night-ms (settings/ticks->ms (game/despawn-left-ticks d (ctx/view c)))))
       (contract/ok :ready "no night to wait out for the pile")
       (ready/exposed c (:pos (:data d))))))
@@ -434,7 +435,7 @@
   "Once per death: warn when the body respawned far from its respawn bed: the live :spawn-bed (set by a click or a
   sleep), else the known :bed it slept in (the respawn point was not set there). Nothing for a bed it never slept in."
   [c entry]
-  (let [spawn-bed (:pos (:data (sh/spawn-bed-live (ctx/view c))))
+  (let [spawn-bed (:pos (:data (sh-spawn/spawn-bed-live (ctx/view c))))
         bed (or spawn-bed
                 (let [b (mem/place (ctx/view c) :bed)]
                   (when (some #(= b (:pos (:data %))) (ctx/entries c :slept)) b)))

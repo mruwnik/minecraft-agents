@@ -12,7 +12,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
 (defn mid [{:keys [x y z]}] {:x (+ x 0.5) :y y :z (+ z 0.5)})
@@ -138,7 +138,7 @@
   "Whether the body is in room (jobs.lib.reach/room): its feet cell or the cell it stands on (as go-to arrives) is one of
   the room's cells."
   [p {:keys [cells]}]
-  (boolean (some #(contains? cells (mapv % [:x :y :z])) [(sh/feet p) (reach/standing-cell p)])))
+  (boolean (some #(contains? cells (mapv % [:x :y :z])) [(sh-sense/feet p) (reach/standing-cell p)])))
 
 (defn in-home?
   "Whether the body is in the closed room that holds home ({:x :y :z} or nil); no other room is looked at."
@@ -152,7 +152,7 @@
   cell inside it): {:cell :inside :steps}, nil when it finds no walk to any."
   [p room]
   (->> (:doors room)
-       (keep (fn [d] (when-let [n (reach/walk-steps p (sh/feet p) (:inside d))] (assoc d :steps n))))
+       (keep (fn [d] (when-let [n (reach/walk-steps p (sh-sense/feet p) (:inside d))] (assoc d :steps n))))
        (sort-by :steps)
        first))
 

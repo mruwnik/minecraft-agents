@@ -5,19 +5,21 @@
   blocks of the place, or already sheltered (underground, or shut in a closed room)."
   (:require [jobs.lib.body :as body]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.clock :as sh-clock]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
 (def defaults {:margin-s 60 :speed 4.3 :slack 1.4 :arrive 4})
 
 (defn dusk-home
   [p view args]
-  (let [{:keys [limit margin-s speed slack arrive]} (merge defaults {:limit sh/home-limit} args)
+  (let [{:keys [limit margin-s speed slack arrive]} (merge defaults {:limit sh-clock/home-limit} args)
         self (.self p)
-        left-s (/ (- sh/dusk-tick (.-timeOfDay self)) 20)
+        left-s (/ (- sh-clock/dusk-tick (.-timeOfDay self)) 20)
         pos (sh/home-target view)]
     (boolean
-     (and pos (pos? left-s) (not (body/recovery-pending? view :dusk-home)) (not (sh/sleeping? p))
+     (and pos (pos? left-s) (not (body/recovery-pending? view :dusk-home)) (not (sh-sense/sleeping? p))
           (let [d (u/dist (u/self-pos {:primitives p}) pos)]
             (and (< arrive d) (<= d limit)
                  (<= left-s (+ margin-s (/ (* slack d) speed)))
-                 (not (or (sh/buried? p) (sh/shut-in-room? p)))))))))
+                 (not (or (sh-sense/buried? p) (sh-sense/shut-in-room? p)))))))))

@@ -25,7 +25,7 @@
             [jobs.storage.deposit :as deposit]
             [jobs.storage.kit :as storage-kit]
             [jobs.storage.withdraw :as withdraw]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.danger :as danger]
             [jobs.maintenance.shut-doors :as shut-doors]
             [jobs.survival.eat :as eat]
@@ -54,7 +54,7 @@
 (defn lit
   "(f) with every cell's light read as block and sky (the fake world has no light data)."
   [block sky f]
-  (with-redefs [sh/block-light-at (constantly block) sh/sky-light-at (constantly sky)] (f)))
+  (with-redefs [sh-sense/block-light-at (constantly block) sh-sense/sky-light-at (constantly sky)] (f)))
 
 (defn kind [check world] (first (check (ctx-of world))))
 (defn reason [check world] (:reason (nth (check (ctx-of world)) 2)))
@@ -220,7 +220,7 @@
     outside :later))
 
 (deftest safe-at-by-night-judges-a-column-goal-at-its-surface
-  (is (= :never (with-redefs [sh/block-light-at (constantly 0)] (kind (ready/safe-at-by-night (constantly {:x 4 :z 0})) tunnel)))))
+  (is (= :never (with-redefs [sh-sense/block-light-at (constantly 0)] (kind (ready/safe-at-by-night (constantly {:x 4 :z 0})) tunnel)))))
 
 (deftest explore-search-underground-at-night-is-ok
   (is (= :ok (bound search/safe? tunnel {}))))

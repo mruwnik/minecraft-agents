@@ -5,14 +5,14 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.danger :as danger]
-            [jobs.lib.shelter :as sh]))
+            [jobs.lib.shelter.clock :as sh-clock]))
 
 (a/defargs settings
   {::grace-ticks {:default 1500 :doc "Game ticks after the night ends before a comfort errand may leave shelter." :spec (a/int-in 0 nil)}
    ::hostile-radius {:default 40 :doc "Blocks within which a known hostile holds a comfort errand (a zombie follows 35)." :spec (a/int-in 1 nil)}
    ::with-hostile {:default false :doc "Whether a comfort errand may start while a known hostile is near." :spec boolean?}})
 
-(defn ticks-since-dawn [time-of-day] (mod (- time-of-day sh/morning-tick) 24000))
+(defn ticks-since-dawn [time-of-day] (mod (- time-of-day sh-clock/morning-tick) 24000))
 
 (defn calm?
   [p]

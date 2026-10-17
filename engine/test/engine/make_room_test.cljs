@@ -11,7 +11,7 @@
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.world-files :as ew]
             [jobs.storage.make-room :as mr]))
 
@@ -838,7 +838,7 @@
 
 (deftest a-toss-direction-is-not-picked-from-cells-never-seen
   (let [p (tu/seeing-all (tu/fake-on-floor {}))
-        {fx :x} (sh/feet p)
+        {fx :x} (sh-sense/feet p)
         omniscient (.-sensedAt p)]
     (is (= [1 0] (mr/direction p nil)) "everything seen: east first")
     (aset p "sensedAt" (fn [pos] (if (> (.-x pos) fx) #js {:unknown true} (omniscient pos))))

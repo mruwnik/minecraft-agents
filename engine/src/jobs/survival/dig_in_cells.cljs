@@ -11,7 +11,7 @@
             [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
             [jobs.lib.access.rules :as rules]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
             [jobs.lib.tools :as tools]
             [jobs.lib.look :as look]
@@ -276,11 +276,11 @@
   "Whether the world shows the body shut in: a roof within roof-height above (a solid block, or a cell that stops a mob,
   sealed?: leaves, glass) and, for walls mode, no open cell around the feet (checked from the blocks, not from what was placed)."
   [p mode roof-height]
-  (and (or (sh/roofed? p roof-height)
+  (and (or (sh-sense/roofed? p roof-height)
            (and (= :walls mode)
-                (let [{:keys [x y z]} (sh/feet p)]
+                (let [{:keys [x y z]} (sh-sense/feet p)]
                   (some #(sealed? p {:x x :y (+ y %) :z z}) (range 1 (inc roof-height))))))
-       (or (not= :walls mode) (empty? (open-cells p (sh/feet p))))))
+       (or (not= :walls mode) (empty? (open-cells p (sh-sense/feet p))))))
 
 (defn ^:async collect-drops!
   "Pick up the placeable blocks a dig dropped."
@@ -460,7 +460,7 @@
   pit then."
   [p {:keys [x y z] :as feet} roof-height]
   (let [column (map (fn [dy] {:x x :y (+ y dy) :z z}) (range 2 (inc roof-height)))
-        plug (first (filter #(and (not (sh/solid-at? p %)) (supported? p %)) column))
+        plug (first (filter #(and (not (sh-sense/solid-at? p %)) (supported? p %)) column))
         cells (when plug (room-cells p feet plug))]
     (when (and cells (door-of? p cells))
       plug)))
@@ -470,11 +470,11 @@
   with a side open, where the shaft opens out (its :start, the height to climb to); nil when a side is open at feet
   height, or the column meets a solid cell or runs on for 32 cells first."
   [p {:keys [x y z]}]
-  (let [open-side? (fn [yy] (some (fn [[dx dz]] (not (sh/solid-at? p {:x (+ x dx) :y yy :z (+ z dz)}))) sides))]
+  (let [open-side? (fn [yy] (some (fn [[dx dz]] (not (sh-sense/solid-at? p {:x (+ x dx) :y yy :z (+ z dz)}))) sides))]
     (when-not (open-side? y)
       (loop [yy (inc y)]
         (cond
           (> yy (+ y 32)) nil
-          (sh/solid-at? p {:x x :y yy :z z}) nil
+          (sh-sense/solid-at? p {:x x :y yy :z z}) nil
           (open-side? yy) yy
           :else (recur (inc yy)))))))

@@ -9,7 +9,8 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.look :as look]
             [jobs.lib.seal :as seal]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.beds :as sh-beds]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
             [jobs.lib.targets :as targets]
             [jobs.lib.tools :as tools]
@@ -73,8 +74,8 @@
         flee-radius (:flee-radius (:args c))
         tried (set (:flee-failed m))]
     (when (and (pos? flee-radius) (< (or (:flees m) 0) (sites/max-flees)))
-      (let [here (sh/feet p)
-            bed (when-let [pos (sh/bed-to-use p (ctx/view c) flee-radius (bed-down/bed-permit c))]
+      (let [here (sh-sense/feet p)
+            bed (when-let [pos (sh-beds/bed-to-use p (ctx/view c) flee-radius (bed-down/bed-permit c))]
                   (when (> (u/dist here pos) (bed-down/radius c)) [{:kind :bed :pos pos}]))
             places (map #(assoc % :kind :roofed-place) (sites/roofed-places-in c flee-radius))
             cands (->> (concat bed places (cave-sites c flee-radius) (ground-sites c flee-radius))

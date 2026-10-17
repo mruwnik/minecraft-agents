@@ -6,7 +6,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.combat :as combat]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spent :as spent]
             [jobs.survival.plug-way :as way]))
 
@@ -27,7 +27,7 @@
 (a/defargs args
   {:ways {:doc "the ways to enclose the body, tried in the order :walls, :pit, :pocket" :spec (a/set-of #{:walls :pit :pocket}) :default #{:walls :pit :pocket}}
    :purpose {:doc "ledger purpose of the placed blocks (:retreat-plug: taken back by the cleanup near no hostile; :shelter: left alone)" :spec #{:retreat-plug :shelter} :default :retreat-plug}
-   :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh/default-roof-height}
+   :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
    :radius {:doc "melee hostiles within this many blocks decide which side is walled first and stand in the way of a cell" :spec (a/num-in 0 nil) :default 8}
    :ranged-radius {:doc "ranged hostiles within this many blocks decide which side is walled first" :spec (a/num-in 0 nil) :default 16}
    :max-places {:doc "placements per step" :spec (a/int-in 1 nil) :default 4}
@@ -101,7 +101,7 @@
   [c]
   (loop []
     (if (and (way/enclosed? c) (not (:way (ctx/mem c))))
-      (end! c :done nil {:pos (sh/feet (:primitives c)) :way (:way (ctx/mem c))})
+      (end! c :done nil {:pos (sh-sense/feet (:primitives c)) :way (:way (ctx/mem c))})
       (let [chosen (when-not (:way (ctx/mem c)) (await (choose c)))
             _ (when chosen (ctx/update-mem! c #(-> % (assoc :way (:way chosen)) (update :dropped (fn [d] (vec (distinct (into (or d []) (:dropped chosen)))))))))
             way (:way (ctx/mem c))]
@@ -112,7 +112,7 @@
             (cond
               (= :continue e) :continue
               (= :done (:kind e)) (do (absorb! c (:data e))
-                                      (end! c :done nil {:pos (sh/feet (:primitives c)) :way way}))
+                                      (end! c :done nil {:pos (sh-sense/feet (:primitives c)) :way way}))
               :else (do (absorb! c (:data e))
                         (ctx/update-mem! c #(-> % (dissoc :way) (update :failed-ways (fnil conj #{}) way) (assoc-in [:why way] (or (:text (:data e)) (:cause e))) (assoc-in [:statuses way] (:status (:data e))) (assoc-in [:stops way] (select-keys (:data e) [:reason :needs]))))
                         (if (seq (combat/hostiles (:primitives c) adjacent-reach)) :continue (recur))))))))))

@@ -7,7 +7,7 @@
             [engine.perception :as perception]
             [engine.test-util :as tu]
             [jobs.lib.breath :as breath]
-            [jobs.lib.shelter :as shelter]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]
             [jobs.survival.breathe :as breathe]
@@ -69,4 +69,4 @@
 (deftest light-at-is-the-brighter-of-block-and-sky-light-and-nil-without-data
   (let [p (felt-only {:blocks {"0,63,0" "stone"}})]
     (swap! (fake/state p) assoc :light {[0 64 0] [4 9] [1 64 0] [12 3]} :unloaded #{[2 64 0]})
-    (is (= [9 12 nil] (mapv #(shelter/light-at p %) [pos {:x 1 :y 64 :z 0} {:x 2 :y 64 :z 0}])))))
+    (is (= [9 12 nil] (mapv #(sh-sense/light-at p %) [pos {:x 1 :y 64 :z 0} {:x 2 :y 64 :z 0}])))))

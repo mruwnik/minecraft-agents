@@ -10,7 +10,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.hunting :as hunting]
             [jobs.lib.need :as need]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.pace :as pace]
             [jobs.lib.trip :as trip]
             [jobs.lib.area :as area]
@@ -263,7 +263,7 @@
         remaining (count (present c))
         by (when (= :spared reason) (frequencies (vals (spare-rules c))))
         out (cond-> {:killed killed :reason reason :spared spared :remaining remaining}
-              (= :gave-up reason) (-> (merge (sh/shelter-hint c)) (assoc :skipped (vec (:skipped (ctx/mem c)))))
+              (= :gave-up reason) (-> (merge (sh-inside/shelter-hint c)) (assoc :skipped (vec (:skipped (ctx/mem c)))))
               by (assoc :spared-by by))
         text (str "hunt done: " (name reason) ", killed " killed ", spared " spared " of the ask, " remaining " adults left"
                   (when by (str "; left alone: " (str/join ", " (map (fn [[k n]] (str n " " (name k))) by)))))]

@@ -8,7 +8,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.survival.retreat-walk :as walk]
@@ -75,7 +75,7 @@
   [p]
   (when (settings/get settings ::prefer-lit?)
     (when-let [{:keys [night? at]} (look/dark-fn p)]
-      (when (or night? (sh/buried? p))
+      (when (or night? (sh-sense/buried? p))
         (fn [{:keys [x y z]}] (= 1 (at x y z)))))))
 
 (defn avoid-ends

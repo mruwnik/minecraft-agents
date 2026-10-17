@@ -10,7 +10,7 @@
             [engine.test-util :as tu]
             [jobs.forestry.collect-drops :as job-ns]
             [jobs.lib.loose :as loose]
-            [jobs.lib.shelter :as sh]))
+            [jobs.lib.shelter.sense :as sh-sense]))
 
 (def job 'jobs.forestry.collect-drops)
 (def body {:pos {:x 0 :y 64 :z 0}})
@@ -204,12 +204,12 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (bd/setup {:self body :time night-ms :blocks (assoc wall "0,66,0" "stone")})]
           (drop! p [4 64 0] "oak_log")
-          (let [result (with-redefs [sh/buried? (constantly true)]
+          (let [result (with-redefs [sh-sense/buried? (constantly true)]
                          (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60)))]
             (is (= 1 (:collected result)))))))))
 
 (deftest a-buried-walk-forces-its-dark-form-only-where-the-caller-has-none
-  (with-redefs [sh/buried? (constantly true)]
+  (with-redefs [sh-sense/buried? (constantly true)]
     (is (= {:safe? '(not (threatened))} (:checks (job-ns/walk-args {:quote-call {}} {}))))
     (is (nil? (:checks (job-ns/walk-args {:quote-call {:checks {:safe? '(always)}}} {}))))))
 

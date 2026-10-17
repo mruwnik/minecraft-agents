@@ -16,7 +16,8 @@
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.beds :as sh-beds]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.targets :as targets]
             [jobs.survival.night :as night]
             [jobs.survival.night.sites :as sites]))
@@ -111,7 +112,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (st/setup (merge {:time night :inventory st/dirt-stack} world))]
-          (mem/write! (:store eng) :bed-open {:pos {:x 6 :y 64 :z 0}} sh/bed-open-policy)
+          (mem/write! (:store eng) :bed-open {:pos {:x 6 :y 64 :z 0}} sh-beds/bed-open-policy)
           (core/submit! eng '(jobs.survival.night) {})
           (await (tu/run-until-empty eng 40))
           (f {:eng eng :p p :seen seen}))))))
@@ -206,7 +207,7 @@
   (let [{:keys [eng p] :as r} (await (night-at-home (update bed-world :blocks merge stone-room) {:x 10 :y 64 :z 0}))]
     (await (with-child-log #(tu/run-until-empty eng 60)
              (fn [c k _ _] (when (= :bed-down k)
-                             (ctx/remember! c :bed-place-failed {:pos (sh/feet p)} sh/bed-place-failed-policy)
+                             (ctx/remember! c :bed-place-failed {:pos (sh-sense/feet p)} sh-beds/bed-place-failed-policy)
                              {:kind :nothing-possible :data {:reason :bed-place-failed}}))))
     (is (= [] (st/calls p "sleep")) "no sleep")
     (.setTime (.-world p) noon)

@@ -28,7 +28,7 @@
             [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.pace :as pace]
             [jobs.lib.result :as result]
-            [jobs.lib.shelter :as shelter]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.submitted :as submitted]
             [jobs.lib.tools :as tools]
             [jobs.lib.trip :as trip]
@@ -272,9 +272,9 @@
   "surface-cause of the body's head cell, before the run has begun (a resumed run stands where it dug)."
   [c]
   (let [p (:primitives c)
-        {:keys [x y z]} (shelter/feet p)]
+        {:keys [x y z]} (sh-sense/feet p)]
     (when-not (or (:goal (ctx/mem c)) (:side-cut? (:args c)))
-      (surface-cause (:args c) (shelter/sky-light-at p {:x x :y (inc y) :z z})))))
+      (surface-cause (:args c) (sh-sense/sky-light-at p {:x x :y (inc y) :z z})))))
 
 (def can-start?
   (cond/and (checks/refusing :here "where it was submitted" away)

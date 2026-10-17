@@ -13,7 +13,8 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.goal :as goal]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.inside :as sh-inside]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
             [jobs.lib.look :as look]
             [jobs.lib.tools :as tools]
@@ -107,9 +108,9 @@
   or with any when the body is shut in a closed room or its own shelter and :stay-inside is on."
   [c]
   (let [p (:primitives c)]
-    (boolean (and (sh/night? p)
+    (boolean (and (sh-sense/night? p)
                   (or (> (count (danger-q/known-hostiles p (hold-radius) {})) 1)
-                      (and (:stay-inside (:args c)) (or (sh/shut-in-room? p) (sh/sheltered-in c))))))))
+                      (and (:stay-inside (:args c)) (or (sh-sense/shut-in-room? p) (sh-inside/sheltered-in c))))))))
 
 (defn stay-under-roof?
   "Whether the body keeps its roof: :stay-inside on, night, a roof over the feet, and every danger near either only heard
@@ -118,8 +119,8 @@
   (let [p (:primitives c)]
     (boolean (and (:stay-inside (:args c))
                   (seq hs)
-                  (sh/night? p)
-                  (sh/roofed? p sh/default-roof-height)
+                  (sh-sense/night? p)
+                  (sh-sense/roofed? p sh-sense/default-roof-height)
                   (every? #(or (combat/flyer? %) (not (danger-q/seen-only? %))) hs)
                   (not-any? #(or (combat/creeper? %) (combat/enderman? %)) hs)))))
 
@@ -264,9 +265,9 @@
 (defn covered?
   "Whether the body is roofed and walled on cover-sides sides, as a cell with a doorway is (a canopy or overhang is not)."
   [p]
-  (let [{:keys [x y z]} (sh/feet p)
-        walled? (fn [[dx dz]] (every? #(sh/solid-at? p {:x (+ x dx) :y (+ y %) :z (+ z dz)}) [0 1]))]
-    (and (sh/roofed? p sh/default-roof-height)
+  (let [{:keys [x y z]} (sh-sense/feet p)
+        walled? (fn [[dx dz]] (every? #(sh-sense/solid-at? p {:x (+ x dx) :y (+ y %) :z (+ z dz)}) [0 1]))]
+    (and (sh-sense/roofed? p sh-sense/default-roof-height)
          (<= cover-sides (count (filter walled? [[1 0] [-1 0] [0 1] [0 -1]]))))))
 
 (defn gap-possible?

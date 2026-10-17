@@ -5,7 +5,8 @@
             [engine.core :as core]
             [engine.events :as events]
             [engine.fake :as fake]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.beds :as sh-beds]
+            [jobs.lib.shelter.sense :as sh-sense]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.scenario :as scenario]
@@ -244,18 +245,18 @@
 
 (deftest a-recent-failed-sleep-stops-night-from-holding-the-roofed-body
   (let [carrying (assoc (merge (hut-world {:x 5 :y 64 :z 0} {}) {:time st/night}) :inventory [{:name "red_bed" :count 1}])
-        failed (fn [eng] (mem/write! (:store eng) :sleep-failed {:pos {:x 6 :y 64 :z 0}} sh/sleep-failed-policy))
+        failed (fn [eng] (mem/write! (:store eng) :sleep-failed {:pos {:x 6 :y 64 :z 0}} sh-beds/sleep-failed-policy))
         known (fn [eng] (st/know-bed! eng {:x 6 :y 64 :z 0}))]
     (is (true? (holds-with night-bed-world known)))
     (is (false? (holds-with night-bed-world (fn [eng] (known eng) (failed eng)))) "known bed")
     (is (true? (holds-with night-bed-world (fn [_]))) "a bed seen in the room, none remembered")
     (is (false? (holds-with night-bed-world failed)) "a bed seen in the room")
-    (is (true? (holds-with night-bed-world failed :later (inc (:ttl sh/sleep-failed-policy)))) "seen bed, entry expired")
-    (is (true? (holds-with night-bed-world (fn [eng] (known eng) (failed eng)) :later (inc (:ttl sh/sleep-failed-policy))))
+    (is (true? (holds-with night-bed-world failed :later (inc (:ttl sh-beds/sleep-failed-policy)))) "seen bed, entry expired")
+    (is (true? (holds-with night-bed-world (fn [eng] (known eng) (failed eng)) :later (inc (:ttl sh-beds/sleep-failed-policy))))
         "known bed, entry expired")
     (is (true? (holds-with carrying (fn [_]))))
     (is (false? (holds-with carrying failed)) "a carried bed")
-    (is (true? (holds-with carrying failed :later (inc (:ttl sh/sleep-failed-policy)))) "a carried bed, entry expired")))
+    (is (true? (holds-with carrying failed :later (inc (:ttl sh-beds/sleep-failed-policy)))) "a carried bed, entry expired")))
 
 ;; ------------------------------------------------------------------ beds of another owner (zones and claims)
 
@@ -383,7 +384,7 @@
 
 (deftest a-bed-behind-a-wall-is-not-seen
   (let [p (tu/fake (merge (hut-world {:x 5 :y 64 :z 0} {}) {:blocks (assoc (:blocks (hut-world {:x 5 :y 64 :z 0} {})) "9,64,0" "red_bed")}))]
-    (is (nil? (sh/seen-bed p)))))
+    (is (nil? (sh-beds/seen-bed p)))))
 
 (deftest a-placed-bed-does-not-overwrite-a-known-bed-beyond-the-radius
   (async done
@@ -476,9 +477,9 @@
 
 (deftest a-gap-in-a-wall-is-a-doorway-and-a-cell-in-the-room-is-not
   (let [p (tu/fake (hut-world {:x 5 :y 64 :z 0} {"5,64,2" "air" "5,65,2" "air"}))]
-    (is (true? (sh/doorway? p {:x 5 :y 64 :z 2})))
-    (is (false? (sh/doorway? p {:x 5 :y 64 :z 1})))
-    (is (false? (sh/doorway? p {:x 4 :y 64 :z 0})))))
+    (is (true? (sh-sense/doorway? p {:x 5 :y 64 :z 2})))
+    (is (false? (sh-sense/doorway? p {:x 5 :y 64 :z 1})))
+    (is (false? (sh-sense/doorway? p {:x 4 :y 64 :z 0})))))
 
 (deftest a-sleep-the-server-refuses-says-why-in-the-failure-text
   (async done

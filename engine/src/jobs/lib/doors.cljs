@@ -12,7 +12,7 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [jobs.lib.pass :as pass]
-            [jobs.lib.shelter :as sh]
+            
             [jobs.lib.util :as u]))
 
 (def defaults {:radius 16 :open-s 10})

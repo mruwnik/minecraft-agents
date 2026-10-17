@@ -17,7 +17,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
             [jobs.lib.seal :as seal]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]))
@@ -154,7 +154,7 @@
             permitted? #(not (access/trespass-refusal in :place %))
             mob (danger-q/mob-pos p (first dangers))
             body (u/pos-of (.-pos (.self p)))
-            cells (candidates (sh/feet p) within)
+            cells (candidates (sh-sense/feet p) within)
             cell (plug-cell kind-at cells mob body #(and (allowed? %) (permitted? %)))]
         (cond
           (nil? (lb/pick c blocks)) (await (fetch-blocks! c blocks))

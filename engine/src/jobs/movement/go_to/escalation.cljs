@@ -8,7 +8,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.util :as u]
             [jobs.lib.dig-in-leave :as dig-leave]
@@ -187,7 +187,7 @@
                                    :result (select-keys result [:status :reason :kind :cells :near :one-way :at :from :dip :rise :move :why :step :partial])})
         (await (escalate! c pos nil)))
     (end/give-up! c pos tries status result
-                  (when (and (not (sh/sheltered-in c))
+                  (when (and (not (sh-inside/sheltered-in c))
                              (or (escalate-reason? result (some-> (:doors (:args c)) keyword)) (sprint-only? result))
                              (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword)))
                     {:shut-in true}))))

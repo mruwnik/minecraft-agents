@@ -8,7 +8,8 @@
             [jobs.lib.choose :as choose]
             [jobs.lib.look :as sight]
             [jobs.lib.reach :as reach]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.beds :as sh-beds]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
 (defn carried-door
@@ -22,18 +23,18 @@
   (cons cell (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]] {:x (+ x dx) :y y :z (+ z dz)})))
 
 (defn shut-by
-  "The first doorway (sh/doorway?, not the feet, passing ok?) among the cells round e whose two cells [d, d above] shut the
+  "The first doorway (sh-sense/doorway?, not the feet, passing ok?) among the cells round e whose two cells [d, d above] shut the
   room: the flood from the feet has no unroofed cell once they are solid. An overhang beside a gap has one."
   [p feet e ok?]
-  (first (filter #(and (not= feet %) (sh/doorway? p %) (ok? %)
+  (first (filter #(and (not= feet %) (sh-sense/doorway? p %) (ok? %)
                        (nil? (:cell (reach/unroofed-cell p feet #{[(:x %) (:y %) (:z %)] [(:x %) (inc (:y %)) (:z %)]}))))
                  (around e))))
 
 (defn closed-home?
   "Whether the body stands in a home closed to the night but for a doorway: every cell of its room is roofed, or one
-  doorway (sh/doorway?) shuts it so that every cell is (shut-by). Under an overhang or a lone roof: false."
+  doorway (sh-sense/doorway?) shuts it so that every cell is (shut-by). Under an overhang or a lone roof: false."
   [p]
-  (let [feet (sh/feet p)
+  (let [feet (sh-sense/feet p)
         cell (:cell (reach/unroofed-cell p feet))]
     (or (nil? cell) (some? (shut-by p feet cell any?)))))
 
@@ -44,7 +45,7 @@
   animal or mob stands in it, the place is refused, or this doorway was tried tonight (job memory :doorway-tried)."
   [c]
   (let [p (:primitives c)
-        feet (sh/feet p)
+        feet (sh-sense/feet p)
         seen (delay (sight/seen-entities p {:radius 8}))
         free? (fn [{:keys [x y z] :as cell}]
                 (and (#{"air" "cave_air"} (u/seen-name p cell)) (not (pillar/mob-in @seen [x y z]))))]
@@ -60,7 +61,7 @@
   [c cells blocks]
   (doseq [cell cells
           :when (not-any? #(= cell (:cell (:data %))) (ctx/entries c :doorway-filled))]
-    (ctx/remember! c :doorway-filled {:cell cell :blocks blocks} sh/doorway-filled-policy)))
+    (ctx/remember! c :doorway-filled {:cell cell :blocks blocks} sh-beds/doorway-filled-policy)))
 
 (defn ^:async shut!
   "Fill the gap (jobs.blocks.fill-cells: a carried wooden door, else the carried building blocks). Once it ends, the
@@ -76,6 +77,6 @@
       (doseq [cell cells
               :let [n (u/seen-name (:primitives c) cell)]
               :when (some #{n} blocks)]
-        (ctx/remember! c :doorway-filled {:cell cell :blocks [n]} sh/doorway-filled-policy))
+        (ctx/remember! c :doorway-filled {:cell cell :blocks [n]} sh-beds/doorway-filled-policy))
       (ctx/update-mem! c update :doorway-tried (fnil conj #{}) (first cells)))
     :again))

@@ -10,7 +10,8 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.reach :as reach]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.inside :as sh-inside]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
             [jobs.movement.go-to.climb :as climb]
@@ -65,7 +66,7 @@
   [c result]
   (boolean (and (not (contains? (skips c) :leave-shelter))
                 (or (escalate-reason? result (some-> (:doors (:args c)) keyword)) (sprint-only? result))
-                (sh/sheltered-in c)
+                (sh-inside/sheltered-in c)
                 (nil? (dig-leave/leave-unsafe (:primitives c))))))
 
 (defn fetch-tool?
@@ -208,7 +209,7 @@
         cheaper? (and (not (:stair-tried m)) (>= (- (second goal) (second feet)) stair-first-rise))
         stair (delay (let [e (escape/choose (:primitives c) feet goal (may-dig-fn c) {:own? (own-placed-fn c) :skip (skips c) :pillar-item (escape/pillar-item c)})]
                        (when (= :stair (:step e)) e)))]
-    (when (and (ways/way? c :stair) (not (sh/sheltered-in c)) (or cave cheaper? back))
+    (when (and (ways/way? c :stair) (not (sh-inside/sheltered-in c)) (or cave cheaper? back))
       (fn [{:keys [status steps ^js r]} first?]
         (let [seconds (some-> r .-path .-cost .-priced)]
           (cond
@@ -223,7 +224,7 @@
   the body's own shelter: it is shut in on purpose."
   [c tries result]
   (and (ways/escalating? c)
-       (or (shelter-exit? c result) (not (sh/sheltered-in c)))
+       (or (shelter-exit? c result) (not (sh-inside/sheltered-in c)))
        (or (shelter-exit? c result)
            (some? (gap-fill c result (skips c)))
            (sprint-only? result)
@@ -248,4 +249,4 @@
   [c pos]
   (boolean (and (:dive-climb (ctx/mem c))
                 (< (second (end/feet-cell c)) (js/Math.floor (:y pos)))
-                (sh/buried? (:primitives c)))))
+                (sh-sense/buried? (:primitives c)))))

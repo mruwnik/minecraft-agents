@@ -3,7 +3,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.ready :as ready]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.plug-way :as way]
             [jobs.survival.retreat-pit :as pit]))
@@ -19,7 +19,7 @@
 
 (a/defargs args
   {:purpose {:doc "ledger purpose of the placed blocks (:retreat-plug: taken back by the cleanup near no hostile; :shelter: left alone)" :spec #{:retreat-plug :shelter} :default :retreat-plug}
-   :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh/default-roof-height}
+   :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
    :radius {:doc "melee hostiles within this many blocks decide which side is walled first and stand in the way of a cell" :spec (a/num-in 0 nil) :default 8}
    :ranged-radius {:doc "ranged hostiles within this many blocks decide which side is walled first" :spec (a/num-in 0 nil) :default 16}
    :max-places {:doc "placements per step" :spec (a/int-in 1 nil) :default 4}
@@ -36,7 +36,7 @@
 (defn done? [c] (way/done? c :pocket))
 
 (defn quote-of [c]
-  (let [feet (sh/feet (:primitives c))]
+  (let [feet (sh-sense/feet (:primitives c))]
     (way/quote-of c (if (some #(pit/pocket-cells c feet %) dig-cells/sides) (settings/get settings ::pocket-s) ##Inf)
                   (settings/get settings ::job-time-s))))
 

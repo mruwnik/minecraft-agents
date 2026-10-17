@@ -1,7 +1,7 @@
 (ns jobs.survival.dig-in.pit
   "dig-in's pit mode: jobs.survival.plug-in with the pit way, and the stops it names."
   (:require [engine.ctx :as ctx]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.survival.dig-in.site :as site]
             [jobs.survival.dig-in.walls :as walls]
             [jobs.survival.dig-in.mode :as mode]
@@ -12,7 +12,7 @@
   :dig-in-futile entry is left (a lack of blocks or of a tool retried once that changes), and the stop is said. :done."
   [c {:keys [reason text needs]}]
   (if (#{:no-blocks :no-tool} reason)
-    (site/remember-material! c (cond-> {:pos (or (:roof (ctx/mem c)) (sh/feet (:primitives c)))} needs (assoc :needs needs)))
+    (site/remember-material! c (cond-> {:pos (or (:roof (ctx/mem c)) (sh-sense/feet (:primitives c)))} needs (assoc :needs needs)))
     (site/remember-failed-site! c reason))
   (ctx/emit! c :dig_in_failed :warn {:text text})
   :done)

@@ -1,4 +1,4 @@
-;; Flights under ground, in closed stone (no sky light: shelter/buried?), lit by torches. Cards 871c180a (takes its own
+;; Flights under ground, in closed stone (no sky light: jobs.lib.shelter.sense/buried?), lit by torches. Cards 871c180a (takes its own
 ;; stair up, ledgered as :stair-way, before a hop across the cave; with none and a pickaxe digs a pocket first), 381bb20c and
 ;; 46997179 (the interrupted walk's goal up on the surface, past the mob, gets no leg: the own stair first), a45562d8 (a
 ;; dead-end slope: no step ends more than 3 below the start), c5b20862 (a creeper up the own stair and a zombie below: no

@@ -8,7 +8,8 @@
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
             [jobs.lib.look :as look]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.inside :as sh-inside]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [jobs.lib.foods :as foods]
             [jobs.survival.eat :as eat]
@@ -336,7 +337,7 @@
   none is left. Inside the ask cooldown only a source learned since counts."
   [c]
   (let [source (when (way? c :source) (if (gave-up-recently? c) (sources/fresh-source c) (sources/known-source c)))]
-    (when (and (foods/fragile? (.self (:primitives c))) (not (sh/sheltered-in c)))
+    (when (and (foods/fragile? (.self (:primitives c))) (not (sh-inside/sheltered-in c)))
       (await (look/survey-until! c :near (constantly nil))))
     (or (when (and (way? c :bake) (can-bake? c)) (await (bake! c)))
         (when (and (way? c :cook) (cook/can-cook? c)) (await (cook/cook! c)))
@@ -369,7 +370,7 @@
 (defn ^:async explore!
   "Once per job, with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore),
   not at night (a body sheltered for the night stays in) nor while the night handler holds, unless starving with no
-  danger near (jobs.lib.danger/danger-near?), nor underground (sh/buried?) unless starving and not fragile, nor when risk refuses it. :again when the search found something to hunt or dig, else nil with what it
+  danger near (jobs.lib.danger/danger-near?), nor underground (sh-sense/buried?) unless starving and not fragile, nor when risk refuses it. :again when the search found something to hunt or dig, else nil with what it
   covered remembered."
   [c]
   (let [e (:explore (:args c))]
@@ -379,7 +380,7 @@
       (do (ctx/update-mem! c assoc :explored (str "not searched: " (:too-dangerous (ctx/mem c)))) nil)
       (night-blocks-search? c)
       (do (ctx/update-mem! c assoc :explored "not searched at night or while the night handler holds") nil)
-      (and (sh/buried? (:primitives c)) (or (not (starving? c)) (foods/fragile? (.self (:primitives c)))))
+      (and (sh-sense/buried? (:primitives c)) (or (not (starving? c)) (foods/fragile? (.self (:primitives c)))))
       (do (ctx/update-mem! c assoc :explored "not searched underground: the caves are dark and full of mobs; surface or eat first") nil)
       :else
       (do

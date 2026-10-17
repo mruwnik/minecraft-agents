@@ -10,7 +10,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
@@ -205,14 +205,14 @@
   looked at may hit a wall."
   [p {:keys [x y z]} [dx dz]]
   (every? #(let [pos {:x (+ x (* % dx)) :y (+ y 1) :z (+ z (* % dz))}]
-             (and (some? (u/seen-name p pos)) (not (sh/solid-at? p pos))))
+             (and (some? (u/seen-name p pos)) (not (sh-sense/solid-at? p pos))))
           [1 2]))
 
 (defn direction
   "The first cardinal [dx dz] with free cells ahead, else nil: a toss into a wall comes straight back. With away
   (a position) the cardinals are tried most opposite to it first."
   [p away]
-  (let [feet (sh/feet p)
+  (let [feet (sh-sense/feet p)
         order (if away
                 (sort-by (fn [[dx dz]] (+ (* dx (- (:x away) (:x feet))) (* dz (- (:z away) (:z feet))))) cardinals)
                 cardinals)]

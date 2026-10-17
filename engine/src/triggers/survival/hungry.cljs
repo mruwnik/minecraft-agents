@@ -6,7 +6,7 @@
             [engine.settings :as settings]
             [jobs.lib.dawn :as dawn]
             [jobs.lib.foods :as foods]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [engine.memory :as mem]))
 
 (a/defargs settings
@@ -73,5 +73,5 @@
              (foods/eat-now? self args reserved))
          (not (resting? self memory args))
          (or (foods/carries-food? self reserved)
-             (and (not (sh/night? world)) (or (not (foods/fragile? self)) (dawn/calm? world))))
+             (and (not (sh-sense/night? world)) (or (not (foods/fragile? self)) (dawn/calm? world))))
          (if urgent? :urgent true))))

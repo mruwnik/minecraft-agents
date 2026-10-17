@@ -2,7 +2,7 @@
   "Shutting a door, gate or trapdoor on the threat in a flight (retreat, night)."
   (:require [jobs.lib.click :as click]
             [engine.ctx :as ctx]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.retreat-cornered :as cornered]
@@ -26,7 +26,7 @@
   [c threat-pos]
   (let [p (:primitives c)
         self (u/self-pos c)
-        {fx :x fy :y fz :z} (sh/feet p)
+        {fx :x fy :y fz :z} (sh-sense/feet p)
         r (js/Math.ceil door-reach)
         clicked (:doors-clicked (ctx/mem c) #{})
         mid retreat-home/mid]

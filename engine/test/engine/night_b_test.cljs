@@ -20,7 +20,7 @@
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.targets :as targets]
             [jobs.survival.night :as night]
             [jobs.survival.night.sites :as sites]
@@ -284,7 +284,7 @@
   (let [due? (fn [feet]
                (with-redefs [ctx/mem (constantly {:exposed {:pos {:x 0 :y 0 :z 0} :at 0 :retries 0}})
                              ctx/now (constantly 1000)
-                             sh/feet (constantly feet)]
+                             sh-sense/feet (constantly feet)]
                  (sites/retry-due? {:primitives nil})))]
     (is (not (due? {:x 8 :y 0 :z 1})) "8.06 away is still inside dig-in's futile check")
     (is (due? {:x 9 :y 0 :z 0}))))

@@ -15,6 +15,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.seal :as seal]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
             [jobs.lib.spent :as spent]
             [jobs.lib.tidy :as tidy]
@@ -46,7 +47,7 @@
   {:reach {:doc "how far from the body to look for a face, 1 to 32" :spec (a/int-in 1 32) :default 16}
    :ignore-zones? :shared
    :fetch {:doc "get a missing tool (jobs.lib.need): true, a set of kinds or a map of limits; false stops :no-tool" :spec need/option? :default true}
-   :roof-height {:doc "a solid block within this many blocks above counts as a roof, 1 to 32" :spec (a/int-in 1 32) :default sh/default-roof-height}})
+   :roof-height {:doc "a solid block within this many blocks above counts as a roof, 1 to 32" :spec (a/int-in 1 32) :default sh-sense/default-roof-height}})
 
 (def can-start? (checks/night :day))
 
@@ -76,7 +77,7 @@
   [c]
   (let [m (ctx/mem c)
         p (:primitives c)
-        d (and (sh/roofed? p (:roof-height (:args c))) (reach/closed-room? p (sh/feet p))
+        d (and (sh-sense/roofed? p (:roof-height (:args c))) (reach/closed-room? p (sh-sense/feet p))
                (or (:ended m) (and (nil? (:site m)) (not (checks/running? c)))))]
     (checks/goal d [:roomed "shut in a closed room under a roof"] [:exposed "not shut in a closed room"]
                  {:units :shelters :done (if d 1 0) :left (if d 0 1)})))
@@ -146,7 +147,7 @@
   (ok? stand dir) holds. Returns {:site that-or-nil :refused? whether a niche that would do was turned down by ok?}.
   need-tool? false ignores whether a carried tool harvests the face."
   [p reach ok? need-tool?]
-  (let [{:keys [x y z]} (sh/feet p)
+  (let [{:keys [x y z]} (sh-sense/feet p)
         offsets (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz)))
                          (for [dx (range (- reach) (inc reach)) dz (range (- reach) (inc reach))
                                :when (<= (+ (* dx dx) (* dz dz)) (* reach reach))]
@@ -180,11 +181,11 @@
   "What is left to do at the site, from the world: [:dig cell] (the first solid cell, cut from the stand cell or the
   opening), :walk-to-face, :walk-in, :plug or :sealed."
   [p {:keys [stand dir]}]
-  (let [feet (sh/feet p)
+  (let [feet (sh-sense/feet p)
         solid (first (filter #(dig-cells/rock-solid? p %) (dug-cells stand dir)))
-        open (remove #(sh/solid-at? p %) (door-cells stand dir))]
+        open (remove #(sh-sense/solid-at? p %) (door-cells stand dir))]
     (cond
-      (and (= feet (at stand dir 2 0 0)) (not (sh/solid-at? p (at stand dir 2 0 1))))
+      (and (= feet (at stand dir 2 0 0)) (not (sh-sense/solid-at? p (at stand dir 2 0 1))))
       (if (seq open) [:plug] [:sealed])
       solid (if (<= (u/dist feet solid) (dig-reach)) [:dig solid] [:walk-to-face])
       :else [:walk-in])))
@@ -249,7 +250,7 @@
   "Plugged: the :shelter entry and the result."
   [c {:keys [stand dir]}]
   (let [p (:primitives c)
-        feet (sh/feet p)
+        feet (sh-sense/feet p)
         door (door-cells stand dir)
         placed (spent/log c)]
     (ctx/remember! c :shelter {:pos feet :state :built :door door} sh/shelter-policy)

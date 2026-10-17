@@ -19,7 +19,7 @@
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.reach :as reach]
-            [jobs.lib.shelter :as sh]
+            
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]))
 

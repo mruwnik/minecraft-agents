@@ -10,7 +10,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.reach :as reach]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spent :as spent]
             [jobs.lib.threats :as threats]
             [jobs.survival.dig-in-cells :as dig-cells]
@@ -76,7 +76,7 @@
                            (cond-> {:ways ways :radius radius :ranged-radius ranged-radius :max-places max-places :on-lava on-lava}
                              purpose (assoc :purpose purpose)
                              (ctx/use c :blocks) (assoc :use {:blocks (ctx/use c :blocks)}))))
-        feet (sh/feet (:primitives c))]
+        feet (sh-sense/feet (:primitives c))]
     (cond
       (= :continue e) (do (ctx/update-mem! c assoc :plugging {:at feet :option option :ways ways}) :again)
       (= :done (:kind e)) (do (ctx/update-mem! c dissoc :plugging)
@@ -89,14 +89,14 @@
   it failed or was tried; a pit or pocket is not dug in a body already shut in (its walls did not keep the hostile off)."
   [c option ways]
   (when-not (or (flight/tried? c option)
-                (and (= :plug-dig option) (dig-cells/sealed-in? (:primitives c) :walls sh/default-roof-height)))
+                (and (= :plug-dig option) (dig-cells/sealed-in? (:primitives c) :walls sh-sense/default-roof-height)))
     (or (await (plug! c option ways)) (do (flight/tried! c option) nil))))
 
 (defn plugging-here?
   "Whether a plug was begun at the body's feet cell this flight and has not failed: it is finished before the walk goes on."
   [c]
   (let [{:keys [at option]} (:plugging (ctx/mem c))]
-    (and (= at (sh/feet (:primitives c))) (not (flight/tried? c option)))))
+    (and (= at (sh-sense/feet (:primitives c))) (not (flight/tried? c option)))))
 
 (defn ^:async plug-on!
   "The plug begun here, one more step."
@@ -173,13 +173,13 @@
       (cond
         hurt? (let [ids (map (fn [e] (.-id e)) (flight/near-known (:primitives c) #{} reach-radius reach-radius))]
                 (ctx/update-mem! c #(-> % (dissoc :quiet-from :hidden-since :hold-health) (update :reached (fnil into #{}) ids)))
-                (ctx/emit! c :retreat.hide-hurt :warn {:text "hurt while hidden: the refuge does not keep the hostile off" :pos (sh/feet (:primitives c))
+                (ctx/emit! c :retreat.hide-hurt :warn {:text "hurt while hidden: the refuge does not keep the hostile off" :pos (sh-sense/feet (:primitives c))
                                                        :hostiles (hostiles-known c)})
                 (if (= :again (await (pillar/raise! c))) :again (await (abandon-refuge! c))))
         breaker (let [name (.-name breaker)]
                   (ctx/update-mem! c #(-> % (dissoc :quiet-from :hidden-since :hold-health) (update :reached (fnil conj #{}) (.-id breaker))))
                   (ctx/emit! c :retreat.hide-breached :warn {:text (str "a " name " is near: the refuge does not keep it off, leaving before it strikes")
-                                                              :mob name :pos (sh/feet (:primitives c))})
+                                                              :mob name :pos (sh-sense/feet (:primitives c))})
                   (await (abandon-refuge! c)))
         quiet? (do (ctx/update-mem! c dissoc :quiet-from :hidden-since)
                    (flight/end-flight! c :hidden {:hold :quiet}))
@@ -203,6 +203,6 @@
         from (if (seq hostiles)
                (str/join ", " (map #(str (:name %) " at " (pr-str (:pos %))) hostiles))
                "a hostile heard, not seen")]
-    (ctx/emit! c :retreat_sealed :warn (merge {:text (str text "; hiding from " from (some->> (spent/text placed "refuge") (str "; "))) :pos (sh/feet (:primitives c)) :hostiles hostiles}
+    (ctx/emit! c :retreat_sealed :warn (merge {:text (str text "; hiding from " from (some->> (spent/text placed "refuge") (str "; "))) :pos (sh-sense/feet (:primitives c)) :hostiles hostiles}
                                               (when (seq placed) (spent/summary placed)))))
   :again)

@@ -9,7 +9,7 @@
             [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
             [jobs.lib.pass :as pass]
-            [jobs.lib.shelter :as shelter]
+            
             [jobs.lib.threats :as threats]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]

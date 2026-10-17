@@ -12,7 +12,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.escape :as escape]
             [jobs.lib.result :as result]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.util :as u]
             [jobs.survival.retreat-flight :as flight]
@@ -430,7 +430,7 @@
         fire? (under-fire? c)
         beaten (and (not fire?) (beaten? c))
         blind? (and fire? (not-any? #(and (combat/ranged? %) (danger-q/seen-only? %)) hostiles))
-        _ (when fire? (ctx/update-mem! c retry-covers (let [{:keys [x y z]} (sh/feet (:primitives c))] [x y z])))
+        _ (when fire? (ctx/update-mem! c retry-covers (let [{:keys [x y z]} (sh-sense/feet (:primitives c))] [x y z])))
         win? (and (not blind?)
                   (fight-wins? c (if (and (:hit-on-the-run (ctx/mem c)) (not fire?)) (hitters c hostiles) hostiles)))
         order (escape-order {:win? win?

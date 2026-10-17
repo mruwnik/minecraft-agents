@@ -9,7 +9,10 @@
             [engine.memory :as mem]
             [engine.scenario :as scenario]
             [engine.fake :as fake]
-            [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.beds :as sh-beds]
+            [jobs.lib.shelter.clock :as sh-clock]
+            [jobs.lib.shelter.inside :as sh-inside]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.survival.dig-in-cells :as dig-cells]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
@@ -87,12 +90,12 @@
     (tu/seeing-all (perception/wrap raw-p per))))
 
 (deftest a-body-buried-in-a-wide-dark-cave-is-unsafe-at-night
-  (is (>= (sh/cave-cells (seen-dark cave-blocks)) 16))
-  (is (< (sh/cave-cells (seen-dark tunnel-blocks)) 16) "its own 1-wide tunnel")
-  (is (true? (sh/open-cave? (seen-dark cave-blocks))))
-  (is (false? (sh/open-cave? (seen-dark tunnel-blocks))))
-  (is (true? (sh/unsafe-night? (seen-dark cave-blocks) sh/default-roof-height)))
-  (is (false? (sh/unsafe-night? (seen-dark tunnel-blocks) sh/default-roof-height))))
+  (is (>= (sh-sense/cave-cells (seen-dark cave-blocks)) 16))
+  (is (< (sh-sense/cave-cells (seen-dark tunnel-blocks)) 16) "its own 1-wide tunnel")
+  (is (true? (sh-sense/open-cave? (seen-dark cave-blocks))))
+  (is (false? (sh-sense/open-cave? (seen-dark tunnel-blocks))))
+  (is (true? (sh-sense/unsafe-night? (seen-dark cave-blocks) sh-sense/default-roof-height)))
+  (is (false? (sh-sense/unsafe-night? (seen-dark tunnel-blocks) sh-sense/default-roof-height))))
 
 (def dug-room-blocks
   "A mine's room the body dug: 5x4 cells, 2 high (ceiling at y 66), light 7."
@@ -101,12 +104,12 @@
 
 (deftest a-room-the-body-dug-is-not-a-cave
   (let [p (seen-dark dug-room-blocks {[0 64 0] [0 7] [0 65 0] [0 7]})]
-    (is (< (sh/cave-cells p) 16))
-    (is (false? (sh/open-cave? p)))
-    (is (false? (sh/unsafe-night? p sh/default-roof-height)))))
+    (is (< (sh-sense/cave-cells p) 16))
+    (is (false? (sh-sense/open-cave? p)))
+    (is (false? (sh-sense/unsafe-night? p sh-sense/default-roof-height)))))
 
 (deftest a-lit-cave-is-not-unsafe
-  (is (false? (sh/open-cave? (seen-dark cave-blocks {[0 64 0] [0 14] [0 65 0] [0 14]})))))
+  (is (false? (sh-sense/open-cave? (seen-dark cave-blocks {[0 64 0] [0 14] [0 65 0] [0 14]})))))
 
 (defn ^:async places-at-night
   "How many blocks the night job places in three ticks for a body that has seen blocks, in the dark."
@@ -142,9 +145,9 @@
           (is (empty? (emitted seen :go-to.night-sheltered))))))))
 
 (deftest night-without-light-data-falls-back-to-the-seen-roof
-  (is (sh/buried-by-column? (seen-fake {:time night :blocks (stone-above 2 1)})) "one seen block over the head, air above it")
-  (is (not (sh/buried-by-column? (seen-fake {:time night :blocks (stone-above 5 3)}))) "air over the head")
-  (is (not (sh/buried-by-column? (tu/fake {:time night :blocks (stone-above 2 1)}))) "nothing seen without a perception"))
+  (is (sh-sense/buried-by-column? (seen-fake {:time night :blocks (stone-above 2 1)})) "one seen block over the head, air above it")
+  (is (not (sh-sense/buried-by-column? (seen-fake {:time night :blocks (stone-above 5 3)}))) "air over the head")
+  (is (not (sh-sense/buried-by-column? (tu/fake {:time night :blocks (stone-above 2 1)}))) "nothing seen without a perception"))
 
 (defn buried-cells
   "buried-at? of each cell for a body at the origin looking up in the world, wrapped in perception after one sight pass."
@@ -154,7 +157,7 @@
         per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})
         p (perception/wrap raw-p per)]
     (perception/pass! per)
-    (mapv #(sh/buried-at? p %) cells)))
+    (mapv #(sh-sense/buried-at? p %) cells)))
 
 (deftest buried-at-judges-any-cell-by-its-sky-light-when-the-body-has-seen-it
   (are [world cell expected] (= [expected] (buried-cells world [cell]))
@@ -499,7 +502,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :blocks (merge floor {"0,65,0" "dirt" "0,66,0" "dirt"})})]
-          (is (nil? (sh/night-sheltered p nil)))
+          (is (nil? (sh-inside/night-sheltered p nil)))
           (core/submit! eng '(jobs.survival.night) {})
           (await (tick-n eng 6))
           (is (empty? (filter #(= :roofed (:night %)) (emitted seen :completed)))))))))
@@ -796,7 +799,7 @@
           (is (= 1 (count (entries eng :slept)))))))))
 
 (deftest ms-until-morning-counts-to-the-end-of-the-night-plus-a-margin
-  (are [t ms] (= ms (sh/ms-until-morning t))
+  (are [t ms] (= ms (sh-clock/ms-until-morning t))
     14000 475050
     12542 547950
     20000 175050
@@ -1112,7 +1115,7 @@
           (let [at2 (atom nil)
                 at4 (atom nil)]
             (dawn-after! p 7 (fn [n] (case n 2 (reset! at2 @tries)
-                                           4 (do (reset! at4 @tries) (swap! clock + (:ttl sh/sleep-failed-policy)))
+                                           4 (do (reset! at4 @tries) (swap! clock + (:ttl sh-beds/sleep-failed-policy)))
                                            nil)))
             (core/submit! eng '(jobs.survival.night {:max-days-awake 0}) {})
             (await (tick-nights eng clock 2))
@@ -1122,7 +1125,7 @@
 
 (deftest a-place-failure-holds-only-near-where-it-happened
   (let [p (tu/fake {:time night})]
-    (are [data held] (= held (sh/near-failed-place? p {:data data}))
+    (are [data held] (= held (sh-beds/near-failed-place? p {:data data}))
       {:pos {:x 0 :y 64 :z 0}} true
       {:pos {:x 3 :y 64 :z 0}} true
       {:pos {:x 20 :y 64 :z 0}} false
@@ -1477,7 +1480,7 @@
 (deftest ms-until-morning-follows-the-game-rate
   (settings/set-clock! 40 false :packet)
   (try
-    (is (= 238525 (sh/ms-until-morning 14000)) "the ticks at 25 ms, plus the same margin")
+    (is (= 238525 (sh-clock/ms-until-morning 14000)) "the ticks at 25 ms, plus the same margin")
     (finally (settings/set-clock! 20 false :assumed))))
 
 (defn reads-during
