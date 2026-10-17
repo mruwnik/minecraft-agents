@@ -10,7 +10,9 @@ const ACTS = ['dig', 'placeBlock', 'activateBlock', 'activateEntity', 'attack', 
 
 const f = n => Math.round(n * 100) / 100
 const vecText = v => v ? `${f(v.x)},${f(v.y)},${f(v.z)}` : '-'
-const argText = a => a?.position ? `${a.name ?? a.type ?? ''}@${vecText(a.position)}` : typeof a === 'object' ? JSON.stringify(a)?.slice(0, 60) : String(a)
+// the trace runs in every sweep (world-test-pool always passes --trace-dir), so an unprintable arg must never break the act
+const json = a => { try { return JSON.stringify(a)?.slice(0, 60) } catch { return '?' } }
+const argText = a => a?.position ? `${a.name ?? a.type ?? ''}@${vecText(a.position)}` : typeof a === 'object' ? json(a) : String(a)
 
 export function createRing (max = MAX_LINES) {
   const lines = []

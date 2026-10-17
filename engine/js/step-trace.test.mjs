@@ -43,3 +43,14 @@ test('the ring keeps only the latest lines', () => {
   ;[1, 2, 3, 4, 5].forEach(n => ring.push(`l${n}`))
   assert.equal(ring.text(), 'l3\nl4\nl5\n')
 })
+
+test('an act whose arg cannot be printed still runs', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'step-trace-'))
+  const bot = fakeBot()
+  const stop = traceSteps(bot, join(dir, 'steps.log'))
+  const cyclic = {}
+  cyclic.self = cyclic
+  assert.equal(await bot.dig(cyclic), 'dug')
+  stop()
+  rmSync(dir, { recursive: true })
+})
