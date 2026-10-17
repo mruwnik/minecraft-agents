@@ -1,5 +1,5 @@
 ;; Card 116b9335: jobs.movement.mount (world.mjs submit mount <id>): walk to a vehicle or mount and get on, then jobs.movement.leave-vehicle.
-;; Should-succeed: boat on land 6 away (walks, mounts); mount a boat in a pool then dismount onto the water (vehicle.left landed :in-water);
+;; Should-succeed: boat on land 6 away (walks, mounts); mount a boat in a pool then dismount onto the water (completed, landed :in-water);
 ;; saddled pig; mounting twice is :already.
 ;; Should-fail: cow (not-mountable), occupied minecart (occupied), no such entity (waits :no-vehicle), full inventory with an item in hand and a saddled pig (hand-full).
 ;; Should-succeed too: the same full inventory still boards a boat (no hand needed).
@@ -21,7 +21,7 @@
          [:job (jobs.movement.mount {:name "oak_boat"})]
          [:job (jobs.movement.leave-vehicle {})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.mount"}} :within-s 40 :of-job true}
-            {:event {:source :job :kind :vehicle.left :data {:landed :in-water}} :within-s 40 :of-job true}]}
+            {:event {:source :job :kind :completed :data {:landed :in-water}} :within-s 40 :of-job true}]}
   {:name "mount-saddled-pig"
    :act [[:summon "pig" [12.5 0 16.5] "{equipment:{saddle:{id:\"minecraft:saddle\",count:1}}}"]
          [:job (jobs.movement.mount {:name "pig"})]]

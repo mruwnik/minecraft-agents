@@ -114,7 +114,7 @@
                (select-keys (await (ending-of {:self {:vehicle 9} :entities [boat]} '(jobs.movement.leave-vehicle {}))) [:event])))
         (is (= {:event :stopped :kind :nothing-possible :reason :dismount-failed}
                (await (ending-of {:self {:vehicle 9} :entities [(assoc boat :dismountFails true)] :dismountFails true}
-                                 '(jobs.movement.leave-vehicle {:max-tries 2 :wait-ms 1})))))))))
+                                 '(jobs.movement.leave-vehicle {})))))))))
 
 (def lake (into {} (for [x (range 0 21) z (range 0 21)] [(str x ",63," z) "water"])))
 

@@ -1,6 +1,7 @@
 (ns jobs.movement.leave-vehicle
   (:require [jobs.lib.ready :as ready]
             [engine.args :as a]
+            [engine.settings :as settings]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
@@ -11,18 +12,15 @@
 
 (def doc
   "Get off whatever the body rides (boat, raft, minecart, mount). Ends at once when on foot.
-  Faces :toward when given, else the nearest dry cell within :radius of the vehicle
+  Faces :toward when given, else the nearest dry cell within ::dry-radius of the vehicle
   (feet and head air over a solid, non-fluid block), else leaves without a look. The server picks the exit from that look.
   Then it uses the dismount primitive (sneak).
-  On success: info vehicle.left {:pos :landed}, :landed being :dry or :in-water, and the call is done with that map as data.
-  A failed dismount is retried in the same run, the wait doubling from :wait-ms up to 1 s. After :max-tries it warns vehicle.dismount_failed {:tries :status}
-  and ends nothing-possible :dismount-failed (data :tries :status), with the body still aboard. On foot at the start the call is refused (condition :not-mounted). Never :continue. The :mounted trigger runs it (cooldown persistence: a body still aboard is tried again 30 s later).")
+  On success the call is done with data {:pos :landed}, :landed being :dry or :in-water.
+  A failed dismount is retried in the same run after ::retry-wait-s. After ::max-tries it ends nothing-possible :dismount-failed
+  (data :tries :status), with the body still aboard. On foot at the start the call is refused (condition :not-mounted). Never :continue. The :mounted trigger runs it (cooldown persistence: a body still aboard is tried again 30 s later).")
 
 (a/defargs args
-  {:toward {:doc "a position {:x :y :z} to face when getting off (its cell's centre); nil picks a dry cell" :spec ::a/pos :default nil}
-   :max-tries {:doc "dismounts tried before giving up" :spec (a/int-in 1 nil) :default 8}
-   :wait-ms {:doc "the wait after the first failed dismount; it doubles per try, at most 1000" :spec (a/num-in 0 nil) :default 50}
-   :radius {:doc "dry cells this many blocks (horizontally) from the vehicle are faced" :spec (a/num-in 0 nil) :default 2}})
+  {:toward {:doc "a position {:x :y :z} to face when getting off (its cell's centre); nil picks a dry cell" :spec ::a/pos :default nil}})
 
 (def not-mounted
   "Later :not-mounted when the body is on foot."
@@ -31,7 +29,10 @@
 (def can-start? not-mounted)
 
 (a/defargs settings
-  {::job-time-s {:default 30 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 30 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
+   ::max-tries {:default 8 :doc "Dismounts tried before giving up." :spec (a/int-in 1 nil)}
+   ::retry-wait-s {:default 0.1 :doc "Seconds waited after a failed dismount." :spec (a/num-in 0 nil)}
+   ::dry-radius {:default 2 :doc "Dry cells this many blocks (horizontally) from the vehicle are faced." :spec (a/num-in 0 nil)}})
 
 (def meta {:category :reflex})
 
@@ -48,9 +49,8 @@
       (contract/later :aboard "still aboard" :units :vehicles :done 0 :left 1)
       (contract/ok :ashore "off the vehicle" :units :vehicles :done 1 :left 0))))
 
-(defn quote-of [c]
-  (let [{:keys [max-tries wait-ms]} (:args c)]
-    {:uses {:job-time [0.1 0.5 (+ 1 (* max-tries (min 1 (/ wait-ms 1000))))]}}))
+(defn quote-of [_c]
+  {:uses {:job-time [0.1 0.5 (+ 1 (* (settings/get settings ::max-tries) (settings/get settings ::retry-wait-s)))]}})
 
 (defn vehicle-pos
   "Where the ridden entity is, else the body."
@@ -62,9 +62,8 @@
 (defn yaw-for
   "The yaw to face when getting off, or nil."
   [c v]
-  (let [{:keys [toward radius]} (:args c)
-        from (vehicle-pos c v)
-        target (or toward (vehicle/nearest-dry-cell (:primitives c) from (or radius 2)))]
+  (let [from (vehicle-pos c v)
+        target (or (:toward (:args c)) (vehicle/nearest-dry-cell (:primitives c) from (settings/get settings ::dry-radius)))]
     (when target (vehicle/yaw-toward from (vehicle/centre target)))))
 
 (defn landed-in-water?
@@ -75,8 +74,7 @@
 
 (defn ^:async round [c]
   (let [p (:primitives c)
-        max-tries (:max-tries (:args c) 8)
-        wait-ms (:wait-ms (:args c) 50)]
+        max-tries (settings/get settings ::max-tries)]
     (loop [tries 0]
       (let [v (vehicle/vehicle-of (.self p))]
         (if-not v
@@ -87,11 +85,9 @@
               (let [self (.self p)
                     pos (u/pos-of (.-pos r))
                     out {:pos pos :landed (if (landed-in-water? p pos (.-inWater self)) :in-water :dry)}]
-                (ctx/emit! c :vehicle.left :info out)
                 (ctx/end c :done nil out))
               (let [tries (inc tries)]
                 (if (< tries max-tries)
-                  (let [r (await (child/pause! c (/ (min 1000 (* wait-ms (bit-shift-left 1 (dec tries)))) 1000) :dismount-retry))]
+                  (let [r (await (child/pause! c (settings/get settings ::retry-wait-s) :dismount-retry))]
                     (if (= :continue r) :continue (recur tries)))
-                  (do (ctx/emit! c :vehicle.dismount_failed :warn {:tries tries :status (.-status r)})
-                      (ctx/end c :nothing-possible :dismount-failed {:tries tries :status (.-status r)})))))))))))
+                  (ctx/end c :nothing-possible :dismount-failed {:tries tries :status (.-status r)}))))))))))

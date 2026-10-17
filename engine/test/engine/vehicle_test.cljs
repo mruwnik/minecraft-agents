@@ -2,6 +2,7 @@
   "jobs.lib.vehicle (what the body rides, the vehicle hold), the :mounted trigger and
   jobs.movement.leave-vehicle against the fake world."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.settings :as settings]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.events :as events]
@@ -133,7 +134,7 @@
           (is (= {:kind :done :cause nil :data {:pos {:x 1 :y 64 :z 2} :landed :dry}} r))
           (is (= [{:yaw 0}] (dismount-args p)) "south, toward (1, 64, 2)")
           (is (nil? (vehicle/vehicle-of (.self p))))
-          (is (some #(= [:vehicle.left :info {:pos {:x 1 :y 64 :z 2} :landed :dry}] %) seen)))))))
+          (is (empty? (filter #(= :vehicle.left (first %)) seen)) "the ending carries it"))))))
 
 (deftest a-stale-in-water-flag-does-not-make-a-dry-landing-water
   (async done
@@ -165,28 +166,28 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (setup-owner (aboard {:dismountFails true}))
-              c (bare-ctx p {:max-tries 2 :wait-ms 1})
-              r (await (leave/round c))]
+              c (bare-ctx p {})
+              r (await (settings/with-settings {:jobs.movement.leave-vehicle/max-tries 2} #(leave/round c)))]
           (is (= {:kind :nothing-possible :cause :dismount-failed :data {:tries 2 :status "timeout"}} r))
           (is (= 2 (count (calls p "dismount"))))
-          (is (= [[:vehicle.dismount_failed :warn {:tries 2 :status "timeout"}]]
-                 (filterv #(= :vehicle.dismount_failed (first %)) @(:seen c)))))))))
+          (is (empty? (filter #(= :vehicle.dismount_failed (first %)) @(:seen c))) "the ending carries it"))))))
 
 (deftest the-wait-between-dismount-tries-is-a-noop-pause-child
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [p (setup-owner (aboard {:dismountFails true}))
-              c (bare-ctx p {:max-tries 3 :wait-ms 100})
-              _ (await (leave/round c))]
-          (is (= [{:seconds 0.1 :why :dismount-retry} {:seconds 0.2 :why :dismount-retry}] @(:pauses c))))))))
+              c (bare-ctx p {})
+              _ (await (settings/with-settings {:jobs.movement.leave-vehicle/max-tries 3} #(leave/round c)))]
+          (is (= [{:seconds 0.1 :why :dismount-retry} {:seconds 0.1 :why :dismount-retry}] @(:pauses c))
+              "a fixed wait, no doubling"))))))
 
 (deftest the-default-run-keeps-trying-far-longer-than-two-tries
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [p (setup-owner (aboard {:dismountFails true}))
-              c (bare-ctx p {:wait-ms 1})
+              c (bare-ctx p {})
               _ (await (leave/round c))]
           (is (= 8 (count (calls p "dismount")))))))))
 
