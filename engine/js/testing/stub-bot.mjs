@@ -4,7 +4,7 @@
 // methods named in `reject` ({name: message}) reject with an Error carrying that message.
 import vec3 from 'vec3'
 import { EventEmitter } from 'node:events'
-import constants from '../src/engine/constants.json' with { type: 'json' }
+import constants from '../../src/engine/constants.json' with { type: 'json' }
 
 const { Vec3 } = vec3
 
