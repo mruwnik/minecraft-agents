@@ -155,6 +155,19 @@
             (is (= 1 (:collected result)))
             (is (= 1 (bd/carried p "oak_log")))))))))
 
+(deftest a-search-walks-to-cells-whose-floor-it-has-not-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body :blocks wall})]
+          (aset p "sensedAt" (fn [pos] (if (and (>= (.-x pos) 3) (zero? (.-z ^js (.self p))))
+                                         #js {:unknown true}
+                                         (.blockAt p pos))))
+          (drop! p [4 64 0] "oak_log")
+          (let [result (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60))]
+            (is (= 1 (:collected result)))
+            (is (= 1 (bd/carried p "oak_log")))))))))
+
 (deftest a-drop-behind-a-wall-stays-unseen-without-a-search
   (async done
     (tu/run-async done

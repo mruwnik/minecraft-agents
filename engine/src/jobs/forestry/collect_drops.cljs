@@ -26,8 +26,8 @@
   the body has seen the floor under it solid and safe and the cells round it (no lava, fluid or cave opening, nothing
   hazardous beside it), the walk dropping one block at most; else it is left, with a debug collect-drops.left
   {:pos :reason :unseen-floor|:unseen-cell|:unsafe-floor|:too-deep}. A drop still falling is judged at rest.
-  With :search, when fewer than :want items (those named in :want-items, else any) were collected and no item is in sight (trunks or terrain hide drops), the body walks (a go-to child, range 0)
-  to seen standable cells round the anchor, nearest first, and looks again at each, until an item is seen or the cells within :search
+  With :search, when fewer than :want items (those named in :want-items, else any) were collected and no item is in sight (trunks or terrain hide drops), the body walks (a go-to child)
+  to standable cells round the anchor, nearest first (a cell whose floor is unseen counts when nothing seen forbids it: walking there is how it gets looked at), and looks again at each, until an item is seen or the cells within :search
   blocks are tried. Underground a walk goes on at night; a search that go-to made wait :search-waits calls in a row ends with :reason :search-waited.
   While it runs it holds its work area (jobs.lib.loose :collecting), so the :loose-items reflex leaves those drops to it.
   With :ids, ids not in sight when none is left to try are booked as one :left {:reason :unseen :ids [...] :last {id [x y z]}}, the cell each was last seen in.
@@ -223,9 +223,20 @@
   (and (every? #(u/seen-block p {:x x :y % :z z}) [(dec y) y (inc y)])
        (reach/standable-cell? p cell (fn [x y z] (reach/kind-of (u/seen-block p {:x x :y y :z z}))))))
 
+(defn unseen-open?
+  "Whether cell may be stood on though some of its feet, head or floor are unseen: every seen one is as a standable cell needs
+  it, at least one is unseen. Walking there is how the body gets to look."
+  [p {:keys [x y z]}]
+  (let [[floor feet head] (map #(u/seen-block p {:x x :y % :z z}) [(dec y) y (inc y)])
+        free? #(or (nil? %) (identical? :open (reach/kind-of %)))]
+    (and (not (and floor feet head))
+         (or (nil? floor) (identical? :solid (reach/kind-of floor)))
+         (free? feet) (free? head))))
+
 (defn search-cells
-  "Standable cells round the anchor at 2 blocks and at :search blocks in the eight directions, at the anchor's height or
-  one above or below, nearest to the body first."
+  "Cells round the anchor at 2 blocks and at :search blocks in the eight directions, nearest to the body first: per column the
+  standable one at the anchor's height or one above or below, else (nothing seen there, a wall in the way) the anchor's height
+  when what is seen of it allows standing (unseen-open?)."
   [c anchor]
   (let [p (:primitives c)
         {:keys [search]} (:args c)
@@ -236,7 +247,12 @@
                     :let [cell {:x (+ ax (* d dx)) :y (+ ay dy) :z (+ az (* d dz))}]
                     :when (seen-standable? p cell)]
                 cell)
-        by-column (vals (group-by (juxt :x :z) cells))]
+        seen-columns (set (map (juxt :x :z) cells))
+        unseen (for [d dists dx [-1 0 1] dz [-1 0 1] :when (not (and (zero? dx) (zero? dz)))
+                     :let [cell {:x (+ ax (* d dx)) :y ay :z (+ az (* d dz))}]
+                     :when (and (not (seen-columns [(:x cell) (:z cell)])) (unseen-open? p cell))]
+                 cell)
+        by-column (vals (group-by (juxt :x :z) (concat cells unseen)))]
     (->> by-column (map first) (sort-by #(u/dist (u/self-pos c) %)))))
 
 (defn wanted-count
@@ -251,7 +267,7 @@
   (let [queue (or (:search-queue (ctx/mem c))
                   (let [q (vec (search-cells c anchor))] (ctx/update-mem! c assoc :search-queue q) q))]
     (when-let [cell (first queue)]
-      (let [r (await (child/run!* c :search 'jobs.movement.go-to (walk-args c {:pos (u/cell-vec cell) :range 0 :ways #{:walk :clear-seal}})))]
+      (let [r (await (child/run!* c :search 'jobs.movement.go-to (walk-args c {:pos (u/cell-vec cell) :range (if (seen-standable? (:primitives c) cell) 0 1) :ways #{:walk :clear-seal}})))]
         (if (= :continue r)
           (if (>= (:search-waited (ctx/mem c) 0) (search-waits))
             :waited
