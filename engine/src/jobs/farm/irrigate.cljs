@@ -73,8 +73,8 @@
   "Whether every block a water source could wet the cell from is seen."
   [p {:keys [x y z]}]
   (let [r (find-spot/water-reach)]
-    (every? #(u/seen-name p {:x (+ x %1) :y (+ y %3) :z (+ z %2)})
-            (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy [0 1]] [dx dz dy]))))
+    (every? #(u/seen-name p %)
+            (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy [0 1]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)}))))
 
 (defn readings
   "The field cells by state: :dry (reach seen, no water), :unknown (water absent, reach partly unseen), :wet."

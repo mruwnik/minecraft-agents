@@ -80,6 +80,17 @@
               r (await (tu/child-outcome eng job (args 3) 20))]
           (is (= {:status :stopped :reason :nothing-seen} (ending-of r))))))))
 
+(deftest a-cell-whose-whole-reach-is-seen-is-dry-and-gets-water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory bucket :blocks (strip 3)})
+              _ (tu/seeing-within p 8)
+              r (await (tu/child-outcome eng job (args 3) 40))]
+          (is (= [] (:unknown r)))
+          (is (= [] (:dry r)))
+          (is (= 1 (count (:poured r)))))))))
+
 (deftest a-cell-with-unseen-reach-is-unknown-not-dry
   (async done
     (tu/run-async done
