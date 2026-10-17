@@ -2,6 +2,8 @@
 ;; S: steps to a free side cell, else digs the feet block (shovel carried; water beside is allowed). N: slab, farmland, snow layer,
 ;; soul sand at the feet never fire :wedged. F: lava beside / above the feet cell, bedrock at the feet: no dig, no step into lava,
 ;; the job ending :stopped :blocked and no refire within the quiet period.
+;; s1 waits for the sand to land: a body saved inside the previous case's sand fires the reflex before t0, which would
+;; decide the fired/ended expectations before this case's sand falls.
 ;; Note: the runner starts the body BEFORE it clears the plot, so a body saved inside the previous case's wedge fires once before
 ;; t0 (job j1, and an :unwedge-blocked entry for that cell). F cases therefore tp the body out at the end, and the no-refire
 ;; check names jobs j2..j6 (the case's own job is j1 when the body starts clean, as it does after a previous F case).
@@ -14,14 +16,16 @@
  :cases
  [{:name "s1-steps-to-free-side-1"
    :blocks [[:set [17 -1 16] "stone"]]
-   :act [[:summon "falling_block" [16.5 4 16.5] "{BlockState:{Name:\"minecraft:sand\"},Time:1}"]]
+   :act [[:summon "falling_block" [16.5 4 16.5] "{BlockState:{Name:\"minecraft:sand\"},Time:1}"]
+         [:until-rcon "execute positioned $X $Y $Z positioned ~16 ~ ~16 if block ~ ~ ~ sand" "passed" 20]]
    :expect [{:event {:source :reflex :kind :fired} :within-s 15}
             {:event {:source :reflex :kind :ended} :within-s 30}
             {:no-event {:source :job :kind :stopped :data {:reason :blocked}} :for-s 30 :until {:source :reflex :kind :ended}}]
    :after [[:block [16 0 16] "sand"]]}
   {:name "s1-steps-to-free-side-2"
    :blocks [[:set [17 -1 16] "stone"] [:set [15 0 16] "stone"] [:set [15 1 16] "stone"] [:set [16 0 17] "stone"] [:set [16 1 17] "stone"] [:set [16 0 15] "stone"] [:set [16 1 15] "stone"]]
-   :act [[:summon "falling_block" [16.5 4 16.5] "{BlockState:{Name:\"minecraft:sand\"},Time:1}"]]
+   :act [[:summon "falling_block" [16.5 4 16.5] "{BlockState:{Name:\"minecraft:sand\"},Time:1}"]
+         [:until-rcon "execute positioned $X $Y $Z positioned ~16 ~ ~16 if block ~ ~ ~ sand" "passed" 20] [:until-pos {:x-min 17} 20]]
    :expect [{:event {:source :reflex :kind :fired} :within-s 15}
             {:event {:source :reflex :kind :ended} :within-s 30}
             {:no-event {:source :job :kind :stopped :data {:reason :blocked}} :for-s 30 :until {:source :reflex :kind :ended}}]

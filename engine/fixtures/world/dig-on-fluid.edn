@@ -1,6 +1,7 @@
 ;; jobs.blocks.dig :on-fluid and jobs.gather.mine :wet (card d5e3748c): stone beside a water source (a one-cell
 ;; pocket at [19 0 16], walled on four sides and open on top; every stone cell touches it), a dry stone at [14 0 16]; bedrock floor so mine sees only that stone.
-;; The dig cases stand on a stone step at [16 0 16] (eye 2.6): from the floor the water surface lies at a grazing angle behind the stone, unseen, and an unseen cell reads as stone.
+;; The dig cases stand on a two-stone pillar at [17 0 16] (eye 3.6): sight is one ray to a cell's centre, and from a lower eye that ray to the water
+;; clips the target stone, so the water reads unseen, and an unseen cell reads as stone.
 {:defaults
  {:tags [:blocks :mine :jobs] :time :any
   :plot {:height 8 :floor "bedrock"}
@@ -9,21 +10,21 @@
   :body {:at [16.5 0 16.5] :inventory [["iron_pickaxe" 1]]}}
  :cases
  [{:name "default-waits-on-hazard"
-   :blocks [[:set [16 0 16] "stone"]]
-   :body {:at [16.5 1 16.5]}
+   :blocks [[:set [17 0 16] "stone"] [:set [17 1 16] "stone"]]
+   :body {:at [17.5 2 16.5]}
    :act [[:job (jobs.blocks.dig {:pos #at [18 0 16]})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :hazard}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:dug [:any]}} :for-s 30 :until {:source :job :kind :waiting :data {:reason :hazard}}}]
    :after [[:block [18 0 16] "stone"]]}
   {:name "fail-ends-at-once-with-hint"
-   :blocks [[:set [16 0 16] "stone"]]
-   :body {:at [16.5 1 16.5]}
+   :blocks [[:set [17 0 16] "stone"] [:set [17 1 16] "stone"]]
+   :body {:at [17.5 2 16.5]}
    :act [[:job (jobs.blocks.dig {:pos #at [18 0 16] :on-fluid :fail})]]
    :expect [{:event {:source :job :kind :stopped :data {:dug false :reason :fluid-adjacent}} :within-s 30 :of-job true}]
    :after [[:block [18 0 16] "stone"]]}
   {:name "fail-with-accept-digs"
-   :blocks [[:set [16 0 16] "stone"]]
-   :body {:at [16.5 1 16.5]}
+   :blocks [[:set [17 0 16] "stone"] [:set [17 1 16] "stone"]]
+   :body {:at [17.5 2 16.5]}
    :act [[:job (jobs.blocks.dig {:pos #at [18 0 16] :on-fluid :fail :accept #{:fluid-adjacent}})]]
    :expect [{:event {:source :job :kind :completed :data {:dug true :reason :dug}} :within-s 60 :of-job true}]
    :after [[:item "cobblestone" [:>= 1]]]}
