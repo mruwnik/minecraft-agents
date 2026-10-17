@@ -17,7 +17,7 @@
 (def doc
   "Get :count obsidian by pouring water on a seen lava source and mining the result with a diamond pickaxe.
   Takes seen obsidian first (jobs.gather.mine). Else it needs a water bucket carried (an empty bucket is filled at seen water; no bucket at all is fetched, :fetch) and a seen
-  lava cell with seen air above it, a clickable air cell to pour at (that one, or one level with it and beside it, the water then runs over) and a stand cell beside the pour cell (a standable cell with no lava beside it, never over lava):
+  lava cell with seen air above it (with none seen, it walks to the cells a sealed mine breach showed lava at, body memory :breach-behind, looks again and forgets the entry), a clickable air cell to pour at (that one, or one level with it and beside it, the water then runs over) and a stand cell beside the pour cell (a standable cell with no lava beside it, never over lava):
   it walks to the stand (go-to, which keeps off lava), pours the water there, waits for the lava to turn to obsidian,
   scoops the water back up (also in the cleanup of a cut run), and mines the obsidian (a mine child, which fetches its pickaxe from a chest or a craft).
   Ends :done {:got n} at :count obsidian gained. Else it ends with :got n in its data: condition-failed :no-bucket (no water bucket and no bucket
@@ -91,6 +91,17 @@
                          {:lava pos :above above :pour pour :stand stand})))))
          (sort-by #(u/dist here (:stand %))))))
 
+(defn breach-lava
+  "The remembered breach entries (data of body memory :breach-behind, nearest first) of this dimension that showed lava."
+  [c]
+  (let [p (:primitives c)
+        dim (.-dimension (.self p))
+        here (u/self-pos c)]
+    (->> (ctx/entries c :breach-behind)
+         (map :data)
+         (filter #(and (= dim (:dim %)) (some #{"lava"} (:names %))))
+         (sort-by #(u/dist here (zipmap [:x :y :z] (first (:cells %))))))))
+
 (defn gained [c] (- (carried c "obsidian") (:base (ctx/mem c) (carried c "obsidian"))))
 
 (defn end
@@ -109,6 +120,17 @@
       (and (= :done (:kind e)) (:arrived (:data e))) :there
       (and (= :done (:kind e)) (:leg (:data e))) :continue
       :else :blocked)))
+
+(defn ^:async visit-breach!
+  "No lava is seen: walk to within 4 of the nearest remembered breach cell, then forget the entry, whatever the walk did (remembered
+  lava is stale; if it is still there the next step sees it). :again, or :continue while the walk waits."
+  [c entry]
+  (let [[x y z] (first (:cells entry))
+        w (await (walk! c {:x x :y y :z z} 4))]
+    (if (= :continue w)
+      :continue
+      (do (ctx/forget-where! c :breach-behind #(= entry %))
+          :again))))
 
 (defn ^:async fill-bucket!
   "An empty bucket carried and water seen: walk to the water and scoop it. :again when filled, :blocked when not."
@@ -215,7 +237,9 @@
                      (do (ctx/update-mem! c #(-> % (update :tried (fnil conj []) (:lava site)) (update :failed (fnil inc 0))))
                          :again))
             (end c :nothing-possible :unreachable (str "could not walk to the stand at " (pr-str (:stand site))))))
-        (end c :condition-failed :no-lava "no seen lava with open air above and a safe stand beside it")))))
+        (if-let [entry (first (breach-lava c))]
+          (await (visit-breach! c entry))
+          (end c :condition-failed :no-lava "no seen lava with open air above and a safe stand beside it"))))))
 
 (defn ^:async round [c]
   (ctx/update-mem! c update :base #(or % (carried c "obsidian")))
@@ -243,7 +267,7 @@
 (defn lava-cause
   "Cause :no-lava before the start: no obsidian seen to mine and no pour site."
   [c]
-  (when (and (empty? (seen-of c ["obsidian"])) (empty? (sites c)))
+  (when (and (empty? (seen-of c ["obsidian"])) (empty? (sites c)) (empty? (breach-lava c)))
     {:reason :no-lava}))
 
 (def can-start?
