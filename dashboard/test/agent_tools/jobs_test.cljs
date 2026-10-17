@@ -316,9 +316,16 @@
   (let [wake {:wake :idle :jobs [{:job "j7" :name "jobs.blocks.dig"}
                                  {:job "j8" :name "jobs.survival.respond-to-hostile" :holding {:reason "hiding"}}]}
         note (:note (jobs/wait-result {:ok true} "j7" wake))]
-    (is (str/includes? note "j7 is still queued or cut by a reflex, not lost"))
+    (is (str/includes? note "j7 is still queued, running or cut by a reflex, not lost"))
     (is (str/includes? note "jobs.survival.respond-to-hostile"))
     (is (str/includes? note "./bin/jobs show j7"))))
+
+(deftest a-wait-woken-by-a-notice-says-what-the-job-is-doing-now
+  (let [wake {:wake :notice}
+        note-of #(:note (jobs/wait-result {:ok true} "j7" wake %))]
+    (is (str/includes? (note-of {:status :running}) "j7 is running, not lost"))
+    (is (not (str/includes? (note-of {:status :running}) "queued")))
+    (is (str/includes? (note-of {:status :queued}) "j7 is queued"))))
 
 (deftest a-waited-submit-under-manual-control-says-who-holds-the-body
   (let [state (state-dir)

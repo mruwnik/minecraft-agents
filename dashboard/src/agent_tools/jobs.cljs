@@ -353,19 +353,29 @@
 (defn follow-command [id] (str "./bin/observe --wait --watch " id))
 
 (defn unfinished-note
-  "Said when a wait ends before the job does: the job is not lost, whatever held the body, and where its result will be."
-  [id wake]
-  (let [holders (->> (:jobs wake) (filter :holding) (keep :name))]
-    (str id " is still queued or cut by a reflex, not lost"
-         (when (seq holders) (str " (holding: " (str/join ", " holders) ")"))
-         "; it runs when the body is free. Result later: ./bin/jobs show " id ", or keep waiting: " (follow-command id))))
+  "Said when a wait ends before the job does: the job is not lost, what it is doing now (now: job-now's map, nil when
+  unknown), and where its result will be."
+  [id wake now]
+  (let [holders (->> (:jobs wake) (filter :holding) (keep :name))
+        tail (str ". Result later: ./bin/jobs show " id ", or keep waiting: " (follow-command id))]
+    (str id
+         (case (:status now)
+           :running " is running, not lost"
+           (:queued :resuming) (str " is " (name (:status now)) " (waiting its turn or cut by a reflex), not lost"
+                                    (when (seq holders) (str " (holding: " (str/join ", " holders) ")"))
+                                    "; it runs when the body is free")
+           (str " is still queued, running or cut by a reflex, not lost"
+                (when (seq holders) (str " (holding: " (str/join ", " holders) ")"))
+                "; it runs when the body is free"))
+         tail)))
 
 (defn wait-result
   "The submit answer with the wake that ended the wait under :wait, and :follow and :note when the job had not ended by then."
-  [answer id wake]
-  (cond-> (assoc answer :wait wake)
-    (not (and (= :job-finished (:wake wake)) (= id (:job wake))))
-    (assoc :follow (follow-command id) :note (unfinished-note id wake))))
+  ([answer id wake] (wait-result answer id wake nil))
+  ([answer id wake now]
+   (cond-> (assoc answer :wait wake)
+     (not (and (= :job-finished (:wake wake)) (= id (:job wake))))
+     (assoc :follow (follow-command id) :note (unfinished-note id wake now)))))
 
 (defn job-now
   "A promise of the job as show prints it (status, waiting reason), so a wait that ended first says what holds the job; nil when unreadable."
@@ -397,10 +407,11 @@
                                    (let [waited (wait-result answer id wake)]
                                      (.then (if (:follow waited) (job-now r id get! opts) (js/Promise.resolve nil))
                                             (fn [now]
+                                              (let [waited (wait-result answer id wake now)]
                                               (output (str (data/write-edn (-> (with-hint r waited (when (:follow waited) manual))
                                                                                (cond-> now (assoc :now now))
                                                                                (assoc :vitals report))) "\n"))
-                                              (if (:follow waited) 1 0))))))))))))))
+                                              (if (:follow waited) 1 0)))))))))))))))
 
 (defn clash-hint [body submitted {:keys [id name label status]}]
   (str id " " name (when label (str " (" label ")")) " is " (cljs.core/name status) " on this body; submitting " submitted " can undo its work (two digs undercut each other). "
