@@ -510,6 +510,16 @@
           (await (run-reflex eng {:free 2} {}))
           (is (zero? (count (calls p "toss")))))))))
 
+(deftest a-body-that-has-seen-no-cell-yet-looks-around-before-judging-itself-walled-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory (many "junk" 35)})
+              omniscient (.-sensedAt p)]
+          (aset p "sensedAt" (fn [pos] (if (empty? (calls p "look")) #js {:unknown true} (omniscient pos))))
+          (await (run-reflex eng {:free 2} {}))
+          (is (pos? (count (calls p "toss"))) "unseen is not walled: it looked, saw the open cells, tossed"))))))
+
 (deftest tosses-that-never-make-room-end-by-the-call-time
   (async done
     (tu/run-async done

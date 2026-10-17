@@ -39,7 +39,7 @@
   3. Without a usable chest, the stack of least worth is thrown. A stack qualifies when item-worth is
      below :toss-below, and it is thrown whole and only while the name's floor stays carried. Cheapest first,
      then the one picked up longest ago (:picked-up entries), then the smaller stack. The body turns to the first
-     of the four directions with two free cells ahead at eye level and tosses; with none (walled in) nothing is
+     of the four directions with two free cells ahead at eye level and tosses; with none (walled in, after one look around) nothing is
      thrown or swapped, since it would come straight back.
   After tossing, the cleanup export (however the call ends) walks up to :away blocks from where the items were thrown (a go-to child; the farthest cell back
   that is no seen obstacle, none: no walk), so it does not pick them up again.
@@ -217,6 +217,17 @@
                 (sort-by (fn [[dx dz]] (+ (* dx (- (:x away) (:x feet))) (* dz (- (:z away) (:z feet))))) cardinals)
                 cardinals)]
     (first (filter #(free-cell? p feet %) order))))
+
+(defn ^:async direction!
+  "direction, after one look around when none is free yet (once per run, tracked in run's :looked): cells never
+  looked at, as just after arriving, are not walls."
+  [c run]
+  (let [p (:primitives c)]
+    (or (direction p nil)
+        (when-not (:looked @run)
+          (swap! run assoc :looked true)
+          (await (look/glance! c (vals look/headings)))
+          (direction p nil)))))
 
 (defn unusable?
   [c chest]
@@ -470,7 +481,7 @@
         {:keys [inventory keep recency] :as st} (state c)
         chest (when-not (:chest-done @run) (usable-chest c))
         names (deposit-names inventory keep recency)
-        dir (direction p nil)
+        dir (await (direction! c run))
         swap (when (and dir (zero? free-now)) (swap-target c st))
         order (when dir (toss-order inventory keep recency toss-below))]
     (cond
@@ -485,5 +496,5 @@
   "One whole attempt: settle intents left by a cut, then step! until it ends."
   [c]
   (await (settle-intents! c))
-  (let [run (atom {:chest-done false})]
+  (let [run (atom {:chest-done false :looked false})]
     (await (pace/steps! c #(step! c run)))))
