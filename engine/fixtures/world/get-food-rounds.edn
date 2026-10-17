@@ -10,7 +10,7 @@
               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}
              {:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}]
   :body {:at [4.5 0 16.5] :settle-s 2}
-  :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+  :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
         [:rcon "damage $BODY 5 minecraft:generic"]]
   :limit-s 90}
  :cases
@@ -42,14 +42,14 @@
   {:name "s3-hunt-cow-a"
    :body {:inventory [["iron_sword" 1]]}
    :act [[:summon "cow" [14.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [14.5 0 20.5] "{NoAI:1b}"] [:summon "cow" [14.5 0 12.5] "{NoAI:1b}"]
-         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :stopped :reason :no-food}} :within-s 80}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}
   {:name "s3-hunt-cow-b"
    :body {:inventory [["iron_sword" 1]]}
    :act [[:summon "cow" [10.5 0 24.5] "{NoAI:1b}"] [:summon "cow" [14.5 0 24.5] "{NoAI:1b}"] [:summon "cow" [14.5 0 28.5] "{NoAI:1b}"]
-         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :stopped :reason :no-food}} :within-s 80}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}
@@ -58,7 +58,7 @@
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}
               {:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"] [:wait-s 75]] ; hold: the declined round must stay quiet past the 60 s window
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 30}
             {:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
@@ -74,7 +74,7 @@
    :body {:at [2.5 0 16.5]}
    :blocks [[:set [60 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:8}]}"]]
    :memory [{:kind :food-source :data {:pos #xyz [60 0 16] :kind :chest}}]
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:await {:source :reflex :kind :fired :context {:reflex-id :hungry}} 30]
          [:wait-s 1]

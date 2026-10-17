@@ -234,7 +234,7 @@
         kept (.filter arr (fn [m] (not= tag (.-by m))))]
     (if (= (.-length kept) (.-length arr)) text (markers-text kept))))
 
-(def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set :restart-body :cli :http :until :until-seen :until-rcon :until-pos})
+(def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set :restart-body :cli :http :until :until-seen :until-rcon :until-effect-gone :until-pos})
 (def after-kinds #{:block :not-block :any-not-block :body-near :body-far :item :entities :memory :file})
 (def http-ops #{:submit :cancel :cancel-all :take :release})
 (def cli-tools #{"jobs" "drive" "plans" "map" "world" "say" "time" "triggers" "entities" "observe" "workspace" "blueprints" "quote"})
@@ -258,6 +258,7 @@
     :until (not (and (= 3 (count step)) (number? b) (vector? a) (or (#{:memory :file} (first a)) (and (= :cli (first a)) (not (step-problem? a))))))
     :until-seen (not (and (= 3 (count step)) (number? b) (map? a) (string? (or (:entity a) (:block a))) (or (nil? (:min a)) (number? (:min a)))))
     :until-rcon (not (and (= 4 (count step)) (string? a) (string? b) (number? (nth step 3))))
+    :until-effect-gone (not (and (= 3 (count step)) (string? a) (number? b)))
     :until-pos (not (and (= 3 (count step)) (map? a) (number? b)))
     :cli (not (and (cli-tools a) (vector? b) (every? #(or (string? %) (map? %) (vector? %)) b)))
     :http (not (http-ops a))

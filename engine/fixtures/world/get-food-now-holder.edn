@@ -10,7 +10,7 @@
  :cases
  [{:name "declined-now-get-food-lets-the-go-to-run"
    :memory [{:kind :hungry :data {:food 8} :age-s 5 :policy {:cap 10 :ttl 3600000}}]
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false}) [:now]]
          [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1})]]

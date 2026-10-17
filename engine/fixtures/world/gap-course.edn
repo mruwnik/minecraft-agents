@@ -25,21 +25,21 @@
    :after [[:body-near [13.5 0 10.5] 1.5]]}
  {:name "gap3-food6-way-round"
    :blocks [[:fill [3 -9 3] [26 -2 17] "air"] [:fill [3 -10 3] [26 -10 17] "stone"] [:fill [4 -1 10] [8 -1 10] "stone"] [:fill [12 -1 10] [16 -1 10] "stone"] [:fill [8 -1 11] [8 -1 12] "stone"] [:fill [9 -1 12] [12 -1 12] "stone"] [:set [12 -1 11] "stone"]]
-   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30] [:rcon "effect clear $BODY"] [:job (jobs.movement.go-to {:pos #at [15 0 10] :range 0 :ways #{:walk :clear-seal}})]]
+   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-effect-gone "hunger" 30] [:rcon "effect clear $BODY"] [:job (jobs.movement.go-to {:pos #at [15 0 10] :range 0 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [15.5 0 10.5] 1.5]]}
  {:name "gap3-food6-no-way-round"
    :blocks [[:fill [3 -9 3] [26 -2 17] "air"] [:fill [3 -10 3] [26 -10 17] "stone"] [:fill [4 -1 10] [8 -1 10] "stone"] [:fill [12 -1 10] [16 -1 10] "stone"]]
-   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30] [:rcon "effect clear $BODY"] [:job (jobs.movement.go-to {:pos #at [15 0 10] :range 0 :ways #{:walk :clear-seal}})]]
+   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-effect-gone "hunger" 30] [:rcon "effect clear $BODY"] [:job (jobs.movement.go-to {:pos #at [15 0 10] :range 0 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false}} :within-s 60 :of-job true}]
    :after [[:body-near [7.5 0 10.5] 4]]}
  {:name "gap2-food6-level"
    :blocks [[:fill [3 -9 3] [26 -2 17] "air"] [:fill [3 -10 3] [26 -10 17] "stone"] [:fill [4 -1 10] [8 -1 10] "stone"] [:fill [11 -1 10] [15 -1 10] "stone"]]
-   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30] [:rcon "effect clear $BODY"] [:job (jobs.movement.go-to {:pos #at [14 0 10] :range 0 :ways #{:walk :clear-seal}})]]
+   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-effect-gone "hunger" 30] [:rcon "effect clear $BODY"] [:job (jobs.movement.go-to {:pos #at [14 0 10] :range 0 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false}} :within-s 60 :of-job true}]
    :after [[:body-near [7.5 0 10.5] 4]]}
  {:name "gap1-food6"
    :blocks [[:fill [3 -9 3] [26 -2 17] "air"] [:fill [3 -10 3] [26 -10 17] "stone"] [:fill [4 -1 10] [8 -1 10] "stone"] [:fill [10 -1 10] [14 -1 10] "stone"]]
-   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30] [:rcon "effect clear $BODY"] [:job (jobs.movement.go-to {:pos #at [13 0 10] :range 0 :ways #{:walk :clear-seal}})]]
+   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-effect-gone "hunger" 30] [:rcon "effect clear $BODY"] [:job (jobs.movement.go-to {:pos #at [13 0 10] :range 0 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [13.5 0 10.5] 1.5]]}]}

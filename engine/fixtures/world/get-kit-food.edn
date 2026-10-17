@@ -19,7 +19,7 @@
    :expect [{:event {:source :job :kind :kit.no-food :level :warn} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :needs-food}} :for-s 40 :until {:source :job :kind :kit.no-food}}]}
   {:name "starving-with-no-food-stops-needs-food"
-   :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
          [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :needs-food}} :within-s 100 :of-job true}]}
   {:name "food-false-stops-needs-food"

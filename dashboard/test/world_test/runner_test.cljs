@@ -754,6 +754,26 @@
           (.catch (fn [e] (is false (.-message e))))
           (.finally done)))))
 
+(deftest until-effect-gone-waits-for-the-effect-to-show-then-to-end
+  (async done
+    (let [replies (atom ["no data" "[{id: \"minecraft:hunger\"}]" "[{id: \"minecraft:hunger\"}]" "[]"])
+          sent (atom 0)
+          io {:send (fn [_] (swap! sent inc) (js/Promise.resolve [(let [r (first @replies)] (swap! replies #(if (next %) (vec (rest %)) %)) r)]))
+              :sleep (fn [_] (js/Promise.resolve nil))}]
+      (-> (r/until-effect-gone-step! io "q" "hunger" 10)
+          (.then (fn [_] (is (= 4 @sent))))
+          (.catch (fn [e] (is false (.-message e))))
+          (.finally done)))))
+
+(deftest until-effect-gone-throws-when-the-effect-never-shows
+  (async done
+    (let [io {:send (fn [_] (js/Promise.resolve ["Found no elements"]))
+              :sleep (fn [_] (js/Promise.resolve nil))}]
+      (-> (r/until-effect-gone-step! io "q" "hunger" 10)
+          (.then (fn [_] (is false "should have thrown")))
+          (.catch (fn [e] (is (re-find #"\"hunger\" never seen: last reply Found no elements" (.-message e)))))
+          (.finally done)))))
+
 (deftest until-pos-polls-until-the-body-is-inside-the-plot-relative-bounds
   (async done
     (let [replies (atom ["B: [20003.5d, 150.0d, 20016.5d]" "B: [20022.5d, 150.0d, 20016.5d]"])

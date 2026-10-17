@@ -14,7 +14,7 @@
          [:await {:source :job :kind #{:completed :stopped} :data {:placed [:any]}} 40]
          [:job (jobs.storage.deposit {:chest #at [12 0 20] :items ["cobblestone"]})]
          [:await {:source :job :kind :completed :data {:name "jobs.storage.deposit"}} 60]
-         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:job (jobs.survival.eat {:until 20})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}
             {:event {:source :job :kind :completed :data {:dug true}} :within-s 90 :of-job true}

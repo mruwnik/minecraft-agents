@@ -701,7 +701,9 @@
     (is (ps [:until-seen "cow" 20]) "the target says block or entity")
     (is (ps [:until-seen {:entity "cow"}]) "a bound is required")
     (is (not (ps [:until-rcon "data get entity $BODY foodLevel" "foodLevel.*\\b(1|2)\\b" 60])))
-    (is (ps [:until-rcon "data get entity $BODY foodLevel" 60]) "a pattern is required"))
+    (is (ps [:until-rcon "data get entity $BODY foodLevel" 60]) "a pattern is required")
+    (is (not (ps [:until-effect-gone "hunger" 30])))
+    (is (ps [:until-effect-gone "hunger"]) "a bound is required"))
   (is (= [:cli "entities" ["$body" "--world" "$world" "--type" "cow"] {:total [:>= 1]}]
          (f/seen-check {:entity "cow"})))
   (is (= [:cli "entities" ["$body" "--world" "$world" "--type" "cow"] {:total [:>= 2]}]

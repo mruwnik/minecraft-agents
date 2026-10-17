@@ -7,7 +7,7 @@
   :time :night
   :plot {:height 6}
   :body {:at [10.5 0 16.5] :settle-s 2 :inventory [["iron_sword" 1]]}
-  :act [[:rcon "effect give $BODY minecraft:hunger 8 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+  :act [[:rcon "effect give $BODY minecraft:hunger 8 243 true"] [:until-effect-gone "hunger" 30]
         [:rcon "damage $BODY 3 minecraft:generic"]
         [:summon "cow" [15.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [15.5 0 18.5] "{NoAI:1b}"] [:summon "cow" [16.5 0 17.5] "{NoAI:1b}"]]
   :limit-s 120}

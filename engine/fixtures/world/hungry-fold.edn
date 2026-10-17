@@ -15,7 +15,7 @@
  [{:name "hp5-food9-bread-eats-in-place"
    :body {:inventory [["bread" 6]]}
    :act [[:job (jobs.memory.set-place {:name :bed :pos #at [8 0 16]})]
-         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 15 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
             {:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 40}
@@ -25,7 +25,7 @@
   {:name "hp5-food19-bread-eats-to-20"
    :body {:inventory [["bread" 6]]}
    :act [[:job (jobs.memory.set-place {:name :bed :pos #at [8 0 16]})]
-         [:rcon "effect give $BODY minecraft:hunger 4 214 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+         [:rcon "effect give $BODY minecraft:hunger 4 214 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 15 minecraft:generic"]]
    :expect [{:event {:source :body :kind :hurt :data {:health 5 :food [:>= 18]}} :within-s 30}
             {:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
@@ -34,7 +34,7 @@
             {:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 40 :until {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}}}]
    :after [[:body-near [16.5 0 16.5] 1.5] [:item "bread" [:>= 4]] [:item "bread" [:<= 5]]]}
   {:name "hp18-food19-scratch-nothing-fires-body-keeps-working"
-   :act [[:rcon "effect give $BODY minecraft:hunger 4 214 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 4 214 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 2 minecraft:generic"]
          [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}
@@ -44,7 +44,7 @@
   ;; the food falls below 18, the body is still below 20 hp and it eats one bread where it stands (never walks off)
   {:name "hp18-food19-bread-carried-regen-then-top-up-eats"
    :body {:inventory [["bread" 6]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 4 214 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 4 214 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 2 minecraft:generic"] [:wait-s 12]] ; after: the bread is eaten, which the events do not wait for
    :expect [{:event {:source :body :kind :hurt :data {:health 18 :food [:>= 18]}} :within-s 20}
             {:no-event {:source :reflex :kind :fired} :for-s 3}
@@ -57,14 +57,14 @@
    :expect [{:no-event {:source :reflex :kind :fired} :for-s 16}]
    :after [[:item "bread" 6]]}
   {:name "hp19-food8-nothing-carried-nothing-fires"
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 1 minecraft:generic"]]
    :expect [{:event {:source :body :kind :hurt :data {:health 19 :food [:<= 9]}} :within-s 20}
             {:no-event {:source :reflex :kind :fired} :for-s 18}]}
   {:name "hurt-hp5-food9-keeps-working-no-bed-no-standing"
    :body {:inventory [["bread" 6]]}
    :act [[:job (jobs.memory.set-place {:name :bed :pos #at [8 0 16]})]
-         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 15 minecraft:generic"]
          [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1})]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
@@ -84,14 +84,14 @@
   ;; = (0.005 * (amp + 1) * 120 ticks - 80 saturation exhaustion) / 4, so amp 229 leaves food 6 and amp 223 food 7 (estimated, not yet run).
   {:name "hp20-food6-bread-eats-in-place"
    :body {:inventory [["bread" 6]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 6 229 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]]
+   :act [[:rcon "effect give $BODY minecraft:hunger 6 229 true"] [:until-effect-gone "hunger" 30]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 25}
             {:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 40}
             {:no-event {:source :action :kind :started :data {:name "steer"}} :for-s 30 :until {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}}}]
    :after [[:body-near [16.5 0 16.5] 1.5] [:item "bread" [:<= 5]]]}
   {:name "hp20-food7-bread-nothing-fires-body-keeps-working"
    :body {:inventory [["bread" 6]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 6 223 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 6 223 true"] [:until-effect-gone "hunger" 30]
          [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}
             {:no-event {:source :reflex :kind :fired} :for-s 30 :until {:source :job :kind :result :data {:arrived true}}}]

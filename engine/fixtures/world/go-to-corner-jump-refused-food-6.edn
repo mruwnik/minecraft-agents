@@ -11,6 +11,6 @@
   :limit-s 60}
  :cases
  [{:name "food-6-refuses-corner-jump"
-   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30] [:rcon "effect clear $BODY"]
+   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-effect-gone "hunger" 30] [:rcon "effect clear $BODY"]
          [:job (jobs.movement.go-to {:pos #at [11 1 11] :range 0 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:status :stopped :arrived false :reason :unreachable :kind :nothing-possible :why :abilities :text [:contains "sprint jump past a corner and food is too low"]}} :within-s 40 :of-job true}]}]}

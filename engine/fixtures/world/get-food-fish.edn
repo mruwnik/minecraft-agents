@@ -13,7 +13,7 @@
  :cases
  [{:name "rod-carried-catches-a-fish-and-eats"
    :body {:inventory [["fishing_rod" 1]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
    :expect [{:event {:source :job :kind :fish.caught} :within-s 180}]}
@@ -26,7 +26,7 @@
             {:event {:source :job :kind :completed :data {:name "jobs.items.obtain"}} :within-s 240 :of-job true}]
    :limit-s 250}
   {:name "no-rod-no-fish"
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 40}

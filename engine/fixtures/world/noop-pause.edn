@@ -20,7 +20,7 @@
    :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}]
    :body {:inventory [["bread" 6]] :effects []}
    :act [[:job (jobs.time.noop {:seconds 30})]
-         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 15 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
             {:event {:source :job :kind :completed :data {:status :completed}} :within-s 60 :of-job true}]

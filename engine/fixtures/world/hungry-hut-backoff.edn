@@ -10,7 +10,7 @@
  :cases
  [{:name "hungry-in-a-hut-with-no-food-fires-once-then-rests"
    :register [{:trigger :hungry}]
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 14 minecraft:generic"]] 
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
             {:count-event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :for-s 100 :at-least 1 :at-most 2}]

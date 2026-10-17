@@ -17,7 +17,7 @@
    :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
    :blocks [[:set [8 0 16] "furnace[facing=west]"]]
    :body {:inventory [["chicken" 2] ["coal" 2]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
             {:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 80}
@@ -25,7 +25,7 @@
    :after [[:item "chicken" 0]]}
   {:name "carried-furnace-is-put-down-and-two-chops-cooked"
    :body {:inventory [["furnace" 1] ["porkchop" 2] ["coal" 2]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 80}
@@ -34,7 +34,7 @@
   {:name "food-near-zero-with-a-furnace-in-sight-still-cooks"
    :blocks [[:set [8 0 16] "furnace[facing=west]"]]
    :body {:inventory [["beef" 2] ["coal" 2]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 80}]
@@ -45,7 +45,7 @@
    :blocks [[:set [40 0 16] "furnace[facing=west]"]]
    :memory [{:kind :furnace :data {:pos #xyz [40 0 16]} :policy {:cap 1 :ttl :forever}}]
    :body {:inventory [["beef" 2] ["coal" 2]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 100}]
@@ -55,7 +55,7 @@
   {:name "starving-at-low-health-eats-the-beef-raw-beside-a-furnace"
    :blocks [[:set [8 0 16] "furnace[facing=west]"]]
    :body {:inventory [["beef" 2] ["coal" 2]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 14 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 60 :of-job true}
@@ -66,7 +66,7 @@
   {:name "two-wild-beef-pay-for-making-a-furnace"
    :blocks [[:set [8 0 20] "crafting_table"]]
    :body {:inventory [["beef" 2] ["coal" 2] ["cobblestone" 8]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 120}]
@@ -76,7 +76,7 @@
    :blocks [[:set [8 0 16] "furnace[facing=west]"]]
    :body {:inventory [["beef" 2] ["coal" 2]]}
    :act [[:summon "creeper" [14.5 0 16.5] "{NoAI:1b,Silent:1b}"]
-         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 60 :of-job true}
@@ -85,7 +85,7 @@
   {:name "reserved-bait-carrots-survive-the-hungry-reflex"
    :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
    :body {:inventory [["carrot" 13]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]]
    :memory [{:kind :bait-reserve :data {:foods ["carrot" "potato" "beetroot"]} :policy {:cap 5 :ttl :forever}}]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
@@ -94,7 +94,7 @@
   {:name "unreserved-carrots-are-eaten-by-the-hungry-reflex"
    :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
    :body {:inventory [["carrot" 13]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 70}]
    :after [[:item "carrot" [:<= 12]]]}]}

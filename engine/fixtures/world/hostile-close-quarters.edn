@@ -15,7 +15,7 @@
  :cases
  [{:name "fist-body-at-food-6-flees-the-whole-spider-before-a-fight-begins"
    :act [[:rcon "effect give $BODY minecraft:hunger 6 226 true"]
-         [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+         [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 2 minecraft:generic"]
          [:summon "spider" [19.5 0 16.5] "{NoAI:1b}"]]
    :expect [{:event {:source :body :kind :hurt :data {:food [:<= 6]}} :within-s 15}

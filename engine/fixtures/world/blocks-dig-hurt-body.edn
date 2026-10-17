@@ -9,12 +9,12 @@
   :limit-s 50}
  :cases
  [{:name "hurt-body-digs-by-default"
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30] [:rcon "damage $BODY 16 minecraft:generic"]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 16 minecraft:generic"]
          [:job (jobs.blocks.dig {:pos #at [16 0 14]})]]
    :expect [{:event {:source :job :kind :completed :data {:dug true}} :within-s 40 :of-job true}]
    :after [[:block [16 0 14] "air"]]}
   {:name "explicit-health-floor-refuses-a-hurt-body"
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30] [:rcon "damage $BODY 16 minecraft:generic"]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 16 minecraft:generic"]
          [:job (jobs.blocks.dig {:pos #at [16 0 14] :floor {:health 6}})]]
    :expect [{:no-event {:source :job :kind :completed :data {:dug true}} :for-s 15 :of-job true}]
    :after [[:block [16 0 14] "stone"]]

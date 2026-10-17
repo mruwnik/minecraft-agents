@@ -11,7 +11,7 @@
  [{:name "buried-hungry-body-does-not-explore"
    :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}]
    :blocks [[:fill [12 0 12] [20 4 20] "stone" :hollow]]
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 10 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
             {:event {:source :job :kind :stopped :data {:reason :no-food :text [:contains "not searched underground"]}} :within-s 40}
@@ -21,7 +21,7 @@
    :time :any
    :blocks [[:fill [2 0 8] [30 6 30] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [16 0 17] "iron_ore"]]
    :body {:at [16.5 0 16.5] :yaw 0 :inventory [["stone_pickaxe" 1] ["cobblestone" 16]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 17 minecraft:generic"]
          [:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]
          [:await {:source :job :kind :waiting :data {:reason :low-health}} 30]

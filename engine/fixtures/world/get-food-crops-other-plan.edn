@@ -11,7 +11,7 @@
   :blocks [[:fill [22 -1 22] [25 -1 22] "farmland[moisture=7]"] [:fill [22 -2 23] [25 -2 23] "stone"] [:fill [22 -1 23] [25 -1 23] "water"]
            [:fill [22 0 22] [25 0 22] "potatoes[age=7]"]]
   :body {:at [10.5 0 16.5] :settle-s 2}
-  :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+  :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
         [:rcon "damage $BODY 5 minecraft:generic"]
         [:job (jobs.survival.get-food {})]]
   :limit-s 100}

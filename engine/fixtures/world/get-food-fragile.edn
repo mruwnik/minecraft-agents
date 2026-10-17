@@ -14,7 +14,7 @@
               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}
              {:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}]
   :body {:at [4.5 0 16.5] :yaw 270 :settle-s 2}
-  :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+  :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
         [:rcon "damage $BODY 18 minecraft:generic"]]
   :limit-s 90}
  :cases

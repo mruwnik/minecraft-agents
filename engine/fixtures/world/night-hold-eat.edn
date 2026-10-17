@@ -12,7 +12,7 @@
            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"] [:fill [8 0 12] [8 1 12] "air"] [:set [5 0 10] "torch"] [:set [5 0 14] "torch"]]
   :body {:at [4.5 0 12.5] :yaw 270 :settle-s 2}
   :act [[:job (jobs.memory.set-place {:name :home :pos #at [10 0 12]})]
-        [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+        [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
         [:rcon "damage $BODY 3 minecraft:generic"]
         [:job (jobs.survival.night {:walk-radius 8})]]
   :limit-s 120}

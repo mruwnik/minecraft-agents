@@ -4,7 +4,7 @@
  :tags [:survival :register] :time :day
  :plot {:height 6}
  :body {:at [16.5 0 16.5] :settle-s 2 :inventory [["bread" 6]]}
- :act [[:rcon "effect give $BODY minecraft:hunger 10 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]]
+ :act [[:rcon "effect give $BODY minecraft:hunger 10 255 true"] [:until-effect-gone "hunger" 30]]
  :expect [{:event {:source :body :kind :hurt :data {:food [:<= 12]}} :within-s 25}
           {:no-event {:source :reflex :kind :fired} :for-s 15}
           {:no-event {:source :job :kind :round_started} :for-s 15}]

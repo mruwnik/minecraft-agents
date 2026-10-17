@@ -215,7 +215,7 @@
   {:name "hungry-at-night-with-nothing-carried-does-not-fire"
    :body {:effects []}
    :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :for-s 30}]
    :after [[:body-near [16.5 0 16.5] 3] [:item "bread" 0]]
@@ -223,7 +223,7 @@
   {:name "hungry-at-night-with-bread-eats"
    :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
    :body {:inventory [["bread" 4]] :effects []}
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 40}
             {:event {:source :reflex :kind :ended :context {:reflex-id :hungry}} :within-s 40}]

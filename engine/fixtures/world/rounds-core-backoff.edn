@@ -20,7 +20,7 @@
                :job (jobs.storage.deposit {:chest #at [16 0 11]})}]
    :blocks [[:set [16 0 11] "chest"]]
    :body {:at [16.5 0 18.5] :inventory [["stick" 5]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-rcon "data get entity $BODY active_effects" "^(?!.*hunger)" 30] [:rcon "damage $BODY 5 minecraft:generic"]]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 5 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :backoff :context {:reflex-id :hungry} :data {:fruitless 3}} :within-s 60}]}
   {:name "listed-job-blocked-is-flagged-not-backed-off"
    :blocks [[:set [16 0 11] "chest"]]
