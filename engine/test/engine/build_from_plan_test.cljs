@@ -16,7 +16,8 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.world-files :as world]
             [jobs.build.from-plan :as build]
-            [jobs.build.from-plan.plan :as plan]))
+            [jobs.build.from-plan.plan :as plan]
+            [plan.surface :as surface]))
 
 (def job 'jobs.build.from-plan)
 
@@ -765,10 +766,10 @@
     (is (false? (build/buried? (tu/seeing-all (tu/fake-on-floor {:blocks (dissoc around (h/cell-key 3 65 3))})) [3 64 3]))
         "air above it")))
 
-(deftest follow-surface-moves-each-column-onto-its-seen-ground
+(deftest surface-follow-moves-each-column-onto-its-seen-ground
   (let [cells [{:pos [1 64 1] :want "oak_fence"} {:pos [1 65 1] :want "torch"} {:pos [4 64 1] :want "oak_fence"} {:pos [7 64 1] :want "oak_fence"}]
         tops {[1 1] 62 [4 1] 70}
-        moved (plan/follow-surface cells (fn [x z _] (tops [x z])))]
+        moved (surface/follow cells (fn [x z _] (tops [x z])))]
     (is (= [[1 63 1] [1 64 1] [4 71 1] [7 64 1]] (mapv :pos moved)) "a column moves as a whole; an unseen one stays")))
 
 (deftest a-surface-build-puts-the-fence-on-the-ground-of-every-column
@@ -776,9 +777,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [hill (into {} (for [x (range 0 8) z (range 0 4) y (range 62 (if (<= x 2) 64 65))] [(h/cell-key x y z) "stone"]))
-              plan {:id "slope" :parts [{:id "fence" :cells [[1 64 1] [4 64 1]] :want "oak_fence"}]}
+              plan {:id "slope" :surface true :parts [{:id "fence" :cells [[1 64 1] [4 64 1]] :want "oak_fence"}]}
               {:keys [eng p]} (start {:blocks hill :inventory [{:name "oak_fence" :count 4}] :self {:pos {:x 2.5 :y 64 :z 2.5}}} {"slope" plan})
-              result (await (child-outcome eng job {:plan "slope" :surface true} 200))]
+              result (await (child-outcome eng job {:plan "slope"} 200))]
           (is (= "oak_fence" (block p [1 64 1])))
           (is (= "oak_fence" (block p [4 65 1])) "the column on the higher ground")
           (is (= [] (:missing result))))))))
@@ -789,9 +790,9 @@
       (fn ^:async t []
         (let [hill (into {} (for [x (range 0 8) z (range 0 4) y (range 62 64)] [(h/cell-key x y z) "stone"]))
               canopy (into {} (for [z (range 0 4) y [66 67]] [(h/cell-key 4 y z) "birch_leaves"]))
-              plan {:id "wood" :parts [{:id "fence" :cells [[4 64 1]] :want "oak_fence"}]}
+              plan {:id "wood" :surface true :parts [{:id "fence" :cells [[4 64 1]] :want "oak_fence"}]}
               {:keys [eng p]} (start {:blocks (merge hill canopy) :inventory [{:name "oak_fence" :count 2}] :self {:pos {:x 2.5 :y 64 :z 2.5}}} {"wood" plan})
-              _ (await (child-outcome eng job {:plan "wood" :surface true} 200))]
+              _ (await (child-outcome eng job {:plan "wood"} 200))]
           (is (= "oak_fence" (block p [4 64 1])) "on the ground under the leaves, not on them"))))))
 
 (deftest what-is-carried-is-placed-before-the-rest-is-fetched

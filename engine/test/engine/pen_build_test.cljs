@@ -346,8 +346,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [plan {:id "pen" :parts [{:id "fence" :cells [[2 64 2] [3 64 2] [4 66 2]] :want "oak_fence"}]}
-              r (await (declines (spec kit) {"pen" plan} {:plan "pen" :surface false}))
-              ok (await (declines (spec kit) {"pen" plan} {:plan "pen" :surface false :uneven? true}))]
+              r (await (declines (spec kit) {"pen" plan} {:plan "pen"}))
+              ok (await (declines (spec kit) {"pen" plan} {:plan "pen" :uneven? true}))]
           (is (= [{:plan "pen" :reason "the pen is uneven (steps over 1): [3 64 2] to [4 66 2] steps 2"}] (:declined r)))
           (is (= [:uneven] (distinct (map :reason (:waits r)))) "the job waits listed")
           (is (= 0 (:places r)))

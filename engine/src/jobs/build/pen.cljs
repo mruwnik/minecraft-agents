@@ -23,7 +23,7 @@
 (def doc
   "Build the fence a plan wants (:plan, optionally only its :part) and prove it holds animals.
   The pen is the bounding box of the plan's cells that want a fence, a fence gate or a wall.
-  With :surface (default) each column of the plan is put on the ground the body has seen there, so a pen on a slope follows it.
+  A plan with :surface true is put on the ground the body has seen (a pen on a slope follows it).
   Phase 1 runs jobs.build.from-plan on the plan. Its args :reach :give-up :accept pass through, and its rules
   (zones, other plans' footprints, materials, cuts) apply. Phase 2: a body still inside the box walks out through the
   gate (a jobs.movement.go-to child to the cell outside it) and jobs.animals.shut-gate shuts it. Phase 3 checks the pen
@@ -57,7 +57,6 @@
    :accept {:doc "as jobs.build.from-plan" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
    :max-cells {:doc "most cells the pen check visits before it gives up with :unbounded" :spec (a/int-in 1 nil) :default pen/default-max-cells}
    :fetch {:doc "as jobs.build.from-plan: get the blocks the plan lacks; false builds with what is carried" :spec need/option? :default {:explore true}}
-   :surface {:doc "as jobs.build.from-plan: each column of the pen on the seen ground (a pen on a slope)" :spec boolean? :default true}
    :uneven? {:doc "build although the ring steps more than 1 between neighbouring fences or the inside drops more than 1 at the gate" :spec boolean? :default false}
    :ignore-zones? :shared})
 
@@ -134,7 +133,7 @@
     (sense/targets p (u/self-pos c) (:remembered (read-pen c cells)) #{})))
 
 (defn build-args [c]
-  (select-keys (:args c) [:plan :part :reach :give-up :accept :fetch :ignore-zones? :surface]))
+  (select-keys (:args c) [:plan :part :reach :give-up :accept :fetch :ignore-zones?]))
 
 ;; ------------------------------------------------------------------ conditions
 

@@ -7,6 +7,7 @@
             [dashboard.agent-plan-tools :as checks]
             [plan.parse :as parse]
             [plan.shape :as shape]
+            [plan.surface :as surface]
             ["node:fs" :as fs]
             ["node:path" :as path]
             ["node:util" :as util]))
@@ -251,23 +252,27 @@
             (.then (fn [seen-module]
                      (let [memory ((aget seen-module "createSeenBlocks") #js {:stateDir (clj->js (:state ctx)) :world (:world ctx) :body (:body req) :dim (:dim req)})
                            blocks (atom {}) seen-times (atom [])
-                           inventory (inventory-value (:inventory req))]
+                           inventory (inventory-value (:inventory req))
+                           seen-name (fn [{:keys [x y z]}] (some-> (.call (aget memory "blockAt") memory x y z) (aget "name")))
+                           expansion (cond-> (:expansion prepared)
+                                       (:surface (:plan-value req)) (update :cells surface/follow (surface/top-fn seen-name)))
+                           cells (mapv :pos (:cells expansion))]
                        (try
-                         (doseq [[x y z :as pos] (:cells prepared)]
+                         (doseq [[x y z :as pos] cells]
                            (when-let [block (.call (aget memory "blockAt") memory x y z)]
                              (swap! blocks assoc pos {:name (aget block "name") :state (js->clj (aget block "state"))})
                              (swap! seen-times conj (.call (aget memory "seenAt") memory x y z))))
-                         (let [score (checks/score-native (:expansion prepared) #(get @blocks %) (constantly nil)
+                         (let [score (checks/score-native expansion #(get @blocks %) (constantly nil)
                                                          (or inventory {}) (some? inventory)
                                                          (js/Number (or (:offset req) 0)) (js/Number (or (:limit req) 10)))
-                               checked (seen-checked (count (:cells prepared)) @seen-times memory)]
+                               checked (seen-checked (count cells) @seen-times memory)]
                            (cond-> (assoc (dissoc prepared :expansion :cells)
                                           :world (:world ctx) :evidence :seen-memory :body (:body req) :live-loaded? false
                                           :score (assoc score :checked
                                                         (assoc checked :newest-age-ms (when (:newest checked) (max 0 (- (:now checked) (:newest checked))))
                                                                        :oldest-age-ms (when (:oldest checked) (max 0 (- (:now checked) (:oldest checked)))))))
                              (shaft-progress (:plan-value req) #(some-> (get @blocks %) :name)) (assoc :shaft (shaft-progress (:plan-value req) #(some-> (get @blocks %) :name)))
-                             (:geometry req) (assoc :cells (:cells prepared))
+                             (:geometry req) (assoc :cells cells)
                              (:large req) (assoc :large true)))
                          (finally (.call (aget memory "close") memory)))))))))))
 

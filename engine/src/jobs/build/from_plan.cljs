@@ -63,8 +63,10 @@
   build.refused warn per reason.
   Water beside a cell is no obstacle by default. :accept names the fluid hazards taken (:fluid-adjacent,
   :lava-adjacent). A cell with an untaken one is refused as :hazard.
-  :sturdy-ground true accepts a sturdy block on the ground of a rail line (plan.rail/ground) where the plan wants
-  fill; it is not listed :wrong.
+  Plan properties: :surface true puts each column of the plan on the ground the body has seen there (the column's lowest
+  cell stands on the ground's top, the rest keep their height above it; an unseen column stays as planned), for a pen on a
+  slope; :sturdy-ground true accepts a sturdy block on the ground of a rail line (plan.rail/ground) where the plan wants
+  fill, not listed :wrong.
   done? holds when no cell is owed, none came out wrong; the engine then ends it :done.
   Ends with data {:placed n :missing [[x y z] ...] :short {item n} :given-up {[x y z] reason} :wrong [{:pos :found
   :want}] :refused [...] :fetch-failed {item {:failed :why}}}: done when nothing is missing (and no block came out wrong: nothing-possible :wrong-blocks) or the cells placed meet
@@ -93,9 +95,7 @@
    :give-up {:doc "refused places or failed walks after which a cell is given up" :spec (a/int-in 1 nil) :default 3}
    :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
    :fetch {:doc "get the blocks and tools the plan lacks (jobs.lib.need): true, a set of kinds or a map of limits; false builds with what is carried" :spec need/option? :default {:explore true}}
-   :ignore-zones? :shared
-   :surface {:doc "put each column of the plan on the ground the body has seen there: the column's lowest cell stands on the ground's top, the rest keep their height above it (an unseen column stays as planned); for a pen on a slope" :spec boolean? :default false}
-   :sturdy-ground {:doc "a sturdy block on the ground of a rail line (plan.rail/ground) is no wrong block, whatever fill the plan wants there" :spec boolean? :default false}})
+   :ignore-zones? :shared})
 
 (def target [:plan :part])
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
@@ -413,7 +413,7 @@
 (defn result-data
   "What the build left (text/summary), with the failed fetches of the call."
   [c cells]
-  (assoc-fetch-failed c (summary c cells (ctx/mem c) (:sturdy-ground (:args c)))))
+  (assoc-fetch-failed c (summary c cells (ctx/mem c) (plan/sturdy-ground? c))))
 
 (defn ending-of
   "The ending of a build with nothing more to do: done when nothing is missing (and no block came out wrong: nothing-possible :wrong-blocks) or the placed cells meet the call's

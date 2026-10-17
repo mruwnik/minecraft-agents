@@ -7,7 +7,7 @@
  {:tags [:build :pen :animals]
   :time :any
   :plot {:height 8 :floor "grass_block"}
-  :plans [{:id "ring" :metadata {:by "$body"} :parts [{:id "fence" :outline [#at [10 0 10] #at [17 0 17]] :want [:any "oak_fence" "birch_fence"]}
+  :plans [{:id "ring" :surface true :metadata {:by "$body"} :parts [{:id "fence" :outline [#at [10 0 10] #at [17 0 17]] :want [:any "oak_fence" "birch_fence"]}
                                                                   {:id "gate" :cells [#at [13 0 10]] :want [:any "oak_fence_gate" "birch_fence_gate"]}]}]
   :body {:at [13.5 0 13.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 150}

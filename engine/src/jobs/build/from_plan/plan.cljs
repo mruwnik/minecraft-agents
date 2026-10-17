@@ -17,7 +17,7 @@
             [jobs.build.wood :as wood]
             [jobs.lib.trees :as trees]
             [jobs.lib.need :as need]
-            [jobs.lib.surface :as spot]
+            [plan.surface :as surface]
             [jobs.lib.world :as known]))
 
 (a/defargs settings
@@ -222,39 +222,17 @@
              {:cells [] :left carried}
              cells))))
 
-(defn follow-surface
-  "cells with each column [x z] moved up or down as a whole so its lowest cell stands on the top of the ground:
-  (top-of x z lowest-y) is that top's y, nil when unknown (the column stays)."
-  [cells top-of]
-  (let [shift (into {}
-                    (for [[col cs] (group-by (fn [{[x _ z] :pos}] [x z]) cells)
-                          :let [base (apply min (map (comp second :pos) cs))
-                                top (top-of (first col) (second col) base)]
-                          :when top]
-                      [col (- (inc top) base)]))]
-    (mapv (fn [{[x y z] :pos :as cell}]
-            (let [d (get shift [x z] 0)] (if (zero? d) cell (assoc cell :pos [x (+ y d) z]))))
-          cells)))
-
-(def surface-depth "Blocks above and below a planned column's lowest cell that the surface is looked for in." 6)
-
-(def on-ground
-  "Names that stand on the ground and are not it: fences, gates, walls and torches."
-  #"(_fence|_fence_gate|_wall|torch)$")
-
 (defn top-fn
-  "(fn [x z y]) the y of the seen ground top of column x z around y, nil when unknown (the arity follow-surface takes)."
+  "(fn [x z y]) the y of the seen ground top of column x z around y, nil when unknown."
   [c]
-  (let [p (:primitives c)
-        name-fn (fn [pos] (let [n (u/seen-name p pos)] (if (and n (re-find on-ground n)) "air" n)))]
-    (fn [x z y] (spot/column-top name-fn x z y surface-depth))))
+  (surface/top-fn (partial u/seen-name (:primitives c))))
 
 (defn surfaced
-  "answer with its cells put on the seen ground when the args ask for it (:surface)."
+  "answer with its cells put on the seen ground when the plan asks for it (:surface true)."
   [c answer]
-  (if-not (and answer (:surface (:args c)))
+  (if-not (and answer (:surface (:plan answer)))
     answer
-    (update answer :cells follow-surface (top-fn c))))
+    (update answer :cells surface/follow (top-fn c))))
 
 (defn judged
   "The plan's cells (of part) judged against the world, each with the :item to place it with. A generic wood want
@@ -298,8 +276,13 @@
               digs? (assoc :dig? true))))
         cells))
 
+(defn sturdy-ground?
+  "Whether the plan of the call says (:sturdy-ground true) that a sturdy block on the ground of its rail line is no wrong block."
+  [c]
+  (boolean (:sturdy-ground (:plan (known/plan c (:plan (:args c)))))))
+
 (defn kept-ground
-  "The predicate of cells that stay unlisted as wrong: with sturdy-ground, ground of a rail line holding a sturdy block."
+  "The predicate of cells that stay unlisted as wrong: with the plan's :sturdy-ground, ground of a rail line holding a sturdy block."
   [c cells sturdy-ground]
   (let [ground (when sturdy-ground (rail/ground cells))]
     (fn [{:keys [pos]}] (and (contains? ground pos) (rail/sturdy? (world-block (:primitives c) pos))))))
@@ -317,7 +300,7 @@
         cells (when usable?
                 (let [carried (set (keys carried-map))]
                   (let [cells (prepared (judged (:primitives c) answer part carried-map wood) carried (:misplaced (ctx/mem c) {}))
-                        kept? (kept-ground c cells (:sturdy-ground (:args c)))]
+                        kept? (kept-ground c cells (sturdy-ground? c))]
                     (mapv #(if (and (:short? %) (kept? %)) (dissoc % :short?) %) cells))))
         trouble (or (plan-trouble answer cells)
                     (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) no-zones))]

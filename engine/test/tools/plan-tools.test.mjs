@@ -168,6 +168,22 @@ test('check scores only cells the body has seen: a never-seen cell is unseen, a 
   } finally { fx.close() }
 })
 
+test('check puts a :surface plan on the seen ground as the build does: the fence cell lands on the ground, a plain plan stays at its y', async () => {
+  const fx = fixture()
+  try {
+    const plan = (id, extra) => `{:id "${id}"${extra} :parts [{:id "fence" :cells [[0 66 0]] :want "oak_fence"}]}`
+    await invoke('plan', fx, ['add', 'slope', '--edn', plan('slope', ' :surface true'), '--by', 'tester'])
+    await invoke('plan', fx, ['add', 'flat', '--edn', plan('flat', ''), '--by', 'tester'])
+    const column = [[0, 60, 0, 'stone'], [0, 61, 0, 'stone'], [0, 62, 0, 'stone'], [0, 63, 0, 'oak_fence']]
+    for (let y = 64; y <= 72; y++) column.push([0, y, 0, 'air'])
+    await writeSeen(fx, 'Probe', column, Date.now() - 1000)
+    const slope = await invoke('plan', fx, ['check', 'slope', '--body', 'Probe'])
+    assert.equal(slope.value.score.counts.match, 1)
+    const flat = await invoke('plan', fx, ['check', 'flat', '--body', 'Probe'])
+    assert.equal(flat.value.score.counts.match ?? 0, 0)
+  } finally { fx.close() }
+})
+
 test('check judges a plan against the memory of its own :dim, the overworld when it has none', async () => {
   const fx = fixture()
   try {
