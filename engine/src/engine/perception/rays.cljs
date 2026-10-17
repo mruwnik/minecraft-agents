@@ -308,9 +308,25 @@
                            (if ax (+ tmx tdx) tmx) (if ay (+ tmy tdy) tmy) (if az (+ tmz tdz) tmz)
                            (or (.lightAt raw nx ny nz) 0) (dec budget)))))))))
 
+(def face-inset 0.15)
+
+(defn face-points
+  "Points just inside the cell (x y z) on each face the eye (ox oy oz) is outside of: four inset corners per face, so a
+  block counts as seen when any such point is, as a player sees it by any visible face."
+  [ox oy oz x y z]
+  (let [lo face-inset hi (- 1 face-inset)
+        side (fn [o c] (cond (< o c) -1 (> o (inc c)) 1 :else 0))
+        sx (side ox x) sy (side oy y) sz (side oz z)
+        near (fn [s c] (if (neg? s) (+ c lo) (+ c hi)))]
+    (concat
+     (when-not (zero? sx) (for [b [lo hi] c [lo hi]] [(near sx x) (+ y b) (+ z c)]))
+     (when-not (zero? sy) (for [a [lo hi] c [lo hi]] [(+ x a) (near sy y) (+ z c)]))
+     (when-not (zero? sz) (for [a [lo hi] b [lo hi]] [(+ x a) (+ y b) (near sz z)])))))
+
 (defn visible-now?
-  "Whether the cell (x y z), now holding state id, is in view: inside the cone and the radius, nothing blocking sight on
-  the way from the eye to its centre, and lit (or within near)."
+  "Whether the cell (x y z), now holding state id, is in view: its centre inside the cone and the radius, a point of it
+  (the centre first, then inset points on the faces towards the eye) with nothing blocking sight on the way from the
+  eye, and lit (or within near)."
   [{:keys [raw opts grid] :as per} ^js st ^js eye x y z id]
   (let [ox (.-x eye) oy (.-y eye) oz (.-z eye)
         vx (- (+ x 0.5) ox) vy (- (+ y 0.5) oy) vz (- (+ z 0.5) oz)
@@ -320,7 +336,8 @@
     (and sight
          (<= dist (:radius opts))
          (in-cone? (basis (.-yaw eye) (.-pitch eye)) (:hx grid) (:hy grid) vx vy vz)
-         (when-let [prev (walk-cells raw sight ox oy oz (+ x 0.5) (+ y 0.5) (+ z 0.5))]
+         (when-let [prev (or (walk-cells raw sight ox oy oz (+ x 0.5) (+ y 0.5) (+ z 0.5))
+                             (some (fn [[tx ty tz]] (walk-cells raw sight ox oy oz tx ty tz)) (face-points ox oy oz x y z)))]
            (let [light (.lightAt ^js raw x y z)
                  shown (if (== 1 (aget sight id)) (max-light light prev) light)]
              (or (== 1 (aget visible shown)) (<= dist (near-of per))))))))

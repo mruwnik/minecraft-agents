@@ -83,6 +83,11 @@
     (is (= {:cells [[2 65 0] [2 64 0]] :through [3 64 0] :unseen true}
            (escape/door-from (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0] 3 2)))))
 
+(deftest escape-door-from-takes-a-row-seen-open-above-and-unseen-below-for-the-far-side
+  (let [block-at #(if (= % [3 65 0]) "air" "stone")]
+    (is (= {:cells [[2 65 0] [2 64 0]] :through [3 64 0] :unseen true}
+           (escape/door-from block-at #{[3 64 0]} [0 64 0] [1 0] 3 2)))))
+
 (deftest escape-door-over-seen-cells-is-as-before
   (let [{:keys [w]} (sensed-only (assoc (wall-east 1) :blocks ground))]
     (is (nil? (escape/door (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0] 3)) "open ground seen ahead: no door")))
@@ -225,15 +230,29 @@
           (is (= {:arrived true} out) (pr-str (last seen)))
           (is (= [:clear-path] (steps seen))))))))
 
+(defn ^:async pit-escape
+  "The result and escalation steps of go-to out of the 3-deep pit carrying n dirt."
+  [n]
+  (let [{:keys [out seen]} (await (run-go-to {:self {:pos {:x 0 :y 61 :z 0}} :blocks pit
+                                              :inventory [{:name "dirt" :count n}]}
+                                             {:pos [10 64 0] :range 1}))]
+    [out (steps seen) (pr-str (last seen))]))
+
 (deftest go-to-stairs-out-of-a-pit-it-sees-from-inside
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out seen]} (await (run-go-to {:self {:pos {:x 0 :y 61 :z 0}} :blocks pit
-                                                    :inventory [{:name "dirt" :count 2}]}
-                                                   {:pos [10 64 0] :range 1}))]
-          (is (= {:arrived true} out) (pr-str (last seen)))
-          (is (= [:stair] (steps seen))))))))
+        (let [[out st shown] (await (pit-escape 1))]
+          (is (= {:arrived true} out) shown)
+          (is (= [:stair] st)))))))
+
+(deftest go-to-pillars-out-of-a-pit-whose-rim-it-sees-with-the-blocks-for-all-but-the-step
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[out st shown] (await (pit-escape 2))]
+          (is (= {:arrived true} out) shown)
+          (is (= [:pillar] st)))))))
 
 (def deep-pit
   "A 5-deep 1x1 pit (feet at y 61) in dirt x -2..2, y 60..65; stone ground east of it (x 3..14) topped at the rim."

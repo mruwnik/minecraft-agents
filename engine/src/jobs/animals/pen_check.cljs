@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.animals :as animals]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.near :as near]
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-read :as pen-read]
@@ -18,7 +19,7 @@
   is not taken) from the feet cell :at [x y z], or from every surface inside :box (or the columns a :plan's fence, wall and gate cells close in), where a step out of the box
   is a leak. Reads what the body has seen; a pen it has not seen closed is checked again after it looks at the
   cells it has not seen (jobs.lib.sense/decide!); a cell that stays unseen (hidden behind a block) is walked to, at
-  most 3 times, until the eye sees it. Never digs or places. Ends impossible :no-pen without :at, :box and :plan; waits (:plan-trouble) while :plan is missing or unreadable and ends impossible :plan-trouble when it has no fence, wall or gate cells.
+  most 3 times, until the eye sees it, unless the fill already leaves through a seen gap or open gate: that is answered at once. Never digs or places. Ends impossible :no-pen without :at, :box and :plan; waits (:plan-trouble) while :plan is missing or unreadable and ends impossible :plan-trouble when it has no fence, wall or gate cells.
 
   The fill stops after :max-cells cells: a bigger pen is not closed, reason :unbounded. A fill without a box
   that finds no wall either side of a gap says that too.
@@ -115,6 +116,16 @@
   [checked]
   (:pos (first (filter #(= :unloaded (:why %)) (:leaks checked)))))
 
+(defn seen-leak?
+  "Whether the final read of a pen still waiting on unseen cells names a leak, other than the start cell at, at a cell the
+  body has seen: the way out is known and the unseen cells lie past it."
+  [p final at]
+  (boolean (some (fn [{:keys [pos why]}]
+                   (let [start (if (map? at) [(:x at) (:y at) (:z at)] (vec at))
+                         cell [(:x pos) (:y pos) (:z pos)]]
+                     (and (not= :unloaded why) (not= cell start) (not (dig-look/unknown? p cell)))))
+                 (:leaks final))))
+
 (defn leak-text
   "\": why at [x y z]\" listing the first leaks of result, with how many more."
   [{:keys [leaks leaks-total]}]
@@ -146,7 +157,9 @@
         near (or (:near (ctx/mem c)) (start-near c))
         _ (ctx/update-mem! c assoc :near near)
         checked (await (pen-read/read! c {:at at :box box :max-cells max-cells :near near}))
-        unseen (when (= :unloaded (:reason checked)) (unseen-leak checked))
+        final (when (= :unloaded (:reason checked))
+                (pen-read/read (:primitives c) {:at at :box box :max-cells max-cells :final? true}))
+        unseen (when-not (seen-leak? (:primitives c) final at) (unseen-leak checked))
         {:keys [walks last-unseen] :or {walks 0}} (ctx/mem c)
         stuck (if (= unseen last-unseen) walks 0)
         walk (when (and unseen (< stuck max-walks))
@@ -154,9 +167,7 @@
     (case walk
       :partial :continue
       :there (do (ctx/update-mem! c assoc :walks (inc stuck) :last-unseen unseen) :continue)
-      (let [checked (if (= :unloaded (:reason checked))
-                      (pen-read/read (:primitives c) {:at at :box box :max-cells max-cells :final? true})
-                      checked)
+      (let [checked (or final checked)
             rows (animals/in-pen-rows (:primitives c) checked animal-radius)
             result (merge (pen/summary checked) (pen-read/listed checked (u/self-pos c)) {:animals rows :animals-in (count rows)} (animal-coverage checked))
             result (assoc result :text (if (:closed? result)

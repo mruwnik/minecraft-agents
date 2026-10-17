@@ -180,8 +180,8 @@
 (defn door-from
   "door from row k on (rows before it already open): the wall's solid cells from row k and the first row beyond with
   room for the body and a floor. unseen? (cell -> true for a cell the body has not sensed): a row past the first whose
-  two cells are both unseen is taken for the far side, {:unseen true}: the dig shows it, and the digger goes on with
-  door-from there."
+  cells are unseen or seen open, at least one unseen (a body seeing over the wall sees only some), is taken for the far
+  side, {:unseen true}: the dig shows it, and the digger goes on with door-from there."
   [block-at unseen? feet dir max-thick k]
   (loop [k k cells []]
     (let [row (ahead feet dir k)
@@ -190,7 +190,8 @@
       (cond
         (not (rules/solid-floor? block-at (up row -1))) nil
         (some nil? names) nil
-        (and (> k 1) (every? unseen? pair)) {:cells cells :through row :unseen true}
+        (and (> k 1) (some unseen? pair) (every? #(or (unseen? %) (passable? (block-at %))) pair))
+        {:cells cells :through row :unseen true}
         (every? passable? names) (when (> k 1) {:cells cells :through row})
         (> k max-thick) nil
         (some protected? names) nil
