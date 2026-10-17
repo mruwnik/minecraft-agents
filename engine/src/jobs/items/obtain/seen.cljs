@@ -2,9 +2,9 @@
   "A gather need against the body: the blocks and sheep seen for it, and the need made ready to run."
   (:require [engine.ctx :as ctx]
             [jobs.items.obtain.base :refer [sheep-radius seen-radius]]
-            [jobs.food.fish :as fish]
             [jobs.lib.access :as access]
             [jobs.lib.animals :as animals]
+            [jobs.lib.foods :as foods]
             [jobs.lib.stock :as stock]
             [jobs.lib.look :as look]
             [jobs.lib.storage :as storage]
@@ -78,7 +78,7 @@
   [p need]
   (case (:job need)
     jobs.forestry.harvest-wood (assoc-in need [:args :count] (+ (gather-carried p need) (:count need)))
-    jobs.food.fish (assoc-in need [:args :count] (+ (fish/fish-carried {:primitives p}) (:count need)))
+    jobs.food.fish (assoc-in need [:args :count] (+ (foods/fish-carried p) (:count need)))
     need))
 
 (defn with-avoid

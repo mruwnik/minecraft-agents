@@ -5,6 +5,7 @@
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.near :as near]
@@ -48,14 +49,9 @@
 (def safe? (ready/safe-at-or-if-lit #(when (:pos (:args %)) (work-place/spot %))))
 (def fit? ready/fit?)
 
-(def fish-items #{"cod" "salmon" "tropical_fish" "pufferfish"})
-
-(defn fish-carried [c]
-  (reduce + 0 (keep #(when (fish-items (:name %)) (:count %)) (u/inventory (:primitives c)))))
-
 (defn rod-carried? [c] (boolean (some #(= "fishing_rod" (:name %)) (u/inventory (:primitives c)))))
 
-(defn got "The fish carried: the goal is to carry :count, whatever was eaten or stored on the way." [c] (fish-carried c))
+(defn got "The fish carried: the goal is to carry :count, whatever was eaten or stored on the way." [c] (foods/fish-carried (:primitives c)))
 
 (defn spots
   "The banks {:land :water} to cast from: the one beside :pos when given, else the seen ones within :radius, nearest first;

@@ -7,7 +7,8 @@
             [engine.settings :as settings]
             ["minecraft-data" :as minecraft-data]
             [clojure.string :as str]
-            [engine.game :as game]))
+            [engine.game :as game]
+            [jobs.lib.util :as u]))
 
 (a/defargs settings
   {::starving-rest-ms {:default 60000 :doc "The rest after a fruitless food search while starving (food 0, or hurt and hungry), for get-food's ask cooldown and the hungry trigger." :spec (a/num-in 0 nil)}
@@ -142,3 +143,8 @@
   ([self args] (eat-now? self args #{}))
   ([self args reserved]
    (boolean (and (< (.-health self) (:health args default-health)) (< (.-food self) 20) (carries-food? self reserved)))))
+
+(def fish-items #{"cod" "salmon" "tropical_fish" "pufferfish"})
+
+(defn fish-carried [p]
+  (reduce + 0 (keep #(when (fish-items (:name %)) (:count %)) (u/inventory p))))
