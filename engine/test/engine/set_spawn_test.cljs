@@ -44,6 +44,15 @@
           (is (= [{:pos bed}] (entries eng :spawn-bed)))
           (is (= [nil] (mapv :why (emitted seen :completed)))))))))
 
+(deftest set-spawn-clicks-from-within-the-servers-bed-range
+  (async done
+    (run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (run-set-spawn {:time noon :blocks {"8,64,0" "red_bed"} :self {:pos {:x 0.5 :y 64 :z 0.5}}} {:bed {:x 8 :y 64 :z 0}} (constantly nil)))
+              pos (.-pos (.self p))]
+          (is (= 1 (count (calls p "useOn"))))
+          (is (< (Math/abs (- 8.5 (.-x pos))) 3) (str "the body stands at " (.-x pos))))))))
+
 (deftest set-spawn-makes-the-bed-home-unless-a-home-is-set
   (async done
     (run-async done

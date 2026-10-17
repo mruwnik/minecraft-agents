@@ -12,7 +12,7 @@
   "Right-click the block at :pos ([x y z] or {:x :y :z}) once, with :item in hand (nil: whatever is held stays in hand; none: the empty hand), on :face.
   A bucket :item (water_bucket pours, lava_bucket pours lava, bucket scoops) is used on the cell :pos itself, through the
   place act: the liquid goes there, or is taken from there; :face is ignored.
-  One call is the whole attempt: walk into reach (one jobs.movement.go-to call, range 3, no escalation), click. Its only condition is can-start?: a bad call is
+  One call is the whole attempt: walk into reach (one jobs.movement.go-to call, within :range, no escalation), click. Its only condition is can-start?: a bad call is
   never. It yields :continue only when the walk waits on the world. Zones are not consulted: a click
   changes no block by itself.
 
@@ -25,6 +25,7 @@
   {:pos {:doc "the block to click, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
    :item {:doc "the item to hold for the click; nil: keep the hand as it is; none: the empty hand" :spec a/item? :default nil}
    :see {:doc "true: click only from where the eye sees the block (jobs.lib.aim), walking to such a stand first (go-to :see; none: :unreachable); false: within reach is enough, though a wall in between refuses the click" :spec boolean? :default false}
+   :range {:doc "how many cells from :pos the walk may stop (go-to :range); a click the server checks by distance, a bed's 3 blocks, wants less" :spec (a/num-in 0 nil) :default 3}
    :enter-pens {:doc "true: the walk may go through the gate of a pen holding animals; false: it keeps out of those gates and, with no other way, declines (a :blocks.pen-kept-out warn names the pen)" :spec boolean? :default false}
    :face {:doc "the face clicked: up down north south east west" :spec #{"up" "down" "north" "south" "east" "west"} :default "up"}})
 
@@ -60,8 +61,8 @@
 
 (defn ^:async walk!
   "The walk to pos: :arrived, :continue or {:unreachable why}."
-  [c pos see?]
-  (let [[pens args] (await (b/walk-request c pos see?))
+  [c pos see? range]
+  (let [[pens args] (await (b/walk-request c pos see? range))
         r (await (child/call-walk* c :walk args))
         arrived? (and (= :done (:kind r)) (:arrived (:data r)))]
     (cond
@@ -93,10 +94,10 @@
 (def can-start? bad-args)
 
 (defn ^:async round [c]
-  (let [{:keys [item face see] :or {face "up"}} (:args c)
+  (let [{:keys [item face see range] :or {face "up"}} (:args c)
         {:keys [pos]} (b/parse (:args c))]
     (loop [fails 0]
-      (let [w (when-not (b/in-reach? c pos see) (await (walk! c pos see)))]
+      (let [w (when-not (b/in-reach? c pos see) (await (walk! c pos see range)))]
         (cond
           (= :continue w) :continue
           (map? w) (if (>= (inc fails) (max-walks))

@@ -165,12 +165,12 @@
        "; :enter-pens true allows the walk through"))
 
 (defn ^:async walk-request
-  "[pens go-to-args] of the walk to pos: range 3, no escalation, and (unless the job's :enter-pens) keeping out of the
+  "[pens go-to-args] of the walk to pos: range (default 3), no escalation, and (unless the job's :enter-pens) keeping out of the
   gates of the pens holding animals, after a look at the cells of those not yet seen."
-  [c pos see?]
+  [c pos see? & [range]]
   (let [pens (when-not (:enter-pens (:args c)) (await (pen-entry/pens! c)))
         keep-out (vec (mapcat :gates pens))]
-    [pens (cond-> {:pos pos :range 3 :see (boolean see?) :ways #{:walk :clear-seal} :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+    [pens (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways #{:walk :clear-seal} :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}
             (seq keep-out) (assoc :keep-out keep-out))]))
 
 (defn warn-kept-out! [c pens]
