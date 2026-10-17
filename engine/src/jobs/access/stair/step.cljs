@@ -47,6 +47,16 @@
   (when (and feet next)
     (await (walk/centre! c (+ fx 0.5 (* lean-reach (js/Math.sign (- nx fx)))) (+ fz 0.5 (* lean-reach (js/Math.sign (- nz fz))))))))
 
+(defn ^:async see-over!
+  "After the top cut cell is dug: lean toward it and look at the cell over it when that is still unseen. From the back of
+  the cell the rock beside hides it, and lava over the cell would pour in as soon as the flow delay has passed."
+  [c in cell cut]
+  (let [over (shape/add cell [0 1 0])]
+    (when (and (= cell (first cut)) (unknown? (:primitives c) over))
+      (await (lean! c (:feet in) cell))
+      (await (look-at! c over))
+      (let [[fx _ fz] (:feet in)] (await (walk/centre! c (+ fx 0.5) (+ fz 0.5)))))))
+
 (defn ^:async judge!
   "stop-of for the step about to be taken. A floor still unseen once the cut is open gets one more look (memory
   :floor-looked), then a look after a lean toward it (memory :floor-leaned), each judged again, so a glance that
@@ -157,7 +167,8 @@
                     (when-let [tag (when (= :dug outcome) (:note (:args c)))] (escape/note-hole! c tag cell block))
                     (when (#{:dug :missing} outcome)
                       (ctx/update-mem! c assoc :dug-at (ctx/now c))
-                      (await (see-round! c cell)))
+                      (await (see-round! c cell))
+                      (await (see-over! c in cell cut)))
                     (case outcome
                       (:dug :missing) :continue
                       {:reason :dig-failed :cell cell :block block :dig outcome})))))))))))

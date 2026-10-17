@@ -517,3 +517,35 @@
                             [{:x 2 :y 66 :z 2} 2 nil]
                             [{:x 2 :y 64 :z 2} 0 nil]]]
     (is (= want (stay/side-cut {:x 2 :y 64 :z 0} [1 0] reach pos)) (pr-str pos reach))))
+
+(defn lava-drip!
+  "Lava above a dug cell flows into it before the next dig or place (the flow delay), as a source dripping down."
+  [p]
+  (let [world (.-world p)
+        state (.. world -state)
+        pending (atom nil)
+        flow! (fn [] (when-let [[x y z] @pending]
+                       (reset! pending nil)
+                       (swap! state assoc-in [:blocks [x y z]] "lava")))]
+    (.override world "place" (fn ^:async f [token a impl] (flow!) (await (impl token a))))
+    (.override world "dig" (fn ^:async f [token a impl]
+                             (flow!)
+                             (let [r (await (impl token a))
+                                   pos (.-pos a)
+                                   cell [(.-x pos) (.-y pos) (.-z pos)]
+                                   above (get-in @state [:blocks (update cell 1 inc)])]
+                               (when (= "lava" above) (reset! pending cell))
+                               r)))))
+
+(deftest lava-over-the-top-cut-cell-is-sealed-at-its-source-and-the-mine-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake-on-floor {:floor-block floor-block :inventory (conj pickaxe {:name "cobblestone" :count 16})
+                                   :bodyHitbox true :exact-eye true :self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (merge rock {"4,66,0" "lava" "6,64,0" "iron_ore"}) :drops {"iron_ore" "raw_iron" "stone" "cobblestone"}})
+              _ (lava-drip! p)
+              s (start {:p p})]
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 10 :mend false}) {})
+          (await (run-ticks s 120))
+          (is (= 1 (get (inv s) "raw_iron")))
+          (is (not= "lava" (block-at s 4 66 0)) "the source over the cut is capped"))))))

@@ -80,7 +80,7 @@
 
   Exposed lava (beside the feet, the head or an open cut cell, or in one) is filled with a building block
   (jobs.lib.choose/fillers :build, a jobs.blocks.place child; it fetches one when :fetch allows), sources behind first, one
-  stair.sealed info each; then the stair goes on. Before it steps into an open cut with an unseen cell beside it, it
+  stair.sealed info each; then the stair goes on. After the top cut cell is dug it leans toward it and looks at the cell over it when that is unseen, so lava over the cut is capped before it pours in. Before it steps into an open cut with an unseen cell beside it, it
   waits a lava flow delay since the last dig and looks at the cut once more. Lava seen beside a cell not yet dug is a hazard as below.
 
   Hazards are the rules' (one per fluid beside) plus a falling block over the top cut of the next column.
