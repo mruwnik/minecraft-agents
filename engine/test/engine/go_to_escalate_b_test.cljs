@@ -12,6 +12,7 @@
             [engine.memory :as mem]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.walk.search :as wsearch]
             [plan.shape :as shape]
             [jobs.movement.go-to.escalation :as esc]
             [engine.registry :as registry]
@@ -273,10 +274,12 @@
                 (await (js/Promise. (fn [ok] (js/setTimeout ok 10))))
                 (recur (inc i)))))
           (is (= 3 (count (calls p "dig"))) "the third dig never ends: the go-to is cut inside its stair")
+          (swap! wsearch/searches assoc p {:goal :kept})
           (core/cancel! eng (first (:list (core/state eng))))
           (.override (.-world p) "dig" nil)
           (await (tick-out! eng 5))
           (is (empty? (:list (core/state eng))) "the stair child's cleanup runs on the cancel")
+          (is (not (contains? @wsearch/searches p)) "go-to's cleanup releases what the planner kept")
           (is (= (set (take 2 (map #(mapv (js->clj (.-pos (.-args %)) :keywordize-keys true) [:x :y :z]) (calls p "dig"))))
                  (holes eng))
               "both dug cells outlive the cancelled job, noted as the stair dug them")

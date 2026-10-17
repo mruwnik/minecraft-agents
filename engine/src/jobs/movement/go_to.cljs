@@ -346,16 +346,14 @@
                   (await (run-steps! c goal))))))))))
 
 (defn ^:async round
-  "attempt, then (unless it waits on a child) the off-hand torch goes back whatever the outcome, a throw too (rethrown),
-  and the planner's kept state is released. A cut ends the call without either."
-  [c0]
-  (let [c (with-limits c0)
-        r (try (await (attempt c))
-               (catch :default e
-                 (when (ctx/alive? c) (await (torch/return-torch! c)))
-                 (throw e)))]
-    (when-not (= :continue r)
-      (swap! plug-since dissoc (:id c))
-      (wsearch/release! c)
-      (await (torch/return-torch! c)))
-    r))
+  "One attempt (see attempt)."
+  [c]
+  (await (attempt (with-limits c))))
+
+(defn ^:async cleanup
+  "However the call ended (a cut too): the off-hand torch goes back, the plug timer and the planner's kept state are released."
+  [c _]
+  (swap! plug-since dissoc (:id c))
+  (wsearch/release! c)
+  (await (torch/return-torch! c))
+  (ctx/end c :done nil {}))

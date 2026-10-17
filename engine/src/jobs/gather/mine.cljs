@@ -585,3 +585,13 @@
                           (trip/torches-ready! c))))]
     t
     (await (pace/steps! c #(step c)))))
+
+(defn ^:async cleanup
+  "A run that ended by itself has walked home already. Cut by the limit, a cancel or a parent's end after it started digging:
+  the walk back to the start cell (home-round!), a step per round, done when it ends (arrived or not; not-home warns)."
+  [c _]
+  (let [m (ctx/mem c)]
+    (if (or (:finished m) (not (:start m)))
+      (ctx/end c :done nil {})
+      (do (ctx/update-mem! c assoc :cleaning true)
+          (await (home-round! c))))))

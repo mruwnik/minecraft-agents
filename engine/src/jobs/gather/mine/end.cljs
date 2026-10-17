@@ -58,6 +58,7 @@
   body got home, else by reason a kind: :hungry limit-reached on the food line, a fact (a worn last tool
   is :no-tool) condition-failed, any other nothing-possible. The cause is {:reason r} with :tool and :why when the data has them."
   [c {:keys [got reason] :as data}]
+  (ctx/update-mem! c assoc :finished true)
   (let [cause (merge {:reason reason} (select-keys data [:tool :why]))]
     (cond
       (and (not= :not-home reason) (>= got (wanted c))) (ctx/end c :done nil data)
@@ -151,7 +152,9 @@
     (ctx/emit! c :mine.not-home :warn {:to (access/cell (:start (ctx/mem c))) :at (access/cell (cell-of (u/self-pos c)))
                                        :text (str "mine did not get back to " (str/join "," (access/cell (:start (ctx/mem c)))))}))
   (when (seq (:left (ctx/mem c))) (still-left! c))
-  (finish! c))
+  (if (:cleaning (ctx/mem c))
+    (ctx/end c :done nil {:walked-back? (boolean arrived?)})
+    (finish! c)))
 
 (defn beside?
   "Whether here is a cell go-to's range 1 accepts as next to the start cell: one step along one axis, and never below it (that is the

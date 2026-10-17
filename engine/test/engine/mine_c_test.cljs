@@ -472,6 +472,26 @@
           (is (= :count (:reason (done-event s))))
           (is (= [0 64 0] (feet s))))))))
 
+(deftest a-cancelled-run-still-walks-home-in-its-cleanup
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})
+              _ (.override (.-world (:p s)) "dig" (fn [token args impl]
+                                                     (.then (impl token args) (fn [_] (set-pos! s 2.5 64 0.5) (js/Promise. (fn [_ _]))))))
+              id (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0}) {})]
+          (core/tick! (:eng s))
+          (loop [i 0]
+            (when (and (< i 300) (zero? (dig-count s)))
+              (await (js/Promise. (fn [ok] (js/setTimeout ok 10))))
+              (recur (inc i))))
+          (is (= [2 64 0] (feet s)) "the dig never ends, with the body off its start")
+          (core/cancel! (:eng s) id)
+          (.override (.-world (:p s)) "dig" nil)
+          (await (run-ticks s 30))
+          (is (finished? s))
+          (is (= [0 64 0] (feet s))))))))
+
 (deftest a-zone-follows-its-owner-and-the-opt-out
   (async done
     (tu/run-async done
