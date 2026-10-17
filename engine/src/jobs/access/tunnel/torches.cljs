@@ -2,6 +2,7 @@
   "The torches of a tunnel (jobs.access.tunnel): which sites stand, hanging one, booking one left out."
   (:require [engine.ctx :as ctx]
             [jobs.access.stair :as stair]
+            [jobs.access.stair.judge :as judge]
             [jobs.access.tunnel.line :as ln]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.ledger :as ledger]
@@ -73,7 +74,7 @@
   :unlit, nothing hanging in its cells). :again after a place, else nil."
   [c k]
   (let [{:keys [plan unlit]} (ctx/mem c)
-        in (stair/rules-in c (reach/standing-vec (:primitives c)))
+        in (judge/rules-in c (reach/standing-vec (:primitives c)))
         cells (ln/line-cells plan)
         booked (set (map :site unlit))
         pending (remove #(or (booked %) (torch-cell (:block-at in) cells %)) (filter #(<= (inc %) k) (:sites plan)))]

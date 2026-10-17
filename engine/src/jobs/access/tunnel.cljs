@@ -7,6 +7,7 @@
             [jobs.lib.cond :as cond]
             [engine.settings :as settings]
             [jobs.access.stair :as stair]
+            [jobs.access.stair.judge :as judge]
             [jobs.access.stair.cells :as geo]
             [jobs.access.stair.memory :as smem]
             [jobs.access.stair.step :as sstep]
@@ -152,7 +153,7 @@
   (let [{:keys [max-length accept]} (:args c)
         target (target-of c)
         a (when-not (or (:plan (ctx/mem c)) (bad-target? target))
-            (ln/approach (dissoc (stair/rules-in c (reach/standing-vec (:primitives c))) :feet) target (reach/standing-vec (:primitives c)) max-length (set accept) (:heading (:args c))))]
+            (ln/approach (dissoc (judge/rules-in c (reach/standing-vec (:primitives c))) :feet) target (reach/standing-vec (:primitives c)) max-length (set accept) (:heading (:args c))))]
     (when (contains? #{:zone :footprint :claim} (:reason a)) a)))
 
 (defn not-refused
@@ -193,7 +194,7 @@
                     :at feet :dug (or dug []) :ores (into (vec ores) (ore-pick/picked c)) :inside (boolean (and plan (not= feet (:entry plan))))
                     :keep (boolean (:keep (:args c))) :torches [] :unlit (or unlit [])}
              plan (assoc :line (select-keys plan [:entry :heading :dir :steps :run :stand :target])
-                         :torches (torches/standing-torches (:block-at (stair/rules-in c feet)) plan)))
+                         :torches (torches/standing-torches (:block-at (judge/rules-in c feet)) plan)))
            (select-keys plan [:entry :heading :stand])
            detail)))
 
@@ -221,7 +222,7 @@
   [c feet]
   (let [{:keys [plan]} (ctx/mem c)
         accept (set (:accept (:args c)))
-        in (stair/rules-in c feet)
+        in (judge/rules-in c feet)
         base (geo/step-cells feet :level (:heading plan))
         {:keys [next cut] :as cells} (assoc base :bridged? (contains? (:bridged (ctx/mem c)) (:floor base))
                                                  :filler? (some? (choose/filler c :build)))]
@@ -241,14 +242,14 @@
                   (do (ctx/update-mem! c update :run-steps (fnil max 0) (run-index (:end (ln/line (:plan (ctx/mem c)))) next (:heading plan) (:run plan)))
                       (ctx/emit! c :tunnel.step :info {:at next :text (str "tunnel step to " (pr-str next))})
                       :again)
-                  (some #(not (rules/air ((:block-at (stair/rules-in c feet)) %))) cut) :again
+                  (some #(not (rules/air ((:block-at (judge/rules-in c feet)) %))) cut) :again
                   :else {:reason :step-failed :cell next :walk (ending-result r)})))))))
 
 (defn ^:async open-over-target!
   "At the stand: the target's step judged again and the cell over the target dug; :reached once it is open."
   [c feet]
   (let [accept (set (:accept (:args c)))
-        in (stair/rules-in c feet)
+        in (judge/rules-in c feet)
         {:keys [next cut] :as cells} (geo/step-cells feet :level (:heading (:plan (ctx/mem c))))
         over (first cut)]
     (await (sstep/look-ahead! c feet next cut))
@@ -269,7 +270,7 @@
   [c]
   (let [feet (reach/standing-vec (:primitives c))
         [tx ty tz :as t] (target-of c)
-        block-at (:block-at (stair/rules-in c feet))]
+        block-at (:block-at (judge/rules-in c feet))]
     (boolean (and t (not (bad-target? t)) (= 1 (apply + (map #(js/Math.abs %) (map - t feet)))) (= ty (feet 1))
                   (rules/air (block-at [tx (inc ty) tz]))))))
 
@@ -341,7 +342,7 @@
         k (line-index cells feet)
         j (run-index end feet heading run)
         i (when (pos? steps) (geo/stair-index entry feet dir heading steps))]
-    (ctx/update-mem! c geo/record-dug (:block-at (stair/rules-in c feet)))
+    (ctx/update-mem! c geo/record-dug (:block-at (judge/rules-in c feet)))
     (or (when k (await (torches/torch-step! c k)))
         (when (and j (= :continue (await (ore-pick/pick! c {:except #{(target-of c)}})))) :continue)
         (cond
@@ -365,7 +366,7 @@
   [c]
   (let [{:keys [plan dug]} (ctx/mem c)]
     {:line (select-keys plan [:entry :heading :dir :steps :run :stand :target]) :dug (or dug [])
-     :torches (torches/standing-torches (:block-at (stair/rules-in c (reach/standing-vec (:primitives c)))) plan)}))
+     :torches (torches/standing-torches (:block-at (judge/rules-in c (reach/standing-vec (:primitives c)))) plan)}))
 
 (defn ^:async retreat!
   "Leave after a stop: a dead end through jobs.access.leave-tunnel (torches back, mouth sealed), a kept tunnel by the
@@ -402,11 +403,11 @@
     (if (bad-target? target)
       (finish! c :bad-args {:why "target must be [x y z] of integers, or a heading with a length"})
       (let [_ (when-not (:start (ctx/mem c)) (ctx/update-mem! c assoc :start feet))
-            a (await (sense/decide! c ::approach #(ln/approach (assoc (dissoc (stair/rules-in c feet) :feet) :filler? (some? (choose/filler c :build))) target feet max-length (set accept) (:heading (:args c)))
+            a (await (sense/decide! c ::approach #(ln/approach (assoc (dissoc (judge/rules-in c feet) :feet) :filler? (some? (choose/filler c :build))) target feet max-length (set accept) (:heading (:args c)))
                                     {:retry? #(not (:entry %))}))]
         (if-let [w (when (or (not (:entry a)) (ln/far-entry? a feet))
                      (when (or (:entry a) (#{:too-far :no-approach} (:reason a)))
-                       (ln/leg-target (:block-at (stair/rules-in c feet)) feet target max-length (:leg-swap (ctx/mem c)))))]
+                       (ln/leg-target (:block-at (judge/rules-in c feet)) feet target max-length (:leg-swap (ctx/mem c)))))]
           (do (ctx/update-mem! c assoc :leg w) :again)
           (if (:entry a)
             (do (ctx/update-mem! c assoc :plan (assoc a :sites (ln/torch-sites a)) :dug [])
@@ -459,7 +460,7 @@
       :else
       (if-let [alt (when-not (:leg-swap (ctx/mem c))
                      (let [feet (reach/standing-vec (:primitives c))]
-                       (ln/leg-target (:block-at (stair/rules-in c feet)) feet (target-of c) max-length true)))]
+                       (ln/leg-target (:block-at (judge/rules-in c feet)) feet (target-of c) max-length true)))]
         (do (ctx/update-mem! c assoc :leg-swap true :leg alt) :again)
         (let [stop (stop-of e :leg)]
           (finish! c (:reason stop) (assoc (dissoc stop :reason) :dug (:dug (:data e)))))))))

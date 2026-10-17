@@ -15,6 +15,7 @@
             [plan.shape :as shape]
             [jobs.lib.util :as u]
             [jobs.access.stair :as stair]
+            [jobs.access.stair.judge :as judge]
             [jobs.lib.reach :as reach]
             [jobs.lib.child :as child]
             [jobs.access.tunnel.line :as ln]
@@ -304,7 +305,7 @@
   "From the cell after its site: the torch's dig asked of the rules, its ledger entry marked :removing before the
   dig and dropped once the cell is air."
   [c {:keys [cell site]}]
-  (let [in (stair/rules-in c (reach/standing-vec (:primitives c)))
+  (let [in (judge/rules-in c (reach/standing-vec (:primitives c)))
         block-at (:block-at in)
         verdict (rules/may-dig? (assoc in :cell cell))]
     (cond
@@ -357,7 +358,7 @@
   [c cell short]
   (let [{:keys [tunnel spare reach]} (:args c)
         p (:primitives c)
-        in (stair/rules-in c (reach/standing-vec (:primitives c)))
+        in (judge/rules-in c (reach/standing-vec (:primitives c)))
         block-at (:block-at in)
         verdict (rules/may-place? (assoc in :cell cell))
         block (:block (first (filter #(= cell (:cell %)) (:dug tunnel))))
@@ -383,7 +384,7 @@
   (let [{:keys [tunnel]} (:args c)
         m (ctx/mem c)
         entry (first (ln/line-cells (:line tunnel)))
-        in (stair/rules-in c (reach/standing-vec (:primitives c)))
+        in (judge/rules-in c (reach/standing-vec (:primitives c)))
         booked (set (map :cell (:open m)))
         body (u/self-pos c)
         todo (remove booked (mouth (:dug tunnel) entry (:block-at in)))]
@@ -396,7 +397,7 @@
 (defn ^:async work-round [c]
   (let [{:keys [tunnel]} (:args c)
         m (ctx/mem c)
-        torches (when (:line tunnel) (standing (:block-at (stair/rules-in c (reach/standing-vec (:primitives c)))) tunnel m))]
+        torches (when (:line tunnel) (standing (:block-at (judge/rules-in c (reach/standing-vec (:primitives c)))) tunnel m))]
     (cond
       (not (:line tunnel)) (finish! c :stopped :bad-args {:why "tunnel must be the result of jobs.access.tunnel"})
       (:escape m) (await (escape! c))

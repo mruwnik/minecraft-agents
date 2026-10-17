@@ -8,6 +8,7 @@
             [jobs.lib.cond :as cond]
             [engine.settings :as settings]
             [jobs.access.stair.cells :as geo]
+            [jobs.access.stair.judge :as judge]
             [jobs.access.stair.memory :as smem]
             [jobs.access.stair.step :as sstep]
             [jobs.lib.access :as access]
@@ -157,83 +158,6 @@
     c
     (assoc-in c [:args :heading] (keyword (or (:heading (ctx/mem c)) (look/facing (:primitives c)))))))
 
-(defn access-world
-  "The social half of the rules' input (jobs.lib.access/zone-input): zones, claims, footprints, the body's name and
-  the clock, and the job's :ignore-zones? arg."
-  [c]
-  (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c)) :own-plans-ok? (false? (:spare-own-builds (:args c))) :except (:through (:args c))}))
-
-(defn rules-in
-  "The rules' input at feet: :block-at reads unsensed cells as hidden-guess; :column-at reads them as air (a column
-  scanned from the sky down for a stand, jobs.access.tunnel.line/surface)."
-  [c feet]
-  (merge {:floor-at (access/seen-at (:primitives c)) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :column-at (access/sensed-at (:primitives c) "air")
-          :feet feet :ledger #{} :ways (ledger/ways-of c) :keep-base? true
-          :plugs (if (:dig-plugs (:args c)) #{} (smem/plugs-of c))}
-         (access-world c)))
-
-(defn fetch-limits
-  "The limits map of :fetch when it allows a tool, else nil."
-  [c]
-  (let [o (need/opts c 'jobs.access.stair)]
-    (when (and o (contains? (:what o) :tool)) o)))
-
-(defn room-due?
-  "Whether lack (from need) is a full pack that a make-room child may cure: :make-room is on and the pack has not
-  changed since make-room last stopped short."
-  [c lack]
-  (and (= :no-free-slot (:reason lack))
-       (:make-room (:args c))
-       (not= (u/inventory (:primitives c)) (:room-failed (ctx/mem c)))))
-
-(defn fetchable?
-  "Whether lack is a missing pickaxe that :fetch lets the call get."
-  [c lack]
-  (and (= :no-tool (:reason lack)) (some? (fetch-limits c))))
-
-(defn next-cut
-  "The cells the next step cuts when it is judged from the feet (the body is at the stair's start or on it), else nil."
-  [c]
-  (let [{:keys [dir heading]} (:args c)
-        feet (reach/standing-vec (:primitives c))
-        {:keys [origin target]} (ctx/mem c)
-        on-stair? (or (nil? origin) (some? (geo/stair-index origin feet dir heading target)))]
-    (when (and on-stair? (geo/rises dir) (shape/headings heading))
-      (:cut (geo/step-cells feet dir heading)))))
-
-(defn need
-  "What the next cell to dig lacks, as a reason map for ctx/wait, or nil: :no-tool (a pickaxe), :no-free-slot (no room
-  for the drop). Judged for the step from the feet when the body is at the stair's start or on it; bad args and the
-  rules' refusals are left to the round."
-  [c]
-  (let [p (:primitives c)
-        block-at (:block-at (rules-in c (reach/standing-vec p)))
-        block (some #(let [n (when-not (unknown? p %) (block-at %))] (when (and n (not (rules/air n)) (not (rules/unbreakable n))) n)) (next-cut c))]
-    (cond
-      (nil? block) nil
-      (sstep/lacks-tool? c block) {:reason :no-tool :tool (tools/needed-kind p block) :block block}
-      (not (sstep/drop-room? c block)) {:reason :no-free-slot :block block})))
-
-(defn unmet
-  "What the next dig lacks that this call cannot make good (no room made, no tool fetched), or nil."
-  [c]
-  (when-not (:backoff (ctx/mem c))
-    (when-let [lack (need c)]
-      (when-not (or (room-due? c lack) (fetchable? c lack)) lack))))
-
-(defn refusal
-  "Before anything is cut: the stop of the first step when a zone, claim or plan refuses its cut, else nil."
-  [c]
-  (let [{:keys [dir heading]} (:args c)
-        {:keys [origin target]} (ctx/mem c)
-        feet (reach/standing-vec (:primitives c))]
-    (when (and (or (nil? origin) (and (= feet origin) (empty? (:dug (ctx/mem c)))))
-               (geo/rises dir) (shape/headings heading))
-      (let [in (rules-in c feet)
-            stepc (-> (geo/step-cells feet dir heading) (assoc :up? (not= :down dir)))
-            stop (geo/stop-of in stepc (set (:accept (:args c))))]
-        (when (#{:zone :claim :footprint} (:reason stop)) stop)))))
-
 ;; ------------------------------------------------------------------ the contract
 
 (defn with-heading-check
@@ -255,7 +179,7 @@
 (defn not-refused
   "Later :refused while a zone, claim or plan refuses the first cut."
   [c]
-  (if-let [stop (refusal c)]
+  (if-let [stop (judge/refusal c)]
     (let [fields (access/refusal-fields [stop])]
       (checks/cause-status :later (assoc fields :reason :refused) (str "refused by " (access/refusal-text fields))))
     (contract/ok :permitted "no zone, claim or plan refuses")))
@@ -265,17 +189,17 @@
   looked at first when no fetch could make good a missing pickaxe and none is carried (else the round would start and
   end the call)."
   [c]
-  (if-let [lack (unmet c)]
+  (if-let [lack (judge/unmet c)]
     (checks/cause-status :later lack (str "lacks " (name (:reason lack))))
-    (let [unseen (filterv #(unknown? (:primitives c) %) (next-cut c))]
-      (if (and (seq unseen) (:need-drop (:args c)) (not (fetch-limits c)) (sstep/lacks-tool? c blocks/hidden-guess))
+    (let [unseen (filterv #(unknown? (:primitives c) %) (judge/next-cut c))]
+      (if (and (seq unseen) (:need-drop (:args c)) (not (judge/fetch-limits c)) (sstep/lacks-tool? c blocks/hidden-guess))
         (contract/look :unseen "the cells to cut were not seen" :look-at unseen)
         (contract/ok :supplied "nothing lacking")))))
 
 (defn pack-has-room
   "Later :no-free-slot while the next dig has no room for its drop and no make-room can cure it: the pack can clear (a deposit, a toss), so the stair waits."
   [c]
-  (let [lack (unmet c)]
+  (let [lack (judge/unmet c)]
     (if (= :no-free-slot (:reason lack))
       (checks/cause-status :later lack "the pack has no room for the next drop")
       (contract/ok :room "the pack has room"))))
@@ -360,7 +284,7 @@
   (let [e (await (ctx/call c :room 'jobs.storage.make-room {:away 0 :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (if (= :continue e)
       :continue
-      (do (when (= :no-free-slot (:reason (need c)))
+      (do (when (= :no-free-slot (:reason (judge/need c)))
             (ctx/update-mem! c assoc :room-failed (u/inventory (:primitives c))))
           :again))))
 
@@ -378,7 +302,7 @@
   "Get the pickaxe for lack's block (jobs.lib.need, then walk back to where the body stood): :continue while it works,
   :again once it ended. A tool asked for already for this block and still missing is a failed fetch."
   [c {:keys [block]}]
-  (let [limits (fetch-limits c)]
+  (let [limits (judge/fetch-limits c)]
     (if (= block (:fetched-for (ctx/mem c)))
       (give-up-fetch! c block nil)
       (let [e (await (need/tool! c {:block block} (assoc (select-keys limits [:how :explore]) :return? true)))]
@@ -400,7 +324,7 @@
       (and (:arrived (:data r)) (= next-feet (reach/standing-vec (:primitives c))))
       (do (ctx/emit! c :stair.step :info {:at next-feet :text (str "stepped to " (pr-str next-feet))})
           :again)
-      (rules/falling? ((:block-at (rules-in c (reach/standing-vec (:primitives c)))) next-feet)) :again ; landed while the body walked in: work! digs it
+      (rules/falling? ((:block-at (judge/rules-in c (reach/standing-vec (:primitives c)))) next-feet)) :again ; landed while the body walked in: work! digs it
       :else {:reason :step-failed :cell next-feet
              :walk (merge (select-keys (:data r) [:why :arrived])
                           {:status (if (= :done (:kind r)) :done :stopped) :reason (contract/cause-key r)})})))
@@ -429,7 +353,7 @@
         accept (set (:accept (:args c)))
         {:keys [origin target checked]} (ctx/mem c)
         feet (reach/standing-vec (:primitives c))
-        in (rules-in c feet)
+        in (judge/rules-in c feet)
         i (geo/stair-index origin feet dir heading target)]
     (ctx/update-mem! c geo/record-dug (:block-at in))
     (cond
@@ -510,14 +434,14 @@
   [c]
   (let [m (ctx/mem c)
         back (when-not (:backoff m) (await (need/return! c)))
-        lack (when-not (or (:backoff m) back) (need c))]
+        lack (when-not (or (:backoff m) back) (judge/need c))]
     (when (and (:fetched-for m) (not lack))
       (ctx/update-mem! c dissoc :fetched-for))
     (cond
       (:backoff m) (await (back-off! c))
       back back
-      (and lack (room-due? c lack)) (await (make-room! c))
-      (and lack (fetchable? c lack)) (await (fetch-tool! c lack))
+      (and lack (judge/room-due? c lack)) (await (make-room! c))
+      (and lack (judge/fetchable? c lack)) (await (fetch-tool! c lack))
       lack (finish! c (:reason lack) (dissoc lack :reason))
       (nil? (:origin m)) (await (start! c))
       :else
