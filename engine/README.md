@@ -303,7 +303,7 @@ a finished job's goes to body memory `:job-report` (cap 256), with its ending's 
 **Contract jobs.** Export `round` (`:continue` or `(ctx/end ...)`), optionally `target`, `ways`,
 `defaults` (a settings key value reads the setting; a fn value is called with the args, the catalog shows `:from-args`), `done?`,
 `cleanup` (`(cleanup ctx ending)`, `:continue` or an ending; `engine.core.cleanup`): run once however a started job ends
-(limit, parent's end or cancel; innermost first; not on a reflex cut, death or restart), before the caller sees the ending,
+(limit, a thrown round, parent's end or cancel; innermost first; not on a reflex cut, death or restart), before the caller sees the ending,
 on its own call (`cleanup-defaults`, default `{:spend {:job-time 30 :wall-time 60}}`); its data merges into the ending, a
 failed or overrun one adds `:cleanup {:kind :cause}` and warns `job.cleanup_failed`. A cancelled job stays listed
 (`job.cleaning_up`) until it ran; a cancel meanwhile does not cut it. A reflex root and the driver's slot job (also when they

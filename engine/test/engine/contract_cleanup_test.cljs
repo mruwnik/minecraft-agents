@@ -203,6 +203,18 @@
           (is (= [:round] (:log @world)))
           (is (= [] (:list (core/state eng)))))))))
 
+(deftest a-round-that-throws-still-runs-its-cleanup-and-the-job-is-parked-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'boom {:round (fn [_] (log! :round) (throw (js/Error. "boom")))
+                                           :cleanup (fn [c e] (log! [:cleanup (:kind e) (get-in e [:cause :reason])])
+                                                      (ctx/end c :done nil {}))}})
+              id (core/submit! eng '(boom) {})]
+          (await (core/tick! eng))
+          (is (= [:round [:cleanup :nothing-possible :error]] (:log @world)))
+          (is (= "Error: boom" (get-in (core/state eng) [:failed id :error]))))))))
+
 (defn setup-reflex [jobs job]
   (reset! world {})
   (reset! clock 1000000)

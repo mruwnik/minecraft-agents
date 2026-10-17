@@ -340,6 +340,14 @@
           (limits/check! eng base)
           e)))))))
 
+(defn ^:async close-after-throw
+  "The cleanups of the root frame of c (job def) whose round threw e, run out here: the job is parked as failed, so no
+  later round runs them. A cleanup that fails only adds :cleanup to the ending, which nobody reads; the error stands."
+  [eng def c e]
+  (try (await (cleanup/close-now eng def c (contract/ending :nothing-possible {:reason :error :error (str e)} nil)
+                                 #(ctx-below eng %1 %2)))
+       (catch :default _ nil)))
+
 (defn ^:async run-round [eng run inst]
   (let [[def args] (job-of eng inst)
         results (atom {})
@@ -367,7 +375,11 @@
             r (if (or (:reflex run) (= (:id run) (exclusive-job eng))) (await (cleanup/run-out eng def c r below)) r)]
         (assoc (normalize-result r) :result (get @results (:id run)) :child-wait @child-wait))
       (catch :default e
-        (if (cut? e) {:status :cut :error e} {:status :error :error e}))
+        (cond
+          (cut? e) {:status :cut :error e}
+          (and (not (contract/passes-through? e)) (owner? eng (:token run)))
+          (do (await (close-after-throw eng def c e)) {:status :error :error e})
+          :else {:status :error :error e}))
       (finally
         (tally/add-time! eng (:id run) [] (- (now eng) t0))))))
 

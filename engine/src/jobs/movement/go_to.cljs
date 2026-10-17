@@ -346,13 +346,9 @@
                   (await (run-steps! c goal))))))))))
 
 (defn ^:async round
-  "One attempt (see attempt). A throw puts the torch back before it goes on: the engine runs no cleanup for a round that threw."
-  [c0]
-  (let [c (with-limits c0)]
-    (try (await (attempt c))
-         (catch :default e
-           (when (ctx/alive? c) (await (torch/return-torch! c)))
-           (throw e)))))
+  "One attempt (see attempt)."
+  [c]
+  (await (attempt (with-limits c))))
 
 (defn ^:async cleanup
   "However the call ended (a cut too): the off-hand torch goes back, the plug timer and the planner's kept state are released."
