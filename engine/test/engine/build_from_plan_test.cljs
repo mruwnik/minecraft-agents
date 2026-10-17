@@ -954,6 +954,13 @@
     {:block "rail" :shape "south_east"} {:name "stone"} "stone"
     {:block "lever" :facing "north"} {:name "lever" :state {:facing "south"}} "lever[facing=south]"))
 
+(deftest a-rail-of-the-wanted-kind-in-another-shape-is-left-to-settle-not-dug
+  (are [found dig?] (= dig? (boolean (:dig? (first (plan/prepared [{:pos [0 0 0] :answer :wrong :found found :item "rail"
+                                                                    :want {:block "rail" :shape "east_west"}}]
+                                                                  {"rail" 3} {})))))
+    "rail" false
+    "stone" true))
+
 (deftest a-plan-cell-under-the-feet-is-dug-from-beside-not-refused
   (async done
     (tu/run-async done

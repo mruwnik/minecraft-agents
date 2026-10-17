@@ -270,14 +270,16 @@
 (defn prepared
   "Cells (as judged) ready for the rounds: a wrong cell holding a replaceable block is :missing (placed into
   directly); a companion half is marked :companion; a wrong block of another kind that the body carries the item for,
-  that is no container, door or gate, not already misplaced by this job, is marked :dig? (dug, then placed). So is a block that is
+  that is no container, door or gate, no rail of the wanted kind (its shape settles as its neighbours land), not already misplaced by this job, is marked :dig? (dug, then placed). So is a block that is
   no replaceable one in a :clear cell (:extra), whatever is carried."
   [cells carried misplaced]
   (mapv (fn [{:keys [answer found want item pos] :as cell}]
           (let [wrong? (= :wrong answer)
                 loose? (and wrong? (rules/replaceable found))
                 extra? (and (= :extra answer) (not (rules/replaceable found)))
+                settling? (and (rail/rail-name? found) (= found (shape/want-block want)))
                 dug? #(and (not (contains? misplaced pos))
+                           (not settling?)
                            (not (kept/kept? [] found))
                            (not (re-find opening-pattern found)))
                 digs? (and (or extra? (and wrong? (not loose?) item (contains? carried item))) (dug?))
