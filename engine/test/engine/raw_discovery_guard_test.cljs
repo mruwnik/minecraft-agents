@@ -18,7 +18,7 @@
 
 (def owed
   (into {} (map (fn [[f n]] [f [n "raw read to move onto jobs.lib.look (card 8a976e90)"]]))
-        {"lib/shelter.cljs" 2 "lib/util.cljs" 1}))
+        {"lib/shelter/beds.cljs" 1 "lib/shelter/sleepers.cljs" 1 "lib/util.cljs" 1}))
 
 (def raw-read #"\(\.(?:entities|blockAt|blocks|findBlocks)[\s)]|\.findBlocks")
 
