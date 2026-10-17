@@ -133,11 +133,11 @@ pool_outputs() {
     index(want, " " cur " ") { l=$0; while (match(l, /:output-(dir|to) "[^"]*"/)) { v=substr(l, RSTART, RLENGTH); sub(/^[^"]*"/, "", v); sub(/"$/, "", v); print v; l=substr(l, RSTART+RLENGTH) } }' "$dir/shadow-cljs.edn"
 }
 
-# engine/out/build-id.edn: the commit a body bundle was built from (engine.build reads it at start); the pool slot has no .git, so the checkout writes it
+# engine/out/build-id.edn: the commit a body bundle was built from (engine.build reads it at start; a hash with -dirty: tracked files differ from it); the pool slot has no .git, so the checkout writes it
 write_build_id() {
   local b
   for b in "${builds[@]}"; do
-    case "$b" in body|body-release) printf '{:commit "%s"}\n' "$(git -C "$repo" rev-parse --short HEAD)" > "$repo/engine/out/build-id.edn"; return ;; esac
+    case "$b" in body|body-release) printf '{:commit "%s"}\n' "$(git -C "$repo" rev-parse --short HEAD)$(git -C "$repo" diff --quiet HEAD -- engine dashboard tools 2>/dev/null || echo -dirty)" > "$repo/engine/out/build-id.edn"; return ;; esac
   done
 }
 
