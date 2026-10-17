@@ -29,7 +29,7 @@
   - :done :already (data reason :all-sheared) when adult sheep stand in radius and all are sheared at the start. :done :shorn: the count was reached. Any stop after at least :least sheep were shorn (default 1; :all =
     :count, every sheep in radius when nil) is done, with the stop as the data reason.
   - :nothing-possible :shears-broke (the shears were gone after some, fewer than :least, were shorn).
-  - :condition-failed :no-shears (none carried and :fetch false), a failed fetch ends with the fetch's own ending,
+  - :condition-failed :no-shears (none carried and the shears went missing mid-run; a listed call with :fetch false waits for them), a failed fetch ends with the fetch's own ending,
     reason :need (its cause names the shears), or with nothing shorn :refused / :no-zones
     when the zone rules refused every candidate.
   - :nothing-possible with nothing shorn: :unreachable if one was given up as unreachable, else :all-sheared (adults present
@@ -43,7 +43,7 @@
    :radius {:doc "sheep within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :color {:doc "shear only sheep of this wool colour (e.g. \"white\"); nil: any" :spec a/name? :default nil}
    :collect {:doc "pick up the wool afterwards" :spec boolean? :default true}
-   :fetch {:doc "get shears when none are carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-shears; a failed fetch ends :need" :spec need/option? :default true}
+   :fetch {:doc "get shears when none are carried (jobs.lib.need): true, a set of kinds or a map of limits; false waits :no-shears; a failed fetch ends :need" :spec need/option? :default true}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -69,9 +69,12 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def can-start?
-  "Nothing waits: no shears with :fetch off ends the first round (finish! :no-shears), so a queued order never blocks the queue."
-  (constantly (contract/ok :no-wait "no start condition")))
+(defn can-start?
+  "Later :no-shears: no shears carried and :fetch off."
+  [c]
+  (if (or (need/parse-arg (:fetch (:args c))) (shears-carried? c))
+    (contract/ok :shears "shears carried or fetched")
+    (contract/later :no-shears "no shears carried and :fetch is off")))
 
 (defn quote-of [c]
   {:uses {:job-time [0 (* 10 (or (:count (:args c)) 1)) ##Inf]}})

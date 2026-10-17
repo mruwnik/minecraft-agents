@@ -79,7 +79,7 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :completed} (select-keys (await (shearing {} {:inventory shears :entities [(sheep 1 2)]})) [:event])))
-        (is (= {:event :stopped :kind :condition-failed :reason :no-shears}
+        (is (= {:event :waiting :reason :no-shears}
                (await (shearing {:fetch false} {:entities [(sheep 1 2)]}))))
         (is (= {:event :stopped :kind :nothing-possible :reason :none}
                (await (shearing {} {:inventory shears :entities []}))) "no sheep: 0 shorn is not done")

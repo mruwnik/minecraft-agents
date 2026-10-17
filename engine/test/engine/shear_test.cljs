@@ -225,13 +225,12 @@
           (is (= :shorn (:reason (done-event s))))
           (is (nil? (shears-in-chest s))))))))
 
-(deftest fetch-false-ends-no-shears-and-leaves-the-chest
+(deftest fetch-false-waits-no-shears-and-leaves-the-chest
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (seeing-scenario {:fetch false} (chest-world [{:name "shears" :count 1}]) 12))]
-          (is (finished? s))
-          (is (= :no-shears (:reason (done-event s))))
+          (is (not (finished? s)))
           (is (= 1 (shears-in-chest s))))))))
 
 (deftest no-fetch-when-no-sheep-is-near
