@@ -69,7 +69,6 @@
   {::job-time-s {:default 120 :doc "Seconds of working, fetching included, before breeding gives up." :spec (a/num-in 0 nil)}
    ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::max-in-row {:default 3 :doc "Animals handled in a row before the body looks again." :spec (a/int-in 0 nil)}})
-(defn time-s [] (settings/get settings ::job-time-s))
 (defn reach [] (settings/get settings ::reach))
 (defn max-in-row [] (settings/get settings ::max-in-row))
 
@@ -93,12 +92,8 @@
       (contract/later :no-food (str "no breeding food for " mob " carried and :fetch is off"))
       :else (contract/ok :food "food carried or fetched"))))
 
-(defn time-limit "Seconds the call may work." [c]
-  (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))
-
 (defn quote-of [c]
-  (let [most (time-limit c)]
-    {:uses {:job-time [0 (min most (* 15 (:count (:args c) 2))) most]}}))
+  {:uses {:job-time [0 (* 15 (:count (:args c) 2)) ##Inf]}})
 
 (defn done?
   "Later with the animals fed against :count: the hand is put back by the run's own ending, so the goal never holds before it."

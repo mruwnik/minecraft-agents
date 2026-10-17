@@ -1,6 +1,5 @@
 (ns jobs.build.clear-box
-  (:require [clojure.string :as str]
-            [engine.settings :as settings]
+  (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -250,13 +249,6 @@
   "Skip reasons that name a cell the job may not or cannot dig; any other skip is nothing-possible."
   #{:zone :footprint :cannot :own-pen})
 
-(defn nothing-dug
-  "The cause (the one skip reason, :nothing-dug when they are mixed) and text of a run that dug nothing."
-  [skipped]
-  (let [counts (frequencies (vals skipped))
-        reason (if (= 1 (count counts)) (key (first counts)) :nothing-dug)]
-    [reason (str "nothing dug: " (str/join ", " (map (fn [[r n]] (str n " " (name r))) (sort-by (comp name key) counts))))]))
-
 (defn result-of
   "The data of the call's ending: what is dug, skipped, kept and wet so far."
   [c]
@@ -267,14 +259,10 @@
      :fluids (frequencies (filter fluids (map second everything)))}))
 
 (defn finish!
-  "The ending of a run with no cell left to work. Done when it dug enough (or had nothing to skip); else the cause is
-  the skip reason(s)."
+  "The ending of a run with no cell left to work (job-common/conclude!)."
   [c]
   (let [{:keys [dug skipped] :as result} (result-of c)]
-    (if (or (empty? skipped) (common/enough? c dug (+ dug (count skipped))))
-      (ctx/end c :done nil (assoc result :text (str "dug " dug ", skipped " (count skipped))))
-      (let [[reason text] (if (pos? dug) [:partial (str "dug " dug ", skipped " (count skipped))] (nothing-dug skipped))]
-        (ctx/end c (if (condition-skips reason) :condition-failed :nothing-possible) reason (assoc result :text text))))))
+    (common/conclude! c {:verb "dug" :mixed :nothing-dug :condition-skips condition-skips} dug skipped result)))
 
 (defn declined?
   "Whether the dig child's ending e is a refusal at its start (no data), not a dig that failed."

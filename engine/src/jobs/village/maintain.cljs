@@ -144,12 +144,12 @@
   (-> m (update :todo rest) (dissoc :call-args) (assoc-in [:report slot] entry)))
 
 (defn entry-of
-  "The report entry of a child's ending e: its summary; a child that did not start (no data) is {:skipped :declined
+  "The report entry of a child's ending e: its summary; a child that did not start (condition-failed or impossible, no data) is {:skipped :declined
   :reason cause}, one that stopped carries :stopped kind."
   [e]
   (cond
     (= :done (:kind e)) (summary (:data e))
-    (empty? (:data e)) {:skipped :declined :reason (contract/cause-key e)}
+    (and (#{:condition-failed :impossible} (:kind e)) (empty? (:data e))) {:skipped :declined :reason (contract/cause-key e)}
     :else (assoc (summary (merge {:reason (contract/cause-key e)} (:data e))) :stopped (:kind e))))
 
 (defn roll? [slot] (str/starts-with? (name slot) "roll-"))

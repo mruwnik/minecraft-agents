@@ -1,7 +1,6 @@
 (ns jobs.build.path
   (:require [engine.settings :as settings]
             [engine.args :as a]
-            [clojure.string :as str]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -211,14 +210,6 @@
   "Skip reasons that name a cell or a shovel that is not there to use; any other skip is nothing-possible."
   #{:not-pathable :covered :not-permitted :gone :no-shovel})
 
-(defn nothing-pathed
-  "The cause (the one skip reason, :nothing-pathed when they are mixed) and text of a run that pathed nothing."
-  [skipped]
-  (let [counts (frequencies (vals skipped))
-        reason (if (= 1 (count counts)) (key (first counts)) :nothing-pathed)
-        text (str/join ", " (map (fn [[r n]] (str n " " (name r))) (sort-by (comp name key) counts)))]
-    [reason (if (= :no-shovel reason) "no shovel, nothing pathed" (str "nothing pathed: " text))]))
-
 (defn result-of
   "The data of the call's ending: what is pathed and skipped so far."
   [c]
@@ -226,14 +217,12 @@
     {:pathed (count (:pathed mem)) :skipped (:skipped mem {})}))
 
 (defn conclude!
-  "The ending of a run with no cell left to work. Done when it pathed enough (or had nothing to skip); else the cause is
-  the skip reason(s)."
+  "The ending of a run with no cell left to work (job-common/conclude!)."
   [c]
   (let [{:keys [pathed skipped] :as result} (result-of c)]
-    (if (or (empty? skipped) (common/enough? c pathed (+ pathed (count skipped))))
-      (ctx/end c :done nil (assoc result :text (str "pathed " pathed ", skipped " (count skipped))))
-      (let [[reason text] (if (pos? pathed) [:partial (str "pathed " pathed ", skipped " (count skipped))] (nothing-pathed skipped))]
-        (ctx/end c (if (condition-skips reason) :condition-failed :nothing-possible) reason (assoc result :text text))))))
+    (common/conclude! c {:verb "pathed" :mixed :nothing-pathed :condition-skips condition-skips
+                         :texts {:no-shovel "no shovel, nothing pathed"}}
+                      pathed skipped result)))
 
 (defn ^:async use-shovel!
   "Use the shovel on target and book the outcome."

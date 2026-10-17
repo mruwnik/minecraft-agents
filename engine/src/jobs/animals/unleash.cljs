@@ -56,7 +56,6 @@
    ::settle-ms {:default 250 :doc "How long the body waits for an animal to settle, in ms." :spec (a/int-in 0 nil)}
    ::settle-tries {:default 6 :doc "Looks at the animal before it counts as settled." :spec (a/int-in 0 nil)}
    ::drop-wait-ms {:default 800 :doc "How long the body waits for a dropped item, in ms." :spec (a/int-in 0 nil)}})
-(defn time-s [] (settings/get settings ::job-time-s))
 (defn reach [] (settings/get settings ::reach))
 (defn max-in-row [] (settings/get settings ::max-in-row))
 (def knot-name "leash_knot")
@@ -77,12 +76,8 @@
   "Nothing waits: an order with nobody on a lead ends the first round."
   (constantly (contract/ok :no-wait "no start condition")))
 
-(defn time-limit "Seconds the call may work." [c]
-  (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))
-
 (defn quote-of [c]
-  (let [most (time-limit c)]
-    {:uses {:job-time [0 (min most 10) most]}}))
+  {:uses {:job-time [0 10 ##Inf]}})
 
 (defn leads-carried [c]
   (reduce + (map :count (filter #(= "lead" (:name %)) (u/inventory (:primitives c))))))

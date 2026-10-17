@@ -67,7 +67,6 @@
 (a/defargs settings
   {::timeout-s {:default 180 :doc "The call's :spend :job-time when it gives none: seconds before the lure gives up." :spec (a/num-in 0 nil)}
    ::sighting-age-s {:default 30 :doc "Seconds a chosen animal's last sighting stays worth walking back to while the animal is out of sight." :spec (a/num-in 0 nil)}})
-(defn timeout-s [] (settings/get settings ::timeout-s))
 (defn sighting-age-ms [] (* 1000 (settings/get settings ::sighting-age-s)))
 
 (def near-spot "An animal this close (flat) to :pos counts as :near." 6)
@@ -113,12 +112,8 @@
       (< 1 (count matches)) (contract/never :ambiguous-uuid (str "the :uuid start " (pr-str uuid) " matches " (count matches) " animals: " (str/join ", " matches)))
       :else (contract/ok :uuid "the :uuid start names at most one animal"))))
 
-(defn time-limit "Seconds the lure may take." [c]
-  (or (get-in (ctx/frozen-call c) [:spend :job-time]) (timeout-s)))
-
 (defn quote-of [c]
-  (let [most (time-limit c)]
-    {:uses {:job-time [0 (min most 60) most]}}))
+  {:uses {:job-time [0 60 ##Inf]}})
 
 (declare at-destination?)
 

@@ -50,7 +50,6 @@
   {::job-time-s {:default 120 :doc "Seconds of working, fetching included, before shearing gives up." :spec (a/num-in 0 nil)}
    ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::max-in-row {:default 3 :doc "Animals handled in a row before the body looks again." :spec (a/int-in 0 nil)}})
-(defn time-s [] (settings/get settings ::job-time-s))
 (defn reach [] (settings/get settings ::reach))
 (defn max-in-row [] (settings/get settings ::max-in-row))
 
@@ -74,12 +73,8 @@
   "Nothing waits: no shears with :fetch off ends the first round (finish! :no-shears), so a queued order never blocks the queue."
   (constantly (contract/ok :no-wait "no start condition")))
 
-(defn time-limit "Seconds the call may work." [c]
-  (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))
-
 (defn quote-of [c]
-  (let [most (time-limit c)]
-    {:uses {:job-time [0 (min most (* 10 (or (:count (:args c)) 1))) most]}}))
+  {:uses {:job-time [0 (* 10 (or (:count (:args c)) 1)) ##Inf]}})
 
 (def ending-of
   "The kind and cause of a finish by reason."

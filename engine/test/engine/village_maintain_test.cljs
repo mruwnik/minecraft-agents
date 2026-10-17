@@ -299,3 +299,9 @@
       (fn ^:async t []
         (let [s (await (scenario {:roles [librarian]} (world (villager 1 3 {:profession "none" :pos {:x -3 :y 64 :z 0}})) {} 40 appear-on-look))]
           (is (= 1 (count (ran s 'jobs.village.roll)))))))))
+
+(deftest only-a-condition-failed-or-impossible-ending-without-data-is-booked-declined
+  (are [e booked] (= booked (maintain/entry-of e))
+    {:kind :condition-failed :cause :no-plan-found} {:skipped :declined :reason :no-plan-found}
+    {:kind :impossible :cause :no-plan-found} {:skipped :declined :reason :no-plan-found}
+    {:kind :nothing-possible :cause :no-spot} {:reason :no-spot :stopped :nothing-possible}))

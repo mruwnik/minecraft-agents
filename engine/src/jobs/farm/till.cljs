@@ -2,7 +2,6 @@
   (:require [engine.contract :as contract]
             [engine.settings :as settings]
             [engine.args :as a]
-            [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
@@ -243,14 +242,6 @@
   "Skip reasons that name a cell or a hoe that is not there to use; any other skip is nothing-possible."
   #{:not-tillable :covered :not-permitted :gone :no-hoe :refused})
 
-(defn nothing-tilled
-  "The cause (the one skip reason, :nothing-tilled when they are mixed) and text of a run that tilled nothing."
-  [skipped]
-  (let [counts (frequencies (vals skipped))
-        reason (if (= 1 (count counts)) (key (first counts)) :nothing-tilled)
-        text (str/join ", " (map (fn [[r n]] (str n " " (name r))) (sort-by (comp name key) counts)))]
-    [reason (if (= :no-hoe reason) "no hoe, nothing tilled" (str "nothing tilled: " text))]))
-
 (defn result-of
   "The data of the call's ending: what is tilled and skipped so far."
   [c]
@@ -258,14 +249,12 @@
     {:tilled (count (:tilled mem)) :skipped (:skipped mem {})}))
 
 (defn conclude!
-  "The ending of a run with no cell left to work. Done when it tilled enough (or had nothing to skip); else the cause is
-  the skip reason(s)."
+  "The ending of a run with no cell left to work (job-common/conclude!)."
   [c]
   (let [{:keys [tilled skipped] :as result} (result-of c)]
-    (if (or (empty? skipped) (common/enough? c tilled (+ tilled (count skipped))))
-      (ctx/end c :done nil (assoc result :text (str "tilled " tilled ", skipped " (count skipped))))
-      (let [[reason text] (if (pos? tilled) [:partial (str "tilled " tilled ", skipped " (count skipped))] (nothing-tilled skipped))]
-        (ctx/end c (if (condition-skips reason) :condition-failed :nothing-possible) reason (assoc result :text text))))))
+    (common/conclude! c {:verb "tilled" :mixed :nothing-tilled :condition-skips condition-skips
+                         :texts {:no-hoe "no hoe, nothing tilled"}}
+                      tilled skipped result)))
 
 (defn ^:async till-step!
   "One step: skip what cannot be tilled, else walk to the nearest cell, clear ground cover above it or use the hoe on it."

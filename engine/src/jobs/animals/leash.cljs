@@ -45,7 +45,6 @@
   {::job-time-s {:default 30 :doc "Seconds of working, fetching included, before leashing gives up." :spec (a/num-in 0 nil)}
    ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::max-in-row {:default 3 :doc "Animals handled in a row before the body looks again." :spec (a/int-in 0 nil)}})
-(defn time-s [] (settings/get settings ::job-time-s))
 (defn reach [] (settings/get settings ::reach))
 (defn max-in-row [] (settings/get settings ::max-in-row))
 
@@ -64,12 +63,8 @@
     (contract/ok :lead "a lead carried or fetched")
     (contract/later :no-lead "no lead carried and :fetch is off")))
 
-(defn time-limit "Seconds the call may work." [c]
-  (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s)))
-
 (defn quote-of [c]
-  (let [most (time-limit c)]
-    {:uses {:job-time [0 (min most 10) most]}}))
+  {:uses {:job-time [0 10 ##Inf]}})
 
 (defn skipped
   "The keys of the animals never to leash: :skip and those given up on."

@@ -92,7 +92,6 @@
    ::max-ties {:default 2 :doc "Ties tried before the job gives up." :spec (a/int-in 0 nil)}
    ::tie-settle-ms {:default 250 :doc "How long to wait between looks at the animal after the click on the post." :spec (a/int-in 0 nil)}
    ::tie-settle-tries {:default 6 :doc "How often the animal is looked at again after the click before the tie counts as not taken." :spec (a/int-in 0 nil)}})
-(defn timeout-s [] (settings/get settings ::timeout-s))
 (defn max-ties [] (settings/get settings ::max-ties))
 
 (defn stop-text
@@ -188,12 +187,8 @@
       (not (or (need/parse-arg (:fetch (:args c))) (animals/lead-carried? c))) (contract/later :no-lead "lead-to waits: no lead carried and :fetch is off")
       :else (contract/ok :order "the order is complete"))))
 
-(defn time-limit "Seconds the leading may take." [c]
-  (or (get-in (ctx/frozen-call c) [:spend :job-time]) (timeout-s)))
-
 (defn quote-of [c]
-  (let [most (time-limit c)]
-    {:uses {:job-time [0 (min most 60) most]}}))
+  {:uses {:job-time [0 60 ##Inf]}})
 
 (defn tied-at-post
   "An animal of :mob in sight held by a knot on the :fence cell, else nil."
