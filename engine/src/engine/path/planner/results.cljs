@@ -280,6 +280,20 @@
           (== (.stateAt ^js (.-snapshot s) (+ x dx) y (+ z dz)) UNLOADED) true
           :else (recur dx (inc dz))))))
 
+  ;; Does a one-way step to the node run on into land not known: atLoadedEdge, or unseen cells (options.unknown) at the
+  ;; node's feet or floor level within OPEN-REACH, which the body can look at once there.
+  (oneWayOpen [s node]
+    (or ^boolean (.atLoadedEdge s node)
+        (let [x (aget (.-xs s) node) y (aget (.-ys s) node) z (aget (.-zs s) node)
+              snap ^js (.-snapshot s)]
+          (loop [dx (- OPEN-REACH) dz (- OPEN-REACH)]
+            (cond
+              (> dx OPEN-REACH) false
+              (> dz OPEN-REACH) (recur (inc dx) (- OPEN-REACH))
+              (or ^boolean (.isUnknown s (.stateAt snap (+ x dx) y (+ z dz)))
+                  ^boolean (.isUnknown s (.stateAt snap (+ x dx) (dec y) (+ z dz)))) true
+              :else (recur dx (inc dz)))))))
+
   (nearest [s]
     #js {:path (if (== (.-best-node s) -1) nil (.pathTo s (.-best-node s))) :distance (.-best-distance s)})
 
@@ -300,7 +314,7 @@
             one-way (when-not (neg? ow)
                       #js {:move (aget (.-moves s) ow) :x (aget (.-xs s) ow) :y (aget (.-ys s) ow) :z (aget (.-zs s) ow)
                            :distance (.-best-distance s) :path (.pathTo s (.-best-node s))
-                           :open (and ^boolean (.atLoadedEdge s (.-best-node s))
+                           :open (and ^boolean (.oneWayOpen s (.-best-node s))
                                       (not ^boolean (.endsOnMagma s (aget (.-xs s) (.-best-node s)) (aget (.-ys s) (.-best-node s)) (aget (.-zs s) (.-best-node s)) (aget (.-hs s) (.-best-node s)))))})]
         (when (or (some? cut) (some? one-way))
           #js {:path (when (some? cut) (.pathTo s cut))
@@ -485,7 +499,7 @@
             end-distance (cond clean (.-distance clean-end) (== (.-best-node s) -1) js/Infinity :else (.-best-distance s))
             one-way (when (and clean (< (.-best-distance s) end-distance))
                       #js {:move (aget (.-moves s) one-way-node) :x (aget (.-xs s) one-way-node) :y (aget (.-ys s) one-way-node) :z (aget (.-zs s) one-way-node)
-                           :distance (.-best-distance s) :path (.pathTo s (.-best-node s)) :open (.atLoadedEdge s (.-best-node s))})]
+                           :distance (.-best-distance s) :path (.pathTo s (.-best-node s)) :open (.oneWayOpen s (.-best-node s))})]
         (cond
           (identical? (.-reason s) "budget") (.outcome s "partial" "budget" end-path one-way)
           ^boolean (.-goal-unloaded s) (.outcome s "partial" "goal-unloaded" end-path one-way)

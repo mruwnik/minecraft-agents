@@ -333,8 +333,8 @@
                                                    {:pos [9 61 0] :range 1 :ways #{:walk :clear-seal} :unknown true} watch!))]
           (is (true? @held) "the off hand held the torch during the walk")
           (is (= 1 (count (filter #(= :go-to.off-hand-torch (:kind %)) seen))) "once per call")
-          (is (= [:one-way {:kind :drop :at [1 62 0]}] [(:why out) (:one-way out)])
-              (str "near 7 sees the shaft's floor: the drop is planned, and refused only as one-way " (pr-str out))))))))
+          (is (= [:unseen-floor-dark [0 64 0] [1 62 0]] [(:why out) (:at out) (vals (:dark-best out))])
+              (str "unseen land counts as open: the body walks to the takeoff before the dark drop is refused " (pr-str out))))))))
 
 (deftest go-to-with-unknown-holds-a-carried-soul-torch-in-the-dark
   (async done
@@ -349,7 +349,7 @@
                                                 {:pos [9 61 0] :range 1 :ways #{:walk :clear-seal} :unknown true} watch!))
               w @(fake/state p)]
           (is (= "soul_torch" @held) "the off hand held the soul torch during the walk")
-          (is (= :one-way (:why out)) (pr-str out))
+          (is (= :unseen-floor-dark (:why out)) (pr-str out))
           (is (nil? (get-in w [:equipment "offHand"])) "put back")
           (is (= 4 (reduce + (map :count (filter #(= "soul_torch" (:name %)) (:inventory w))))) (pr-str (:inventory w))))))))
 

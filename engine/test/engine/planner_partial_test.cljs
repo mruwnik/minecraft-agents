@@ -124,6 +124,13 @@
     (is (= {:move DROP :x 11 :y 67 :z 2} (one-way-of r)))
     (is (false? (get-in r [:oneWay :open])))))
 
+(deftest a-one-way-step-into-a-pit-with-unseen-cells-by-it-is-open
+  (let [unseen [[13 67 -2 14 68 6 "void_air"]]
+        unknown {:unknown {:cell 0.1 :floor 0.3 :peekS 0.7 :aimS 0.1}}]
+    (is (false? (get-in (run pit-in-front plateau (near 100 70 2) unknown) [:oneWay :open])) "all seen: a dead end")
+    (is (true? (get-in (run (into pit-in-front unseen) plateau (near 100 70 2) unknown) [:oneWay :open])) "unseen land runs on")
+    (is (false? (get-in (run (into pit-in-front unseen) plateau (near 100 70 2)) [:oneWay :open])) "without the mask nothing is unseen")))
+
 (defn gap-of [cells][(stone -2 -2 5 6 70) (stone (+ 6 cells) -2 20 6 70)])
 
 (deftest a-gap-wider-than-any-jump-is-exhausted

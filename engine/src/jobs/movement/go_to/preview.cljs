@@ -57,12 +57,13 @@
   (near/with-sight), a dark drop as go-to's :unseen-floor-dark."
   [c plan to policy unknown]
   (let [{:keys [r steps status]} plan
+        path (or (.-path r) (some-> (.-oneWay r) .-path))
         no (wplan/no-walk plan 0 policy)
         here (u-dist c to)
         result (cond
                  (and (nil? no) (= "found" status)) (let [dark (dark-cells (:primitives c) steps unknown)]
-                                                      (cond-> (assoc (route steps (.-path r)) :found true) dark (assoc :dark dark)))
-                 (nil? no) {:found false :reason :partial :near here :partial (route steps (.-path r))}
+                                                      (cond-> (assoc (route steps path) :found true) dark (assoc :dark dark)))
+                 (nil? no) {:found false :reason :partial :near here :partial (route steps path)}
                  :else (assoc (dissoc no :replans :status) :found false :near here))]
     (if-not unknown
       result
