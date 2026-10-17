@@ -1513,3 +1513,27 @@
           (.then (fn [_] (reset! calls 0) (r/put-until-answered! (fn [] (swap! calls inc) (js/Promise.resolve {:code 2 :out "{:ok false :reason :bad-args}"})) 4 1)))
           (.then (fn [answer] (is (= [2 1] [(:code answer) @calls]) "a refusal is not asked again")))
           (.then done)))))
+
+(deftest the-last-plot-is-cleared-only-while-its-lease-is-free
+  (async done
+    (let [body (str "WtLast" (.-pid js/process))
+          plot (+ 200000 (.-pid js/process))
+          sent (atom 0)
+          send! (fn [_] (swap! sent inc) (js/Promise.resolve nil))]
+      (fs/mkdirSync (r/run-dir {:body body}) #js {:recursive true})
+      (fs/mkdirSync r/lease-dir #js {:recursive true})
+      (fs/writeFileSync (r/last-plot-file {:body body}) (pr-str {:plot plot :origin [0 0 0] :dims [16 16]}))
+      (fs/writeFileSync (r/lease-file plot) "1")
+      (-> (r/reset-last-plot! {:body body} send!)
+          (.then (fn []
+                   (is (zero? @sent) "another live runner holds the plot: nothing is sent")
+                   (fs/rmSync (r/lease-file plot))
+                   (r/reset-last-plot! {:body body} send!)))
+          (.then (fn []
+                   (is (= 1 @sent) "a free plot is cleared")
+                   (is (not (fs/existsSync (r/lease-file plot))) "and its lease is released again")))
+          (.finally (fn []
+                      (fs/rmSync (r/lease-file plot) #js {:force true})
+                      (fs/rmSync (str (r/lease-file plot) ".guard") #js {:force true})
+                      (fs/rmSync (r/run-dir {:body body}) #js {:recursive true :force true})
+                      (done)))))))

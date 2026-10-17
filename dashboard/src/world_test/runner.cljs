@@ -360,21 +360,29 @@
 (defn last-plot-file [opts] (path/join (run-dir opts) "last-origin.edn"))
 
 (defn note-last-plot!
-  "Records the plot the body is about to be put on, so a later start can clear it first (a run that broke may have left the body there)."
-  [opts origin grid]
+  "Records the plot (index i) the body is about to be put on, so a later start can clear it first (a run that broke may have left the body there)."
+  [opts i origin grid]
   (fs/mkdirSync (path/dirname (last-plot-file opts)) #js {:recursive true})
-  (fs/writeFileSync (last-plot-file opts) (pr-str {:origin origin :dims (f/dims grid)})))
+  (fs/writeFileSync (last-plot-file opts) (pr-str {:plot i :origin origin :dims (f/dims grid)})))
+
+(declare acquire-plot! release-plot!)
 
 (defn reset-last-plot!
-  "Resolves once the plot the body was last left on is cleared (its traps gone), before the body starts."
-  [opts]
-  (let [file (last-plot-file opts)
-        {:keys [origin dims]} (when (fs/existsSync file)
-                                (try (let [v (reader/read-string (fs/readFileSync file "utf8"))] (if (vector? v) {:origin v} v))
-                                     (catch :default _ nil)))]
-    (if (vector? origin)
-      (rcon! (f/reset-plot-commands (let [[sx sz] dims] (if sx (assoc f/default-grid :size-x sx :size-z sz) f/default-grid)) origin))
-      (js/Promise.resolve nil))))
+  "Resolves once the plot the body was last left on is cleared (its traps gone), before the body starts. The clearing
+  runs only while this runner holds that plot's lease (taken for it): another runner may be mid-case there, and the
+  next holder clears its own plot at setup anyway. send! (commands -> promise) defaults to rcon!."
+  ([opts] (reset-last-plot! opts rcon!))
+  ([opts send!]
+   (let [file (last-plot-file opts)
+         {:keys [plot origin dims]} (when (fs/existsSync file)
+                                      (try (reader/read-string (fs/readFileSync file "utf8"))
+                                           (catch :default _ nil)))
+         held (when (and (integer? plot) (vector? origin))
+                (try (acquire-plot! plot (inc plot)) (catch :default _ nil)))]
+     (if-not held
+       (js/Promise.resolve nil)
+       (-> (send! (f/reset-plot-commands (let [[sx sz] dims] (if sx (assoc f/default-grid :size-x sx :size-z sz) f/default-grid)) origin))
+           (.finally #(release-plot! held)))))))
 
 (defn finish-run!
   "End of a run: clears the plot the body was left on, then removes the run's temp dir, unless results is nil (the run
@@ -1652,7 +1660,7 @@
                             :day-limit (:day-limit opts default-day-limit)}
                            phase (:id c))))
             :start! start!}))
-        (.then (fn [ok] (note-last-plot! opts origin grid) ok))
+        (.then (fn [ok] (note-last-plot! opts i origin grid) ok))
         (.then (fn [ok]
                  (if-not ok
                    (result {:status :skipped :why (str "needs " (if (lease/weather-x? rc) (str "weather " (name (:weather rc))) (name (:time rc))) " (no --allow-time)")})
