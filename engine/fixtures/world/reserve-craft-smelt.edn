@@ -1,0 +1,47 @@
+;; Reserve register step 7: craft ingredients and furnace fuel do not spend units the register holds.
+;; The furnace stands at [20 0 14], a crafting table at [20 0 16]; the body at [16.5 0 16.5] carries its stock.
+;; Should-succeed: bread from the wheat left free (4 carried, 1 held); iron smelted on the coal left free (2 carried, 1 held).
+;; Should-fail: all the coal held leaves the smelt with no fuel; all the wheat held leaves bread short (stopped :need).
+{:defaults
+ {:tags [:items :reserve :craft :smelt :jobs]
+  :time :any
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :settle-s 2}
+  :limit-s 90}
+ :cases
+ [{:name "smelt-does-not-load-held-coal"
+   :blocks [[:set [20 0 14] "furnace[facing=west]"]]
+   :body {:inventory [["raw_iron" 3] ["coal" 3]]}
+   :act [[:job (jobs.memory.reserve {:id "wt-fuel" :item "coal" :count 3 :why "world test"})]
+         [:await {:source :job :kind :completed} 20]
+         [:job (jobs.items.smelt {:furnace #xyz [20 0 14] :item "raw_iron" :count 3})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-fuel}} :within-s 40 :of-job true}]
+   :after [[:item "iron_ingot" 0] [:item "coal" 3]]
+   :limit-s 60}
+  {:name "smelt-burns-the-coal-the-register-leaves-free"
+   :blocks [[:set [20 0 14] "furnace[facing=west]"]]
+   :body {:inventory [["raw_iron" 3] ["coal" 3]]}
+   :act [[:job (jobs.memory.reserve {:id "wt-fuel" :item "coal" :count 1 :why "world test"})]
+         [:await {:source :job :kind :completed} 20]
+         [:job (jobs.items.smelt {:furnace #xyz [20 0 14] :item "raw_iron" :count 3})]]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 3}} :within-s 100 :of-job true}]
+   :after [[:item "iron_ingot" 3] [:item "coal" [:>= 1]]]
+   :limit-s 120}
+  {:name "craft-does-not-spend-held-wheat"
+   :blocks [[:set [20 0 16] "crafting_table"]]
+   :body {:inventory [["wheat" 3]]}
+   :act [[:job (jobs.memory.reserve {:id "wt-wheat" :item "wheat" :count 3 :why "world test"})]
+         [:await {:source :job :kind :completed} 20]
+         [:job (jobs.items.craft {:item "bread" :fetch false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :need}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 10 :of-job true :until {:source :job :kind :stopped}}]
+   :after [[:item "bread" 0] [:item "wheat" 3]]
+   :limit-s 60}
+  {:name "craft-uses-the-wheat-the-register-leaves-free"
+   :blocks [[:set [20 0 16] "crafting_table"]]
+   :body {:inventory [["wheat" 4]]}
+   :act [[:job (jobs.memory.reserve {:id "wt-wheat" :item "wheat" :count 1 :why "world test"})]
+         [:await {:source :job :kind :completed} 20]
+         [:job (jobs.items.craft {:item "bread" :fetch false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "bread" 1] [:item "wheat" 1]]}]}
