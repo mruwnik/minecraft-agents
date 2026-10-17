@@ -1293,6 +1293,15 @@
     (is (= {:event :completed :job "j141" :message "done" :ago-s 10} (first (:items summary))))
     (is (nil? (observe-status/missed-summary [(event :body :chat)] 11000)))))
 
+(deftest missed-summary-folds-a-repeated-notice-into-one-item-with-its-count
+  (let [again (fn [i] (assoc (notice "j5" :obtain.no-source (str "no source " i)) :time-ms (* 1000 i)))
+        other (assoc (notice "j6" :go-home.too-far "far") :time-ms 9000)
+        summary (observe-status/missed-summary (conj (mapv again (range 1 6)) other) 11000)]
+    (is (= 2 (:count summary)))
+    (is (= [{:event :obtain.no-source :job "j5" :count 5 :message "no source 5" :ago-s 6}
+            {:event :go-home.too-far :job "j6" :message "far" :ago-s 2}]
+           (:items summary)))))
+
 (deftest missed-summary-lists-a-notice-the-agent-must-decide-on
   (let [warn (assoc (notice "j5" :go-home.too-far "home is 409 blocks away") :time-ms 5000)
         summary (observe-status/missed-summary [(event :body :chat) warn (event :job :tick)] 11000)]

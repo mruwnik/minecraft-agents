@@ -425,16 +425,30 @@
 (defn missed-item [now-ms e]
   (clean-pairs :event (:kind e) :job (get-in e [:context :job-id]) :reflex (some-> (get-in e [:context :reflex-id]) name)
                :decision (some-> (get-in e [:data :decision]) name)
+               :count (when (< 1 (:repeats e 1)) (:repeats e))
                :damage (:damage e) :lowest-health (:lowest-health e) :cause (:cause e) :message (clip (:message e))
                :ago-s (some-> (:time-ms e) (#(max 0 (js/Math.round (/ (- now-ms %) 1000)))))))
 
+(defn merge-repeated-notices
+  "events with the notices of one job and kind folded into one, at the place of the first, holding the latest text and
+  :repeats, so a job re-emitting a notice each round cannot crowd out the rest."
+  [events]
+  (let [k (fn [e] (when (= :notice (:attention e)) [(get-in e [:context :job-id]) (:kind e)]))
+        groups (group-by k (filter k events))]
+    (into [] (keep (fn [e]
+                     (let [g (some-> (k e) groups)]
+                       (cond (nil? g) e
+                             (identical? e (first g)) (assoc (last g) :repeats (count g))))))
+          events)))
+
 (defn missed-summary
   "{:count n :items [...]} of the missed events among events, or nil when there are none: the latest max-missed and every
-  death or respawn before them, in order; all hits are one item, in the place of the first. skipped (events never read)
+  death or respawn before them, in order; all hits are one item, in the place of the first; repeated notices of one job
+  and kind are one item with :count. skipped (events never read)
   is added as :skipped when positive."
   ([events now-ms] (missed-summary events now-ms 0))
   ([events now-ms skipped]
-  (let [news (filterv missed? events)
+  (let [news (merge-repeated-notices (filterv missed? events))
         hits (filterv hurt-event? news)
         hurt (when (seq hits) (hurt-item hits))
         items (into [] (keep #(if (hurt-event? %) (when (identical? % (first hits)) hurt) %)) news)]
