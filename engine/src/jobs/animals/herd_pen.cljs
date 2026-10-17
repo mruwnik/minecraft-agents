@@ -311,9 +311,9 @@
         {:keys [gate in out]} chosen
         unseen (when refuse (unseen-approach c extra))]
     (cond
-      (and unseen (not (u/within? (u/self-pos c) (centre unseen) (look-range))) (< (:approach-walks (ctx/mem c) 0) max-approach-walks))
+      (and unseen (< (:approach-walks (ctx/mem c) 0) max-approach-walks)
+           (not= :there (await (near/go-near! c (centre unseen) (look-range) {:doors :never :ways #{:walk :clear-seal} :see true}))))
       (do (ctx/update-mem! c update :approach-walks (fnil inc 0))
-          (await (near/go-near! c (centre unseen) (look-range) {:doors :never :ways #{:walk :clear-seal}}))
           :continue)
       unseen
       (do (await (sense/look-at! c unseen))
