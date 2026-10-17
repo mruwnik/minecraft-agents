@@ -62,6 +62,15 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   }
 
   const here = () => xyz(bot.entity.position)
+
+  // a pick-up shortly after, and near, the body's own dig, use or chest transfer is its own work, not found goods
+  let ownWork = null
+  const noteOwnWork = () => { ownWork = { at: Date.now(), pos: here() } }
+  const ownWorkNear = () => {
+    if (!ownWork || Date.now() - ownWork.at > OWN_WORK_MS) return false
+    const p = here()
+    return Math.hypot(p.x - ownWork.pos.x, p.y - ownWork.pos.y, p.z - ownWork.pos.z) <= OWN_WORK_BLOCKS
+  }
   // the cell the pathfinder plans from: one up when standing on a block lower than a cube (farmland), as it offsets
   const standingCell = () => {
     const p = bot.entity.position
@@ -307,7 +316,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       playerCollect: (collector, collected) => {
         if (collector !== target.entity) return
         const item = collected && droppedItem(target, collected)
-        if (item) emit({ kind: 'picked-up', item: item.name, count: item.count, pos: here() })
+        if (item) emit({ kind: 'picked-up', item: item.name, count: item.count, pos: here(), ...(ownWorkNear() && { own: true }) })
       },
       spawn: () => {
         emit({ kind: 'spawned' })
@@ -545,20 +554,29 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
   // dig, place, jumpPlace and useOn mark the cell's column for the view dump once they settle, whatever the outcome
   const marking = fn => async (token, a) => {
+    noteOwnWork()
     const mark = () => {
+      noteOwnWork()
       const p = a?.pos
       if (isNum(p?.x) && isNum(p?.y) && isNum(p?.z)) view?.markCell?.(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z))
     }
     try { return await fn(token, a) } finally { mark() }
   }
 
-  const acting = Object.fromEntries(Object.entries({ moveTo: onFoot(moveTo), dig: marking(dig), place: marking(place), jumpPlace: marking(jumpPlace), collect, inspectContainer, transfer, equip, toss, craft, furnace, enchant, chat, eat, fish, attack, interact, trade, unequip, sleep, look, swim, useOn: marking(useOn), steer: onFoot(steer), mount, dismount, paddle })
+  const working = fn => async (token, a) => {
+    noteOwnWork()
+    try { return await fn(token, a) } finally { noteOwnWork() }
+  }
+
+  const acting = Object.fromEntries(Object.entries({ moveTo: onFoot(moveTo), dig: marking(dig), place: marking(place), jumpPlace: marking(jumpPlace), collect, inspectContainer, transfer: working(transfer), equip, toss, craft, furnace, enchant, chat, eat, fish, attack, interact, trade, unequip, sleep, look, swim, useOn: marking(useOn), steer: onFoot(steer), mount, dismount, paddle })
     .map(([name, fn]) => [name, whenUp(fn)]))
   // the raw world engine.perception looks at (stateAt, lightAt, eye, block changes): body-side only, never a job's
   const rawWorld = createRawWorld({ getBot: () => bot, isOffline: () => isOffline() || down, lightOverlay: (cx, cz, s) => view?.lightOverlay?.(cx, cz, s) })
   return { setOwner, isOwner, drive: driveNow, stopDriving, self, worldAge, entities, blockAt, harvestTools, digTime, clearTime, pathWorld, ...acting, chatDirect, wait, isOffline, isSettling, lastKnown, offline, onBodyEvent, entityObservation, onEntityDeath, rawWorld, physicsMs: () => bot.physicsClock?.intervalMs() ?? 50, close }
 }
 
+const OWN_WORK_MS = 15000
+const OWN_WORK_BLOCKS = 8
 const REPO_ROOT = join(import.meta.dirname, '..', '..')
 const readRepoFile = rel => { try { return readFileSync(join(REPO_ROOT, rel), 'utf8') } catch { return null } }
 

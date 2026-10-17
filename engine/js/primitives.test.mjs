@@ -3302,3 +3302,13 @@ test('entities with ids filter before the max cap', () => {
   assert.equal(p.entities({ max: 3 }).some(e => e.id === 500), false)
   assert.deepEqual(p.entities({ max: 3, ids: [500] }).map(e => e.id), [500])
 })
+
+test('picked-up is marked own after the body digs nearby, and not for a pile it walked into', async () => {
+  const { bot, p } = rig({ ...world, blocks: { '2,64,0': 'stone' }, entities: { 21: { id: 21, ...pile } } })
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  bot.emit('playerCollect', bot.entity, { id: 21, ...pile })
+  await p.dig('t1', { pos: at(2, 64, 0) })
+  bot.emit('playerCollect', bot.entity, { id: 21, ...pile })
+  assert.deepEqual(seen.filter(e => e.kind === 'picked-up').map(e => e.own), [undefined, true])
+})

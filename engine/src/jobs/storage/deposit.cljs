@@ -41,7 +41,7 @@
   beside a full one and joins the group. A place that ends for a reason of the cell (a zone, the body in it, nothing to place against,
   unreachable, occupied) tries the next free spot (warn deposit.no-chest); a place that ends :need (no chest to be had) ends condition-failed
   :no-chest-item, no free cell beside (or none left to try), or :make-chests? false, nothing-possible :all-chests-full; a chest that cannot be placed after 3 tries nothing-possible :no-chest-spot. Any other :chest is used alone.
-  Found goods (jobs.lib.found: bulk or containers picked up with no job reason) stay carried, even when named in :items; one
+  Found goods (jobs.lib.found: bulk or containers picked up with no work of the body near) stay carried, even when named in :items; one
   goods.found notice (:attention :notice) names item, count and the pick-up place.
   Stock: what the chest holds after each transfer is booked in body memory :fetch/stock (jobs.lib.stock), so observe chests shows it.")
 
