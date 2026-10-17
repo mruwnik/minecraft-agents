@@ -188,6 +188,24 @@
           (is (pos? (await (fed 5 false))) "not reserved: eaten")
           (is (pos? (await (fed 1 true))) "starving: eaten"))))))
 
+(deftest eat-leaves-the-seed-of-a-dug-crop-for-the-tidy-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [fed (fn ^:async fed* [food]
+                    (let [{:keys [eng]} (setup {:self {:food food} :inventory [{:name "potato" :count 2}]})]
+                      (mem/write! (:store eng) :tidy {:cell [1 0 1] :action :dig :was "potatoes" :any-of ["potato"] :now "air" :tries 0
+                                                      :plan "p" :job "j1"} {:cap 5 :ttl 300000})
+                      (core/submit! eng '(jobs.survival.eat) {})
+                      (await (core/tick! eng))
+                      (count (entries eng :fed))))]
+          (is (= 1 (await (fed 5))) "one potato of two is kept"))))))
+
+(deftest spare-seeds-leaves-the-owed-seeds-until-near-starving
+  (are [food expected] (= expected (vec (eat/spare-seeds [{:name "potato" :count 3} {:name "carrot" :count 1}] food {"potato" 2})))
+    5 [{:name "potato" :count 1} {:name "carrot" :count 1}]
+    1 [{:name "potato" :count 3} {:name "carrot" :count 1}]))
+
 (deftest reserved-bait-is-not-food-for-the-hungry-checks
   (let [self (fn [food] #js {:food food :health 20 :inventory #js [#js {:name "carrot" :count 10}]})
         res #{"carrot"}]

@@ -111,10 +111,15 @@
   [view]
   (into #{} (mapcat :foods) (map :data (mem/entries view :bait-reserve))))
 
+(defn nearly-starving?
+  "Whether food is at or below ::reserve-eat-below, where meals no longer spare reserved bait or seeds."
+  [food]
+  (<= food (settings/get settings ::reserve-eat-below)))
+
 (defn spared?
   "Whether an unnamed meal leaves name alone: it is in reserved and food is above ::reserve-eat-below."
   [food name reserved]
-  (and (contains? reserved name) (> food (settings/get settings ::reserve-eat-below))))
+  (and (contains? reserved name) (not (nearly-starving? food))))
 
 (defn carried-names
   "Names of the carried items an unnamed meal may eat: not the reserved bait (names), unless nearly starving."

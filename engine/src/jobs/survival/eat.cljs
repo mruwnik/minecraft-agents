@@ -7,12 +7,14 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.foods :as foods]
+            [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]))
 
 (def doc
   "Eat the best carried food, bite after bite in one call, until food reaches :until, :max-bites are eaten or nothing edible is left.
   Best means most hunger points, then most saturation (data from jobs.lib.foods).
   Harmful foods (rotten flesh, spider eyes, pufferfish, poisonous potatoes, raw chicken) need :allow-bad.
+  An unnamed meal leaves one of each seed a noted dug crop needs for the tidy-up (jobs.lib.tidy) until food is nearly starving.
   Golden apples are eaten only when named or at low health. Chorus fruit and suspicious stew only when named.
   Done? means fed (food at :until): a fed body ends done without eating. Hungry, it needs an edible food carried, else
   condition-failed :no-food (a listed job waits). A named item that is not food, or is harmful without :allow-bad, is
@@ -66,10 +68,29 @@
                          (- (foods/points n)) (- (foods/saturation n))]))
        first))
 
+(defn seeds-owed
+  "{seed count} the noted dug crops still need to be sown again (jobs.lib.tidy)."
+  [c]
+  (->> (tidy/entries c)
+       (filter #(= :dig (:action %)))
+       (keep (comp first :any-of))
+       frequencies))
+
+(defn spare-seeds
+  "inventory without the seeds owed, so a meal leaves them for the tidy-up; all of it once food is nearly starving."
+  [inventory food owed]
+  (if (foods/nearly-starving? food)
+    inventory
+    (keep (fn [{:keys [name count] :as i}]
+            (let [left (- count (get owed name 0))]
+              (when (pos? left) (assoc i :count left))))
+          inventory)))
+
 (defn carried-best [c]
   (let [{:keys [item allow-bad]} (:args c)
-        self (.self (:primitives c))]
-    (best-food (u/inventory (:primitives c)) allow-bad item (.-health self) (.-food self) (foods/reserved (ctx/view c)))))
+        self (.self (:primitives c))
+        inventory (if item (u/inventory (:primitives c)) (spare-seeds (u/inventory (:primitives c)) (.-food self) (seeds-owed c)))]
+    (best-food inventory allow-bad item (.-health self) (.-food self) (foods/reserved (ctx/view c)))))
 
 (defn refusal
   "The cause when the :item is not eaten at all (not a food, or harmful without :allow-bad), else nil."
