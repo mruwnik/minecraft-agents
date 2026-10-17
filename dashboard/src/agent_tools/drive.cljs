@@ -15,6 +15,7 @@
   (str "usage: drive.mjs <agent> <op> [args] --world <world> [--worlds <dir>] [--state <legacy-parent>]\n"
        "  take --who NAME --why \"<text>\" --idle-s <n> | hold <control>[,<control>...] <ms> | look <yaw> <pitch>\n"
        "  turn <dyaw> [dpitch] | jump | stop (also cancels the driver's running world.mjs job) | ping | state | release [--force]\n"
+       "  degrees as in Minecraft's F3 screen: yaw 0 south, 90 west, 180 north, 270 east; pitch +90 straight down, -90 straight up\n"
        "  controls: " (str/join " " controls)))
 
 (defn socket-path-for [{:keys [state world agent]}]

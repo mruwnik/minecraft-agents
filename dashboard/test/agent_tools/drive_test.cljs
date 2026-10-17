@@ -91,3 +91,6 @@
   (doseq [argv [["hold" "forward" "500"] ["look" "10" "0"] ["turn" "5"] ["jump"] ["stop"] ["ping"]]]
     (is (re-find #"reflexes are off" (str (drive/reply-note (drive/request-for (into ["Bob"] (concat argv ["--world" "w"]))) "{\"ok\":true}")))
         (pr-str argv))))
+
+(deftest usage-states-the-pitch-sign
+  (is (re-find #"pitch \+90 straight down" drive/usage)))
