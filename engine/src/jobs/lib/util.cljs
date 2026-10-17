@@ -80,7 +80,7 @@
   is not loaded. Primitives that are not wrapped by perception (no sensedAt) know nothing: nil, never a blockAt read."
   [p pos]
   (when (some? (.-sensedAt p))
-    (let [b (.sensedAt p (clj->js pos))]
+    (let [b (.sensedAt p (if (map? pos) #js {:x (:x pos) :y (:y pos) :z (:z pos)} (clj->js pos)))]
       (when (and *reads* b (true? (.-unknown b))) (note-read! :cells (cell-vec pos)))
       b)))
 

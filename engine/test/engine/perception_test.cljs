@@ -198,6 +198,18 @@
     (is (.-unknown (.seenBlockAt wrapped #js {:x 0 :y 65 :z 8})))
     (is (= "stone" (.-name (.seenBlockAt wrapped #js {:x 0 :y 65 :z 5}))))))
 
+(deftest sensedAt-answers-as-js-and-is-redone-when-the-eye-turns
+  (let [{:keys [p per]} (rig {"0,65,-5" "gold_block"})
+        wrapped (perception/wrap p per)
+        at #(.sensedAt wrapped #js {:x 0 :y 65 :z -5})]
+    (perception/pass! per)
+    (is (true? (.-unknown (at))))
+    (turn! p 180)
+    (perception/pass! per)
+    (let [a (at)]
+      (is (= ["gold_block" true -5] [(.-name a) (.-visible a) (.-z (.-pos a))]))
+      (is (= #{"name" "pos" "ageMs" "visible" "fullCube"} (set (js/Object.keys a)))))))
+
 (deftest the-seeing-curve-is-the-view-lightmap
   (are [sky block time rain]
        (let [darken (.skyDarken ^js @shading time rain 0)]

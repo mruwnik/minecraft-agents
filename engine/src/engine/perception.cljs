@@ -57,7 +57,6 @@
   The parts: engine.perception.light (light curve), .store (block memory and reading it), .rays (view cone, sight pass,
   keeping memory current), .mobs (mob memory), .persist (file). This namespace creates, runs and wraps them."
   (:require [engine.args :as a]
-            [clojure.set :as set]
             [engine.perception.light :as light]
             [engine.perception.mobs :as mobs]
             [engine.perception.persist :as persist]
@@ -203,22 +202,29 @@
       {:unknown true :pos pos}
       (assoc (block-of per id pos) :age-ms age :visible false))))
 
-(defn sense-key
-  "What a cached answer depends on: the tick, the raw world's epoch and the eye; nil offline."
-  [{:keys [raw opts]}]
+(defn sense-fresh!
+  "Clears the sensed cache when what it depends on (the tick, the raw world's epoch and the eye) changed since the last
+  call; false offline (no eye). Compares the parts in place: a key string per call was the cost."
+  [{:keys [raw opts st]}]
   (when-let [^js eye (.eye ^js raw)]
-    (str (js/Math.floor (/ ((:now opts)) (:step-ms opts))) "|" (rays/epoch-of raw) "|" (.-dimension eye) "|"
-         (.-x eye) "|" (.-y eye) "|" (.-z eye) "|" (.-yaw eye) "|" (.-pitch eye))))
+    (let [^js st st
+          ^js last (.-sensedKey st)
+          tick (js/Math.floor (/ ((:now opts)) (:step-ms opts)))
+          epoch (rays/epoch-of raw)]
+      (when-not (and last
+                     (identical? tick (aget last 0)) (identical? epoch (aget last 1)) (identical? (.-dimension eye) (aget last 2))
+                     (identical? (.-x eye) (aget last 3)) (identical? (.-y eye) (aget last 4)) (identical? (.-z eye) (aget last 5))
+                     (identical? (.-yaw eye) (aget last 6)) (identical? (.-pitch eye) (aget last 7)))
+        (set! (.-sensedKey st) #js [tick epoch (.-dimension eye) (.-x eye) (.-y eye) (.-z eye) (.-yaw eye) (.-pitch eye)])
+        (.clear ^js (.-sensed st)))
+      true)))
 
 (defn sensed
   "What the body knows of the cell pos [x y z] now: nil (unloaded or offline), felt, visible, remembered or unknown (see
   the namespace doc). Cached for one tick while the eye and the world stay the same."
   [{:keys [raw st] :as per} [x y z :as pos]]
-  (let [^js st st k (sense-key per)]
-    (when k
-      (when-not (= k (.-sensedKey st))
-        (set! (.-sensedKey st) k)
-        (.clear ^js (.-sensed st)))
+  (let [^js st st]
+    (when (sense-fresh! per)
       (let [ck (str x "," y "," z)
             hit (.get ^js (.-sensed st) ck)]
         (if (undefined? hit)
@@ -231,13 +237,20 @@
 (defn pos-js [[x y z]] #js {:x x :y y :z z})
 
 (defn answer-js
-  "A sensed answer as JS: blockAt's keys (pos {x y z}, fullCube) plus ageMs, felt, visible, unknown."
+  "A sensed answer as JS: blockAt's keys (pos {x y z}, fullCube) plus ageMs, felt, visible, unknown. Built key by key:
+  only the properties map needs clj->js."
   [m]
   (when m
-    (clj->js (-> m
-                 (dissoc :state-id)
-                 (set/rename-keys {:age-ms :ageMs :full-cube :fullCube})
-                 (update :pos pos-js)))))
+    (let [o #js {}]
+      (doseq [[k v] m]
+        (case k
+          :state-id nil
+          :pos (aset o "pos" (pos-js v))
+          :age-ms (aset o "ageMs" v)
+          :full-cube (aset o "fullCube" v)
+          :properties (aset o "properties" (clj->js v))
+          (aset o (name k) v)))
+      o)))
 
 (defn cell-of [^js a]
   (when-let [^js pos (some-> a .-pos)]
