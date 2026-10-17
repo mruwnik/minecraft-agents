@@ -151,11 +151,11 @@
 (defn ^:async seal-cells!
   "The body of seal!: place the open cells round the feet."
   [c]
-  (await (look/look-unknown! c (map lb/cell (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c))))))
-  (let [{:keys [radius max-places]} (:args c)
-        blocks (flight/blocks c)
+  (let [threats (into (shooters c) (melee-spots c))
         p (:primitives c)
-        threats (into (shooters c) (melee-spots c))
+        _ (await (look/look-unknown! c (map lb/cell (dig-cells/open-cells p (sh-sense/feet p) threats))))
+        {:keys [radius max-places]} (:args c)
+        blocks (flight/blocks c)
         open (dig-cells/open-cells p (sh-sense/feet p) threats)
         free (remove #(occupied? c %) open)
         cells (if (seq (shooters c)) (facing-first (sh-sense/feet p) (shooters c) free) (nearest-first (sh-sense/feet p) (melee-spots c) free))
