@@ -275,6 +275,43 @@ const babyLlama = () => [
   ...[[1, 4], [-4, -1]].flatMap(([x0, x1]) => [[3.5, 6.5], [-6.5, -3.5]].map(([z0, z1]) => cube([x0, 0, z0], [x1, 8, z1], { u: 0, v: 34, w: 3, h: 8, d: 3 }, limb, 2)))
 ]
 
+// a pup: body, head, snout, two ears, tail and two leg regions (front legs one, hind legs the other)
+const babyWolf = () => [
+  cube([-3, 3, -4], [3, 7, 4], { u: 0, v: 0, w: 6, h: 4, d: 8 }, slab, 0),
+  cube([-3, 4, 4], [3, 9, 9], { u: 0, v: 12, w: 6, h: 5, d: 5 }, compact, 1),
+  cube([-1.5, 4, 9], [1.5, 6, 11], { u: 17, v: 12, w: 3, h: 2, d: 2 }, compact, 1),
+  ...[[-3, -1, 0], [1, 3, 20]].map(([x0, x1, u]) => cube([x0, 9, 5], [x1, 12, 7], { u, v: 0, w: 2, h: 3, d: 2 }, limb, 1)),
+  cube([-1, 3, -6], [1, 9, -4], { u: 22, v: 16, w: 4, h: 6, d: 2 }, limb, 0),
+  ...[[1, 3, 0], [-3, -1, 8]].flatMap(([x0, x1, u]) => [[2, 4], [-4, -2]].map(([z0, z1]) => cube([x0, 0, z0], [x1, 3, z1], { u, v: 22, w: 2, h: 3, d: 2 }, limb, 2)))
+]
+
+// a kid: body, level head, two horns and four legs of their own regions (the tan chest net is left out)
+const babyGoat = () => [
+  cube([-3, 3, -4.5], [3, 8, 4.5], { u: 0, v: 10, w: 6, h: 5, d: 9 }, slab, 0),
+  cube([-2, 5, 4.5], [2, 9, 10.5], { u: 0, v: 0, w: 4, h: 4, d: 6 }, compact, 1),
+  ...[[-2, 0, 20], [0, 2, 24]].map(([x0, x1, u]) => cube([x0, 9, 5.5], [x1, 11, 6.5], { u, v: 0, w: 2, h: 2, d: 1 }, limb, 1)),
+  ...[[1, 3, 21], [-3, -1, 29]].flatMap(([x0, x1, u]) => [[2, 4, 5], [-4, -2, 12]].map(([z0, z1, v]) => cube([x0, 0, z0], [x1, 5, z1], { u, v, w: 2, h: 5, d: 2 }, limb, 2)))
+]
+
+// a piglet-person: head with snout and ears, tunic body, two arms and two legs of their own regions
+const babyPiglin = () => [
+  cube([-4.5, 9, -3.5], [4.5, 15, 3.5], { u: 0, v: 0, w: 9, h: 6, d: 7 }, upright, 1),
+  cube([-1.5, 10, 3.5], [1.5, 13, 4.5], { u: 21, v: 30, w: 3, h: 3, d: 1 }, compact, 1),
+  ...[[4.5, 5.5], [-5.5, -4.5]].map(([x0, x1]) => cube([x0, 11, -1], [x1, 14, 2], { u: 0, v: 21, w: 2, h: 5, d: 4 }, limb, 1)),
+  cube([-3, 4, -1.5], [3, 9, 1.5], { u: 0, v: 13, w: 6, h: 5, d: 3 }, trunk, 0),
+  ...[[3, 5, 19], [-5, -3, 28]].map(([x0, x1, u]) => cube([x0, 4, -1.5], [x1, 9, 1.5], { u, v: 13, w: 2, h: 5, d: 3 }, limb, 2)),
+  ...[[0, 3, 10], [-3, 0, 22]].map(([x0, x1, u]) => cube([x0, 0, -1.5], [x1, 4, 1.5], { u, v: 23, w: 3, h: 4, d: 3 }, limb, 2))
+]
+
+// a child villager or zombie villager: head and nose, body, two arms held crossed in front, two legs
+const babyVillager = ({ armH, armU }) => [
+  cube([-4, 8, -3.5], [4, 16, 3.5], { u: 0, v: 0, w: 8, h: 8, d: 7 }, upright, 1),
+  cube([-1, 9, 3.5], [1, 11, 4.5], { u: 23, v: 0, w: 2, h: 2, d: 1 }, limb, 1),
+  cube([-4, 3, -1.5], [4, 8, 1.5], { u: 0, v: 15, w: 8, h: 5, d: 3 }, slab, 0),
+  ...[[0, 4, armU[0]], [-4, 0, armU[1]]].map(([x0, x1, u]) => cube([x0, 8 - armH, 1.5], [x1, 8, 3.5], { u, v: 15, w: 4, h: armH, d: 2 }, limb, 2)),
+  ...[[0, 4, 0], [-4, 0, 8]].map(([x0, x1, u]) => cube([x0, 0, -1], [x1, 3, 1], { u, v: 23, w: 4, h: 3, d: 2 }, limb, 2))
+]
+
 const SHAPES = {
   humanoid: { px: 32, hit: 1.8, parts: humanoid() },
   zombie: { px: 32, hit: 1.95, parts: humanoid({ armsForward: true }) },
@@ -340,6 +377,11 @@ SHAPES.rabbit_baby = { px: 8, hit: 0.5, parts: babyRabbit(), own: true }
 SHAPES.horse_baby = { px: 32, hit: 1.6, parts: babyHorse({ bodyV: 13, bodyH: 7, legV: 34, legH: 9, neckV: 0 }), own: true }
 SHAPES.donkey_baby = { px: 36, hit: 1.5, parts: babyHorse({ bodyV: 13, bodyH: 6, legV: 33, legH: 8, neckV: 9 }), own: true }
 SHAPES.llama_baby = { px: 32, hit: 1.87, parts: babyLlama(), own: true }
+SHAPES.wolf_baby = { px: 16, hit: 0.85, parts: babyWolf(), own: true }
+SHAPES.goat_baby = { px: 21, hit: 1.3, parts: babyGoat(), own: true }
+SHAPES.piglin_baby = { px: 32, hit: 1.95, parts: babyPiglin(), own: true }
+SHAPES.villager_baby = { px: 34, hit: 1.95, parts: babyVillager({ armH: 4, armU: [16, 36] }), own: true }
+SHAPES.zombie_villager_baby = { px: 34, hit: 1.95, parts: babyVillager({ armH: 5, armU: [16, 24] }), own: true }
 SHAPES.witch = { ...SHAPES.villager, parts: [...SHAPES.villager.parts,
   cube([-5, 34, -5], [5, 36, 5], { u: 0, v: 64, w: 10, h: 2, d: 10 }, compact, 1),
   cube([-3.5, 36, -3.5], [3.5, 40, 3.5], { u: 0, v: 76, w: 7, h: 4, d: 7 }, compact, 1),
@@ -414,7 +456,12 @@ export const BABIES = {
   donkey: ['donkey_baby', 'horse/donkey_baby'],
   mule: ['donkey_baby', 'horse/mule_baby'],
   llama: ['llama_baby', 'llama/llama_creamy_baby'],
-  trader_llama: ['llama_baby', 'llama/llama_white_baby']
+  trader_llama: ['llama_baby', 'llama/llama_white_baby'],
+  wolf: ['wolf_baby', 'wolf/wolf_baby'],
+  goat: ['goat_baby', 'goat/goat_baby'],
+  piglin: ['piglin_baby', 'piglin/piglin_baby'],
+  villager: ['villager_baby', 'villager/villager_baby'],
+  zombie_villager: ['zombie_villager_baby', 'zombie_villager/zombie_villager_baby']
 }
 
 // a sheep's wool by dye index (white, orange, magenta, light blue, yellow, lime, pink, gray, light gray, cyan, purple, blue, brown, green, red, black), rgb

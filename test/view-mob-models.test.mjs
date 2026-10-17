@@ -233,8 +233,8 @@ test('the baby zombie\'s head reads the 6x6x6 head net at (3, 3) of its sheet, a
   assert.ok(m.hull[4] < 0.55 * 1.95)
 })
 
-test('the baby layouts: the pig, chicken, cat, ocelot, fox, rabbit, horse family and llamas read their own baby sheets', () => {
-  const NAMES = 'pig chicken cat ocelot fox rabbit horse zombie_horse donkey mule llama trader_llama'.split(' ')
+test('the baby layouts: the pig, chicken, cat, ocelot, fox, rabbit, horse family, llamas, wolf, goat, piglin and villagers read their own baby sheets', () => {
+  const NAMES = 'pig chicken cat ocelot fox rabbit horse zombie_horse donkey mule llama trader_llama wolf goat piglin villager zombie_villager'.split(' ')
   for (const name of NAMES) {
     assert.ok(name in BABIES, name)
     const m = modelFor({ name, height: 1, baby: true })
@@ -266,8 +266,8 @@ test('the baby pig\'s head reads the 7x6x6 head net at (0, 15) of its sheet', ()
 })
 
 test('a baby of a mob without a baby layout still reads the adult sheet, half height with a bigger head', () => {
-  const layers = modelFor({ name: 'wolf', height: 0.85, baby: true }).parts.flatMap(p => p.layers)
-  assert.ok(layers.every(l => l.startsWith('entity/wolf/wolf#')))
+  const layers = modelFor({ name: 'creeper', height: 1.7, baby: true }).parts.flatMap(p => p.layers)
+  assert.ok(layers.every(l => l.startsWith('entity/creeper/creeper#')))
 })
 
 test('mobPaint: a tinted part multiplies its sheet picture by the dye', () => {
