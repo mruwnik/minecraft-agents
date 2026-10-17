@@ -111,8 +111,8 @@
 
 (defn box-cells
   "How many cells the box covers."
-  [{:keys [min max]}]
-  (apply * (map #(inc (- (% max) (% min))) [:x :y :z])))
+  [{lo :min hi :max}]
+  (apply * (map #(inc (- (% hi) (% lo))) [:x :y :z])))
 
 (defn usable-box?
   "A box with a crop layer above its farmland layer, of at most max-cells cells."
@@ -121,18 +121,18 @@
                 (>= (:y (:max box)) (inc (:y (:min box))))
                 (<= (box-cells box) (max-cells)))))
 
-(defn in-box? [{:keys [min max]} {:keys [x y z]}]
-  (and (<= (:x min) x (:x max)) (<= (:y min) y (:y max)) (<= (:z min) z (:z max))))
+(defn in-box? [{lo :min hi :max} {:keys [x y z]}]
+  (and (<= (:x lo) x (:x hi)) (<= (:y lo) y (:y hi)) (<= (:z lo) z (:z hi))))
 
 (defn centre
   "The box centre rounded to cells."
-  [{:keys [min max]}]
-  (into {} (map (fn [k] [k (js/Math.round (/ (+ (k min) (k max)) 2))])) [:x :y :z]))
+  [{lo :min hi :max}]
+  (into {} (map (fn [k] [k (js/Math.round (/ (+ (k lo) (k hi)) 2))])) [:x :y :z]))
 
 (defn radius
   "How far a sphere around mid must reach to cover the box: the farthest corner, rounded up, plus 1."
-  [{:keys [min max]} mid]
-  (inc (js/Math.ceil (apply js/Math.max (for [x [(:x min) (:x max)] y [(:y min) (:y max)] z [(:z min) (:z max)]]
+  [{lo :min hi :max} mid]
+  (inc (js/Math.ceil (apply js/Math.max (for [x [(:x lo) (:x hi)] y [(:y lo) (:y hi)] z [(:z lo) (:z hi)]]
                                           (u/dist mid {:x x :y y :z z}))))))
 
 (defn reserve
@@ -160,9 +160,9 @@
 
 (defn ground-layer
   "[{:pos :name :above}] for the cells of the lowest layer of the box."
-  [p {:keys [min max]}]
-  (vec (for [x (range (:x min) (inc (:x max))) z (range (:z min) (inc (:z max)))
-             :let [pos {:x x :y (:y min) :z z}]]
+  [p {lo :min hi :max}]
+  (vec (for [x (range (:x lo) (inc (:x hi))) z (range (:z lo) (inc (:z hi)))
+             :let [pos {:x x :y (:y lo) :z z}]]
          {:pos pos :name (u/seen-name p pos) :above (u/seen-name p (update pos :y inc))})))
 
 (defn unripe-in-box
@@ -182,8 +182,8 @@
 
 (defn irrigate-need
   "How many ground cells of the box are seen dry, 0 when no spot would wet any (irrigate would end :no-spot)."
-  [c {:keys [min max]}]
-  (let [view (assoc c :args {:from min :to (assoc max :y (:y min))})
+  [c {lo :min hi :max}]
+  (let [view (assoc c :args {:from lo :to (assoc hi :y (:y lo))})
         dry (irrigate/dry-cells view)]
     (if (irrigate/spot view dry) (count dry) 0)))
 
@@ -230,9 +230,9 @@
   "The live {:crops :bare :untilled} of the box."
   [c]
   (let [p (:primitives c)
-        {:keys [min max] :as box} (:box (:args c))
-        above (inc (:y min))]
-    {:crops (count (for [x (range (:x min) (inc (:x max))) z (range (:z min) (inc (:z max)))
+        {lo :min hi :max :as box} (:box (:args c))
+        above (inc (:y lo))]
+    {:crops (count (for [x (range (:x lo) (inc (:x hi))) z (range (:z lo) (inc (:z hi)))
                          :when (crop-names (u/seen-name p {:x x :y above :z z}))]
                      1))
      :bare (count (farm/bare-cells p box []))
@@ -253,8 +253,8 @@
   [c]
   (if (:plan (:args c))
     (mapcat (fn [pos] [pos (update pos :y dec)]) (keys (:crops (tend-plan/planned c))))
-    (let [{:keys [min max]} (:box (:args c))]
-      (for [x (range (:x min) (inc (:x max))) z (range (:z min) (inc (:z max))) y [(:y min) (inc (:y min))]]
+    (let [{lo :min hi :max} (:box (:args c))]
+      (for [x (range (:x lo) (inc (:x hi))) z (range (:z lo) (inc (:z hi))) y [(:y lo) (inc (:y lo))]]
         {:x x :y y :z z}))))
 
 (defn needs-look?
@@ -304,8 +304,8 @@
 (defn site
   "A position of the field: the box's centre, else the plan's first crop cell; nil when there is neither."
   [c]
-  (if-let [{:keys [min max]} (:box (:args c))]
-    (when min {:x (/ (+ (:x min) (:x max)) 2) :y (:y min) :z (/ (+ (:z min) (:z max)) 2)})
+  (if-let [{lo :min hi :max} (:box (:args c))]
+    (when lo {:x (/ (+ (:x lo) (:x hi)) 2) :y (:y lo) :z (/ (+ (:z lo) (:z hi)) 2)})
     (when (:plan (:args c)) (first (keys (:crops (tend-plan/planned c)))))))
 
 (defn usable-args
