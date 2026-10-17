@@ -6,7 +6,8 @@
   (:require [cljs.reader :as reader]
             [clojure.string :as str]
             [clojure.walk :as walk]
-            [world-test.expect :as x]))
+            [world-test.expect :as x]
+            [world-test.lease :as lease]))
 
 ;; ------------------------------------------------------------------ the plot grid
 
@@ -141,6 +142,16 @@
     (not (:keep-memory c)) :restart-clean
     first-in-group? :restart-keep
     :else :keep))
+
+(defn memory-entries
+  "A case's :memory entries, and for a night case a :log-out \"unsupported\" entry (unless the case names log-out or keeps
+  memory): other probe bodies sleep in the same night, and the night job would log out for them instead of doing what the case tests."
+  [c]
+  (cond-> (vec (:memory c))
+    (and (#{:night :night-x} (lease/time-phase c))
+         (not (:keep-memory c))
+         (not (str/includes? (pr-str (dissoc c :id :file)) "log-out")))
+    (conj {:kind :log-out :data {:status "unsupported"}})))
 
 (def default-memory-policy
   "The engine's default policy for a memory kind (engine.memory/default-policy): 50 entries, one hour."

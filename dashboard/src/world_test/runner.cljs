@@ -1923,8 +1923,8 @@
                                                      (let [plan (f/body-start-plan c (zero? n))
                                                            [from end] (f/plot-range (f/case-grid c))
                                                            i (acquire-plot! (max from (:first-plot opts)) end)
-                                                           memory (when (seq (:memory c))
-                                                                    (f/memory-seed (:memory (f/resolve-tags c (f/plot-origin (f/case-grid c) i))) (js/Date.now)))]
+                                                           memory (when (seq (f/memory-entries c))
+                                                                    (f/memory-seed (f/resolve-tags (f/memory-entries c) (f/plot-origin (f/case-grid c) i)) (js/Date.now)))]
                                                        (-> (with-goal! (body-dir opts) (case-goal c run (or (:retry opts) 0)) (case-wait c)
                                                              #(run-case! opts c i run (when-not (= :keep plan) register)
                                                                          (fn [] (if (= :keep plan) (js/Promise.resolve nil) (stop-body! opts)))

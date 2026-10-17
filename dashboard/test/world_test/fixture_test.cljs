@@ -420,6 +420,16 @@
     (is (= {:cap 50 :ttl 3600000} (get-in data [:policies :food-source])))
     (is (= {:entries {} :policies {}} (f/memory-seed nil 5000)))))
 
+(deftest memory-entries-mark-log-out-unsupported-for-night-cases-only
+  (let [log-out? #(some (comp #{:log-out} :kind) (f/memory-entries %))]
+    (is (log-out? {:time :night}))
+    (is (log-out? {:time :night-exclusive :memory [{:kind :bed :data {}}]}))
+    (is (log-out? {:time :day :act [[:time-set 13000]]}))
+    (is (not (log-out? {:time :day})))
+    (is (not (log-out? {:time :night :keep-memory true})))
+    (is (not (log-out? {:time :night :act [[:job '(jobs.survival.log-out)]]})))
+    (is (= [:bed :log-out] (mapv :kind (f/memory-entries {:time :night :memory [{:kind :bed :data {}}]}))))))
+
 (deftest memory-seed-age-s-backdates-an-entry
   (let [data (f/memory-seed [{:kind :spawn-set :data {} :age-s 7200} {:kind :spawn-set :data {}}] 10000000)]
     (is (= [2800000 10000000] (mapv :t (get-in data [:entries :spawn-set]))))))
