@@ -7,8 +7,6 @@
             [engine.ctx :as ctx]
             [engine.primitive :as primitive]))
 
-(def position-keys #{:pos})
-
 (def also-required
   "Args beside the table's target that the act cannot go without."
   {:place [:item] :steer [:decide] :jumpPlace [:item] :trade [:id :op]})
@@ -26,33 +24,81 @@
 (a/defargs settings
   {::job-time-s {:default 300 :doc "Seconds one primitive act may take before it gives up (:limit-reached); an offline act is the longest." :spec (a/num-in 0 nil)}})
 
-(def precondition-statuses
-  "Statuses that say a precondition was false before the act ran (a failed condition); any other status the table
-  reads as a failed condition is an act that ran and did not reach its end."
-  #{:missing :occupied :gone :not-night :monsters-near :no-item :no-room :no-support :no-water :no-rod :no-food
-    :no-lapis :no-levels :not-mounted :not-a-boat :not-mountable :hand-full :full :empty :busy :refused-mounted :already-mounted})
+(def failure-kinds
+  "The kind of every status a primitive reports that is not a done one: a false precondition is a failed condition,
+  an act that ran and did not reach its end nothing possible. engine/js/prim-statuses.test.mjs fails on a status the
+  JavaScript returns that no table entry or this map names."
+  (merge (zipmap ["missing" "occupied" "gone" "not-night" "monsters-near" "no-item" "no-room" "no-support" "no-headroom"
+                  "no-water" "no-rod" "no-food" "no-lapis" "no-levels" "not-mounted" "not-a-boat" "not-mountable"
+                  "hand-full" "full" "empty" "busy" "refused-mounted" "already-mounted"]
+                 (repeat :condition-failed))
+         (zipmap ["failed" "cannot" "unreachable" "out-of-reach" "blocked" "partial" "rejected" "not-raised" "no-effect"
+                  "unchanged" "nothing" "error"]
+                 (repeat :nothing-possible))
+         {"unsupported" :impossible}))
 
 (defn read-ending
-  "The table's ending e with the kind read by when the act failed: :unsupported impossible, a false precondition a
-  failed condition, anything else nothing possible."
+  "The table's ending e with the kind its cause has in failure-kinds when the act failed; an unlisted cause is nothing
+  possible."
   [e]
-  (cond
-    (not= :condition-failed (:kind e)) e
-    (= :unsupported (:cause e)) (assoc e :kind :impossible)
-    (precondition-statuses (:cause e)) e
-    :else (assoc e :kind :nothing-possible)))
+  (if (= :condition-failed (:kind e))
+    (assoc e :kind (get failure-kinds (name (:cause e)) :nothing-possible))
+    e))
 
 (defn failure-text
   "What a failed act of primitive k met, as the ending's words: its status, the block that holds the cell, its reason."
   [k {:keys [status block reason]}]
   (str (name k) ": " status (some->> block (str " by ")) (some->> reason (#(str " (" % ")")))))
 
+(defn spec-entry
+  "An arg entry: doc, spec pred and the quoted form the catalog shows."
+  [doc spec form]
+  {:doc doc :spec spec :form form})
+
+(def arg-specs
+  "The args spec of each arg any primitive takes, as the primitive reads it (engine/js/prim-*.mjs)."
+  (let [text (a/pred "a string" string?)
+        number (a/pred "a number" a/finite?)
+        id (a/or-of (a/pred "a number" a/finite?) (a/pred "a string" string?))
+        map-arg (a/pred "a map" map?)]
+    {:pos (spec-entry "where, [x y z] or {:x :y :z}" ::a/pos '::a/pos)
+     :range (spec-entry "how near to get" (a/num-in 0 nil) '(a/num-in 0 nil))
+     :timeoutS (spec-entry "seconds before the act gives up" (a/num-in 0 nil) '(a/num-in 0 nil))
+     :maxDistance (spec-entry "the longest walk" (a/num-in 0 nil) '(a/num-in 0 nil))
+     :maxDropDown (spec-entry "the longest drop a walk may take, in blocks" (a/int-in 0 nil) '(a/int-in 0 nil))
+     :item (spec-entry "an item name" text 'string?)
+     :click (spec-entry "the click chosen by the caller" map-arg 'map?)
+     :count (spec-entry "how many" (a/int-in 0 nil) '(a/int-in 0 nil))
+     :id (spec-entry "an entity id" id '(a/or-of number string))
+     :entity (spec-entry "an entity id" id '(a/or-of number string))
+     :direction (spec-entry "deposit or withdraw" #{"deposit" "withdraw"} #{"deposit" "withdraw"})
+     :slot (spec-entry "an inventory slot" (a/int-in 0 nil) '(a/int-in 0 nil))
+     :watchS (spec-entry "seconds to watch the drop" (a/num-in 0 nil) '(a/num-in 0 nil))
+     :table (spec-entry "a crafting table cell {:x :y :z}" a/point? 'a/point?)
+     :dest (spec-entry "where an item goes" #{"hand" "off-hand" "head" "torso" "legs" "feet"} #{"hand" "off-hand" "head" "torso" "legs" "feet"})
+     :op (spec-entry "what to do at the block or villager" text 'string?)
+     :input (spec-entry "what to load, {:item :count}" map-arg 'map?)
+     :fuel (spec-entry "what to load, {:item :count}" map-arg 'map?)
+     :output (spec-entry "false to leave the output" boolean? 'boolean?)
+     :choice (spec-entry "the offer, 0 to 2" #{0 1 2} #{0 1 2})
+     :levelCost (spec-entry "the levels the offer costs" (a/int-in 0 nil) '(a/int-in 0 nil))
+     :message (spec-entry "the chat line" text 'string?)
+     :to (spec-entry "the player to whisper to" text 'string?)
+     :offer (spec-entry "the index of the trade" (a/int-in 0 nil) '(a/int-in 0 nil))
+     :times (spec-entry "how many times" (a/int-in 1 nil) '(a/int-in 1 nil))
+     :yaw (spec-entry "degrees" number '(a/num-in nil nil))
+     :pitch (spec-entry "degrees" number '(a/num-in nil nil))
+     :face (spec-entry "the face to click" #{"up" "down" "north" "south" "west" "east"} #{"up" "down" "north" "south" "west" "east"})
+     :ms (spec-entry "milliseconds" (a/num-in 0 nil) '(a/num-in 0 nil))
+     :toward (spec-entry "where to swim to" ::a/pos '::a/pos)
+     :decide (spec-entry "the steering function" (a/pred "a function" fn?) 'fn?)
+     :ticks (spec-entry "ticks of paddling" (a/int-in 0 nil) '(a/int-in 0 nil))
+     :turn (spec-entry "left or right" #{"left" "right"} #{"left" "right"})
+     :forward (spec-entry "paddle forward" boolean? 'boolean?)
+     :why (spec-entry "why the act is done" text 'string?)}))
+
 (defn args-data [k]
-  (into {} (map (fn [arg] [arg (if (position-keys arg)
-                                  {:doc "where, [x y z] or {:x :y :z}" :spec ::a/pos}
-                                  {:doc (str "the act's " (name arg) ", as the primitive reads it")
-                                   :spec (a/pred "a value" some?) :form 'some?})]))
-        (get-in primitive/table [k :args])))
+  (into {} (map (fn [arg] [arg (get arg-specs arg)])) (get-in primitive/table [k :args])))
 
 (defn act-args
   "The act's args as JavaScript: the job's own args, unset ones and the call keys left out."

@@ -321,3 +321,10 @@
                           (is (nil? (:parent-went-on @world)))
                           (is (= {:kind :limit-reached :cause {:line :job-time :spend 4 :act :wait}}
                                  (stopped seen))))))))))
+
+(deftest every-failure-kind-is-an-ending-kind
+  (is (every? contract/all-kinds (vals primitive-job/failure-kinds))))
+
+(deftest every-arg-of-the-table-has-a-spec-of-its-own
+  (is (= [] (for [[k {:keys [args]}] primitive/table, arg args :when (not (contains? primitive-job/arg-specs arg))] [k arg])))
+  (is (= [] (for [[arg e] primitive-job/arg-specs :when (= 'some? (:form e))] arg))))
