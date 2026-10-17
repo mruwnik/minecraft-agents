@@ -9,6 +9,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
+            [jobs.lib.pen-read :as pen-read]
             [jobs.lib.standing :as standing]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
@@ -17,9 +18,12 @@
             [jobs.lib.world :as known]))
 
 (def doc
-  "Keep one pen of one kind of animal in order. The pen is :box. One run is one pass over five steps in this
+  "Keep one pen of one kind of animal in order. The pen is :box. One run is one pass over six steps in this
   order, each a child job called once (a child that yields is called again on the next call). A step under way is not re-decided.
 
+  - :mend (jobs.build.pen over the whole :plan, only with :plan): a fence, gate or wall cell of the plan beside the box
+    was seen as something else (blown away), so the plan's fence is built again. Only cells the body has seen count; a gap
+    that stays rests the pen.
   - :breed (jobs.animals.breed, 2 animals): adults plus babies are below :target, at least 2 adults, breeding
     food carried (breed fetches it unless :fetch is off).
   - :cull (jobs.animals.cull): adults exceed :keep, the larger of 2 and :target minus the babies.
@@ -31,7 +35,7 @@
   A body outside the box that lists fewer animals of the kind in it than the target first walks to the box (go-to, once; the server
   lists animals only near the body) and counts again; the job starts for that look.
 
-  A step whose conditions do not hold is skipped and booked {:skipped reason}: :at-target, :too-few-adults,
+  A step whose conditions do not hold is skipped and booked {:skipped reason}: :no-plan, :sound, :at-target, :too-few-adults,
   :no-food and :no-shears (only with :fetch off), :within-target, :not-sheep, :none-shearable, :no-drops, :no-chest, :nothing-to-store,
   or :declined when the child declined.
 
@@ -40,7 +44,7 @@
   {:skipped {step reason}}.
 
   Ends :done after the pass, with {:mob :target :adults :babies (live census in the box) :steps {step
-  summary}}. Summaries: breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
+  summary}}. Summaries: mend {:closed? :reason}, breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
   :collected}, collect {:collected}, deposit {:gave-up :reason}.
 
   With :plan and :part the pen is that part of the plan: its :box, and :mob and :target from its :herd
@@ -69,10 +73,11 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def steps [:breed :cull :shear :collect :deposit])
+(def steps [:mend :breed :cull :shear :collect :deposit])
 
 (def jobs
-  {:breed 'jobs.animals.breed
+  {:mend 'jobs.build.pen
+   :breed 'jobs.animals.breed
    :cull 'jobs.animals.cull
    :shear 'jobs.animals.shear
    :collect 'jobs.forestry.collect-drops
@@ -106,12 +111,28 @@
        distinct
        vec))
 
+(defn missing-barrier
+  "The plan's fence, gate and wall cells beside the box (one column out) that the body has seen as something its plan
+  does not want there, as [x y z]; a cell never seen is no gap."
+  [c]
+  (let [{:keys [plan box]} (:args c)
+        cells (when plan (:cells (known/plan c plan)))
+        {:keys [min max]} box
+        beside? (fn [[x _ z]] (and (<= (dec (:x min)) x (inc (:x max))) (<= (dec (:z min)) z (inc (:z max)))))
+        p (:primitives c)]
+    (vec (for [{:keys [pos want]} cells
+               :when (and (pen-read/barrier? want) (beside? pos))
+               :let [seen (u/sensed p (u/cell-pos pos))]
+               :when (and seen (not (true? (.-unknown seen))) (not (some #{(.-name seen)} (pen-read/want-blocks want))))]
+           pos))))
+
 (defn facts
   "What the decisions are made from, read live."
   [c]
   (let [{:keys [adults babies]} (cull/census c)
         inventory (u/inventory (:primitives c))]
-    {:adults (count adults)
+    {:gaps (missing-barrier c)
+     :adults (count adults)
      :babies (count babies)
      :drops (drops-in-box c)
      :shears (boolean (some #(= "shears" (:name %)) inventory))
@@ -119,6 +140,13 @@
      :stored (to-store inventory (produce (:mob (:args c))) (:carry (:args c)))
      :food (animals/food-carried (:primitives c) (:mob (:args c)))
      :reach (cull/reach c)}))
+
+(defn decide-mend
+  [{:keys [plan fetch]} {:keys [gaps]}]
+  (cond
+    (nil? plan) {:skip :no-plan}
+    (empty? gaps) {:skip :sound}
+    :else {:call {:slot :mend :job (jobs :mend) :args (cond-> {:plan plan} (some? fetch) (assoc :fetch fetch))}}))
 
 (defn decide-breed
   [{:keys [mob target fetch]} {:keys [adults babies food reach]}]
@@ -160,6 +188,7 @@
   "{:skip reason} or {:call {:slot :job :args}} for a step."
   [step args facts]
   (case step
+    :mend (decide-mend args facts)
     :breed (decide-breed args facts)
     :cull (decide-cull args facts)
     :shear (decide-shear args facts)
@@ -279,6 +308,7 @@
   "What the report keeps of a child's result."
   [step r]
   (case step
+    :mend (select-keys r [:closed? :reason])
     :breed {:fed (count (:fed r)) :reason (:reason r)}
     :cull (select-keys r [:killed :remaining :reason])
     :shear {:shorn (count (:shorn r)) :reason (:reason r) :collected (:collected r)}

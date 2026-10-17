@@ -1,6 +1,7 @@
 ;; Card d00cfcb6: animals.tend with nothing to do waits :nothing-to-do with the census it counted and why each step was skipped, so a miscount
 ;; reads differently from a satisfied target. Box x 10..14, z 10..14; two adult cows inside, :target 2.
 ;; Should-succeed: the wait names {:adults 2 :babies 0 :target 2} and the skipped steps.
+;; mends-a-blown-fence-cell: card e43936a3, a planned fence cell seen as air is built again by tend's first step (body outside the ring, 4 fence carried).
 {:defaults
  {:tags [:animals :jobs]
   :time :any
@@ -13,4 +14,13 @@
    :act [[:summon "cow" [11.5 0 11.5]]
          [:summon "cow" [13.5 0 13.5]]
          [:job (jobs.animals.tend {:mob "cow" :target 2 :box {:min #xyz [10 0 10] :max #xyz [14 0 14]}})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do :adults 2 :babies 0 :target 2 :skipped [:any]}} :within-s 40 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do :adults 2 :babies 0 :target 2 :skipped [:any]}} :within-s 40 :of-job true}]}
+  {:name "mends-a-blown-fence-cell"
+   :plans [{:id "pen" :metadata {:by "$body"}
+            :parts [{:id "fence" :outline [#at [9 0 9] #at [15 0 15]] :want "oak_fence"}
+                    {:id "cows" :box [#at [10 0 10] #at [14 0 14]] :want "air" :herd {:mob "cow" :target 0}}]}]
+   :blocks [[:fill [9 0 9] [15 0 15] "oak_fence" :hollow] [:set [9 0 12] "air"]]
+   :body {:at [7.5 0 12.5] :inventory [["oak_fence" 4]] :yaw 270 :effects [["resistance" 600 4]]}
+   :act [[:job (jobs.animals.tend {:plan "$plan:pen" :part "cows"})]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 90 :of-job true}]
+   :after [[:block [9 0 12] "oak_fence"]]}]}

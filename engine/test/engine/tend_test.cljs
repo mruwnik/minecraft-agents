@@ -6,6 +6,8 @@
             [engine.fake :as fake]
             [engine.look-support :as ls]
             [engine.test-util :as tu]
+            [engine.build-from-plan-test :as b]
+            [engine.pen-build-test :as pb]
             [jobs.animals.tend :as tend]
             [jobs.lib.world-files :as ew]))
 
@@ -234,9 +236,9 @@
         (let [s (await (scenario {:target 4} {:inventory h/sword :entities (mapv #(cow % (+ 1 %)) (range 1 6))} 60))
               r (done-event s)]
           (is (= {:mob "cow" :target 4 :adults 4 :babies 0} (select-keys r [:mob :target :adults :babies])))
-          (is (= [:breed :cull :shear :collect :deposit] (vec (keys (:steps r)))))
-          (is (= {:breed {:skipped :at-target} :shear {:skipped :not-sheep} :deposit {:skipped :no-chest}}
-                 (select-keys (:steps r) [:breed :shear :deposit]))))))))
+          (is (= [:mend :breed :cull :shear :collect :deposit] (vec (keys (:steps r)))))
+          (is (= {:mend {:skipped :no-plan} :breed {:skipped :at-target} :shear {:skipped :not-sheep} :deposit {:skipped :no-chest}}
+                 (select-keys (:steps r) [:mend :breed :shear :deposit]))))))))
 
 (deftest the-pure-pieces-decide-from-facts
   (are [expected inventory produce reserve] (= expected (tend/to-store inventory produce reserve))
@@ -264,6 +266,27 @@
     :within-target {:adults 2 :babies 3}
     nil {:adults 5 :babies 0}
     nil {:adults 5 :babies 2}))
+
+(deftest a-seen-leaky-pen-of-a-plan-is-mended-first
+  (are [expected args facts] (= expected (tend/decide :mend args facts))
+    {:skip :no-plan} {} {:gaps [[1 64 1]]}
+    {:skip :sound} {:plan "pen"} {:gaps []}
+    {:call {:slot :mend :job 'jobs.build.pen :args {:plan "pen"}}} {:plan "pen"} {:gaps [[1 64 1]]}
+    {:call {:slot :mend :job 'jobs.build.pen :args {:plan "pen" :fetch false}}} {:plan "pen" :fetch false} {:gaps [[1 64 1]]}))
+
+(def ring-pen-plan
+  (update (pb/ring-plan) :parts conj {:id "cows" :box [[3 64 3] [3 64 3]] :want "air" :herd {:mob "cow" :target 0}}))
+
+(deftest a-fence-cell-seen-blown-away-is-built-again-by-the-first-step
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (b/start (pb/spec pb/kit (assoc pb/built-pen "4,64,3" "air")) {"pen" ring-pen-plan} [])
+              result (await (tu/child-outcome eng 'jobs.animals.tend {:plan "pen" :part "cows"} 600))]
+          (is (not= :nothing-to-do (:reason result)) "the gap starts a run"))
+        (let [{:keys [eng]} (b/start (pb/spec pb/kit pb/built-pen) {"pen" ring-pen-plan} [])
+              result (await (tu/child-outcome eng 'jobs.animals.tend {:plan "pen" :part "cows"} 600))]
+          (is (= :sound (get-in result [:ending :cause :skipped :mend]))))))))
 
 (deftest the-check-declines-when-the-only-drops-lie-outside-the-box
   (is (declines? {:box box :target 4} (conj four-cows (drop-at 90 "leather" 9)))))
