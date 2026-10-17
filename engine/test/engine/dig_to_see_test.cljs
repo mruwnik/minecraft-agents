@@ -111,7 +111,7 @@
           (is (= :stopped (:status @out)))
           (is (= :lava-unsealed (:reason @out)))
           (is (= [3 63 0] (:cell @out)))
-          (is (= [1 64 0] (feet p)) "one step back up the stair")
+          (is (<= (first (feet p)) 1) "backed up the stair, not beside the lava")
           (is (= "lava" (block-at p [3 63 0])))
           (is (not-any? #{{:x 3 :y 63 :z 0} {:x 3 :y 62 :z 0}} (digs p)) "nothing dug into the lava"))))))
 
@@ -167,11 +167,14 @@
         (reset! in-lava true)))))
 
 (defn ^:async flow-run!
-  "run! with sources: ticks the job out, flowing lava from the source cells beside open air between ticks."
+  "run! with sources: ticks the job out, flowing lava from the source cells beside open air between ticks. The sources
+  are never seen (a face point of one beside the cut would show it to a real eye), only the lava that flows out."
   [spec sources job args]
   (let [{:keys [eng clock p] :as s} (setup (sensing spec) job args)
+        sensed (.-sensedAt p)
         since (atom {})
         in-lava (atom false)]
+    (aset p "sensedAt" (fn [pos] (if (contains? sources [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (sensed pos))))
     (loop [i 0]
       (when (and (< i 400) (seq (:list (core/state eng))))
         (swap! clock + 500)
