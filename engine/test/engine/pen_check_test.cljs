@@ -12,6 +12,10 @@
             [jobs.animals.pen-check :as pen-check]
             [jobs.lib.pen :as pen]))
 
+(defn lcg [seed]
+  (let [a (atom (+ 12345 (* 7919 seed)))]
+    (fn [] (/ (swap! a #(mod (+ (* % 1103515245) 12345) 2147483648)) 2147483648))))
+
 (def job 'jobs.animals.pen-check)
 
 (def ground
@@ -108,9 +112,9 @@
     (is (= leaks (pen/dedupe-leaks (concat leaks leaks))))))
 
 (defn ^:async run-seeing
-  "run-job with the body seeing through perception (sight jitter pinned) and no look taken yet; facing yaw (Minecraft degrees), ticks rounds (default 6)."
-  [args w yaw & [ticks]]
-  (let [s (h/setup-seeing (assoc w :yaw yaw :rand (constantly 0.5)) nil)]
+  "run-job with the body seeing through perception (sight jitter pinned to rand, default 0.5) and no look taken yet; facing yaw (Minecraft degrees), ticks rounds (default 6)."
+  [args w yaw & [ticks rand]]
+  (let [s (h/setup-seeing (assoc w :yaw yaw :rand (or rand (constantly 0.5))) nil)]
     (core/submit! (:eng s) (list job args) {})
     (dotimes [_ (or ticks 6)]
       (swap! (:clock s) + 700)
@@ -357,3 +361,11 @@
   (are [args expected] (= expected (pen-check/start-near {:args args}))
     {:box {:min {:x 0 :y 64 :z 0} :max {:x 4 :y 64 :z 4}}} [2 64 2]
     {:at [7 64 3]} [7 64 3]))
+
+(deftest a-pen-seen-from-outside-closes-whatever-the-ray-jitter
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [seed [0 35]]
+          (let [event (await (run-seeing {:at [2 64 2]} (assoc (world {}) :self {:pos {:x 6 :y 64 :z 2}}) 270 6 (lcg seed)))]
+            (is (= {:closed? true :cells 25} (select-keys event [:closed? :reason :cells])) (str "ray jitter seed " seed))))))))
