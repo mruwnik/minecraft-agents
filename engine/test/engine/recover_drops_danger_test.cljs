@@ -6,6 +6,7 @@
             [engine.fake :as fake]
             [engine.death-test :as dt :refer [die! job recovered recovered-trip pile-drops fetching-events]]
             [engine.library-test :refer [setup]]
+            [jobs.lib.child :as child]
             [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]
             [engine.shelter-support :as st]
@@ -291,6 +292,26 @@
                  (take 1 (keep #(some->> (:text %) (re-find #"cleanup removed.*")) @seen)))
               "the first cleanup saw the plug and took it back")
           (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng))))))))
+
+(deftest a-seal-cleanup-that-takes-nothing-back-is-not-counted-as-cleared
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (sealed-run [] {:self {:pos {:x -25 :y 64 :z 0}}})
+              walk-leg! recover-drops/walk-leg!
+              run!* child/run!*]
+          (set! recover-drops/walk-leg! (fn [_ _] [{:kind :done :data {:arrived false :why :goal-enclosed}}]))
+          (let [stub (fn ^:async stub [c slot & more]
+                      (if (= :seal slot)
+                        {:kind :done :data {:removed []}}
+                        (await (apply run!* c slot more))))]
+            (set! (.-cljs$core$IFn$_invoke$arity$4 stub) stub)
+            (set! (.-cljs$core$IFn$_invoke$arity$5 stub) stub)
+            (set! child/run!* stub))
+          (await (run-until-empty eng 60))
+          (set! recover-drops/walk-leg! walk-leg!)
+          (set! child/run!* run!*)
+          (is (= 2 (count (filter #(= :recover-drops.seal (:kind %)) @seen))) "the seal is tried again, up to twice a trip"))))))
 
 ;; ------------------------------------------------------------ night: safe? judges the pile
 

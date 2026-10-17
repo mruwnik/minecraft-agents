@@ -181,7 +181,7 @@
 
 (defn ^:async clear-seal!
   "When the body's own placed blocks stand near the pile (its flee seal): take back those within seal-radius of it
-  (jobs.access.cleanup :near) and walk again, after a walk to within ::seal-sight of the nearest of them (the cleanup offers only blocks the body has seen). Tried twice a trip at most; :seal-cleared is set once a run finished.
+  (jobs.access.cleanup :near) and walk again, after a walk to where the eye sees the nearest of them, within ::seal-sight (the cleanup offers only blocks the body has seen). Tried twice a trip at most; :seal-cleared is set once a run removed a block.
   :next when it ran, else nil."
   [c pos]
   (when-let [seal (and (not (:seal-cleared (ctx/mem c))) (not (child/exhausted? c :seal 2)) (seq (own-seal-near c pos)))]
@@ -190,9 +190,10 @@
     (dth/save-trip! c)
     (ctx/emit! c :recover-drops.seal :info {:pos pos :text "the pile is out of reach behind blocks this body placed: taking them back"})
     (let [[x y z] (:cell (apply min-key #(u/dist (u/self-pos c) (zipmap [:x :y :z] (:cell %))) seal))]
-      (await (child/run!* c :seal-walk 'jobs.movement.go-to {:pos {:x x :y y :z z} :range (cfg/seal-sight) :ways #{:walk} :checks own-checks})))
-    (when (= :done (:kind (await (child/run!* c :seal 'jobs.access.cleanup {:job :all :near {:pos pos :radius (cfg/seal-radius)} :checks (assoc own-checks :fit? '(always))}))))
-      (ctx/update-mem! c assoc :seal-cleared true))
+      (await (child/run!* c :seal-walk 'jobs.movement.go-to {:pos {:x x :y y :z z} :range (cfg/seal-sight) :see true :ways #{:walk} :checks own-checks})))
+    (let [r (await (child/run!* c :seal 'jobs.access.cleanup {:job :all :near {:pos pos :radius (cfg/seal-radius)} :checks (assoc own-checks :fit? '(always))}))]
+      (when (and (= :done (:kind r)) (seq (:removed (:data r))))
+        (ctx/update-mem! c assoc :seal-cleared true)))
     :next))
 
 (defn ^:async walk-leg!
