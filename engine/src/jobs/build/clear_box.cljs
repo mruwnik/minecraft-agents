@@ -302,12 +302,13 @@
           :again))))
 
 (defn ^:async step
-  "One step: a round of the dig child on the cell under way (until it has picked up the drop), else skip the
+  "One step (the pen is read anew: digging in shows a hidden pit): a round of the dig child on the cell under way (until it has picked up the drop), else skip the
   refused cells and start on the highest nearest pending cell; an unloaded one is walked to first."
-  [c pen-wall?]
+  [c pen-wall-fn]
   (if-let [t (:target (ctx/mem c))]
     (await (dig! c t))
     (let [{:keys [allowed refused]} (sort-out c (pending c))
+          pen-wall? (pen-wall-fn)
           {open true walled false} (group-by (fn [[pos _]] (not (pen-wall? [(:x pos) (:y pos) (:z pos)]))) allowed)
           allowed (vec open)]
       (when (seq refused) (skip-refused! c refused))
@@ -326,5 +327,5 @@
 (defn ^:async round
   "The whole attempt: loop the steps until the box is cleared or declined; :continue only while a walk or the body waits."
   [c]
-  (let [pen-wall? (if (:open-pens? (:args c)) (constantly false) (own-pen/box-wall? c (cells (:args c))))]
-    (await (pace/steps! c (fn ^:async s [] (await (step c pen-wall?)))))))
+  (let [pen-wall-fn (if (:open-pens? (:args c)) (constantly (constantly false)) #(own-pen/box-wall? c (cells (:args c))))]
+    (await (pace/steps! c (fn ^:async s [] (await (step c pen-wall-fn)))))))

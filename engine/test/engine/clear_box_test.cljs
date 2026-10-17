@@ -355,6 +355,19 @@
 (def pit-zone {:name "pit" :owner "Fake" :min [0 61 0] :max [2 63 2]})
 (def pit-cow {:id 7 :name "cow" :kind "passive" :pos {:x 1.5 :y 61 :z 1.5}})
 
+(deftest clear-box-reads-the-pen-again-once-digging-shows-its-inside
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks stocked-pit :entities [pit-cow] :self {:pos {:x 8.5 :y 64 :z 1.5}}}
+                                     (ew/of-data {} {} [pit-zone]))
+              _ (aset p "sensedAt" (fn [pos] (if (and (<= (.-x pos) 2) (not= "air" (block-at p {:x 4 :y 63 :z 1})))
+                                               #js {:unknown true}
+                                               (.blockAt p pos))))
+              result (await (child-outcome eng job pit-rim-row 60))]
+          (is (= {{:x 3 :y 63 :z 1} :own-pen} (:skipped result)) "the pit was hidden at the start; the rim cell is spared once seen")
+          (is (= 3 (:dug result))))))))
+
 (deftest clear-box-leaves-the-wall-of-a-pen-with-animals-unless-told-to
   (async done
     (tu/run-async done
