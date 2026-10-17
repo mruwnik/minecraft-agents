@@ -1,5 +1,6 @@
 (ns jobs.lib.crops
-  (:require [jobs.lib.look :as look]))
+  (:require [engine.constants :as constants]
+            [jobs.lib.look :as look]))
 
 (defn seen-crops
   "The crops of the given names the body has seen within radius, still standing, nearest first, as {:name :pos :age}
@@ -8,7 +9,9 @@
   (->> (look/seen-blocks p {:names names :radius radius :max max :live? true :properties? true})
        (map (fn [b] (assoc b :age (some-> (get-in b [:properties :age]) js/Number))))))
 
-(def ripe-age {"wheat" 7 "carrots" 7 "potatoes" 7 "beetroots" 3})
+(def ripe-age
+  "The field crops: farm jobs plant, tend and cut these; nether wart, berries and cocoa need other handling."
+  (select-keys constants/crop-ripe-age ["wheat" "carrots" "potatoes" "beetroots"]))
 
 (def seed-of {"wheat" "wheat_seeds" "carrots" "carrot" "potatoes" "potato" "beetroots" "beetroot_seeds"})
 

@@ -2,6 +2,7 @@
   "Where get-food finds food it knows of: remembered farms and chests, ripe crops in sight."
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [engine.constants :as constants]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.access.zones :as zones]
@@ -23,9 +24,9 @@
 (def ripe-age
   "The growth stage at which each crop block can be harvested. Wheat is left
   out: only the :field way cuts it, in a field of its own."
-  {"carrots" 7 "potatoes" 7 "beetroots" 3})
+  (dissoc crops/ripe-age "wheat"))
 
-(def berry-bush {"sweet_berry_bush" 2})
+(def berry-bush (select-keys constants/crop-ripe-age ["sweet_berry_bush"]))
 
 (def melon-block "A melon has no growth stage: it is always ripe." {"melon" 0})
 

@@ -20,3 +20,7 @@
 (def mob-speeds
   "Blocks a second each hostile covers chasing a body on open ground, from its speed attribute (not measured live). Spiders also leap 2 to 4 blocks. Read for the time a mob stays remembered (engine.perception.mobs) and for outrunning and racing it (jobs.lib.cost.danger)."
   (js->clj (unchecked-get values "mobSpeeds")))
+
+(def crop-ripe-age
+  "The growth stage at which each crop block can be harvested (a sweet berry bush from 2)."
+  {"wheat" 7 "carrots" 7 "potatoes" 7 "beetroots" 3 "nether_wart" 3 "sweet_berry_bush" 2 "cocoa" 2})

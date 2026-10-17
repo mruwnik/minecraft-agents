@@ -490,9 +490,10 @@
     (is (= 11 (:max (first @calls))))))
 
 (deftest seen-view-adds-crop-age-and-ripeness-and-the-nearest-zone
-  (let [props {"1,64,2" {:age "7"} "4,64,2" {:age "2"}}
+  (let [props {"1,64,2" {:age "7"} "4,64,2" {:age "2"} "6,64,2" {:age "2"}}
         eng (-> (seen-engine [{:name "wheat" :pos {:x 1 :y 64 :z 2} :distance 3.0 :age-ms 5}
                               {:name "wheat" :pos {:x 4 :y 64 :z 2} :distance 5.0 :age-ms 5}
+                              {:name "sweet_berry_bush" :pos {:x 6 :y 64 :z 2} :distance 6.0 :age-ms 5}
                               {:name "chest" :pos {:x 40 :y 64 :z 2} :distance 9.0 :age-ms 5}]
                              (atom []))
                 (assoc :world {:state (atom {:zones {:value [{:name "far" :owner "Wren" :min [100 0 0] :max [110 90 9]}
@@ -503,6 +504,8 @@
              :zone {:name "field" :owner "Alder" :distance 0}}
             {:name "wheat" :pos [4 64 2] :distance 5.0 :age-ms 5 :age 2 :ripe false
              :zone {:name "field" :owner "Alder" :distance 2}}
+            {:name "sweet_berry_bush" :pos [6 64 2] :distance 6.0 :age-ms 5 :age 2 :ripe true
+             :zone {:name "field" :owner "Alder" :distance 4}}
             {:name "chest" :pos [40 64 2] :distance 9.0 :age-ms 5}]
            (:blocks (event-api/seen-view eng {:radius 64 :max 10}))))))
 

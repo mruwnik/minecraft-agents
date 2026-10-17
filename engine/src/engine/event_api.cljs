@@ -4,6 +4,7 @@
   POST  /jobs and /triggers (changes), /attention/resolve, /chat, /settings/reload, /settings/set, /settings/unset
   Bodies are limited (a setting, 16 KB). Lists are paged and bounded."
   (:require [engine.args :as a]
+            [engine.constants :as constants]
             [clojure.string :as str]
             [clojure.walk :as walk]
             [cljs.reader :as reader]
@@ -170,14 +171,10 @@
           suffixes (mapv #(subs % 1) (filter #(.startsWith % "*") names))]
       (fn [n] (or (contains? exact n) (boolean (some #(.endsWith n %) suffixes)))))))
 
-(def crop-max-age
-  "The age at which each crop is ripe (the properties of a remembered crop block carry :age)."
-  {"wheat" 7 "carrots" 7 "potatoes" 7 "beetroots" 3 "nether_wart" 3 "sweet_berry_bush" 3 "cocoa" 2})
-
 (defn crop-fields
   "{:age :ripe} of a remembered crop row (p's seenBlockAt), nil for any other block."
   [^js p {:keys [name pos]}]
-  (when-let [ripe-age (crop-max-age name)]
+  (when-let [ripe-age (constants/crop-ripe-age name)]
     (when-let [age (some-> (.-seenBlockAt p) (.call p (clj->js {:x (:x pos) :y (:y pos) :z (:z pos)}))
                            .-properties .-age js/Number)]
       {:age age :ripe (>= age ripe-age)})))
