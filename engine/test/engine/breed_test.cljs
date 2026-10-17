@@ -4,6 +4,7 @@
             [engine.backoff :as backoff]
             [engine.core :as core]
             [engine.hostile-test :as h]
+            [engine.settings :as settings]
             [engine.perception :as perception]
             [jobs.lib.animals :as animals]
             [engine.memory :as mem]
@@ -24,13 +25,23 @@
   [{:keys [eng clock]} n step]
   (await (tu/run-ticks eng clock n step)))
 
-(defn ^:async scenario
-  "Submit (jobs.animals.breed args) in a world; run n ticks 700 ms apart; the setup map."
-  [args world n]
+(defn ^:async scenario-waiting
+  "Submit (jobs.animals.breed args) in a world; run n ticks 700 ms apart, running mid-run (f setup) after the second; the setup map."
+  [args world n f]
   (let [s (h/setup world)]
     (core/submit! (:eng s) (list 'jobs.animals.breed args) {})
-    (await (run-ticks s n 700))
+    (await (run-ticks s 2 700))
+    (f s)
+    (await (run-ticks s (- n 2) 700))
     s))
+
+(defn ^:async scenario
+  "As scenario-waiting with no calf wait, so a fed pair ends at once."
+  [args world n]
+  (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 0}
+           #(let [s (h/setup world)]
+              (core/submit! (:eng s) (list 'jobs.animals.breed args) {})
+              (.then (run-ticks s n 700) (fn [_] s))))))
 
 (defn interacts [{:keys [p]}] (h/calls p "interact"))
 (defn done-event
@@ -42,6 +53,17 @@
 (defn items-total [inv] (reduce + (map :count inv)))
 (defn count-of [{:keys [p]} item]
   (reduce + (map :count (filter #(= item (:name %)) (js->clj (.-inventory (.self p)) :keywordize-keys true)))))
+
+(deftest a-fed-pair-waits-for-the-calf-before-the-babies-are-counted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label calf? babies] [["calf appears" true 1] ["no calf" false 0]]]
+          (let [s (await (scenario-waiting {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]} 12
+                                           #(when calf? (fake/add-entity! (:p %) (cow 3 4 {:baby true})))))]
+            (is (= babies (:babies (done-event s))) label)))
+        (let [s (await (scenario-waiting {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]} 4 identity))]
+          (is (not (finished? s)) "still waiting for a calf"))))))
 
 ;; ------------------------------------------------------------ pure helpers
 
@@ -224,7 +246,7 @@
             (await round)
             (release))
           (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
-          (await (run-ticks s 4 700))
+          (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 0} #(run-ticks s 4 700)))
           (is (finished? s))
           (is (= :fed (:reason (done-event s))))
           (is (= ["u1" "u2"] (:fed (done-event s))))
@@ -325,7 +347,7 @@
             (await round)
             (release))
           (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
-          (await (run-ticks s 4 700))
+          (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 0} #(run-ticks s 4 700)))
           (is (finished? s))
           (is (= :fed (:reason (done-event s))))
           (is (= "iron_axe" (held-at-end s)))
@@ -349,7 +371,7 @@
                          (swap! (fake/state p) update :entities (partial mapv #(update % :id + 100)))
                          r)))
           (core/submit! eng '(jobs.animals.breed {:mob "cow"}) {})
-          (await (run-ticks s 4 700))
+          (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 0} #(run-ticks s 4 700)))
           (is (= :fed (:reason (done-event s))))
           (is (= ["u1" "u2"] (:fed (done-event s))))
           (is (= 2 (count (interacts s)))))))))

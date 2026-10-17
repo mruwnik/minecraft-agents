@@ -70,7 +70,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:target 4} {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3) leather-on-the-ground]} 1))]
+        (let [s (await (scenario {:target 4} {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3) (calf 3 4) leather-on-the-ground]} 1))]
           (is (true? (finished? s)))
           (is (= 2 (get-in (done-event s) [:steps :breed :fed])))
           (is (= 1 (get-in (done-event s) [:steps :collect :collected]))))))))

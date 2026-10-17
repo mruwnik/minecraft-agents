@@ -49,6 +49,9 @@
   :restored, :emptied or :full (no free slot: the food stays in hand, warn breed.hand-full). There is no :hand
   when nothing was fed. A cancel or the engine's limit restores it too.
 
+  After a pair was fed with no baby in view, the run waits (yielding :continue) up to the setting calf-wait-s for the
+  calf before it counts the babies, so :babies is what the body sees.
+
   A run that fed at least two animals writes one memory entry of kind :bred/<mob> (data {:fed [uuids]}, default
   one hour). A trigger can use it, e.g. (or (not (known? (since :bred/cow))) (> (since :bred/cow) 1200)).
 
@@ -68,9 +71,11 @@
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds of working, fetching included, before breeding gives up." :spec (a/num-in 0 nil)}
    ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+   ::calf-wait-s {:default 4 :doc "Seconds to wait for the calf to be seen after a pair was fed, before the count of babies is reported." :spec (a/num-in 0 nil)}
    ::max-in-row {:default 3 :doc "Animals handled in a row before the body looks again." :spec (a/int-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn max-in-row [] (settings/get settings ::max-in-row))
+(defn calf-wait-ms [] (* 1000 (settings/get settings ::calf-wait-s)))
 
 (def target [:mob])
 
@@ -151,10 +156,21 @@
     (when (>= (count fed) 2)
       (ctx/remember! c (keyword "bred" (:mob (:args c))) {:fed fed}))))
 
-(defn finish!
-  "Emit the outcome and end the call: the ending of reason (ending-of, else nothing-possible), or ending when given
-  (a failed fetch's). The hand is put back by cleanup."
-  [c reason & [ending]]
+(defn calf-pending?
+  "Whether a pair was fed and no baby is in view yet: a calf shows 1-3 s after the hearts, so for :calf-wait-s the
+  count of babies would be stale. Notes the first look in mem."
+  [c]
+  (let [{:keys [mob radius]} (:args c)
+        m (ctx/mem c)
+        now (ctx/now c)]
+    (when (and (>= (count (:fed m)) 2) (empty? (animals/babies (:primitives c) mob radius)))
+      (let [from (or (:calf-from m) now)]
+        (ctx/update-mem! c assoc :calf-from from)
+        (< (- now from) (calf-wait-ms))))))
+
+(defn finish-now!
+  "Emit the outcome and end the call; see finish!."
+  [c reason ending]
   (let [m (ctx/mem c)
         {:keys [mob radius]} (:args c)
         p (:primitives c)
@@ -176,6 +192,14 @@
                            [:done nil]
                            (get ending-of reason [:nothing-possible reason]))]
         (ctx/end c kind cause result)))))
+
+(defn finish!
+  "Emit the outcome and end the call: the ending of reason (ending-of, else nothing-possible), or ending when given
+  (a failed fetch's). The hand is put back by cleanup. Resolves to :continue while a calf is awaited."
+  [c reason & [ending]]
+  (if (calf-pending? c)
+    :continue
+    (finish-now! c reason ending)))
 
 (defn candidates
   "The adults within radius not fed, refused or given up on, nearest first."
