@@ -14,7 +14,8 @@
   {:op :repeat :child node :times n?}, {:op :until :children [guard child]}. They are plain EDN, so they persist."
   (:require [clojure.string :as str]
             [engine.args :as a]
-            [engine.contract :as contract]))
+            [engine.contract :as contract]
+            [engine.settings :as settings]))
 
 (def combinators #{'seq 'any 'repeat 'until 'hold})
 
@@ -34,7 +35,7 @@
       (throw (ex-info (str "job " sym " needs a round and no old check, or can-start? or can-run?") {:job sym}))
       :else (if-let [problem (contract/call-problem sym (:ways entry) args)]
               (fail problem args)
-              (try [entry (a/conform sym data (a/merge-args data (a/defaults data) args))]
+              (try [entry (a/conform sym data (a/merge-args data (settings/job-defaults sym data) args))]
                    (catch :default e (fail (ex-message e) args)))))))
 
 (defn unknown-keys-message

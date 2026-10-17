@@ -557,6 +557,14 @@
     (is (= (set (keys wide-args)) (set (keys args))))
     (is (not (contains? args :truncated)))))
 
+(deftest catalog-entry-shows-the-effective-default-and-where-it-comes-from
+  (let [eng {:jobs {'jobs.demo.wide {:doc "wide" :args (select-keys wide-args [:arg1 :arg2])}}}
+        args #(:args (event-api/catalog-entry eng "job" "jobs.demo.wide"))]
+    (settings/with-settings {:engine.settings/job-args {'jobs.demo.wide {:arg1 50}}}
+      (fn []
+        (is (= {:arg1 {:default 50 :default-from :test} :arg2 {:default 2 :default-from :code}}
+               (update-vals (args) #(select-keys % [:default :default-from]))))))))
+
 (deftest event-payload-values-stay-bounded
   (let [bounded (event-api/bounded-value wide-args 0 (volatile! 64))]
     (is (true? (:truncated bounded)))))

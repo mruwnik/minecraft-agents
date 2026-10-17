@@ -1,6 +1,6 @@
 (ns jobs.explore.look
   (:require [jobs.lib.ready :as ready]
-            [engine.args :as a] [engine.entity-observations :as obs] [jobs.lib.util :as u]
+            [engine.args :as a] [engine.settings :as settings] [engine.entity-observations :as obs] [jobs.lib.util :as u]
             ["minecraft-data" :as minecraft-data] [engine.contract :as contract] [engine.ctx :as ctx] [engine.game :as game] [jobs.lib.look :as look] [jobs.lib.places :as places]))
 (def doc
   "Observe the nearby blocks and entities the body has seen, once, without moving or changing the world. :at inspects one exact
@@ -49,7 +49,7 @@
   :block-names, a cell). known-block? (optional) refuses block names minecraft-data does not list."
   ([a] (options a nil))
   ([a known-block?]
-  (let [a (merge (into {} (map (fn [[k v]] [k (:default v)]) args)) a)
+  (let [a (merge (settings/job-defaults (quote jobs.explore.look) args) a)
         blocks (names (:block-names a)) entities (names (:entity-names a))
         at (when (:at a) (places/parse-pos (:at a)))]
     (cond

@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [clojure.string :as str]
             [engine.args :as a]
+            [engine.expr :as expr]
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.settings-registry :as settings-registry]
@@ -296,3 +297,31 @@
         (is (= 25 (:physics-ms v)))
         (is (= 5000 (get-in v [:settings :jobs.demo/wait-ms :value]))))
       (settings/set-clock! 20 false :assumed))))
+
+(def job-specs
+  (a/declare-settings! {:engine.settings/job-args {:default {} :doc "d" :spec (a/map-of symbol? map?)}}))
+
+(deftest job-arg-overrides-layer-by-job-and-arg-and-bad-ones-are-dropped
+  (settings/with-settings {}
+    (fn []
+      (let [dir (tu/tmp-dir)
+            events (atom [])
+            world (write! dir "world.edn" "{:engine.settings/job-args {jobs.explore.look {:radius 20 :max-blocks 99 :max-entities 3} jobs.nowhere {:x 1} jobs.farm.find-spot {:range 3}}}")
+            body (write! dir "body.edn" "{:engine.settings/job-args {jobs.explore.look {:radius 24 :typo 1 :useful? nil}}}")]
+        (settings/load! {:specs (merge specs job-specs) :jobs registry/jobs :world-file world :body-file body :body "Bob"
+                         :emit #(swap! events conj %)})
+        (is (= {:radius 24 :max-entities 3} (settings/job-overlay 'jobs.explore.look)) "bad args dropped, the body wins per arg")
+        (is (= {:range 3} (settings/job-overlay 'jobs.farm.find-spot)))
+        (is (= [:body :world :code] (map #(settings/job-arg-layer 'jobs.explore.look %) [:radius :max-entities :useful?])))
+        (is (= 4 (count @events)) "unknown job, unknown arg, nil value, out-of-range value")
+        (is (every? #(= {:kind (keyword "settings.bad") :level :info} (select-keys % [:kind :level])) @events))))))
+
+(deftest an-override-changes-the-default-an-explicit-arg-beats-it-and-a-frozen-instance-keeps-it
+  (let [leaf-args #(second (expr/leaf registry/jobs 'jobs.explore.look %))
+        overlay {:engine.settings/job-args {'jobs.explore.look {:radius 24}}}
+        frozen (settings/with-settings overlay #(leaf-args {}))]
+    (is (= 16 (:radius (settings/with-settings {} #(leaf-args {})))))
+    (is (= 24 (:radius frozen)))
+    (is (= 8 (:radius (settings/with-settings overlay #(leaf-args {:radius 8})))))
+    (is (= 24 (:radius frozen)) "the args built before a reload stay as they were")
+    (is (= 16 (:radius (settings/with-settings {} #(leaf-args {})))) "a job built after the override is gone has the code default")))

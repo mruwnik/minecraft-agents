@@ -171,6 +171,7 @@
         settings-events (atom [])
         js-settings (settings/js-specs (.-SPECS ((createRequire (str root "/")) "./js/settings.mjs")))
         _ (settings/load! {:specs (merge registry/settings settings-registry/settings settings js-settings)
+                           :jobs registry/jobs
                            :world-file (path/join (bodies/worlds-dir state-dir) (:world cfg) "settings.edn")
                            :body-file (path/join (bodies/body-dir state-dir (:world cfg) (:agent opts)) "settings.edn")
                            :body (:agent opts)

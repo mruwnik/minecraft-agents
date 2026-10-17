@@ -20,7 +20,10 @@
             [engine.perception.store :as store]))
 
 (a/defargs settings
-  {::default-food {:default 20 :doc "The food a walk counts on when it has neither a :food arg nor a body food: fed (nothing caps the damage)." :spec (a/int-in 0 nil)}})
+  {::default-food {:default 20 :doc "The food a walk counts on when it has neither a :food arg nor a body food: fed (nothing caps the damage)." :spec (a/int-in 0 nil)}
+   ::min-health {:default false :doc "The health every walk of this body keeps (a floor of 1 to 20), false: the code's default floor. A job's own :min-health wins." :spec (a/or-of false? (a/int-in 1 20))}
+   ::max-damage {:default false :doc "The most hp every walk of this body may spend (0 or more), false: no cap but the budget. A job's own :max-damage wins." :spec (a/or-of false? (a/num-in 0 nil))}
+   ::gait {:default :auto :doc "How go-to walks when its :gait is nil: :auto, :walk or :sneak." :spec cost/gaits}})
 
 (defn unknown-spec
   "go-to's :unknown as the mask spec of one go-to call (the planner's options.unknown less what path-world adds): the prices
@@ -256,41 +259,21 @@
     {:health (.-health self) :absorption (.-absorption self) :food (food-of c) :on-fire (.-onFire self)
      :effects (map #(.-name %) (array-seq (.-effects self)))}))
 
-(def setting-checks
-  "The body setting's keys and what a valid value is."
-  {:min-health #(and (number? %) (<= 1 % 20))
-   :max-damage #(and (number? %) (>= % 0))
-   :gait #(contains? cost/gaits %)})
-
-(defn body-setting
-  "The body's memory :walk-settings entry's {:min-health :max-damage} (written with jobs.memory.remember, :ttl-s :forever,
-  :cap 1), a value outside the go-to arg's range left out; the second item names the keys left out."
-  [c]
-  (let [data (if (:view c) (select-keys (:data (ctx/latest c :walk-settings)) (keys setting-checks)) {})
-        bad (into [] (comp (remove (fn [[k v]] ((setting-checks k) v))) (map key)) data)]
-    [(apply dissoc data bad) bad]))
-
 (defn walk-settings
-  "The {:min-health :max-damage} the walk keeps: the body's setting (body-setting), each overridden by the job's arg (go-to's) when given."
+  "The {:min-health :max-damage} the walk keeps: the body's settings (those not false), each overridden by the job's arg (go-to's) when given."
   [c]
-  (into (first (body-setting c)) (remove (comp nil? val)) (select-keys (:args c) [:min-health :max-damage])))
+  (into (into {} (remove (comp false? val))
+              {:min-health (settings/get settings ::min-health) :max-damage (settings/get settings ::max-damage)})
+        (remove (comp nil? val)) (select-keys (:args c) [:min-health :max-damage])))
 
 (defn gait
-  "The gait the walk keeps: go-to's :gait arg over the body's :gait setting (body-setting), else :auto."
+  "The gait the walk keeps: go-to's :gait arg over the body's :gait setting."
   [c]
-  (or (:gait (:args c)) (:gait (first (body-setting c))) :auto))
-
-(defn warn-bad-settings!
-  "An :info walk-settings.bad event naming the keys of the body's setting that are ignored; go-to calls it once per attempt."
-  [c]
-  (let [bad (second (body-setting c))]
-    (when (seq bad)
-      (ctx/emit! c :walk-settings.bad :info
-                 {:keys bad :text (str "the body's :walk-settings " (pr-str bad) " is out of range (:min-health 1-20, :max-damage >= 0, :gait :auto|:walk|:sneak); ignored")}))))
+  (or (:gait (:args c)) (settings/get settings ::gait)))
 
 (defn damage-budget
   "The hp the body may spend walking now (jobs.lib.cost/damage-budget): its health, food and effects, and the walk-settings
-  :min-health and :max-damage (the job's args over the body's setting); with the ctx's :over-budget (go-to chose to go over it) the survivable-budget."
+  :min-health and :max-damage (the job's args over the body's settings); with the ctx's :over-budget (go-to chose to go over it) the survivable-budget."
   [c]
   ((if (:over-budget c) cost/survivable-budget cost/damage-budget) (damage-body c) (walk-settings c)))
 

@@ -197,7 +197,7 @@
       (apply contract/later :searching (str "find-spot: " (count spots) " spots found") data))))
 
 (defn quote-of [c]
-  (let [{:keys [range walk]} (merge (into {} (map (fn [[k v]] [k (:default v)])) args) (:args c))]
+  (let [{:keys [range walk]} (merge (settings/job-defaults (quote jobs.farm.find-spot) args) (:args c))]
     {:uses {:job-time [0.1 1 (+ 20 (if walk (* 4 range) 0))]}}))
 
 (defn spot-text [{:keys [pos score level work water-share sky away]}]
@@ -243,7 +243,7 @@
   "Look around when no water is in sight, scan (a bounded slice per step, remembering the spots), then walk to the
   best one if :walk."
   [c]
-  (let [a (merge (into {} (map (fn [[k v]] [k (:default v)])) args) (:args c))
+  (let [a (merge (settings/job-defaults (quote jobs.farm.find-spot) args) (:args c))
         found (if (water-unseen? c a)
                 (do (await (look/survey! c :run (look/search-effort))) :again)
                 (or (:spots (ctx/mem c)) (scan-step! c a)))]

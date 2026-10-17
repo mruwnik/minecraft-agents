@@ -9,7 +9,9 @@
 (a/defargs settings
   "The engine's own keys, :engine.<area>/<name>, each {:default :doc :spec} (engine.args, as job args)."
   {:engine.perception/save-ms {:default 60000 :spec (a/int-in 1000 nil)
-                               :doc "How often the body's seen-world file (seen.bin) is saved, in ms of wall clock."}})
+                               :doc "How often the body's seen-world file (seen.bin) is saved, in ms of wall clock."}
+   :engine.settings/job-args {:default {} :spec (a/map-of symbol? map?)
+                              :doc "Job arg defaults over the code's, {job-symbol {arg value}}; a per-call arg still wins. Frozen into a job's args when it is submitted."}})
 
 (defonce state
   (atom {:body nil :specs {} :values {} :layers {}}))
@@ -44,6 +46,47 @@
           kw (keyword k)]
       (when (contains? specs kw) (get specs kw)))))
 
+(def job-args-key :engine.settings/job-args)
+
+(defn clean-job-args
+  "[kept problems] for the overlay {job-sym {arg value}} against jobs ({sym entry}, the job registry): an unknown job or arg
+  or a value its arg spec refuses is dropped, with one text in problems."
+  [jobs overlay]
+  (reduce-kv
+   (fn [[kept problems] sym args]
+     (let [data (:args (clojure.core/get jobs sym))]
+       (if-not (contains? jobs sym)
+         [kept (conj problems (str sym ": unknown job"))]
+         (reduce-kv
+          (fn [[kept problems] k v]
+            (let [why (cond (not (contains? data k)) "unknown arg"
+                            (nil? v) "a value, not nil"
+                            :else (when-let [p (a/first-problem sym data {k v})]
+                                    (str "must be " (:want p) ", got " (pr-str v))))]
+              (if why
+                [kept (conj problems (str sym " " k ": " why))]
+                [(assoc-in kept [sym k] v) problems])))
+          [kept problems] args))))
+   [{} []] overlay))
+
+(defn job-overlay
+  "The settings' override of job sym's arg defaults, {arg value} (empty when none)."
+  [sym]
+  (clojure.core/get (clojure.core/get (:values @state) job-args-key) sym {}))
+
+(defn job-defaults
+  "The default args of job sym (data: its args map): the code's :default of each arg under the settings' overlay."
+  [sym data]
+  (a/merge-args data (a/defaults data) (job-overlay sym)))
+
+(defn job-arg-layer
+  "Where job sym's arg default comes from: :world or :body when the overlay sets it, else :code."
+  [sym arg]
+  (let [layers (:layers @state)]
+    (if (contains? (job-overlay sym) arg)
+      (clojure.core/get layers [sym arg] (clojure.core/get layers job-args-key))
+      :code)))
+
 (defn read-layer
   "[:missing], [:ok map] or [:bad why] for a settings file."
   [file]
@@ -60,33 +103,39 @@
     k (assoc :key k)))
 
 (defn apply-layer
-  "[values layers events] with the file's keys applied over them at layer, each key checked against specs."
-  [specs [values layers events] layer file]
+  "[values layers events] with the file's keys applied over them at layer, each key checked against specs. The job-args
+  of a layer are checked against jobs (when given) and merged over the lower layer's, job by job."
+  [specs jobs [values layers events :as acc] layer file]
   (let [[kind data] (read-layer file)]
     (case kind
-      :missing [values layers events]
+      :missing acc
       :bad [values layers (conj events (bad-event file nil data))]
       (reduce-kv (fn [[values layers events] k v]
                    (let [spec (clojure.core/get specs k)
                          why (if spec (a/problem k v) :unknown)]
-                     (if why
-                       [values layers (conj events (bad-event file k (if spec (str "must be " why ", got " (pr-str v)) "unknown key")))]
-                       [(assoc values k v) (assoc layers k layer) events])))
-                 [values layers events] data))))
+                     (cond
+                       why [values layers (conj events (bad-event file k (if spec (str "must be " why ", got " (pr-str v)) "unknown key")))]
+                       (and jobs (= k job-args-key))
+                       (let [[kept problems] (clean-job-args jobs v)]
+                         [(assoc values k (merge-with merge (clojure.core/get values k) kept))
+                          (into (assoc layers k layer) (for [[sym args] kept, arg (keys args)] [[sym arg] layer]))
+                          (into events (map #(bad-event file k (str % "; ignored"))) problems)])
+                       :else [(assoc values k v) (assoc layers k layer) events])))
+                 acc data))))
 
 (defn load!
   "Read the world file, then the body file, over the code defaults of specs, and keep the result. Each bad value,
   unknown key or unreadable file keeps the lower layer and is passed to emit as one settings.bad :info event.
   Callable again to reload. Throws when a different body already loaded in this process (one body per process)."
-  [{:keys [specs world-file body-file body emit]}]
+  [{:keys [specs jobs world-file body-file body emit]}]
   (let [loaded (:body @state)]
     (when (and loaded (not= loaded body))
       (throw (ex-info (str "second body " body " in one process (settings are global, " loaded " loaded first)") {:body body}))))
   (let [[values layers events] (-> [{} {} []]
-                                   (->> (#(apply-layer specs % :world world-file)))
-                                   (->> (#(apply-layer specs % :body body-file))))]
+                                   (->> (#(apply-layer specs jobs % :world world-file)))
+                                   (->> (#(apply-layer specs jobs % :body body-file))))]
     (reset! state {:body body :specs specs :values values :layers layers
-                   :load {:world-file world-file :body-file body-file :body body}})
+                   :load {:world-file world-file :body-file body-file :body body :jobs jobs}})
     (run! emit events)
     nil))
 

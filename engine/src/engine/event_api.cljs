@@ -386,6 +386,23 @@
   "Nodes of a job's declared args a catalog entry shows; far above any job, so agents see every arg."
   5000)
 
+(defn effective-defaults
+  "described (a job's args for the catalog) with each arg's :default the one a call gets now (the settings' overlay over the
+  code's) and its :default-from, :code, :world or :body; a group's keys the same."
+  [sym described]
+  (let [overlay (settings/job-overlay sym)]
+    (into {} (map (fn [[k e]]
+                    [k (cond
+                         (and (:keys e) (map? (get overlay k)))
+                         (update e :keys (fn [ks] (into {} (map (fn [[sk se]]
+                                                                  [sk (if (contains? (get overlay k) sk)
+                                                                        (assoc se :default (get-in overlay [k sk]) :default-from (settings/job-arg-layer sym k))
+                                                                        (assoc se :default-from :code))]))
+                                                        ks)))
+                         (contains? overlay k) (assoc e :default (get overlay k) :default-from (settings/job-arg-layer sym k))
+                         :else (assoc e :default-from :code))]))
+          described)))
+
 (defn catalog-entry [eng kind name]
   (case kind
     "job" (let [sym (symbol name)
@@ -396,7 +413,7 @@
                  (:defaults entry) (update :defaults (partial walk/postwalk #(if (fn? %) :from-args %))))
                {:ok true :kind :job :name sym
                 :doc (short-text (:doc entry) (setting "catalog-doc-limit"))
-                :args (bounded-value (a/described sym (:args entry)) 0 (volatile! catalog-args-budget))})))
+                :args (bounded-value (effective-defaults sym (a/described sym (:args entry))) 0 (volatile! catalog-args-budget))})))
     "trigger" (let [id (keyword name)
                     entry (get (:triggers eng) id)]
                 (when entry

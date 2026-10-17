@@ -1,9 +1,10 @@
 (ns engine.go-to-gait-test
   "go-to's :gait (:auto, :walk, :sneak), seen through its quote and body-policy: :walk never sprints, :sneak plans at sneak
   speed, never sprints, and holds sneak on level steps only (released for drops, gaps, climbs, water, in the air); the body
-  setting is the default, the arg wins."
+  setting (walk.world gait) is the default, the arg wins."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.expr :as expr]
+            [engine.settings :as settings]
             [engine.path.executor :as ex]
             [engine.path.planner-tuned :as planner]
             [engine.go-to-quote-test :as pt]
@@ -86,8 +87,8 @@
         (pr-str bad))))
 
 (defn policy [setting args]
-  (wworld/body-policy {:primitives (tu/fake {:self {:health 20 :food 20}}) :args args
-                       :view (constantly {:now 0 :data {:entries {:walk-settings (when setting [{:t 0 :data setting}])}}})}))
+  (settings/with-settings (into {} (map (fn [[k v]] [(keyword "jobs.lib.walk.world" (name k)) v])) setting)
+    #(wworld/body-policy {:primitives (tu/fake {:self {:health 20 :food 20}}) :args args})))
 
 (deftest the-gait-shapes-the-executor-policy
   (are [setting args sprint? sneak? drops?] (let [p (policy setting args)]
@@ -99,8 +100,7 @@
     nil {:gait :walk} false false true
     nil {:gait :sneak} false true true
     {:gait :sneak} {} false true true
-    {:gait :sneak} {:gait :walk} false false true
-    {:gait :bogus} {} true false true))
+    {:gait :sneak} {:gait :walk} false false true))
 
 (defn on [move] {:steps [{:move :start} {:move move}] :i 1})
 

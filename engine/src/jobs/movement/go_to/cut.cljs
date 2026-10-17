@@ -60,7 +60,6 @@
   (let [m (ctx/mem c)
         there? (here? c pos (:range (:args c)))
         opened (set (keep (comp :cell :data) (ctx/entries c :opened)))]
-    (wworld/warn-bad-settings! c)
     (when (or (nil? (:pen-checked m)) (some #(not (contains? (:pen-checked m) %)) opened))
       (await (pen-entry/warn-left-open! c pos (:doors (:args c)))))
     (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :hang-walks :waypoint-misses :waypoint-why :waypoints-tried :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings :dive-floor :cave-ok :cave-climb :own-way-on :own-way-done :own-way-top :detour-from :tour-walks) (assoc :pen-checked opened :blocked 0 :searching 0 :leg-t0 (ctx/now c) :leg-hp (.-health (.self (:primitives c))) :frontier-best {} :target-best {}))
