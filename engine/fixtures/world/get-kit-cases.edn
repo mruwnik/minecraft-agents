@@ -88,11 +88,11 @@
             {:no-event {:source :job :kind :stopped} :for-s 200 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "iron_pickaxe" 1]]
    :limit-s 220}
-  ;; card 175bf093: iron ore seen about 20 blocks off, no raw iron carried: the kit goes to the ore and mines it, not "stopped no-source"
+  ;; card 175bf093: iron ore seen about 20 blocks off, no raw iron carried: the kit goes to the ore and mines it, not "stopped no-source". Three ore blocks (a pickaxe takes 3 ingots) and a carried table, so nothing else is short once they are mined
   {:name "seen-iron-ore-is-mined-not-no-source"
    :plot {:height 12 :floor "grass_block" :length 64 :width 32}
-   :blocks [[:fill [36 -1 14] [40 3 18] "stone"] [:set [36 0 16] "iron_ore"] [:set [36 1 16] "iron_ore"]]
-   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["stone_sword" 1] ["stick" 2] ["cooked_beef" 3] ["cobblestone" 8] ["coal" 4]]}
+   :blocks [[:fill [36 -1 14] [40 3 18] "stone"] [:set [36 0 16] "iron_ore"] [:set [36 1 16] "iron_ore"] [:set [36 2 16] "iron_ore"]]
+   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["stone_sword" 1] ["stick" 2] ["cooked_beef" 3] ["cobblestone" 8] ["coal" 4] ["crafting_table" 1]]}
    :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
    :expect [{:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 150 :of-job true}]
    :after [[:not-block [36 0 16] "iron_ore"]]
