@@ -1,0 +1,26 @@
+;; Card e0765ef8: Water Breathing counts as air in go-to's plan. A submerged 2-high tunnel 110 cells long (about 28 s of swimming at
+;; ~3.9 b/s, far past the 15 s of plain air) is the only way past a bedrock ridge; shaft down at x 4, shaft up at x 115, goal on the far surface.
+;; Should-succeed: with Water Breathing (120 s) the body takes the tunnel and arrives unhurt.
+;; Should-fail: with no effect the plan would drown the body, so go-to ends unarrived (refused :air-lethal) and the body is not hurt.
+{:defaults
+ {:tags [:movement :water :air :go-to]
+  :time :any
+  :plot {:height 12 :length 128 :width 16}
+  :blocks [[:fill [0 0 0] [127 5 15] "stone"]
+           [:fill [4 0 8] [4 5 8] "water"] [:fill [5 0 8] [114 1 8] "water"] [:fill [115 0 8] [115 5 8] "water"]
+           [:fill [60 6 0] [60 9 15] "bedrock"]]
+  :body {:at [4.5 0 8.5] :settle-s 2}
+  :limit-s 90}
+ :cases
+ [{:name "water-breathing-takes-the-long-submerged-tunnel"
+   :body {:effects [["water_breathing" 120 0]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [116 6 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 70 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 70 :until {:source :job :kind :result}}]
+   :after [[:body-near [116.5 6 8.5] 3]]}
+  {:name "plain-air-refuses-the-long-submerged-tunnel"
+   :act [[:job (jobs.movement.go-to {:pos #at [116 6 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :result}}]
+   :after [[:body-far [116.5 6 8.5] 20]]
+   :limit-s 70}]}
