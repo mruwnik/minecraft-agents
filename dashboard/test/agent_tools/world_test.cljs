@@ -3,6 +3,7 @@
             [agent-tools.fake-socket :as fake]
             [agent-tools.world :as world]
             [agent-tools.world-data :as data]
+            [clojure.string :as str]
             ["node:fs" :as fs]
             ["node:os" :as os]
             ["node:path" :as path]))
@@ -116,3 +117,6 @@
     ["move-to" "10" "-35"] '(jobs.movement.go-to {:pos [10 -35]})
     ["move-to" "10" "-35" "--range" "2"] '(jobs.movement.go-to {:pos [10 -35] :range 2}))
   (is (fails-with #"x z or x y z" ["--world" "w" "Probe" "submit" "move-to" "1"])))
+
+(deftest usage-points-gates-and-doors-at-access-toggle
+  (is (str/includes? world/usage "jobs.access.toggle")))
