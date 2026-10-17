@@ -44,7 +44,7 @@
   - a bed to use or a carried bed to put down, with a roofed :roofed-places place within :home-radius and the body not roofed: walks into the place first (go-to :place, lit or not; one try, a failed walk is not repeated tonight). A carried bed is never put down in the open while such a place is close (info night.bed-kept once); the night goes on below.
   - an open door of the closed room the body stands in is shut before any bed is used or put down (below).
   - roofed, with a carried bed to put down under the roof and a doorway out of the room (night.doorway/gap): the doorway is filled first (jobs.blocks.fill-cells: a carried wooden door, else building blocks; never a cell an animal or mob stands in; tried once a night; the cells remembered as :doorway-filled, a day).
-  - a bed-down in flight (its walk to the bed or to where the bed goes down) is called again until it ends.
+  - a bed-down in flight (its walk to the bed or to where the bed goes down) is called again until it ends; one that stops hostile-near makes the night hold :monsters-near (5 s) first.
   - a bed (sh/bed-to-use: seen, or remembered within :bed-radius, :urgent-bed-radius once :max-days-awake days without
     sleep; never an occupied one, one given up on, or, unless :max-days-awake days without sleep, one whose walk leaves an underground, dug-in or room shelter): jobs.survival.bed-down sleeps in it (jobs.survival.sleep). A sleep that ends without sleeping writes
     :sleep-failed (5 minutes).
@@ -191,6 +191,8 @@
       (ctx/update-mem! c dissoc :bed-down))
     (when (and (= :done (:kind d)) (:slept (:data d)))
       (hold/sheltered! c :slept))
+    (when (= :hostile-near (:reason (:cause d)))
+      (await (hold/hold! c :monsters-near)))
     :again))
 
 ;; ------------------------------------------------------------------ a safe place

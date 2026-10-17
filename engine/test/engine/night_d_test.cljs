@@ -201,6 +201,17 @@
           (is (= 1 (count (:list (core/state eng)))) "the call holds")
           (is (= [:monsters-near] (distinct (map :reason (st/emitted seen :holding))))))))))
 
+(deftest a-hostile-near-holds-the-night-as-monsters-near-without-calling-bed-down-every-pass
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (held-starving [zombie] {:food 20 :health 20} [{:name "red_bed" :count 1}])]
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (core/tick! eng))
+          (is (empty? (st/calls p "sleep")) "no sleep with a hostile near")
+          (is (>= 12 (count (filterv #(and (= :child_started (:kind %)) (= :bed-down (:slot %))) @seen))) "one bed-down per hold, not per pass")
+          (is (= [:monsters-near] (distinct (map :reason (st/emitted seen :holding))))))))))
+
 (deftest an-occupied-bed-not-yet-looked-at-is-refused-before-the-sleep
   (async done
     (tu/run-async done
