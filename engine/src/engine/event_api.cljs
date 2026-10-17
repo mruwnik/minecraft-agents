@@ -158,6 +158,8 @@
         (> (count all-stacks) (setting "inventory-stack-limit")) (assoc :more? true)
         offline? (assoc :last-known true :offline (core/away eng)))))))
 
+(def max-zone-distance "How far a zone may be from a seen block and still be named on its row." 32)
+
 (def seen-name-pattern #"\*?[a-z0-9_]{1,80}")
 
 (defn seen-matcher
@@ -168,22 +170,52 @@
           suffixes (mapv #(subs % 1) (filter #(.startsWith % "*") names))]
       (fn [n] (or (contains? exact n) (boolean (some #(.endsWith n %) suffixes)))))))
 
+(def crop-max-age
+  "The age at which each crop is ripe (the properties of a remembered crop block carry :age)."
+  {"wheat" 7 "carrots" 7 "potatoes" 7 "beetroots" 3 "nether_wart" 3 "sweet_berry_bush" 3 "cocoa" 2})
+
+(defn crop-fields
+  "{:age :ripe} of a remembered crop row (p's seenBlockAt), nil for any other block."
+  [^js p {:keys [name pos]}]
+  (when-let [ripe-age (crop-max-age name)]
+    (when-let [age (some-> (.-seenBlockAt p) (.call p (clj->js {:x (:x pos) :y (:y pos) :z (:z pos)}))
+                           .-properties .-age js/Number)]
+      {:age age :ripe (>= age ripe-age)})))
+
+(defn nearest-zone
+  "{:name :owner :distance} of the zone nearest to cell [x y z] within max-zone-distance (0 inside it), else nil."
+  [zones [x y z]]
+  (let [gap (fn [v lo hi] (cond (< v lo) (- lo v) (> v hi) (- v hi) :else 0))]
+    (->> zones
+         (keep (fn [{[x0 y0 z0] :min [x1 y1 z1] :max :as zone}]
+                 (let [d (js/Math.hypot (gap x x0 x1) (gap y y0 y1) (gap z z0 z1))]
+                   (when (<= d max-zone-distance)
+                     {:name (:name zone) :owner (:owner zone) :distance (/ (js/Math.round (* 10 d)) 10)}))))
+         (sort-by :distance)
+         first)))
+
 (defn seen-view
   "Read-only: the blocks the body's perception memory holds (never x-ray), nearest first, as
-  {:name :pos [x y z] :distance :age-ms}. q: :names (a name or *suffix, at most 32), :radius (cut at 64), :max (cut at 64)."
+  {:name :pos [x y z] :distance :age-ms}; a crop adds :age and :ripe, a block within max-zone-distance of a zone
+  :zone {:name :owner :distance}. q: :names (a name or *suffix, at most 32), :radius (cut at 64), :max (cut at 64)."
   [eng {:keys [names radius max]}]
   (if (core/offline? eng)
     {:ok false :reason :offline :offline (core/away eng)}
     (let [radius (min (or radius 32) 64) max (min (or max 16) 64)
           match (seen-matcher names)
-          rows (if-let [f (.-seenBlocks (:primitives eng))]
-                 (js->clj (.call f (:primitives eng) (clj->js (cond-> {:radius radius :max (inc max)} match (assoc :match match))))
+          p (:primitives eng)
+          zones (some-> (:world eng) :state deref (get-in [:zones :value]))
+          rows (if-let [f (.-seenBlocks p)]
+                 (js->clj (.call f p (clj->js (cond-> {:radius radius :max (inc max)} match (assoc :match match))))
                           :keywordize-keys true)
                  [])]
       (cond-> {:ok true :radius radius
-               :blocks (mapv (fn [{:keys [name pos distance age-ms]}]
-                               (cond-> {:name name :pos [(:x pos) (:y pos) (:z pos)] :distance (/ (js/Math.round (* 10 distance)) 10)}
-                                 age-ms (assoc :age-ms age-ms)))
+               :blocks (mapv (fn [{:keys [name pos distance age-ms] :as row}]
+                               (let [cell [(:x pos) (:y pos) (:z pos)]]
+                                 (cond-> (into {:name name :pos cell :distance (/ (js/Math.round (* 10 distance)) 10)}
+                                               (crop-fields p row))
+                                   age-ms (assoc :age-ms age-ms)
+                                   (seq zones) (as-> r (if-let [zone (nearest-zone zones cell)] (assoc r :zone zone) r)))))
                              (take max rows))}
         (> (count rows) max) (assoc :more? true)))))
 

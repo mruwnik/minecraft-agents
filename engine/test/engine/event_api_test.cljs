@@ -489,6 +489,23 @@
     (is (= 20 (:radius (first @calls))))
     (is (= 11 (:max (first @calls))))))
 
+(deftest seen-view-adds-crop-age-and-ripeness-and-the-nearest-zone
+  (let [props {"1,64,2" {:age "7"} "4,64,2" {:age "2"}}
+        eng (-> (seen-engine [{:name "wheat" :pos {:x 1 :y 64 :z 2} :distance 3.0 :age-ms 5}
+                              {:name "wheat" :pos {:x 4 :y 64 :z 2} :distance 5.0 :age-ms 5}
+                              {:name "chest" :pos {:x 40 :y 64 :z 2} :distance 9.0 :age-ms 5}]
+                             (atom []))
+                (assoc :world {:state (atom {:zones {:value [{:name "far" :owner "Wren" :min [100 0 0] :max [110 90 9]}
+                                                             {:name "field" :owner "Alder" :min [0 60 0] :max [2 70 9]}]}})}))]
+    (aset (:primitives eng) "seenBlockAt"
+          (fn [c] #js {:properties (clj->js (props (str (.-x c) "," (.-y c) "," (.-z c))))}))
+    (is (= [{:name "wheat" :pos [1 64 2] :distance 3.0 :age-ms 5 :age 7 :ripe true
+             :zone {:name "field" :owner "Alder" :distance 0}}
+            {:name "wheat" :pos [4 64 2] :distance 5.0 :age-ms 5 :age 2 :ripe false
+             :zone {:name "field" :owner "Alder" :distance 2}}
+            {:name "chest" :pos [40 64 2] :distance 9.0 :age-ms 5}]
+           (:blocks (event-api/seen-view eng {:radius 64 :max 10}))))))
+
 (deftest seen-view-matches-star-suffix-names-and-bounds-radius-and-count
   (let [calls (atom [])
         _ (event-api/seen-view (seen-engine [] calls) {:names ["*_bed" "chest"] :radius 500 :max 500})
