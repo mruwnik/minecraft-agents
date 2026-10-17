@@ -1051,6 +1051,16 @@
                     (is (= 3 (count @calls)) "bounded retries")
                     (done)))))))
 
+(deftest a-submit-held-back-as-a-job-clash-is-refused-not-taken-for-the-running-jobs-id
+  (async done
+    (-> (r/submit-job! {:body "B" :world "w"
+                        :exec (fn [_] (js/Promise.resolve {:code 1 :out "{:ok false :reason :job-clash :clashes [{:id \"j1\" :name \"jobs.access.stair\"}]}"}))}
+                       {:job :x} [])
+        (.then (fn [_] (is false "took the clashing job's id")))
+        (.catch (fn [e]
+                  (is (re-find #"submit refused.*job-clash" (.-message e)))
+                  (done))))))
+
 (deftest the-case-goal-names-file-case-and-run-or-retry-only-above-the-first
   (is (= "test pen-check › closed" (r/case-goal {:id "pen-check/closed"} 1 0)))
   (is (= "test pen-check › closed (run 2)" (r/case-goal {:id "pen-check/closed"} 2 0)))
