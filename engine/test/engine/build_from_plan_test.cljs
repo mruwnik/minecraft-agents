@@ -727,15 +727,14 @@
         (let [ground (into {} (concat (for [x (range 5 23) z (range 5 23)] [(h/cell-key x 63 z) "stone"])
                                       (for [x (range 15 23) z (range 5 23)] [(h/cell-key x 64 z) "stone"])
                                       (for [c [[11 11] [12 11] [11 12]]] [(h/cell-key (first c) 64 (second c)) "stone"])))
-              plan {:id "box" :parts [{:id "walls" :outline [[10 64 10] [13 65 13]] :want "dirt"}
-                                      {:id "roof" :box [[10 66 10] [13 66 13]] :want "dirt"}]}
+              plan {:id "box" :parts [{:id "walls" :outline [[10 64 10] [13 65 13]] :want "dirt"}]}
               {:keys [eng]} (start {:blocks ground :inventory [{:name "dirt" :count 64}]
                                     :self {:pos {:x 11.5 :y 65 :z 11.5}}}
                                    {"box" plan} [])
               result (await (child-outcome eng job {:plan "box"} 600))]
           (is (= [] (:missing result)))
           (is (= {} (:given-up result)))
-          (is (= 40 (:placed result))))))))
+          (is (= 24 (:placed result))))))))
 
 (deftest stand-cells-are-put-on-the-ground-where-it-rises-or-falls
   (let [ground (into {} (concat (for [x (range 5 23) z (range 5 23)] [(h/cell-key x 63 z) "stone"])

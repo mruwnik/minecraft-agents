@@ -57,6 +57,7 @@
    :clear {:doc "dig a plant, flower or snow layer out of the cell first; false places into what a placement overwrites" :spec boolean? :default true}
    :click {:doc "how to place it ({:against [x y z] :cursor [x y z] :yaw :pitch :sneak}, jobs.lib.placement/click); nil: plainly" :spec map? :default nil}
    :facing {:doc "north, south, east or west: the way a facing block (bed head, gate, door, stairs) is oriented; the body looks that way as it places (jobs.lib.placement); not with :click; nil: as the body stands" :spec (a/pred "north, south, east or west" #{"north" "south" "east" "west"}) :default nil}
+   :see {:doc "true: place only from where the eye sees the cell (jobs.lib.aim: nothing seen solid in the way, as a player aims at the face it places against), walking to such a stand first (go-to :see; none: :unreachable :out-of-sight); false: within reach is enough" :spec boolean? :default true}
    :fetch {:doc "get the missing block item instead of waiting :need (jobs.lib.need): true, a set of kinds or a map of limits" :spec need/option? :default true}})
 
 (def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
@@ -172,7 +173,7 @@
 
 (defn quote-of [c]
   (let [{:keys [pos items error]} (parse c)
-        walk (if (or error (b/in-reach? c pos)) 0 (u/eye-dist (u/self-pos c) pos))]
+        walk (if (or error (b/in-reach? c pos (:see (:args c)))) 0 (u/eye-dist (u/self-pos c) pos))]
     {:uses (cond-> {:job-time [0.5 (+ 1 (/ walk 4)) (+ 10 walk)]}
              (= 1 (count items)) (assoc :items {(first items) [1 1 1]}))}))
 
@@ -295,8 +296,8 @@
       (clears? c block)
       (let [w (await (clear! c pos items))]
         (if (= :cleared w) :again w))
-      (not (b/in-reach? c pos))
-      (let [w (await (b/walk!* c pos))]
+      (not (b/in-reach? c pos (:see (:args c))))
+      (let [w (await (b/walk!* c pos (:see (:args c))))]
         (cond
           (= :continue w) :continue
           (= :arrived w) :again

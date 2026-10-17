@@ -205,6 +205,18 @@
         (is (= {:reason :no-support :pos {:x 2 :y 67 :z 0}}
                (bd/wait-cause (await (bd/waiting-after (bd/setup {:self body :inventory cobble}) (list job {:pos [2 67 0] :item "cobblestone"}) 3)))))))))
 
+(deftest a-cell-hidden-from-where-the-body-stands-is-placed-from-where-it-sees-it
+  ;; the pit floor is in reach of the cell but the surface stone is in the way; :see false places from the pit
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [see? [true false]]
+          (let [{:keys [eng p]} (bd/setup {:self bd/in-pit :blocks bd/pit-blocks :inventory cobble})
+                result (await (tu/child-outcome eng job {:pos [6 65 0] :item "cobblestone" :see see?} 15))
+                y (.-y (.-pos (.self p)))]
+            (is (= "cobblestone" (bd/block-at p {:x 6 :y 65 :z 0})) (pr-str result))
+            (is (= see? (>= y 64)) (str ":see " see? ", feet y " y))))))))
+
 (deftest a-floor-remembered-as-air-long-ago-is-looked-at-and-placed-against
   (async done
     (tu/run-async done

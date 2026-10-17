@@ -19,7 +19,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [open (await (d/run! {:blocks d/ground} 'jobs.blocks.place {:pos {:x 3 :y 66 :z 0} :item "cobblestone" :ignore-zones? true}))
-              hid (await (d/run! {:blocks hole} 'jobs.blocks.place {:pos {:x 1 :y 63 :z 0} :item "cobblestone" :ignore-zones? true}))]
+              hid (await (d/run! {:blocks hole} 'jobs.blocks.place {:pos {:x 1 :y 63 :z 0} :item "cobblestone" :ignore-zones? true :see false}))]
           (is (empty? (d/places (:p open))) "a seen cell in the air has nothing to place against: it waits")
           (is (some #{{:x 1 :y 63 :z 0}} (d/places (:p hid))) "a hidden one is tried: the primitive decides"))))))
 
