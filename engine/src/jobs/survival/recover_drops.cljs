@@ -9,7 +9,6 @@
             [jobs.lib.body :as body]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
-            [jobs.lib.danger :as danger-q]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
@@ -17,6 +16,7 @@
             [jobs.lib.shelter :as sh]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
+            [jobs.survival.recover-drops.danger :as dg]
             [jobs.survival.recover-drops.deaths :as dth]
             [jobs.survival.recover-drops.estimate :as est]
             [jobs.survival.recover-drops.kit :as kt]
@@ -173,13 +173,6 @@
                       :decision decision :pos pos :text text))
     (ending-for c decision fields text pos)))
 
-(defn decline!
-  "End this run with the death still open, the ending carrying the reason and a text: condition-failed
-  for a danger or the night, nothing-possible for a walk that did not arrive."
-  [c reason text fields]
-  (let [text (str "recover-drops declined: " text)]
-    (ctx/end c (if (= :unreachable reason) :nothing-possible :condition-failed) reason (assoc fields :text text))))
-
 (defn own-seal-near
   "The open scaffold ledger entries (jobs.lib.ledger) within seal-radius of pos: blocks this body placed round the pile."
   [c pos]
@@ -201,13 +194,11 @@
       (ctx/update-mem! c assoc :seal-cleared true))
     :next))
 
-(declare threatened? meet-danger!)
-
 (defn ^:async walk-leg!
   "One leg of the walk to pos: [:danger d] when a danger the trip has not priced is near (no walk is made), else [r] of
   a go-to child with :leg-s seconds (:continue, or its ending; its :data has the result, with :arrived or :leg)."
   [c pos]
-  (if-let [d (threatened? c)]
+  (if-let [d (dg/threatened? c)]
     [:danger d]
     [(await (child/call-walk* c :go {:pos pos :range (cfg/arrive-range) :checks own-checks :spend {:job-time (:leg-s (:args c))}}))]))
 
@@ -226,11 +217,11 @@
         [r danger] (await (walk-leg! c pos))
         walked (or (:data r) (when (job-time-limit? r) {:leg true}))]
     (cond
-      (= :danger r) (meet-danger! c danger)
+      (= :danger r) (dg/meet-danger! c danger)
       (or (= :continue r) (and (not= :done (:kind r)) (nil? walked)))
-      (decline! c :unreachable (str "the walk to " (pr-str pos) " is waiting on the world") {:pos pos})
+      (dg/decline! c :unreachable (str "the walk to " (pr-str pos) " is waiting on the world") {:pos pos})
       (:inside-own-shelter walked)
-      (decline! c :unreachable (str "the walk to " (pr-str pos) " is refused: the body is sealed in its own shelter, which opens by day") {:pos pos})
+      (dg/decline! c :unreachable (str "the walk to " (pr-str pos) " is refused: the body is sealed in its own shelter, which opens by day") {:pos pos})
       (and (= :goal-enclosed (:why walked)) (await (clear-seal! c pos))) :next
       (:leg walked)
       (let [nearer? (< (u/dist (u/self-pos c) pos) (- before 1))]
@@ -242,7 +233,7 @@
       (do (ctx/update-mem! c assoc :blocked true)
           (child/fruitless! c :go)
           (dth/save-trip! c)
-          (decline! c :unreachable (str "the walk to " (pr-str pos) " did not arrive") {:pos pos}))
+          (dg/decline! c :unreachable (str "the walk to " (pr-str pos) " did not arrive") {:pos pos}))
       :else (do (ctx/update-mem! c assoc :phase :collect :blocked false) (dth/save-trip! c) :next))))
 
 (defn finish-collect!
@@ -313,45 +304,6 @@
 
                   :else (finish-collect! c pile again))))))))))
 
-(defn threatened?
-  "The nearest real danger within :danger-radius the trip has not been weighed with near (:weighed), or nil."
-  [c]
-  (danger-q/nearest-danger (:primitives c) (:danger-radius (:args c)) {} {:skip (:weighed (ctx/mem c))}))
-
-(defn unpriced-threat
-  "threatened? leaving out the mobs the call prices itself (:danger-overrides): the decision weighs those."
-  [c]
-  (let [priced (set (keys (:danger-overrides (:args c))))
-        p (:primitives c)
-        ids (keep #(when (contains? priced (.-name %)) (.-id %)) (danger-q/known-hostiles p (:danger-radius (:args c)) {}))]
-    (danger-q/nearest-danger p (:danger-radius (:args c)) {} {:skip (into (set (:weighed (ctx/mem c))) ids)})))
-
-(defn hit-since?
-  "Whether the body was hurt since the decision was taken."
-  [c decided]
-  (boolean (seq (ctx/since c :hurt (inc (:at decided 0))))))
-
-(defn danger-fields
-  "{:mob :mob-pos} of the danger m: its place when seen, else the rough spot its band gives (jobs.lib.danger/mob-pos)."
-  [p m]
-  {:mob (.-name m) :mob-pos (danger-q/mob-pos p m)})
-
-(defn decline-danger!
-  "End condition-failed :danger for the danger m: its name and place are in the event."
-  [c m]
-  (let [{:keys [mob mob-pos] :as fields} (danger-fields (:primitives c) m)]
-    (ctx/update-mem! c assoc :hostile-cut true)
-    (dth/save-trip! c)
-    (decline! c :danger (str mob " at " (pr-str mob-pos) " within " (:danger-radius (:args c)) " blocks") fields)))
-
-(defn meet-danger!
-  "A danger m the trip has not been weighed with near: :next with the trip to be weighed again with it, once per mob;
-  else (no decision yet, or a mob with no id) the decline."
-  [c m]
-  (if (and (:decided (ctx/mem c)) (some? (.-id m)))
-    (do (ctx/update-mem! c #(-> % (assoc :recheck true) (update :weighed (fnil conj #{}) (.-id m)))) :next)
-    (decline-danger! c m)))
-
 (defn ^:async wait-while!
   "Hold still (reason) while (pending?) is true: nil when it clears, else the ending of a danger within :danger-radius
   (one the call prices with :danger-overrides is left to the decision), :continue for a cut, :closed when the despawn window passes."
@@ -361,7 +313,7 @@
       (not (pending?)) (do (ctx/hold-still! c nil) nil)
       (not (ctx/alive? c)) :continue
       (dth/window-closed? c entry) (do (ctx/hold-still! c nil) :closed)
-      (unpriced-threat c) (do (ctx/hold-still! c nil) (decline-danger! c (unpriced-threat c)))
+      (dg/unpriced-threat c) (do (ctx/hold-still! c nil) (dg/decline-danger! c (dg/unpriced-threat c)))
       :else (do (await (child/pause! c (cfg/pause-s) reason)) (await (pace/pace!)) (recur)))))
 
 (defn decide!
@@ -384,45 +336,6 @@
                           :pos (:pos (:data entry)) :text (est/decision-text :fetch e margin))))
       e)))
 
-(defn ^:async wear-kit!
-  "Put on what the kit fetch brought (jobs.items.wear), once its child has ended."
-  [c]
-  (await (child/run!* c :wear 'jobs.items.wear {})))
-
-(defn kit-minutes
-  "The kit fetch's limit: the fetch option's :minutes, at most the minutes the pile's despawn window has left."
-  [c entry limits]
-  (let [left (/ (settings/ticks->ms (game/despawn-left-ticks entry (ctx/view c))) 60000)]
-    (max 0.1 (min left (or (:minutes limits) left)))))
-
-(defn ^:async kit!
-  "Once per run: fetch and wear a weapon and armour when the pile is worth the trip, the danger calls for them and a known
-  chest has them (jobs.lib.need, one piece at a time). A fetch child waiting on the world is waited for (declared hold
-  :fetching-kit) until it ends, a danger or the despawn window. nil when done, dropped (a fetch that failed: warn) or
-  nothing to do; else the ending of a danger, or :continue for a cut."
-  [c entry]
-  (let [limits (need/opts c 'jobs.survival.recover-drops)]
-    (if (or (:kit-done (ctx/mem c)) (not limits) (nil? (kt/kit-problem c)) (not (kt/kit-called-for? c entry)))
-      (do (ctx/update-mem! c assoc :kit-done true) nil)
-      (loop []
-        (let [wanted (kt/kit-problem c)
-              r (if wanted (await (need/blocks! c (:any-of wanted) 1 (assoc (select-keys limits [:how :explore]) :minutes (kit-minutes c entry limits)))) :done)]
-          (cond
-            (nil? wanted)
-            (do (await (wear-kit! c))
-                (ctx/update-mem! c assoc :kit-done true)
-                nil)
-
-            (and (not= :continue r) (not= :done (:kind r)))
-            (do (ctx/update-mem! c assoc :kit-done true)
-                (ctx/emit! c :recover-drops.kit-dropped :warn {:text "recover-drops: the kit fetch failed; going without a kit"})
-                nil)
-
-            (not= :continue r) (recur)
-            (not (ctx/alive? c)) :continue
-            (dth/window-closed? c entry) (do (ctx/hold-still! c nil) nil)
-            (threatened? c) (do (ctx/hold-still! c nil) (decline-danger! c (threatened? c)))
-            :else (do (await (child/pause! c (cfg/pause-s) :fetching-kit)) (await (pace/pace!)) (recur))))))))
 
 (defn retreat!
   "Remember the danger for hold-ms, report the skip and end condition-failed :danger (see retry-later!)."
@@ -462,14 +375,14 @@
       (give-up! :window-closed (str "the pile is " below " blocks down: a stair takes about " (js/Math.round need-s) " s, " (js/Math.round left-s) " s are left"))
       (let [args {:target [(js/Math.floor (:x pos)) (js/Math.floor (:y pos)) (js/Math.floor (:z pos))] :max-length 96 :keep true :by-hand false :max-steps 1 :checks own-checks}]
         (loop [n 0]
-          (let [danger (threatened? c)
+          (let [danger (dg/threatened? c)
                 r (when-not danger (await (ctx/call c :dig 'jobs.access.tunnel args)))]
             (cond
-              danger (meet-danger! c danger)
+              danger (dg/meet-danger! c danger)
               (= :done (:kind r)) :next
               (not (ctx/alive? c)) :continue
               (and (= :continue r) (< n (child/default-max-calls))) (do (await (pace/pace!)) (recur (inc n)))
-              (= :continue r) (decline! c :unreachable "the stair down to the pile is waiting on the world" {:pos pos})
+              (= :continue r) (dg/decline! c :unreachable "the stair down to the pile is waiting on the world" {:pos pos})
               :else (give-up! :unreachable (str "no stair down to the pile: " (pr-str (contract/cause-key r))
                                                     (when (get-in r [:cause :fetch]) " (no pickaxe could be got)"))))))))))
 
@@ -477,7 +390,7 @@
   "The decision, then the walk and the collect passes of a trip inside its window."
   [c entry]
   (let [{:keys [margin collect-radius]} (:args c)
-        kit (await (kit! c entry))
+        kit (await (kt/kit! c entry))
         decided (when-not kit (decide! c entry))
         pos (:pos (:data entry))]
     (cond
@@ -496,9 +409,9 @@
       (child/exhausted? c :go)
       (finish! c :abandoned (assoc decided :reason :unreachable :detail (est/unreachable-detail c pos)))
 
-      (hit-since? c decided) (do (ctx/update-mem! c assoc :recheck true) :next)
+      (dg/hit-since? c decided) (do (ctx/update-mem! c assoc :recheck true) :next)
 
-      (and (= :collect (:phase (ctx/mem c))) (threatened? c)) (meet-danger! c (threatened? c))
+      (and (= :collect (:phase (ctx/mem c))) (dg/threatened? c)) (dg/meet-danger! c (dg/threatened? c))
 
       (and (= :collect (:phase (ctx/mem c))) (> (u/dist (u/self-pos c) pos) (cfg/stray-range)))
       (do (ctx/update-mem! c assoc :phase :go) :next)

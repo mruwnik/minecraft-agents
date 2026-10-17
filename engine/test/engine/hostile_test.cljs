@@ -12,6 +12,7 @@
             [jobs.survival.fight-back :as fight-back]
             [jobs.lib.util :as u]
             [jobs.survival.recover-drops :as recover-drops]
+            [jobs.survival.recover-drops.danger :as recover-drops-danger]
             [jobs.survival.respond-to-hostile :as respond-to-hostile]
             [jobs.lib.cost :as cost]
             [engine.events :as events]
@@ -1190,7 +1191,7 @@
 (deftest recover-drops-logs-a-heard-danger-at-its-rough-spot
   (let [p (tu/fake-on-floor {:floor flight-floor :entities [(assoc (heard-zombie) :visible false)]})
         e (first (combat/hostiles p 8))
-        f (recover-drops/danger-fields p e)
+        f (recover-drops-danger/danger-fields p e)
         [bx] (let [pos (.-pos (.self p))] [(.-x pos)])]
     (is (= "zombie" (:mob f)))
     (is (= (+ bx 4) (:x (:mob-pos f))) "the rough spot 4 east, not the exact 3")))

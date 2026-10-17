@@ -4,10 +4,16 @@
             [engine.settings :as settings]
             [engine.game :as game]
             [jobs.lib.armour :as armour]
+            [jobs.lib.child :as child]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
+            [jobs.lib.need :as need]
+            [jobs.lib.pace :as pace]
             [jobs.lib.stock :as stock]
             [jobs.lib.util :as u]
+            [jobs.survival.recover-drops.config :as cfg]
+            [jobs.survival.recover-drops.danger :as dg]
+            [jobs.survival.recover-drops.deaths :as dth]
             [jobs.survival.recover-drops.estimate :as est]))
 
 (defn stock-names
@@ -46,3 +52,43 @@
         safe (cost/fetch-cost {:distance (when pos (u/dist (u/self-pos c) pos)) :danger 0 :elapsed-ms elapsed :cause cause})
         safe-cost (if (js/isFinite (:cost safe)) (:cost safe) js/Infinity)]
     (boolean (and (seq (:top-mobs e)) (> (:value e) (+ safe-cost (:margin (:args c))))))))
+
+(defn ^:async wear-kit!
+  "Put on what the kit fetch brought (jobs.items.wear), once its child has ended."
+  [c]
+  (await (child/run!* c :wear 'jobs.items.wear {})))
+
+(defn kit-minutes
+  "The kit fetch's limit: the fetch option's :minutes, at most the minutes the pile's despawn window has left."
+  [c entry limits]
+  (let [left (/ (settings/ticks->ms (game/despawn-left-ticks entry (ctx/view c))) 60000)]
+    (max 0.1 (min left (or (:minutes limits) left)))))
+
+(defn ^:async kit!
+  "Once per run: fetch and wear a weapon and armour when the pile is worth the trip, the danger calls for them and a known
+  chest has them (jobs.lib.need, one piece at a time). A fetch child waiting on the world is waited for (declared hold
+  :fetching-kit) until it ends, a danger or the despawn window. nil when done, dropped (a fetch that failed: warn) or
+  nothing to do; else the ending of a danger, or :continue for a cut."
+  [c entry]
+  (let [limits (need/opts c 'jobs.survival.recover-drops)]
+    (if (or (:kit-done (ctx/mem c)) (not limits) (nil? (kit-problem c)) (not (kit-called-for? c entry)))
+      (do (ctx/update-mem! c assoc :kit-done true) nil)
+      (loop []
+        (let [wanted (kit-problem c)
+              r (if wanted (await (need/blocks! c (:any-of wanted) 1 (assoc (select-keys limits [:how :explore]) :minutes (kit-minutes c entry limits)))) :done)]
+          (cond
+            (nil? wanted)
+            (do (await (wear-kit! c))
+                (ctx/update-mem! c assoc :kit-done true)
+                nil)
+
+            (and (not= :continue r) (not= :done (:kind r)))
+            (do (ctx/update-mem! c assoc :kit-done true)
+                (ctx/emit! c :recover-drops.kit-dropped :warn {:text "recover-drops: the kit fetch failed; going without a kit"})
+                nil)
+
+            (not= :continue r) (recur)
+            (not (ctx/alive? c)) :continue
+            (dth/window-closed? c entry) (do (ctx/hold-still! c nil) nil)
+            (dg/threatened? c) (do (ctx/hold-still! c nil) (dg/decline-danger! c (dg/threatened? c)))
+            :else (do (await (child/pause! c (cfg/pause-s) :fetching-kit)) (await (pace/pace!)) (recur))))))))
