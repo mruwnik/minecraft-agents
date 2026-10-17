@@ -138,6 +138,16 @@
     (is (= 1 (:count (seen/snapshot c 179999))))
     (is (= 0 (:count (seen/snapshot c 180000))))))
 
+(deftest a-row-the-client-stopped-tracking-is-remembered-at-its-last-place
+  (let [c (cache) bot (js-obj) cow (entity 1 "cow" "cow-1" 7)
+        sense-at #(:sense (first (:entities (seen/snapshot c %))))]
+    (seen/observe! c (sample bot [cow]) 1000)
+    (is (= :seen (sense-at 1000)))
+    (is (= :seen (sense-at 3500)) "within a few samples it is still current")
+    (seen/observe! c (sample bot []) 10000)
+    (is (= :remembered (sense-at 10000)))
+    (is (= 9000 (:age-ms (first (:entities (seen/snapshot c 10000))))))))
+
 (deftest disconnected-or-stalled-samples-do-not-fabricate-sightings
   (let [c (cache) bot (js-obj) e (entity 1 "cow" "cow" 1)]
     (seen/observe! c (sample bot [e]) 0)

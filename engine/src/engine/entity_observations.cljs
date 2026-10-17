@@ -4,6 +4,7 @@
   reflexes do not read this cache.
 
   Each entity is listed with how it was sensed:
+  - a :seen row that went unrefreshed for three samples (no longer tracked) is listed :remembered
   - hostile mobs come only from engine.perception's known-mobs memory (`known-sense`): :seen, :heard, or
     :remembered at the place last sensed, with :age-ms; dropped once that memory forgets it, even if unloaded
   - everything else goes through perception's rule for a thing at a place (`sense`): a clear line, light and
@@ -221,6 +222,14 @@
             (swap! (:state store) update :entities dissoc key))))))
   nil)
 
+(defn aged-sense
+  "A :seen row not refreshed by the last few samples (the client stopped tracking it: far off, unloaded) shows
+  where it was, not where it is."
+  [entity age]
+  (if (and (= :seen (:sense entity)) (> age (* 3 (setting "sample-ms"))))
+    :remembered
+    (:sense entity)))
+
 (defn bounded-entities [entities]
   (loop [[entity & more] entities bytes 1024 kept []]
     (if entity
@@ -236,7 +245,8 @@
    (swap! (:state store) update :entities prune now)
    (let [state @(:state store)
          values (->> (vals (:entities state))
-                     (map #(assoc % :age-ms (max 0 (- now (:observed-at %)))))
+                     (map #(let [age (max 0 (- now (:observed-at %)))]
+                          (cond-> (assoc % :age-ms age) (:sense %) (assoc :sense (aged-sense % age)))))
                      (sort-by (juxt :dimension :key)))
          bounded (bounded-entities values)
          dropped (+ (:dropped bounded) (if (> (:overflow-until state) now) (:dropped state) 0))]

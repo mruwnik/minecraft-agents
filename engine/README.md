@@ -867,7 +867,7 @@ Every workspace `bin/` call appends a `:start` and an `:end` line (tool, argv, o
   result. A manual lease rejects `--now` with `:manual-control`.
 - `triggers.mjs` uses `GET/POST /triggers`; built-ins cannot be replaced or removed, only muted or moved. `put`/`add`
   replace a custom entry and reset its condition, latch, cooldown and backoff state.
-- `entities.mjs` reads the body's perception cache (a row has the numeric `:id` when known; `:sense` is `:seen`, `:heard` or `:remembered`; a `:heard` row has no `:pos`, only `:direction` (8 compass points)
+- `entities.mjs` reads the body's perception cache (a row has the numeric `:id` when known; `:sense` is `:seen`, `:heard` or `:remembered` (also a seen row no sample has refreshed for 3 s); a `:heard` row has no `:pos`, only `:direction` (8 compass points)
   and `:band` (`:near` within 8, else `:far`); rows older than two minutes expire). Engine reflexes do not read it.
 - `drive.mjs` and `world.mjs` are the manual takeover tools above.
 
