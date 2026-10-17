@@ -157,6 +157,18 @@
                  (dissoc (wait-cause (await (waiting-after env (list job {:pos at :fetch false}) 3))) :hint)))
           (is (empty? (calls (:p env) "dig"))))))))
 
+(deftest an-unseen-block-is-looked-at-before-the-call-starts-so-a-listed-call-waits-no-tool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup {:self body :blocks {"2,64,0" "stone"}})
+              p (:p env)
+              shown (atom false)]
+          (aset p "sensedAt" (fn [pos] (if (and (>= (.-x pos) 1) (not @shown)) #js {:unknown true} (.blockAt p pos))))
+          (.override (.-world p) "look" (fn [token a impl] (reset! shown true) (impl token a)))
+          (is (= :no-tool (:reason (wait-cause (await (waiting-after env (list job {:pos at :fetch false}) 6))))))
+          (is (empty? (calls p "dig"))))))))
+
 (deftest the-no-tool-wait-says-need-drop-false-digs-by-hand
   (async done
     (tu/run-async done

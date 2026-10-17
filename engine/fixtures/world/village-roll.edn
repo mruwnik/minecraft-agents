@@ -47,6 +47,6 @@
    :act [[:summon "villager" [12.5 0 17.5] "{NoAI:1b,UUID:[I;20260,7,5,6],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 2]
          [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000006" :pos #at [16 0 16] :item "lectern" :want "enchanted_book"})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :cell-unseen}} :within-s 120 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :cell-unseen}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20}]
    :after [[:block [16 0 16] "lectern"]]}]}
