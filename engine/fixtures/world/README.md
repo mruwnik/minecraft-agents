@@ -50,7 +50,7 @@ patterns write `#at [x y z]` (absolute `[x y z]`) or `#xyz [x y z]` (absolute `{
 | `:keep-memory` | `true`: the body's `engine/memory.edn` is not deleted before this case, and when a case follows another in the same register group the body is not restarted (it goes on with the memory it has); for cases that test memory across runs | `false` (every case starts a restarted body with its `memory.edn` deleted) |
 | `:mobs` | `:keep`: the runner does not kill hostile mobs in or (at night) near the plot (each run, `--repeat` too); for danger cases that rely on mobs already there | absent (hostiles near the plot are killed) |
 | `:plot` | `{:height 2..31 :floor "block"}`; `:length` (x, 16..1024) and `:width` (z, 16..64) make a large plot, leased from 16 lanes south of the grid (z 20704 + 96 j, never overlapping it; setup clears the lane's full 64-wide floor first); keep each `:blocks` fill under 32768 blocks | `{:height 16 :floor "stone"}`, 32x32 |
-| `:blocks` | `[:fill a b "block" (:hollow/:outline/...)]`, `[:set p "block[state]"]` | `[]` |
+| `:blocks` | `[:fill a b "block" (:hollow/:outline/...; a one-layer :outline is a ring, not a slab)]`, `[:set p "block[state]"]` | `[]` |
 | `:plans` | plan maps (`:id`, `:parts`); written as `worlds/<world>/plans/test-<body>-<id>.edn`, the runner waits for the body's `world.reloaded` of each file; deleted after; `"$body"` anywhere in a plan or job spec becomes the running body (plan `:metadata :by`); a job-spec string `"$plan:<id>"` becomes that plan's id | `[]` |
 | `:body` | `{:at p :yaw deg (0 south, 180 north) :pitch deg (0 level, positive down) :inventory [["item" n]] :effects [["effect" s amp]] :spawnpoint p :settle-s 3}` | at the middle |
 | `:act` | steps, in order (below) | `[]` |

@@ -613,14 +613,24 @@
       (into (split-fill a (assoc b axis mid))
             (split-fill (assoc a axis (if up? (inc mid) (dec mid))) b)))))
 
+(defn flat-ring
+  "The four [a b] side lines of the ring around a one-layer a..b: /fill outline would fill the whole slab."
+  [[x1 y z1] [x2 _ z2]]
+  [[[x1 y z1] [x2 y z1]] [[x1 y z2] [x2 y z2]] [[x1 y z1] [x1 y z2]] [[x2 y z1] [x2 y z2]]])
+
 (defn block-commands
-  "RCON commands for the case's :blocks. A plain fill over fill-limit blocks (the server refuses it) is split."
+  "RCON commands for the case's :blocks. A plain fill over fill-limit blocks (the server refuses it) is split; a
+  one-layer :outline fill is the hollow ring (four lines)."
   [origin c]
-  (vec (mapcat (fn [[op a b _ d :as entry]]
-                 (if (and (= :fill op) (nil? d))
-                   (map (fn [[x y]] (block-command origin [:fill x y (nth entry 3)]))
-                        (split-fill (mapv #(js/Math.floor %) a) (mapv #(js/Math.floor %) b)))
-                   [(block-command origin entry)]))
+  (vec (mapcat (fn [[op a b block d :as entry]]
+                 (let [fa (mapv #(js/Math.floor %) a)
+                       fb (mapv #(js/Math.floor %) b)]
+                   (cond
+                     (and (= :fill op) (nil? d))
+                     (map (fn [[x y]] (block-command origin [:fill x y block])) (split-fill fa fb))
+                     (and (= :fill op) (= :outline d) (= (fa 1) (fb 1)))
+                     (map (fn [[x y]] (block-command origin [:fill x y block])) (flat-ring fa fb))
+                     :else [(block-command origin entry)])))
                (:blocks c))))
 
 (defn build-failure

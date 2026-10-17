@@ -404,6 +404,13 @@
   (is (= [["Probe" "--world" "test" "put" "hungry" "--trigger" "hungry" "--job" "(jobs.storage.deposit {:chest [20016 150 20011]})" "--by" "world-test"]]
          (f/register-put-argvs "Probe" "test" [{:trigger :hungry :job (list 'jobs.storage.deposit {:chest (f/rel [16 0 11])})}] [20000 150 20000]))))
 
+(deftest a-one-layer-outline-fill-is-a-hollow-ring
+  (is (= ["fill 20001 150 20001 20005 150 20001 oak_fence" "fill 20001 150 20005 20005 150 20005 oak_fence"
+          "fill 20001 150 20001 20001 150 20005 oak_fence" "fill 20005 150 20001 20005 150 20005 oak_fence"]
+         (f/block-commands [20000 150 20000] {:blocks [[:fill [1 0 1] [5 0 5] "oak_fence" :outline]]})))
+  (is (= ["fill 20001 150 20001 20005 151 20005 stone outline"]
+         (f/block-commands [20000 150 20000] {:blocks [[:fill [1 0 1] [5 1 5] "stone" :outline]]}))))
+
 (deftest block-commands-floor-fractional-coordinates
   (is (= "setblock 20001 150 20002 stone" (f/block-command [20000 150 20000] [:set [1.5 0 2.5] "stone"])))
   (is (= "fill 20001 150 20001 20003 152 20003 glass" (f/block-command [20000 150 20000] [:fill [1.5 0 1.5] [3.9 2 3.2] "glass"]))))
