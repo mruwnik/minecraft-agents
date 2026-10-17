@@ -191,8 +191,13 @@
   :again, or nil when there is none (after a look around) or the walk to it is refused (risk). An animal is attacked
   once per job, killed or not."
   [c own?]
-  (when-let [{animal :entity :as target} (await (animals/nearest-or-look c (animal-opts c own?)))]
-    (when-not (risk/refused? c (u/pos-of (.-pos animal)))
+  (let [target (await (animals/nearest-or-look c (animal-opts c own?)))
+        animal (:entity target)]
+    (cond
+      (= :continue target) :continue
+      (nil? target) nil
+      (risk/refused? c (u/pos-of (.-pos animal))) nil
+      :else
       (let [e (await (child/run!* c :attack 'jobs.combat.attack
                                   {:targets [(.-id animal)] :radius (hunt-radius c) :attack-gap-ms (:attack-gap-ms (:args c))
                                    :spend {:job-time 60}

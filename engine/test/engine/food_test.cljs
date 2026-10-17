@@ -695,6 +695,16 @@
           (is (= [] (calls p "attack")))
           (is (some #(and (= :no-food (:reason %)) (re-find #"cow: pen" (str (:text %)))) @seen)))))))
 
+(deftest get-food-looks-at-a-fence-it-has-not-seen-before-hunting-inside-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (h/setup-seeing {:self {:food 4 :pos {:x -9 :y 64 :z 0}} :yaw 270 :entities three-cows :blocks (merge (tu/box 3 63 -2 12 63 2 "stone") pen-ring)} nil 700)]
+          (core/submit! eng '(jobs.survival.get-food {:attack-gap-ms 0}) {})
+          (await (run-until-empty eng 40))
+          (is (= [] (calls p "attack")))
+          (is (some #(and (= :no-food (:reason %)) (re-find #"cow: pen" (str (:text %)))) @seen)))))))
+
 (deftest get-food-hunts-an-animal-when-no-source-is-known
   (async done
     (tu/run-async done

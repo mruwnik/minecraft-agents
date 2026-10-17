@@ -1,11 +1,18 @@
 (ns jobs.survival.get-food.animals
   "The food animals get-food may hunt: which are in sight and why one is spared, and what a kill says."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
+            [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
+            [jobs.lib.pen-read :as pen-read]
             [jobs.lib.util :as u]))
+
+(a/defargs settings
+  {::pen-look-range {:default 4 :doc "Blocks from a food animal the body walks to when the cells round it were out of sight and may be a fenced pen." :spec (a/num-in 0 nil)}})
 
 (def food-animals #{"cow" "pig" "sheep" "chicken" "rabbit"})
 
@@ -40,11 +47,28 @@
   [c opts]
   (->> (in-sight c opts) (remove :why) first))
 
+(defn ^:async pen-looked
+  "The nearest entry to hunt (or :continue while the walk is not done) after the body has looked at the cells of any
+  enclosure round the target that a first read left unseen, walking within sight range of it when they lie beyond:
+  a fenced pen is no wild surplus, and the spare check reads seen cells only."
+  [c opts target]
+  (let [{:keys [x y z] :as pos} (u/pos-of (.-pos (:entity target)))
+        undecided? (fn ^:async undecided []
+                     (= :unloaded (:reason (await (pen-read/read! c {:at {:x (js/Math.floor x) :y (js/Math.floor (+ y 0.01)) :z (js/Math.floor z)}
+                                                                     :max-cells (settings/get spare/settings ::spare/pen-max-cells)}
+                                                                  #(= :unloaded (:reason %)))))))]
+    (if-not (await (undecided?))
+      (nearest c opts)
+      (let [e (await (child/run!* c :pen-look 'jobs.movement.go-to {:pos pos :range (settings/get settings ::pen-look-range) :ways #{:walk}}))]
+        (if (= :continue e)
+          :continue
+          (do (await (undecided?)) (nearest c opts)))))))
+
 (defn ^:async nearest-or-look
-  "The nearest food animal in sight (an in-sight entry); with none, the body looks around once from where it stands and tries again."
+  "The nearest food animal in sight (an in-sight entry), its surroundings looked at first when they may be a pen (see pen-looked); with none, the body looks around once from where it stands and tries again."
   [c opts]
-  (or (nearest c opts)
-      (await (look/survey-until! c :cell #(nearest c opts)))))
+  (when-let [target (or (nearest c opts) (await (look/survey-until! c :cell #(nearest c opts))))]
+    (if (= :own-pen (:rule target)) target (await (pen-looked c opts target)))))
 
 (defn note-kill!
   "Say which animal the hunt attacked and where, with the adults of its kind counted, the keep threshold, the food level
