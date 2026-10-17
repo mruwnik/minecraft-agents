@@ -303,3 +303,9 @@ test('missingNss: a namespace/deftest spec is missing when the deftest is not de
   fs.writeFileSync(`${src}/out/test/cljs-runtime/engine.a_test.js`, 'engine.a_test.go_to_works = (function (){})\nengine.a_test.ready_QMARK__is_set = 1\n')
   assert.deepEqual(missingNss(src, ['engine.a-test/go-to-works', 'engine.a-test/ready?-is-set', 'engine.a-test/nope', 'engine.b-test/x']), ['engine.a-test/nope', 'engine.b-test/x'])
 })
+
+test('res-slot.json needs stay above the measured VmHWM: 476 MB for one namespace, 640 for five, 722 for many', () => {
+  const t = JSON.parse(fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), 'res-slot.json'), 'utf8')).kinds.tests
+  assert.ok(needMb(1, t) >= 476 && needMb(5, t) >= 640 && needMb(30, t) >= 722, JSON.stringify(t))
+  assert.ok(needMb(1, t) < 700, JSON.stringify(t))
+})
