@@ -652,3 +652,20 @@
             (is (true? (:ok? result)) "the line is sound once the cell is read afresh")
             (is (= [[3 64 0]] (mapv (fn [[q]] [(:x q) (:y q) (:z q)]) (filter (fn [[_ _ o]] (:see o)) @calls)))
                 "the one stale cell is walked to, within sight, once")))))))
+
+(deftest a-powered-rail-read-unlit-while-its-power-still-spreads-is-read-again-before-the-line-breaks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (b/start (spec "stone" 63 (kit {})) {"line" (line-plan {})} [])
+              real (.-sensedAt p)]
+          (aset p "sensedAt"
+                (fn [q]
+                  (let [b (real q)]
+                    (if (and (= [3 64 0] [(.-x q) (.-y q) (.-z q)]) (empty? (h/calls p "wait")))
+                      (js/Object.assign #js {} b #js {:properties (js/Object.assign #js {} (.-properties b) #js {:powered false})
+                                                      :visible true :felt false})
+                      b))))
+          (let [result (await (outcome eng job {:plan "line"} 400))]
+            (is (true? (:ok? result)) "the line is sound once the power arrived")
+            (is (seq (h/calls p "wait")) "the unlit reading was waited out, not judged at once")))))))

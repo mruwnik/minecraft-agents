@@ -35,7 +35,7 @@
      With nothing left to build the builder is skipped and the line goes straight to the proof.
   2. :switch turns on every planned lever that is off (jobs.access.toggle as a child, once per lever).
   3. :check runs plan.rail/judge-line over the world. A powered rail found unlit (or lit) only in the body's memory is
-     first walked to once, to read its power as it is now. A sturdy block where the plan wants bed or buffer fill is
+     first walked to once, to read its power as it is now; a line broken only by power states is re-read for a short while before it counts as broken. A sturdy block where the plan wants bed or buffer fill is
      no fault.
   Needs: the plan, a zone list (unless :ignore-zones?), and the items for every cell still to build carried (unless
   :all-carried false); those lacking are fetched first (jobs.lib.need, :fetch; a failed fetch ends the job with its cause). Returns, as the data of its ending, {:ok? :breaks :hazards :built {:placed :missing :short
@@ -317,8 +317,21 @@
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one rail line may take." :spec (a/int-in 1 nil)}
+   ::settle-reads {:default 8 :doc "How many times, 250 ms apart, a line whose only fault is a powered rail's power state is re-read before it counts as broken (the power spreads and its updates arrive after the last block is placed)." :spec (a/int-in 0 nil)}
    ::max-breaks {:default 12 :doc "Blocks broken for one rail line before it gives up." :spec (a/int-in 0 nil)}})
 (defn max-breaks [] (settings/get settings ::max-breaks))
+(defn settle-reads [] (settings/get settings ::settle-reads))
+
+(defn ^:async settle-step!
+  "While the proof's only faults are power states, re-read it up to settle-reads times after a short wait, so power still
+  spreading from the last torch or rail is read once it arrived. :continue after a wait, nil when nothing is due."
+  [c cells]
+  (let [breaks (:breaks (rail/judge-line cells (block-at c)))
+        n (or (:settled (ctx/mem c)) 0)]
+    (when (and (seq breaks) (every? #(#{:unlit :lit-brake} (:why %)) breaks) (< n (settle-reads)))
+      (ctx/update-mem! c assoc :settled (inc n))
+      (await (ctx/act c :wait #js {:ms 250}))
+      :continue)))
 
 (defn finish!
   "Prove the line, emit the outcome, hand the answer to the parent and end."
@@ -358,7 +371,7 @@
         phase (:phase (ctx/mem c))]
     (cond
       trouble :continue
-      (= :check phase) (or (await (look-step! c cells)) (finish! c cells))
+      (= :check phase) (or (await (look-step! c cells)) (await (settle-step! c cells)) (finish! c cells))
       (= :switch phase) (await (switch-step! c cells))
       :else (do (when-not phase (ctx/update-mem! c assoc :phase :build))
                 (or (await (fetch-step! c cells))
