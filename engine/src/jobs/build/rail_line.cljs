@@ -12,7 +12,7 @@
             [jobs.lib.pace :as pace]
             [jobs.build.rail :as builder]
             [jobs.lib.placement :as placement]
-            [jobs.build.from-plan.plan :as plan]
+            [jobs.lib.build.plan :as plan]
             [plan.rail :as rail]
             [plan.shape :as shape]
             [jobs.lib.ready :as ready]

@@ -16,7 +16,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.world-files :as world]
             [jobs.build.from-plan :as build]
-            [jobs.build.from-plan.plan :as plan]
+            [jobs.lib.build.plan :as plan]
             [plan.surface :as surface]))
 
 (def job 'jobs.build.from-plan)

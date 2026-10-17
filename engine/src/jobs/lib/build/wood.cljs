@@ -1,5 +1,5 @@
-(ns jobs.build.wood
-  "Generic wood names of a plan (jobs.build.from-plan helper, not a job): a want of `planks`, `logs`, `wooden_stairs`,
+(ns jobs.lib.build.wood
+  "Generic wood names of a plan (plan helper): a want of `planks`, `logs`, `wooden_stairs`,
   `wooden_slabs`, `wooden_doors`, `wooden_fences`, `fence_gates`, `wooden_trapdoors`, `wooden_buttons` or
   `wooden_pressure_plates` (a name or a block with state) is satisfied by any species, as Minecraft's tags are. A species
   name (oak_planks) stays exact. One species is chosen for the plan: the one carried most, else the nearest log seen,

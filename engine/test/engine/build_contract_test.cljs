@@ -13,7 +13,7 @@
             [engine.ctx :as ctx]
             [engine.registry :as registry]
             [engine.test-util :as tu]
-            [jobs.build.from-plan.plan :as plan]
+            [jobs.lib.build.plan :as plan]
             [jobs.lib.world-files :as ew]))
 
 (defn bad-args [e] [(:kind e) (get-in e [:cause :reason])])

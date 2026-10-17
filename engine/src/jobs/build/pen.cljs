@@ -12,7 +12,7 @@
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.sense :as sense]
-            [jobs.build.from-plan.plan :as plan]
+            [jobs.lib.build.plan :as plan]
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]

@@ -13,8 +13,8 @@
             [jobs.lib.storage :as storage]
             [jobs.lib.near :as near]
             [jobs.build.from-plan :as build]
-            [jobs.build.from-plan.plan :as plan]
-            [jobs.build.from-plan.text :as text]
+            [jobs.lib.build.plan :as plan]
+            [jobs.lib.build.text :as text]
             [plan.rail :as rail]))
 
 (def doc

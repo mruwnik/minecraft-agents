@@ -4,7 +4,7 @@
   (:require [cljs.test :refer [deftest is]]
             [engine.ctx :as ctx]
             [engine.seen-work-reads-test :refer [wrapped]]
-            [jobs.build.from-plan.plan :as plan]
+            [jobs.lib.build.plan :as plan]
             [jobs.explore.search :as search]
             [jobs.gather.mine.targets :as mine-targets]
             [jobs.gather.mine.mend :as mine-mend]))

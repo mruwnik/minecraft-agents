@@ -24,8 +24,8 @@
             [jobs.lib.reach :as reach]
             [plan.shape :as shape]
             [jobs.lib.check-cache :as check-cache]
-            [jobs.build.from-plan.plan :as plan :refer [retry-distance max-retries facing-of facing-ok? body-cells stands-for plan-trouble owed need-of shortage hazards decide rules-input refuse permitted judged no-zones planned how placeable misplaced missing digging unseen buildable problem]]
-            [jobs.build.from-plan.text :refer [summary announce! stopped-text assoc-fetch-failed]]))
+            [jobs.lib.build.plan :as plan :refer [retry-distance max-retries facing-of facing-ok? body-cells stands-for plan-trouble owed need-of shortage hazards decide rules-input refuse permitted judged no-zones planned how placeable misplaced missing digging unseen buildable problem]]
+            [jobs.lib.build.text :refer [summary announce! stopped-text assoc-fetch-failed]]))
 
 (def doc
   "Build what a plan wants (:plan, optionally only its :part) from what the body carries.
@@ -81,7 +81,7 @@
   failed condition {:reason :no-zones}; a plan that is missing, unreadable or has no cells to
   build (in :part) is impossible {:reason :plan-trouble :why text} (a plan missing or unreadable waits), at the start and later in the call; at the start, with nothing to place, dig, fetch or
   look at, a failed condition {:reason :no-items :needs {item n}}.
-  Wood: a generic wood want (jobs.build.wood: planks, logs, wooden_stairs, wooden_slabs, wooden_doors, wooden_fences,
+  Wood: a generic wood want (jobs.lib.build.wood: planks, logs, wooden_stairs, wooden_slabs, wooden_doors, wooden_fences,
   fence_gates, wooden_trapdoors ...) is built in one species chosen for the plan (carried most, else the nearest log seen,
   else oak), booked, fetched by that species, and named in the result (:wood \"birch\"); a species name (oak_planks) stays exact.
   When cells are missing but none of their blocks is carried and none can be fetched, the call ends condition-failed :no-items with :needs.

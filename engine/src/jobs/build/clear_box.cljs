@@ -6,6 +6,7 @@
             [jobs.lib.job-common :as common]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.build.kept :refer [kept?]]
             [jobs.lib.choose :as choose]
             [jobs.lib.own-pen :as own-pen]
             [jobs.lib.ready :as ready]
@@ -54,9 +55,6 @@
 (defn max-tries [] (settings/get settings ::max-tries))
 (def air #{"air" "cave_air" "void_air"})
 (def fluids #{"water" "lava" "bubble_column"})
-(def kept-pattern
-  #"(_bed|chest|barrel|furnace|smoker|crafting_table|shulker_box|hopper|dispenser|dropper|brewing_stand|anvil|enchanting_table)$")
-
 (defn span [a b] (range (min a b) (inc (max a b))))
 
 (defn box-error
@@ -76,9 +74,6 @@
   (when-let [e (box-error args)] (throw (ex-info e {})))
   (let [[a b] [from to]]
     (vec (for [x (span (:x a) (:x b)) y (span (:y a) (:y b)) z (span (:z a) (:z b))] {:x x :y y :z z}))))
-
-(defn kept? [keep n]
-  (or (some? (re-find kept-pattern n)) (boolean (some #{n} keep))))
 
 (defn dig-args
   "The jobs.blocks.dig args for the cell at pos: no tool needed, the drop picked up, the job's :accept and opt-out."

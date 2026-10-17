@@ -1,4 +1,4 @@
-(ns jobs.build.from-plan.plan
+(ns jobs.lib.build.plan
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [clojure.string :as str]
@@ -9,12 +9,12 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.storage :as storage]
-            [jobs.build.clear-box :as clear-box]
+            [jobs.lib.build.kept :as kept]
             [jobs.lib.placement :as placement]
             [jobs.lib.reach :as reach]
             [plan.rail :as rail]
             [plan.shape :as shape]
-            [jobs.build.wood :as wood]
+            [jobs.lib.build.wood :as wood]
             [jobs.lib.trees :as trees]
             [jobs.lib.need :as need]
             [plan.surface :as surface]
@@ -236,7 +236,7 @@
 
 (defn judged
   "The plan's cells (of part) judged against the world, each with the :item to place it with. A generic wood want
-  (jobs.build.wood) is wanted in species sp first, any other counts where it stands."
+  (jobs.lib.build.wood) is wanted in species sp first, any other counts where it stands."
   [p answer part carried sp]
   (->> (:cells answer)
        (filter #(or (nil? part) (= part (:part %))))
@@ -265,7 +265,7 @@
                 loose? (and wrong? (rules/replaceable found))
                 extra? (and (= :extra answer) (not (rules/replaceable found)))
                 dug? #(and (not (contains? misplaced pos))
-                           (not (clear-box/kept? [] found))
+                           (not (kept/kept? [] found))
                            (not (re-find opening-pattern found)))
                 digs? (and (or extra? (and wrong? (not loose?) item (contains? carried item))) (dug?))
                 short? (and wrong? (not loose?) item (not (contains? carried item)) (dug?))]

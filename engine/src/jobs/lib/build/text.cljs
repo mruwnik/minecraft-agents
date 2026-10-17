@@ -1,10 +1,10 @@
-(ns jobs.build.from-plan.text
+(ns jobs.lib.build.text
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [plan.shape :as shape]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
-            [jobs.build.from-plan.plan :refer [owed kept-ground shortage left-text shortage-text]]))
+            [jobs.lib.build.plan :refer [owed kept-ground shortage left-text shortage-text]]))
 
 (defn summary
   "What a build of cells left, from the job memory m: {:placed :missing :short :given-up :wrong :refused}."
