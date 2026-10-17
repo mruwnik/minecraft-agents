@@ -187,12 +187,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 10)] :unreachable ["10,64,0"]} 5))
-              gave-up (events-of s :attack.gave-up)]
+        (let [s (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 10)] :unreachable ["10,64,0"]} 5))]
           (is (zero? (count (attacked s))))
           (is (= [] (h/calls (:p s) "moveTo")) "walks with the engine walker, not the raw pathfinder")
-          (is (= [[7 :unreachable]] (mapv (juxt :target :reason) gave-up)))
-          (is (= :warn (:level (first gave-up))))
+          (is (= "attack gave-up: killed 0, gave up on zombie 7: unreachable" (:text (done-event s))))
           (is (finished? s))
           (is (= :gave-up (:reason (done-event s))))
           (is (= {7 :unreachable} (:given-up (done-event s)))))))))
@@ -206,7 +204,6 @@
         (let [s (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 3)] :blocks (wall-of "glass" [1 2]) :unreachable ["3,64,0"]} 8))]
           ;; the fake teleports a walker, so the walk to the walled-off cell is answered blocked, as a real one would be
           (is (zero? (count (attacked s))))
-          (is (= [[7 :unreachable]] (mapv (juxt :target :reason) (events-of s :attack.gave-up))))
           (is (finished? s))
           (is (= :gave-up (:reason (done-event s)))))))))
 
@@ -216,7 +213,7 @@
       (fn ^:async t []
         (let [s (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 3)] :blocks {"1,64,0" "oak_fence"}} 2))]
           (is (= [7] (distinct (attacked s))))
-          (is (empty? (events-of s :attack.gave-up))))))))
+          (is (empty? (:given-up (done-event s)))))))))
 
 (deftest a-target-in-the-open-is-swung-at-and-a-missing-hittable-swings-too
   (async done
@@ -232,7 +229,7 @@
         (let [s (await (scenario {:targets [7]}
                                  {:inventory h/sword :entities [(ent 7 "zombie" "hostile" 2 {:invulnerable true})]} 5))]
           (is (= 4 (count (attacked s))))
-          (is (= [[7 :no-damage]] (mapv (juxt :target :reason) (events-of s :attack.gave-up))))
+          (is (= {7 :no-damage} (:given-up (done-event s))))
           (is (finished? s))
           (is (= :gave-up (:reason (done-event s)))))))))
 
@@ -243,7 +240,7 @@
         (let [s (await (scenario {:targets [7] :max-hits 6}
                                  {:inventory h/sword :entities [(ent 7 "chest_minecart" "vehicle" 2 {:invulnerable true})]} 8))]
           (is (= 6 (count (attacked s))))
-          (is (= [[7 :too-many-hits]] (mapv (juxt :target :reason) (events-of s :attack.gave-up)))))))))
+          (is (= {7 :too-many-hits} (:given-up (done-event s)))))))))
 
 (deftest gives-up-after-max-hits-without-a-kill
   (async done
@@ -252,7 +249,7 @@
         (let [s (await (scenario {:targets [7] :max-hits 3}
                                  {:inventory h/sword :entities [(ent 7 "zombie" "hostile" 2 {:health 1000})]} 4))]
           (is (= 3 (count (attacked s))))
-          (is (= [[7 :too-many-hits]] (mapv (juxt :target :reason) (events-of s :attack.gave-up))))
+          (is (= {7 :too-many-hits} (:given-up (done-event s))))
           (is (= :gave-up (:reason (done-event s)))))))))
 
 (deftest the-engines-limit-ends-a-fight-past-its-time
@@ -334,8 +331,8 @@
         (let [s (await (scenario {:targets [7]}
                                  {:inventory h/sword
                                   :entities [(ent 7 "player" "player" 2 {:username "Alex" :invulnerable true})]} 5))
-              gave-up (first (events-of s :attack.gave-up))]
-          (is (= "Alex" (:name gave-up)))
+              gave-up (done-event s)]
+          (is (= {7 "Alex"} (:names gave-up)))
           (is (re-find #"Alex" (:text gave-up)))
           (is (not (re-find #"player" (:text gave-up)))))))))
 
@@ -363,7 +360,7 @@
                                                            {:inventory h/sword :entities [(ent 3 "Fake" "player" 1) (zed 7 2)]} 20))]
             (is (finished? s) (str targets))
             (is (= :absent (:reason (done-event s))) (str targets))
-            (is (empty? (events-of s :attack.done)) (str targets))
+            (is (empty? (:given-up (done-event s))) (str targets))
             (is (every? #(zero? (count (h/calls p %))) ["equip" "moveTo" "attack"]) (str targets))
             (is (pos? (count (h/calls p "look"))) (str targets " turned before ending absent"))))))))
 
@@ -449,14 +446,14 @@
       (fn ^:async t []
         (let [s (await (scripted-attack (conj (vec (take 12 (cycle ["out-of-reach" "hit"]))) "killed") 1))]
           (is (>= (count (attacked s)) 12))
-          (is (empty? (events-of s :attack.gave-up))))))))
+          (is (empty? (:given-up (done-event s)))))))))
 
 (deftest three-out-of-reach-swings-in-a-row-still-give-up
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scripted-attack ["out-of-reach"] 10))]
-          (is (= [[7 :unreachable]] (mapv (juxt :target :reason) (events-of s :attack.gave-up)))))))))
+          (is (= {7 :unreachable} (:given-up (done-event s)))))))))
 
 (deftest out-of-reach-right-after-an-arrived-walk-is-the-target-moving-not-a-failure
   (async done
@@ -472,7 +469,7 @@
           (core/submit! eng (spec {:targets [7] :spend {:job-time 1000}}) {})
           (await (core/tick! eng))
           (is (>= (count (attacked s)) 5) "swung well past three times")
-          (is (empty? (events-of s :attack.gave-up))))))))
+          (is (empty? (:given-up (done-event s)))))))))
 
 ;; ------------------------------------------------------- looking round between swings (card 9970c377)
 

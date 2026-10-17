@@ -78,7 +78,7 @@
       (fn ^:async t []
         (let [s (await (scenario {:mob ["cow" "pig"] :count 1 :keep 1}
                                  {:inventory h/sword :entities [(cow 1 3) (cow 2 5) (pig 3 4) (pig 4 6)]} 60))
-              e (first (events-of s :hunt.batch-done))]
+              e (done-event s)]
           (is (= #{2 4} (world-ids s)) "the nearest cow and the nearest pig died")
           (is (= 1 (get (inv s) "beef")))
           (is (= 1 (get (inv s) "porkchop")))
@@ -99,7 +99,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:mob ["cow" "pig"] :keep 0} {:inventory h/sword :entities []} 20))
-              e (first (events-of s :hunt.batch-done))]
+              e (done-event s)]
           (is (= 0 (:killed e)))
           (is (= :too-few (:reason e)) "the first kind's ending")
           (is (seq (events-of s :stopped)) "0 killed ends stopped, not completed")

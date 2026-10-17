@@ -337,9 +337,8 @@
         all-count? (every? #(= :count (:reason %)) (vals results))
         first-kind (get results (first kinds))
         reason (cond all-count? :count (zero? killed) (:reason first-kind) :else :partial)
-        out {:killed killed :reason reason :kinds results}]
-    (ctx/emit! c :hunt.batch-done (if (zero? killed) :warn :info)
-               (assoc out :text (str "hunt done: killed " killed " of " (str/join ", " kinds) ", " (some-> reason name))))
+        out {:killed killed :reason reason :kinds results
+             :text (str "hunt done: killed " killed " of " (str/join ", " kinds) ", " (some-> reason name))}]
     (if (or all-count? (>= killed (let [least (:least (ctx/frozen-call c) 1)] (if (= :all least) (* (:count (:args c)) (count kinds)) least))))
       (ctx/end c :done nil out)
       (ctx/end c (if (= :done (:kind first-kind)) :nothing-possible (:kind first-kind)) reason out))))

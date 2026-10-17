@@ -100,7 +100,7 @@
               _ (mem/write! (:store eng) :shelter (shelter-entry :built) {:cap 10 :ttl st/day-ms})
               _ (core/submit! eng '(jobs.combat.attack {:targets [7]}) {})
               _ (await (st/tick-n eng 30))
-              g (first (st/emitted seen :attack.gave-up))]
+              g (first (st/emitted seen :stopped))]
           (is (= {:x 0 :y 64 :z 0} (:inside-own-shelter g))))))))
 
 ;; ------------------------------------------------------------------ eating while held

@@ -14,6 +14,5 @@
    :act [[:summon "zombie" [44.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:wait-s 2] ; settle: the zombie is 40 blocks away, so a seen poll may never pass at that range
          [:job (jobs.combat.attack {:targets "zombie" :radius 48})]]
-   :expect [{:event {:source :job :kind :completed :data {:reason :cleared :given-up {}}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :attack.gave-up} :for-s 100 :until {:source :job :kind :completed} :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:reason :cleared :given-up {}}} :within-s 100 :of-job true}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [63 5 31]] 0]]}]}

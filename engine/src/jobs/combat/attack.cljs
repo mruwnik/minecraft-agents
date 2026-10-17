@@ -26,14 +26,15 @@
   round and waiting.
   It does not swing when the entity's `hittable` sensing is false (no clear line to its hitbox, for example glass).
   It walks closer instead, and counts that as a blocked walk.
-  A target is given up on, with an attack.gave-up warning and a :reason:
+  A target is given up on, with a :reason:
   - :unreachable: three blocked walks or out-of-reach swings in a row. A landed hit resets the count.
     An out-of-reach swing right after a walk that arrived (the target moved on) does not count.
   - :no-damage: :no-damage-hits swings in a row that did no damage.
   - :too-many-hits: :max-hits hits without a kill.
   A kill counts only when the attack reports killed. A killed target or player is not attacked again in this run,
   even after respawning.
-  Ends with the data {:reason :killed [ids] :given-up {id reason}}; the ending is
+  Ends with the data {:reason :killed [ids] :given-up {id reason} :names {id name} :text}, plus the
+  shelter hint when a target was given up as :unreachable from inside the body's own shelter; the ending is
   - :done (:cleared): every target seen was killed and none is within :radius.
   - :nothing-possible :gave-up: every target seen was killed or given up on, and one was given up on.
   - :nothing-possible :lost: some target was neither killed nor given up on.
@@ -132,8 +133,12 @@
 (defn fight-data
   "The fight's data so far."
   [c reason]
-  (let [m (ctx/mem c)]
-    {:reason reason :killed (vec (:killed m)) :given-up (:given-up m {})}))
+  (let [{:keys [killed given-up names]} (ctx/mem c)
+        given-up (or given-up {})]
+    (cond-> {:reason reason :killed (vec killed) :given-up given-up :names (or names {})
+             :text (str "attack " (name reason) ": killed " (count killed)
+                        (apply str (for [[id why] given-up] (str ", gave up on " (get names id id) " " id ": " (name why)))))}
+      (some #{:unreachable} (vals given-up)) (merge (sh/shelter-hint c)))))
 
 (defn done?
   "Done once every target seen is killed and none is present; the data is the fight so far."
@@ -164,10 +169,7 @@
 
 (defn give-up!
   [c target reason]
-  (ctx/update-mem! c assoc-in [:given-up (.-id target)] reason)
-  (ctx/emit! c :attack.gave-up :warn (merge {:target (.-id target) :name (display-name target) :reason reason
-                                             :text (str "giving up on " (display-name target) " " (.-id target) ": " (name reason))}
-                                            (when (= :unreachable reason) (sh/shelter-hint c)))))
+  (ctx/update-mem! c #(-> % (assoc-in [:given-up (.-id target)] reason) (assoc-in [:names (.-id target)] (display-name target)))))
 
 (defn fail!
   "Count a blocked walk or out-of-reach swing at target; give up at u/max-failures."
