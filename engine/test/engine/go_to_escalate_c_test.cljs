@@ -160,7 +160,8 @@
                                                     {:pos [3 60 0] :range 0}))]
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= [3 60 0] (feet p)))
-          (is (= [:dig-route] (map :step (events-of seen :go-to.escalated))) "the goal is a dig away: no wall is walked to"))))))
+          (is (= [:dig-route] (map :step (events-of seen :go-to.escalated))) "the goal is a dig away: no wall is walked to")
+          (is (empty? (events-of seen :go-to.wall-walk)) "no wall is walked to"))))))
 
 (deftest a-walled-in-goal-is-not-dug-to-in-another-s-zone-or-under-walk-only
   (async done

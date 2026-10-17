@@ -224,7 +224,7 @@
                        deadline (conj (/ (- deadline (ctx/now c)) 1000))))))
 
 (defn ^:async walk-to-wall!
-  "A walled-in goal (result :goal-enclosed, :goal-cut-off) that no escalation will open: once a call (mem :wall-walked),
+  "A walled-in goal (result :goal-enclosed, :goal-cut-off) that no escalation will open: once a call (mem :wall-walked, set once the walk arrived or got nowhere),
   walk to the cell nearest it the body can reach (escalation/nearest-stand) when that is more than a block nearer and
   the walk there (jobs.lib.cost/walk-cost) fits budget-s. True when it walked."
   [c pos tries result opts]
@@ -238,11 +238,13 @@
                (not (esc/escalate? c tries result))
                (< (to @near goal) (dec (to feet goal)))
                (<= (:cost (cost/walk-cost {:distance (to feet @near)})) (budget-s c)))
-      (ctx/update-mem! c assoc :wall-walked true)
       (ctx/emit! c :go-to.wall-walk :info {:at @near :why (:reason result)
                                            :text (str "the goal is walled in: walking to " @near ", the nearest cell to it")})
-      (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) (zipmap [:x :y :z] @near) 0 (dissoc opts :progress)))
-      true)))
+      (let [walk (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) (zipmap [:x :y :z] @near) 0 (dissoc opts :progress)))]
+        ;; a walk that got nearer but was cut short is tried again; one that arrived or got nowhere is not
+        (when-not (= "partial" (:status walk))
+          (ctx/update-mem! c assoc :wall-walked true))
+        true))))
 
 (defn leg-alert?
   "Whether :leg-alert-within is set and a close-range attacker is within it, or the body lost health since start-attempt!."
