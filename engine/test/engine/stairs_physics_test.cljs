@@ -63,16 +63,18 @@
        :space space/space})
 
 (defn plan
-  "The executor's steps from feet cell from to goal over fills, or nil."
-  [fills [x y z] [gx gy gz]]
+  "The executor's steps from feet cell from (its y the feet's, fractional on a stair) to goal over fills, or nil. at is the
+  point [px pz] inside the cell, as in bot-at."
+  ([fills from goal] (plan fills from goal nil))
+  ([fills [x y z] [gx gy gz] [px pz]]
   (let [pw (path-world fills)
         r (planner/plan (.-snapshot pw)
-                        #js {:from #js {:x x :y (Math/floor y) :z z :px (+ x 0.5) :pz (+ z 0.5)}
+                        #js {:from #js {:x x :y (Math/floor y) :z z :px (or px (+ x 0.5)) :py y :pz (or pz (+ z 0.5))}
                              :goal #js {:kind "near" :x gx :y gy :z gz :range 0}}
                         #js {:table (.-table pw) :space (.-space pw) :weight 1.2
                              :limits (ex/planner-limits ex/policy (wworld/solid-fn pw))})]
     (when (= "found" (.-status r))
-      (wplan/plan-steps pw r))))
+      (wplan/plan-steps pw r)))))
 
 (defn bot-at
   "A bot standing at feet cell [x y z], at its middle or at the point px pz inside it."
@@ -99,7 +101,7 @@
         world (world-of fills)
         phys ((.-Physics physics) mc world)
         _ (set! (.-playerHalfWidth phys) (body-half))
-        steps (plan fills from goal)
+        steps (plan fills from goal at)
         bot (bot-at from at)]
     (if (nil? steps)
       {:done {:status :no-plan}}
@@ -294,3 +296,9 @@
     [8610.5 8192.5]
     [8610.69 8192.31]
     [8610.69 8192.69]))
+
+(deftest a-body-on-the-low-half-of-a-stairs-block-walks-off-it
+  (are [at goal] (= :arrived (status-of [floor-fill (stairs 8 64 1 "east")] [8 64.5 1] goal at))
+    [8.2 1.5] [8 64 5]
+    [8.2 1.5] [4 64 1]
+    [8.2 1.5] [8 64 -1]))

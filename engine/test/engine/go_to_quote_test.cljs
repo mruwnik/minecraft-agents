@@ -27,11 +27,11 @@
 
 (defn ^:async preview
   "Ask go-to's quote over the fake world (body at 0 64 1); {:out its :route :quote :reply the /quote answer :p primitives}.
-  opts: :places {name pos} written to memory, :markers shared markers, :no-path-world true."
-  [blocks args & [{:keys [places markers no-path-world]}]]
+  opts: :places {name pos} written to memory, :markers shared markers, :no-path-world true, :states block states."
+  [blocks args & [{:keys [places markers no-path-world states]}]]
   (let [clock (atom 1000000)
         [_ sink] (tu/legacy-capture-sink)
-        p (tu/fake {:blocks blocks :self {:pos {:x 0 :y 64 :z 1}}})
+        p (tu/fake (cond-> {:blocks blocks :self {:pos {:x 0 :y 64 :z 1}}} states (assoc :states states)))
         dir (tu/tmp-dir)
         _ (when markers (fs/writeFileSync (path/join dir "places.json") (js/JSON.stringify (clj->js markers))))
         _ (when no-path-world (set! (.-pathWorld p) nil))
@@ -267,3 +267,17 @@
           (is (= 11 dark) "seen dark: every cell of the 11-step route"))
         (is (= 11 (await (dark-of {:time night-ms :light [15 4] :seen? false}))) "unseen at night reads dark")
         (is (zero? (await (dark-of {:time 1000 :light [15 0] :seen? false}))) "unseen by day costs like a lit one")))))
+
+(def gate-blocks
+  (assoc (merge (floor -2 -3 40 3) (box 5 64 -6 5 64 6 "oak_fence")) "5,64,0" "oak_fence_gate"))
+
+(deftest doors-never-quotes-a-shut-gate-as-a-wall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [opts {:states {"5,64,0" {:open false :facing "east"}}}
+              shut (await (preview gate-blocks {:pos [10 64 1] :range 0} opts))
+              never (await (preview gate-blocks {:pos [10 64 1] :range 0 :doors :never} opts))]
+          (is (true? (:found (:out shut))))
+          (is (= [[5 64 0]] (:doors (:out shut))))
+          (is (false? (:found (:out never)))))))))
