@@ -34,7 +34,7 @@
    :blocks [[:fill [0 0 0] [31 19 31] "dirt"] [:fill [24 0 24] [28 2 28] "air"]]
    :act [[:await {:source :job :kind :stair.step} 120]
          [:rcon "execute as $BODY at @s run summon zombie ~ ~ ~ {NoAI:1b,Tags:[\"wt\"],equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :job :kind :recover-drops.declined} :within-s 150 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :danger}} :within-s 150 :of-job true}]
    :limit-s 200}
 ;; card 5b64bbaa: a pile 19 below on an open 1:1 slope (dirt columns x 0..18, the top falling a block a step) with no tool: the body
   ;; respawns on the top at [0 19 16] and walks down to the pile at the foot [25 0 16]; no stair is dug for a pile a walk reaches
@@ -42,5 +42,5 @@
    :blocks [[:fill [0 0 8] [0 18 24] "dirt"] [:fill [1 0 8] [1 17 24] "dirt"] [:fill [2 0 8] [2 16 24] "dirt"] [:fill [3 0 8] [3 15 24] "dirt"] [:fill [4 0 8] [4 14 24] "dirt"] [:fill [5 0 8] [5 13 24] "dirt"] [:fill [6 0 8] [6 12 24] "dirt"] [:fill [7 0 8] [7 11 24] "dirt"] [:fill [8 0 8] [8 10 24] "dirt"] [:fill [9 0 8] [9 9 24] "dirt"] [:fill [10 0 8] [10 8 24] "dirt"] [:fill [11 0 8] [11 7 24] "dirt"] [:fill [12 0 8] [12 6 24] "dirt"] [:fill [13 0 8] [13 5 24] "dirt"] [:fill [14 0 8] [14 4 24] "dirt"] [:fill [15 0 8] [15 3 24] "dirt"] [:fill [16 0 8] [16 2 24] "dirt"] [:fill [17 0 8] [17 1 24] "dirt"] [:fill [18 0 8] [18 0 24] "dirt"]]
    :body {:at [25.5 0 16.5] :spawnpoint [0 19 16]}
    :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 300 :of-job true}
-            {:no-event {:source :job :kind :recover-drops.deep} :for-s 300 :until {:source :job :kind :recover-drops.decided}}]
+            {:no-event {:source :job :kind :stair.step} :for-s 300 :until {:source :job :kind :recover-drops.decided}}]
    :after [[:item "raw_iron" 24]]}]}

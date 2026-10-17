@@ -29,7 +29,7 @@
   so an expired trip still gets to write :abandoned.
   One run is the whole trip: it holds still (declared :respawning, then :settling) until a :respawned entry newer than
   the death exists and its 2 s have passed (no decision, no walk), decides, walks, collects and writes :recovered.
-  Every run that leaves the death open emits recover-drops.declined with a :reason (:danger with :mob and :mob-pos, :unreachable) and a text.
+  Every run that leaves the death open ends with a :reason (:danger with :mob and :mob-pos, :unreachable) and a text.
   Ready: fit? ok; safe? is ok by day, ok at night when the pile despawns before morning (weighed by its route danger alone), else the exposure of the pile's cell (ready/exposed: later at night in the open or out of a shelter, so the died trigger is held with the reason and the pile is fetched by day while it lasts). The job's children walk under :checks {:safe? (always)}: the trip prices its own danger.
   The trip owns the danger it priced (the died trigger ranks above hostile-near, so no flight cuts the run it fires; an agent's run any reflex cuts):
   a real danger within :danger-radius has the trip weighed again with it near, once per mob, and so does a hit (:hurt) since the decision, at once: it backs off or goes on; before a decision
@@ -167,11 +167,10 @@
     (ending-for c decision fields text pos)))
 
 (defn decline!
-  "Say why this run ends with the death still open (an event with the reason and a text), and end it: condition-failed
+  "End this run with the death still open, the ending carrying the reason and a text: condition-failed
   for a danger or the night, nothing-possible for a walk that did not arrive."
   [c reason text fields]
   (let [text (str "recover-drops declined: " text)]
-    (ctx/emit! c :recover-drops.declined :info (assoc fields :reason reason :text text))
     (ctx/end c (if (= :unreachable reason) :nothing-possible :condition-failed) reason (assoc fields :text text))))
 
 (defn own-seal-near
@@ -435,7 +434,6 @@
   (let [need-s (* (cfg/stair-step-s) (max below aside))
         left-s (/ (settings/ticks->ms (game/despawn-left-ticks entry (ctx/view c))) 1000)
         give-up! (fn [reason text]
-                   (ctx/emit! c :recover-drops.deep :info {:reason reason :below below :aside aside :text text})
                    (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason reason :detail text)))]
     (if (> need-s left-s)
       (give-up! :window-closed (str "the pile is " below " blocks down: a stair takes about " (js/Math.round need-s) " s, " (js/Math.round left-s) " s are left"))

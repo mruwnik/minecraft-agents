@@ -18,7 +18,7 @@
 
 (def dear-zombie '(jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}}))
 
-(defn danger-declines [seen] (filterv #(= :danger (:reason %)) (emitted seen :recover-drops.declined)))
+(defn danger-declines [seen] (filterv #(and (= :danger (:reason %)) (:mob %)) (emitted seen :stopped)))
 
 (deftest a-guarded-pile-the-trip-priced-is-collected-without-a-danger-decline
   (async done

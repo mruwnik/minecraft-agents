@@ -91,7 +91,6 @@
           (die! eng {:pos slope-pile-pos :inventory pile} 5000)
           (core/submit! eng job {})
           (await (run-until-empty eng 120))
-          (is (empty? (filter #(= :recover-drops.deep (:kind %)) @seen)) "no stair is cut for a pile a walk reaches")
           (is (empty? (filter #(= "dig" (.-name %)) (.-calls (.-world p)))))
           (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng))))))))
 
@@ -167,5 +166,5 @@
           (core/submit! eng job {})
           (await (run-until-empty eng 120))
           (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason])) (pr-str (recovered eng)))
-          (is (= 1 (count (filter #(= :recover-drops.deep (:kind %)) @seen))))
+          (is (= 1 (count (filter #(and (= :stopped (:kind %)) (= :unreachable (:reason %))) @seen))))
           (is (re-find #":no-tool \(no pickaxe could be got\)" (:detail (recovered eng))) (pr-str (recovered eng))))))))

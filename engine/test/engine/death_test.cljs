@@ -515,7 +515,7 @@
 
 ;; ------------------------------------------- every :declined says why
 
-(defn declined-events [seen] (filter #(= :recover-drops.declined (:kind %)) @seen))
+(defn declined-events [seen] (filterv #(and (= :stopped (:kind %)) (#{:danger :unreachable} (:reason %))) @seen))
 
 (deftest recover-drops-declines-with-the-danger-named
   (async done

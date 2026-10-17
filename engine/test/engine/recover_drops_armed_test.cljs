@@ -104,7 +104,8 @@
                      (if (= 1 (swap! calls inc)) :continue (await (real c names n opts))))
               {:keys [eng seen p]} (await ((run-with-pile dt/death-pile-of-the-field-report stub)))]
           (is (< 1 @calls))
-          (is (not (some #{:yielded :recover-drops.declined} (kinds-of seen))))
+          (is (not (some #{:yielded} (kinds-of seen))))
+          (is (not-any? #(and (= :stopped (:kind %)) (#{:danger :unreachable} (:reason %))) @seen) "never declined")
           (is (= 1 (get (inv p) "iron_sword")))
           (is (not= :skip (:decision (recovered eng)))))))))
 
