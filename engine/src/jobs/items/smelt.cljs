@@ -247,6 +247,10 @@
         plan (sp/plan-load {:state state :carried (carried c) :item item :count count :fuel fuel :target (:target m)})]
     (cond
       (and (= "furnace-busy" (:give-up plan)) (= :wait (sp/judge state))) (wait-until! c (wait-ms (:kind state) state))
+      (and (= "furnace-busy" (:give-up plan)) (= :take (sp/judge state)))
+      (if-let [v (access/container-refusal c :take (furnace-of c))]
+        (refuse! c v)
+        (do (await (visit! c "take" {})) :continue))
       (:give-up plan) (stop! c (:give-up plan))
       :else
       (if-let [v (when (:output state) (access/container-refusal c :take (furnace-of c)))]

@@ -331,6 +331,19 @@
           (is (empty? (of-kind seen :stopped)))
           (is (= {"cooked_beef" 2 "iron_ingot" 3} (select-keys (inv-of p) ["cooked_beef" "iron_ingot"]))))))))
 
+(deftest a-furnace-with-leftover-output-and-more-cooking-is-emptied-not-given-up-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup (assoc base-world :furnaces {pos-key {:input {:name "beef" :count 1} :output {:name "cooked_beef" :count 1}
+                                                                                :fuel {:name "coal" :count 1}}}))
+              _ (advance! p 1)
+              _ (core/submit! eng iron-job {})
+              _ (await (ticks eng 2))]
+          (is (empty? (of-kind seen :stopped)) "output beside another cooking input is not furnace-busy")
+          (is (nil? (:output (furnace-of p))) "the leftover is taken out")
+          (is (= 1 (get (inv-of p) "cooked_beef"))))))))
+
 (def gave-up-rows
   [["no furnace there" {:inventory [{:name "raw_iron" :count 3} {:name "coal" :count 2}]} "raw_iron" "no-furnace"]
    ["a chest" {:blocks {pos-key "chest"} :inventory [{:name "raw_iron" :count 3} {:name "coal" :count 2}]} "raw_iron" "not-a-furnace"]
