@@ -22,7 +22,7 @@
 (def doc
   "Make room in a nearly full inventory (the inventory-nearly-full reflex) until :free slots are free. One round is
   the whole attempt: it re-reads the inventory before every step and puts away, swaps or tosses until enough is free
-  or nothing more may go. It never yields: the walk away (the cleanup export) is waited out inside it.
+  or nothing more may go. It never yields. Done as soon as :free slots are free (done? carries the summary); the cleanup walks away.
   What is thrown, like a player: names with no keep first (plain junk blocks such as granite, tuff and gravel first, whole
   big stacks before partial, then the rest by worth: flowers, saplings, leaf litter), then the surplus above the
   keep of cobblestone, dirt and planks; ores, fuel and the like are not thrown (below :toss-below only). Never put away or thrown: tools, weapons, armour and buckets. Food is never thrown and is put away only above
@@ -41,7 +41,7 @@
      then the one picked up longest ago (:picked-up entries), then the smaller stack. The body turns to the first
      of the four directions with two free cells ahead at eye level and tosses; with none (walled in, after one look around) nothing is
      thrown or swapped, since it would come straight back.
-  After tossing, the cleanup export (however the call ends) walks up to :away blocks from where the items were thrown (a go-to child; the farthest cell back
+  After tossing, the cleanup export (however the call ends; it also notes the :make-room-rest memory the inventory trigger rests on) walks up to :away blocks from where the items were thrown (a go-to child; the farthest cell back
   that is no seen obstacle, none: no walk), so it does not pick them up again.
   Resume: a toss or swap writes its intent first; a run that finds one (after a cut or a restart) checks the
   inventory before acting again. What was tossed before a cut stays in the result when the job survives the cut (a
@@ -414,16 +414,18 @@
   [c]
   (max 0 (- (:free (:args c)) (u/free-slots (:primitives c)))))
 
+(declare tossed-summary)
+
 (defn done?
-  "Done when :free slots are free; a run that acted still has its summary to do."
+  "Done when :free slots are free; the result is the summary (what was tossed), so the walk away is left to the cleanup."
   [c]
   (let [left (slots-short c)
         free (u/free-slots (:primitives c))
-        data [:units :slots :done free :left left :result {:tossed (vec (:tossed (ctx/mem c))) :free free}]]
-    (cond
-      (pos? left) (apply contract/later :short (str "make-room: " left " slot(s) short") data)
-      (:acted (ctx/mem c)) (apply contract/later :wrapping-up "make-room: room made, the summary to do" data)
-      :else (apply contract/ok :room (str free " free") data))))
+        summary (tossed-summary (ctx/mem c) free)
+        data [:units :slots :done free :left left :result summary]]
+    (if (pos? left)
+      (apply contract/later :short (str "make-room: " left " slot(s) short") data)
+      (apply contract/ok :room (:text summary) data))))
 
 (defn quote-of
   "Time for the steps the missing slots take (one each at best); frees up to the missing slots, none at worst."
@@ -452,7 +454,6 @@
   (let [m (ctx/mem c)
         free-now (u/free-slots (:primitives c))
         {:keys [tossed text]} (tossed-summary m free-now)]
-    (when (seq tossed) (ctx/remember! c :make-room-rest {:items (vec (distinct (map :item tossed)))} rest-policy))
     (if (nil? reason)
       (ctx/end c :done nil {:tossed tossed :free free-now :text text})
       (ctx/end c :nothing-possible reason (cond-> {:text (str (stop-texts reason) "; " text) :free free-now :tossed tossed}
@@ -464,6 +465,8 @@
   and fewer than :free slots are free."
   [c ending]
   (await (settle-intents! c))
+  (when-let [tossed (seq (:tossed (ctx/mem c)))]
+    (ctx/remember! c :make-room-rest {:items (vec (distinct (map :item tossed)))} rest-policy))
   (let [spot (tossed-spot c)]
     (if (and spot (near-spot? c spot))
       (await (walk-away! c spot))

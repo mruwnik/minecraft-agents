@@ -188,7 +188,7 @@
 (deftest the-shape-only-jobs-are-ok-when-the-goal-holds
   (are [sym world args m more reason] (= reason (tu/kind-reason (done-of sym world args m more)))
     'jobs.storage.make-room {} {} {} {} [:ok :room]
-    'jobs.storage.make-room {} {} {:acted true} {} [:later :wrapping-up]
+    'jobs.storage.make-room {} {} {:acted true} {} [:ok :room]
     'jobs.storage.make-room full-bag {} {} {} [:later :short]
     'jobs.food.fish {:inventory [{:name "cod" :count 2}]} {:count 2} {} {} [:ok :caught]
     'jobs.food.fish {:inventory [{:name "cod" :count 1}]} {:count 2} {:base 0} {} [:later :fishing]

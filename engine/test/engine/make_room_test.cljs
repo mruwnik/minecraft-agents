@@ -386,6 +386,7 @@
           (is (= 32 (stack-count p)))
           (is (>= 1 (Math/abs (- -4 (:x (feet p))))) "then it walks 4 blocks back from where it threw, against the throw direction")
           (is (= 0 (:z (feet p))))
+          (is (= [{:items ["item_a" "item_b"]}] (mapv :data (mem/entries (mem/view (:store eng)) :make-room-rest))) "the cleanup notes the rest for the trigger")
           (is (= [:make-room.tossed :ended] (vec (distinct (filter #{:make-room.tossed :ended} (map :kind @seen)))))))))))
 
 (deftest the-name-picked-up-more-recently-is-tossed-last
@@ -653,7 +654,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p]} (await (run-child {:inventory (same "oak_log" 35 5) :entities [diamond-on-ground]}
-                                            {:free 1 :toss-below 0}
+                                            {:free 2 :toss-below 0}
                                             {:acted true :swap {:id 70 :item "diamond" :worth 10}}))]
           (is (= [70] (mapv #(arg-of "id" %) (calls p "collect"))))
           (is (= 0 (count (calls p "toss"))))
