@@ -1,6 +1,7 @@
 ;; Card dc655af5 (settings C2 65273969): the body's settings reach a call that leaves the arg out. Geometry of go-to-drop-budget: a stone block
 ;; y 0..9 under the body (feet y 10), the goal on the floor east of its edge: a drop of 10, which the default budget (7 hp at full health) allows.
 ;; Should-succeed: an explicit :floor {:health 1} beats the :engine.settings/job-args overlay of :floor {:health 14}.
+;; A settings set through the observe tool reloads at once: a go-to started after it uses the new walk floor; unset puts the default back.
 ;; Should-fail (unarrived, no drop taken): the overlay alone; the walk setting jobs.lib.walk.world/min-health 14 alone.
 {:defaults
  {:tags [:movement :settings]
@@ -27,4 +28,16 @@
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind :result}}]
-   :after [[:body-far [22.5 0 16.5] 4]]}]}
+   :after [[:body-far [22.5 0 16.5] 4]]}
+  {:name "settings-set-reloads-the-floor-for-the-next-go-to-and-unset-restores-it"
+   :act [[:cli "observe" ["$body" "--world" "$world" "settings" "set" ":jobs.lib.walk.world/min-health" "14"] {:ok true}]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind :result}}]
+   :after [[:body-far [22.5 0 16.5] 4]]}
+  {:name "settings-unset-restores-the-default-floor-for-the-next-go-to"
+   :settings {:jobs.lib.walk.world/min-health 14}
+   :act [[:cli "observe" ["$body" "--world" "$world" "settings" "unset" ":jobs.lib.walk.world/min-health"] {:ok true}]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [22.5 0 16.5] 2]]}]}

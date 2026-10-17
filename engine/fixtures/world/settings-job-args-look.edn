@@ -1,7 +1,8 @@
 ;; Card dc655af5 (settings C2 65273969): the :engine.settings/job-args overlay changes a default of a job called without that arg.
 ;; Open plot, the body at [16.5 0 16.5]; look reports its :radius.
 ;; Should-succeed: with the overlay {jobs.explore.look {:radius 8}} a look with no :radius reports 8, one with :radius 12 reports 12;
-;; with no overlay the code default 16.
+;; with no overlay the code default 16. The catalog shows the overlay's radius as :default 8 :default-from :body, the code's 16 as :code;
+;; unsetting the overlay restores it.
 {:defaults
  {:tags [:settings :explore :jobs] :time :any
   :plot {:height 6}
@@ -18,4 +19,19 @@
    :expect [{:event {:source :job :kind :completed :data {:radius 12}} :within-s 20 :of-job true}]}
   {:name "no-overlay-keeps-the-code-default"
    :act [[:job (jobs.explore.look {:max-blocks 0 :max-entities 0})]]
-   :expect [{:event {:source :job :kind :completed :data {:radius 16}} :within-s 20 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :completed :data {:radius 16}} :within-s 20 :of-job true}]}
+  {:name "catalog-shows-the-overlay-default-from-body"
+   :settings {:engine.settings/job-args {jobs.explore.look {:radius 8}}}
+   :act [[:cli "observe" ["$body" "--world" "$world" "catalog" "job" "jobs.explore.look"] {:ok true :args {:radius {:default 8 :default-from :body}}}]]
+   :expect [{:no-event {:source :job :kind :failed} :for-s 3}]
+   :after [[:body-near [16.5 0 16.5] 3]]}
+  {:name "catalog-shows-the-code-default-without-an-overlay"
+   :act [[:cli "observe" ["$body" "--world" "$world" "catalog" "job" "jobs.explore.look"] {:ok true :args {:radius {:default 16 :default-from :code}}}]]
+   :expect [{:no-event {:source :job :kind :failed} :for-s 3}]
+   :after [[:body-near [16.5 0 16.5] 3]]}
+  {:name "unsetting-the-overlay-restores-the-catalog-default"
+   :settings {:engine.settings/job-args {jobs.explore.look {:radius 8}}}
+   :act [[:cli "observe" ["$body" "--world" "$world" "settings" "unset" ":engine.settings/job-args"] {:ok true}]
+         [:cli "observe" ["$body" "--world" "$world" "catalog" "job" "jobs.explore.look"] {:ok true :args {:radius {:default 16 :default-from :code}}}]]
+   :expect [{:no-event {:source :job :kind :failed} :for-s 3}]
+   :after [[:body-near [16.5 0 16.5] 3]]}]}
