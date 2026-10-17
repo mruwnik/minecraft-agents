@@ -34,7 +34,7 @@
   (let [job (get registry/jobs food)]
     (is (fn? (:can-start? job)))
     (is (= [] (:target job)))
-    (is (= [:bake :cook :source :collect :hunt :crops :fish :pen] (:ways job)))
+    (is (= [:bake :cook :source :collect :hunt :crops :fish :pen :field] (:ways job)))
     (is (fn? (:done? job)))
     (is (nil? (contract/quote-problem ((:quote-of job) {:args {}}))))
     (is (fn? cook/cook!) "the cooking block night's hold uses lives in get-food.cook")
