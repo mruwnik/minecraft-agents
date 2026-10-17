@@ -356,7 +356,7 @@
   ledger, the off-hand torch goes back, the plug timer and the planner's kept state are released."
   [c _]
   (when-not (:own (:escalation (ctx/mem c))) (note-holes! c (:planned (ctx/mem c))))
-  (swap! plug-since dissoc (:id c))
+  (swap! plug-since dissoc (:root c))
   (wsearch/release! c)
   (await (torch/return-torch! c))
   (ctx/end c :done nil {}))

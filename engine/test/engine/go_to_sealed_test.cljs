@@ -97,6 +97,17 @@
           (await (tick! s 8))
           (is (seq (st/emitted seen :unreachable)) "after the deadline the walk goes on to its own give-up"))))))
 
+(deftest the-plug-clock-is-gone-once-the-walk-has-ended
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen clock] :as s} (await (sealed 6))]
+          (is (seq @gholds/plug-since) "the wait started a clock under the root job")
+          (swap! clock + (* 10 60 1000))
+          (await (tick! s 8))
+          (is (seq (st/emitted seen :unreachable)))
+          (is (empty? @gholds/plug-since) "cleanup of the child go-to removes the root's clock"))))))
+
 (deftest a-starving-or-hurt-body-is-not-held
   (async done
     (tu/run-async done
