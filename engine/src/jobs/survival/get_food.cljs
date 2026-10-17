@@ -42,6 +42,8 @@
   :pen   The surplus of its own pens: an animal in a zone or plan of its own in sight, else it walks (go-to) to the
          nearest zone or plan of its own within :source-radius it has not visited in this job and hunts there (the
          same keep rules; the kill's rule is :own-pen). Its stock is its reserve: taken after the wild food in reach, before fishing and the search.
+  :field Last: it walks to the nearest zone or plan of its own it has not visited in this job and cuts and replants the ripe wheat there
+         (jobs.farm.harvest); the wheat is baked next (:bake).
   Then, once per job (:explore, default on; a starving body again after foods/::starving-rest-ms) it searches for food animals and crops (jobs.explore.search, the
   ::explore setting; not while the search would wait (dark sky, danger near) nor while the night handler holds) and goes on if it found some; at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it ends nothing-possible :no-food (the text says what was searched, the nearest known source) and writes
@@ -60,12 +62,12 @@
   :too-dangerous); can-run? is then :later and the hungry trigger rests (its :rest-s) while the body stays fragile
   (jobs.survival.get-food.risk). Not shut in a shelter, it first looks around from where it stands (once per place) so hostiles outside its view count. For ::danger-rest-s (300) after that, while still fragile, above food 0, with nothing to eat, a call
   is :later :too-dangerous (can-start?, can-run?) without acting, so the hungry reflex backs off.
-  Wheat is never harvested. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own (but for the :pen way) or inside a closed enclosure (:spare-pens, default true), kinds in :off-limits (default the jobs.lib.animal-spare setting), and the last :keep-adults (2) adults of a kind in sight (for breeding; never hunted, even when starving, unless ::kept-lifted-below lifts it) are never hunted (:ignore-zones? lifts the others' zone only). Each animal attacked is a food.killed info with its name, cell, adults counted, :keep-adults, food and the rule that allowed it; the data carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
+  Wheat is cut only by :field, in a zone or plan of its own. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own (but for the :pen way) or inside a closed enclosure (:spare-pens, default true), kinds in :off-limits (default the jobs.lib.animal-spare setting), and the last :keep-adults (2) adults of a kind in sight (for breeding; never hunted, even when starving, unless ::kept-lifted-below lifts it) are never hunted (:ignore-zones? lifts the others' zone only). Each animal attacked is a food.killed info with its name, cell, adults counted, :keep-adults, food and the rule that allowed it; the data carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
   (one get-food.skipped warning). A crop in another's zone or claim is dug only when no other is (one
   get-food.trespass-last-resort warning). :ignore-zones? lifts both.
   A cut call starts again from the world: carried food first, then the ways.
   Memory: reads :food-source and :hungry. Writes :hungry {:food} (cap 10, one hour) and :no-bake. Job memory (hints for
-  this run): :tried-sources, :skipped-blocks, :skipped-animals. Quote: F, a search.")
+  this run): :tried-sources, :tried-fields, :skipped-blocks, :skipped-animals. Quote: F, a search.")
 
 (a/defargs args
   {:food {:doc "hungry below this much food (of 20)" :spec (a/num-in 0 20) :default foods/default-food}
@@ -149,7 +151,7 @@
 
 ;; ------------------------------------------------------------------ ways
 
-(def ways [:bake :cook :source :collect :hunt :crops :fish :pen])
+(def ways [:bake :cook :source :collect :hunt :crops :fish :pen :field])
 
 (def defaults {:checks {:safe? '(job-safe-or-starving) :fit? '(always)}
                :spend {:job-time ::job-time-s} :ways (set ways)})
@@ -314,6 +316,19 @@
           :continue :continue
           (or (await (hunt! c true)) :again))))))
 
+(defn ^:async field!
+  "Way :field: walk to the nearest zone or plan of its own not visited in this job and cut and replant its ripe wheat
+  (farm.harvest), for :bake. :again after a visit, nil with none left."
+  [c]
+  (when-let [[lo hi :as box] (when-not (gave-up-recently? c) (first (sources/own-boxes c :tried-fields)))]
+    (let [pos (sources/box-middle box)]
+      (ctx/update-mem! c update :tried-fields (fnil conj []) pos)
+      (if (risk/refused? c pos)
+        :again
+        (let [e (await (child/run!* c :field 'jobs.farm.harvest
+                                    {:center pos :crops ["wheat"] :radius (inc (apply max (map #(/ (js/Math.abs (- %1 %2)) 2) lo hi)))}))]
+          (if (= :continue e) :continue :again))))))
+
 (defn ^:async next-way!
   "The first allowed way with something to do: :again (try eating, then the ways, again), :continue (yield), or nil when
   none is left. Inside the ask cooldown only a source learned since counts."
@@ -327,7 +342,8 @@
         (when (way? c :collect) (await (collect-drops! c (drop-radius))))
         (when (way? c :hunt) (await (hunt! c false)))
         (when (way? c :crops) (await (sources/dig-ripe! c (merge sources/ripe-age sources/wild-food) (u/self-pos c) (hunt-radius c))))
-        (when (way? c :pen) (await (pen! c))))))
+        (when (way? c :pen) (await (pen! c)))
+        (when (way? c :field) (await (field! c))))))
 
 (defn night-blocks-search?
   "Whether the search would wait: the search child's own safe-if-lit under the children's default (ready/or-starving) is not ok, or the night handler holds and the body is not starving with no

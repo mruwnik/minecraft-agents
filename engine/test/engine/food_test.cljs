@@ -766,17 +766,26 @@
           (await (run!))
           (is (= 2 (count (none))) "after the cooldown it says so again"))))))
 
-(deftest get-food-skips-wheat
+(def wheat-field
+  {:self {:food 1} :inventory [{:name "wheat_seeds" :count 4}]
+   :blocks {"6,64,0" "wheat" "6,63,0" "farmland"} :ages {"6,64,0" 7} :drops {:wheat "wheat"}})
+
+(deftest get-food-cuts-and-replants-wheat-only-in-a-zone-of-its-own
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:self {:food 1}
-                                           :blocks {"6,64,0" "wheat"} :ages {"6,64,0" 7}
-                                           :drops {:wheat "wheat"}})]
-          (core/submit! eng '(jobs.survival.get-food) {})
-          (await (run-until-empty eng 20))
-          (is (= [] (calls p "dig")))
-          (is (= 1 (count (none-events seen)))))))))
+        (let [run (fn ^:async run1 [zones]
+                    (let [{:keys [eng p]} (setup wheat-field zones)]
+                      (core/submit! eng '(jobs.survival.get-food {:explore false}) {})
+                      (await (run-until-empty eng 60))
+                      p))
+              own (await (run own-farm))
+              none (await (run nil))
+              other (await (run [(assoc (first own-farm) :owner "Miles")]))]
+          (is (= [{:x 6 :y 64 :z 0}] (call-args own "dig" "pos")) "the field of a zone it owns is cut")
+          (is (seq (calls own "place")) "and replanted")
+          (is (= [] (calls none "dig")) "wheat in no zone is left")
+          (is (= [] (calls other "dig")) "and so is another's"))))))
 
 (deftest get-food-forgets-a-source-found-empty
   (async done

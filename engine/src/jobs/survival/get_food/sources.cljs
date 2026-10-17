@@ -22,7 +22,7 @@
 
 (def ripe-age
   "The growth stage at which each crop block can be harvested. Wheat is left
-  out: it is not harvested here."
+  out: only the :field way cuts it, in a field of its own."
   {"carrots" 7 "potatoes" 7 "beetroots" 3})
 
 (def berry-bush {"sweet_berry_bush" 2})
@@ -82,28 +82,36 @@
     (when (and source learned gave-up (> learned gave-up))
       source)))
 
-(defn own-areas
-  "The middles {:x :y :z} of the zones this body owns and of the plans it made (their footprints), within :source-radius,
-  not tried in this job, nearest first: its own pens and farms, which it knows without seeing them."
-  [c]
+(defn box-middle [[lo hi]]
+  (zipmap [:x :y :z] (map #(js/Math.floor (/ (+ %1 %2) 2)) lo hi)))
+
+(defn own-boxes
+  "The [min max] cells of the zones this body owns and of the plans it made (their footprints), within :source-radius
+  of their middle, not in this job's memory list tried-key, nearest first: its own pens and farms, which it knows without
+  seeing them."
+  [c tried-key]
   (let [self (ctx/self-name c)
         here (u/self-pos c)
-        tried (set (:tried-sources (ctx/mem c)))
-        middle (fn [cells] (zipmap [:x :y :z] (apply map #(js/Math.floor (/ (+ %1 %2) 2)) cells)))
+        tried (set (tried-key (ctx/mem c)))
         zoned (->> (known/zones c)
                    (filter #(zones/same-owner? (:owner %) self))
-                   (map #(middle [(:min %) (:max %)])))
+                   (map (juxt :min :max)))
         planned (->> (known/footprints c)
                      (filter (comp (access/own-plans c) val))
                      (group-by val)
                      vals
                      (map (fn [cells] (let [cs (map key cells)]
-                                        (middle [(apply mapv min cs) (apply mapv max cs)])))))]
+                                        [(apply mapv min cs) (apply mapv max cs)]))))]
     (->> (concat zoned planned)
          distinct
-         (remove tried)
-         (filter #(<= (u/dist here %) (:source-radius (:args c))))
-         (sort-by #(u/dist here %)))))
+         (remove (comp tried box-middle))
+         (filter #(<= (u/dist here (box-middle %)) (:source-radius (:args c))))
+         (sort-by #(u/dist here (box-middle %))))))
+
+(defn own-areas
+  "The middles {:x :y :z} of own-boxes."
+  [c]
+  (map box-middle (own-boxes c :tried-sources)))
 
 (defn pass-over!
   "Not try the source at pos again in this job."
