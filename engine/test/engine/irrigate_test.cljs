@@ -123,12 +123,33 @@
           (is (not= "water" (block-at p {:x 4 :y 63 :z 0})))
           (is (= 1 (count (:poured r)))))))))
 
-(deftest a-failed-pour-after-the-dig-names-the-open-hole
+(defn fail-places!
+  "Make every place of item fail; other places run as the fake does."
+  [p item]
+  (.override (.-world p) "place"
+             (fn ^:async f [tok a impl] (if (= item (.-item a)) #js {:status "failed" :reason "no"} (await (impl tok a))))))
+
+(def dirt [{:name "water_bucket" :count 1} {:name "dirt" :count 4}])
+
+(deftest a-failed-pour-after-the-dig-has-the-cell-refilled
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory bucket :blocks (strip 9)})
+        (let [{:keys [eng p]} (setup {:inventory dirt :blocks (strip 9)})
+              _ (fail-places! p "water_bucket")
+              r (await (tu/child-outcome eng job (args 9) 60))]
+          (is (= 1 (count (:restored r))))
+          (is (= [] (:holes r)))
+          (is (= [] (:poured r)))
+          (is (not-any? #(#{"air" "water"} (block-at p {:x % :y 63 :z 0})) (range 9))))))))
+
+(deftest a-cell-that-cannot-be-refilled-is-named-as-a-hole
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory dirt :blocks (strip 9)})
               _ (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "failed" :reason "no"}))
-              r (await (tu/child-outcome eng job (args 9) 40))]
+              r (await (tu/child-outcome eng job (args 9) 60))]
           (is (= 1 (count (:holes r))))
+          (is (= [] (:restored r)))
           (is (= [] (:poured r))))))))
