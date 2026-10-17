@@ -189,6 +189,14 @@
 
 (def hop "Cells walked between two steps on the way to the far end: a dark corridor is seen about this far." 8)
 
+(defn side-dirs
+  "The headings a stop looks along to see the walls: both sides and the four diagonals. A spawner sits in a side wall, out of
+  the cone of a look along the corridor."
+  [axis]
+  (if (= axis :x)
+    [[0 1] [0 -1] [1 1] [1 -1] [-1 1] [-1 -1]]
+    [[1 0] [-1 0] [1 1] [-1 1] [1 -1] [-1 -1]]))
+
 (defn ^:async look-end!
   "Walk to the segment's far end from the entry, hop cells at a time (each stop is a step: it sees and lights what stands
   there), and look round there once: :again, :continue or a stop."
@@ -208,7 +216,7 @@
       (if (= stop-at far)
         (do (await (look/look-around! c))
             :again)
-        (do (look/see! c)
+        (do (await (look/glance! c (side-dirs (:axis seg))))
             :again)))))
 
 (defn result-of

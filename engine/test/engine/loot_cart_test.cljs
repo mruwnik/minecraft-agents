@@ -79,6 +79,16 @@
               result (await (child-outcome eng job {:id 50} 12))]
           (is (= [:stopped :bag-full 0] ((juxt :status :reason :collected) result))))))))
 
+(deftest a-bag-with-no-free-slot-leaves-the-cart-standing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:entities [(cart 50 [2 64 0])] :inventory (mapv (fn [i] {:name (str "filler_" i) :count 1}) (range 36))})
+              _ (.override (.-world p) "transfer" (fn [_ _ _] #js {:status "full" :moved 0}))
+              result (await (child-outcome eng job {:id 50} 12))]
+          (is (= [:stopped :bag-full 0] ((juxt :status :reason :collected) result)))
+          (is (= #{50} (cart-ids p)) "breaking it would spill the drops where the bag cannot take them"))))))
+
 (deftest a-cart-that-will-not-break-ends-nothing-possible
   (async done
     (tu/run-async done

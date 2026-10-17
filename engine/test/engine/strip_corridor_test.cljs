@@ -273,6 +273,20 @@
           (is (= :done (:status r)))
           (is (some #{{:pos {:x 10 :y 65 :z 2} :why :spawner}} (:kept r))))))))
 
+(deftest spawner-skip-lists-a-spawner-in-a-dark-side-wall-seen-only-from-the-side
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [air (set (for [x (range -5 56) y [64 65 66] z [-1 0 1]] (str x "," y "," z)))
+              blocks (-> (apply dissoc (tu/box -6 63 -2 56 67 2 "stone") air) (assoc "30,65,2" "spawner"))
+              long-seg (assoc seg :to 50 :id (strip/seg-id (assoc seg :to 50)))
+              env (bd/setup-seeing {:self {:pos {:x -3 :y 64 :z 0}} :blocks blocks :drops drops :inventory kit})
+              _ (swap! (.. (:p env) -world -state) merge {:light (into {} (for [x (range -5 56) y [64 65 66] z [-1 0 1 2]] [[x y z] [0 0]]))})
+              r (await (run! env (assoc args :segment long-seg :spawner :skip)))]
+          (is (= :done (:status r)))
+          (is (some #{{:pos {:x 30 :y 65 :z 2} :why :spawner}} (:kept r))
+              "in the dark a block is seen within 4 cells and inside the view cone: a stop must look to the walls"))))))
+
 (deftest a-stopped-trip-ends-with-the-kind-of-its-reason
   (async done
     (tu/run-async done

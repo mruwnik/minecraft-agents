@@ -22,7 +22,7 @@
   a restart re-reads the world and goes on from there.
   Ends :done {:collected n :items {name n}} (what came into the bag, counted from the inventory at the start), with :full true
   when the bag had no room for a stack. Else condition-failed :gone (the cart vanished), :refused (zones) or :bag-full (no
-  room for anything: nothing gained), nothing-possible
+  room for anything: nothing gained; with no free slot the cart is left standing), nothing-possible
   :unreachable (go-near! cannot arrive, or the cart is out of reach) or :cannot-break (the attack gave up, the cart is still
   there), with :why, :collected and :items as data. Spends :time (default ::job-time-s).")
 
@@ -152,9 +152,11 @@
                   (not= "ok" e) (stop! c :unreachable (str "cannot open the cart: " e))
                   :else
                   (do (ctx/update-mem! c assoc :emptied true)
-                      (let [b (await (break-cart! c id))]
-                        (cond
-                          (= :continue b) :continue
-                          (= :cannot-break b) (stop! c :cannot-break "the cart did not break")
-                          :else (do (ctx/update-mem! c assoc :broken true)
-                                    (let [r (await (collect! c pos))] (if (= :continue r) :continue (looted! c))))))))))))))))
+                      (if (and (:full (ctx/mem c)) (empty? (gained c)) (zero? (u/free-slots (:primitives c))))
+                        (stop! c :bag-full "the bag had no room for anything in the cart")
+                        (let [b (await (break-cart! c id))]
+                          (cond
+                            (= :continue b) :continue
+                            (= :cannot-break b) (stop! c :cannot-break "the cart did not break")
+                            :else (do (ctx/update-mem! c assoc :broken true)
+                                      (let [r (await (collect! c pos))] (if (= :continue r) :continue (looted! c)))))))))))))))))
