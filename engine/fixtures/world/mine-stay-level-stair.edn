@@ -28,12 +28,13 @@
             {:no-event {:source :job :kind :mine.tunnel-end :data {:reason #{:breach-sealed :breach-open}}} :for-s 120}]
    :after [[:block [20 4 16] "air"] [:block [19 3 16] "air"]]}
   {:name "west-back-over-the-stair-never-seals-it"
-   ;; the heading back over the body's own stair: whatever it ends with, the stair's own air is never sealed as a breach
+   ;; the heading back over the body's own stair: whatever it ends with, the stair's own air is never sealed as a breach; the level run
+   ;; floors the step cell [19 3 16] under its path (a floor gap, as any level run does) and leaves the step below it
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]
          [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :west :stay-level true :tunnel-length 5 :mend false})]]
    :expect [{:event {:source :job :kind :mine.tunnel-end} :within-s 180 :of-job true}
             {:no-event {:source :job :kind :mine.tunnel-end :data {:reason #{:breach-sealed :breach-open}}} :for-s 120}]
-   :after [[:block [19 3 16] "air"] [:block [18 2 16] "air"]]}
+   :after [[:not-block [19 3 16] "air"] [:block [18 2 16] "air"]]}
   {:name "second-run-along-the-earlier-tunnel-goes-on"
    ;; the first run cuts 3 blocks east (remembered as the body's own tunnel); the second run's cut cells touch that air and
    ;; still ends by its length, not as a breach
