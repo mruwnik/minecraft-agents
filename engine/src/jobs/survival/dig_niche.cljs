@@ -32,7 +32,7 @@
   at each opening cell (feet, then head) from the blocks the dig dropped or carried ones (the call's :use :blocks,
   default the shelter fillers).
   Needs a tool that harvests the face (a pickaxe for stone): :fetch (default true; jobs.lib.need) runs jobs.items.get-tool
-  for it, else, or when that fails, it ends :no-tool.
+  for it; when that fails it cuts the niche bare-handed (slow, the drops lost); with :fetch off it ends :no-tool.
   Conditions (at the start only): night, else condition-failed :day. A body already shut in a closed room under a roof (any roof within :roof-height, a canopy too) is done. Done {:pos :door [feet head cells plugged]}
   with a :shelter entry {:pos :door} (jobs.lib.dig-in-leave/leave! digs the door out by day). Facts of the site are condition-failed:
   :no-site, :no-tool, :refused (every site would dig or plug another's zone, claim or plan footprint), :no-blocks, and what a dug cell
@@ -254,6 +254,11 @@
     (ctx/update-mem! c assoc :ended true)
     (ctx/end c :done nil (merge {:pos feet :door door} (spent/summary placed)))))
 
+(defn fetch-tried?
+  "Whether :fetch allows a tool; a fetch that got none leaves the niche to be cut bare-handed."
+  [c]
+  (some-> (need/opts c 'jobs.survival.dig-niche) :what (contains? :tool)))
+
 (defn ^:async fetch-tool!
   "Get the tool for the block of w (jobs.lib.need) when :fetch allows a tool: :continue while it works, :again once
   it got one, nil when it did not or may not."
@@ -271,7 +276,7 @@
         saved (:site (ctx/mem c))
         reach (:reach (:args c))
         kept (when (and saved (ok? (:stand saved) (:dir saved))) saved)
-        {:keys [site refused?]} (if kept {:site kept} (scan p reach ok?))]
+        {:keys [site refused?]} (if kept {:site kept} (if (:by-hand (ctx/mem c)) (scan* p reach ok? false) (scan p reach ok?)))]
     (if (nil? site)
       (if refused?
         (fail! c :refused "every hillside or wall that would do is another's (zone, claim or plan)")
@@ -279,6 +284,7 @@
               r (when w (await (fetch-tool! c w)))]
           (cond
             r r
+            (and w (fetch-tried? c)) (do (ctx/update-mem! c assoc :by-hand true) :again)
             w (fail! c :no-tool (str "no tool for the " (:block w) " of the hillside"))
             (not (look/surveyed? c)) (await (look/look-around! c))
             :else (fail! c :no-site "no hillside or wall to cut a niche into"))))

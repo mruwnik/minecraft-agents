@@ -439,6 +439,23 @@
           (is (= 1 (count @calls)))
           (is (= :done (:status @out))))))))
 
+(deftest a-pickaxe-that-cannot-be-fetched-has-the-escape-dug-by-hand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              stub {:ways [:chest :craft :gather]
+                    :round (fn ^:async get-tool [c]
+                             (swap! calls conj (:args c))
+                             (ctx/end c :condition-failed :no-source))
+                    :args {:block {:default nil} :item {:default nil} :kind {:default nil} :how {:default nil} :depth {:default nil}
+                           :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []} :explore {:default true}}}
+              s (setup {:blocks eight-down :inventory (inventory)} {:target [6 57 0]} {:fetch true}
+                       :between drop-pickaxe! :jobs {'jobs.items.get-tool stub})
+              {:keys [out]} (await (run-out! s))]
+          (is (= 1 (count @calls)) "asked once, not again")
+          (is (= :done (:status @out))))))))
+
 (deftest a-default-call-fetches-a-missing-pickaxe-for-the-escape
   (async done
     (tu/run-async done

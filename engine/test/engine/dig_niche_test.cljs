@@ -258,14 +258,15 @@
           (is (= :no-tool (:reason (failed seen))))
           (is (= "stone" (block-at p [5 64 0]))))))))
 
-(deftest stone-without-a-pickaxe-tries-a-fetch-by-default-then-fails-no-tool
+(deftest stone-without-a-pickaxe-tries-a-fetch-by-default-then-cuts-the-niche-by-hand
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [seen] :as s} (setup [] {:inventory []})]
+        (let [{:keys [p seen] :as s} (setup [] {:inventory [{:name "cobblestone" :count 4}]})]
           (await (run! s {}))
           (is (some #(and (= :child_started (:kind %)) (= :need (:slot %))) @seen) "a tool is asked for")
-          (is (= :no-tool (:reason (failed seen)))))))))
+          (is (nil? (failed seen)))
+          (is (= ["cobblestone" "cobblestone"] (mapv #(block-at p %) [[4 64 0] [4 65 0]]))))))))
 
 (deftest a-hill-not-yet-seen-is-looked-for-before-no-site-then-dug
   (async done

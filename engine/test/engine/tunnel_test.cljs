@@ -710,10 +710,10 @@
    :args {:block {:default nil} :item {:default nil} :kind {:default nil} :how {:default nil} :depth {:default nil}
           :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []} :explore {:default true}}})
 
-(defn ^:async fetching-tunnel! [give fetch prep]
+(defn ^:async fetching-tunnel! [give fetch prep & [extra]]
   (let [calls (atom [])
         p (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :inventory [] :blocks ground})
-        s (setup {} (cond-> {:target [6 57 0]} (not= :default fetch) (assoc :fetch fetch)) prep :p p
+        s (setup {} (cond-> (merge {:target [6 57 0]} extra) (not= :default fetch) (assoc :fetch fetch)) prep :p p
                  :jobs {'jobs.items.get-tool (get-tool-stub calls p give)})
         s (assoc s :id (core/submit! (:eng s) '(recording-parent) {}))]
     (await (tick-out! s))
@@ -727,12 +727,19 @@
           (is (= 1 (count calls)))
           (is (= :reached (:reason @out))))))))
 
-(deftest a-pickaxe-that-cannot-be-fetched-ends-no-tool
+(deftest a-pickaxe-that-cannot-be-fetched-is-done-without-one-by-hand
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out calls]} (await (fetching-tunnel! nil true (fn [_])))]
           (is (= 1 (count calls)) "tried once, not again")
+          (is (= :reached (:reason @out))))))))
+
+(deftest by-hand-false-ends-no-tool-after-a-failed-fetch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (fetching-tunnel! nil true (fn [_]) {:by-hand false}))]
           (is (= [:stopped :no-tool] ((juxt :status :reason) @out))))))))
 
 (deftest fetch-false-opts-out-and-never-calls-get-tool
@@ -886,7 +893,7 @@
                      [4 64 4] [0 65 0] 64 #{})
     (is (< @reads 40000))))
 
-(deftest a-fetch-child-that-ends-done-while-the-no-tool-stop-persists-does-not-spin
+(deftest a-fetch-child-that-ends-done-while-the-no-tool-stop-persists-digs-by-hand-without-spinning
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -907,7 +914,7 @@
                              (orig c slot job args))))
           (try
             (let [s (await (tunnel! {:blocks (assoc ground "6,57,0" "iron_ore")} {:target [6 57 0]} prep))]
-              (is (= [:stopped :no-tool] ((juxt :status :reason) @(:out s))) "the fetch that cured nothing is not asked again"))
+              (is (= :reached (:reason @(:out s))) "the fetch that cured nothing is not asked again: the stone is dug by hand"))
             (finally (set! ctx/call orig)))
           (is (<= 1 @n 2) (str "fetch child calls " @n)))))))
 

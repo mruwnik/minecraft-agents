@@ -54,7 +54,7 @@
   :open []}; :left holds torches not taken. A mouth cell left open (:open [{:cell :reason}]) ends nothing-possible
   :open with the same data; :escaped true: the entry itself was unreachable.
   Impossible :bad-args (no :line in the tunnel). Or condition-failed with the cause :no-tool (the escape stair has no pickaxe and
-  :fetch is off, or the fetch failed, as its :because), or nothing-possible with :walk-failed (every escape failed; data
+  :fetch is off; a failed fetch digs the stair bare-handed), or nothing-possible with :walk-failed (every escape failed; data
   :escape holds the stair endings). Events: leave-tunnel.done (info, :sealed), leave-tunnel.open (warn, mouth open),
   leave-tunnel.stopped (warn, any stop).
 
@@ -250,14 +250,14 @@
 
 (defn ^:async fetch-tool!
   "Get the pickaxe the escape stair lacks (its ending e names the block or tool kind): :continue while it works, :again
-  once it is got, else the stop :no-tool (the fetch's ending its :because)."
+  once it is got, else :again with the stair dug bare-handed from now on (:by-hand)."
   [c e]
   (let [{:keys [block tool]} (:cause e)
         t (await (need/tool! c (if block {:block block} {:kind tool}) {:return? true}))]
     (cond
       (= :continue t) :continue
       (= :done (:kind t)) :again
-      :else (finish! c :stopped (:cause e) {}))))
+      :else (do (ctx/update-mem! c assoc :by-hand true) :again))))
 
 (defn ^:async escape!
   "One attempt of the way out: a stair to the entry's height (opposite the tunnel's :dir) along the next heading; done, the body is out and the
@@ -274,7 +274,7 @@
       (finish! c :stopped :walk-failed {:cell cell :walk walk :escape results})
       (let [slot (keyword (str "escape-" i))
             sargs (assoc (escape-stair (:line tunnel) entry-y)
-                         :heading (:heading attempt) :fetch false :spent-ok true :stock-torches false :ignore-zones? (:ignore-zones? attempt))
+                         :heading (:heading attempt) :fetch false :need-drop (not (:by-hand (ctx/mem c))) :spent-ok true :stock-torches false :ignore-zones? (:ignore-zones? attempt))
             e (await (ctx/call c slot 'jobs.access.stair sargs))
             why (when (map? e) (contract/cause-key e))
             next-heading! #(do (ctx/update-mem! c update :escape (fn [m] (-> m (assoc :i (inc i)) (update :results conj %)))) :again)]

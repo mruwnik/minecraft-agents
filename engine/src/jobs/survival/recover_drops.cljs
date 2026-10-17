@@ -439,7 +439,7 @@
                    (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason reason :detail text)))]
     (if (> need-s left-s)
       (give-up! :window-closed (str "the pile is " below " blocks down: a stair takes about " (js/Math.round need-s) " s, " (js/Math.round left-s) " s are left"))
-      (let [args {:target [(js/Math.floor (:x pos)) (js/Math.floor (:y pos)) (js/Math.floor (:z pos))] :max-length 96 :keep true :max-steps 1 :checks own-checks}]
+      (let [args {:target [(js/Math.floor (:x pos)) (js/Math.floor (:y pos)) (js/Math.floor (:z pos))] :max-length 96 :keep true :by-hand false :max-steps 1 :checks own-checks}]
         (loop [n 0]
           (let [danger (threatened? c)
                 r (when-not danger (await (ctx/call c :dig 'jobs.access.tunnel args)))]
