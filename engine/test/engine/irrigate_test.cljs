@@ -4,6 +4,7 @@
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]))
@@ -153,3 +154,19 @@
           (is (= 1 (count (:holes r))))
           (is (= [] (:restored r)))
           (is (= [] (:poured r))))))))
+
+(deftest a-bucket-gone-after-the-dig-has-the-cell-refilled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory dirt :blocks (strip 9)})
+              _ (.override (.-world p) "dig"
+                           (fn ^:async f [tok a impl]
+                             (let [r (await (impl tok a))]
+                               (swap! (.-state (.-world p)) fake/take-one "water_bucket")
+                               r)))
+              r (await (tu/child-outcome eng job (args 9) 60))]
+          (is (= 1 (count (:restored r))))
+          (is (= [] (:holes r)))
+          (is (= [] (:poured r)))
+          (is (not-any? #(#{"air" "water"} (block-at p {:x % :y 63 :z 0})) (range 9))))))))
