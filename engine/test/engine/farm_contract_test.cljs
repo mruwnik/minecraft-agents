@@ -304,4 +304,9 @@
   (let [p (tu/seeing-all (tu/fake-on-floor ht/wheat-world))
         quote-for (fn [args] ((:quote-of (get registry/jobs harvest)) {:primitives p :args (merge (ht/plain-args {}) args)}))]
     (is (= {"wheat_seeds" [0 9 9]} (:items (:uses (quote-for {})))))
-    (is (nil? (:items (:uses (quote-for {:replant false})))))))
+    (is (nil? (:items (:uses (quote-for {:replant false})))))
+    (are [least d cause] (= cause (contract/least-cause {:least least} (quote-for {}) {:left d}))
+      9 9 nil
+      10 9 {:reason :least :least 10 :most 9}
+      :all 9 nil
+      :all 10 {:reason :least :least :all :most 9})))

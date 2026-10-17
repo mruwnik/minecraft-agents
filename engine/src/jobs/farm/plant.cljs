@@ -23,29 +23,25 @@
             [jobs.lib.world :as known]))
 
 (def doc
-  "Sow the bare farmland of a :box. A cell is bare when (x, min.y, z) is farmland and the block above is air.
-  The seed is :seed, else the carried seed with the largest stack. Carrots and potatoes are sown only above the
-  food reserve (jobs.lib.cost/food-reserve); harvest replants its own cut cells whatever the reserve. That pick is
-  kept while it is carried, so one run sows one crop.
+  "Sow the bare farmland of a :box (a cell is bare when (x, min.y, z) is farmland and the block above is air).
+  The seed is :seed, else the carried seed with the largest stack, kept while carried (one run sows one crop). Carrots
+  and potatoes are sown only above the food reserve (jobs.lib.cost/food-reserve); harvest replants whatever the reserve.
   A missing seed is fetched before the run starts (jobs.lib.need, :fetch; a failed fetch ends the call with its ending as
   the :because), unless :fetch is false.
-  One call plants the bare cells within :reach, walking to the nearest (a go-to child) when none is, until the field is
-  done. A cell whose place is refused or unreachable, or whose walk is blocked, three times is skipped (warn plant.gave-up).
-  :plan (optionally :part) makes the plan's crop cells the field instead (:box and :seed are then unused). Every planned
-  cell standing bare is sown with the seed of the crop the plan wants there, when it is carried. Zones and the footprints
-  of other active plans are asked before choosing a cell and again before the place; a cell another owner's zone or a
-  plan refuses is left bare (one plant.declined warn, :reason :refused, names it), :ignore-zones? true skips the check.
-  Refused before it starts: impossible {:reason :bad-args :why}; failed conditions {:reason :no-zones} (no zone list read, unless
-  :ignore-zones?), {:reason :plan-trouble :why} (the plan is missing or unreadable: a wait; it has no crop cells: impossible, also later in the call), :refused
-  (every bare cell is refused), :food-reserve (a food-crop seed is carried but the reserve keeps it, with :seed :held :kept
-  :reserve-points; nothing is fetched), {:reason :need ..} (no seed, :fetch false) and :nothing-to-do (no bare cell; a
-  field of dried-back dirt names :untilled n).
+  One call plants the bare cells within :reach, walking to the nearest (a go-to child) when none is. A cell whose place is
+  refused or unreachable, or whose walk is blocked, three times is skipped (warn plant.gave-up).
+  :plan (optionally :part) makes the plan's crop cells the field instead (:box and :seed are then unused); each bare
+  planned cell is sown with the seed of the crop the plan wants there, when carried. Zones and other active plans'
+  footprints are asked before choosing a cell and again before the place; a cell they refuse is left bare (one
+  plant.declined warn, :reason :refused), :ignore-zones? true skips the check.
+  Refused before it starts: impossible {:reason :bad-args :why}; failed conditions {:reason :no-zones}, {:reason
+  :plan-trouble :why} (the plan is missing or unreadable: a wait; it has no crop cells: impossible, also later),
+  :refused (every bare cell is refused), :food-reserve (a food-crop seed is carried but the reserve keeps it; nothing is
+  fetched), {:reason :need ..} (no seed, :fetch false) and :nothing-to-do (no bare cell; dried-back dirt names :untilled n).
   Ends with data {:planted n :skipped [cells] :untilled [cells]} (plan mode: :refused [{:pos :reason}] and :short [seeds
-  not carried] instead of :untilled; :untilled lists the dirt, grass or path cells of the box: till them first). Done when
-  every bare cell was sown, or some were and the number meets :least (cells, default 1); else condition-failed :need,
-  :refused or :food-reserve for cells left without a seed or permission, nothing-possible :gave-up for skipped cells;
-  none planted and nothing left, condition-failed :nothing-to-do. done? counts the cells sown and the bare cells
-  left.")
+  not carried] instead of :untilled). Done when every bare cell was sown, or some were and the number meets :least (cells,
+  default 1); else condition-failed :need, :refused or :food-reserve for cells left without a seed or permission,
+  nothing-possible :gave-up for skipped cells; none planted and nothing left, :nothing-to-do. done? counts the cells sown and the bare cells left.")
 
 (a/defargs args
   {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; the ground layer is y = (:y :min); required without :plan" :spec a/box? :default nil}
