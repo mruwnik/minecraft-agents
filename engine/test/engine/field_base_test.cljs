@@ -45,7 +45,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[_ sink] (tu/legacy-capture-sink)
-              p (tu/seeing-all (tu/fake-on-floor {:inventory inventory}))
+              p (tu/seeing-all (tu/fake-on-floor {:inventory inventory :self {:pos {:x -2.5 :y 64 :z -2.5}}}))
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref h/clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref h/clock)})
                                 :world (world/of-data {"base" plan} {"field-base" blueprint} [])})
