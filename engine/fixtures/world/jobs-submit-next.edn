@@ -39,7 +39,7 @@
          [:http :submit (jobs.memory.set-place {:name :wt-d :pos #at [6 0 16]}) [] {:ok true}]
          [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.forget-place {:name :wt-c})" "--now"]
           {:ok true}]]
-   :expect [{:event {:source :job :kind :completed :name [:contains "forget-place"]} :within-s 30}
+   :expect [{:event {:source :job :kind :completed :data {:name [:contains "forget-place"]}} :within-s 30}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [100.5 0 16.5] 2]]}
   {:name "next-with-now-refused"
