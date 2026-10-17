@@ -7,11 +7,14 @@
             [engine.perception :as perception]
             [engine.test-util :as tu]
             [jobs.animals.lead-to :as lead-to]
+            [jobs.farm.compost :as compost]
+            [jobs.farm.fertilize :as fertilize]
             [jobs.farm.field :as fld]
             [jobs.lib.farm :as farm]
             [jobs.farm.tend :as tend]
             [jobs.farm.tend-plan :as tend-plan]
             [jobs.farm.till :as till]
+            [jobs.apiary.maintain :as apiary-maintain]
             [jobs.forestry.maintain :as maintain]
             [jobs.forestry.prepare-rule :as prepare-rule]
             [jobs.forestry.plant-sapling :as sapling]
@@ -25,14 +28,15 @@
 (defn wrapped
   "Wrapped fake primitives whose raw blockAt throws; wall? puts a stone wall between the body and the cells at z 4.
   Rays 4 degrees apart with pinned jitter: a pass costs a fraction and no ray misses a cell by chance."
-  [blocks wall?]
+  ([blocks wall?] (wrapped blocks wall? {}))
+  ([blocks wall? extra]
   (let [wall (when wall? (into {} (for [y (range 60 70) x (range -2 3)] [(str x "," y ",2") "stone"])))
-        p (tu/fake {:blocks (merge blocks wall)})
+        p (tu/fake (assoc extra :blocks (merge blocks wall)))
         per (perception/create (fake-raw/create p) {:now (constantly 1000000) :ray-deg 4 :rand (constantly 0.5)})
         w (perception/wrap p per)]
     (perception/pass! per)
     (aset w "blockAt" (fn [_] (throw (js/Error. "raw blockAt"))))
-    w))
+    w)))
 
 (def far {"0,63,4" "stone" "0,64,4" "farmland" "0,65,4" "air"})
 
@@ -95,14 +99,16 @@
     (is (= {:pos cell :name "farmland" :above "wheat"} (tend-plan/ground-cell (wrapped blocks false) cell)))
     (is (= [] (tend-plan/wrong-crops (wrapped {"0,64,4" "carrots"} true) {cell "wheat"})))
     (is (= 1 (count (tend-plan/wrong-crops (wrapped {"0,64,4" "carrots"} false) {cell "wheat"}))))
-    (is (= [] (tend-plan/unripe-planned (wrapped {"0,64,4" "wheat"} true) {cell "wheat"})))))
+    (is (= [] (tend-plan/unripe-planned (wrapped {"0,64,4" "wheat"} true {:ages {cell 1}}) {cell "wheat"})))
+    (is (= [[cell "wheat"]] (tend-plan/unripe-planned (wrapped {"0,64,4" "wheat"} false {:ages {cell 1}}) {cell "wheat"})))))
 
 (deftest tend-ground-and-unripe-need-sight
   (let [box {:min cell :max cell}
         blocks {"0,64,4" "farmland" "0,65,4" "wheat"}]
     (is (= [{:pos cell :name nil :above nil}] (tend/ground-layer (wrapped blocks true) box)))
     (is (= [{:pos cell :name "farmland" :above "wheat"}] (tend/ground-layer (wrapped blocks false) box)))
-    (is (= [] (tend/unripe-in-box (wrapped {"0,64,4" "wheat"} true) box {:x 0 :y 64 :z 4} 8)))))
+    (is (= [] (tend/unripe-in-box (wrapped {"0,64,4" "wheat"} true {:ages {cell 1}}) box cell 8)))
+    (is (= [cell] (tend/unripe-in-box (wrapped {"0,64,4" "wheat"} false {:ages {cell 1}}) box cell 8)))))
 
 (deftest tidy-world-block-needs-sight
   (let [blocks {"0,64,4" "stone"}]
@@ -128,3 +134,31 @@
 (deftest live-seen-blocks-check-through-the-senses-not-raw-blockat
   (let [q {:names ["grass_block"] :radius 8 :live? true}]
     (is (= 1 (count (look/seen-blocks (wrapped {"0,63,4" "grass_block"} false) q))) "in view: still there")))
+
+(deftest fertilize-targets-need-sight
+  (let [grass {"0,64,4" "grass_block" "0,65,4" "air"}
+        wheat {"0,64,4" "wheat"}
+        raw (fn [w args] (fertilize/raw-targets (job-ctx w (assoc args :radius 8))))]
+    (is (= [] (raw (wrapped grass true) {:at cell :grass true})) "behind stone: grass unknown")
+    (is (= [cell] (raw (wrapped grass false) {:at cell :grass true})))
+    (is (= [] (raw (wrapped grass true) {:grass true})) "open-grass scan skips what is unseen")
+    (is (= [cell] (raw (wrapped grass false) {:grass true})))
+    (is (= [] (raw (wrapped wheat true {:ages {cell 1}}) {:at cell})) "behind stone: crop unknown")
+    (is (= [cell] (raw (wrapped wheat false {:ages {cell 1}}) {:at cell})))
+    (is (= [] (raw (wrapped wheat true {:ages {cell 1}}) {})) "crop scan skips what is unseen")
+    (is (= [cell] (raw (wrapped wheat false {:ages {cell 1}}) {})))))
+
+(deftest compost-composter-needs-sight
+  (let [blocks {"0,64,4" "composter"}
+        at (fn [w args] (with-redefs [compost/composter-allowed? (constantly true)]
+                          (compost/composter-at (job-ctx w (assoc args :radius 8)))))]
+    (is (nil? (at (wrapped blocks true) {:at cell})) "behind stone: not seen as a composter")
+    (is (= cell (at (wrapped blocks false) {:at cell})) "in view: used")))
+
+(deftest apiary-maintain-unsafe-fires-need-sight
+  (let [blocks {"0,65,4" "beehive" "0,63,4" "campfire"}
+        fire {:x 0 :y 63 :z 4}
+        unsafe (fn [w] (apiary-maintain/unsafe-fires (apiary/seen-block-at-fn w) [{:x 0 :y 65 :z 4}]))
+        extra {:states {fire {:lit true}}}]
+    (is (= [] (unsafe (wrapped blocks true extra))) "unseen fire: nothing smoking the hive")
+    (is (= [fire] (unsafe (wrapped blocks false extra))) "seen open fire")))
