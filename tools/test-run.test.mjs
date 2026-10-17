@@ -34,7 +34,7 @@ test('watchStall: fires once when the file stops growing, not before the run has
   fs.writeFileSync(f, '')
   t.after(() => fs.rmSync(f, { force: true }))
   let fired = 0, clock = 0
-  const stop = watchStall(f, 10, () => fired++, { pollMs: 5, now: () => clock })
+  const stop = watchStall(f, 10, () => fired++, { pollMs: 5, now: () => clock, firstS: 0 })
   const tick = (ms) => new Promise((r) => setTimeout(r, ms))
   clock = 100000; await tick(30)
   assert.equal(fired, 0, 'an empty file means node has not started')
@@ -51,13 +51,29 @@ test('watchStall: fires once when the file stops growing, not before the run has
   stop()
 })
 
+test('watchStall: before any test has finished the longer first-result limit applies', async (t) => {
+  const f = `/tmp/test-run-first-${process.pid}`
+  fs.writeFileSync(f, '{"started":1}\n')
+  t.after(() => fs.rmSync(f, { force: true }))
+  let fired = 0, clock = 0
+  const stop = watchStall(f, 10, () => fired++, { pollMs: 5, now: () => clock, firstS: 100 })
+  const tick = (ms) => new Promise((r) => setTimeout(r, ms))
+  await tick(30)
+  clock += 50000; await tick(30)
+  assert.equal(fired, 0, 'past the stall limit but inside the first-result limit')
+  fs.appendFileSync(f, '{"var":"#\'a-test/x","ms":4}\n'); await tick(30)
+  clock += 11000; await tick(30)
+  assert.equal(fired, 1, 'after a test finished the normal limit applies')
+  stop()
+})
+
 test('watchStall kills a CPU-spinning node that finished nothing (the parent is not blocked)', async (t) => {
   const f = `/tmp/test-run-spin-${process.pid}`
   fs.writeFileSync(f, '{"started":1}\n')
   t.after(() => fs.rmSync(f, { force: true }))
   const child = spawn('node', ['-e', 'for (;;);'], { stdio: 'ignore' })
   const exit = new Promise((r) => child.on('exit', (c, sig) => r(sig)))
-  const stop = watchStall(f, 0.2, () => killTree(child.pid), { pollMs: 50 })
+  const stop = watchStall(f, 0.2, () => killTree(child.pid), { pollMs: 50, firstS: 0 })
   assert.equal(await exit, 'SIGTERM')
   stop()
 })

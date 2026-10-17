@@ -27,7 +27,7 @@ touch compiling; while [ -n "$HOLD" ] && [ ! -e go ]; do sleep 0.05; done
 exit 0
 `, { mode: 0o755 })
   fs.writeFileSync(path.join(res, 'cfg.json'), JSON.stringify({ floorMb: 0, kinds: { server: { needMb: 1, max: 1 } } }))
-  const env = { PATH: `${bin}:${process.env.PATH}`, MC_COMPILE_LOCK: path.join(T, 'lock'), MC_COMPILE_QUEUE: path.join(T, 'queue'), MC_COMPILE_MIN_START_MB: '0', RES_SLOT_DIR: res, RES_SLOT_CONFIG: path.join(res, 'cfg.json'), RES_SLOT_MAX_WAIT_MS: '1500', RES_SLOT_POLL_MS: '200' }
+  const env = { PATH: `${bin}:${process.env.PATH}`, MC_COMPILE_LOCK: path.join(T, 'lock'), MC_COMPILE_QUEUE: path.join(T, 'queue'), MC_COMPILE_MIN_START_MB: '0', MC_COMPILE_POOL_SIZE: '0', MC_COMPILE_POOL_DIR: path.join(T, 'pool'), RES_SLOT_DIR: res, RES_SLOT_CONFIG: path.join(res, 'cfg.json'), RES_SLOT_MAX_WAIT_MS: '1500', RES_SLOT_POLL_MS: '200' }
   t.after(() => {
     for (const d of [main, wt]) { try { process.kill(Number(fs.readFileSync(path.join(d, 'dashboard/.shadow-cljs/server.pid'), 'utf8'))) } catch {} }
     fs.rmSync(T, { recursive: true, force: true })

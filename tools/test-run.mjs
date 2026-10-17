@@ -40,6 +40,8 @@ export const needMb = (nsCount, tests) => Math.min(tests.needMb, tests.baseMb + 
 // A hung test stops the timings file growing (one line per finished test, one {"started"} line at load), so the run is killed when it stalls, not after a whole-run time.
 // Floor, because a test may legitimately idle (waits, loaded machine); k x the slowest prior test of the requested namespaces when timings exist.
 export const STALL_FLOOR_S = 90, STALL_K = 10
+// Until the first test finishes the run is still loading (bundle, setup, a long first test under machine load), so it gets this longer limit.
+export const FIRST_RESULT_S = 300
 export const slowestPriorMs = (nss, lines) => {
   const want = new Set(nss)
   return lines.filter(Boolean).map((l) => { try { return JSON.parse(l) } catch { return {} } })
@@ -48,14 +50,15 @@ export const slowestPriorMs = (nss, lines) => {
 }
 export const stallLimitS = (slowestMs, floor = STALL_FLOOR_S, k = STALL_K) => Math.max(floor, Math.round(k * slowestMs / 1000))
 
-// Polls the timings file; once the node run has started (non-empty file) and the file has not grown for limitS, calls onStall() once. Returns stop().
-export const watchStall = (file, limitS, onStall, { pollMs = 2000, now = Date.now } = {}) => {
-  let size = 0, since = null, fired = false
+// Polls the timings file; once the node run has started (non-empty file) and the file has not grown for limitS
+// (firstS, if longer, until a test has finished), calls onStall() once. Returns stop().
+export const watchStall = (file, limitS, onStall, { pollMs = 2000, now = Date.now, firstS = FIRST_RESULT_S } = {}) => {
+  let size = 0, since = null, fired = false, anyTest = false
   const timer = setInterval(() => {
     let cur
     try { cur = fs.statSync(file).size } catch { return }
-    if (cur !== size) { size = cur; since = now(); return }
-    if (since === null || fired || now() - since < limitS * 1000) return
+    if (cur !== size) { size = cur; since = now(); anyTest = anyTest || fs.readFileSync(file, 'utf8').includes('"var"'); return }
+    if (since === null || fired || now() - since < (anyTest ? limitS : Math.max(limitS, firstS)) * 1000) return
     fired = true; clearInterval(timer); onStall()
   }, pollMs)
   return () => clearInterval(timer)
