@@ -113,6 +113,22 @@
           (is (= #{[-1 64 0] [-1 65 0]} (set (cells-of p "dig"))))
           (is (= #{[0 64 0] [0 65 0]} (set (cells-of p "place")))))))))
 
+(def mid-room
+  "A 7x7 room (x, z -3..3, y 64..65) in solid stone: no rock beside the body at its centre, the walls 4 blocks off."
+  (into {} (for [x (range -8 9) y (range 62 68) z (range -8 9)
+                 :when (not (and (<= -3 x 3) (<= -3 z 3) (<= 64 y 65)))]
+             [(ct/key-of x y z) "stone"])))
+
+(deftest a-pocket-mid-room-walks-to-a-wall-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (plug! {:blocks mid-room :inventory pick :entities [(ct/zombie -3 64 0)]} {:ways #{:pocket}}))
+              [x _ z] (mapv js/Math.floor (:pos (fake/self p)))]
+          (is (= [:done :pocket] [(:kind out) (:way (:data out))]))
+          (is (<= 3 (max (js/Math.abs x) (js/Math.abs z))) "a pocket in a wall 3 blocks from the room's centre")
+          (is (= 2 (count (cells-of p "dig")))))))))
+
 (deftest a-body-already-enclosed-is-done-before-anything-is-placed
   (async done
     (tu/run-async done
@@ -147,7 +163,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (plug! {:blocks room :inventory (into cobble pick)} {}))]
+        (let [{:keys [out p]} (await (plug! {:blocks room :inventory (into cobble pick)} {:ways #{:walls :pit}}))]
           (is (= [:done :pit] [(:kind out) (:way (:data out))]) "sixteen walls cost more than a pit")
           (is (= [0 63 0] (first (cells-of p "dig")))))))))
 
