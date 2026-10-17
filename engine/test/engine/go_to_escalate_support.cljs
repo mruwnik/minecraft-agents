@@ -163,8 +163,8 @@
     (every? #(> (:seq %) last-esc) (concat (events-of seen :go-to.restored) (events-of seen :go-to.restore-skipped)))))
 
 (def deep-shaft
-  "A 1x1 shaft 30 deep (feet at y 34) in solid dirt x -30..30, y 30..63, z -30..30."
-  (apply dissoc (box -30 30 -30 30 63 30 "dirt") (for [y (range 34 64)] (str "0," y ",0"))))
+  "A 1x1 shaft 30 deep (feet at y 34) in solid dirt x -8..38, y 30..63, z -6..6: room for 4 stairs east and the goals at x 10 and 30."
+  (apply dissoc (box -8 30 -6 38 63 6 "dirt") (for [y (range 34 64)] (str "0," y ",0"))))
 
 (def own-pit-wall
   "The pit's dirt walls as a plan this body made (a hut's walls)."
