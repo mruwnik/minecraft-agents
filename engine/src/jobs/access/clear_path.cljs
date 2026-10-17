@@ -42,7 +42,6 @@
 (a/defargs args
   {:heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
    :max-thick {:doc "the thickest wall it digs through, in blocks" :spec (a/int-in 0 nil) :default 3}
-   :note {:doc "a map: each cell dug is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!; go-to's escalation)" :spec map? :default nil}
    :ignore-zones? :shared
    :fetch {:doc "get a missing tool for the dig children with jobs.lib.need: true, a set of kinds or a map of limits; false waits :dig-waits" :spec need/option? :default true}
    :need-drop {:doc "false: dig a block no carried tool harvests bare-handed (slow, the drop is lost)" :spec boolean? :default true}
@@ -195,8 +194,7 @@
           (= :continue e) :continue
           (= :done (:kind e)) (do (done!)
                                   (when (:dug (:data e))
-                                    (ctx/update-mem! c update :dug conj {:cell cell :block block})
-                                    (when-let [tag (:note (:args c))] (escape/note-hole! c tag cell block)))
+                                    (ctx/update-mem! c update :dug conj {:cell cell :block block}))
                                   :again)
           (declined? e) (do (done!) (finish! c :dig-waits {:cell cell :block block :wait (wait-of e)}))
           :else (do (done!)

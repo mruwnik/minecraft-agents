@@ -404,8 +404,8 @@
   "Write cell, where block was dug, to the tidy ledger (jobs.lib.tidy, body memory) as a :dig entry with tag merged,
   the :zone, :claim or :plan it trespassed on, and :any-of, the items that put it back (the block or what it drops);
   only when another's zone, claim or plan covers the cell (the body's own diggings stay), it is air now and no tagged
-  entry is there yet (a plain one the dig itself noted is replaced). The :note arg of jobs.access.stair and
-  clear-path (go-to's escalations), so a cut or cancel leaves no hole unknown."
+  entry is there yet (a plain one the dig itself noted is replaced). The :note arg of jobs.access.stair
+  (go-to's escalation), so a cut or cancel leaves no hole unknown."
   [c tag cell block]
   (let [p (:primitives c)
         cell (vec cell)
