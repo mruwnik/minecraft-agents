@@ -11,7 +11,7 @@
 (def doc
   "Face a random point 3 blocks away (any yaw, from a block below to 1.5 above the body),
   write a :looked entry to body memory (a condition can read it: (since :looked)),
-  then wait :every-ms so an idle body does not spin.")
+  then wait :every-ms so an idle body does not spin. It only turns, so no hostile or dark makes it wait.")
 
 (a/defargs args
   {:every-ms {:doc "milliseconds to wait after each look" :spec (a/num-in 0 nil) :default 2000}})
@@ -25,7 +25,7 @@
 (a/defargs settings
   {::job-time-s {:default 60 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
-(def safe? ready/safe-here-by-night)
+(def safe? ready/ok)
 (def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})

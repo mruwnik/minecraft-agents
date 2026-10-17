@@ -8,6 +8,7 @@
             [jobs.debug.walk-plan :as walk-plan]
             [jobs.explore.look :as look]
             [jobs.explore.search :as search]
+            [jobs.movement.look-around :as look-around]
             [jobs.access.stair :as stair]
             [jobs.blocks.fill-cells :as fill-cells]
             [jobs.blocks.place :as place]
@@ -114,6 +115,9 @@
 
 (deftest a-look-reads-without-moving-and-does-not-wait-for-a-zombie
   (is (= :ok (first (look/safe? (ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}} :entities [zombie]}))))))
+
+(deftest a-look-around-only-turns-and-does-not-wait-for-a-zombie
+  (is (= :ok (first (look-around/safe? (ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}} :entities [zombie]}))))))
 
 (deftest pick-up-loose-waits-while-a-zombie-is-near
   (is (= :later (first (pick-up-loose/safe? (ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}} :entities [zombie]}))))))
