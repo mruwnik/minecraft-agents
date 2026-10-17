@@ -193,3 +193,13 @@
               e (await (ending-of s 'jobs.items.obtain {:item "cobblestone" :count 4 :explore false} 120))]
           (is (= {:kind :nothing-possible :cause :unreachable} (kc e)))
           (is (re-find #"could not get to a source of" (get-in e [:cause :why]))))))))
+
+(deftest a-craft-from-carried-materials-beats-a-walk-to-a-chest-of-unknown-contents
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (update (f/bare [{:name "oak_planks" :count 2}]) :blocks assoc "14,64,0" "chest") [(assoc f/own-zone :min [-20 60 -20] :max [20 70 20])])
+              e (await (ending-of s 'jobs.items.obtain {:item "stick" :count 4 :explore false} 30))]
+          (is (= :done (:kind e)))
+          (is (= 4 (get-in e [:data :got])))
+          (is (empty? (f/events-of s :obtain.chest)) "no walk to the chest"))))))

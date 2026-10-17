@@ -176,6 +176,17 @@
        (way? c :chest)
        (empty? (candidates c names))))
 
+(def near-chest "Blocks within which a chest not yet looked in is worth the walk even when a craft would do." 10)
+
+(defn chests-to-try
+  "The candidates, minus the unlooked-in far ones when a chain from what is carried makes the need: crafting now is
+  cheaper than a long walk to a chest that may not hold it."
+  [c m names n]
+  (let [cs (candidates c names)]
+    (if (and (makes? c) (not (get-in m [:tried :craft])) (craft-plan c names n))
+      (filter #(or (:stock %) (u/within? (u/self-pos c) (:pos %) near-chest)) cs)
+      cs)))
+
 (defn ^:async step! [c]
   (let [a (:args c)
         names (names-of a)
@@ -199,8 +210,9 @@
         (cond
           (get-in m [:gather :tree]) (await (finish-tree! c))
           (>= have target) (ctx/end c :done nil {:got got :item (held-name inv names)})
-          (and (way? c :chest) (not (get-in m [:tried :chest])))
-          (let [cs (candidates c names)
+          (and (way? c :chest) (not (get-in m [:tried :chest]))
+               (or (seq (chests-to-try c m names (- target have))) (not (seq (candidates c names)))))
+          (let [cs (chests-to-try c m names (- target have))
                 known (first (filter :stock cs))
                 unknown (first (remove :stock cs))]
             (cond
