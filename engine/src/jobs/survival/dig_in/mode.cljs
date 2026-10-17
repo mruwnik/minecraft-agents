@@ -4,6 +4,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
             [jobs.lib.choose :as choose]
+            [jobs.lib.tools :as tools]
             [jobs.lib.shelter :as sh]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.dig-in.site :as site]
@@ -15,6 +16,24 @@
   [c]
   (let [used (ctx/use c :blocks)]
     (if (seq used) used (choose/fillers :shelter))))
+
+(def place-s
+  "Seconds one wall block takes to place. The dig back at dawn is daylight work, so only the night's seconds are priced."
+  0.5)
+
+(defn recoverable-walls-s
+  "Night seconds to wall in cells with a carried block worth more than the call's :wall-value (taken back at dawn, so not
+  spent): placing each. nil when fewer than cells are carried."
+  [c cells]
+  (let [dear (remove (set (choose/cheap-blocks (blocks c) (:wall-value (:args c)))) (blocks c))]
+    (when (some #(>= (:count %) (count cells)) (lb/carried c dear))
+      (* (count cells) place-s))))
+
+(defn pit-s
+  "Seconds the pit's cells take to dig with the best carried tool or the hand."
+  [c pit]
+  (let [p (:primitives c)]
+    (/ (reduce + (map #(tools/clear-ms p (dig-cells/rock-name p %)) (concat (:prep pit) (mapcat :dig (:steps pit))))) 1000)))
 
 (defn mode-choice
   "[mode refusal] for the shelter from start: the first of :plug (only with a room-plug cell), :walls (only when
@@ -57,12 +76,14 @@
             enclose (:enclose (:args c))
             found (when-not enclose (await (pit/plan-of! c (blocks c))))
             pit (when-not (:stop found) found)
+            recoverable (when pit (recoverable-walls-s c cells))
+            take-back-walls? (and recoverable (< recoverable (pit-s c pit)))
             plug (when (and (pos? have) (not enclose)) (dig-cells/room-plug p start (:roof-height (:args c))))
             spared (when pit (spared-cell c pit))
             [chosen refusal] (if enclose
                                [(if (>= have (count cells)) :walls :no-blocks)
                                 (some #(access/trespass-refusal (access/rules-input c) :place %) cells)]
-                               (mode-choice c start cells (or (>= cheap (count cells)) (and (nil? pit) (>= have (count cells)))) pit plug))]
+                               (mode-choice c start cells (or (>= cheap (count cells)) take-back-walls? (and (nil? pit) (>= have (count cells)))) pit plug))]
         (access/trespass! c "dig-in" refusal)
         (cond
           (= :no-blocks chosen) (ctx/update-mem! c assoc :mode :no-blocks)

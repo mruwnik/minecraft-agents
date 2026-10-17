@@ -63,7 +63,7 @@
   Every end with no roof over the body leaves a :dig-in-futile {:pos :reason} entry,
   and the start declines while one lies within 8 blocks. An entry with no :reason (a lack of blocks or tools)
   is retried once blocks are carried or a carried tool harvests the block.
-  Walls need blocks worth at most :wall-value each; dearer ones (logs, planks) wall the body in only when no pit can be dug.
+  Walls need blocks worth at most :wall-value each; dearer ones (logs, planks) are taken back at dawn, so they wall the body in when placing them takes less time than the pit's digging, else only when no pit can be dug.
   Events: dig-in.sealed when it placed blocks and the world shows the body shut in, with :spent {item count} (its text names them)
   (a warning when :resealed, meaning the latest :shelter entry was already at this cell),
   else dig-in.unsealed (warning) naming the cells still open.
@@ -78,7 +78,7 @@
 
 (a/defargs args
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh/default-roof-height}
-   :wall-value {:doc "a block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85, stone 2.85, planks 3.4, log 12.8) walls the body in only when no pit can be dug" :spec (a/num-in 0 nil) :default 3}
+   :wall-value {:doc "a block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85, stone 2.85, planks 3.4, log 12.8) walls the body in only when placing them (taken back at dawn) is quicker than the pit, or no pit can be dug" :spec (a/num-in 0 nil) :default 3}
    :take-back-value {:doc "a placed block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85) is dug again and collected when the shelter is left by day" :spec (a/num-in 0 nil) :default 0.5}
    :max-places {:doc "placements per step" :spec (a/int-in 1 nil) :default 4}
    :hand-clear-ms {:doc "a block the carried tools cannot harvest is dug by hand, once a block to roof with is in hand, when the hand breaks it within this many ms (stone by hand takes 7500)" :spec (a/int-in 0 nil) :default 10000}

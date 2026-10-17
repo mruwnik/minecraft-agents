@@ -53,20 +53,20 @@
           (is (= {"oak_log" (get (placed p) "oak_log")} (:spent ev)))
           (is (re-find #"oak_log" (:text ev))))))))
 
-(deftest a-body-with-only-logs-and-no-tool-digs-a-pit-by-hand
+(deftest a-body-with-only-logs-and-no-tool-walls-in-at-once-when-the-pit-takes-longer-by-hand
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p]} (await (run-dig! {:inventory [logs] :blocks st/floor}))]
-          (is (seq (st/calls p "dig")))
-          (is (<= (get (placed p) "oak_log" 0) 1) (pr-str (placed p))))))))
+          (is (empty? (st/calls p "dig")))
+          (is (pos? (get (placed p) "oak_log" 0)) (pr-str (placed p))))))))
 
-(deftest the-night-handler-digs-by-hand-with-only-logs
+(deftest the-night-handler-walls-in-with-logs-it-takes-back-when-no-tool-digs-slower
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time st/night :inventory [logs] :blocks st/floor})]
           (core/submit! eng '(jobs.survival.night) {})
           (await (run-until-empty eng 40))
-          (is (seq (st/calls p "dig")))
-          (is (<= (get (placed p) "oak_log" 0) 1) (pr-str (placed p))))))))
+          (is (empty? (st/calls p "dig")))
+          (is (pos? (get (placed p) "oak_log" 0)) (pr-str (placed p))))))))
