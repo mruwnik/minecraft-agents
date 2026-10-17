@@ -1,5 +1,6 @@
 ;; Card eda1e677 (af7aaa87): jobs.explore.search queries each target name separately, so a common name does not fill the
-;; 64-block scan cap and hide a rare one. 70 hay bales (x 1..7, z 1..5, y 0..1; visible, nearest) and one gold block at [28 0 28]
+;; 64-block scan cap and hide a rare one. 72 hay bales in one layer (x 1..9, z 1..8, y 0: every bale shows its top; two stacked
+;; layers would hide the inner lower bales from a body that sees like a player, leaving under 64) and one gold block at [28 0 28]
 ;; (both within :scan-radius 24 of the body); :count 65 is only reached with 64 hay plus the gold block, never with the old
 ;; shared cap (64 hay alone).
 ;; Should-succeed: both found, search.done :found at the origin (no legs walked). Should-fail: no target in range ends
@@ -11,7 +12,7 @@
   :limit-s 60}
  :cases
  [{:name "abundant-target-does-not-hide-a-single-one"
-   :blocks [[:fill [1 0 1] [7 1 5] "hay_block"] [:set [28 0 28] "gold_block"]]
+   :blocks [[:fill [1 0 1] [9 0 8] "hay_block"] [:set [28 0 28] "gold_block"]]
    :act [[:job (jobs.explore.search {:target ["hay_block" "gold_block"] :count 65 :max-legs 2})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 40 :of-job true :until {:source :job :kind :completed}}]}
