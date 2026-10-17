@@ -80,14 +80,18 @@
 (def far-ground (into {} (for [x (range 0 71) z (range -2 3) y [62 63]] [(str x "," y "," z) "stone"])))
 (def breach {:dim "overworld" :at {:x 57 :y 63 :z 0} :names ["air" "lava"] :cells [[60 63 0] [62 63 0]]})
 
+(def sealed-breach
+  {:dim "overworld" :at [62 63 1] :names ["air" "lava"] :cells [[62 63 0]] :lava [[62 63 0]] :seals [[62 63 1]]})
+
 (defn ^:async obtain-remembering
   "make-obsidian with a water bucket, on w, with a :breach-behind entry in memory."
-  [w]
+  ([w] (obtain-remembering w breach))
+  ([w entry]
   (let [{:keys [eng p]} (lt/setup w)]
-    (mem/write! (:store eng) :breach-behind breach)
+    (mem/write! (:store eng) :breach-behind entry)
     {:res (await (tu/child-outcome eng 'jobs.gather.make-obsidian {:count 1 :radius 24} 600))
      :p p
-     :left (mem/entries (mem/view (:store eng)) :breach-behind)}))
+     :left (mem/entries (mem/view (:store eng)) :breach-behind)})))
 
 (deftest lava-beyond-sight-is-walked-to-from-a-breach-memory-and-made-obsidian
   (async done
@@ -97,6 +101,16 @@
           (is (= :done (:status res)) (pr-str res))
           (is (= 1 (carried p "obsidian")))
           (is (empty? left) "the entry is forgotten once looked at"))))))
+
+(deftest the-seal-over-remembered-lava-is-dug-so-the-lava-is-seen-and-made-obsidian
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res p left]} (await (obtain-remembering (world (assoc far-ground "62,63,0" "lava") [pick {:name "water_bucket" :count 1}]) sealed-breach))]
+          (is (= :done (:status res)) (pr-str res))
+          (is (= "air" (.-name (.blockAt p #js {:x 62 :y 63 :z 1}))) "the seal the mine placed is dug")
+          (is (= 1 (carried p "obsidian")))
+          (is (empty? left)))))))
 
 (deftest remembered-lava-that-is-gone-is-forgotten-and-ends-no-lava
   (async done

@@ -86,7 +86,11 @@
       {:names (vec (sort (distinct (map (fn [[x y z]] (name-at {:x x :y y :z z})) cells)))) :cells (vec cells)})))
 
 (defn remember-behind!
-  "Keep what a breach showed in body memory (:breach-behind: dim, the breach cell at, names, cells), for jobs that look for caves or lava."
-  [c at b]
+  "Keep what a breach showed in body memory (:breach-behind: dim, the breach cell at, names, cells, the lava cells among them, the sealed breach
+  cells), for jobs that look for caves or lava."
+  [c at b name-at seals]
   (when b
-    (ctx/remember! c :breach-behind (assoc b :dim (.-dimension (.self (:primitives c))) :at at) behind-policy)))
+    (ctx/remember! c :breach-behind
+                   (assoc b :dim (.-dimension (.self (:primitives c))) :at at :seals (mapv (juxt :x :y :z) seals)
+                          :lava (filterv (fn [[x y z]] (= "lava" (name-at {:x x :y y :z z}))) (:cells b)))
+                   behind-policy)))

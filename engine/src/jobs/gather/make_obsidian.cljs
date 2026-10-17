@@ -8,7 +8,10 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
+            [jobs.lib.access :as access]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
+            [jobs.lib.tidy :as tidy]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.shore :as shore]
@@ -17,7 +20,7 @@
 (def doc
   "Get :count obsidian by pouring water on a seen lava source and mining the result with a diamond pickaxe.
   Takes seen obsidian first (jobs.gather.mine). Else it needs a water bucket carried (an empty bucket is filled at seen water; no bucket at all is fetched, :fetch) and a seen
-  lava cell with seen air above it (with none seen, it walks to the cells a sealed mine breach showed lava at, body memory :breach-behind, looks again and forgets the entry), a clickable air cell to pour at (that one, or one level with it and beside it, the water then runs over) and a stand cell beside the pour cell (a standable cell with no lava beside it, never over lava):
+  lava cell with seen air above it (with none seen, it walks to the cells a sealed mine breach showed lava at, body memory :breach-behind, digs the seal the mine placed there from at least 2 blocks off, looks again and forgets the entry), a clickable air cell to pour at (that one, or one level with it and beside it, the water then runs over) and a stand cell beside the pour cell (a standable cell with no lava beside it, never over lava):
   it walks to the stand (go-to, which keeps off lava), pours the water there, waits for the lava to turn to obsidian,
   scoops the water back up (also in the cleanup of a cut run), and mines the obsidian (a mine child, which fetches its pickaxe from a chest or a craft).
   Ends :done {:got n} at :count obsidian gained. Else it ends with :got n in its data: condition-failed :no-bucket (no water bucket and no bucket
@@ -121,15 +124,40 @@
       (and (= :done (:kind e)) (:leg (:data e))) :continue
       :else :blocked)))
 
-(defn ^:async visit-breach!
-  "No lava is seen: walk to within 4 of the nearest remembered breach cell, then forget the entry, whatever the walk did (remembered
-  lava is stale; if it is still there the next step sees it). :again, or :continue while the walk waits."
+(defn cell-of [v] (if (map? v) v (zipmap [:x :y :z] v)))
+
+(defn seal-cell
+  "The entry's own seal cell (memory :seals, else the breach cell :at) that is a solid block now, can be dug (zones, hazards beyond lava and water
+  beside it taken as known) and is in reach but not beside the body, so lava let out cannot reach the stand at once; nil when none."
   [c entry]
-  (let [[x y z] (first (:cells entry))
-        w (await (walk! c {:x x :y y :z z} 4))]
+  (let [p (:primitives c)
+        here (u/self-pos c)
+        in (b/rules-in c)]
+    (->> (or (seq (:seals entry)) [(:at entry)])
+         (keep #(some-> % cell-of))
+         (filter #(and (solid? p %)
+                       (<= 2 (u/dist here %) 4.5)
+                       (= :ok (access/judge (access/may-dig? in %) [:lava-adjacent :fluid-adjacent]))))
+         first)))
+
+(defn ^:async open-seal!
+  "Dig the seal of a breach entry the body stands near, and look through the hole, so the lava behind it is seen. Nothing when no seal qualifies."
+  [c entry]
+  (when-let [seal (seal-cell c entry)]
+    (when (= "dug" (.-status (await (tidy/dig! c seal))))
+      (await (dig-look/look-at! c (vec (first (or (seq (:lava entry)) (:cells entry)))))))))
+
+(defn ^:async visit-breach!
+  "No lava is seen: walk to within 4 of the nearest remembered breach lava cell and dig the seal the mine placed there, so the lava is
+  seen; then forget the entry, whatever the walk did (remembered lava is stale; if it is still there the next step sees it).
+  :again, or :continue while the walk waits."
+  [c entry]
+  (let [target (cell-of (first (or (seq (:lava entry)) (:cells entry))))
+        w (await (walk! c target 4))]
     (if (= :continue w)
       :continue
-      (do (ctx/forget-where! c :breach-behind #(= entry %))
+      (do (when (= :there w) (await (open-seal! c entry)))
+          (ctx/forget-where! c :breach-behind #(= entry %))
           :again))))
 
 (defn ^:async fill-bucket!

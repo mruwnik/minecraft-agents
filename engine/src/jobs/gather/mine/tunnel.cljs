@@ -189,7 +189,7 @@
             open (when (:stay-level args) (seq (stay/breaches name-at from cut own)))]
         (if open
           (let [b (stay/behind name-at from cut own open)]
-            (stay/remember-behind! c (access/cell (first open)) b)
+            (stay/remember-behind! c (access/cell (first open)) b name-at open)
             (ctx/update-mem! c assoc :behind b)
             (end! c (if (await (stay/seal! c (rules-in c) open)) :breach-sealed :breach-open) (first open) next))
           (do (ctx/update-mem! c #(-> % (update-in [:tunnel :steps] inc) (assoc :looked next)))
