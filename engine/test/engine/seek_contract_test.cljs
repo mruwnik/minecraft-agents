@@ -60,14 +60,14 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :completed}
-               (select-keys (await (fight {:targets [7] :lost-s 1} {:inventory h/sword :entities [(zed 7 2)]})) [:event])))))))
+               (select-keys (await (fight {:targets [7]} {:inventory h/sword :entities [(zed 7 2)]})) [:event])))))))
 
 (deftest a-target-given-up-on-is-nothing-possible
   (async done
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :stopped :kind :nothing-possible :reason :gave-up}
-               (await (fight {:targets [7] :lost-s 1 :no-damage-hits 2}
+               (await (fight {:targets [7] :no-damage-hits 2}
                              {:inventory h/sword :entities [(zed 7 2 {:invulnerable true})]}))))))))
 
 (deftest no-target-at-all-is-a-failed-condition

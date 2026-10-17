@@ -5,7 +5,6 @@
             [engine.block-arrow-gap-test :as gt]
             [engine.contract :as contract]
             [engine.core :as core]
-            [engine.expr :as expr]
             [engine.extinguish-test :as et]
             [engine.hostile-test :as h]
             [engine.registry :as registry]
@@ -14,7 +13,6 @@
             [jobs.survival.block-arrow-gap :as gap]
             [jobs.survival.extinguish :as extinguish]
             [engine.settings :as settings]
-            [jobs.survival.fight-back :as fight-back]
             [jobs.survival.respond-to-hostile :as respond]
             [jobs.survival.sleep :as sleep]))
 
@@ -42,9 +40,6 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[_ args] (expr/leaf registry/jobs 'jobs.survival.fight-back {:hold true})
-              e (await (fight-back/step (hold-ctx args {:held-since 0 :start {:x 0 :y 64 :z 0}})))]
-          (is (= [:nothing-possible :hold-timeout] [(:kind e) (contract/cause-key e)])))
         (let [e (await (sleep/hold! (hold-ctx {} {:held-since 0}) {:reason :bed-occupied :pos [1 64 0]}))]
           (is (= [:nothing-possible :bed-occupied] [(:kind e) (contract/cause-key e)])))))))
 

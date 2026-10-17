@@ -14,11 +14,11 @@
   "Equip the best weapon, walk up to the nearest hostile within :range and hit it, at most one swing per :attack-gap-ms (nil: the held weapon's cooldown).
   Only a hostile the body has seen is fought: one only heard is judged by its direction and band (jobs.lib.danger), never
   walked to or hit. With only heard mobs in range it does not start (:no-target); one that goes unseen mid-fight is turned toward and the job declines, so the retreat takes over.
-  With :hold the body stays where it is: a melee hostile beyond reach is waited for, 15 s at most, then the job declines (a ranged one is still walked up to).
+  With :hold the body stays where it is: a melee hostile beyond reach is waited for (the call's spend ends the wait) (a ranged one is still walked up to).
   A ranged hostile farther than ::ranged-chase (6) is not walked to while another is in range (the job declines).
   A hostile more than :leash blocks from the point the job started at is not chased: with none other in range the job is not started (:no-target); one that falls past the leash mid-fight ends the job as a decline, so the retreat takes over.
   Done (:already before the start) when no hostile is within :range, with the result {:killed [ids]}.
-  Every other ending is a decline, so the retreat takes over: :nothing-possible with the cause :hold-timeout (the :hold wait ran out), :too-far, :heard-only, :given-up;
+  Every other ending is a decline, so the retreat takes over: :limit-reached (a held wait that ran out the call's time), :nothing-possible with the cause :too-far, :heard-only, :given-up;
   its data are {:killed :struck :memory}, the job memory as it ended.
   The weapons are the call's :use :tools (default the weapons carried).
   A hostile the walk toward is blocked for three times is given up on, with a fight_unreachable warning, and no longer counts,
@@ -152,12 +152,6 @@
   "Bound of one walk toward the mob: it moves, so the walk aims again at where it is now this often."
   10)
 
-(def hold-limit-ms "How long a held body waits for a mob that does not come before the fight declines (the retreat takes over)." 15000)
-
-(defn held-too-long? [c]
-  (when-let [since (:held-since (ctx/mem c))]
-    (> (- (ctx/now c) since) hold-limit-ms)))
-
 (def chase-gap-ms "How long a held body waits for a mob to come before it looks again." 200)
 
 (defn ^:async swing!
@@ -169,8 +163,7 @@
         hold? (and (:hold (:args c)) (not (combat/ranged? target)))
         r (cond
             (not far?) :there
-            hold? (do (ctx/update-mem! c update :held-since #(or % (ctx/now c)))
-                      (await (combat/wait-gap! c (ctx/now c) chase-gap-ms))
+            hold? (do (await (combat/wait-gap! c (ctx/now c) chase-gap-ms))
                       :held)
             :else (await (near/go-near! c tpos 2 {:spend {:job-time chase-timeout-s} :dangers false :ways #{:walk :clear-seal} :look-round false})))]
     (when (= :blocked r) (note-blocked! c target))
@@ -204,7 +197,6 @@
         last-attack (:last-attack (ctx/mem c))]
     (when-not (:start (ctx/mem c)) (ctx/update-mem! c assoc :start (u/self-pos c)))
     (cond
-      (held-too-long? c) (declined c :nothing-possible :hold-timeout)
       (and target (too-far-to-chase? c target)) (declined c :nothing-possible :too-far)
       (and last-attack (< (.-health (.self p)) (:health0 (ctx/mem c)))) :continue
       (nil? target) (if-let [heard (first (remove danger-q/seen-only? (in-range c)))]

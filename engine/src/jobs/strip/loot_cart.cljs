@@ -109,7 +109,7 @@
 (defn ^:async break-cart!
   "Attack the cart until it is gone: :broken, :continue (the child waits) or :cannot-break."
   [c id]
-  (let [r (await (child/run!* c :break 'jobs.combat.attack {:targets [id] :radius 8 :lost-s 0}))]
+  (let [r (await (child/run!* c :break 'jobs.combat.attack {:targets [id] :radius 8}))]
     (cond
       (= :continue r) :continue
       (empty? (filter #(= id (:id %)) (carts c))) :broken

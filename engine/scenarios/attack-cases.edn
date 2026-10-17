@@ -26,7 +26,7 @@
 ;; -- case from live-ProbeAttack-6
 ;; ;; ProbeAttack live case: ProbeDummy by username; it respawns on the pad and is left alone
 ;; {:register []
-;;  :queue [(hold (jobs.combat.attack {:targets "ProbeDummy" :lost-s 15}))
+;;  :queue [(hold (jobs.combat.attack {:targets "ProbeDummy"}))
 ;;          (repeat (jobs.movement.look-around))]}
 ;; -- case from live-ProbeAttack-7
 ;; ;; ProbeAttack live case: an entity id that does not exist (should decline)

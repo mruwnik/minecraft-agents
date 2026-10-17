@@ -57,14 +57,14 @@
    :blocks [[:fill [20 0 20] [24 3 24] "glass" :hollow]]
    :act [[:summon "zombie" [22.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "zombie"} 10]
-         [:job (jobs.combat.attack {:targets "zombie" :lost-s 3})]]
+         [:job (jobs.combat.attack {:targets "zombie"})]]
    :expect [{:event {:source :job :kind :attack.gave-up :data {:reason :unreachable}} :within-s 90 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :gave-up :killed []}} :within-s 100 :of-job true}]
    :after [[:entities "type=zombie,tag=wt" [[20 0 20] [24 3 24]] 1]]}
   {:name "invulnerable-zombie-given-up-no-damage"
    :act [[:summon "zombie" [12.5 0 12.5] "{NoAI:1b,Invulnerable:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "zombie"} 10]
-         [:job (jobs.combat.attack {:targets "zombie" :lost-s 3})]]
+         [:job (jobs.combat.attack {:targets "zombie"})]]
    :expect [{:event {:source :job :kind :attack.gave-up :data {:reason :no-damage}} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :gave-up :killed []}} :within-s 90 :of-job true}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 3 31]] 1]]}

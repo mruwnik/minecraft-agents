@@ -5,7 +5,6 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
-            [jobs.lib.child :as child]
             [jobs.lib.combat :as combat]
             [jobs.lib.look :as look]
             [jobs.lib.vantage :as vantage]
@@ -35,11 +34,11 @@
   A kill counts only when the attack reports killed. A killed target or player is not attacked again in this run,
   even after respawning.
   Ends with the data {:reason :killed [ids] :given-up {id reason}}; the ending is
-  - :done (:cleared): no target within :radius for :lost-s (waiting in 1 s steps), and every target seen was killed.
+  - :done (:cleared): every target seen was killed and none is within :radius.
   - :nothing-possible :gave-up: every target seen was killed or given up on, and one was given up on.
   - :nothing-possible :lost: some target was neither killed nor given up on.
   - :limit-reached: the engine's limit (default :spend :job-time ::job-time-s) ends it, with the same data (done?'s :data).
-  - :condition-failed :absent: no target was present after a 2 s grace for the world's entities to arrive, a look round and, for a target heard but not seen, up to four steps toward the sound (jobs.lib.vantage).
+  - :condition-failed :absent: no target was present after a look round and, for a target heard but not seen, up to four steps toward the sound (jobs.lib.vantage).
   :absent :done (the default) lets the job start and end with :absent, so {:targets [123 \"zombie\"]} is a one-shot order.
   :absent :wait makes the call wait (can-start? :no-target) until a target is present, so {:targets \"zombie\" :absent :wait} repeated is a standing guard.
   Creepers get no special handling. The job does not guard the body's health: the survival register sits above it and cuts it.")
@@ -48,7 +47,6 @@
   {:targets {:doc "entity ids, player usernames and mob types to kill; a single one may be given bare" :spec (a/or-of number? string? (a/coll-of (a/or-of number? string?))) :default []}
    :radius {:doc "targets within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :attack-gap-ms {:doc "least time between swings; nil: the held weapon's cooldown" :spec (a/num-in 0 nil) :default nil}
-   :lost-s {:doc "seconds without a target in radius before the job is done" :spec (a/num-in 0 nil) :default 5}
    :no-damage-hits {:doc "swings in a row that do no damage before a target is given up on" :spec (a/int-in 1 nil) :default 4}
    :max-hits {:doc "hits without a kill before a target is given up on" :spec (a/int-in 1 nil) :default 40}
    :walk-timeout-s {:doc "bound of one walk towards a target" :spec (a/num-in 0 nil) :default 5}
@@ -65,10 +63,6 @@
 (def defaults {:spend {:job-time ::job-time-s} :use {:tools :attack} :checks {:safe? '(not (exposed))}})
 (def safe? ready/safe-if-lit)
 (def fit? ready/fit?)
-
-(def absent-grace-ms
-  "How long a job that has seen nothing waits for the world's entities to arrive."
-  2000)
 
 (defn target-list
   "targets as a vector: nil is empty, a bare id or name is one target."
@@ -142,13 +136,12 @@
     {:reason reason :killed (vec (:killed m)) :given-up (:given-up m {})}))
 
 (defn done?
-  "Done once every target seen is killed and none is present for :lost-s; the data is the fight so far."
+  "Done once every target seen is killed and none is present; the data is the fight so far."
   [c]
-  (let [{:keys [killed seen last-seen]} (ctx/mem c)
+  (let [{:keys [killed seen]} (ctx/mem c)
         dead? (set killed)
         data [:units :targets :done (count killed) :left (count (remove dead? seen))]
-        cleared? (and (seq seen) (every? dead? seen) (empty? (present c))
-                      (>= (- (ctx/now c) last-seen) (* 1000 (:lost-s (:args c)))))]
+        cleared? (and (seq seen) (every? dead? seen) (empty? (present c)))]
     (if cleared?
       (apply contract/ok :cleared "every target is killed" (conj data :result (fight-data c :cleared)))
       (apply contract/later :fighting "the fight is on" (conj data :result (fight-data c :limit-reached))))))
@@ -269,7 +262,7 @@
       (ctx/end c :nothing-possible reason result))))
 
 (defn settled-reason
-  "How a run that saw nothing for :lost-s ends: :cleared when every target
+  "How a run that finds no target ends: :cleared when every target
   ever seen was killed, :gave-up when each was killed or given up on and one
   was given up on, else :lost."
   [c]
@@ -298,32 +291,23 @@
     (fail! c target))
   :again)
 
-(defn ^:async wait! [c ms]
-  (await (child/pause! c (/ ms 1000) :fight-wait))
-  :again)
-
 (defn ^:async step
-  "One step of the fight: end, wait, wait out the swing gap, or walk and swing once. :again or the ending."
+  "One step of the fight: end, look for a lost target, wait out the swing gap, or walk and swing once. :again or the ending."
   [c]
-  (let [now (ctx/now c)
-        {:keys [lost-s]} (:args c)]
-    (ctx/update-mem! c update :started #(or % now))
-    (let [{:keys [started seen last-seen]} (ctx/mem c)
-          targets (candidates c)]
-      (cond
-        (and (empty? targets) (seq (present c))) (finish! c :gave-up)
-        (and (empty? targets) (empty? seen)) (cond
-                                               (< (- now started) absent-grace-ms) (await (wait! c 500))
-                                               (await (look/survey-until! c #(seq (candidates c)))) :again
-                                               (await (vantage/step! c (heard c) #(seq (candidates c)))) :again
-                                               :else (finish! c :absent))
-        (empty? targets) (if (>= (- now (or last-seen started)) (* 1000 lost-s))
-                           (finish! c (settled-reason c))
-                           (await (wait! c 1000)))
-        :else (do (ctx/update-mem! c #(-> % (assoc :last-seen now) (update :seen (fnil into #{}) (mapv (fn [e] (.-id e)) targets))))
-                  (if (combat/within-gap? c)
-                    (do (await (combat/wait-gap! c (:last-attack (ctx/mem c)) (combat/gap-ms c))) :again)
-                    (await (engage! c (first targets)))))))))
+  (let [{:keys [seen]} (ctx/mem c)
+        targets (candidates c)
+        found? #(seq (candidates c))]
+    (cond
+      (and (empty? targets) (seq (present c))) (finish! c :gave-up)
+      (empty? targets) (cond
+                         (and (seq seen) (not= :lost (settled-reason c))) (finish! c (settled-reason c))
+                         (await (look/survey-until! c found?)) :again
+                         (await (vantage/step! c (heard c) found?)) :again
+                         :else (finish! c (if (empty? seen) :absent (settled-reason c))))
+      :else (do (ctx/update-mem! c update :seen (fnil into #{}) (mapv (fn [e] (.-id e)) targets))
+                (if (combat/within-gap? c)
+                  (do (await (combat/wait-gap! c (:last-attack (ctx/mem c)) (combat/gap-ms c))) :again)
+                  (await (engage! c (first targets))))))))
 
 (defn ^:async round
   "The whole fight: steps until the job finishes (cleared, gave up, lost, absent) or the engine's limit ends it."

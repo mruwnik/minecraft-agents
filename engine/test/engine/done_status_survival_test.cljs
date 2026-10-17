@@ -29,14 +29,13 @@
 
 (defn zombie [id x] (ft/zombie id x {}))
 
-(deftest attack-is-done-when-every-target-seen-is-killed-and-none-is-left-for-lost-s
-  (are [world m want] (= want (tu/kind-reason (done-of 'jobs.combat.attack world {:targets "zombie" :lost-s 5} m)))
+(deftest attack-is-done-when-every-target-seen-is-killed-and-none-is-left
+  (are [world m want] (= want (tu/kind-reason (done-of 'jobs.combat.attack world {:targets "zombie"} m)))
     {} {} [:later :fighting]
-    {} {:seen #{7} :killed [7] :last-seen 0} [:later :fighting]
-    {} {:seen #{7} :killed [7] :last-seen -9000} [:ok :cleared]
-    {} {:seen #{7 8} :killed [7] :last-seen -9000} [:later :fighting]
-    {} {:seen #{7 8} :killed [7] :given-up {8 :unreachable} :last-seen -9000} [:later :fighting]
-    {:entities [(zombie 9 4)]} {:seen #{7} :killed [7] :last-seen -9000} [:later :fighting]))
+    {} {:seen #{7} :killed [7]} [:ok :cleared]
+    {} {:seen #{7 8} :killed [7]} [:later :fighting]
+    {} {:seen #{7 8} :killed [7] :given-up {8 :unreachable}} [:later :fighting]
+    {:entities [(zombie 9 4)]} {:seen #{7} :killed [7]} [:later :fighting]))
 
 (deftest hunt-is-done-when-the-count-is-killed-and-the-drops-are-collected
   (are [args m want] (= want (tu/kind-reason (done-of 'jobs.combat.hunt {} args m)))

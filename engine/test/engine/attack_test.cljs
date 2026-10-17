@@ -109,13 +109,13 @@
 
 ;; ------------------------------------------------------------------ the job
 
-(deftest kills-an-id-then-clears-after-lost-s
+(deftest kills-an-id-then-clears
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:targets [7]} {:inventory h/sword :entities [(zed 7 3)]} 1))]
           (is (= [7 7 7 7] (attacked s)) "four hits at 5 damage")
-          (is (finished? s) "one call: the kill, then :lost-s of waiting")
+          (is (finished? s) "one call: the kill ends it")
           (is (= :cleared (:reason (done-event s))))
           (is (= [7] (:killed (done-event s)))))))))
 
@@ -304,7 +304,7 @@
           (is (= 4 (count (attacked s))))
           (is (every? #(<= 80 % 100) (h/waited-between-swings p)) "100 ms, not the sword's 625 nor the 500 floor"))))))
 
-(deftest a-started-job-stays-until-lost-s-after-its-target-leaves
+(deftest a-target-that-leaves-unkilled-is-looked-for-then-lost
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -312,7 +312,7 @@
           (.override (.-world p) "attack" (fn [_ _ _] (swap! (fake/state p) assoc :entities []) (js/Promise.resolve #js {:status "hit" :hurt true})))
           (core/submit! (:eng s) (spec {:targets [7]}) {})
           (await (core/tick! (:eng s)))
-          (is (finished? s) "nothing left to attack: the call waits :lost-s and ends")
+          (is (finished? s) "nothing left to attack: the call looks round and ends")
           (is (= :lost (:reason (done-event s)))))))))
 
 (deftest a-target-that-vanishes-after-a-hit-is-not-booked-as-killed
@@ -354,20 +354,7 @@
             (is (= :cleared (:reason (done-event s))) (str targets))
             (is (= [9] (:killed (done-event s))) (str targets))))))))
 
-(deftest waits-in-one-second-steps-while-nothing-is-in-radius
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [p seen] :as s} (h/setup {:inventory h/sword :entities [(zed 7 2)]} 20)]
-          (.override (.-world p) "attack" (fn [_ _ _] (swap! (fake/state p) assoc :entities []) (js/Promise.resolve #js {:status "hit" :hurt true})))
-          (core/submit! (:eng s) (spec {:targets [7]}) {})
-          (await (core/tick! (:eng s)))
-          (is (pos? (count (h/calls p "wait"))))
-          (is (= [1000] (distinct (mapv #(.. % -args -ms) (h/calls p "wait")))))
-          (is (not-any? #(= :idle (:kind %)) @seen))
-          (is (= :lost (:reason (done-event s)))))))))
-
-(deftest an-absent-target-ends-the-job-after-the-grace
+(deftest an-absent-target-ends-the-job-absent
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -378,8 +365,7 @@
             (is (= :absent (:reason (done-event s))) (str targets))
             (is (empty? (events-of s :attack.done)) (str targets))
             (is (every? #(zero? (count (h/calls p %))) ["equip" "moveTo" "attack"]) (str targets))
-            (is (pos? (count (h/calls p "look"))) (str targets " turned before ending absent"))
-            (is (pos? (count (h/calls p "wait"))) (str targets))))))))
+            (is (pos? (count (h/calls p "look"))) (str targets " turned before ending absent"))))))))
 
 (deftest a-target-heard-but-not-seen-is-stepped-toward-before-the-job-ends-absent
   (async done
@@ -402,22 +388,6 @@
               _ (await (run-ticks s 60 700))]
           (is (= :absent (:reason (done-event s))))
           (is (zero? (count (h/calls (:p s) "steer")))))))))
-
-(deftest a-target-arriving-within-the-grace-is_attacked
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [p] :as s} (h/setup {:inventory h/sword} 20)
-              first? (atom true)]
-          (.override (.-world p) "wait" (fn [t a impl]
-                                          (when @first?
-                                            (reset! first? false)
-                                            (fake/add-entity! p {:id 7 :name "zombie" :kind "hostile" :health 20 :pos [2 64 0]}))
-                                          (impl t a)))
-          (core/submit! (:eng s) (spec {:targets ["zombie"]}) {})
-          (await (core/tick! (:eng s)))
-          (is (= [7] (distinct (attacked s))))
-          (is (= :cleared (:reason (done-event s)))))))))
 
 (deftest absent-wait-declines-until-a-target-turns-up
   (async done
@@ -557,7 +527,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p eng clock] :as s} (await (h/first-round-ms (spec {:targets [7]}) {:inventory h/sword :entities [(zed 7 3)]} 20))
-              _ (is (= [] (:list (core/state eng))) "the first call killed it and waited out :lost-s")
+              _ (is (= [] (:list (core/state eng))) "the first call killed it")
               calls (vec (.-calls (.-world p)))
               idx (keep-indexed (fn [i c] (when (= "attack" (.-name c)) i)) calls)]
           (is (= [7 7 7 7] (attacked s)))
@@ -576,12 +546,3 @@
           (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (= 5 (get-in % [:spend :job-time])) (false? (:look-round %)) (false? (:dangers %)) (= :shut (:doors %))) opts)
               "a moving target is chased in legs, never dug or pillared toward"))))))
 
-(deftest a-wait-in-a-fight-is-a-pause-child
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [calls (atom [])
-              c {:engine {:jobs registry/jobs}
-                 :call (fn [slot def args] (swap! calls conj [slot (:sym def) (:seconds args)]) (js/Promise.resolve (contract/ending :done nil nil)))}]
-          (is (= :again (await (attack/wait! c 500))))
-          (is (= [[:pause 'jobs.time.noop 0.5]] @calls)))))))

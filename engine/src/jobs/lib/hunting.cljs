@@ -73,7 +73,7 @@
         _ (note-target! c target opts)
         tools (ctx/use c :tools)
         e (await (ctx/call c :attack 'jobs.combat.attack
-                           (cond-> {:targets [target] :radius radius :lost-s 1 :absent :done}
+                           (cond-> {:targets [target] :radius radius :absent :done}
                              tools (assoc :use {:tools tools}))))]
     (if (= :continue e)
       :yield
