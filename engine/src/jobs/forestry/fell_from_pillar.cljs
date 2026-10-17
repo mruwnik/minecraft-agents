@@ -272,7 +272,7 @@
   ledger is closed, :continue while the child waits, else the nothing-possible :cleanup-open ending."
   [c]
   (when (log/open-scaffold? c)
-    (let [e (await (ctx/atomic c :urgent :pillar #(ctx/call c :cleanup 'jobs.access.cleanup {:job (:id c)})))]
+    (let [e (await (ctx/atomic c :urgent :pillar #(ctx/call c :cleanup 'jobs.access.cleanup {:job (:id c) :checks {:fit? '(always)}})))]
       (cond
         (= :continue e) :continue
         (log/open-scaffold? c) (ctx/end c :nothing-possible :cleanup-open (result c))))))

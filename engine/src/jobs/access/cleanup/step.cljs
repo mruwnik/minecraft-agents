@@ -98,11 +98,10 @@
                  (range 1 (inc roof-height)))))
 
 (defn walk-blocker
-  "Why the body should not walk to the entry at cell, as {:reason ...}, or nil: :unarmed/:low-health (walk-hold), :far-below
-  (more than max-below under the feet), :died-near (died-near? of the cell), :roofed (under cover where the body is not)."
-  [{:keys [feet walk-hold max-below died-near?] :as in} {:keys [cell]}]
+  "Why the body should not walk to the entry at cell, as {:reason ...}, or nil: :far-below (more than max-below under
+  the feet), :died-near (died-near? of the cell), :roofed (under cover where the body is not)."
+  [{:keys [feet max-below died-near?] :as in} {:keys [cell]}]
   (cond
-    walk-hold walk-hold
     (> (- (get feet 1) (get cell 1)) max-below) {:reason :far-below}
     (and died-near? (died-near? cell)) {:reason :died-near}
     (and (roofed? in cell) (not (roofed? in (update feet 1 dec)))) {:reason :roofed}))

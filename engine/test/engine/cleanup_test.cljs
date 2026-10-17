@@ -270,20 +270,6 @@
     (is (= :walk (:step (go under))) "a body under a roof itself has nothing to fear in a roof")
     (is (= :walk (:step (go (lookup [10 64 0] "dirt" [10 70 0] "stone")))) "a roof out of range is open sky")))
 
-(deftest the-walk-hold-reads-the-weapon-and-the-health-of-the-body
-  (let [sword [{:name "iron_sword" :count 1}]]
-    (are [world hold] (= hold (:reason (cleanup/walk-hold-of (tu/fake world))))
-      {:inventory []} :unarmed
-      {:inventory sword} nil
-      {:inventory sword :self {:health 3}} :low-health)
-    (is (nil? (settings/with-settings {::cleanup/hold-unarmed? false} #(cleanup/walk-hold-of (tu/fake {:inventory []})))))))
-
-(deftest an-unarmed-or-hurt-body-walks-to-no-scaffold
-  (are [hold reason] (= reason (:reason (first (:open (step :feet [3 64 0] :entries [(entry [10 64 0])] :walk-hold hold)))))
-    {:reason :unarmed} :unarmed
-    {:reason :low-health} :low-health)
-  (is (= :dig (:step (step :feet [3 64 0] :entries [(entry [4 64 0])] :walk-hold {:reason :unarmed}))) "within reach it is still dug"))
-
 ;; ------------------------------------------------------------------ against the fake world
 
 (defn row-world
@@ -857,7 +843,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [p (d/sensing {:self {:pos {:x 3.5 :y 65 :z 0.5}} :blocks (assoc d/ground "0,65,0" "oak_planks" "2,65,0" "dirt")})
+        (let [p (d/sensing {:inventory [{:name "iron_sword" :count 1}] :self {:pos {:x 3.5 :y 65 :z 0.5}} :blocks (assoc d/ground "0,65,0" "oak_planks" "2,65,0" "dirt")})
               _ (.setOwner p "t1")
               _ (await (.look p "t1" #js {:pos #js {:x 2.5 :y 65.5 :z 0.5}}))
               s (d/setup p 'jobs.access.cleanup {:ignore-zones? true})]

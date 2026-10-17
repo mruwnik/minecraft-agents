@@ -2,12 +2,13 @@
   "The readiness checkers a job binds as its safe? and fit? exports: fns of the ctx giving a status (engine.contract).
   safe-at, safe-at-by-night and safe-if-lit are :later while the place is exposed (the estimate of jobs.lib.cost/exposure is
   above ::risk-limit; :look while the light there is unseen and the body has not looked round, then :later; :never when nothing lowers it) or a danger is near
-  (threatened); fit? is :later below the risky health or while poisoned; ok never refuses."
+  (threatened); fit? is :later below the risky health or while poisoned (fit-armed also while unarmed); ok never refuses."
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.check-cache :as check-cache]
+            [jobs.lib.combat :as combat]
             [jobs.lib.cond :as lcond]
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
@@ -22,7 +23,7 @@
 
 (def wait-reasons
   "The :reason of every :later these checkers give: a job that declines for one is waiting out the world, not failing."
-  #{:exposed :dark :hostile-near :low-health :poisoned})
+  #{:exposed :dark :hostile-near :low-health :poisoned :unarmed})
 
 (defn unforced
   "The :checks forms a child would be forced with, minus the keys c's own frame runs under a form for: a call key beats
@@ -127,6 +128,18 @@
 
 (def fit? "Later :low-health below the risky health, :poisoned while poisoned." checks/low-health)
 
+(defn armed
+  "Later :unarmed while the body carries no weapon (jobs.lib.combat/default-weapons)."
+  [c]
+  (if (combat/best-weapon (:primitives c) combat/default-weapons)
+    (contract/ok :armed "a weapon is carried")
+    (contract/later :unarmed "no weapon carried")))
+
+(defn fit-armed
+  "The fit? of a job that goes where mobs may be: fit? and armed."
+  [c]
+  (contract/all [(fit? c) (armed c)]))
+
 (defn ok "The checker of a job with nothing to check." [_] (contract/ok :ready "nothing to check"))
 
 ;; ------------------------------------------------------------------ the :checks vocabulary
@@ -149,5 +162,7 @@
    'threatened {:args [] :type :status :doc "a hostile is near (ready/threatened)" :fn #(lcond/not threatened)}
    'job-safe-or-starving {:args [] :type :status :doc "the frame's own safe? holds, or at food 0 no hostile is near"
                           :fn (fn [] #(or-starving (own-export :safe?) %))}
+   'healthy {:args [] :type :status :doc "health is enough and the body is not poisoned (fit?)" :fn (fn [] fit?)}
+   'armed {:args [] :type :status :doc "a weapon is carried" :fn (fn [] armed)}
    'starving {:args [] :type :status :doc "food is 0" :fn #(lcond/= (lcond/food) 0)}
    'always {:args [] :type :status :doc "always holds" :fn (fn [] (fn [_] (contract/ok :always "always")))}})

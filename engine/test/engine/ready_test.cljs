@@ -2,6 +2,7 @@
   "jobs.lib.ready: the safe? and fit? checkers a job binds, as statuses over the shelter, the light and the mobs."
   (:require [cljs.test :refer [deftest is are]]
             [engine.hut-shelter-test :as hut]
+            [engine.core.ending :as ending]
             [engine.registry :as registry]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
@@ -124,6 +125,19 @@
 
 (def skeleton {:id 8 :name "skeleton" :kind "hostile" :pos {:x 12 :y 64 :z 0}})
 (def at-origin {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}})
+
+(def sword [{:name "iron_sword" :count 1}])
+
+(deftest fit-armed-waits-while-unarmed-or-hurt
+  (are [world expected] (= expected (let [s (ready/fit-armed (ctx-of (merge at-origin world)))] [(first s) (:reason (nth s 2))]))
+    {:inventory sword} [:ok :healthy]
+    {:inventory []} [:later :unarmed]
+    {:inventory sword :self {:pos {:x 0 :y 64 :z 0} :health 3}} [:later :low-health]))
+
+(deftest a-job-whose-checks-default-to-armed-and-healthy-runs-them-from-the-declared-forms
+  (are [world expected] (= expected (first (ending/run-status (get registry/jobs 'jobs.access.cleanup) (ctx-of (merge at-origin world)))))
+    {:inventory sword} :ok
+    {:inventory []} :later))
 
 (defn with-entry
   "ctx-of world, its engine holding a hostile-near register entry with args."
