@@ -1247,6 +1247,22 @@
           (is (= :exposed (:reason (waiting s))))
           (is (empty? (digs p))))))))
 
+(deftest a-pickaxe-less-stair-looks-at-the-unseen-cut-first-and-then-waits-no-tool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shown (atom false)
+              unseen (fn [p]
+                       (aset p "sensedAt" (fn [pos] (if @shown (.blockAt p pos) #js {:unknown true})))
+                       (.override (.-world p) "look" (fn [token a impl] (reset! shown true) (impl token a))))
+              {:keys [eng clock p]} (setup {:blocks ground :inventory []} (assoc east :fetch false) unseen)
+              id (core/submit! eng (list job (assoc east :fetch false)) {})]
+          (dotimes [_ 6]
+            (swap! clock + 700)
+            (await (core/tick! eng)))
+          (is (= :no-tool (:reason (core/waiting eng id))) "listed: it waits, it does not start and end")
+          (is (empty? (digs p))))))))
+
 (deftest a-stair-with-only-a-spent-pickaxe-stops-tool-spent-unless-told-otherwise
   (async done
     (tu/run-async done

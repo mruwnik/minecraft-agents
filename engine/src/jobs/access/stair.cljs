@@ -190,24 +190,28 @@
   [c lack]
   (and (= :no-tool (:reason lack)) (some? (fetch-limits c))))
 
+(defn next-cut
+  "The cells the next step cuts when it is judged from the feet (the body is at the stair's start or on it), else nil."
+  [c]
+  (let [{:keys [dir heading]} (:args c)
+        feet (reach/standing-vec (:primitives c))
+        {:keys [origin target]} (ctx/mem c)
+        on-stair? (or (nil? origin) (some? (geo/stair-index origin feet dir heading target)))]
+    (when (and on-stair? (geo/rises dir) (shape/headings heading))
+      (:cut (geo/step-cells feet dir heading)))))
+
 (defn need
   "What the next cell to dig lacks, as a reason map for ctx/wait, or nil: :no-tool (a pickaxe), :no-free-slot (no room
   for the drop). Judged for the step from the feet when the body is at the stair's start or on it; bad args and the
   rules' refusals are left to the round."
   [c]
-  (let [{:keys [dir heading]} (:args c)
-        p (:primitives c)
-        feet (reach/standing-vec (:primitives c))
-        {:keys [origin target]} (ctx/mem c)
-        on-stair? (or (nil? origin) (some? (geo/stair-index origin feet dir heading target)))]
-    (when (and on-stair? (geo/rises dir) (shape/headings heading))
-      (let [block-at (:block-at (rules-in c feet))
-            {:keys [cut]} (geo/step-cells feet dir heading)
-            block (some #(let [n (when-not (unknown? p %) (block-at %))] (when (and n (not (rules/air n)) (not (rules/unbreakable n))) n)) cut)]
-        (cond
-          (nil? block) nil
-          (sstep/lacks-tool? c block) {:reason :no-tool :tool (tools/needed-kind p block) :block block}
-          (not (sstep/drop-room? c block)) {:reason :no-free-slot :block block})))))
+  (let [p (:primitives c)
+        block-at (:block-at (rules-in c (reach/standing-vec p)))
+        block (some #(let [n (when-not (unknown? p %) (block-at %))] (when (and n (not (rules/air n)) (not (rules/unbreakable n))) n)) (next-cut c))]
+    (cond
+      (nil? block) nil
+      (sstep/lacks-tool? c block) {:reason :no-tool :tool (tools/needed-kind p block) :block block}
+      (not (sstep/drop-room? c block)) {:reason :no-free-slot :block block})))
 
 (defn unmet
   "What the next dig lacks that this call cannot make good (no room made, no tool fetched), or nil."
@@ -256,11 +260,16 @@
     (contract/ok :permitted "no zone, claim or plan refuses")))
 
 (defn not-lacking
-  "Later with what the next dig lacks that this call cannot make good (:no-tool, :no-free-slot)."
+  "Later with what the next dig lacks that this call cannot make good (:no-tool, :no-free-slot); cells not yet seen are
+  looked at first when no fetch could make good a missing pickaxe and none is carried (else the round would start and
+  end the call)."
   [c]
   (if-let [lack (unmet c)]
     (checks/cause-status :later lack (str "lacks " (name (:reason lack))))
-    (contract/ok :supplied "nothing lacking")))
+    (let [unseen (filterv #(unknown? (:primitives c) %) (next-cut c))]
+      (if (and (seq unseen) (:need-drop (:args c)) (not (fetch-limits c)) (sstep/lacks-tool? c blocks/hidden-guess))
+        (contract/look :unseen "the cells to cut were not seen" :look-at unseen)
+        (contract/ok :supplied "nothing lacking")))))
 
 (defn pack-has-room
   "Later :no-free-slot while the next dig has no room for its drop and no make-room can cure it: the pack can clear (a deposit, a toss), so the stair waits."
