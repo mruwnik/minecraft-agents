@@ -11,6 +11,7 @@
   danger-rate: mob-hurt over 1 s x stance factor (:flee x4, :fight x0.1), at most max-rate: hp a second (the factors, the cap and
   danger-shape are go-to options, danger-opts), which the planner prices at go-to's hp price (:hp-seconds x health-scale) like a drop's damage."
   (:require [engine.args :as a]
+            [engine.constants :as constants]
             [engine.settings :as settings]
             [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.fight :as fight]
@@ -218,9 +219,9 @@
   (settings/get settings (if (> food (settings/get settings ::sprint-food)) ::sprint-speed ::walk-speed)))
 
 (defn chase-speed
-  "Blocks a second mob-name covers chasing the body: threat/mob-speed, ::chase-speed for a mob not listed there."
+  "Blocks a second mob-name covers chasing the body: engine.constants/mob-speeds, ::chase-speed for a mob not listed there."
   [mob-name]
-  (get threat/mob-speed mob-name (settings/get settings ::chase-speed)))
+  (get constants/mob-speeds mob-name (settings/get settings ::chase-speed)))
 
 (defn reach-first?
   "Whether a body with food food (body-speed), body-dist blocks from a refuge, gets there ::race-margin-s before every

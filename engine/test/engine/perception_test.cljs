@@ -5,6 +5,8 @@
             [engine.fake.node :as node]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
+            [engine.perception.mobs :as mobs]
+            [jobs.lib.cost.danger :as danger]
             [engine.test-util :as tu]))
 
 ;; The body stands at [0 64 0], eye at (0.5, 65.62, 0.5), facing south (+z) unless a test turns it.
@@ -502,3 +504,7 @@
                  (perception/pass! per {:effort effort})
                  (:rays (perception/stats per))))]
     (is (< (rays 0) (rays 0.5) (rays 1)))))
+
+(deftest a-mob-is-forgotten-at-the-speed-the-cost-library-chases-it
+  (are [mob-name] (= (* 1000 (/ 20 (danger/chase-speed mob-name))) (mobs/mob-forget-ms {:opts {:mob-drift 20}} mob-name))
+    "spider" "zombie" "skeleton" "pillager" "guardian"))

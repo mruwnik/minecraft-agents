@@ -2,24 +2,17 @@
   "Mob memory: the hostiles the body has seen or heard (see engine.perception)."
   (:require [engine.perception.light :refer [table-now]]
             [engine.perception.rays :refer [basis in-cone?]]
+            [engine.constants :as constants]
             [engine.game :as game]))
 
 (def silent-mobs "Hostiles that make no sound while they stalk: known only once seen, or while fusing (hissing)." #{"creeper"})
 
-(def mob-speed
-  "Blocks a second a hostile covers when it chases (rough game values); one not listed `default-mob-speed`."
-  {"zombie" 2.3 "husk" 2.3 "drowned" 2.3 "zombie_villager" 2.3 "zombified_piglin" 2.3 "blaze" 2.3
-   "skeleton" 2.5 "stray" 2.5 "bogged" 2.5 "wither_skeleton" 2.5 "creeper" 2.5 "witch" 2.5
-   "silverfish" 2.5 "endermite" 2.5 "slime" 2 "magma_cube" 2
-   "spider" 3 "cave_spider" 3 "enderman" 3 "hoglin" 3 "zoglin" 3 "ravager" 3 "piglin_brute" 3.5
-   "pillager" 3.5 "vindicator" 3.5 "evoker" 3 "guardian" 5 "phantom" 6 "vex" 8})
-
-(def default-mob-speed 3)
+(def default-mob-speed "Blocks a second of a hostile not in engine.constants/mob-speeds." 3)
 
 (defn mob-forget-ms
   "How long a mob of name not sensed again stays known: the time it takes to drift :mob-drift blocks."
   [{:keys [opts]} name]
-  (* 1000 (/ (:mob-drift opts) (get mob-speed name default-mob-speed))))
+  (* 1000 (/ (:mob-drift opts) (get constants/mob-speeds name default-mob-speed))))
 
 (def mob-middle 0.9)
 

@@ -18,13 +18,6 @@
   {"zombie" 3 "husk" 3 "drowned" 3 "zombie_villager" 3 "skeleton" 2 "stray" 2 "bogged" 2 "spider" 2 "cave_spider" 3
    "witch" 3 "pillager" 2 "vindicator" 8 "slime" 2 "silverfish" 1 "endermite" 2 "phantom" 2 "enderman" 7})
 
-(def mob-speed
-  "Blocks a second a mob covers chasing a body on open ground (from its speed attribute). Spiders also leap 2 to 4
-  blocks. Unknown mobs count at jobs.lib.cost.danger's ::chase-speed."
-  {"zombie" 2.3 "husk" 2.3 "drowned" 2.3 "zombie_villager" 2.3 "skeleton" 2.7 "stray" 2.7 "bogged" 2.7 "creeper" 2.7
-   "witch" 2.7 "silverfish" 2.7 "endermite" 2.7 "slime" 2 "spider" 3.9 "cave_spider" 3.9 "enderman" 3.9
-   "pillager" 5.3 "vindicator" 5.3 "phantom" 6})
-
 (defn creeper-blast [] (settings/get settings ::creeper-blast))
 (def provoked-only #{"enderman" "zombified_piglin"})
 (defn provoked-share [] (settings/get settings ::provoked-share))
