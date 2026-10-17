@@ -30,6 +30,8 @@ function fakeRepo() {
   return { root, repo, wt: path.join(root, 'wts', `fix-${CARD}`) }
 }
 
+const deadPid = () => spawnSync('sh', ['-c', 'echo $$'], { encoding: 'utf8' }).stdout.trim()
+
 const commitIn = (dir, file, text) => {
   fs.writeFileSync(path.join(dir, file), text)
   git(dir, 'commit', '-q', '-am', `edit ${file}`)
@@ -286,5 +288,70 @@ test('-h/--help print usage and exit 0, an unknown flag exits 2, and none of the
     assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8'), 'one\n')
     assert.equal(fs.existsSync(wt), true)
     assert.equal(git(repo, 'branch', '--list', `fix/${CARD}`).stdout.trim() !== '', true)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
+test('--remove deletes the worktree and branch even with uncommitted work, and leaves main alone', () => {
+  const { root, repo, wt } = fakeRepo()
+  try {
+    run(repo, 'fixer-worktree.sh', CARD)
+    commitIn(wt, 'a.txt', 'committed\n')
+    fs.writeFileSync(path.join(wt, 'b.txt'), 'dirty\n')
+    const r = run(repo, 'fixer-worktree.sh', '--remove', CARD)
+    assert.equal(r.status, 0, r.stderr)
+    assert.equal(fs.existsSync(wt), false)
+    assert.equal(git(repo, 'branch', '--list', `fix/${CARD}`).stdout.trim(), '')
+    assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8'), 'one\n')
+    assert.equal(run(repo, 'fixer-worktree.sh', '--remove', 'nothex').status, 1)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
+test('exit 4: main has uncommitted edits to a file the landing changes; nothing moves, the lock is freed, and landing works once main is clean', () => {
+  const { root, repo, wt } = fakeRepo()
+  try {
+    run(repo, 'fixer-worktree.sh', CARD)
+    commitIn(wt, 'a.txt', 'fixed\n')
+    fs.writeFileSync(path.join(repo, 'a.txt'), 'someone else\n')
+    const before = git(repo, 'rev-parse', 'HEAD').stdout
+    const r = run(wt, 'land.sh')
+    assert.equal(r.status, 4, r.stderr)
+    assert.equal(git(repo, 'rev-parse', 'HEAD').stdout, before)
+    assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8'), 'someone else\n')
+    assert.equal(fs.existsSync(wt), true)
+    assert.equal(fs.existsSync(path.join(repo, '.git/commit-lock')), false)
+    fs.writeFileSync(path.join(repo, 'a.txt'), 'one\n')
+    assert.equal(run(wt, 'land.sh').status, 0)
+    assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8'), 'fixed\n')
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
+test('a commit lock left by a dead process is reclaimed', () => {
+  const { root, repo, wt } = fakeRepo()
+  try {
+    run(repo, 'fixer-worktree.sh', CARD)
+    commitIn(wt, 'a.txt', 'fixed\n')
+    const lock = path.join(repo, '.git/commit-lock')
+    fs.mkdirSync(lock)
+    fs.writeFileSync(path.join(lock, 'pid'), `${deadPid()}\n`)
+    const r = run(wt, 'land.sh')
+    assert.equal(r.status, 0, r.stderr)
+    assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8'), 'fixed\n')
+    assert.equal(fs.existsSync(lock), false)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
+test('a commit lock held by a live process is not stolen: land.sh gives up at the timeout and lands nothing', () => {
+  const { root, repo, wt } = fakeRepo()
+  try {
+    run(repo, 'fixer-worktree.sh', CARD)
+    commitIn(wt, 'a.txt', 'fixed\n')
+    const lock = path.join(repo, '.git/commit-lock')
+    fs.mkdirSync(lock)
+    fs.writeFileSync(path.join(lock, 'pid'), `${process.pid}\n`)
+    const r = spawnSync(path.join(wt, 'tools', 'land.sh'), [], { cwd: wt, encoding: 'utf8', env: { ...process.env, COMMIT_LOCK_TIMEOUT: '1' } })
+    assert.equal(r.status, 1, r.stderr)
+    assert.match(r.stderr, /could not take/)
+    assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8'), 'one\n')
+    assert.equal(fs.readFileSync(path.join(lock, 'pid'), 'utf8'), `${process.pid}\n`)
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
