@@ -103,6 +103,31 @@
           (is (= {:skipped :no-hoe} (step s :till)))
           (is (true? (finished? s))))))))
 
+(def under {:blocks (into {} (map (fn [[x z]] [(k x 62 z) "dirt"])) all-cells)})
+
+(deftest the-irrigate-call-covers-the-ground-layer-of-the-box
+  (is (= {:from (:min box) :to {:x 4 :y 63 :z 4}}
+         (:args (:call (decide/decide :irrigate {:irrigate true :box box} {:dry 2}))))))
+
+(deftest a-dry-field-is-wetted-before-it-is-planted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} (world (ground "farmland" all-cells) under
+                                           {:inventory [(item "water_bucket" 1) (item "wheat_seeds" 9)]}) 120))]
+          (is (= {:poured 1} (step s :irrigate)))
+          (is (= 1 (count (filter #(= "water" (block-at s (first %) 63 (second %))) all-cells))))
+          (is (= 8 (:planted (step s :plant)))))))))
+
+(deftest a-field-with-irrigate-off-is-left-dry
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:irrigate false} (world (ground "farmland" all-cells)
+                                                          {:inventory [(item "water_bucket" 1) (item "wheat_seeds" 9)]}) 80))]
+          (is (= {:skipped :irrigate-off} (step s :irrigate)))
+          (is (= 9 (:planted (step s :plant)))))))))
+
 (deftest bare-farmland-is-planted
   (async done
     (tu/run-async done
@@ -397,6 +422,10 @@
     :nothing-to-till :till {:till true} {:hoe true :untilled [] :bare 0 :seeds 3}
     :no-seed :till {:till true} {:hoe true :untilled [{}] :bare 2 :seeds 2}
     nil :till {:till true} {:hoe true :untilled [{:x 1 :y 63 :z 1}] :bare 2 :seeds 3}
+    :irrigate-off :irrigate {:irrigate false :box box} {:dry 3}
+    :not-dry :irrigate {:irrigate true :box box} {:dry 0}
+    :not-dry :irrigate {:irrigate true} {}
+    nil :irrigate {:irrigate true :box box} {:dry 3}
     :no-bare :plant {} {:bare 0 :seed true}
     :no-seed :plant {} {:bare 1 :seed false}
     nil :plant {:box box} {:bare 1 :seed true}
@@ -440,6 +469,8 @@
   (are [step summary worked] (= worked (tend/worked? step summary))
     :harvest {:cut 0 :replanted 0 :gave-up true} false
     :harvest {:cut 1} true
+    :irrigate {:poured 1} true
+    :irrigate {:poured 0} false
     :till {:tilled 0} false
     :plant {:planted 2} true
     :plant {:skipped :no-bare} false

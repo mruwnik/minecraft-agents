@@ -1,0 +1,20 @@
+;; Card b98eacaf: jobs.farm.tend wets dry farmland before it sows (its :irrigate step, jobs.farm.irrigate). A row of nine dry
+;; farmland cells at [12..20 -1 16], crops at y 0, one water bucket and seed carried.
+;; Should-succeed: the middle cell [16 -1 16] becomes water and the other eight are sown (tend completes, irrigate poured 1).
+;; Should-fail: with :irrigate false the row stays dry and all nine are sown, no water is placed.
+{:defaults
+ {:tags [:farm :irrigate :jobs]
+  :time :any
+  :plot {:height 8 :floor "grass_block"}
+  :body {:at [16.5 0 14.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["water_bucket" 1] ["wheat_seeds" 16]]}
+  :blocks [[:fill [12 -1 16] [20 -1 16] "farmland[moisture=0]"]]
+  :limit-s 120}
+ :cases
+ [{:name "dry-row-is-wetted-then-sown"
+   :act [[:job (jobs.farm.tend {:box {:min #xyz [12 -1 16] :max #xyz [20 0 16]}})]]
+   :expect [{:event {:source :job :kind :completed :data {:steps {:irrigate {:poured 1} :plant {:planted 8}}}} :within-s 100 :of-job true}]
+   :after [[:block [16 -1 16] "water"] [:block [12 0 16] "wheat[age=0]"] [:item "water_bucket" 0]]}
+  {:name "irrigate-off-leaves-the-row-dry"
+   :act [[:job (jobs.farm.tend {:box {:min #xyz [12 -1 16] :max #xyz [20 0 16]} :irrigate false})]]
+   :expect [{:event {:source :job :kind :completed :data {:steps {:irrigate {:skipped :irrigate-off} :plant {:planted 9}}}} :within-s 100 :of-job true}]
+   :after [[:block [16 -1 16] "farmland[moisture=0]"] [:item "water_bucket" 1]]}]}

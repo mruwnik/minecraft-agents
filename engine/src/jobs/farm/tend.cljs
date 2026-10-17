@@ -18,6 +18,7 @@
             [jobs.lib.storage :as storage]
             [jobs.lib.crops :as crops]
             [jobs.farm.field :as fld]
+            [jobs.farm.irrigate :as irrigate]
             [jobs.lib.farm :as farm]
             [jobs.farm.tend-decide :as decide]
             [jobs.farm.tend-plan :as tend-plan]
@@ -26,8 +27,11 @@
 (def doc
   "Keep one field of crops in order. The field is the :box (inclusive). Its lowest layer (y = min) is the
   farmland and the layer above holds the crops, so max y is at least min y + 1.
-  One run is one pass over six steps in this order. Each step is a child job that runs when its conditions hold:
+  One run is one pass over seven steps in this order. Each step is a child job that runs when its conditions hold:
   - :harvest (jobs.farm.harvest, replanting): a ripe crop lies in the box.
+  - :irrigate (jobs.farm.irrigate over the ground layer): :irrigate is true (box mode only) and a ground cell is seen
+    dry (no water seen in reach, the whole reach seen). The child fetches a water bucket when none is carried; a failed
+    call is booked as its summary {:poured n} and the run goes on.
   - :till (jobs.farm.till): :till is true, a hoe is carried, dirt or grass lies uncovered in the ground layer and
     more seed is carried than there is bare farmland. It tills one cell at a time, nearest first.
   - :plant (jobs.farm.plant): bare farmland lies in the box and a seed is carried.
@@ -59,7 +63,7 @@
   touched. A dirt lane inside the box counts as a bed unless :till is false. A ripe crop that cannot be reached
   keeps the check passing on every run (harvest gives up on it and the run still ends).
   :plan (optionally :part; with neither :part nor :parts every crop part of the plan is worked) makes the plan's crop cells the field instead of :box. Only crops harvest knows
-  (wheat, carrots, potatoes, beetroots) count. The plan's other cells are never touched. The same six steps run
+  (wheat, carrots, potatoes, beetroots) count. The plan's other cells are never touched. The same steps (but :irrigate) run
   per cell, with the crop the plan names there:
   - harvest never digs a wrong crop. A ripe crop of another kind in a crop cell stays standing and is listed in
     :field :wrong {:pos :found :want} (warn farm-tend.wrong).
@@ -83,6 +87,7 @@
    :part {:doc "with :plan, only the cells of this part; omit :part (and :parts) to work every crop part of the plan" :spec a/name? :default nil}
    :parts {:doc "with :plan, the parts worked in one job, one pass each in this order (instead of :part)" :spec (a/coll-of a/name?) :default nil}
    :till {:doc "hoe untilled dirt and grass in the ground layer when seed and a hoe are carried" :spec boolean? :default true}
+   :irrigate {:doc "wet dry farmland with water (jobs.farm.irrigate, a water bucket fetched when none is carried); box mode only" :spec boolean? :default true}
    :fertilize {:doc "use bone meal on unripe crops" :spec boolean? :default false}
    :composter {:doc "composter position {:x :y :z} for seed above the reserve; nil: do not compost" :spec ::a/pos :default nil}
    :chest {:doc "chest position {:x :y :z} for the farm goods; nil: do not store" :spec ::a/pos :default nil}
@@ -175,6 +180,13 @@
   (let [in (access/rules-input c)]
     (filterv #(not (gate/refused? (access/may? in action %))) poss)))
 
+(defn irrigate-need
+  "How many ground cells of the box are seen dry, 0 when no spot would wet any (irrigate would end :no-spot)."
+  [c {:keys [min max]}]
+  (let [view (assoc c :args {:from min :to (assoc max :y (:y min))})
+        dry (irrigate/dry-cells view)]
+    (if (irrigate/spot view dry) (count dry) 0)))
+
 (defn box-facts
   "What the decisions are made from for a box, read live."
   [c]
@@ -186,12 +198,14 @@
         me (u/self-pos c)
         tried (:till-tried (ctx/mem c) #{})
         ground (ground-layer p box)
+        dry (if (:irrigate (:args c)) (irrigate-need c box) 0)
         raw-untilled (->> ground (filter stock/untilled?) (map :pos) (remove tried))
         bare (count (box-permitted c :sow (farm/bare-cells p box [])))
         keep-of (stock/keeps (reserve (beds ground) inventory) inventory keep)]
     {:mid mid
      :radius R
      :ripe (count (box-permitted c :harvest (filter #(in-box? box %) (fld/ripe-crops p {:radius R :crops nil} mid []))))
+     :dry dry
      :hoe (some? (farm/hoe-of p))
      :untilled (->> ground
                     (filter stock/untilled?)
@@ -338,6 +352,7 @@
   (boolean
    (case step
      :harvest (pos? (+ (:cut s 0) (:replanted s 0)))
+     :irrigate (pos? (:poured s 0))
      :till (pos? (:tilled s 0))
      :plant (pos? (:planted s 0))
      :fertilize (pos? (:used s 0))
@@ -384,6 +399,7 @@
   [step r]
   (case step
     :harvest (select-keys r [:cut :replanted :bare :gave-up])
+    :irrigate {:poured (count (:poured r))}
     :till {:tilled (:tilled r 0)}
     :plant (select-keys r [:planted :reason :skipped :refused :short])
     :fertilize (select-keys r [:used])
@@ -530,7 +546,7 @@
       (finish-all! c))))
 
 (defn ^:async round
-  "The whole run: one pass per part, each one child call after another over the six steps; :continue only while a
+  "The whole run: one pass per part, each one child call after another over the seven steps; :continue only while a
   child waits on the world."
   [c]
   (await (pace/steps! c (fn ^:async s [] (await (run-step c))))))

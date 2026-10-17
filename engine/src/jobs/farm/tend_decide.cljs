@@ -2,10 +2,11 @@
   "The steps of jobs.farm.tend, the child job of each, and the decision per step over the facts: skip it with a
   reason, or call its child.")
 
-(def steps [:harvest :till :plant :fertilize :compost :deposit])
+(def steps [:harvest :irrigate :till :plant :fertilize :compost :deposit])
 
 (def jobs
   {:harvest 'jobs.farm.harvest
+   :irrigate 'jobs.farm.irrigate
    :till 'jobs.farm.till
    :plant 'jobs.farm.plant
    :fertilize 'jobs.farm.fertilize
@@ -20,6 +21,14 @@
             :args (if plan
                     {:plan plan :part part :replant true :replant-bare false}
                     {:center mid :radius radius :replant true})}}))
+
+(defn decide-irrigate
+  [{:keys [irrigate box]} {:keys [dry]}]
+  (cond
+    (not irrigate) {:skip :irrigate-off}
+    (not (pos? (or dry 0))) {:skip :not-dry}
+    :else {:call {:slot :irrigate :job (jobs :irrigate)
+                  :args {:from (:min box) :to (assoc (:max box) :y (:y (:min box)))}}}))
 
 (defn decide-till
   [{:keys [till plan]} {:keys [hoe untilled bare seeds till-short till-held]}]
@@ -66,6 +75,7 @@
   [step args facts]
   (case step
     :harvest (decide-harvest args facts)
+    :irrigate (decide-irrigate args facts)
     :till (decide-till args facts)
     :plant (decide-plant args facts)
     :fertilize (decide-fertilize args facts)
