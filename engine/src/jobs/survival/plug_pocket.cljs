@@ -2,7 +2,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-                        [jobs.lib.ready :as ready]
+            [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
