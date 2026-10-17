@@ -226,6 +226,26 @@
     (is (= :later (status mem false near)) "a log is still in reach")
     (is (= :later (status {} false [])) "no pillar was stood on")))
 
+(defn ^:async step-with-scaffold
+  "pillar/step on a call with no pillar yet and an open scaffold; the cleanup child leaves it open-after."
+  [open-after cleanup-result]
+  (let [open (atom true) started (atom false)]
+    (with-redefs [ctx/mem (constantly {})
+                  log/open-scaffold? (fn [_] @open)
+                  ctx/atomic (fn [_ _ _ f] (f))
+                  ctx/call (fn [& _] (reset! open open-after) cleanup-result)
+                  ctx/end (fn ([_ kind cause] [kind cause]) ([_ kind cause _] [kind cause]))
+                  pillar/start-pillar! (fn [_] (reset! started true) :started)]
+      {:r (await (pillar/step {:id "j"})) :started @started})))
+
+(deftest a-call-starting-on-an-open-scaffold-takes-it-back-before-it-plans
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:r :started :started true} (await (step-with-scaffold false :done))) "closed ledger: the call goes on to plan")
+        (is (= {:r [:nothing-possible :cleanup-open] :started false} (await (step-with-scaffold true :done))) "still open: ends, plans nothing")
+        (is (= {:r :continue :started false} (await (step-with-scaffold true :continue))) "the cleanup child waits")))))
+
 (deftest fell-tree-quotes-axe-wear-and-no-logs
   (async done
     (tu/run-async done
