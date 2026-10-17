@@ -78,7 +78,8 @@
 (defn safe-at-by-night
   "The checker of a job that goes to the place (f c): at night safe-at it, by day or when body and place are both
   underground only not threatened (an unseen place's light is no reason to wait, and darkness underground does not end
-  at dawn; a walk from a tunnel to open ground is exposed)."
+  at dawn; a walk from a tunnel to open ground is exposed). A buried body's unseen place no higher than its feet is
+  underground (Q279: caves count only reachable hostiles); one above them may be open ground."
   [f]
   (let [at (safe-at f)
         by-night? (fn [c]
@@ -87,7 +88,10 @@
                           at (f c)
                           to (cond (nil? at) feet
                                    (:y at) (update-vals at js/Math.floor))]
-                      (and (sh-sense/night? p) (not (and to (sh-sense/buried? p) (sh-sense/buried-at? p to))))))]
+                      (and (sh-sense/night? p)
+                           (not (and to (sh-sense/buried? p)
+                                     (or (sh-sense/buried-at? p to)
+                                         (and (not (sh-sense/seen-cell? p to)) (<= (:y to) (:y feet)))))))))]
     (with-meta (fn [c] (if (by-night? c) (at c) (threatened c)))
       {::exposure (fn [c] (if (by-night? c) ((::exposure (meta at)) c) (contract/ok :day "an unseen place's light is no reason to wait")))})))
 

@@ -233,6 +233,13 @@
     nil :ok
     outside :later))
 
+(deftest safe-at-by-night-takes-an-unseen-goal-no-higher-than-a-buried-body-as-underground
+  (are [goal expected] (= expected (with-redefs [sh-sense/seen-cell? (constantly false)]
+                                     (kind (ready/safe-at-by-night (constantly goal)) tunnel)))
+    {:x 40 :y 64 :z 0} :ok
+    {:x 40 :y 50 :z 0} :ok
+    {:x 40 :y 70 :z 0} :later))
+
 (deftest safe-at-by-night-judges-a-column-goal-at-its-surface
   (is (= :never (with-redefs [sh-sense/block-light-at (constantly 0)] (kind (ready/safe-at-by-night (constantly {:x 4 :z 0})) tunnel)))))
 
