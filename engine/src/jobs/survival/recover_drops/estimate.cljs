@@ -95,7 +95,7 @@
               {:name (if (= "drowning" cause) "drowning" "water") :danger (cfg/wet-danger)})
         threat (cond-> threat wet (-> (update :danger + (:danger wet)) (update :mobs #(vec (cons wet %)))))
         fetch (cost/fetch-cost {:distance (when pos (u/dist here pos)) :danger (:danger threat) :elapsed-ms elapsed :cause cause})]
-    (cond-> {:value (+ (:value worth) (* (cfg/xp-per-level) (or (:level experience) 0)))
+    (cond-> {:value (+ (:value worth) (cost/experience-cost experience))
              :cost (:cost fetch)
              :hold-ms (if (every? (set (map :pos guard)) (map :pos (:mobs threat)))
                         (min (cfg/danger-memory-ms) (apply max 0 (map :left-ms guard)))

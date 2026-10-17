@@ -54,3 +54,9 @@
   seen and unseen ground alike."
   [resource pos body]
   (reduce + 0 (map #(* (biome-chance % pos body) (density resource pos % body)) biomes)))
+
+(defn peak-density
+  "The most expected-density of resource at any height from -64 to 64, where mining is done, the figure of the best layer to look
+  in; 0 for a resource with no placement."
+  [resource body]
+  (apply max 0 (for [y (range -64 65)] (expected-density resource {:y y} body))))

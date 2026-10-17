@@ -21,11 +21,13 @@
     planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; swim-profile: its swimH from Depth Strider on the boots; swim-factor: a swim block in walk blocks (a flight's water price); gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's prices of unseen cells (jobs.lib.cost.planner).
     tolls    farm-tolls, zone-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort
              (jobs.lib.cost.tolls).
-    base-rates  density, biome-chance, expected-density: the ore a block of ground is expected to hold, from the game's
+    death    experience-cost, death-cost, death-chance, route-death-cost: death as an ordinary cost, the walk back for the items plus the experience; a route pays its chance of dying x that (jobs.lib.cost.death).
+    base-rates  density, biome-chance, expected-density, peak-density: the ore a block of ground is expected to hold, from the game's
              own placements, and the chance of a biome on ground the body has not seen (jobs.lib.cost.base-rates)."
   (:require [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.cost.danger :as danger]
+            [jobs.lib.cost.death :as death]
             [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.food :as food]
             [jobs.lib.cost.health :as health]
@@ -145,6 +147,12 @@
 (def meat-factor food/meat-factor)
 (def meat-animal food/meat-animal)
 
+(def experience-cost death/experience-cost)
+(def death-cost death/death-cost)
+(def death-chance death/death-chance)
+(def route-death-cost death/route-death-cost)
+
 (def density base-rates/density)
 (def biome-chance base-rates/biome-chance)
 (def expected-density base-rates/expected-density)
+(def peak-density base-rates/peak-density)

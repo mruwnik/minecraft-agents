@@ -209,3 +209,8 @@
   (let [ratio (fn [item spot] (/ (value [{:name item :count 1}]) (:cost (v/detour-cost spot))))]
     (is (< 1 (ratio "oak_log" {:distance 6 :climb 0})))
     (is (> 1 (ratio "dirt" {:distance 8 :climb 7})))))
+
+(deftest an-ore-is-dearer-to-find-where-its-density-is-lower
+  (is (> (each "gold_ingot") (each "iron_ingot")) "gold ground holds less ore than iron ground")
+  (is (> (each "diamond") (each "coal")))
+  (is (< (value [{:name "coal"}] :basis {:find {:ore-scan-s 0.03}}) (each "coal")) "the find is the scan over the density"))

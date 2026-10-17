@@ -252,3 +252,17 @@
   (let [p (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}}})]
     (is (= {:chance (cost/spawn-chance [15 64 0]) :lowered-by #{:look} :look-at [[15 64 0]]}
            (cost/exposure p {:x 15.5 :z 0.2})))))
+
+(def far {:x 100 :y 64 :z 0})
+
+(deftest death-costs-more-the-farther-from-respawn-and-the-more-levels
+  (let [body {:respawn {:x 0 :y 64 :z 0} :level 0}]
+    (is (> (cost/death-cost body far) (cost/death-cost body {:x 10 :y 64 :z 0})))
+    (is (> (cost/death-cost (assoc body :level 10) far) (cost/death-cost body far)))
+    (is (= (cost/experience-cost {:level 10}) (- (cost/death-cost (assoc body :level 10) far) (cost/death-cost body far))))))
+
+(deftest a-route-with-a-death-chance-costs-more-than-the-same-route-without
+  (let [body {:respawn {:x 0 :y 64 :z 0} :level 3}
+        night (cost/route-death-cost body {:night? true} far)]
+    (is (pos? night))
+    (is (> night (cost/route-death-cost body {:night? false} far)) "night is the likelier death")))

@@ -5,7 +5,6 @@
 
 (a/defargs settings
   {::arrive-range {:default 2 :doc "How near the death point the walk back ends, in blocks." :spec (a/int-in 0 nil)}
-   ::xp-per-level {:default 5 :doc "Worth of one experience level carried at the death (the game drops a few levels' worth)." :spec (a/int-in 0 nil)}
    ::top-n {:default 3 :doc "Items and mobs named in the report of a death site, at most." :spec (a/int-in 0 nil)}
    ::max-collect-passes {:default 3 :doc "Walks back to the pile after a collect pass that left visible items of it behind." :spec (a/int-in 0 nil)}
    ::stray-range {:default 5 :doc "A body this far from the death point in the collect phase (a flee cut the trip) walks back first." :spec (a/int-in 0 nil)}
@@ -53,8 +52,6 @@
 (def trip-policy {:cap 1 :ttl day-ms}) ; wall clock; the despawn window itself is counted in game ticks
 
 (def danger-policy {:cap 5 :ttl day-ms})
-
-(defn xp-per-level [] (settings/get settings ::xp-per-level))
 
 (defn top-n [] (settings/get settings ::top-n))
 

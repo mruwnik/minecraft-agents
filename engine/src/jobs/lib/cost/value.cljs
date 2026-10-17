@@ -9,7 +9,7 @@
     block        A block's drops (blockLoot, no silk touch, chance at least :min-drop-chance): (dig + find) / drops.
                  dig = hardness x :hardness-s / the speed of the stone tool (the block's own tier if higher; the base assumes a
                  tool, never the hand);
-                 find = :terrain, :wood for a log, stem or bamboo block, or :ores {ore [find drops]}, or :find-s for a block. Crafted blocks are no source
+                 find = :terrain, :wood for a log, stem or bamboo block, or :ores {ore [find drops]} (a nil find: :ore-scan-s over the base-rates density of the ore's best layer), or :find-s for a block. Crafted blocks are no source
                  except :natural ones (granite, clay ...); a block that is no item (redstone_wire) is none.
     crop         A block with an age state: :farm-s / the age-7 yield.
     mob          entityLoot of the mobs in weapon/mob-max-health and passive-max-health: (kill + hurt + find) / expected
@@ -40,6 +40,7 @@
   (:require [engine.args :as a]
             ["minecraft-data" :as minecraft-data]
             [clojure.string :as str]
+            [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.health :as health]
             [jobs.lib.cost.weapon :as weapon]
@@ -89,9 +90,10 @@
           :wood 12 ;; a log, stem, hyphae, wood or bamboo block: the walk to a tree
           :block {"gilded_blackstone" 300}
           :ore-by-tier {1 10 2 30 3 300 4 300}
-          :ores {"coal" [10 1.5] "copper" [15 3.5] "iron" [30 1] "lapis" [60 6.5] "redstone" [40 4.5] "gold" [90 1]
-                 "diamond" [300 1.5] "emerald" [900 1] "nether_quartz" [40 1.5] "nether_gold" [60 4]
-                 "ancient_debris" [900 1]}}
+          :ore-scan-s 0.3 ;; seconds of looking per unit of the best layer's ore density (base-rates/peak-density): find = this / density
+          :ores {"coal" [nil 1.5] "copper" [nil 3.5] "iron" [nil 1] "lapis" [nil 6.5] "redstone" [nil 4.5] "gold" [nil 1]
+                 "diamond" [nil 1.5] "emerald" [nil 1] "nether_quartz" [40 1.5] "nether_gold" [60 4]
+                 "ancient_debris" [900 1]}} ;; [find drops]: a nil find comes from the base rates, a number is the hand figure of an ore they do not cover
    :natural #{"granite" "diorite" "andesite" "coarse_dirt" "sandstone" "red_sandstone" "mossy_cobblestone" "snow"
               "clay" "glowstone" "melon" "packed_ice" "blue_ice" "prismarine" "dark_prismarine"}
    :mob {:weapon "stone_sword" :hurt-hp-per-hp 0.025 :danger {"creeper" 3 "enderman" 3} :find {:hostile 20 :passive 15}}})
@@ -148,13 +150,20 @@
 
 (defn wood-block? [name] (boolean (re-find #"(_log|_stem|_wood|_hyphae|^bamboo_block)$" name)))
 
+(defn ore-find-seconds
+  "Seconds to find ore: its hand figure, else :ore-scan-s over the density of its best layer (nil: no placement)."
+  [{:keys [ores ore-scan-s]} ore]
+  (or (first (get ores ore))
+      (let [density (base-rates/peak-density ore nil)]
+        (when (pos? density) (/ ore-scan-s density)))))
+
 (defn find-seconds [md basis b]
-  (let [{:keys [terrain wood block ores ore-by-tier]} (:find basis)
+  (let [{:keys [terrain wood block ores ore-by-tier] :as found} (:find basis)
         name (.-name b)]
     (cond
       (contains? block name) (get block name)
       (wood-block? name) wood
-      (ore-block? name) (first (get ores (ore-key name) [(get ore-by-tier (block-tier md b) (apply max (vals ore-by-tier)))]))
+      (ore-block? name) (or (ore-find-seconds found (ore-key name)) (get ore-by-tier (block-tier md b) (apply max (vals ore-by-tier))))
       :else terrain)))
 
 (defn crop? [b loot]
