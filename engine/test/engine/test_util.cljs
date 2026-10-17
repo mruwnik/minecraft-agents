@@ -63,6 +63,14 @@
   ([x0 z0 x1 z1] (floor 63 x0 z0 x1 z1))
   ([y x0 z0 x1 z1] (box x0 y z0 x1 y z1 "stone")))
 
+(defn sensed-by
+  "A sensedAt over p's blockAt that answers {:unknown true} for a position whose coordinates are not finite numbers
+  (a malformed pos): perception knows nothing there, while the fake's blockAt would say air."
+  [p]
+  (fn [pos] (if (every? #(js/Number.isFinite (aget pos %)) ["x" "y" "z"])
+              (.blockAt p pos)
+              #js {:unknown true :pos pos})))
+
 (defn fake
   "A fake primitives object (engine.fake/create) built from a cljs spec map, with an omniscient sensedAt (a fully informed
   body; blind removes it, perception/wrap replaces it). The spec's :floor, [x0 z0 x1 z1], is stone at
@@ -73,7 +81,7 @@
                 (-> spec (dissoc :floor) (update :blocks #(merge (apply floor rect) %)))
                 spec)]
      (let [p (fake-world/create spec)]
-       (aset p "sensedAt" (fn [pos] (.blockAt p pos)))
+       (aset p "sensedAt" (sensed-by p))
        p))))
 
 (def walk-floor
@@ -103,9 +111,11 @@
   test a body that has seen nothing."
   [p]
   (aset p "seenBlocks" (fn [q] (.blocks p q)))
-  (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)]
-                                    #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})))
-  (aset p "sensedAt" (fn [pos] (.blockAt p pos)))
+  (aset p "seenBlockAt" (fn [pos] (let [b ((sensed-by p) pos)]
+                                    (if (true? (.-unknown b))
+                                      b
+                                      #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0}))))
+  (aset p "sensedAt" (sensed-by p))
   p)
 
 (defn blind

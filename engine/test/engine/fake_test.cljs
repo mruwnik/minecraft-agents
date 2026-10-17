@@ -1142,3 +1142,12 @@
     {"0,50,0" "stone" "0,51,0" "ladder" "0,52,0" "ladder"} [0 52 0] 20 [[0 52 0] 20]  ; on a ladder: holds
     {"0,50,0" "stone" "0,52,0" "vine"} [0 56 0] 20 [[0 52 0] 20]                      ; a vine catches the fall
     {"0,50,0" "stone" "0,51,0" "scaffolding"} [0 51 0] 20 [[0 51 0] 20]))             ; scaffolding holds
+
+(deftest sensing-a-malformed-position-is-unknown-not-air
+  (let [p (tu/seeing-all (tu/fake {:blocks {"0,63,0" "stone"}}))]
+    (are [pos] (true? (.-unknown (.sensedAt p (clj->js pos))))
+      {:x [0 0 0] :y nil :z nil}
+      {:x 0 :y 63 :z js/NaN}
+      {:x 0 :y 63})
+    (is (true? (.-unknown (.seenBlockAt p (clj->js {:x [0 0] :y nil :z nil})))))
+    (is (= "stone" (.-name (.sensedAt p (clj->js {:x 0 :y 63 :z 0})))))))
