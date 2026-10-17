@@ -22,7 +22,7 @@
    :body {:inventory [["fishing_rod" 1] ["furnace" 1] ["coal" 2]]}
    :act [[:job (jobs.items.obtain {:any-of ["cooked_cod" "cooked_salmon"] :count 1 :explore false})]]
    :expect [{:event {:source :job :kind :fish.caught} :within-s 180}
-            {:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 230}
+            {:event {:source :job :kind :child_ended :data {:slot :smelt :ending {:kind :done}}} :within-s 230}
             {:event {:source :job :kind :completed :data {:name "jobs.items.obtain"}} :within-s 240 :of-job true}]
    :limit-s 250}
   {:name "no-rod-no-fish"

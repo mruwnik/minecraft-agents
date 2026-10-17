@@ -92,12 +92,12 @@
    :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]]
    :body {:inventory [["carrot" 6]]}
    :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :seed "carrot"})]]
-   :expect [{:event {:source :job :kind :plant.done :data {:reason :food-reserve}} :within-s 40 :of-job true}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :food-reserve}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :fetch.started} :for-s 20}]
    :after [[:block [10 0 16] "air"] [:item "carrot" 6]]}
   {:name "carrots-above-the-food-reserve-are-sown"
    :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]]
    :body {:inventory [["carrot" 30]]}
    :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :seed "carrot"})]]
-   :expect [{:event {:source :job :kind :plant.done :data {:planted [:>= 3]}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:planted [:>= 3]}} :within-s 60 :of-job true}]
    :after [[:block [10 0 16] "carrots"]]}]}

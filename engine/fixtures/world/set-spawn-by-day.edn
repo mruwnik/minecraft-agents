@@ -18,7 +18,7 @@
    :body {:at [4.5 0 4.5] :spawnpoint [21 0 16]}
    :memory [{:kind :spawn-bed :data {:pos #xyz [20 0 16]} :policy {:cap 1 :ttl :forever}}]
    :act [[:job (jobs.survival.set-spawn {:bed #at [20 0 16]})]]
-   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.set-spawn" :why :unchanged}} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.set-spawn" :cause :already}} :within-s 30 :of-job true}]
    :after [[:body-near [4.5 0 4.5] 3]]
    :limit-s 40}
   {:name "newer-spawn-reset-walks-to-the-bed-and-clicks"

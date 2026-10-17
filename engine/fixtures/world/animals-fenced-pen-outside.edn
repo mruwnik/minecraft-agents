@@ -30,5 +30,5 @@
    :body {:at [10.5 0 16.5] :yaw 90}
    :act [[:summon "chicken" [20.5 0 15.5] "{NoAI:1b}"] [:summon "chicken" [21.5 0 16.5] "{NoAI:1b}"] [:summon "chicken" [22.5 0 17.5] "{NoAI:1b}"]
          [:job (jobs.animals.tend {:mob "chicken" :target 3 :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do :adults 3}} :within-s 100 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :adults 3}} :within-s 100 :of-job true}]
    :limit-s 140}]}
