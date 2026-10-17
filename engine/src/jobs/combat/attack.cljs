@@ -54,7 +54,8 @@
    :absent {:doc ":done ends the job with reason :absent when no target is present after a 2 s grace; :wait makes the check decline until one is" :spec #{:done :wait} :default :done}})
 
 (a/defargs settings
-  {::reach {:default 3 :doc "How near the target the body stands to swing, in blocks." :spec (a/int-in 0 nil)}
+  {::vehicle-gap-ms {:default 150 :doc "Least time between swings at a minecart or boat: its damage drains 1 a tick and each hit adds only 10, so slower hits never break it." :spec (a/int-in 0 nil)}
+   ::reach {:default 3 :doc "How near the target the body stands to swing, in blocks." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds from the first round before a fight gives up." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn time-s [] (settings/get settings ::job-time-s))
@@ -293,6 +294,21 @@
     (fail! c target))
   :again)
 
+(defn swing-gap-ms
+  "The least time between swings at target: ::vehicle-gap-ms for a vehicle, else the call's or weapon's gap."
+  [c target]
+  (if (vehicle? target)
+    (settings/get settings ::vehicle-gap-ms)
+    (combat/gap-ms c)))
+
+(defn ^:async wait-swing-gap!
+  "Wait out the rest of the swing gap. A vehicle's is too short to look round in (watch! would outlast it)."
+  [c target]
+  (if-not (vehicle? target)
+    (await (combat/wait-gap! c (:last-attack (ctx/mem c)) (combat/gap-ms c)))
+    (let [left (- (+ (:last-attack (ctx/mem c)) (swing-gap-ms c target)) (ctx/now c))]
+      (when (pos? left) (await (ctx/act c :wait #js {:ms left}))))))
+
 (defn ^:async step
   "One step of the fight: end, look for a lost target, wait out the swing gap, or walk and swing once. :again or the ending."
   [c]
@@ -307,8 +323,8 @@
                          (await (vantage/step! c (heard c) found?)) :again
                          :else (finish! c (if (empty? seen) :absent (settled-reason c))))
       :else (do (ctx/update-mem! c update :seen (fnil into #{}) (mapv (fn [e] (.-id e)) targets))
-                (if (combat/within-gap? c)
-                  (do (await (combat/wait-gap! c (:last-attack (ctx/mem c)) (combat/gap-ms c))) :again)
+                (if (combat/within-gap? c (swing-gap-ms c (first targets)))
+                  (do (await (wait-swing-gap! c (first targets))) :again)
                   (await (engage! c (first targets))))))))
 
 (defn ^:async round

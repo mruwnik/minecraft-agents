@@ -293,6 +293,14 @@
           (is (= 4 (count (attacked s))))
           (is (every? #(<= 585 % 625) (h/waited-between-swings p)) "the rest of the sword's 625 ms is waited out between swings"))))))
 
+(deftest a-vehicle-is-hit-faster-than-its-damage-drains
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (await (h/first-round-ms (spec {:targets [7]}) {:inventory h/sword :entities [(ent 7 "chest_minecart" "vehicle" 2 {:invulnerable true})]} 10))]
+          (is (< 4 (count (attacked s))))
+          (is (every? #(<= % 150) (h/waited-between-swings p)) "a minecart loses 1 damage a tick and gains 10 a hit: the sword's 625 ms gap never breaks it"))))))
+
 (deftest an-explicit-attack-gap-ms-beats-the-floor
   (async done
     (tu/run-async done

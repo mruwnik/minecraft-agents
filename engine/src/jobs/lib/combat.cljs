@@ -80,10 +80,11 @@
       (weapon/attack-gap-ms (.-held (.self (:primitives c))))))
 
 (defn within-gap?
-  "Whether the job memory's :last-attack swing was less than the gap ago."
-  [c]
-  (let [last-attack (:last-attack (ctx/mem c))]
-    (and last-attack (< (- (ctx/now c) last-attack) (gap-ms c)))))
+  "Whether the job memory's :last-attack swing was less than gap (default gap-ms) ago."
+  ([c] (within-gap? c (gap-ms c)))
+  ([c gap]
+   (let [last-attack (:last-attack (ctx/mem c))]
+     (and last-attack (< (- (ctx/now c) last-attack) gap)))))
 
 (defn ^:async wait-gap!
   "Spend the rest of the attack gap after a swing at last-attack (ms): look round (watch!), then wait out what is left."
