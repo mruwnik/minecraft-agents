@@ -49,7 +49,7 @@
    :register []
    :blocks [[:fill [16 0 16] [16 2 16] "dirt"]]
    :body {:at [16.5 3 16.5] :effects []}
-   :act [[:summon "zombie" [14.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}},active_effects:[{id:\"minecraft:slowness\",amplifier:255b,duration:2400}]}"]
+   :act [[:summon "zombie" [14.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}},active_effects:[{id:\"minecraft:slowness\",amplifier:127b,duration:2400}]}"]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 50"] [:until-seen {:entity "zombie"} 10]
          [:job (jobs.movement.go-to {:pos #at [3 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
