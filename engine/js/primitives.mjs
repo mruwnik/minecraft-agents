@@ -224,35 +224,40 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       return /^(soul_)?fire$/.test(name ?? '') ? { cause: 'fire' } : {}
     }
     const remember = () => { if (target.health > 0) snapshot = inventoryNow() }
-    // The last damage packet to this body: the damage type's name (target.damageTypeNames comes from the login
-    // registry) and the entity responsible, as a client can know them. The next health loss reports it; engine.hurt
-    // turns it into the cause.
-    let damage = null
+    // The damage packets to this body since the last health packet: the damage type's name (target.damageTypeNames
+    // comes from the login registry) and the entity responsible, as a client can know them. The server sends one
+    // health packet per tick, so a blast and a hit in one tick are one loss; the next health loss reports all of them
+    // (damages) and the last one's fields; engine.hurt turns them into the causes.
+    let damages = []
     const onDamage = packet => {
       if (packet.entityId !== target.entity?.id) return
       const source = packet.sourceCauseId > 0 ? target.entities?.[packet.sourceCauseId - 1] : undefined
-      damage = {
+      damages.push({
         at: Date.now(),
         damageType: target.damageTypeNames?.[packet.sourceTypeId],
         ...(source && { attacker: { id: source.id, name: source.name ?? source.username } })
-      }
+      })
     }
     target._client?.on('damage_event', onDamage)
-    let lastHurt = null // the fields of the last health loss's damage packet, for a death that follows it
+    let lastHurt = null // the damage packets of the last health loss, for a death that follows it
+    const fresh = list => list.filter(d => Date.now() - d.at < setting('prim/damage-fresh-ms'))
     const hurtNow = () => {
-      const last = damage
-      damage = null
-      if (!last || Date.now() - last.at >= setting('prim/damage-fresh-ms')) return {}
-      lastHurt = last
-      const { at, ...fields } = last
-      return fields
+      const list = fresh(damages)
+      damages = []
+      if (!list.length) return {}
+      lastHurt = list
+      const { at, ...fields } = list[list.length - 1]
+      return { ...fields, damages: list.map(({ at, ...d }) => d) }
     }
-    // The died event's cause when the block gives none: the attacker of the lethal hit, else its damage type.
+    // The died event's cause when the block gives none: the attacker of the lethal loss's first damage packet, else
+    // its damage type (a blast comes before the hit that follows it in the tick).
     const killerNow = () => {
-      if (!lastHurt || Date.now() - lastHurt.at >= setting('prim/damage-fresh-ms')) return {}
-      const { at, ...fields } = lastHurt
-      const cause = fields.attacker?.name ?? fields.damageType?.replace(/^minecraft:/, '')
-      return { ...fields, ...(cause && { cause }) }
+      const list = lastHurt && fresh(lastHurt)
+      if (!list?.length) return {}
+      const { at, ...fields } = list[list.length - 1]
+      const { at: firstAt, ...first } = list[0]
+      const cause = first.attacker?.name ?? first.damageType?.replace(/^minecraft:/, '')
+      return { ...fields, damages: list.map(({ at, ...d }) => d), ...(cause && { cause }) }
     }
     // raw levels; engine.senses turns them into weather-changed when raining or thundering flips
     const levelsNow = () => ({ rain: target.rainState ?? 0, thunder: target.thunderState ?? 0 })

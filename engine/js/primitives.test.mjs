@@ -3208,6 +3208,19 @@ test('the hurt event carries the damage type when nothing is responsible, and no
   assert.equal('damageType' in second, false)
 })
 
+test('damage packets of one health loss are all reported, the death named after the first', () => {
+  const { bot, seen } = hurtRig()
+  bot._client.emit('damage_event', { entityId: bot.entity.id, sourceTypeId: 0, sourceCauseId: 0, sourceDirectId: 0 })
+  bot._client.emit('damage_event', { entityId: bot.entity.id, sourceTypeId: 1, sourceCauseId: 9, sourceDirectId: 9 })
+  bot.health = 0
+  bot.emit('health')
+  bot.emit('death')
+  assert.deepEqual(seen.find(e => e.kind === 'hurt').damages.map(d => d.damageType), ['fall', 'mob_attack'])
+  const died = seen.find(e => e.kind === 'died')
+  assert.equal(died.cause, 'fall')
+  assert.equal(died.damages.length, 2)
+})
+
 test('the died event names the attacker of the lethal hit as its cause', () => {
   const { bot, seen } = hurtRig()
   bot._client.emit('damage_event', { entityId: bot.entity.id, sourceTypeId: 1, sourceCauseId: 9, sourceDirectId: 9 })

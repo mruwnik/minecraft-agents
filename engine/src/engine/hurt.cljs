@@ -31,6 +31,14 @@
       (:cause m)
       (get type-causes (some-> (:damageType m) (str/replace #"^minecraft:" "")))))
 
+(defn causes-of
+  "All causes of raw hurt event m, in packet order: one per damage packet of one health loss (a blast and a hit in the
+  same tick are one loss), else the single cause."
+  [m]
+  (if-let [ds (seq (:damages m))]
+    (vec (distinct (keep #(cause (merge (select-keys m [:cause]) %)) ds)))
+    (some-> (cause m) vector)))
+
 (defn new-state [] (atom {:window-ms (settings/get settings :engine.hurt/window-ms) :pending nil}))
 
 (defn set-window!
@@ -54,7 +62,7 @@
                            " (health " (:health pending) ")")})))))
 
 (defn totals
-  "{cause health} lost since the engine started, by named cause: an act's share is the change over it."
+  "{cause health} lost since the engine started, by named cause (a loss with several causes under \"several\"): an act's share is the change over it."
   [eng]
   (:totals @(:hurt eng)))
 
@@ -62,12 +70,14 @@
   "One raw hurt body event m (keyword map). The first hit of a window starts it; later hits add into it; at the
   window's end flush! emits one event with the total, the hit count, the causes, the last health and when the window started (:since-ms)."
   [eng emit! m]
-  (when-let [c (cause m)]
-    (swap! (:hurt eng) update-in [:totals c] (fnil + 0) (or (:amount m) 0)))
+  (let [cs (causes-of m)
+        c (if (> (count cs) 1) "several" (first cs))]
+    (when c
+      (swap! (:hurt eng) update-in [:totals c] (fnil + 0) (or (:amount m) 0))))
   (let [add (fn [p] (-> (or p {:amount 0 :hits 0 :causes [] :since-ms (js/Date.now)})
                         (update :amount + (or (:amount m) 0))
                         (update :hits inc)
-                        (update :causes #(cond-> % (cause m) (conj (cause m))))
+                        (update :causes into (causes-of m))
                         (assoc :health (:health m) :food (:food m))))
         st (swap! (:hurt eng) update :pending add)]
     (when-not (:timer (:pending st))

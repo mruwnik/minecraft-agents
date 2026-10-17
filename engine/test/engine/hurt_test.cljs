@@ -98,3 +98,15 @@
           (await (settle))
           (let [e (first (hurt-events s))]
             (is (<= before (:since-ms e) (- (js/Date.now) window-ms)) "stamped at the first hit, not at the flush")))))))
+
+(deftest a-loss-from-several-damage-packets-lists-every-cause-and-totals-under-several
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {})]
+          (hurt/set-window! (:eng s) window-ms)
+          (hit! s {:health 0 :amount 20 :damages [{:damageType "explosion" :attacker {:id 5 :name "creeper"}}
+                                                  {:damageType "mob_attack" :attacker {:id 9 :name "zombie"}}]})
+          (await (settle))
+          (is (= ["creeper" "zombie"] (:causes (first (hurt-events s)))))
+          (is (= {"several" 20} (hurt/totals (:eng s)))))))))
