@@ -180,8 +180,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[spend at] [[nil [4 64 0]] [{:wall-time 0.5} [0 64 0]]]]
-          (let [{:keys [out p]} (await (run-job! free-by-pocket (cond-> {:pos [8 64 0] :range 0 :ways #{:walk}} spend (assoc :spend spend))))]
+        (doseq [[spend from at] [[nil {:x 0 :z 0} [4 64 0]] [{:wall-time 0.5} {:x 0 :z 0} [0 64 0]] [nil {:x 3 :z 2} [4 64 2]]]]
+          (let [{:keys [out p]} (await (run-job! (update-in free-by-pocket [:self :pos] merge from) (cond-> {:pos [8 64 0] :range 0 :ways #{:walk}} spend (assoc :spend spend))))]
             (is (= :goal-enclosed (:why @out)) (pr-str spend @out))
             (is (= at (feet p)) (str spend ": the nearest cell to the goal, when the walk there fits the budget"))
             (is (empty? (calls p "dig")))))))))

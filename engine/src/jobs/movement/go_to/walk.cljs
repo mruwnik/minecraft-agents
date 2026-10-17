@@ -227,18 +227,20 @@
 
 (defn ^:async walk-to-wall!
   "A walled-in goal (result :goal-enclosed, :goal-cut-off) that no escalation will open: once a call (mem :wall-walked, set once the walk arrived or got nowhere),
-  walk to a cell near it the body can reach (escalation/nearest-stand: the shortest walk within wall-walk-slack of the nearest) when that is more than a block nearer and
+  walk to a cell near it the body can reach (escalation/nearest-stand: the shortest walk within wall-walk-slack of the nearest) when the nearest cell is at least a block nearer than the feet (and the one chosen nearer at all) and
   the walk there (jobs.lib.cost/walk-cost) fits budget-s. True when it walked."
   [c pos tries result opts]
   (let [p (:primitives c)
         feet (end/feet-cell c)
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
         near (delay (esc/nearest-stand p goal wall-walk-slack))
+        nearest (delay (esc/nearest-stand p goal))
         to (fn [a b] (u/dist (zipmap [:x :y :z] a) (zipmap [:x :y :z] b)))]
     (when (and (#{:goal-enclosed :goal-cut-off} (:reason result))
                (not (:wall-walked (ctx/mem c)))
                (not (esc/escalate? c tries result))
-               (< (to @near goal) (dec (to feet goal)))
+               (<= (to @nearest goal) (dec (to feet goal)))
+               (< (to @near goal) (to feet goal))
                (<= (:cost (cost/walk-cost {:distance (to feet @near)})) (budget-s c)))
       (ctx/emit! c :go-to.wall-walk :info {:at @near :why (:reason result)
                                            :text (str "the goal is walled in: walking to " @near ", the nearest cell to it")})
