@@ -4,34 +4,30 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.cond :as cond]
             [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]))
 
 (def doc
   "Keep the body within :range of the player :player, who must be within :radius to be seen.
   A player in range is looked at (the head) and waited on for 500 ms, then the job yields (:continue): it is an
-  ongoing watch. One farther off is walked to in one round (jobs.movement.go-to legs of 5 s, re-aimed at where the
-  player is, doors :shut) until in range. A player out of sight is walked to where they were last seen.
+  ongoing watch. One farther off is walked to in one round (jobs.movement.go-to calls, re-aimed at where the
+  player is, doors :shut) until in range. A player out of sight is walked to where they were last seen, then
+  waited for there. A player never seen is a wait (can-start? and can-run? :later :gone, bounded by the call's limits).
   Ends with a result {:reason ...}:
-  - \"lost\" (with :last-seen): the player was out of sight for :lost-s.
   - \"unreachable\": a walk go-to gave up on (it retries itself).
   - \"out-of-range\": three walks in a row that arrived or got closer but left the body out of range.
-  - \"absent\": the player was never seen within 2 s of the first round
-    (the grace lets the world's entities arrive).
-  - The engine ends it :limit-reached when :spend :job-time is used up, with {:met} (the player was seen). Nothing to undo then.
+  - The engine ends it :limit-reached when :spend :job-time (or :wall-time) is used up, with {:met} (the player was seen). Nothing to undo then.
   Idling is look and wait, neutral for backoff. A cut leaves nothing to undo. The last-seen position stays in job memory.")
 
 (a/defargs args
   {:player {:doc "username to follow" :spec a/name? :default nil}
    :range {:doc "stay within this many blocks of the player" :spec (a/num-in 0 nil) :default 3}
-   :radius {:doc "how far the player may be and still be seen" :spec (a/num-in 0 nil) :default 64}
-   :lost-s {:doc "give up after the player has been out of sight this long" :spec (a/num-in 0 nil) :default 10}})
+   :radius {:doc "how far the player may be and still be seen" :spec (a/num-in 0 nil) :default 64}})
 
 (def target [:player])
 
-(def absent-grace-ms 2000)
 (def idle-ms 500)
-(def walk-leg-s 5)
 (def max-blocked "One go-to give-up ends the job: go-to already retries." 1)
 (def max-out 3)
 (def head-height 1.6)
@@ -50,8 +46,6 @@
 
 (def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 
-(def can-start? bad-args)
-
 (defn find-player
   "The position {:x :y :z} of player named name within radius, or nil."
   [p name radius]
@@ -60,6 +54,23 @@
            first
            .-pos
            u/pos-of))
+
+(defn in-sight
+  "Later :gone while the player is not seen within :radius."
+  [c]
+  (let [{:keys [player radius]} (:args c)]
+    (if (find-player (:primitives c) player radius)
+      (contract/ok :in-sight (str player " is in sight"))
+      (contract/later :gone (str player " is not in sight")))))
+
+(def can-start? (cond/and bad-args in-sight))
+
+(defn can-run?
+  "In sight, or seen before (then the trail is walked); else later :gone."
+  [c]
+  (if (:last-seen (ctx/mem c))
+    (contract/ok :trail "the player was seen before")
+    (in-sight c)))
 
 (defn ^:async idle!
   "A noop pause, then :continue."
@@ -100,19 +111,18 @@
   (ctx/end c kind cause data))
 
 (defn ^:async walk!
-  "Walk to pos within range with go-to calls (legs of leg-s seconds while the player moves, then pos is read again with
+  "Walk to pos within range with go-to calls (then pos is read again with
   target-now, which returns nil when the target is out of sight). The counts are per call: a walk that did not arrive
   counts as blocked when go-to stopped; the first ends the job (result
   {:reason \"unreachable\"}); three legs that got closer but left the body out of range of where the target stands now
   end it. :continue (in range, out of sight, or go-to waiting) or :done."
-  ([c pos range] (walk! c pos range (constantly pos) nil))
-  ([c pos range target-now leg-s]
+  ([c pos range] (walk! c pos range (constantly pos)))
+  ([c pos range target-now]
    (loop [pos pos blocked 0 out 0]
      (let [r (await (child/call-walk* c :walk
-                                     (cond-> {:pos pos :range range :doors :shut :ways #{:walk :clear-seal} :warn false}
-                                       leg-s (assoc-in [:spend :job-time] leg-s))))
+                                     {:pos pos :range range :doors :shut :ways #{:walk :clear-seal} :warn false}))
            res (:data r)
-           blocked (if (or (:arrived res) (:leg res)) 0 (inc blocked))
+           blocked (if (:arrived res) 0 (inc blocked))
            now (target-now)
            out (next-out out blocked (u/self-pos c) (or now pos) range)]
        (cond
@@ -133,42 +143,22 @@
     (do (await (look-at-head! c pos))
         (await (idle! c)))
     (await (walk! c pos (:range (:args c))
-                  #(find-player (:primitives c) (:player (:args c)) (:radius (:args c)))
-                  walk-leg-s))))
+                  #(find-player (:primitives c) (:player (:args c)) (:radius (:args c)))))))
 
 (defn ^:async follow-unseen!
-  "The player is out of sight at now, seen last at seen-t at last-seen."
-  [c now]
-  (let [{:keys [started last-seen seen-t]} (ctx/mem c)
-        lost-ms (* 1000 (:lost-s (:args c)))]
-    (cond
-      (and (nil? seen-t) (< (- now started) absent-grace-ms))
+  "The player is out of sight, seen last at last-seen: walk there, then wait."
+  [c]
+  (let [{:keys [last-seen]} (ctx/mem c)]
+    (if (u/within? (u/self-pos c) last-seen last-seen-reach)
       (await (idle! c))
-
-      (nil? seen-t)
-      (finish! c :condition-failed :absent {:text (str (:player (:args c)) " is not here")})
-
-      (>= (- now seen-t) lost-ms)
-      (finish! c :nothing-possible :lost {:text (str "lost " (:player (:args c))) :last-seen last-seen})
-
-      (u/within? (u/self-pos c) last-seen last-seen-reach)
-      (await (idle! c))
-
-      :else
       (await (walk! c last-seen 1)))))
 
 (defn ^:async round
   "One bounded step: follow the player seen or the trail."
   [c]
-  (let [now (ctx/now c)
-        _ (when-not (contains? (ctx/mem c) :started)
-            (ctx/update-mem! c assoc :started now))
-        {:keys [player radius]} (:args c)
+  (let [{:keys [player radius]} (:args c)
         pos (find-player (:primitives c) player radius)]
-    (cond
-      pos
-      (do (ctx/update-mem! c assoc :last-seen pos :seen-t now)
+    (if pos
+      (do (ctx/update-mem! c assoc :last-seen pos :seen-t (ctx/now c))
           (await (follow-seen! c pos)))
-
-      :else
-      (await (follow-unseen! c now)))))
+      (await (follow-unseen! c)))))

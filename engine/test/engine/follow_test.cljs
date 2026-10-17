@@ -69,7 +69,7 @@
     {:player 5} [:never :bad-args]))
 
 (defn ended "The result fields a test reads of the follow's ending." [out]
-  (select-keys out [:reason :last-seen]))
+  (select-keys out [:reason]))
 
 (deftest follows-a-player-ten-away
   (async done
@@ -100,29 +100,44 @@
           (is (= [{:x 20 :y 64 :z 0}] (move-targets eng)))
           (is (<= (Math/abs (- 20 (self-x p))) 3)))))))
 
-(deftest a-player-who-disappears-is-walked-to-then-lost
+(deftest a-player-who-disappears-is-walked-to-then-waited-for
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [vanish (fn [s i] (when (= 1 i) (swap! (fake/state (:p s)) update :entities subvec 1)))
-              {:keys [p out eng] :as s} (await (follow {:entities [(steve 10)]} {:player "Steve" :lost-s 3} 20 1000 vanish))]
-          (is (= {:reason :lost :last-seen {:x 10 :y 64 :z 0}} (ended @out)))
+              {:keys [out eng]} (await (follow {:entities [(steve 10)]} {:player "Steve"} 20 1000 vanish))]
+          (is (= :not-done @out) "no lost clock: the call's limits end it")
           (is (every? #{{:x 10 :y 64 :z 0}} (move-targets eng)) "only the last-seen cell is walked to"))))))
 
-(deftest a-player-who-is-never-there-is-absent-after-two-seconds
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [clock out] :as s} (await (follow {} {:player "Steve"} 10 500))]
-          (is (= {:reason :absent} (ended @out)))
-          (is (<= 2000 (- @clock 1000000))))))))
+(defn check-ctx
+  "A ctx for the checks: the world's primitives and a job memory of mem."
+  [p mem]
+  {:primitives p :root "j1" :args {:player "Steve" :radius 64}
+   :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data mem}]}}})})
 
-(deftest not-yet-absent-within-the-grace
+(deftest a-player-never-seen-is-a-wait-not-an-ending
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (follow {} {:player "Steve"} 2 500))]
-          (is (= :not-done @out)))))))
+        (let [{:keys [out p]} (await (follow {} {:player "Steve"} 10 500))
+              c (check-ctx p {})]
+          (is (= [:condition-failed :gone] [(:kind (:ending @out)) (:reason @out)]) "a called child that would wait ends")
+          (is (= [:later :gone] (tu/kind-reason (follow/can-start? c))))
+          (is (= [:later :gone] (tu/kind-reason (follow/can-run? c)))))))))
+
+(deftest a-player-gone-since-was-seen-is-walked-to-not-waited-for
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {} {:player "Steve"})]
+          (is (= [:ok :trail] (tu/kind-reason (follow/can-run? (check-ctx (:p s) {:last-seen {:x 10 :y 64 :z 0}}))))))))))
+
+(deftest a-player-in-sight-lets-it-start
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:entities [(steve 2)]} {:player "Steve"})]
+          (is (= [:ok :in-sight] (tu/kind-reason (follow/in-sight (check-ctx (:p s) {}))))))))))
 
 (deftest one-blocked-go-to-is-unreachable
   (async done
