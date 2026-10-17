@@ -11,6 +11,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as look]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.spent :as spent]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
@@ -44,7 +45,7 @@
   Blocks missing (:too-few-blocks, with :short) are got with jobs.items.obtain (jobs.lib.need, then the body walks back
   to the cell it stood on) unless :fetch is false; a cell ahead still unsensed after the look ends :unseen.
 
-  Ends :done with data {:placed [[x y z] ...] :built n :length n}; :placed are this job's confirmed blocks, nearest
+  Ends :done with data {:placed [[x y z] ...] :built n :length n :spent {item n} :spent-at [cell ...]}; :placed are this job's confirmed blocks, nearest
   first. A give-up is condition-failed with the cause :too-few-blocks (the fetch ending as its :because), :not-on-solid,
   :blocked (a cell ahead at body height is not clear), :zone, :footprint, :no-zones, :not-loaded, :not-replaceable,
   :unseen or :bad-args, or nothing-possible with :off-line, :place-failed (3 failed places in a row, :detail the
@@ -137,15 +138,25 @@
 
 ;; ------------------------------------------------------------------ the round
 
-(defn placed
-  "This job's confirmed bridge cells in ledger l, nearest the start first."
+(defn placed-entries
+  "This job's confirmed bridge ledger entries in l, nearest the start first."
   [c l start heading]
   (let [at #(progress (update % 1 inc) start heading)]
     (->> (ledger/of-job l (:id c) purpose)
          (filter #(= :placed (:state %)))
-         (map :cell)
-         (sort-by #(or (at %) 0))
-         vec)))
+         (sort-by #(or (at (:cell %)) 0)))))
+
+(defn placed
+  "This job's confirmed bridge cells in ledger l, nearest the start first."
+  [c l start heading]
+  (mapv :cell (placed-entries c l start heading)))
+
+(defn result-of
+  "The bridge's result data from ledger l: the cells placed, their count and the length, plus what they cost."
+  [c l start heading]
+  (let [entries (if start (placed-entries c l start heading) [])]
+    (merge {:placed (mapv :cell entries) :built (count entries) :length (:length (:args c))}
+           (spent/summary (reduce (fn [log {:keys [item cell]}] (spent/add log item cell)) nil entries)))))
 
 (def condition-reasons
   "Give-up reasons that read as a failed condition; any other is nothing possible."
@@ -155,9 +166,8 @@
   "End the job on a give-up step: its event and ending."
   [c l step]
   (let [{:keys [heading length]} (:args c)
-        cells (placed c l (:start (ctx/mem c)) heading)
-        result (merge {:placed cells :built (count cells) :length length}
-                      (dissoc step :step :reason))]
+        result (merge (result-of c l (:start (ctx/mem c)) heading) (dissoc step :step :reason))
+        cells (:placed result)]
     (ctx/emit! c :bridge.gave-up :warn
                (assoc result :status :stopped :reason (:reason step)
                       :text (str "bridge gave up at " (count cells) " of " length ": " (name (:reason step))
@@ -198,9 +208,9 @@
   (let [{:keys [heading length]} (:args c)
         start (:start (ctx/mem c))
         l (ledger/open-entries (ctx/view c))
-        cells (if start (placed c l start heading) [])
-        i (when start (progress (pl/feet-cell c) start heading))
-        result {:placed cells :built (count cells) :length length}]
+        result (result-of c l start heading)
+        cells (:placed result)
+        i (when start (progress (pl/feet-cell c) start heading))]
     (if (and i (pos? (or length 0)) (>= i length))
       (contract/ok :bridged (str "bridge of " (count cells) " blocks " (name heading)) :units :blocks :done (count cells) :left 0 :result result)
       (contract/later :building "the bridge is being built" :units :blocks :done (count cells) :left (max 0 (- (or length 0) (count cells))) :result result))))

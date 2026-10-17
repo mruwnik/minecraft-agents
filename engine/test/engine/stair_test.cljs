@@ -675,6 +675,8 @@
           (is (= [1 66 0] (:at @out)))
           (is (= "cobblestone" (block-at p [1 65 0])) "the floor was placed")
           (is (= "cobblestone" (block-at p [1 64 0])) "from the cell under it, the only one with a face (the ground beside it)")
+          (is (= {"cobblestone" 2} (:spent @out)))
+          (is (= [[1 64 0] [1 65 0]] (:spent-at @out)))
           (is (= 2 (count (filter #(= "place" (.-name %)) (.-calls (.-world p)))))))))))
 
 (defn scaffold [{:keys [eng]}] (mapv #(select-keys % [:cell :item :purpose]) (ledger/open-entries (mem/view (:store eng)))))

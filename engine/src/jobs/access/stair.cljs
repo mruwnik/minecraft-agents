@@ -1,6 +1,7 @@
 (ns jobs.access.stair
   (:require [engine.args :as a]
             [jobs.lib.ready :as ready]
+            [jobs.lib.spent :as spent]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
@@ -288,10 +289,11 @@
             (with-heading-check not-lacking)))
 
 (defn result-of
-  "The data of a stair now: {:steps :at :dug :ores} plus detail."
+  "The data of a stair now: {:steps :at :dug :ores} and what it placed (jobs.lib.spent) plus detail."
   [c detail]
   (let [m (ctx/mem c)]
-    (merge {:steps (or (:at-step m) 0) :at (reach/standing-vec (:primitives c)) :dug (:dug m []) :ores (vec (ore-pick/picked c))} detail)))
+    (merge {:steps (or (:at-step m) 0) :at (reach/standing-vec (:primitives c)) :dug (:dug m []) :ores (vec (ore-pick/picked c))}
+           (spent/summary (spent/log c)) detail)))
 
 (defn done?
   "Ok once the stair is cut and its end settled; before the start, already when :y is given and the feet stand at it.

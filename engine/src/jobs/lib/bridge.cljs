@@ -5,6 +5,7 @@
             [jobs.lib.access.rules :as rules]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.spent :as spent]
             [jobs.lib.util :as u]))
 
 (def face-steps [[1 0 0] [-1 0 0] [0 -1 0] [0 0 1] [0 0 -1]])
@@ -65,6 +66,7 @@
             {:reason :no-support-floor :cell cell :item item :why (str "nothing to place " item " against at " (pr-str cell))}
             {:reason :place-failed :cell cell :item item})
           (do (ctx/update-mem! c update :bridged (fnil conj #{}) cell)
+              (spent/note! c item cell)
               nil))))))
 
 (defn ^:async place-all!

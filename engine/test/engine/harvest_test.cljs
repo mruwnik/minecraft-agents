@@ -101,7 +101,9 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (start {:world wheat-world})
               result (await (child-outcome eng job {} 200))]
-          (is (= {:cut 9 :replanted 9 :bare [] :lost [] :gave-up false} (dissoc result :text)))
+          (is (= {:cut 9 :replanted 9 :bare [] :lost [] :gave-up false} (select-keys result [:cut :replanted :bare :lost :gave-up])))
+          (is (= {"wheat_seeds" 9} (:spent result)) "the seeds replanted")
+          (is (= 5 (count (:spent-at result))))
           (is (every? #(and (= "wheat" (block-at p (first %) 64 (second %))) (= 0 (age-at p (first %) 64 (second %))))
                       (for [x (range 2 5) z (range 2 5)] [x z])))
           (is (= {"wheat" 9} (inv p))))))))
@@ -124,7 +126,7 @@
               result (await (child-outcome eng job {} 200))
               dug (set (map #(let [pos (.-pos (.-args %))] [(.-x pos) (.-z pos)]) (calls p "dig")))]
           (is (= #{[1 2] [2 2]} dug))
-          (is (= {:cut 2 :replanted 2 :bare [] :lost [] :gave-up false} (dissoc result :text)))
+          (is (= {:cut 2 :replanted 2 :bare [] :lost [] :gave-up false} (dissoc result :text :spent :spent-at)))
           (is (= [3 3] [(age-at p 3 64 2) (age-at p 4 64 2)]))
           (is (= [0 0] [(age-at p 1 64 2) (age-at p 2 64 2)])))))))
 
@@ -255,7 +257,7 @@
                          ((get {3 #(fake/set-block! p [(.-x pos) 63 (.-z pos)] "dirt")} (.-z pos) (constantly nil)))
                          r)))
           (let [result (await (child-outcome eng job {} 100))]
-            (is (= {:cut 2 :replanted 1 :bare [{:x 2 :y 64 :z 3}] :lost [] :gave-up false} (dissoc result :text)))))))))
+            (is (= {:cut 2 :replanted 1 :bare [{:x 2 :y 64 :z 3}] :lost [] :gave-up false} (dissoc result :text :spent :spent-at)))))))))
 
 (deftest the-job-is-not-run-while-every-crop-is-unripe
   (async done
@@ -321,7 +323,7 @@
                              #js {:status "failed" :reason "the block is still air"})
                          (await (impl token args)))))
           (let [result (await (child-outcome eng job {} 100))]
-            (is (= {:cut 1 :replanted 1 :bare [] :lost [] :gave-up false} (dissoc result :text)))
+            (is (= {:cut 1 :replanted 1 :bare [] :lost [] :gave-up false} (dissoc result :text :spent :spent-at)))
             (is (= 2 (count (place-calls-at p 3))))
             (is (<= (second @dists) 2) "the retry is from within 2 blocks")
             (is (= "wheat" (block-at p 3 64 0)))))))))
@@ -334,7 +336,7 @@
           (let [{:keys [eng p]} (start {:world one-cell})]
             (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status status}))
             (let [result (await (child-outcome eng job {} 100))]
-              (is (= {:cut 1 :replanted 0 :bare [{:x 3 :y 64 :z 0}] :lost [] :gave-up false} (dissoc result :text)) status)
+              (is (= {:cut 1 :replanted 0 :bare [{:x 3 :y 64 :z 0}] :lost [] :gave-up false} (dissoc result :text :spent :spent-at)) status)
               (is (= 3 (count (place-calls-at p 3))) status)
               (is (= [] (:list (core/state eng))) status))))))))
 
@@ -350,7 +352,7 @@
         (let [{:keys [eng p]} (start {:world far-cell})]
           (tu/short-walks! p 1 2) ; the first two steers run for no time: blocked walks without a reason
           (let [result (await (child-outcome eng job {} 100))]
-            (is (= {:cut 1 :replanted 1 :bare [] :lost [] :gave-up false} (dissoc result :text)))))))))
+            (is (= {:cut 1 :replanted 1 :bare [] :lost [] :gave-up false} (dissoc result :text :spent :spent-at)))))))))
 
 (deftest a-walk-with-no-path-is-counted-blocked-until-the-crops-are-skipped
   (async done
@@ -389,7 +391,7 @@
                              _ (fake/set-block! p [3 63 0] "dirt")]
                          r)))
           (let [result (await (child-outcome eng job {} 100))]
-            (is (= {:cut 1 :replanted 1 :bare [cell] :lost [cell] :gave-up false} (dissoc result :text)))))))))
+            (is (= {:cut 1 :replanted 1 :bare [cell] :lost [cell] :gave-up false} (dissoc result :text :spent :spent-at)))))))))
 
 (deftest the-sweep-is-owed-before-the-first-dig
   (async done
@@ -424,7 +426,7 @@
           (let [result (await (child-outcome eng job {} 600))
                 homeward (filterv #(zero? (:x %)) (tu/walked-to eng))]
             (is (pos? (count homeward)) "walked back to the field")
-            (is (= {:cut 1 :replanted 1 :bare [] :lost [] :gave-up false} (dissoc result :text)))
+            (is (= {:cut 1 :replanted 1 :bare [] :lost [] :gave-up false} (dissoc result :text :spent :spent-at)))
             (is (= "wheat" (block-at p 3 64 0)))))))))
 
 ;; the crops are in sight only from near the field, as in the world
@@ -453,7 +455,7 @@
           (tu/short-walks! p 1) ; every steer runs for no time: the walk home is blocked each time
           (let [result (await (child-outcome eng job {} 100))]
             (is (= 3 (count (filterv #(zero? (:x %)) (tu/walked-to eng)))))
-            (is (= {:cut 1 :replanted 0 :bare [cell] :lost [] :gave-up false} (dissoc result :text)))))))))
+            (is (= {:cut 1 :replanted 0 :bare [cell] :lost [] :gave-up false} (dissoc result :text :spent :spent-at)))))))))
 
 ;; ------------------------------------------------------------------ zones and claims
 
@@ -502,7 +504,7 @@
               {:keys [eng p]} (start {:world {:blocks (field "wheat" 7 xs zs) :ages (ages 7 xs zs) :drops wheat-drops}})
               result (await (child-outcome eng job {} 1))]
           (is (= 15 (count (calls p "dig"))) "15 ripe crops in reach: one call cuts them all, in steps of at most max-per-round")
-          (is (= {:cut 15 :replanted 15 :bare [] :lost [] :gave-up false} (dissoc result :text))))))))
+          (is (= {:cut 15 :replanted 15 :bare [] :lost [] :gave-up false} (dissoc result :text :spent :spent-at))))))))
 (deftest every-replant-goes-through-the-place-job
   (async done
     (tu/run-async done

@@ -131,7 +131,9 @@
           (is (empty? (of-kind seen :bridge.done)))
           (let [d (first (of-kind seen :completed))]
             (is (= (row 5) (:placed d)))
-            (is (= 5 (:built d)))))))))
+            (is (= 5 (:built d)))
+            (is (= {"dirt" 5} (:spent d)))
+            (is (= (row 5) (:spent-at d)))))))))
 
 (defn obtain-stub
   "An obtain that records the args of each round in the atom and yields."

@@ -13,6 +13,7 @@
             [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
             [jobs.lib.ready :as ready]
+            [jobs.lib.spent :as spent]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
@@ -41,7 +42,7 @@
   Refused before it starts, as failed conditions: {:reason :no-zones} (no zone list read, unless :ignore-zones?),
   {:reason :plan-trouble :why} (the plan is missing or unreadable: a wait; it has no crop cells: impossible, also later in the call), :refused (every ripe crop is
   refused) and :nothing-to-do (no ripe crop and nothing owed).
-  Ends with data {:cut :replanted :bare :lost :gave-up}: cells that could not be replanted, or stopped being a crop
+  Ends with data {:cut :replanted :bare :lost :gave-up :spent :spent-at (the seeds replanted)}: cells that could not be replanted, or stopped being a crop
   afterwards, are named in :bare and a harvest.bare warn. Done when it cut or replanted some and the number meets :least
   (cells, default 1; :all wants every ripe crop it found); with none cut and crops given up on, nothing-possible
   :gave-up; some cut but fewer than :least with nothing left, nothing-possible :partial; none, condition-failed
@@ -294,7 +295,8 @@
         cut (:cut m 0)
         worked (max cut (:replanted m 0))
         lost (lost-cells (:primitives c) (:planted m))
-        data [:units :cells :done cut :left ripe :result {:cut cut :replanted (:replanted m 0) :bare (vec (distinct (concat (:bare m) (map :pos (:replant m)) lost))) :lost lost :gave-up (gave-up? c)}]
+        data [:units :cells :done cut :left ripe :result (merge {:cut cut :replanted (:replanted m 0) :bare (vec (distinct (concat (:bare m) (map :pos (:replant m)) lost))) :lost lost :gave-up (gave-up? c)}
+                       (spent/summary (spent/log c)))]
         waiting (cond
                   (:trouble field) :plan-trouble
                   (blind? c) :looking
@@ -335,6 +337,7 @@
   (if-not (seq (permitted c :sow [pos]))
     (ctx/update-mem! c bare-debt pos)
     (let [outcome (await (blocks/place-cell! c pos seed {:ignore-zones? true}))]
+      (when (= :placed outcome) (spent/note! c seed pos))
       (case outcome
         :continue :continue
         (:placed :already :occupied) (ctx/update-mem! c (fn [m] (-> (drop-debt m pos)
