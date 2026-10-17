@@ -43,7 +43,7 @@
    :after [[:item "stone_pickaxe" 0] [:not-block [16 9 16] "air"]]}
   {:name "tunnel-no-source-fetch-fails-and-stops-no-tool"
    :body {:inventory [["torch" 8] ["cobblestone" 8]]}
-   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]]
+   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true :by-hand false})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :stopped}} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} :within-s 70 :of-job true}
             {:no-event {:source :job :kind :tunnel.done} :for-s 70 :until {:source :job :kind :stopped}}]
