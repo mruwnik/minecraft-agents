@@ -1,0 +1,21 @@
+;; Card dc655af5 (settings C2 65273969): the :engine.settings/job-args overlay changes a default of a job called without that arg.
+;; Open plot, the body at [16.5 0 16.5]; look reports its :radius.
+;; Should-succeed: with the overlay {jobs.explore.look {:radius 8}} a look with no :radius reports 8, one with :radius 12 reports 12;
+;; with no overlay the code default 16.
+{:defaults
+ {:tags [:settings :explore :jobs] :time :any
+  :plot {:height 6}
+  :body {:at [16.5 0 16.5] :settle-s 2}
+  :limit-s 40}
+ :cases
+ [{:name "overlay-radius-is-the-default-of-a-look-without-it"
+   :settings {:engine.settings/job-args {jobs.explore.look {:radius 8}}}
+   :act [[:job (jobs.explore.look {:max-blocks 0 :max-entities 0})]]
+   :expect [{:event {:source :job :kind :completed :data {:radius 8}} :within-s 20 :of-job true}]}
+  {:name "explicit-radius-beats-the-overlay"
+   :settings {:engine.settings/job-args {jobs.explore.look {:radius 8}}}
+   :act [[:job (jobs.explore.look {:radius 12 :max-blocks 0 :max-entities 0})]]
+   :expect [{:event {:source :job :kind :completed :data {:radius 12}} :within-s 20 :of-job true}]}
+  {:name "no-overlay-keeps-the-code-default"
+   :act [[:job (jobs.explore.look {:max-blocks 0 :max-entities 0})]]
+   :expect [{:event {:source :job :kind :completed :data {:radius 16}} :within-s 20 :of-job true}]}]}
