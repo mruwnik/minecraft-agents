@@ -77,11 +77,12 @@
 
 (def aside {:self {:pos [2 64 0]}})
 
-(deftest an-unsafe-moment-waits-the-run-and-skips-no-cell
+(deftest an-unsafe-moment-makes-can-run-later-and-skips-no-cell
   (let [{:keys [p]} (setup (assoc aside :inventory [{:name "stone" :count 2}] :self {:pos [2 64 0] :health 6}) [(zs/whole-zone "Miles")])
         c {:primitives p :args {:min-health 14 :danger-radius 8 :reach 3}}]
-    (is (= [:wait] (restore-broken/decide c [dug])))
+    (is (= [:later :low-health] ((juxt first #(:reason (nth % 2))) (restore-broken/can-run? c))))
     (swap! (fake/state p) assoc-in [:self :health] 20)
+    (is (= :ok (first (restore-broken/can-run? c))))
     (is (= :restore (first (restore-broken/decide c [dug]))))))
 
 (deftest restore-places-the-dug-block-when-carried-and-safe

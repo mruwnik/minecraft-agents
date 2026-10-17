@@ -1,5 +1,6 @@
 (ns jobs.survival.restore-broken
   (:require [jobs.lib.ready :as ready]
+            [engine.contract :as contract]
             [jobs.lib.checks :as checks]
             [engine.settings :as settings]
             [engine.args :as a]
@@ -18,8 +19,8 @@
   entries jobs.lib.tidy and jobs.movement.go-to write; the body's own diggings elsewhere stay). A dug block is placed
   again from an item of the same name carried, or for an escalation hole what the block drops (cobblestone for stone). An escalation hole waits while
   the body is shut in (:shut-in), as it is the body's way on. A placed block is dug again. Both go through jobs.blocks.place / jobs.blocks.dig children (zones ignored on purpose, nothing fetched), so a cell with nothing solid beside it cannot be placed. It digs nothing else.
-  Works only when the body is safe: health at least :min-health and no hostile within :danger-radius; when that stops
-  holding mid-run the run yields :continue (no cell is skipped for it).
+  Works only when the body is safe: health at least :min-health and no hostile within :danger-radius (can-run?, asked before every pass); when that stops
+  holding mid-run the run yields (a reflex ends condition-failed; no cell is skipped for it).
   Touches only a cell whose block is still what the job left (a changed cell is somebody's, left alone),
   with at most 3 tries per cell.
   One run over every entry, paced between steps, a cell put back forgotten at once; a step takes the first cell
@@ -172,6 +173,14 @@
 (def fit? ready/fit?)
 
 
+(defn can-run?
+  "Before every round and between passes: :later :low-health under :min-health, :later :hostile-near with a danger within :danger-radius."
+  [c]
+  (cond
+    (not (tidy/unsafe? (:primitives c) (:args c))) (contract/ok :safe "safe to restore")
+    (< (.-health (.self (:primitives c))) (:min-health (:args c))) (contract/later :low-health "health too low to restore")
+    :else (contract/later :hostile-near "a danger is near: restoring waits")))
+
 (defn done?
   "No :tidy entry waits; the cells put back so far against the entries waiting."
   [c]
@@ -182,11 +191,6 @@
 (defn quote-of [c]
   (let [t (* (settings/get settings ::s-per-cell) (count (tidy/entries c)))]
     {:uses {:job-time [0 t (max t (settings/get settings ::job-time-s))]}}))
-
-(defn unsafe?
-  "Whether the body should not be busy with other people's blocks now."
-  [c args]
-  (tidy/unsafe? (:primitives c) args))
 
 (defn why-not
   "Why entry cannot be restored now (:changed :not-carried :shut-in :occupied), or nil. pr: the pass's probe."
@@ -274,7 +278,7 @@
 
 (defn decide
   "What one pass does with the waiting entries (synchronous, its searches and floods bounded whatever the number
-  waiting): [:done], [:wait] (unsafe now), [:skip e why], [:step-clear e] or [:restore e]. An occupied cell comes first, then the first of
+  waiting): [:done], [:skip e why], [:step-clear e] or [:restore e]. An occupied cell comes first, then the first of
   the first, in order, whose put-back seals no other (checked while the pass's search allowance lasts), else the first."
   [c waiting]
   (let [a (:args c)
@@ -285,7 +289,6 @@
         why (when e (why-not c e pr))]
     (cond
       (nil? e) [:done]
-      (unsafe? c a) [:wait]
       (= :occupied why) [:step-clear e]
       why [:skip e why]
       (tidy/unreachable? (:primitives c) e (:reach a)) [:skip e :unreachable]
@@ -295,14 +298,13 @@
 
 (defn ^:async pass!
   "One step over the next waiting entry: restore it, step clear of it, or skip it with a reason. Resolves :again,
-  :continue while the body is unsafe (nothing is skipped, the run resumes), or :done when none is waiting."
+  :continue while a walk or put-back child yields, or :done when none is waiting."
   [c]
   (let [seen (:seen (ctx/mem c) #{})
         waiting (vec (remove #(contains? seen (:cell %)) (tidy/entries c)))
         [verdict e why] (decide c waiting)]
     (case verdict
       :done :done
-      :wait :continue
       :skip (do (if (and (= :changed why) (= (:was e) (tidy/block-now (:primitives c) (:cell e))))
                   (do (tidy/forget-cell! c (:cell e))
                       (ctx/update-mem! c update :restored (fnil conj []) (:cell e))
@@ -313,12 +315,6 @@
       :restore (if (= :continue (await (restore-one! c e (:reach (:args c))))) :continue :again))))
 
 (defn ^:async round [c]
-  (loop [i 0]
-    (cond
-      (not (ctx/alive? c)) :continue
-      (<= (max-passes) i) (report! c)
-      :else (let [r (await (pass! c))]
-              (case r
-                :again (do (await (pace/pace!)) (recur (inc i)))
-                :continue :continue
-                (report! c))))))
+  (let [i (volatile! 0)
+        r (await (pace/steps! c #(if (< (max-passes) (vswap! i inc)) :done (pass! c))))]
+    (if (= :continue r) :continue (report! c))))
