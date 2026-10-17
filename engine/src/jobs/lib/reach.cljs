@@ -400,14 +400,20 @@
   shut door's cell cannot step across the panel. False with no body position.
   solid: a set of cells [x y z] treated as solid blocks (what if they were filled)."
   ([p] (enclosed? p #{}))
-  ([p solid]
+  ([p solid] (enclosed? p solid (lookup p body-kind-of)))
+  ([p solid base]
    (if (some-> (.self p) .-pos)
-     (let [base (lookup p body-kind-of)
-           kind-at (if (empty? solid)
-                     base
-                     (fn [x y z] (if (contains? solid [x y z]) :solid (base x y z))))]
-       (shut-in? p kind-at))
+     (shut-in? p (if (empty? solid)
+                   base
+                   (fn [x y z] (if (contains? solid [x y z]) :solid (base x y z)))))
      false)))
+
+(defn closes-in?
+  "Whether the body has room to walk now but would be shut in with cell [x y z] solid. Both floods read the cells
+  through one lookup."
+  [p cell]
+  (let [base (lookup p body-kind-of)]
+    (boolean (and (not (enclosed? p #{} base)) (enclosed? p #{(vec cell)} base)))))
 
 (defn seen-free? [p kind-at x y z]
   (and (some? (u/seen-block p {:x x :y y :z z})) (passable? kind-at x y z)))

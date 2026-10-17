@@ -42,7 +42,7 @@
     (cond
       (changed? p cell) :changed
       (tidy/in-body? p cell) :occupied
-      (and (not (reach/enclosed? p)) (reach/enclosed? p #{(vec cell)})) :needed
+      (reach/closes-in? p cell) :needed
       (and (not (b/in-reach? c cell)) (deep-below? c cell)) :away)))
 
 (defn ^:async restore-round!

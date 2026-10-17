@@ -88,6 +88,16 @@
     (is (false? (reach/enclosed? p)))
     (is (= 1 (most-reads reads)))))
 
+(deftest closes-in-names-the-doorway-and-reads-each-block-once
+  (let [doorway (apply dissoc walls ["1,64,0" "1,65,0"])
+        [p reads] (counting (tu/fake {:self {:pos body} :floor [-30 -30 30 30] :blocks doorway}))]
+    (is (true? (reach/closes-in? p [1 64 0])) "the only way out")
+    (is (= 1 (most-reads reads)) "both floods share the blocks they read"))
+  (let [p (tu/fake {:self {:pos body} :floor [-30 -30 30 30] :blocks (apply dissoc walls ["1,64,0" "1,65,0"])})]
+    (is (false? (reach/closes-in? p [-1 64 0])) "a wall cell already solid")
+    (is (false? (reach/closes-in? p [9 64 9])) "a cell far off"))
+  (is (false? (reach/closes-in? (tu/fake {:self {:pos body} :floor [-30 -30 30 30] :blocks walls}) [1 64 0])) "already shut in"))
+
 (defn ring
   "One-high ring of block name at radius 1 around the cell (6 64 0)."
   [name]
