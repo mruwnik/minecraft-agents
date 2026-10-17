@@ -207,10 +207,14 @@
     {:status s :goal goal :goal-job goal-job :inventory inv :want-counts (want-counts inv want)}))
 
 (defn fingerprint
-  "What changes when the body gets on: the current job and its wait, the 4-block cell, the items carried."
-  [{s :status :keys [inventory want-counts]}]
-  [(get-in s [:current :id]) (get-in s [:current :waiting]) (mapv #(js/Math.floor (/ % 4)) (:pos s))
-   (:total-items inventory) want-counts])
+  "What changes when the body gets on: the goal job's state, the items carried and the want counts. The 4-block cell
+  counts only while a non-reflex job is current: a reflex fires with a new id each time, and fleeing in a loop is not progress."
+  [{s :status :keys [goal inventory want-counts]}]
+  (let [current (:current s)
+        row (first (filter #(= goal (:id %)) (job-rows s)))]
+    [(:id row) (:status row) (:waiting row)
+     (when-not (:reflex current) (mapv #(js/Math.floor (/ % 4)) (:pos s)))
+     (:total-items inventory) want-counts]))
 
 (defn watch-ids
   "The goal and the listed (not reflex) jobs of a view, at most 32."

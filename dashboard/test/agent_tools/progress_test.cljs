@@ -244,6 +244,20 @@
             (.then (fn [result] (is (= :timeout (:wake result)))))
             (.finally #(js/clearInterval timer)))))))
 
+(deftest reflex-churn-is-not-progress
+  (with-fixture (assoc working-status :current {:id "j90" :name "flee" :status :running :reflex true}
+                       :jobs {:total 1 :items [{:id "j14" :name "obtain" :status :running}]})
+    {:wait-ms 2000 :stall-ms 150}
+    (fn [f]
+      (let [n (atom 90)
+            timer (js/setInterval
+                   #(swap! (:world f) (fn [w] (-> w (assoc-in [:status :current :id] (str "j" (swap! n inc)))
+                                                  (update-in [:status :position :x] + 10))))
+                   40)]
+        (-> (wait! f)
+            (.then (fn [result] (is (= :stall (:wake result)) (pr-str (dissoc result :view)))))
+            (.finally #(js/clearInterval timer)))))))
+
 ;; The goal and want are kept for later calls
 
 (deftest goal-and-want-are-saved-and-reused
