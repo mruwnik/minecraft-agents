@@ -33,7 +33,7 @@
 (def slip 0.15)
 (def height 1.8)
 (def half-width k/hitbox-half-width)
-(def scan-down 4)
+(def scan-down 6)
 (def fall-limit 256)
 (def bury 3)
 (def deg (/ 180 js/Math.PI))

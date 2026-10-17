@@ -533,3 +533,14 @@
           (is (= [:stopped 0] ((juxt :status :got) e)))
           (is (= (set (map (fn [[x z]] [x 71 z]) stones)) (set (:unreached e))))
           (is (re-find #"seen ore out of reach" (:text e))))))))
+
+;; The ore is seen over the platform's rim, so only go-to's health floor decides the drop: 13 blocks (7 hp left) is refused, 5 is taken.
+(deftest a-drop-to-a-seen-ore-is-taken-only-above-the-health-floor
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[top got] [[77 0] [69 1]]]
+          (let [platform (cells "stone" (range -4 1) (range 64 top) (range -4 5))
+                s (await (scenario {:block "iron_ore" :count 1 :radius 12 :tunnel-length 0 :descend-limit 0 :mend false}
+                                   {:blocks (assoc (merge platform (cells "stone" (range 1 13) [62] (range -4 5))) "6,63,0" "iron_ore") :bodyHitbox true :drops {"iron_ore" "raw_iron"} :self {:pos [0.5 top 0.5]} :inventory pickaxe} 120))]
+            (is (= got (:got (done-event s))) (str "platform top " top))))))))
