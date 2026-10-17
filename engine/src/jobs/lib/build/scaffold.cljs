@@ -106,7 +106,7 @@
   :continue while the child waits."
   [c]
   (when (open? c)
-    (let [e (await (ctx/atomic c :urgent :scaffold #(ctx/call c :cleanup 'jobs.access.cleanup {:job (:id c)})))]
+    (let [e (await (ctx/atomic c :urgent :scaffold #(ctx/call c :cleanup 'jobs.access.cleanup {:job (:id c) :checks {:fit? '(always)}})))]
       (when (= :continue e) :continue))))
 
 (defn ^:async clean!
