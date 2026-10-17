@@ -369,6 +369,24 @@
           (await (tu/run-ticks (:eng s) (:clock s) 40 700))
           (is (= 2 (passes s)) "after the back-off it tries again"))))))
 
+(def far-box {:min {:x 200 :y 60 :z -5} :max {:x 208 :y 70 :z 5}})
+
+(deftest a-pen-far-away-declines-while-another-job-is-listed-and-runs-when-none-is
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:inventory [(wheat 4)] :entities [(cow 1 202) (cow 2 203)]}
+              listed (h/setup world 50)
+              alone (h/setup world 50)]
+          (core/submit! (:eng listed) '(jobs.time.wait-for-dusk) {})
+          (core/submit! (:eng listed) (spec {:box far-box}) {})
+          (core/submit! (:eng alone) (spec {:box far-box}) {})
+          (await (tu/run-ticks (:eng listed) (:clock listed) 3 700))
+          (await (tu/run-ticks (:eng alone) (:clock alone) 3 700))
+          (is (empty? (events-of listed :round_started)))
+          (is (some #(= :away (:reason %)) (events-of listed :waiting)) "the wait says the body is away")
+          (is (seq (events-of alone :round_started)) "alone in the queue it goes"))))))
+
 (deftest animals-behind-the-body-in-the-box-are-looked-for-before-the-pass-concludes
   (async done
     (tu/run-async done

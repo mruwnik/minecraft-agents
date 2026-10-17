@@ -5,6 +5,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
+            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
@@ -244,15 +245,18 @@
       :else (contract/never :plan-trouble trouble :why trouble))))
 
 (defn can-start?
-  "Never :no-box without a box or a plan; later for :plan-trouble, a resting pen or nothing to do."
+  "Never :no-box without a box or a plan; later for :plan-trouble, :away (far from the pen while another job is listed), a resting pen or nothing to do."
   [c]
   (let [{:keys [plan box]} (:args c)
         {:keys [trouble] :as pen} (pen-of c)
         c (if pen (with-pen c pen) c)
-        resting (get (standing/rested c 'jobs.animals.tend) (pen-key c))]
+        resting (get (standing/rested c 'jobs.animals.tend) (pen-key c))
+        {:keys [min max]} (:box (:args c))
+        away (when min (standing/away-cause c {:x (/ (+ (:x min) (:x max)) 2) :y (:y min) :z (/ (+ (:z min) (:z max)) 2)}))]
     (cond
       (not (or plan box)) (contract/never :no-box "tend needs a :box or a :plan")
       trouble (can-run? c)
+      away (checks/cause-status :later away)
       resting (contract/later :nothing-to-do "the pen is resting" :backed-off [(pen-key c)] :until (:until resting))
       :else (pen-fact c))))
 
