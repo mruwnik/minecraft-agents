@@ -1,5 +1,6 @@
 ;; Card 77da0ee5: plans.mjs check judges a plan against what the body has seen (its seen memory file, saved every :engine.perception/save-ms: 1000 here, polled until the face shows), not the world's chunks.
 ;; A stone mass x 10..22, y 0..3, z 12..20 with the body outside it to the west: its west face is in sight, its inside never is.
+;; The body faces east (:yaw 270): sight is a view cone, so a body left facing another way (a pool body keeps its last rotation) never sees the face.
 ;; seen-face-cell-matches: a plan cell on the west face, wanted stone, is seen and matches. hidden-cell-is-unseen-not-matching: a plan cell deep inside the mass counts :unseen/unknown, never matching.
 ;; built-cells-count-as-seen (card 335f6f3c): cells the body has just placed in plain view are seen at once, so the check reports them as matches, never :unknown.
 ;; check-without-body-refused: no --body, no answer from the world (:body-required).
@@ -7,7 +8,7 @@
  {:tags [:build :tool :memory] :time :any
   :plot {:height 8}
   :blocks [[:fill [10 0 12] [22 3 20] "stone"]]
-  :body {:at [4.5 0 16.5] :settle-s 2}
+  :body {:at [4.5 0 16.5] :yaw 270 :settle-s 2}
   :settings {:engine.perception/save-ms 1000}
   :limit-s 120}
  :cases

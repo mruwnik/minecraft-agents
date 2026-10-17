@@ -238,7 +238,7 @@
   [cell-count seen-times memory]
   (let [now (js/Date.now)]
     {:cells cell-count :seen (count seen-times) :unseen (- cell-count (count seen-times)) :now now
-     :memory-sections (.-sections memory) :memory-file? (.-found memory)
+     :memory-sections (aget memory "sections") :memory-file? (aget memory "found")
      :oldest (when (seq seen-times) (apply min seen-times)) :newest (when (seq seen-times) (apply max seen-times))}))
 
 (defn check-plan [ctx text id inline req]
