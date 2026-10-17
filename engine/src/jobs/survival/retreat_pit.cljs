@@ -165,7 +165,7 @@
          _ (await (sense/decide! c ::roof-support #(dig-cells/dig-plan p feet)))
          plan #(pit-plan c feet blocks)]
      (or (plan)
-         (do (await (look/look-unknown! c (for [[dx dz] dig-cells/sides, dy [0 1]]
+         (do (await (look/look-unknown! c (for [[dx dz] dig-cells/sides, dy [0 -1 1]]
                                             [(+ (:x feet) dx) (+ (:y feet) dy) (+ (:z feet) dz)])))
              (plan))
          (stop-of c blocks feet)))))
