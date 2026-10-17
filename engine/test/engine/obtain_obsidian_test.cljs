@@ -3,6 +3,7 @@
   seen lava source from a side stand, mined, and the bucket scooped back; else a refusal naming what is missing."
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
+            [engine.ctx :as ctx]
             [engine.core :as core]
             [engine.events :as events]
             [engine.farm-contract-test :refer [ending-of]]
@@ -43,6 +44,22 @@
           (is (= :done (:status res)) (pr-str res))
           (is (= 1 (carried p "obsidian")))
           (is (= 1 (carried p "water_bucket")) "the bucket is full again"))))))
+
+(deftest a-mine-child-that-dug-the-obsidian-and-still-collects-is-kept-not-replaced-by-a-pour
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup (world (assoc lava-lake "1,63,0" "obsidian") [pick {:name "water_bucket" :count 1}]))
+              calls (atom 0)
+              stub {:round (fn ^:async mine-round [c]
+                             (if (= 1 (swap! calls inc))
+                               (do (await (ctx/act c :dig (clj->js {:pos {:x 1 :y 63 :z 0}}))) :continue)
+                               (ctx/end c :done nil)))}
+              eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.gather.mine stub))
+              res (await (tu/child-outcome eng 'jobs.gather.make-obsidian {:count 1} 100))]
+          (is (= 2 @calls) "the mine child ran on after the block was dug")
+          (is (= :mine-failed (:reason res)) (pr-str res))
+          (is (= 1 (carried p "water_bucket")) "no water was poured"))))))
 
 (defn ^:async refused
   "{:reason :why} of an obsidian obtain that ends before it gets anywhere."

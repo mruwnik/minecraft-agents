@@ -223,11 +223,12 @@
             (left!)))))))
 
 (defn ^:async mine-seen!
-  "The seen obsidian mined with a mine child: :again, :continue while it works, or its ending when it got none."
+  "The seen obsidian mined with a mine child, which is kept under way (memory :mining) until it ends: the dug block is no longer seen while the child picks it up. :again, :continue while it works, or its ending when it got none."
   [c got]
   (let [e (await (ctx/call c :mine 'jobs.gather.mine
                            {:block "obsidian" :item "obsidian" :count (- (:count (:args c)) got) :fetch (if (contains? (:what (need/opts c 'jobs.gather.make-obsidian)) :tool) mine-fetch false) :mend false :radius (:radius (:args c))
                             :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+    (ctx/update-mem! c assoc :mining (= :continue e))
     (cond
       (= :continue e) :continue
       (> (gained c) got) :again
@@ -240,7 +241,7 @@
     (cond
       (>= got count) (ctx/end c :done nil {:got got})
       (:poured (ctx/mem c)) (await (settle! c))
-      (seq (seen-of c ["obsidian"])) (await (mine-seen! c got))
+      (or (:mining (ctx/mem c)) (seq (seen-of c ["obsidian"]))) (await (mine-seen! c got))
       (>= (:failed (ctx/mem c) 0) 2) (end c :nothing-possible :pour-failed "water on the lava did not make obsidian twice in a row")
       (zero? (carried c "water_bucket"))
       (if (pos? (carried c "bucket"))
