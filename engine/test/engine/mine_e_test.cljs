@@ -425,7 +425,7 @@
   (let [def (get registry/jobs 'jobs.gather.mine)
         c {:primitives (tu/fake-on-floor {:blocks sand-patch}) :args (second (expr/leaf registry/jobs 'jobs.gather.mine {:block "sand" :count 3}))}
         q ((:quote-of def) c)]
-    (is (= [:block :heading] (:target def)))
+    (is (= [:block :heading :center] (:target def)))
     (is (fn? (:can-start? def)))
     (is (nil? (:check def)))
     (is (nil? (contract/quote-problem q)) (pr-str q))
