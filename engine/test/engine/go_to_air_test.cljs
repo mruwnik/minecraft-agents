@@ -8,9 +8,17 @@
 ;; go-to-air-budget drowning-body-swims-to-seen-air: a 2 high water tunnel (feet 64, head 65) under a stone roof, an air
 ;; pocket in the roof (x 11..13, y 66) 6 cells east of the body; oxygen 4 (12.4 s of air used). Looking east the body sees
 ;; a cell of the pocket edge-on through the water; looking west it sees none, and go-to looks at the goal's head first
-(def tunnel
-  (merge (box -4 60 -4 30 63 20 "stone") (box 3 64 7 22 68 9 "stone")
-         (box 4 64 8 20 65 8 "water") (box 11 66 8 13 66 8 "air")))
+(def water-tunnel
+  (merge (box -4 60 -4 30 63 20 "stone") (box 3 64 7 22 68 9 "stone") (box 4 64 8 20 65 8 "water")))
+
+(def tunnel (merge water-tunnel (box 11 66 8 13 66 8 "air")))
+
+;; the tunnel bent north at x 20, the pocket (x 20, z 17..19) round the corner: out of sight from the start at any jitter, since
+;; a face point seen is enough now (the first look at jitter 0 sees the straight pocket's edge)
+(def bent-tunnel
+  (merge water-tunnel (box 19 64 10 22 68 21 "stone") (box 20 64 9 20 65 19 "water") (box 20 66 17 20 66 19 "air")))
+
+(def bent-goal [20 65 18])
 
 ;; Sight jitters each pass's rays within their grid cells; seen edge-on, the pocket is hit by some jitters only (0.25 to
 ;; 0.75 at the first look), so the cases run over jitters the first look misses it at too: the body looks again.
@@ -19,9 +27,9 @@
 (defn ^:async go-east!
   ([yaw jitter] (go-east! yaw jitter {}))
   ([yaw jitter args]
-   (let [{:keys [out]} (await (gt/go! {:self {:pos [5.5 64 8.5] :inWater true :oxygen 4 :yaw yaw} :blocks tunnel :light [15 15]
+   (let [{:keys [out]} (await (gt/go! {:self {:pos [5.5 64 8.5] :inWater true :oxygen 4 :yaw yaw} :blocks (:blocks args tunnel) :light [15 15]
                                        :jitter jitter}
-                                      (merge {:pos [12 65 8] :range 1 :ways #{:walk :clear-seal}} args)))]
+                                      (merge {:pos [12 65 8] :range 1 :ways #{:walk :clear-seal}} (dissoc args :blocks))))]
      @out)))
 
 (deftest a-drowning-body-swims-to-a-pocket-it-has-seen-a-cell-of
@@ -36,16 +44,16 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [out (await (go-east! (/ js/Math.PI -2) 0 {:air-looks 0}))]
+        (let [out (await (go-east! (/ js/Math.PI -2) 0 {:air-looks 0 :blocks bent-tunnel :pos bent-goal}))]
           (is (= :air (:why out)) (str "result " out)))))))
 
 (deftest a-body-too-low-on-air-gives-up_without_looking_again
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (gt/go! {:self {:pos [5.5 64 8.5] :inWater true :oxygen 2 :yaw (/ js/Math.PI -2)} :blocks tunnel :light [15 15]
+        (let [{:keys [out]} (await (gt/go! {:self {:pos [5.5 64 8.5] :inWater true :oxygen 2 :yaw (/ js/Math.PI -2)} :blocks bent-tunnel :light [15 15]
                                             :jitter 0}
-                                           {:pos [12 65 8] :range 1 :ways #{:walk :clear-seal}}))
+                                           {:pos bent-goal :range 1 :ways #{:walk :clear-seal}}))
               out @out]
           (is (= :air (:why out)) (str "result " out)))))))
 
