@@ -75,14 +75,20 @@
                    (for [dx (range (- r) (inc r)) dy (range (- r) (inc r)) dz (range (- r) (inc r))] [dx dy dz])))))
 
 (defn in-seen-ground?
-  "Under :unknown, whether the y goal pos is a cell the body has seen that is not free (a position in the ground) with
-  no seen stand within the :range arg of it."
+  "Under :unknown, whether the y goal pos is a position in the ground with no seen stand within the :range arg of it: a
+  seen cell that is not free, or an unseen one under a seen solid cell of its column within :y-slack (the roof of a
+  plateau: its inside is never shown), with the body within approach-range of the column."
   [c pos]
   (boolean (and (:unknown c) (:y pos)
                 (let [ka (column/seen-kind-at (:primitives c))
                       cell (mapv #(js/Math.floor (% pos)) [:x :y :z])
-                      k (apply ka cell)]
-                  (and (not (or (keyword-identical? :unknown k) (column/free? k)))
+                      [x y z] cell
+                      k (apply ka cell)
+                      me (u/self-pos c)
+                      roofed? (and (keyword-identical? :unknown k)
+                                   (<= (js/Math.hypot (- x (:x me)) (- z (:z me))) column/approach-range)
+                                   (some #(keyword-identical? :solid (ka x (+ y %) z)) (range 1 (inc (:y-slack (:args c) 4)))))]
+                  (and (or roofed? (not (or (keyword-identical? :unknown k) (column/free? k))))
                        (not (seen-stand-within? ka cell (:range (:args c) 1))))))))
 
 (def lookout-reach "Blocks from a y goal hidden in seen ground (hidden-in-ground?) a stand go-to looks at it from may be." 4)
