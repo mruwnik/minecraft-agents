@@ -7,7 +7,7 @@
             [engine.settings :as settings]
             [jobs.gather.mine.descent :refer [descent-wanted? descend-due? descend-round! shaft-due? shaft-under-way? shaft-top-here? shaft-round!]]
             [jobs.gather.mine.drops :refer [collect! dig-cell!]]
-            [jobs.gather.mine.end :refer [end-run to-mend! wrap-up! home-round!]]
+            [jobs.gather.mine.end :refer [end-run to-mend! wrap-up! home-round! wanted]]
             [jobs.gather.mine.mend :refer [mend-round!]]
             [jobs.gather.mine.side :as wall]
             [jobs.gather.mine.targets :refer [reach air kinds carried rules-in soil-blocks scan snapshot way-floor last-exit? skip! skip-failed! skip-unreachable! stalled! zone-margin within-own-zone drop-in-line? next-target!]]
@@ -287,13 +287,16 @@
 (def can-run? checks/low-health)
 
 (defn done?
-  "Progress in items: got against :count. Always :later: the round ends the run after the mend and the walk home, which
-  memory does not show."
+  "Progress in items: got against :count. :ok once the run has finished (mend and walk home done, :finished in memory) with
+  the wanted items carried and the body home; else :later, the round ends the run."
   [c]
   (let [n (:count (:args c))
-        got (if-let [goal (:goal (ctx/mem c))] (max 0 (- (carried c) (- goal n))) 0)]
-    (contract/later :mining (str "mine: " got " of " n ", the round ends the run") :units :items :done got :left (max 0 (- n got))
-                    :result {:got got})))
+        m (ctx/mem c)
+        got (if-let [goal (:goal m)] (max 0 (- (carried c) (- goal n))) 0)
+        extra {:units :items :done got :left (max 0 (- n got)) :result {:got got}}]
+    (if (and (:finished m) (not= :not-home (:reason m)) (>= got (wanted c)))
+      (apply contract/ok :mined (str "mine: " got " of " n ", home") (mapcat identity extra))
+      (apply contract/later :mining (str "mine: " got " of " n ", the round ends the run") (mapcat identity extra)))))
 
 (defn quote-of
   "Finding out: about ::item-s per item, open-ended (a tunnel may find none); yields up to :count of the item."

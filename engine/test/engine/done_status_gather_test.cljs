@@ -251,3 +251,10 @@
   (let [c (ctx-of 'jobs.forestry.collect-drops {} {} {})]
     (swap! (fake/state (:primitives c)) fake/spawn [1 64 1] "apple" 1)
     (is (= [:later :collecting] (tu/kind-reason ((:done? (get registry/jobs 'jobs.forestry.collect-drops)) c))))))
+
+(deftest mine-is-done-once-finished-with-the-count-carried-and-home
+  (are [m reason] (= reason (tu/kind-reason (done-of 'jobs.gather.mine {:inventory [{:name "cobblestone" :count 5}]} {:block "stone" :count 2} m)))
+    {:goal 3 :finished true} [:ok :mined]
+    {:goal 3} [:later :mining]
+    {:goal 6 :finished true} [:later :mining]
+    {:goal 3 :finished true :reason :not-home} [:later :mining]))
