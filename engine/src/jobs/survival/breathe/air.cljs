@@ -168,7 +168,7 @@
 
 (defn ^:async dig-cap!
   "Drowning under a cap: dig it (and the solid cell over it) from below, with the best carried tool. A floating dig
-  under water is 25 times slower than on land, so the dig is started only when its expected time, all cells together,
+  under water is 25 times slower than on land, so the dig is started only when its expected time
   fits share of the air left (breath/air-left-ms), and each dig gives up at what is left of that. True when a
   dig worked, so the next pass swims up; else the reason (see cap-above, :too-slow, or :dig-failed, also after
   :max-cap-digs digs that left the body drowning)."

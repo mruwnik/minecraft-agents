@@ -1,6 +1,6 @@
 ;; Breathe under a stone ceiling (cards 221d9783, e8a92f33): the body is put in water, its air runs out, the breathe reflex fires.
 ;; Air is looked for only in the own column and in cells the body has seen, never through stone.
-;; seen-pocket-is-gone-to: a water tunnel with a ceiling and an air pocket 6 blocks down it, in line of sight: the body swims the open straight walk there (a raw move, no go-to child), the ceiling is not dug.
+;; seen-pocket-is-gone-to: a water tunnel with a ceiling and an air pocket 6 blocks down it, in line of sight and lit by a glowstone in its ceiling (a dark cell beyond 4 blocks is not made out, so an unlit pocket is never seen): a go-to child (slot :air, past the 2-column search) takes the body there, the ceiling is not dug.
 ;; The tunnel lies 9+ blocks from the shaft cases (the body remembers the cells of an earlier case on the shared plot); the body faces it (:yaw 270, east), since it sees only its view cone.
 ;; Shaft cases (1x1 water column, 4 deep, a cap at y 4, an air chimney over it): dirt cap is dug; planks cap stops :no-air :cap :not-natural.
 ;; A sand cap is not a live case: set over water it falls at once (:gravity is in breathe-test).
@@ -17,9 +17,11 @@
  :cases
  [{:name "seen-pocket-is-gone-to"
    :blocks [[:fill [4 0 5] [24 3 7] "water"]
-            [:fill [12 3 5] [15 3 7] "air"]]
+            [:fill [12 3 5] [15 3 7] "air"]
+            [:set [14 4 6] "glowstone"]]
    :body {:at [6.5 1 6.5] :yaw 270}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
+            {:event {:source :job :kind :child_started :data {:slot :air}} :within-s 40}
             {:no-event {:source :job :kind :stopped :data {:reason :no-air}} :for-s 40}]
    :after [[:body-near [13.5 2 6.5] 4] [:block [8 4 6] "stone"] [:block [13 4 6] "stone"]]}
   ;; should fail (as a go-to): the pocket is behind stone and was never seen, the cap is dug instead
