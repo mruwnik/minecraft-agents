@@ -221,6 +221,14 @@
       (when (:unknown b) (u/note-read! :cells (u/cell-vec pos)))
       (update b :pos #(if (map? %) % (u/pos-of %))))))
 
+(defn never-seen?
+  "Whether the cell was never seen (seen-block's :unknown), without building the block map."
+  [p pos]
+  (when-let [f (aget p "seenBlockAt")]
+    (let [unknown (true? (.-unknown ^js (.call f p (clj->js pos))))]
+      (when unknown (u/note-read! :cells (u/cell-vec pos)))
+      unknown)))
+
 (defn beliefs
   "What the body knows of ground, the body argument of jobs.lib.cost.base-rates: {:biome-at}, a fn of a pos -> the
   biome of that cell when the body has seen the cell and its chunk is loaded, else nil."

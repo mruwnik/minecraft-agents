@@ -139,7 +139,7 @@
   [p f]
   (let [solid? #(solid/solid? (u/seen-name p %))
         up (assoc f :y (inc (:y f)))
-        unseen? #(:unknown (look/seen-block p %))]
+        unseen? #(look/never-seen? p %)]
     (and (not (unseen? f)) (not (unseen? up)) (solid? (assoc f :y (dec (:y f)))) (not (solid? f)) (not (solid? up))
          (not (dig-cells/wet? p f)) (not (dig-cells/wet? p up)))))
 

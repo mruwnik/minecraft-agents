@@ -3,6 +3,7 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.animals :as animals]
+            [jobs.lib.check-cache :as check-cache]
             [jobs.lib.click :as click]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -331,7 +332,7 @@
   its reason and its :why, :cell, :leaks or :depth. ok when it will do, already holds :target (done? answers)
   or cannot be read from here (the run reads it at the pen). The setting ::precheck? false skips it."
   [c]
-  (let [answer (when (precheck?) (read-pen c))
+  (let [answer (when (precheck?) (check-cache/cached c ::pen-refusal #(read-pen c)))
         {:keys [refuse extra]} (when-not (or (nil? answer)
                                              (#{:unloaded :no-start} (:reason answer))
                                              (>= (count (in-pen-adults c answer)) (:target (:args c))))
