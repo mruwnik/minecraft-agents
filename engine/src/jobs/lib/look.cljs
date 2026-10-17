@@ -249,9 +249,9 @@
 (defn seen-objs
   "seen-entities as the JS entities of entities(): players and hostiles always (hostile
   sight is perception's known mobs, see seen-entities), every other kind only when not hidden behind a wall (visible
-  false). :max caps after the hiding."
+  false). :max caps after the hiding (entities() gets a huge cap, else its default 32 cuts before the hiding)."
   [p opts]
-  (->> (array-seq (.entities p (clj->js (dissoc opts :max))))
+  (->> (array-seq (.entities p (clj->js (assoc opts :max 1000000))))
        (remove #(and (not (#{"player" "hostile"} (.-kind %))) (false? (.-visible %))))
        (take (or (:max opts) 64))))
 
