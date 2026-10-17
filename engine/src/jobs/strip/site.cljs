@@ -13,6 +13,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.shafts :as shafts]
             [jobs.lib.shelter.spawn :as sh-spawn]
+            [jobs.lib.stock :as stock]
             [jobs.lib.strip :as strip]
             [jobs.lib.torch :as torch]
             [jobs.lib.trip :as trip]
@@ -34,12 +35,13 @@
           sealed. A segment that stops stop-limit (3) times for one reason is :skipped with the reason. A stop for
           :bag-full :food-short :no-torches :no-tool, or low torches or free slots, is a trip: deposit into the base chests
           (storage.deposit), obtain torches, get the tool, get food (survival.get-food, once per trip; still hungry with none: :food-short; :fetch false skips the try), then back down; at most max-trips (12).
-  Each time at the base, before the deposit, the raw ore carried (raw_iron raw_gold raw_copper) is loaded into the base
+  Each time at the base, before the deposit, the raw ore the base chests are known to hold (body memory stock) is withdrawn (storage.withdraw,
+          up to 64 a free furnace; a failed withdraw is not a stop), then the raw ore carried (raw_iron raw_gold raw_copper) is loaded into the base
           furnaces (items.smelt, :fetch only from chests; one kind split over both furnaces, several one kind each) and
           the body goes back down; the furnaces and their args are kept in :cooking. The next visit replays those
           children to collect the output, which is deposited with the rest. A smelt that gives up is listed in
           :smelt-failed and the ore stays raw (not with :smelt false).
-  :haul   first collects the output still in the furnaces (waits while it cooks) and banks it in the first base chest, then
+  :haul   first collects the output still in the furnaces (waits while it cooks, also with :haul false) and banks it in the first base chest, then
           storage.haul from the base chests to the main storage (not with :haul false).
   The cleanup export puts :home and the respawn bed back to :was however the call ends (a cut included). The torches the
   corridor took back are carried.
@@ -286,6 +288,23 @@
         free (remove #(contains? cooking (first %)) (furnaces c s))]
     (loads free (into {} (map (juxt :name :count)) (u/inventory (:primitives c))) (:ignore-zones? (:args c)))))
 
+(defn withdraw-plan
+  "[[slot job args] ..] taking the raw ore the base chests are known to hold (body memory :fetch/stock) into the bag, up to
+  what the free furnaces take (64 each), the kinds in one call per chest."
+  [c s]
+  (let [free (- (count (furnaces c s)) (count (:cooking s)))
+        held (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))
+        stock (stock/stock-of (ctx/view c))]
+    (when (pos? free)
+      (loop [[chest & more] (chests c s) want (select-keys held ores) out []]
+        (if-not chest
+          out
+          (let [have (select-keys (get stock (stock/cell-of chest)) ores)
+                want' (reduce (fn [m [k n]] (update m k #(min (* 64 free) (+ (or % 0) n)))) want have)]
+            (recur more want' (cond-> out (seq have) (conj [(keyword (str "withdraw-" (count out))) 'jobs.storage.withdraw
+                                                           (merge {:chest chest :items (select-keys want' (keys have))}
+                                                                  (select-keys (:args c) [:ignore-zones?]))])))))))))
+
 (defn ^:async trip!
   "At the base: deposit into the next base chest while the bag is short of room, obtain torches, get the lost tool; then back down."
   [c s]
@@ -295,6 +314,7 @@
         short? (< (u/free-slots p) (trip/want-free))
         step (cond
                (and (seq (:cooking s)) (not (:collected (:trip s)))) :collect
+               (and (:smelt (:args c)) (not (:withdrawn (:trip s))) (seq (withdraw-plan c s))) :withdraw
                (and (:smelt (:args c)) (not (:loaded (:trip s))) (seq (load-plan c s))) :load
                (or (:bank s)
                    short? (and (= :bag-full reason) (zero? deposits))) :deposit
@@ -305,6 +325,10 @@
       :collect (let [r (await (smelt-run! c (:cooking s)))]
                  (save! c #(-> (smelt-saved % r {}) (assoc-in [:trip :collected] true)))
                  :again)
+      :withdraw (let [f (await (run-all! c (withdraw-plan c s)))]
+                  (if (= :continue f)
+                    :continue
+                    (do (save! c assoc-in [:trip :withdrawn] true) :again)))
       :load (let [r (await (smelt-run! c (load-plan c s)))]
               (save! c #(-> (smelt-saved % r (:cooking %)) (assoc-in [:trip :loaded] true)))
               :again)
@@ -382,7 +406,7 @@
       ready (await (seal! c s t ready))
       seg (await (corridor! c s t seg))
       (all-skipped s) (stop! c :all-skipped {:skipped (all-skipped s)})
-      :else (do (save! c assoc :phase (if (:haul (:args c)) :haul :done)) :again))))
+      :else (do (save! c assoc :phase :haul) :again))))
 
 (defn ^:async haul-chests! [c s]
   (let [res (await (call! c :haul 'jobs.storage.haul (merge {:from (chests c s)} (select-keys (:args c) [:ignore-zones?]))))]
@@ -399,7 +423,8 @@
                 (cond (= :continue f) :continue
                       f (child-stop! c f)
                       :else (do (save! c dissoc :bank) :again)))
-    :else (await (haul-chests! c s))))
+    (:haul (:args c)) (await (haul-chests! c s))
+    :else (do (save! c assoc :phase :done) :again)))
 
 (defn restore-steps [{:keys [home spawn-bed]}]
   (cond-> [(if home

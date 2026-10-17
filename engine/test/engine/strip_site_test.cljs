@@ -16,6 +16,7 @@
             [engine.strip-test :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.stock :as stock]
             [jobs.lib.world-files :as world]))
 
 (def job 'jobs.strip.site)
@@ -102,6 +103,7 @@
                   'jobs.strip.seal {:status :done :reason :sealed :placed 9}
                   'jobs.storage.haul {:gave-up false :moved {"rail" 7}}
                   'jobs.storage.deposit {:gave-up false}
+                  'jobs.storage.withdraw {:gave-up false}
                   'jobs.items.obtain {:status :done}
                   'jobs.survival.get-food {:status :done}}
         stubs (into {} (for [[sym res] defaults]
@@ -356,6 +358,34 @@
           (is (= ["smelt" "smelt" "deposit" "haul"] (take 4 (take-last 6 short-names))) "ingots collected and banked before the haul")
           (is (= (take 2 smelts) (drop 2 smelts)) "the same args resume the same children")
           (is (= {"raw_iron" 16} (:smelted r))))))))
+
+(deftest haul-false-still-collects-the-output-still-cooking
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup :inventory ore-bag)
+              _ (swap! (:results env) assoc 'jobs.strip.corridor (full-then env #(ready! (:furnaces %))))
+              r (await (start! env (assoc args :haul false)))]
+          (is (= :done (:status r)))
+          (is (empty? (called env 'jobs.storage.haul)))
+          (is (= ["smelt" "smelt" "deposit"] (take 3 (take-last 5 (mapv #(last (re-find #"\.([a-z-]+)$" %)) (names env))))) "ingots collected and banked before the cleanup")
+          (is (= {"raw_iron" 16} (:smelted r))))))))
+
+(deftest raw-ore-the-base-chests-hold-is-withdrawn-before-it-is-loaded
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup)
+              _ (mem/write! (:store (:eng env)) stock/stock-kind {:pos chest-1 :items {"raw_iron" 20 "stone" 9}} stock/stock-policy)
+              _ (swap! (:results env) assoc
+                       'jobs.strip.corridor (full-then env #(ready! (:furnaces %)))
+                       'jobs.storage.withdraw (fn [_] (fake/add-item! (:p env) "raw_iron" 20) {:gave-up false}))
+              r (await (start! env args))
+              short-names (mapv #(last (re-find #"\.([a-z-]+)$" %)) (names env))]
+          (is (= :done (:status r)))
+          (is (= [{:chest (xyz chest-1) :items {"raw_iron" 20}}] (mapv #(select-keys % [:chest :items]) (called env 'jobs.storage.withdraw))))
+          (is (= ["withdraw" "smelt" "smelt"] (subvec short-names 5 8)) "taken out, then loaded in both furnaces")
+          (is (= [10 10] (mapv :count (take 2 (called env 'jobs.items.smelt))))))))))
 
 (deftest smelt-false-leaves-the-ore-raw
   (async done
