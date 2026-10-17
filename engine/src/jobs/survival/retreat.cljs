@@ -133,6 +133,8 @@
   "Bound of a flight step while exposed low in a ranged chaser's line of fire: a search that stands still must not last."
   1.5)
 
+(def slow-step-cap "Flee steps in a row that ran out of their seconds before the body moved (a slow start, nothing in the way) tried again before the way counts as blocked." 2)
+
 (def stall-blocks "A low step that moved the body less than this stood still: cover where it stands comes next." 1)
 
 
@@ -317,8 +319,10 @@
             gap0 (flight/nearest-gap p threats)
             goal-gap0 (when leg (u/dist (u/self-pos c) leg))
             target (or leg (away? (await (cover/flight-target! c threats covered? rooms))))
+            grown? (not= (set (map #(.-id %) threats)) (set (map #(.-id %) (flight/look! c))))
             low? (cover/exposed-low? c covered?)
             cover (cond
+                    grown? :again
                     (and low?
                          (or (refuge/plugging-here? c) (not (and target (covered? target))) (pos? (:stalled (ctx/mem c) 0)))
                          (not (cover/close-danger? p threats)))
@@ -347,10 +351,12 @@
                                  (< (u/dist (u/self-pos c) leg) (- goal-gap0 0.5)))))
               (do (retreat-goal/off! c leg :lost-ground) :again)
               (and leg (retreat-goal/drifted? c leg)) (do (retreat-goal/off! c leg :height) :again)
+              (and (not moved) (:leg-timed-out (ctx/mem c)) (< (:slow-steps (ctx/mem c) 0) slow-step-cap))
+              (do (ctx/update-mem! c update :slow-steps (fnil inc 0)) :again)
               (not moved) (await (stuck "the way away from the hostile is blocked"))
               :else
               (let [gap (flight/nearest-gap p threats)]
-                (ctx/update-mem! c #(-> % (dissoc :tried) (flight/note-gap gap)))
+                (ctx/update-mem! c #(-> % (dissoc :tried :slow-steps) (flight/note-gap gap)))
                 :again))))))))
 
 (defn ^:async round

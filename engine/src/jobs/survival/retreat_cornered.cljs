@@ -195,11 +195,12 @@
 
 (defn ^:async leg-step!
   "One flee step to target as a go-to child of legs of at most leg-s seconds (a flee never digs or pillars: :ways #{:walk :clear-seal}, and plans no route deeper or higher than y-margin (16) blocks past body and target;
-  known dangers stay costed): true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined."
+  known dangers stay costed): true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined (mem :leg-timed-out: it ran out of the leg's seconds unhurt)."
   ([c slot target range leg-s] (await (leg-step! c slot target range leg-s retreat-goal/leg-margin)))
   ([c slot target range leg-s y-margin]
   (let [from (u/self-pos c)
         t0 (ctx/now c)
+        health0 (.-health (.self (:primitives c)))
         r (await (ctx/call c slot 'jobs.movement.go-to {:pos target :range range :ways #{:walk :clear-seal} :y-margin y-margin
                                                               :warn false :spend {:job-time leg-s}
                                                               :leg-alert-within (close-radius) :leg-alert-s (close-leg-s)
@@ -207,7 +208,8 @@
         res (when (contract/ending? r) (:data r))
         _ (when (= :goal-not-standable (result/why r)) (ctx/update-mem! c update :refused (fnil conj #{}) (mapv target [:x :y :z])))
         s (/ (- (ctx/now c) t0) 1000)
-        d (u/dist from (u/self-pos c))]
+        d (u/dist from (u/self-pos c))
+        _ (ctx/update-mem! c assoc :leg-timed-out (and (= :limit-reached (:kind r)) (>= (.-health (.self (:primitives c))) health0)))]
     (ctx/emit! c :retreat.step-speed :debug {:slot slot :blocks (/ (js/Math.round (* 10 d)) 10) :seconds (/ (js/Math.round (* 10 s)) 10)
                                              :bps (when (pos? s) (/ (js/Math.round (* 10 (/ d s))) 10))})
     (boolean (or (:arrived res) (:leg res))))))

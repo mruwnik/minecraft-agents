@@ -797,6 +797,48 @@
           (is (pos? (count (calls p "place"))) "sealed in")
           (is (<= 1 @n 2) "after one or two stalled steps"))))))
 
+;; a creeper that the glance round turns up is weighed before the cover decision: the low body walks instead of sealing beside it
+(deftest a-creeper-sighted-by-the-glance-round-keeps-a-low-body-from-sealing-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:pos [0.5 64 0.5] :health 8}
+                                      :inventory [{:name "cobblestone" :count 20}]
+                                      :entities [(assoc (skeleton 6.5 64 0.5) :visible true)]})]
+          (with-redefs [cover/glance-away! (fn [_ _]
+                                                     (fake/add-entity! p (assoc (creeper 0.5 64 3.5) :visible true))
+                                                     (js/Promise.resolve nil))]
+            (core/submit! eng retreat {})
+            (let [round (core/tick! eng)]
+              (loop [i 0] (when (and (empty? (tu/walked-to eng)) (empty? (calls p "place")) (< i 250)) (await (sleep 20)) (recur (inc i))))
+              (swap! (fake/state p) assoc :entities [])
+              (await round)))
+          (is (empty? (calls p "place")) "no seal beside the creeper")
+          (is (seq (tu/walked-to eng)) "it walks"))))))
+
+;; a flee step that ran out of its seconds before the body moved is tried again, not taken for a blocked way
+(deftest a-flee-step-that-times-out-before-moving-is-tried-again-not-sealed-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [n (atom 0)
+              {:keys [eng p]} (setup {:self {:pos [0.5 64 0.5] :health 20}
+                                      :inventory [{:name "cobblestone" :count 20}]
+                                      :entities [(assoc (zombie 5.5 64 0.5) :visible true)]})
+              slow-once {:ways (:ways (get registry/jobs 'jobs.movement.go-to))
+                         :round (fn ^:async slow [c]
+                                  (if (= 1 (swap! n inc))
+                                    (ctx/end c :limit-reached {:reason :leg :line :job-time} {:arrived false})
+                                    (ctx/end c :done nil {:arrived true})))}
+              eng (assoc-in eng [:jobs 'jobs.movement.go-to] slow-once)]
+          (core/submit! eng retreat {})
+          (let [round (core/tick! eng)]
+            (loop [i 0] (when (and (< @n 3) (empty? (calls p "place")) (< i 250)) (await (sleep 20)) (recur (inc i))))
+            (swap! (fake/state p) assoc :entities [])
+            (await round))
+          (is (empty? (calls p "place")) "no plug after one slow step")
+          (is (<= 3 @n) "the step ran again"))))))
+
 ;; a skeleton only heard (its rough spot) is no line of fire to hide from: the low body walks
 (deftest a-low-body-does-not-seal-in-from-a-heard-only-skeleton
   (async done
