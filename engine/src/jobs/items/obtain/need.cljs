@@ -46,12 +46,22 @@
   [need]
   (if (set? (:seen need)) (vec (sort (:seen need))) trees/log-names))
 
+(defn trees-unreachable?
+  "Whether a seen log need's child declines :no-tree (the logs seen are not ones it can fell): the search looks
+  elsewhere."
+  [c need]
+  (and (= 'jobs.forestry.harvest-wood (:job need))
+       (let [s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
+         (and (#{:later :look} (first s))
+              (= :no-tree (:reason (contract/status-cause s)))))))
+
 (defn explorable?
-  "Whether :explore is on and a raw need of the chain is not seen: the search child solves it, when the tool that
-  harvests its block (an unseen ore is mined by the pickaxe for its block) can be had (tool-viable?)."
+  "Whether :explore is on and a raw need of the chain is not seen, or its logs are seen but not fellable: the search
+  child solves it, when the tool that harvests its block (an unseen ore is mined by the pickaxe for its block) can be
+  had (tool-viable?)."
   [c names n]
   (boolean (and (explore-opts c)
-                (some #(and (not (animal? %)) (not (seen-of c %))
+                (some #(and (not (animal? %)) (or (not (seen-of c %)) (trees-unreachable? c (with-block c %)))
                             (or (not (tools-wanted c names %)) (tool-viable? c names %)))
                       (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))))))))
 

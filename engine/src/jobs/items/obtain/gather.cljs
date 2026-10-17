@@ -5,7 +5,7 @@
             [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.items.obtain.base :refer [max-fruitless sheep-radius tried! ways-of]]
-            [jobs.items.obtain.need :refer [explore-opts gather-viable? pickaxe-first? search-names tools-wanted]]
+            [jobs.items.obtain.need :refer [explore-opts gather-viable? pickaxe-first? search-names tools-wanted trees-unreachable?]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
             [jobs.items.obtain.table :refer [animal? gather-need]]
@@ -103,7 +103,7 @@
       (and (not (get-in (ctx/mem c) [:gather :before])) (pickaxe-first? c names need) (or (explore-opts c) (seen-of c need)))
       (await (pickaxe-step! c names need))
       (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (not (animal? need)) (not (:tunnel? need))
-           (or (not (seen-of c need)) (get-in (ctx/mem c) [:gather :unreachable (:key need)]))
+           (or (not (seen-of c need)) (get-in (ctx/mem c) [:gather :unreachable (:key need)]) (trees-unreachable? c need))
            (< (get-in (ctx/mem c) [:explored (:key need)] 0) (max-fruitless)))
       (await (explore-walk! c need))
       (and (not (get-in (ctx/mem c) [:gather :before]))
