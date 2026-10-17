@@ -129,3 +129,19 @@
   [c]
   (let [ds (known-dangers (:primitives c) (remembered-spots c) (cost/danger-opts (:args c)))]
     (when (seq ds) (clj->js ds))))
+
+(defn danger-near-fn
+  "A fn of a cell pos: the nearest known mob (known-dangers of c: sensed or remembered) the body would flee that has pos
+  within its full-cost radius, as {:mob :mob-pos :mob-distance}, else nil. Dangers are read once."
+  [c]
+  (let [p (:primitives c)
+        body (body-of p)
+        ds (known-dangers p (remembered-spots c) (cost/danger-opts (:args c)))]
+    (fn [pos]
+      (->> ds
+           (keep (fn [{:keys [mob close] :as d}]
+                   (let [dist (u/dist pos d)]
+                     (when (and (<= dist close) (= :flee (cost/stance body mob)))
+                       {:mob mob :mob-pos (select-keys d [:x :y :z]) :mob-distance (js/Math.round dist)}))))
+           (sort-by :mob-distance)
+           first))))

@@ -135,6 +135,20 @@
           (is (= [] (st/entries eng :dig-in-futile)) "dig-in's failed sites too: the next night digs there again")
           (is (empty? (st/emitted seen :shelter.exposed))))))))
 
+(deftest a-relocation-site-is-not-by-a-known-zombie
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup {:time night :blocks wide-ground :self {:food 20 :health 4}
+                                         :entities [(assoc zombie :pos {:x -7.5 :y 64 :z 0.5})]})]
+          (st/refuse-cell! p [0 63 0])
+          (st/dawn-after! p 3)
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (core/tick! eng))
+          (let [roofs (filterv #(= 63 (:y %)) (mapv st/arg-pos (st/calls p "place")))]
+            (is (> (count roofs) 1) "a second pit was roofed")
+            (is (pos? (:x (last roofs))) "on the side away from the zombie, though the near side is as close")))))))
+
 (deftest a-failed-site-is-not-dug-again-after-a-cut-however-long-the-night
   (async done
     (tu/run-async done

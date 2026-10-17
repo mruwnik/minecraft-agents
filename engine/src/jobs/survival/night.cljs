@@ -14,6 +14,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.threats :as threats]
             [jobs.lib.spent :as spent]
             [jobs.lib.util :as u]
             [jobs.survival.bed-down :as bed-down]
@@ -284,9 +285,9 @@
 (defn ^:async relocate!
   "Get to a nearby cell where a pit can be dug; the next pass digs in there. Out of its own failed pit first by a stair
   (dig-in-leave/climb!; one that finds no way out holds exposed), then a walk (go-to). A walk that does not arrive marks that
-  cell failed (:unreachable). With sites/max-sites failed sites, or no such cell: hold exposed."
+  cell failed (:unreachable). A chosen site a known mob the body would flee has come by is dropped for another. With sites/max-sites failed sites, or no such cell: hold exposed."
   [c]
-  (let [site (or (:relocating (ctx/mem c))
+  (let [site (or (let [s (:relocating (ctx/mem c))] (when-not (and s ((threats/danger-near-fn c) s)) s))
                  (when (< (count (sites/failed-sites c)) (sites/max-sites)) (sites/relocation-site c)))
         pit (sites/pit-start c)]
     (cond

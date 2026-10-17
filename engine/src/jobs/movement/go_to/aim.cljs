@@ -228,19 +228,9 @@
       (wworld/stand-goal (wworld/path-world (:primitives c) (:unknown c)) pos))))
 
 (defn goal-danger
-  "The nearest known mob the body would flee (sensed or remembered, jobs.lib.threats/known-dangers) that has the cell pos
-  within its full-cost radius, as {:mob :mob-pos :mob-distance}, else nil."
+  "The nearest known mob the body would flee that has the cell pos within its full-cost radius (threats/danger-near-fn), else nil."
   [c pos]
-  (let [p (:primitives c)
-        spots (threats/remembered-spots c)
-        body (threats/body-of p)]
-    (->> (threats/known-dangers p spots (cost/danger-opts (:args c)))
-         (keep (fn [{:keys [mob close] :as d}]
-                 (let [dist (u/dist pos d)]
-                   (when (and (<= dist close) (= :flee (cost/stance body mob)))
-                     {:mob mob :mob-pos (select-keys d [:x :y :z]) :mob-distance (js/Math.round dist)}))))
-         (sort-by :mob-distance)
-         first)))
+  ((threats/danger-near-fn c) pos))
 
 (defn pre-aim!
   "Before the first walk: a y goal pos (goal-pos) that the planner answers goal-not-standable for alone (no search,

@@ -8,6 +8,7 @@
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
             [jobs.lib.solid :as solid]
+            [jobs.lib.threats :as threats]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in :as dig-in]
@@ -83,11 +84,13 @@
 (defn relocation-site
   "The nearest feet cell within relocate-reach of the failed site the body is at (its feet when none: a body in its
   pit looks from the surface), at least futile-radius+1 from every failed site (tonight's and dig-in's
-  :dig-in-futile entries), where a pit can be dug (pit-site?), or nil. With :free?, only cells no zone, claim or plan refuses."
+  :dig-in-futile entries), where a pit can be dug (pit-site?), outside the full-cost radius of every known mob the body would flee (threats/danger-near-fn: a
+  site by a zombie only walks the body back into it), or nil. With :free?, only cells no zone, claim or plan refuses."
   [c & [{:keys [free?]}]]
   (let [p (:primitives c)
         feet (sh/feet p)
         here (first (filter #(<= (u/dist feet %) (dig-in/futile-radius)) (map :pos (failed-sites c))))
+        danger-near (threats/danger-near-fn c)
         {:keys [x y z]} (or here feet)
         offsets (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz)))
                          (for [dx (range (- (relocate-reach)) (inc (relocate-reach)))
@@ -96,7 +99,7 @@
                            [dx dz]))]
     (some (fn [[dx dz]]
             (some (fn [dy] (let [f {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
-                             (when (and (clear-of-failed? c f) (pit-site? p f) (not (and free? (zone-refused? c f)))) f)))
+                             (when (and (clear-of-failed? c f) (pit-site? p f) (not (danger-near f)) (not (and free? (zone-refused? c f)))) f)))
                   [0 -1 1 -2 2]))
           offsets)))
 
