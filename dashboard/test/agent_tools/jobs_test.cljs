@@ -415,6 +415,13 @@
                          ["EACCES" :socket-access-denied] ["EPIPE" :transport-error]]]
     (is (= reason (:reason (jobs/failure-for {} (let [e (js/Error. "x")] (aset e "code" code) e)))) code)))
 
+(deftest a-mutation-to-a-body-that-is-not-running-says-nothing-was-queued
+  (let [e (let [e (js/Error. "x")] (aset e "code" "ECONNREFUSED") e)
+        v (jobs/failure-for {:mutating true :request {:request-id "abc-1"}} e)]
+    (is (= :not-sent (:confirmation v)))
+    (is (not (re-find #"request-id" (:message v))))
+    (is (re-find #"nothing was queued" (:message v)))))
+
 (deftest an-uncertain-mutation-names-the-command-to-repeat
   (let [e (let [e (js/Error. "x")] (aset e "code" "ECONNRESET") e)
         m (:message (jobs/failure-for {:mutating true :request {:request-id "abc-1"}} e))]

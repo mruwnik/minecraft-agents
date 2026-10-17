@@ -104,7 +104,8 @@
 (deftest outward-goes-ahead-first-then-to-the-sides
   (is (= [[0 -16] [8 -12] [-8 -12] [12 -4] [-12 -4] [16 0] [-16 0]]
          (search/outward-points [0.5 0.5] :north 16)))
-  (is (= [16 0] (first (search/outward-points [0 0] :east 16)))))
+  (is (= [16 0] (first (search/outward-points [0 0] :east 16))))
+  (is (= [11 11] (first (search/outward-points [0 0] :south-east 16)))))
 
 (defn column [m] (fn [[x y z]] (if (contains? m :unloaded) nil (get m [x y z] "air"))))
 
@@ -494,7 +495,7 @@
 (deftest an-unknown-pattern-or-heading-is-refused-at-submit
   (is (re-find #":pattern must be one of :outward, :spiral, got :zigzag"
                (expr/problem registry/jobs '(jobs.explore.search {:target "diamond_block" :pattern :zigzag}))))
-  (is (re-find #":heading must be one of :east, :north, :south, :west, got :up"
+  (is (re-find #":heading must be one of :east, :north, :north-east, :north-west, :south, :south-east, :south-west, :west, got :up"
                (expr/problem registry/jobs '(jobs.explore.search {:target "diamond_block" :pattern :outward :heading :up})))))
 
 (deftest a-call-without-a-target-can-never-run

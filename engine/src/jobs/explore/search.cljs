@@ -55,12 +55,17 @@
   failed since the last arrival) :deferred (unloaded legs set aside while a sweep goes on), and :leg while
   a walk is under way, so a cut or restart resumes it.")
 
+(def diagonal 0.7071)
+(def headings {:north [0 -1] :east [1 0] :south [0 1] :west [-1 0]
+               :north-east [diagonal (- diagonal)] :south-east [diagonal diagonal]
+               :south-west [(- diagonal) diagonal] :north-west [(- diagonal) (- diagonal)]})
+
 (a/defargs args
   {:target {:doc "a block or entity name, or several (a vector or set)" :spec (a/or-of a/name? (a/coll-of a/name?)) :default nil}
    :count {:doc "how many targets end the search" :spec (a/int-in 1 nil) :default 1}
    :max-distance {:doc "how far (XZ) from the origin a leg may go, 1 to 128" :spec (a/int-in 1 128) :default 96}
    :pattern {:doc ":spiral (rings round the origin, the default) or :outward (ahead along :heading); :outward when a :heading is given" :spec #{:spiral :outward} :default nil}
-   :heading {:doc ":north, :east, :south or :west, for :outward (default :north)" :spec #{:north :east :south :west} :default nil}
+   :heading {:doc "a compass heading (:north, :north-east, :east ...), for :outward (default :north)" :spec (set (keys headings)) :default nil}
    :spacing {:doc "blocks between legs, 4 to 64" :spec (a/int-in 4 64) :default 16}
    :scan-radius {:doc "how far round the body each look reaches" :spec (a/num-in 0 nil) :default 24}
    :max-legs {:doc "legs walked before it gives up" :spec (a/int-in 0 nil) :default 32}
@@ -95,7 +100,6 @@
 
 (def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 
-(def headings {:north [0 -1] :east [1 0] :south [0 1] :west [-1 0]})
 
 ;; ------------------------------------------------------------------ pure
 

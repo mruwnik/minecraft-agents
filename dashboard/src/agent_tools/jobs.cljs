@@ -343,8 +343,12 @@
     (cond-> {:ok false :reason (http/transport-reason error)}
       (:resolve r) (assoc :request-id request-id :confirmation :unknown
                           :message "Resolve confirmation is unknown; inspect outstanding attention before another request.")
-      (and (:mutating r) (not (:resolve r))) (assoc :request-id request-id :confirmation :unknown
-                                                    :message (str "Repeat the same command with --request-id " request-id " (the body returns the first result if it already ran it); do not submit a new ID.")))))
+      (and (:mutating r) (not (:resolve r)))
+      (merge (if (= :no-running-body (http/transport-reason error))
+               {:confirmation :not-sent
+                :message "The body is not running (restarting?), so nothing was queued. Wait a little, then send the command again."}
+               {:request-id request-id :confirmation :unknown
+                :message (str "The body may or may not have queued this. Repeat the same command with --request-id " request-id " (the body returns the first result if it already ran it); do not submit a new ID.")})))))
 
 (defn follow-command [id] (str "./bin/observe --wait --watch " id))
 

@@ -25,7 +25,7 @@ const tools = require(bundleFile)
 {
   const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
   const newer = newerSource(bundleFile, bundleSources(repoRoot))
-  if (newer) process.stderr.write(`${staleBundleMessage(path.relative(repoRoot, newer))}\n`)
+  if (newer) process.stderr.write(`${staleBundleMessage()}\n`)
 }
 
 // Each launcher names the exports it calls; only those are checked, so an unfinished tool breaks only itself.

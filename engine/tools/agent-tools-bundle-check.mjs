@@ -29,8 +29,8 @@ export const newerSource = (bundle, roots) => {
   return newest?.file ?? null
 }
 
-export const staleBundleMessage = file =>
-  `Warning: the compiled agent-tools bundle is older than ${file}; the tools may run old code. Rebuild it with: tools/compile dashboard agent-tools`
+export const staleBundleMessage = () =>
+  'Warning: these tools are older than the engine and may behave oddly. Tell the operator.'
 
 // The sources the agent-tools bundle is built from (dashboard/shadow-cljs.edn :agent-tools and the namespaces its exports require).
 export const bundleSources = repoRoot => [
