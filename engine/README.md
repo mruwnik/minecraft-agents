@@ -438,7 +438,7 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 A dead body holds none of `:night`, `:dusk-home`, `:hungry`, `:needs-bed`, `:door-left`, `:inventory-nearly-full`, `:scaffold-left`, `:tidy-pending`, `:pen-gate`, `:loose-items` (`jobs.lib.body/recovery-pending?`). Alive, only the trigger ids in setting `jobs.lib.body/recovery-holds` (default the errand ones: not `:night`, `:dusk-home`, `:needs-bed`) stay back, for `recovery-hold-s` (180) after the death, wherever a saved register lists them; `:died` does not need to be first. The danger reflexes are not held back.
 
 The dangers (`:suffocating`, `:burning`) have no cooldown and no backoff. Needs rest with a reason the agent
-sees (`:hungry` after `food.none`: 600 s, 60 s while starving). There is no timer trigger: periodic work is a job.
+sees (`:hungry` after get-food ends `:no-food`: 600 s, 60 s while starving). There is no timer trigger: periodic work is a job.
 To see a trigger fire without its real job, register it against `jobs.debug.notify`.
 
 ### Conditions
