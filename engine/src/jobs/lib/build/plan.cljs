@@ -343,6 +343,11 @@
       h
       (assoc h :refused :no-support))))
 
+(defn unseen-support
+  "The neighbours of pos (below first) the body has never seen: a cell refused :no-support may only lack a look at its floor."
+  [c pos]
+  (filterv #(nil? (u/seen-block (:primitives c) (zipmap [:x :y :z] %))) (map #(mapv + pos %) neighbour-steps)))
+
 (defn placeable
   "The cells of todo a click places now, each with its :click (nil: placed plainly); the others are booked under
   :unplaceable with the reason, which only says why at the end."

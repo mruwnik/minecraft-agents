@@ -676,6 +676,22 @@
             (is (= 2 (:placed result)))
             (is (= "dirt" (block p [3 66 3])))))))))
 
+(deftest a-cell-whose-floor-was-never-seen-is-looked-at-before-it-is-refused-no-support
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "rails" :parts [{:id "r" :cells [[3 64 3]] :want "dirt"}]}
+              {:keys [eng p]} (start {:inventory [{:name "dirt" :count 4}] :self {:pos {:x 3.5 :y 64 :z 5.5}}} {"rails" plan} [])
+              looked? #(seq (h/calls p "look"))
+              hide (fn [f unseen] (fn [pos] (if (and (< (.-y pos) 64) (not (looked?))) (unseen pos) (f pos))))]
+          (aset p "seenBlockAt" (hide (.-seenBlockAt p) (fn [pos] #js {:unknown true :pos pos})))
+          (aset p "sensedAt" (hide (.-sensedAt p) (fn [_] #js {:unknown true})))
+          (no-support-world! p)
+          (let [result (await (child-outcome eng job {:plan "rails"} 200))]
+            (is (seq (places p)))
+            (is (= {} (:given-up result)))
+            (is (= 1 (:placed result)))))))))
+
 (deftest a-cell-no-neighbour-ever-supports-is-given-up-as-no-support-and-never-placed
   (async done
     (tu/run-async done

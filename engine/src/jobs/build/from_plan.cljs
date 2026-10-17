@@ -63,7 +63,7 @@
   4. Walk toward the nearest unloaded cell. Unseen cells are never taken as built.
   5. Finish.
   A cell whose state no neighbour gives, or with no block to click beside it yet, waits for one. If still missing at
-  the end it is given up with jobs.lib.placement's reason (:no-support, :no-room, :opened, :double-slab). A cell whose place is refused, or whose stand cell
+  the end it is given up with jobs.lib.placement's reason (:no-support, after a look at any floor or neighbour never seen; :no-room, :opened, :double-slab). A cell whose place is refused, or whose stand cell
   cannot be reached, :give-up times is given up (:refused, :occupied, :no-item, :unreachable or :unloaded).
   Zones: every place is checked against zones and the footprints of the other active plans, when the cell is
   chosen and again before the place. A cell in a zone that does not allow :place, or in another plan's footprint,
@@ -451,6 +451,25 @@
     (or (when-not (seq grounded) (await (scaffold/start! c cells cell (result-data c cells))))
         (await (walk-to! c cells cell)))))
 
+(defn support-looks
+  "[cell neighbour] pairs: a cell refused :no-support with a neighbour never seen and not yet looked at."
+  [c cells]
+  (let [done (set (:support-looked (ctx/mem c)))
+        refused (set (keys (filter (comp #{:no-support} val) (:unplaceable (ctx/mem c)))))]
+    (vec (for [cell cells :when (refused (:pos cell))
+               n (plan/unseen-support c (:pos cell)) :when (not (done n))]
+           [cell n]))))
+
+(defn ^:async look-for-support!
+  "Look at the unseen floor of the nearest refused cell: from where the body stands when the cell is in reach, else walk to it first."
+  [c cells looks]
+  (let [[cell n] (first (sort-by #(u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos (first %)))) looks))]
+    (if (<= (u/eye-dist (u/self-pos c) (:pos cell)) (:reach (:args c)))
+      (do (ctx/update-mem! c update :support-looked (fnil conj []) n)
+          (await (dig-look/look-at! c n))
+          :again)
+      (await (walk-to! c cells cell)))))
+
 (defn ^:async build-step!
   "One step of the build (:again, or :continue while a walk waits): place or dig what is in reach, else walk, else finish."
   [c cells]
@@ -492,6 +511,7 @@
       (= :up (scaffold/phase c)) (do (scaffold/finish-up! c todo) :again)
       (seq todo) (await (reach-cell! c cells (nearest todo)))
       (seq digs) (await (walk-to! c cells (nearest digs)))
+      (seq (support-looks c wanted)) (await (look-for-support! c cells (support-looks c wanted)))
       (seq (unseen cells given-up)) (await (walk-to! c cells (nearest (unseen cells given-up))))
       :else (let [before (ctx/mem c)]
               (ctx/update-mem! c retry-walks (u/self-pos c) true)
