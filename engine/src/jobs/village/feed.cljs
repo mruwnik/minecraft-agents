@@ -84,6 +84,8 @@
 
 (def target [:villager])
 
+(def meta {:category :phase :part-of '[jobs.village.breed]})
+
 (def safe? ready/safe-if-lit)
 (def fit? ready/fit?)
 

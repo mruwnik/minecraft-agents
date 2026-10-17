@@ -56,6 +56,8 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
+(def meta {:category :phase :part-of '[jobs.survival.night]})
+
 (def safe? ready/ok)
 
 (def fit? ready/ok)

@@ -56,6 +56,8 @@
    ::cell-s {:default 1.5 :doc "Mean seconds one cell of the door takes (dig, pick up, pace), for the quote." :spec (a/num-in 0 nil)}})
 (defn max-cell-digs [] (settings/get settings ::max-cell-digs))
 
+(def meta {:category :phase :part-of '[jobs.movement.go-to]})
+
 (def safe? ready/safe-here-by-night)
 
 (def fit? ready/ok)

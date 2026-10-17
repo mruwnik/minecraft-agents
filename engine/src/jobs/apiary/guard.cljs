@@ -316,6 +316,8 @@
 
 (def target [:box :center])
 
+(def meta {:category :phase :part-of '[jobs.apiary.maintain]})
+
 (def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
 

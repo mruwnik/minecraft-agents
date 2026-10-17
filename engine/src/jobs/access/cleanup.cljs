@@ -217,6 +217,8 @@
 
 (def can-start? (cond/and bad-args no-zones))
 
+(def meta {:category :phase :part-of '[jobs.movement.go-to jobs.access.stair]})
+
 (def safe? ready/safe-if-lit)
 
 (def fit? ready/ok)
