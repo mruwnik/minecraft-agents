@@ -1,7 +1,5 @@
 (ns jobs.survival.retreat
-  (:require [clojure.set :as set]
-            [jobs.lib.ready :as ready]
-            [clojure.string :as str]
+  (:require [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -15,16 +13,15 @@
             [jobs.lib.goal :as goal]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.pace :as pace]
-            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
+            [jobs.survival.retreat-choose :as choose]
             [jobs.survival.retreat-cornered :as cornered]
             [jobs.survival.retreat-cover :as cover]
             [jobs.survival.retreat-flight :as flight]
             [jobs.survival.retreat-goal :as retreat-goal]
             [jobs.survival.retreat-home :as retreat-home]
-            [jobs.survival.retreat-pillar :as pillar]
             [jobs.survival.retreat-refuge :as refuge]
-            [jobs.survival.retreat-walk :as walk]))
+            [jobs.survival.retreat-step :as step]))
 
 (def doc
   "Flee from the hostiles in range, one whole flight per round: run until no mob chases the body any more.
@@ -130,14 +127,6 @@
    :fist-sweeps {:doc "times a body with no weapon, every cornered option failed, looks for a way to walk before it punches a hostile it would not beat; 0: it punches at once" :spec (a/int-in 0 nil) :default 1}})
 
 
-(def low-leg-s
-  "Bound of a flight step while exposed low in a ranged chaser's line of fire: a search that stands still must not last."
-  1.5)
-
-(def slow-step-cap "Flee steps in a row that ran out of their seconds before the body moved (a slow start, nothing in the way) tried again before the way counts as blocked." 2)
-
-(def stall-blocks "A low step that moved the body less than this stood still: cover where it stands comes next." 1)
-
 
 (a/defargs settings
   {::job-time-s {:default 420 :doc "Seconds of a flight's time spend (its pauses not counted): past it the flight ends limit-reached and the hostile trigger fires again while the danger stays." :spec (a/num-in 0 nil)}
@@ -171,29 +160,6 @@
   {:uses {:job-time [0 (settings/get settings ::mean-s) ##Inf]}})
 
 
-(defn close-hitters
-  "Of the hostiles near, those that attack at close range (creepers included, not ranged mobs or endermen) within close-radius."
-  [c]
-  (filterv #(and (not (combat/ranged? %)) (not (combat/enderman? %))
-                 (<= (danger-q/mob-distance (:primitives c) %) (cornered/close-radius)))
-           (cornered/near-hostiles c)))
-
-
-(def eat-gap
-  "Blocks to the nearest hostile at which a bite is eaten per flee step."
-  12)
-
-(defn ^:async eat-on-the-run!
-  "One bite a flee step, with the nearest hostile at least eat-gap away; none for the rest of the flight once
-  nothing is left to eat or a bite fails."
-  [c threat]
-  (when (and (not (:ate (ctx/mem c)))
-             (>= (danger-q/mob-distance (:primitives c) threat) eat-gap))
-    (let [r (await (ctx/call c :eat 'jobs.survival.eat {:until 20 :max-bites 1}))]
-      (when (and (contract/ending? r) (not= :done (:kind r)))
-        (ctx/update-mem! c assoc :ate true)))))
-
-
 (defn ^:async wait-far!
   "Cornered with every chaser beyond :radius: pause a moment (why cornered) and look again."
   [c]
@@ -209,67 +175,9 @@
   :again)
 
 
-(defn say-target!
-  "Log (retreat.target) the cell a flee step walks to, the chasers it runs from and whether it is out of every ranged one's line of fire."
-  [c target threats covered?]
-  (let [cell (mapv #(js/Math.floor %) [(:x target) (:y target) (:z target)])
-        from (mapv #(str (.-name %) " " (.-id %)) threats)]
-    (ctx/emit! c :retreat.target :info {:target cell :from from :cover (boolean (and covered? (covered? target)))
-                                        :text (str "flee step to " (str/join " " cell) " away from " (str/join ", " from))})))
-
-(defn say-choice!
-  "Log (retreat.choice info), when it changes, what the flight chose among: the hostiles it knows and where, each
-  closed room (survey) and why it is not run to (verdicts; nil: it is), the cells that are no closed room, the home,
-  the goal and why it is dropped (judged), and where the flight leans. blast: the creepers within blast reach
-  (flight/blaster?), for which no room was judged."
-  [c survey verdicts judged blast]
-  (let [p (:primitives c)
-        at (fn [pos] (when pos (mapv #(js/Math.floor (% pos)) [:x :y :z])))
-        rooms (mapv (fn [{:keys [room why inside?]}]
-                      {:at (at (:start room)) :own? (boolean (:home? room)) :why (if inside? :inside why)})
-                    verdicts)
-        goal (at (:goal judged))
-        blast (mapv #(str (.-name %) " " (.-id %)) blast)
-        lean (at (or (:start (first (:rooms survey))) (:home judged) (retreat-goal/usable judged) (when (empty? blast) (cover/home-pos c))))
-        choice {:blast blast :rooms rooms :dropped (:dropped survey) :home (at (cover/home-pos c)) :home-why (retreat-goal/home-why (u/self-pos c) (retreat-goal/hostile-spots c) (cover/home-pos c)) :goal goal :goal-why (:why judged) :lean lean}]
-    (when (not= choice (:choice-said (ctx/mem c)))
-      (ctx/update-mem! c assoc :choice-said choice)
-      (ctx/emit! c :retreat.choice :info
-                 (assoc choice
-                        :hostiles (mapv #(str (.-name %) " " (.-id %) " " (at (danger-q/mob-pos p %))) (flight/known-chasers p))
-                        :text (str "flee choice: leans to " (or lean "nothing")
-                                   (when (:home-why choice) (str "; home " (at (cover/home-pos c)) " dropped (" (name (:home-why choice)) ")"))
-                                   (when goal (str "; goal " goal (when (:why judged) (str " dropped (" (name (:why judged)) ")"))))
-                                   (when (seq blast) (str "; no room is a refuge within blast reach of " (str/join ", " blast)))
-                                   (when (seq rooms)
-                                     (str "; rooms " (str/join ", " (map #(str (:at %) " " (name (or (:why %) :run))) rooms))))
-                                   (when (seq (:dropped survey))
-                                     (str "; no room " (str/join ", " (map #(str (:at %) " " (name (:why %))) (:dropped survey)))))))))))
-
-(defn lone-melee?
-  "Whether hostiles is one melee mob a pillar stops (not a creeper, enderman, spider, flyer or shooter) farther than cover-gap (it would stand in the cells to fill) and within refuge-gap."
-  [p hostiles]
-  (let [h (first hostiles)]
-    (boolean (and h (nil? (second hostiles)) (pos? (cornered/refuge-gap))
-                  (not (combat/ranged? h)) (not (combat/creeper? h)) (not (combat/enderman? h))
-                  (not (combat/climber? h)) (not (combat/flyer? h))
-                  (< (cornered/cover-gap) (danger-q/mob-distance p h) (inc (cornered/refuge-gap)))))))
-
-(defn ^:async early-refuge!
-  "A lone melee hostile close by that a fight would not win, at least a pillar's blocks carried: pillar up, else seal in,
-  before any flee step (a walk gains little on it). Once a flight: nil when it cannot, and then the flight walks."
-  [c]
-  (let [hostiles (cornered/near-hostiles c)]
-    (when (and (not (:early-refuge-failed (ctx/mem c))) (lone-melee? (:primitives c) hostiles)
-               (pillar/pillar-item c) (not (pillar/lean? c)) (not (cornered/fight-wins? c hostiles)))
-      (let [r (or (when-not (flight/tried? c :pillar) (await (refuge/pillar! c)))
-                  (await (refuge/plug-option! c :plug #{:walls})))]
-        (when (nil? r) (ctx/update-mem! c assoc :early-refuge-failed true))
-        r))))
-
 (defn ^:async flight-step!
-  "One step of the flight (flight/look!, then shut a door, or run home, or walk a step away, or the cornered options),
-  :again; the flight's end (flight/end-flight!) once no chaser is left."
+  "One step of the flight (flight/look!, then retreat-choose picks: shut a door, run home, walk a step away or the
+  cornered options), :again; the flight's end (flight/end-flight!) once no chaser is left."
   [c]
   (let [{:keys [no-gain-steps]} (:args c)
         p (:primitives c)
@@ -277,7 +185,7 @@
         threat (first threats)
         hit? (or (cornered/hit-on-the-run! c) (cornered/beaten? c))
         door (when threat (retreat-doors/door-to-shut c (danger-q/mob-pos p threat)))
-        early (when (and threat (not hit?) (not door)) (await (early-refuge! c)))
+        early (when (and threat (not hit?) (not door)) (await (step/early-refuge! c)))
         covered? (cover/cover-fn p threats)
         blast (filterv #(flight/blaster? p %) threats)
         survey (when (and threat (not hit?) (empty? blast))
@@ -290,78 +198,34 @@
         {:keys [room way inside?]} (retreat-home/pick verdicts)
         home-now? (fn [] (or inside? (and (nil? survey) (retreat-home/in-home? c (cover/home-pos c)))))
         judged (when threat (retreat-goal/judge c (if (seq blast) [] (remove nil? [(:start (first rooms)) (cover/home-pos c)]))))
-        _ (when threat (say-choice! c survey verdicts judged blast))
+        _ (when threat (step/say-choice! c survey verdicts judged blast))
         stuck (fn ^:async stuck [why]
                 (if (seq (cornered/near-hostiles c))
                   (await (cornered/cornered! c why (or inside? (and (seq blast) (retreat-home/in-home? c (cover/home-pos c))))))
                   (do (ctx/update-mem! c update :since-gain (fnil inc 0))
                       (if (flight/no-gain? (ctx/mem c) no-gain-steps)
                         (flight/end-flight! c :keeps-off)
-                        (await (wait-far! c))))))]
-    (cond
-      (nil? threat) (or (await (flight/look-back! c))
-                        (when (refuge/plugging-here? c) (await (refuge/plug-on! c)))
-                        (flight/end-flight! c nil))
-      (some? early) early
-      (flight/no-gain? (ctx/mem c) no-gain-steps)
-      (do (when (seq (cornered/near-hostiles c)) (ctx/update-mem! c assoc :since-gain 0))
-          (await (stuck "the chaser keeps up")))
-      (cornered/angry-enderman? c (cornered/near-hostiles c)) (await (cornered/cornered! c "an enderman cannot be outrun" (home-now?)))
-      hit? (await (cornered/cornered! c "a hostile keeps hitting the body as it flees" (home-now?)))
-      (some combat/flyer? (cornered/near-hostiles c)) (await (cornered/cornered! c "a phantom cannot be outrun" (home-now?)))
-      door (await (retreat-doors/shut-door! c door))
-      (and inside? (retreat-doors/home-door c room)) (await (retreat-doors/shut-home-door! c (retreat-doors/home-door c room)))
-      inside? (await (stuck "at home, the hostile still has a way in"))
-      way (await (run-home! c room way))
-      (not (cornered/outrun? c (cornered/near-hostiles c))) (await (cornered/cornered! c "the hostile outruns the body" inside?))
-      :else
-      (let [_ (await (eat-on-the-run! c threat))
-            away? (fn [cell] (when (and cell (not (walk/too-close? (mapv #(danger-q/mob-pos p %) threats) cell))) cell))
-            stair (cover/way-up c threats)
-            leg (when-not stair (away? (retreat-goal/leg c judged)))
-            gap0 (flight/nearest-gap p threats)
-            goal-gap0 (when leg (u/dist (u/self-pos c) leg))
-            target (or leg (away? (await (cover/flight-target! c threats covered? rooms))))
-            grown? (and (zero? (:regrown (ctx/mem c) 0))
-                        (seq (set/difference (set (map #(.-id %) (flight/look! c))) (set (map #(.-id %) threats)))))
-            low? (cover/exposed-low? c covered?)
-            cover (cond
-                    grown? (do (ctx/update-mem! c update :regrown (fnil inc 0)) :again)
-                    (and low?
-                         (or (refuge/plugging-here? c) (not (and target (covered? target))) (pos? (:stalled (ctx/mem c) 0)))
-                         (not (cover/close-danger? p threats)))
-                    (await (cover/take-cover! c))
-                    (and target (not stair) (sh-sense/buried? p) (not (cover/close-danger? p threats)))
-                    (await (cover/dig-pocket! c)))]
-        (cond
-          (some? cover) cover
-          (nil? target) (await (stuck "no open way away from the hostile"))
-          :else
-          (let [_ (when (:cornered (ctx/mem c)) (ctx/update-mem! c dissoc :cornered))
-                _ (say-target! c target threats covered?)
-                _ (when leg (retreat-goal/start-leg! c))
-                from (u/self-pos c)
-                moved (await (cornered/leg-step! c :step target 1
-                                        (cond (or (seq (close-hitters c)) (cornered/recently-hurt? c)) (cornered/close-leg-s)
-                                              low? low-leg-s
-                                              :else cornered/flight-timeout-s)
-                                        (if leg (retreat-goal/margin c) retreat-goal/leg-margin)))]
-            (ctx/update-mem! c #(if (and low? (< (u/dist from (u/self-pos c)) stall-blocks))
-                                  (update % :stalled (fnil inc 0))
-                                  (dissoc % :stalled)))
-            (cond
-              (and leg (not (and moved
-                                 (>= (or (flight/nearest-gap p threats) js/Infinity) (dec (or gap0 0)))
-                                 (< (u/dist (u/self-pos c) leg) (- goal-gap0 0.5)))))
-              (do (retreat-goal/off! c leg :lost-ground) :again)
-              (and leg (retreat-goal/drifted? c leg)) (do (retreat-goal/off! c leg :height) :again)
-              (and (not moved) (:leg-timed-out (ctx/mem c)) (< (:slow-steps (ctx/mem c) 0) slow-step-cap))
-              (do (ctx/update-mem! c update :slow-steps (fnil inc 0)) :again)
-              (not moved) (await (stuck "the way away from the hostile is blocked"))
-              :else
-              (let [gap (flight/nearest-gap p threats)]
-                (ctx/update-mem! c #(-> % (dissoc :tried :slow-steps :regrown) (flight/note-gap gap)))
-                :again))))))))
+                        (await (wait-far! c))))))
+        near (when threat (cornered/near-hostiles c))
+        {:keys [option why reset-gain?]}
+        (choose/choose {:threat threat :early early :no-gain? (flight/no-gain? (ctx/mem c) no-gain-steps)
+                        :angry-enderman? (and threat (cornered/angry-enderman? c near)) :hit? hit?
+                        :flyer? (some combat/flyer? near) :door door :inside? inside?
+                        :home-door (when inside? (retreat-doors/home-door c room)) :way way
+                        :outruns? (or (nil? threat) (cornered/outrun? c near))})]
+    (case option
+      :end (or (await (flight/look-back! c))
+               (when (refuge/plugging-here? c) (await (refuge/plug-on! c)))
+               (flight/end-flight! c nil))
+      :early early
+      :stuck (do (when (and reset-gain? (seq (cornered/near-hostiles c))) (ctx/update-mem! c assoc :since-gain 0))
+                 (await (stuck why)))
+      :cornered (await (cornered/cornered! c why (home-now?)))
+      :cornered-inside (await (cornered/cornered! c why inside?))
+      :shut-door (await (retreat-doors/shut-door! c door))
+      :shut-home-door (await (retreat-doors/shut-home-door! c (retreat-doors/home-door c room)))
+      :run-home (await (run-home! c room way))
+      :walk (await (step/walk-away! c threats judged rooms covered? stuck)))))
 
 (defn ^:async round
   "One whole flight: steps (flight-step!, or the refuge's) until it ends."

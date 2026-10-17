@@ -1,6 +1,6 @@
 (ns engine.retreat-contract-test
   "jobs.survival.retreat as a contract job: its exports, how a flight ends, and its time spend."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -10,7 +10,8 @@
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.survival.retreat :as retreat]))
+            [jobs.survival.retreat :as retreat]
+            [jobs.survival.retreat-choose :as choose]))
 
 (defn setup
   "flee-test/setup with the canonical event sink and a contract parent 'caller that calls retreat once with ctx/call
@@ -91,3 +92,18 @@
                  :call (fn [slot def args] (swap! calls conj [slot (:sym def) (:why args)]) (js/Promise.resolve (contract/ending :done nil nil)))}]
           (is (= :again (await (retreat/wait-far! c))))
           (is (= [[:pause 'jobs.time.noop "cornered"]] @calls)))))))
+
+(deftest the-choice-follows-the-documented-order
+  (are [facts option] (= option (:option (choose/choose (merge {:threat :mob :outruns? true} facts))))
+    {:threat nil :hit? true} :end
+    {:early :r :hit? true} :early
+    {:no-gain? true :hit? true} :stuck
+    {:angry-enderman? true :hit? true :door :d} :cornered
+    {:hit? true :door :d} :cornered
+    {:flyer? true :door :d} :cornered
+    {:door :d :inside? true :home-door :h} :shut-door
+    {:inside? true :home-door :h :way :w} :shut-home-door
+    {:inside? true :way :w} :stuck
+    {:way :w :outruns? false} :run-home
+    {:outruns? false} :cornered-inside
+    {} :walk))
