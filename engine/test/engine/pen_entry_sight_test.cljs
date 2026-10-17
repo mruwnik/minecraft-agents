@@ -63,5 +63,16 @@
         (let [[p c] (seeing-body (update walled-world :entities conj (ht/cow 3 17.5 22.5)))
               _ (await (pen-entry/pens! c))]
           (is (seq (st/look-points p)) "the hidden half is looked at")
-          (is (every? (fn [[x _ z]] (<= z 19)) (st/look-points p))
-              "no look round the cow in the open (z 22)"))))))
+          (is (every? (fn [[x _ z]] (or (<= z 19) (and (< (js/Math.abs (- x 17.5)) 1) (< (js/Math.abs (- z 22.5)) 1)))) (st/look-points p))
+              "no look round the cow in the open (z 22), only at its own cell"))))))
+
+(deftest a-pen-behind-the-body-is-found-by-a-look
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (:p (ht/clock-on-wait! (h/setup-seeing world nil 700)))
+              _ ((aget p "setOwner") "t1")
+              _ (swap! (fake/state p) assoc :yaw 90 :pitch 0)
+              _ (perception/pass! (aget p "perception"))
+              c (st/stub-ctx p)]
+          (is (= [[{:x 18 :y 64 :z 16}]] (map :gates (await (pen-entry/pens! c))))))))))

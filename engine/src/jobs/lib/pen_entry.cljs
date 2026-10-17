@@ -34,7 +34,8 @@
 (defn pens
   "[{:gates [{:x :y :z}] :animals n}] of the pens round the passive animals in sight, one per pen; metadata :unseen?
   when a pen has cells the body has not seen. Those are noted for sense/decide! (u/*reads*) only for an animal whose
-  fill met no leak but unseen cells: plausibly inside a fence ring, not loose in the open."
+  fill met no leak but unseen cells: plausibly inside a fence ring, not loose in the open. An animal whose own floor
+  is unseen (the pen is out of view) notes that floor, so it gets looked at."
   [c]
   (let [p (:primitives c)
         block-at (apiary/seen-block-at-fn p)
@@ -53,6 +54,9 @@
               (when ring?
                 (doseq [l (:leaks answer) :let [leak ((juxt :x :y :z) (:pos l))] :when (sense/unknown? p leak)]
                   (u/note-read! :cells leak)))
+              (when (empty? (:inside answer))
+                (doseq [at [[(:x cell) (dec (:y cell)) (:z cell)] k] :when (sense/unknown? p at)]
+                  (u/note-read! :cells at)))
               (recur (rest todo)
                      (if (and (contains? (:inside answer) k) (seq (:gates answer)))
                        (conj found {:inside (:inside answer) :gates (mapv :pos (:gates answer)) :open (mapv :pos (filter :open? (:gates answer))) :animals 1})
