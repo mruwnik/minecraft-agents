@@ -53,7 +53,7 @@
    :act [[:job (jobs.combat.attack {:targets ["$body"]})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :absent :killed []}} :within-s 20 :of-job true}]}
   {:name "zombie-in-glass-box-given-up-unreachable"
-   :blocks [[:fill [20 0 20] [24 3 24] "glass" :hollow]]
+   :blocks [[:fill [20 -1 20] [24 3 24] "glass" :hollow]]
    :act [[:summon "zombie" [22.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "zombie"} 10]
          [:job (jobs.combat.attack {:targets "zombie"})]]

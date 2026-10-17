@@ -307,6 +307,55 @@
   (filter (fn [[op a b _ d]] (and (= :fill op) d (> (fill-volume (mapv #(js/Math.floor %) a) (mapv #(js/Math.floor %) b)) fill-limit)))
           (:blocks c)))
 
+;; Full cubes the check treats as solid; anything else (torch, door, water, a bed...) never flags a position.
+(def solid-block #"^(stone|dirt|coarse_dirt|rooted_dirt|grass_block|cobblestone|bedrock|obsidian|netherrack|gravel|sand|granite|diorite|andesite|deepslate|clay|glass|glowstone|sea_lantern|hay_block|magma_block|slime_block|melon|moss_block|soul_sand|crafting_table|furnace|smoker|blast_furnace|snow_block|stone_bricks)$|_ore$|_log$|_leaves$|_planks$|_block$")
+
+(defn solid-block? [block]
+  (boolean (re-find solid-block (-> (str block) (str/replace #"^minecraft:" "") (str/replace #"\[.*" "")))))
+
+(defn block-op-effect
+  "What one :blocks entry does to the plot-relative cell: :solid, :clear, or nil (not touched, or a mode this check does not model)."
+  [[op a b c d] cell]
+  (let [block (if (= op :fill) c b)
+        mode (when (= op :fill) d)
+        lo (mapv #(js/Math.floor %) (if (= op :fill) (mapv min a b) a))
+        hi (mapv #(js/Math.floor %) (if (= op :fill) (mapv max a b) a))
+        inside? (every? true? (map <= lo cell hi))
+        flat-ring? (and (= mode :outline) (= (lo 1) (hi 1)))
+        border? (some true? (map-indexed (fn [i [l c h]] (and (not (and flat-ring? (= i 1))) (or (= c l) (= c h)))) (map vector lo cell hi)))
+        effect (if (solid-block? block) :solid :clear)]
+    (cond
+      (not inside?) nil
+      (= op :set) effect
+      (nil? mode) effect
+      (not (#{:hollow :outline} mode)) nil
+      border? effect
+      (= mode :hollow) :clear)))
+
+(defn solid-cell?
+  "Does the cell (plot-relative, floored) end solid after the case's :blocks are applied in order?"
+  [c cell]
+  (= :solid (some #(block-op-effect % cell) (reverse (:blocks c)))))
+
+(defn solid-placements
+  "The :summon positions, :body :at feet and head cells and go-to :pos #at positions of the case that end inside a solid :blocks cell, as [what position].
+  A go-to with :unknown true may aim into ground by design, and an :rcon setblock / fill in :act changes the blocks after the check: neither is judged."
+  [c]
+  (let [rcon-edits? (some #(and (string? %) (re-find #"setblock|fill" %)) (tree-seq coll? seq (:act c)))
+        cell #(mapv (fn [v] (js/Math.floor v)) %)
+        [bx by bz] (get-in c [:body :at])
+        go-to-pos (->> (tree-seq coll? seq (:act c))
+                       (filter #(and (seq? %) (= 'jobs.movement.go-to (first %)) (not (:unknown (second %)))))
+                       (keep #(let [p (:pos (second %))] (when (map? p) (::rel p)))))
+        summons (->> (tree-seq coll? seq (:act c))
+                     (filter #(and (vector? %) (= :summon (first %)) (coords? (nth % 2 nil))))
+                     (map #(nth % 2)))]
+    (->> (concat (when-not rcon-edits?
+                   (concat (map vector (repeat :summon) summons)
+                           (map vector (repeat :go-to-pos) (filter coords? go-to-pos))))
+                 (when (coords? [bx by bz]) [[:body-feet [bx by bz]] [:body-head [bx (inc by) bz]]]))
+         (filter (fn [[_ p]] (solid-cell? c (cell p)))))))
+
 ;; A goal this far outside the plot is deliberately far (an unloaded-goal case), not a mistake.
 (def far-margin 64)
 
@@ -348,6 +397,7 @@
       (some step-problem? (:act c)) (conj (str ":act steps must be one of " (sort step-kinds)))
       (seq (bare-plot-positions c)) (conj (str "a job position " (first (bare-plot-positions c)) " with a plot-relative height needs #at"))
       (seq (out-of-plot-positions c)) (conj (str "position " (first (out-of-plot-positions c)) " is outside the plot: give :plot :length / :width or move it inside"))
+      (seq (solid-placements c)) (conj (str "the " (name (ffirst (solid-placements c))) " position " (second (first (solid-placements c))) " is inside a solid :blocks cell"))
       (seq (unsplittable-fills c)) (conj (str "a :hollow / :outline fill over " fill-limit " blocks cannot be split: " (first (unsplittable-fills c))))
       (seq (unbounded-selectors c)) (conj "an @e selector must be bounded to the plot: use $BOX (x,y,z,dx,dy,dz), not distance")
       (some #(not (and (after-kinds (first %)) (or (not= :file (first %)) (string? (second %))))) (:after c)) (conj (str ":after checks must be one of " (sort after-kinds)))

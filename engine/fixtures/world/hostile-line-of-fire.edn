@@ -42,12 +42,12 @@
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
    :after [[:entities "type=skeleton,tag=wt" [[20 0 14] [24 2 18]] 1]]}
   {:name "zombie-sealed-glass-quiet"
-   :blocks [[:fill [20 0 14] [24 2 18] "glass" :hollow]]
+   :blocks [[:fill [20 -1 14] [24 3 18] "glass" :hollow]]
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
    :after [[:entities "type=zombie,tag=wt" [[21 0 15] [23 1 17]] 1]]}
   {:name "skeleton-ai-sealed-glass-quiet"
-   :blocks [[:fill [20 0 14] [24 2 18] "glass" :hollow]]
+   :blocks [[:fill [20 -1 14] [24 3 18] "glass" :hollow]]
    :act [[:summon "skeleton" [22.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
    :after [[:entities "type=skeleton,tag=wt" [[21 0 15] [23 1 17]] 1]]}

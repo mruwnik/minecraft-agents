@@ -6,7 +6,7 @@
 # Exit 3: the branch was behind and is now rebased. What you tested is not what would land: rerun your test namespaces, then land.sh again.
 #         --rebased-ok lands the rebased branch anyway (use only when the upstream commits it printed touch none of your files).
 # Exit 5: the branch was rebased over commits that touch files it changes and no clean test run (a .claude/live-tests/*.log ending
-#         "0 failures, 0 errors") is newer than that rebase; the overlapping files are named. Rerun the tests, then land.sh again.
+#         "0 failures, 0 errors"; for a change of engine/fixtures/ files only, a fixtures-suite log "0 failed" counts too) is newer than that rebase; the overlapping files are named. Rerun the tests, then land.sh again.
 # Exit 1: rebase conflict (aborted; branch unchanged), dirty worktree, or no checkout has the branch you were cut from.
 # A landing that changes the agent-tools bundle sources starts a detached rebuild of the main checkout bundle.
 # Exit 4: the main checkout has uncommitted edits to a file the landing changes (git refused; nothing moved): wait or ask the lead.
@@ -50,7 +50,10 @@ fi
 # A rebase over commits that touch this branch's files must be followed by a clean test run before it lands.
 if [ -s "$marker" ]; then
   top=$(git rev-parse --show-toplevel)
-  clean=$(find "$top/.claude/live-tests" -name '*.log' -newer "$marker" -exec grep -lE '(^|[^0-9])0 failures, 0 errors' {} + 2>/dev/null | head -1 || true)
+  pass='(^|[^0-9])0 failures, 0 errors'
+  # A fixture-only change is tested by the offline fixtures check, whose log says "0 failed".
+  [ -z "$(git diff --name-only "$target" HEAD | grep -v '^engine/fixtures/' || true)" ] && pass="$pass|world-test --check: [0-9]+ cases, 0 failed"
+  clean=$(find "$top/.claude/live-tests" -name '*.log' -newer "$marker" -exec grep -lE "$pass" {} + 2>/dev/null | head -1 || true)
   [ -n "$clean" ] || { echo "land: rebased over commits that touch your files; no clean test run since. Run the tests, then land.sh again. Overlap:" >&2; sort -u "$marker" >&2; exit 5; }
 fi
 

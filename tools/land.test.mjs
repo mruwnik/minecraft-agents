@@ -33,7 +33,9 @@ function fakeRepo() {
 const deadPid = () => spawnSync('sh', ['-c', 'echo $$'], { encoding: 'utf8' }).stdout.trim()
 
 const commitIn = (dir, file, text) => {
+  fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true })
   fs.writeFileSync(path.join(dir, file), text)
+  git(dir, 'add', file)
   git(dir, 'commit', '-q', '-am', `edit ${file}`)
 }
 
@@ -149,6 +151,33 @@ test('after a rebase over commits that touch its files, the branch lands only on
     recordTestRun(wt)
     assert.equal(run(wt, 'land.sh', '--rebased-ok').status, 0)
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
+test('a fixture-only branch lands on a passing fixtures-suite log; a branch with other files needs the 0 failures log', () => {
+  const { root, repo, wt } = fakeRepo()
+  try {
+    commitIn(repo, 'engine/fixtures/world/x.edn', 'one\n')
+    run(repo, 'fixer-worktree.sh', CARD)
+    commitIn(wt, 'engine/fixtures/world/x.edn', 'mine\none\n')
+    commitIn(repo, 'engine/fixtures/world/x.edn', 'one\nother\n')
+    assert.equal(run(wt, 'land.sh').status, 3)
+    const checkLog = 'world-test --check: 12 cases, 0 failed\n'
+    recordTestRun(wt, 'world-test --check: 12 cases, 1 failed\n')
+    assert.equal(run(wt, 'land.sh', '--rebased-ok').status, 5, 'a failing check is no evidence')
+    recordTestRun(wt, checkLog)
+    assert.equal(run(wt, 'land.sh', '--rebased-ok').status, 0)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+  const other = fakeRepo()
+  try {
+    commitIn(other.repo, 'engine/fixtures/world/x.edn', 'one\n')
+    run(other.repo, 'fixer-worktree.sh', CARD)
+    commitIn(other.wt, 'engine/fixtures/world/x.edn', 'mine\none\n')
+    commitIn(other.wt, 'b.txt', 'mine\n')
+    commitIn(other.repo, 'engine/fixtures/world/x.edn', 'one\nother\n')
+    assert.equal(run(other.wt, 'land.sh').status, 3)
+    recordTestRun(other.wt, 'world-test --check: 12 cases, 0 failed\n')
+    assert.equal(run(other.wt, 'land.sh', '--rebased-ok').status, 5, 'code beside the fixtures still needs a unit run')
+  } finally { fs.rmSync(other.root, { recursive: true, force: true }) }
 })
 
 test('--rebased-ok lands at once when the commits rebased onto touch none of its files', () => {

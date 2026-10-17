@@ -58,7 +58,7 @@
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night}} :within-s 20}]}
   {:name "under-high-slab-shelters"
    ;; a 7x7 slab 6 above the floor (over the roof height 4, light leaks in from the sides): not buried, so it shelters
-   :blocks [[:fill [2 0 8] [30 9 24] "air"] [:fill [2 0 8] [30 -1 24] "stone"]
+   :blocks [[:fill [2 0 8] [30 9 24] "air"] [:fill [2 -1 8] [30 -1 24] "stone"]
             [:fill [13 7 13] [19 7 19] "stone"] [:fill [13 0 13] [13 6 13] "stone"] [:fill [19 0 13] [19 6 13] "stone"]
             [:fill [13 0 19] [13 6 19] "stone"] [:fill [19 0 19] [19 6 19] "stone"]]
    :body {:at [16.5 0 16.5] :inventory [["cobblestone" 16]]}

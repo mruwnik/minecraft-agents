@@ -108,7 +108,7 @@
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
    :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :leak}} :within-s 20 :of-job true}]}
   {:name "water-1-deep-in-a-2-high-wall-closed"
-   :blocks [[:fill [2 0 2] [8 1 8] "stone" :hollow] [:fill [3 0 3] [7 0 7] "water"] [:set [5 0 5] "stone"]]
+   :blocks [[:fill [2 0 2] [8 1 8] "stone" :hollow] [:fill [3 0 3] [7 0 7] "water"] [:fill [3 1 3] [7 1 7] "air"] [:set [5 0 5] "stone"]]
    :body {:at [5.5 1 5.5] :yaw 0}
    :act [[:job (jobs.animals.pen-check {:at #at [5 1 5]})]]
    :expect [{:event {:source :job :kind :completed :data {:closed? true}} :within-s 20 :of-job true}]}

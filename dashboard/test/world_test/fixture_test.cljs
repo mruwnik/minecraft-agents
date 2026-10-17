@@ -165,6 +165,23 @@
     (is (nil? (ps "[[:job (jobs.a.b {})]]" "[[:rcon \"x\"]]")) "a default job alone runs for every case")
     (is (nil? (ps "[[:rcon \"x\"]]" "[[:job (jobs.c.d {})]]")) "default setup steps may precede a case's job")))
 
+(deftest a-position-inside-a-solid-blocks-cell-is-refused
+  (let [ps (fn [blocks body-at act]
+             (:problems (first (f/file-cases (str "{:name \"a\" :blocks " (pr-str blocks) " :body {:at " (pr-str body-at) "} :act " act
+                                                  " :expect [{:event {:kind :x} :within-s 1}]}")
+                                             "d"))))
+        solid? (fn [problems] (boolean (some #(re-find #"inside a solid" %) problems)))
+        stone [[:fill [0 0 0] [30 4 30] "stone"]]
+        carved (conj stone [:fill [5 0 16] [29 1 16] "air"])]
+    (is (solid? (ps stone [5.5 0 5.5] "[]")) "body feet in the fill")
+    (is (solid? (ps (conj carved [:set [5 1 16] "stone"]) [5.5 0 16.5] "[]")) "only the head cell is solid")
+    (is (not (solid? (ps carved [5.5 0 16.5] "[]"))) "an air fill after the stone clears it")
+    (is (solid? (ps carved [5.5 0 16.5] "[[:summon \"skeleton\" [19.5 0 18.5]]]")) "a summon in rock")
+    (is (not (solid? (ps carved [5.5 0 16.5] "[[:summon \"skeleton\" [19.5 0 16.5]]]"))))
+    (is (solid? (ps carved [5.5 0 16.5] "[[:job (jobs.movement.go-to {:pos #at [28 0 18]})]]")) "a go-to goal in rock")
+    (is (not (solid? (ps carved [5.5 0 16.5] "[[:job (jobs.movement.go-to {:pos #at [28 0 16]})]]"))))
+    (is (not (solid? (ps [[:fill [0 0 0] [30 4 30] "stone" :hollow]] [5.5 1 5.5] "[]"))) "a hollow fill is air inside")))
+
 (deftest a-single-case-file-is-one-case
   (is (= ["one/x"] (map :id (f/file-cases "{:name \"x\"}" "one")))))
 
