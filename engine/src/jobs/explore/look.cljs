@@ -6,7 +6,7 @@
   "Observe the nearby blocks and entities the body has seen, once, without moving or changing the world. :at inspects one exact
   block as last seen, with properties (a cell never seen is :unknown). Nearby samples are nearest first and bounded;
   :more-blocks?/:more-entities? report extra matches. Nothing is sensed through walls (players are always listed).
-  This is sight evidence, not a terrain map. A refused argument ends :impossible with cause {:reason :bad-args :text why} (from can-start?). On success ends :done with the observation as its data.")
+  This is sight evidence, not a terrain map; it only reads, so no hostile or dark makes it wait. A refused argument ends :impossible with cause {:reason :bad-args :text why} (from can-start?). On success ends :done with the observation as its data.")
 (a/defargs args
   {:radius {:doc "nearby sample radius, 1..32 blocks" :spec (a/num-in 1 32) :default 16}
    :block-names {:doc "nil, one block name or a vector/set of up to 16 names" :spec (a/or-of a/name? (a/coll-of a/name?)) :default nil}
@@ -21,7 +21,7 @@
 
 (def target [:at])
 
-(def safe? ready/safe-here-by-night)
+(def safe? ready/ok)
 (def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})

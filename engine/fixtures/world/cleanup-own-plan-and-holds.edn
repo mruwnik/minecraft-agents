@@ -1,6 +1,7 @@
 ;; Cards 99aab6b1, c82d8238: jobs.access.cleanup never digs a ledger block on the footprint of a plan the body made (cleanup.plan-cell, entry
 ;; dropped; :spare-own-builds false digs it), keeps a shelter's block (:retreat-plug) at night unless :keep-at-night? false, and walks to an
 ;; unowned scaffold entry (no :job) 14 blocks off only when armed and healthy and the entry is not 5+ below the feet or within 24 of a death.
+;; The night cases pass :checks {:safe? (not (threatened))}: the job's dark-sky gate would wait for dawn before its own night rule runs.
 ;; The ledger entry (a pillar block; the night cases a retreat plug) is seeded at [6 0 8] with its block; the body stands at [20.5 0 8.5].
 {:defaults
  {:tags [:cleanup :access :jobs] :time :any
@@ -42,13 +43,13 @@
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "dirt" :before "air" :purpose :retreat-plug :state :placed}]}}]
    :time :night
    :blocks [[:set [6 0 8] "dirt"] [:set [4 0 4] "torch"] [:set [20 0 4] "torch"] [:set [20 0 12] "torch"] [:set [8 0 12] "torch"]]
-   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :cleanup.left} :within-s 40 :of-job true}]
    :after [[:block [6 0 8] "dirt"]]}
   {:name "keep-at-night-false-takes-it-back"
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "dirt" :before "air" :purpose :retreat-plug :state :placed}]}}]
    :time :night
    :blocks [[:set [6 0 8] "dirt"] [:set [4 0 4] "torch"] [:set [20 0 4] "torch"] [:set [20 0 12] "torch"] [:set [8 0 12] "torch"]]
-   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true :keep-at-night? false})]]
+   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true :keep-at-night? false :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :cleanup.done :data {:removed 1}} :within-s 60 :of-job true}]
    :after [[:not-block [6 0 8] "dirt"]]}]}

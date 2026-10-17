@@ -6,6 +6,7 @@
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [jobs.debug.walk-plan :as walk-plan]
+            [jobs.explore.look :as look]
             [jobs.explore.search :as search]
             [jobs.access.stair :as stair]
             [jobs.blocks.fill-cells :as fill-cells]
@@ -110,6 +111,9 @@
     {:time st/noon :self {:pos {:x 0 :y 64 :z 0}} :entities [zombie]} :later
     {:time st/noon :self {:pos {:x 0 :y 64 :z 0}} :entities [zombie] :blocks (merge wall (tu/box 2 67 -2 4 67 2 "stone") (tu/box 3 64 -2 4 66 -2 "stone") (tu/box 3 64 2 4 66 2 "stone") (tu/box 4 64 -2 4 66 2 "stone"))} :ok
     {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}} :ok))
+
+(deftest a-look-reads-without-moving-and-does-not-wait-for-a-zombie
+  (is (= :ok (first (look/safe? (ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}} :entities [zombie]}))))))
 
 (deftest pick-up-loose-waits-while-a-zombie-is-near
   (is (= :later (first (pick-up-loose/safe? (ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}} :entities [zombie]}))))))
