@@ -25,6 +25,11 @@
             t))
         (rseq (mem/entries view :job-report))))
 
+(defn refused-at
+  "When get-food last refused every way as too dangerous (its :food-too-dangerous entry), or nil."
+  [view]
+  (:t (mem/latest view :food-too-dangerous)))
+
 (defn bake-wheat [] (settings/get settings ::bake-wheat))
 
 (defn wheat-carried [self]
@@ -37,10 +42,10 @@
     (if (foods/starving? self args) (min rest (/ (foods/starving-rest-ms) 1000)) rest)))
 
 (defn resting?
-  "Whether the trigger rests: get-food found no food (gave-up-at) less than :rest-s ago, and since then nothing to
+  "Whether the trigger rests: get-food found no food (gave-up-at), or while the body is fragile refused every way as too dangerous (refused-at), less than :rest-s ago, and since then nothing to
   eat came to hand: no food carried, too little wheat to bake, no :food-source entry learned after the give-up."
   [self view args]
-  (let [gave-up (gave-up-at view)
+  (let [gave-up (->> [(gave-up-at view) (when (foods/fragile? self) (refused-at view))] (remove nil?) seq (#(when % (apply max %))))
         learned (:t (mem/latest view :food-source))]
     (boolean (and gave-up
                   (< (- (:now view) gave-up) (* 1000 (rest-s self args)))

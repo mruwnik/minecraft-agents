@@ -46,6 +46,15 @@
     (is (hungry/hungry (at 3 5) (gave-up 120000 50000) {}) "losing health while hungry: 70 s is enough")
     (is (not (hungry/hungry (at 6 15) (gave-up 120000 50000) {})) "hungry but healthy, 70 s: still resting")))
 
+(defn refused [now t]
+  {:now now :data {:entries {:food-too-dangerous [{:t t :data {:why :creeper}}]}}})
+
+(deftest hungry-rests-after-get-food-refused-on-danger-only-while-fragile
+  (let [at (fn [food health] (tu/fake {:self {:food food :health health}}))]
+    (is (not (hungry/hungry (at 3 5) (refused 100000 50000) {})) "fragile, 50 s after a refusal: resting")
+    (is (hungry/hungry (at 3 5) (refused 700000 50000) {}) "650 s after: fires again")
+    (is (hungry/hungry (at 3 15) (refused 100000 50000) {}) "healed: the refusal no longer holds it")))
+
 (deftest a-layer-moves-the-accessors
   (settings/with-settings {:jobs.lib.danger/hostile-radius 5 :jobs.lib.danger/ranged-radius 6
                            :triggers.survival.hungry/bake-wheat 4 :triggers.survival.hungry/rest-s 7
