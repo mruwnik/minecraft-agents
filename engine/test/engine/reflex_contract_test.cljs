@@ -1,7 +1,7 @@
 (ns engine.reflex-contract-test
   "survival.fight-back, block-arrow-gap and extinguish as contract jobs: they export the contract, quote validly, and
   end with a kind and a cause."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.block-arrow-gap-test :as gt]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -12,6 +12,7 @@
             [engine.test-util :as tu]
             [jobs.survival.block-arrow-gap :as gap]
             [jobs.survival.extinguish :as extinguish]
+            [jobs.survival.fight-back :as fight-back]
             [engine.settings :as settings]
             [jobs.survival.respond-to-hostile :as respond]
             [jobs.survival.sleep :as sleep]))
@@ -42,6 +43,14 @@
       (fn ^:async t []
         (let [e (await (sleep/hold! (hold-ctx {} {:held-since 0}) {:reason :bed-occupied :pos [1 64 0]}))]
           (is (= [:nothing-possible :bed-occupied] [(:kind e) (contract/cause-key e)])))))))
+
+(deftest a-held-fight-waits-hold-s-from-its-last-swing-not-from-its-start
+  (are [args mem idle?] (= idle? (boolean (fight-back/held-idle? (hold-ctx args mem))))
+    {:hold true} {:started-at 0} true
+    {:hold true} {:started-at 0 :last-attack 99999000} false
+    {:hold true} {:started-at 99999000} false
+    {:hold true} {:started-at 0 :last-attack 99980000} true
+    {} {:started-at 0} false))
 
 (defn ^:async fight [args world]
   (await (sc/ending-of #(tu/fake-on-floor (merge {:floor h/flight-floor} world)) (list 'jobs.survival.fight-back args))))

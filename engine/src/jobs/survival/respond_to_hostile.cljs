@@ -59,7 +59,6 @@
 
 (a/defargs settings
   {::job-time-s {:default 480 :doc "Seconds a response to a hostile may take: above retreat's (a hide runs long)." :spec (a/num-in 0 nil)}
-   ::hold-s {:default 15 :doc "Seconds a held fight may wait for a mob that does not come before the retreat takes over." :spec (a/num-in 0 nil)}
    ::hold-radius {:default 16 :doc "Hostiles known within this many blocks count for holding position at night." :spec (a/num-in 0 nil)}
    ::hit-window-s {:default 5 :doc "A flight hit twice within this long is failing: the body fights. Also how recent a hurt keeps a fight from leaving heard mobs, and makes a round look once more." :spec (a/num-in 0 nil)}
    ::max-unchanged {:default 3 :doc "Calls of a child in a row that leave the body and the dangers as they were before the reflex stops :no_response." :spec (a/int-in 1 nil)}
@@ -67,7 +66,6 @@
    ::struck-cap {:default 8 :doc "How many :struck-hits entries memory keeps." :spec (a/int-in 1 nil)}
    ::quote-mean-s {:default 20 :doc "Seconds an encounter is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
 
-(defn hold-s [] (settings/get settings ::hold-s))
 (defn hold-radius [] (settings/get settings ::hold-radius))
 (defn hit-window-ms [] (* 1000 (settings/get settings ::hit-window-s)))
 (defn max-unchanged [] (settings/get settings ::max-unchanged))
@@ -128,9 +126,8 @@
   or a retreat that ended :condition-failed: the other child may run), or the ending of a retreat that ended otherwise."
   [c decision {:keys [radius ranged-radius reserve quiet-s hide-s]} hold]
   (let [child-args (case decision
-                     :fight (let [held (or hold (hold? c))]
-                              (cond-> {:range radius :ranged-range ranged-radius :use {:tools (weapons c)} :hold held}
-                                held (assoc :spend {:job-time (hold-s)})))
+                     :fight {:range radius :ranged-range ranged-radius :use {:tools (weapons c)}
+                             :hold (or hold (hold? c))}
                      :flee {:radius radius :ranged-radius ranged-radius :use {:tools (weapons c)} :reserve reserve :quiet-s quiet-s :hide-s hide-s
                             :goal (:goal (ctx/mem c))})
         e (await (ctx/call c decision (child-jobs decision) child-args))]

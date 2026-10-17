@@ -14,11 +14,11 @@
   "Equip the best weapon, walk up to the nearest hostile within :range and hit it, at most one swing per :attack-gap-ms (nil: the held weapon's cooldown).
   Only a hostile the body has seen is fought: one only heard is judged by its direction and band (jobs.lib.danger), never
   walked to or hit. With only heard mobs in range it does not start (:no-target); one that goes unseen mid-fight is turned toward and the job declines, so the retreat takes over.
-  With :hold the body stays where it is: a melee hostile beyond reach is waited for (the call's spend ends the wait) (a ranged one is still walked up to).
+  With :hold the body stays where it is: a melee hostile beyond reach is waited for, until ::hold-s (15) seconds pass with no swing, then the job declines (a ranged one is still walked up to).
   A ranged hostile farther than ::ranged-chase (6) is not walked to while another is in range (the job declines).
   A hostile more than :leash blocks from the point the job started at is not chased: with none other in range the job is not started (:no-target); one that falls past the leash mid-fight ends the job as a decline, so the retreat takes over.
   Done (:already before the start) when no hostile is within :range, with the result {:killed [ids]}.
-  Every other ending is a decline, so the retreat takes over: :limit-reached (a held wait that ran out the call's time), :nothing-possible with the cause :too-far, :heard-only, :given-up;
+  Every other ending is a decline, so the retreat takes over: :nothing-possible with the cause :hold-timeout (the :hold wait ran out), :too-far, :heard-only, :given-up;
   its data are {:killed :struck :memory}, the job memory as it ended.
   The weapons are the call's :use :tools (default the weapons carried).
   A hostile the walk toward is blocked for three times is given up on, with a fight_unreachable warning, and no longer counts,
@@ -38,6 +38,7 @@
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds a fight may take." :spec (a/num-in 0 nil)}
+   ::hold-s {:default 15 :doc "Seconds a held fight waits without a swing for a mob to come within reach before it declines." :spec (a/num-in 0 nil)}
    ::reach {:default 3 :doc "How near the target the body stands to hit, in blocks." :spec (a/int-in 0 nil)}
    ::ranged-chase {:default 6 :doc "Farthest a ranged mob may be for the body to cross open ground to it while another hostile is in range; beyond it the fight declines." :spec (a/num-in 0 nil)}})
 (def target [])
@@ -48,6 +49,7 @@
 
 (def fit? ready/ok)
 
+(defn hold-ms [] (* 1000 (settings/get settings ::hold-s)))
 (defn reach [] (settings/get settings ::reach))
 (defn ranged-chase [] (settings/get settings ::ranged-chase))
 
@@ -189,14 +191,22 @@
   (let [m (dissoc (ctx/mem c) :contract)]
     (ctx/end c kind cause {:killed (vec (:killed m)) :struck (:struck m) :memory m})))
 
+(defn held-idle?
+  "Whether a held fight has waited hold-ms since its last swing (or its start) with no mob coming within reach."
+  [c]
+  (let [m (ctx/mem c)]
+    (and (:hold (:args c))
+         (> (- (ctx/now c) (or (:last-attack m) (:started-at m))) (hold-ms)))))
+
 (defn ^:async step
   "One step of the fight: look at a heard mob, wait out the swing gap, or swing once. :again, :continue or an ending."
   [c]
   (let [p (:primitives c)
         target (first (targets c))
         last-attack (:last-attack (ctx/mem c))]
-    (when-not (:start (ctx/mem c)) (ctx/update-mem! c assoc :start (u/self-pos c)))
+    (when-not (:start (ctx/mem c)) (ctx/update-mem! c assoc :start (u/self-pos c) :started-at (ctx/now c)))
     (cond
+      (and target (held-idle? c)) (declined c :nothing-possible :hold-timeout)
       (and target (too-far-to-chase? c target)) (declined c :nothing-possible :too-far)
       (and last-attack (< (.-health (.self p)) (:health0 (ctx/mem c)))) :continue
       (nil? target) (if-let [heard (first (remove danger-q/seen-only? (in-range c)))]
