@@ -67,4 +67,13 @@ phase compiling
 rx="^($(printf '%s\n' "$@" | tr ',' '\n' | sed -e 's#/.*##' -e 's#\.#\\.#g' | sort -u | paste -sd'|')|engine\\.timing-test)\$"
 compile_retry engine test --ns-regexp "$rx" || exit $?
 phase testing
-exec node "$repo/tools/test-run.mjs" "$@"
+node "$repo/tools/test-run.mjs" "$@"; rc=$?
+# 3: a requested namespace is missing from the bundle; another targeted run in this checkout may have rebuilt engine/out for other namespaces, so compile once more (a really absent one is still missing)
+if [ "$rc" = 3 ]; then
+  phase compiling
+  compile_retry engine test --ns-regexp "$rx" || exit $?
+  phase testing
+  node "$repo/tools/test-run.mjs" "$@"; rc=$?
+  [ "$rc" = 3 ] && rc=2
+fi
+exit "$rc"

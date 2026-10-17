@@ -19,7 +19,7 @@ export RES_SLOT_DIR="$T/res" RES_SLOT_CONFIG="$T/res/cfg.json"
 sleep 300 & SRV=$!; trap 'kill $SRV 2>/dev/null; rm -rf "$T"' EXIT
 echo $SRV > "$T/repo/dashboard/.shadow-cljs/server.pid"
 printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n' "$T" > "$T/bin/npx"; chmod +x "$T/bin/npx"
-printf 'console.log("NODE", process.argv.slice(1).join(" "), process.execArgv.join(" ")); if (process.argv.join(" ").includes("hang-test")) setInterval(() => {}, 1000); if (process.argv.join(" ").includes("stall-test")) { require("fs").writeFileSync(process.env.STALL_PID_FILE, String(process.pid)); require("fs").appendFileSync(process.env.MC_TEST_TIMINGS, JSON.stringify({started: 1}) + "\\n"); for (;;); }\n' > "$T/repo/engine/out/test.cjs"
+printf 'function SHADOW_IMPORT() {} console.log("NODE", process.argv.slice(1).join(" "), process.execArgv.join(" ")); if (process.argv.join(" ").includes("hang-test")) setInterval(() => {}, 1000); if (process.argv.join(" ").includes("stall-test")) { require("fs").writeFileSync(process.env.STALL_PID_FILE, String(process.pid)); require("fs").appendFileSync(process.env.MC_TEST_TIMINGS, JSON.stringify({started: 1}) + "\\n"); for (;;); }\n' > "$T/repo/engine/out/test.cjs"
 export PATH="$T/bin:$PATH"
 C="$T/repo/tools/compile"
 
@@ -66,7 +66,7 @@ timeout 20 "$C" engine test >/dev/null 2>&1; check "compile with blocking waiter
 wait %+ 2>/dev/null
 
 # stub bundle files so the namespaces count as built (test-run.mjs refuses a namespace missing from the bundle)
-for n in engine.a-test engine.b-test engine.hang-test engine.stall-test; do : > "$T/repo/engine/out/test/cljs-runtime/${n//-/_}.js"; done
+for n in engine.a-test engine.b-test engine.hang-test engine.stall-test; do : > "$T/repo/engine/out/test/cljs-runtime/${n//-/_}.js"; echo "SHADOW_IMPORT(\"${n//-/_}.js\");" >> "$T/repo/engine/out/test.cjs"; done
 # test-engine: compile for build test, then node outside the lock on a private copy, namespaces comma-joined
 out=$(timeout 30 "$T/repo/tools/test-engine" engine.a-test engine.b-test 2>&1); check "test-engine rc" "$?" 0
 check "test-engine ns args" "$(grep -c -- '--test=engine.a-test,engine.b-test' <<<"$out")" 1
@@ -83,7 +83,12 @@ STALL_PID_FILE="$T/stall.pid" MC_TEST_STALL_S=3 MC_TEST_FIRST_S=3 timeout 30 "$T
 out=$(cat "$T/stall.out")
 check "stalled run message" "$(grep -c 'STALLED, no test finished for 3 s' <<<"$out")" 1
 out=$(timeout 30 "$T/repo/tools/test-engine" engine.nope-test 2>&1); check "missing ns rc" "$?" 2
-check "missing ns message" "$(grep -c 'not in the :test bundle' <<<"$out")" 1
+check "missing ns message" "$(grep -q "not in the :test bundle" <<<"$out" && echo 1)" 1
+# a bundle rebuilt by another run for other namespaces lacks ours: the second compile (the stub writes the file on its 2nd call) brings it back
+rm -f "$T/repo/engine/out/test/cljs-runtime/engine.late_test.js"
+printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n[ "$(wc -l < "%s/npx.log")" -ge 2 ] && { : > "%s/repo/engine/out/test/cljs-runtime/engine.late_test.js"; echo "SHADOW_IMPORT(\\"engine.late_test.js\\");" >> "%s/repo/engine/out/test.cjs"; }\nexit 0\n' "$T" "$T" "$T" "$T" > "$T/bin/npx"
+: > "$T/npx.log"; out=$(timeout 30 "$T/repo/tools/test-engine" engine.late-test 2>&1); check "bundle swapped under the run: recompiled once, rc" "$?" 0
+check "bundle swapped under the run: compiled twice" "$(wc -l < "$T/npx.log")" 2
 # a failed compile that printed an ERROR / undeclared warning is retried (up to 2x); other failures, usage and busy exits are not
 printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\nn=$(wc -l < "%s/npx.log")\n[ "$n" -ge "$OK_AT" ] && exit 0\necho "------ WARNING #1 - :undeclared-var ---"\n' "$T" "$T" > "$T/bin/npx"
 : > "$T/npx.log"; out=$(OK_AT=3 MC_COMPILE_RETRY_S=0 timeout 30 "$T/repo/tools/test-engine" engine.a-test 2>&1); check "retry: clears on 3rd try rc" "$?" 0

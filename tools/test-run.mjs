@@ -13,6 +13,9 @@ const tools = path.dirname(fileURLToPath(import.meta.url))
 const repo = path.resolve(tools, '..')
 const engine = path.join(repo, 'engine')
 
+// Exit status for a requested namespace or deftest missing from the bundle.
+export const MISSING_RC = 3
+
 export const parseNss = (argv) => argv.flatMap((a) => a.split(',')).filter(Boolean)
 
 // An arg is a namespace or <namespace>/<deftest> (shadow's --test takes both); narrowing, sizing and timings go by namespace.
@@ -235,11 +238,6 @@ const main = async () => {
   const specs = parseNss(process.argv.slice(2))
   const nss = [...new Set(specs.map(nsOf))]
   if (!nss.length) { console.error('usage: tools/test-run.mjs <ns|ns/deftest>...'); process.exit(2) }
-  const missing = missingNss(engine, specs)
-  if (missing.length) {
-    console.error(`test-engine: not in the :test bundle (a run would pass with 0 tests): ${missing.join(' ')}${missing.some((n) => nsOf(n).endsWith('-golden')) ? ' (the -golden ones run with tools/test-engine --golden)' : ''}`)
-    process.exit(2)
-  }
   const res = readJson(path.join(tools, 'res-slot.json'), null)
   const expected = expectedMs(nss, readJson(path.join(engine, 'out/test-ns-ms.json'), {}))
   const limit = Number(process.env.MC_TEST_TIMEOUT_S) || WHOLE_RUN_CAP_S
@@ -248,6 +246,12 @@ const main = async () => {
   const { runDir, cleanup } = isolate(engine, process.pid, '/tmp', nss)
   let child = null
   cleanupOnExit(process, cleanup, (sig) => child && killTree(child.pid, sig))
+  // Checked on the private copy: a concurrent targeted compile of other namespaces in this checkout can replace engine/out under us (test-engine recompiles once on MISSING_RC).
+  const missing = missingNss(runDir, specs)
+  if (missing.length) {
+    console.error(`test-engine: not in the :test bundle (a run would pass with 0 tests): ${missing.join(' ')}${missing.some((n) => nsOf(n).endsWith('-golden')) ? ' (the -golden ones run with tools/test-engine --golden)' : ''}`)
+    process.exit(MISSING_RC)
+  }
   const timings = path.join(runDir, 'timings.jsonl')
   fs.writeFileSync(timings, '')
   child = spawn(path.join(tools, 'res-slot'),
