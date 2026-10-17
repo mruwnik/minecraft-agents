@@ -428,6 +428,10 @@
   [opts]
   (fs/rmSync (path/join (run-dir opts) "body.log") #js {:force true}))
 
+(def started-event
+  "A restoring start logs :restored instead of :started (engine core)."
+  {:source :system :kind #{:started :restored}})
+
 (defn start-body!
   "Starts the body with a scenario holding register, --fresh; resolves once it logged :system :started. The body's own
   engine/memory.edn is deleted first unless keep-memory? (--fresh only drops engine.edn), then written from
@@ -455,7 +459,7 @@
           child (cp/spawn "node" (body-argv opts scenario restore?)
                           #js {:cwd (repo-path "engine") :stdio #js ["ignore" fd fd]})]
       (swap! bodies assoc (:body opts) child)
-      (.then (await-event opts offset {:source :system :kind :started} since 90000 #{})
+      (.then (await-event opts offset started-event since 90000 #{})
              (fn [ev]
                (when-not ev (throw (js/Error. (str "the body did not start within 90 s (see " out ")"))))
                (await-online! opts))))))

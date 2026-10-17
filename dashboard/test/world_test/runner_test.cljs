@@ -5,6 +5,7 @@
             ["os" :as os]
             ["path" :as path]
             [cljs.reader]
+            [world-test.expect :as x]
             [world-test.fixture :as f]
             [world-test.runner :as r]))
 
@@ -17,6 +18,10 @@
 
 (deftest a-restoring-launch-keeps-engine-edn-by-leaving-out-fresh
   (is (not-any? #{"--fresh"} (r/body-argv {:body "B" :world "w"} "/tmp/s.edn" true))))
+
+(deftest a-start-waits-for-either-started-or-restored
+  (are [kind] (x/matches? r/started-event {:source :system :kind kind})
+    :started :restored))
 
 (deftest build-plot-retries-an-unloaded-plot-then-fails-as-a-setup-error
   (let [origin [20000 150 20000]
