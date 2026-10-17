@@ -30,14 +30,14 @@
             {:no-event {:source :job :kind :stair.stopped} :for-s 120 :until {:source :job :kind :stair.done}}]
    :after [[:not-block [11 8 16] "air"] [:not-block [12 7 16] "air"] [:body-near [14.5 6 16.5] 2.5]]}
   ;; card 9d7691f2: the cave (x 12..13, y 0..6) opens under the floor of step 3 (x 13): its floor [13 6 16] has no face, only the solid
-  ;; [11 6 16] two cells back along the line, so [12 6 16] is placed first, then the floor; [14 6 16] is air too, else the floor would have a face to its east and need no cell further back
+  ;; [11 6 16] two cells back along the line, so [12 6 16] is placed first, then the floor (or the floor alone against the ceiling when the body cannot see back to [11 6 16]); [14 6 16] is air too, else the floor would have a face to its east and need no cell further back
   {:name "stair-down-floors-a-cave-from-a-solid-cell-further-back"
    :blocks [[:fill [12 0 12] [13 6 20] "air"] [:set [14 6 16] "air"]]
    :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 4})]]
    :expect [{:event {:source :job :kind :stair.done :data {:steps 4}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :stair.stopped} :for-s 120 :until {:source :job :kind :stair.done}}]
-   :after [[:not-block [13 6 16] "air"] [:not-block [12 6 16] "air"] [:body-near [14.5 6 16.5] 2.5]]}
+   :after [[:not-block [13 6 16] "air"] [:body-near [14.5 6 16.5] 2.5]]}
   ;; should-fail: a cave under the very first floor and no block carried: the stair stops :no-floor, :filler :none
   {:name "stair-down-over-a-cave-with-no-block-stops-no-floor"
    :blocks [[:fill [11 0 12] [20 8 20] "air"]]

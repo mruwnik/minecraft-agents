@@ -67,7 +67,9 @@
     (is (empty? (plans (solid-at [9 9 9]))) "a void pocket")
     (is (= [[[3 60 0] floor]] (bridge/bridge-plans (solid-at [2 60 0]) floor 70.0 {:back [-1 0] :depth 2}))
         "a solid cell back along the line: the cells between are placed from it")
-    (is (empty? (bridge/bridge-plans (solid-at [1 60 0]) floor 70.0 {:back [-1 0] :depth 2})) "but not beyond the depth")))
+    (is (empty? (bridge/bridge-plans (solid-at [1 60 0]) floor 70.0 {:back [-1 0] :depth 2})) "but not beyond the depth")
+    (is (= [[[3 60 0] floor]] (bridge/bridge-plans (fn [cell] (when-not (= cell [2 60 0]) "air")) floor 70.0 {:back [-1 0] :depth 2}))
+        "an unseen support behind the body still gives a chain")))
 
 (deftest an-unseen-neighbour-is-tried-only-after-the-cells-with-a-known-face
   (let [floor [4 60 0]

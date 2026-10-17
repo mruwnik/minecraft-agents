@@ -22,10 +22,11 @@
 
 (defn chain-plan
   "The cells to place, farthest first, to reach floor from a solid cell up to depth steps back along back ([dx dz]) at the
-  floor's height: every cell between must be air, the support seen solid. nil when there is none."
-  [block-at floor {:keys [back depth]}]
+  floor's height: every cell between must be air, the support seen solid (or unseen when loose?: the body looks forward, so
+  the cell behind it is often unseen). nil when there is none."
+  [block-at floor loose? {:keys [back depth]}]
   (let [at (fn [k] (mapv + floor [(* k (first back)) 0 (* k (second back))]))
-        solid? (fn [n] (and n (not (rules/air n)) (not (#{"water" "lava"} n))))]
+        solid? (fn [n] (if (nil? n) loose? (not (or (rules/air n) (#{"water" "lava"} n)))))]
     (when back
       (some (fn [j]
               (when (and (solid? (block-at (at j))) (every? #(rules/air (block-at (at %))) (range j)))
@@ -35,17 +36,18 @@
 (defn bridge-plans
   "The cell lists to place for a missing floor, to try in order: [floor] when it has a face to place against, [support
   floor] when only the cell under it has one (the previous floor of a stair up), the cells back along opts' :back (with
-  :depth) from a solid one (a stair down whose cave undercuts its last floor). Cells with a seen face come before those
+  :depth) from a solid one (a stair down whose cave undercuts its last floor); an unseen support comes last. Cells with a seen face come before those
   whose face is an unseen neighbour, which may be air (place answers no-support). Only cells that are air are placed; a
   floor in a cave with nothing near has no plan. eye-y: the body's eye height."
   ([block-at floor eye-y] (bridge-plans block-at floor eye-y nil))
   ([block-at floor eye-y opts]
    (let [under (update floor 1 dec)
+         chain (fn [loose?] (some-> (chain-plan block-at floor loose? opts) vector))
          plans (fn [loose?]
                  (for [[probe plan] [[floor [floor]] [under [under floor]]]
                        :when (face-support? block-at probe loose? eye-y)]
                    (filterv #(rules/air (block-at %)) plan)))]
-     (vec (distinct (concat (plans false) (some-> (chain-plan block-at floor opts) vector) (plans true)))))))
+     (vec (distinct (concat (plans false) (chain false) (plans true) (chain true)))))))
 
 (defn ^:async place-floor!
   "Place item at cell (in the scaffold ledger when take-back?): nil when it stands, else a stop map. in: the rules input."
