@@ -9,6 +9,7 @@
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.checks :as checks]
@@ -125,8 +126,9 @@
 (defn keep-counts
   "{name n}: how many of each carried name stay carried. Protected names keep
   their whole total; food names share keep-food, best food-points first;
-  shelter-blocks keep up to keep-blocks each, seeds up to keep-seeds each, keep-items whole; the rest 0."
-  [inventory {:keys [keep-food keep-blocks keep-seeds keep-items]}]
+  shelter-blocks keep up to keep-blocks each, seeds up to keep-seeds each, keep-items whole, held ({name n}, the reserve
+  register) at least n; the rest 0."
+  [inventory {:keys [keep-food keep-blocks keep-seeds keep-items]} held]
   (let [totals (totals inventory)
         names (keys totals)
         food (->> names
@@ -136,12 +138,14 @@
                       (shared-floors food totals keep-food)
                       (select-keys (cost/food-reserve inventory) food))
         capped (fn [pred n] (into {} (for [[k v] totals :when (pred k)] [k (min v (or n 0))])))]
-    (merge (zipmap names (repeat 0))
-           (select-keys totals (filter protected? names))
-           food-floors
-           (capped shelter-blocks keep-blocks)
-           (capped #(str/ends-with? % "_seeds") keep-seeds)
-           (select-keys totals keep-items))))
+    (merge-with max
+                (merge (zipmap names (repeat 0))
+                       (select-keys totals (filter protected? names))
+                       food-floors
+                       (capped shelter-blocks keep-blocks)
+                       (capped #(str/ends-with? % "_seeds") keep-seeds)
+                       (select-keys totals keep-items))
+                (into {} (for [[k n] held :when (totals k)] [k (min n (totals k))])))))
 
 (defn recency
   "{item-name t}: the time of the newest :picked-up entry per item."
@@ -247,7 +251,7 @@
   [c]
   (let [inventory (u/inventory (:primitives c))]
     {:inventory inventory
-     :keep (keep-counts inventory (:args c))
+     :keep (keep-counts inventory (:args c) (reserve/held c :make-room))
      :recency (recency (ctx/view c))}))
 
 (defn ground-items

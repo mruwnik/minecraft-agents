@@ -148,25 +148,32 @@
             "dirt" 30 "cobblestone" 64 "oak_planks" 64 "diorite" 0
             "wheat_seeds" 16 "poppy" 0
             "stick" 0}
-           (mr/keep-counts inventory {:keep-food 16 :keep-blocks 64 :keep-seeds 16}))
+           (mr/keep-counts inventory {:keep-food 16 :keep-blocks 64 :keep-seeds 16} nil))
         "beef (8 points) keeps its 12, bread (5) the 4 left of 16; cobblestone, dirt and planks each keep up to 64, other blocks none")))
 
 (deftest keep-counts-without-keep-food-uses-the-food-reserve
   (is (= {"bread" 12 "apple" 0 "golden_apple" 2 "dirt" 0}
          (mr/keep-counts [{:name "bread" :count 20} {:name "apple" :count 5} {:name "golden_apple" :count 2} {:name "dirt" :count 9}]
-                         {:keep-food nil :keep-blocks 0}))
+                         {:keep-food nil :keep-blocks 0} nil))
       "the 60-point reserve is 12 bread; golden apples are kept whole, outside the reserve")
   (is (= {"golden_apple" 2 "bread" 0}
-         (mr/keep-counts [{:name "golden_apple" :count 2} {:name "bread" :count 3}] {:keep-food 0 :keep-blocks 0}))))
+         (mr/keep-counts [{:name "golden_apple" :count 2} {:name "bread" :count 3}] {:keep-food 0 :keep-blocks 0} nil))))
+
+(deftest keep-counts-keep-the-held-units-up-to-the-carried-total
+  (is (= {"diamond" 3 "bread" 0 "emerald" 0 "dirt" 2}
+         (mr/keep-counts [{:name "diamond" :count 5} {:name "bread" :count 2} {:name "emerald" :count 1} {:name "dirt" :count 2}]
+                         {:keep-food 0 :keep-blocks 0}
+                         {"diamond" 3 "dirt" 9 "elytra" 1}))
+      "held raises a floor, never above what is carried or for what is not carried"))
 
 (deftest keep-counts-with-zero-budgets-keep-only-the-protected
   (is (= {"iron_axe" 1 "bread" 0 "dirt" 0 "stick" 0}
          (mr/keep-counts [{:name "iron_axe" :count 1} {:name "bread" :count 3} {:name "dirt" :count 9} {:name "stick" :count 2}]
-                         {:keep-food 0 :keep-blocks 0}))))
+                         {:keep-food 0 :keep-blocks 0} nil))))
 
 (deftest keep-counts-keep-the-named-items-whole
   (are [keep-items expected] (= expected (mr/keep-counts [{:name "stick" :count 40} {:name "stick" :count 40} {:name "poppy" :count 2}]
-                                                          {:keep-food 0 :keep-blocks 0 :keep-items keep-items}))
+                                                          {:keep-food 0 :keep-blocks 0 :keep-items keep-items} nil))
     ["stick"] {"stick" 80 "poppy" 0}
     ["stick" "poppy"] {"stick" 80 "poppy" 2}
     [] {"stick" 0 "poppy" 0}
@@ -215,7 +222,7 @@
    {:name "wheat_seeds" :count 63 :slot 9} {:name "diorite" :count 48 :slot 10}])
 
 (deftest toss-order-spares-the-shelter-materials-of-a-full-bag
-  (let [keep (mr/keep-counts linden-bag {:keep-food 16 :keep-blocks 64 :keep-seeds 16})
+  (let [keep (mr/keep-counts linden-bag {:keep-food 16 :keep-blocks 64 :keep-seeds 16} nil)
         order (names-of (mr/toss-order linden-bag keep {} 3.2))]
     (is (= #{"dandelion" "cornflower" "poppy" "oxeye_daisy" "leaf_litter" "granite" "oak_sapling" "diorite"} (set order)))
     (is (not-any? #{"dirt" "cobblestone" "wheat_seeds"} order))))
@@ -223,7 +230,7 @@
 (deftest toss-order-throws-surplus-of-kept-materials-after-everything-without-a-keep
   (let [inventory [{:name "cobblestone" :count 64 :slot 0} {:name "cobblestone" :count 64 :slot 1}
                    {:name "poppy" :count 2 :slot 2} {:name "granite" :count 3 :slot 3}]
-        keep (mr/keep-counts inventory {:keep-food 16 :keep-blocks 64 :keep-seeds 16})]
+        keep (mr/keep-counts inventory {:keep-food 16 :keep-blocks 64 :keep-seeds 16} nil)]
     (is (= ["granite" "poppy" "cobblestone"] (names-of (mr/toss-order inventory keep {} 3.2))))))
 
 (deftest toss-order-orders-by-recency-before-count

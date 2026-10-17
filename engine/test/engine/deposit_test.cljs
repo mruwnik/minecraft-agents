@@ -14,7 +14,7 @@
             [jobs.lib.world-files :as world]
             [jobs.lib.stock :as stock]
             [engine.withdraw-test :as wt]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu :refer [child-outcome]]))
 
 (def job 'jobs.storage.deposit)
 
@@ -51,6 +51,16 @@
         (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5} {:name "bread" :count 20}] :containers {"10,64,0" []}})
               result (await (wt/ending-of eng job {:chest chest} 16))]
           (is (= {"bread" 12} (wt/inv p)) "bread 12 is the 60 points; dirt and the 8 spare bread go")
+          (is (= :done (:kind result))))))))
+
+(deftest deposit-of-everything-keeps-the-units-the-register-holds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5} {:name "diamond" :count 4}] :containers {"10,64,0" []}})
+              _ (await (child-outcome eng 'jobs.memory.reserve {:item "diamond" :count 3} 4))
+              result (await (wt/ending-of eng job {:chest chest} 16))]
+          (is (= {"diamond" 3} (wt/inv p)) "three diamonds are held, the fourth and the dirt go")
           (is (= :done (:kind result))))))))
 
 (deftest deposit-gives-up-when-the-known-chest-is-gone

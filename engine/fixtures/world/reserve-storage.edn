@@ -1,0 +1,29 @@
+;; Reserve register step 4: deposit and make-room never put away or toss units the register holds.
+;; Should-succeed: make-room tosses the tuff and keeps the 64 granite held (granite is plain junk otherwise); deposit puts away 2 of 5 diamonds and keeps the 3 held.
+;; Should-fail: none (the held units must stay, which the :after rows check).
+{:defaults
+ {:tags [:storage :reserve :make-room :jobs]
+  :time :any
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 100}
+ :cases
+ [{:name "make-room-keeps-the-held-junk"
+   :body {:inventory [["granite" 64] ["tuff" 20] ["coal" 30] ["raw_copper" 12] ["diamond" 3] ["wooden_pickaxe" 1] ["stone_pickaxe" 1] ["iron_pickaxe" 1] ["golden_pickaxe" 1] ["diamond_pickaxe" 1] ["netherite_pickaxe" 1] ["wooden_axe" 1] ["stone_axe" 1] ["iron_axe" 1] ["golden_axe" 1] ["diamond_axe" 1] ["netherite_axe" 1] ["wooden_shovel" 1] ["stone_shovel" 1] ["iron_shovel" 1] ["golden_shovel" 1] ["diamond_shovel" 1] ["netherite_shovel" 1] ["wooden_hoe" 1] ["stone_hoe" 1] ["iron_hoe" 1] ["golden_hoe" 1] ["diamond_hoe" 1] ["netherite_hoe" 1] ["wooden_sword" 1] ["stone_sword" 1] ["iron_sword" 1] ["golden_sword" 1]]}
+   :act [[:job (jobs.memory.reserve {:id "wt-granite" :item "granite" :count 64 :why "world test"})]
+         [:await {:source :job :kind :completed} 20]
+         [:job (jobs.storage.make-room {:free 2})]]
+   :expect [{:event {:source :job :kind :make-room.tossed :data {:item "tuff"}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :make-room.tossed :data {:item "granite"}} :for-s 60 :until {:source :job :kind :make-room.tossed :data {:item "tuff"}}}]
+   :after [[:item "granite" 64] [:item "tuff" 0]]
+   :limit-s 100}
+  {:name "deposit-keeps-the-held-diamonds"
+   :blocks [[:set [20 0 16] "chest[facing=west]"]]
+   :memory [{:kind :chest :data {:pos #xyz [20 0 16]} :policy {:cap 1 :ttl :forever}}]
+   :body {:inventory [["diamond" 5] ["dirt" 5]]}
+   :act [[:job (jobs.memory.reserve {:id "wt-diamonds" :item "diamond" :count 3 :why "world test"})]
+         [:await {:source :job :kind :completed} 20]
+         [:job (jobs.storage.deposit {})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "diamond" 3] [:item "dirt" 0]]
+   :limit-s 80}]}

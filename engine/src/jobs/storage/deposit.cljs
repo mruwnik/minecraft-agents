@@ -7,7 +7,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
-            [jobs.lib.cost :as cost]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.found :as found]
             [jobs.lib.stock :as stock]
             [jobs.lib.checks :as checks]
@@ -20,7 +20,7 @@
 
 (def doc
   "Walk to the chest (one go-to) and deposit every stack in one call: the named :items in the order named, or everything but tools
-  and armour (saplings included) and the body's 3-day food reserve (jobs.lib.cost/food-reserve) in inventory order.
+  and armour (saplings included) and the units the reserve register holds (jobs.lib.reserve/held: the 3-day food reserve, bait, entries) in inventory order.
   :keep leaves at least that many of a name carried. :free ends the call, clean, once that many slots are free. With explicit :items the reserve is ignored.
   Needs: a chest, the :chest argument or the known :chest place; none known waits :no-chest (can-start? and can-run?: a chest place lost mid-job waits, a reflex ends condition-failed).
   Ends done when nothing is left to put away (also at once when nothing is), or at any other ending when at least the
@@ -92,7 +92,7 @@
         carried (u/inventory (:primitives c))
         goods (found/goods (ctx/view c))
         inventory (remove #(contains? goods (:name %)) carried)
-        keeps (if items keep (merge-with max (cost/food-reserve inventory) keep))]
+        keeps (if items keep (merge-with max (reserve/held c :deposit) keep))]
     (loop [left inventory, acc {}]
       (if-let [pick (to-deposit left items keeps)]
         (let [n (:name (:stack pick))]
@@ -282,7 +282,7 @@
         keeps (found-here! c carried)
         inventory (remove #(contains? keeps (:name %)) carried)
         pick (when-not (and free (>= (u/free-slots (:primitives c)) free))
-               (to-deposit inventory items (if items keep (merge-with max (cost/food-reserve inventory) keep))))]
+               (to-deposit inventory items (if items keep (merge-with max (reserve/held c :deposit) keep))))]
     (cond
       (nil? pick) (do (when (offer-owed? c)
                         (places/offer! c :chest (:chest (:args c)))
