@@ -833,6 +833,21 @@
         (.catch (fn [e] (is (re-find #"world.reloaded" (.-message e)) (.-message e))))
         (.finally done))))
 
+(deftest seed-shared-ignores-a-reload-logged-while-it-waited-for-the-lock
+  (async done
+    (-> (with-body-dir
+          (fn [opts _]
+            (let [places (r/world-file opts "places.json")
+                  lock (str places ".lock")]
+              (fs/mkdirSync (path/dirname places) #js {:recursive true})
+              (fs/writeFileSync lock (str (.-pid js/process) "\nother"))
+              (js/setTimeout #(log-reload! opts ["/w/zones.edn" "/w/places.json"]) 100)
+              (js/setTimeout #(fs/unlinkSync lock) 400)
+              (r/seed-shared! (assoc opts :shared-settle-ms 700) [0 0 0] {:places [{:name "p-$tag" :pos [1 0 1]}]}))))
+        (.then (fn [v] (is false (str "should have thrown, got " v))))
+        (.catch (fn [e] (is (re-find #"world.reloaded" (.-message e)) (.-message e))))
+        (.finally done))))
+
 (deftest an-rcon-step-logs-its-reply
   (let [sent (atom []) logged (atom [])]
     (async done

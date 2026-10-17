@@ -1073,19 +1073,21 @@
 (defn seed-shared!
   "Adds the case's :zones and :places (plot-relative in c, resolved against origin) to the world's zones.edn and
   places.json, tagged with the body; resolves once the body logged world.reloaded for them, throws after shared-settle-ms
-  without one. Nothing to do when the case has neither."
+  without one. Nothing to do when the case has neither. Only a reload logged after the lock is held counts: one logged
+  while waiting for the lock (a fresh body's first load) predates the edit."
   [opts origin c]
   (if (and (empty? (:zones c)) (empty? (:places c)))
     (js/Promise.resolve nil)
     (let [zones (f/zone-entries (:body opts) (abs-entries origin (:zones c) [:min :max]))
           markers (f/marker-entries (:body opts) (f/resolve-body-refs (abs-entries origin (:places c) [:pos]) (:body opts)))]
-      (let [cursor (log-cursor (events-file opts))
-            since (js/Date.now)]
+      (let [cursor (log-cursor (events-file opts))]
         (-> ((with-shared-files! [(world-file opts "zones.edn") (world-file opts "places.json")]
                (fn []
-                 (when (seq zones) (edit-shared-file! (world-file opts "zones.edn") #(f/zones-with % zones)))
-                 (when (seq markers) (edit-shared-file! (world-file opts "places.json") #(f/markers-with % markers))))))
-            (.then #(await-reload! opts cursor since (cond-> [] (seq zones) (conj "zones.edn") (seq markers) (conj "places.json"))
+                 (let [since (js/Date.now)]
+                   (when (seq zones) (edit-shared-file! (world-file opts "zones.edn") #(f/zones-with % zones)))
+                   (when (seq markers) (edit-shared-file! (world-file opts "places.json") #(f/markers-with % markers)))
+                   since))))
+            (.then #(await-reload! opts cursor % (cond-> [] (seq zones) (conj "zones.edn") (seq markers) (conj "places.json"))
                                    (:shared-settle-ms opts shared-settle-ms)))
             (.then #(when-not %
                       (throw (js/Error. (str "the body logged no world.reloaded for the seeded zones/places within "
