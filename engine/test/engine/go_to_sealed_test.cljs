@@ -127,13 +127,17 @@
                                    (when muted? (mem/write! (:store eng) :heard-mute {:until 9999999999} body/mute-policy)))))]
             (is (= held? (boolean (seq (sealed-holds s)))) (str "muted " muted?))))))))
 
-(deftest a-heard-only-hostile-in-the-far-band-does-not-hold-the-sealed-walk
+(deftest a-hostile-out-of-sight-in-the-far-band-does-not-hold-the-sealed-walk
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[x held?] [[-6 true] [-20 false]]]
-          (let [s (await (sealed 6 nil (fn [_ p] (swap! (fake/state p) update :entities (partial mapv #(assoc-in % [:pos 0] x))))))]
-            (is (= held? (boolean (seq (sealed-holds s)))) (str "skeleton at x " x))))))))
+        (doseq [[x extra held?] [[-6 {} true]
+                                 [-14 {} false]
+                                 [-14 {:seen true :visible false} false]
+                                 [-6 {:seen true :visible false} true]
+                                 [-14 {:seen true :visible true} true]]]
+          (let [s (await (sealed 6 nil (fn [_ p] (swap! (fake/state p) update :entities (partial mapv #(merge (assoc-in % [:pos 0] x) extra))))))]
+            (is (= held? (boolean (seq (sealed-holds s)))) (str "skeleton at x " x " " extra))))))))
 
 (deftest the-hold-deadline-counts-across-a-parents-fresh-go-to-children
   (async done

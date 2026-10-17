@@ -15,10 +15,15 @@
   "Root job id -> when its plug-wait began (in process, like approaches); one clock for all the go-to children of a parent, kept while the hold is due, so a deadline stays passed."
   (atom {}))
 
+(defn in-sight?
+  "Whether hostile e is in line of sight now; a mob seen before the plug went in and since heard or remembered is not."
+  [e]
+  (true? (.-visible e)))
+
 (defn plug-hostiles
   "The known hostiles that hold a body shut in with a retreat plug of its ledger standing, neither starving nor hurt:
-  a heard-only one not counting beyond the near band or while heard mobs are muted (waiting costs food and health, and
-  underground a hostile may stay for ever). Empty when the body is not so held."
+  one out of sight now not counting beyond the near band or while heard mobs are muted (waiting costs food and health,
+  and underground a hostile may stay for ever). Empty when the body is not so held."
   [c]
   (let [p (:primitives c)
         self (.self p)]
@@ -27,8 +32,8 @@
                (> (or (.-health self) 20) (plug-wait-min-health))
                (escape/enclosed? p (some-> (:doors (:args c)) keyword)))
       (cond->> (danger-q/known-hostiles p threats/max-follow-range {:ranged-radius (danger-q/ranged-radius)})
-        (body/heard-muted? (ctx/view c)) (filter danger-q/seen-only?)
-        :always (remove #(and (not (danger-q/seen-only? %)) (> (danger-q/mob-distance p %) obs/near-band)))))))
+        (body/heard-muted? (ctx/view c)) (filter in-sight?)
+        :always (remove #(and (not (in-sight? %)) (> (danger-q/mob-distance p %) obs/near-band)))))))
 
 (defn hostile-facts
   "{:mob :band :sensed} of the nearest of hostiles: its kind, :near or :far, and :seen or :heard."
