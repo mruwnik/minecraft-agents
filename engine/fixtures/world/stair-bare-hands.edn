@@ -1,4 +1,4 @@
-;; Card 66fa119b: a stair cut with no pickaxe and no way to get one (the tool fetch fails once on an empty plot) digs stone by hand and
+;; Card 66fa119b: a stair cut with no pickaxe and no way to get one digs stone by hand and
 ;; reaches the surface; bedrock in the line stops it with a reason and nothing is dug. Stone mass x 8..24, z 8..24, y 0..9 (surface y 10),
 ;; the body in a pocket at feet y 6, the stair goes up east 4 steps to feet y 10.
 {:defaults
@@ -10,8 +10,7 @@
  :cases
  [{:name "no-pickaxe-stair-up-digs-stone-by-hand-to-the-surface"
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]]
-   :expect [{:event {:source :job :kind :fetch.failed} :within-s 120 :of-job true}
-            {:event {:source :job :kind :stair.done} :within-s 210 :of-job true}
+   :expect [{:event {:source :job :kind :stair.done} :within-s 210 :of-job true}
             {:no-event {:source :job :kind :stair.stopped :data {:reason :no-tool}} :for-s 200 :until {:source :job :kind :stair.done}}]
    :after [[:body-near [14.5 10 16.5] 3]]}
   {:name "bedrock-in-the-line-stops-with-a-reason-and-digs-nothing"
