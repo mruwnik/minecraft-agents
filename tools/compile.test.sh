@@ -221,11 +221,13 @@ flock "$T/pool/0/.pool.lock" sleep 4 & H=$!; sleep 0.5
 printf '#!/bin/sh\nshift 2\nexec "$@"\n' > "$T/wt/tools/res-slot"
 out=$(timeout 60 "$T/wt/tools/compile" engine test 2>&1); check "pool busy: fallback rc" "$?" 0
 check "pool busy: says one-shot" "$(grep -c 'compiling one-shot' <<<"$out")" 1
+check "pool busy: log row names build and fallback cause" "$(tail -n1 "$T/res/log.jsonl" | grep -c '"build":"test".*"fallback":"no free slot in 1s"')" 1
 wait $H
 # a test macro (.clj on the source paths) changed: the warm slot server restarts before compiling
 mkdir -p "$T/wt/engine/test"; echo macro > "$T/wt/engine/test/m.clj"
 out=$(timeout 60 "$T/wt/tools/compile" engine test 2>&1); check "pool macro: rc" "$?" 0
 check "pool macro: server restarted" "$(grep -c 'build-time .clj file changed' <<<"$out")" 1
+check "pool macro: log row names the worktree and the restart" "$(tail -n1 "$T/res/log.jsonl" | grep -c "\"build\":\"test\",\"from\":\"$T/wt\".*\"restarted\":1")" 1
 rm "$T/wt/engine/test/m.clj"
 # the worktree's own lock serializes its compiles
 : > "$T/pool-npx.log"
