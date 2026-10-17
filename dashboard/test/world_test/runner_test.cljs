@@ -476,20 +476,23 @@
         (.then done))))
 
 (deftest phase-time-fix-says-when-the-phase-window-was-left
-  (is (= [nil nil 1000 1000 nil nil 14000 14000 nil nil]
-         [(r/phase-time-fix :day 1000) (r/phase-time-fix :day 10999) (r/phase-time-fix :day 11000) (r/phase-time-fix :day 18000)
-          (r/phase-time-fix :day 23500)
-          (r/phase-time-fix :night 14000) (r/phase-time-fix :night 12999) (r/phase-time-fix :night 22500)
-          (r/phase-time-fix :night-x 20000) (r/phase-time-fix :any 18000)])))
+  (is (= [nil nil 1000 1000 nil nil 14000 14000 nil nil nil 1000]
+         (let [fix #(r/phase-time-fix %1 %2 r/default-day-limit)]
+           [(fix :day 1000) (fix :day 8999) (fix :day 9000) (fix :day 18000)
+            (fix :day 23500)
+            (fix :night 14000) (fix :night 12999) (fix :night 22500)
+            (fix :night-x 20000) (fix :any 18000)
+            (r/phase-time-fix :day 10999 11000) (r/phase-time-fix :day 11000 11000)]))
+      "day resets from the limit (default 9000), well before dusk"))
 
 (deftest a-joiner-re-sets-a-drifted-phase-time-and-leaves-an-in-window-one
   (async done
     (let [sets (atom [])
-          env (fn [ticks] {:read-ticks #(js/Promise.resolve ticks)
+          env (fn [ticks] {:day-limit r/default-day-limit :read-ticks #(js/Promise.resolve ticks)
                            :set-ticks! (fn [t why] (swap! sets conj [t why]) (js/Promise.resolve true))})]
       (-> (r/refresh-phase-time! (env 11500) :day "c1")
           (.then (fn [ok] (is (true? ok)) (is (= [1000] (map first @sets))) (reset! sets [])
-                   (r/refresh-phase-time! (env 5000) :day "c1")))
+                   (r/refresh-phase-time! (env 8000) :day "c1")))
           (.then (fn [_] (is (empty? @sets))
                    (r/refresh-phase-time! (env 9000) :night "c2")))
           (.then (fn [_] (is (= [14000] (map first @sets))) (reset! sets [])

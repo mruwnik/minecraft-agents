@@ -24,10 +24,11 @@
 
 (def usage
   (str "usage: node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--match-id ID ...] [--repeat N] [--body NAME]\n"
-       "         [--world test] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--trace-dir DIR [--trace-attempt N]] [--phase day|night|night-exclusive] [--night-batch ID] [--night-barrier N] [--night-batch-end ID] [--night-classes] [--retry-failed N] [--changed-since-pass] [--stop-on-fail] [--list] [--check] [--stop-stale-bodies PREFIX] [--refresh-build]\n"
+       "         [--world test] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--trace-dir DIR [--trace-attempt N]] [--phase day|night|night-exclusive] [--night-batch ID] [--night-barrier N] [--night-batch-end ID] [--night-classes] [--day-limit TICKS] [--retry-failed N] [--changed-since-pass] [--stop-on-fail] [--list] [--check] [--stop-stale-bodies PREFIX] [--refresh-build]\n"
        "--phase runs only the cases of that time class (case level; :any and untimed cases, and :day, count as day; a case whose first :time-set step is\n"
        "night counts as night): run day, then night, then night-exclusive so the time lock never flips mid-pass.\n"
        "--changed-since-pass skips a fixture file that passed fully at a recorded revision (every run passes record it, in .claude/world-test-passes.edn) when no file of the jobs and triggers it uses (and what their source names) changed since, tracked or untracked; any engine, js, trigger-default or runner change, or a change to the fixture file, runs it.\n"
+       "--day-limit TICKS (default 9000) is the world time at which a held day phase is reset to 1000: well before dusk (12000), when natural hostiles start to spawn.\n"
        "--retry-failed N reruns each failed case (not errors or inconclusive) up to N times after the batch, on the same body; a pass on a retry is reported :flaky (counted apart, never :pass, exit 0, also the live outcome) with the first failure kept under :first-failure; not combinable with --stop-on-fail.\n"
        "--trace-dir DIR writes, for each failed or errored case, DIR/<fixture>__<case>__r<run>-a<attempt>.edn (its body events from the setup on, capped, and the tail of body.log) and names it under :trace in the result; --trace-attempt N (default 0) numbers the attempt in the file name.\n"
        "--check only loads and validates the fixtures (no body, no server): one result per case, exit 1 on a parse error or problem.\n"
@@ -65,6 +66,9 @@
       (= a "--phase") (if (#{"day" "night" "night-exclusive"} b)
                         (recur more (assoc opts :phase b))
                         (throw (js/Error. (str "--phase must be day, night or night-exclusive, not " b))))
+      (= a "--day-limit") (if (re-matches #"\d+" (str b))
+                            (recur more (assoc opts :day-limit (js/Number b)))
+                            (throw (js/Error. (str "--day-limit needs a tick count, not " b))))
       (= a "--retry-failed") (if (re-matches #"\d+" (str b))
                                (recur more (assoc opts :retry-failed (js/Number b)))
                                (throw (js/Error. (str "--retry-failed needs a count, not " b))))
@@ -1305,8 +1309,8 @@
     #(js/clearInterval timer)))
 
 (defn start-natural-sweep!
-  "At night, clears naturally spawned hostiles around the plot (f/natural-hostiles-commands) now and every 5 s until the
-  returned stop fn is called; a no-op stop by day."
+  "Clears naturally spawned hostiles around the plot (f/natural-hostiles-commands) now and every 5 s until the
+  returned stop fn is called; a no-op with :mobs :keep."
   [cmds]
   (if (empty? cmds)
     (fn [])
@@ -1514,23 +1518,27 @@
                              :else (.then (sleep 1000) #(attempt (dec retries)))))))))]
     (attempt 3)))
 
+(def default-day-limit
+  "The world time at which a held day phase is reset: natural hostiles spawn from dusk (12000) and stay."
+  9000)
+
 (defn phase-time-fix
   "The ticks to `time set` when the world time left the window of phase (:day, :night, :night-x), else nil. A held phase
-  drifts with the clock (a day is 24000 ticks, ~10 real min at the sweep tick rate): day ends ~2 min before dusk (11000), night spans
+  drifts with the clock (a day is 24000 ticks, ~10 real min at the sweep tick rate): day ends at day-limit, night spans
   13000-22000."
-  [phase ticks]
+  [phase ticks day-limit]
   (case phase
-    :day (when (and ticks (<= 11000 ticks 22999)) 1000)
+    :day (when (and ticks (<= day-limit ticks 22999)) 1000)
     (:night :night-x) (when (and ticks (not (<= 13000 ticks 22000))) 14000)
     nil))
 
 (defn refresh-phase-time!
   "Keeps the phase's time of day for the whole phase: re-sets the time (env :set-ticks!, which logs) when it left the window.
-  Resolves to true. env: {:read-ticks (-> promise of ticks or nil), :set-ticks! (ticks why -> promise)}."
-  [{:keys [read-ticks set-ticks!]} phase what]
+  Resolves to true. env: {:read-ticks (-> promise of ticks or nil), :set-ticks! (ticks why -> promise), :day-limit ticks}."
+  [{:keys [read-ticks set-ticks! day-limit]} phase what]
   (.then (read-ticks)
          (fn [ticks]
-           (if-let [fix (phase-time-fix phase ticks)]
+           (if-let [fix (phase-time-fix phase ticks day-limit)]
              (.then (set-ticks! fix (str what " found the " (name phase) " phase at " ticks)) (fn [_] true))
              true))))
 
@@ -1575,7 +1583,7 @@
         t-start (atom nil)
         clock (stall-clock (js/Date.now))
         stop-monitor (start-stall-monitor! clock)
-        natural (f/natural-hostiles-commands grid origin rc (starts-night? rc))
+        natural (f/natural-hostiles-commands grid origin rc)
         stop-sweep (atom (fn []))
         pre-register (atom nil)
         setup-cursor (atom nil)
@@ -1617,7 +1625,8 @@
                           (js/Promise.resolve true)
                           (refresh-phase-time!
                            {:read-ticks #(.then (rcon! ["time query day"]) (fn [[reply]] (daytime (or reply ""))))
-                            :set-ticks! (fn [ticks why] (set-time! opts ticks why))}
+                            :set-ticks! (fn [ticks why] (set-time! opts ticks why))
+                            :day-limit (:day-limit opts default-day-limit)}
                            phase (:id c))))
             :start! start!}))
         (.then (fn [ok] (note-last-plot! opts origin grid) ok))

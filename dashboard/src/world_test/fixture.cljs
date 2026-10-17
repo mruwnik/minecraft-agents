@@ -534,15 +534,15 @@
    "phantom"])
 
 (def natural-margin
-  "How far around the plot a night case clears naturally spawned hostiles: beyond a skeleton's 16-block line of fire."
+  "How far around the plot a case clears naturally spawned hostiles: beyond a skeleton's 16-block line of fire."
   24)
 
 (defn natural-hostiles-commands
-  "At night (night?), one kill per natural hostile type in the plot's box widened by natural-margin, never one a runner
-  summoned (tag wt): mobs spawned on the dark plots around would answer the body's hostile reflex. None by day or with
-  :mobs :keep."
-  [grid [ox oy oz] c night?]
-  (if (or (not night?) (= :keep (:mobs c)))
+  "One kill per natural hostile type in the plot's box widened by natural-margin, never one a runner
+  summoned (tag wt): mobs spawned on the dark plots around (or left from dusk) would answer the body's hostile reflex.
+  None with :mobs :keep."
+  [grid [ox oy oz] c]
+  (if (= :keep (:mobs c))
     []
     (let [[sx sz] (dims grid)
           m natural-margin
