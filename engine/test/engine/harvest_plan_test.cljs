@@ -47,7 +47,9 @@
               result (await (h/child-outcome eng h/job {:plan "field"} 200))]
           (is (= #{[2 2]} (dug p)))
           (is (= #{[2 2 "wheat_seeds"] [4 2 "wheat_seeds"]} (placed p)))
-          (is (= {:cut 1 :replanted 2 :bare [] :lost [] :gave-up false} (dissoc result :text)))
+          (is (= {:cut 1 :replanted 2 :bare [] :lost [] :gave-up false
+                  :spent {"wheat_seeds" 2} :spent-at #{[4 64 2] [2 64 2]}}
+                 (-> result (dissoc :text) (update :spent-at set))))
           (is (= [0 3 0] (mapv #(h/age-at p % 64 2) [2 3 4])))
           (is (= ["carrots" 7] [(h/block-at p 5 64 2) (h/age-at p 5 64 2)]))
           (is (= ["wheat" 7] [(h/block-at p 6 64 2) (h/age-at p 6 64 2)])))))))
