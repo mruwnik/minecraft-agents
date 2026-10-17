@@ -27,7 +27,7 @@
 (deftest set-spawn-start-facts
   (are [world args expected] (= expected (start-of 'jobs.survival.set-spawn world args))
     {:time st/night} {:bed {:x 3 :y 64 :z 0}} [:later :night]
-    {:time st/noon} {} [:later :no-bed]
+    {:time st/noon} {} [:look :no-bed]
     {:time st/noon} {:bed {:x 3 :y 64 :z 0}} [:ok :daytime]))
 
 (deftest dig-niche-starts-by-night-only

@@ -82,7 +82,8 @@
 (defn gather-held
   "When every raw need of the chain is seen and the first one's child would wait for a reason of its own (night in
   a shelter ..): that reason as a cause, the source there, only not now; else nil. A need that wants a tool first
-  has the wait of the tool's own chain (a pickaxe from logs held by the night shelter)."
+  has the wait of the tool's own chain (a pickaxe from logs held by the night shelter). The cause's metadata :kind is
+  the child's status kind (:later or :look)."
   [c names n]
   (let [needs (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))) seq)
         need (when (and needs (every? #(seen-of c %) needs)) (with-block c (first needs)))]
@@ -90,4 +91,4 @@
       (if-let [tools (tools-wanted c names need)]
         (gather-held c tools 1)
         (let [s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
-          (when-not (= :ok (first s)) (contract/status-cause s)))))))
+          (when-not (= :ok (first s)) (with-meta (contract/status-cause s) {:kind (first s)})))))))

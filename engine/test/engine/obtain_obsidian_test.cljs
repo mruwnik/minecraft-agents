@@ -10,6 +10,7 @@
             [engine.library-test :as lt]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.sense-test :as sense]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]))
@@ -128,6 +129,15 @@
           (is (= "air" (.-name (.blockAt p #js {:x 62 :y 63 :z 1}))) "the seal the mine placed is dug")
           (is (= 1 (carried p "obsidian")))
           (is (empty? left)))))))
+
+(deftest no-lava-seen-looks-round-before-it-waits
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup (world ground [pick {:name "water_bucket" :count 1}]))]
+          (core/submit! eng '(jobs.gather.make-obsidian {:count 1}) {})
+          (await (tu/run-until-empty eng 6))
+          (is (pos? (sense/looks p))))))))
 
 (deftest remembered-lava-that-is-gone-is-forgotten-and-ends-no-lava
   (async done

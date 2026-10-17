@@ -5,7 +5,9 @@
             [engine.fish-test :as ft]
             [engine.library-test :as lt]
             [engine.test-util :as tu]
+            [engine.core :as core]
             [engine.game :as game]
+            [engine.sense-test :as sense]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.seen :as seen]
             [jobs.items.obtain.table :as table]
@@ -31,6 +33,15 @@
         (let [{:keys [res]} (await (obtain (ft/world [] {}) {:item "cod" :count 1}))]
           (is (= :stopped (:status res)))
           (is (= :no-source (:reason res))))))))
+
+(deftest no-water-seen-looks-round-before-obtain-waits
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup (assoc (ft/world [ft/rod] {}) :blocks {}))]
+          (core/submit! eng '(jobs.items.obtain {:item "cod" :count 1}) {})
+          (await (tu/run-until-empty eng 6))
+          (is (pos? (sense/looks p))))))))
 
 (deftest a-cooked-fish-plan-gathers-the-raw-fish
   (is (= {"cod" 2} (:gather (recipes/plan game/default-version {} "cooked_cod" 2 (merge (table/source-opts) {:gather? true :table? true}))))))

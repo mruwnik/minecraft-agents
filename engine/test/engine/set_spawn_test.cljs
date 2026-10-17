@@ -1,10 +1,11 @@
 (ns engine.set-spawn-test
   "jobs.survival.set-spawn against the fake world: a bed used by day sets the respawn point."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.job-api :as job-api]
             [engine.memory :as mem]
             [engine.test-util :as tu :refer [run-async run-until-empty]]
+            [engine.sense-test :as sense]
             [engine.shelter-support :as st :refer [setup know-bed! calls entries emitted noon night]]))
 
 (def bed {:x 6 :y 64 :z 0})
@@ -28,11 +29,13 @@
       (await (run-until-empty (:eng s) 6))
       (assoc s :id id))))
 
-(defn wait-reason [world known-bed]
+(defn ^:async wait-reason
+  "Why set-spawn waits once it has looked round."
+  [world known-bed]
   (let [{:keys [eng]} (setup world)]
     (when known-bed (know-bed! eng known-bed))
     (let [id (core/submit! eng '(jobs.survival.set-spawn) {})]
-      (core/tick! eng)
+      (await (run-until-empty eng 6))
       (:reason (:waiting (job-api/summary eng id))))))
 
 (deftest set-spawn-uses-the-remembered-bed-by-day-and-records-the-spawn-bed
@@ -99,11 +102,21 @@
           (is (= 1 (count (emitted seen :spawn_lost)))))))))
 
 (deftest set-spawn-forgets-a-remembered-bed-that-is-gone-and-waits-when-it-sees-none
-  (let [{:keys [eng]} (setup {:time noon})]
-    (know-bed! eng bed)
-    (let [id (core/submit! eng '(jobs.survival.set-spawn) {})]
-      (core/tick! eng)
-      (is (= :no-bed (:reason (:waiting (job-api/summary eng id))))))))
+  (async done
+    (run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:time noon})]
+          (know-bed! eng bed)
+          (let [id (core/submit! eng '(jobs.survival.set-spawn) {})]
+            (await (run-until-empty eng 6))
+            (is (= :no-bed (:reason (:waiting (job-api/summary eng id)))))))))))
+
+(deftest set-spawn-looks-round-before-it-waits-for-a-bed
+  (async done
+    (run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (run-set-spawn {:time noon} {} (constantly nil)))]
+          (is (pos? (sense/looks p))))))))
 
 (deftest set-spawn-does-not-click-again-when-the-spawn-bed-is-known
   (async done
@@ -135,12 +148,17 @@
           (is (re-find #"did not set the respawn point" (:text (first (emitted seen :stopped))))))))))
 
 (deftest set-spawn-skips-a-remembered-bed-beyond-the-bed-radius
-  (is (= :no-bed (wait-reason {:time noon :blocks {"90,64,0" "red_bed"}} far-bed))))
+  (async done
+    (run-async done
+      (fn ^:async t []
+        (is (= :no-bed (await (wait-reason {:time noon :blocks {"90,64,0" "red_bed"}} far-bed))))))))
 
 (deftest set-spawn-says-why-it-waits
-  (are [world known-bed reason] (= reason (wait-reason world known-bed))
-    {:time night :blocks {"6,64,0" "red_bed"}} bed :night
-    {:time noon} nil :no-bed))
+  (async done
+    (run-async done
+      (fn ^:async t []
+        (is (= :night (await (wait-reason {:time night :blocks {"6,64,0" "red_bed"}} bed))))
+        (is (= :no-bed (await (wait-reason {:time noon} nil))))))))
 
 (deftest set-spawn-clicks-when-the-spawn-set-near-the-bed-was-reset
   (async done

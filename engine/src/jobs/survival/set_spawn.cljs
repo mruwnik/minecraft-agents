@@ -46,7 +46,7 @@
   {::job-time-s {:default 60 :doc "Seconds the walk to the bed and the click may take." :spec (a/num-in 0 nil)}
    ::click-s {:default 10 :doc "Seconds the walk to the bed and the click take, for the quote." :spec (a/num-in 0 nil)}})
 
-(defn has-bed [c] (if (bed-of c) (contract/ok :bed "a bed") (contract/later :no-bed "no bed given, remembered or seen")))
+(defn has-bed [c] (if (bed-of c) (contract/ok :bed "a bed") (contract/look :no-bed "no bed given, remembered or seen")))
 
 (def can-start? (cond/and (checks/day :night) has-bed))
 

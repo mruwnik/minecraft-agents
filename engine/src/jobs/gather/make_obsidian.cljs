@@ -301,7 +301,7 @@
 
 (def can-start?
   (cond/and (checks/refusing :bucket "a water bucket or a bucket and water" bucket-cause)
-            (checks/refusing :lava "obsidian or lava seen" lava-cause)))
+            (checks/refusing :look :lava "obsidian or lava seen" lava-cause)))
 
 (defn done?
   ":count obsidian gained and no child under way (a mine child still picks up)."
