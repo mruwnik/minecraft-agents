@@ -90,7 +90,7 @@
        vec))
 
 (defn hole-tag
-  "What marks a hole as this go-to's in the tidy ledger; its stair child writes it (:note) as it digs; clear-path's holes are noted by go-to after each round."
+  "What marks a hole as this go-to's in the tidy ledger; its stair child writes it (:note) as it digs; clear-path's are noted by go-to after each round and in its cleanup."
   [c]
   {:escalation true :go-to (:id c)})
 

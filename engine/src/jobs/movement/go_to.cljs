@@ -17,6 +17,7 @@
             [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.cut :refer [approaches cut-loop? nearest-hostile note-restart! start-attempt! way-hostiles]]
             [jobs.movement.go-to.escalation :as esc]
+            [jobs.movement.go-to.holes :refer [note-holes!]]
             [jobs.movement.go-to.restore :as restore]
             [jobs.movement.go-to.holds :refer [plug-hold plug-since]]
             [jobs.movement.go-to.preview :as preview]
@@ -351,8 +352,10 @@
   (await (attempt (with-limits c))))
 
 (defn ^:async cleanup
-  "However the call ended (a cut too): the off-hand torch goes back, the plug timer and the planner's kept state are released."
+  "However the call ended (a cut too): the planned cells of an escalation child cut mid-round are noted to the tidy
+  ledger, the off-hand torch goes back, the plug timer and the planner's kept state are released."
   [c _]
+  (when-not (:own (:escalation (ctx/mem c))) (note-holes! c (:planned (ctx/mem c))))
   (swap! plug-since dissoc (:id c))
   (wsearch/release! c)
   (await (torch/return-torch! c))

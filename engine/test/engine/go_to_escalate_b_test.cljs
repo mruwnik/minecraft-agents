@@ -258,6 +258,28 @@
           (is (empty? (events-of seen :go-to.by-hand)))
           (is (= "stone" (block p [1 62 0])) "the stone is left"))))))
 
+(deftest go-to-cancelled-mid-clear-path-notes-the-cell-dug-so-far
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (merge in-room {:blocks room :inventory [{:name "dirt" :count 2}]}) foreign)]
+          (core/submit! eng '(jobs.movement.go-to {:pos [8 64 0] :range 1 :ignore-zones? true}) {})
+          (let [k (atom 0)]
+            (.override (.-world p) "dig" (fn [token args impl]
+                                           (if (< (swap! k inc) 2) (impl token args) (js/Promise. (fn [_ _])))))
+            (core/tick! eng)
+            (loop [i 0]
+              (when (and (< i 300) (< @k 2))
+                (await (js/Promise. (fn [ok] (js/setTimeout ok 10))))
+                (recur (inc i)))))
+          (core/cancel! eng (first (:list (core/state eng))))
+          (.override (.-world p) "dig" nil)
+          (await (tick-out! eng 5))
+          (is (empty? (:list (core/state eng))))
+          (is (= #{(first (dug-cells p))} (holes eng))
+              "the one cell dug before the cut is in the ledger, tagged as go-to's escalation")
+          (is (every? :go-to (filter :escalation (ledger eng)))))))))
+
 (deftest go-to-cancelled-mid-escalation-leaves-its-holes-in-the-ledger
   (async done
     (tu/run-async done
