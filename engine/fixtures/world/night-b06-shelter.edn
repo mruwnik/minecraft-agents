@@ -39,21 +39,21 @@
             {:event {:source :job :level :debug :kind :dig-in.take-back-skipped :data {:reason :no-tool}} :within-s 120}
             {:no-event {:source :job :kind :dig-in.took-back} :for-s 150}]
    :limit-s 170}
-  ;; 1cbf8596, ad2c7c84: logs only, no tool, stone floor: the only wall material is the logs, named in the sealed text, and dug back at dawn
+  ;; 1cbf8596, ad2c7c84: logs only, no tool, stone floor: logs are dear, so a pit is dug by hand (3 stone at 7.5 s each, about 50 s) and roofed with a log, named in the sealed text and dug back at dawn
   {:name "log-walls-are-named-and-taken-back-at-dawn"
    :time :night-exclusive
    :sleep-skip true
    :blocks [[:fill [8 -6 8] [24 -1 24] "stone"]]
    :body {:inventory [["oak_log" 12]]}
    :act [[:job (jobs.survival.night)]
-         [:await {:source :job :kind :dig-in.sealed} 60]
+         [:await {:source :job :kind :dig-in.sealed} 120]
          [:until [:memory {:entries {:shelter [{:data {:state :built}}]}}] 10]
          [:time-set 1000]
          [:job (jobs.survival.night)]]
-   :expect [{:event {:source :job :kind :dig-in.sealed :message [:contains "oak_log"]} :within-s 60}
-            {:event {:source :job :kind :dig-in.took-back} :within-s 150}]
+   :expect [{:event {:source :job :kind :dig-in.sealed :message [:contains "oak_log"]} :within-s 120}
+            {:event {:source :job :kind :dig-in.took-back} :within-s 200}]
    :after [[:item "oak_log" [:>= 8]]]
-   :limit-s 230}
+   :limit-s 280}
   ;; 1b4b51d6, ad2c7c84: logs only, no tool, diggable dirt: a pit by hand, at most one log placed
   {:name "logs-and-no-tool-on-dirt-digs-a-pit-and-keeps-the-logs"
    :blocks [[:fill [8 -6 8] [24 -1 24] "dirt"]]
