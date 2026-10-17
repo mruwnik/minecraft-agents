@@ -61,10 +61,21 @@
   (are [deg name] (= name (snap/compass (* deg (/ pi 180))))
     0 "north" 45 "north-west" 90 "west" 180 "south" 270 "east" -90 "east" 359 "north" 405 "north-west"))
 
+;; the same F3 degrees drive takes (engine/js/primitives.test.mjs "look conversion"): drive look 0 faces south
+(deftest snapshot-yaw-degrees-match-drive-look
+  (are [f3 mf compass] (and (same-angle? mf (:yaw (snap/camera (pose {}) {:yaw f3})))
+                            (= {:yaw f3 :pitch 0 :compass compass}
+                               (:facing (snap/summary {:pose (pose {}) :camera {:yaw mf :pitch 0} :width 10 :height 10
+                                                       :center nil :seen []}))))
+    0 pi "south"
+    90 (/ pi 2) "west"
+    180 0 "north"
+    270 (- (/ pi 2)) "east"))
+
 (deftest camera-overrides-only-what-is-given
   (let [p (pose {:yaw 1.0 :pitch 0.2})]
     (is (= {:yaw 1.0 :pitch 0.2} (snap/camera p {})))
-    (is (close? (/ pi 2) (:yaw (snap/camera p {:yaw 90}))))
+    (is (same-angle? (/ pi 2) (:yaw (snap/camera p {:yaw 90}))))
     (is (= 0.2 (:pitch (snap/camera p {:yaw 90}))))
     (is (close? (/ pi 6) (:pitch (snap/camera p {:pitch -30}))))
     (is (same-angle? 0 (:yaw (snap/camera (pose {}) {:look-at [0 65 -5]}))))))
