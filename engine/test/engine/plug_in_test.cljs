@@ -5,6 +5,7 @@
             [engine.cornered-test :as ct]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -62,6 +63,18 @@
       (fn ^:async t []
         (let [{:keys [eng]} (await (plug! {:blocks ct/dead-end :inventory cobble} {:purpose :shelter}))]
           (is (= #{:shelter} (purposes eng))))))))
+
+(deftest walls-beside-an-open-iron-door-step-away-from-it-and-wall-the-cell-between
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [door {"-1,64,0" "iron_door" "-1,65,0" "iron_door"}
+              states {"-1,64,0" {:open true :half "lower"} "-1,65,0" {:open true :half "upper"}}
+              {:keys [out p]} (await (plug! {:blocks (merge ct/dead-end door) :states states :inventory cobble} {:ways #{:walls}}))]
+          (is (= [:done :walls] [(:kind out) (:way (:data out))]) "enclosed, not nothing-possible at the door")
+          (is (= 1 (js/Math.floor (first (:pos (fake/self p))))) "one step off the door")
+          (is (some #{[0 64 0]} (cells-of p "place")) "the cell between the body and the door is walled")
+          (is (not-any? #{[-1 64 0] [-1 65 0]} (cells-of p "place")) "nothing is placed into the door cells"))))))
 
 (deftest a-pit-digs-down-and-plugs-the-hole
   (async done

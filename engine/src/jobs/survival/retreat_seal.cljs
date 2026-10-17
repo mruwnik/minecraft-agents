@@ -3,6 +3,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.click :as click]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as look]
@@ -117,16 +118,38 @@
          (filter #(and (not (combat/ranged? %)) (danger-q/seen-only? %)))
          (mapv #(danger-q/mob-pos p %)))))
 
-(defn ^:async seal!
-  "Fill the open cells around the body (dig-in's 1x1: sides at feet and head
-  height, a roof support, the roof) with carried :blocks, at most
-  :max-places this step. :sealed when none is left open, :again while
-  more are owed, :failed when a hostile stands in one (not with :purpose :shelter: the place is tried and a mob in its cell waited out), none is carried, a
-  placement is refused, or only cells it cannot fill are left open (place-seal!'s :seal-occupied: a torch, chest or bed
-  in a side cell, which the seal leaves alone).
-  A door standing open in a side cell is no wall (dig-cells/sealed?): it is shut. Cells it has not sensed (a ceiling
-  out of view) are looked at first: an unseen cell is not taken for an open one. A support block under a wall cell is never placed in another's
-  area (the wall cell then fails no-support); the wall cells themselves are a last resort."
+(defn stuck-door?
+  "Whether cell holds a door a hand cannot shut (iron) standing open: no wall, and nothing can be placed into it."
+  [p cell]
+  (let [b (dig-cells/open-openable p cell)]
+    (and b (= :iron (click/kind-of (.-name b))))))
+
+(defn door-free-spot
+  "A side neighbour of feet to stand in that the walls can enclose, because no stuck-door? is among its fill cells, or nil: its feet and
+  head cells are seen free, its floor is solid and it is no door cell."
+  [p feet]
+  (let [free? #(let [f (u/seen-facts p %)] (and f (not (:full-cube? f)) (not (dig-cells/open-openable p %))))]
+    (first (for [[dx dz] dig-cells/sides
+                 :let [n (assoc feet :x (+ (:x feet) dx) :z (+ (:z feet) dz))]
+                 :when (and (free? n) (free? (update n :y inc))
+                            (:full-cube? (u/seen-facts p (update n :y dec)))
+                            (not-any? #(stuck-door? p %) (dig-cells/fill-cells (constantly false) n)))]
+             n))))
+
+(defn ^:async step-from-door!
+  "Walls beside a stuck-door? cell cannot close: step once to a door-free-spot (go-to child :door-step) so the cell between becomes a wall.
+  :again while the walk goes on or after it ends; nil when there is no door beside the body, no spot, or the step was tried."
+  [c]
+  (let [p (:primitives c)
+        feet (sh/feet p)]
+    (when (and (not (:door-stepped (ctx/mem c))) (some #(stuck-door? p %) (dig-cells/fill-cells (constantly false) feet)))
+      (when-let [spot (door-free-spot p feet)]
+        (let [r (await (ctx/call c :door-step 'jobs.movement.go-to {:pos {:x (+ (:x spot) 0.5) :y (:y spot) :z (+ (:z spot) 0.5)} :range 0}))]
+          (when-not (= :continue r) (ctx/update-mem! c assoc :door-stepped true))
+          :again)))))
+
+(defn ^:async seal-cells!
+  "The body of seal!: place the open cells round the feet."
   [c]
   (await (look/look-unknown! c (map lb/cell (dig-cells/open-cells (:primitives c) (sh/feet (:primitives c))))))
   (let [{:keys [radius max-places]} (:args c)
@@ -154,3 +177,18 @@
                 (empty? left) (do (forget!) :sealed)
                 (every? #(occupied? c %) left) (unfillable)
                 :else :again)))))))
+
+(defn ^:async seal!
+  "Fill the open cells around the body (dig-in's 1x1: sides at feet and head
+  height, a roof support, the roof) with carried :blocks, at most
+  :max-places this step. :sealed when none is left open, :again while
+  more are owed, :failed when a hostile stands in one (not with :purpose :shelter: the place is tried and a mob in its cell waited out), none is carried, a
+  placement is refused, or only cells it cannot fill are left open (place-seal!'s :seal-occupied: a torch, chest or bed
+  in a side cell, which the seal leaves alone).
+  A door standing open in a side cell is no wall (dig-cells/sealed?): it is shut. Cells it has not sensed (a ceiling
+  out of view) are looked at first: an unseen cell is not taken for an open one. A support block under a wall cell is never placed in another's
+  area (the wall cell then fails no-support); the wall cells themselves are a last resort.
+  An open iron door in a side cell can be neither shut nor filled: the body first steps to a spot not beside it (step-from-door!)."
+  [c]
+  (let [stepped (await (step-from-door! c))]
+    (or stepped (await (seal-cells! c)))))
