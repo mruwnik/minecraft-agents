@@ -144,10 +144,16 @@
         (contract/status :later :not-night "not night" (if spawn {:spawn spawn} {})))
       (contract/ok :night "night, or in a shelter"))))
 
-(defn done?
-  "Already sheltered with nothing for the night to do: only before the start, the round ends a night it began."
+(defn spawn-lost-unnoted?
+  "The respawn bed is seen gone and :spawn-lost does not name it yet (note-spawn-lost! runs only in a round)."
   [c]
-  (checks/goal (and (not (checks/running? c)) (boolean (:shelter (quiet-night c))))
+  (when-let [pos (:lost (sh-spawn/spawn-state (:primitives c) (ctx/view c)))]
+    (not= pos (:pos (:data (ctx/latest c :spawn-lost))))))
+
+(defn done?
+  "Already sheltered with nothing for the night to do (and no lost respawn bed to note): only before the start, the round ends a night it began."
+  [c]
+  (checks/goal (and (not (checks/running? c)) (boolean (:shelter (quiet-night c))) (not (spawn-lost-unnoted? c)))
                [:sheltered "sheltered, nothing for the night to do"] [:night "the night is not over"] {:units :nights}))
 
 (defn quote-of
@@ -167,9 +173,8 @@
 (defn note-spawn-lost!
   "The respawn bed is seen gone: remember :spawn-lost and warn spawn_lost once (sh-spawn/lose-spawn!)."
   [c]
-  (when-let [pos (:lost (sh-spawn/spawn-state (:primitives c) (ctx/view c)))]
-    (when-not (= pos (:pos (:data (ctx/latest c :spawn-lost))))
-      (sh-spawn/lose-spawn! c pos :seen-gone))))
+  (when (spawn-lost-unnoted? c)
+    (sh-spawn/lose-spawn! c (:lost (sh-spawn/spawn-state (:primitives c) (ctx/view c))) :seen-gone)))
 
 (defn log-out-wanted? [c]
   (and (not (:log-out-failed (ctx/mem c)))

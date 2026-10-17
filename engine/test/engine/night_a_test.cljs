@@ -228,6 +228,16 @@
           (is (= [{:pos {:x 6 :y 64 :z 0} :why :seen-gone}] (st/entries eng :spawn-lost)))
           (is (= 1 (count (st/emitted seen :spawn_lost)))))))))
 
+(deftest a-sheltered-night-still-says-the-respawn-bed-it-sees-gone-is-lost
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (st/setup {:time night :blocks (merge roof {"6,64,0" "stone"})})]
+          (mem/write! (:store eng) :spawn-bed {:pos {:x 6 :y 64 :z 0}} {:cap 1 :ttl :forever})
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 20))
+          (is (= 1 (count (st/emitted seen :spawn_lost)))))))))
+
 (deftest the-night-check-shows-the-spawn-state
   (let [waiting (fn [world seed!]
                   (let [{:keys [eng]} (st/setup world)
