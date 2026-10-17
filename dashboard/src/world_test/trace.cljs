@@ -1,11 +1,12 @@
 (ns world-test.trace
-  "The trace of a failed case: the body events from its setup on and the tail of body.log, kept next to the results."
+  "The trace of a failed case: the body events from its setup on and the tail of body.log and, when the body ran with the step trace, the tail of its steps, kept next to the results."
   (:require [clojure.string :as str]
             ["fs" :as fs]
             ["path" :as path]))
 
 (def max-events-bytes "Cap on the printed events of one trace." 200000)
 (def max-log-bytes "Cap on the body.log tail of one trace." 20000)
+(def max-steps-bytes "Cap on the step-trace tail of one trace." 400000)
 
 (defn file-name
   "cases/ file of run `run`, attempt `attempt` (0 = first) of case id \"fixture/case\"."
@@ -25,10 +26,11 @@
     {:events (vec (take-last kept events)) :dropped (- (count events) kept)}))
 
 (defn trace-doc
-  [{:keys [id run attempt status why events log]}]
+  [{:keys [id run attempt status why events log steps]}]
   (let [{:keys [events dropped]} (cap-events events max-events-bytes)]
     (cond-> {:id id :run run :attempt attempt :status status}
       why (assoc :why why)
+      steps (assoc :steps-tail (tail-text steps max-steps-bytes))
       :always (assoc :events events :events-dropped dropped :body-log-tail (tail-text (or log "") max-log-bytes)))))
 
 (defn write!

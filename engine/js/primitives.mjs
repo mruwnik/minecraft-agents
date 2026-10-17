@@ -17,6 +17,7 @@ import { mobFields } from './interact.mjs'
 import { trackLiveEntities, liveEntities } from './live-entities.mjs'
 import { trackVehicles } from './vehicle.mjs'
 import { avoidEnderStare } from './gaze.mjs'
+import { traceSteps } from './step-trace.mjs'
 import { missingPatches, missingRequired } from './deps-check.mjs'
 import { wrapBlockAt } from './offset-shapes.mjs'
 import { say } from './chat.mjs'
@@ -212,6 +213,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     if (target.physics) target.physics.playerHalfWidth = BODY_HALF_WIDTH
     wrapBlockAt(target) // physics collides with bamboo/dripstone where the server has them, not at minecraft-data's fixed box
     const unguard = avoidEnderStare(target)
+    const untrace = traceSteps(target, process.env.MC_STEP_TRACE)
     lastTick = Date.now()
     stalled = false
     settleFromNow()
@@ -333,6 +335,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     Object.entries(handlers).forEach(([name, fn]) => target.on(name, fn))
     if (entityDeathListeners.size) removalEvents.forEach(([n, f]) => target.on(n, f))
     return () => {
+      untrace()
       unguard()
       target._client?.removeListener('damage_event', onDamage)
       Object.entries(handlers).forEach(([name, fn]) => target.removeListener(name, fn))

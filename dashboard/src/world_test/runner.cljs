@@ -30,7 +30,7 @@
        "--changed-since-pass skips a fixture file that passed fully at a recorded revision (every run passes record it, in .claude/world-test-passes.edn) when no file of the jobs and triggers it uses (and what their source names) changed since, tracked or untracked; any engine, js, trigger-default or runner change, or a change to the fixture file, runs it.\n"
        "--day-limit TICKS (default 9000) is the world time at which a held day phase is reset to 1000: well before dusk (12000), when natural hostiles start to spawn.\n"
        "--retry-failed N reruns each failed case (not errors or inconclusive) up to N times after the batch, on the same body; a pass on a retry is reported :flaky (counted apart, never :pass, exit 0, also the live outcome) with the first failure kept under :first-failure; not combinable with --stop-on-fail.\n"
-       "--trace-dir DIR writes, for each failed or errored case, DIR/<fixture>__<case>__r<run>-a<attempt>.edn (its body events from the setup on, capped, and the tail of body.log) and names it under :trace in the result; --trace-attempt N (default 0) numbers the attempt in the file name.\n"
+       "--trace-dir DIR writes, for each failed or errored case, DIR/<fixture>__<case>__r<run>-a<attempt>.edn (its body events from the setup on, capped, the tail of body.log, and :steps-tail, the per-tick step trace the body then keeps via MC_STEP_TRACE) and names it under :trace in the result; --trace-attempt N (default 0) numbers the attempt in the file name.\n"
        "--check only loads and validates the fixtures (no body, no server): one result per case, exit 1 on a parse error or problem.\n"
        "A job case (no :register, no :wait-full true, only :event expectations pending) ends :idle-grace-s (default 3) s after every job it submitted has ended, failed or parked (\"no job active: ...\", :ended-early-s and :idle-grace-s in the result).\n"
        "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
@@ -357,6 +357,8 @@
 
 (defn run-dir [opts] (path/join (os/tmpdir) (str "world-test-" (:body opts))))
 
+(defn steps-file [opts] (path/join (run-dir opts) "steps.log"))
+
 (defn last-plot-file [opts] (path/join (run-dir opts) "last-origin.edn"))
 
 (defn note-last-plot!
@@ -426,7 +428,8 @@
 (defn reset-body-log!
   "Drops the body.log an earlier run kept, so this run's log holds only this run (start-body! appends across restarts)."
   [opts]
-  (fs/rmSync (path/join (run-dir opts) "body.log") #js {:force true}))
+  (fs/rmSync (path/join (run-dir opts) "body.log") #js {:force true})
+  (fs/rmSync (steps-file opts) #js {:force true}))
 
 (def started-event
   "A restoring start logs :restored instead of :started (engine core)."
@@ -457,7 +460,10 @@
     (fs/writeFileSync scenario (pr-str {:register [] :queue []}))
     (let [fd (fs/openSync out "a")
           child (cp/spawn "node" (body-argv opts scenario restore?)
-                          #js {:cwd (repo-path "engine") :stdio #js ["ignore" fd fd]})]
+                          #js {:cwd (repo-path "engine") :stdio #js ["ignore" fd fd]
+                               :env (if (:trace-dir opts)
+                                      (js/Object.assign #js {} js/process.env #js {:MC_STEP_TRACE (steps-file opts)})
+                                      js/process.env)})]
       (swap! bodies assoc (:body opts) child)
       (.then (await-event opts offset started-event since 90000 #{})
              (fn [ev]
@@ -1603,6 +1609,7 @@
             doc (trace/trace-doc (assoc (select-keys r [:id :run :status :why])
                                         :attempt attempt
                                         :events (read-events-from (events-file opts) cursor)
+                                        :steps (when (fs/existsSync (steps-file opts)) (str (fs/readFileSync (steps-file opts) "utf8")))
                                         :log (when (fs/existsSync log-file) (trace/tail-text (str (fs/readFileSync log-file "utf8")) trace/max-log-bytes))))]
         (assoc r :trace (trace/write! (:trace-dir opts) (:id r) (:run r) attempt doc)))
       (catch :default e (log! "world-test: trace not written: " (.-message e)) r))))

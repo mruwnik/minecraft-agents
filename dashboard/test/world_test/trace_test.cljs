@@ -26,6 +26,10 @@
     (is (= {:id "f/c" :run 1 :attempt 0 :status :fail :why "w" :events [{:a 1}] :events-dropped 0 :body-log-tail "line\n"}
            d))))
 
+(deftest doc-carries-the-step-tail-only-when-the-body-traced-steps
+  (is (= "9 2 T 1,2,3" (:steps-tail (t/trace-doc {:id "f/c" :steps "9 2 T 1,2,3"}))))
+  (is (not (contains? (t/trace-doc {:id "f/c" :steps nil}) :steps-tail))))
+
 (deftest write-puts-the-doc-in-the-dir-and-returns-its-path
   (let [fs (js/require "fs") os (js/require "os") path (js/require "path")
         dir (.mkdtempSync fs (.join path (.tmpdir os) "trace-test-"))
