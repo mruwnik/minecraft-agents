@@ -816,6 +816,24 @@
           (is (empty? (calls p "place")) "no seal beside the creeper")
           (is (seq (tu/walked-to eng)) "it walks"))))))
 
+;; a mob that shows up in every second glance (flicker) is re-read once, then the body flees anyway
+(deftest a-flickering-threat-set-does-not-stall-the-flee
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [n (atom 0)
+              look flight/look!
+              {:keys [eng p]} (setup {:self {:pos [0.5 64 0.5] :health 20}
+                                      :inventory [{:name "cobblestone" :count 20}]
+                                      :entities [(assoc (zombie 5.5 64 0.5) :visible true)]})]
+          (with-redefs [flight/look! (fn [c] (cond-> (vec (look c)) (even? (swap! n inc)) (conj #js {:id (str "ghost" @n)})))]
+            (core/submit! eng retreat {})
+            (let [round (core/tick! eng)]
+              (loop [i 0] (when (and (empty? (tu/walked-to eng)) (< i 250)) (await (sleep 20)) (recur (inc i))))
+              (swap! (fake/state p) assoc :entities [])
+              (await round)))
+          (is (seq (tu/walked-to eng)) "it walks despite the changing view"))))))
+
 ;; a flee step that ran out of its seconds before the body moved is tried again, not taken for a blocked way
 (deftest a-flee-step-that-times-out-before-moving-is-tried-again-not-sealed-in
   (async done

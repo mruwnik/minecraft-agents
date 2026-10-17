@@ -1,5 +1,6 @@
 (ns jobs.survival.retreat
-  (:require [jobs.lib.ready :as ready]
+  (:require [clojure.set :as set]
+            [jobs.lib.ready :as ready]
             [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -319,10 +320,11 @@
             gap0 (flight/nearest-gap p threats)
             goal-gap0 (when leg (u/dist (u/self-pos c) leg))
             target (or leg (away? (await (cover/flight-target! c threats covered? rooms))))
-            grown? (not= (set (map #(.-id %) threats)) (set (map #(.-id %) (flight/look! c))))
+            grown? (and (zero? (:regrown (ctx/mem c) 0))
+                        (seq (set/difference (set (map #(.-id %) (flight/look! c))) (set (map #(.-id %) threats)))))
             low? (cover/exposed-low? c covered?)
             cover (cond
-                    grown? :again
+                    grown? (do (ctx/update-mem! c update :regrown (fnil inc 0)) :again)
                     (and low?
                          (or (refuge/plugging-here? c) (not (and target (covered? target))) (pos? (:stalled (ctx/mem c) 0)))
                          (not (cover/close-danger? p threats)))
@@ -356,7 +358,7 @@
               (not moved) (await (stuck "the way away from the hostile is blocked"))
               :else
               (let [gap (flight/nearest-gap p threats)]
-                (ctx/update-mem! c #(-> % (dissoc :tried :slow-steps) (flight/note-gap gap)))
+                (ctx/update-mem! c #(-> % (dissoc :tried :slow-steps :regrown) (flight/note-gap gap)))
                 :again))))))))
 
 (defn ^:async round
