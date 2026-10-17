@@ -56,6 +56,14 @@
           (is (nil? (held p)))
           (is (= {:status :done :item "shield" :hand "off" :text "holding shield"} @out)))))))
 
+(deftest the-hand-takes-a-string-or-a-keyword
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [hand ["off" :off]]
+          (let [{:keys [p]} (await (equip (stacks "shield") {:item "shield" :hand hand}))]
+            (is (= "shield" (off-hand p)) (pr-str hand))))))))
+
 (deftest an-item-already-in-hand-is-done-at-once
   (async done
     (tu/run-async done
@@ -87,7 +95,7 @@
           (is (= [:impossible :bad-args] [(get-in @out [:ending :kind]) (:reason @out)]) "refused before it starts"))))))
 
 (deftest a-bad-hand-is-refused-at-submit
-  (is (re-find #"jobs.items.equip :hand must be one of \"main\", \"off\", got \"foot\""
+  (is (re-find #"jobs.items.equip :hand must be one of .*\"off\".*got \"foot\""
                (expr/problem registry/jobs '(jobs.items.equip {:item "dirt" :hand "foot"})))))
 
 (deftest a-default-call-gets-a-missing-item-from-a-seen-chest-then-holds-it

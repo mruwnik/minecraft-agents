@@ -19,7 +19,7 @@
 
 (a/defargs args
   {:item {:doc "the item to hold" :spec a/item? :default nil}
-   :hand {:doc "\"main\" or \"off\"" :spec #{"main" "off"} :default "main"}
+   :hand {:doc "\"main\" or \"off\" (a keyword works too)" :spec #{"main" "off" :main :off} :default "main"}
    :fetch {:doc "get a missing item (jobs.lib.need): true, a set of kinds or a map of limits; false stops :no-item instead" :spec need/option? :default true}})
 
 (a/defargs settings
@@ -35,7 +35,7 @@
 (defn carried? [p item] (boolean (some #(= item (:name %)) (u/inventory p))))
 
 (defn held-in [p hand]
-  (some-> (.-equipment (.self p)) (aget (name (slots hand))) .-name))
+  (some-> (.-equipment (.self p)) (aget (name (slots (name hand)))) .-name))
 
 (def target [:item :hand])
 
@@ -101,7 +101,7 @@
       (and e (not= :done (:kind e))) (ctx/end c (:kind e) (:cause e) {:item item})
       (not (carried? p item)) (refuse! c :condition-failed :no-item (str "cannot hold " item ": not carried") {:item item})
       :else
-      (let [r (await (ctx/act c :equip (clj->js {:item item :dest (dests hand)})))
+      (let [r (await (ctx/act c :equip (clj->js {:item item :dest (dests (name hand))})))
             status (.-status r)]
         (if (= "equipped" status)
           (ctx/end c :done nil {:item item :hand hand :text (str "holding " item)})
