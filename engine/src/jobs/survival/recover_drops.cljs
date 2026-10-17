@@ -32,7 +32,7 @@
   Every run that leaves the death open ends with a :reason (:danger with :mob and :mob-pos, :unreachable) and a text.
   Ready: fit? ok; safe? is ok by day, ok at night when the pile despawns before morning (weighed by its route danger alone), else the exposure of the pile's cell (ready/exposed: later at night in the open or out of a shelter, so the died trigger is held with the reason and the pile is fetched by day while it lasts). The job's children walk under :checks {:safe? (always)}: the trip prices its own danger.
   The trip owns the danger it priced (the died trigger ranks above hostile-near, so no flight cuts the run it fires; an agent's run any reflex cuts):
-  a real danger within :danger-radius has the trip weighed again with it near, once per mob, and so does a hit (:hurt) since the decision, at once: it backs off or goes on; before a decision
+  a real danger within :danger-radius has the trip weighed again with it near, once per mob, and so does a hit (:hurt) since the decision, at once: it backs off or goes on; before a decision (a mob named in :danger-overrides is left to the decision, also while the body waits for the respawn and its settling)
   the run ends condition-failed :danger so a reflex can deal with it (the died trigger fires it again); nothing-possible :unreachable when go-to does not arrive; the despawn window ends it :abandoned.
   A real danger is a mob that can reach the body, or a ranged one with a line of fire (jobs.lib.danger/nearest-danger).
   Decision: skips when the value of what was carried is at most the fetch cost plus :margin.
@@ -304,6 +304,14 @@
   [c]
   (danger-q/nearest-danger (:primitives c) (:danger-radius (:args c)) {} {:skip (:weighed (ctx/mem c))}))
 
+(defn unpriced-threat
+  "threatened? leaving out the mobs the call prices itself (:danger-overrides): the decision weighs those."
+  [c]
+  (let [priced (set (keys (:danger-overrides (:args c))))
+        p (:primitives c)
+        ids (keep #(when (contains? priced (.-name %)) (.-id %)) (danger-q/known-hostiles p (:danger-radius (:args c)) {}))]
+    (danger-q/nearest-danger p (:danger-radius (:args c)) {} {:skip (into (set (:weighed (ctx/mem c))) ids)})))
+
 (defn hit-since?
   "Whether the body was hurt since the decision was taken."
   [c decided]
@@ -331,15 +339,15 @@
     (decline-danger! c m)))
 
 (defn ^:async wait-while!
-  "Hold still (reason) while (pending?) is true: nil when it clears, else the ending of a danger within :danger-radius,
-  :continue for a cut, :closed when the despawn window passes."
+  "Hold still (reason) while (pending?) is true: nil when it clears, else the ending of a danger within :danger-radius
+  (one the call prices with :danger-overrides is left to the decision), :continue for a cut, :closed when the despawn window passes."
   [c entry reason pending?]
   (loop []
     (cond
       (not (pending?)) (do (ctx/hold-still! c nil) nil)
       (not (ctx/alive? c)) :continue
       (dth/window-closed? c entry) (do (ctx/hold-still! c nil) :closed)
-      (threatened? c) (do (ctx/hold-still! c nil) (decline-danger! c (threatened? c)))
+      (unpriced-threat c) (do (ctx/hold-still! c nil) (decline-danger! c (unpriced-threat c)))
       :else (do (await (child/pause! c (cfg/pause-s) reason)) (await (pace/pace!)) (recur)))))
 
 (defn decide!

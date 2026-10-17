@@ -1,5 +1,5 @@
 ;; jobs.survival.recover-drops owns the danger it priced (card 417e96f3): a zombie without AI stands by the respawn point,
-;; priced cheap (:danger-overrides 0.01: the unarmed respawned body multiplies a zombie's price by its fist factor, 1 would be dearer than the pile); the trip starts after the 2 s settling hold (a danger seen while settling declines before any pricing), goes past it with no :danger decline and collects the pile.
+;; priced cheap (:danger-overrides 0.01: the unarmed respawned body multiplies a zombie's price by its fist factor, 1 would be dearer than the pile); the trip goes past it with no :danger decline and collects the pile.
 {:defaults
  {:tags [:survival :death :jobs]
   :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :effects [["resistance" 600 4]]
@@ -11,7 +11,6 @@
         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
         [:summon "zombie" [8.5 0 4.5] "{NoAI:1b}"]
         [:until-seen {:entity "zombie"} 10]
-        [:wait-s 3]
         [:job (jobs.survival.recover-drops {:danger-overrides {"zombie" 0.01}})]]
   :limit-s 150}
  :cases

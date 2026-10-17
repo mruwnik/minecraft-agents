@@ -97,6 +97,20 @@
                  (let [e (last (emitted seen :recover-drops.decided))] {:decision (:decision e) :retry (:retry e) :mobs (map :name (:top-mobs e))})))
           (is (= [] (tu/walk-calls p)) "the body did not walk toward the pile"))))))
 
+(deftest a-priced-zombie-near-during-the-settling-hold-is-weighed-not-declined
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zombie {:id 8 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
+              {:keys [eng seen clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
+          (die! eng {:pos dt/death-pos :inventory dt/diamonds} 2500)
+          (core/submit! eng dear-zombie {})
+          (let [timer (js/setInterval #(swap! clock + 500) 5)]
+            (await (run-until-empty eng 12))
+            (js/clearInterval timer))
+          (is (= [] (danger-declines seen)))
+          (is (= :skip (:decision (last (emitted seen :recover-drops.decided))))))))))
+
 (deftest a-far-mob-that-closes-in-is-weighed-when-near
   (async done
     (tu/run-async done
