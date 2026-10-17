@@ -434,3 +434,17 @@
           (reset! hidden false)
           (is (nil? (home-why)) "seen, the home is a refuge")
           (is (= 1 (count (:rooms (retreat-home/survey c home))))))))))
+
+(deftest a-body-at-a-buildings-door-looks-in-before-it-drops-the-unseen-room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [hidden (atom true)
+              {:keys [eng p seen]} (setup (assoc (hut {:x 5.5 :y 64 :z 6.5} hs/door-states [(zombie 5.5 13.5 0.4)]) :home false))
+              _ (seeing-all-but p (fn [[x y z]] (and @hidden (= [5 64 0] [x y z]))))
+              _ (.override (.-world p) "look" (fn ^:async o [token args impl] (reset! hidden false) (await (impl token args))))]
+          (core/submit! eng '(jobs.survival.retreat) {})
+          (await (tu/run-until-empty eng 6))
+          (is (false? @hidden) "it looked")
+          (is (ran-home? seen) "the room seen, it runs in")
+          (is (in-room? (body p)) (str "inside the building: " (body p))))))))

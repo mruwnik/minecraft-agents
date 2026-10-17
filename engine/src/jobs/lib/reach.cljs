@@ -510,6 +510,23 @@
         starts (if in-door? (map (fn [[dx dz]] [(+ x dx) y (+ z dz)]) [[1 0] [-1 0] [0 1] [0 -1]]) [[x y z]])]
     (boolean (some (fn [[sx sy sz]] (:unseen? (room-flood p kind-at sx sy sz))) starts))))
 
+(defn unseen-sides
+  "The feet cells [x y z] beside the room cells of the room around pos {:x :y :z} (as unseen-room?) that the body has not
+  seen: what a look into the room has to show."
+  [p {:keys [x y z]}]
+  (let [kind-at (shut-kind-at p)
+        in-door? (some-> (u/seen-block p {:x x :y y :z z}) .-name openable?)
+        starts (if in-door? (map (fn [[dx dz]] [(+ x dx) y (+ z dz)]) [[1 0] [-1 0] [0 1] [0 -1]]) [[x y z]])]
+    (->> starts
+         (mapcat (fn [[sx sy sz]]
+                   (for [c (:cells (room-flood p kind-at sx sy sz))
+                         [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                         :let [cell [(+ (aget c 0) dx) (aget c 1) (+ (aget c 2) dz)]]
+                         :when (nil? (u/seen-block p {:x (cell 0) :y (cell 1) :z (cell 2)}))]
+                     cell)))
+         distinct
+         vec)))
+
 (defn unroofed-cell
   "{:cell :closed?}: the first cell a walker flood from pos {:x :y :z} (doors shut, within room-cells) reaches with no
   block seen within room-roof cells over it ({:x :y :z}, nil when every cell is roofed), and whether the flood closed.

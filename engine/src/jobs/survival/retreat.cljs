@@ -39,7 +39,7 @@
      gate the body has seen (jobs.survival.retreat-home/rooms, bounded by its settings), that is a closed room (walls,
      doors that shut: jobs.lib.reach/room) whose door it walks to (over seen blocks, at its own speed) ahead of every
      melee chaser (jobs.lib.cost/reach-first?), the fewest steps of those, with a go-to child to the room cell inside
-     that door (retreat.home info, once a flight); a step that gets no nearer drops that room for the flight. Not while
+     that door (retreat.home info, once a flight); a building dropped only for unseen cells, with its door side within 6 blocks, is looked into once a flight (retreat-home/glance-in!) before the choice; a step that gets no nearer drops that room for the flight. Not while
      low in a ranged chaser's line of fire (the cover step below comes first). Any cell of the room counts as home:
      there an open door of the room is shut (a step back to one out of reach first), and a chaser still with a way in
      gets the cornered options (4.), its plug the walls alone (no pit or pocket dug in the hut): it does not walk out.
@@ -188,11 +188,13 @@
         early (when (and threat (not hit?) (not door)) (await (step/early-refuge! c)))
         covered? (cover/cover-fn p threats)
         blast (filterv #(flight/blaster? p %) threats)
-        survey (when (and threat (not hit?) (empty? blast))
-                 (retreat-home/survey c (cover/home-pos c)
-                                      (if (some #(and (not (combat/ranged? %)) (<= (danger-q/mob-distance p %) (cornered/cover-gap))) threats)
-                                        0
-                                        (retreat-home/judge-per-step))))
+        survey-now (fn []
+                     (retreat-home/survey c (cover/home-pos c)
+                                          (if (some #(and (not (combat/ranged? %)) (<= (danger-q/mob-distance p %) (cornered/cover-gap))) threats)
+                                            0
+                                            (retreat-home/judge-per-step))))
+        survey0 (when (and threat (not hit?) (empty? blast)) (survey-now))
+        survey (if (and survey0 (await (retreat-home/glance-in! c survey0))) (survey-now) survey0)
         rooms (:rooms survey)
         verdicts (when survey (retreat-home/verdicts p rooms threats (not (cover/exposed-low? c covered?))))
         {:keys [room way inside?]} (retreat-home/pick verdicts)

@@ -12,6 +12,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
+            [jobs.lib.sense :as sense]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
@@ -128,6 +129,28 @@
                   (reduce (fn [acc r] (if (some #(contains? (:cells %) (mapv (:start r) [:x :y :z])) acc) acc (conj acc r))) [])
                   (take (max-rooms))
                   vec)})))
+
+(def door-glance-radius
+  "Blocks from a building's door side within which a flight looks in once when the building was dropped :unseen."
+  6)
+
+(defn ^:async glance-in!
+  "Once a flight per building: when survey dropped a building only for :unseen cells and the body is within
+  door-glance-radius of its door side, look at the nearest unseen cell beside its room (a sight pass; the look's time
+  is part of the flight). True when it looked: the caller surveys again."
+  [c survey]
+  (let [p (:primitives c)
+        me (u/self-pos c)
+        glanced (:door-glanced (ctx/mem c) #{})
+        at (first (for [{[x y z] :at why :why} (:dropped survey)
+                        :let [k (cell-key {:x x :y y :z z})]
+                        :when (and (= :unseen why) (not (glanced k)) (<= (u/dist me {:x x :y y :z z}) door-glance-radius))]
+                    {:k k :pos {:x x :y y :z z}}))
+        target (when at (first (sort-by #(u/dist me {:x (% 0) :y (% 1) :z (% 2)}) (reach/unseen-sides p (:pos at)))))]
+    (when at (ctx/update-mem! c update :door-glanced (fnil conj #{}) (:k at)))
+    (when target
+      (await (sense/look-at! c target))
+      true)))
 
 (defn rooms
   "The closed rooms to flee to (survey), none a run to failed this flight."
