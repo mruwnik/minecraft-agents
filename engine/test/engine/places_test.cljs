@@ -381,7 +381,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (await (sleep-in {:recorded {:pos {:x 7 :y 64 :z 0}} :arg {:x 7 :y 64 :z 0}}))]
           (is (nil? (place eng :bed)))
-          (is (= 1 (count (events-of seen :bed_missing)))))))))
+          (is (= 1 (count (filterv #{:bed-missing} (stopped-reasons seen))))))))))
 
 (deftest the-sleep-job-without-an-argument-still-uses-the-recorded-bed
   (async done

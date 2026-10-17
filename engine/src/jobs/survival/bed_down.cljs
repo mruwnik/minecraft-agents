@@ -19,8 +19,8 @@
   "Go to bed: sleep in a bed to use, else put a carried bed down beside the body and sleep in it. One step per call, run to its end by the caller (jobs.survival.night).
   Conditions at the start (a listed call waits on them): night (:not-night), and a bed to use or a bed item to put down (:no-bed; the engine looks round once first; with :fetch on, which is the default, a bed is fetched instead through jobs.lib.need: jobs.items.obtain of any colour, then put down; a failed fetch ends with the cause {:reason :need} and its ending as :because).
   The bed: the :bed argument, else sh/bed-to-use (seen, or remembered within :bed-radius, :urgent-bed-radius once :max-days-awake days passed without sleep; never an occupied one or one given up on; unless that long without sleep, never one whose walk leaves an underground, dug-in or room shelter): jobs.survival.sleep on it.
-  A bed in the open is slept in only by a body overdue for sleep or one that just put the bed down; a sleep that stops :bed-open writes :bed-open (shelter.bed_open info) and ends condition-failed :bed-open.
-  A sleep that ends otherwise without sleeping writes :sleep-failed (5 minutes, shelter.sleep_failed warn) and ends nothing-possible :sleep-failed.
+  A bed in the open is slept in only by a body overdue for sleep or one that just put the bed down; a sleep that stops :bed-open writes :bed-open and ends condition-failed :bed-open.
+  A sleep that ends otherwise without sleeping writes :sleep-failed (5 minutes) and ends nothing-possible :sleep-failed.
   A bed item carried and no bed to use: put down beside the body (roofed cells first, else in the open unless :roofed-only; never in a doorway, on a chest, table or other kept block, or in another's zone, claim or plan footprint), recorded as :bed unless a live :bed is, and as :bed-placed outside the body's own zones (info night.bed-placed {:pos :own-zone}). A placement the server refuses is tried again (twice at most on one foot cell, three in all). No room, or a failed placement, writes :bed-place-failed (10 minutes, shelter.bed_place_failed warn) and ends nothing-possible :bed-place-failed.
   Ends done {:slept true :bed pos} when asleep, condition-failed :not-night when the day came first or :bed-open {:slept false :bed-open true}; :continue while walking or sleeping. Quote: time by the walk to the bed, done 1 sleep.")
 
@@ -108,13 +108,13 @@
       (= :continue s) :continue
       (= :bed-open (contract/cause-key s))
       (do (ctx/remember! c :bed-open {:pos bed} sh/bed-open-policy)
-          (ctx/emit! c :shelter.bed_open :info {:pos bed :text "bed is open (not shut in a roofed room); not lying in it"})
-          (ctx/end c :condition-failed :bed-open {:slept false :bed-open true}))
+          (ctx/end c :condition-failed :bed-open {:slept false :bed-open true :pos bed
+                                                   :text "bed is open (not shut in a roofed room); not lying in it"}))
       (or (sh/sleeping? p) (seq (ctx/since c :slept started))) (ctx/end c :done nil {:slept true :bed bed})
       (not (sh/night? p)) (ctx/end c :condition-failed :not-night {:slept false})
       :else (do (ctx/remember! c :sleep-failed {:pos bed} sh/sleep-failed-policy)
-                (ctx/emit! c :shelter.sleep_failed :warn {:pos bed :text "could not sleep in the bed; not trying again for a while"})
-                (ctx/end c :nothing-possible :sleep-failed {:slept false})))))
+                (ctx/end c :nothing-possible :sleep-failed {:slept false :pos bed
+                                                            :text "could not sleep in the bed; not trying again for a while"})))))
 
 (def bed-dirs [[1 0] [-1 0] [0 1] [0 -1]])
 
@@ -213,8 +213,8 @@
       r (await (sleep! c r true))
       :else
       (do (ctx/remember! c :bed-place-failed {:pos (sh/feet (:primitives c))} sh/bed-place-failed-policy)
-          (ctx/emit! c :shelter.bed_place_failed :warn {:text "no room or permission to put the carried bed down; not sleeping in it"})
-          (ctx/end c :nothing-possible :bed-place-failed {:slept false})))))
+          (ctx/end c :nothing-possible :bed-place-failed {:slept false
+                                                          :text "no room or permission to put the carried bed down; not sleeping in it"})))))
 
 (defn ^:async round [c]
   (let [p (:primitives c)

@@ -187,7 +187,7 @@
           (is (seq (st/calls p "look")) "looked around first")
           (is (= 1 (count (st/calls p "sleep"))) "slept in the seen bed")
           (is (empty? (st/calls p "place")) "no second bed")
-          (is (empty? (st/emitted seen :shelter.bed_place_failed)) "did not decide to put the carried bed down unlooked"))))))
+          (is (empty? (st/ended-because seen :bed-place-failed)) "did not decide to put the carried bed down unlooked"))))))
 
 (deftest monsters-near-a-free-bed-hold-the-sleep-as-monsters-near
   (async done
@@ -225,7 +225,7 @@
           (let [names (mapv #(.-name %) (.-calls (.-world p)))]
             (is (< (.indexOf names "look") (.indexOf names "place")) "the room was looked at before the bed went down")
             (is (not= -1 (.indexOf names "look"))))
-          (is (empty? (st/emitted seen :shelter.bed_place_failed))))))))
+          (is (empty? (st/ended-because seen :bed-place-failed))))))))
 
 (deftest a-held-hungry-body-cooks-raw-beef-at-a-furnace-in-the-room
   (async done

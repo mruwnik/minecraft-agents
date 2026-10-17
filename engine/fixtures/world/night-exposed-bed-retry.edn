@@ -2,7 +2,7 @@
 ;; 5-minute :sleep-failed body-memory entry (no job-memory flag); a failed bed placement holds only within 6 blocks of the failure.
 ;; jobs.survival.night is submitted in :act (the runner starts the body with its register before plot and time are set).
 ;; Open ground: stone floor, torches around, no roof and no blocks to build one. Hut cases: stone shell x 8..16, z 8..16.
-;; sleep_failed uses a NoAI zombie next to the bed (a block-state occupied=true bed is skipped without a sleep call, see
+;; a :sleep-failed ending uses a NoAI zombie next to the bed (a block-state occupied=true bed is skipped without a sleep call, see
 ;; bed-occupied-rule); the zombie is killed after the hold and the next round sleeps (monsters-near writes no :sleep-failed entry).
 ;; The bed is set where the body looks (:yaw 90, west): one set behind it is not seen.
 ;; The failed sleep in the closed hut ends the night job :roofed, so the long case registers the :night trigger: it holds again
@@ -52,7 +52,7 @@
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 40}
             {:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 60}
             {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 60}
-            {:no-event {:source :job :kind :shelter.bed_place_failed} :for-s 60}]
+            {:no-event {:source :job :kind :child_ended :data {:ending {:cause :bed-place-failed}}} :for-s 60}]
    :after [[:body-near [16.5 0 16.5] 1.5]]
    :limit-s 80}
   {:name "monster-near-holds-then-sleeps-once-the-zombie-is-killed"

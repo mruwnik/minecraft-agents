@@ -47,7 +47,7 @@
   - a bed-down in flight (its walk to the bed or to where the bed goes down) is called again until it ends.
   - a bed (sh/bed-to-use: seen, or remembered within :bed-radius, :urgent-bed-radius once :max-days-awake days without
     sleep; never an occupied one, one given up on, or, unless :max-days-awake days without sleep, one whose walk leaves an underground, dug-in or room shelter): jobs.survival.bed-down sleeps in it (jobs.survival.sleep). A sleep that ends without sleeping writes
-    :sleep-failed (5 minutes, shelter.sleep_failed warn).
+    :sleep-failed (5 minutes).
   - a bed item carried and no bed to use (jobs.survival.bed-down): put down beside the body (roofed cells first, else in the open, never in the open from a closed home (night.doorway/closed-home?: every cell roofed, or one doorway shuts the roof); never in a
     doorway or another's zone), slept in, recorded as :bed unless a live :bed is; outside its own zones also as
     :bed-placed for the morning (info night.bed-placed {:pos :own-zone} says where). No room writes :bed-place-failed (10 minutes, or until the body is 6+ blocks away).

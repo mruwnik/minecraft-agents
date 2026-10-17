@@ -173,12 +173,12 @@
       "missing" (if (nil? (u/sensed (:primitives c) bed))
                   (let [text "bed chunk not loaded yet"]
                     (fail-ending c (u/fail! c :bed_unloaded text) :bed-unloaded text bed))
-                  (do (sh/lose-spawn! c bed :missing)
-                      (if (= bed (mem/place (ctx/view c) :bed))
-                        (do (ctx/remember! c :bed {:gone true :was bed} mem/place-policy)
-                            (ctx/emit! c :bed_missing :warn {:pos bed :text "no bed at the remembered place"}))
-                        (ctx/emit! c :bed_missing :warn {:pos bed :text "no bed at the given place"}))
-                      (ctx/end c :condition-failed :bed-missing {:pos bed})))
+                  (let [_ (sh/lose-spawn! c bed :missing)
+                        known? (= bed (mem/place (ctx/view c) :bed))]
+                    (when known?
+                      (ctx/remember! c :bed {:gone true :was bed} mem/place-policy))
+                    (ctx/end c :condition-failed :bed-missing
+                             {:pos bed :text (if known? "no bed at the remembered place" "no bed at the given place")})))
       (let [text (str "cannot sleep: " (.-status r) (when-let [why (.-reason r)] (str " (" why ")")))]
         (fail-ending c (u/fail! c :bed_unusable text) :bed-unusable text bed)))))
 

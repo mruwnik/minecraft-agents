@@ -1,6 +1,6 @@
 ;; Bed review findings (card d9c87329, commits 9169664e, 6ec6d391): a hut bed the body does not remember is slept in and
 ;; recorded (no second bed even with one carried); a one-wide tunnel never counts as a room (no walk to a bed, no bed put
-;; down); a sleep that fails (a NoAI monster near) writes one shelter.sleep_failed and does not refire for five minutes;
+;; down); a sleep that fails (a NoAI monster near) ends one sleep :sleep-failed and does not refire for five minutes;
 ;; a live remembered :bed beyond reach is kept (place.kept) when a carried bed is put down in a new hut.
 ;; Needs night: run with --allow-time --time-log <shared time log>. One case per runner call (--match). The runner puts the
 ;; :night trigger after the plot is built, so beds and structures are in :blocks, remembered beds in :memory and a carried
@@ -59,7 +59,7 @@
    :body {:at [10.5 0 12.5] :inventory [["red_bed" 1]]}
    :memory [{:kind :bed :data {:pos #xyz [70 0 12]} :policy {:cap 1 :ttl :forever}}]
    :expect [{:event {:source :reflex :kind :fired} :within-s 20}
-            {:event {:source :job :kind :shelter.bed_place_failed} :within-s 20}
+            {:event {:source :job :kind :child_ended :data {:ending {:cause :bed-place-failed}}} :within-s 20}
             {:no-event {:source :action :kind :done :data {:name "sleep"}} :for-s 40}
             {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 40}]
    :after [[:item "red_bed" 1] [:body-near [10.5 0 12.5] 1.5]]
@@ -69,7 +69,7 @@
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
    :body {:at [13.5 0 13.5] :yaw 90}
    :act [[:summon "zombie" [14.5 0 11.5] "{NoAI:1b,Silent:1b}"] [:rcon "execute positioned $X $Y $Z run setblock ~10 ~ ~12 red_bed[facing=east,part=foot]"] [:rcon "execute positioned $X $Y $Z run setblock ~11 ~ ~12 red_bed[facing=east,part=head]"]]
-   ;; sleep holds the monsters-near refusal in pauses (a :pause child each) and asks again, never ending in a sleep_failed
+   ;; sleep holds the monsters-near refusal in pauses (a :pause child each) and asks again, never ending :sleep-failed
    :expect [{:event {:source :job :kind :child_started :data {:slot :pause}} :within-s 40}
             {:no-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :for-s 75}]
    :limit-s 90}

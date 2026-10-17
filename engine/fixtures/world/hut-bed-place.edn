@@ -1,5 +1,5 @@
 ;; A carried bed in a roofed hut at night (card 07d5a79f, 5d2913a8): placed in a row of three free roofed cells and slept in;
-;; no such row (a 2x2 room, or the cells inside another's plan footprint) writes one shelter.bed_place_failed warn, the bed
+;; no such row (a 2x2 room, or the cells inside another's plan footprint) writes one :bed-place-failed ending, the bed
 ;; stays in the pack and the trigger does not refire. The bed is given after t0 (a bed carried at the start would be put
 ;; down inside the settle, before the expectations count events). Run one case per runner call, wipe the body's engine/memory.edn
 ;; between calls (a :slept entry blocks the next case) and use a plot not used by an earlier case (--first-plot: bed items dropped
@@ -23,7 +23,7 @@
    :blocks [[:fill [10 0 10] [13 3 13] "stone" :hollow] [:fill [11 0 11] [12 2 12] "air"] [:set [11 2 10] "glowstone"]]
    :body {:at [11.5 0 11.5]}
    :act [[:rcon "give $BODY red_bed 1"]]
-   :expect [{:event {:source :job :kind :shelter.bed_place_failed} :within-s 30}
+   :expect [{:event {:source :job :kind :child_ended :data {:ending {:cause :bed-place-failed}}} :within-s 30}
             {:no-event {:source :action :kind :done :data {:name "place" :status "placed"}} :for-s 40}]
    :after [[:item "red_bed" 1]]
    :limit-s 70}
@@ -31,7 +31,7 @@
    :blocks [[:fill [10 0 10] [13 3 13] "stone" :hollow] [:fill [11 0 11] [12 2 12] "air"] [:set [11 2 10] "glowstone"]]
    :body {:at [11.5 0 11.5]}
    :act [[:rcon "give $BODY red_bed 1"] [:wait-s 100]] ; hold: a re-fired bed place would come after the first failure; only the pause itself is judged
-   :expect [{:event {:source :job :kind :shelter.bed_place_failed} :within-s 30}]
+   :expect [{:event {:source :job :kind :child_ended :data {:ending {:cause :bed-place-failed}}} :within-s 30}]
    :after [[:item "red_bed" 1]]
    :limit-s 140}
   {:name "planned-footprint-no-bed-place"
@@ -42,7 +42,7 @@
                      :want [:any "stone"]}]}]
    :body {:at [12.5 0 12.5]}
    :act [[:rcon "give $BODY red_bed 1"]]
-   :expect [{:event {:source :job :kind :shelter.bed_place_failed} :within-s 30}
+   :expect [{:event {:source :job :kind :child_ended :data {:ending {:cause :bed-place-failed}}} :within-s 30}
             {:no-event {:source :action :kind :done :data {:name "place" :status "placed"}} :for-s 40}]
    :after [[:item "red_bed" 1]]
    :limit-s 70}]}

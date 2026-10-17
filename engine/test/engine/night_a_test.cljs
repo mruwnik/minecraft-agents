@@ -138,8 +138,8 @@
           (core/submit! eng '(jobs.survival.night) {})
           (await (tu/run-until-empty eng 40))
           (is (empty? (st/calls p "sleep")) "an unwalled, unroofed bed is no place to lie")
-          (is (not (re-find #"dug in" (str (:text (first (st/emitted seen :shelter.bed_open)))))) "said before any dig")
-          (is (= 1 (count (st/emitted seen :shelter.bed_open))) "the open bed is judged once")
+          (is (not (re-find #"dug in" (str (st/ending-text (first (st/child-ended-because seen :bed-down :bed-open)))))) "said before any dig")
+          (is (= 1 (count (st/child-ended-because seen :bed-down :bed-open))) "the open bed is judged once")
           (is (= 1 (count (filterv #(and (= :child_started (:kind %)) (= :sleep (:slot %))) @seen))) "one sleep call for it")
           (is (<= (Math/abs (- 20 (:x (st/pos-of p)))) 3) "the body dug in beside the bed"))))))
 

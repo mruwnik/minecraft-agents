@@ -451,7 +451,7 @@
               [a b] (mapv st/arg-pos (st/calls p "place"))]
           (is (= a b) "the same foot cell again")
           (is (= 1 (count (st/calls p "sleep"))))
-          (is (empty? (st/emitted seen :shelter.bed_place_failed))))))))
+          (is (empty? (st/ended-because seen :bed-place-failed))))))))
 
 (deftest a-foot-cell-the-server-keeps-refusing-is-left-for-another-row
   (async done
@@ -462,7 +462,7 @@
           (is (= 3 (count feet)) "twice on the refused cell, then another")
           (is (not= (first feet) (last feet)))
           (is (= 1 (count (st/calls p "sleep"))))
-          (is (empty? (st/emitted seen :shelter.bed_place_failed))))))))
+          (is (empty? (st/ended-because seen :bed-place-failed))))))))
 
 (deftest a-bed-the-server-always-refuses-fails-once-after-three-tries
   (async done
@@ -470,7 +470,7 @@
       (fn ^:async t []
         (let [{:keys [p seen]} (await (carried-bed-night 99 16))]
           (is (= 3 (count (st/calls p "place"))))
-          (is (= 1 (count (st/emitted seen :shelter.bed_place_failed))))
+          (is (= 1 (count (st/ended-because seen :bed-place-failed))))
           (is (empty? (st/calls p "sleep"))))))))
 
 (deftest a-gap-in-a-wall-is-a-doorway-and-a-cell-in-the-room-is-not

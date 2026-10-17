@@ -82,6 +82,18 @@
 
 (defn emitted [seen kind] (filterv #(= kind (:kind %)) @seen))
 
+(defn ended-because
+  "The ending events (a job's own, or a child's child_ended) whose cause is cause."
+  [seen cause]
+  (filterv #(or (= cause (:reason %)) (= cause (get-in % [:ending :cause]))) @seen))
+
+(defn ending-text [e] (or (:text e) (get-in e [:ending :data :text])))
+
+(defn child-ended-because
+  "The child_ended events of slot whose ending cause is cause."
+  [seen slot cause]
+  (filterv #(and (= :child_ended (:kind %)) (= slot (:slot %)) (= cause (get-in % [:ending :cause]))) @seen))
+
 (defn emitted-by [seen source reflex] (filterv #(= [source reflex] [(:source %) (:reflex %)]) @seen))
 
 (def floor {"0,63,0" "dirt" "0,62,0" "stone" "0,61,0" "stone" "0,60,0" "stone"})
