@@ -56,8 +56,7 @@
       (not (ctx/alive? c)) :continue
       (nil? best) (ctx/end c :condition-failed :no-cure)
       :else
-      (let [_ (await (ctx/act c :equip #js {:item best}))
-            r (await (ctx/act c :eat #js {:item best :always true}))]
+      (let [r (await (ctx/act c :eat #js {:item best :always true}))]
         (if (= "ate" (.-status r))
           (ctx/end c :done nil {:used best})
           (ctx/end c :nothing-possible :cure-failed {:text (str "taking " best " failed: " (.-status r))}))))))

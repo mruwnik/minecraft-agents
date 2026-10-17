@@ -19,7 +19,8 @@
     {:self {:health 6 :effects poison}} false
     {:self {:health 6 :effects poison} :inventory [{:name "bread" :count 1}]} false
     {:self {:health 18 :effects poison} :inventory milk} false
-    {:self {:health 6 :effects []} :inventory milk} false))
+    {:self {:health 6 :effects []} :inventory milk} false
+    {:self {:health 6 :effects (conj poison {:name "regeneration" :amplifier 1 :duration 100})} :inventory milk} false))
 
 (deftest cure-drinks-the-milk-and-ends-done
   (async done

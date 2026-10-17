@@ -10,9 +10,11 @@
 
 (defn poisoned
   "Holds while the body has an hp-costing effect (poison, wither), its health is below :health (default ::below-health, 10) and a
-  cure (jobs.lib.body/cures) is carried. Poison alone stops at half a heart, so a healthy body leaves it to run out."
+  cure (jobs.lib.body/cures) is carried and no regeneration runs (a golden apple's does not clear the poison, so the
+  next cure waits for it to end). Poison alone stops at half a heart, so a healthy body leaves it to run out."
   [world memory args]
   (and (not (body/recovery-pending? memory :poisoned))
        (< (.-health (.self world)) (or (:health args) (settings/get settings ::below-health)))
        (body/poisoned? world)
+       (not (body/regenerating? world))
        (some? (body/cure-carried (u/inventory world) nil))))

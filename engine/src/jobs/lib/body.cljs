@@ -31,6 +31,11 @@
   [p]
   (boolean (some #(contains? cost-health/ticking-effects (.-name %)) (array-seq (.-effects (.self p))))))
 
+(defn regenerating?
+  "Whether the body (primitives p) has a regeneration effect running."
+  [p]
+  (boolean (some #(= "regeneration" (.-name %)) (array-seq (.-effects (.self p))))))
+
 (defn cure-carried
   "The first of cures (or of those named in only) the inventory [{:name}] holds, else nil."
   [inventory only]
