@@ -612,6 +612,19 @@
           (is (= [] (searches seen)) "a hostile near: no search")
           (is (re-find #"night" (str (:text (first (events-of seen :food.none)))))))))))
 
+(deftest carried-bread-is-eaten-at-night-with-a-hostile-near
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:food 9 :health 6 :pos {:x 0.5 :y 64 :z 0.5}} :time 15000
+                                           :inventory [{:name "bread" :count 4}]
+                                           :entities [{:id 5 :name "zombie" :kind "hostile" :pos {:x 4.5 :y 64 :z 0.5} :health 20}]}
+                                          :step-ms 5)]
+          (await (one-round! eng {:explore false}))
+          (is (< 9 (food p)) "danger never holds back eating carried food")
+          (is (= [] (searches seen)))
+          (is (= [] (events-of seen :food.none))))))))
+
 (defn stop-text
   "The job's stopped events, printed: the ending's reason and why."
   [seen]
