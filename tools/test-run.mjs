@@ -2,7 +2,7 @@
 // Why JavaScript: a thin Node launcher (copies the compiled test bundle, runs node under res-slot and timeout(1)); no engine behaviour.
 // tools/test-run.mjs <ns>...   (called by tools/test-engine after the compile; namespaces space- or comma-separated)
 //  Runs a private copy of out/test.cjs + out/test/cljs-runtime (/tmp/mc-test-run-<pid>, so a concurrent compile cannot swap it) under one
-//  res-slot 'tests' slot sized by the namespace count (needMb), killed when no test has finished for stallLimitS (MC_TEST_STALL_S overrides; a spinning test too, the watchdog is this parent) so a hung test frees its slot, and after WHOLE_RUN_CAP_S (MC_TEST_TIMEOUT_S overrides).
+//  res-slot 'tests' slot sized by the namespace count (needMb), killed when no test has finished for stallLimitS (MC_TEST_STALL_S overrides, MC_TEST_FIRST_S the 300 s allowed to the first finished test; a spinning test too, the watchdog is this parent) so a hung test frees its slot, and after WHOLE_RUN_CAP_S (MC_TEST_TIMEOUT_S overrides).
 //  Only the requested -test namespaces are loaded (narrowBundle: imports and shadow.test registry cut from the source, only the imported files copied; engine.timing-test, the timing / TEST_EVENTS=1 @@test reporter, always stays); full and shard runs keep the whole bundle.
 import fs from 'node:fs'
 import path from 'node:path'
@@ -255,7 +255,7 @@ const main = async () => {
       'timeout', '-k', '10', String(limit), 'node', `--max-old-space-size=${res.kinds.tests.heapMb}`, path.join(runDir, 'out/test.cjs'), `--test=${specs.join(',')}`],
     { cwd: engine, stdio: 'inherit', env: { ...process.env, MC_TEST_TIMINGS: timings, NODE_PATH: path.join(repo, 'node_modules') } })
   let stalled = false
-  const stop = watchStall(timings, stallS, () => { stalled = true; killStalled(child.pid) })
+  const stop = watchStall(timings, stallS, () => { stalled = true; killStalled(child.pid) }, { firstS: Number(process.env.MC_TEST_FIRST_S) || FIRST_RESULT_S })
   const exited = await new Promise((resolve) => child.on('exit', (status) => resolve(status ?? 1)))
   stop()
   const code = stalled ? 124 : exited

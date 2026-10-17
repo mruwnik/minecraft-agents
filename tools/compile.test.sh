@@ -19,7 +19,7 @@ export RES_SLOT_DIR="$T/res" RES_SLOT_CONFIG="$T/res/cfg.json"
 sleep 300 & SRV=$!; trap 'kill $SRV 2>/dev/null; rm -rf "$T"' EXIT
 echo $SRV > "$T/repo/dashboard/.shadow-cljs/server.pid"
 printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n' "$T" > "$T/bin/npx"; chmod +x "$T/bin/npx"
-printf 'console.log("NODE", process.argv.slice(1).join(" "), process.execArgv.join(" ")); if (process.argv.join(" ").includes("hang-test")) setInterval(() => {}, 1000); if (process.argv.join(" ").includes("stall-test")) { require("fs").appendFileSync(process.env.MC_TEST_TIMINGS, JSON.stringify({started: 1}) + "\\n"); for (;;); }\n' > "$T/repo/engine/out/test.cjs"
+printf 'console.log("NODE", process.argv.slice(1).join(" "), process.execArgv.join(" ")); if (process.argv.join(" ").includes("hang-test")) setInterval(() => {}, 1000); if (process.argv.join(" ").includes("stall-test")) { require("fs").writeFileSync(process.env.STALL_PID_FILE, String(process.pid)); require("fs").appendFileSync(process.env.MC_TEST_TIMINGS, JSON.stringify({started: 1}) + "\\n"); for (;;); }\n' > "$T/repo/engine/out/test.cjs"
 export PATH="$T/bin:$PATH"
 C="$T/repo/tools/compile"
 
@@ -76,7 +76,11 @@ check "test-engine private copy" "$(grep -c -- '/tmp/mc-test-run-[0-9]*/out/test
 out=$(MC_TEST_TIMEOUT_S=2 timeout 30 "$T/repo/tools/test-engine" engine.hang-test 2>&1); check "hung run rc" "$?" 124
 check "hung run message" "$(grep -c 'TIMEOUT, killed after 2 s' <<<"$out")" 1
 # a run that started but finishes no test (a spinning test) is killed by the stall watchdog, not the whole-run cap
-out=$(MC_TEST_STALL_S=3 timeout 30 "$T/repo/tools/test-engine" engine.stall-test 2>&1); check "stalled run rc" "$?" 124
+# output goes to a file, not $(...): a spinner the watchdog missed would hold the pipe open and hang the run
+STALL_PID_FILE="$T/stall.pid" MC_TEST_STALL_S=3 MC_TEST_FIRST_S=3 timeout 30 "$T/repo/tools/test-engine" engine.stall-test > "$T/stall.out" 2>&1; check "stalled run rc" "$?" 124
+# reaped by pid (timeout(1) leaves the process group) in case the watchdog missed it
+[ -s "$T/stall.pid" ] && kill -KILL "$(cat "$T/stall.pid")" 2>/dev/null
+out=$(cat "$T/stall.out")
 check "stalled run message" "$(grep -c 'STALLED, no test finished for 3 s' <<<"$out")" 1
 out=$(timeout 30 "$T/repo/tools/test-engine" engine.nope-test 2>&1); check "missing ns rc" "$?" 2
 check "missing ns message" "$(grep -c 'not in the :test bundle' <<<"$out")" 1
