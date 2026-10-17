@@ -1172,3 +1172,23 @@
           (is (empty? (h/events-of seen :fetch.started)) "nothing is fetched: a listed choice is carried")
           (is (= 6 (:placed result)))
           (is (= {} (:short result))))))))
+
+(deftest a-box-on-an-island-the-walk-out-cannot-reach-never-seals-the-body-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "box" :parts [{:id "walls" :outline [[10 64 10] [13 65 13]] :want "dirt"}
+                                      {:id "roof" :box [[10 66 10] [13 66 13]] :want "dirt"}]}
+              island (into {} (concat (for [x (range 0 32) z (range 0 32)] [(h/cell-key x 61 z) "stone"])
+                                      (for [x (range 9 15) z (range 9 15)] [(h/cell-key x 63 z) "stone"])))
+              {:keys [eng p]} (start {:blocks island :inventory [{:name "dirt" :count 64}]
+                                      :self {:pos {:x 11.5 :y 64 :z 11.5}}}
+                                     {"box" plan} [])
+              result (await (child-outcome eng job {:plan "box"} 400))
+              open? (fn [x y z] (not= "dirt" (block p [x y z])))]
+          (is (= :incomplete (:reason result)))
+          (is (some (fn [[x y z]] (open? x y z))
+                    (concat (for [x (range 10 14) z (range 10 14)] [x 66 z])
+                            (for [x (range 10 14) y [64 65] z [10 13]] [x y z])
+                            (for [z (range 11 13) y [64 65] x [10 13]] [x y z]))))
+          (is (not (reach/enclosed? p))))))))
