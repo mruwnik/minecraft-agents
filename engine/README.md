@@ -138,7 +138,7 @@ Statuses below are the common ones; `reason` and extra fields are in `js/primiti
 | `dig` | `{pos, timeoutS?}` | `dug` (`drops`), `missing` (air, a fluid or unloaded), `unreachable` (over 4.5), `cannot` |
 | `place` | `{pos, item, click?}` | `placed`, `occupied`, `no-item`, `no-support`, `unreachable`, `failed` (server refused: reason names face, body spot and entities near the cell); buckets pour/scoop at `pos` |
 | `jumpPlace` | `{item, count=1}` (max 8) | `done`, `partial`, `failed` (`no-item`, `no-support`, `no-headroom`, `not-raised`) |
-| `collect` | `{id, timeoutS=10, maxDropDown}` (caps the blocks a drop of the walk falls) | `collected`, `gone`, `unreachable`, `timeout` |
+| `collect` | `{id, timeoutS=10, maxDropDown}` (caps the blocks a drop of the walk falls; a failed walk to an item that moved or is airborne is retried, up to 40 polls) | `collected`, `gone`, `unreachable`, `timeout` |
 | `inspectContainer` | `{pos}` or `{entity}` (a chest minecart id) | `ok` (`items`, `size`, `free` slots), `missing`, `unreachable` |
 | `transfer` | `{pos or entity, direction: deposit/withdraw, item, count}` | `ok` (`moved`, `items` the chest holds after), `missing`, `unreachable`, `no-item`, `full` |
 | `equip` / `unequip` | `{item, dest='hand'}` / `{dest='hand'}` (or `'off-hand'`) | `equipped`, `no-item` / `ok`, `empty`, `full` (off hand: room includes an unfilled stack of it; what does not fit stays, `kept`) |

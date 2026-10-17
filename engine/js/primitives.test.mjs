@@ -1154,6 +1154,18 @@ test('collect: an item the body cannot get within reach of after the re-approach
   assert.equal(goals.length, 3)
 })
 
+test('collect: an item that was still settling when the walk to it failed is followed to where it lands', async () => {
+  const { bot, p, goals } = dropRig([4.5, 66, 0.5], (b, goal, n) => {
+    if (n === 1) b.entities[7].position = new Vec3(4.5, 64, 0.5)
+    if (n === 2) { stepTo(b, goal); pickUp(b) }
+  })
+  const goto = bot.pathfinder.goto
+  bot.pathfinder.goto = goal => goto(goal).then(() => (goals.length === 1 ? Promise.reject(Object.assign(new Error('NoPath'), { name: 'NoPath' })) : undefined))
+  const result = await p.collect('t1', { id: 7 })
+  assert.equal(goals.length, 2)
+  assert.equal(result.status, 'collected')
+})
+
 test('moveTo: a goto that resolves with the body moved but short of the goal is partial', async () => {
   const { bot, p } = rig(world)
   bot.pathfinder.goto = () => { bot.entity.position = new Vec3(10, 64, 0); return Promise.resolve() }

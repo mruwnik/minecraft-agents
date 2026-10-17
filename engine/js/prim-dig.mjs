@@ -267,6 +267,7 @@ export function createDig (env) {
   const PICKUP_REACH = 1
   const PICKUP_WAIT_S = 3 // an item in reach that is still there after this long is not going to be picked up (full inventory)
   const MAX_APPROACHES = 3
+  const MAX_SETTLES = 40
   // Up and down the pickup box is the body's grown by 0.5: an item resting a block below (in a hole beside) is out of it.
   const inPickupReach = e => {
     const dy = e.position.y - here().y
@@ -284,6 +285,7 @@ export function createDig (env) {
       if (!target || entityKind(target) !== 'item') return { status: 'gone' }
       let approaches = 0
       let inReachSince = null
+      let settles = 0
       while (liveEntity(env.bot, id)) {
         const item = liveEntity(env.bot, id)
         if (inPickupReach(item)) {
@@ -295,11 +297,19 @@ export function createDig (env) {
         }
         inReachSince = null
         if (approaches >= MAX_APPROACHES) return result('unreachable', 'out-of-reach')
-        const p = item.position
+        const p = { x: item.position.x, y: item.position.y, z: item.position.z }
         // maxDropDown caps the walk's drops (a dug hole's drop: the walk plans on the raw world, a deeper drop lands on a floor never seen)
         const { reached } = await walk(ctx, new goals.GoalNear(p.x, p.y, p.z, approaches === 0 ? 1 : 0), { stall: false, maxDropDown })
+        const now = liveEntity(env.bot, id)
+        // An item just dropped can still be popping out of a block or falling: a walk to where it was fails, a walk to where it lands does not.
+        if (!reached && now && settles < MAX_SETTLES && (dist(now.position, p) > 0.1 || now.onGround === false)) {
+          settles++
+          await sleepMs(setting('prim/poll-ms') * timeScale)
+          ctx.alive()
+          continue
+        }
         approaches++
-        if (!reached && liveEntity(env.bot, id)) return result('unreachable')
+        if (!reached && now) return result('unreachable')
       }
       const got = gained(before, countsNow())
       return got.length ? { status: 'collected', gained: got } : { status: 'gone', gained: [] }
