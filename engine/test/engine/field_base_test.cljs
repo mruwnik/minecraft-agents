@@ -40,6 +40,19 @@
           "furnace-1" [5 65 2] "furnace-2" [5 65 3] "table" [1 65 3] "door" [3 65 4] "torch" [1 66 3]}
          (into {} (map (fn [n] [n (spot n)])) ["bed" "chest-1" "chest-2" "chest-3" "chest-4" "furnace-1" "furnace-2" "table" "door" "torch"]))))
 
+(deftest from-plan-places-the-cell-under-its-own-feet
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ sink] (tu/legacy-capture-sink)
+              p (tu/seeing-all (tu/fake-on-floor {:inventory inventory :self {:pos {:x 0.5 :y 64 :z 0.5}}}))
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref h/clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref h/clock)})
+                                :world (world/of-data {"base" plan} {"field-base" blueprint} [])})
+              result (await (tu/child-outcome eng 'jobs.build.from-plan {:plan "base"} 1500))]
+          (is (every? #(<= 66 (second %)) (:missing result)) "the cell the body started on was placed from outside, not left :unreachable")
+          (is (= "oak_door" (name-at p (spot "door")))))))))
+
 (deftest from-plan-builds-the-base
   (async done
     (tu/run-async done

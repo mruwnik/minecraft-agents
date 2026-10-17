@@ -42,7 +42,9 @@
   Its walks never dig through the build, except from a hole the body stands in (2 or more levels walled): they may climb out.
   One call works until the plan is built or nothing more applies (it yields only while a walk or fetch waits). Every
   step re-reads the plan and the world, then takes the first step that applies:
-  0. A place that would shut the body in (it has a way out and would have none) is held back; the body first walks
+  0. A buildable cell under the body's feet or head makes it walk out of the footprint first (once per cell) when it
+     stands on ground the plan did not build, so that cell is placed from outside before the walls close round the body.
+     A place that would shut the body in (it has a way out and would have none) is held back; the body first walks
      out of the plan's footprint (go-to child), then places from outside. Held back :give-up times, a cell is given
      up as :unreachable.
   1. Place every buildable cell within :reach of the eye, lowest first. A cell is buildable when its block is
@@ -439,14 +441,22 @@
   [c cells]
   (let [_ (ctx/update-mem! c retry-walks (u/self-pos c) false)
         closed #(merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
-        todo (placeable c (permitted c (buildable cells (storage/carried-totals (u/inventory (:primitives c))) (closed))))
+        wanted (buildable cells (storage/carried-totals (u/inventory (:primitives c))) (closed))
+        todo (placeable c (permitted c wanted))
         digs (diggable c (digging cells) (closed))
         given-up (closed)
         near (in-reach c todo)
+        mine (body-cells (u/self-pos c))
+        feet (first (sort mine))
+        on-ground (not-any? #(= (update (:pos %) 1 inc) feet) cells)
+        underfoot (when on-ground (first (filter #(mine (:pos %)) wanted)))
         dig-near (in-dig-reach c digs)
         nearest #(first (sort-by (fn [cell] (u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos cell)))) %))]
     (cond
       (:leave (ctx/mem c)) (await (leave! c))
+      (and underfoot (not= (:pos underfoot) (:stepped-off (ctx/mem c))))
+      (do (ctx/update-mem! c assoc :leave (exit-point cells (u/self-pos c)) :stepped-off (:pos underfoot))
+          :again)
       (seq near) (do (await (watch/watch! c {}))
                      (loop [left near]
                        (when (seq left)
