@@ -66,7 +66,7 @@ test('a direction override changes the picture and the crosshair but not the pos
   const before = f.run('--width', '64', '--height', '36')
   const poseFile = path.join(path.dirname(f.workspace), 'worlds', WORLD, 'agents', AGENT, 'view', 'pose.json')
   const poseText = fs.readFileSync(poseFile, 'utf8')
-  const turned = f.run('--width', '64', '--height', '36', '--yaw', '180')
+  const turned = f.run('--width', '64', '--height', '36', '--yaw', '0')
   assert.equal(turned.status, 0, turned.stdout)
   assert.equal(turned.edn.facing.compass, 'south')
   assert.equal(turned.edn.crosshair, null)
