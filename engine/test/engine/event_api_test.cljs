@@ -170,7 +170,9 @@
                           :seenBlocks (fn [_] #js [#js {:name "chest" :pos #js {:x 1 :y 2 :z 3} :distance 1.5 :age-ms 0}])
                           :isOffline (fn [] false)
                           :isSettling (fn [] true)}
+          flushes (atom 0)
           eng {:events stream
+               :flush-seen (fn [] (swap! flushes inc) (js/Promise.resolve nil))
                :store (atom {:now js/Date.now :data {}})
                :state (atom {:generation-id "gen-api"
                              :list ["j1"] :current "j1"
@@ -239,6 +241,11 @@
                       (request socket-path "GET" "/seen?names=Bad!" {} nil)))
              (.then (fn [response]
                       (is (= 400 (:status response)))
+                      (request socket-path "POST" "/seen/flush" {} nil)))
+             (.then (fn [response]
+                      (is (= 200 (:status response)))
+                      (is (true? (:ok (edn-response response))))
+                      (is (= 1 @flushes))
                       (request socket-path "GET" "/job?id=j1" {} nil)))
              (.then (fn [response]
                       (let [job (edn-response response)]

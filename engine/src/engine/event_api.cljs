@@ -499,6 +499,12 @@
                           (respond! res 200 (seen-view eng q))
                           (bad! res 400 :bad-query))
 
+                        (and (= method "POST") (= pathname "/seen/flush"))
+                        (if-let [flush (:flush-seen eng)]
+                          (-> (flush)
+                              (.then #(respond! res 200 {:ok true}) (fn [e] (engine-failed! eng res e))))
+                          (respond! res 200 {:ok false :reason :no-perception}))
+
                         (and (= method "GET") (= pathname "/chests"))
                         (if-let [max (number-param (.-searchParams url) "max" 16 64)]
                           (respond! res 200 (chests-view eng {:max max}))

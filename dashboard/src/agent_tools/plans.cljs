@@ -3,6 +3,7 @@
   (:require [cljs.tools.reader.edn :as edn]
             [cljs.tools.reader.reader-types :as rt]
             [clojure.string :as str]
+            [agent-tools.http :as http]
             [agent-tools.world-data :as data]
             [dashboard.agent-plan-tools :as checks]
             [plan.parse :as parse]
@@ -16,7 +17,7 @@
 (def names #"^[A-Za-z0-9_-]{1,100}$")
 (def repo-root (.resolve path js/__dirname "../.."))
 (def usage
-  {:plan "usage: plans.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]]\n  find <text> [--limit 10 --offset 0] [--raw [--large]] | show <id> [--raw [--large]] [--geometry [--large]]\n  add <id> --edn '<plan-map>' --by <name> [--dry-run] [--raw]\n  edit <id> --edn '<plan-map>' --by <name> --revision <digest> [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (every submitted plan is active; remove retires one)\n  mineshaft <id> --at=x,y,z --heading north|east|south|west --to-y <y> --by <name> [--dry-run] [--raw]   (declare a stair shaft: :at is the feet cell of its top step, --to-y below it; show names its depth and heading, check counts its steps dug)\n  validate <id> --edn '<plan-map>' [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  check <id> --body <name> [--inventory '<block-count-map>'] [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  check judges only what that body has seen (its seen memory); cells never seen count unknown and :checked :unseen. Large raw output is opt-in with --large; raw output otherwise stops at 64 KiB. Plan/world edits need --by."
+  {:plan "usage: plans.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]]\n  find <text> [--limit 10 --offset 0] [--raw [--large]] | show <id> [--raw [--large]] [--geometry [--large]]\n  add <id> --edn '<plan-map>' --by <name> [--dry-run] [--raw]\n  edit <id> --edn '<plan-map>' --by <name> --revision <digest> [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (every submitted plan is active; remove retires one)\n  mineshaft <id> --at=x,y,z --heading north|east|south|west --to-y <y> --by <name> [--dry-run] [--raw]   (declare a stair shaft: :at is the feet cell of its top step, --to-y below it; show names its depth and heading, check counts its steps dug)\n  validate <id> --edn '<plan-map>' [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  check <id> --body <name> [--inventory '<block-count-map>'] [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  check judges only what that body has seen (its seen memory, flushed from the running body first; :seen-note says when it could not be and the data is the file on disk); cells never seen count unknown and :checked :unseen. Large raw output is opt-in with --large; raw output otherwise stops at 64 KiB. Plan/world edits need --by."
    :blueprint "usage: blueprints.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]] | find <text> [--limit 10 --offset 0] [--raw [--large]]\n  show <id> [--raw [--large]] | save <id> --edn '<blueprint-map>' --by <name> [--revision <digest>] [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (deletes the global blueprint file)\n  validate <id> --edn '<blueprint-map>' [--raw] [--large]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  Blueprints are shared globally; each result reports :scope :global. Writes need --by."})
 
 (defn fail! [reason message] (throw (data/fail reason message)))
@@ -242,14 +243,34 @@
      :memory-sections (aget memory "sections") :memory-file? (aget memory "found")
      :oldest (when (seq seen-times) (apply min seen-times)) :newest (when (seq seen-times) (apply max seen-times))}))
 
+(def flush-timeout-ms 5000)
+
+(defn flush-seen!
+  "Asks the running body to write its sight memory to seen.bin now: a promise of {:flushed? true} or
+  {:flushed? false :why <reason>} (no running body, an engine without the route, a failure); never rejects."
+  [ctx body]
+  (let [socket (.join path (:world-dir ctx) "agents" (str body) "engine" "events.sock")]
+    (-> (http/request {:socket-path socket :method "POST" :path "/seen/flush" :label "seen flush" :timeout-ms flush-timeout-ms})
+        (.then (fn [{:keys [status text]}]
+                 (if (and (= 200 status) (str/includes? (str text) ":ok true"))
+                   {:flushed? true}
+                   {:flushed? false :why (if (= 404 status) :engine-without-flush :flush-refused)})))
+        (.catch (fn [e] {:flushed? false :why (http/transport-reason e)})))))
+
+(defn seen-age-note
+  "What to tell when the seen data is the file on disk, not the body's sight now."
+  [why]
+  (str "seen data is read from the body's seen.bin, which the body writes about every minute (flush failed: " (name why)
+       "); cells seen or built since the last write count as unseen or old. Check :checked :newest-age-ms."))
+
 (defn check-plan [ctx text id inline req]
   (let [prepared (prepare ctx text id inline (read-zone-text ctx) (mapv :value (current-docs ctx :claim)))]
     (if (or (not (:ok prepared)) (nil? (:expansion prepared)))
       (js/Promise.resolve (assoc prepared :world (:world ctx) :evidence :seen-memory :live-loaded? false))
       (do
         (geometry-check! (:cells prepared) (:large req))
-        (-> ((:load-worldblocks req))
-            (.then (fn [seen-module]
+        (-> (js/Promise.all #js [(flush-seen! ctx (:body req)) ((:load-worldblocks req))])
+            (.then (fn [[flush seen-module]]
                      (let [memory ((aget seen-module "createSeenBlocks") #js {:stateDir (clj->js (:state ctx)) :world (:world ctx) :body (:body req) :dim (:dim req)})
                            blocks (atom {}) seen-times (atom [])
                            inventory (inventory-value (:inventory req))
@@ -267,12 +288,13 @@
                                                          (js/Number (or (:offset req) 0)) (js/Number (or (:limit req) 10)))
                                checked (seen-checked (count cells) @seen-times memory)]
                            (cond-> (assoc (dissoc prepared :expansion :cells)
-                                          :world (:world ctx) :evidence :seen-memory :body (:body req) :live-loaded? false
+                                          :world (:world ctx) :evidence :seen-memory :body (:body req) :live-loaded? (:flushed? flush)
                                           :score (assoc score :checked
                                                         (assoc checked :newest-age-ms (when (:newest checked) (max 0 (- (:now checked) (:newest checked))))
                                                                        :oldest-age-ms (when (:oldest checked) (max 0 (- (:now checked) (:oldest checked)))))))
                              (shaft-progress (:plan-value req) #(some-> (get @blocks %) :name)) (assoc :shaft (shaft-progress (:plan-value req) #(some-> (get @blocks %) :name)))
                              (:geometry req) (assoc :cells cells)
+                             (not (:flushed? flush)) (assoc :seen-note (seen-age-note (:why flush)))
                              (:large req) (assoc :large true)))
                          (finally (.call (aget memory "close") memory)))))))))))
 

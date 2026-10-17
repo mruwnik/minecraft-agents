@@ -3,6 +3,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
+import http from 'node:http'
 import path from 'node:path'
 import prismarineRegistry from 'prismarine-registry'
 import { saveSeen } from '../../js/seen-file.mjs'
@@ -181,6 +182,31 @@ test('check puts a :surface plan on the seen ground as the build does: the fence
     assert.equal(slope.value.score.counts.match, 1)
     const flat = await invoke('plan', fx, ['check', 'flat', '--body', 'Probe'])
     assert.equal(flat.value.score.counts.match ?? 0, 0)
+  } finally { fx.close() }
+})
+
+test('check asks the running body to flush its seen memory first and says so; without one it states the data is the file', async () => {
+  const fx = fixture()
+  try {
+    await invoke('plan', fx, ['add', 'house', '--edn', planText('house'), '--by', 'tester'])
+    await writeSeen(fx, 'Probe', [[0, 64, 0, 'stone']], Date.now() - 120000)
+    const offline = await invoke('plan', fx, ['check', 'house', '--body', 'Probe'])
+    assert.equal(offline.value['live-loaded?'], false)
+    assert.match(offline.value['seen-note'], /seen\.bin/)
+    const flushed = []
+    const server = http.createServer((req, res) => {
+      flushed.push(`${req.method} ${req.url}`)
+      res.writeHead(200, { 'content-type': 'application/edn' })
+      res.end('{:ok true}')
+    })
+    const socket = path.join(fx.state, 'worlds', 'fixture', 'agents', 'Probe', 'engine', 'events.sock')
+    await new Promise(resolve => server.listen(socket, resolve))
+    try {
+      const live = await invoke('plan', fx, ['check', 'house', '--body', 'Probe'])
+      assert.deepEqual(flushed, ['POST /seen/flush'])
+      assert.equal(live.value['live-loaded?'], true)
+      assert.equal(live.value['seen-note'], undefined)
+    } finally { await new Promise(resolve => server.close(resolve)) }
   } finally { fx.close() }
 })
 

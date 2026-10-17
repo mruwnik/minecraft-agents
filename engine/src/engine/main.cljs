@@ -206,11 +206,13 @@
         _ (trigger-api/restore-conditions! base-eng)
         _ (boot-scenario! base-eng {:plan plan :stale stale :restoring? restoring? :upgrade? upgrade?})
         seen (entity-observations/start! p {:world (:world cfg) :body (:agent opts)})
-        eng (assoc base-eng :seen-entities seen)
+        seen-file (path/join (:engine-dir cfg) "seen.bin")
+        seen-io ((createRequire (str root "/")) "./js/seen-file.mjs")
+        eng (cond-> (assoc base-eng :seen-entities seen)
+              per (assoc :flush-seen #(perception/save! per seen-io seen-file)))
         _ (reset! eng-ref eng)
         stop-perception (if per
-                          (perception/start! per {:file (path/join (:engine-dir cfg) "seen.bin")
-                                                  :io ((createRequire (str root "/")) "./js/seen-file.mjs")
+                          (perception/start! per {:file seen-file :io seen-io
                                                   :on-event (fn [e] (some-> @eng-ref (core/emit! e)))})
                           (fn []))
         stop-heap (heap/start! #(core/emit! eng %) (:stats-ms eng))]
