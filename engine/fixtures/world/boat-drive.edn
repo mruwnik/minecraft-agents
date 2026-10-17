@@ -12,14 +12,15 @@
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]
          [:job (jobs.movement.boat-drive {:pos #at [23 -1 16]})]]
-   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:left [:<= 1.5]}} :within-s 100 :of-job true}]
+   :after [[:body-near [23.5 -1 16.5] 2]]}
   {:name "drive-there-and-back"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]
          [:job (jobs.movement.boat-drive {:pos #at [23 -1 16]})]
          [:job (jobs.movement.boat-drive {:pos #at [14 -1 15]})]]
-   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}
-            {:event {:source :job :kind :completed} :within-s 100 :of-job true}]}
+   :expect [{:count-event {:source :job :kind :completed :data {:left [:<= 1.5]}} :for-s 160 :at-least 2 :at-most 2}]
+   :after [[:body-near [14.5 -1 15.5] 2]]}
   {:name "on-foot-is-not-aboard"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-drive {:pos #at [23 -1 16]})]]
