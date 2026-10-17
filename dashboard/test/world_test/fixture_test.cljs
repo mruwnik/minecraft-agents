@@ -38,24 +38,34 @@
     (is (not-any? #(overlap? grid-rect %) rects))
     (is (not-any? (fn [[a b]] (overlap? a b)) (for [a rects b rects :when (not= a b)] [a b])))
     (is (= [400 416] (f/plot-range big)))
-    (is (= [200 400] (f/plot-range small)) "plain cases keep to the rows below the mob plots")))
+    (is (= [437 465] (f/plot-range small)) "plain cases come after the mob plots")))
 
 (def mob-case {:plot {} :act [[:wait-s 1] [:summon "skeleton" [3.5 0 3.5] "{NoAI:1b}"]]})
 
 (defn widen [[x z x2 z2] m] [(- x m) (- z m) (+ x2 m) (+ z2 m)])
 
+(deftest plain-plots-lie-beyond-sight-chest-search-and-light-of-each-other
+  (let [g (f/case-grid {:plot {}})
+        [from end] (f/plot-range g)
+        rects (map #(rect g %) (range from end))
+        reach 48]
+    (is (= 28 (- end from)))
+    (is (= [20000 150 20320] (f/plot-origin g from)))
+    (is (not-any? (fn [[a b]] (overlap? (widen a reach) b)) (for [a rects b (remove #{a} rects)] [a b]))
+        "no plain plot lies within sight (about 48 blocks; chests 32, light 15) of another")))
+
 (deftest mob-cases-lie-three-plots-apart-beyond-sight-of-the-others
   (let [g (f/case-grid mob-case)
         [from end] (f/plot-range g)
         rects (map #(rect g %) (range from end))
-        others (concat (map #(rect (f/case-grid {:plot {}}) %) (range 200 400))
+        others (concat (map #(rect (f/case-grid {:plot {}}) %) (apply range (f/plot-range (f/case-grid {:plot {}}))))
                        (map #(rect (f/case-grid {:plot {:length 1024 :width 64}}) %) (range 400 416)))
         sight 48]
     (is (= [416 437] [from end]))
     (is (= [20000 150 20000] (f/plot-origin g 416)))
     (is (= [20096 150 20000] (f/plot-origin g 417)))
     (is (= [20000 150 20096] (f/plot-origin g 423)))
-    (is (thrown? js/Error (f/plot-origin g 437)))
+    (is (thrown? js/Error (f/plot-origin g 465)))
     (is (not-any? (fn [[a b]] (overlap? (widen a sight) b)) (for [a rects b (concat others (remove #{a} rects))] [a b]))
         "no other leased plot lies within sight (about 48 blocks) of a mob plot")))
 
@@ -69,7 +79,7 @@
         idx (fn [re] (first (keep-indexed #(when (re-find re %2) %1) cmds)))
         island (widen (rect g 417) 32)
         others (concat (map #(rect g %) (remove #{417} (range 416 437)))
-                       (map #(rect (f/case-grid {:plot {}}) %) (range 200 400))
+                       (map #(rect (f/case-grid {:plot {}}) %) (apply range (f/plot-range (f/case-grid {:plot {}}))))
                        (map #(rect (f/case-grid {:plot {:length 1024 :width 64}}) %) (range 400 416)))]
     (is (= "forceload add 20064 19968 20159 20063" (first cmds)))
     (is (some #{"kill @e[type=!player,x=20064,y=142,z=19968,dx=95,dy=24,dz=95]"} cmds))

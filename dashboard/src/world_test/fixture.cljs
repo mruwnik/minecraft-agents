@@ -39,16 +39,24 @@
 
 (defn mob-plot-count [grid] (* (quot (+ mob-rows (dec mob-stride)) mob-stride) (mob-cols grid)))
 
+(defn plain-row-count [{:keys [rows]}] (quot (+ (- rows mob-rows 1) (dec mob-stride)) mob-stride))
+
+(defn plain-plot-count [grid] (* (plain-row-count grid) (mob-cols grid)))
+
 (defn plot-origin
-  "The origin [x y z] of plot i: its north-west corner at body level. Plots n + lanes and up are the mob plots."
+  "The origin [x y z] of plot i: its north-west corner at body level. Plots n + lanes and up are the mob plots, then
+  the plain plots (rows from mob-rows + 1, every mob-stride-th row and column, like the mob plots)."
   [{:keys [x0 z0 y size cols rows] :as grid} i]
   (let [n (* cols rows) {lz :z0 :keys [stride count]} large-lanes
-        k (- i n count)]
+        k (- i n count)
+        m (- k (mob-plot-count grid))]
     (cond
       (< -1 (- i n) count) [x0 y (+ lz (* stride (- i n)))]
       (< -1 k (mob-plot-count grid)) [(+ x0 (* size mob-stride (mod k (mob-cols grid)))) y
                                       (+ z0 (* size mob-stride (quot k (mob-cols grid))))]
-      (>= i n) (throw (js/Error. (str "plot " i " is outside the grid (" n " plots, " count " large lanes, " (mob-plot-count grid) " mob plots)")))
+      (< -1 m (plain-plot-count grid)) [(+ x0 (* size mob-stride (mod m (mob-cols grid)))) y
+                                        (+ z0 (* size (+ mob-rows 1 (* mob-stride (quot m (mob-cols grid))))))]
+      (>= i n) (throw (js/Error. (str "plot " i " is outside the grid (" n " cells, " count " large lanes, " (mob-plot-count grid) " mob plots, " (plain-plot-count grid) " plain plots)")))
       :else [(+ x0 (* size (mod i cols))) y (+ z0 (* size (quot i cols)))])))
 
 (declare hostile-types)
@@ -69,13 +77,14 @@
 
 (defn plot-range
   "[first end) of the plot indexes a case may lease: the plain rows of the 32x32 grid, the mob plots for a case that
-  summons a hostile, or the large lanes."
+  summons a hostile, or the large lanes. Plain plots lie three apart like the mob ones: 64 blocks of air between two,
+  beyond the body's sight (about 48) and a chest search (32)."
   [{:keys [size-x size-z size cols rows mob-plots?] :as grid}]
-  (let [n (* cols rows) lanes (:count large-lanes)]
+  (let [n (* cols rows) lanes (:count large-lanes) mobs (+ n lanes (mob-plot-count grid))]
     (cond
       (or (> (or size-x size) 32) (> (or size-z size) 32)) [n (+ n lanes)]
-      mob-plots? [(+ n lanes) (+ n lanes (mob-plot-count grid))]
-      :else [(* cols (inc mob-rows)) n])))
+      mob-plots? [(+ n lanes) mobs]
+      :else [mobs (+ mobs (plain-plot-count grid))])))
 
 (defn dims [{:keys [size size-x size-z]}] [(or size-x size) (or size-z size)])
 
