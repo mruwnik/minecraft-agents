@@ -260,10 +260,13 @@
                 r (await (tidy/dig! c cell true))]
             (when (= "dug" (.-status r))
               (ctx/update-mem! c assoc :dug-at (ctx/now c))
-              (await (look/see-round! c [(:x cell) (:y cell) (:z cell)]))
-              (await (look/wait-settled! c [[(:x cell) (:y cell) (:z cell)]]))
-              (await (dig-cells/collect-drops! c (flight/blocks c) (.-drops r)))
-              (when-not (await (lays-open? c (take (- (count cells) (count more)) cells) (into (set cells) [feet (update feet :y inc)]))) (recur more)))))))))
+              (let [dug (take (- (count cells) (count more)) cells)]
+                ;; every dug cell again: this dig opens the line of sight to the earlier cells' neighbours
+                (loop [[d & ds] (reverse dug)]
+                  (when d (await (look/see-round! c [(:x d) (:y d) (:z d)])) (recur ds)))
+                (await (look/wait-settled! c [[(:x cell) (:y cell) (:z cell)]]))
+                (await (dig-cells/collect-drops! c (flight/blocks c) (.-drops r)))
+                (when-not (await (lays-open? c dug (into (set cells) [feet (update feet :y inc)]))) (recur more))))))))))
 
 (defn pit-index
   "Which drop of the pit the feet are at (0 at the anchor), nil when the body is not in its column."
