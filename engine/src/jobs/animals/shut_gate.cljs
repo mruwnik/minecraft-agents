@@ -210,6 +210,8 @@
 
 (def can-start? can-run?)
 
+(def meta {:category :reflex})
+
 (def safe?
   "Not exposed at the gate of the plan nearest to the body."
   (ready/safe-at-by-night (fn [c] (some-> (nearest c (first (watched-cells c))) a/cell))))

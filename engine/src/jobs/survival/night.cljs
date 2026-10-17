@@ -114,6 +114,8 @@
 
 (def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s :wall-time ::wall-time-s} :ways (set ways)})
 
+(def meta {:category :reflex})
+
 (def safe? ready/ok)
 
 (def fit? ready/ok)

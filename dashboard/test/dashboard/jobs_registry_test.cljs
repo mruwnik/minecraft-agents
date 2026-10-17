@@ -11,9 +11,13 @@
       :kind :job
       :category "movement"
       :name "go-to"
+      :role :goal
       :file "engine/src/jobs/movement/go_to.cljs")
     (are [k] (string? (get job k))
       :doc :args)))
+
+(deftest a-phase-names-the-jobs-it-is-part-of
+  (is (= [:phase ["jobs.survival.night"]] ((juxt :role :part-of) (entry "jobs.survival.bed-down")))))
 
 (deftest every-entry-is-well-formed
   (is (every? #(and (string? (:id %)) (string? (:category %)) (string? (:file %))

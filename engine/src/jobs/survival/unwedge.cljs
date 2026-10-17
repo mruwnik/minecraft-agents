@@ -34,6 +34,8 @@
 (def ways [:step :dig])
 (def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s} :ways #{:step :dig}})
 
+(def meta {:category :reflex})
+
 (def safe? ready/ok)
 
 (def fit? ready/ok)

@@ -33,6 +33,8 @@
 (a/defargs settings
   {::job-time-s {:default 30 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
+(def meta {:category :reflex})
+
 (def safe? ready/safe-here-by-night)
 (def fit? ready/ok)
 

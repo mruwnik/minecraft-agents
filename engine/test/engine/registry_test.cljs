@@ -1,7 +1,7 @@
 (ns engine.registry-test
   (:require-macros [engine.registry-test-macros :refer [describe-message describes-job?]])
   (:require [clojure.string :as str]
-            [cljs.test :refer [deftest is]]
+            [cljs.test :refer [are deftest is]]
             [engine.args :as args]
             [engine.expr :as expr]
             [engine.primitive :as primitive]
@@ -48,6 +48,14 @@
   (is (every? #(contains? registry/jobs %) primitive-names))
   (is (contains? registry/jobs 'jobs.primitive.move-to))
   (is (= [:pos] (get-in registry/jobs ['jobs.primitive.dig :target]))))
+
+(deftest a-job-declares-its-category-or-gets-the-default-of-its-group
+  (are [sym category part-of] (= [category part-of] ((juxt :category :part-of) (get registry/jobs sym)))
+    'jobs.movement.go-to :goal []
+    'jobs.primitive.dig :phase []
+    'jobs.debug.notify :debug []
+    'jobs.survival.night :reflex []
+    'jobs.survival.bed-down :phase '[jobs.survival.night]))
 
 (deftest a-primitive-job-refuses-unknown-arg-keys
   (is (re-find #"jobs.primitive.dig has no arg :bogus; its args are .*:pos"

@@ -156,6 +156,8 @@
 (def defaults {:checks {:safe? '(job-safe-or-starving) :fit? '(always)}
                :spend {:job-time ::job-time-s} :ways (set ways)})
 
+(def meta {:category :reflex})
+
 (def safe? ready/ok)
 
 (def fit? ready/ok)

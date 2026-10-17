@@ -165,6 +165,8 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
+(def meta {:category :reflex})
+
 (def safe? ready/safe-if-lit)
 
 (def fit? ready/fit?)

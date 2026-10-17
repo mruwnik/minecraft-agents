@@ -1,5 +1,5 @@
 (ns engine.event-api-test
-  (:require [cljs.test :refer [async deftest is testing]]
+  (:require [cljs.test :refer [are async deftest is testing]]
             [cljs.reader :as reader]
             [engine.build :as build]
             [engine.chat :as chat]
@@ -596,3 +596,10 @@
                    (is (= :unknown-job (:reason unknown)))
                    (is (= :bad-args (:reason bad)))
                    (done)))))))
+
+(deftest catalog-list-filters-jobs-by-category
+  (let [eng {:jobs {'jobs.a.goal {:category :goal} 'jobs.a.step {:category :phase :part-of '[jobs.a.goal]}}}]
+    (are [category items] (= items (:items (event-api/catalog-list eng "jobs" "" 0 10 category)))
+      nil ["jobs.a.goal" "jobs.a.step"]
+      "phase" ["jobs.a.step"])
+    (is (= [:phase '[jobs.a.goal]] ((juxt :category :part-of) (event-api/catalog-entry eng "job" "jobs.a.step"))))))

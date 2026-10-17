@@ -4,6 +4,7 @@
   hooks (hooks.edn). See README.md, Jobs and Triggers."
   (:require [engine.args :as args]
             [clojure.edn :as edn]
+            [clojure.walk]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.tools.reader :as reader]
@@ -62,8 +63,10 @@
   [defines]
   (boolean (and (defines 'round) (or (some defines check-names) (not (defines 'check))))))
 
+(declare job-meta)
+
 (defn describe
-  "{:ns sym :defines #{...}} for a job file, nil for a helper file (job?), or throws when a job file's ns does not match
+  "{:ns sym :defines #{...} :meta (job-meta)} for a job file, nil for a helper file (job?), or throws when a job file's ns does not match
   its path, a file defines round and check but none of check-names (an old job), or a job lacks safe? or fit?."
   [dir file]
   (let [forms (read-forms file)
@@ -82,7 +85,7 @@
       (not (and (defines 'safe?) (defines 'fit?)))
       (throw (ex-info (str "job " want " must export " (str/join " and " (map str (remove defines '[safe? fit?]))) " (ready/ok for a job with nothing to check)")
                       {:file (.getPath file) :job want}))
-      :else {:ns want :defines defines})))
+      :else {:ns want :defines defines :meta (job-meta want forms)})))
 
 (defn job-namespaces
   "Every job namespace under jobs/, checked, in path order. Helper files are left out."
@@ -103,6 +106,24 @@
   [n forms]
   (some->> forms (filter #(and (defining? n %) (not (#{'defn 'defn-} (first %))))) first (drop 2) last))
 
+(defn unquote-form
+  "The form with every (quote x) replaced by x: a declared meta is read as source, not evaluated."
+  [form]
+  (clojure.walk/postwalk #(if (and (seq? %) (= 'quote (first %))) (second %) %) form))
+
+(defn default-category
+  "The category of a job that declares none, from its namespace group: :debug for jobs.debug.*, else :goal."
+  [ns-sym]
+  (if (= "debug" (second (str/split (str ns-sym) #"\."))) :debug :goal))
+
+(defn job-meta
+  "{:category :goal|:phase|:reflex|:debug :part-of [job-sym ...]} of job ns-sym from the (def meta {...}) in forms:
+  what it declares over the default category, :part-of [] when absent."
+  [ns-sym forms]
+  (let [declared (some-> (def-value "meta" forms) unquote-form)]
+    {:category (or (:category declared) (default-category ns-sym))
+     :part-of (vec (:part-of declared))}))
+
 (defn ns-doc
   "The docstring of the ns form (the first form), or nil."
   [forms]
@@ -116,17 +137,18 @@
   (str "engine/src/" (second (re-find #"/engine/src/(.+)$" (str/replace (.getPath file) "\\" "/")))))
 
 (defn file-metadata
-  "{:id :file :ns-doc :doc :args}, with :args the (def args ...) value itself, for the source file of
+  "{:id :file :ns-doc :doc :args :category :part-of}, with :args the (def args ...) value itself, for the source file of
   namespace id. A file that cannot be read gets {:id :file :error \"...\"} instead of throwing."
   [id file]
   (let [base {:id (str id) :file (repo-path file)}]
     (try
       (let [forms (read-forms file)
             doc (def-value "doc" forms)]
-        (assoc base
-               :ns-doc (ns-doc forms)
-               :doc (when (string? doc) doc)
-               :args (some-> (def-value "args" forms) args/expand)))
+        (merge base
+               (job-meta id forms)
+               {:ns-doc (ns-doc forms)
+                :doc (when (string? doc) doc)
+                :args (some-> (def-value "args" forms) args/expand)}))
       (catch Exception e
         (assoc base :error (str "unreadable: " (ex-message e)))))))
 
@@ -159,16 +181,17 @@
     []))
 
 (defmacro job-registry
-  "{ns-symbol {:check :round :doc :args :idle-ok}} for every job namespace under jobs/; a contract job's entry also
+  "{ns-symbol {:check :round :doc :args :idle-ok :category :part-of}} for every job namespace under jobs/; a contract job's entry also
   holds :can-start? :can-run? :safe? :fit? (a checker fn or a quoted condition form) :target :ways :defaults :done? :quote-of :cleanup :cleanup-defaults  and its namespace's
   :settings. Each
   primitive of the engine/primitive.cljs table is a job too, as jobs.primitive.<kebab-case> (jobs.primitive/job)."
   []
   (into (into {} (map (fn [k] [(list 'quote (primitive-job-name k)) (list 'jobs.primitive/job k (list 'quote (primitive-job-name k)))])) (primitive-keys))
-        (map (fn [{:keys [ns defines]}]
+        (map (fn [{:keys [ns defines] declared :meta}]
                (let [ref (fn [k] (when (defines k) (symbol (str ns) (str k))))]
-                 [(list 'quote ns) (cond-> {:check (ref 'check) :round (ref 'round)
-                                            :doc (ref 'doc) :args (ref 'args) :idle-ok (ref 'idle-ok)}
+                 [(list 'quote ns) (cond-> (merge {:check (ref 'check) :round (ref 'round)
+                                                  :doc (ref 'doc) :args (ref 'args) :idle-ok (ref 'idle-ok)}
+                                                 (update declared :part-of #(list 'quote %)))
                                      (job? defines)
                                      (merge {:can-start? (ref 'can-start?) :can-run? (ref 'can-run?) :safe? (ref 'safe?) :fit? (ref 'fit?)
                                              :target (ref 'target) :ways (ref 'ways)

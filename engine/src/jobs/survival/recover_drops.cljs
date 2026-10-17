@@ -97,6 +97,8 @@
       (contract/ok :ready "no night to wait out for the pile")
       (ready/exposed c (:pos (:data d))))))
 
+(def meta {:category :reflex})
+
 (def safe? (with-meta pile-exposure {::ready/exposure pile-exposure}))
 
 (def fit? ready/ok)

@@ -42,6 +42,8 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
+(def meta {:category :reflex})
+
 (def safe? ready/threatened)
 
 (def fit? ready/ok)

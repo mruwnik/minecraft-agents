@@ -3,6 +3,7 @@
   engine.registry (engine/src is on the source path, only its .clj is loaded); this ns adds kind, category and
   name and prints the args."
   (:require [clojure.java.io :as io]
+            [clojure.set :as set]
             [clojure.string :as str]
             [engine.registry :as registry]))
 
@@ -14,11 +15,14 @@
     (str "{" (str/join "\n " (map (fn [[k v]] (str (pr-str k) " " (pr-str v))) value)) "}")))
 
 (defn entry
-  "A registry-metadata map as a page entry: kind, category and name added, args printed. :error entries stay
+  "A registry-metadata map as a page entry: kind, category (the ns group) and name added, the job's declared
+  category (:goal, :phase, ...) kept as :role, args printed. :error entries stay
   (the page shows them)."
   [kind category m]
   (merge {:kind kind :category category :name (str/join "." (drop 2 (str/split (:id m) #"\.")))}
-         (update m :args #(when (some? %) (pretty %)))))
+         (-> (set/rename-keys m {:category :role})
+             (update :args #(when (some? %) (pretty %)))
+             (cond-> (:part-of m) (update :part-of (partial mapv str))))))
 
 (defn job-entries []
   (for [m (registry/job-metadata)]

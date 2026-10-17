@@ -397,6 +397,8 @@
 
 (def target [:free])
 
+(def meta {:category :reflex})
+
 (def safe? ready/safe-here-by-night)
 (def fit? ready/ok)
 

@@ -392,7 +392,7 @@
                 entry (get (:jobs eng) sym)]
             (when entry
               (merge
-               (cond-> (select-keys entry [:target :ways :defaults])
+               (cond-> (select-keys entry [:category :part-of :target :ways :defaults])
                  (:defaults entry) (update :defaults (partial walk/postwalk #(if (fn? %) :from-args %))))
                {:ok true :kind :job :name sym
                 :doc (short-text (:doc entry) (setting "catalog-doc-limit"))
@@ -421,10 +421,12 @@
                  (catch :default e
                    {:ok false :reason (if (:form (ex-data e)) :bad-args :quote-failed) :message (short-text (ex-message e) 500)})))))
 
-(defn catalog-list [eng kind prefix offset limit]
+(defn catalog-list [eng kind prefix offset limit category]
   (let [name-of (fn [x] (if (keyword? x) (name x) (str x)))
         names (case kind
-                "jobs" (sort-by name-of (keys (:jobs eng)))
+                "jobs" (sort-by name-of (cond->> (:jobs eng)
+                                          category (filter #(= category (some-> (:category (val %)) name)))
+                                          true (map key)))
                 "triggers" (sort-by name-of (keys (:triggers eng)))
                 nil)]
     (when names
@@ -539,6 +541,7 @@
                               prefix (or (.get params "prefix") "")
                               limit (number-param params "limit" (setting "catalog-page-limit") (setting "max-catalog-page-limit"))
                               offset (number-param params "offset" 0 10000)
+                              category (.get params "category")
                               exact? (contains? #{"job" "trigger"} kind)
                               list? (contains? #{"jobs" "triggers"} kind)
                               valid-name? (and (string? name)
@@ -555,14 +558,15 @@
                                                    "triggers" (or (empty? prefix)
                                                                    (boolean (re-matches #"[a-z][a-z0-9-]*" prefix)))
                                                    false))]
-                          (if (and (or (and exact? valid-name?)
+                          (if (and (or (nil? category) (and (= "jobs" kind) (contains? #{"goal" "phase" "reflex" "debug"} category)))
+                                   (or (and exact? valid-name?)
                                        (and list? valid-prefix? limit (pos? limit) offset))
                                    (or (not exact?) (nil? (.get params "prefix"))))
                             (if exact?
                               (if-let [entry (catalog-entry eng kind name)]
                                 (respond! res 200 entry)
                                 (bad! res 404 :capability-not-found))
-                              (respond! res 200 (catalog-list eng kind prefix offset limit)))
+                              (respond! res 200 (catalog-list eng kind prefix offset limit (.get params "category"))))
                             (bad! res 400 :bad-query)))
 
                         (and (= method "GET") (= pathname "/quote"))

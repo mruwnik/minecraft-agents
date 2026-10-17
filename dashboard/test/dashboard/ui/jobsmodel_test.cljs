@@ -35,6 +35,8 @@
   (are [job expected] (= expected (jm/badges job))
     {:running [] :reflex []} []
     {:running ["A" "B"] :reflex []} [{:kind :running :text "running on: A, B"}]
+    {:role :goal :part-of []} []
+    {:role :phase :part-of '[jobs.a.b]} [{:kind :role :text "phase of jobs.a.b"}]
     {:running [] :reflex ["A"]} [{:kind :reflex :text "reflex on: A"}]
     {:running ["A"] :reflex ["B"]} [{:kind :running :text "running on: A"} {:kind :reflex :text "reflex on: B"}]))
 

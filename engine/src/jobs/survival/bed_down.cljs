@@ -57,6 +57,8 @@
 
 (def defaults {:checks {:safe? '(not (threatened)) :fit? '(always)} :spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 
+(def meta {:category :phase :part-of '[jobs.survival.night]})
+
 (def safe? ready/threatened)
 
 (def fit? ready/ok)

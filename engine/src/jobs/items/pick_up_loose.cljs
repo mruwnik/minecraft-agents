@@ -30,6 +30,8 @@
 
 (def target [])
 
+(def meta {:category :reflex})
+
 (def safe? ready/safe-if-lit)
 (def fit? ready/ok)
 

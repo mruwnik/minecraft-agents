@@ -66,7 +66,7 @@
   ending of its result (the result's fields are the ending's data)."
   [k sym]
   (let [{:keys [target quote-of ending]} (get primitive/table k)]
-    {:can-start? (missing-args k) :safe? nothing-to-check :fit? nothing-to-check :target target :args (a/declare! sym (args-data k))
+    {:can-start? (missing-args k) :safe? nothing-to-check :fit? nothing-to-check :target target :category :phase :part-of [] :args (a/declare! sym (args-data k))
      :doc (str "The primitive " k " as a job: one act, which cannot be stopped midway. Takes the act's args (engine/README,"
                " Acting). Ends done when the act's status is a success, else with the ending its status maps to; the result"
                " fields are the ending's data.")

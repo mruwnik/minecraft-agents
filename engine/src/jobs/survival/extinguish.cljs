@@ -106,6 +106,8 @@
 
 (def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s} :use {:blocks :cover}})
 
+(def meta {:category :reflex})
+
 (def safe? ready/ok)
 
 (def fit? ready/ok)

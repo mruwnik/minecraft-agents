@@ -45,6 +45,8 @@
 
 (def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s} :use {:tools :attack}})
 
+(def meta {:category :phase :part-of '[jobs.survival.respond-to-hostile]})
+
 (def safe? ready/ok)
 
 (def fit? ready/ok)

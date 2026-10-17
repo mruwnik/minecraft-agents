@@ -17,7 +17,7 @@
 
 (defn matches? [needle job]
   (let [n (str/lower-case (or needle ""))
-        hay (str/lower-case (str/join "\n" (concat [(:id job) (:doc job) (:ns-doc job) (:args job)] (:running job) (:reflex job))))]
+        hay (str/lower-case (str/join "\n" (concat [(:id job) (:doc job) (:ns-doc job) (:args job) [(some-> (:role job) name)]] (:running job) (:reflex job))))]
     (or (str/blank? n) (str/includes? hay n))))
 
 (defn grouped
@@ -29,8 +29,10 @@
        (sort-by key)
        (mapv (fn [[category items]] {:category category :jobs (vec (sort-by :id items))}))))
 
-(defn badges [{:keys [running reflex]}]
-  (vec (concat (when (seq running) [{:kind :running :text (str "running on: " (str/join ", " running))}])
+(defn badges [{:keys [running reflex role part-of]}]
+  (vec (concat (when (and role (not= :goal role))
+                 [{:kind :role :text (str (name role) (when (seq part-of) (str " of " (str/join ", " part-of))))}])
+               (when (seq running) [{:kind :running :text (str "running on: " (str/join ", " running))}])
                (when (seq reflex) [{:kind :reflex :text (str "reflex on: " (str/join ", " reflex))}]))))
 
 (defn count-text [shown total needle]
