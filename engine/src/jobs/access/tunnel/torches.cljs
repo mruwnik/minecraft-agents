@@ -61,10 +61,7 @@
             intended (ledger/intend (ledger/reconcile (ledger/open-entries (ctx/view c)) block-at)
                                     {:cell cell :item (:block choice) :before "air" :job (:id c) :purpose :tunnel-torch})
             _ (when-not keep? (ledger/remember! c intended))
-            _ (await (torch/off-hand-to-inventory! c))
-            r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] cell) :item "torch"
-                                                 :click (placement/js-click (:click choice))})))
-            held? (or (= "placed" (.-status r)) (torch/torch-blocks (block-at cell)))]
+            held? (await (torch/place! c choice block-at))]
         (when-not keep? (ledger/remember! c (if held? (ledger/confirm intended cell) (ledger/reconcile intended block-at))))
         (when-not held? (book-unlit! c plan s :place-failed cell))
         :again))))

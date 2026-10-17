@@ -136,12 +136,9 @@
                      (not (gate/allowed? c :mine.declined "mine" :place (zipmap [:x :y :z] cell))) :refused)]
     (if reason
       (left-out! c cell reason branch)
-      (let [_ (await (torch/off-hand-to-inventory! c))
-            r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] cell) :item "torch"
-                                                 :click (placement/js-click (:click choice))})))]
+      (let [held? (await (torch/place! c choice block-at))]
         (booked! c branch)
-        (when-not (or (= "placed" (.-status r)) (torch/torch-blocks (block-at cell)))
-          (left-out! c cell :place-failed branch))))))
+        (when-not held? (left-out! c cell :place-failed branch))))))
 
 (defn ^:async torch-step!
   "One round of a torch (the tunnel's; a branch's when branch is true, the stair's when :stair): craft more when under 2 are carried and coal or

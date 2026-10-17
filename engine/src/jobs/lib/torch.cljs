@@ -52,3 +52,13 @@
      (or (when (ok? head) (first (remove :refused (map wall (side-dirs dir)))))
          (when (and (ok? feet) (not (:refused floor))) floor)
          {:refused :no-support}))))
+
+(defn ^:async place!
+  "Place the torch of choice (torch-at's) from the body's place; true when the cell holds a torch after (placed, or
+  already there). block-at: a fn of a cell, the block name seen there."
+  [c choice block-at]
+  (let [cell (:cell choice)]
+    (await (off-hand-to-inventory! c))
+    (let [r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] cell) :item "torch"
+                                               :click (placement/js-click (:click choice))})))]
+      (boolean (or (= "placed" (.-status r)) (torch-blocks (block-at cell)))))))
