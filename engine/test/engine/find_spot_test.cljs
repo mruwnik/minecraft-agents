@@ -107,7 +107,42 @@
     #{[0 63 5]} 0 63 0 false
     #{} 0 63 0 false))
 
+(deftest max-step-table
+  (are [tops h expected] (= expected (fs/max-step tops h))
+    [63 63 63 63] 2 0
+    [63 64 63 63] 2 1
+    [63 63 63 66] 2 3
+    [63 63 65 63] 2 2
+    [63 70 70 63] 2 7
+    [63 63 63 63 63 63 63 63 63] 3 0))
+
+(deftest blocked-fn-leaves-out-plans-and-foreign-zones
+  (let [in {:footprints {[5 70 5] "hut"} :zones [{:name "mine" :owner "Me" :min [0 0 0] :max [2 99 2]}
+                                                  {:name "theirs" :owner "Other" :min [10 0 0] :max [12 99 2]}]
+            :claims [] :self "Me" :now 0}
+        b? (fs/blocked-fn in)]
+    (are [x y z expected] (= expected (b? x y z))
+      5 63 5 true
+      6 63 5 false
+      1 63 1 false
+      11 63 1 true
+      13 63 1 false)))
+
 ;; ---- job
+
+(def stepped-world
+  (merge (patch 2 0 3 3 63 "dirt") {"3,64,1" "dirt"}
+         (patch -4 0 3 3 63 "dirt") {"-3,64,1" "dirt" "-3,65,1" "dirt"}))
+
+(deftest max-step-keeps-only-patches-with-small-steps
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:blocks stepped-world})
+              all (await (child-outcome eng job (assoc small :walk false) 4))
+              r (await (child-outcome eng job (assoc small :walk false :max-step 1) 4))]
+          (is (= [1 2] (sort (map :step (:spots all)))))
+          (is (= [{:x 2 :y 63 :z 0}] (mapv :pos (:spots r)))))))))
 
 (def wet-world
   (merge (patch 2 0 3 3 63 "dirt")
