@@ -205,7 +205,7 @@
            (names-of (mr/toss-order inventory {} {} 3)))
         "junk blocks first, whole stacks before partial; coal and raw copper are worth keeping")
     (is (= ["cobbled_deepslate" "granite" "tuff" "iron_ore" "raw_copper" "coal"]
-           (names-of (mr/toss-order inventory {} {} 8)))
+           (names-of (mr/toss-order inventory {} {} 25)))
         "raised :toss-below lets the stacks of raw copper and coal go")))
 
 (def linden-bag
