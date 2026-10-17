@@ -241,42 +241,33 @@
         (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:plan "pen-a"} 30))]
           (is (< (waited-ms-before-click s) 1000) "with :plan the caller asked: no grace"))))))
 
-(defn ^:async run-again
-  "Submit the job again on s's engine after ms more of clock and tick until the list is empty."
-  [s args ms]
-  (swap! clock + ms)
-  (core/submit! (:eng s) (list 'jobs.animals.shut-gate args) {})
-  (loop [i 0]
-    (when (and (< i 30) (seq (:list (core/state (:eng s)))))
-      (swap! clock + 700)
-      (await (core/tick! (:eng s)))
-      (recur (inc i))))
-  s)
-
 (defn clicks [s] (count (filter #(= "useOn" (.-name %)) (.-calls (.-world (:p s))))))
 
-(deftest a-gate-the-grace-covers-ends-the-run-and-the-next-run-shuts-it
+(defn ^:async tick-n [s n]
+  (dotimes [_ n] (swap! clock + 700) (await (core/tick! (:eng s))))
+  s)
+
+(deftest a-gate-the-grace-covers-is-waited-out-and-then-shut
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:open-s 4} 30))]
-          (is (empty? (:list (core/state (:eng s)))) "the run ended, it did not wait")
+        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:open-s 4} 3))]
+          (is (seq (:list (core/state (:eng s)))) "the run waits, it does not end")
           (is (gate-open? (:p s) 2 64 0))
           (is (zero? (clicks s)) "no click inside the grace")
-          (is (empty? (filter #(= "wait" (.-name %)) (.-calls (.-world (:p s))))) "no wait")
-          (await (run-again s {:open-s 4} 1000))
-          (is (zero? (clicks s)) "the grace is still on")
-          (await (run-again s {:open-s 4} 5000))
-          (is (not (gate-open? (:p s) 2 64 0)) "after :open-s the next run shuts it")
+          (await (tick-n s 30))
+          (is (empty? (:list (core/state (:eng s)))))
+          (is (not (gate-open? (:p s) 2 64 0)) "after :open-s the same run shuts it")
           (is (= 1 (:shut (last (events-of s :completed))))))))))
 
 (deftest a-gate-a-player-shuts-in-the-grace-is-left-alone
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:open-s 4} 30))]
+        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:open-s 4} 3))]
           (swap! (fake/state (:p s)) assoc-in [:states [2 64 0] :open] false)
-          (await (run-again s {:open-s 4} 5000))
+          (await (tick-n s 30))
+          (is (empty? (:list (core/state (:eng s)))))
           (is (zero? (clicks s)) "no click on the gate the player shut")
           (is (empty? (events-of s :shut-gate.stopped))))))))
 

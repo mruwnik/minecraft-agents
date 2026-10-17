@@ -20,8 +20,7 @@
   - Without :plan: the open planned gates within :radius of the body. This is the job of the pen-gate trigger,
     which fires for a gate seen open with the body more than 2 blocks away, so a job that holds a gate open on
     purpose is not fought. A gate seen open for the first time is given :open-s (4 s) of grace, so a gate a player just opened
-    is not shut on them: that run ends condition-failed :gate-grace at once (a :gate-graced entry, and the gate hidden for
-    :open-s), and the trigger's next run shuts it.
+    is not shut on them: the run waits (later :gate-grace) :open-s, then shuts it if it still stands open.
   - With :plan: every open gate of that plan, wherever it is. A gate the body has not seen lately is walked to and
     looked at, never taken for shut; one that still cannot be read is left (:unseen).
 
@@ -189,14 +188,25 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
+(defn grace-cells
+  "Without :plan, the open watched gates still inside their :open-s of grace (graced by an earlier round of this call)."
+  [c]
+  (let [{:keys [plan open-s]} (:args c)
+        [cells trouble] (watched-cells c)
+        since (- (ctx/now c) (* 1000 open-s))
+        graced (into #{} (comp (filter #(> (:t %) since)) (keep #(some-> % :data :cell vec))) (ctx/entries c :gate-graced))]
+    (if (or plan trouble) [] (filterv graced (open-now c cells [])))))
+
 (defn can-run?
-  "Later :plan-trouble while :plan is missing or unreadable."
+  "Later :plan-trouble while :plan is missing or unreadable; later :gate-grace while an open gate is inside its grace."
   [c]
   (let [id (:plan (:args c))
-        why (when id (second (plan-gates c id)))]
-    (if why
-      (contract/later :plan-trouble (str "shut-gate waits: " why) :plan id)
-      (contract/ok :plan "the plan is readable"))))
+        why (when id (second (plan-gates c id)))
+        graced (when-not why (seq (grace-cells c)))]
+    (cond
+      why (contract/later :plan-trouble (str "shut-gate waits: " why) :plan id)
+      graced (contract/later :gate-grace "a gate just opened stays open for its grace" :cells (vec graced))
+      :else (contract/ok :plan "the plan is readable"))))
 
 (def can-start? can-run?)
 
@@ -222,28 +232,27 @@
   {:uses {:job-time [0 15 120]}})
 
 (def graced-ttl-ms
-  "How long a gate's grace is remembered: the run that finds it still open after the grace shuts it."
+  "How long a gate's grace is remembered: the round that finds it open after the grace shuts it."
   60000)
 
 (defn grace!
-  "Without :plan, a watched gate that stands open and was not graced yet is given :open-s seconds: it is hidden from the
-  trigger and this job for that long (a :gate-gave-up entry) and remembered as graced. The cells given grace, or nil."
+  "Without :plan, a watched gate that stands open and was not graced yet is remembered as graced; can-run? then waits
+  :open-s seconds before the round shuts it. The cells newly graced, or nil."
   [c cells]
   (let [{:keys [plan open-s]} (:args c)
         graced (into #{} (keep #(some-> % :data :cell vec)) (ctx/entries c :gate-graced))
         fresh (when (and (not plan) (pos? open-s)) (vec (remove graced (open-now c cells []))))]
     (when (seq fresh)
       (doseq [cell fresh]
-        (ctx/remember! c :gate-graced {:cell cell} {:cap 50 :ttl graced-ttl-ms})
-        (ctx/remember! c :gate-gave-up {:cell cell :reason :grace} {:cap 50 :ttl (* 1000 open-s)}))
+        (ctx/remember! c :gate-graced {:cell cell} {:cap 50 :ttl graced-ttl-ms}))
       fresh)))
 
 (defn ^:async round [c]
   (let [[cells trouble] (watched-cells c)]
     (if trouble
       :continue
-      (if-let [fresh (grace! c cells)]
-        (ctx/end c :condition-failed :gate-grace {:shut 0 :left [] :graced fresh})
+      (if (grace! c cells)
+        :continue
         (loop [shut (:shut (ctx/mem c) 0) left (:left (ctx/mem c) []) skip #{}]
           (let [here (u/self-pos c)
                 open (into (open-now c cells left) (unread-now c cells left skip))
