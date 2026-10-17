@@ -658,7 +658,7 @@
           (core/submit! eng '(jobs.survival.dig-in) {})
           (is (<= (await (run-until-empty eng 10)) 5) "bounded")
           (is (= 1 (count (emitted seen :dig_in_failed))))
-          (is (= [{:pos {:x 0 :y 64 :z 0} :state :built}] (entries eng :shelter)) "records that it stopped, unroofed"))))))
+          (is (= [{:pos {:x 0 :y 64 :z 0} :state :built :sealed false}] (entries eng :shelter)) "records that it stopped, unroofed"))))))
 
 (deftest dig-in-walls-place-a-support-before-the-roof
   (async done
@@ -766,7 +766,8 @@
           (is (= [] (emitted seen :dig-in.sealed)) "no sealed claim while a wall is open")
           (let [[u] (emitted seen :dig-in.unsealed)]
             (is (some? u) "reported honestly")
-            (is (= [{:x -1 :y 64 :z 0}] (:open u)) "the open cell is named: the refused one")))))))
+            (is (= [{:x -1 :y 64 :z 0}] (:open u)) "the open cell is named: the refused one"))
+          (is (false? (:sealed (last (entries eng :shelter)))) "the entry says it is open"))))))
 
 (deftest dig-in-places-the-other-walls-before-retrying-a-refused-cell
   (async done

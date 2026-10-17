@@ -68,7 +68,7 @@
   (a warning when :resealed, meaning the latest :shelter entry was already at this cell),
   else dig-in.unsealed (warning) naming the cells still open.
   Memory: reads :dig-in-futile. Writes :dig-in-futile (cap 5, ten minutes)
-  and, on any end, :shelter {:pos :roof :state :built} (cap 10, one in-game day).
+  and, on any end, :shelter {:pos :roof :state :built} (:sealed false when the world shows it open: the body is not shut in it) (cap 10, one in-game day).
   :roof is the cell it placed above the body, absent if none. Walls mode adds :door, the feet and head cells of one side it placed.
   Pit mode adds :start, the cell dug from. Walls mode at the bottom of a shaft has :start at the shaft's top.
   :take-back lists the placed {:cell :item} dearer than :take-back-value, and any within 2 of a fence gate a plan wants, which leave! digs again by day.
@@ -227,14 +227,15 @@
                                (for [[cell item] (:placed-items (ctx/mem c)) :when (or (not (cheap item)) (near-gate? c cell))] {:cell cell :item item}))
                        (reduce #(assoc %1 (:cell %2) %2) {}) vals vec)
         start (or start (when resealed (:start prev)))
-        door (or door (when resealed (:door prev)))]
-    (when (and (seq placed) (not (dig-cells/sealed-in? p judged (:roof-height (:args c)))))
+        door (or door (when resealed (:door prev)))
+        sealed? (dig-cells/sealed-in? p judged (:roof-height (:args c)))]
+    (when (and (seq placed) (not sealed?))
       (let [open (dig-cells/open-cells p feet)]
         (ctx/emit! c :dig-in.unsealed :warn
                    {:pos feet :placed (vec placed) :open open
                     :text (str "NOT sealed in: placed " (count placed) " blocks at " (pr-str (mapv (juxt :x :y :z) placed))
                                ", but the world still shows " (site/open-text open) (when (empty? open) " (no roof)"))})))
-    (when (and (seq placed) (dig-cells/sealed-in? p judged (:roof-height (:args c))))
+    (when (and (seq placed) sealed?)
       (ctx/emit! c :dig-in.sealed (if resealed :warn :info)
                  {:pos feet :placed (vec placed) :resealed resealed :spent spent
                   :text (str (cond
@@ -244,6 +245,7 @@
                              "placed " (count placed) " blocks (" (spent-text spent) ") at " (pr-str (mapv (juxt :x :y :z) placed))
                              ". At night an open shelter is closed again; it is left by day")}))
     (ctx/remember! c :shelter (cond-> {:pos feet :state :built}
+                                (not sealed?) (assoc :sealed false)
                                 (contains? placed roof) (assoc :roof roof)
                                 door (assoc :door door)
                                 start (assoc :start start)
@@ -251,7 +253,7 @@
                                 (= :plug mode) (assoc :room true))
                    sh/shelter-policy)
     (ctx/update-mem! c assoc :ended true)
-    (if (dig-cells/sealed-in? p judged (:roof-height (:args c)))
+    (if sealed?
       (ctx/end c :done nil (cond-> {:pos feet :mode mode} (contains? placed roof) (assoc :roof roof)))
       (stop-ending c feet))))
 

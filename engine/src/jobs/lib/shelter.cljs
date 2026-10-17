@@ -568,12 +568,13 @@
   (days-awake-in (ctx/view c)))
 
 (defn shut-in?
-  "Whether the body is still shut in by its shelter entry. Never for a mended :room (its door is the way out). With a
+  "Whether the body is still shut in by its shelter entry. Never for a mended :room (its door is the way out) or an entry
+  that ended :sealed false. With a
   pit :start, when below that height and walled in (a pit left by a stair is open). With a :door, when a door cell is solid. With neither, when under a solid
   block within default-roof-height."
-  [p {:keys [start door room]}]
+  [p {:keys [start door room sealed]}]
   (cond
-    room false
+    (or room (false? sealed)) false
     start (and (< (:y (feet p)) (:y start)) (reach/enclosed? p))
     door (boolean (some #(solid-at? p %) door))
     :else (roofed? p default-roof-height)))

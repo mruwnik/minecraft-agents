@@ -109,7 +109,8 @@
 (deftest a-room-entry-is-not-shut-in
   (let [p (tu/fake (hut-world {:x 5 :y 64 :z 0} {}))]
     (is (true? (dig-leave/shut-in? p {:pos {:x 5 :y 64 :z 0} :roof {:x 5 :y 67 :z 0}})) "a plain roofed entry")
-    (is (false? (dig-leave/shut-in? p {:pos {:x 5 :y 64 :z 0} :roof {:x 5 :y 67 :z 0} :room true})))))
+    (is (false? (dig-leave/shut-in? p {:pos {:x 5 :y 64 :z 0} :roof {:x 5 :y 67 :z 0} :room true})))
+    (is (false? (dig-leave/shut-in? p {:pos {:x 5 :y 64 :z 0} :roof {:x 5 :y 67 :z 0} :sealed false})) "an entry that ended unsealed")))
 
 ;; ------------------------------------------------------------------ a roofed body sleeps in the bed beside it
 
