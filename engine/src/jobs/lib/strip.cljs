@@ -7,7 +7,8 @@
 
   A segment is {:id :y :axis :x|:z :line n :from a :to b :open-ends #{:from :to}}: y is the rail level, the axis the
   direction it runs, line the other horizontal coordinate. The id comes from the geometry (\"x-27-290:-180..-160\").
-  Memory is a map id -> segment, with :state kept by the caller.")
+  Memory is a map id -> segment, with :state kept by the caller."
+  (:require [jobs.lib.access.rules :as rules]))
 
 (def run-gap "Evidence further apart than this on one line belongs to different runs." 9)
 (def join "Reach at which two perpendicular runs count as crossing." 7)
@@ -197,7 +198,7 @@
         (and n (re-find #"_ore$" n)) :ore
         (= n "spawner") :spawner))
 
-(def faces [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+(def faces rules/neighbour-deltas)
 
 (defn why-kept
   "Why the wood at cell must stay (:lava :bridge :falling), nil when it may go. floor? is a cell of the corridor floor."

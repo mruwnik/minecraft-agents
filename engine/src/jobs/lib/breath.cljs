@@ -12,7 +12,8 @@
 
   Wedged: the feet cell holds such a full block, e.g. sand that fell on the body. Farmland, slabs, snow layers, soul
   sand, paths, plants and fluids never do. The eye cell is the suffocating trigger's business."
-  (:require [engine.args :as a]
+  (:require [jobs.lib.access.rules :as rules]
+            [engine.args :as a]
             [engine.game :as game]
             [engine.memory :as mem]
             [engine.settings :as settings]
@@ -174,7 +175,7 @@
            (contains? swimmable head) (recur (inc k))
            :else nil))))))
 
-(def neighbours [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+(def neighbours rules/neighbour-deltas)
 
 (defn joined-cells
   "The seen water and air cells joined to the feet by a walk through such cells, at most radius sideways of the feet and

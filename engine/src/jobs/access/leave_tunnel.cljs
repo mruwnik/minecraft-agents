@@ -91,7 +91,7 @@
   (let [n (count (:torches (:tunnel (:args c))))]
     {:uses {:job-time [1 (+ 3 (* 4 n)) (max (+ 3 (* 4 n)) (time-s))]}}))
 
-(def faces [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+(def faces rules/neighbour-deltas)
 
 (defn open?
   "Whether the cell is loaded and holds air, a fluid or a plant: a block placed there takes its place."

@@ -4,7 +4,8 @@
   that harvests it, room in the bag, the rules' dig verdict ok) with a jobs.blocks.dig child, then steps back to the
   stand it dug from. Picked blocks are listed in the job's memory (picked) for its result. The arg :pick-up-ores is true
   (the ::ores setting), false (none) or a coll of ore block names."
-  (:require [engine.args :as a]
+  (:require [jobs.lib.access.rules :as rules]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -22,7 +23,7 @@
    ::radius {:default 5 :doc "Blocks around the body searched for an ore to pick up on the way." :spec (a/int-in 1 8)}
    ::per-call {:default 6 :doc "Ore blocks one call picks up before the job goes on." :spec (a/int-in 1 nil)}})
 
-(def faces [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+(def faces rules/neighbour-deltas)
 
 (defn names
   "The block names to pick up under the arg: the ores and their deepslate kinds, empty for none."

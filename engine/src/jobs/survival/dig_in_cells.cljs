@@ -404,7 +404,7 @@
     (and (sealed? p cell)
          (not (and (= :openable (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))))))
 
-(def neighbours [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+(def neighbours rules/neighbour-deltas)
 
 (defn shift [{:keys [x y z]} [dx dy dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
 

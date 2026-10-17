@@ -1,5 +1,6 @@
 (ns jobs.survival.block-arrow-gap
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.access.rules :as rules]
+            [jobs.lib.ready :as ready]
             [jobs.lib.checks :as checks]
             [jobs.lib.choose :as choose]
             [engine.settings :as settings]
@@ -88,7 +89,7 @@
            {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
          (sort-by #(u/dist feet %)))))
 
-(def faces [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+(def faces rules/neighbour-deltas)
 
 (defn supported?
   "Whether a block can be placed at cell: one of its faces touches a solid block (solid-at? takes a cell; the job
