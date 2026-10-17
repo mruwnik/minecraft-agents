@@ -48,8 +48,6 @@
 
   With :plan and :part the pen is that part of the plan: its :box, and :mob and :target from its :herd
   {:mob :target}; it waits :plan-trouble while the plan is missing or unreadable, and ends impossible :plan-trouble when the part or its :herd is missing. A pass that leaves
-  a step that would still run rests the pen 10 minutes (jobs.lib.standing): it waits {:reason :nothing-to-do
-  :backed-off [pen]}, so the job can stand in the queue under repeat without starving other jobs.
 
   Limit: the box is the only pen there is. An animal inside it may be outside the fence. Breed, shear and
   collect-drops look in a radius around the body that covers the box, so animals or items just outside it can
@@ -244,10 +242,6 @@
 (def fit? ready/fit?)
 
 
-(defn pen-key [c]
-  (let [{:keys [plan part box]} (:args c)]
-    (if plan (str plan "/" part) (pr-str box))))
-
 (defn pen-fact
   "ok when some step would run (or the body is to look at the box first), else the later :nothing-to-do with the census."
   [c]
@@ -273,19 +267,17 @@
       :else (contract/never :plan-trouble trouble :why trouble))))
 
 (defn can-start?
-  "Never :no-box without a box or a plan; later for :plan-trouble, :away (far from the pen while another job is listed), a resting pen or nothing to do."
+  "Never :no-box without a box or a plan; later for :plan-trouble, :away (far from the pen while another job is listed) or nothing to do."
   [c]
   (let [{:keys [plan box]} (:args c)
         {:keys [trouble] :as pen} (pen-of c)
         c (if pen (with-pen c pen) c)
-        resting (get (standing/rested c 'jobs.animals.tend) (pen-key c))
         {:keys [min max]} (:box (:args c))
         away (when min (standing/away-cause c {:x (/ (+ (:x min) (:x max)) 2) :y (:y min) :z (/ (+ (:z min) (:z max)) 2)}))]
     (cond
       (not (or plan box)) (contract/never :no-box "tend needs a :box or a :plan")
       trouble (can-run? c)
       away (checks/cause-status :later away)
-      resting (contract/later :nothing-to-do "the pen is resting" :backed-off [(pen-key c)] :until (:until resting))
       :else (pen-fact c))))
 
 (defn done?
@@ -320,8 +312,6 @@
         {:keys [adults babies]} (hunting/census c)
         f (facts c)
         out {:mob mob :target target :adults (count adults) :babies (count babies) :steps report}]
-    (when (some #(:call (decide % (:args c) f)) steps)
-      (standing/rest! c 'jobs.animals.tend (pen-key c) :undone))
     (ctx/end c :done nil (assoc out :text (str "tend done: " (count adults) " adults, " (count babies) " babies")))))
 
 (defn ^:async step-steps

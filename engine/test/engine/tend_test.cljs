@@ -380,17 +380,14 @@
           (is (empty? (events-of s :waiting)))
           (is (true? (finished? s))))))))
 
-(deftest a-pass-that-leaves-a-step-to-run-rests-the-pen-so-a-standing-job-does-not-starve-the-queue
+(deftest a-pass-that-leaves-a-step-to-run-keeps-no-rest-of-its-own
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (plan-scenario (list 'repeat (list 'jobs.animals.tend {:plan "pen" :part "cows"})) {"pen" pen-plan}
                                       {:inventory [(wheat 8)] :entities [(cow 1 2) (cow 2 3)]} 60))]
-          (is (= 1 (passes s)) "one pass, then the pen rests")
-          (is (some #(= ["pen/cows"] (:backed-off %)) (events-of s :waiting)) "the wait names the pen")
-          (swap! (:clock s) + 660000)
-          (await (tu/run-ticks (:eng s) (:clock s) 40 700))
-          (is (= 2 (passes s)) "after the back-off it tries again"))))))
+          (is (< 1 (passes s)) "the next pass starts without a 10-minute rest")
+          (is (empty? (filter :backed-off (events-of s :waiting)))))))))
 
 (def far-box {:min {:x 200 :y 60 :z -5} :max {:x 208 :y 70 :z 5}})
 
