@@ -1,0 +1,24 @@
+;; Card 89ea66f3 (go-to look-at-drops!): a landing is priced only on blocks the body has seen; an unseen wall of a pad is no wall (Q266), and a plain floor is a plain fall.
+;; A stone block y 0..5 (the body on top at feet y 6, x 8.5), walls all round, the drop east of its edge at x 16 (6 blocks). :floor {:health 18} leaves 2 hp, so only a free landing may be taken.
+;; The should-succeed side (the 6 and 10 drops looked at from the lip, then taken onto slime walled with glass) is go-to-slime/drop-6-shaft-walled-6-high-is-free-at-floor-18 and shaft-walled-10-high-is-free-at-floor-14.
+;; Should-fail: the drop onto the plain floor (3 hp), and onto one slime block in a 1x1 stone shaft (the wall under the body's feet is never seen).
+{:defaults
+ {:tags [:movement :planner]
+  :time :any
+  :plot {:height 16}
+  :blocks [[:fill [0 0 0] [31 12 0] "stone"] [:fill [0 0 31] [31 12 31] "stone"] [:fill [0 0 0] [0 12 31] "stone"] [:fill [31 0 0] [31 12 31] "stone"]
+           [:fill [1 0 1] [15 5 30] "stone"]]
+  :body {:at [8.5 6 16.5]}
+  :limit-s 90}
+ :cases
+ [{:name "drop-6-onto-plain-floor-is-refused"
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 18}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind :result}}]
+   :after [[:body-far [24.5 0 16.5] 4]]}
+  {:name "drop-6-into-unseen-stone-shaft-is-refused"
+   :blocks [[:fill [16 0 15] [17 5 17] "stone"] [:fill [16 0 16] [16 5 16] "air"] [:set [16 -1 16] "slime_block"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 0 :ways #{:walk :clear-seal} :floor {:health 18}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind :result}}]
+   :after [[:body-far [16.5 0 16.5] 4]]}]}
