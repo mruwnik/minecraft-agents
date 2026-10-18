@@ -1,4 +1,4 @@
-;; What the agent tools tell about a real body (cards f7bb91c1 a22d6e55 746a573b 50188a24 31aac5b8 ce26dc90 899478b0 9eee05c3 3602def6 54b2e9f5 79e12eeb a118bd2e 592695ac).
+;; What the agent tools tell about a real body (cards f7bb91c1 a22d6e55 746a573b 50188a24 31aac5b8 ce26dc90 899478b0 9eee05c3 3602def6 54b2e9f5 79e12eeb a118bd2e 592695ac 4cf12073).
 ;; The tool steps run one after another, so a wake that needs a wait running while the event happens is not covered here:
 ;; a death before the wait is the stale-death rule (summary, no wake). Notice wakes (hostile.fled, stale job notices) are hand-run.
 {:defaults
@@ -50,6 +50,13 @@
                   {:ok true :blocks [:has {:name "crafting_table"}]}] 20]]
    :expect [{:no-event {:source :job :kind :queued} :for-s 3}]
    :after [[:block [20 0 16] "crafting_table"]]}
+  {:name "world-usage-points-gates-and-doors-at-access-toggle"
+   :time :day
+   :act [[:job (jobs.debug.notify {:text "usage"})]
+         [:await {:source :job :kind :completed} 30]
+         [:cli "world" ["$body" "--world" "$world"]
+          {:ok false :reason :bad-args :usage [:contains "prefer jobs.mjs submit '(jobs.access.toggle"]}]]
+   :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}]}
   {:name "seen-lists-crops-by-default"
    :body {:at [16.5 0 16.5] :yaw 270 :spawnpoint [4 0 4]}
    :blocks [[:set [19 -1 16] "farmland[moisture=7]"] [:set [19 0 16] "wheat[age=7]"]]
