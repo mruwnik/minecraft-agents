@@ -86,6 +86,19 @@
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30}]
    :after [[:body-near [22.5 0 16.5] 2.5]]
    :limit-s 40}
+  ;; card 4e2615d0: an angry enderman that never leaves (speed 0) must not hold the body in water for ever: after hold-cap holds the flight tries the next options and ends (the stone ring leaves no seal cell)
+  {:name "staying-enderman-ends-the-water-hold-and-the-flight-ends"
+   :settings {:jobs.survival.retreat-cornered/hold-cap 2}
+   :blocks [[:fill [14 0 14] [18 0 18] "stone"] [:fill [15 0 15] [17 0 17] "water"]]
+   :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
+   :register []
+   :act [[:summon "enderman" [20.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0}]}"]
+         [:until-seen {:entity "enderman"} 10]
+         [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]
+         [:wait-s 1]
+         [:job (jobs.survival.retreat {})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 50 :of-job true}]
+   :limit-s 60}
   {:name "phantom-near-unarmed-body-seals-no-flight"
    :body {:inventory [["cobblestone" 20]] :effects [["resistance" 900 4]]}
    :act [[:summon "phantom" [20.5 0 16.5] "{NoAI:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]]
