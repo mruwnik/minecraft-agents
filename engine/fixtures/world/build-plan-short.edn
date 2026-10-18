@@ -1,16 +1,17 @@
 ;; Cards 4df74238, 922e408e, 618c0e16: jobs.build.from-plan fetches what the plan lacks, names what it is short of, and fetches a tool
 ;; even while another item's fetch has failed.
+;; :time :day: from-plan declines an exposed open-sky place by night (safe-at-by-night), so these cases need daylight.
 ;; tool-fetched-while-a-short-item-has-no-source: the plan wants dirt where stone stands ([20 0 16]; dirt carried, no pickaxe, a seen chest
 ;; holds one) and a gold_block nobody has; the gold fetch fails (:explore false) and the pickaxe is still fetched, the stone replaced.
 ;; default-fetch-gathers-logs-and-crafts-planks: oak_planks wanted, none carried, a log column in sight; the default :fetch obtains them.
-;; fetch-false-names-the-short-item: the same plan with :fetch false stops short, naming the item. grass-under-the-floor-says-short:
-;; a cobblestone cell holds grass, no cobblestone carried, :fetch false: the job waits :no-items needing cobblestone, the grass stays;
+;; fetch-false-names-the-short-item: the same plan with :fetch false names the item: the job waits :no-items or starts and reports build.short, by whether the floor was sensed when it was submitted. grass-under-the-floor-says-short:
+;; a cobblestone cell holds grass, no cobblestone carried, :fetch false: the job waits :no-items or stops short of cobblestone, the grass stays;
 ;; with a seen chest of cobblestone the default fetch brings it, the grass is dug and cobblestone placed.
 ;; air-want-clears-the-cell (cards 8a7774d1): a cell wanted "air" holding stone is dug, "air" is never fetched; the job completes with nothing missing.
 ;; any-want-uses-what-is-carried (93b3dba5): a part wanting [:any cobblestone granite dirt] is built from granite carried, never fetching cobblestone;
 ;; with none of them carried the first listed is fetched. in-a-pit-walks-out-and-places (8a7774d1, cd5a0d81): a body 3 deep in a pit (as after a dirt dig) escalates out of it to reach its stands, instead of idling.
 {:defaults
- {:tags [:build :fetch] :time :any
+ {:tags [:build :fetch] :time :day
   :plot {:height 8}
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 150}
@@ -38,7 +39,8 @@
    :blocks [[:fill [24 0 14] [24 3 14] "oak_log"] [:set [24 4 14] "oak_leaves[persistent=true]"]]
    :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [14 0 14] #at [15 0 14]] :want "oak_planks"}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:floor" :fetch false})]]
-   :expect [{:event {:source :job :kind :build.short :message [:contains "oak_planks"]} :within-s 40 :of-job true}
+   :expect [{:event #{{:source :job :kind :build.short :message [:contains "oak_planks"]}
+                    {:source :job :kind :waiting :data {:reason :no-items :needs {"oak_planks" 2}}}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :fetch.started} :for-s 30}]
    :after [[:not-block [14 0 14] "oak_planks"]]
    :limit-s 60}
@@ -47,7 +49,8 @@
    :body {:inventory [["iron_pickaxe" 1]]}
    :plans [{:id "ring" :metadata {:by "$body"} :parts [{:id "cell" :cells [#at [18 -1 16]] :want "cobblestone"}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:ring" :fetch false})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :no-items :needs #{{"cobblestone" 1} {:cobblestone 1}}}} :within-s 40 :of-job true}]
+   :expect [{:event #{{:source :job :kind :stopped :message [:contains "short of cobblestone"]}
+                    {:source :job :kind :waiting :data {:reason :no-items :needs #{{"cobblestone" 1} {:cobblestone 1}}}}} :within-s 40 :of-job true}]
    :after [[:block [18 -1 16] "grass_block"]]
    :limit-s 60}
   {:name "grass-under-the-floor-fetches-cobblestone-and-replaces"
