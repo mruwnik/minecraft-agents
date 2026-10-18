@@ -1,4 +1,4 @@
-;; What the agent tools tell about a real body (cards f7bb91c1 a22d6e55 746a573b 50188a24 31aac5b8 ce26dc90 899478b0 9eee05c3 3602def6 54b2e9f5 79e12eeb a118bd2e 592695ac 4cf12073).
+;; What the agent tools tell about a real body (cards f7bb91c1 a22d6e55 746a573b 50188a24 31aac5b8 ce26dc90 899478b0 9eee05c3 3602def6 54b2e9f5 79e12eeb a118bd2e 592695ac 4cf12073 69e219a6).
 ;; The tool steps run one after another, so a wake that needs a wait running while the event happens is not covered here:
 ;; a death before the wait is the stale-death rule (summary, no wake). Notice wakes (hostile.fled, stale job notices) are hand-run.
 {:defaults
@@ -63,4 +63,13 @@
    :act [[:until [:cli "observe" ["$body" "--world" "$world" "seen"]
                   {:ok true :blocks [:has {:name "wheat"}]}] 20]]
    :expect [{:no-event {:source :job :kind :queued} :for-s 3}]
-   :after [[:block [19 0 16] "wheat"]]}]}
+   :after [[:block [19 0 16] "wheat"]]}
+  {:name "snapshot-text-gives-the-distance-in-metres"
+   :time :day
+   :body {:at [16.5 0 16.5] :yaw 270 :spawnpoint [4 0 4]}
+   :act [[:summon "cow" [20.5 0 16.5] "{NoAI:1b}"]
+         [:until [:cli "entities" ["$body" "--world" "$world" "--type" "cow"] {:total [:>= 1]}] 20]
+         [:until [:cli "snapshot" ["$body" "--world" "$world" "--width" "160" "--height" "90"]
+                  {:ok true :text [:contains " m centre"]}] 30]
+         [:job (jobs.debug.notify {:text "snap"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}]}]}
