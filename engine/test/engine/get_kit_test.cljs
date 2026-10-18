@@ -68,6 +68,12 @@
 (deftest the-iron-kit-needs-32-ingots-from-the-furnace
   (is (= {"iron_ingot" 32} (kit/furnace-short game/default-version kit/iron-kit {}))))
 
+(deftest the-kit-reserves-the-ingots-and-raw-iron-its-missing-pieces-need
+  (is (= [{:id "k-kit-iron_ingot" :item "iron_ingot" :count 3 :strength 0.9 :by "k" :why "material for the kit"}
+          {:id "k-kit-raw_iron" :item "raw_iron" :count 3 :strength 0.9 :by "k" :why "material for the kit"}]
+         (kit/kit-entries "k" game/default-version ["iron_pickaxe"])))
+  (is (= [] (kit/kit-entries "k" game/default-version []))))
+
 (deftest carried-ingots-count-against-the-furnace-need
   (is (= {"iron_ingot" 1} (kit/furnace-short game/default-version ["iron_pickaxe" "iron_helmet" "iron_boots"] {"iron_ingot" 11}))))
 

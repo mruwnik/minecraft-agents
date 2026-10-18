@@ -6,7 +6,6 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [clojure.string :as str]
-            [jobs.lib.blocks :as b]
             [jobs.lib.choose :as choose]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.weapon :as weapon]
@@ -62,15 +61,6 @@
   (ctx/update-mem! c assoc :trip outcome)
   (ctx/emit! c (keyword (str "trip." (name outcome))) :info fields))
 
-(def goods
-  "Raw materials and metal a body gathers for crafts (kit, tools): a trip's deposit leaves them carried."
-  (into (set (vals b/ores)) ["iron_ingot" "gold_ingot" "copper_ingot"]))
-
-(defn keep-goods
-  "{name count} of the goods carried, as a deposit's :keep."
-  [p]
-  (reduce (fn [m {:keys [name count]}] (cond-> m (goods name) (update name (fnil + 0) count))) {} (u/inventory p)))
-
 (defn plan
   "What a trip start does: :roomy, :no-chest, :far or :deposit, with the chest and its walk cost."
   [c]
@@ -85,8 +75,8 @@
 
 (defn ^:async ready!
   "Before a gathering job sets out: when fewer than ::want-free slots are free and the known :chest place is within
-  ::max-cost of walking, run jobs.storage.deposit as a child (:free ::want-free; it keeps tools, armour, the food
-  reserve and raw ore and metal (goods)). Resolves nil to go on, :continue while the child waits on the world. Done once per job (:trip in the job's
+  ::max-cost of walking, run jobs.storage.deposit as a child (:free ::want-free; it keeps tools, armour and what the
+  reserve register holds). Resolves nil to go on, :continue while the child waits on the world. Done once per job (:trip in the job's
   memory), so a restart does not repeat it. No chest known or a far one: info trip.no-chest or trip.far and the trip
   goes on. A deposit that stops (its own warn says why) does not stop the trip."
   [c]
@@ -97,7 +87,7 @@
         :roomy (do (ctx/update-mem! c assoc :trip :roomy) nil)
         (:no-chest :far) (do (done! c (case (:do p) :no-chest :no-chest :far) (select-keys p [:free :cost])) nil)
         :deposit
-        (let [e (await (ctx/call c child 'jobs.storage.deposit {:free (want-free) :keep (keep-goods (:primitives c))}))]
+        (let [e (await (ctx/call c child 'jobs.storage.deposit {:free (want-free)}))]
           (if (= :continue e)
             :continue
             (do (done! c :deposited (assoc (select-keys p [:free :cost]) :result (:data e))) nil)))))))

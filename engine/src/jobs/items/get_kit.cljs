@@ -14,6 +14,7 @@
             [jobs.lib.foods :as foods]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -74,6 +75,21 @@
                                           :when (contains? smelt-plan/made-from k)]
                                       {k v}))]
     (into {} (keep (fn [[k v]] (let [n (- v (get carried k 0))] (when (pos? n) [k n])))) need)))
+
+(defn kit-entries
+  "The reserve entries (strength 0.9, by job id) for the furnace material the missing items need together and the raw
+  input it is smelted from: a deposit or craft leaves those carried units alone."
+  [id version items]
+  (vec (for [[mat n] (furnace-short version items {})
+             item [mat (get smelt-plan/made-from mat)]]
+         {:id (str id "-kit-" item) :item item :count n :strength 0.9 :by id :why "material for the kit"})))
+
+(defn reserve-kit!
+  "Replace this job's reserve entries with kit-entries for todo; none once nothing is missing."
+  [c todo]
+  (ctx/forget-where! c reserve/kind #(= (:id c) (:by %)))
+  (doseq [e (kit-entries (:id c) (game/version-of (:primitives c)) todo)]
+    (ctx/remember! c reserve/kind e reserve/policy)))
 
 (defn restarted
   "The job memory after a death: the children and what was made went with the body; the job starts from now."
@@ -181,6 +197,7 @@
   "End the call: done when out is nil, else with the stop out; the data has what is had and made, and a text."
   [c items have out]
   (let [data {:have have :made (vec (:made (ctx/mem c)))}]
+    (reserve-kit! c [])
     (if-not out
       (ctx/end c :done nil data)
       (ctx/end c (:kind out) (:cause out)
@@ -227,6 +244,7 @@
             wear (when (:wear a) (first (to-wear items st)))
             have (filterv #(had? (:carried st) (:worn st) %) items)
             todo (remove (set have) items)
+            _ (reserve-kit! c todo)
             fp (foods/stock-points (:inv st))
             partial (:partial (ctx/mem c))
             need (when (and (seq todo) (seq (furnace-short version [(first todo)] {})))
