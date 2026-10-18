@@ -582,7 +582,7 @@
           (is (= 2 placed))
           (is (= 1 (count (filter #(= "dirt" (:item (ce/data %))) (ce/ends seen :placed))))))))))
 
-(deftest a-source-beside-the-cell-is-dammed-and-the-flow-given-time-to-recede
+(deftest a-source-beside-the-cell-is-dammed-and-the-flow-waited-out
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -680,7 +680,18 @@
             (is (= 3 (count (places (:p s)))) (str label " " status))
             (is (= [{:pos {:x 3 :y 64 :z 0} :reason (keyword status)}] (warns (:seen s) :prepare.refused)) (str label " " status))))))))
 
-(deftest a-cell-receding-from-a-dam-yields-until-its-recede-time
+(deftest a-skipped-cell-is-tried-again-by-the-next-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world {} (item "oak_sapling" 1)) {"forest" one-cell})
+              refuse? (atom true)]
+          (.override (.-world (:p s)) "place" (fn ^:async f [tok a impl] (if @refuse? #js {:status "occupied"} (await (impl tok a)))))
+          (is (= :refused (:reason (await (tu/child-outcome (:eng s) job {:plan "forest"} 300)))))
+          (reset! refuse? false)
+          (is (= (expect {:planted 1}) (dissoc (await (tu/child-outcome (:eng s) job {:plan "forest"} 300)) :text :status))))))))
+
+(deftest a-cell-receding-from-a-dam-yields-until-its-water-is-gone
   (async done
     (tu/run-async done
       (fn ^:async t []

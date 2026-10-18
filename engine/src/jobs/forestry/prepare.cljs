@@ -32,8 +32,8 @@
   Bringing saplings and dirt is another job, e.g. (seq (jobs.storage.withdraw ...) (jobs.forestry.prepare ...)).
   Water in the cell is repaired. A source in the cell is filled with carried dirt (the dirt is then dug as a
   stray). A source beside it on its level is dammed first, since it would flood the dug cell back. A flow is
-  traced upstream (at most 16 cells) and its source filled. The cell then gets 10 s to recede (the call yields
-  :continue, then the check waits :receding with :ready-at; nothing is polled). Water that cannot be traced, no dirt carried, or a refused source leaves the
+  traced upstream (at most 16 cells) and its source filled. The cell then waits while its water is traced to nothing (the call yields
+  :continue, then the check waits :receding). Water that cannot be traced, no dirt carried, or a refused source leaves the
   cell as :wet {:pos :why :source} (warn prepare.wet).
   Never dug, only reported:
   - a stray or natural ground that no carried tool harvests (stone with no pickaxe: slow, nothing drops): result
@@ -53,7 +53,7 @@
   maintain's business.
   Every dig and place is checked against zones and the footprints of all other active plans, when the cell is
   chosen and again before the act. A refusal, a dig hazard not in :accept, or three failed tries (walk, dig,
-  place, plant) skips the cell for 10 minutes (body memory :forestry/prepare-skip). It is reported as :refused
+  place, plant) skips the cell for the rest of the call. It is reported as :refused
   {:pos :reason} (warn prepare.refused).
   Condition-failed (it does not start) unless a step can be taken. A field where every cell is done, wrong, cramped, without soil or
   short of saplings is left alone, with one note per cell (prepare.wrong, prepare.no-soil, prepare.cramped,
@@ -164,15 +164,15 @@
         (cond
           (seq (field/todo c states)) (contract/ok :work "a step can be taken on a planned cell")
           (seq (unseen-room c states)) (contract/look :unseen-room "cells never seen are looked at" :look-at (unseen-room c states))
-          (seq (:recede (ctx/mem c))) (checks/cause-status :later {:reason :receding :ready-at (apply min (vals (:recede (ctx/mem c))))})
+          (receding? states) (checks/cause-status :later {:reason :receding})
           :else (checks/cause-status :later (or (blocked-reason states) {:reason :nothing-to-do})))))))
 
 ;; ------------------------------------------------------------------ steps
 
 (defn skip!
-  "Leave the cell for a while and say why, once."
+  "Leave the cell for the rest of this call and say why, once."
   [c pos reason]
-  (ctx/remember! c field/skip-kind {:pos pos :reason reason} field/skip-policy)
+  (ctx/update-mem! c assoc-in [:skipped pos] {:pos pos :reason reason})
   (ctx/warn-once! c [:refused pos reason] :prepare.refused
                   {:pos pos :reason reason
                    :text (str "prepare leaves " (pr-str (lib/cell-vec pos)) " alone: " (name reason))}))
@@ -263,8 +263,6 @@
                       (:need :no-item :occupied :no-support) (do (count-cell-fail! c pos (if (= :need outcome) :no-item outcome)) :again)
                       (do (count-cell-fail! c pos :failed) :again))))))))))
 
-(def recede-ms "How long a flow is given to recede after its source was dammed." 10000)
-
 (defn ^:async place-source!
   "Place the carried soil into the water of a wet cell: the source in the cell (:fill), or the source elsewhere
   (:dam, after which the cell is receding for recede-ms). :again."
@@ -283,7 +281,7 @@
                   (let [outcome (await (blocks/place-cell! c target item {:for-plan (:plan (:args c))
                                                                           :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
                         dammed (fn [m] (cond-> (bump m :dammed)
-                                         (not fill?) (update :recede assoc pos (+ (ctx/now c) recede-ms))))]
+                                         (not fill?) (update :recede (fnil conj #{}) pos)))]
                     (case outcome
                       :continue :continue
                       (:placed :already) (do (ctx/update-mem! c dammed) :again)
@@ -434,7 +432,7 @@
             {:keys [refused text] :as result} (result-of c states)
             data [:units :cells :done worked :left (count todo) :result (dissoc result :text)]]
         (cond
-          (or (seq todo) (seq (:recede m)) (blocked-reason states) (seq refused) (look/unseen? (:primitives c) cells))
+          (or (seq todo) (receding? states) (blocked-reason states) (seq refused) (look/unseen? (:primitives c) cells))
           (apply contract/later :preparing (str "prepare: " (count todo) " cells to work") data)
           (or (:collect m) (checks/child-under-way? c)) (apply contract/later :wrapping-up "prepare: every cell is ready, wrapping up" data)
           :else (apply contract/ok :prepared text data))))))

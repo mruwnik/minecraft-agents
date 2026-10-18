@@ -11,14 +11,10 @@
 
 ;; ------------------------------------------------------------------ reading the field
 
-(def skip-kind :forestry/prepare-skip)
-
-(def skip-policy {:cap 100 :ttl (* 10 60 1000)})
-
 (defn skipped
-  "{pos data} of the cells skipped for a while (body memory)."
+  "{pos {:pos :reason}} of the cells this call gave up on."
   [c]
-  (into {} (map (fn [e] [(:pos (:data e)) (:data e)])) (ctx/entries c skip-kind)))
+  (:skipped (ctx/mem c) {}))
 
 (defn planned
   "{:trees {pos species} :planned #{[x y z]}} for the plan, or {:trouble text} (warned once per reason)."
@@ -39,13 +35,13 @@
 
 (defn settle-wet
   "The assessed cell with a water state checked against what is known now: a :fill / :dam the access rules refuse is
-  :wet with the reason, and an untraced cell still receding from a dam is :receding."
+  :wet with the reason, and an untraced cell beside a dam of this call is :receding until the water is gone."
   [c {:keys [state why pos] :as cell}]
   (let [v (when (#{:fill :dam} state) (place-verdict c (lib/cell-vec (:target cell))))
-        until (get (:recede (ctx/mem c)) pos)]
+        dammed? (contains? (:recede (ctx/mem c)) pos)]
     (cond
       (vector? v) (assoc cell :state :wet :why (second v))
-      (and (= :wet state) (= :untraced why) until (> until (ctx/now c))) (assoc cell :state :receding :until until)
+      (and (= :wet state) (= :untraced why) dammed?) (assoc cell :state :receding)
       :else cell)))
 
 (defn assessments
