@@ -3,7 +3,7 @@
 ;; A stone island x 10..22, z 10..12 sits inside a 5-wide, 6-deep void ring (x 5..27, z 5..17); the body stands south of the ring (z 18.5)
 ;; and cannot cross it. The gates and the chest on the island are in click range of nothing the walker can reach.
 ;; Should-succeed: a pen-gate reflex whose planned gates are all unreachable backs off (reflex.backoff, :pen-gate);
-;;   a listed job that fails every act three rounds in a row raises job.fruitless and is never backed off.
+;;   a listed repeat of a job that cannot act rests (waiting :resting) and is never backed off.
 ;; Should-fail (never backs off): the burning reflex (backoff off in defaults.edn) while extinguish cannot find water.
 {:defaults
  {:tags [:rounds :backoff] :time :any
@@ -22,12 +22,12 @@
    :body {:at [16.5 0 18.5] :inventory [["stick" 5]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 5 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :backoff :context {:reflex-id :hungry} :data {:fruitless 3}} :within-s 60}]}
-  {:name "listed-job-blocked-is-flagged-not-backed-off"
+  {:name "listed-repeat-of-a-blocked-job-rests-not-backed-off"
    :blocks [[:set [16 0 11] "chest"]]
    :body {:at [16.5 0 18.5] :inventory [["stick" 5]]}
    :act [[:job (repeat (jobs.storage.deposit {:chest #at [16 0 11]}))]]
-   :expect [{:event {:source :job :kind :fruitless} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :backoff} :for-s 90 :until {:source :job :kind :fruitless}}]}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :resting}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :backoff} :for-s 30 :until {:source :job :kind :waiting}}]}
   {:name "burning-never-backs-off"
    :register [{:trigger :burning :persistence :cooldown :cooldown-s 0 :job (jobs.survival.extinguish {:water-radius 6})}]
    :blocks [[:set [10 -1 22] "netherrack"] [:set [10 0 22] "fire"]]

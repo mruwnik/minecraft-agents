@@ -30,7 +30,7 @@
    :limit-s 120}
   {:name "get-tool-announces-its-walk-to-look-for-logs"
    :act [[:job (jobs.items.get-tool {:kind "pickaxe"})]]
-   :expect [{:event {:source :job :kind :obtain.exploring :data {:attention :notice :for [:any] :max-distance [:any]}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :obtain.exploring :attention :notice :data {:for [:any] :max-distance [:any]}} :within-s 40 :of-job true}]
    :limit-s 60}
   {:name "get-tool-without-explore-gives-no-notice"
    :act [[:job (jobs.items.get-tool {:kind "pickaxe" :explore false})]]
