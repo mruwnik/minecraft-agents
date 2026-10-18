@@ -29,7 +29,7 @@
   {:name "mount-twice-is-already"
    :act [[:summon "oak_boat" [11.5 0 16.5] "{}"]
          [:job (jobs.movement.mount {:name "oak_boat"})]
-         [:job (jobs.movement.mount {:name "oak_boat"})]]
+         [:http :submit (jobs.movement.mount {:name "oak_boat"}) [:alongside] {:ok true}]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.mount" :already true}} :within-s 40 :of-job true}]}
   {:name "cow-is-not-mountable"
    :act [[:summon "cow" [12.5 0 16.5]]

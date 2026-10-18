@@ -18,7 +18,7 @@
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]
          [:job (jobs.movement.boat-drive {:pos #at [23 -1 16]})]
-         [:job (jobs.movement.boat-drive {:pos #at [14 -1 15]})]]
+         [:http :submit (jobs.movement.boat-drive {:pos #at [14 -1 15]}) [:alongside] {:ok true}]]
    :expect [{:count-event {:source :job :kind :completed :data {:left [:<= 1.5]}} :for-s 160 :at-least 2 :at-most 2}]
    :after [[:body-near [14.5 -1 15.5] 2]]}
   {:name "on-foot-is-not-aboard"
