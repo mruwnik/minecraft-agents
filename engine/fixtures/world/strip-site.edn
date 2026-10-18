@@ -3,7 +3,7 @@
 ;; seal of strip.seal that 7a7381b9 leaves to the site.
 ;; Plot 32 x 32, floor stone. A stone mass x 2..30, y 0..4, z 10..22 holds a corridor along x 2..26 (y 0..2, z 15..17; its west end
 ;; opens to the air at x 1), rails x 3..25 at z 16, two supports (fences + planks) at x 8 and 14, a cobweb at [12 1 16]. The base
-;; (blueprint field-base, plan "base") goes at [18 -1 2], a main storage chest at [28 0 4] (place "main-$tag"). The site is named
+;; (blueprint field-base, plan "base") goes at [18 -1 2], a main storage chest at [28 0 4] (the body's :chest memory). The site is named
 ;; by :at, a rail at [10 0 16]; :shaft false walks in from the west mouth.
 ;; The "branch" cases add a second corridor along z at x 20 (z 11..15, y 0..2, x 19..21) with rails x 20 z 11..15, a support at
 ;; z 12 and a cobweb at [20 1 13]; it hangs on the main corridor at z 16 and is sealed at [20 0..2 15] when stripped.
@@ -21,7 +21,7 @@
            [:set [8 0 15] "oak_fence"] [:set [8 1 15] "oak_fence"] [:set [8 0 17] "oak_fence"] [:set [8 1 17] "oak_fence"] [:fill [8 2 15] [8 2 17] "oak_planks"]
            [:set [14 0 15] "oak_fence"] [:set [14 1 15] "oak_fence"] [:set [14 0 17] "oak_fence"] [:set [14 1 17] "oak_fence"] [:fill [14 2 15] [14 2 17] "oak_planks"]
            [:fill [18 -1 2] [24 -1 6] "grass_block"] [:set [28 0 4] "chest"]]
-  :places [{:name "main-$tag" :kind :chest :pos [28 0 4] :note "main storage"}]
+  :memory [{:kind :chest :data {:pos #xyz [28 0 4]}}]
   :plans [{:id "base" :metadata {:by "$body"} :parts [{:id "base" :blueprint "field-base" :at #at [18 -1 2]}]}]
   :body {:at [12.5 0 8.5] :yaw 180 :settle-s 2 :effects [["resistance" 600 4]]
          :inventory [["stone_pickaxe" 1] ["stone_axe" 1] ["shears" 1] ["torch" 16] ["bread" 12] ["cobblestone" 64] ["oak_planks" 96] ["chest" 4]
