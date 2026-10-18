@@ -29,7 +29,7 @@
     breaking the workstation changes nothing), :occupied (another block stands at :pos). :baby, :occupied and a named
     :villager's :gone are checked at the start and then wait (a skipped job); a nitwit takes no job ever: impossible,
     :nitwit, also checked at the start and found mid-run (impossible).
-  - nothing-possible: :still-employed (it kept its job), :no-claim (the villager took no profession within :claim-s after the workstation was placed: night, no path, a
+  - nothing-possible: :still-employed (it kept its job), :no-claim (the villager took no profession within the claim-s setting (60) after the workstation was placed: night, no path, a
     taken workstation), :no-match (:tries rolls without a match), :unreachable, :window (offers could not be read
     three times), :dig-failed, :place-failed (a child stopped, with its reason).
   A workstation item, wanted item or cell that is missing or bad is impossible (:bad-args). A cell the body has not seen
@@ -49,7 +49,6 @@
    :radius {:doc "how far to look for a villager" :spec (a/int-in 1 96) :default 48}
    :max-price {:doc "highest price (first cost stack); nil for no limit" :spec (a/int-in 0 nil) :default nil}
    :tries {:doc "rolls (breaks) before giving up" :spec (a/int-in 1 200) :default 20}
-   :claim-s {:doc "seconds to wait for the villager to take the placed workstation" :spec (a/int-in 1 600) :default 60}
    :fetch {:doc "get the workstation item or a tool when missing (jobs.lib.need)" :spec need/option? :default true}})
 
 (def workstations
@@ -58,10 +57,12 @@
    "mason" "stonecutter" "shepherd" "loom" "toolsmith" "smithing_table" "weaponsmith" "grindstone"})
 
 (a/defargs settings
-  {::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+  {::claim-s {:default 60 :doc "Seconds to wait for the villager to take the placed workstation." :spec (a/int-in 1 600)}
+   ::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::leg-s {:default 15 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 1800 :doc "Seconds one search may take." :spec (a/int-in 1 nil)}
    ::unemploy-s {:default 20 :doc "Seconds to wait for the villager to lose its job after the break, then place anyway." :spec (a/int-in 0 nil)}})
+(defn claim-s [] (settings/get settings ::claim-s))
 (defn reach [] (settings/get settings ::reach))
 (defn leg-s [] (settings/get settings ::leg-s))
 (defn unemploy-s [] (settings/get settings ::unemploy-s))
@@ -274,7 +275,7 @@
 (defn ^:async step!
   "One piece of the search, from what the world and the saved count say now. :again, :continue or :done."
   [c]
-  (let [{:keys [tries claim-s pos]} (:args c)
+  (let [{:keys [tries pos]} (:args c)
         item (item-of (:args c))
         p (:primitives c)
         villager (pick! c)
@@ -302,7 +303,7 @@
       (= "unemployed" profession)
       (do (ctx/update-mem! c dissoc :stale)
           (when-not (:placed (ctx/mem c)) (stamp! c :placed))
-          (if (> (waited-s c :placed) claim-s)
+          (if (> (waited-s c :placed) (claim-s))
             (stop! c :no-claim)
             :continue))
       (not (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach))) (await (walk! c (u/pos-of (.-pos e))))

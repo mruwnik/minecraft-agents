@@ -179,7 +179,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[r p] (await (enchant! (assoc table-world :blocks {"20,64,0" "enchanting_table"}) {:radius 40}))]
+        (let [[r p] (await (enchant! (assoc table-world :blocks {"20,64,0" "enchanting_table"}) {:settings {:jobs.items.enchant/table-radius 40}}))]
           (is (seq (tu/walk-calls p)))
           (is (true? (:enchanted r))))))))
 
@@ -294,7 +294,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (start (assoc table-world :blocks {"20,64,0" "enchanting_table"}))
-              result (await (child-outcome eng ['jobs.items.enchant {:item "diamond_sword" :radius 40}] 1))]
+              result (await (child-outcome eng ['jobs.items.enchant {:item "diamond_sword" :settings {:jobs.items.enchant/table-radius 40}}] 1))]
           (is (empty? (:list (core/state eng))))
           (is (seq (tu/walk-calls p)))
           (is (true? (:enchanted result)))

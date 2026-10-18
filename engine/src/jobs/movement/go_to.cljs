@@ -10,7 +10,6 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.pace :as pace]
             [jobs.lib.walk.search :as wsearch]
-            [jobs.lib.walk.watch :as wwatch]
             [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to.air :as air]
             [jobs.movement.go-to.aim :as aim :refer [args-refusal goal-danger goal-pos pre-aim!]]
@@ -83,7 +82,7 @@
     leg that got no nearer goes on as any round, and a search that goes on past n s gives up :leg-search-spent.
   - An arrival in water walks on to the nearest seen dry stand within :range and ::dry-radius of the body (settings), once
     a call, a short walk of its own; with none, or that walk failing, it ends {:arrived true :in-water true} with an info
-    go-to.in-water saying which. :leave-water false keeps an arrival in water. Under water with its search going on (no
+    go-to.in-water saying which. The leave-water setting false keeps an arrival in water. Under water with its search going on (no
     walk) it swims to air first (go-to.surfacing) when under ::surface-air seconds of air are left (always), or when the
     search began afresh more than ::wet-restarts times (at most 3 such swims in a row that leave the head under).
   - A call starts afresh from the world: its walk counters are per call (the cut count carries over only a cut of this run's call to the same goal), and a saved escalation is dropped when the body
@@ -172,7 +171,6 @@
    :dark {:doc "false: plan dark cells like lit ones; true: a dark cell (seen dark, or unseen at night) costs twice a lit one" :spec boolean? :default true}
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more (jobs.lib.cost farm-tolls, zone-tolls)" :spec (a/valid-by "a list of {:x :y :z :factor} of finite numbers, :factor >= 0" wworld/tolls-problem) :default nil}
    :food {:doc "the food level (0-20) the walk counts on for its damage budget, its sprinting and whether it can heal by waiting (18 or more regenerates); default the body's own" :spec (a/num-in 0 20) :default nil}
-   :fall-margin {:doc "hp the falls of a walk may cost over the plan before an info go-to damage-mismatch" :spec (a/num-in 0 nil) :default wwatch/fall-margin}
    :flee-factor {:doc "danger price: a known mob the body would flee costs this times its hp a second (jobs.lib.cost.danger)" :spec (a/num-in 0 nil) :default (:flee cost/danger-stances)}
    :fight-factor {:doc "danger price: a known mob the body would fight costs this times its hp a second" :spec (a/num-in 0 nil) :default (:fight cost/danger-stances)}
    :danger-max-rate {:doc "danger price: hp a second one known danger costs at most; above the default it also raises the total of all dangers a second (planner dangerCap)" :spec a/pos-num? :default cost/danger-max-rate}
@@ -198,9 +196,6 @@
    :look-round {:doc "false: no look round on arrival, for a caller that keeps moving" :spec boolean? :default true}
    :warn {:doc "false: a give-up or refusal is an info event, not a warn, for a caller that reports the failure itself"
           :spec boolean? :default true}
-   :air-looks {:doc "under water with no air known: rounds of looking again for air (goal head, open water ahead), the aim shifted a little each round, before giving up :air" :spec (a/int-in 0 nil) :default air/default-air-looks}
-   :air-look-min {:doc "seconds of air left below which it looks again for air no more (:air-looks), the fallback (swim up, breathe) needs them" :spec (a/num-in 0 nil) :default air/default-air-look-min}
-   :leave-water {:doc "false: an arrival within range in water stays there (a swim target, a boat), no walk on to a dry stand" :spec boolean? :default true}
    :ignore-zones? :shared
    :spare-own-builds {:doc "the escalation never digs a cell of a plan this body made (stops :own-build); false: it may, and warns of each cell dug" :spec boolean? :default true}})
 

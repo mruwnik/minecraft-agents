@@ -1,7 +1,8 @@
 (ns jobs.lib.walk.watch
   "The walk driver's look-ahead: the cells and mobs of the way ahead watched while a plan is walked (watch-stop), when a walk may
   stop to plan again, and whether a refreshed plan replaces the old one."
-  (:require [engine.game :as game]
+  (:require [engine.args :as a]
+            [engine.game :as game]
             [engine.hurt :as hurt]
             [engine.settings :as settings]
             [jobs.lib.combat :as combat]
@@ -35,7 +36,9 @@
   "Steps a walk is never stopped before or on: the body is in the air, on a ladder, swimming, or in a gap's run-up."
   #{:gap :climb-up :climb-down :jump-climb :open :swim :swim-up :swim-down :exit})
 
-(def fall-margin "Default hp a walk's falls may cost over the plan before it is a mismatch (rounding of the fall)." 1)
+(a/defargs settings
+  {::fall-margin {:default 1 :doc "Hp a walk's falls may cost over the plan before an info damage-mismatch (rounding of the fall)." :spec (a/num-in 0 nil)}})
+(defn fall-margin [] (settings/get settings ::fall-margin))
 
 (defn step-cells
   "The cells [x y z] the body passes going from prev to step: the columns its footprint (the hitbox half-width either side) touches
@@ -203,8 +206,8 @@
 
 (defn damage-mismatch
   "{:planned :lost} when the falls in hurts (raw :hurt memory entries since the walk began) cost more than margin hp
-  (default fall-margin) over planned, the hp the walked steps planned for drops; else nil. Hits of other causes do not count."
-  ([planned hurts] (damage-mismatch planned hurts fall-margin))
+  (the fall-margin setting) over planned, the hp the walked steps planned for drops; else nil. Hits of other causes do not count."
+  ([planned hurts] (damage-mismatch planned hurts (fall-margin)))
   ([planned hurts margin]
   (let [lost (transduce (comp (filter #(= "fall" (hurt/cause (:data %)))) (map #(:amount (:data %)))) + 0 hurts)]
     (when (> lost (+ planned margin))

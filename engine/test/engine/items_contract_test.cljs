@@ -13,7 +13,7 @@
 (deftest every-item-job-exports-the-contract-and-quotes-validly
   (let [p (tu/fake {})
         args {'jobs.items.equip {:item "stone_pickaxe" :hand "main"} 'jobs.items.interact {:id 7}
-              'jobs.items.give {:player "Steve" :item "bread" :wait-s 6} 'jobs.items.enchant {:item "iron_sword"}}]
+              'jobs.items.give {:player "Steve" :item "bread"} 'jobs.items.enchant {:item "iron_sword"}}]
     (doseq [sym jobs
             :let [job (get registry/jobs sym)]]
       (is (fn? (:can-start? job)) (str sym " has can-start?"))

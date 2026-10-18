@@ -160,7 +160,7 @@
                                                                     (assoc fresh :steps [] :refused true :stop {:status :stair-cheaper :why why})
                                                                     fresh)))
                                                           :walk-fn walk-fn :to to :policy (policy-of) :announce! announce! :dangers dangers}))
-                             _ (walk/note-mismatch! c planned began (:fall-margin (:args c)))]
+                             _ (walk/note-mismatch! c planned began nil)]
                          (cond
                            (= :stair-cheaper (:status done)) done
 

@@ -19,12 +19,12 @@
   Nothing-possible, {:given 0}:
   - :unreachable, three walks in a row are blocked.
   - :out-of-range, three arrivals in a row are still out of reach.
-  A player farther than :reach is walked to (doors :shut). In reach the body looks at the player's head and tosses.
+  A player farther than the reach setting (2) is walked to (doors :shut). In reach the body looks at the player's head and tosses.
   The item entities of that name within 10 blocks of the toss spot that were not there before are the drop.
   After the toss:
   - The drop is gone once seen: done {:given n :text}.
   - The drop is never seen within 3 s: done {:given tossed :unconfirmed true}.
-  - The drop still lies after :wait-s: it is collected back, never left as litter. Done {:given (tossed - back)
+  - The drop still lies after the wait-s setting (6): it is collected back, never left as litter. Done {:given (tossed - back)
     :returned back} when some was taken (the call's :least, default 1), else nothing-possible :not-taken. The same happens if the body picks it up on its own.
   A toss refused three times in a row, or three collects in a row that change nothing, end nothing-possible with the status or :litter as the cause.
   The cleanup export takes back a drop still lying however the call ends (a cut included), at most :max-blocked
@@ -36,12 +36,12 @@
   {:player {:spec a/name? :default nil}
    :item {:spec a/item? :default nil}
    :count {:doc "how many; nil gives everything carried" :spec (a/int-in 1 nil) :default nil}
-   :reach {:doc "toss from within this many blocks" :spec (a/num-in 0 nil) :default 2}
-   :radius {:spec (a/num-in 0 nil) :default 32}
-   :wait-s {:doc "how long a drop may lie before it is taken back" :spec (a/num-in 0 nil) :default 6}})
+   :radius {:spec (a/num-in 0 nil) :default 32}})
 
 (a/defargs settings
-  {::job-time-s {:default 60 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+  {::reach {:default 2 :doc "Toss from within this many blocks." :spec (a/num-in 0 nil)}
+   ::wait-s {:default 6 :doc "How long a drop may lie before it is taken back, in seconds." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 60 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::idle-ms {:default 500 :doc "Wait while there is nothing to do, in ms." :spec (a/int-in 0 nil)}
    ::walk-leg-s {:default 5 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
    ::max-blocked {:default 3 :doc "Blocked attempts before the job gives up." :spec (a/int-in 0 nil)}
@@ -49,6 +49,8 @@
    ::head-height {:default 1.6 :doc "Height of a player's head above its position, in blocks." :spec (a/num-in 0 nil)}
    ::walk-s {:default 10 :doc "Seconds the walk to the player takes (the quote)." :spec (a/num-in 0 nil)}
    ::toss-s {:default 2 :doc "Seconds the toss and the confirmation take (the quote)." :spec (a/num-in 0 nil)}})
+(defn reach [] (settings/get settings ::reach))
+(defn wait-s [] (settings/get settings ::wait-s))
 (defn idle-ms [] (settings/get settings ::idle-ms))
 (defn walk-leg-s [] (settings/get settings ::walk-leg-s))
 (defn max-blocked [] (settings/get settings ::max-blocked))
@@ -120,7 +122,7 @@
   (let [n (or (:count (:args c)) 1)
         walk (settings/get settings ::walk-s)
         toss (settings/get settings ::toss-s)]
-    {:uses {:job-time [toss (+ toss walk) (+ toss (* 2 walk) (:wait-s (:args c)))]}
+    {:uses {:job-time [toss (+ toss walk) (+ toss (* 2 walk) (wait-s))]}
      :done [0 n n]}))
 
 (defn finish!
@@ -149,19 +151,18 @@
   :continue)
 
 (defn ^:async walk!
-  "Walk to pos within :reach (a go-to child, a leg of walk-leg-s so a moving player is aimed at again). An arrival or a
+  "Walk to pos within the reach setting (a go-to child, a leg of walk-leg-s so a moving player is aimed at again). An arrival or a
   leg resets the blocked count; any other end counts, and the third in a row ends the job. An arrival that leaves the
   body not u/within? reach counts in :out-of-range (reset when within), the third in a row ends as out-of-range.
   :again, :continue (go-to waits) or :done."
   [c pos]
-  (let [reach (:reach (:args c))
-        r (await (child/call-walk* c :walk {:pos pos :range reach :doors :shut :spend {:job-time (walk-leg-s)}
+  (let [r (await (child/call-walk* c :walk {:pos pos :range (reach) :doors :shut :spend {:job-time (walk-leg-s)}
                                                                :ways #{:walk :clear-seal} :warn false :retry false :zone-tolls true}))
         res (when-not (= :continue r) (:data r))]
     (if (= :continue r)
       :continue
       (let [blocked (if (or (:arrived res) (:leg res)) 0 (inc (:blocked (ctx/mem c) 0)))
-            out (if (or (> blocked 0) (u/within? (u/self-pos c) pos reach)) 0 (inc (:out-of-range (ctx/mem c) 0)))]
+            out (if (or (> blocked 0) (u/within? (u/self-pos c) pos (reach))) 0 (inc (:out-of-range (ctx/mem c) 0)))]
         (ctx/update-mem! c assoc :blocked blocked :out-of-range out)
         (cond
           (>= out (max-blocked))
@@ -215,7 +216,7 @@
   empty view only means taken once the drop has been seen (its spawn may not
   have arrived yet); a drop never seen within unseen-ms ends as unconfirmed."
   [c]
-  (let [{:keys [item radius wait-s]} (:args c)
+  (let [{:keys [item radius]} (:args c)
         {:keys [tossed tossed-t toss-at before had collecting seen-drop]} (ctx/mem c)
         p (:primitives c)
         lying (remove #(contains? before (:id %)) (look/drops p item radius toss-at))
@@ -239,7 +240,7 @@
         (do (ctx/update-mem! c assoc :confirmed true)
             (gave! c tossed :short {:text (str "gave " tossed)})))
 
-      (and (not collecting) (< since (* 1000 wait-s)))
+      (and (not collecting) (< since (* 1000 (wait-s))))
       (await (idle! c))
 
       :else
@@ -249,7 +250,7 @@
   "Nothing thrown yet: wait when nothing is carried or the player is not seen (can-run? answers), walk when too far,
   else toss."
   [c]
-  (let [{:keys [player item radius reach]} (:args c)
+  (let [{:keys [player item radius]} (:args c)
         p (:primitives c)
         have (storage/carried (u/inventory p) item)
         pos (find-player p player radius)]
@@ -257,7 +258,7 @@
       (or (zero? have) (nil? pos))
       (await (idle! c))
 
-      (not (u/within? (u/self-pos c) pos reach))
+      (not (u/within? (u/self-pos c) pos (reach)))
       (await (walk! c pos))
 
       :else

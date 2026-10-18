@@ -18,6 +18,9 @@
    :jobs.movement.go-to.tuning/send-back-margin {:default 3 :doc "Blocks farther from the goal than where the cut found the body a go-to restart must begin to count as sent back (knockback and in-place reflexes stay under it)." :spec (a/num-in 0 nil)}
    :jobs.movement.go-to.tuning/surface-air {:default 7.5 :doc "Seconds of air left under which a go-to whose head is under water and whose search goes on (no walk) swims to air first: a body holding still in water sinks while it thinks." :spec (a/num-in 0 nil)}
    :jobs.movement.go-to.tuning/wet-restarts {:default 2 :doc "Times a go-to's search under water may begin afresh (no walk) after its first slice before it swims to air first and plans from there." :spec (a/int-in 0 nil)}
+   :jobs.movement.go-to.tuning/air-looks {:default 3 :doc "Under water with no air known: rounds of looking again for air (goal head, open water ahead), the aim shifted a little each round, before a go-to gives up :air." :spec (a/int-in 0 nil)}
+   :jobs.movement.go-to.tuning/air-look-min {:default 1.5 :doc "Seconds of air left below which a go-to looks again for air no more; the fallback (swim up, breathe) needs them." :spec (a/num-in 0 nil)}
+   :jobs.movement.go-to.tuning/leave-water {:default true :doc "Whether an arrival within range in water walks on to a dry stand; false keeps it in the water (a swim target, a boat)." :spec boolean?}
    :jobs.movement.go-to.tuning/dry-radius {:default 6 :doc "Blocks from the body an arrival in water reads for a dry stand (also within :range of the goal)." :spec (a/num-in 0 nil)}
    :jobs.movement.go-to.tuning/dry-walk-rounds {:default 3 :doc "Walk rounds (search slices or walks) the walk on from an arrival in water to a dry stand takes at most." :spec (a/int-in 1 nil)}
    :jobs.movement.go-to.tuning/climb-rise {:default 16 :doc "Blocks a goal must lie above a body under ground for its go-to to plan no dive (:jobs.movement.go-to.tuning/climb-dip)." :spec (a/num-in 0 nil)}
@@ -40,7 +43,10 @@
 
 (defn surface-air [] (settings/get settings :jobs.movement.go-to.tuning/surface-air))
 (defn wet-restarts [] (settings/get settings :jobs.movement.go-to.tuning/wet-restarts))
-(defn dry-radius [] (settings/get settings :jobs.movement.go-to.tuning/dry-radius))
+(defn air-looks [] (settings/get settings :jobs.movement.go-to.tuning/air-looks))
+(defn air-look-min [] (settings/get settings :jobs.movement.go-to.tuning/air-look-min))
+(defn leave-water [] (settings/get settings :jobs.movement.go-to.tuning/leave-water))
+(defn dry-radius []  (settings/get settings :jobs.movement.go-to.tuning/dry-radius))
 (defn dry-walk-rounds [] (settings/get settings :jobs.movement.go-to.tuning/dry-walk-rounds))
 (defn climb-rise [] (settings/get settings :jobs.movement.go-to.tuning/climb-rise))
 (defn climb-dip [] (settings/get settings :jobs.movement.go-to.tuning/climb-dip))

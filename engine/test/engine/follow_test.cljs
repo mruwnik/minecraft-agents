@@ -112,7 +112,7 @@
 (defn check-ctx
   "A ctx for the checks: the world's primitives and a job memory of mem."
   [p mem]
-  {:primitives p :root "j1" :args {:player "Steve" :radius 64}
+  {:primitives p :root "j1" :args {:player "Steve"}
    :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data mem}]}}})})
 
 (deftest a-player-never-seen-is-a-wait-not-an-ending
@@ -167,7 +167,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (follow {:entities [(steve 150)] :floor [-30 -10 160 10]} {:player "Steve" :radius 200} 1 500))]
+        (let [{:keys [p]} (await (follow {:entities [(steve 150)] :floor [-30 -10 160 10]} {:player "Steve" :settings {:jobs.movement.follow/radius 200}} 1 500))]
           (is (< 5 (self-x p)) (str "legs on toward the player, at " (self-x p))))))))
 
 (deftest the-out-of-range-count-is-against-where-the-target-stands-after-the-walk
@@ -191,7 +191,7 @@
       (fn ^:async t []
         (let [pauses (atom [])
               stub {:round (fn ^:async stub-round [c] (swap! pauses conj (:args c)) (ctx/end c :done nil {}))}
-              s (setup {:entities [(steve 1)]} {:player "Steve" :range 3 :radius 10})]
+              s (setup {:entities [(steve 1)]} {:player "Steve" :range 3 :settings {:jobs.movement.follow/radius 10}})]
           (await (run-ticks (assoc-in s [:eng :jobs 'jobs.time.noop] stub) 3 500))
           (is (= [{:seconds 0.5 :why :following}] (distinct @pauses)))
           (is (empty? (calls (:p s) "wait")) "no bare wait act"))))))

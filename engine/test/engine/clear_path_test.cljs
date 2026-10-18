@@ -19,9 +19,9 @@
    :blocks (merge (box -2 63 -2 8 63 2 "stone") (box 1 64 -1 2 65 1 "stone"))})
 
 (defn ^:async run-door
-  "Run clear-path over world (stub: a replacement round for jobs.blocks.dig, or nil) as a child, :east :max-thick 3
+  "Run clear-path over world (stub: a replacement round for jobs.blocks.dig, or nil) as a child, :east
   unless args says otherwise; its result."
-  ([world stub] (run-door world stub {:heading :east :max-thick 3}))
+  ([world stub] (run-door world stub {:heading :east}))
   ([world stub args] (run-door world stub args nil))
   ([world stub args rounds] (run-door world stub args rounds tu/outcome))
   ([world stub args rounds f]
@@ -48,7 +48,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (run-door wall nil {:heading :east :max-thick 3 :fetch false}))]
+        (let [r (await (run-door wall nil {:heading :east :fetch false}))]
           (is (= [:stopped :dig-waits :no-tool] [(:status r) (:reason r) (:reason (:wait r))]) (pr-str r))
           (is (= [1 65 0] (:cell r)) "the top layer first"))))))
 
@@ -62,14 +62,14 @@
                      (ctx/end c :nothing-possible :failed {:dug false}))
               w (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}])
               _ (await (run-door w stub))
-              _ (await (run-door w stub {:heading :east :max-thick 3 :fetch #{:item}}))]
+              _ (await (run-door w stub {:heading :east :fetch #{:item}}))]
           (is (= [true #{:item}] @seen)))))))
 
 (deftest by-hand-digs-the-door-with-no-pickaxe
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (run-door wall nil {:heading :east :max-thick 3 :need-drop false}))]
+        (let [r (await (run-door wall nil {:heading :east :need-drop false}))]
           (is (= [:done [3 64 0]] [(:status r) (:through r)]) (pr-str r))
           (is (= 4 (count (:dug r))) "two blocks high, two thick, bare-handed"))))))
 
@@ -125,7 +125,7 @@
                       (reset! asked (:args c))
                       (ctx/end c :nothing-possible :unreachable {:arrived false}))
               r (await (run-door (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}]) nil
-                                 {:heading :east :max-thick 3} {'jobs.movement.go-to go-to} identity))]
+                                 {:heading :east} {'jobs.movement.go-to go-to} identity))]
           (is (= [:nothing-possible :step-failed] [(:kind r) (contract/cause-key r)]) (pr-str r))
           (is (= [[3 64 0] 0 #{:walk :clear-seal}] ((juxt :pos :range :ways) @asked)) (pr-str @asked)))))))
 
@@ -133,12 +133,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [e (await (run-door wall nil {:max-thick 3} nil identity))]
+        (let [e (await (run-door wall nil {} nil identity))]
           (is (= [:impossible :bad-args] [(:kind e) (contract/cause-key e)]) (pr-str e)))))))
 
 (deftest the-job-exports-the-contract-and-quotes-validly
   (let [def (get registry/jobs job)
-        q ((:quote-of def) {:primitives (tu/fake wall) :args {:heading :east :max-thick 3}})]
+        q ((:quote-of def) {:primitives (tu/fake wall) :args {:heading :east}})]
     (is (= [:heading] (:target def)))
     (is (some? (:can-start? def)))
     (is (nil? (contract/quote-problem q)) (pr-str q))))
@@ -153,13 +153,13 @@
                       [(:kind e) (contract/cause-key e) (:kind (:because e))]))
               refilling (fn ^:async refilling [c] (ctx/end c :done nil {:dug true :reason :dug}))
               failing (fn ^:async failing [c] (ctx/end c :nothing-possible :failed {:dug false :primitive "timeout"}))
-              east {:heading :east :max-thick 3}]
+              east {:heading :east}]
           (is (= [:done :done nil] (await (end (merge wall pick) nil east))))
           (is (= [:condition-failed :dig-waits :condition-failed] (await (end wall nil east))) "the dig child's wait is its because")
           (is (= [:nothing-possible :refills nil] (await (end (merge wall pick) refilling east))))
           (is (= [:nothing-possible :dig-failed :nothing-possible] (await (end (merge wall pick) failing east))))
           (is (= [:condition-failed :no-door nil] (await (end (dissoc wall :blocks) nil east))))
-          (is (= [:condition-failed :no-door nil] (await (end wall nil {:heading :east :max-thick 1}))) "a wall thicker than :max-thick")
+          (is (= [:condition-failed :no-door nil] (await (end wall nil {:heading :east :settings {:jobs.access.clear-path/max-thick 1}}))) "a wall thicker than the max-thick setting")
           (is (= [:condition-failed :footprint nil]
                  (await (end (assoc (merge wall pick) :plans {"hut" (shape/with-author {:id "hut" :parts [{:id "w" :cells [[1 64 0]] :want "stone"}]} "Fake")})
                              nil east)))))))))
@@ -170,15 +170,15 @@
       (fn ^:async t []
         (let [plan (shape/with-author {:id "hut" :parts [{:id "w" :cells [[1 64 0] [1 65 0] [2 64 0] [2 65 0]] :want "stone"}]} "Fake")
               world (assoc wall :plans {"hut" plan})
-              r (await (run-door world nil {:heading :east :max-thick 3 :need-drop false}))
-              r2 (await (run-door world nil {:heading :east :max-thick 3 :spare-own-builds false :need-drop false}))]
+              r (await (run-door world nil {:heading :east :need-drop false}))
+              r2 (await (run-door world nil {:heading :east :spare-own-builds false :need-drop false}))]
           (is (= [:stopped :footprint "hut"] [(:status r) (:reason r) (:plan r)]) (pr-str r))
           (is (= :done (:status r2)) (pr-str r2)))))))
 
 (defn done-of
   "The kind and reason of clear-path's done? for a body at pos over world with the call's memory mem."
   [world pos mem]
-  (let [c {:primitives (tu/fake (assoc-in world [:self :pos] pos)) :root "j1" :slots [] :args {:heading :east :max-thick 3}
+  (let [c {:primitives (tu/fake (assoc-in world [:self :pos] pos)) :root "j1" :slots [] :args {:heading :east}
            :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data mem}]}}})}]
     (tu/kind-reason ((:done? (get registry/jobs job)) c))))
 

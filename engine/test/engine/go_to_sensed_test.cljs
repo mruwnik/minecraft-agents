@@ -99,7 +99,7 @@
         [_ sink] (tu/legacy-capture-sink)
         {:keys [w]} (sensed-only spec)
         out (atom :not-done)
-        parent (tu/recording-parent 'jobs.access.clear-path {:heading :east :max-thick 3} out)
+        parent (tu/recording-parent 'jobs.access.clear-path {:heading :east} out)
         eng (core/create {:primitives w :jobs (assoc registry/jobs 'recording-parent parent) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]

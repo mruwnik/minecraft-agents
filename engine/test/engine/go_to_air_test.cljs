@@ -44,7 +44,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [out (await (go-east! (/ js/Math.PI -2) 0 {:air-looks 0 :blocks bent-tunnel :pos bent-goal}))]
+        (let [out (await (go-east! (/ js/Math.PI -2) 0 {:settings {:jobs.movement.go-to.tuning/air-looks 0} :blocks bent-tunnel :pos bent-goal}))]
           (is (= :air (:why out)) (str "result " out)))))))
 
 (deftest a-body-too-low-on-air-gives-up_without_looking_again

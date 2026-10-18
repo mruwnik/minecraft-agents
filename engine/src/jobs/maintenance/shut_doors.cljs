@@ -20,13 +20,13 @@
   Blocks with an :opened entry count (written by jobs.lib.pass when a walk opens a block, dropped when it
   shuts it), whatever their age. With :unrecorded? (default off; the door-left reflex and lead-to never set it) wooden
   doors (never gates or trapdoors) seen open without an entry count too, but only those of the body's own building:
-  inside the footprint of a plan it made, or within :home-radius of its :home place. Any other block the walker did not open is never touched. Blocks a :leave-open walk left
+  inside the footprint of a plan it made, or within the home-radius setting (8) of its :home place. Any other block the walker did not open is never touched. Blocks a :leave-open walk left
   open on purpose are left alone while that walk's job lives (once it is gone, they count).
-  One run shuts them all, nearest first. For each it walks within :reach (a jobs.movement.go-to child, doors :never:
+  One run shuts them all, nearest first. For each it walks within the reach setting (3) (a jobs.movement.go-to child, doors :never:
   it opens nothing on the way), then shuts it as the walker does (pass/shut-column!). An animal in the cell is waited
   out, never pushed. A recorded block the body still has not seen after the look is left as :unseen (entry untouched). A block that cannot be reached, that the body stands in the column of, or that is not shut after
-  :tries clicks fails this run (shut-doors.gave-up, warn the first time); its entry is kept with a fail counted (the
-  trigger waits :open-s per fail) and a later run tries again, until :attempts runs have failed: then it is dropped with a last
+  the tries setting (3) clicks fails this run (shut-doors.gave-up, warn the first time); its entry is kept with a fail counted (the
+  trigger waits :open-s per fail) and a later run tries again, until the attempts setting (5) runs have failed: then it is dropped with a last
   warn. A block that cannot be reached is dropped at once. A block the body stands in the column of, or whose walk was
   interrupted (:walk-interrupted, info only), is left and keeps its entry the same way. A block an animal stands in
   (:animal-in-the-way, info only) keeps its entry untouched and no failure counts, so the trigger tries again at once.
@@ -35,8 +35,17 @@
   Spends :time (default ::job-time-s).")
 
 (a/defargs settings
-  {::job-time-s {:default 120 :doc "Seconds a run may take before it ends." :spec (a/num-in 0 nil)}
+  {::reach {:default 3 :doc "Walk until within this many cells of the block (a click reaches 4.5 from the eye)." :spec (a/num-in 0 nil)}
+   ::home-radius {:default 8 :doc "With :unrecorded?, a door this close to the :home place is the body's own, in blocks." :spec (a/num-in 0 nil)}
+   ::tries {:default 3 :doc "Clicks on one block before the run leaves it." :spec (a/int-in 1 nil)}
+   ::attempts {:default 5 :doc "Runs whose clicks failed before a block is dropped for good." :spec (a/int-in 1 nil)}
+   ::job-time-s {:default 120 :doc "Seconds a run may take before it ends." :spec (a/num-in 0 nil)}
    ::s-per-door {:default 6 :doc "Seconds a quote counts for one door: the walk and the clicks." :spec (a/num-in 0 nil)}})
+
+(defn reach [] (settings/get settings ::reach))
+(defn home-radius [] (settings/get settings ::home-radius))
+(defn tries [] (settings/get settings ::tries))
+(defn attempts [] (settings/get settings ::attempts))
 
 (def target [])
 
@@ -51,21 +60,17 @@
 
 (a/defargs args
   {:radius {:doc "how far from the body a left block is looked for, in blocks" :spec (a/num-in 0 nil) :default 16}
-   :reach {:doc "walk until within this many cells of the block (a click reaches 4.5 from the eye)" :spec (a/num-in 0 nil) :default 3}
-   :unrecorded? {:doc "also shut wooden doors of the body's own building seen standing open that no walk recorded opening" :spec boolean? :default false}
-   :home-radius {:doc "with :unrecorded?, a door this close to the :home place is the body's own, in blocks" :spec (a/num-in 0 nil) :default 8}
-   :tries {:doc "clicks on one block before the run leaves it" :spec (a/int-in 1 nil) :default 3}
-   :attempts {:doc "runs whose clicks failed before a block is dropped for good" :spec (a/int-in 1 nil) :default 5}})
+   :unrecorded? {:doc "also shut wooden doors of the body's own building seen standing open that no walk recorded opening" :spec boolean? :default false}})
 
 ;; the blocks given up in this run are skipped; a later run starts afresh from the world and the :opened entries
 (defn cell-key [{:keys [x y z]}] [x y z])
 
 (defn own-door?
-  "Whether the door cell is in the footprint of a plan this body made, or within :home-radius of its :home place."
+  "Whether the door cell is in the footprint of a plan this body made, or within the home-radius setting (8) of its :home place."
   [c {:keys [x y z] :as cell}]
   (let [home (mem/place (ctx/view c) :home)]
     (boolean (or (some (access/own-plans c) [(get (known/footprints c) [x y z])])
-                 (and home (<= (doors/distance {:x (:x home) :y (:y home) :z (:z home)} cell) (:home-radius (:args c))))))))
+                 (and home (<= (doors/distance {:x (:x home) :y (:y home) :z (:z home)} cell) (home-radius)))))))
 
 (defn targets
   "The left-open blocks (doors/left-open as the body last saw them, any age; then doors/unrecorded-open) within :radius, minus the cells in left ({:cell [x y z]})."
@@ -78,7 +83,7 @@
 (defn ^:async walk!
   "nil when the body stands within reach, else why not: :walk-interrupted (the walk ended :continue) or :unreachable."
   [c {:keys [cell]}]
-  (let [r (await (child/call-walk* c :walk {:pos cell :range (:reach (:args c)) :doors :never :ways #{:walk :clear-seal}}))]
+  (let [r (await (child/call-walk* c :walk {:pos cell :range (reach) :doors :never :ways #{:walk :clear-seal}}))]
     (cond
       (= :continue r) :walk-interrupted
       (and (= :done (:kind r)) (:arrived (:data r))) nil
@@ -95,7 +100,7 @@
         (await (pass/shut-column! c column))
         (cond
           (not (doors/open-block (:primitives c) cell)) nil
-          (< n (:tries (:args c))) (recur (inc n))
+          (< n (tries)) (recur (inc n))
           (seq (pass/animals-in c column)) :animal-in-the-way
           :else :shut-failed)))))
 
@@ -108,7 +113,7 @@
         fails' (if (= :shut-failed reason) (inc fails) fails)
         keep? (case reason
                 (:standing-in :walk-interrupted) true
-                :shut-failed (< fails' (:attempts (:args c)))
+                :shut-failed (< fails' (attempts))
                 false)]
     (when-not (= :animal-in-the-way reason)
       (ctx/forget-where! c :opened #(= cell (:cell %)))

@@ -135,5 +135,5 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:reasons [:no-door] :rounds 0 :listed? true}
-               (await (waiting-on '(jobs.access.clear-path {:heading :east :max-thick 3})
+               (await (waiting-on '(jobs.access.clear-path {:heading :east})
                                   {:self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,63,0" "stone"}} []))))))))

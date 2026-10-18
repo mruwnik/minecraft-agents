@@ -12,17 +12,14 @@
             [jobs.lib.near :as near]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
-            [jobs.movement.go-to.column :as column]))
+            [jobs.movement.go-to.column :as column]
+            [jobs.movement.go-to.tuning :as tuning]))
 
 (def max-surfacings "Walks to air one go-to call makes at most." 3)
 
 (def look-args "breath/find-air!'s look: columns within :radius, cells up to :reach above the feet." {:radius 2 :reach 10})
 
 (def air-radius "Columns this far sideways are read for air when the looks found none nearer (breathe's :air-radius default)." 8)
-
-(def default-air-looks "go-to's :air-looks default: rounds of looking again for air before an :air give-up." 3)
-
-(def default-air-look-min "go-to's :air-look-min default: seconds of air left below which it looks no more (a swim up needs them)." 1.5)
 
 (defn dry-stand
   "The seen cell within radius of pos (the body) and within range within of goal, nearest pos, where the body stands
@@ -75,14 +72,14 @@
 (defn ^:async look-again!
   "Look again at the look-cells for air, aims shifted by i/(n+1) of the ray spacing for the i-th of n tries (mem
   :air-relooks), a sight pass after each look, as a player who glimpsed air keeps looking. True when it looked; nil when
-  the tries are spent, nothing is left unknown or the air left is under :air-look-min (the fallback needs it)."
+  the tries are spent, nothing is left unknown or the air left is under the air-look-min setting (the fallback needs it)."
   [c pos goal]
   (let [p (:primitives c)
-        n (or (:air-looks (:args c)) default-air-looks)
+        n (tuning/air-looks)
         i (inc (:air-relooks (ctx/mem c) 0))
         cells (look-cells p pos goal)]
     (when (and (<= i n) (seq cells)
-               (>= (air-left p) (let [m (:air-look-min (:args c))] (if (some? m) m default-air-look-min))))
+               (>= (air-left p) (tuning/air-look-min)))
       (ctx/update-mem! c assoc :air-relooks i)
       (ctx/emit! c :go-to.air-look :info {:cells cells :text (str "short of air: looking again for air (" i " of " n ")")})
       (let [eye {:x (:x pos) :y (+ (:y pos) game/eye-height) :z (:z pos)}

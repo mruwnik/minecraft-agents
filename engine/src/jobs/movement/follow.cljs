@@ -1,6 +1,7 @@
 (ns jobs.movement.follow
   (:require [jobs.lib.ready :as ready]
             [engine.args :as a]
+            [engine.settings :as settings]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
@@ -9,7 +10,7 @@
             [jobs.lib.util :as u]))
 
 (def doc
-  "Keep the body within :range of the player :player, who must be within :radius to be seen.
+  "Keep the body within :range of the player :player, who must be within the radius setting (64) to be seen.
   A player in range is looked at (the head) and waited on for 500 ms, then the job yields (:continue): it is an
   ongoing watch. One farther off is walked to in one round (jobs.movement.go-to calls, re-aimed at where the
   player is, doors :shut) until in range. A player out of sight is walked to where they were last seen, then
@@ -22,8 +23,7 @@
 
 (a/defargs args
   {:player {:doc "username to follow" :spec a/name? :default nil}
-   :range {:doc "stay within this many blocks of the player" :spec (a/num-in 0 nil) :default 3}
-   :radius {:doc "how far the player may be and still be seen" :spec (a/num-in 0 nil) :default 64}})
+   :range {:doc "stay within this many blocks of the player" :spec (a/num-in 0 nil) :default 3}})
 
 (def target [:player])
 
@@ -38,8 +38,11 @@
   (checks/args-fit "no player name" #(string? (:player (:args %)))))
 
 (a/defargs settings
-  {::job-time-s {:default 3600 :doc "Seconds one call may take before it gives up (:limit-reached), pauses not counted." :spec (a/num-in 0 nil)}
+  {::radius {:default 64 :doc "How far the player may be and still be seen, in blocks." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 3600 :doc "Seconds one call may take before it gives up (:limit-reached), pauses not counted." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the idle pauses beside the player included (:limit-reached)." :spec (a/num-in 0 nil)}})
+
+(defn radius [] (settings/get settings ::radius))
 
 (def safe? ready/safe-if-lit)
 (def fit? ready/fit?)
@@ -47,19 +50,19 @@
 (def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 
 (defn find-player
-  "The position {:x :y :z} of player named name within radius, or nil."
-  [p name radius]
-  (some->> (array-seq (.entities p #js {:radius radius :kind "player"}))
+  "The position {:x :y :z} of player named name within the given distance, or nil."
+  [p name within]
+  (some->> (array-seq (.entities p #js {:radius within :kind "player"}))
            (filter #(or (= name (.-username %)) (= name (.-name %))))
            first
            .-pos
            u/pos-of))
 
 (defn in-sight
-  "Later :gone while the player is not seen within :radius."
+  "Later :gone while the player is not seen within the radius setting."
   [c]
-  (let [{:keys [player radius]} (:args c)]
-    (if (find-player (:primitives c) player radius)
+  (let [player (:player (:args c))]
+    (if (find-player (:primitives c) player (radius))
       (contract/ok :in-sight (str player " is in sight"))
       (contract/later :gone (str player " is not in sight")))))
 
@@ -101,7 +104,7 @@
 
 (defn quote-of [c]
   (let [most (or (time-limit c) ##Inf)
-        now (find-player (:primitives c) (:player (:args c)) (:radius (:args c)))]
+        now (find-player (:primitives c) (:player (:args c)) (radius))]
     (cond-> {:uses {:job-time [0 (min 60 most) most]}}
       now (assoc :moves-to [(:x now) (:y now) (:z now)]))))
 
@@ -143,7 +146,7 @@
     (do (await (look-at-head! c pos))
         (await (idle! c)))
     (await (walk! c pos (:range (:args c))
-                  #(find-player (:primitives c) (:player (:args c)) (:radius (:args c)))))))
+                  #(find-player (:primitives c) (:player (:args c)) (radius))))))
 
 (defn ^:async follow-unseen!
   "The player is out of sight, seen last at last-seen: walk there, then wait."
@@ -156,8 +159,8 @@
 (defn ^:async round
   "One bounded step: follow the player seen or the trail."
   [c]
-  (let [{:keys [player radius]} (:args c)
-        pos (find-player (:primitives c) player radius)]
+  (let [player (:player (:args c))
+        pos (find-player (:primitives c) player (radius))]
     (if pos
       (do (ctx/update-mem! c assoc :last-seen pos :seen-t (ctx/now c))
           (await (follow-seen! c pos)))

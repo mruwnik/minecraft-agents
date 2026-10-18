@@ -176,7 +176,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (gt/go! {:self {:pos [-4.5 64 0.5]} :blocks (pond 12)}
-                                             {:pos [10 64 0] :range 3 :ways #{:walk :clear-seal} :leave-water false}))]
+                                             {:pos [10 64 0] :range 3 :ways #{:walk :clear-seal} :settings {:jobs.movement.go-to.tuning/leave-water false}}))]
           (is (true? (:arrived @out)) (str "result " @out))
           (is (true? (:in-water @out)) (str "result " @out))
           (is (< (first (gt/at p)) 13) (str "not walked on to the east bank: at " (gt/at p))))))))

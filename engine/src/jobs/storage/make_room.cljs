@@ -31,11 +31,11 @@
   Cobblestone, dirt and each kind of planks (what shelter, mend, furnace and tool jobs spend) are each kept up to
   :keep-blocks; seeds up to :keep-seeds each; other blocks are not kept. Names in :keep-items are kept whole.
   Steps, in order:
-  1. A chest known within :chest-range (and not marked :chest-unusable) takes what jobs.storage.deposit may put
+  1. A chest known within the chest-range setting (32) (and not marked :chest-unusable) takes what jobs.storage.deposit may put
      away, least worth keeping first: names without a floor before food and building blocks, then the cheapest,
      then the one picked up longest ago. A chest that fails (full, gone, unreachable, refused) is remembered as
      :chest-unusable for ten minutes and the job goes on without it.
-  2. With no slot free and an item lying within :swap-radius that is worth more than the cheapest throwable
+  2. With no slot free and an item lying within the swap-radius setting (8) that is worth more than the cheapest throwable
      stack, that stack is thrown away from the item and the item is collected.
   3. Without a usable chest, the stack of least worth is thrown. A stack qualifies when item-worth is
      below :toss-below, and it is thrown whole and only while the name's floor stays carried. Cheapest first,
@@ -57,15 +57,21 @@
 
 (a/defargs args
   {:free {:doc "done once at least this many slots are free (above the trigger's 2, so it does not refire at once)" :spec (a/int-in 0 nil) :default 4}
-   :chest-range {:doc "the known :chest place is used only within this distance" :spec (a/num-in 0 nil) :default 32}
    :keep-food {:doc "food items kept carried (best food by points first); the body's food reserve (jobs.lib.cost/food-reserve) when nil" :spec (a/int-in 0 nil) :default nil}
    :keep-blocks {:doc "cobblestone, dirt and each kind of planks kept carried, each up to this many" :spec (a/int-in 0 nil) :default 64}
    :keep-items {:doc "item names kept carried whole, never put away or thrown (a caller's own inputs)" :spec (a/coll-of a/name?) :default []}
    :keep-seeds {:doc "each kind of seeds kept carried up to this many (a farming body sows them)" :spec (a/int-in 0 nil) :default 16}
    :toss-below {:doc "a stack is tossed to make room only when its item-worth (jobs.lib.cost/item-value per item, seconds of work) is below this: dirt, cobblestone, rotten flesh and seeds go; ores, fuel, tools and food stay" :spec (a/num-in 0 nil) :default 3.2}
-   :swap-radius {:doc "when no slot is free, a dropped item worth more than some carried stack within this radius is swapped in" :spec (a/num-in 0 nil) :default 8}
    :away {:doc "after tossing, walk this far away from where the items were thrown" :spec (a/num-in 0 nil) :default 4}
    :ignore-zones? :shared})
+
+(a/defargs settings
+  {::chest-range {:default 32 :doc "The known :chest place is used only within this distance." :spec (a/num-in 0 nil)}
+   ::swap-radius {:default 8 :doc "When no slot is free, a dropped item worth more than some carried stack within this radius is swapped in." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+   ::step-s {:default 3 :doc "Seconds a quote counts for one deposit call, swap or toss." :spec (a/num-in 0 nil)}})
+(defn chest-range [] (settings/get settings ::chest-range))
+(defn swap-radius [] (settings/get settings ::swap-radius))
 
 (def unusable-policy {:cap 5 :ttl 600000})
 
@@ -242,7 +248,7 @@
   [c]
   (let [chest (mem/place (ctx/view c) :chest)]
     (when (and chest
-               (<= (u/dist (u/self-pos c) chest) (:chest-range (:args c)))
+               (<= (u/dist (u/self-pos c) chest) (chest-range))
                (not (unusable? c chest)))
       chest)))
 
@@ -385,7 +391,7 @@
           (let [worth (stack-worth g)]
             (when-let [stack (first (toss-order inventory keep recency worth))]
               {:item (assoc g :worth worth) :stack stack})))
-        (ground-items c (:swap-radius (:args c)))))
+        (ground-items c (swap-radius))))
 
 (defn ^:async swap-in!
   "Throw stack away from item (the swap intent written first), then collect item."
@@ -394,10 +400,6 @@
   (if (await (toss! c stack (direction (:primitives c) (:pos item)) {:for (:name item)}))
     (await (pick-up-swap! c))
     (ctx/update-mem! c dissoc :swap)))
-
-(a/defargs settings
-  {::job-time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
-   ::step-s {:default 3 :doc "Seconds a quote counts for one deposit call, swap or toss." :spec (a/num-in 0 nil)}})
 
 (def target [:free])
 

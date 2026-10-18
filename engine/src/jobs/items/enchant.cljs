@@ -14,7 +14,7 @@
             [clojure.string :as str]))
 
 (def doc
-  "Enchant one :item at an enchanting table. Walks to the table (:table, else the nearest within :radius), reads
+  "Enchant one :item at an enchanting table. Walks to the table (:table, else the nearest within the table-radius setting), reads
   the three offers with the item lying in the table, chooses one and enchants. Needs the item, lapis and levels; a missing item or
   lapis is fetched (jobs.lib.need) unless :fetch is false. Quote: A, a walk and a visit.
   An offer costs its slot number in lapis, and in levels at least its level cost and its slot number. The
@@ -39,19 +39,20 @@
 
 (a/defargs args
   {:item {:doc "name of the item to enchant, from the inventory" :spec a/item? :default nil}
-   :table {:doc "the enchanting table position {:x :y :z}; the nearest within :radius when nil" :spec ::a/pos :default nil}
-   :radius {:doc "how far to look for a table" :spec (a/num-in 0 nil) :default 16}
+   :table {:doc "the enchanting table position {:x :y :z}; the nearest within the table-radius setting when nil" :spec ::a/pos :default nil}
    :max-level-cost {:doc "highest level cost of an offer to take; nil for no limit" :spec (a/int-in 0 nil) :default nil}
    :slot {:doc "take exactly offer 1, 2 or 3; nil to choose by :choice" :spec #{1 2 3} :default nil}
    :choice {:doc "\"best\" (dearest affordable offer) or \"cheapest\" (lowest level cost affordable)" :spec #{"best" "cheapest"} :default "best"}
    :fetch {:doc "get a missing item or lapis (jobs.lib.need): true, a set of kinds or a map of limits; false stops with :no-item / :no-lapis" :spec need/option? :default true}})
 
 (a/defargs settings
-  {::job-time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+  {::table-radius {:default 16 :doc "How far to look for a table, in blocks." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::walk-s {:default 10 :doc "Seconds the walk to the table takes (the quote)." :spec (a/num-in 0 nil)}
    ::visit-s {:default 5 :doc "Seconds the offers and the enchant take at the table (the quote)." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
+(defn table-radius [] (settings/get settings ::table-radius))
 
 (def target [:item :table :slot :choice])
 
@@ -247,8 +248,8 @@
   "One piece: find and reach the table (a go-to child), then read the offers and enchant. :again, :continue (go-to
   waits) or :done."
   [c]
-  (let [{:keys [table radius]} (:args c)
-        pos (or table (find-table (:primitives c) radius))]
+  (let [table (:table (:args c))
+        pos (or table (find-table (:primitives c) (table-radius)))]
     (if-not pos
       (if (look/surveyed? c)
         (give-up! c "no-table" {})

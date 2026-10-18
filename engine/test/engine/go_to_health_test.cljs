@@ -188,18 +188,17 @@
         (let [{:keys [out]} (await (g/go! {:blocks g/flat} {:pos [6 64 0] :hp-seconds 30}))]
           (is (= {:arrived true} @out)))))))
 
-(deftest go-to-refuses-bad-danger-options-and-fall-margin-at-submit
+(deftest go-to-refuses-bad-danger-options-at-submit
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[k bad] [[:fall-margin [-1 "x" js/Infinity]]
-                         [:flee-factor [-1 "x" js/Infinity]]
+        (doseq [[k bad] [[:flee-factor [-1 "x" js/Infinity]]
                          [:fight-factor [-1 "x" js/Infinity]]
                          [:danger-max-rate [0 -1 "x" js/Infinity]]
                          [:danger-shape ["x" {:sensed {:radius -1}} {:sensed {:close 5 :radius 2}} {:bogus {}}]]]
                 v bad]
           (is (re-find (re-pattern (str k " must be ")) (refusal {:pos [6 64 0] k v})) (pr-str k v)))
-        (let [{:keys [out]} (await (g/go! {:blocks g/flat} {:pos [6 64 0] :fall-margin 0 :flee-factor 2 :fight-factor 0 :danger-max-rate 3
+        (let [{:keys [out]} (await (g/go! {:blocks g/flat} {:pos [6 64 0] :flee-factor 2 :fight-factor 0 :danger-max-rate 3
                                                            :danger-shape {:sensed {:radius 9}}}))]
           (is (= {:arrived true} @out)))))))
 

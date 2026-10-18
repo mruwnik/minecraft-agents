@@ -451,9 +451,9 @@
           :else (finish done plan walked'))))))
 
 (defn note-mismatch!
-  "Emit the info :damage-mismatch when the falls hurt since began cost more than margin (default wwatch/fall-margin) over planned hp."
+  "Emit the info :damage-mismatch when the falls hurt since began cost more than margin (default the fall-margin setting) over planned hp."
   [c planned began margin]
-  (when-let [m (wwatch/damage-mismatch planned (ctx/since c :hurt began) (or margin wwatch/fall-margin))]
+  (when-let [m (wwatch/damage-mismatch planned (ctx/since c :hurt began) (or margin (wwatch/fall-margin)))]
     (ctx/emit! c :damage-mismatch :info m)))
 
 (defn ^:async walk-to!
@@ -463,7 +463,7 @@
   {:result :walked :walk-ms}: result is a {:status ...} map with :replans; walked is the blocks of
   every plan followed, walk-ms the time inside steer acts. announce! is called (kind data) with :plan before each walk,
   :replan when the body is off its plan and for each of follow!'s replans (those have :why). :fall-margin the hp falls may cost over
-  the plan before an info :damage-mismatch (default jobs.lib.walk.watch/fall-margin)."
+  the plan before an info :damage-mismatch (default the fall-margin setting of jobs.lib.walk.watch)."
   [c {:keys [to range weight timeout-s announce! fall-margin] :or {announce! (fn [_ _])}}]
   (let [p (:primitives c)
         plan-fn (fn [walls] (plan-walk! c (wworld/path-world p) to range weight {:walls walls}))

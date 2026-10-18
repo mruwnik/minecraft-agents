@@ -19,7 +19,7 @@
 
 (def doc
   "Dig a door 1 wide and 2 high through the wall straight ahead along :heading, then step through it.
-  - The wall is at most :max-thick blocks thick, starts right in front of the body, and has a floor under every
+  - The wall is at most the max-thick setting (3) blocks thick, starts right in front of the body, and has a floor under every
     row and room for the body beyond it (jobs.lib.escape/door). A cell it has not seen is rock (one not loaded ends :no-door); a far side it cannot
     see is guessed, and once the cells before it are dug it plans on from there with what it sees.
   - Never digs a door, gate, trapdoor, bed, container, sign or an unbreakable block.
@@ -29,7 +29,7 @@
   One call is the whole door; it yields :continue only while a dig child waits on the world.
   Needs nothing carried (a tool the dig child cannot find is its :dig-waits). Quote: the door's cells times the time of a
   cell, ending at the far side.
-  :bad-args and :no-door are conditions, checked at the start. Ends :done, or with a cause {:reason r ...}: :impossible for :bad-args (needs :heading and :max-thick > 0), :condition-failed for
+  :bad-args and :no-door are conditions, checked at the start. Ends :done, or with a cause {:reason r ...}: :impossible for :bad-args (needs :heading), :condition-failed for
   :no-door (no such wall here), :protected (a block it never digs), :footprint (a cell of a plan this body made,
   unless :spare-own-builds is false) and :dig-waits (the dig child's wait or decline, as :wait); :nothing-possible for
   :dig-failed (its ending, as :dig), :refills (a cell dug max-cell-digs times, e.g. sand falling in) and :step-failed
@@ -41,7 +41,6 @@
 
 (a/defargs args
   {:heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
-   :max-thick {:doc "the thickest wall it digs through, in blocks" :spec (a/int-in 0 nil) :default 3}
    :ignore-zones? :shared
    :fetch {:doc "get a missing tool for the dig children with jobs.lib.need: true, a set of kinds or a map of limits; false waits :dig-waits" :spec need/option? :default true}
    :need-drop {:doc "false: dig a block no carried tool harvests bare-handed (slow, the drop is lost)" :spec boolean? :default true}
@@ -50,9 +49,11 @@
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
 
 (a/defargs settings
-  {::job-time-s {:default 300 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
+  {::max-thick {:default 3 :doc "The thickest wall it digs through, in blocks." :spec (a/int-in 1 nil)}
+   ::job-time-s {:default 300 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::max-cell-digs {:default 8 :doc "Digs of one cell (a falling block refills it) before it stops :refills." :spec (a/int-in 0 nil)}
    ::cell-s {:default 1.5 :doc "Mean seconds one cell of the door takes (dig, pick up, pace), for the quote." :spec (a/num-in 0 nil)}})
+(defn max-thick [] (settings/get settings ::max-thick))
 (defn max-cell-digs [] (settings/get settings ::max-cell-digs))
 
 (def meta {:category :phase :part-of '[jobs.movement.go-to]})
@@ -64,21 +65,21 @@
 (def target [:heading])
 
 (def bad-args
-  "Never :bad-args unless :heading and a positive :max-thick are given."
-  (checks/args-fit "needs :heading (:north :east :south :west) and :max-thick > 0"
-                   (fn [c] (let [{:keys [heading max-thick]} (:args c)] (and (headings heading) (pos-int? max-thick))))))
+  "Never :bad-args unless :heading is given."
+  (checks/args-fit "needs :heading (:north :east :south :west)"
+                   (fn [c] (boolean (headings (:heading (:args c)))))))
 
-(defn no-door-why [heading max-thick p]
-  (str "no wall at most " max-thick " thick with a floor beyond, " (name heading) " of " (pr-str (reach/standing-vec p))))
+(defn no-door-why [heading p]
+  (str "no wall at most " (max-thick) " thick with a floor beyond, " (name heading) " of " (pr-str (reach/standing-vec p))))
 
 (defn no-door
-  "Later :no-door when no wall of at most :max-thick with a floor beyond lies ahead on the map as seen."
+  "Later :no-door when no wall of at most the max-thick setting with a floor beyond lies ahead on the map as seen."
   [c]
-  (let [{:keys [heading max-thick]} (:args c)
+  (let [heading (:heading (:args c))
         p (:primitives c)]
-    (if (and (headings heading) (pos-int? max-thick)
-             (nil? (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec p) (headings heading) max-thick)))
-      (contract/later :no-door (no-door-why heading max-thick p) :why (no-door-why heading max-thick p))
+    (if (and (headings heading)
+             (nil? (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec p) (headings heading) (max-thick))))
+      (contract/later :no-door (no-door-why heading p) :why (no-door-why heading p))
       (contract/ok :door "a wall to clear"))))
 
 (def defaults {:spend {:job-time ::job-time-s}})
@@ -86,10 +87,10 @@
 (def can-start? (cond/and bad-args no-door))
 
 (defn quote-of [c]
-  (let [{:keys [heading max-thick]} (:args c)
+  (let [heading (:heading (:args c))
         p (:primitives c)
         {:keys [cells through]} (when (headings heading)
-                                  (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec p) (headings heading) max-thick))
+                                  (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec p) (headings heading) (max-thick)))
         s (* (count cells) (settings/get settings ::cell-s))]
     (cond-> {:uses {:job-time [s (* 1.5 s) (* 4 s)]}}
       through (assoc :moves-to through))))
@@ -144,12 +145,11 @@
 
 (defn ^:async plan! [c]
   (let [dir (headings (:heading (:args c)))
-        max-thick (:max-thick (:args c))
         p (:primitives c)]
-    (if-let [{:keys [cells through unseen]} (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec (:primitives c)) dir max-thick)]
+    (if-let [{:keys [cells through unseen]} (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec (:primitives c)) dir (max-thick))]
       (do (ctx/update-mem! c assoc :cells cells :through through :unseen unseen :from (reach/standing-vec (:primitives c)) :dug [])
           :again)
-      (finish! c :no-door {:why (no-door-why (:heading (:args c)) max-thick p)}))))
+      (finish! c :no-door {:why (no-door-why (:heading (:args c)) p)}))))
 
 (defn room-for-drop?
   "A free slot, or a carried stack of what block drops (b/drops-of) under 64."
@@ -227,10 +227,10 @@
               (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
               (recur (rest cells))))
           :again)
-      (let [gap (escape/door-from (escape/block-at-of p) (escape/unseen-of p) from dir (:max-thick (:args c)) k)]
+      (let [gap (escape/door-from (escape/block-at-of p) (escape/unseen-of p) from dir (max-thick) k)]
         (cond
           (nil? gap) (finish! c :no-door {:why (str "the wall goes on past " (pr-str through) ": thicker than "
-                                                     (:max-thick (:args c)) " or no floor beyond")})
+                                                     (max-thick) " or no floor beyond")})
           (= through (:through gap)) (do (ctx/update-mem! c dissoc :unseen) :again)
           :else (do (ctx/update-mem! c assoc :cells (:cells gap) :through (:through gap) :unseen (:unseen gap))
                     :again))))))
