@@ -1,6 +1,6 @@
 (ns jobs.lib.reserve
   "The body's register of reserved items: body memory kind :reserve, entries {:id :item|:tag :count|:all :strength 0..1
-  :by \"agent\"|job instance id :why :until ms|nil}. Writing an id replaces its entry. An entry counts while :until has
+  :by \"agent\"|job instance id :why :until ms|nil :not #{chooser..} the choosers it does not bind}. Writing an id replaces its entry. An entry counts while :until has
   not passed and its :by job still lives. It covers carried units only.
   (entries view) the live entries. (rows c chooser) [{:name :count :strength}] of the carried units reserved, strongest
   first: the register plus the built-in rules (the bait foods, the 3-day food reserve, precious food, a chooser's
@@ -73,7 +73,7 @@
         carried (carried-of inv)
         asked (concat (map (fn [[n k]] [n k 1]) (builtin c chooser inv carried))
                       (mapcat (fn [e] (map (fn [[n k]] [n k (:strength e 1)]) (units carried e)))
-                              (remove #(zero? (:strength % 1)) (entries (ctx/view c)))))]
+                              (remove #(or (zero? (:strength % 1)) (contains? (:not %) chooser)) (entries (ctx/view c)))))]
     (->> (group-by first asked)
          (mapcat (fn [[n rs]]
                    (loop [[[_ k s] & more] (sort-by #(- (nth % 2)) rs) left (carried n) out []]

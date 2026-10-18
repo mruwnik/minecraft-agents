@@ -37,6 +37,9 @@
   (is (= [[:craft "stone_pickaxe" 1]]
          (shape (plan {"cobblestone" 3 "stick" 2} "stone_pickaxe" 1 {:table? true})))))
 
+(deftest a-plan-names-the-carried-units-its-crafts-take
+  (is (= {"cobblestone" 3} (:uses (plan {"cobblestone" 3} "stone_axe" 1 {:gather? true})))))
+
 (deftest gather-plans-name-the-raw-items-the-chain-lacks
   (let [p (plan {} "stone_pickaxe" 1 {:gather? true})]
     (is (= 3 (get-in p [:gather "cobblestone"])))

@@ -11,6 +11,7 @@
   :materials (the stone-materials that count as gatherable, default all; the cheapest recipe among them wins),
   :raw (more items that count as gathered: ore drops), :smelts ({product [input ..]}: a product is also made by a
   step {:op :smelt :item product :count n :input name}, one input per item; without it no smelt is planned).
+  The plan also has :uses {name n}, the carried units its crafts take.
   (lacking version have item n) says why a craft cannot start."
   (:require ["minecraft-data" :as minecraft-data]
             [jobs.lib.game-facts :as facts]
@@ -78,7 +79,8 @@
   (when-not (chain item)
     (let [have (get-in st [:have item] 0)
           use (min have n)
-          st (update-in st [:have item] (fnil - 0) use)
+          st (cond-> (update-in st [:have item] (fnil - 0) use)
+               (pos? use) (update-in [:used item] (fnil + 0) use))
           deficit (- n use)]
       (cond
         (zero? deficit) st
@@ -135,7 +137,7 @@
   (let [rs (recipes-for version)
         st0 {:have have :steps [] :gather? gather? :materials (or materials (stone-materials version)) :ranks (material-ranks version)
              :raw (set raw) :smelts smelts}
-        with-gather (fn [pl st] (cond-> pl (seq (:gather st)) (assoc :gather (:gather st))))
+        with-gather (fn [pl st] (cond-> pl (seq (:gather st)) (assoc :gather (:gather st)) (seq (:used st)) (assoc :uses (:used st))))
         main (make rs st0 item n #{} max-depth)
         needs-table (and main (some :table? (:steps main)) (not table?))]
     (cond

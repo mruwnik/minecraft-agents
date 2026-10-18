@@ -10,7 +10,20 @@
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
             [jobs.items.obtain.table :refer [animal? gather-need]]
             [jobs.lib.child :as child]
-            [jobs.lib.need :as fetch-need]))
+            [jobs.lib.need :as fetch-need]
+            [jobs.lib.reserve :as reserve]))
+
+(defn keep-crafting-items!
+  "Reserve the carried units the craft chain will take, against every chooser but the crafts, while a gather child runs:
+  a sapling fetch must not pillar up with the cobblestone of the axe."
+  [c uses]
+  (doseq [[item n] uses]
+    (ctx/remember! c reserve/kind {:id (str (:id c) "-craft-" item) :item item :count n :strength 1 :by (:id c)
+                                   :why "kept for the craft" :not #{:craft :smelt}}
+                   reserve/policy)))
+
+(defn release-crafting-items! [c]
+  (ctx/forget-where! c reserve/kind #(= (:id c) (:by %))))
 
 (defn declined?
   "Whether child ending e is a refusal before it ran: a failed condition with no result of its own."
@@ -122,6 +135,7 @@
       (do (when-not (get-in (ctx/mem c) [:gather :before])
             (ctx/update-mem! c assoc-in [:gather :before] (gather-carried p need))
             (ctx/update-mem! c assoc-in [:gather :item] (:key need))
+            (keep-crafting-items! c (:uses pl))
             (when (= 'jobs.forestry.harvest-wood (:job need))
               (ctx/update-mem! c assoc-in [:gather :tree] (select-keys need [:key :job :args])))
             (let [at (:pos (seen-of c need))]
@@ -148,6 +162,7 @@
               (let [res (merge (when (map? (:cause e)) (:cause e)) (:data e))
                     before (get-in (ctx/mem c) [:gather :before])]
                 (ctx/update-mem! c update :gather dissoc :before :item :tree)
+                (release-crafting-items! c)
                 (if (> (gather-carried p need) before)
                   (do (child/progress! c :gather) :again)
                   (do (when-let [w (or (:why res) (spared-why res))] (ctx/update-mem! c assoc-in [:gather :why] w))

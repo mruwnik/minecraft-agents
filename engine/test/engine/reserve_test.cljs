@@ -31,6 +31,11 @@
     2 3 {"diamond" 2}
     0 3 {}))
 
+(deftest an-entry-spares-the-choosers-it-names-in-not
+  (are [chooser held] (= held (reserve/held (body [(item "cobblestone" 3)] [{:item "cobblestone" :count 3 :not #{:craft}}]) chooser))
+    :fillers {"cobblestone" 3}
+    :craft {}))
+
 (deftest a-tag-entry-holds-the-carried-names-of-the-tag
   (is (= {"raw_iron" 2 "iron_ore" 1}
          (reserve/held (body [(item "raw_iron" 4) (item "iron_ore" 1) (item "stick" 9)] [{:tag :ore :count 3}]) :tools))))
