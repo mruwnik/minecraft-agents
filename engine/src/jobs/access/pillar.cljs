@@ -1,6 +1,5 @@
 (ns jobs.access.pillar
   (:require [jobs.lib.choose :as choose]
-            [jobs.lib.submitted :as submitted]
             [engine.settings :as settings]
             [engine.args :as a]
             [jobs.lib.ready :as ready]
@@ -9,7 +8,6 @@
             [engine.ctx :as ctx]
             [engine.contract :as contract]
             [jobs.lib.checks :as checks]
-            [jobs.lib.cond :as cond]
             [jobs.lib.child :as child]
             [jobs.lib.need :as need]
             [jobs.lib.access :as access]
@@ -35,8 +33,7 @@
   Needs: blocks for the :use {:blocks [...]} list of the call (default: the carried fillers for a pillar, dirt then
   cobblestone, jobs.lib.choose). A call starts only with some of them
   carried unless :fetch is false (then condition :too-few-blocks, with :short; a fetch that fails ends the same, the
-  fetch's ending its :because) and, when it was submitted with a :from, with the body near it
-  (:moved-since-submit); both are checked at the call's start only. Quote: height x the time of a block, that many
+  fetch's ending its :because) (checked at the call's start only). Quote: height x the time of a block, that many
   blocks of the first carried one, ending height up.
 
   Before each block it checks:
@@ -63,9 +60,7 @@
   reason :at :block :zone :short :detail). pillar.done is told by the cleanup.")
 
 (a/defargs args
-  {:from {:doc "where the body stood at submit (jobs.mjs adds it): the job waits :moved-since-submit before its first round when the body is then over jobs.lib.submitted/limit away" :spec a/position? :default nil}
-   :here {:doc "true: run where the body is, whatever :from says" :spec boolean? :default false}
-   :fetch {:doc "get the blocks with jobs.items.obtain when none is carried at the start, and walk back (false: end :too-few-blocks); a set of kinds or a map of limits counts as true" :spec need/option? :default true}
+  {:fetch {:doc "get the blocks with jobs.items.obtain when none is carried at the start, and walk back (false: end :too-few-blocks); a set of kinds or a map of limits counts as true" :spec need/option? :default true}
    :height {:doc "blocks to rise, 1 to 64 (the short form of :y: the feet's y at the start plus this)" :spec (a/int-in 1 64) :default 1}
    :y {:doc "the y the feet end at; nil: the start's y plus :height" :spec (a/int-in -64 320) :default nil}
    :ignore-zones? :shared
@@ -242,7 +237,7 @@
       (contract/later :too-few-blocks (str short " blocks short") :short short :items items)
       (contract/ok :blocks "blocks enough or fetched"))))
 
-(def can-start? (cond/and checks/not-moved too-few-blocks))
+(def can-start? too-few-blocks)
 
 (defn on-top?
   "Whether the body stands on the ground with its feet at the pillar's top or above."
@@ -433,6 +428,5 @@
   "The whole pillar: step! until it ends, a pace between blocks, as one urgent section (ctx/atomic :pillar): a night or
   low-food reflex waits for the climb to end, up to its cap."
   [c]
-  (submitted/begin! c)
   (or (await (fetch-first! c))
       (await (ctx/atomic c :urgent :pillar #(pace/steps! c (fn [] (step! c)))))))

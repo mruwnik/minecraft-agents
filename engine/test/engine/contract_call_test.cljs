@@ -121,3 +121,13 @@
   (is (nil? (contract/call-problem 'x nil {:settings {:jobs.callscope/knob 3}})))
   (is (some? (contract/call-problem 'x nil {:settings {:jobs.callscope/knob -1}})))
   (is (some? (contract/call-problem 'x nil {:settings {:jobs.callscope/nope 1}}))))
+
+(deftest a-submitted-at-call-key-is-moved-only-past-the-limit-and-without-here
+  (let [at {:x 10 :y 65 :z 0}]
+    (is (nil? (contract/moved-cause {} {:x 99 :y 65 :z 0} 6)))
+    (is (nil? (contract/moved-cause {:submitted-at at} {:x 14 :y 65 :z 0} 6)))
+    (is (nil? (contract/moved-cause {:submitted-at at :here true} {:x 99 :y 65 :z 0} 6)))
+    (is (= {:reason :moved-since-submit :from at :at {:x 20 :y 65 :z 0} :distance 11 :limit 6}
+           (contract/moved-cause {:submitted-at [10 65 0]} {:x 20.5 :y 65 :z 0} 6)))
+    (is (nil? (contract/call-problem 'x nil {:submitted-at at :here true})))
+    (is (some? (contract/call-problem 'x nil {:submitted-at "there"})))))

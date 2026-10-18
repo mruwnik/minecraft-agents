@@ -232,6 +232,9 @@
               :spec (a/valid-by "a map {setting-key value} of declared settings" #(when-not (map? %) "not a map"))}
    :deadline {:doc "the wall-clock ms by which the call must have ended; default the caller's" :default nil
               :spec (a/num-in 0 nil)}
+   :submitted-at {:doc "where the body stood at submit (the agent tool adds it): the call waits :moved-since-submit before its first round while the body stands over ::moved-limit from it" :default nil
+                  :spec a/position?}
+   :here {:doc "true: start wherever the body is, whatever :submitted-at says" :default nil :spec boolean?}
    :least {:doc "the least work accepted, in the job's units, or :all; default 1" :default nil
            :spec (a/or-of a/pos-num? #{:all})}})
 
@@ -248,6 +251,17 @@
       (and (contains? given :ways) (empty? (:ways given))) (str sym " :ways is empty, so no way may run")
       (seq unknown) (str sym " has no way " (str/join ", " (sort unknown)) "; "
                          (if (seq ways) (str "its ways are " (str/join ", " ways)) "it has no ways")))))
+
+(defn moved-cause
+  "nil, or the cause {:reason :moved-since-submit :from :at :distance :limit} when args give a :submitted-at (no :here) that the body at pos
+  {:x :y :z} has left by more than limit."
+  [args pos limit]
+  (let [from (a/cell (:submitted-at args))]
+    (when (and from pos (not (:here args)))
+      (let [d (js/Math.hypot (- (:x pos) (:x from)) (- (:y pos) (:y from)) (- (:z pos) (:z from)))]
+        (when (> d limit)
+          {:reason :moved-since-submit :from from :at (into {} (map (fn [[k v]] [k (js/Math.floor v)])) (select-keys pos [:x :y :z]))
+           :distance (js/Math.round d) :limit limit})))))
 
 (defn resolve-settings
   "defaults with each qualified keyword value read with (lookup k), a settings key, and each fn value called with
@@ -276,7 +290,9 @@
 ;; ------------------------------------------------------------------ limits
 
 (a/defargs settings
-  {::default-time-s {:default 30 :spec (a/num-in 0 nil)
+  {::moved-limit {:default 6 :spec (a/num-in 0 nil)
+                  :doc "How far from its :submitted-at a call still starts, in blocks."}
+   ::default-time-s {:default 30 :spec (a/num-in 0 nil)
                      :doc "The mean time a job with no quote-of and no reports quotes."}
    ::quote-s {:default 2 :spec (a/num-in 0 nil)
               :doc "The wall-clock budget of a quote asked with no quote deadline; past it the quote's time is ##Inf."}})

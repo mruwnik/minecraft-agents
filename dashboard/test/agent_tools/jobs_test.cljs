@@ -530,30 +530,13 @@
 
 (deftest stamp-from-adds-the-submit-position-only-to-jobs-that-take-it-and-did-not-say-otherwise
   (let [pos {:x 1.5 :y 64 :z -3 :yaw 2}]
-    (doseq [[spec takes? want] [['(jobs.access.stair {:dir :up}) true '(jobs.access.stair {:dir :up :from {:x 1.5 :y 64 :z -3}})]
-                                ['(jobs.access.stair) true '(jobs.access.stair {:from {:x 1.5 :y 64 :z -3}})]
+    (doseq [[spec takes? want] [['(jobs.access.stair {:dir :up}) true '(jobs.access.stair {:dir :up :submitted-at {:x 1.5 :y 64 :z -3}})]
+                                ['(jobs.access.stair) true '(jobs.access.stair {:submitted-at {:x 1.5 :y 64 :z -3}})]
                                 ['(jobs.access.stair {:dir :up}) false '(jobs.access.stair {:dir :up})]
                                 ['(jobs.access.stair {:here true}) true '(jobs.access.stair {:here true})]
-                                ['(jobs.access.stair {:from {:x 0 :y 0 :z 0}}) true '(jobs.access.stair {:from {:x 0 :y 0 :z 0}})]
+                                ['(jobs.access.stair {:submitted-at {:x 0 :y 0 :z 0}}) true '(jobs.access.stair {:submitted-at {:x 0 :y 0 :z 0}})]
                                 ['(repeat (jobs.farm.tend)) true '(repeat (jobs.farm.tend))]]]
       (is (= want (jobs/stamp-from spec pos takes?)) (pr-str spec takes?)))))
-
-(defn- job-sources
-  "{job id source} of every job file, from the compiled-in registry entries."
-  []
-  (let [root (loop [d (js/process.cwd)]
-               (cond (.existsSync fs (.join path d "engine" "src" "jobs")) d
-                     (= d (.dirname path d)) (throw (js/Error. "repo root not found"))
-                     :else (recur (.dirname path d))))]
-    (into {} (for [e reg/entries :when (= :job (:kind e)) :when (:file e)]
-               [(:id e) (.readFileSync fs (.join path root (:file e)) "utf8")]))))
-
-(deftest from-jobs-are-exactly-the-jobs-whose-from-arg-is-the-submitted-position
-  (let [sources (job-sources)
-        submitted? #(re-find #":from \{:doc \"where the body stood at submit[^\n]*:spec a/position\?" %)
-        declares-here? #(re-find #":here \{[^\n]*:spec boolean\?" %)]
-    (is (= (set (keys (filter (comp submitted? val) sources))) jobs/from-jobs))
-    (is (every? #(declares-here? (get sources %)) jobs/from-jobs))))
 
 (deftest the-jobs-that-take-from-are-named-not-read-from-the-truncated-catalog
   (doseq [spec ['(jobs.access.stair {:dir :down}) '(jobs.access.bridge) '(jobs.access.pillar) '(jobs.gather.mine {:block "coal_ore"})]]
@@ -569,7 +552,7 @@
                                                    "{:generation-id \"g\" :position {:x -528.3 :y 64 :z 350.5}}"
                                                    "{:ok true :job {:id \"j5\" :status :queued}}")}))
           (.then (fn [{:keys [seen]}]
-                   (is (= '(jobs.access.stair {:dir :down :from {:x -528.3 :y 64 :z 350.5}})
+                   (is (= '(jobs.access.stair {:dir :down :submitted-at {:x -528.3 :y 64 :z 350.5}})
                           (:spec (data/read-edn (:body (last (filterv #(= "POST" (:method %)) seen)))))) (pr-str seen))))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 

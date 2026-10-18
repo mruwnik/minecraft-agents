@@ -1313,9 +1313,9 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[extra dug? reason] [[{} true nil]
-                                     [{:from {:x 1 :y 65 :z 0}} true nil]
-                                     [{:from {:x 80 :y 65 :z 0}} false :moved-since-submit]
-                                     [{:from {:x 80 :y 65 :z 0} :here true} true nil]]]
+                                     [{:submitted-at {:x 1 :y 65 :z 0}} true nil]
+                                     [{:submitted-at {:x 80 :y 65 :z 0}} false :moved-since-submit]
+                                     [{:submitted-at {:x 80 :y 65 :z 0} :here true} true nil]]]
           (let [{:keys [p] :as s} (await (stair! {:blocks ground :inventory pick} (merge east extra) (fn [_])))
                 w (:cause (:ending @(:out s)))]
             (is (= dug? (boolean (seq (digs p)))) (pr-str extra))
@@ -1384,7 +1384,7 @@
           (is (= [:condition-failed :refused]
                  (await (run {:blocks ground :zones [{:name "garden" :min [1 50 -2] :max [6 70 2]}]} east (fn [_])))))
           (is (= [:condition-failed :moved-since-submit]
-                 (await (run {:blocks ground} (assoc east :from {:x 80 :y 65 :z 0}) (fn [_])))))
+                 (await (run {:blocks ground} (assoc east :submitted-at {:x 80 :y 65 :z 0}) (fn [_])))))
           (is (= [:condition-failed :tool-spent]
                  (await (run {:blocks ground :inventory [{:name "stone_pickaxe" :count 1 :durability 3}]} east (fn [_])))))
           (is (= [:nothing-possible :refills] (await (run {:blocks ground} east refill))))

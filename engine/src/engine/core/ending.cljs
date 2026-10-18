@@ -69,12 +69,21 @@
                         :when f]
                     (contract/asked c def k f)))))
 
+(defn moved-or
+  "Status s, with :later :moved-since-submit before it when the call has not started and the body has left its :submitted-at."
+  [s c]
+  (let [pos (when-not (started? c) (some-> (:primitives c) .self .-pos))
+        cause (when pos (contract/moved-cause (:args c) {:x (.-x pos) :y (.-y pos) :z (.-z pos)} (settings/get contract/settings ::contract/moved-limit)))]
+    (if cause
+      (contract/all [(contract/status :later :moved-since-submit (str "moved " (:distance cause) " blocks since submit") (dissoc cause :reason)) s])
+      s)))
+
 (defn statuses
   "[start run] for c: start def's can-start? status until it has started (:ok after); run its can-run?'s
   (contract/verdict). asked: {:start s :run s} a check just computed for this round, used as it is."
   ([def c] (statuses def c nil))
   ([def c asked]
-   [(or (:start asked) (contract/verdict c (cond-> (dissoc def :can-run?) (started? c) (dissoc :can-start?))))
+   [(or (:start asked) (moved-or (contract/verdict c (cond-> (dissoc def :can-run?) (started? c) (dissoc :can-start?))) c))
     (or (:run asked) (run-status def c))]))
 
 (defn asked-key "c's frame, as ctx/child-status makes a child ctx without a new :id." [c] (mem/path->id (:root c) (:slots c)))

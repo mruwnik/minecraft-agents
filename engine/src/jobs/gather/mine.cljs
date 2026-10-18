@@ -29,7 +29,6 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.result :as result]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.submitted :as submitted]
             [jobs.lib.tools :as tools]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
@@ -184,9 +183,7 @@
   A breach's tunnel-end event and leg carry :behind {:names :cells}, the seen air and fluid cells beside the cut (read before the seal), also kept in body memory :breach-behind.")
 
 (a/defargs args
-  {:from {:doc "where the body stood at submit (jobs.mjs adds it): the job waits :moved-since-submit before its first round when the body is then over jobs.lib.submitted/limit away" :spec a/position? :default nil}
-   :here {:doc "true: run where the body is, whatever :from says" :spec boolean? :default false}
-   :block {:doc "name of the block to mine (required)" :spec a/name? :default nil}
+  {:block {:doc "name of the block to mine (required)" :spec a/name? :default nil}
    :item {:doc "the item the block drops; nil: the drop-item table, else the block name" :spec a/item? :default nil}
    :count {:doc "how many more to carry than at the start" :spec (a/int-in 0 nil) :default 8}
    :radius {:doc "seen blocks within this many blocks of the body count" :spec (a/num-in 0 nil) :default 16}
@@ -230,11 +227,6 @@
 
 ;; ------------------------------------------------------------------ the contract
 
-(defn away
-  "The cause of a call submitted with a :from the body has since left (jobs.lib.submitted/away-cause), or nil."
-  [c]
-  (submitted/away-cause c))
-
 (defn no-zones
   "{:reason :no-zones} while no zone list has been read (unless :ignore-zones?), with one warn mine.declined."
   [c]
@@ -277,8 +269,7 @@
       (surface-cause (:args c) (sh-sense/sky-light-at p {:x x :y (inc y) :z z})))))
 
 (def can-start?
-  (cond/and (checks/refusing :here "where it was submitted" away)
-            area/inside
+  (cond/and area/inside
             block-given
             (checks/refusing :underground "not in the open" on-surface)
             (checks/refusing :zones-read "zone list read" no-zones)
@@ -580,7 +571,6 @@
 
 (defn ^:async round
   [c]
-  (submitted/begin! c)
   (when (and (nil? (:phase (ctx/mem c))) (nil? (:pre-start (ctx/mem c))))
     (ctx/update-mem! c assoc :pre-start (cell-of (u/self-pos c))))
   (if-let [t (or (await (trip/ready! c)) (await (trip/tool-ready! c (:block (:args c)) (digs-left c)))

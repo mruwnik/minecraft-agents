@@ -4,7 +4,6 @@
             [engine.ctx :as ctx]
             [engine.test-util :as tu]
             [jobs.lib.checks :as checks]
-            [jobs.lib.submitted :as submitted]
             [jobs.lib.world :as known]))
 
 (deftest args-fit-is-ok-or-never-bad-args-with-the-text
@@ -20,13 +19,6 @@
 
 (deftest no-cause-is-ok
   (is (= [:ok :holds] (tu/kind-reason (checks/cause-status :later nil)))))
-
-(deftest not-moved-is-later-with-the-distance-only-when-the-body-left
-  (with-redefs [submitted/away-cause (constantly nil)]
-    (is (= [:ok :here] (tu/kind-reason (checks/not-moved {})))))
-  (with-redefs [submitted/away-cause (constantly {:reason :moved-since-submit :distance 9})]
-    (is (= [:later :moved-since-submit] (tu/kind-reason (checks/not-moved {}))))
-    (is (= 9 (:distance (nth (checks/not-moved {}) 2))))))
 
 (deftest zones-read-waits-for-a-zone-list-unless-zones-are-ignored
   (are [zones args expected] (= expected (with-redefs [known/zones (constantly zones)]

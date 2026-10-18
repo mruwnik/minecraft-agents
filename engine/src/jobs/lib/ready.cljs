@@ -102,8 +102,8 @@
 (def safe-here-by-night "safe-at-by-night where the job stands." (safe-at-by-night (constantly nil)))
 
 (def safe-at-from
-  "safe-at-by-night for a job that works where the body stood at submit (:from), here with none or with :here."
-  (safe-at-by-night (fn [c] (let [args (:args c)] (when-not (:here args) (a/cell (:from args)))))))
+  "safe-at-by-night for a job that works where the body stood at submit (:submitted-at), here with none or with :here."
+  (safe-at-by-night (fn [c] (let [args (:args c)] (when-not (:here args) (a/cell (:submitted-at args)))))))
 
 (defn dark-sky
   "Later :dark at night above ground."

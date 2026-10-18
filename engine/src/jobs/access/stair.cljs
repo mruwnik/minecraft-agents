@@ -23,7 +23,6 @@
             [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
-            [jobs.lib.submitted :as submitted]
             [jobs.lib.tools :as tools]
             [jobs.access.stock :as stock]
             [jobs.lib.util :as u]
@@ -50,7 +49,7 @@
   against at any of them (a void pocket): :no-support-floor with :cell, :tried and :why. A stair down that stops so shuts the cut cell over the missing floor with a carried block (:sealed [cell]), else the stop names it (:open-to [cell]). A lava or water floor is never bridged. A go-to stair (:note) writes its placed floors to the scaffold ledger
   (purpose :stair-floor) for jobs.access.cleanup to take back once go-to's job ended (setting take-back-floors?).
 
-  Needs a pickaxe for the blocks it cuts and room for the drops. A call starts only when the first step is not refused by a zone, claim or plan, the args give a length (:steps or :y), the next dig lacks nothing this call cannot get, and, when it was submitted with a :from, the body is still near it (conditions :refused, :no-tool, :no-free-slot, :moved-since-submit; start only). Quote: steps x cells of the step x the time of a cell, ending at the last step.
+  Needs a pickaxe for the blocks it cuts and room for the drops. A call starts only when the first step is not refused by a zone, claim or plan, the args give a length (:steps or :y), the next dig lacks nothing this call cannot get (conditions :refused, :no-tool, :no-free-slot; start only). Quote: steps x cells of the step x the time of a cell, ending at the last step.
   - A pack without room is made room in (jobs.storage.make-room child, once per pack content; :make-room), else it waits :no-free-slot until the pack changes (a call that starts so ends condition-failed).
   - A missing pickaxe is got with jobs.items.get-tool (:fetch, jobs.lib.need), then the body walks back to the cell it stood on and goes on; a fetch that fails, or that changes nothing, is remembered for the call and the block is dug bare-handed. With :fetch off it ends :no-tool.
 
@@ -109,9 +108,7 @@
   last resort when it has no pickaxe. Also done once the fetch of a tool for that block failed.")
 
 (a/defargs args
-  {:from {:doc "where the body stood at submit (jobs.mjs adds it): the job waits :moved-since-submit before its first round when the body is then over jobs.lib.submitted/limit away" :spec a/position? :default nil}
-   :here {:doc "true: run where the body is, whatever :from says" :spec boolean? :default false}
-   :dir {:doc ":down, :up or :level (a flat run, :steps only)" :spec #{:down :up :level} :default :down}
+  {:dir {:doc ":down, :up or :level (a flat run, :steps only)" :spec #{:down :up :level} :default :down}
    :heading {:doc ":north :east :south or :west; nil: the way the body faces" :spec #{:north :east :south :west} :default nil}
    :steps {:doc "steps to cut; or give :y" :spec (a/int-in 1 nil) :default nil}
    :cut-only {:doc "true: end :done (:steps 0) once the first step is cut and settled, without stepping in" :spec boolean? :default false}
@@ -208,8 +205,7 @@
 (def can-run? (with-heading-check pack-has-room))
 
 (def can-start?
-  (cond/and checks/not-moved
-            (with-heading-check target-fit)
+  (cond/and (with-heading-check target-fit)
             (with-heading-check not-refused)
             (with-heading-check not-lacking)))
 
@@ -461,7 +457,6 @@
   [c0]
   (let [c (with-heading c0)
         n (atom 0)]
-    (submitted/begin! c)
     (when-not (:heading (:args c0)) (ctx/update-mem! c assoc :heading (name (:heading (:args c)))))
     (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (next! c) :continue)))))
 

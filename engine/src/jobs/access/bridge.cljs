@@ -2,7 +2,6 @@
   (:require [engine.contract :as contract]
             [jobs.lib.choose :as choose]
             [jobs.lib.need :as need]
-            [jobs.lib.submitted :as submitted]
             [engine.settings :as settings]
             [engine.args :as a]
             [jobs.lib.ready :as ready]
@@ -15,7 +14,6 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
-            [jobs.lib.cond :as cond]
             [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]))
 
@@ -29,8 +27,7 @@
   its place and confirmed when the cell is seen holding it, so a cleanup can take the row back after a cut or restart.
   Each (re)start reads the row from the cells: a cell ahead that is already solid floor is stepped onto, not placed.
 
-  Conditions, checked at the start: :moved-since-submit, when the body stands over jobs.lib.submitted/limit from :from;
-  the first step's :bad-args, permission refusal (:zone :footprint :no-zones) and :not-on-solid.
+  Conditions, checked at the start: the first step's :bad-args, permission refusal (:zone :footprint :no-zones) and :not-on-solid.
 
   Before each step it checks:
   - the whole rest of the row is permitted (no zone that bars :place, no other plan's footprint, a zone list loaded)
@@ -53,9 +50,7 @@
   and by reason :at :block :zone :short :detail. Event: bridge.gave-up (warn).")
 
 (a/defargs args
-  {:from {:doc "where the body stood at submit (jobs.mjs adds it): the job waits :moved-since-submit before its first round when the body is then over jobs.lib.submitted/limit away" :spec a/position? :default nil}
-   :here {:doc "true: run where the body is, whatever :from says" :spec boolean? :default false}
-   :heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
+  {:heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
    :length {:doc "blocks in the row, 1 to 64" :spec (a/int-in 1 64) :default 1}
    :item {:doc "the block to bridge with; nil: dirt while any is carried, then cobblestone" :spec a/item? :default nil}
    :ignore-zones? :shared
@@ -200,7 +195,7 @@
       (= :bad-args (:reason fact)) (checks/cause-status :never fact "bad args")
       :else (checks/cause-status :later fact (str "the first step gives up: " (name (:reason fact)))))))
 
-(def can-start? (cond/and checks/not-moved start-fact))
+(def can-start? start-fact)
 
 (defn done?
   "Done when the body stands on the row's last block: the blocks placed and the body walked onto them."
@@ -321,5 +316,4 @@
 (defn ^:async round
   "The whole bridge: step! until it ends, a pace between blocks."
   [c]
-  (submitted/begin! c)
   (await (pace/steps! c #(step! c))))

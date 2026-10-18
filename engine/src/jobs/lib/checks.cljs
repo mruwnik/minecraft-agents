@@ -7,7 +7,6 @@
             [jobs.lib.body :as body]
             [jobs.lib.cond :as cond]
             [jobs.lib.storage :as storage]
-            [jobs.lib.submitted :as submitted]
             [jobs.lib.world :as known]))
 
 (defn running?
@@ -34,13 +33,6 @@
      (holds)
      (let [cause (if (keyword? cause) {:reason cause} cause)]
        (contract/status kind (:reason cause) (or text (cause-text cause)) (dissoc cause :reason))))))
-
-(defn not-moved
-  "Later :moved-since-submit while the call has a :from the body has left before its first round (jobs.lib.submitted)."
-  [c]
-  (if-let [away (submitted/away-cause c)]
-    (cause-status :later away (str "moved " (:distance away) " blocks since submit"))
-    (contract/ok :here "where it was submitted")))
 
 (defn goal
   "A done? status: :ok [reason text] when holds?, else :later [reason text]; data: :units :done :left :result."

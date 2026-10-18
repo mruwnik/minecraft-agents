@@ -1,6 +1,5 @@
 (ns agent-tools.jobs
   "Job command validation and native EDN requests; HTTP remains a Node boundary."
-  (:require-macros [dashboard.jobs-registry :refer [submitted-jobs]])
   (:require [engine.bodies :as bodies]
             [agent-tools.http :as http]
             [agent-tools.job-results :as job-results]
@@ -18,7 +17,7 @@
   "Build the usage string with the given invocation prefix (e.g., 'jobs.mjs' or './bin/jobs')."
   (str "usage: " prefix " <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit '(jobs.storage.deposit {:items [\"bread\"]})' [--hold] [--survive-death] [--next | --now] [--alongside] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
        "While manual control holds the body (drive.mjs take) only the driver's one job runs (world.mjs submit): others stay :queued and list/submit say who holds it; drive.mjs <body> release frees it.\n"
-       "A job that depends on where the body stands (access.stair, access.bridge, access.pillar, gather.mine) gets :from (the body's position at submit) added to its args; if the body is then over 6 blocks from it when the job starts, the job waits :moved-since-submit (something moved the body meanwhile) instead of running there. Give :here true in the args to run wherever the body is.\n"
+       "A job that depends on where the body stands (access.stair, access.bridge, access.pillar, gather.mine) gets :submitted-at (the body's position at submit) added to its args; if the body is then over 6 blocks from it when the job starts, the job waits :moved-since-submit (something moved the body meanwhile) instead of running there. Give :here true in the args (any job takes it) to run wherever the body is.\n"
        "submit appends the job to the end of the list (jobs take turns). --hold makes the job hold the body: no other job gets a round until it ends or fails (reflexes still come first).\n"
        "A spec is a job name then its args map: submit '(jobs.movement.go-to {:pos {:x 1 :y 64 :z 2}})' or '(jobs.items.get-tool {:item \"stone_pickaxe\"})'. Find a job's args with observe.mjs <body> catalog job <name> (catalog jobs [prefix] lists names).\n"
        "  --survive-death  the job stays listed through the body's death and runs again once the respawn reflexes (recover-drops, night) are done; other jobs are cancelled; a (repeat ...) spec does this by default\n"
@@ -214,17 +213,17 @@
     (if cached generation (record-generation! meta-file meta-dir generation))))
 
 (defn stamp-from
-  "spec with :from position added to its args map (none given: a new one) when the job takes :from and the call gave neither :from nor :here; else spec. Jobs that depend on where the body stood at submit wait if it has moved (jobs.lib.submitted)."
+  "spec with :submitted-at position added to its args map (none given: a new one) when the job is position-bound and the call gave neither :submitted-at nor :here; else spec. The runner makes such a call wait if the body has moved (engine.core.ending/moved-or)."
   [spec position takes-from?]
   (let [args (second spec)]
     (if (and takes-from? position (nil? (nnext spec)) (or (nil? args) (map? args))
-             (not (contains? args :from)) (not (contains? args :here)))
-      (list (first spec) (assoc args :from (select-keys position [:x :y :z])))
+             (not (contains? args :submitted-at)) (not (contains? args :here)))
+      (list (first spec) (assoc args :submitted-at (select-keys position [:x :y :z])))
       spec)))
 
 (def from-jobs
-  "Jobs that declare :from (jobs.lib.submitted); read from the sources because the catalog entry cuts a long args map."
-  (submitted-jobs))
+  "Jobs whose meaning depends on where the body stands: they get :submitted-at."
+  #{"jobs.access.stair" "jobs.access.bridge" "jobs.access.pillar" "jobs.gather.mine"})
 
 (defn takes-from?
   "Whether the spec's job is one of from-jobs."
@@ -232,7 +231,7 @@
   (contains? from-jobs (str (first spec))))
 
 (defn stamped
-  "The request body with :from stamped into a submitted spec (see stamp-from); position is the snapshot's."
+  "The request body with :submitted-at stamped into a submitted spec (see stamp-from); position is the snapshot's."
   [request position]
   (if-not (and (#{:submit :interrupt} (:op request)) (:spec request) position)
     request
