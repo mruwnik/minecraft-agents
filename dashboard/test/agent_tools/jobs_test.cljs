@@ -299,6 +299,30 @@
                      (is (not (contains? result :follow)) "nothing left to follow"))))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
+(def decline-text "plant declined: every target is refused by plan jizo-crop-field")
+
+(deftest submit-wait-prints-the-decline-text-of-a-job-that-ends-or-waits-declined
+  (let [ended {:job-id "j7" :chain ["j7"]}
+        ends (fn [kind data] (event-of 2 :job kind ended {:message decline-text :attention :notice :data data}))
+        waits (event-of 2 :job :farm.plant.declined ended {:message decline-text :attention :notice :data {:reason :refused :plans ["jizo-crop-field"]}})]
+    (async done
+      (-> (js/Promise.all
+            (clj->js
+              (for [event [(ends :stopped {:status :stopped :kind :nothing-possible :reason :refused})
+                           (ends :stopped {:status :stopped :reason :yielded})
+                           waits]]
+                (let [state (state-dir)
+                      events (atom [(event-of 1 :system :started {})])]
+                  (js/setTimeout #(swap! events conj event) 60)
+                  (-> (run-main! state ["submit" "(jobs.farm.plant)" "--wait" "--timeout" "3s"] (waiting-engine events))
+                      (.then (fn [{:keys [out]}]
+                               (.rmSync fs state #js {:recursive true :force true})
+                               out)))))))
+          (.then (fn [outs]
+                   (doseq [out outs]
+                     (is (str/includes? out decline-text) out))))
+          (.then (fn [_] (done)))))))
+
 (deftest a-wait-that-ends-before-the-job-says-how-to-go-on-waiting
   (let [state (state-dir)
         events (atom [(event-of 1 :system :started {})])]
