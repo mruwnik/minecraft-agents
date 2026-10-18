@@ -331,7 +331,7 @@
   on, or the walk failed)."
   [c pos]
   (let [[x y z] (b/feet-cell c)
-        r (await (step-off/step-off-zoned! c {:x x :y y :z z} {:reach 1}))]
+        r (await (step-off/step-off! c {:x x :y y :z z} {:reach 1 :ok? (step-off/zone-ok (b/rules-in c))}))]
     (if (keyword? r)
       r
       (let [why (:unreachable r)]

@@ -553,6 +553,20 @@
             (is (= 1 (count @stands)))
             (is (not= [0 0] (first @stands)) "the dig is made from beside the column, never from on top")))))))
 
+(def ring {:id "ring" :parts [{:id "w" :cells (vec (for [x [-1 0 1] y [63 64 65] z [-1 0 1] :when (not= [x z] [0 0])] [x y z])) :want "stone"}]})
+
+(deftest the-body-steps-aside-onto-a-cell-of-its-own-plan
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self body :blocks {"0,63,0" "dirt" "0,62,0" "stone"} :plans {"ring" (shape/with-author ring "Fake")}})
+              stands (atom [])]
+          (hiding p #(= [0 62 0] %))
+          (digging-from p stands)
+          (let [result (await (tu/child-outcome eng job {:pos under-feet :for-plan "ring"} 20))]
+            (is (= {:dug true :reason :dug} (select-keys result [:dug :reason])))
+            (is (not= [0 0] (first @stands)))))))))
+
 (deftest a-dig-under-the-feet-says-what-it-read-of-the-floor-before-it-digs
   (async done
     (tu/run-async done
