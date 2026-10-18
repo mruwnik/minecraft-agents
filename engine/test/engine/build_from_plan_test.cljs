@@ -1229,6 +1229,18 @@
 (defn scaffold-left [p]
   (->> (:blocks @(engine.fake/state p)) (filter (fn [[[x y z] n]] (and (>= y 64) (not= "stone" n) (not= "air" n)))) vec))
 
+(deftest a-layer-is-finished-before-the-next-though-its-far-cells-are-out-of-reach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "slab" :parts [{:id "floor" :cells (vec (for [x (range 2 12)] [x 64 6])) :want "stone"}
+                                       {:id "wall" :cells (vec (for [x [2 3 4]] [x 65 6])) :want "stone"}]}
+              {:keys [eng p]} (start {:inventory [{:name "stone" :count 20}] :self {:pos {:x 3.5 :y 64 :z 2.5}}} {"slab" plan} [])
+              result (await (child-outcome eng job {:plan "slab" :reach 3} 600))
+              ys (map (comp second first) (places p))]
+          (is (= 13 (:placed result)))
+          (is (= ys (sort ys)) "no cell of a higher layer is placed while a lower one is open"))))))
+
 (deftest a-wall-above-reach-is-built-from-a-pillar-that-is-taken-back
   (async done
     (tu/run-async done
