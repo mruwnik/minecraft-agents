@@ -42,6 +42,18 @@
 
 (defn side-here? [c feet] (boolean (some #(pit/pocket-cells c feet %) dig-cells/sides)))
 
+(def max-scan "Blocks of reach the stand search reads at most: the body sees no farther, and a huge :walk-radius would read millions of cells." 16)
+
+(defn scan-cells
+  "The cells around feet within r (capped at max-scan) at feet height, nearest first, feet left out."
+  [feet r]
+  (let [r (min r max-scan)]
+    (->> (for [dx (range (- r) (inc r)) dz (range (- r) (inc r))
+               :let [cell (assoc feet :x (+ (:x feet) dx) :z (+ (:z feet) dz))]
+               :when (and (not= cell feet) (<= (+ (* dx dx) (* dz dz)) (* r r)))]
+           cell)
+         (sort-by #(u/dist feet %)))))
+
 (defn stand-cell
   "The nearest cell within :walk-radius at feet height that the body sees open (feet and head over a solid floor), holds no
   hostile and has a pocket side (pocket-cells), nil when none."
@@ -53,13 +65,7 @@
               (and (dig-cells/open-cell? p cell) (dig-cells/open-cell? p (update cell :y inc))
                    (dig-cells/known-solid? p (update cell :y dec)) (not (mobs cell))
                    (side-here? c cell)))]
-    (->> (for [dx (range (- r) (inc r)) dz (range (- r) (inc r))
-               :let [cell (assoc feet :x (+ (:x feet) dx) :z (+ (:z feet) dz))]
-               :when (and (not= cell feet) (<= (+ (* dx dx) (* dz dz)) (* r r)))]
-           cell)
-         (sort-by #(u/dist feet %))
-         (filter ok?)
-         first)))
+    (first (filter ok? (scan-cells feet r)))))
 
 (defn quote-of [c]
   (let [feet (sh-sense/feet (:primitives c))
@@ -89,7 +95,9 @@
       (if-let [stand (stand-cell c feet)]
         (let [e (await (ctx/call c :walk 'jobs.movement.go-to {:pos stand :range 0 :ways #{:walk :clear-seal}}))]
           (cond (= :continue e) :continue
-                (not= :done (:kind e)) (ctx/end c :nothing-possible :failed {:text "could not walk to a wall to pocket" :reason :walk-failed})))
+                (not= :done (:kind e)) (ctx/end c :nothing-possible :failed {:text "could not walk to a wall to pocket" :reason :walk-failed})
+                (not (side-here? c (sh-sense/feet (:primitives c))))
+                (ctx/end c :nothing-possible :failed {:text "walked to a wall but no side fits there" :reason :walk-failed})))
         (ctx/end c :nothing-possible :failed {:text "no side to pocket and no wall in sight to walk to"})))))
 
 (defn ^:async round [c]
