@@ -1005,6 +1005,7 @@ const torchWorld = (overrides, at = new Vec3(8.5, 65, 10.5)) => {
   const columns = Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7].flatMap(cx => [0, 1].map(cz => [`${cx},${cz}`, new ChunkColumn()])))
   const bot = fakeBot({ columns })
   bot.registry = undefined
+  bot._client = new EventEmitter()
   bot.entity.position = at
   const { view, dir } = makeView(bot, overrides)
   const torch = x => {
@@ -1037,6 +1038,16 @@ test('relight: a backlog over relightBacklogMax keeps only the nearest points', 
 })
 
 const torchCell = (cx) => ((65 + 64) & 15) << 8 | 8 << 4 | 8
+
+test('a server light update drops the column overlay, so the server light wins over the relit copy', async () => {
+  const { view, torch, bot } = torchWorld({ relightRange: 1000, relightBudgetMs: 1e9 })
+  torch(8)
+  await view.flushColumns()
+  await view.idle()
+  assert.equal(view.lightOverlay(0, 0, (65 + 64) >> 4)?.block[torchCell()], 14)
+  bot._client.emit('update_light', { chunkX: 0, chunkZ: 0 })
+  assert.equal(view.lightOverlay(0, 0, (65 + 64) >> 4), undefined)
+})
 
 test('relight: a far change is relit once the body comes within relightRange of its column', async () => {
   const { view, torch, bot } = torchWorld({ relightRange: 50, relightBudgetMs: 1e9 })

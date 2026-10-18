@@ -505,7 +505,12 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   const onPhysics = () => { tickPose().catch(reportError) }
 
   // mineflayer applies update_light without emitting a bot event, so listen on the raw client
-  const onLight = safely(packet => markColumn(packet.chunkX, packet.chunkZ))
+  const onLight = safely(packet => {
+    const key = `${packet.chunkX},${packet.chunkZ}`
+    overlays.delete(key) // the server's light is fresher than our frozen copy
+    dirty.delete(key)
+    markColumn(packet.chunkX, packet.chunkZ)
+  })
 
   const hook = target => {
     const client = target._client
