@@ -11,6 +11,7 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [jobs.lib.escape :as escape]
+            [jobs.lib.near :as near]
             [jobs.lib.ledger :as ledger]
             [plan.shape :as shape]
             [jobs.movement.go-to.escalate-choose :as choose]
@@ -186,6 +187,22 @@
             (is (= :goal-enclosed (:why @out)) (pr-str spend @out))
             (is (= at (feet p)) (str spend ": the nearest cell to the goal, when the walk there fits the budget"))
             (is (empty? (calls p "dig")))))))))
+
+(deftest a-wall-walk-cut-short-is-walked-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [real near/walk-round!
+              cuts (atom 0)
+              cut-once (fn [c to & args]
+                         (if (and (= to {:x 4 :y 64 :z 0}) (< (swap! cuts inc) 2))
+                           (js/Promise.resolve {:status "partial"})
+                           (apply real c to args)))
+              {:keys [out p seen]} (with-redefs [near/walk-round! cut-once]
+                                     (await (run-job! free-by-pocket {:pos [8 64 0] :range 0 :ways #{:walk}})))]
+          (is (= :goal-enclosed (:why @out)) (pr-str @out))
+          (is (= 2 (count (events-of seen :go-to.wall-walk))) "a walk reported partial is made again")
+          (is (= [4 64 0] (feet p))))))))
 
 (deftest a-wall-walk-takes-the-short-walk-among-near-equal-cells
   (async done
