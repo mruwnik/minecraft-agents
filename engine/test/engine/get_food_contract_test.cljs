@@ -76,39 +76,12 @@
               e (await (ending-of eng {}))]
           (is (= :done (:kind e))))))))
 
-(deftest nothing-to-try-inside-the-cooldown-is-condition-failed-after-one-look
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:self {:food 1}})]
-          (mem/write! (:store eng) :hungry {:food 1} {:cap 10 :ttl 3600000})
-          (let [e (await (ending-of eng {:explore false}))]
-            (is (= :condition-failed (:kind e)))
-            (is (= :no-food-found (contract/cause-key e)))
-            (is (seq (.filter (.-calls (.-world p)) (fn [c] (= "look" (.-name c))))) "it looked round from here first")))))))
-
-(deftest an-animal-seen-only-after-the-look-starts-the-job-inside-the-cooldown
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:self {:food 2}})
-              look (.-look p)
-              added (atom false)]
-          (mem/write! (:store eng) :hungry {:food 2} {:cap 10 :ttl 3600000})
-          (set! (.-look p) (fn [& args]
-                             (when (compare-and-set! added false true) (run! #(fake/add-entity! p %) herd))
-                             (.apply look p (to-array args))))
-          (let [e (await (ending-of eng {:attack-gap-ms 0 :explore false}))]
-            (is (= :done (:kind e)))
-            (is (seq (gr/calls p "attack")))))))))
-
 (deftest the-call-takes-only-the-ways-it-allows
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[ways bake-tried?] [[#{:hunt} false] [nil true]]]
+        (doseq [ways [#{:hunt} nil]]
           (let [{:keys [eng p]} (setup {:self {:food 3} :entities herd :inventory [{:name "wheat" :count 3}]})
                 e (await (ending-of eng (cond-> {:attack-gap-ms 0} ways (assoc :ways ways))))]
             (is (= :done (:kind e)) (pr-str ways))
-            (is (seq (gr/calls p "attack")) (pr-str ways))
-            (is (= bake-tried? (boolean (seq (gr/entries eng :no-bake)))) (pr-str ways))))))))
+            (is (seq (gr/calls p "attack")) (pr-str ways))))))))

@@ -36,14 +36,6 @@
     {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} [:ok :target]
     {:self {:health 2} :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} [:ok :target]))
 
-(deftest get-food-rests-after-a-too-dangerous-call-while-fragile-and-empty-handed
-  (let [entry [[:food-too-dangerous {:why :creeper} {:cap 1 :ttl 3600000}]]
-        args {:explore false}]
-    (are [self inventory expected] (= expected (start-of 'jobs.survival.get-food {:self self :inventory inventory :time st/noon} args entry))
-      {:food 5 :health 2} [] [:later :too-dangerous]
-      {:food 5 :health 20} [] [:ok :food-to-try]
-      {:food 5 :health 2} [{:name "bread" :count 1}] [:ok :food-to-try])))
-
 (defn done-of
   "[kind reason] of job's done? over a fake body, asked before the call starts or once it runs (its :contract :call written, an entry of `entries`)."
   [job world args entries]

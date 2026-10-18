@@ -15,11 +15,11 @@
 
 (defn ^:async cooking-in-shelter?
   "Raw food carried and a furnace or smoker seen within cook's ::shelter-cook-reach, or a cook under way, and the
-  cook not rushed (cook/rushed?) nor failed lately: run it (cook/cook!). True while it goes on (do not eat
+  cook not rushed (cook/rushed?) nor failed in this job: run it (cook/cook!). True while it goes on (do not eat
   raw), nil when it ended (the cooked food is eaten next) or none is possible."
   [c]
   (let [cooker (when (and (seq (cook/raw-carried c))
-                          (zero? (ctx/count-in c :no-cook cook/no-bake-ms)))
+                          (not (:no-cook (ctx/mem c))))
                  (cook/seen-cooker c (cook/shelter-cook-reach)))]
     (when (and (or cooker (:cooking (ctx/mem c))) (not (cook/rushed? c)))
       (= :continue (await (cook/cook! c cooker))))))

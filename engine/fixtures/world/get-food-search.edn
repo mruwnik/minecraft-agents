@@ -1,13 +1,13 @@
 ;; survival.get-food: how far and when it looks for food (cards 728080aa, 0a81324f, b871dfbf, cb576dfa, 025a58b3, f7c1d8ff,
 ;; 01dca619, 517a3685, 6b628210, 7418793a, 6e7635fc, 1bda3325). Hunger is drained by RCON (food 8 after 5 s); `damage` sets hp 15
 ;; (hungry), or hp 5 with food 0 (starving: foods/starving? is food 0, or hp 6 or less and hungry). The jobs are submitted
-;; directly; a :hungry entry seeded 90 s old is a give-up inside the 10 min ask cooldown and past the 60 s starving rest.
+;; directly; a seeded :hungry entry is an earlier give-up (it widens the search; a starving body's search repeats after 60 s).
 ;; Should-succeed: a starving body past one give-up widens its hunt radius (24 -> 48) and kills a cow 40 blocks off; the
 ;; give-ups widen the radius in the the :no-food ending text (24, 72); an explore search runs for a body with a stale give-up while it
 ;; is starving or asked for a :stock; a melon seen is dug and eaten; a chest booked with bread 100 blocks off is walked to;
 ;; 3 cows lose one, 2 are kept.
 ;; A fragile body (hp 6 or less) waits sheltered at night, so the night cases take only 8 damage (get-food-fragile.edn covers the fragile stop).
-;; Should-fail: a fed-enough body inside the ask cooldown ends condition-failed without searching; a night body that is not
+;; Should-fail: a night body that is not
 ;; starving does not search; a booked chest holding cobblestone is not visited.
 {:defaults
  {:tags [:survival :get-food :search]
@@ -45,13 +45,6 @@
    :expect [{:event {:source :job :kind :child_ended :data {:slot :explore}} :within-s 110}
             {:no-event {:source :job :kind :failed} :for-s 100 :until {:source :job :kind :child_ended :data {:slot :explore}}}]
    :limit-s 150}
-  {:name "fed-enough-body-inside-the-cooldown-ends-without-searching"
-   :memory [{:kind :hungry :data {:food 8} :age-s 90 :policy {:cap 10 :ttl 3600000}}]
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
-         [:rcon "damage $BODY 5 minecraft:generic"]
-         [:job (jobs.survival.get-food {:explore true})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :child_started :data {:slot :explore}} :for-s 30}]}
   {:name "stock-ask-explores-while-fed-past-a-give-up"
    :memory [{:kind :hungry :data {:food 8} :age-s 60 :policy {:cap 10 :ttl 3600000}}]
    :act [[:job (jobs.survival.get-food {:stock 8 :explore {:max-distance 64 :max-legs 3 :spend {:job-time 30}}})]]

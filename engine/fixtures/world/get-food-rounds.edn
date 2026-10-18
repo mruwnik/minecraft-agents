@@ -1,8 +1,7 @@
 ;; Card c5373d1a: survival.get-food as one round, run by the :hungry reflex (cooldown 30 s).
 ;; Food is drained by RCON (hunger 5 s amp 255 -> food 8) and damage sets hp 15, so hungry = food < min(18, 6 + 5).
 ;; Should-succeed: carried bread eaten in one run; a seeded far chest (memory + block) walked to and emptied of food; a cow hunted.
-;; Should-fail: nothing anywhere -> stopped :no-food with the :no-food ending, then, inside the ask cooldown, the call ends
-;; condition-failed :no-food-found (the reflex settles it as declined; no 2nd the :no-food ending); a cut while walking to a chest (hostile-near fires) with the chest emptied meanwhile -> :no-food afterwards.
+;; Should-fail: nothing anywhere -> stopped :no-food with the :no-food ending, then the hungry trigger rests (no 2nd run); a cut while walking to a chest (hostile-near fires) with the chest emptied meanwhile -> :no-food afterwards.
 {:defaults
  {:tags [:survival :hungry :get-food :rounds] :time :day
   :plot {:height 6}

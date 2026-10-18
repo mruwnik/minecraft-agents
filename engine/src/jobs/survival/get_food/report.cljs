@@ -4,7 +4,6 @@
             [engine.ctx :as ctx]
             [jobs.lib.foods :as foods]
             [jobs.lib.util :as u]
-            [jobs.survival.get-food.cook :as cook]
             [jobs.survival.get-food.sources :as sources]))
 
 (defn nearest-known-source [c]
@@ -15,10 +14,9 @@
          first)))
 
 (defn no-bake-reason
-  "The reason of the live :no-bake entry, or nil."
+  "Why the bake failed in this job, or nil."
   [c]
-  (when (pos? (ctx/count-in c :no-bake cook/no-bake-ms))
-    (:reason (:data (ctx/latest c :no-bake)))))
+  (:no-bake (ctx/mem c)))
 
 (defn harmful-carried-text
   "\"; carrying 2 chicken, 5 rotten_flesh, skipped on purpose (...)\" for the harmful foods in the inventory, or nil."

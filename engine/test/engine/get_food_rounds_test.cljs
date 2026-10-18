@@ -517,16 +517,6 @@
           (await (one-round! eng {:explore false}))
           (is (= ["within 24 blocks" "within 48 blocks" "within 72 blocks"] (radii))))))))
 
-(deftest a-fed-enough-body-keeps-the-full-rest-before-searching-again
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen clock]} (setup {:self {:food 4 :health 20}} :step-ms 5)]
-          (await (one-round! eng {}))
-          (swap! clock + 120000)
-          (await (one-round! eng {}))
-          (is (= 1 (count (searches seen)))))))))
-
 (deftest starving-with-only-rotten-flesh-eats-it-as-a-last-resort
   (async done
     (tu/run-async done
@@ -535,17 +525,6 @@
           (await (one-round! eng {:explore false}))
           (is (< 2 (food p)))
           (is (= [] (none-endings seen))))))))
-
-(deftest a-fruitless-job-inside-the-cooldown-waits-with-a-reason
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:self {:food 1}} :step-ms 5)]
-          (await (one-round! eng {:explore false}))
-          (core/submit! eng '(jobs.survival.get-food {:explore false}) {})
-          (await (core/tick! eng))
-          (await (core/tick! eng))
-          (is (= [:no-food-found] (distinct (map :reason (events-of seen :waiting))))))))))
 
 (deftest a-body-above-the-hungry-line-is-done-without-waiting
   (async done
@@ -556,18 +535,6 @@
           (await (core/tick! eng))
           (is (= [] (events-of seen :waiting)))
           (is (= [] (:list (core/state eng)))))))))
-
-(deftest rotten-flesh-above-the-eat-bad-line-is-nothing-to-try
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [args {:explore false}
-              {:keys [eng seen]} (setup {:self {:food 11 :health 6} :inventory [{:name "rotten_flesh" :count 3}]} :step-ms 5)]
-          (await (one-round! eng args))
-          (core/submit! eng (list 'jobs.survival.get-food args) {})
-          (await (core/tick! eng))
-          (await (core/tick! eng))
-          (is (= [:no-food-found] (distinct (map :reason (events-of seen :waiting))))))))))
 
 (deftest hungry-at-night-does-not-explore
   (async done
@@ -683,20 +650,6 @@
           (await (one-round! eng {:explore false}))
           (is (= [] (calls p "transfer")))
           (is (re-find #"passes creeper" (pr-str (entries eng :food-too-dangerous)))))))))
-
-(deftest after-a-too-dangerous-ending-the-next-call-acts-nothing-so-the-reflex-backs-off
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen p]} (setup (merge bread-chest {:self {:food 5 :health 2} :time 6000
-                                                              :entities [(assoc creeper :pos {:x 50.5 :y 64 :z 0.5})]})
-                                          :step-ms 5)]
-          (know-source! eng {:x 60 :y 64 :z 0} :chest)
-          (await (one-round! eng {:explore false}))
-          (let [n (count (.-calls (.-world p)))]
-            (await (one-round! eng {:explore false}))
-            (is (= n (count (.-calls (.-world p)))) "the second call acts nothing")
-            (is (= [:too-dangerous] (distinct (map :reason (events-of seen :waiting)))) "a listed call waits on it")))))))
 
 (deftest a-body-at-food-zero-does-not-rest-after-a-too-dangerous-ending
   (async done
@@ -950,7 +903,6 @@
                                           :zones [{:name "home" :owner "Fake" :min [-20 60 -20] :max [20 70 20]}])]
           (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
           (await (run-until-idle! eng p 40))
-          (is (re-find #"no-furnace-seen" (str (:text (first (events-of seen :food.no-cook))))) "the cook said why it could not")
           (is (> (food p) 5) "the beef was eaten raw after"))))))
 
 (deftest a-failed-cook-is-remembered-as-no-cook-and-the-food-is-eaten-raw
@@ -961,7 +913,6 @@
                                            :inventory [{:name "beef" :count 4}]})]
           (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
           (await (run-until-idle! eng p 40))
-          (is (seq (filter #(= :food.no-cook (:kind %)) @seen)) "the cook failed (no fuel) and said so")
           (is (> (food p) 5) "the beef was eaten raw after"))))))
 
 ;; ---------------------------------------------------------------- :stock

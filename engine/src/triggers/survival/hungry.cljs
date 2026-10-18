@@ -13,7 +13,7 @@
 (a/defargs settings
   {::bake-wheat {:default 3 :doc "Carried wheat enough to bake a loaf." :spec (a/int-in 0 nil)}
    ::urgent-food {:default 2 :doc "At or below this food the trigger holds at :urgent (it cuts a job's comfort section) instead of its default :comfort." :spec (a/int-in 0 20)}
-   ::rest-s {:default 600 :doc "Seconds the trigger rests after get-food found nothing, unless food comes to hand. Same as get-food's :ask-cooldown-ms." :spec (a/int-in 0 nil)}})
+   ::rest-s {:default 600 :doc "Seconds the trigger rests after get-food found nothing, unless food comes to hand." :spec (a/int-in 0 nil)}})
 
 (defn gave-up-at
   "When get-food last ended for finding no food (its nothing-possible :no-food ending, as body memory :job-report

@@ -107,7 +107,7 @@
 
 ;; Owner: eat "should not continuously fire with no food at hand". After get-food finds nothing (ends :no-food, which
 ;; says why), the trigger rests: not every tick, not every cooldown.
-(deftest hungry-reflex-rests-after-finding-no-food-and-says-why
+(deftest hungry-reflex-rests-after-finding-no-food
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -115,9 +115,7 @@
           (core/register-reflex! eng {:trigger :hungry})
           (await (tick-for! eng clock 5))
           (is (= 1 (count (hungry-fired seen))))
-          (let [none (none-events seen)]
-            (is (= 1 (count none)))
-            (is (re-find #"hungry reflex rests" (:text (first none))) "the agent is told why it stops"))
+          (is (= 1 (count (none-events seen))))
           (await (tick-for! eng clock 300))
           (is (= 1 (count (hungry-fired seen))) "five minutes on, no food at hand: not fired again"))))))
 
@@ -775,29 +773,6 @@
           (is (= [{:x 6 :y 64 :z 0}] (call-args p "dig" "pos")))
           (is (= ["melon_slice"] (call-args p "eat" "item"))))))))
 
-(deftest get-food-says-so-once-per-cooldown-when-nothing-is-found
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen clock]} (setup {:self {:food 1}})
-              none #(none-events seen)
-              run! (fn ^:async run! []
-                     (core/submit! eng '(jobs.survival.get-food) {})
-                     (await (run-until-empty eng 10)))]
-          (know-source! eng {:x 300 :y 64 :z 0} :farm)
-          (await (run!))
-          (is (= [] (:list (core/state eng))) "done, so the list resumes work")
-          (is (= 1 (count (none))))
-          (is (= :warn (:level (first (none)))))
-          (is (re-find #"farm" (:text (first (none)))) "names the nearest known source")
-          (is (= 1 (count (entries eng :hungry))))
-          (swap! clock + 60000)
-          (await (run!))
-          (is (= 1 (count (none))) "inside the cooldown it stays quiet")
-          (swap! clock + 600000)
-          (await (run!))
-          (is (= 2 (count (none))) "after the cooldown it says so again"))))))
-
 (def wheat-field
   {:self {:food 1} :inventory [{:name "wheat_seeds" :count 4}]
    :blocks {"6,64,0" "wheat" "6,63,0" "farmland"} :ages {"6,64,0" 7} :drops {:wheat "wheat"}})
@@ -831,89 +806,6 @@
           (is (= [] (entries eng :food-source)))
           (is (= 1 (count (none))))
           (is (re-find #"no food source is known" (:text (first (none))))))))))
-
-(deftest get-food-harvests-in-sight-during-its-ask-cooldown
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen clock]} (setup {:self {:food 1}
-                                                 :blocks {"6,64,0" "carrots"} :ages {"6,64,0" 7}
-                                                 :drops {:carrots "carrot"}})]
-          (mem/write! (:store eng) :hungry {:food 1} {:cap 10 :ttl 3600000})
-          (swap! clock + 60000)
-          (core/submit! eng '(jobs.survival.get-food) {})
-          (await (run-until-empty eng 20))
-          (is (= [{:x 6 :y 64 :z 0}] (call-args p "dig" "pos")))
-          (is (= ["carrot"] (call-args p "eat" "item")))
-          (is (empty? (none-events seen))))))))
-
-(deftest get-food-declines-in-its-ask-cooldown-with-nothing-in-sight
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen clock]} (setup {:self {:food 1}})]
-          (mem/write! (:store eng) :hungry {:food 1} {:cap 10 :ttl 3600000})
-          (know-source! eng {:x 20 :y 64 :z 0} :farm)
-          (swap! clock + 60000)
-          (core/submit! eng '(jobs.survival.get-food) {})
-          (await (core/tick! eng))
-          (is (= [] (tu/walk-calls p)) "does not walk to remembered sources")
-          (is (= 1 (count (entries eng :hungry))))
-          (is (empty? (none-events seen))))))))
-
-(def bread-chest {"20,64,0" [{:name "cobblestone" :count 30} {:name "bread" :count 4}]})
-
-(defn write-hungry! [eng]
-  (mem/write! (:store eng) :hungry {:food 1} {:cap 10 :ttl 3600000}))
-
-(deftest get-food-uses-a-source-learned-after-it-gave-up-during-its-ask-cooldown
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen clock]} (setup {:self {:food 0} :containers bread-chest})]
-          (write-hungry! eng)
-          (swap! clock + 60000)
-          (know-source! eng {:x 20 :y 64 :z 0} :chest)
-          (swap! clock + 1000)
-          (core/submit! eng '(jobs.survival.get-food) {})
-          (await (run-until-empty eng 20))
-          (is (seq (tu/walk-calls p)) "walks to the new chest")
-          (is (= ["bread"] (call-args p "transfer" "item")))
-          (is (= 20 (food p)) "eats the bread")
-          (is (= 1 (count (entries eng :hungry))))
-          (is (empty? (none-events seen))))))))
-
-(deftest get-food-skips-a-source-known-before-it-gave-up-during-its-ask-cooldown
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen clock]} (setup {:self {:food 1} :containers bread-chest})]
-          (know-source! eng {:x 20 :y 64 :z 0} :chest)
-          (swap! clock + 1000)
-          (write-hungry! eng)
-          (swap! clock + 60000)
-          (core/submit! eng '(jobs.survival.get-food) {})
-          (await (core/tick! eng))
-          (is (= [] (tu/walk-calls p)))
-          (is (= 1 (count (entries eng :hungry))))
-          (is (empty? (none-events seen))))))))
-
-(deftest get-food-forgets-a-fresh-source-found-empty-during-its-ask-cooldown
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen clock]} (setup {:self {:food 1} :containers {"20,64,0" [{:name "cobblestone" :count 3}]}})]
-          (write-hungry! eng)
-          (swap! clock + 60000)
-          (know-source! eng {:x 20 :y 64 :z 0} :chest)
-          (swap! clock + 1000)
-          (core/submit! eng '(jobs.survival.get-food) {})
-          (await (run-until-empty eng 20))
-          (is (= [] (entries eng :food-source)))
-          (is (= 1 (count (entries eng :hungry))))
-          (is (empty? (none-events seen))))))))
-
-;; ---------------------------------------------------------------- bread rung
 
 (def table-near {"3,64,0" "crafting_table"})
 
@@ -958,31 +850,14 @@
           (await (run-food! eng))
           (is (= [] (calls p "craft"))))))))
 
-(deftest get-food-remembers-it-cannot-bake-and-goes-on
+(deftest get-food-cannot-bake-and-goes-on
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:food 12} :inventory [{:name "wheat" :count 5}]})]
           (await (run-food! eng))
-          (is (= 1 (count (entries eng :no-bake))))
-          (is (= "no-table" (:reason (first (entries eng :no-bake)))))
-          (is (some #(= :food.no-bake (:kind %)) @seen))
           (is (= 1 (count (none-events seen))) "went on down the ladder")
           (is (re-find #"carrying 5 wheat but cannot bake \(no-table\)" (:text (first (none-events seen))))))))))
-
-(deftest get-food-does-not-retry-baking-until-the-memory-expires
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p clock]} (setup {:self {:food 12} :inventory [{:name "wheat" :count 5}]})]
-          (await (run-food! eng))
-          (let [n (count (calls p "craft"))]
-            (swap! clock + 60000)
-            (await (run-food! eng))
-            (is (= n (count (calls p "craft"))) "a second firing inside 10 minutes makes no craft call")
-            (swap! clock + 600000)
-            (await (run-food! eng))
-            (is (> (count (calls p "craft")) n) "after 10 minutes it tries again")))))))
 
 (deftest get-food-withdraws-wheat-from-a-chest-with-no-food-then-bakes
   (async done
@@ -1036,7 +911,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:self {:food 12} :inventory [{:name "wheat" :count 5}] :blocks table-near})]
+        (let [{:keys [eng p seen]} (setup {:self {:food 12} :inventory [{:name "wheat" :count 5}] :blocks table-near})]
           (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "partial" :reason "no-item" :made 0 :used #js {} :have #js {} :recipes #js [#js {"wheat" 3}]}))
           (await (run-food! eng))
-          (is (= "short" (:reason (first (entries eng :no-bake))))))))))
+          (is (re-find #"cannot bake \(short\)" (:text (first (none-events seen))))))))))

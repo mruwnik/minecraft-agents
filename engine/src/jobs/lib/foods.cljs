@@ -10,7 +10,7 @@
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::starving-rest-ms {:default 60000 :doc "The rest after a fruitless food search while starving (food 0, or hurt and hungry), for get-food's ask cooldown and the hungry trigger." :spec (a/num-in 0 nil)}
+  {::starving-rest-ms {:default 60000 :doc "The rest after a fruitless food search while starving (food 0, or hurt and hungry), for the hungry trigger." :spec (a/num-in 0 nil)}
    ::reserve-eat-below {:default 3 :doc "At this much food or less reserved items are eaten as well." :spec (a/int-in 0 20)}
    ::low-health {:default 10 :doc "Below this health (of 20) precious food is eaten unnamed." :spec (a/int-in 0 nil)}
    ::fragile-health {:default 6 :doc "At or below this health a body with no food carried walks out for food only on a calm day (jobs.lib.dawn/calm?) and never past a known hostile that would likely kill it (the hungry trigger, get-food)." :spec (a/num-in 0 20)}})

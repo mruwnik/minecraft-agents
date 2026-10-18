@@ -62,10 +62,6 @@
                       (filter (comp (set (map :name (u/inventory (:primitives c)))) key) cost/meat-animal))]
     #(get factors % 1)))
 
-(def no-bake-policy {:cap 1 :ttl (* 10 60 1000)})
-
-(def no-bake-ms (* 10 60 1000))
-
 (defn food-level [c] (.-food (.self (:primitives c))))
 
 (defn night-holds?
@@ -120,7 +116,7 @@
                       (assoc (cook-costs) :meat-factor (meat-factor-fn c)))))
 
 (defn can-cook?
-  "Mid-cook, or raw food carried and no live :no-cook entry, with a furnace known or cooking worth a furnace of its
+  "Mid-cook, or raw food carried and no failed cook in this job, with a furnace known or cooking worth a furnace of its
   own (worth-cooking?); never at night, while the night handler holds or when rushed? (a cook under way is dropped then)."
   [c]
   (boolean
@@ -129,7 +125,7 @@
         (not (rushed? c))
         (or (:cooking (ctx/mem c))
             (and (seq (raw-carried c))
-                 (zero? (ctx/count-in c :no-cook no-bake-ms))
+                 (not (:no-cook (ctx/mem c)))
                  (or (nearest-cooker c) (worth-cooking? c)))))))
 
 (defn cook-first?
@@ -142,7 +138,7 @@
   wait yields the round (once the furnace holds the load, the world must move on before the next look; the child is not called while it waits, since an ending would wipe its load). :again when it ended, :continue while it goes on, else nil with :no-cook remembered."
   ([c] (await (cook! c nil)))
   ([c cooker]
-  (let [{:keys [item] :as cooking}
+  (let [cooking
         (or (:cooking (ctx/mem c))
             (let [{:keys [name count]} (first (raw-carried c))
                   furnace (or cooker (nearest-cooker c))]
@@ -161,6 +157,5 @@
                     (if (pos? (:smelted (:data e) 0))
                       :again
                       (let [reason (if (= :done (:kind e)) "short" (name (contract/cause-key e)))]
-                        (ctx/remember! c :no-cook {:reason reason} no-bake-policy)
-                        (ctx/emit! c :food.no-cook :info {:text (str "cannot cook " item ": " reason)})
+                        (ctx/update-mem! c assoc :no-cook reason)
                         nil)))))))))
