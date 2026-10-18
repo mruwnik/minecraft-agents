@@ -109,11 +109,11 @@ const pidAlive = (pid) => {
 }
 
 // Removes the run dirs of dead pids (a SIGKILLed run leaves its copy in RAM): <root>/mc-test-run-<digits> and the test process's
-// <root>/engine-test-<digits>-<random> temp dirs (engine/test/engine/test_util.cljs tmp-dir); never a live pid.
+// <root>/engine-test-<digits>-<random> temp dirs (engine/test/engine/test_util.cljs tmp-dir) and the failing-shard logs <root>/mc-test-run-<digits>-shard-<n>.log (tools/test-shards.mjs); never a live pid.
 export const sweepStale = (root = '/tmp', alive = pidAlive) => {
   const removed = []
   for (const name of fs.readdirSync(root)) {
-    const m = /^(?:mc-test-run-(\d+)|engine-test-(\d+)-.+)$/.exec(name)
+    const m = /^(?:mc-test-run-(\d+)(?:-shard-\d+\.log)?|engine-test-(\d+)-.+)$/.exec(name)
     if (!m || alive(Number(m[1] ?? m[2]))) continue
     try { fs.rmSync(path.join(root, name), { recursive: true, force: true }) } catch { continue } // not ours to delete (EACCES, EBUSY): skip it
     removed.push(name)

@@ -235,9 +235,10 @@ test('sweepStale: removes only mc-test-run-<digits> dirs of dead pids from the g
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))
   for (const d of ['mc-test-run-111', 'mc-test-run-222', 'mc-test-run-abc', 'mc-test-run-333-x', 'other-444', 'mc-test-run', 'engine-test-111-aB3', 'engine-test-222-xYz', 'engine-test-Ab12Cd']) fs.mkdirSync(`${root}/${d}/out`, { recursive: true })
   fs.writeFileSync(`${root}/mc-test-run-999`, 'a file of that name')
+  for (const f of ['mc-test-run-111-shard-3.log', 'mc-test-run-222-shard-1.log', 'mc-test-run-111-shard-x.log']) fs.writeFileSync(`${root}/${f}`, 'log')
   const removed = sweepStale(root, (pid) => pid === 222)
-  assert.deepEqual(removed.sort(), ['engine-test-111-aB3', 'mc-test-run-111', 'mc-test-run-999'])
-  assert.deepEqual(fs.readdirSync(root).sort(), ['engine-test-222-xYz', 'engine-test-Ab12Cd', 'mc-test-run', 'mc-test-run-222', 'mc-test-run-333-x', 'mc-test-run-abc', 'other-444'])
+  assert.deepEqual(removed.sort(), ['engine-test-111-aB3', 'mc-test-run-111', 'mc-test-run-111-shard-3.log', 'mc-test-run-999'])
+  assert.deepEqual(fs.readdirSync(root).sort(), ['engine-test-222-xYz', 'engine-test-Ab12Cd', 'mc-test-run', 'mc-test-run-111-shard-x.log', 'mc-test-run-222', 'mc-test-run-222-shard-1.log', 'mc-test-run-333-x', 'mc-test-run-abc', 'other-444'])
 })
 
 test('sweepStale: a really dead pid is swept, the own pid is kept', (t) => {
