@@ -14,10 +14,13 @@
             [jobs.lib.dig-look :refer [unknown? look-at! see-round!]]
             [jobs.lib.escape :as escape]
             [jobs.lib.lava :as lava]
+            [jobs.lib.reach :as reach]
             [jobs.lib.tools :as tools]
             [jobs.access.stock :as stock]
             [jobs.lib.trip :as trip]
             [jobs.lib.walk :as walk]
+            [engine.game :as game]
+            [jobs.lib.util :as u]
             [plan.shape :as shape]))
 
 (defn judged-in
@@ -216,11 +219,27 @@
           (await (look-at! c cell)))
         (recur (rest cells))))))
 
+(defn box-overlaps?
+  "Whether the body's hitbox (0.6 wide, 1.8 tall) reaches into cell: the server refuses a block there."
+  [pos [cx cy cz]]
+  (let [h game/hitbox-half]
+    (and (pos? (reach/overlap (- (:x pos) h) (+ (:x pos) h) cx))
+         (pos? (reach/overlap (- (:z pos) h) (+ (:z pos) h) cz))
+         (< (:y pos) (+ cy 1)) (> (+ (:y pos) 1.8) cy))))
+
+(defn ^:async clear-box!
+  "Step to the middle of the body's own cell when its hitbox overlaps cell, so the server takes a block there."
+  [c cell]
+  (let [pos (u/self-pos c)]
+    (when (box-overlaps? pos cell)
+      (await (walk/centre! c (+ (js/Math.floor (:x pos)) 0.5) (+ (js/Math.floor (:z pos)) 0.5))))))
+
 (defn ^:async bridge!
   "Place carried filler on the missing floor of the step (bridge/bridge-plans, a plan whose placing found no support gives way
   to the next). :again, or a stop map (:no-support-floor when no plan works), with the opening shut-opening! leaves."
   [c in {:keys [floor] :as cs}]
   (await (look-back! c floor))
+  (await (clear-box! c floor))
   (let [item (choose/filler c :build)
         plans (bridge/bridge-plans (:block-at in) floor (bridge/eye-y c) (bridge-opts c))
         stop (cond

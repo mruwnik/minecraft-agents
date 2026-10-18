@@ -53,4 +53,11 @@
    :body {:inventory [["iron_pickaxe" 1]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 4})]]
    :expect [{:event {:source :job :kind :stair.stopped :data {:reason :no-floor :filler :none}} :within-s 90 :of-job true}]
-   :after [[:item "cobblestone" 0]]}]}
+   :after [[:item "cobblestone" 0]]}
+  ;; a stair up from the stone top over open air: each floor is placed at the body's own height beside it, so the body steps to the middle
+  ;; of its cell first (its box at x .77 reached into the floor cell and the server refused the block)
+  {:name "stair-up-in-open-air-centres-before-placing-the-floor"
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 3})]]
+   :expect [{:event {:source :job :kind :stair.done :data {:steps 3}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :stair.stopped} :for-s 120 :until {:source :job :kind :stair.done}}]
+   :after [[:not-block [11 10 16] "air"] [:not-block [12 11 16] "air"]]}]}

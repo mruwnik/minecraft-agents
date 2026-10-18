@@ -679,6 +679,11 @@
           (is (= [[1 64 0] [1 65 0]] (:spent-at @out)))
           (is (= 2 (count (filter #(= "place" (.-name %)) (.-calls (.-world p)))))))))))
 
+(deftest a-body-on-the-edge-of-its-cell-overlaps-the-floor-it-would-place-beside-it
+  (is (sstep/box-overlaps? {:x 20299.77 :y 161 :z 20336.5} [20300 161 20336]) "x .77: the box reaches .07 into the next cell")
+  (is (not (sstep/box-overlaps? {:x 20299.5 :y 161 :z 20336.5} [20300 161 20336])) "centred")
+  (is (not (sstep/box-overlaps? {:x 20299.77 :y 161 :z 20336.5} [20300 160 20336])) "a cell under the feet is free"))
+
 (defn scaffold [{:keys [eng]}] (mapv #(select-keys % [:cell :item :purpose]) (ledger/open-entries (mem/view (:store eng)))))
 
 (deftest a-noted-stair-leaves-its-bridged-floor-to-cleanup
