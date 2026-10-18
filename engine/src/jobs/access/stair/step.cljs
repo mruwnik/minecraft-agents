@@ -220,12 +220,12 @@
         (recur (rest cells))))))
 
 (defn box-overlaps?
-  "Whether the body's hitbox (0.6 wide, 1.8 tall) reaches into cell: the server refuses a block there."
+  "Whether the body's hitbox reaches into cell: the server refuses a block there."
   [pos [cx cy cz]]
   (let [h game/hitbox-half]
     (and (pos? (reach/overlap (- (:x pos) h) (+ (:x pos) h) cx))
          (pos? (reach/overlap (- (:z pos) h) (+ (:z pos) h) cz))
-         (< (:y pos) (+ cy 1)) (> (+ (:y pos) 1.8) cy))))
+         (< (:y pos) (+ cy 1)) (> (+ (:y pos) game/body-height) cy))))
 
 (defn ^:async clear-box!
   "Step to the middle of the body's own cell when its hitbox overlaps cell, so the server takes a block there."
