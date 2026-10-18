@@ -139,4 +139,11 @@
    :act [[:job (jobs.items.obtain {:item "wooden_pickaxe" :explore false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :obtain.chest} :for-s 60 :until {:source :job :kind :completed}}]
-   :after [[:item "wooden_pickaxe" 1] [:body-near [16 0 16] 6]]}]}
+   :after [[:item "wooden_pickaxe" 1] [:body-near [16 0 16] 6]]}
+  ;; card e24fa31c: the walk to a seen chest says what it is for
+  {:name "seen-chest-walk-names-the-chest-and-item"
+   :blocks [[:set [21 0 16] "chest[facing=west]{Items:[{Slot:0b,id:\"minecraft:oak_log\",count:3}]}"]]
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 3 :ways #{:chest} :explore false})]]
+   :expect [{:event {:source :job :kind :obtain.chest :message [:contains "oak_log in the chest at"]} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:item "oak_log" 3]]}]}
