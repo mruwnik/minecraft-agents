@@ -93,17 +93,17 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"60,64,0" "crafting_table"}} {:item "bread" :fetch false :far 40}))]
+        (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"60,64,0" "crafting_table"}} {:item "bread" :fetch false :radius 40}))]
           (is (= {:item "bread" :made 0 :status :stopped :reason :no-table} (dissoc result :text)))
           (is (empty? (tu/walked-to eng)))
           (is (str/includes? (:text result) "[60 64 0]"))
           (is (str/includes? (:text result) "60 blocks")))))))
 
-(deftest craft-walks-to-a-known-table-beyond-the-radius
+(deftest craft-walks-to-a-known-table-30-off-within-the-default-radius
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p _ eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"30,64,0" "crafting_table"}} {:item "bread" :fetch false :radius 8}))]
+        (let [[result p _ eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"30,64,0" "crafting_table"}} {:item "bread" :fetch false}))]
           (is (= {:item "bread" :made 1 :status :done} (dissoc result :text)))
           (is (= {"bread" 1} (inv p)))
           (is (= 1 (count (tu/walked-to eng)))))))))
@@ -314,7 +314,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"20,64,0" "crafting_table"}}
-                                            {:item "bread" :radius 8 :far 8}))]
+                                            {:item "bread" :radius 8}))]
           (is (= {:item "bread" :made 0 :status :stopped :reason :no-table} (dissoc result :text)))
           (is (empty? (tu/walked-to eng)))
           (is (empty? (filter #(str/starts-with? (name (:kind %)) "craft.") @seen)) "the ending carries it"))))))

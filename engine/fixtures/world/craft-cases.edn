@@ -49,7 +49,7 @@
    :act [[:job (jobs.items.craft {:item "stone_sword"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:item "stone_sword" 1]]}
-  ;; card 1d7cd1e0: a seen table beyond :radius (32) is walked to up to :far (64); beyond :far the stop names the nearest known one
+  ;; card 1d7cd1e0: a seen table within :radius (default 64) is walked to; beyond it the stop names the nearest known one
   ;; (the body sees 48 blocks: the table stands 44 off)
   {:name "seen-table-44-off-is-walked-to-and-the-pickaxe-crafted"
    :plot {:length 80 :width 16 :height 8}

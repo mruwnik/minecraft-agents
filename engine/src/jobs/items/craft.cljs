@@ -28,7 +28,7 @@
 
 (def doc
   "Craft until at least :count of :item are carried. 2x2 recipes work anywhere. Bigger ones need a crafting table: :table, else the
-  nearest within :radius, else the nearest seen within :far (up to 64), walking there when out of reach (a go-to child;
+  nearest seen within :radius (up to 64), walking there when out of reach (a go-to child;
   a carried table is put down instead, with no :table, also with :fetch false; a seen table the walk cannot reach is
   left, and the carried or a fetched table is put down).
   The count carried at the start is kept in memory for :made; the target is :count carried, so a body that carries it
@@ -53,8 +53,7 @@
   {:item {:doc "item name to craft" :spec a/item? :default nil}
    :count {:doc "how many to carry at least" :spec (a/int-in 0 nil) :default 1}
    :table {:doc "crafting table position; the nearest seen within :radius when nil and the recipe needs one" :spec ::a/pos :default nil}
-   :radius {:doc "how far to look for a crafting table" :spec (a/num-in 0 nil) :default 32}
-   :far {:doc "how far a seen crafting table is walked to when none is within :radius (the seen memory reaches 64)" :spec (a/num-in 0 64) :default 64}
+   :radius {:doc "how far to look for a crafting table, and to walk to a seen one (the seen memory reaches 64)" :spec (a/num-in 0 64) :default 64}
    :fetch {:doc "get an ingredient that runs out (jobs.lib.need): true, a set of kinds or a map of limits; false stops :short" :spec need/option? :default true}
    :keep-table {:doc "leave a table this call put down standing; false: it is dug up again when the call ends" :spec boolean? :default false}
    :avoid {:doc "cells [x y z] a table is never put in or dug for: the dig line of a job that crafts as its child" :spec (a/coll-of a/position?) :default nil}
@@ -386,12 +385,12 @@
   reach (not one handed in as :table) is dropped for this call and a carried or fetched table is put down instead.
   :again to craft again, :continue while go-to waits, :done when there is none or the walk was given up."
   [c made]
-  (let [{:keys [table radius far]} (merge (:args c) (ctx/mem c))
+  (let [{:keys [table radius]} (merge (:args c) (ctx/mem c))
         p (:primitives c)
         handed? (some? table)
         arg? (some? (:table (:args c)))
         skip (unreachable-tables c)
-        table (or table (crafting-table/nearest p radius skip) (crafting-table/nearest p far skip))]
+        table (or table (crafting-table/nearest p radius skip))]
     (cond
       (and (nil? table) (not (look/surveyed? c)))
       (do (await (look/survey! c)) :again) ; a table behind the body is not seen until it looks
