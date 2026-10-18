@@ -1,0 +1,16 @@
+;; Card 4bb27e89: the agent tools' submit guard holds any two digging jobs (stair, tunnel, mine, strip.*), not only same-name ones.
+;; Should-succeed: a stair job waiting for a pickaxe; a tunnel submit is held back as :job-clash naming the stair; the same submit with --alongside is posted.
+;; Should-fail (held): the first tunnel submit; the stair keeps running with no tunnel event.
+{:defaults
+ {:tags [:access :tool] :time :day
+  :plot {:height 20}
+  :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+  :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "tunnel-submit-is-held-while-a-stair-runs"
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3 :fetch false})]
+         [:await {:source :job :kind :waiting} 30]
+         [:http :submit (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true}) [] {:ok false :reason :job-clash :clashes [:has {:name "jobs.access.stair"}]}]
+         [:http :submit (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true}) [:alongside] {:ok true}]]
+   :expect [{:event {:source :job :kind :waiting} :within-s 30 :of-job true}]}]}
