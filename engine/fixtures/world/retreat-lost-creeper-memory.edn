@@ -1,7 +1,7 @@
 ;; Card 7889852a: the :threat entry of a creeper last seen 8 blocks east, written 5 s ago, for a creeper no entity has (gone),
 ;; does not make the flee from a zombie (6 west, NoAI and helmeted: it never hurts) go sideways: it runs east as with no memory.
 ;; A :threat entry whose mob the client no longer lists (it blew up; card 18fc7cc2) is gone, not lost: it steers nothing (flee-ignores-a-gone-creeper).
-;; The listed-but-unseen creeper has no world case: a seeded entry cannot name the id of a mob summoned later (threats-test pins it).
+;; A creeper the body saw seconds ago, still listed but now behind a wall, is remembered: the flight keeps clear of it (keeps-clear-of-a-creeper-walled-off).
 ;; Anchor: every flee step logs retreat.target.
 {:defaults
  {:tags [:survival :retreat] :time :day
@@ -26,4 +26,17 @@
          [:wait-s 12]] ; hold: the flight takes this long to show its distance
    :expect [{:event {:source :job :kind :retreat.target} :within-s 20}]
    :after [[:body-far [10.5 0 16.5] 8]]
-   :limit-s 40}]}
+   :limit-s 40}
+  {:name "keeps-clear-of-a-creeper-walled-off"
+   :body {:at [16.5 0 16.5] :yaw 270 :settle-s 3}
+   :act [[:summon "creeper" [24.5 0 16.5] "{NoAI:1b,Silent:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:until-seen {:entity "creeper"} 15]
+         [:wait-s 2] ; hold: the sighting reaches memory before the wall hides the creeper
+         [:rcon "execute positioned $X $Y $Z run fill ~20 ~0 ~13 ~20 ~3 ~19 stone"]
+         [:wait-s 2] ; hold: the wall reaches the body's world view
+         [:summon "zombie" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.survival.retreat {})]
+         [:wait-s 12]] ; hold: the flight takes this long to show its distance
+   :expect [{:event {:source :job :kind :retreat.target} :within-s 20}]
+   :after [[:body-far [24.5 0 16.5] 8]]
+   :limit-s 60}]}
