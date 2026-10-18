@@ -1,6 +1,6 @@
 (ns engine.shelter-mob-wait-test
   "dig-in's walls and the retreat's seal wait a bounded game time for a mob standing in a cell they place into, then stop
-  naming the mob (as dig-niche's plug does)."
+  naming the mob (as dig-pocket's plug does)."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.events :as events]

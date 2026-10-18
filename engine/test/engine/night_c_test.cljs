@@ -318,7 +318,7 @@
               _ (core/submit! eng '(jobs.survival.night) {})
               log (await (with-child-log #(core/tick! eng)))
               niche (first (filter #(= :niche (first %)) log))]
-          (is (= {:fetch false} (nth niche 2)) "the niche child is told not to fetch")
+          (is (not (:fetch (nth niche 2))) "the niche child is not told to fetch")
           (is (empty? (filter #(= 'jobs.items.get-tool (second %)) log)) "no tool fetched in the dark"))))))
 
 (deftest with-nothing-to-dig-the-night-flees-to-a-roofed-home-beyond-the-walk-radius-by-an-unlit-route

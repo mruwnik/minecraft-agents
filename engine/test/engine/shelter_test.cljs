@@ -17,7 +17,7 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
             [engine.test-util :as tu :refer [run-until-empty]]
-            [engine.shelter-support :refer [day-ms night noon on-wait! dawn-after! mid-night! default-dawn setup tick-n night-then-day calls arg-pos entries know-bed! looked-round! pos-of teleport! emitted emitted-by floor bed-room dirt-stack sleeper awake declined-events always-shelter refuse-placing! after-first! fires? ground stone-ground ms-of-offline notified refuse-cell!]]
+            [engine.shelter-support :refer [day-ms night noon on-wait! dawn-after! mid-night! default-dawn setup tick-n night-then-day calls arg-pos entries know-bed! looked-round! pos-of teleport! emitted emitted-by floor bed-room dirt-stack sleeper awake declined-events always-shelter refuse-placing! after-first! fires? ground stone-ground hard-ground ms-of-offline notified refuse-cell!]]
             [engine.triggers :as triggers]))
 
 (deftest night-holds-at-night-in-the-open
@@ -1170,7 +1170,7 @@
 
 (def futile-world
   {:time night :drops {"iron_ore" "raw_iron"} :inventory [{:name "iron_pickaxe" :count 1}]
-   :blocks (merge ground {"0,63,0" "iron_ore" "0,62,0" "iron_ore" "0,61,0" "stone"})})
+   :blocks (merge hard-ground {"0,63,0" "iron_ore" "0,62,0" "iron_ore" "0,61,0" "stone"})})
 
 (deftest a-futile-pit-is-not-dug-again-while-the-shelter-holds
   (async done
@@ -1318,23 +1318,6 @@
             (is (< (await (run-until-empty eng 12)) 12))
             (is (= 1 (count (emitted seen :dig_in_failed))))
             (is (= :descent-stalled (:reason (first (entries eng :dig-in-futile)))) status)))))))
-
-(deftest a-failed-roof-does-not-deepen-the-pit-on-refiring
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p clock]} (setup {:time night :blocks pit-floor})
-              eng (update eng :triggers assoc :always-shelter always-shelter)]
-          (refuse-placing! p)
-          (core/register-reflex! eng {:trigger :always-shelter})
-          (let [held (mid-night! p (dec default-dawn) #(hash-map :places (count (calls p "place")) :digs (count (calls p "dig")) :futile (entries eng :dig-in-futile)))]
-            (await (tick-n eng 14))
-            (is (= {:places 3 :futile [{:pos {:x 0 :y 63 :z 0} :reason :roof-failed}]}
-                   (dissoc @held :digs))
-                "the roof is tried three times at the site, then given up; no other pit is roofed")
-            (swap! clock + 11000)
-            (await (tick-n eng 8))
-            (is (= (:digs @held) (count (calls p "dig"))) "a fresh reflex cannot excavate another pit")))))))
 
 (deftest unsupported-walls-are-not-retried-on-every-reflex-firing
   (async done

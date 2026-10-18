@@ -274,7 +274,7 @@
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake {:offlineScale 0.0001 :floor tu/walk-floor :time night
-                                   :blocks (assoc st/ground furnace-pos "furnace") :self {:food 5}
+                                   :blocks (assoc st/hard-ground furnace-pos "furnace") :self {:food 5}
                                    :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]}))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(deref clock)
@@ -292,7 +292,7 @@
   [entities & [self inventory]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/seeing-all (tu/fake {:offlineScale 0.0001 :floor tu/walk-floor :time night :blocks st/ground
+        p (tu/seeing-all (tu/fake {:offlineScale 0.0001 :floor tu/walk-floor :time night :blocks st/hard-ground
                                    :self (or self {:food 0 :health 15}) :inventory (or inventory []) :entities entities}))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(swap! clock + 5)

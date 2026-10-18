@@ -1,0 +1,18 @@
+;; Breathe with no air anywhere (shut-in step 2): a sealed water room under stone, the body standing on its floor by a rock wall.
+;; It digs a pocket into the wall from the water (shut-in's pocket way, no look-round), steps in and walls the way in with a carried
+;; block; the water left in the pocket drains and the head is in air. The cap over the room is not dug.
+{:defaults
+ {:tags [:survival :water] :time :any
+  :plot {:height 12}
+  :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
+              :job (jobs.survival.breathe {:min-oxygen 12})}]
+  :blocks [[:fill [0 0 0] [31 8 31] "stone"]]
+  :body {:effects [["resistance" 600 4]] :settle-s 1}
+  :limit-s 70}
+ :cases
+ [{:name "sealed-water-room-wall-pocket-gives-air"
+   :blocks [[:fill [14 0 14] [16 1 16] "water"]]
+   :body {:at [14.5 0 15.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 8]]}
+   :expect [{:event {:source :reflex :kind :fired} :within-s 30}
+            {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 50}]
+   :after [[:block [14 0 15] "cobblestone"] [:block [14 1 15] "cobblestone"] [:block [13 0 15] "air"] [:body-near [13.5 0 15.5] 1.5]]}]}

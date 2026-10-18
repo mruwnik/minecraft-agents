@@ -5,6 +5,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.need :as need]
             [jobs.lib.combat :as combat]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spent :as spent]
@@ -27,6 +28,7 @@
 (a/defargs args
   {:ways {:doc "the ways to enclose the body, tried in the order :walls, :pit, :pocket" :spec (a/set-of #{:walls :pit :pocket}) :default #{:walls :pit :pocket}}
    :for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}
+   :fetch {:doc "dig-pocket: get a missing tool (jobs.lib.need): true, a set of kinds or a map of limits" :spec need/option? :default false}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
    :radius {:doc "melee hostiles within this many blocks decide which side is walled first and stand in the way of a cell" :spec (a/num-in 0 nil) :default 8}
    :ranged-radius {:doc "ranged hostiles within this many blocks decide which side is walled first" :spec (a/num-in 0 nil) :default 16}
@@ -52,7 +54,7 @@
   "Each way's job and the args of this call it takes."
   {:walls ['jobs.survival.wall-in [:for :roof-height :radius :ranged-radius :max-places]]
    :pit ['jobs.survival.dig-pit [:for :roof-height :radius :on-lava :hand-clear-ms]]
-   :pocket ['jobs.survival.dig-pocket [:for :roof-height :radius :ranged-radius :max-places :on-lava]]})
+   :pocket ['jobs.survival.dig-pocket [:for :fetch :roof-height :radius :ranged-radius :max-places :on-lava]]})
 
 (defn done? [c] (way/done? c (:way (ctx/mem c)) (merge (spent/summary (spent/log c)) (select-keys (ctx/mem c) [:placed :roof :start]))))
 

@@ -30,11 +30,6 @@
     {:time st/noon} {} [:look :no-bed]
     {:time st/noon} {:bed {:x 3 :y 64 :z 0}} [:ok :daytime]))
 
-(deftest dig-niche-starts-by-night-only
-  (are [world expected] (= expected (start-of 'jobs.survival.dig-niche world {}))
-    {:time st/noon} [:later :day]
-    {:time st/night} [:ok :night]))
-
 (deftest fight-back-needs-a-hostile-in-range
   (are [world expected] (= expected (start-of 'jobs.survival.fight-back world {:range 4 :ranged-range 16 :leash 20 :skip []}))
     {} [:later :no-target]

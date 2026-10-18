@@ -135,6 +135,10 @@
 
 (def stone-ground (into {} (map (fn [[k _]] [k "stone"])) ground))
 
+(def hard-ground
+  "Cobblestone where ground is dirt: nothing to dig without a pickaxe, so a held night has no pit or pocket to try."
+  (into {} (map (fn [[k _]] [k "cobblestone"])) ground))
+
 (def ms-of-offline (fn [p] (mapv #(.-ms (.-args %)) (calls p "offline"))))
 
 (defn notified [seen] (count (emitted seen :job.notify)))

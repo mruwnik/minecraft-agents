@@ -13,7 +13,7 @@
   '#{jobs.survival.breathe jobs.survival.unwedge jobs.survival.extinguish
      jobs.survival.cure jobs.survival.respond-to-hostile jobs.survival.fight-back jobs.survival.retreat
      jobs.food.fish jobs.survival.eat jobs.survival.get-food jobs.survival.go-home
-     jobs.survival.sleep jobs.survival.set-spawn jobs.survival.night jobs.survival.bed-down jobs.survival.dig-in jobs.survival.shut-in jobs.survival.wall-in jobs.survival.dig-pit jobs.survival.dig-pocket jobs.survival.dig-niche jobs.survival.log-out
+     jobs.survival.sleep jobs.survival.set-spawn jobs.survival.night jobs.survival.bed-down jobs.survival.dig-in jobs.survival.shut-in jobs.survival.wall-in jobs.survival.dig-pit jobs.survival.dig-pocket jobs.survival.log-out
      jobs.combat.attack jobs.animals.breed jobs.animals.shear jobs.animals.cull jobs.animals.tend jobs.animals.pen-check jobs.animals.shut-gate jobs.animals.leash jobs.animals.unleash jobs.animals.lead-to jobs.animals.lure-to jobs.survival.recover-drops jobs.survival.restore-broken jobs.maintenance.shut-doors jobs.storage.make-room
      jobs.animals.herd
      jobs.forestry.fell-tree jobs.forestry.fell-from-pillar jobs.items.collect-drops jobs.forestry.plant-sapling jobs.forestry.tidy
@@ -120,9 +120,6 @@
                 '(jobs.farm.find-spot {:limit 0})
                 '(jobs.movement.go-to {:pos [1 64 1] :leg-alert-s 0})
                 '(jobs.movement.go-to {:pos [1 64 1] :leg-alert-s 500})
-                '(jobs.survival.dig-niche {:reach 100000})
-                '(jobs.survival.dig-niche {:reach 0})
-                '(jobs.survival.dig-niche {:roof-height 100000})
                 '(jobs.farm.till {:center [0 64 0] :radius 1000000})
                 '(jobs.farm.find-spot {:w 17})
                 '(jobs.farm.find-spot {:range 49})
@@ -130,18 +127,15 @@
                 '(jobs.farm.find-spot {:limit 9})
                 '(jobs.movement.go-to {:pos [1 64 1] :leg-alert-s 0.05})
                 '(jobs.movement.go-to {:pos [1 64 1] :leg-alert-s 120.1})
-                '(jobs.survival.dig-niche {:reach 33})
                 '(jobs.farm.till {:center [0 64 0] :radius 8})
                 '(jobs.farm.till {:center [0 64 0] :radius -1})]]
     (is (string? (expr/problem registry/jobs form)) (pr-str form)))
   (doseq [form ['(jobs.farm.find-spot {:w 16 :h 16 :range 48 :depth 16 :limit 8})
                 '(jobs.movement.go-to {:pos [1 64 1] :leg-alert-s 5})
-                '(jobs.survival.dig-niche {:reach 16 :roof-height 4})
                 '(jobs.farm.till {:center [0 64 0] :radius 7})
                 '(jobs.farm.find-spot {:limit 1})
                 '(jobs.movement.go-to {:pos [1 64 1] :leg-alert-s 0.1})
                 '(jobs.movement.go-to {:pos [1 64 1] :leg-alert-s 120})
-                '(jobs.survival.dig-niche {:reach 32})
                 '(jobs.farm.till {:center [0 64 0] :radius 0})]]
     (is (nil? (expr/problem registry/jobs form)) (pr-str form))))
 

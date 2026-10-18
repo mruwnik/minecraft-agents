@@ -1,10 +1,10 @@
 (ns engine.night-jobs-contract-test
-  "jobs.survival.dig-niche, sleep, go-home and set-spawn as contract jobs: what each way of ending a call is, read through ctx/call."
+  "jobs.survival.dig-pocket, sleep, go-home and set-spawn as contract jobs: what each way of ending a call is, read through ctx/call."
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
-            [engine.dig-niche-test :as niche]
+            [engine.dig-pocket-test :as pocket]
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
@@ -39,32 +39,23 @@
 
 (defn spawn-world [extra] (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor :time st/night} extra)))
 
-(deftest a-hill-niche-ends-done-with-its-door
+(deftest a-hill-pocket-ends-done-with-the-cells-it-walled
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [p (tu/seeing-all (tu/fake {:offlineScale 0.0001 :time 14000 :blocks (merge niche/ground niche/hill)
+        (let [p (tu/seeing-all (tu/fake {:offlineScale 0.0001 :time 14000 :blocks (merge pocket/ground pocket/hill)
                                          :drops {"stone" "cobblestone"} :inventory [{:name "iron_pickaxe" :count 1}]}))
-              e (await (call! p 'jobs.survival.dig-niche {} (constantly nil)))]
+              e (await (call! p 'jobs.survival.dig-pocket {} (constantly nil)))]
           (is (= :done (:kind e)))
-          (is (= 2 (count (:door (:data e))))))))))
+          (is (= 2 (count (:placed (:data e))))))))))
 
-(deftest flat-ground-has-no-niche-site-a-fact
+(deftest flat-ground-has-no-pocket-site
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [p (tu/seeing-all (tu/fake {:offlineScale 0.0001 :time 14000 :blocks niche/ground :inventory [{:name "iron_pickaxe" :count 1}]}))
-              e (await (call! p 'jobs.survival.dig-niche {} (constantly nil)))]
-          (is (= [:condition-failed :no-site] (ending-of e))))))))
-
-(deftest no-block-to-plug-the-niche-is-a-fact
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [p (tu/seeing-all (tu/fake {:offlineScale 0.0001 :time 14000 :blocks (merge niche/ground niche/hill)
-                                         :inventory [{:name "iron_pickaxe" :count 1}]}))
-              e (await (call! p 'jobs.survival.dig-niche {:use {:blocks ["dirt"]}} (constantly nil)))]
-          (is (= [:condition-failed :no-blocks] (ending-of e))))))))
+        (let [p (tu/seeing-all (tu/fake {:offlineScale 0.0001 :time 14000 :blocks pocket/ground :inventory [{:name "iron_pickaxe" :count 1}]}))
+              e (await (call! p 'jobs.survival.dig-pocket {} (constantly nil)))]
+          (is (= [:nothing-possible :no-site] (ending-of e))))))))
 
 (deftest a-click-that-does-not-set-the-spawn-is-a-failed-try
   (async done
@@ -112,26 +103,6 @@
       (fn ^:async t []
         (let [e (await (call! (spawn-world {:blocks {"6,64,0" "red_bed"}}) 'jobs.survival.sleep {:bed {:x 6 :y 64 :z 0} :open-bed false} (constantly nil)))]
           (is (= [:condition-failed :bed-open] (ending-of e))))))))
-
-(deftest dig-niche-by-day-is-condition-failed-day
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [p (tu/seeing-all (tu/fake {:offlineScale 0.0001 :time st/noon :blocks (merge niche/ground niche/hill)
-                                         :inventory [{:name "iron_pickaxe" :count 1}]}))
-              e (await (call! p 'jobs.survival.dig-niche {} (constantly nil)))]
-          (is (= [:condition-failed :day] (ending-of e))))))))
-
-(deftest a-roof-over-an-open-field-is-not-a-shelter-for-dig-niche
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [p (tu/seeing-all (tu/fake {:offlineScale 0.0001 :time 14000
-                                         :blocks (merge niche/ground niche/hill (niche/blocks "oak_leaves" [-2 3] [67 67] [-3 3]))
-                                         :drops {"stone" "cobblestone"} :inventory [{:name "iron_pickaxe" :count 1}]}))
-              e (await (call! p 'jobs.survival.dig-niche {} (constantly nil)))]
-          (is (= :done (:kind e)))
-          (is (= 2 (count (:door (:data e)))) "it cut a niche, the canopy did not count as shelter"))))))
 
 (deftest set-spawn-on-a-bed-ends-done
   (async done

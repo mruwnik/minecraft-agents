@@ -153,7 +153,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen clock]} (st/setup {:time night :blocks (into {} (for [x (range -4 5) z (range -4 5) y (range 54 64)] [(str x "," y "," z) "dirt"]))})]
+        (let [{:keys [eng p seen clock]} (st/setup {:time night :inventory [{:name "iron_pickaxe" :count 1}]
+                                                       :blocks (into {} (for [x (range -4 5) z (range -4 5) y (range 54 64)] [(str x "," y "," z) "cobblestone"]))})]
           (st/refuse-placing! p)
           ;; the 2nd wait (an exposed hold) is cut by a higher reflex 11 minutes on: the night was lengthened
           ;; with time set, so dig-in's own 10-minute futile entry has expired
@@ -168,10 +169,7 @@
           (await (st/tick-n eng 40))
           (is (= [63 62 61] (keep #(when (= [0 0] [(:x %) (:z %)]) (:y %)) (mapv st/arg-pos (st/calls p "dig"))))
               "one pit; the second firing does not dig deeper (the other digs are the stair out by day)")
-          (is (= 2 (fired seen)) "fired again after the cut")
-          (is (= [{:roofed false :buried false :open-cave false}]
-                 (mapv #(select-keys % [:roofed :buried :open-cave]) (st/emitted seen :night.dig-in-why)))
-              "the inputs of the choice are recorded once, at the start of the pit"))))))
+          (is (= 2 (fired seen)) "fired again after the cut"))))))
 
 (deftest with-no-site-left-the-night-holds-exposed-then-stops-at-morning
   (async done
@@ -313,9 +311,9 @@
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
           (reset! mid {:at (st/pos-of p) :holder (some? (core/holder eng))})
-          (is (= {:at {:x 5.5 :y 64 :z -0.5} :holder false} @mid) "shut in at the middle of the niche (the stair out of the failed pit went north), safe: not held")
-          (is (= #{{:x 4 :y 64 :z -1} {:x 4 :y 65 :z -1}}
-                 (set (filterv #(= 4 (:x %)) (mapv st/arg-pos (st/calls p "place")))))
+          (is (= {:at {:x 4.5 :y 64 :z -0.5} :holder false} @mid) "shut in the pocket (the stair out of the failed pit went north), safe: not held")
+          (is (= #{{:x 3 :y 64 :z -1} {:x 3 :y 65 :z -1}}
+                 (set (filterv #(= 3 (:x %)) (mapv st/arg-pos (st/calls p "place")))))
               "the opening, feet and head, plugged")
           (is (empty? (st/emitted seen :shelter.exposed)))
           (is (empty? (st/emitted seen :stopped)) "the night ended done"))))))

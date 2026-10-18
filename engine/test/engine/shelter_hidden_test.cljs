@@ -1,5 +1,5 @@
 (ns engine.shelter-hidden-test
-  "The shelter plans (retreat's pit and pocket, dig-niche's niche) for a body that has seen only the surface (Q98): a cell
+  "The shelter plans (retreat's pit, jobs.survival.dig-pocket's pocket) for a body that has seen only the surface (Q98): a cell
   inside rock reads stone when it lies behind seen solid faces, and the dig looks at what it laid open and stops on
   fluid or a hole that shows. The primitives are wrapped; nothing inside the rock is known."
   (:require [cljs.test :refer [deftest is async]]
@@ -16,7 +16,7 @@
             [jobs.lib.seal :as seal]
             [jobs.survival.dig-in :as dig-in]
             [jobs.survival.dig-in-cells :as dig-cells]
-            [jobs.survival.dig-niche :as niche]
+            [jobs.survival.dig-pocket :as dig-pocket]
             [jobs.survival.retreat-pit :as pit]))
 
 (defn stone [[x0 x1] [y0 y1] [z0 z1]]
@@ -71,19 +71,19 @@
         (let [p (await (seen-world {}))]
           (is (= [{:x 3 :y 64 :z 0} {:x 3 :y 65 :z 0}] (pit/pocket-cells (ctx-of p) {:x 2 :y 64 :z 0} [1 0]))))))))
 
-(deftest a-niche-in-the-hill-is-found-on-the-faces-seen
+(deftest a-pocket-site-in-the-hill-is-found-on-the-faces-seen
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [p (await (seen-world {}))]
-          (is (= {:stand {:x 2 :y 64 :z 0} :dir [1 0]} (niche/find-site p 6))))))))
+          (is (= [{:x 3 :y 64 :z 0} {:x 3 :y 65 :z 0}] (pit/pocket-site (ctx-of p) {:x 2 :y 64 :z 0}))))))))
 
-(deftest rock-with-a-seen-opening-in-its-shell-is-no-niche
+(deftest rock-with-a-seen-opening-over-it-is-no-pocket
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [p (await (seen-world {"3,66,0" "air"}))]
-          (is (not (niche/niche-ok? p {:x 2 :y 64 :z 0} [1 0]))))))))
+          (is (nil? (pit/pocket-site (ctx-of p) {:x 2 :y 64 :z 0}))))))))
 
 (defn setup [p job args]
   (let [clock (atom 1000000)
@@ -107,25 +107,25 @@
       (recur (inc i))))
   s)
 
-(defn ^:async run-niche! [extra]
-  (await (tick-out! (setup (await (seen-world extra)) 'jobs.survival.dig-niche {}))))
+(defn ^:async run-pocket! [extra]
+  (await (tick-out! (setup (await (seen-world extra)) 'jobs.survival.dig-pocket {}))))
 
 (defn digs [p] (mapv (juxt :x :y :z) (map #(:pos (js->clj (.-args %) :keywordize-keys true))
                                            (filter #(= "dig" (.-name %)) (.-calls (.-world p))))))
 
-(deftest a-niche-in-clean-rock-is-cut-and-plugged
+(deftest a-pocket-in-clean-rock-is-cut-and-plugged
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (run-niche! {}))]
+        (let [{:keys [out p seen]} (await (run-pocket! {}))]
           (is (= :done (:status @out)))
-          (is (= 4 (count (digs p)))))))))
+          (is (= 2 (count (digs p)))))))))
 
-(deftest water-behind-the-opening-shows-after-the-first-dig-and-the-niche-stops
+(deftest water-behind-the-pocket-shows-after-the-dig-and-the-pocket-stops
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (run-niche! {"4,65,0" "water"}))]
+        (let [{:keys [out p]} (await (run-pocket! {"4,65,0" "water"}))]
           (is (= :stopped (:status @out)))
-          (is (= :fluid (:reason @out)))
+          (is (= :fluid-adjacent (get-in @out [:ending :data :reason])))
           (is (not-any? #{[4 65 0] [4 64 0]} (digs p))))))))

@@ -1504,7 +1504,7 @@
           (is (= [[:completed nil]] ended))
           (is (nil? (breath/situation p 12)) "breathing")
           (is (pos? (.-health (.self p))))
-          (is (= {:x 1 :y 64 :z 0} pos) "in the pocket beside the cut, not up the water column")
+          (is (= {:x 1.5 :y 64 :z 0.5} pos) "in the pocket beside the cut, not up the water column")
           (is (= ["cobblestone" "cobblestone"] [(block [0 64 0]) (block [0 65 0])]) "the opening is plugged behind it")
           (is (= "air" (block [1 65 0])) "the head cell is dry")
           (is (not (some #{"swim"} (call-names p)))))))))
@@ -1535,7 +1535,7 @@
           (is (= [[:completed nil]] ended))
           (is (nil? (breath/situation p 12)) "breathing")
           (is (= "cobblestone" (block [0 69 0])) "the footing under the feet")
-          (is (= {:x 1 :y 70 :z 0} pos) "in the pocket")
+          (is (= {:x 1.5 :y 70 :z 0.5} pos) "in the pocket")
           (is (= "oak_planks" (block [0 73 0])) "the cap is left"))))))
 
 (deftest a-stop-with-no-air-says-why-no-pocket-was-made

@@ -75,7 +75,7 @@
   - else a safe place: jobs.survival.dig-in here, unless a site tonight failed within 8 blocks. A dig-in that does not
     roof the body (any other ending) writes a :night-site {:pos :reason} entry, and the body walks (go-to) to the
     nearest cell within 16 blocks, 9+ from every failed site, that looks dry and solid from the surface (shelter.relocated info; dig-in finds out the
-    rest), to dig in there. After max-sites failed sites, or with no such cell, it cuts a niche (jobs.survival.dig-niche with :fetch false, once, :niche;
+    rest), to dig in there. After max-sites failed sites, or with no such cell, it cuts a niche (jobs.survival.shut-in with the pocket way, once, :niche;
     out of a failed pit first; never a tool fetched in the dark), else flees somewhere safer, else holds exposed until day (one shelter.exposed
     warn, hold :exposed), still taking a bed or a sleeper's log-out when one turns up. A body held exposed digs in again (failed sites
     forgotten) when it has moved off its spot or retry-after-ms passed, at most max-retries times.
@@ -243,9 +243,13 @@
     (ctx/update-mem! c #(-> % (dissoc :relocating :pit-trapped :niche :fleeing :flee-failed)
                             (assoc :exposed {:pos (sh-sense/feet p) :at (ctx/now c) :retries retries})))))
 
+(def niche-reach
+  "Blocks within which the niche's wall is looked for."
+  16)
+
 (defn ^:async niche!
-  "No pit site is left: out of the failed pit first (dig-in-leave/climb!, a stair), then jobs.survival.dig-niche cuts a niche
-  into a hillside or wall. Whatever it ends in, it is tried once (:niche :tried); the next pass holds exposed if it
+  "No pit site is left: out of the failed pit first (dig-in-leave/climb!, a stair), then jobs.survival.shut-in digs a pocket
+  into a hillside or wall within niche-reach; the blocks that plug it are the :shelter entry's door. Whatever it ends in, it is tried once (:niche :tried); the next pass holds exposed if it
   did not shut the body in."
   [c pit]
   (hold/busy! c)
@@ -253,11 +257,17 @@
     (let [r (await (dig-leave/climb! c {:start pit} nil))]
       (when (map? r) (ctx/update-mem! c assoc :pit-trapped true))
       :again)
-    (let [d (await (ctx/call c :niche 'jobs.survival.dig-niche {:fetch false}))]
-      (when-not (= :continue d)
-        (ctx/update-mem! c assoc :niche :tried)
-        (spent/absorb! c (:data d)))
-      :again)))
+    (if-not (look/surveyed? c)
+      (do (await (look/look-around! c)) :again)
+      (let [d (await (ctx/call c :niche 'jobs.survival.shut-in {:ways #{:pocket} :for :night :settings {:jobs.survival.dig-pocket/walk-radius niche-reach}}))]
+        (when-not (= :continue d)
+          (ctx/update-mem! c assoc :niche :tried)
+          (spent/absorb! c (:data d))
+          (when (= :done (:kind d))
+            (ctx/remember! c :shelter {:pos (sh-sense/feet (:primitives c)) :state :built
+                                       :door (mapv (fn [{[x y z] :cell}] {:x x :y y :z z}) (:placed (:data d)))}
+                           sh/shelter-policy)))
+        :again))))
 
 ;; ------------------------------------------------------------------ somewhere safer
 
