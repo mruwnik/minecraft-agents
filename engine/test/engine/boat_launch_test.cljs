@@ -105,6 +105,22 @@
           (is (= 1 (count (boats p))) "a new boat is down")
           (is (not= 99 (:id (:placed @m)))))))))
 
+(deftest a-remembered-boat-beyond-the-radius-is-not-replaced
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far {:id 99 :name "oak_boat" :uuid "u-99" :kind "other" :pos {:x 25.5 :y 63 :z 0.5}}
+              m (atom {:placed {:id 99 :pos {:x 25 :y 63 :z 0}}})
+              mem ctx/mem
+              update-mem! ctx/update-mem!
+              _ (set! ctx/mem (fn [_] @m))
+              _ (set! ctx/update-mem! (fn [_ f & args] (apply swap! m f args)))
+              {:keys [p]} (try (await (run {:blocks pond :inventory [boat-item] :entities [far]} {:board false}))
+                               (finally (set! ctx/mem mem) (set! ctx/update-mem! update-mem!)))]
+          (is (= 1 (count (boats p))) "only the remembered boat is on the water")
+          (is (some? (get (lt/inv p) "oak_boat")) "no boat item is spent")
+          (is (= 99 (:id (:placed @m)))))))))
+
 (deftest boat-names
   (is (every? bl/boat-name? ["oak_boat" "bamboo_raft" "oak_chest_boat"]))
   (is (not-any? bl/boat-name? ["minecart" nil "boat_x"])))

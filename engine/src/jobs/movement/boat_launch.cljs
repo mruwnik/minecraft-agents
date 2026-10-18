@@ -173,13 +173,24 @@
       (do (ctx/emit! c :boat.launched :info {:id id :boat (:name boat) :pos cell :text (str "launched " (:name boat))})
           (ctx/end c :done nil {:id id :boat (:name boat) :pos cell :boarded true})))))
 
+(defn ^:async walk-to-remembered!
+  "The remembered boat is beyond :radius, so its cell was only remembered, not seen: walk close enough to look (one go-to call), then a later round decides."
+  [c cell]
+  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos cell :range (max 1 (- (:radius (:args c)) 2)) :ways #{:walk :clear-seal}}))]
+    (if (= :continue r)
+      :continue
+      (if (and (= :done (:kind r)) (:arrived (:data r)))
+        :continue
+        (ctx/end c :nothing-possible :no-boat {:pos cell :hint "the remembered boat is out of reach"})))))
+
 (defn ^:async launch! [c]
   (let [p (:primitives c)
         {:keys [item board]} (:args c)
         item (or item (carried-boat c) default-item)
         saved (:placed (ctx/mem c))
-        gone? (and saved (nil? (first (filter #(= (:id saved) (:id %)) (boats-in-sight c))))
-                   (some? (u/seen-name p (:pos saved))))
+        unsighted? (and saved (nil? (first (filter #(= (:id saved) (:id %)) (boats-in-sight c)))))
+        near? (and saved (<= (u/dist (u/self-pos c) (:pos saved)) (:radius (:args c))))
+        gone? (and unsighted? near? (some? (u/seen-name p (:pos saved))))
         remembered (when-not gone? saved)
         cell (or (:pos remembered) (await (launch-pos! c)))]
     (cond
@@ -187,6 +198,7 @@
       remembered
       (let [boat (first (filter #(= (:id remembered) (:id %)) (boats-in-sight c)))]
         (cond
+          (and (nil? boat) (not near?)) (await (walk-to-remembered! c cell))
           (nil? boat) (ctx/end c :nothing-possible :no-boat {:pos cell})
           (not board) (ctx/end c :done nil {:id (:id boat) :boat (:name boat) :pos cell :boarded false})
           :else (await (board! c boat cell))))
