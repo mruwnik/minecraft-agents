@@ -7,6 +7,7 @@
             [jobs.forestry.fell-tree.log :as log]
             [jobs.lib.access :as access]
             [jobs.lib.access.approach :as approach]
+            [jobs.lib.blocks :as b]
             [jobs.lib.child :as child]
             [jobs.lib.choose :as choose]
             [jobs.lib.loose :as loose]
@@ -244,13 +245,12 @@
       :else (pillar-failed! c :build))))
 
 (defn ^:async pillar-dig!
-  "Centre on the stand cell the plan counted reach from, then dig the highest log in reach; none in reach: take the
-  pillar back."
+  "Centre on the stand cell the plan counted reach from, then dig the highest log in reach that the eye sees (blocks.dig
+  digs only what it sees; a stand inside the trunk sees only the log above its head); none: take the pillar back."
   [c {:keys [plan]}]
   (let [[sx _ sz] (:stand plan)
         _ (await (walk/centre! c (+ sx 0.5) (+ sz 0.5)))
-        here (u/self-pos c)
-        in-reach (filter #(<= (u/eye-dist here (:pos %)) dig-reach) (tree-logs c))
+        in-reach (filter #(b/in-reach? c (:pos %) true) (tree-logs c))
         l (first (sort-by #(- (:y (:pos %))) in-reach))]
     (if-not l
       (do (ctx/update-mem! c update :pillar #(cond-> (assoc % :phase :clean) (not (:dug %)) (assoc :failed :no-log-in-reach))) :again)
