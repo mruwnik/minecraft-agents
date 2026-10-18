@@ -669,3 +669,15 @@
               (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :radius 20}) {})
               (await (run-until-done s 150))
               (is (= :no-animal (:reason (done-event s)))))))))))
+
+(deftest the-zone-rules-refuse-only-an-animal-standing-in-the-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[zone-x declined] [[3 [:refused]] [12 []]]]
+          (let [{:keys [eng clock seen] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50 (h/zone-store zone-x "Miles"))]
+            (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
+            (dotimes [_ 6]
+              (swap! clock + 700)
+              (await (core/tick! eng)))
+            (is (= declined (mapv :reason (filter #(= :lure-to.declined (:kind %)) @seen))) (str "zone at x " zone-x))))))))

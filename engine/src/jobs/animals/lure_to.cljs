@@ -58,7 +58,7 @@
    :pos {:doc "where to lure it {:x :y :z}" :spec ::a/pos :default nil}
    :box {:doc "the destination pen {:min :max} (feet cells, inclusive): animals in it are not lured, and the job arrives only when the led animal stands in it; none: the animal within 6 blocks of :pos" :spec a/box? :default nil}
    :range {:doc "how close to :pos counts as there" :spec (a/num-in 0 nil) :default 2}
-   :radius {:doc "animals within this many blocks of where the job starts are lured" :spec (a/num-in 0 nil) :default 8}
+   :radius {:doc "animals within this many blocks (flat, height ignored) of where the job starts are lured" :spec (a/num-in 0 nil) :default 8}
    :fetch {:doc "get the food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}
    :uuid {:doc "lead only this animal (its uuid or the start of it, as the entities tool shows; the id when it has none); nothing else takes its place. An empty or ambiguous start (more than one animal matches) never starts; one already at the destination ends the job at once (done? :ok)" :spec string? :default nil}
    :include-penned? {:doc "also lure animals standing in a closed pen" :default false :spec boolean?}
