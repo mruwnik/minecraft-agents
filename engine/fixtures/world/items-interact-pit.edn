@@ -1,0 +1,19 @@
+;; Card 09327b58: items.interact on a chicken in a pit the body stands at the rim of. The id comes from the entities sense; the passive-mob
+;; sight filter may drop the chicken at the rim between the sighting and the click, and the call must still walk to its last seen place
+;; and click it by id, not end :gone. A world case cannot force the drop (it depends on the eye line), so this pins the end-to-end outcome.
+;; Pit: x 13..17, z 14..18, 2 deep, body on the west rim; two NoAI chickens 3-4 blocks away. The click feeds seeds (an empty hand has no effect on a chicken). Should-succeed: the click is made (used true).
+{:defaults
+ {:tags [:items :animals :jobs]
+  :time :any
+  :plot {:floor "grass_block" :height 8}
+  :blocks [[:fill [13 -1 14] [17 -1 18] "air"] [:fill [13 0 14] [17 0 18] "air"]]
+  :body {:at [11.5 0 16.5] :yaw 270 :inventory [["wheat_seeds" 4]] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "chicken-in-pit-clicked-not-gone"
+   :act [[:summon "chicken" [14.5 -1 15.5] "{NoAI:1b}"]
+         [:summon "chicken" [14.5 -1 17.5] "{NoAI:1b}"]
+         [:until-seen {:entity "chicken" :min 1} 15]
+         [:job (jobs.items.interact {:id "$entity-id:chicken" :item "wheat_seeds"})]]
+   :expect [{:event {:source :job :kind :completed :data {:used true}} :within-s 60 :of-job true}]
+   :after [[:entities "type=chicken,tag=wt" [[12 -2 13] [18 1 19]] 2]]}]}
