@@ -702,6 +702,12 @@
     (is (false? (stuck? (dec ticks))))
     (is (true? (stuck? ticks)))))
 
+(deftest a-slowed-body-closing-in-is-not-stuck
+  (let [ticks (:no-progress-ticks p)
+        tick-at (fn [x] (:done (ex/tick p (state-at straight 3 :tick ticks :near 0.9) (pose x 64.0 3.5))))]
+    (is (nil? (tick-at 2.75)))
+    (is (= :stuck (:status (tick-at 2.5))))))
+
 (deftest a-land-step-out-of-the-water-keeps-the-land-limit
   (let [steps [(step 5 62 0 :start {:swim true}) (step 6 63 0 :jump)]
         stuck? (fn [tick] (= :stuck (:status (:done (ex/tick p (state-at steps 1 :tick tick) (wet 5.3 62.4 0.5))))))]

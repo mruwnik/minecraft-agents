@@ -8,7 +8,7 @@
          h is the stand height above the cell floor in 1/16 block; px/pz is the point to stand at.
   Pose:  {:x :y :z :vy :on-ground :on-climbable :in-water :in-lava :collided}, feet position; :vx :vz (horizontal velocity, blocks
          per tick) and :under-water (the eyes in water) when the body reports them.
-  State: {:steps :i :since :tick :yaw}; i is the index of the step walked to, since the tick at which it
+  State: {:steps :i :since :tick :yaw} (+ :near, the least distance to the aim yet on this step); i is the index of the step walked to, since the tick at which it
          became current, tick the number of calls, yaw the last yaw sent while moving, landed (when set) the tick a :bounce
          drop's bounce began.
   Done:  {:status :arrived :at} | {:status :off-plan :at :step} | {:status :stuck :at :step :move :target :why}.
@@ -26,6 +26,7 @@
    :max-replans 5          ; re-plans before giving up
    :no-progress-ticks 60   ; 3 s on one step without reaching it -> stuck
    :swim-no-progress-ticks 120  ; the same for a step in water: a body that plunged in comes up at ~1.2 blocks/s
+   :progress-xz 0.1        ; nearer the aim by this much restarts the no-progress clock
    :swim-float 0.2         ; in water, jump while the feet are below the step's height plus this (head out at the surface)
    :bend-xz 0.15           ; a bend step (a corner round a stalk inside a tight cell) is reached this close to its point
    :arrive-xz 0.35         ; final step: horizontal distance to px/pz
@@ -598,6 +599,15 @@
          (<= (dist-xz x z (:px final) (:pz final)) (:arrive-xz policy))
          (boolean (or on-ground on-climbable (and in-water (:swim final)))))))
 
+(defn nearer
+  "state with the no-progress clock restarted when the body is nearer the aim than it has been on this step: a slowed
+  body (potion, web, soul sand) still closes in, which is progress however slowly."
+  [policy {:keys [near tick] :as state} d]
+  (cond
+    (nil? near) (assoc state :near d)
+    (< d (- near (:progress-xz policy))) (assoc state :near d :since tick)
+    :else state))
+
 (defn tick
   "One physics tick: the controls for this pose, or :done."
   [policy state {:keys [x y z] :as pose}]
@@ -605,12 +615,14 @@
         settled (settle-bounce policy (assoc state :tick n) pose)
         i (advance policy settled pose)
         state' (cond-> settled
-                 (not= i (:i state)) (-> (assoc :i i :since n) (dissoc :landed)
+                 (not= i (:i state)) (-> (assoc :i i :since n) (dissoc :landed :near)
                                          (cond-> (contact? policy (nth (:steps settled) i) pose) (assoc :landed n))))
-        {:keys [steps since landed]} state'
+        {:keys [steps landed]} state'
         at [x y z]
         step (nth steps i)
-        aim (aim-point policy step pose)]
+        aim (aim-point policy step pose)
+        state' (nearer policy state' (dist-xz x z (aim 0) (aim 1)))
+        since (:since state')]
     (cond
       (arrived? policy steps i pose)
       {:state state' :done {:status :arrived :at at}}
