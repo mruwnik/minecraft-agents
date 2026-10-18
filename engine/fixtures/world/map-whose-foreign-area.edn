@@ -1,0 +1,24 @@
+;; Card 08fbfef9 (owner Q177): `map whose --center CELL --by ME` answers whether another owner's zone holds the cell; a query, nothing is refused.
+;; Should-succeed: inside Other's zone -> :foreign? true naming the zone's owner; outside, or inside the asker's own zone -> :foreign? false.
+{:defaults
+ {:tags [:zones :access :tool]
+  :time :any
+  :plot {:height 8}
+  :body {:at [4.5 0 4.5]}
+  :zones [{:name "yard" :min [12 0 12] :max [20 4 20] :owner "Other"}
+          {:name "mine" :min [24 0 12] :max [28 4 20] :owner "$body"}]
+  :limit-s 40}
+ :cases
+ [{:name "whose-names-the-other-owner-inside-their-zone"
+   :act [[:cli "map" ["--world" "$world" "whose" "--center" {:at #at [16 0 16]} "--by" "$body"]
+          {:ok true :foreign? true :holder {:kind :zone :owner "Other"}}]]
+   :expect [{:no-event {:source :job :kind :queued} :for-s 2}]
+   :after [[:body-near [4.5 0 4.5] 3]]}
+  {:name "whose-says-no-outside-every-zone"
+   :act [[:cli "map" ["--world" "$world" "whose" "--center" {:at #at [6 0 6]} "--by" "$body"] {:ok true :foreign? false}]]
+   :expect [{:no-event {:source :job :kind :queued} :for-s 2}]
+   :after [[:body-near [4.5 0 4.5] 3]]}
+  {:name "whose-says-no-inside-the-askers-own-zone"
+   :act [[:cli "map" ["--world" "$world" "whose" "--center" {:at #at [26 0 16]} "--by" "$body"] {:ok true :foreign? false}]]
+   :expect [{:no-event {:source :job :kind :queued} :for-s 2}]
+   :after [[:body-near [4.5 0 4.5] 3]]}]}
