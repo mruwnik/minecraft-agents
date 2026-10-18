@@ -38,9 +38,3 @@
         (when (and from to) (middle (map corner-vec [from to])))
         (a/cell center)
         (when (:x center) (select-keys center [:x :z])))))
-
-(defn above-ground
-  "The spot of c lifted one cell, for a job whose args name ground cells: a solid cell has no light to judge, the air over it has."
-  [c]
-  (let [s (spot c)]
-    (cond-> s (:y s) (update :y inc))))

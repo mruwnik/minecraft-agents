@@ -28,9 +28,3 @@
     {"line" long-plan} {:plan "line" :part "b"} {:x 10 :y 64 :z 0}
     {"line" long-plan} {:plan "gone" :center [9 64 9]} {:x 9 :y 64 :z 9}
     {"line" {:id "line" :broken "bad"}} {:plan "line" :box {:min {:x 0 :y 63 :z 0} :max {:x 4 :y 64 :z 6}}} {:x 2 :y 63 :z 3}))
-
-(deftest above-ground-lifts-the-spot-of-a-ground-box-one-cell
-  (are [args expected] (= expected (work-place/above-ground {:args args}))
-    {:from [0 64 0] :to [2 64 2]} {:x 1 :y 65 :z 1}
-    {:center {:x 9 :z 7}} {:x 9 :z 7}
-    {} nil))

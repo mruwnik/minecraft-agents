@@ -86,7 +86,7 @@
 
 (def target [:from :to :center :radius])
 (def defaults {:use {:tools :till}})
-(def safe? (ready/safe-at-by-night work-place/above-ground))
+(def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
 
 (defn listed
