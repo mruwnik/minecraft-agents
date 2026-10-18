@@ -147,6 +147,18 @@
           (is (= [[:not-set :cannot]] (mapv (juxt :reason :why) (emitted seen :stopped))))
           (is (re-find #"did not set the respawn point" (:text (first (emitted seen :stopped))))))))))
 
+(deftest set-spawn-is-done-when-the-click-changes-nothing-because-the-server-has-the-spawn-there
+  (async done
+    (run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup bed-world)]
+          (.override (.-world p) "useOn" (fn ^:async f [_ _ _] #js {:status "unchanged" :consumed 0}))
+          (core/submit! eng '(jobs.survival.set-spawn {:bed {:x 6 :y 64 :z 0}}) {})
+          (await (run-until-empty eng 6))
+          (is (= [:unchanged] (mapv :why (emitted seen :completed))))
+          (is (= [] (emitted seen :stopped)))
+          (is (= 1 (count (entries eng :spawn-bed)))))))))
+
 (deftest set-spawn-skips-a-remembered-bed-beyond-the-bed-radius
   (async done
     (run-async done

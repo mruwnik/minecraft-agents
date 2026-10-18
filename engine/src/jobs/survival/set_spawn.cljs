@@ -17,7 +17,8 @@
   Needs a bed: the :bed argument, else the remembered :bed within :bed-radius (forgotten when its block is seen to be gone), else a bed the body sees.
   Conditions (at the start only): not night (at night the sleep job sets it), else it waits :night; a bed, else condition-failed :no-bed.
   Done at once (:already) when the :spawn-bed it writes is recorded at the bed. Done {:spawn pos} when the server set the point, or at once with :why :unchanged when the spawn is already
-  known at that bed (jobs.lib.shelter.spawn/spawn-known?: :spawn-bed or :spawn-set near it, not reset since). A click that did not set it
+  known at that bed (jobs.lib.shelter.spawn/spawn-known?: :spawn-bed or :spawn-set near it, not reset since). A click that reached the bed
+  and changed nothing means the server already has the spawn there (it answers only when the point moves): done :why :unchanged. Any other click that did not set it
   is nothing-possible :not-set {:why reason}. Writes :spawn-bed {:pos bed} (cap 1, forever),
   which jobs.survival.sleep also writes, and :home at the bed unless a live :home is recorded.
   Quote: time of one click and walk; done 1 spawn.")
@@ -86,9 +87,10 @@
       (let [e (await (ctx/call c :use 'jobs.blocks.use-on {:pos bed :see true :range 2}))]
         (cond
           (= :continue e) :continue
-          (= :done (:kind e)) (do (ctx/remember! c :spawn-bed {:pos bed} sh-spawn/spawn-bed-policy)
-                                  (places/offer! c :home bed)
-                                                          (ctx/end c :done nil {:spawn bed}))
+          (or (= :done (:kind e)) (= :unchanged (get-in e [:data :reason])))
+          (do (ctx/remember! c :spawn-bed {:pos bed} sh-spawn/spawn-bed-policy)
+              (places/offer! c :home bed)
+              (ctx/end c :done nil (cond-> {:spawn bed} (not= :done (:kind e)) (assoc :why :unchanged))))
           :else (let [why (get-in e [:data :reason] (contract/cause-key e))]
                   (ctx/end c :nothing-possible :not-set
                            {:why why :pos bed :text (str "clicking the bed did not set the respawn point: " (name (or why :unknown)))})))))))

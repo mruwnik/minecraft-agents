@@ -1,5 +1,5 @@
 ;; jobs.survival.set-spawn (cards 46a1e373, a4290bcf, c4bd3ebe, f4796f97, 783f34c2): by day the bed is clicked and the respawn point
-;; set; a point already known at the bed ends at once with :why :unchanged; a newer :spawn-reset makes the body click again; a bed
+;; set; a point already known at the bed ends at once with :why :unchanged, and so does a click the server answers with nothing because the point is already there; a newer :spawn-reset makes the body click again; a bed
 ;; in a closed hut is clicked through the door; at night the job refuses (the sleep job sets it). Bed at [20 0 16] (head [21 0 16]).
 ;; The night case needs night: --allow-time --time-log <the shared time log>.
 {:defaults
@@ -21,6 +21,13 @@
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.set-spawn" :cause :already}} :within-s 30 :of-job true}]
    :after [[:body-near [4.5 0 4.5] 3]]
    :limit-s 40}
+  {:name "server-spawn-already-at-the-bed-without-memory-completes-unchanged"
+   :body {:spawnpoint [20 0 16]}
+   :act [[:job (jobs.survival.set-spawn {:bed #at [20 0 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.set-spawn" :why :unchanged}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :not-set}} :for-s 40 :until {:source :job :kind :completed :data {:name "jobs.survival.set-spawn"}}}]
+   :after [[:memory {:entries {:spawn-bed [{:data {:pos [:any]}}]}}]]
+   :limit-s 50}
   {:name "newer-spawn-reset-walks-to-the-bed-and-clicks"
    :memory [{:kind :spawn-bed :data {:pos #xyz [20 0 16]} :age-s 7200 :policy {:cap 1 :ttl :forever}}
             {:kind :spawn-reset :data {:pos #xyz [20 0 16]} :age-s 600}]
