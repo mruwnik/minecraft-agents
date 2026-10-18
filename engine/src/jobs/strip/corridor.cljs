@@ -28,14 +28,15 @@
 (def doc
   "Strip one mineshaft corridor segment (jobs.lib.strip) on one trip. The segment is read again at every step (what is left
   is what the seen blocks show, jobs.lib.strip/targets), so a restart needs nothing but the args. Each step, in this order:
-  the trip ends if the body is short of food (jobs.lib.trip/food-short?) or has fewer than :want-free slots free (bag-full);
   a torch is hung on the floor beside the rail when the feet light is under 8 and none hangs within 3 cells (a
   jobs.blocks.place child; torches are the caller's to stock); a chest minecart in the segment is looted (jobs.strip.loot-cart
   child); else the next target is dug (jobs.blocks.dig child, no fetch, drops collected): cobwebs on the walk line first, then
   the rest outward from the :entry end, each with a carried tool of its kind (shears, axe, pickaxe). With no target left it
   walks to the far end (8 cells a step, so a spawner on the way is seen and lit) and looks round there, so crossings and new corridors come into view, then takes back the torches
   standing in the segment (the caller seals behind it).
-  It does not start (a skipped job) while the body is short of food (:food-short). Its safe? is ready/safe-at-by-night the end of the segment nearest :entry. A :segment that
+  It does not start (a skipped job) while the body is short of food (:food-short). Its can-run? is never, with what was taken in
+  the cause, when the next step cannot go on: :food-short, :spawner (:seal, :cell), :bag-full (under :want-free slots free with
+  work left), :no-torches (one is due, none carried), :no-tool (:tool, :cell). Its safe? is ready/safe-at-by-night the end of the segment nearest :entry. A :segment that
   is neither a map nor a readable id is never possible (:bad-args).
   A spawner seen at any step stays in the result (the far end may be out of sight of it). A spawner follows :spawner: :light (default) hangs torches on the dark standable centre-line cells of the segment inside its
   spawn box (4 either side, 1 up or down; light 8), leaves the spawner and those torches, and lists it in :kept {:why :spawner :lit true};
@@ -44,9 +45,9 @@
   Every child's failure ends the trip with the child's reason in :child.
   Ends :done with data {:taken {class n} :kept [{:pos :why}] :new-segments [segment ..]}, :new-segments being the corridors
   seen from the far end that are not this segment (the caller folds them into its memory with merge-segments); or
-  condition-failed with the cause :bag-full :food-short :no-torches :no-tool (data :tool kind) :spawner (:cell) :refused,
-  or nothing-possible with :unreachable :dig-failed :cart-failed :torch-failed (data :cell, :child), the data carrying :taken.
-  Event: strip.corridor.stopped (warn).")
+  impossible with the cause :bag-full :food-short :no-torches :no-tool :spawner (cause keys :taken, as can-run?), or
+  condition-failed :bag-full (a cart it cannot empty) :refused, or nothing-possible with :unreachable :dig-failed :cart-failed :torch-failed (data :cell, :child), the data carrying :taken.
+  Event: strip.corridor.stopped (warn) at a stop of a step; a can-run? stop ends as the engine's stopped event.")
 
 (a/defargs args
   {:segment {:doc "the segment map {:y :axis :line :from :to :open-ends} of jobs.lib.strip, or its id string" :spec (a/pred "a segment map or its id string" #(or (map? %) (string? %))) :default nil}
@@ -75,8 +76,7 @@
   "Later :food-short: no food and none to eat."
   (checks/refusing :trip "food to eat" (fn [c] (when (trip/food-short? c) :food-short))))
 
-(def failed-conditions "Stop reasons that end condition-failed: a fact of the body or the world. The rest are nothing-possible."
-  #{:bag-full :food-short :no-torches :no-tool :spawner :refused})
+(def failed-conditions "Stop reasons that end condition-failed. The rest are nothing-possible." #{:bag-full :refused})
 
 (defn stop! [c reason extra]
   (let [res (merge {:taken (:taken (ctx/mem c) {})} extra)]
@@ -101,12 +101,10 @@
 (defn ^:async hang-torch! [c seg feet]
   (let [p (:primitives c)
         spot (torch-spot (access/seen-at p) (:axis seg) feet)
-        o (cond (zero? (torch/torches-held p)) :none
-                (nil? spot) :no-spot
+        o (cond (nil? spot) :no-spot
                 :else (await (b/place-cell! c (zipmap [:x :y :z] spot) "torch" (select-keys (:args c) [:ignore-zones?]))))]
     (case o
       :continue :continue
-      :none (stop! c :no-torches {})
       :no-spot (do (ctx/update-mem! c update :torches (fnil conj []) feet) :again)
       :refused (stop! c :refused {:cell spot})
       (:placed :already) (do (ctx/update-mem! c update :torches (fnil conj []) spot) :again)
@@ -154,19 +152,15 @@
          (sort-by d2)
          first)))
 
-(defn ^:async dig! [c {:keys [pos name class]}]
+(defn ^:async dig! [c {:keys [pos class]}]
   (let [cell [(:x pos) (:y pos) (:z pos)]
-        kind (kind/tool-kind name)]
-    (cond
-      (and (not= :torch class) (not-any? #(kind/of-kind? (:name %) kind) (u/inventory (:primitives c)))) (stop! c :no-tool {:tool kind :cell cell})
-      :else
-      (let [o (await (b/dig-cell! c pos (merge {:collect true :need-drop (not= :spawner class)} (select-keys (:args c) [:ignore-zones?]))))]
-        (case o
-          :continue :continue
-          (:dug :missing) (do (ctx/update-mem! c #(-> % (update :dug (fnil conj []) cell) (update-in [:taken class] (fnil inc 0)))) :again)
-          :refused (stop! c :refused {:cell cell})
-          :unreachable (stop! c :unreachable {:cell cell})
-          (stop! c :dig-failed {:child o :cell cell}))))))
+        o (await (b/dig-cell! c pos (merge {:collect true :need-drop (not= :spawner class)} (select-keys (:args c) [:ignore-zones?]))))]
+    (case o
+      :continue :continue
+      (:dug :missing) (do (ctx/update-mem! c #(-> % (update :dug (fnil conj []) cell) (update-in [:taken class] (fnil inc 0)))) :again)
+      :refused (stop! c :refused {:cell cell})
+      :unreachable (stop! c :unreachable {:cell cell})
+      (stop! c :dig-failed {:child o :cell cell}))))
 
 (defn torch-cells
   "The torches standing in the segment's corridor, nearest the body first: [{:pos :name :class :torch}], not those in the
@@ -248,19 +242,37 @@
              (some #(dark-near c seg (:pos %)) (spawners c seg))
              (when (= :spawner (:class target)) (dark-near c seg (:pos target))))}))
 
+(defn blocker
+  "The cause {:reason .. :taken ..} the next step cannot go on for, in the order step! takes its branches, or nil: food
+  short, a spawner to seal, a full bag with work left, no torch for the one to hang, no tool for the next dig."
+  [c seg]
+  (let [p (:primitives c)
+        {:keys [want-free spawner]} (:args c)
+        {:keys [target cart dark sealed-spawner]} (owed c seg)
+        feet (assoc (b/feet-cell c) 1 (:y seg))
+        work? (or target cart)
+        no-torch? (zero? (torch/torches-held p))
+        kind (some-> target :name kind/tool-kind)
+        cause (cond
+                (trip/food-short? c) {:reason :food-short}
+                sealed-spawner {:reason :spawner :cell (u/cell-vec (:pos sealed-spawner))}
+                (and work? (< (u/free-slots p) (or want-free (trip/want-free)))) {:reason :bag-full}
+                (and work? no-torch? (torch-due? c feet)) {:reason :no-torches}
+                cart nil
+                (and dark no-torch?) {:reason :no-torches}
+                (and target (not= :torch (:class target))
+                     (not-any? #(kind/of-kind? (:name %) kind) (u/inventory p))) {:reason :no-tool :tool kind :cell (u/cell-vec (:pos target))})]
+    (some-> cause (assoc :taken (:taken (ctx/mem c) {})))))
+
 (defn ^:async step! [c seg]
   (let [p (:primitives c)
-        {:keys [want-free]} (:args c)
-        {:keys [target cart torch dark sealed-spawner]} (owed c seg)
+        {:keys [target cart torch dark]} (owed c seg)
         feet (assoc (b/feet-cell c) 1 (:y seg))
         work? (or target cart)]
     (when-let [seen (seq (spawners c seg))]
       (ctx/update-mem! c update :spawners #(vec (distinct (concat % seen)))))
     (when (and target (:looked (ctx/mem c))) (ctx/update-mem! c dissoc :looked))
     (cond
-      (trip/food-short? c) (stop! c :food-short {})
-      sealed-spawner (stop! c :spawner {:cell (u/cell-vec (:pos sealed-spawner))})
-      (and work? (< (u/free-slots p) (or want-free (trip/want-free)))) (stop! c :bag-full {})
       (and work? (torch-due? c feet)) (await (hang-torch! c seg feet))
       cart (await (loot! c cart))
       dark (await (hang-torch! c seg dark))
@@ -293,6 +305,13 @@
 (def fit? ready/fit?)
 
 (def can-start? (cond/and bad-segment not-now))
+
+(defn can-run?
+  "Never the cause (blocker) the trip ends for, with what was taken so far in its data."
+  [c]
+  (if-let [seg (seg-of (:segment (:args c)))]
+    (checks/cause-status :never (blocker c seg) nil)
+    (contract/ok :args "no segment")))
 
 (defn done?
   "The segment is stripped: nothing left to take or light, the far end looked at. The result is what it leaves behind."

@@ -49,6 +49,7 @@
 (def pick-torches (into kit [{:name "torch" :count 8}]))
 
 (defn run! [{:keys [eng]} a] (tu/child-outcome eng job a 400))
+(defn cause "The cause of a stopped run r: what its can-run? said." [r] (:cause (:ending r)))
 (defn gone? [p cells] (every? #(#{"air" "cave_air"} (bd/block-at p %)) cells))
 (defn cart [id pos] {:id id :name "chest_minecart" :kind "other" :pos pos :health 5
                      :items [{:name "iron_ingot" :count 3}] :drops [{:name "chest_minecart" :count 1}]})
@@ -97,7 +98,7 @@
         (let [filler (mapv (fn [i] {:name (str "filler_" i) :count 1}) (range 21))
               env (world :inventory (into kit filler))
               r (await (run! env args))]
-          (is (= {:status :stopped :reason :bag-full :taken {:rail 1}} (select-keys r [:status :reason :taken])))
+          (is (= [:stopped :bag-full {:rail 1}] [(:status r) (:reason r) (:taken (cause r))]))
           (is (= 1 (count (bd/calls (:p env) "dig")))))))))
 
 (deftest a-chest-minecart-in-the-segment-is-looted-by-the-child
@@ -129,7 +130,7 @@
       (fn ^:async t []
         (let [env (world :inventory (vec (take 2 kit)))
               r (await (run! env args))]
-          (is (= {:status :stopped :reason :no-tool :tool "shears"} (select-keys r [:status :reason :tool])))
+          (is (= {:reason :no-tool :tool "shears"} (select-keys (cause r) [:reason :tool])))
           (is (= "cobweb" (bd/block-at (:p env) web))))))))
 
 (deftest a-refused-dig-ends-the-trip-with-the-childs-reason
@@ -213,7 +214,7 @@
       (fn ^:async t []
         (let [env (world :blocks (assoc corridor "10,65,2" "spawner"))
               r (await (run! env (assoc args :spawner :seal)))]
-          (is (= {:status :stopped :reason :spawner :cell [10 65 2]} (select-keys r [:status :reason :cell])))
+          (is (= {:reason :spawner :cell [10 65 2]} (select-keys (cause r) [:reason :cell])))
           (is (empty? (bd/calls (:p env) "dig")))
           (is (= "spawner" (bd/block-at (:p env) spawner-cell))))))))
 
@@ -292,10 +293,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [filler (mapv (fn [i] {:name (str "filler_" i) :count 1}) (range 21))
-              ends (fn ^:async ends [env a] (let [e (:ending (await (run! env a)))] [(:kind e) (:cause e)]))]
-          (is (= [:impossible :bad-args] (let [[kind cause] (await (ends (world) {:segment "nonsense"}))] [kind (:reason cause)]))
+              ends (fn ^:async ends [env a] (let [e (:ending (await (run! env a)))] [(:kind e) (if (map? (:cause e)) (:reason (:cause e)) (:cause e))]))]
+          (is (= [:impossible :bad-args] (await (ends (world) {:segment "nonsense"})))
               "a segment from the args that cannot be read is never possible")
-          (is (= [:condition-failed :bag-full] (await (ends (world :inventory (into kit filler)) args))))
-          (is (= [:condition-failed :no-tool] (await (ends (world :inventory (vec (take 2 kit))) args))))
+          (is (= [:impossible :bag-full] (await (ends (world :inventory (into kit filler)) args))))
+          (is (= [:impossible :no-tool] (await (ends (world :inventory (vec (take 2 kit))) args))))
           (is (= [:condition-failed :refused]
                  (await (ends (world :zones [{:name "farm" :min [0 60 -3] :max [12 70 3] :owner "Miles"}]) args)))))))))

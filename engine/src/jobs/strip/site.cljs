@@ -361,7 +361,7 @@
         {:keys [take spawner ignore-zones?]} (:args c)
         e (await (ctx/call c :corridor 'jobs.strip.corridor
                            {:segment seg :entry entry :take take :spawner spawner :ignore-zones? ignore-zones?}))
-        res (:data e)
+        res (merge (:data e) (when (map? (:cause e)) (:cause e)))
         id (:id seg)
         why (when-not (= :done (:kind e)) (reason-of e))
         n (inc (get-in s [:stops id why] 0))
