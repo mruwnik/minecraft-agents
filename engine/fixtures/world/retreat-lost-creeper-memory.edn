@@ -1,21 +1,23 @@
-;; Card 7889852a (6a536408): a flight keeps clear of a mob it lost seconds ago: the :threat entry of a creeper last seen 8 blocks east,
-;; written 5 s ago, makes the flee from a zombie (6 west, NoAI and helmeted: it never hurts) go sideways, not east towards it.
+;; Card 7889852a: the :threat entry of a creeper last seen 8 blocks east, written 5 s ago, for a creeper no entity has (gone),
+;; does not make the flee from a zombie (6 west, NoAI and helmeted: it never hurts) go sideways: it runs east as with no memory.
+;; A :threat entry whose mob the client no longer lists (it blew up; card 18fc7cc2) is gone, not lost: it steers nothing (flee-ignores-a-gone-creeper).
+;; The listed-but-unseen creeper has no world case: a seeded entry cannot name the id of a mob summoned later (threats-test pins it).
 ;; Anchor: every flee step logs retreat.target.
 {:defaults
- {:tags [:survival :retreat] :time :night
+ {:tags [:survival :retreat] :time :day
   :plot {:height 12}
   :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
            [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
   :body {:at [16.5 0 16.5] :settle-s 3}}
  :cases
- [{:name "flee-keeps-clear-of-a-lost-creeper"
+ [{:name "flee-ignores-a-gone-creeper"
    :memory [{:kind :home :data {:pos #xyz [21000 150 20016]}}
             {:kind :threat :data {:mob "creeper" :id 9 :uuid "u9" :key "u9" :pos {:x 24.5 :y 0 :z 16.5} :ended :lost} :policy {:cap 20 :ttl 300000} :age-s 5}]
    :act [[:summon "zombie" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.survival.retreat {})]
          [:wait-s 12]] ; hold: the flight takes this long to show its distance
    :expect [{:event {:source :job :kind :retreat.target} :within-s 20}]
-   :after [[:body-far [24.5 0 16.5] 5]]
+   :after [[:body-near [24.5 0 16.5] 8]]
    :limit-s 40}
   {:name "flee-without-the-lost-creeper-may-run-east"
    :memory [{:kind :home :data {:pos #xyz [21000 150 20016]}}]
