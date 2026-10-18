@@ -1,0 +1,27 @@
+;; Card 5eb8fb56: items.craft never puts its table in the cell beside a door (the way out) or over a bed. Closed stone room, door in
+;; the east wall at [14 0 12]; the doorway cell [13 0 12] was the first candidate table cell.
+;; Should-succeed: 3x3 room with a bed on the west side: the pickaxe is crafted and no table stands in the doorway cell.
+;; Should-fail: a 3x1 room whose only cells are the doorway cell and the bed: no table spot, nothing crafted, doorway left free.
+{:defaults
+ {:tags [:items :craft :jobs]
+  :time :any
+  :plot {:height 8}
+  :body {:at [12.5 0 12.5] :yaw 270 :settle-s 2 :effects [["resistance" 600 4]]
+         :inventory [["oak_planks" 7] ["stick" 2]]}
+  :limit-s 90}
+ :cases
+ [{:name "table-goes-beside-the-body-not-in-the-doorway"
+   :blocks [[:fill [10 0 10] [14 3 14] "stone" :hollow] [:fill [11 0 11] [13 2 13] "air"] [:set [12 2 10] "glowstone"]
+            [:set [14 0 12] "oak_door[facing=east,half=lower,open=false]"] [:set [14 1 12] "oak_door[facing=east,half=upper,open=false]"]
+            [:set [11 0 12] "red_bed[facing=west,part=foot]"] [:set [10 0 12] "red_bed[facing=west,part=head]"]]
+   :act [[:job (jobs.items.craft {:item "wooden_pickaxe" :fetch false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:item "wooden_pickaxe" 1] [:not-block [13 0 12] "crafting_table"] [:not-block [13 1 12] "crafting_table"]]}
+  {:name "no-spot-but-the-doorway-and-the-bed-leaves-both-free"
+   :blocks [[:fill [10 0 11] [14 3 13] "stone" :hollow] [:fill [11 0 12] [13 2 12] "air"] [:set [12 2 11] "glowstone"]
+            [:set [14 0 12] "oak_door[facing=east,half=lower,open=false]"] [:set [14 1 12] "oak_door[facing=east,half=upper,open=false]"]
+            [:set [11 0 12] "red_bed[facing=west,part=foot]"]]
+   :act [[:job (jobs.items.craft {:item "wooden_pickaxe" :fetch false})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 60 :of-job true}]
+   :after [[:item "wooden_pickaxe" 0] [:not-block [13 0 12] "crafting_table"] [:not-block [13 1 12] "crafting_table"] [:not-block [11 1 12] "crafting_table"]]
+   :limit-s 80}]}
