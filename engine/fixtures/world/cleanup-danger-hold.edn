@@ -8,7 +8,7 @@
   :plot {:height 12}
   :blocks [[:set [6 0 8] "cobblestone"]]
   :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "cobblestone" :before "air" :job "j1" :purpose :pillar :state :placed}]}}]
-  :body {:at [20.5 0 8.5] :inventory [["iron_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :body {:at [20.5 0 8.5] :inventory [["iron_pickaxe" 1] ["iron_sword" 1]] :effects [["resistance" 600 4]]}
   :limit-s 70}
  :cases
  [{:name "skeleton-near-the-cell-holds-the-walk"

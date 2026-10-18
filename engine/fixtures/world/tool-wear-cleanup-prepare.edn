@@ -1,5 +1,6 @@
 ;; Card c5d2cded part 1: tool wear after digs in jobs.access.cleanup and jobs.forestry.prepare. A pickaxe with 1 durability
 ;; left (damage=249) breaks in the dig: warn tool.broke then tool.none; a healthy pick gives no tool event; no pick at all
+;; Cleanup holds an unarmed body (:fit? is ready/fit-armed) and waits out the night (:safe?), so the cleanup cases carry a sword and lift :safe?.
 ;; gives none either (nothing is dug: prepare and cleanup leave a block that needs a pick). Cleanup digs the cobblestone pillar the same body placed; prepare digs a
 ;; cobblestone stray in the planned oak cell. Torches keep hostiles away.  Run: node tools/world-test.mjs <file> --match <name> --first-plot N
 {:defaults
@@ -10,26 +11,26 @@
   :limit-s 90}
  :cases
  [{:name "cleanup-last-durability-pick-breaks"
-   :body {:inventory [["iron_pickaxe[damage=249]" 1] ["cobblestone" 4]]}
+   :body {:inventory [["iron_pickaxe[damage=249]" 1] ["cobblestone" 4] ["iron_sword" 1]]}
    :act [[:job (jobs.access.pillar {:height 2 :use {:blocks ["cobblestone"]} :ignore-zones? true})]
          [:await {:source :job :kind :pillar.done} 60]
-         [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+         [:job (jobs.access.cleanup {:job :all :ignore-zones? true :checks {:safe? (always)}})]]
    :expect [{:event {:source :job :kind :tool.broke} :within-s 60}
             {:event {:source :job :kind :tool.none} :within-s 60}]
    :after [[:item "iron_pickaxe" 0]]}
   {:name "cleanup-healthy-pick-no-tool-event"
-   :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 4]]}
+   :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 4] ["iron_sword" 1]]}
    :act [[:job (jobs.access.pillar {:height 2 :use {:blocks ["cobblestone"]} :ignore-zones? true})]
          [:await {:source :job :kind :pillar.done} 60]
-         [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+         [:job (jobs.access.cleanup {:job :all :ignore-zones? true :checks {:safe? (always)}})]]
    :expect [{:event {:source :job :kind :cleanup.done} :within-s 60}
             {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 60 :until {:source :job :kind :cleanup.done}}]
    :after [[:item "iron_pickaxe" 1]]}
   {:name "cleanup-no-pick-no-tool-event"
-   :body {:inventory [["cobblestone" 4]]}
+   :body {:inventory [["cobblestone" 4] ["iron_sword" 1]]}
    :act [[:job (jobs.access.pillar {:height 2 :use {:blocks ["cobblestone"]} :ignore-zones? true})]
          [:await {:source :job :kind :pillar.done} 60]
-         [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+         [:job (jobs.access.cleanup {:job :all :ignore-zones? true :checks {:safe? (always)}})]]
    ;; no pick: the cobblestone pillar stays (entries open :no-tool), nothing dug, no tool event
    :expect [{:event {:source :job :kind :cleanup.done} :within-s 30}
             {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 30 :until {:source :job :kind :cleanup.done}}]
