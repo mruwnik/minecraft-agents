@@ -1,0 +1,20 @@
+;; Reserve register step 5: a trip's deposit (jobs.lib.trip/ready!) leaves the units a :reserve entry holds carried and puts the rest away.
+;; The bag holds 28 junk stacks, raw_iron 5 (reserved, as get-kit reserves the ore of a kit) and coal 3; a chest is known 2 blocks off.
+;; Should-succeed: the hunt deposits first (trip.deposited), keeps the raw_iron and the sword, and puts enough away to leave 12 slots free (the deposit stops there).
+;; Should-fail: the reserved raw_iron never goes into the chest.
+{:defaults
+ {:tags [:transport :reserve :hunt :jobs]
+  :time :day
+  :plot {:height 6}
+  :body {:at [10.5 0 14.5] :settle-s 2}
+  :limit-s 100}
+ :cases
+ [{:name "trip-deposit-keeps-the-reserved-raw-iron"
+   :blocks [[:set [10 0 16] "chest"]]
+   :memory [{:kind :chest :data {:pos #xyz [10 0 16]}}
+            {:kind :reserve :data {:id "wt-kit-raw" :item "raw_iron" :count 5 :strength 0.9 :by "agent"} :policy {:cap 100 :ttl :forever}}]
+   :body {:inventory [["iron_sword" 1] ["raw_iron" 5] ["coal" 3] ["dirt" 1] ["sand" 1] ["gravel" 1] ["andesite" 1] ["diorite" 1] ["granite" 1] ["cobblestone" 1] ["oak_log" 1] ["birch_log" 1] ["spruce_log" 1] ["oak_planks" 1] ["birch_planks" 1] ["spruce_planks" 1] ["stick" 1] ["flint" 1] ["feather" 1] ["string" 1] ["bone" 1] ["gunpowder" 1] ["clay_ball" 1] ["snowball" 1] ["poppy" 1] ["dandelion" 1] ["leather" 1] ["paper" 1] ["glass" 1] ["brick" 1] ["sugar" 1]]}
+   :act [[:summon "cow" [20.5 0 14.5] "{NoAI:1b}"]
+         [:job (jobs.combat.hunt {:count 1 :keep 0})]]
+   :expect [{:event {:source :job :kind :trip.deposited :data {:result {:moved [:any]}}} :within-s 60 :of-job true}]
+   :after [[:item "raw_iron" 5] [:item "iron_sword" 1]]}]}
