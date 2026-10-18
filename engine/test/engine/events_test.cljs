@@ -478,3 +478,53 @@
       (is (<= (count (:chain ctx)) 8))
       (is (= ["j0" "j1"] (take 2 (:chain ctx))))
       (is (= "j2302" (last (:chain ctx)))))))
+
+;; ---------------------------------------------------------------- :debug chain
+
+(defn emit-pairs!
+  "n rounds of one padded :debug event and one :info event."
+  [stream n]
+  (doseq [i (range n)]
+    (events/emit! stream {:source :job :kind :glance :level :debug :data {:i i :pad (apply str (repeat 100 "d"))}})
+    (events/emit! stream {:source :job :kind :done :level :info :data {:i i}})))
+
+(defn kinds-after [stream after]
+  (let [page (events/read-after stream {:stream-id (:stream-id (events/cursor stream)) :after after :limit 500})]
+    [(:gap? page) (mapv :kind (:events page))]))
+
+(deftest debug-events-rotate-by-size-in-their-own-chain-and-leave-the-main-chain-whole
+  (let [file (path/join (tu/tmp-dir) "events.edn")
+        stream (events/make {:file file :generation-id "g" :debug-max-bytes 2048})]
+    (emit-pairs! stream 60)
+    (is (<= (total-bytes (events/debug-file file)) 2048))
+    (is (= 60 (count (filter #{"done"} (map (comp name :kind) (read-lines file))))) "every :info event is kept")
+    (is (empty? (filter #(= :glance (:kind %)) (read-lines file))) "no :debug event in the main chain")
+    (disk-only stream)
+    (let [[gap? kinds] (kinds-after stream 1)]
+      (is (false? gap?) "expired :debug events are no gap")
+      (is (= 60 (count (filter #{:done} kinds))))
+      (is (< 0 (count (filter #{:glance} kinds)) 60)))))
+
+(deftest debug-events-older-than-the-age-limit-are-dropped-on-restart
+  (let [file (path/join (tu/tmp-dir) "events.edn")
+        stream (events/make {:file file :generation-id "g" :debug-max-age-ms 60000})
+        old (/ (- (js/Date.now) 120000) 1000)]
+    (emit-pairs! stream 5)
+    (doseq [f (events/segment-files (events/debug-file file))
+            :when (fs/existsSync f)]
+      (fs/utimesSync f old old))
+    (let [restarted (disk-only (events/make {:file file :generation-id "g" :debug-max-age-ms 60000}))]
+      (is (zero? (.-size (fs/statSync (events/debug-file file)))))
+      (is (= [false (vec (repeat 5 :done))] (kinds-after restarted 1)))
+      (is (= 10 (:seq (events/cursor restarted))) "the high-water mark survives")
+      (events/emit! restarted {:source :job :kind :glance :level :debug})
+      (is (= [false [:done :glance]] (kinds-after restarted 9))))))
+
+(deftest a-hole-below-the-newest-debug-event-is-no-gap
+  (let [file (path/join (tu/tmp-dir) "events.edn")
+        line (fn [n] (str (pr-str {:seq n :generation-id "g" :time-ms 0 :source :a :kind :b}) "\n"))
+        _ (fs/mkdirSync (path/dirname file) #js {:recursive true})
+        _ (fs/writeFileSync file (apply str (map line (concat (range 1 11) (range 12 21)))))
+        _ (events/write-meta! file {:stream-id "s" :last-seq 20 :debug-seq 11})
+        stream (disk-only (events/make {:file file :generation-id "g" :stream-id "s"}))]
+    (is (false? (:gap? (events/read-after stream {:stream-id "s" :after 5 :limit 100}))))))

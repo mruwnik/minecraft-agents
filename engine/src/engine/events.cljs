@@ -11,6 +11,10 @@
 (a/defargs settings
   {:engine.events/max-bytes {:default (* 64 1024 1024) :spec (a/int-in 1024 nil)
                              :doc "The event log's size cap over the active and rotated segments, bytes."}
+   :engine.events/debug-max-bytes {:default (* 8 1024 1024) :spec (a/int-in 1024 nil)
+                                   :doc "Size cap of the separate chain that holds :debug events, bytes; the main chain keeps everything else."}
+   :engine.events/debug-max-age-ms {:default (* 15 60 1000) :spec (a/int-in 1000 nil)
+                                    :doc "How long :debug events are kept, ms."}
    :engine.events/recent-count {:default 256 :spec (a/int-in 1 nil) :doc "Events kept in memory for the live reader; an older cursor reads from disk."}
    :engine.events/recent-bytes {:default (* 256 1024) :spec (a/int-in 1 nil) :doc "Bytes of events kept in memory for the live reader."}
    :engine.events/default-page-size {:default 256 :spec (a/int-in 1 nil) :doc "Events a read returns when it names no limit."}
@@ -32,6 +36,9 @@
 
 (defn segment-file [file n]
   (if (zero? n) file (str file "." n)))
+
+(defn debug-file [file]
+  (str file ".debug"))
 
 (defn segment-files [file]
   (mapv #(segment-file file %) (range segment-count)))
@@ -225,6 +232,16 @@
                     {:max-bytes n})))
   n)
 
+(defn age-out!
+  "Drop the segments of a chain whose newest line is older than max-age-ms (file mtime); an old active one is emptied."
+  [file max-age-ms]
+  (let [cutoff (- (js/Date.now) max-age-ms)]
+    (doseq [f (segment-files file)
+            :when (and (fs/existsSync f) (< (.-mtimeMs (fs/statSync f)) cutoff))]
+      (if (= f file)
+        (fs/writeFileSync f "")
+        (fs/rmSync f #js {:force true})))))
+
 (defn initial-meta [file]
   (let [mf (metadata-file file)
         m (read-edn-file mf)]
@@ -333,7 +350,7 @@
         first-seq (or (:first-seq prior) n)]
     (conj (vec (butlast segments))
           {:file active :bytes (+ (or (:bytes prior) 0) line-bytes)
-           :first-seq first-seq :last-seq n})))
+           :first-seq first-seq :last-seq n :born (or (:born prior) (js/Date.now))})))
 
 (defn rotate-segment-index [segments file]
   (let [empty-segment {:file (segment-file file 0) :bytes 0 :first-seq nil :last-seq nil}
@@ -355,34 +372,47 @@
         (try (fs/truncateSync file before) (catch :default _ nil))
         (throw e)))))
 
+(defn append-chain!
+  "Append line to the chain at chain-file (segments under key k of the stream), rotating by size and, with max-age-ms,
+  by the age of the active segment, and pruning by size and age."
+  [stream chain-file k cap max-age-ms n line line-bytes]
+  (let [active (segment-file chain-file 0)
+        active-bytes (.-size (fs/statSync active))
+        born (:born (last (k @stream)))]
+    (when (and (pos? active-bytes)
+               (or (> (+ active-bytes line-bytes) (segment-target cap))
+                   (and max-age-ms born (> (- (js/Date.now) born) (/ max-age-ms 3)))))
+      (rotate! chain-file)
+      (swap! stream update k rotate-segment-index chain-file))
+    (append-line! active line)
+    (prune-segments! chain-file cap)
+    (when max-age-ms (age-out! chain-file max-age-ms))
+    (swap! stream update k update-active-segment chain-file n line-bytes)
+    (swap! stream update k existing-segment-index)))
+
 (defn append-record! [stream event]
-  (let [{:keys [file max-bytes last-seq stream-id generation-id run-id now pos-fn]} @stream
+  (let [{:keys [file max-bytes debug-max-bytes debug-max-age-ms last-seq debug-seq stream-id generation-id run-id now pos-fn]} @stream
         n (inc last-seq)
         full (canonical-event {:generation-id generation-id :run-id run-id :now now :pos-fn pos-fn} n event)
         line (str (pr-str full) "\n")
-        line-bytes (bytes-of line)]
-    (if (> line-bytes max-bytes)
+        line-bytes (bytes-of line)
+        debug? (= :debug (:level full))
+        cap (if debug? debug-max-bytes max-bytes)]
+    (if (> line-bytes cap)
       (do
         (.write js/process.stderr (str "event rejected: serialized record is " line-bytes
-                                       " bytes, above the " max-bytes " byte log cap\n"))
-        {:error :event-too-large :bytes line-bytes :max-bytes max-bytes})
+                                       " bytes, above the " cap " byte log cap\n"))
+        {:error :event-too-large :bytes line-bytes :max-bytes cap})
       (do
         ;; Reserve the sequence before appending: a crash leaves a gap, never a reused number.
         (when file
-          (write-meta! file {:stream-id stream-id :last-seq n}))
+          (write-meta! file {:stream-id stream-id :last-seq n :debug-seq (if debug? n debug-seq)}))
         ;; The in-memory counter moves on even if the append fails.
-        (swap! stream assoc :last-seq n)
+        (swap! stream assoc :last-seq n :debug-seq (if debug? n debug-seq))
         (when file
-          (let [active (segment-file file 0)
-                active-bytes (.-size (fs/statSync active))]
-            (when (and (pos? active-bytes)
-                       (> (+ active-bytes line-bytes) (segment-target max-bytes)))
-              (rotate! file)
-              (swap! stream update :segments rotate-segment-index file))
-            (append-line! active line)
-            (prune-segments! file max-bytes)
-            (swap! stream update :segments update-active-segment file n line-bytes)
-            (swap! stream update :segments existing-segment-index)))
+          (if debug?
+            (append-chain! stream (debug-file file) :debug-segments cap debug-max-age-ms n line line-bytes)
+            (append-chain! stream file :segments cap nil n line line-bytes)))
         (let [r (assoc @stream :recent (conj (:recent @stream) full)
                                :recent-byte-count (+ (:recent-byte-count @stream) line-bytes))]
           (let [r (loop [s r]
@@ -418,33 +448,50 @@
          :bytes (reduce + 0 (map #(inc (bytes-of %)) lines))})
       (finally (fs/closeSync fd)))))
 
+(defn open-chain!
+  "Prepare the chain at file: repaired, aged out when max-age-ms is given. Returns its scanned segments, oldest first."
+  [file max-age-ms]
+  (fs/mkdirSync (path/dirname file) #js {:recursive true})
+  (when-not (fs/existsSync file) (fs/writeFileSync file ""))
+  (repair-active-tail! file)
+  (when max-age-ms (age-out! file max-age-ms))
+  (scan-segments file))
+
+(defn enforce-chain!
+  "Cut the chain at file to max-bytes; returns its segment index."
+  [file scanned max-bytes]
+  (prune-segments! file max-bytes)
+  (let [active-info (trim-active! file max-bytes)
+        base (existing-segment-index scanned)
+        segments (assoc (vec base) (dec (count base)) active-info)
+        retained-bytes (reduce + 0 (map :bytes segments))]
+    (when (> retained-bytes max-bytes)
+      (throw (ex-info (str "could not enforce configured :max-bytes " max-bytes)
+                      {:file file :bytes retained-bytes :max-bytes max-bytes})))
+    segments))
+
 (defn make
   "Create a canonical EDN event stream. Options: :file, :generation-id,
-  :max-bytes (aggregate active+rotated cap), :stdout?, :sinks, :pos-fn,
-  :now, and :stream-id for tests. File-backed streams use events.edn plus
+  :max-bytes (aggregate active+rotated cap), :debug-max-bytes and :debug-max-age-ms (the separate :debug chain in
+  <file>.debug), :stdout?, :sinks, :pos-fn, :now, and :stream-id for tests. File-backed streams use events.edn plus
   atomically replaced events.edn.meta.edn metadata."
-  [{:keys [file generation-id max-bytes stdout? sinks pos-fn now stream-id]
-    :or {max-bytes (setting "max-bytes") now js/Date.now pos-fn (constantly nil)
+  [{:keys [file generation-id max-bytes debug-max-bytes debug-max-age-ms stdout? sinks pos-fn now stream-id]
+    :or {max-bytes (setting "max-bytes") debug-max-bytes (setting "debug-max-bytes")
+         debug-max-age-ms (setting "debug-max-age-ms") now js/Date.now pos-fn (constantly nil)
          sinks []}}]
   (ensure-valid-max-bytes! max-bytes)
-  (when file
-    (fs/mkdirSync (path/dirname file) #js {:recursive true})
-    (when-not (fs/existsSync file) (fs/writeFileSync file ""))
-    (repair-active-tail! file))
-  (let [meta (if file (initial-meta file) {:stream-id (or stream-id (random-id)) :last-seq 0})
-        scanned-segments (if file (scan-segments file) [])
-        scanned-seq (reduce max 0 (keep :last-seq scanned-segments))
+  (ensure-valid-max-bytes! debug-max-bytes)
+  (let [dfile (when file (debug-file file))
+        scanned-segments (if file (open-chain! file nil) [])
+        scanned-debug (if file (open-chain! dfile debug-max-age-ms) [])
+        meta (if file (initial-meta file) {:stream-id (or stream-id (random-id)) :last-seq 0})
+        debug-seq (max (or (:debug-seq meta) 0) (reduce max 0 (keep :last-seq scanned-debug)))
+        scanned-seq (reduce max 0 (keep :last-seq (concat scanned-segments scanned-debug)))
         last-seq (max (:last-seq meta) scanned-seq)
         sid (or stream-id (:stream-id meta) (random-id))
-        _reserved (when file (write-meta! file {:stream-id sid :last-seq last-seq}))
-        _pruned (when file (prune-segments! file max-bytes))
-        active-info (when file (trim-active! file max-bytes))
-        base-segments (if file (existing-segment-index scanned-segments) [])
-        segments (if file (assoc (vec base-segments) (dec (count base-segments)) active-info) [])
-        retained-bytes (reduce + 0 (map :bytes segments))
-        _valid-cap (when (> retained-bytes max-bytes)
-                     (throw (ex-info (str "could not enforce configured :max-bytes " max-bytes)
-                                     {:file file :bytes retained-bytes :max-bytes max-bytes})))
+        _reserved (when file (write-meta! file {:stream-id sid :last-seq last-seq :debug-seq debug-seq}))
+        segments (if file (enforce-chain! file scanned-segments max-bytes) [])
+        debug-segments (if file (enforce-chain! dfile scanned-debug debug-max-bytes) [])
         run-id (random-id)
         {recent :records recent-byte-count :bytes}
         (if file (tail-records file (setting "recent-bytes") (setting "recent-count")) {:records [] :bytes 0})
@@ -453,6 +500,8 @@
     (atom {:file file :metadata-file (when file (metadata-file file))
            :stream-id sid :generation-id (or generation-id (random-id))
            :run-id run-id :max-bytes max-bytes :last-seq last-seq
+           :debug-max-bytes debug-max-bytes :debug-max-age-ms debug-max-age-ms
+           :debug-seq debug-seq :debug-segments debug-segments
            :oldest-seq (some :first-seq segments) :segments segments
            :recent recent :recent-byte-count recent-byte-count :sinks sinks :now now :pos-fn pos-fn})))
 
@@ -532,12 +581,25 @@
               {:events (into out (:records r)) :capped? true}
               (recur (rest remaining) (into out (:records r)) (- left (:bytes r))))))))))
 
+(defn disk-events-merged
+  "disk-events-after over several chains, merged by seq. A chain that filled the page bounds the result at its last
+  event, so no event of another chain is skipped."
+  [chains after limit budget]
+  (let [rs (mapv #(disk-events-after % after limit budget) chains)
+        bound (->> rs
+                   (keep (fn [{:keys [events capped?]}]
+                           (when (or capped? (>= (count events) limit)) (:seq (last events)))))
+                   (reduce min js/Infinity))]
+    {:events (->> rs (mapcat :events) (filter #(<= (:seq %) bound)) (sort-by :seq) (take limit) vec)
+     :capped? (boolean (some :capped? rs))}))
+
 (defn read-after
   "Read a bounded page after a cursor. A stream replacement, retention loss,
   or reserved-but-missing sequence is returned as :gap? true with no events;
   the caller must take a fresh state snapshot and use its cursor."
   [stream {:keys [stream-id after limit] :or {after 0}}]
-  (let [{sid :stream-id latest :last-seq segments :segments recent :recent} @stream
+  (let [{sid :stream-id latest :last-seq segments :segments recent :recent
+         debug-segments :debug-segments horizon :debug-seq} @stream
         limit (bounded-page-size limit)
         oldest (some :first-seq segments)
         cursor-now {:stream-id sid :seq latest}
@@ -555,18 +617,17 @@
             {:keys [events capped?]}
             (if (and recent-first (>= after (dec recent-first)))
               {:events (->> recent (filter #(> (:seq %) after)) (take limit) vec)}
-              (disk-events-after segments after limit (setting "max-page-bytes")))
+              (disk-events-merged [segments debug-segments] after limit (setting "max-page-bytes")))
             seqs (map :seq events)
-            expected (inc after)
-            hole? (or (and (seq seqs) (> (first seqs) expected))
-                      (and (empty? seqs) (< after latest))
-                      (and (seq seqs) (not capped?) (< (count seqs) limit) (< (last seqs) latest)))
-            internal-hole? (some true? (map (fn [[a b]] (> b (inc a)))
-                                              (partition 2 1 seqs)))]
-        (if (or hole? internal-hole?)
+            complete? (and (not capped?) (< (count seqs) limit))
+            ;; Missing seqs at or below the newest :debug event may be expired :debug events: no gap.
+            missing (concat (when (and (seq seqs) (> (first seqs) (inc after))) [[(inc after) (dec (first seqs))]])
+                            (for [[a b] (partition 2 1 seqs) :when (> b (inc a))] [(inc a) (dec b)])
+                            (when (and complete? (< (or (last seqs) after) latest)) [[(inc (or (last seqs) after)) latest]]))]
+        (if (some (fn [[_ to]] (> to (or horizon 0))) missing)
           (assoc base :gap? true :events [] :cursor cursor-now)
           (assoc base :gap? false :events events
-                      :cursor {:stream-id sid :seq (or (last seqs) after)}))))))
+                      :cursor {:stream-id sid :seq (if complete? latest (or (last seqs) after))}))))))
 
 (defn emit!
   "Append one normalized EDN event and return its sequence. Oversized events
