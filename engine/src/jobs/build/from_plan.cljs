@@ -319,12 +319,12 @@
                   (reach/closes-in? p cell)))))
 
 (defn shuts-out?
-  "Whether placing cell would wall in the floor under a higher cell still owed, which can then only be placed from inside
-  (the interior of a roof): the cell waits while anything else can be placed."
+  "Whether placing cell would wall in the floor under another cell still owed at its height or above, which can then only
+  be placed from inside (the interior of a roof): the cell waits while anything else can be placed."
   [c cell owed]
   (let [y (get (:pos cell) 1)
         [cx _ cz] (:pos cell)
-        close? #(and (> (get (:pos %) 1) y) (<= (js/Math.abs (- cx (nth (:pos %) 0))) 4) (<= (js/Math.abs (- cz (nth (:pos %) 2))) 4))
+        close? #(and (>= (get (:pos %) 1) y) (not= (:pos %) (:pos cell)) (<= (js/Math.abs (- cx (nth (:pos %) 0))) 4) (<= (js/Math.abs (- cz (nth (:pos %) 2))) 4))
         above (vals (into {} (map (fn [o] [[(nth (:pos o) 0) (nth (:pos o) 2)] (:pos o)])) (filter close? owed)))]
     (boolean (some #(reach/walls-in? (:primitives c) % (:pos cell)) above))))
 
@@ -489,7 +489,7 @@
         given-up (closed)
         lowest-of #(when (seq %) (apply min (map (fn [x] (get (:pos x) 1)) %)))
         layer-of (fn [cs] (let [y (lowest-of cs)] (filter #(= y (get (:pos %) 1)) cs)))
-        held (set (filter #(shuts-out? c % wanted) (in-reach c (layer-of placeable-now))))
+        held (set (filter #(shuts-out? c % wanted) (in-reach c placeable-now)))
         todo (let [open (remove held placeable-now)] (if (seq open) open placeable-now))
         layer (layer-of todo)
         near (in-reach c layer)

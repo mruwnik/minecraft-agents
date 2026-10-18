@@ -1302,3 +1302,21 @@
               result (await (child-outcome eng job {:plan "wall" :reach 3 :fetch false} 600))]
           (is (= :needs (:reason result)))
           (is (empty? (h/calls p "jumpPlace"))))))))
+
+(deftest roof-cells-over-the-way-out-wait-for-the-rest-of-the-interior-roof
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "box" :parts [{:id "walls" :outline [[1 64 1] [4 65 4]] :want "dirt"}
+                                      {:id "roof" :box [[1 66 1] [4 66 4]] :want "dirt"}]}
+              open #{[3 65 1] [3 66 1] [3 66 2] [2 66 2] [2 66 3] [3 66 3]}
+              built (into {} (for [x (range 1 5) z (range 1 5) y [64 65 66]
+                                   :when (and (or (= y 66) (#{1 4} x) (#{1 4} z)) (not (open [x y z])))]
+                               [(h/cell-key x y z) "dirt"]))
+              {:keys [eng p]} (start {:blocks (merge wide-ground built) :inventory [{:name "dirt" :count 64}]
+                                      :self {:pos {:x 3.5 :y 64 :z 2.5}}}
+                                     {"box" plan} [])
+              result (await (child-outcome eng job {:plan "box"} 400))
+              order (mapv first (places p))]
+          (is (= 6 (:placed result)) (pr-str order (:given-up result)))
+          (is (not (reach/enclosed? p))))))))
