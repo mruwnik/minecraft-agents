@@ -72,4 +72,13 @@
          [:until [:cli "snapshot" ["$body" "--world" "$world" "--width" "160" "--height" "90"]
                   {:ok true :text [:contains " m centre"]}] 30]
          [:job (jobs.debug.notify {:text "snap"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}]}
+  {:name "drive-look-uses-minecraft-pitch-sign"
+   :time :day
+   :body {:at [16.5 0 16.5] :yaw 270 :spawnpoint [4 0 4]}
+   :act [[:cli "drive" ["$body" "take" "--who" "fixture" "--why" "pitch sign" "--idle-s" "30" "--world" "$world"] {:ok true}]
+         [:cli "drive" ["$body" "look" "0" "60" "--who" "fixture" "--world" "$world"] {:ok true :manual {:pitch [:>= 59]}}]
+         [:cli "drive" ["$body" "turn" "10" "-20" "--who" "fixture" "--world" "$world"] {:ok true :manual {:pitch [:< 45]}}]
+         [:cli "drive" ["$body" "release" "--who" "fixture" "--world" "$world"] {:ok true}]
+         [:job (jobs.debug.notify {:text "pitch"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}]}]}
