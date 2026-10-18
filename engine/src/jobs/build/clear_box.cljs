@@ -1,5 +1,6 @@
 (ns jobs.build.clear-box
-  (:require [engine.settings :as settings]
+  (:require [clojure.string :as str]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -35,12 +36,13 @@
   is :least, cells) or had nothing to dig; with none dug and cells skipped, condition-failed for :zone, :footprint and
   :cannot, else nothing-possible (:unreachable, :hazard, :refused), the cause the one skip reason or :nothing-dug when
   mixed. Already done when every cell is loaded and air, fluid or kept; done? counts the cells dug this call and the
-  cells left.")
+  cells left. With :only, blocks not ending in one of its names stay (a tree-clearing keeps the ground).")
 
 (a/defargs args
   {:from {:doc "box corner (inclusive); any order; [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
    :to {:doc "opposite box corner (inclusive); at most 400 cells" :spec ::a/pos :default nil}
    :keep {:doc "extra block names to leave alone" :spec (a/coll-of a/name?) :default []}
+   :only {:doc "block name endings to clear, e.g. [\"_log\" \"_leaves\"]; other blocks are left as they are; none = every block" :spec (a/coll-of a/name?) :default []}
    :ignore-zones? :shared
    :open-pens? {:doc "true: cells that are the wall of an own pen holding livestock may be dug (the animals walk out)" :spec boolean? :default false}
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block)"
@@ -55,6 +57,11 @@
 (defn max-tries [] (settings/get settings ::max-tries))
 (def air #{"air" "cave_air" "void_air"})
 (def fluids #{"water" "lava" "bubble_column"})
+(defn left-alone?
+  "Whether block n stays: air, fluid, kept, or (with :only) not one of the endings."
+  [{:keys [keep only]} n]
+  (or (air n) (fluids n) (kept? keep n)
+      (and (seq only) (not-any? #(str/ends-with? n %) only))))
 (defn span [a b] (range (min a b) (inc (max a b))))
 
 (defn box-error
@@ -93,21 +100,20 @@
   "[[pos block-name-or-nil] ...]: the loaded cells to dig, and the unloaded
   ones (nil name) not skipped, which are still to be walked to."
   [c]
-  (let [keep (:keep (:args c) [])
-        skipped (:skipped (ctx/mem c) {})]
+  (let [skipped (:skipped (ctx/mem c) {})]
     (->> (cells (:args c))
          (remove #(contains? skipped %))
          (map (fn [pos] [pos (u/seen-name (:primitives c) pos)]))
-         (remove (fn [[_ n]] (and n (or (air n) (fluids n) (kept? keep n)))))
+         (remove (fn [[_ n]] (and n (left-alone? (:args c) n))))
          vec)))
 
 (defn pending-all
   "pending, skipped cells included."
   [c]
-  (let [keep (:keep (:args c) [])]
-    (->> (cells (:args c))
+  (let [args (:args c)]
+    (->> (cells args)
          (map (fn [pos] [pos (u/seen-name (:primitives c) pos)]))
-         (remove (fn [[_ n]] (and n (or (air n) (fluids n) (kept? keep n)))))
+         (remove (fn [[_ n]] (and n (left-alone? args n))))
          vec)))
 
 (defn split-by-rules

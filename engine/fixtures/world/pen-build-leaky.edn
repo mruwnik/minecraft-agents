@@ -32,6 +32,19 @@
    :expect [{:event {:source :job :kind :pen-build.leaky :data {:reason :leak :leaks [{:why :gap}]}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 80 :until {:source :job :kind :pen-build.leaky}}]
    :after [[:not-block [10 0 12] "oak_fence"] [:item "oak_fence" 2]]}
+  ;; Card 3f51b63a (f449d14b): a tree inside the ring (leaves reach the fence tops) is cleared first; the pen closes and the ground stays.
+  {:name "a-tree-inside-the-ring-is-cleared"
+   :blocks [[:fill [11 0 13] [11 1 13] "oak_log"] [:fill [11 1 12] [11 1 12] "oak_leaves"] [:fill [10 1 13] [10 1 13] "oak_leaves"] [:fill [11 2 13] [11 2 13] "oak_leaves"]]
+   :plans [{:id "ring" :metadata {:by "$body"}
+            :parts [{:id "n" :box [#at [10 0 10] #at [14 0 10]] :want "oak_fence"}
+                    {:id "s" :box [#at [10 0 14] #at [14 0 14]] :want "oak_fence"}
+                    {:id "w" :box [#at [10 0 11] #at [10 0 13]] :want "oak_fence"}
+                    {:id "e1" :box [#at [14 0 11] #at [14 0 11]] :want "oak_fence"}
+                    {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
+                    {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
+   :act [[:job (jobs.build.pen {:plan "$plan:ring" :fetch false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:not-block [11 0 13] "oak_log"] [:not-block [11 1 12] "oak_leaves"] [:block [10 0 12] "oak_fence"]]}
   ;; Card f84912c5: with the fences carried (8, the ring needs 7 and a gate) the pen is placed from the bag at once; nothing is fetched
   ;; or searched for first (no obtain.exploring).
   {:name "carried-fences-are-placed-before-any-fetch"

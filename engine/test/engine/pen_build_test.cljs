@@ -352,3 +352,14 @@
           (is (= [:uneven] (distinct (map :reason (:waits r)))) "the job waits listed")
           (is (= 0 (:places r)))
           (is (= [] (:declined ok))))))))
+
+(deftest trees-inside-the-box-are-cleared-before-the-fence-and-the-ground-stays
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [trees {"3,64,3" "oak_log" "3,65,3" "oak_log" "3,65,4" "oak_leaves"}
+              [result _ p] (await (build! (spec kit trees) {"pen" (ring-plan)} {}))]
+          (is (true? (:closed? result)))
+          (is (every? #{nil "air"} (map #(h/block-at p 3 % 3) [64 65])))
+          (is (contains? #{nil "air"} (h/block-at p 3 65 4)))
+          (is (= "stone" (h/block-at p 3 63 3))))))))

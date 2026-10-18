@@ -25,6 +25,8 @@
   "Build the fence a plan wants (:plan, optionally only its :part) and prove it holds animals.
   The pen is the bounding box of the plan's cells that want a fence, a fence gate or a wall.
   A plan with :surface true is put on the ground the body has seen (a pen on a slope follows it).
+  Phase 0 clears the trees (logs and leaves) inside the box up to the fence tops with a jobs.build.clear-box child
+  (:only), so no leaf staircase leads over the fence; trees not seen yet are left to the check.
   Phase 1 runs jobs.build.from-plan on the plan. Its args :reach :accept and the give-up setting (3) pass through, and its rules
   (zones, other plans' footprints, materials, cuts) apply. Phase 2: a body still inside the box walks out through the
   gate (a jobs.movement.go-to child to the cell outside it) and jobs.animals.shut-gate shuts it. Phase 3 checks the pen
@@ -240,6 +242,37 @@
                             (select-keys answer [:leaks-total])))
           (ctx/end c :nothing-possible (:reason answer) result)))))
 
+(def tree-endings ["_log" "_wood" "_leaves"])
+
+(defn trees-in
+  "The seen log, wood and leaf cells inside the box of cells, from its lowest fence cell to one above its highest."
+  [c cells]
+  (let [box (pen-read/barrier-box cells)
+        ys (map (comp second :pos) (filter #(pen-read/barrier? (:want %)) cells))]
+    (for [x (range (:x (:min box)) (inc (:x (:max box))))
+          z (range (:z (:min box)) (inc (:z (:max box))))
+          y (range (apply min ys) (+ 2 (apply max ys)))
+          :let [n (u/seen-name (:primitives c) {:x x :y y :z z})]
+          :when (and n (some #(str/ends-with? n %) tree-endings))]
+      [x y z])))
+
+(defn ^:async trees-step!
+  "While trees stand in the box: a clear-box child over the box clears their logs and leaves. Whatever it ends with,
+  on to the build (a tree it could not clear shows as a leak in the check)."
+  [c cells]
+  (if (empty? (trees-in c cells))
+    (do (ctx/update-mem! c assoc :phase :build) :again)
+    (let [box (pen-read/barrier-box cells)
+          ys (map (comp second :pos) cells)
+          r (await (ctx/call c :trees 'jobs.build.clear-box
+                             (merge (select-keys (:args c) [:ignore-zones?])
+                                    {:from {:x (:x (:min box)) :y (apply min ys) :z (:z (:min box))}
+                                     :to {:x (:x (:max box)) :y (+ 1 (apply max ys)) :z (:z (:max box))}
+                                     :only tree-endings})))]
+      (if (= :continue r)
+        :continue
+        (do (ctx/update-mem! c assoc :phase :build) :again)))))
+
 (defn ^:async build-step!
   "One round of the builder as the child; the phase moves to the exit when its round ended with its data (done, or it
   left cells refused, given up or short: the check reports them as leaks); an ending of its conditions, or of a limit, is
@@ -291,9 +324,10 @@
 
 (defn ^:async step [c]
   (let [{:keys [cells trouble]} (planned c)
-        phase (or (:phase (ctx/mem c)) :build)]
+        phase (or (:phase (ctx/mem c)) :trees)]
     (cond
       trouble :continue
+      (= :trees phase) (await (trees-step! c cells))
       (= :exit phase) (await (exit-step! c cells))
       (= :shut phase) (await (shut-step! c))
       (= :check phase) (do (await (look/survey! c)) (await (finish! c cells))) ; cells behind the body are not seen until it looks
