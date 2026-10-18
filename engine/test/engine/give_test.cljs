@@ -149,6 +149,7 @@
           (is (= {:given 0 :reason :not-taken :returned 5 :text "gave 0 bread (not-taken)"} @out))
           (is (= {"bread" 5} (inv p)))
           (is (= 1 (count (calls p "collect"))))
+          (is (some #(= "giving" (some-> (.-args %) .-why .-name)) (calls p "wait")))
           (is (<= 6000 (- @clock 1000000))))))))
 
 (deftest a-part-of-the-toss-coming-back-counts-what-was-given

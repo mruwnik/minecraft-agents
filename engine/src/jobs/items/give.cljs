@@ -29,7 +29,7 @@
   A toss refused three times in a row, or three collects in a row that change nothing, end nothing-possible with the status or :litter as the cause.
   The cleanup export takes back a drop still lying however the call ends (a cut included), at most :max-blocked
   collects in a row that change nothing.
-  One call is the whole give; it yields :continue only while it waits for the player to appear or to take the drop.
+  One call is the whole give; it waits for the player to appear or to take the drop in jobs.time.noop pauses (:giving) and yields :continue.
   done? is ok once the drop is seen taken.")
 
 (a/defargs args
@@ -145,9 +145,9 @@
     (finish! c :nothing-possible cause (assoc data :given given))))
 
 (defn ^:async idle!
-  "A neutral wait for the world (the player to appear or to take the drop), then :continue: the yield."
+  "A pause (jobs.time.noop, holding :giving) for the world (the player to appear or to take the drop), then :continue: the yield."
   [c]
-  (await (ctx/act c :wait #js {:ms (idle-ms)}))
+  (await (child/pause! c (/ (idle-ms) 1000) :giving))
   :continue)
 
 (defn ^:async walk!
