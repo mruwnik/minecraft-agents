@@ -548,14 +548,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory [{:name "oak_log" :count 1}]})]
-          (.override (.-world p) "craft"
-                     (fn ^:async f [token args impl]
-                       (await (impl token args))
-                       #js {:status "timeout" :inventoryChange #js {"oak_planks" 4 "oak_log" -1}}))
-          (let [result (await (child-outcome eng job {:item "oak_planks" :count 4} 8))]
-            (is (= {:made 4 :text "crafted 4 oak_planks" :status :done} (dissoc result :item)))
-            (is (= 1 (count (calls p "craft"))))))))))
+        (doseq [timeout [#js {:status "timeout" :inventoryChange #js {"oak_planks" 4 "oak_log" -1}} #js {:status "timeout"}]]
+          (let [{:keys [eng p]} (setup {:inventory [{:name "oak_log" :count 1}]})]
+            (.override (.-world p) "craft"
+                       (fn ^:async f [token args impl]
+                         (await (impl token args))
+                         timeout))
+            (let [result (await (child-outcome eng job {:item "oak_planks" :count 4} 8))]
+              (is (= {:made 4 :text "crafted 4 oak_planks" :status :done} (dissoc result :item)))
+              (is (= 1 (count (calls p "craft")))))))))))
 
 (deftest craft-looks-around-before-it-says-there-is-no-table
   (async done
