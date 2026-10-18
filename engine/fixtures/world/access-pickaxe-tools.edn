@@ -16,6 +16,14 @@
    :expect [{:event {:source :job :kind :tool.low} :within-s 40}
             {:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :tool-spent}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :stair.done} :for-s 40 :until {:source :job :kind :stopped}}]}
+  {:name "stair-through-dirt-goes-on-with-only-a-worn-shovel"
+   ;; card fa053a5a: dirt needs no tool, so a 3-use shovel beside a fresh pickaxe must not stop the stair :tool-spent
+   :blocks [[:fill [8 0 8] [24 9 24] "dirt"]]
+   :body {:at [8.5 10 16.5] :inventory [["stone_pickaxe" 1] ["stone_shovel" 1]]}
+   :act [[:rcon "item replace entity $BODY container.1 with minecraft:stone_shovel[minecraft:damage=128]"]
+         [:job (jobs.access.stair {:dir :down :heading :east :steps 4 :fetch false})]]
+   :expect [{:event {:source :job :kind :stair.done} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :tool-spent}} :for-s 60 :until {:source :job :kind :stair.done}}]}
   {:name "pickaxe-already-low-at-first-hold"
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=125]"]
