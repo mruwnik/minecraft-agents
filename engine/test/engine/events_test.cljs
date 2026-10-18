@@ -528,3 +528,11 @@
         _ (events/write-meta! file {:stream-id "s" :last-seq 20 :debug-seq 11})
         stream (disk-only (events/make {:file file :generation-id "g" :stream-id "s"}))]
     (is (false? (:gap? (events/read-after stream {:stream-id "s" :after 5 :limit 100}))))))
+
+(deftest cursor-zero-on-a-log-that-starts-with-a-debug-event-is-no-gap
+  (let [file (path/join (tu/tmp-dir) "events.edn")
+        stream (events/make {:file file :generation-id "g"})]
+    (events/emit! stream {:source :job :kind :glance :level :debug})
+    (events/emit! stream {:source :job :kind :done :level :info})
+    (disk-only stream)
+    (is (= [false [:glance :done]] (kinds-after stream 0)))))

@@ -247,12 +247,16 @@
 
 (defn file-size [file] (if (fs/existsSync file) (.-size (fs/statSync file)) 0))
 
-(defn log-cursor
-  "Where the log stands now: {:ino :pos}. The inode lets a reader find the file again after the engine rotates it."
-  [file]
+(defn chain-cursor [file]
   (if (fs/existsSync file)
     (let [st (fs/statSync file)] {:ino (.-ino st) :pos (.-size st)})
     {:ino nil :pos 0}))
+
+(defn log-cursor
+  "Where the log stands now: {:ino :pos} of the main chain, and :debug, the same for the :debug chain (events.edn.debug).
+  The inode lets a reader find the file again after the engine rotates it."
+  [file]
+  (assoc (chain-cursor file) :debug (chain-cursor (str file ".debug"))))
 
 (defn read-from
   "The parsed events of file from byte start on; unreadable lines skipped."
@@ -269,8 +273,8 @@
              (filter map?)
              vec)))))
 
-(defn read-events-from
-  "The events logged after cursor, oldest first. When the engine rotated the log since (events.edn.N), the tail of the
+(defn read-chain-from
+  "The events of one chain (file and its segments) logged after cursor. When the engine rotated the log since (events.edn.N), the tail of the
   segment that was the active file at cursor, the newer segments, then the active file. When that segment is gone, every
   kept segment (all newer) then the active file."
   [file {:keys [ino pos]}]
@@ -285,6 +289,14 @@
                        (mapcat #(read-from % 0) (subvec live (inc from)))
                        (read-from file 0)))
           (vec (concat (mapcat #(read-from % 0) live) (read-from file 0))))))))
+
+(defn read-events-from
+  "The events logged after cursor in both chains (main and :debug), oldest first by :seq."
+  [file cursor]
+  (->> (concat (read-chain-from file cursor)
+               (read-chain-from (str file ".debug") (or (:debug cursor) {:ino nil :pos 0})))
+       (sort-by #(:seq % 0))
+       vec))
 
 (defn await-since
   "The time an :await counts events from: t0, but a :world.reloaded await after a :cli/:http step (cli-ms, when that step

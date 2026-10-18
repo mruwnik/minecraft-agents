@@ -610,7 +610,7 @@
       {:error :bad-cursor :stream-id sid :oldest-seq oldest :latest-seq latest
        :gap? true :events [] :cursor cursor-now}
       (> after latest) (assoc base :gap? true :events [] :cursor cursor-now)
-      (and oldest (< after (dec oldest))) (assoc base :gap? true :events [] :cursor cursor-now)
+      (and oldest (< after (dec oldest)) (> (dec oldest) (or horizon 0))) (assoc base :gap? true :events [] :cursor cursor-now)
       (>= after latest) (assoc base :gap? false :events [] :cursor {:stream-id sid :seq after})
       :else
       (let [recent-first (some-> recent first :seq)

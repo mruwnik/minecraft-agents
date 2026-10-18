@@ -171,6 +171,17 @@
             "the segment active at the cursor was rotated out: every kept segment oldest first, then the active file")))
     (fs/rmSync dir #js {:recursive true :force true})))
 
+(deftest the-event-reader-merges-the-debug-chain
+  (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "wt-dbg-"))
+        file (path/join dir "events.edn")
+        ev (fn [& ns] (apply str (map #(str "{:seq " % "}\n") ns)))]
+    (fs/writeFileSync file (ev 1))
+    (let [cur (r/log-cursor file)]
+      (fs/appendFileSync file (ev 2 4))
+      (fs/writeFileSync (str file ".debug") (ev 3 5))
+      (is (= [2 3 4 5] (mapv :seq (r/read-events-from file cur))) "main and debug events after the cursor, by seq"))
+    (fs/rmSync dir #js {:recursive true :force true})))
+
 (deftest an-await-step-counts-events-from-the-watch-window
   (let [opts {:world "wt-await-769ce017" :body "Probe"}
         file (r/events-file opts)
