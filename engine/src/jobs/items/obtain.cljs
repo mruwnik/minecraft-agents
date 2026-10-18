@@ -7,7 +7,7 @@
             [engine.settings :as settings]
             [jobs.items.obtain.base :refer [args-error carried-of holds makes? max-inspections names-of tried! wanted-fields way?]]
             [jobs.items.obtain.chest :refer [blocked-text candidates inspect! withdraw!]]
-            [jobs.items.obtain.craft :refer [craft-step!]]
+            [jobs.items.obtain.craft :refer [craft-step! plan-table pick-plan-table!]]
             [jobs.items.obtain.gather :refer [finish-tree! gather-step!]]
             [jobs.items.obtain.need :refer [explorable? gather-held gather-viable?]]
             [jobs.items.obtain.plan :refer [craft-plan gather-plan]]
@@ -130,8 +130,8 @@
   (or (holds (into {} (map (juxt :name :count)) inv) names) (first names)))
 
 (defn done?
-  "The count carried, no tree a cut left half felled and no child under way (the round fells it whole first, a craft
-  picks its table up)."
+  "The count carried, no tree a cut left half felled and no child under way (the round fells it whole first, a table in a plan cell
+  dug up)."
   [c]
   (let [{:keys [start] :as m} (ctx/mem c)
         inv (u/inventory (:primitives c))
@@ -145,7 +145,7 @@
       (apply contract/later :short (str "obtain: " left " " (clojure.string/join "/" names) " to get") (conj data :result
              (if start (merge {:got got :tried (:tried m)} (wanted-fields (:args c))) {:got 0})))
 
-      (or (get-in m [:gather :tree]) (checks/child-under-way? c))
+      (or (get-in m [:gather :tree]) (plan-table c) (checks/child-under-way? c))
       (apply contract/later :wrapping-up "obtain: the count is carried, wrapping up" (conj data :result {:got got :item (held-name inv names)}))
 
       :else (apply contract/ok :carried (str "obtained " got " " (held-name inv names)) (conj data :result {:got got :item (held-name inv names)})))))
@@ -211,6 +211,7 @@
             data (merge {:got got} (wanted-fields a))]
         (cond
           (get-in m [:gather :tree]) (await (finish-tree! c))
+          (and (>= have target) (plan-table c)) (await (pick-plan-table! c (plan-table c)))
           (>= have target) (ctx/end c :done nil {:got got :item (held-name inv names)})
           (and (way? c :chest) (not (get-in m [:tried :chest]))
                (or (seq (chests-to-try c m names (- target have))) (not (seq (candidates c names)))))

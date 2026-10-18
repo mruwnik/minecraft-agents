@@ -608,6 +608,20 @@
           (is (seq @seen) "not rejected as bad-args")
           (is (every? #(= "house" (:for-plan %)) @seen) (pr-str @seen)))))))
 
+(def own-house
+  {"house" {:id "house" :metadata {:by "Fake"}
+            :parts [{:id "all" :cells (vec (for [x (range -3 4) y [64 65] z (range -3 4)] [x y z])) :want {:block "stone"}}]}})
+
+(deftest get-tool-for-a-plan-digs-up-the-table-it-put-in-the-plans-own-cells
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (bare [{:name "oak_log" :count 12}]) [own-zone] sight-opts own-house)]
+          (core/submit! (:eng s) (list 'jobs.items.get-tool {:kind "pickaxe" :for-plan "house"}) {})
+          (await (run-ticks s 80))
+          (is (= 1 (get (inv s) "wooden_pickaxe")))
+          (is (empty? (tables s)) "the table is not left in a cell the build wants"))))))
+
 (deftest get-tool-crafts-a-wooden-pickaxe-from-logs
   (async done
     (tu/run-async done

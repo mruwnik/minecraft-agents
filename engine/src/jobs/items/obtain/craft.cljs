@@ -7,7 +7,8 @@
             [jobs.items.obtain.plan :refer [craft-plan]]
             [jobs.items.smelt :as smelt]
             [jobs.lib.child :as child]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.world :as known]))
 
 (defn fruitless! [c why]
   (child/fruitless! c :craft)
@@ -52,6 +53,23 @@
                   (ctx/update-mem! c assoc-in [:craft :detail] why))
                 (fruitless! c (contract/cause-key e))))))))
 
+(defn plan-table
+  "The table this obtain put down in a cell of its :for-plan plan, else nil: the build keeps tables, so it is dug up once the count is carried."
+  [c]
+  (let [{:keys [x y z] :as spot} (:plan-table (ctx/mem c))
+        plan (:for-plan (:args c))]
+    (when (and spot plan (= plan (get (known/footprints c) (mapv #(js/Math.floor %) [x y z]))))
+      spot)))
+
+(defn ^:async pick-plan-table!
+  "Dig up the table in a plan cell (a jobs.blocks.dig child): :continue while it waits, else :again (a failed dig is not retried)."
+  [c spot]
+  (let [r (await (ctx/call c :pickup 'jobs.blocks.dig {:pos spot :collect true :need-drop false :fetch false :on-fluid :fail :for-plan (:for-plan (:args c))}))]
+    (if (= :continue r)
+      :continue
+      (do (ctx/update-mem! c dissoc :plan-table)
+          :again))))
+
 (defn ^:async craft-step!
   "One round of the craft source: run the current step of the plan as a child, until it ends."
   [c names have target]
@@ -86,7 +104,7 @@
                   :continue
                   (do (ctx/update-mem! c update :craft dissoc :step :spot)
                       (if (and (= :done (:kind e)) (get-in e [:data :placed]))
-                        (do (ctx/update-mem! c assoc :table spot)
+                        (do (ctx/update-mem! c assoc :table spot :plan-table spot)
                             (ctx/update-mem! c update :craft dissoc :table-unreachable)
                             :again)
                         (fruitless! c (contract/cause-key e)))))))))
