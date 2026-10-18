@@ -30,9 +30,9 @@
   (is (not (:closed? (read (scanned blocks true)))) "behind a wall: unknown, not read")
   (is (true? (:closed? (read (scanned blocks false)))) "in view: read"))
 
-(deftest cells-read-from-memory-within-sight-are-stale-until-looked-at
+(deftest cells-read-from-memory-are-stale-until-looked-at
   (let [w (scanned blocks false)]
     (swap! (fake/state w) assoc :yaw 180 :pitch 0)
     (perception/pass! (aget w "perception"))
-    (is (seq (pen/stale-in-sight {:primitives w} cells)) "turned away: remembered, within sight range")
-    (is (empty? (pen/stale-in-sight {:primitives (wrapped blocks true)} cells)) "never seen: unknown, not stale")))
+    (is (seq (:remembered (pen/read-pen {:primitives w} cells))) "turned away: remembered")
+    (is (empty? (:remembered (pen/read-pen {:primitives (wrapped blocks true)} cells))) "never seen: unknown, not stale")))
