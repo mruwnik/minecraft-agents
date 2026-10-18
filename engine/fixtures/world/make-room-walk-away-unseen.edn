@@ -1,0 +1,20 @@
+;; Card 72264367: make-room walks away only to a cell the body has seen standable. The body stands in a one-wide tunnel
+;; that is open 8 cells east and ends 1 cell west (rock behind it; the cells 3 and 4 west of the toss are rock never seen).
+;; The junk is thrown east, so the walk-away is west: the old goal was the unseen cell 4 back (rock, goal-not-standable,
+;; go-to gave up), the cell to aim at is the seen open one 1 back. Should-succeed: the run completes with no go-to
+;; gives up (the walk ends arrived: the body is within range of the seen cell). Rock x 10..30, z 12..20, y 0..10; tunnel x 15..24.
+{:defaults
+ {:tags [:make-room :storage :jobs] :time :any :mobs :keep
+  :plot {:height 14}
+  :blocks [[:fill [10 0 12] [30 10 20] "deepslate"] [:fill [15 0 16] [24 2 16] "air"]]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 900 4]]}
+  :limit-s 100}
+ :cases
+ [{:name "dead-end-pocket-walks-to-the-seen-cell-behind"
+   :body {:inventory [["dirt" 64] ["coarse_dirt" 64] ["cobblestone" 64] ["cobbled_deepslate" 64] ["deepslate" 64] ["stone" 64] ["granite" 64] ["diorite" 64] ["andesite" 64] ["tuff" 64] ["gravel" 64] ["netherrack" 64] ["sand" 64] ["red_sand" 64] ["calcite" 64] ["dripstone_block" 64] ["coal" 30] ["diamond" 3] ["wooden_pickaxe" 1] ["stone_pickaxe" 1] ["iron_pickaxe" 1] ["golden_pickaxe" 1] ["diamond_pickaxe" 1] ["netherite_pickaxe" 1] ["wooden_axe" 1] ["stone_axe" 1] ["iron_axe" 1] ["golden_axe" 1] ["diamond_axe" 1] ["netherite_axe" 1] ["wooden_shovel" 1] ["stone_shovel" 1] ["iron_shovel" 1] ["golden_shovel" 1] ["diamond_shovel" 1] ["netherite_shovel" 1]]}
+   :act [[:job (jobs.storage.make-room {:free 6})]]
+   :expect [{:event {:source :job :kind :make-room.tossed} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 90 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 90 :of-job true}
+            {:no-event {:source :job :level :warn} :for-s 90 :until {:source :job :kind :completed}}]
+   :after [[:item "coal" 30] [:item "diamond" 3]]}]}
