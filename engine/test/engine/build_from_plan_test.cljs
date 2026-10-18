@@ -183,6 +183,18 @@
           (is (= {[40 64 0] :unloaded} (:given-up result)))
           (is (= [[40 64 0]] (:missing result))))))))
 
+(deftest a-place-child-that-waits-ends-the-round-instead-of-being-called-again-in-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "near" :parts [{:id "post" :cells [[3 64 0]] :want "oak_fence"}]}
+              {:keys [eng seen]} (start {:inventory kit} {"near" plan})
+              eng (assoc-in eng [:jobs 'jobs.blocks.place] {:round (fn [_] :continue)})
+              result (await (child-outcome eng job {:plan "near"} 30))
+              placed (filter #(= :place (:slot %)) (h/events-of seen :child_started))]
+          (is (= :not-done result))
+          (is (<= (count placed) 30) "at most one place call per tick"))))))
+
 (deftest an-unseen-cell-is-looked-at-before-it-is-given-up
   (async done
     (tu/run-async done

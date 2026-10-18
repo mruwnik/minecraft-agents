@@ -511,13 +511,15 @@
           :again)
       (seq near) (do (await (watch/watch! c {}))
                      (loop [left near]
-                       (when (seq left)
+                       (if (seq left)
                          (if (seals? c (:pos (first left)))
-                           (ctx/update-mem! c #(-> (count-fail % (:pos (first left)) :unreachable (:give-up (:args c)))
-                                                   (assoc :leave (exit-point cells (u/self-pos c)))))
-                           (do (await (place-one! c (first left)))
-                               (recur (rest left))))))
-                     :again)
+                           (do (ctx/update-mem! c #(-> (count-fail % (:pos (first left)) :unreachable (:give-up (:args c)))
+                                                       (assoc :leave (exit-point cells (u/self-pos c)))))
+                               :again)
+                           (if (= :continue (await (place-one! c (first left))))
+                             :continue
+                             (recur (rest left))))
+                         :again)))
       (seq dig-near) (loop [left dig-near]
                        (if (seq left)
                          (if (= :continue (await (dig-one! c (first left))))
