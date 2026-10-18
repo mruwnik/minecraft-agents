@@ -42,10 +42,15 @@
         (* hurt (max 0 (quot (+ steps descent) (inc max-drop)))))
       0)))
 
+(def any-act-fails
+  "The failure statuses every act can return, with their kinds."
+  {"refused-mounted" :condition-failed "unsupported" :impossible "error" :nothing-possible})
+
 (defn ending-of
-  "The ending fn of a primitive whose done statuses are done: timeout is the time line, a cut or a lost connection
-  cuts off, failed is nothing possible, any other status a failed condition named by it."
-  [done]
+  "The ending fn of a primitive whose done statuses are done and whose own failures are fails ({status kind}): timeout is
+  the time line, a cut or a lost connection cuts off, failed is nothing possible, any other status has the kind fails or
+  any-act-fails gives it, else nothing possible."
+  [done fails]
   (fn [r]
     (let [s (some-> r .-status)
           k (keyword s)]
@@ -54,7 +59,7 @@
         (= "timeout" s) (contract/ending :limit-reached {:line :job-time} nil)
         (#{"cut" "offline" "closed" "disconnected"} s) (contract/ending :cut-off k nil)
         (= "failed" s) (contract/ending :nothing-possible :failed nil)
-        :else (contract/ending :condition-failed (or k :no-status) nil)))))
+        :else (contract/ending (get fails s (get any-act-fails s :nothing-possible)) (or k :no-status) nil)))))
 
 (def spawn-s "connect.mjs SPAWN_TIMEOUT_MS: how long one connect waits for the spawn." 60)
 
@@ -73,12 +78,12 @@
 
 (defn fails
   "The failure statuses of a primitive as {status kind}: condition-failed ones name a false precondition, nothing-possible
-  ones an act that ran and did not reach its end. Statuses every act can return are in ending-of and failure-kinds."
+  ones an act that ran and did not reach its end. Statuses every act can return are in any-act-fails."
   [condition-failed nothing-possible]
   (merge (zipmap condition-failed (repeat :condition-failed)) (zipmap nothing-possible (repeat :nothing-possible))))
 
 (defn entry [args target done fails quote-of]
-  {:args args :target target :quote-of quote-of :fails fails :ending (ending-of done)})
+  {:args args :target target :quote-of quote-of :fails fails :ending (ending-of done fails)})
 
 (defn fixed [args target done fails most] (entry args target done fails (fn [_ _] (timed most))))
 
@@ -146,9 +151,3 @@
                                      (js-setting "prim/offline-max-ms" 600000))
                                 1000)]
                        {:uses {:job-time [0 s (+ s (reconnect-s))]}})))})
-
-(def failure-kinds
-  "Every status a primitive reports that is not a done one, with its kind: the entries' :fails and the statuses any act
-  can return. engine/js/prim-statuses.test.mjs fails on a status the JavaScript returns that this file does not name."
-  (merge {"refused-mounted" :condition-failed "unsupported" :impossible "error" :nothing-possible}
-         (into {} (mapcat :fails) (vals table))))

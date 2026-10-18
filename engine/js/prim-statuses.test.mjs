@@ -10,7 +10,7 @@ const classified = new Set(['../src/engine/primitive.cljs'].flatMap(quoted))
 const notActs = new Set(['online'])
 const literal = /(?:status: |(?:result|refuse|outcome)\()'([a-z-]+)'/g
 
-test('every status the primitives return is named in engine.primitive (a done set, failure-kinds or the cut lines)', () => {
+test('every status the primitives return is named in engine.primitive (a done set, :fails or the cut lines)', () => {
   const statuses = readdirSync(dir)
     .filter(f => f.endsWith('.mjs') && !f.includes('test'))
     .flatMap(f => [...readFileSync(new URL(f, dir), 'utf8').matchAll(literal)].map(m => m[1]))

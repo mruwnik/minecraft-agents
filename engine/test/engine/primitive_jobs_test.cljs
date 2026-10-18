@@ -73,25 +73,21 @@
     (is (= {:kind :done :cause :dug} (end #js {:status "dug"})))
     (is (= {:kind :limit-reached :cause {:line :job-time}} (end #js {:status "timeout"})))
     (is (= {:kind :nothing-possible :cause :failed} (end #js {:status "failed"})))
-    (is (= {:kind :condition-failed :cause :unreachable} (end #js {:status "unreachable"})))))
+    (is (= {:kind :nothing-possible :cause :unreachable} (end #js {:status "unreachable"})))))
 
-(deftest an-act-that-ran-and-failed-is-nothing-possible-a-false-precondition-a-failed-condition
-  (let [end #(primitive-job/read-ending ((get-in primitive/table [:dig :ending]) #js {:status %}))]
-    (are [status kind] (= kind (:kind (end status)))
-      "unreachable" :nothing-possible
-      "partial" :nothing-possible
-      "blocked" :nothing-possible
-      "out-of-reach" :nothing-possible
-      "cannot" :nothing-possible
-      "no-item" :condition-failed
-      "missing" :condition-failed
-      "occupied" :condition-failed
-      "gone" :condition-failed
-      "not-night" :condition-failed
-      "monsters-near" :condition-failed
-      "unsupported" :impossible
-      "failed" :nothing-possible)
-    (is (= :unreachable (:cause (end "unreachable"))))))
+(deftest an-act-that-ran-and-failed-is-read-by-its-own-entry
+  (let [end (fn [k status] (:kind ((get-in primitive/table [k :ending]) #js {:status status})))]
+    (are [k status kind] (= kind (end k status))
+      :dig "missing" :condition-failed
+      :dig "unreachable" :nothing-possible
+      :dig "no-item" :nothing-possible
+      :place "no-item" :condition-failed
+      :place "cannot" :nothing-possible
+      :sleep "not-night" :condition-failed
+      :moveTo "partial" :nothing-possible
+      :dig "unsupported" :impossible
+      :dig "refused-mounted" :condition-failed
+      :dig "anything-else" :nothing-possible)))
 
 (defn drops-to [y]
   {:defaults {:floor {:health 15}}
@@ -323,7 +319,7 @@
                                  (stopped seen))))))))))
 
 (deftest every-failure-kind-is-an-ending-kind
-  (is (every? contract/all-kinds (vals primitive/failure-kinds))))
+  (is (every? contract/all-kinds (concat (vals primitive/any-act-fails) (mapcat (comp vals :fails) (vals primitive/table))))))
 
 (deftest every-arg-of-the-table-has-a-spec-of-its-own
   (is (= [] (for [[k {:keys [args]}] primitive/table, arg args :when (not (contains? primitive-job/arg-specs arg))] [k arg])))

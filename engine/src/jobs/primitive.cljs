@@ -24,14 +24,6 @@
 (a/defargs settings
   {::job-time-s {:default 300 :doc "Seconds one primitive act may take before it gives up (:limit-reached); an offline act is the longest." :spec (a/num-in 0 nil)}})
 
-(defn read-ending
-  "The table's ending e with the kind its cause has in primitive/failure-kinds when the act failed; an unlisted cause is nothing
-  possible."
-  [e]
-  (if (= :condition-failed (:kind e))
-    (assoc e :kind (get primitive/failure-kinds (name (:cause e)) :nothing-possible))
-    e))
-
 (defn failure-text
   "What a failed act of primitive k met, as the ending's words: its status, the block that holds the cell, its reason."
   [k {:keys [status block reason]}]
@@ -111,6 +103,6 @@
                              (if (.-badArgs err) err (throw err))))]
                 (if (instance? js/Error r)
                   (ctx/end c :impossible {:reason :bad-args :why (.-message r)})
-                  (let [e (read-ending (ending r))]
-                    (let [data (js->clj r :keywordize-keys true)]
-                      (ctx/end c (:kind e) (:cause e) (cond-> data (not= :done (:kind e)) (assoc :text (failure-text k data)))))))))}))
+                  (let [e (ending r)
+                        data (js->clj r :keywordize-keys true)]
+                    (ctx/end c (:kind e) (:cause e) (cond-> data (not= :done (:kind e)) (assoc :text (failure-text k data))))))))}))
