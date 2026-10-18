@@ -27,6 +27,19 @@
             {:event {:source :job :kind #{:leave-tunnel.done :leave-tunnel.open}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :leave-tunnel.escape :level :warn} :for-s 140 :until {:source :job :kind #{:leave-tunnel.done :leave-tunnel.open :leave-tunnel.stopped}} :of-job true}
             {:no-event {:source :job :kind :leave-tunnel.stopped} :for-s 140 :until {:source :job :kind #{:leave-tunnel.done :leave-tunnel.open}} :of-job true}]}
+  {:name "no-pickaxe-digs-own-way-out-by-hand"
+   :body {:inventory [["cobblestone" 4]]}
+   :act [[:job (jobs.access.leave-tunnel {:tunnel {:line {:entry #at [11 10 20] :heading :east :dir :down :steps 4 :run 0
+                                                          :stand #at [15 6 20] :target #at [16 6 20]}
+                                                   :dug [{:cell #at [12 9 20] :block "stone"} {:cell #at [13 9 20] :block "stone"}
+                                                         {:cell #at [13 8 20] :block "stone"} {:cell #at [14 9 20] :block "stone"}
+                                                         {:cell #at [14 8 20] :block "stone"} {:cell #at [14 7 20] :block "stone"}
+                                                         {:cell #at [15 8 20] :block "stone"} {:cell #at [15 7 20] :block "stone"}
+                                                         {:cell #at [15 6 20] :block "stone"}]
+                                                   :torches []}})]]
+   :expect [{:event {:source :job :kind #{:leave-tunnel.done :leave-tunnel.open}} :within-s 280 :of-job true}
+            {:no-event {:source :job :kind :leave-tunnel.stopped} :for-s 280 :until {:source :job :kind #{:leave-tunnel.done :leave-tunnel.open}} :of-job true}]
+   :limit-s 300}
   {:name "blown-torch-is-not-taken"
    :act [[:job (jobs.access.leave-tunnel {:tunnel {:line {:entry #at [11 10 20] :heading :east :dir :down :steps 4 :run 0
                                                           :stand #at [15 6 20] :target #at [16 6 20]}
