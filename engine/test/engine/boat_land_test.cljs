@@ -232,3 +232,11 @@
 
 (deftest the-landing-record-never-expires
   (is (= :forever (:ttl boat-land/landed-policy)) "a boat left ashore stays owed until seen gone"))
+
+(deftest done-is-ok-only-ashore-at-the-given-cell
+  (let [c (fn [w args] (assoc (st/stub-ctx (:p (lt/setup w))) :args args))
+        ashore (assoc world :self {:pos [21.5 64 10.5]})
+        cell [21 64 10]]
+    (is (= [:ok :ashore] (tu/kind-reason (boat-land/done? (c ashore {:pos cell})))))
+    (is (= :later (first (tu/kind-reason (boat-land/done? (c world {:pos cell}))))) "still on the boat")
+    (is (= :later (first (tu/kind-reason (boat-land/done? (c ashore {}))))) "no cell to be ashore on")))

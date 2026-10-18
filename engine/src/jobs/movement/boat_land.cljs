@@ -85,12 +85,18 @@
 
 (def can-run? not-aboard)
 
+(def ashore-range "How near a given land cell the body stands once it is ashore there." 1.5)
+
 (defn done?
-  "Never done? itself: off the boat the landing is still to be recorded (event, recovery), by the round."
+  "Ok when off the boat on the given land cell with no recovery owed; else later (the round records the landing and ends)."
   [c]
-  (let [off (not (vehicle/mounted? (:primitives c)))]
-    (contract/later :landing (if off "off the boat, the landing is to be recorded" "on the boat")
-                    :units :landings :done 0 :left 1)))
+  (let [p (:primitives c)
+        cell (given-pos c)]
+    (if (and cell (not (vehicle/mounted? p)) (not (landed-boat c))
+             (<= (u/dist (u/self-pos c) (vehicle/centre cell)) ashore-range))
+      (contract/ok :ashore "ashore on the land cell")
+      (contract/later :landing (if (vehicle/mounted? p) "on the boat" "off the boat, the landing is to be recorded")
+                      :units :landings :done 0 :left 1))))
 
 (def drive-s "Seconds a landing takes, for the quote." 20)
 
