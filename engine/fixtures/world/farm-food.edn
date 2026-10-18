@@ -1,9 +1,9 @@
 ;; Cards b94798ac, e5ecc2e2: the farm food rules. The food reserve is 3 days of food, 60 hunger points (bread 5, carrot 3,
 ;; cooked_beef 8; best food first). Seed above a 64 backup stack is composted, crops above the reserve are stored, carrots
-;; and potatoes are sown only above the reserve (a cell harvest just cut is always replanted).
+;; and potatoes are sown only above the reserve (a cell harvest just cut is always replanted), get-food :stock counts real food points.
 ;; Should-succeed: tend composts 6 of 70 seeds and stores 5 of 20 carrots (3 bread = 15 points, so 15 carrots stay);
 ;; default deposit keeps 12 bread; 30 carrots + 3 bread are tilled and sown; harvest replants its own cell with 15 carrots;
-;; plant sows wheat seeds beside 15 carrots.
+;; plant sows wheat seeds beside 15 carrots; get-food :stock takes 8 cooked_beef (60 points) from a booked chest and deposit stocks another chest with it.
 ;; Should-fail: 12 carrots and no seed (nothing to compost, store or sow: tend waits :nothing-to-do); 15 carrots with a hoe
 ;; and untilled dirt (tends nothing); plant with only 15 carrots waits :food-reserve.
 ;; Floor y -1 is the ground layer; farmland at y -1 with water beside, crops at y 0. Chest [9 0 16], composter [11 0 16].
@@ -65,4 +65,13 @@
    :body {:inventory [["carrot" 15] ["wheat_seeds" 4]]}
    :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :fetch false})]]
    :expect [{:event {:source :job :kind :completed :data {:planted 4}} :within-s 60 :of-job true}]
-   :after [[:block [10 0 16] "wheat"] [:block [13 0 16] "wheat"] [:item "carrot" 15]]}]}
+   :after [[:block [10 0 16] "wheat"] [:block [13 0 16] "wheat"] [:item "carrot" 15]]}
+  {:name "stock-takes-cooked-beef-up-to-60-points-and-deposit-stocks-a-chest"
+   :blocks [[:set [14 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:cooked_beef\",count:20}]}"] [:set [9 0 16] "chest"]]
+   :memory [{:kind :fetch/stock :data {:pos #at [14 0 16] :items {"cooked_beef" 20}} :policy {:cap 64 :ttl :forever}}]
+   :body {:at [12.5 0 16.5]}
+   :act [[:job (jobs.survival.get-food {:stock 60 :explore false})]
+         [:job (jobs.storage.deposit {:chest #xyz [9 0 16] :items ["cooked_beef"]})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.get-food"}} :within-s 60}
+            {:event {:source :job :kind :completed :data {:name "jobs.storage.deposit"}} :within-s 90}]
+   :after [[:item "cooked_beef" 0]]}]}
