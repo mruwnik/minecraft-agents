@@ -88,6 +88,12 @@
     (is (false? (reach/enclosed? p)))
     (is (= 1 (most-reads reads)))))
 
+(deftest closes-in-ignores-a-fill-that-only-trims-a-room-sized-platform
+  (let [p (tu/fake {:self {:pos body} :floor [-16 -16 15 15]})]
+    (is (false? (reach/enclosed? p)) "a 32 x 32 platform is room")
+    (is (true? (reach/enclosed? p #{[1 65 0]})) "one cell less floods as closed at room-cells")
+    (is (false? (reach/closes-in? p [1 65 0])) "yet the body still has the platform")))
+
 (deftest closes-in-names-the-doorway-and-reads-each-block-once
   (let [doorway (apply dissoc walls ["1,64,0" "1,65,0"])
         [p reads] (counting (tu/fake {:self {:pos body} :floor [-30 -30 30 30] :blocks doorway}))]

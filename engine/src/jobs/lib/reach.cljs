@@ -381,10 +381,16 @@
       (when (and name (str/ends-with? name "_door") (not (open-prop? b)))
         (door-panel-step (some-> b .-properties .-facing))))))
 
+(def shut-room-cells
+  "Cells a body must still reach after a cell is filled for it not to count as shut in by that fill: half of
+  room-cells, so a fill that trims a region of about room-cells (a plot-sized platform) by one cell does not shut it in."
+  (quot room-cells 2))
+
 (defn shut-in?
-  "Whether the body is shut in: it can walk to fewer than room-cells cells over kind-at. A body in the free part of a
-  shut door's cell cannot step across the panel."
-  [p kind-at]
+  "Whether the body is shut in: it can walk to fewer than budget (default room-cells) cells over kind-at. A body in
+  the free part of a shut door's cell cannot step across the panel."
+  ([p kind-at] (shut-in? p kind-at room-cells))
+  ([p kind-at budget]
   (let [{:keys [x y z] :as start} (standing-cell p kind-at)
         panel (panel-step p kind-at start)
         next-cells (fn [cx cy cz]
@@ -392,7 +398,7 @@
                        (if (and panel (== cx x) (== cy y) (== cz z))
                          (.filter ns (fn [n] (not (and (== (- (aget n 0) x) (first panel)) (== (- (aget n 2) z) (second panel))))))
                          ns)))]
-    (= :closed (flood next-cells [x y z] room-cells))))
+    (= :closed (flood next-cells [x y z] budget)))))
 
 (defn enclosed?
   "Whether the body is shut in: it can walk to fewer than room-cells cells (one step up, up to three down, water swum,
@@ -401,19 +407,21 @@
   solid: a set of cells [x y z] treated as solid blocks (what if they were filled)."
   ([p] (enclosed? p #{}))
   ([p solid] (enclosed? p solid (lookup p body-kind-of)))
-  ([p solid base]
+  ([p solid base] (enclosed? p solid base room-cells))
+  ([p solid base budget]
    (if (some-> (.self p) .-pos)
      (shut-in? p (if (empty? solid)
                    base
-                   (fn [x y z] (if (contains? solid [x y z]) :solid (base x y z)))))
+                   (fn [x y z] (if (contains? solid [x y z]) :solid (base x y z))))
+               budget)
      false)))
 
 (defn closes-in?
-  "Whether the body has room to walk now but would be shut in with cell [x y z] solid. Both floods read the cells
-  through one lookup."
+  "Whether the body has room to walk now but would be left fewer than shut-room-cells cells with cell [x y z] solid.
+  Both floods read the cells through one lookup; the filled one goes first, as it is mostly open."
   [p cell]
   (let [base (lookup p body-kind-of)]
-    (boolean (and (not (enclosed? p #{} base)) (enclosed? p #{(vec cell)} base)))))
+    (boolean (and (enclosed? p #{(vec cell)} base shut-room-cells) (not (enclosed? p #{} base))))))
 
 (defn seen-free? [p kind-at x y z]
   (and (some? (u/seen-block p {:x x :y y :z z})) (passable? kind-at x y z)))

@@ -44,8 +44,9 @@
   One call works until the plan is built or nothing more applies (it yields only while a walk or fetch waits). Every
   step re-reads the plan and the world, then takes the first step that applies:
   0. A buildable cell under the body's feet or head makes it walk out of the footprint first (once per cell) when it
-     stands on ground the plan did not build, so that cell is placed from outside before the walls close round the body.
-     A place that would shut the body in (it has a way out and would have none) is held back; the body first walks
+     stands on ground the plan did not build, so that cell is placed from outside before the walls close round the body;
+     standing on a built cell of the plan, it does so only when nothing else is left to place.
+     A place that would shut the body in (it has room and would be left under half of it) is held back; the body first walks
      out of the plan's footprint (go-to child), then places from outside. Held back :give-up times, a cell is given
      up as :unreachable.
   1. Place every buildable cell within :reach of the eye, lowest first. A cell is buildable when its block is
@@ -308,17 +309,14 @@
 ;; ------------------------------------------------------------------ keeping a way out
 
 (defn seals?
-  "Whether placing at cell would shut the body in: it has a way out now (jobs.lib.reach/enclosed?) and would have none
-  with the cell solid. Only a cell at the body's own height band (feet to a block above the head) can; the flood is
-  bounded (reach/room-cells)."
+  "Whether placing at cell would shut the body in: it has room now and would have too little with the cell solid
+  (jobs.lib.reach/closes-in?). Only a cell at the body's own height band (feet to a block above the head) can."
   [c cell]
   (let [p (:primitives c)
         by (js/Math.floor (:y (u/self-pos c)))
         cy (second cell)]
-    ;; the flood with the cell solid first: most cells do not shut the body in, and then the second flood is skipped
     (boolean (and (<= by cy (+ by 2))
-                  (reach/enclosed? p #{(vec cell)})
-                  (not (reach/enclosed? p))))))
+                  (reach/closes-in? p cell)))))
 
 (defn exit-point
   "A cell two blocks outside the box of the planned cells, on the side nearest the body, at its feet height."
@@ -486,6 +484,9 @@
         feet (first (sort mine))
         on-ground (not-any? #(= (update (:pos %) 1 inc) feet) cells)
         underfoot (when on-ground (first (filter #(mine (:pos %)) wanted)))
+        ;; standing on a cell of the plan itself, the body has no ground to leave from until nothing else is left to place
+        standing (let [cell (first (filter #(mine (:pos %)) wanted))]
+                   (when (and cell (not= (:pos cell) (:stepped-off (ctx/mem c)))) cell))
         dig-near (in-dig-reach c digs)
         nearest #(first (sort-by (fn [cell] (u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos cell)))) %))]
     (cond
@@ -515,6 +516,8 @@
       (seq digs) (await (walk-to! c cells (nearest digs)))
       (seq (support-looks c wanted)) (await (look-for-support! c cells (support-looks c wanted)))
       (seq (unseen cells given-up)) (await (walk-to! c cells (nearest (unseen cells given-up))))
+      standing (do (ctx/update-mem! c assoc :leave (exit-point cells (u/self-pos c)) :stepped-off (:pos standing))
+                   :again)
       :else (let [before (ctx/mem c)]
               (ctx/update-mem! c retry-walks (u/self-pos c) true)
               (if (= before (ctx/mem c)) (finish! c cells) :again)))))

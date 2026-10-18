@@ -1,6 +1,6 @@
 ;; Card 7616f6fc: jobs.build.from-plan raises a temporary pillar (jobs.access.pillar, ledgered) to place wall rows no ground stand
 ;; reaches, with its base outside every footprint, and jobs.access.cleanup takes it back.
-;; tall-wall-from-a-pillar: a 3 x 6 stone wall (y 0..5 at z 20) is built complete and the pillar's dirt is back in the bag.
+;; tall-wall-from-a-pillar: a 3 x 9 stone wall (y 0..8 at z 20; ground reaches y 5) is built complete and the pillar's dirt is back in the bag.
 ;; every-base-refused: another body's plan footprint rings the wall to radius 5, so no pillar base is allowed: the rows in reach are
 ;; built, the rest is refused (build.refused) and nothing is placed outside the wall.
 {:defaults
@@ -8,17 +8,17 @@
   :time :any
   :plot {:height 24 :floor "grass_block"}
   :plans [{:id "wall" :metadata {:by "$body"}
-           :parts [{:id "w" :box [#at [15 0 20] #at [17 5 20]] :want "stone"}]}]
-  :body {:at [16.5 0 12.5] :yaw 0 :inventory [["stone" 18] ["dirt" 8]] :effects [["resistance" 600 4]]}
-  :limit-s 200}
+           :parts [{:id "w" :box [#at [15 0 20] #at [17 8 20]] :want "stone"}]}]
+  :body {:at [16.5 0 12.5] :yaw 0 :inventory [["stone" 27] ["dirt" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 330}
  :cases
  [{:name "tall-wall-from-a-pillar"
    :act [[:job (jobs.build.from-plan {:plan "$plan:wall"})]]
-   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 180 :of-job true}]
-   :after [[:block [15 5 20] "stone"] [:block [17 5 20] "stone"] [:item "dirt" 8]]}
+   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 300 :of-job true}]
+   :after [[:block [15 8 20] "stone"] [:block [17 8 20] "stone"] [:item "dirt" 8]]}
   {:name "every-base-refused"
    :plans [{:id "wall" :metadata {:by "$body"}
-            :parts [{:id "w" :box [#at [15 0 20] #at [17 5 20]] :want "stone"}]}
+            :parts [{:id "w" :box [#at [15 0 20] #at [17 8 20]] :want "stone"}]}
            {:id "ring" :metadata {:by "SomeoneElse"}
             :parts [{:id "n" :box [#at [10 -1 15] #at [22 1 19]] :want "dirt"}
                     {:id "s" :box [#at [10 -1 21] #at [22 1 25]] :want "dirt"}
@@ -26,5 +26,5 @@
                     {:id "e" :box [#at [18 -1 20] #at [22 1 20]] :want "dirt"}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:wall"})]]
    :expect [{:event {:source :job :kind :build.refused} :within-s 120 :of-job true}]
-   :after [[:not-block [16 5 20] "stone"] [:item "dirt" 8]]
+   :after [[:block [16 5 20] "stone"] [:not-block [16 8 20] "stone"] [:item "dirt" 8]]
    :limit-s 150}]}

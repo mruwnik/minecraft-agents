@@ -989,6 +989,18 @@
           (is (= [] (:refused result)) "the floor under it is unseen: not a hazard to refuse, a dig to make from beside")
           (is (= "oak_planks" (block p [0 63 0]))))))))
 
+(deftest a-body-standing-on-the-wall-it-built-steps-off-to-place-its-own-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells [[2 64 2] [2 65 2] [3 65 2]]
+              {:keys [eng p]} (start {:self {:pos {:x 2.5 :y 65 :z 2.5}} :blocks {"2,64,2" "dirt"}
+                                      :inventory [{:name "dirt" :count 4}]}
+                                     {"wall" {:id "wall" :parts [{:id "w" :cells cells :want "dirt"}]}})
+              result (await (child-outcome eng job {:plan "wall"} 200))]
+          (is (= [] (:missing result)) "the cell it stood in is placed once it stepped off")
+          (is (every? #(= "dirt" (block p %)) cells)))))))
+
 ;; ---------------------------------------------------------------- lava a dig lays open
 
 (deftest a-clear-cell-over-hidden-lava-is-dug-and-the-lava-under-it-sealed
@@ -1203,7 +1215,7 @@
       (fn ^:async t []
         (let [plan {:id "box" :parts [{:id "walls" :outline [[10 64 10] [13 65 13]] :want "dirt"}
                                       {:id "roof" :box [[10 66 10] [13 66 13]] :want "dirt"}]}
-              island (into {} (concat (for [x (range 0 32) z (range 0 32)] [(h/cell-key x 61 z) "stone"])
+              island (into {} (concat (for [x (range 0 48) z (range 0 48)] [(h/cell-key x 61 z) "stone"])
                                       (for [x (range 9 15) z (range 9 15)] [(h/cell-key x 63 z) "stone"])))
               {:keys [eng p]} (start {:blocks island :inventory [{:name "dirt" :count 64}]
                                       :self {:pos {:x 11.5 :y 64 :z 11.5}}}
