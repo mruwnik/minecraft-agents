@@ -1,6 +1,7 @@
 ;; Card 89ea66f3 (go-to look-at-drops!): a landing is priced only on blocks the body has seen; an unseen wall of a pad is no wall (Q266), and a plain floor is a plain fall.
 ;; A stone block y 0..5 (the body on top at feet y 6, x 8.5), walls all round, the drop east of its edge at x 16 (6 blocks). :floor {:health 18} leaves 2 hp, so only a free landing may be taken.
 ;; The should-succeed side (the 6 and 10 drops looked at from the lip, then taken onto slime walled with glass) is go-to-slime/drop-6-shaft-walled-6-high-is-free-at-floor-18 and shaft-walled-10-high-is-free-at-floor-14.
+;; Card 7f1f9a83: the look over the edge first walks to the takeoff cell by a planned leg; a 2-wide pit (x 10..11, z 12..20) lies on the straight line from the body to the edge, so a blind sneak east would go into it. Both cases must end with no fall damage; the pool drop is seen from the lip and taken.
 ;; Should-fail: the drop onto the plain floor (3 hp), and onto one slime block in a 1x1 stone shaft (the wall under the body's feet is never seen).
 {:defaults
  {:tags [:movement :planner]
@@ -21,4 +22,16 @@
    :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 0 :ways #{:walk :clear-seal} :floor {:health 18}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind :result}}]
-   :after [[:body-far [16.5 0 16.5] 4]]}]}
+   :after [[:body-far [16.5 0 16.5] 4]]}
+  {:name "drop-6-look-walks-around-pit-and-refuses"
+   :blocks [[:fill [10 0 12] [11 5 20] "air"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 18}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind :result}}]
+   :after [[:body-far [24.5 0 16.5] 4]]}
+  {:name "drop-6-into-seen-pool-after-walking-around-pit-arrives"
+   :blocks [[:fill [10 0 12] [11 5 20] "air"] [:fill [18 0 12] [26 0 20] "water"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 18}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind :result}}]
+   :after [[:body-near [22.5 0 16.5] 3]]}]}
