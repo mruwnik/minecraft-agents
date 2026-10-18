@@ -211,14 +211,24 @@
                                  (/ mute-ms 1000) " s, one that comes into sight is fought")))
     :left-heard))
 
+(defn begun-fight?
+  "Pure: whether the :hostile entry e (decision, mob, time t) is a fight against one of the mobs now near (names) that
+  was decided or last struck at (the later of e's time and last-hit-t) within window-ms of now."
+  [e last-hit-t names now window-ms]
+  (boolean (and e (= :fight (get-in e [:data :decision]))
+                (some #{(get-in e [:data :mob])} names)
+                (> (max (:t e) (or last-hit-t 0)) (- now window-ms)))))
+
 (defn fight-begun?
-  "Whether this call or the last refire (a :hostile entry within ::struck-s) decided to fight: a reflex that refired
-  mid-fight is the same fight."
-  [c m]
+  "Whether this call or the last refire decided to fight these mobs: a reflex that refired mid-fight is the same fight,
+  which lasts ::struck-s past its entry or its last hit; a fight against another mob is a fresh one."
+  [c m near]
   (or (= :fight (:decision m))
-      (let [e (mem/latest (ctx/view c) :hostile)]
-        (boolean (and (= :fight (get-in e [:data :decision]))
-                      (> (:t e) (- (ctx/now c) (* 1000 (settings/get settings ::struck-s)))))))))
+      (begun-fight? (mem/latest (ctx/view c) :hostile)
+                    (:t (mem/latest (ctx/view c) :struck-hits))
+                    (map #(.-name %) near)
+                    (ctx/now c)
+                    (* 1000 (settings/get settings ::struck-s)))))
 
 (defn ^:async respond [c near]
   (let [{:keys [reserve] :as a} (:args c)
@@ -230,7 +240,7 @@
         chosen (if (some combat/enderman? near)
                    :flee
                    (cost/decide {:health (.-health self)
-                               :fighting? (fight-begun? c m)
+                               :fighting? (fight-begun? c m near)
                                :single? (= 1 (count near))
                                :cannot-outrun? (not (cost/outruns? (or (.-food self) 20) (map cost/mob-kind (remove combat/ranged? near))))
                                :creeper? (boolean (some combat/creeper? near))

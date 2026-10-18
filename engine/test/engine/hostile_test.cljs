@@ -161,6 +161,17 @@
     {:health 8 :fighting? true :single? true} :flee
     {:health 18 :fighting? true :single? true :creeper? true} :flee))
 
+(deftest a-begun-fight-is-the-same-mob-and-lasts-from-the-last-hit
+  (let [entry (fn [t mob decision] {:t t :data {:mob mob :decision decision}})]
+    (are [e last-hit names expected] (= expected (respond-to-hostile/begun-fight? e last-hit names 100000 30000))
+      (entry 80000 "zombie" :fight) nil ["zombie"] true
+      (entry 80000 "zombie" :fight) nil ["skeleton"] false
+      (entry 80000 "zombie" :fight) nil ["skeleton" "zombie"] true
+      (entry 60000 "zombie" :fight) nil ["zombie"] false
+      (entry 60000 "zombie" :fight) 90000 ["zombie"] true
+      (entry 80000 "zombie" :flee) nil ["zombie"] false
+      nil nil ["zombie"] false)))
+
 (deftest a-mob-that-outruns-the-body-is-no-reason-to-start-a-fight-but-a-fight-begun-goes-on
   (are [world expected] (= expected (cost/decide (merge {:reserve 4 :damage 16 :health 18} world)))
     {} :flee
