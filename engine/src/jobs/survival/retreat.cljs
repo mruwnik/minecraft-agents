@@ -49,7 +49,7 @@
   2b. A lone melee mob (no creeper, enderman, spider, flyer or shooter) between ::cover-gap (5) and ::refuge-gap (10) that a fight would not win, with
      pillar-height blocks carried: pillar up, else seal in, before any flee step (a walk gains little on it); when neither can be
      done the flight walks. Each flee step emits debug retreat.step-speed {:blocks :seconds :bps}.
-  3. Walks a short step (:step blocks) away from all chasers (nearer ones weigh more) with a go-to child (:ways #{:walk :clear-seal}),
+  3. Walks a short step (the retreat-flight ::step setting, 6 blocks) away from all chasers (nearer ones weigh more) with a go-to child (:ways #{:walk :clear-seal}),
      leaning toward the first closed room of 2. (else a home it is nearer to than every hostile it knows, none on the way; else the :goal, the destination of the walk the flight
      interrupted, while it is safe: jobs.survival.retreat-goal/verdict, judged every step in three dimensions against every hostile it knows and the places of those it fled lately; else the latest :bed or :home within retreat-cover/home-range) when not through the
      hostiles (a closed room behind them: turned retreat-walk ::flank-turn degrees toward it, to go round them, while it still gains on them so:
@@ -71,7 +71,7 @@
   not a creeper or an enderman): no flee step. After the door and room steps (1., 2., the race at each chaser's own
   speed) it takes the cornered options (4.) without the back-off.
   4. Cornered (no open direction worth a walk, or the walk is blocked, or a melee hostile within 3 hit the body since the last step, or melee mobs within close-radius hit it retreat-cornered/::beaten-hits (2) times within its ::hurt-window-s: it cannot be outrun, and the fight is weighed over those hostiles alone; checked afresh every step) with no hostile within
-     :radius: holds a second (wait, why cornered) and looks again; after :no-gain-steps such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
+     :radius: holds a second (wait, why cornered) and looks again; after the retreat-flight ::no-gain-steps setting (20) of such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
      - an angry enderman near (one the client flags angry, that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else a seen 2-high gap under a roof within 8 blocks (a 3-tall enderman cannot enter; walks there and holds), else plug in, last of all fight.
      - a drowned near while the body is in water (and no fight wins): swims to the nearest seen dry stand within 16 blocks first (past the mob if need be), before seal, pillar or a fist fight.
      - fight (jobs.survival.fight-back) only when jobs.lib.cost/fight-damage leaves :reserve health. Never against a creeper.
@@ -82,7 +82,7 @@
        Not against a ranged mob or a spider (it climbs the pillar). Every block goes to the scaffold ledger (purpose :pillar) for jobs.access.cleanup.
      - back off: a step of up to 2 cells in any of 8 directions that gains at least a block on the hostile.
      - last of all, fight with the best weapon or tool (pickaxe, shovel, hoe) or the fist. A body with no weapon
-       (the call's :use :tools, else jobs.lib.combat/default-weapons) first looks for a way to walk once more (:fist-sweeps, default 1).
+       (the call's :use :tools, else jobs.lib.combat/default-weapons) first looks for a way to walk once more (retreat-cornered ::fist-sweeps, 1).
        A pillared body that is hit raises the pillar `retreat-pillar/::pillar-extend` (2) blocks, once, before the refuge fails.
      Order: fight if it wins, then plug in (walls), pillar (not against a ranged mob or a spider), back off (not from a mob that outruns the body), plug in by a pit or pocket (not at home), fight.
      Against a creeper back off comes first.
@@ -95,13 +95,13 @@
      (one retreat_blocked warning per flight).
   Plugged in or up a pillar it hides (one retreat_sealed warning; a declared hold, wait why hiding) while a
   hostile within its follow range (jobs.lib.threats; ranged ones at least :ranged-radius) would have a walkable way to
-  the refuge if its own blocks were gone, and for :quiet-s more after the last such danger (a silent mob is forgotten
-  after a few seconds); then the flight ends :hidden. After :hide-s in the refuge with no real danger on the body as it
+  the refuge if its own blocks were gone, and for the retreat-refuge ::quiet-s setting (30 s) more after the last such danger (a silent mob is forgotten
+  after a few seconds); then the flight ends :hidden. After the ::hide-s setting (60 s) in the refuge with no real danger on the body as it
   stands (jobs.lib.danger/danger-near?, the hostile-near trigger's test) it ends :hidden even while that hostile stays;
   the refuge stays, its plugs too while a hostile is near (jobs.access.cleanup).
   A chase is bounded by the call's time spend (default ::job-time-s): past it the flight ends limit-reached :job-time where it
   stands (refuge included) and the hostile trigger fires again while the danger stays. With no new best gap to the
-  nearest chaser in :no-gain-steps steps it takes the cornered options instead of walking on; it ends nothing-possible
+  nearest chaser in ::no-gain-steps (20) steps it takes the cornered options instead of walking on; it ends nothing-possible
   :cannot-escape only once every option failed in two sweeps in a row with no gain between.
   Each change of what it chose among is said in one retreat.choice info: the hostiles and where, every closed room and why
   it is not run to, the cells that are no closed room, the home and why it is no run (:home-why), the goal and why it is dropped, where it leans.
@@ -115,18 +115,11 @@
   {:radius {:doc "hostiles within this many blocks start a flight" :spec (a/num-in 0 nil) :default 8}
    :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks start a flight" :spec (a/num-in 0 nil) :default 16}
    :goal {:doc "a position {:x :y :z} the flight walks to with go-to legs (planner danger costs keep it round the hostiles) while the body outruns them (done within 3 blocks of it; given up for jobs.survival.retreat-goal/retry-s after a leg that lost ground or left the goal's height), else leans toward, like a refuge; nil: away only" :spec goal/pos-spec :default nil}
-   :step {:doc "blocks per walk" :spec (a/num-in 1 nil) :default 6}
    :reserve {:doc "health a cornered fight must be expected to leave" :spec (a/num-in 0 nil) :default cost/default-reserve}
    :max-places {:doc "seal placements per step" :spec (a/int-in 1 nil) :default 4}
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pocket or pit is dropped and the lava left" :spec #{:seal :stop} :default :seal}
-   :quiet-s {:doc "a hidden body keeps its refuge this many seconds after the last danger" :spec (a/num-in 0 nil) :default 30}
-   :hide-s {:doc "a hidden body hands back after this many seconds in its refuge, though a danger it keeps off stays, once no real danger is on it as it stands" :spec (a/num-in 0 nil) :default 60}
    :swim-factor {:doc "blocks of walking a block of swimming costs a flight; nil: jobs.lib.cost/swim-factor of the boots" :spec (a/num-in 1 nil) :default nil}
-   :hide-health {:doc "at or under this health, in a ranged chaser's line of fire with no covered step, take cover where it stands before walking on" :spec (a/num-in 0 20) :default 12}
-   :no-gain-steps {:doc "flight steps without a new best gap to the nearest chaser before the cornered options are tried" :spec (a/int-in 1 nil) :default 20}
-   :fist-sweeps {:doc "times a body with no weapon, every cornered option failed, looks for a way to walk before it punches a hostile it would not beat; 0: it punches at once" :spec (a/int-in 0 nil) :default 1}})
-
-
+   :hide-health {:doc "at or under this health, in a ranged chaser's line of fire with no covered step, take cover where it stands before walking on" :spec (a/num-in 0 20) :default 12}})
 
 (a/defargs settings
   {::job-time-s {:default 420 :doc "Seconds of a flight's time spend (its pauses not counted): past it the flight ends limit-reached and the hostile trigger fires again while the danger stays." :spec (a/num-in 0 nil)}
@@ -179,8 +172,7 @@
   "One step of the flight (flight/look!, then retreat-choose picks: shut a door, run home, walk a step away or the
   cornered options), :again; the flight's end (flight/end-flight!) once no chaser is left."
   [c]
-  (let [{:keys [no-gain-steps]} (:args c)
-        p (:primitives c)
+  (let [p (:primitives c)
         threats (flight/look! c)
         threat (first threats)
         hit? (or (cornered/hit-on-the-run! c) (cornered/beaten? c))
@@ -205,12 +197,12 @@
                 (if (seq (cornered/near-hostiles c))
                   (await (cornered/cornered! c why (or inside? (and (seq blast) (retreat-home/in-home? c (cover/home-pos c))))))
                   (do (ctx/update-mem! c update :since-gain (fnil inc 0))
-                      (if (flight/no-gain? (ctx/mem c) no-gain-steps)
+                      (if (flight/no-gain? (ctx/mem c) (flight/no-gain-steps))
                         (flight/end-flight! c :keeps-off)
                         (await (wait-far! c))))))
         near (when threat (cornered/near-hostiles c))
         {:keys [option why reset-gain?]}
-        (choose/choose {:threat threat :early early :no-gain? (flight/no-gain? (ctx/mem c) no-gain-steps)
+        (choose/choose {:threat threat :early early :no-gain? (flight/no-gain? (ctx/mem c) (flight/no-gain-steps))
                         :angry-enderman? (and threat (cornered/angry-enderman? c near)) :hit? hit?
                         :flyer? (some combat/flyer? near) :door door :inside? inside?
                         :home-door (when inside? (retreat-doors/home-door c room)) :way way

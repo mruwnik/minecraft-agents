@@ -21,7 +21,8 @@
   {:cap 8 :ttl sh-clock/ms-per-day})
 
 (a/defargs settings
-  {:jobs.survival.night.sites/max-sites {:default 4 :doc "Failed sites a night tries before holding exposed." :spec (a/int-in 0 nil)}
+  {:jobs.survival.night.sites/home-radius {:default 12 :doc "A remembered roofed place (:roofed-places) this close is walked into, whatever the light, before a bed is used or put down; a carried bed is never put down in the open while one is." :spec (a/num-in 0 nil)}
+   :jobs.survival.night.sites/max-sites {:default 4 :doc "Failed sites a night tries before holding exposed." :spec (a/int-in 0 nil)}
    :jobs.survival.night.sites/relocate-reach {:default 16 :doc "How far (blocks) a night looks for a spot to dig in." :spec (a/int-in 0 nil)}
    :jobs.survival.night.sites/retry-after-ms {:default 660000 :doc "How long a body holds exposed before it tries to dig in again (past dig-in's own 10-minute give-up)." :spec (a/int-in 0 nil)}
    :jobs.survival.night.sites/max-retries {:default 2 :doc "Dig-in retries after a night went exposed." :spec (a/int-in 0 nil)}
@@ -30,6 +31,7 @@
    :jobs.survival.night.sites/cave-candidates {:default 16 :doc "Seen cave cells costed per flee: the nearest ones." :spec (a/int-in 0 nil)}
    :jobs.survival.night.sites/dig-in-seconds {:default 8 :doc "What digging in costs (seconds, as go-to prices a route): a roofed place is walked to when go-to's planned route costs no more." :spec (a/num-in 0 nil)}
    :jobs.survival.night.sites/cave-scan {:default 2048 :doc "Solid blocks one cave search reads: nearest first, so it reaches about 16 blocks around the body." :spec (a/int-in 0 nil)}})
+(defn home-radius [] (settings/get settings :jobs.survival.night.sites/home-radius))
 (defn dig-in-seconds [] (settings/get settings :jobs.survival.night.sites/dig-in-seconds))
 (defn max-sites [] (settings/get settings :jobs.survival.night.sites/max-sites))
 
@@ -154,9 +156,9 @@
       (if (await (cheap-route? c place)) place (recur more)))))
 
 (defn near-roofed-home
-  "The nearest roofed place of :roofed-places within :home-radius, lit or not, as {:name :pos}, or nil."
+  "The nearest roofed place of :roofed-places within the ::home-radius setting, lit or not, as {:name :pos}, or nil."
   [c]
-  (first (roofed-places-in c (:home-radius (:args c)))))
+  (first (roofed-places-in c (home-radius))))
 
 (defn roof-walk-wanted?
   "Whether to walk to a roofed place before digging in: none failed tonight, no dig-in in flight, no walk failed."

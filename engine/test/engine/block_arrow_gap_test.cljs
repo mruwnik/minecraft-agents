@@ -129,7 +129,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen] :as s} (setup [] {:blocks ground})]
-          (await (run-job! s {:reach 0}))
+          (await (run-job! s {:settings {:jobs.survival.block-arrow-gap/reach 0}}))
           (is (= :no-gap (:reason (failed seen)))))))))
 
 (deftest a-placed-cell-perception-has-not-caught-up-with-still-counts-as-placed

@@ -293,7 +293,7 @@
         (let [far (drop-item 2 25.5 "diamond_sword")
               {:keys [eng p]} (setup {:floor tu/walk-floor :entities [(drop-item 1 20 "diamond_pickaxe") far]})]
           (die! eng {:pos death-pos :inventory diamonds})
-          (core/submit! eng (list 'jobs.survival.recover-drops {:collect-radius 6}) {})
+          (core/submit! eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}}) {})
           (is (< (await (run-until-empty eng 20)) 20))
           (is (= {"diamond_pickaxe" 1 "diamond_sword" 1} (inv p)))
           (is (= {:decision :collected :items 2} (select-keys (recovered eng) [:decision :items]))))))))
@@ -321,7 +321,7 @@
           (.override (.-world p) "steer"
                      (fn [token a impl] (when @collected (show! true)) (impl token a)))
           (die! eng {:pos death-pos :inventory diamonds})
-          (core/submit! eng (list 'jobs.survival.recover-drops {:collect-radius 8}) {})
+          (core/submit! eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 8}}) {})
           (is (< (await (run-until-empty eng 40)) 40))
           (is (= {"diamond_pickaxe" 1 "diamond_sword" 1} (inv p)) "a short walk round the pile brought it into sight")
           (is (= :collected (:decision (recovered eng)))))))))
@@ -368,7 +368,7 @@
           (.override (.-world p) "steer"
                      (fn [token a impl] (when @hidden (show! true)) (impl token a)))
           (die! eng {:pos death-pos :inventory diamonds})
-          (core/submit! eng (list 'jobs.survival.recover-drops {:collect-radius 8}) {})
+          (core/submit! eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 8}}) {})
           (is (< (await (run-until-empty eng 40)) 40))
           (is (= {"diamond_pickaxe" 1 "diamond_sword" 1} (inv p)) "the walk to where it was last seen found it again")
           (is (= :collected (:decision (recovered eng)))))))))

@@ -19,11 +19,15 @@
 
 (a/defargs settings
   {::leave-for-breakers {:default true :doc "Whether a hidden body leaves its refuge, before it is hit, for a creeper (its blast breaks any refuge) or, on a pillar, a spider (it climbs) within :breaker-reach." :spec boolean?}
-   ::foot-reach {:default 4 :doc "Blocks within which a melee hostile kept off a hidden body counts as waiting at its foot: the hide then outlasts :hide-s, up to ::hide-max-s, since the first step off the refuge would pass it." :spec (a/num-in 0 nil)}
+   ::foot-reach {:default 4 :doc "Blocks within which a melee hostile kept off a hidden body counts as waiting at its foot: the hide then outlasts ::hide-s, up to ::hide-max-s, since the first step off the refuge would pass it." :spec (a/num-in 0 nil)}
+   ::quiet-s {:default 30 :doc "Seconds a hidden body keeps its refuge after the last danger." :spec (a/num-in 0 nil)}
+   ::hide-s {:default 60 :doc "Seconds in its refuge after which a hidden body hands back, though a danger it keeps off stays, once no real danger is on it as it stands." :spec (a/num-in 0 nil)}
    ::hide-max-s {:default 300 :doc "Seconds after which a hidden body hands back though a melee hostile still waits at its foot." :spec (a/num-in 0 nil)}
    ::breaker-reach {:default 6 :doc "Blocks within which a creeper or a climber counts as breaching a hidden body's refuge." :spec (a/num-in 0 nil)}})
 (defn leave-for-breakers? [] (settings/get settings ::leave-for-breakers))
 (defn breaker-reach [] (settings/get settings ::breaker-reach))
+(defn quiet-s [] (settings/get settings ::quiet-s))
+(defn hide-s [] (settings/get settings ::hide-s))
 (defn foot-reach [] (settings/get settings ::foot-reach))
 (defn hide-max-s [] (settings/get settings ::hide-max-s))
 
@@ -148,7 +152,7 @@
 
 (defn ^:async hide-hold!
   "Plugged in or up the pillar: hold (a :wait, why hiding) while the refuge keeps a danger off
-  (refuge-danger?) and :quiet-s after the last one, then end the flight :hidden. Past :hide-s (while a melee hostile waits at the foot, ::hide-max-s) in the refuge with no real
+  (refuge-danger?) and the ::quiet-s setting after the last one, then end the flight :hidden. Past the ::hide-s setting (while a melee hostile waits at the foot, ::hide-max-s) in the refuge with no real
   danger on the body as it stands (danger-q/danger-near?, the hostile-near trigger's test) it ends :hidden at once,
   the trigger fires again should one reach it.
   A body hurt while hidden (a mob reaching it round a corner of the seal) leaves the refuge as failed (abandon-refuge!),
@@ -159,15 +163,15 @@
     (when-not (:hidden-since (ctx/mem c)) (ctx/update-mem! c assoc :hidden-since now)))
   (loop []
     (when (refuge-danger? c (:refuge (ctx/mem c))) (ctx/update-mem! c assoc :quiet-from (ctx/now c)))
-    (let [{:keys [radius ranged-radius quiet-s hide-s]} (:args c)
+    (let [{:keys [radius ranged-radius]} (:args c)
           {:keys [quiet-from hidden-since refuge hold-health]} (ctx/mem c)
           health (.-health (.self (:primitives c)))
           hurt? (< health (or hold-health health))
           breaker (breaker-of c refuge)
           _ (ctx/update-mem! c assoc :hold-health health)
-          quiet? (>= (- (ctx/now c) quiet-from) (* 1000 quiet-s))
+          quiet? (>= (- (ctx/now c) quiet-from) (* 1000 (quiet-s)))
           held-ms (- (ctx/now c) hidden-since)
-          spent? (and (>= held-ms (* 1000 hide-s))
+          spent? (and (>= held-ms (* 1000 (hide-s)))
                       (or (>= held-ms (* 1000 (hide-max-s))) (not (waiting-at-foot? c)))
                       (not (danger-q/danger-near? (:primitives c) radius ranged-radius)))]
       (cond

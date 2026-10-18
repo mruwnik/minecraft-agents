@@ -36,7 +36,7 @@
   Ends :done with the data {:placed [cells]} once none has a line of fire (also when the mob moved away meanwhile), else
   :condition-failed :no-blocks (none carried, nothing fetched) or :refused (every cell that would help is another's zone,
   claim or plan; :ignore-zones? lifts it), or :nothing-possible :no-gap (a line of fire stays and no open cell within
-  :reach would end it), :place-failed or :no-progress (over max-steps rounds).
+  the ::reach setting (3) would end it), :place-failed or :no-progress (over max-steps rounds).
   Does not fight, flee or walk: respond-to-hostile and retreat own that.
   What it placed is what place-all! reports placed (the body trusts its own place, not a view that may lag).
   Filling a doorway can shut the body in: the blocks are the building blocks dig-in shelters with, and a shut-in body
@@ -44,12 +44,12 @@
 
 (a/defargs args
   {:radius {:doc "ranged mobs within this many blocks count" :spec (a/num-in 0 nil) :default 16}
-   :reach {:doc "open cells within this many blocks of the body's feet may be filled" :spec (a/num-in 0 nil) :default 3}
    :ignore-zones? :shared
    :fetch {:doc "get a missing block (jobs.lib.need): true, a set of kinds or a map of limits; false stops :no-blocks" :spec need/option? :default true}})
 
 (a/defargs settings
-  {::job-time-s {:default 120 :doc "Seconds stopping the arrows may take, a block fetch included." :spec (a/num-in 0 nil)}
+  {::reach {:default 3 :doc "Open cells within this many blocks of the body's feet may be filled." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 120 :doc "Seconds stopping the arrows may take, a block fetch included." :spec (a/num-in 0 nil)}
    ::max-steps {:default 12 :doc "Rounds one call takes at most." :spec (a/int-in 0 nil)}})
 (defn max-steps [] (settings/get settings ::max-steps))
 
@@ -141,7 +141,7 @@
   "One cell: :done, :again, or :continue while it fetches a block."
   [c]
   (let [p (:primitives c)
-        within (:reach (:args c))
+        within (settings/get settings ::reach)
         blocks (blocks c)
         dangers (ranged-dangers c)]
     (if (empty? dangers)

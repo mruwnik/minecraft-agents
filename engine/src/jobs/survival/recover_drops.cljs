@@ -51,7 +51,7 @@
   dangerous, fetches the best weapon and armour piece a chest of known stock (:fetch/stock) holds (jobs.lib.need, chests only,
   :fetch false: off) and wears the armour (jobs.items.wear); nothing known to be in a chest: unchanged.
   A kit fetch waiting on the world is waited for (declared hold :fetching-kit); a fetch that ended the job drops the kit (warn recover-drops.kit-dropped).
-  Fetch: walks to the death point (jobs.movement.go-to, in legs of :leg-s seconds; after each leg the value and cost are weighed again from where the body stands, at its health, a pile gone dear with danger backing off as above), then collects (passes, up to 3) the pile's items it can see within :collect-radius
+  Fetch: walks to the death point (jobs.movement.go-to, in legs of :leg-s seconds; after each leg the value and cost are weighed again from where the body stands, at its health, a pile gone dear with danger backing off as above), then collects (passes, up to 3) the pile's items it can see within the ::collect-radius setting (10)
   (jobs.items.collect-drops; only the carried item names, never items out of sight). Drops that went out of sight
   (down a shaft) get one walk to the cell the first was last seen in and a look again before the trip ends :partial, and so do drops never in sight at the pile: once, a walk to four cells 3 blocks round it.
   The pile out of reach (go-to :goal-enclosed, or no item in sight at it) with blocks this body placed within ::seal-radius of it (the scaffold ledger, a flee
@@ -75,11 +75,11 @@
    :danger-radius {:doc "a hostile this close makes the job yield without acting" :spec (a/num-in 0 nil) :default 8}
    :fetch {:doc "get a weapon and armour from a chest whose stock the body knows before walking to a pile its killer guards (jobs.lib.need limits); false: no kit fetch" :spec need/option? :default {:what #{:item} :how #{:chest} :minutes 3}}
    :leg-s {:doc "the walk to the pile goes in legs of this many seconds; after each the danger and the cost are weighed again" :spec (a/num-in 0.1 120) :default 6}
-   :retry {:doc "try a pile again that an earlier run ended :abandoned or declined for a danger still remembered, while its despawn window is open (a reflex run keeps the decision; an agent asks for another try)" :spec boolean? :default false}
-   :collect-radius {:doc "collect the pile's drops within this many blocks of the death point (a pile on open ground rolls 6-8 out)" :spec (a/num-in 0 nil) :default 10}})
+   :retry {:doc "try a pile again that an earlier run ended :abandoned or declined for a danger still remembered, while its despawn window is open (a reflex run keeps the decision; an agent asks for another try)" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::job-time-s {:default 300 :doc "Seconds of the call's time limit: the despawn window, which the job keeps itself in game ticks." :spec (a/num-in 0 nil)}
+  {::collect-radius {:default 10 :doc "Blocks from the death point within which the pile's drops are collected (a pile on open ground rolls 6-8 out)." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 300 :doc "Seconds of the call's time limit: the despawn window, which the job keeps itself in game ticks." :spec (a/num-in 0 nil)}
    ::collect-s {:default 10 :doc "Seconds a collect pass at the pile is reckoned to take, in the job's quote." :spec (a/num-in 0 nil)}})
 
 (def target [])
@@ -391,7 +391,8 @@
 (defn ^:async trip!
   "The decision, then the walk and the collect passes of a trip inside its window."
   [c entry]
-  (let [{:keys [margin collect-radius]} (:args c)
+  (let [{:keys [margin]} (:args c)
+        radius-to-collect (settings/get settings ::collect-radius)
         kit (await (kt/kit! c entry))
         decided (when-not kit (decide! c entry))
         pos (:pos (:data entry))]
@@ -418,7 +419,7 @@
       (and (= :collect (:phase (ctx/mem c))) (> (u/dist (u/self-pos c) pos) (cfg/stray-range)))
       (do (ctx/update-mem! c assoc :phase :go) :next)
 
-      (= :collect (:phase (ctx/mem c))) (await (collect! c pos collect-radius (:inventory (:data entry))))
+      (= :collect (:phase (ctx/mem c))) (await (collect! c pos radius-to-collect (:inventory (:data entry))))
       (and (est/deep-pile c pos) (:blocked (ctx/mem c))) (await (dig-down! c entry pos (est/deep-pile c pos)))
       :else (let [r (await (go! c pos))]
               (if (and (= :unreachable (:cause r)) (:blocked (ctx/mem c)) (est/deep-pile c pos)) :next r)))))

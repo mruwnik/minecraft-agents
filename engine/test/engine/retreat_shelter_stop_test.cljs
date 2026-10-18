@@ -88,7 +88,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [p (await (round (pocket-world "air") {:fist-sweeps 0}))]
+        (let [p (await (round (pocket-world "air") {:settings {:jobs.survival.retreat-cornered/fist-sweeps 0}}))]
           (is (= [[-1 64 0] [-1 65 0]] (calls p "dig")) "both cells dug, the cave behind them showed")
           (is (not-any? #{[0 64 0] [0 65 0]} (calls p "place")) "never sealed in at the way in"))))))
 

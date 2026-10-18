@@ -136,7 +136,7 @@
          flank? (and (some? (or refuge goal)) (cost/outruns-at? (retreat-home/food p) (walk/flank-turn)))]
      (await (glance-away! c (walk/direction from threat-pos home flank?)))
      (walk/choose-target (cornered/block-at-fn p) from threat-pos home (keep (comp :pos :data) (ctx/entries c :hazard))
-                         (:step (:args c)) {:swim-factor (swim-factor c) :covered? covered? :flank? flank?
+                         (flight/walk-step) {:swim-factor (swim-factor c) :covered? covered? :flank? flank?
                           :avoid (flight/avoid-ends c)
                           :refused (:refused (ctx/mem c))
                           :floor (flight/floor c)

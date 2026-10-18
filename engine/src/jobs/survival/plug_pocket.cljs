@@ -15,7 +15,7 @@
   or dug. One call is a whole attempt: :done {:pos :way :pocket} once enclosed, at once when it already is; nothing-possible :failed
   with no pocket that fits, a dig that fails or a way in that cannot be walled. A pocket that lays open fluid or a cave is
   dropped (lava is filled first, :on-lava :seal). With no side that fits at the feet it first walks (go-to) to the nearest seen
-  standing cell within :walk-radius, at the same height, from where one does (a rock wall of the room), not to a cell a hostile
+  standing cell within the ::walk-radius setting (6), at the same height, from where one does (a rock wall of the room), not to a cell a hostile
   stands on; the quote adds the walk. The walls go to the scaffold ledger with :purpose (default :retreat-plug, taken
   back by jobs.access.cleanup once no hostile is near; :shelter is left alone). Quote: time (##Inf when no side fits). Picked by
   jobs.survival.plug-in, which shuts the body in by the cheapest way.")
@@ -25,12 +25,12 @@
    :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
    :radius {:doc "melee hostiles within this many blocks decide which side is walled first and stand in the way of a cell" :spec (a/num-in 0 nil) :default 8}
    :ranged-radius {:doc "ranged hostiles within this many blocks decide which side is walled first" :spec (a/num-in 0 nil) :default 16}
-   :walk-radius {:doc "blocks, at the body's height, within which it walks to a standing cell with a side to pocket when none fits where it stands (0: never walks; at most 16, the body sees no farther and the scan reads every cell of the square)" :spec (a/num-in 0 16) :default 6}
    :max-places {:doc "placements per step" :spec (a/int-in 1 nil) :default 4}
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pocket is dropped and the lava left" :spec #{:seal :stop} :default :seal}})
 
 (a/defargs settings
-  {::job-time-s {:default 60 :doc "Seconds a pocket attempt may take." :spec (a/num-in 0 nil)}
+  {::walk-radius {:default 6 :doc "Blocks, at the body's height, within which it walks to a standing cell with a side to pocket when none fits where it stands (0: never walks; at most 16, the body sees no farther and the scan reads every cell of the square)." :spec (a/num-in 0 16)}
+   ::job-time-s {:default 60 :doc "Seconds a pocket attempt may take." :spec (a/num-in 0 nil)}
    ::walk-s-per-block {:default 0.3 :doc "Seconds a block of walk to a pocket's standing cell is guessed to take, for the quote." :spec (a/num-in 0 nil)}
    ::pocket-s {:default 10 :doc "Seconds a pocket is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
 
@@ -47,7 +47,7 @@
   hostile and has a pocket side (pocket-cells), nil when none."
   [c feet]
   (let [p (:primitives c)
-        r (int (:walk-radius (:args c)))
+        r (int (settings/get settings ::walk-radius))
         mobs (pit/hostiles c)
         ok? (fn [cell]
               (and (dig-cells/open-cell? p cell) (dig-cells/open-cell? p (update cell :y inc))

@@ -114,7 +114,7 @@
 
 (def hiding-retreat
   "A retreat that hides on for as long as the test needs (:hide-s far off)."
-  '(jobs.survival.retreat {:hide-s 100000}))
+  '(jobs.survival.retreat {:settings {:jobs.survival.retreat-refuge/hide-s 100000}}))
 
 (deftest a-retreat-walks-back-down-the-stair-it-came-up
   (async done
@@ -280,7 +280,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p while-hidden]}
-              (await (hidden-round '(jobs.survival.respond-to-hostile {:hide-s 100000})
+              (await (hidden-round '(jobs.survival.respond-to-hostile {:settings {:jobs.survival.retreat-refuge/hide-s 100000}})
                                    {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
                                     :entities [(assoc (skeleton 4 64 0) :name "zombie")]}
                                    100000 (fn [{:keys [eng]}] (:list (core/state eng)))))]
@@ -353,7 +353,7 @@
       (fn ^:async t []
         (doseq [[spec listed-want] [['(jobs.survival.retreat) [[]]]
                                       ['(jobs.survival.respond-to-hostile) [[]]]
-                                      ['(jobs.survival.respond-to-hostile {:hide-s 100000}) [["j1"]]]]]
+                                      ['(jobs.survival.respond-to-hostile {:settings {:jobs.survival.retreat-refuge/hide-s 100000}}) [["j1"]]]]]
           (let [{:keys [listed]}
                 (await (hide-steps spec {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
                                          :entities [(zombie-at 4)]}
@@ -366,7 +366,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng listed]}
-              (await (hide-steps '(jobs.survival.retreat {:quiet-s 2000 :hide-s 100000})
+              (await (hide-steps '(jobs.survival.retreat {:settings {:jobs.survival.retreat-refuge/quiet-s 2000 :jobs.survival.retreat-refuge/hide-s 100000}})
                                  {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
                                   :entities [(zombie-at 4)]}
                                  [[[(zombie-at 12)] 0] [[] 10000]]))]
@@ -387,17 +387,17 @@
           (is (= [:quiet] (hidden-holds seen)))
           (is (= [] (:list (core/state eng)))))))))
 
-(deftest respond-to-hostile-passes-quiet-s-to-the-retreat
+(deftest respond-to-hostile-s-quiet-s-setting-reaches-the-retreat
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [[q ok?] [[0 #(< % 5)] [120 #(>= % 100)]]]
           (let [{:keys [waits]}
-                (await (hide-steps (list 'jobs.survival.respond-to-hostile {:quiet-s q :hide-s 100000})
+                (await (hide-steps (list 'jobs.survival.respond-to-hostile {:settings {:jobs.survival.retreat-refuge/quiet-s q :jobs.survival.retreat-refuge/hide-s 100000}})
                                    {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
                                     :entities [(zombie-at 4)]}
                                    [[[] 0]]))]
-            (is (ok? waits) (str ":quiet-s " q " held " waits " waits"))))))))
+            (is (ok? waits) (str "quiet-s " q " held " waits " waits"))))))))
 
 (deftest a-walled-off-hostile-ends-the-hide-only-after-the-quiet-period
   (async done
@@ -1137,7 +1137,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen]}
-              (await (hidden-round '(jobs.survival.respond-to-hostile {:hide-s 100000})
+              (await (hidden-round '(jobs.survival.respond-to-hostile {:settings {:jobs.survival.retreat-refuge/hide-s 100000}})
                                    {:self {:health 20 :food 20} :inventory [{:name "cobblestone" :count 20}]
                                     :entities [{:id 9 :name "spider" :kind "hostile" :pos {:x 4 :y 64 :z 0} :health 16}]}
                                    120000 (fn [_] nil)))]
@@ -1169,7 +1169,7 @@
                                            :entities [(assoc (zombie 3 64 0) :visible true)]})
               hurt! #(swap! (fake/state p) update-in [:self :health] - 2)]
           (.override (.-world p) "wait" (fn [token a impl] (when (hiding? seen) (hurt!)) (impl token a)))
-          (core/submit! eng '(jobs.survival.retreat {:hide-s 100000}) {})
+          (core/submit! eng '(jobs.survival.retreat {:settings {:jobs.survival.retreat-refuge/hide-s 100000}}) {})
           (await (core/tick! eng))
           (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen))) "sealed first")
           (is (pos? (count (calls p "attack"))) "hit while sealed: it stops hiding and hits back"))))))

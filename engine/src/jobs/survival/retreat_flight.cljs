@@ -22,6 +22,8 @@
    ::resume-gap-ms {:default 5000 :doc "A flight cut for longer than this starts its clocks afresh when it resumes." :spec (a/int-in 0 nil)}
    ::died-radius {:default 12 :doc "Blocks around a place the body died within which a flee step does not end, nor a goal lie, while another end is open; 0: off." :spec (a/num-in 0 nil)}
    ::died-ttl-ms {:default 3600000 :doc "Milliseconds after a death during which a flight keeps away from the place (::died-radius)." :spec (a/int-in 0 nil)}
+   ::step {:default 6 :doc "Blocks per walk of a flight step." :spec (a/num-in 1 nil)}
+   ::no-gain-steps {:default 20 :doc "Flight steps without a new best gap to the nearest chaser before the cornered options are tried." :spec (a/int-in 1 nil)}
    ::prefer-lit? {:default true :doc "By night or under ground a flee step ends on lit ground rather than dark (jobs.lib.look/dark-fn) while a lit end is open." :spec boolean?}})
 
 (def displaced-policy
@@ -29,6 +31,8 @@
   {:cap 1 :ttl 1800000})
 
 (defn wait-ms [] (settings/get settings ::wait-ms))
+(defn walk-step [] (settings/get settings ::step))
+(defn no-gain-steps [] (settings/get settings ::no-gain-steps))
 
 (defn blocks
   "The block names a cornered body may place: the call's :use {:blocks}, else every :build filler, carried or not (a

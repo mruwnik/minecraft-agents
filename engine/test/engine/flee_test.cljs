@@ -229,7 +229,7 @@
             (.override world name (fn ^:async f [token a impl]
                                     (when (> (elapsed-s) 180) (swap! (fake/state p) assoc :entities []))
                                     (await (impl token a)))))
-          (let [{:keys [out]} (await (run-job! s 'jobs.survival.retreat {:no-gain-steps 3}))]
+          (let [{:keys [out]} (await (run-job! s 'jobs.survival.retreat {:settings {:jobs.survival.retreat-flight/no-gain-steps 3}}))]
             (is (> (elapsed-s) 180) "the chase went on past the old 180 s bound, until the zombie left")
             (is (not= :still-chased (:reason out)))))))))
 

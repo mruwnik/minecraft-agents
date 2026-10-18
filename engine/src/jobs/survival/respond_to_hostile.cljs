@@ -53,8 +53,6 @@
   {:radius {:doc "hostiles within this many blocks count" :spec (a/num-in 0 nil) :default 8}
    :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :reserve {:doc "health a fight must be expected to leave" :spec (a/num-in 0 20) :default 4}
-   :quiet-s {:doc "passed to the retreat: a hidden body keeps its refuge this many seconds after the last danger" :spec (a/num-in 0 nil) :default 30}
-   :hide-s {:doc "passed to the retreat: a hidden body hands back after this many seconds once no real danger is on it" :spec (a/num-in 0 nil) :default 60}
    :goal {:doc "passed to the retreat: where the flight leans; nil: the destination of the walk this reflex interrupted (jobs.lib.goal), read once" :spec goal/pos-spec :default nil}
    :stay-inside {:doc "at night a body shut in a closed room or its own shelter fights from there and never steps out toward a mob; under any roof it does not flee for mobs it only hears (false: it may)" :spec boolean? :default true}})
 
@@ -127,11 +125,11 @@
 (defn ^:async run-child
   "One call of the child for decision: :continue, :done, :declined (a fight that ended otherwise, its memory put back,
   or a retreat that ended :condition-failed: the other child may run), or the ending of a retreat that ended otherwise."
-  [c decision {:keys [radius ranged-radius reserve quiet-s hide-s]} hold]
+  [c decision {:keys [radius ranged-radius reserve]} hold]
   (let [child-args (case decision
                      :fight {:range radius :ranged-range ranged-radius :use {:tools (weapons c)}
                              :hold (or hold (hold? c))}
-                     :flee {:radius radius :ranged-radius ranged-radius :use {:tools (weapons c)} :reserve reserve :quiet-s quiet-s :hide-s hide-s
+                     :flee {:radius radius :ranged-radius ranged-radius :use {:tools (weapons c)} :reserve reserve
                             :goal (:goal (ctx/mem c))})
         e (await (ctx/call c decision (child-jobs decision) child-args))]
     (cond

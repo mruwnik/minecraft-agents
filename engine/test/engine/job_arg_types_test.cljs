@@ -52,7 +52,7 @@
                 '(jobs.survival.dig-in {:max-places 0})
                 '(jobs.survival.dig-in {:enclose "text"})
                 '(jobs.survival.retreat {:radius "text"})
-                '(jobs.survival.retreat {:step -7})]]
+                '(jobs.survival.retreat {:max-places -7})]]
     (is (string? (expr/problem registry/jobs form)) (pr-str form)))
   (doseq [form ['(jobs.blocks.dig {:pos [1 64 1] :on-fluid :fail})
                 '(jobs.combat.attack {:radius 16 :absent :wait})
@@ -62,7 +62,7 @@
                 '(jobs.storage.deposit {:free 2})
                 '(jobs.storage.kit {:spare 0})
                 '(jobs.survival.dig-in {:max-places 4 :enclose true})
-                '(jobs.survival.retreat {:radius 8 :step 6})]]
+                '(jobs.survival.retreat {:radius 8 :max-places 6})]]
     (is (nil? (expr/problem registry/jobs form)) (pr-str form))))
 
 (deftest shape-errors-once-caught-in-a-round-are-refused-at-submit

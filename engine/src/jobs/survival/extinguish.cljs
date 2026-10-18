@@ -28,7 +28,7 @@
      8 while still burning. A pour left more than 4 blocks away is walked back to (one go-to) when within 16 blocks, else dropped.
      A scoop that fails, or a pour dropped as too far, is dropped and listed in the ending as :scoop-failed [{:pos :status :text}].
   3. With no bucket, on fire and with water within :water-radius, walks into the nearest water.
-  4. In lava, or with no water in reach, walks to the best nearby cell within :step blocks.
+  4. In lava, or with no water in reach, walks to the best nearby cell within the ::step setting (4) blocks.
      It must be passable, solid underfoot and not fire, lava, magma or a campfire.
      Scoring favours distance from those hazards (up to 4 blocks) and height, and charges a small cost per block walked.
   Water also counts powder snow. Not in lava (or in lava once a walk was blocked), with a cover block carried (cobblestone, stone, dirt, ...) it first
@@ -44,12 +44,10 @@
   Still burning after max-passes passes ends :limit-reached :still-burning. Never yields :continue (only a cut round returns it, unseen).
   The cover blocks are the call's :use :blocks (default the carried :cover fillers of jobs.lib.choose).
   Memory: writes :extinguish {:pos :cause} each pass (cap 20, one hour),
-  and lava seen within :scan-radius as :hazard entries (cap 50, six hours) for retreat logic.")
+  and lava seen within the ::scan-radius setting (8) as :hazard entries (cap 50, six hours) for retreat logic.")
 
 (a/defargs args
   {:water-radius {:doc "on fire, water within this many blocks is walked into" :spec (a/num-in 0 nil) :default 6}
-   :step {:doc "candidate cells lie within this many blocks (horizontally) of the body" :spec (a/num-in 0 nil) :default 4}
-   :scan-radius {:doc "fire, lava and magma within this many blocks count as hazards" :spec (a/num-in 0 nil) :default 8}
    :ignore-zones? :shared})
 
 (def hazards #{"lava" "fire" "soul_fire" "magma_block" "campfire" "soul_campfire"})
@@ -61,7 +59,9 @@
 (def extinguish-policy {:cap 20 :ttl (* 60 60 1000)})
 (def hazard-policy {:cap 50 :ttl (* 6 60 60 1000)})
 (a/defargs settings
-  {::job-time-s {:default 60 :doc "Seconds putting the body out may take." :spec (a/num-in 0 nil)}
+  {::step {:default 4 :doc "Candidate cells to walk to lie within this many blocks (horizontally) of the body." :spec (a/num-in 0 nil)}
+   ::scan-radius {:default 8 :doc "Fire, lava and magma within this many blocks count as hazards." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 60 :doc "Seconds putting the body out may take." :spec (a/num-in 0 nil)}
    ::max-hazards-per-round {:default 16 :doc "Hazard cells costed per round, the nearest first." :spec (a/int-in 0 nil)}
    ::hazard-reach {:default 4 :doc "Blocks around the body in which hazards are scanned." :spec (a/int-in 0 nil)}
    ::height-bonus {:default 2 :doc "Cost credit per block a hazard cell lies above the body." :spec (a/int-in 0 nil)}
@@ -77,6 +77,8 @@
    ::max-water-waits {:default 10 :doc "Waits for poured water to show before it is scooped back." :spec (a/int-in 0 nil)}
    ::pour-wait-ms {:default 250 :doc "A wait for the server to put the fire out or show the poured water." :spec (a/int-in 0 nil)}
    ::max-passes {:default 60 :doc "Passes in one run before it stops :still-burning." :spec (a/int-in 0 nil)}})
+(defn step-radius [] (settings/get settings ::step))
+(defn scan-radius [] (settings/get settings ::scan-radius))
 (defn max-hazards-per-round [] (settings/get settings ::max-hazards-per-round))
 (defn hazard-reach [] (settings/get settings ::hazard-reach))
 (defn height-bonus [] (settings/get settings ::height-bonus))
@@ -400,11 +402,11 @@
       :done
 
       :else
-      (let [{:keys [water-radius step scan-radius]} (:args c)
+      (let [{:keys [water-radius]} (:args c)
             pos (floor-cell (u/pos-of (.-pos me)))
             lava? (boolean (.-inLava me))
             _ (await (look/survey! c :cell))
-            scanned (feel-feet p pos (scan p scan-radius hazards 128))
+            scanned (feel-feet p pos (scan p (scan-radius) hazards 128))
             water (when-not lava? (first (scan p water-radius water-like 1)))
             pour? (and (not lava?) (has-bucket? p))
             refusal (when pour? (access/trespass-refusal c :place pos))]
@@ -441,7 +443,7 @@
 
           :else
           (let [hazard-poss (map :pos scanned)
-                target (best-cell p pos step hazard-poss)]
+                target (best-cell p pos (step-radius) hazard-poss)]
             (cond
               (not target)
               (or (when refusal (await (pour-last-resort! c pos refusal)))

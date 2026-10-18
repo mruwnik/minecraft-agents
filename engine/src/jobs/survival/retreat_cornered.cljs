@@ -48,6 +48,7 @@
 
 (a/defargs settings
   {:jobs.survival.retreat-cornered/lost-memory-ms {:default 30000 :doc "Milliseconds a mob the flight lost (its :threat entry) still counts, at the place it was last known, when choosing where to flee; a creeper counts triple." :spec (a/int-in 0 nil)}
+   :jobs.survival.retreat-cornered/fist-sweeps {:default 1 :doc "Times a body with no weapon, every cornered option failed, looks for a way to walk before it punches a hostile it would not beat; 0: it punches at once." :spec (a/int-in 0 nil)}
    :jobs.survival.retreat-cornered/hit-reach {:default 3 :doc "Blocks within which a melee hostile counts as the one that hit the body." :spec (a/num-in 0 nil)}
    :jobs.survival.retreat-cornered/glance-reach {:default 3 :doc "Blocks along a direction to the feet cell a glance looks at." :spec (a/int-in 0 nil)}
    :jobs.survival.retreat-cornered/glance-memory {:default 24 :doc "Most glanced cells a flight remembers." :spec (a/int-in 0 nil)}
@@ -61,6 +62,7 @@
    :jobs.survival.retreat-cornered/hold-cap {:default 60 :doc "Holds (one wait-ms each) a flight makes in water or under a roof against an angry enderman before it tries the next option (seal, pit, pocket, fight); 0: none." :spec (a/int-in 0 nil)}
    :jobs.survival.retreat-cornered/refuge-gap {:default 10 :doc "Blocks within which a lone melee hostile the body cannot outfight is pillared against (else sealed against) before any flee step, when blocks are carried; 0 never." :spec (a/num-in 0 nil)}})
 
+(defn fist-sweeps [] (settings/get settings :jobs.survival.retreat-cornered/fist-sweeps))
 (defn hit-reach [] (settings/get settings :jobs.survival.retreat-cornered/hit-reach))
 
 (defn ^:async fight!
@@ -428,7 +430,7 @@
   ([c why] (await (cornered! c why false)))
   ([c why home?]
   (let [weapons (weapons c)
-        fist-sweeps (:fist-sweeps (:args c))
+        max-fist-sweeps (fist-sweeps)
         hostiles (near-hostiles c)
         threat (first hostiles)
         fire? (under-fire? c)
@@ -452,7 +454,7 @@
       (let [r (when-not (flight/tried? c option)
                 (case option
                   :fight (if (fist-hold? {:armed? (or beaten (some? (combat/best-weapon (:primitives c) weapons))) :win? win?
-                                          :sweeps (:sweeps (ctx/mem c) 0) :fist-sweeps fist-sweeps})
+                                          :sweeps (:sweeps (ctx/mem c) 0) :fist-sweeps max-fist-sweeps})
                            (await (fist-look! c))
                            (await (fight! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons)) blind?)))
                   :plug (await (refuge/plug-option! c :plug #{:walls}))
