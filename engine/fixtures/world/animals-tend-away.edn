@@ -1,0 +1,28 @@
+;; Card ccd9dfef (16eee7bfa): animals.tend declines :away like farm.tend when the body is more than jobs.lib.standing/away-depth (8) below its pen,
+;; so it does not pull the body home. Pen on a stone platform x 6..20, z 12..22, top block y 10, fence ring x 9..15, z 13..19 at y 11, two cows inside.
+;; Should-succeed: body on the platform, tend runs and counts the cows. Should-fail (control): the body 11 below the pen waits :away and never completes.
+{:defaults
+ {:tags [:animals :tend :jobs]
+  :time :day
+  :plot {:height 18}
+  :blocks [[:fill [6 0 12] [20 10 22] "stone"]
+           [:fill [9 11 13] [15 11 19] "oak_fence" :hollow]]
+  :body {:effects [["resistance" 600 4]] :settle-s 2}
+  :limit-s 100}
+ :cases
+ [{:name "body-far-below-the-pen-waits-away"
+   :body {:at [3.5 0 16.5]}
+   :act [[:summon "cow" [11.5 11 15.5]]
+         [:summon "cow" [13.5 11 17.5]]
+         [:http :submit (repeat (jobs.animals.tend {:mob "cow" :target 2 :box {:min #xyz [10 11 14] :max #xyz [14 11 18]}})) [] {:ok true}]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :away}} :within-s 40}
+            {:no-event {:source :job :kind :completed} :for-s 15}]
+   :after [[:body-near [3.5 0 16.5] 2]]
+   :limit-s 70}
+  {:name "body-on-the-platform-tends-the-pen"
+   :body {:at [7.5 11 16.5]}
+   :act [[:summon "cow" [11.5 11 15.5]]
+         [:summon "cow" [13.5 11 17.5]]
+         [:http :submit (jobs.animals.tend {:mob "cow" :target 2 :box {:min #xyz [10 11 14] :max #xyz [14 11 18]}}) [] {:ok true}]]
+   :expect [{:no-event {:source :job :kind :waiting :data {:reason :away}} :for-s 20}
+            {:event {:source :job :kind :completed :data {:kind :done :adults 2}} :within-s 60}]}]}
