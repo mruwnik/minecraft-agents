@@ -84,6 +84,13 @@
           (is (= [:done :pit] [(:kind out) (:way (:data out))]))
           (is (= [[0 63 0] [0 62 0]] (cells-of p "dig"))))))))
 
+(deftest a-pit-whose-floor-is-not-seen-yet-is-quoted-not-dropped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (plug! {:blocks ct/deep-dead-end :inventory pick} {:ways #{:pit}} #(tu/seeing-within % 2.1)))]
+          (is (= [[] [:pit]] [(get-in out [:data :dropped]) (get-in out [:data :tried])])))))))
+
 (deftest a-pit-that-cannot-be-planned-is-dropped
   (async done
     (tu/run-async done

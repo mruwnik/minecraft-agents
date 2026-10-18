@@ -37,7 +37,7 @@
 (defn done? [c] (way/done? c :pit))
 
 (defn quote-of [c]
-  (way/quote-of c (if (pit/pit-plan c (sh-sense/feet (:primitives c))) (settings/get settings ::pit-s) ##Inf)
+  (way/quote-of c (if (pit/quote-fits? c (sh-sense/feet (:primitives c))) (settings/get settings ::pit-s) ##Inf)
                 (settings/get settings ::job-time-s)))
 
 (defn ^:async step!

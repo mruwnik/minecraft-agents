@@ -134,7 +134,8 @@
     (or (some (fn [{:keys [dig floor]}]
                 (or (some #(cell-stop p %) dig)
                     (when-not (dig-cells/rock-solid? p floor)
-                      (stop :no-floor (str (or (u/seen-name p floor) "an unseen cell") " under the hole; not stepping into it")))))
+                      (cond-> (stop :no-floor (str (or (u/seen-name p floor) "an unseen cell") " under the hole; not stepping into it"))
+                        (nil? (u/seen-name p floor)) (assoc :unseen true)))))
               steps)
         (over-stop p roof)
         (material-stop c blocks (concat prep (mapcat :dig steps))))))
@@ -154,6 +155,13 @@
                      (stop :no-floor "no floor the body sees solid under a pit; not digging down")
                      (stop :no-roof-support "nothing solid beside the roof cell to place against; not digging a pit"))
       :else (or (shape-stop c blocks shape) (stop :no-floor "no pit fits here")))))
+
+(defn quote-fits?
+  "Whether a pit may fit at feet, for a quote (no looks): a plan, or only a floor not yet seen rules it out (plan-of! looks
+  and digs to see it)."
+  [c feet]
+  (let [blocks (flight/blocks c)]
+    (boolean (or (pit-plan c feet blocks) (:unseen (stop-of c blocks feet))))))
 
 (defn ^:async plan-of!
   "The pit that fits at the feet (pit-plan with blocks, default the call's, after a look at the roof's surroundings and at the
