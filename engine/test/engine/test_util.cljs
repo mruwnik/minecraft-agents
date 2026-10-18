@@ -46,9 +46,10 @@
    :after #(reset! real-memory-disk false)})
 
 (defn tmp-dir
-  "A fresh temp dir, removed when the test process exits."
+  "A fresh temp dir, removed when the test process exits (the pid in the name lets tools/test-run.mjs sweepStale remove
+  the dirs of a killed process)."
   []
-  (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "engine-test-"))]
+  (let [dir (fs/mkdtempSync (path/join (os/tmpdir) (str "engine-test-" js/process.pid "-")))]
     (swap! made-dirs conj dir)
     dir))
 

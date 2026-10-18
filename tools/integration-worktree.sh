@@ -2,7 +2,7 @@
 # Set up a fresh git worktree for integration testing.
 # Usage: tools/integration-worktree.sh <commit> <dir> | --remove <dir>
 # Checks out <commit> at <dir>, then adds what a clean checkout lacks (all git-ignored): node_modules (symlinked to the main
-# checkout's), the .shadow-cljs dir (with the :test cache seeded by tools/seed-shadow-cache.sh), worlds/test (symlinked to the main checkout's: world.json, biomes.json and the bodies; nothing else under worlds/), textures/, engine/test/fixtures/pathfinding, engine/out/test-ns-ms.json (shard timeouts), the built agent-tools.cjs and the viewer cljs.
+# checkout's), the .shadow-cljs dir (with the :test cache seeded by tools/seed-shadow-cache.sh), worlds/test (symlinked to the main checkout's: world.json, biomes.json and the bodies; nothing else under worlds/), textures/, engine/test/fixtures/pathfinding, engine/out/test-ns-ms.json (shard timeouts), the built agent-tools.cjs, world-test.cjs and rcon-tools.cjs bundles and the viewer cljs.
 # At the end it prints the body flags that point the worktree at the main checkout's worlds and blueprints (untracked blueprints are not in the checkout).
 # Any failing step fails the script. Each build there is a one-shot shadow-cljs JVM under a res-slot `server` slot (tools/compile);
 # remove the worktree afterwards with `tools/integration-worktree.sh --remove <dir>`.
@@ -33,6 +33,8 @@ mkdir -p "$wt/engine/out"
 [ -f "$repo/engine/out/test-ns-ms.json" ] && cp "$repo/engine/out/test-ns-ms.json" "$wt/engine/out/" || true
 
 "$wt/tools/compile" dashboard agent-tools --release
+"$wt/tools/compile" dashboard world-test --release # the world suites and tools/world-sweep.mjs load it
+"$wt/tools/compile" dashboard rcon-tools --release
 node "$wt/tools/view/build-cljs.mjs"
 echo "Worktree ready at $wt"
 echo "Start a body from it with: --worlds $repo/worlds --blueprints $repo/blueprints"
