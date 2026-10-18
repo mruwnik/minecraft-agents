@@ -113,10 +113,10 @@
    :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}]
    :after [[:item "obsidian" [:>= 1]]]
    :limit-s 130}
-  ;; card ff7ec4e1: flowing lava only (the source under a stone wall, so no site): water on it makes cobblestone; the wall at
-  ;; x 10 keeps each pour's water to its own side, so a failed east pour leaves the west flow for a second failed pour
+  ;; card ff7ec4e1: flowing lava only (the source under a glass wall, so no site): water on it makes cobblestone; the wall at
+  ;; x 10 (glass: stone would hide the west flow from the east side) keeps each pour's water to its own side, so a failed east pour leaves the west flow for a second failed pour
   {:name "water-on-flowing-lava-twice-ends-pour-failed"
-   :blocks [[:fill [4 0 10] [16 0 22] "stone"] [:fill [7 0 16] [13 0 16] "air"] [:fill [10 1 10] [10 1 22] "stone"]
+   :blocks [[:fill [4 0 10] [16 0 22] "stone"] [:fill [7 0 16] [13 0 16] "air"] [:fill [10 1 10] [10 1 22] "glass"]
             [:set [10 0 16] "lava"]]
    :body {:at [14.5 1 20.5] :inventory [["diamond_pickaxe" 1] ["water_bucket" 2]]}
    :act [[:wait-s 8] [:job (jobs.gather.make-obsidian {:count 1})]]
