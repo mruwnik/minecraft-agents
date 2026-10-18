@@ -1,6 +1,7 @@
 (ns engine.stair-test
   "jobs.access.stair: step geometry, the stop rules, and whole stairs against the fake world."
   (:require [engine.child-ends :as ce]
+            [engine.constants :as constants]
             [jobs.lib.shelter.sense :as sh-sense]
             [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
@@ -682,7 +683,10 @@
 (deftest a-body-on-the-edge-of-its-cell-overlaps-the-floor-it-would-place-beside-it
   (is (sstep/box-overlaps? {:x 20299.77 :y 161 :z 20336.5} [20300 161 20336]) "x .77: the box reaches .07 into the next cell")
   (is (not (sstep/box-overlaps? {:x 20299.5 :y 161 :z 20336.5} [20300 161 20336])) "centred")
-  (is (not (sstep/box-overlaps? {:x 20299.77 :y 161 :z 20336.5} [20300 160 20336])) "a cell under the feet is free"))
+  (is (not (sstep/box-overlaps? {:x 20299.77 :y 161 :z 20336.5} [20300 160 20336])) "a cell under the feet is free")
+  (let [pos {:x 20299.695 :y 161 :z 20336.5} cell [20300 161 20336]]
+    (is (not (sstep/box-overlaps? pos cell)) "x .695: the server's box just stops at the face")
+    (is (sstep/box-overlaps? pos cell constants/body-half-width) "the client's wider box reaches a hair into it")))
 
 (defn scaffold [{:keys [eng]}] (mapv #(select-keys % [:cell :item :purpose]) (ledger/open-entries (mem/view (:store eng)))))
 

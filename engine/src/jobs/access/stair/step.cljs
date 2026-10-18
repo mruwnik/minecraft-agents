@@ -2,6 +2,7 @@
   "The pieces of a stair step that call the world: look, judge, peek, seal lava, plug water, dig a cell, bridge a missing
   floor. Shared by jobs.access.stair and jobs.access.tunnel."
   (:require [clojure.string :as str]
+            [engine.constants :as constants]
             [engine.ctx :as ctx]
             [jobs.access.stair.cells :as cells]
             [jobs.access.stair.memory :as mem]
@@ -220,19 +221,32 @@
         (recur (rest cells))))))
 
 (defn box-overlaps?
-  "Whether the body's hitbox reaches into cell: the server refuses a block there."
-  [pos [cx cy cz]]
-  (let [h game/hitbox-half]
-    (and (pos? (reach/overlap (- (:x pos) h) (+ (:x pos) h) cx))
-         (pos? (reach/overlap (- (:z pos) h) (+ (:z pos) h) cz))
-         (< (:y pos) (+ cy 1)) (> (+ (:y pos) game/body-height) cy))))
+  "Whether the body's hitbox (half-width half: the server's by default, the client physics' for a jump) reaches into cell."
+  ([pos cell] (box-overlaps? pos cell game/hitbox-half))
+  ([pos [cx cy cz] h]
+   (and (pos? (reach/overlap (- (:x pos) h) (+ (:x pos) h) cx))
+        (pos? (reach/overlap (- (:z pos) h) (+ (:z pos) h) cz))
+        (< (:y pos) (+ cy 1)) (> (+ (:y pos) game/body-height) cy))))
+
+(def centre-tolerance "How near the middle of its cell a body stepping off an edge ends (blocks, each axis): under the walk's, which leaves a body 0.2 off." 0.1)
 
 (defn ^:async clear-box!
-  "Step to the middle of the body's own cell when its hitbox overlaps cell, so the server takes a block there."
-  [c cell]
-  (let [pos (u/self-pos c)]
-    (when (box-overlaps? pos cell)
-      (await (walk/centre! c (+ (js/Math.floor (:x pos)) 0.5) (+ (js/Math.floor (:z pos)) 0.5))))))
+  "Step to the middle of the body's own cell when its hitbox overlaps cell, so the server takes a block there (or, with half,
+  so a jump onto a block there does not start inside it)."
+  ([c cell] (clear-box! c cell game/hitbox-half))
+  ([c cell half]
+   (let [pos (u/self-pos c)]
+     (when (box-overlaps? pos cell half)
+       (await (walk/centre! c (+ (js/Math.floor (:x pos)) 0.5) (+ (js/Math.floor (:z pos)) 0.5) centre-tolerance))))))
+
+(defn ^:async clear-jump-edge!
+  "Before the walk into the next cell of a stair up: step to the middle of the body's cell when its box (the client's width)
+  reaches into the block it jumps onto. A floor placed beside a body that coasted to the edge leaves it overlapping that
+  block by a hair; the client physics then moves into the block and the server throws every move back."
+  [c next-feet]
+  (let [[nx _ nz] next-feet
+        [_ fy _] (reach/standing-vec (:primitives c))]
+    (await (clear-box! c [nx fy nz] constants/body-half-width))))
 
 (defn ^:async bridge!
   "Place carried filler on the missing floor of the step (bridge/bridge-plans, a plan whose placing found no support gives way

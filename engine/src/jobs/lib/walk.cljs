@@ -86,21 +86,24 @@
 (defn centre-max-ticks [] (settings/get settings ::centre-max-ticks))
 
 (defn centre-decider
-  "A steer decide function that walks straight at [tx tz], done within centre-tolerance of it or after centre-max-ticks."
-  [tx tz]
-  (let [ticks (volatile! 0)]
-    (fn [js-pose]
-      (let [dx (- tx (.-x js-pose)) dz (- tz (.-z js-pose))]
-        (if (or (and (<= (js/Math.abs dx) (centre-tolerance)) (<= (js/Math.abs dz) (centre-tolerance)))
-                (>= (vswap! ticks inc) (centre-max-ticks)))
-          #js {:done true}
-          #js {:controls #js {:forward true} :yaw (js/Math.atan2 (- dx) (- dz))})))))
+  "A steer decide function that walks straight at [tx tz], done within tol (default centre-tolerance) of it or after
+  centre-max-ticks."
+  ([tx tz] (centre-decider tx tz (centre-tolerance)))
+  ([tx tz tol]
+   (let [ticks (volatile! 0)]
+     (fn [js-pose]
+       (let [dx (- tx (.-x js-pose)) dz (- tz (.-z js-pose))]
+         (if (or (and (<= (js/Math.abs dx) tol) (<= (js/Math.abs dz) tol))
+                 (>= (vswap! ticks inc) (centre-max-ticks)))
+           #js {:done true}
+           #js {:controls #js {:forward true} :yaw (js/Math.atan2 (- dx) (- dz))}))))))
 
 (defn ^:async centre!
-  "A short walk (no planning, no jump) to within centre-tolerance of [tx tz] on the cell the body is in: the step a
+  "A short walk (no planning, no jump) to within centre-tolerance (or tol) of [tx tz] on the cell the body is in: the step a
   go-to to a cell cannot make, since a body on the edge of the cell already counts as in it."
-  [c tx tz]
-  (await (ctx/act c :steer (steer-args (steer-s c 3) (centre-decider tx tz)))))
+  ([c tx tz] (centre! c tx tz (centre-tolerance)))
+  ([c tx tz tol]
+   (await (ctx/act c :steer (steer-args (steer-s c 3) (centre-decider tx tz tol))))))
 
 (defn ^:async plan-walk!
   "Plan a walk with plan-within! (yields to the event loop between search slices): what the walks (jobs.lib.near, walk-to!)

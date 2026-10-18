@@ -314,6 +314,7 @@
   chain is the same call as that go-to (a duplicate), so it is walked to the cell's centre: the same place. A cut cell
   that filled again while the body walked in (gravel landing in the head or feet cell) is dug again."
   [c next-feet cut]
+  (when (= :up (:dir (:args c))) (await (sstep/clear-jump-edge! c next-feet)))
   (let [r (await (child/walk-into!* c :walk next-feet))
         r (if (= :duplicate-call (when (= :condition-failed (:kind r)) (contract/cause-key r)))
             (await (child/call-walk* c :walk-centre (update (child/walk-into-args :walk next-feet) :pos (fn [[x y z]] [(+ x 0.5) y (+ z 0.5)]))))
