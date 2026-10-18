@@ -20,7 +20,6 @@
             [jobs.movement.go-to.health :as health]
             [jobs.movement.go-to.holes :refer [note-holes!]]
             [jobs.movement.go-to.restore :as restore]
-            [jobs.movement.go-to.holds :refer [plug-hold plug-since]]
             [jobs.movement.go-to.preview :as preview]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.tuning :refer [max-cut-resets]]
@@ -77,7 +76,6 @@
     with none and no fetch it gives up :unseen-floor-dark saying so. A torch that cannot go there is not tried there again.
   - :dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
     longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
-  - A walk with no escalating way from a body shut in by its own retreat plug (ledger) with a known hostile near waits, {:reason :sealed-hostile-near}, until the hostile goes (a heard-only one counts not beyond the near band, 8 blocks, nor while heard mobs are muted, jobs.lib.body/heard-muted?), :plug-wait-ms (3 min, in all across the go-to children of one root job) pass, or food or health fall to :plug-wait-min-food or -health (it never holds a starving or hurt body).
   - :goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
   - :dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). A
     :spend :job-time of n walks one leg of at most n s and, when it got more than 1 block nearer, ends limit-reached
@@ -287,11 +285,11 @@
   (if (= :look kind) (contract/ok :unseen-goal "the goal's light is seen on the way") status))
 
 (def safe?
-  "Safe at the goal (ready/safe-at-by-night; its light unseen is no reason to wait), and no retreat plug wait."
+  "Safe at the goal (ready/safe-at-by-night; its light unseen is no reason to wait)."
   (let [at (ready/safe-at-by-night goal-of)]
     (with-meta (fn [c]
                  (if (goal-of c)
-                   (contract/all [(unseen-goal-ok (at c)) (plug-hold c)])
+                   (unseen-goal-ok (at c))
                    (contract/ok :no-goal "no goal to judge")))
       (meta at))))
 
@@ -347,10 +345,9 @@
 
 (defn ^:async cleanup
   "However the call ended (a cut too): the planned cells of an escalation child cut mid-round are noted to the tidy
-  ledger, the off-hand torch goes back, the plug timer and the planner's kept state are released."
+  ledger, the off-hand torch goes back and the planner's kept state is released."
   [c _]
   (when-not (:own (:escalation (ctx/mem c))) (note-holes! c (:planned (ctx/mem c))))
-  (swap! plug-since dissoc (:root c))
   (wsearch/release! c)
   (await (torch/return-torch! c))
   (ctx/end c :done nil {}))

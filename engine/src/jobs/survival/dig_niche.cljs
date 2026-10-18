@@ -212,7 +212,7 @@
 
 (defn fail! [c reason text]
   (let [site (:site (ctx/mem c))]
-    (ctx/update-mem! c dissoc :site :plug-since)
+    (ctx/update-mem! c dissoc :site)
     (ctx/end c (if (fact-stops reason) :condition-failed :nothing-possible) reason {:text text :site site})))
 
 (defn ^:async go!

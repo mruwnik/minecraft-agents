@@ -1,9 +1,8 @@
 ;; A refuge (pillar, seal) and what follows it. Cards 090211e8 (a creeper arriving at a pillar: the body leaves before a hit;
 ;; setting off: it stays), 4c5ec59c (a zombie waiting at the pillar's foot keeps the hide past :hide-s 60), c3676cae (a walk
 ;; off a pillar keeps out of reach of a zombie at its foot), 24fe30d6 (the hide names the zombie; a queued job runs after),
-;; e0670a91 and 8d9b5bbc (seal blocks are ledgered: cleanup takes them back once the mob is gone), b5c1d94a 40613c1e 94b5eaee
-;; 73aa2088 (a walk from inside the plug holds :sealed-hostile-near for a skeleton heard near, for :plug-wait-ms in all, then
-;; gives up; a skeleton heard far does not hold), 1f0b4279 and 8035feed (a body in a hole with dirt, a zombie that moves).
+;; e0670a91 and 8d9b5bbc (seal blocks are ledgered: cleanup takes them back once the mob is gone),
+;; b5c1d94a 40613c1e 94b5eaee 1f0b4279 and 8035feed (a body in a hole with dirt, a zombie that moves).
 ;; Pit case: the zombie stands 4 off on the stone top, close enough for its line of sight over the lip to reach the body in the pit.
 ;; Pillar cases: open ground, 20 dirt, one NoAI zombie 7 blocks off (a lone melee mob between cover-gap 5 and refuge-gap 10:
 ;; pillar first). Tunnel cases: the cornered-retreat stone mass (x 2..30, z 10..22, y 0..4), 1x2 tunnel along z 16 from x 5.
@@ -80,30 +79,6 @@
             {:event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :within-s 150}]
    :after [[:not-block [6 0 16] "cobblestone"] [:not-block [6 1 16] "cobblestone"]]
    :limit-s 170}
-  {:name "walk-from-the-plug-holds-for-the-skeleton-near-then-gives-up"
-   :settings {:jobs.movement.go-to.tuning/plug-wait-ms 40000}
-   :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [5 0 16] [29 1 16] "air"]
-            [:set [8 1 16] "torch"] [:set [14 1 16] "torch"]]
-   :body {:at [5.5 0 16.5] :inventory [["cobblestone" 20]]}
-   :act [[:summon "skeleton" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:await {:source :job :kind :retreat_sealed} 40]
-         [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1 :ways #{:walk}})]]
-   :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
-            {:event {:source :job :kind :waiting :data {:reason :sealed-hostile-near :mob "skeleton" :band :near}} :within-s 150}
-            {:event {:source :job :kind :result :data {:arrived false}} :within-s 230 :of-job true}]
-   :after [[:block [6 0 16] "cobblestone"] [:body-near [5.5 0 16.5] 1.5]]
-   :limit-s 240}
-  {:name "walk-from-the-plug-skeleton-heard-far-gives-no-hold"
-   :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [5 0 16] [12 1 16] "air"] [:fill [12 0 17] [12 1 18] "air"]
-            [:fill [13 0 18] [29 1 18] "air"] [:set [8 1 16] "torch"]]
-   :body {:at [5.5 0 16.5] :inventory [["cobblestone" 20]]}
-   :act [[:summon "skeleton" [19.5 0 18.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:await {:source :job :kind :retreat_sealed} 40]
-         [:job (jobs.movement.go-to {:pos #at [28 0 18] :range 1 :ways #{:walk}})]]
-   :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
-            {:event {:source :job :kind :result} :within-s 200 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :sealed-hostile-near}} :for-s 200 :until {:source :job :kind :result :data {:arrived [:any]}} :of-job true}]
-   :limit-s 210}
   {:name "zombie-diagonal-to-a-stair-hole-body-survives"
    :blocks [[:fill [0 0 0] [31 2 31] "stone"] [:fill [16 2 16] [16 2 16] "air"]]
    :body {:at [16.5 2 16.5] :inventory [["dirt" 12]] :effects [["resistance" 900 1]]}

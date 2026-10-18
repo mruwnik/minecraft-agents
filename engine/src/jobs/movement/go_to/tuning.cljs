@@ -23,9 +23,6 @@
    :jobs.movement.go-to.tuning/climb-rise {:default 16 :doc "Blocks a goal must lie above a body under ground for its go-to to plan no dive (:jobs.movement.go-to.tuning/climb-dip)." :spec (a/num-in 0 nil)}
    :jobs.movement.go-to.tuning/climb-dip {:default 24 :doc "Blocks below where it began that a go-to of a body under ground to a goal far above (:jobs.movement.go-to.tuning/climb-rise) may plan; a way that dives deeper is not walked (:way-dives)." :spec (a/num-in 0 nil)}
    :jobs.movement.go-to.tuning/climb-stair {:default true :doc "Whether a go-to that would give up :way-dives cuts a stair up instead (its escalation, when the call allows :stair)." :spec boolean?}
-   :jobs.movement.go-to.tuning/plug-wait-ms {:default 180000 :doc "Milliseconds a go-to shut in by its retreat plug holds for a known hostile (:sealed-hostile-near) before it walks on as without the hold." :spec (a/int-in 0 nil)}
-   :jobs.movement.go-to.tuning/plug-wait-min-food {:default 6 :doc "Food at or under which a go-to shut in by its retreat plug no longer holds for a hostile: starving beats waiting." :spec (a/num-in 0 20)}
-   :jobs.movement.go-to.tuning/plug-wait-min-health {:default 8 :doc "Health at or under which a go-to shut in by its retreat plug no longer holds for a hostile." :spec (a/num-in 0 20)}
    :jobs.movement.go-to.tuning/max-waypoint-misses {:default 3 :doc "Waypoint walks toward a column goal whose ground is only guessed that a call takes while they bring the body no nearer it." :spec (a/int-in 0 nil)}
    :jobs.movement.go-to.tuning/waypoint-gain {:default 2 :doc "Blocks (across) a waypoint must lie nearer a guessed column goal than the body, and a waypoint walk must bring the body nearer, not to be a miss." :spec (a/num-in 1 nil)}
    :jobs.movement.go-to.tuning/off-line-radius {:default 16 :doc "Blocks round the body an off-line waypoint (a stand past a cliff on the line to a guessed column goal) is looked for: about what a body sees of the land." :spec (a/num-in 1 nil)}
@@ -48,9 +45,6 @@
 (defn climb-rise [] (settings/get settings :jobs.movement.go-to.tuning/climb-rise))
 (defn climb-dip [] (settings/get settings :jobs.movement.go-to.tuning/climb-dip))
 (defn climb-stair [] (settings/get settings :jobs.movement.go-to.tuning/climb-stair))
-(defn plug-wait-ms [] (settings/get settings :jobs.movement.go-to.tuning/plug-wait-ms))
-(defn plug-wait-min-food [] (settings/get settings :jobs.movement.go-to.tuning/plug-wait-min-food))
-(defn plug-wait-min-health [] (settings/get settings :jobs.movement.go-to.tuning/plug-wait-min-health))
 (defn max-waypoint-misses [] (settings/get settings :jobs.movement.go-to.tuning/max-waypoint-misses))
 (defn off-line-radius [] (settings/get settings :jobs.movement.go-to.tuning/off-line-radius))
 (defn off-line-cone [] (settings/get settings :jobs.movement.go-to.tuning/off-line-cone))
