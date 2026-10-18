@@ -27,7 +27,6 @@
   the same go-to call. {:out :ticks :eng :p}."
   [load?]
   (let [budget wsearch/round-budget
-        chunk wplan/chunk-expansions
         plan-walk wsearch/plan-walk-budgeted!
         {:keys [eng p] :as s} (gt/setup {:blocks floor-blocks :self {:pos {:x 44.5 :y 64 :z 24.5}}})
         out (atom :not-done)
@@ -35,7 +34,6 @@
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out {:pos goal :range 0})))]
     (reset! wsearch/searches {})
     (set! wsearch/round-budget 16)
-    (set! wplan/chunk-expansions 16)
     (set! wsearch/plan-walk-budgeted!
           (fn [& args]
             (when (and load? (not @loaded) (= 47 (js/Math.floor (first (gt/at p)))))
@@ -43,10 +41,9 @@
               (swap! (fake/state p) update :blocks merge (fake/cells sealed-cell identity)))
             (apply plan-walk args)))
     (core/submit! eng '(recording-parent) {})
-    (let [ticks (await (gt/tick-out! eng 400))]
+    (let [ticks (await (tu/with-expansion-budget 16 #(gt/tick-out! eng 400)))]
       (set! wsearch/plan-walk-budgeted! plan-walk)
       (set! wsearch/round-budget budget)
-      (set! wplan/chunk-expansions chunk)
       (reset! wsearch/searches {})
       (assoc s :eng eng :p p :out out :ticks ticks :loaded @loaded))))
 
@@ -105,20 +102,17 @@
                     (reset! cut-at @slices)
                     (.setOwner @p-atom "other"))
                   (apply plan-walk args)))
-          (let [budget wsearch/round-budget
-                chunk wplan/chunk-expansions]
+          (let [budget wsearch/round-budget]
             (reset! wsearch/searches {})
             (set! wsearch/round-budget 16)
-            (set! wplan/chunk-expansions 16)
             (let [{:keys [eng p]} (gt/setup {:blocks floor-blocks :self {:pos {:x 44.5 :y 64 :z 24.5}}})
                   out (atom :not-done)
                   eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out {:pos goal :range 0})))]
               (reset! p-atom p)
               (core/submit! eng '(recording-parent) {})
-              (await (gt/tick-out! eng 1)))
+              (await (tu/with-expansion-budget 16 #(gt/tick-out! eng 1))))
             (set! wsearch/plan-walk-budgeted! plan-walk)
             (set! wsearch/round-budget budget)
-            (set! wplan/chunk-expansions chunk)
             (reset! wsearch/searches {})
             (is (some? @cut-at) "a search slice ran")
             (is (= @cut-at @slices) "no slice after the cut")))))))

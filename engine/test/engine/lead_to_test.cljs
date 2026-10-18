@@ -492,12 +492,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {:floor tu/walk-floor :blocks wall-32 :inventory lead})
-              order (atom [])
-              chunk wplan/chunk-expansions]
-          (set! wplan/chunk-expansions 16)
+              order (atom [])]
           (js/setTimeout #(swap! order conj :timer) 0)
-          (try (await (reach-check s {:x 33.4 :y 64 :z 0.6}))
-               (finally (set! wplan/chunk-expansions chunk)))
+          (await (tu/with-expansion-budget 16 #(reach-check s {:x 33.4 :y 64 :z 0.6})))
           (swap! order conj :checked)
           (is (= [:timer :checked] @order)))))))
 

@@ -509,7 +509,6 @@
     (tu/run-async done
       (fn ^:async t []
         (let [budget wsearch/round-budget
-              chunk wplan/chunk-expansions
               world {:blocks (merge (box 0 63 0 47 63 15 "stone") (box 18 79 8 47 79 8 "stone"))
                      :self {:pos {:x 18.5 :y 80 :z 8.5}}}
               {:keys [eng p] :as s} (setup world)
@@ -517,11 +516,9 @@
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [10 64 8] :range 0 :spend {:health 7}})))]
           (reset! wsearch/searches {})
           (set! wsearch/round-budget 64)
-          (set! wplan/chunk-expansions 16)
           (core/submit! eng '(recording-parent) {})
-          (await (tick-out! eng 600))
+          (await (tu/with-expansion-budget 16 #(tick-out! eng 600)))
           (set! wsearch/round-budget budget)
-          (set! wplan/chunk-expansions chunk)
           (is (= {:arrived false :reason :unreachable :why :exhausted} (select-keys @out [:arrived :reason :why])))
           (is (>= (first (at p)) 46) "walked to the frontier and stayed there")
           (is (= ["partial" "blocked" "blocked" "blocked"] (mapv :status (moved eng)))
@@ -537,23 +534,20 @@
     (tu/run-async done
       (fn ^:async t []
         (let [budget wsearch/round-budget
-              chunk wplan/chunk-expansions
               joined (merge (box 0 63 0 6 63 60 "stone") (box 3 64 0 3 65 58 "stone"))
               {:keys [eng p] :as s} (setup {:blocks joined :self {:pos {:x 0.5 :y 64 :z 0.5}}})
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [6 64 0] :range 0})))]
           (reset! wsearch/searches {})
           (set! wsearch/round-budget 32)
-          (set! wplan/chunk-expansions 16)
           (core/submit! eng '(recording-parent) {})
           (let [plans (atom 0)
                 plan-walk wsearch/plan-walk-budgeted!]
             (set! wsearch/plan-walk-budgeted! (fn [& args] (swap! plans inc) (apply plan-walk args)))
-            (await (tick-out! eng 200))
+            (await (tu/with-expansion-budget 16 #(tick-out! eng 200)))
             (set! wsearch/plan-walk-budgeted! plan-walk)
             (is (> @plans 3) "several rounds searched"))
           (set! wsearch/round-budget budget)
-          (set! wplan/chunk-expansions chunk)
           (is (= {:arrived true} @out))
           (is (= [] (events-of s :unreachable)))
           (is (= ["arrived"] (mapv :status (moved eng))) "one round walked: the rounds that searched wrote nothing"))))))
@@ -635,15 +629,12 @@
   "Run (f) with a search budget of 32 expansions a slice and go-to's pace! counted in paces; restores both."
   [paces f]
   (let [budget wsearch/round-budget
-        chunk wplan/chunk-expansions
         pace pace/pace!]
     (reset! wsearch/searches {})
     (set! wsearch/round-budget 32)
-    (set! wplan/chunk-expansions 16)
     (set! pace/pace! (fn [] (swap! paces inc) (pace)))
-    (try (await (f))
+    (try (await (tu/with-expansion-budget 16 f))
          (finally (set! wsearch/round-budget budget)
-                  (set! wplan/chunk-expansions chunk)
                   (set! pace/pace! pace)))))
 
 (deftest one-go-to-call-searches-on-paced-until-its-search-ends

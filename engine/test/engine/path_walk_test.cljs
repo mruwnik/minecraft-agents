@@ -119,13 +119,10 @@
         (let [p (tu/fake {:blocks (walkways true) :self {:pos {:x 0.5 :y 64 :z 0.5}}})
               c {:primitives p}
               order (atom [])
-              chunk wplan/chunk-expansions
               whole (await (walk/plan-walk! c (.pathWorld p) [6 64 0] 0 walk/default-weight))]
-          (set! wplan/chunk-expansions 16)
           (js/setTimeout #(swap! order conj :timer) 0)
-          (let [plan (await (walk/plan-walk! c (.pathWorld p) [6 64 0] 0 walk/default-weight))]
+          (let [plan (await (tu/with-expansion-budget 16 #(walk/plan-walk! c (.pathWorld p) [6 64 0] 0 walk/default-weight)))]
             (swap! order conj :planned)
-            (set! wplan/chunk-expansions chunk)
             (is (= [:timer :planned] @order))
             (is (= "found" (:status plan) (:status whole)))
             (is (= (:steps whole) (:steps plan)))
@@ -308,16 +305,15 @@
   \"searching\": [that plan, the calls]."
   [blocks pos goal budget]
   (let [p (tu/fake {:blocks blocks :self {:pos pos}})
-        c {:primitives p}
-        chunk wplan/chunk-expansions]
+        c {:primitives p}]
     (reset! wsearch/searches {})
-    (set! wplan/chunk-expansions 16)
-    (loop [calls 1]
-      (let [plan (await (walk/plan-walk! c (.pathWorld p) goal 0 walk/default-weight {:budget budget}))]
-        (if (and (= "searching" (:status plan)) (< calls 100))
-          (recur (inc calls))
-          (do (set! wplan/chunk-expansions chunk)
-              [plan calls]))))))
+    (await (tu/with-expansion-budget 16
+             (fn ^:async run []
+               (loop [calls 1]
+                 (let [plan (await (walk/plan-walk! c (.pathWorld p) goal 0 walk/default-weight {:budget budget}))]
+                   (if (and (= "searching" (:status plan)) (< calls 100))
+                     (recur (inc calls))
+                     [plan calls]))))))))
 
 ;; the joined walkways' way round is ~200 cells along a walkway that leads away from the goal: no call gets nearer, so
 ;; each walks nowhere and the next goes on with the same search, which ends with the plan of a search in one go
@@ -347,20 +343,12 @@
           (is (= {} @wsearch/searches) "the body walks on: a new search from where it gets to"))))))
 
 (defn ^:async one-budgeted-call
-  "One plan-walk! with budget (chunk-expansions 16) from pos toward goal with opts: its plan. round-ms is lifted: under load
-  the wall-clock cap would end the search before its expansion budget."
+  "One plan-walk! with budget (chunk-expansions 16) from pos toward goal with opts: its plan."
   [blocks pos goal budget opts]
-  (let [p (tu/fake {:blocks blocks :self {:pos pos}})
-        chunk wplan/chunk-expansions
-        ms wsearch/round-ms]
+  (let [p (tu/fake {:blocks blocks :self {:pos pos}})]
     (reset! wsearch/searches {})
-    (set! wplan/chunk-expansions 16)
-    (set! wsearch/round-ms 1e9)
-    (try (await (walk/plan-walk! {:primitives p} (.pathWorld p) goal 0 walk/default-weight (assoc opts :budget budget)))
-         (finally
-           (set! wplan/chunk-expansions chunk)
-           (set! wsearch/round-ms ms)
-           (reset! wsearch/searches {})))))
+    (try (await (tu/with-expansion-budget 16 #(walk/plan-walk! {:primitives p} (.pathWorld p) goal 0 walk/default-weight (assoc opts :budget budget))))
+         (finally (reset! wsearch/searches {})))))
 
 ;; a ledge (feet 64, x 0..1, z 0..63) whose first move east is a 3-drop to a floor (feet 61, x 2..47) running on to the
 ;; loaded edge (x 48 on is unloaded), the goal far east in unloaded land (live: go-to's first move a gap jump down, 100

@@ -1191,12 +1191,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [order (atom [])
-              chunk wplan/chunk-expansions]
-          (set! wplan/chunk-expansions 16)
+        (let [order (atom [])]
           (js/setTimeout #(swap! order conj :timer) 0)
-          (try (await (way-back-of (slab 63 (range 60)) [50 64 1]))
-               (finally (set! wplan/chunk-expansions chunk)))
+          (await (tu/with-expansion-budget 16 #(way-back-of (slab 63 (range 60)) [50 64 1])))
           (swap! order conj :planned)
           (is (= [:timer :planned] @order)))))))
 

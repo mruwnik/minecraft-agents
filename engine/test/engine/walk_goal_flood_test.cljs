@@ -20,25 +20,24 @@
   ([k starts policy-fn]
   (let [p (tu/fake {:blocks high-deck :self {:pos {:x 0.5 :y 64 :z 0.5}}})
         c {:primitives p}
-        chunk wplan/chunk-expansions
         options wplan/plan-options]
     (reset! wsearch/searches {})
     (wsearch/forget-known! c)
-    (set! wplan/chunk-expansions 16)
     (set! wplan/plan-options (fn [& args] (js/Object.assign (apply options args) #js {:preFlood 0 :floodAfter 20 :goalFlood 100})))
-    (let [out (loop [i 0
-                     walked true]
-                (if (>= i k)
-                  :unfinished
-                  (let [[x z] (nth (cycle starts) i)
-                        _ (when walked ; a walk: the next call begins a new search from where it got to
-                            (swap! (fake/state p) assoc-in [:self :pos] [(+ x 0.5) 64 (+ z 0.5)])
-                            (reset! wsearch/searches {}))
-                        plan (await (walk/plan-walk! c (.pathWorld p) [20 71 20] 0 walk/default-weight {:budget 300 :policy (policy-fn (wworld/body-policy c))}))]
-                    (if (= "searching" (.-reason (:r plan)))
-                      (recur (inc i) (some? (:steps plan)))
-                      (.-reason (:r plan))))))]
-      (set! wplan/chunk-expansions chunk)
+    (let [out (await (tu/with-expansion-budget 16
+                       (fn ^:async run []
+                         (loop [i 0
+                                walked true]
+                           (if (>= i k)
+                             :unfinished
+                             (let [[x z] (nth (cycle starts) i)
+                                   _ (when walked ; a walk: the next call begins a new search from where it got to
+                                       (swap! (fake/state p) assoc-in [:self :pos] [(+ x 0.5) 64 (+ z 0.5)])
+                                       (reset! wsearch/searches {}))
+                                   plan (await (walk/plan-walk! c (.pathWorld p) [20 71 20] 0 walk/default-weight {:budget 300 :policy (policy-fn (wworld/body-policy c))}))]
+                               (if (= "searching" (.-reason (:r plan)))
+                                 (recur (inc i) (some? (:steps plan)))
+                                 (.-reason (:r plan)))))))))]
       (set! wplan/plan-options options)
       (reset! wsearch/searches {})
       (wsearch/forget-known! c)
@@ -83,18 +82,15 @@
       (fn ^:async t []
         (let [p (tu/fake {:blocks room-floor :self {:pos {:x 0.5 :y 64 :z 0.5}}})
               c {:primitives p}
-              chunk wplan/chunk-expansions
               options wplan/plan-options
               plan! (fn [budget] (walk/plan-walk! c (.pathWorld p) [17 64 0] 0 walk/default-weight {:budget budget}))]
           (reset! wsearch/searches {})
           (wsearch/forget-known! c)
-          (set! wplan/chunk-expansions 16)
           (set! wplan/plan-options (fn [& args] (js/Object.assign (apply options args) #js {:preFlood 0 :floodAfter 20 :goalFlood 100})))
-          (let [first-plan (await (plan! 40))]
+          (let [first-plan (await (tu/with-expansion-budget 16 #(plan! 40)))]
             (swap! (fake/state p) update :blocks dissoc (fake/parse-cell "18,64,0") (fake/parse-cell "18,65,0"))
             (reset! wsearch/searches {}) ; a walk: the next call begins a new search
-            (let [then (await (plan! 100000))]
-              (set! wplan/chunk-expansions chunk)
+            (let [then (await (tu/with-expansion-budget 16 #(plan! 100000)))]
               (set! wplan/plan-options options)
               (reset! wsearch/searches {})
               (wsearch/forget-known! c)

@@ -29,16 +29,15 @@
   ([blocks ts range opts] (answer-of blocks ts range opts nil))
   ([blocks ts range opts {:keys [world self]}]
   (let [p (tu/fake (merge {:blocks blocks :self (merge {:pos start} self)} world))
-        c {:primitives p :view (fn [] {:data mem/empty-data :now 0})}
-        chunk wplan/chunk-expansions]
+        c {:primitives p :view (fn [] {:data mem/empty-data :now 0})}]
     (reset! targets/searches {})
-    (set! wplan/chunk-expansions 16)
-    (loop [calls 1]
-      (let [a (await (targets/nearest! c ts range opts))]
-        (if (and (= :searching (:status a)) (< calls 500))
-          (recur (inc calls))
-          (do (set! wplan/chunk-expansions chunk)
-              [a calls])))))))
+    (await (tu/with-expansion-budget 16
+             (fn ^:async run []
+               (loop [calls 1]
+                 (let [a (await (targets/nearest! c ts range opts))]
+                   (if (and (= :searching (:status a)) (< calls 500))
+                     (recur (inc calls))
+                     [a calls])))))))))
 
 (def near-sealed {:x 6 :y 64 :z 2})
 (def far-open {:x 20 :y 64 :z 2})

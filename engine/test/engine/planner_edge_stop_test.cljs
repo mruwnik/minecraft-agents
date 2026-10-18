@@ -162,15 +162,10 @@
               query #js {:from #js {:x 40 :y 64 :z 24} :goal #js {:kind "near" :x gx :y gy :z gz :range 0}}
               options (fn [] #js {:table (.-table pw) :space (.-space pw) :weight 1.2 :stopAtEdge true
                                   :knownCells (js/Set.) :knownEdges (js/Set.)})
-              whole (planner/plan (.-snapshot pw) query (options))
-              chunk wplan/chunk-expansions
-              ms wsearch/round-ms]
-          (set! wplan/chunk-expansions 2)
-          (set! wsearch/round-ms 1e9)
-          (let [[_ within] (await (wsearch/run-search! {} {:walled pw :limited (planner/create-plan (.-snapshot pw) query (options))}
-                                                       (- (.-expanded whole) 6) nil corridor-goal 0 1.2))]
-            (set! wplan/chunk-expansions chunk)
-            (set! wsearch/round-ms ms)
+              whole (planner/plan (.-snapshot pw) query (options))]
+          (let [[_ within] (await (tu/with-expansion-budget 2
+                                    #(wsearch/run-search! {} {:walled pw :limited (planner/create-plan (.-snapshot pw) query (options))}
+                                                          (- (.-expanded whole) 6) nil corridor-goal 0 1.2)))]
             (is (some? within) "the search ends in its round")
             (is (= (cell (js->clj (.-frontier whole) :keywordize-keys true))
                    (some-> within :r .-frontier (js->clj :keywordize-keys true) cell)))))))))

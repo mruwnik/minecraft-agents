@@ -13,7 +13,9 @@
             [engine.fast-pace]
             [engine.fsutil :as fsu]
             [engine.memory :as mem]
-            [jobs.lib.near :as near]))
+            [jobs.lib.near :as near]
+            [jobs.lib.walk.plan :as wplan]
+            [jobs.lib.walk.search :as wsearch]))
 
 (def require-here node/require-here)
 
@@ -186,6 +188,18 @@
   "Call the promise-returning (f row) on each of rows in turn: a table of cases without a loop in the test."
   [rows f]
   (doseq [row rows] (await (f row))))
+
+(defn ^:async with-expansion-budget
+  "Run the thunk f (sync or promise) with wplan/chunk-expansions n and the wall-clock cap wsearch/round-ms lifted, so
+  a loaded machine cannot end a budgeted search early; restores both."
+  [n f]
+  (let [chunk wplan/chunk-expansions
+        ms wsearch/round-ms]
+    (set! wplan/chunk-expansions n)
+    (set! wsearch/round-ms 1e9)
+    (try (await (f))
+         (finally (set! wplan/chunk-expansions chunk)
+                  (set! wsearch/round-ms ms)))))
 
 (defn run-async
   "Run the promise-returning thunk f inside a cljs.test async block."

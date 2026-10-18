@@ -14,16 +14,13 @@
 (defn ^:async slices-after-cut
   "Run f (a function of a ctx whose alive? turns false after 3 yields) with 16-expansion slices; [yields outcome]."
   [f]
-  (let [chunk wplan/chunk-expansions
-        yield wplan/yield!
+  (let [yield wplan/yield!
         yields (atom 0)
         p (tu/fake {:blocks floor-blocks :self {:pos {:x 44.5 :y 64 :z 24.5}}})
         c {:primitives p :alive? #(< @yields 3)}]
-    (set! wplan/chunk-expansions 16)
     (set! wplan/yield! (fn [] (swap! yields inc) (yield)))
-    (let [out (try (await (f c (wworld/path-world p)))
+    (let [out (try (await (tu/with-expansion-budget 16 #(f c (wworld/path-world p))))
                    (catch :default e e))]
-      (set! wplan/chunk-expansions chunk)
       (set! wplan/yield! yield)
       [@yields out])))
 

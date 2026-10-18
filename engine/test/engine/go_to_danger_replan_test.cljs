@@ -31,7 +31,6 @@
   {:out :ticks :calls :unfinished :searches}: unfinished the re-plan searches (budget 160) that ended unfinished."
   [wander?]
   (let [budget wsearch/round-budget
-        chunk wplan/chunk-expansions
         plan-walk wsearch/plan-walk-budgeted!
         {:keys [eng p] :as s} (gt/setup {:blocks floor-blocks})
         out (atom :not-done)
@@ -41,7 +40,6 @@
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out {:pos goal :range 0})))]
     (reset! wsearch/searches {})
     (set! wsearch/round-budget 40)
-    (set! wplan/chunk-expansions 20)
     (set! wsearch/plan-walk-budgeted!
           (fn [& args]
             (let [n (swap! calls inc)]
@@ -55,10 +53,9 @@
                        (swap! unfinished inc))
                      pl))))
     (core/submit! eng '(recording-parent) {})
-    (let [ticks (await (gt/tick-out! eng 400))]
+    (let [ticks (await (tu/with-expansion-budget 20 #(gt/tick-out! eng 400)))]
       (set! wsearch/plan-walk-budgeted! plan-walk)
       (set! wsearch/round-budget budget)
-      (set! wplan/chunk-expansions chunk)
       (reset! wsearch/searches {})
       (assoc s :out out :ticks ticks :calls @calls :unfinished @unfinished :searches @searches))))
 
