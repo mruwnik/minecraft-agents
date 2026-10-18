@@ -170,6 +170,10 @@
   (is (re-find #"must export safe\? "
                (describe-message "(ns jobs.probe)\n(def fit? 1)\n(defn round [c] :continue)"))))
 
+(deftest an-empty-or-misnamed-file-is-refused-not-taken-for-a-helper
+  (is (re-find #"must declare \(ns jobs.probe"  (describe-message "")))
+  (is (re-find #"must declare \(ns jobs.probe" (describe-message "(ns jobs.other)\n(defn helper [c] :continue)"))))
+
 (deftest a-file-with-only-a-round-is-a-job-and-one-without-is-a-helper
   (is (describes-job? "(ns jobs.probe)\n(def safe? 1)\n(def fit? 1)\n(defn round [c] :continue)"))
   (is (not (describes-job? "(ns jobs.probe)\n(defn helper [c] :continue)"))))

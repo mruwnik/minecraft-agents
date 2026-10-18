@@ -63,8 +63,8 @@
 (declare job-meta)
 
 (defn describe
-  "{:ns sym :defines #{...} :meta (job-meta)} for a job file, nil for a helper file (job?), or throws when a job file's ns does not match
-  its path, a job defines check (the old start check; a job declares can-start? or can-run?), or a job lacks safe? or fit?."
+  "{:ns sym :defines #{...} :meta (job-meta)} for a job file, nil for a helper file (job?), or throws when a file's ns does not match
+  its path (an empty or half-written file too: it must never pass for a helper and drop a job from the bundle), a job defines check (the old start check; a job declares can-start? or can-run?), or a job lacks safe? or fit?."
   [dir file]
   (let [forms (read-forms file)
         ns-form (first forms)
@@ -75,10 +75,10 @@
       (and (defines 'round) (defines 'check))
       (throw (ex-info (str "job file " (.getPath file) " defines check; a job declares can-start? or can-run?")
                       {:file (.getPath file)}))
-      (not (job? defines)) nil
       (not= want ns-sym)
       (throw (ex-info (str "job file " (.getPath file) " must declare (ns " want " ...), found " (pr-str ns-sym))
                       {:file (.getPath file)}))
+      (not (job? defines)) nil
       (not (and (defines 'safe?) (defines 'fit?)))
       (throw (ex-info (str "job " want " must export " (str/join " and " (map str (remove defines '[safe? fit?]))) " (ready/ok for a job with nothing to check)")
                       {:file (.getPath file) :job want}))

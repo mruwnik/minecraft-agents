@@ -13,7 +13,7 @@ check() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: want [$3]
 
 # Fake repo: tools copied in, stub npx, a live "server" pid so no server start.
 mkdir -p "$T/repo/tools" "$T/repo/dashboard/.shadow-cljs" "$T/repo/engine/out/test/cljs-runtime" "$T/bin" "$T/res"
-cp "$TOOLS/compile" "$TOOLS/test-engine" "$TOOLS/test-run.mjs" "$TOOLS/res-slot" "$TOOLS/res-slot.mjs" "$TOOLS/res-slot.json" "$TOOLS/compile-idle-watch" "$T/repo/tools/" 2>/dev/null
+cp "$TOOLS/compile" "$TOOLS/test-engine" "$TOOLS/test-run.mjs" "$TOOLS/res-slot" "$TOOLS/res-slot.mjs" "$TOOLS/res-slot.json" "$TOOLS/compile-idle-watch" "$TOOLS/bundle-jobs-check" "$T/repo/tools/" 2>/dev/null
 printf '{"floorMb":0,"kinds":{"tests":{"needMb":1,"max":1}}}' > "$T/res/cfg.json"
 export RES_SLOT_DIR="$T/res" RES_SLOT_CONFIG="$T/res/cfg.json"
 sleep 300 & SRV=$!; trap 'kill $SRV 2>/dev/null; rm -rf "$T"' EXIT
@@ -35,6 +35,17 @@ WARN='------ WARNING #1 - :undeclared-var ---' timeout 20 "$C" engine test >/dev
 WARN='------ WARNING #1 - :undeclared-ns ---' timeout 20 "$C" engine test >/dev/null 2>&1; check "undeclared-ns fails" "$?" 1
 WARN='------ WARNING #1 - :fn-arity ---' timeout 20 "$C" engine test >/dev/null 2>&1; check "fn-arity fails" "$?" 1
 WARN='------ WARNING #1 - :redef ---' timeout 20 "$C" engine test >/dev/null 2>&1; check "other warning passes" "$?" 0
+printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n' "$T" > "$T/bin/npx"
+
+# body-release is built to a temp file, checked for every jobs/ file, then renamed; a bundle lacking a job leaves the old one in place
+mkdir -p "$T/repo/engine/src/jobs/movement"; echo '(ns jobs.movement.go-to)' > "$T/repo/engine/src/jobs/movement/go_to.cljs"
+echo old > "$T/repo/engine/out/body-release.cjs"
+bundle_stub() { printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n[ "$BUNDLE" = none ] || echo "$BUNDLE" > ../engine/out/body-release.new.cjs\n' "$T" > "$T/bin/npx"; }
+bundle_stub
+BUNDLE='jobs.movement.go_to.round=1' timeout 20 "$C" engine body-release >/dev/null 2>&1; check "complete body-release bundle is renamed into place" "$(cat "$T/repo/engine/out/body-release.cjs")" 'jobs.movement.go_to.round=1'
+check "no temp bundle left" "$(ls "$T/repo/engine/out" | grep -c 'body-release.new')" 0
+BUNDLE='jobs.movement.other.x=1' timeout 20 "$C" engine body-release >/dev/null 2>&1; check "bundle missing a job fails the build" "$?" 1
+check "failed bundle leaves the old one" "$(cat "$T/repo/engine/out/body-release.cjs")" 'jobs.movement.go_to.round=1'
 printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n' "$T" > "$T/bin/npx"
 
 # TERM during a compile leaves no temp file behind

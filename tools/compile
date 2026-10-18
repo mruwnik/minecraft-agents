@@ -57,6 +57,12 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ "$stop" = 1 ] || [ ${#builds[@]} -gt 0 ] || usage
+# body-release is built beside its target, checked against the job files, then renamed: a running body or a crashed compile never sees a partial or job-less bundle
+tmp_bundle=
+if [ "$stop" = 0 ] && [ -z "$outdir" ] && [ "${builds[*]}" = body-release ]; then
+  tmp_bundle="$repo/engine/out/body-release.new.cjs"
+  extra+=(--config-merge '{:output-to "../engine/out/body-release.new.cjs" :output-dir "../engine/out/body-release.new"}')
+fi
 # the dashboard's own unit-test build is :dashboard-test (:test is the engine's)
 [ "$project" = dashboard ] && for i in "${!builds[@]}"; do [ "${builds[$i]}" = test ] && builds[$i]=dashboard-test; done
 
@@ -282,6 +288,11 @@ if [ "$code" = 0 ] && grep -qE 'WARNING #[0-9]+ - :(undeclared-(var|ns)|fn-arity
   code=1
 fi
 rm -f "$out"; out=
+if [ -n "$tmp_bundle" ]; then
+  [ "$code" != 0 ] || "$repo/tools/bundle-jobs-check" "$tmp_bundle" "$repo/engine/src/jobs" || code=1
+  if [ "$code" = 0 ]; then mv -f "$tmp_bundle" "$repo/engine/out/body-release.cjs"; else echo "tools/compile: body-release.cjs left as it was" >&2; fi
+  rm -rf "$tmp_bundle" "$repo/engine/out/body-release.new"
+fi
 [ "$code" = 0 ] && [ -z "${MC_COMPILE_IN_POOL:-}" ] && write_build_id
 touch .shadow-cljs/last-use; rm -f .shadow-cljs/last-use.compiling
 t2=$(date +%s.%N)
