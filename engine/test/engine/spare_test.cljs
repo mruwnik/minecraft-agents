@@ -21,6 +21,7 @@
         (let [s (await (st/stair! (assoc spare-chest :inventory [worn]) east tu/seeing-all))]
           (is (= :done (:status @(:out s))))
           (is (contains? (kinds s) :tool.spare))
+          (is (= 2 (get (m/inv s) "stone_pickaxe")) "the spare is a second pickaxe on top of the worn one carried")
           (is (not (contains? (kinds s) :tool.no-spare))))))))
 
 (deftest a-worn-last-pickaxe-with-no-spare-to-be-had-warns-and-goes-on

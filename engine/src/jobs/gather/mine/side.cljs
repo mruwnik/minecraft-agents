@@ -5,11 +5,13 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.gather.mine-stay :as stay]
-            [jobs.gather.mine.targets :refer [carried rules-in skip! step-cell]]
+            [jobs.gather.mine.targets :refer [rules-in skip! step-cell]]
             [jobs.gather.mine.tunnel :as tunnel]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.blocks :as blocks]
             [jobs.lib.look :as look :refer [cell-of headings]]
+            [jobs.lib.need :as need]
             [jobs.lib.util :as u]))
 
 (defn ^:async side-round!
@@ -20,7 +22,7 @@
   (let [here (cell-of (u/self-pos c))
         args (-> (:args c)
                  (dissoc :direction :submitted-at)
-                 (assoc :heading heading :tunnel-length steps :count (inc (carried c)) :ore-reach 0 :mend false :fetch false :shaft false :stay-level true :side-cut? true))
+                 (assoc :heading heading :tunnel-length steps :count (need/carry-count c :side [(blocks/item-name (:args c))] 1) :ore-reach 0 :mend false :fetch false :shaft false :stay-level true :side-cut? true))
         r (await (ctx/call c :side 'jobs.gather.mine args))]
     (if (= :continue r)
       :continue

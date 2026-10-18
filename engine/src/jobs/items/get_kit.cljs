@@ -1,6 +1,5 @@
 (ns jobs.items.get-kit
   (:require [jobs.lib.ready :as ready]
-            [jobs.lib.storage :as storage]
             [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -153,10 +152,10 @@
         t (* n (settings/get settings ::item-s))]
     {:uses {:job-time [0 t ##Inf]}}))
 
-(defn obtain-args [c item n]
+(defn obtain-args [c item total]
   (let [a (:args c)]
     (assoc (if (vector? item) {:any-of item} {:item item})
-           :count (+ (min 64 n) (reduce + 0 (map #(storage/carried (u/inventory (:primitives c)) %) (if (vector? item) item [item])))) :explore (:explore a)
+           :count total :explore (:explore a)
            :spend {:job-time (* 60 (settings/get settings ::minutes))})))
 
 (defn armed?
@@ -172,7 +171,7 @@
   "One obtain child round in slot: :continue, or the stop (stop-of) of the child's ending when it ended without the item
   (nil when it got it)."
   [c slot item n]
-  (let [e (await (need/call! c slot (quote jobs.items.obtain) (obtain-args c item n)))]
+  (let [e (await (need/call! c slot (quote jobs.items.obtain) (obtain-args c item (need/carry-count c slot (if (vector? item) item [item]) n))))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) nil

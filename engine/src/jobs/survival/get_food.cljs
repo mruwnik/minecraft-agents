@@ -9,6 +9,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.cond :as cond]
             [jobs.lib.look :as look]
+            [jobs.lib.need :as need]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
@@ -221,7 +222,7 @@
   "Way :bake: :again when bread was made, else nil with :no-bake remembered."
   [c]
   (let [loaves (min (sources/loaves-wanted c) (quot (sources/carried-count c "wheat") 3))
-        e (await (child/run!* c :bake 'jobs.items.craft {:item "bread" :count (+ loaves (sources/carried-count c "bread")) :radius 32 :fetch false}))]
+        e (await (child/run!* c :bake 'jobs.items.craft {:item "bread" :count (need/carry-count c :bake ["bread"] loaves) :radius 32 :fetch false}))]
     (cond
       (= :continue e) :continue
       (>= (:made (:data e) 0) 1) :again

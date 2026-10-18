@@ -141,32 +141,6 @@
   [c]
   (boolean (some #(str/ends-with? % "/spare") (:chain c))))
 
-(defn ^:async tool-ready!
-  "Before a job that digs a lot sets out: when the tool for block-name is the last of its kind that harvests it and is
-  worn (spare-need), run jobs.items.obtain for the cheapest tool of its kind that harvests block-name (spare-name; child :spare; chest, craft, gather). Resolves nil
-  to go on, :continue while the child waits on the world. Told once per tool name in the job's memory (:spare-tried):
-  info tool.spare when one came, warn tool.no-spare with the child's reason when not (the job goes on with the worn
-  tool). amount (the digs the job will make, optional) is spare-need's. The job's :fetch off, or a set of kinds without :tool, skips it; so does a job under a spare fetch (no spare of a spare)."
-  ([c block-name] (tool-ready! c block-name nil))
-  ([c block-name amount]
-  (let [p (:primitives c)
-        need (when (and block-name (not (in-spare? c)) (let [f (need/parse-arg (:fetch (:args c)))] (and (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) :tool))))) (spare-need c block-name amount))
-        tool-name (when need (spare-name p block-name need))]
-    (when (and need (not (contains? (:spare-tried (ctx/mem c)) tool-name)))
-      (let [e (await (ctx/call c :spare 'jobs.items.obtain {:item tool-name :count 1 :explore false}))]
-        (if (= :continue e)
-          :continue
-          (let [got? (= :done (:kind e))
-                reason (contract/cause-key e)
-                tried (:tried (:data e))]
-            (ctx/update-mem! c update :spare-tried (fnil conj #{}) tool-name)
-            (if got?
-              (ctx/emit! c :tool.spare :info {:tool tool-name :text (str "carrying a spare " tool-name)})
-              (ctx/emit! c :tool.no-spare :warn {:tool tool-name :durability (:uses-left need) :reason reason :status :stopped :tried tried
-                                                 :text (str "the last " tool-name " is worn (" (:uses-left need) " left) and no spare could be had"
-                                                            ": " (name reason))}))
-            nil)))))))
-
 (defn ^:async back-from-stocking!
   "After the torch trip, walk back to the cell it began on (:torches-from): :continue while the walk waits on the world, else nil."
   [c]
@@ -190,6 +164,34 @@
         [x y z] (mapv #(js/Math.floor %) [x y z])]
     (vec (for [n [1 2] dy [-1 0 1]] [(+ x (* n dx)) (+ y dy) (+ z (* n dz))]))))
 
+(defn ^:async tool-ready!
+  "Before a job that digs a lot sets out: when the tool for block-name is the last of its kind that harvests it and is
+  worn (spare-need), get the cheapest lasting tool of its kind that harvests block-name (spare-name) through need/fetch!
+  (slot :spare; chest, craft, gather; a table is never put in the dig line). Resolves nil to go on, :continue while the
+  get waits on the world. Told once per tool name in the job's memory (:spare-tried): info tool.spare when one came, warn
+  tool.no-spare with the get's reason when not (the job goes on with the worn tool). amount (the digs the job will make,
+  optional) is spare-need's. The job's :fetch off, or a set of kinds without :tool, skips it; so does a job under a spare
+  fetch (no spare of a spare)."
+  ([c block-name] (tool-ready! c block-name nil))
+  ([c block-name amount]
+   (let [p (:primitives c)
+         f (need/parse-arg (:fetch (:args c)))
+         worn (when (and block-name (not (in-spare? c)) (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) :tool)))
+                (spare-need c block-name amount))
+         tool-name (when worn (spare-name p block-name worn))]
+     (when (and worn (not (contains? (:spare-tried (ctx/mem c)) tool-name)))
+       (let [e (await (need/fetch! c 'jobs.items.obtain {:item tool-name :count 1 :avoid (line-ahead c)} :need {:item tool-name :count 1} {:slot :spare}))]
+         (if (= :continue e)
+           :continue
+           (let [why (need/cause-why e)]
+             (ctx/update-mem! c update :spare-tried (fnil conj #{}) tool-name)
+             (if (= :done (:kind e))
+               (ctx/emit! c :tool.spare :info {:tool tool-name :text (str "carrying a spare " tool-name)})
+               (ctx/emit! c :tool.no-spare :warn {:tool tool-name :durability (:uses-left worn) :reason why :tried (get-in e [:data :tried])
+                                                  :text (str "the last " tool-name " is worn (" (:uses-left worn) " left) and no spare could be had"
+                                                             (when why (str ": " (name why))))}))
+             nil)))))))
+
 (defn ^:async torches-ready!
   "Before a job that digs down or tunnels sets out: when fewer than ::torch-low torches are carried, run jobs.items.obtain
   for torches up to ::torch-stock (child :torches; chest, craft from coal or charcoal, charcoal from logs by smelt, gather).
@@ -204,7 +206,7 @@
           fetch? (and (map? limits) (not (:error limits)) (or (nil? (:what limits)) (contains? (:what limits) :item)))
           fuel (torch/fuel-held (:primitives c))
           want (- (torch-stock) held)
-          args {:item "torch" :count (+ (torch/torches-carried (:primitives c)) (if (pos? fuel) (min want (* 4 fuel)) want)) :avoid (line-ahead c) :explore false}]
+          args {:item "torch" :count (need/carry-count c :torches ["torch"] (if (pos? fuel) (min want (* 4 fuel)) want)) :avoid (line-ahead c) :explore false}]
       (when (and fetch? (< held (torch-low)) (not (:torches-tried (ctx/mem c))) (not (food-short? c)))
         (when-not (:torches-from (ctx/mem c)) (ctx/update-mem! c assoc :torches-from (u/self-pos c)))
         (let [e (await (ctx/call c :torches 'jobs.items.obtain args))]

@@ -25,6 +25,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.tools :as tools]
             [jobs.access.stock :as stock]
+            [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]
             [plan.shape :as shape]))
@@ -103,7 +104,7 @@
   :hazards :zone :walk ...), also as a stair.done info or stair.stopped warn event.
 
   :spent-ok (default false): a dig whose every carried tool is down to 3 uses (jobs.lib.trip/spent-tool?) stops {:reason :tool-spent :tool <kind>}
-  before the last tool breaks deep down, after a spare was tried once (jobs.access.stock/spare!); true digs on.
+  before the last tool breaks deep down, after a spare was tried once (jobs.lib.trip/tool-ready!); true digs on.
   :need-drop (default true): false digs a block no carried tool clears bare-handed anyway (slow, its drop lost): go-to's
   last resort when it has no pickaxe. Also done once the fetch of a tool for that block failed.")
 
@@ -421,7 +422,7 @@
         ;; the spare's fetch may walk the body off: the stair starts where it was asked, not where the fetch ended
         (ctx/update-mem! c assoc :start feet)
         (if (= :continue (or (await (when (and (= :down (:dir (:args c))) (:stock-torches (:args c))) (stock/torches! c)))
-                             (await (stock/spare! c "stone" (* 3 target)))))
+                             (await (trip/tool-ready! c "stone" (* 3 target)))))
           :continue
           (if (and (not= feet (reach/standing-vec (:primitives c))) (= :continue (await (child/walk-into!* c :start feet))))
             :continue

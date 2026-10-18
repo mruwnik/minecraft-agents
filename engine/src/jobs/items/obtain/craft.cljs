@@ -8,7 +8,7 @@
             [jobs.items.smelt :as smelt]
             [jobs.lib.child :as child]
             [jobs.lib.util :as u]
-            [jobs.lib.storage :as storage]
+            [jobs.lib.need :as need]
             [jobs.lib.world :as known]))
 
 (defn fruitless! [c why]
@@ -115,7 +115,7 @@
 
       :else
       (do (ctx/update-mem! c assoc-in [:craft :step] step)
-          (let [e (await (ctx/call c :craft 'jobs.items.craft (cond-> {:item (:item step) :count (storage/plus-carried (u/inventory (:primitives c)) (:item step) (:count step)) :fetch false :avoid (:avoid (:args c)) :for-plan (:for-plan (:args c))}
+          (let [e (await (ctx/call c :craft 'jobs.items.craft (cond-> {:item (:item step) :count (need/carry-count c :craft [(:item step)] (:count step)) :fetch false :avoid (:avoid (:args c)) :for-plan (:for-plan (:args c))}
                                                                 (and (:table? step) (:table (ctx/mem c))) (assoc :table (:table (ctx/mem c))))))]
             (if (= :continue e)
               :continue

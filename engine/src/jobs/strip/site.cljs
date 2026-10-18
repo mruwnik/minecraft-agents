@@ -332,7 +332,7 @@
                    (cond (= :continue f) :continue
                          f (child-stop! c f)
                          :else (do (save! c #(-> % (update-in [:trip :deposits] (fnil inc 0)) (dissoc :bank))) :again))))
-      :torches (let [f (await (run-all! c [[:torches 'jobs.items.obtain {:item "torch" :count (+ (torch/torches-carried p) (- (trip/torch-stock) (torch/torches-held p))) :explore false}]]))]
+      :torches (let [f (await (run-all! c [[:torches 'jobs.items.obtain {:item "torch" :count (need/carry-count c :torches ["torch"] (- (trip/torch-stock) (torch/torches-held p))) :explore false}]]))]
                  (cond (= :continue f) :continue f (child-stop! c f)
                        (< (torch/torches-held p) (trip/torch-low)) (stop! c :no-torches {})
                        :else :again))

@@ -238,3 +238,15 @@
           (give! (:p r) "cobblestone" 1)
           (await (core/tick! (:eng r)))
           (is (= [5 5] (mapv :count @(:obtain r))) "the 2 more are on top of the 3 carried when the fetch began"))))))
+
+(deftest carry-count-books-the-total-once-per-child-so-a-yielding-child-does-not-move-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (setup (fn [c] (ctx/call c :x 'jobs.items.obtain {:item "cobblestone" :count (need/carry-count c :x ["cobblestone"] 2)}))
+                       {:obtain-step (constantly :continue)})]
+          (give! (:p r) "cobblestone" 3)
+          (await (core/tick! (:eng r)))
+          (give! (:p r) "cobblestone" 2)
+          (await (core/tick! (:eng r)))
+          (is (= [5 5] (mapv :count @(:obtain r))) "the 2 more are on top of the 3 carried when the child began, not of the 5 carried later"))))))

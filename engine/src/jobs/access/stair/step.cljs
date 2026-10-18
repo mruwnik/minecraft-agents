@@ -140,7 +140,7 @@
       (rules/unbreakable block) {:reason :unbreakable :cell cell :block block}
       (and seen? (lacks-tool? c block)) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)}
       (and (not (:spent-ok (:args c))) (trip/spent-tool? p block))
-      (if (= :continue (await (stock/spare! c block nil)))
+      (if (= :continue (await (trip/tool-ready! c block nil)))
         :yield
         (if (trip/spent-tool? p block)
           {:reason :tool-spent :cell cell :block block :tool (tools/needed-kind p block)}

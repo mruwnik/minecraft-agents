@@ -162,16 +162,32 @@
       (do (some-> (:child-wait c) (reset! (contract/status-cause s))) :continue)
       (await (ctx/call c slot job args)))))
 
+(defn booked-total
+  "The count to carry at least for n more of names: n and what is carried now, booked in the caller's memory when the child
+  of slot is fresh, so the items the child brings in do not move the goal (ctx/call evaluates the args every round)."
+  [c slot names n fresh?]
+  (if fresh?
+    (let [t (+ n (reduce + 0 (vals (counts c names))))]
+      (ctx/update-mem! c assoc-in [:need/total slot] t)
+      t)
+    (get-in (ctx/mem c) [:need/total slot])))
+
+(defn carry-count
+  "booked-total for the child about to be called (or already running) in slot: the :count of an item goal (\"carry at least\")
+  that asks for n more of names."
+  [c slot names n]
+  (booked-total c slot names n (nil? (get-in (ctx/mem c) [:children slot]))))
+
 (defn total-of
-  "The count to carry at least for a fetch of args' :count more of its item(s): booked in the caller's memory when the child
-  is fresh, so the carried items the child brings in do not move the goal."
+  "The count to carry at least for a fetch of args' :count more of its item(s), booked once per child."
   [c slot job args fresh?]
   (when (and (= 'jobs.items.obtain job) (:count args))
-    (if fresh?
-      (let [t (+ (:count args) (reduce + 0 (vals (counts c (if (:item args) [(:item args)] (:any-of args))))))]
-        (ctx/update-mem! c assoc-in [:need/total slot] t)
-        t)
-      (get-in (ctx/mem c) [:need/total slot]))))
+    (booked-total c slot (if (:item args) [(:item args)] (:any-of args)) (:count args) fresh?)))
+
+(defn cause-why
+  "The reason of the get that failed (its own, which need keeps as :why), else the cause's."
+  [e]
+  (or (get-in e [:cause :why]) (contract/cause-key e)))
 
 (defn ^:async fetch!
   "Get :count more of what args name (jobs.items.obtain's :count is the amount to carry, so the carried is added here)."
