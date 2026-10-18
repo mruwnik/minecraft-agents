@@ -25,6 +25,22 @@
    :expect [{:count-event {:source :reflex :kind :fired :context {:reflex-id :dusk-home}} :for-s 120 :at-least 1 :at-most 1}
             {:event {:source :reflex :kind :ended :context {:reflex-id :dusk-home}} :within-s 120}]
    :after [[:body-near [104.5 0 16.5] 5]]}
+  ;; card 6732741c: a body shut in a closed hut (roof 3 over the feet) is sheltered; the twin in the open fires
+  {:name "body-in-a-closed-hut-never-fires-dusk-home"
+   :register [{:trigger :dusk-home :persistence :cooldown :cooldown-s 5}]
+   :blocks [[:set [76 0 16] "torch"] [:fill [0 0 12] [8 3 20] "stone" :hollow] [:fill [1 0 13] [7 2 19] "air"]]
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [76 0 16]}) [:now]]
+         [:time-set 11500]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :dusk-home}} :for-s 40}]
+   :after [[:body-far [76.5 0 16.5] 40]]
+   :limit-s 60}
+  {:name "body-in-the-open-60-blocks-from-home-fires-dusk-home"
+   :register [{:trigger :dusk-home :persistence :cooldown :cooldown-s 5}]
+   :blocks [[:set [76 0 16] "torch"]]
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [76 0 16]}) [:now]]
+         [:time-set 11500]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :dusk-home}} :within-s 40}]
+   :limit-s 60}
   {:name "go-home-by-hand-with-a-home-300-away-waits-too-far"
    :blocks [[:set [304 0 16] "torch"]]
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [304 0 16]}) [:now]]
