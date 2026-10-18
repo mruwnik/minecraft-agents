@@ -1,0 +1,19 @@
+;; Card 226072ed: farm.harvest with a :center far outside the body's sight walks there before it looks for crops; it used to look once where it stood,
+;; see none and end :no-crop-seen. Wheat row [80..82 0 16] ripe on farmland, the body 76 blocks west of it.
+;; Should-succeed: harvest {:center :radius 6} cuts 3 and the wheat is in the bag. Should-fail (control): a far centre with no crop still ends :no-crop-seen.
+{:defaults
+ {:tags [:farm :harvest :jobs]
+  :time :day
+  :plot {:floor "grass_block" :length 100 :width 32 :height 8}
+  :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "harvest-walks-to-a-far-centre-and-cuts"
+   :blocks [[:fill [80 -1 16] [82 -1 16] "farmland[moisture=7]"] [:fill [80 -2 17] [82 -2 17] "stone"] [:fill [80 -1 17] [82 -1 17] "water"]
+            [:fill [80 0 16] [82 0 16] "wheat[age=7]"]]
+   :act [[:job (jobs.farm.harvest {:center #xyz [81 0 16] :radius 6 :replant false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:cut 3}} :within-s 120 :of-job true}]
+   :after [[:block [80 0 16] "air"] [:block [82 0 16] "air"] [:item "wheat" [:>= 3]]]}
+  {:name "harvest-at-a-far-centre-without-crops-ends-no-crop-seen"
+   :act [[:job (jobs.farm.harvest {:center #xyz [81 0 16] :radius 6 :replant false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-crop-seen}} :within-s 120 :of-job true}]}]}
