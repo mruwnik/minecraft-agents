@@ -1,6 +1,6 @@
 ;; Card cb9b30eb: jobs.farm.find-spot reports each spot's :step (largest height difference between neighbouring cells), drops patches over
 ;; :max-step, and leaves out patches in another owner's zone (the body's own zone is fine). A 128 x 64 grass plot, body in the middle, 5x5 patches.
-;; Should-succeed: ground rising westward 1 up every 3 columns (steps of 1) beside the flat east: the best spot is a flat one (step 0) and
+;; Should-succeed: ground rising westward 1 up every 3 columns (steps of 1) beside a flat strip with a high bank east of it (fewer than :limit flat patches fit): the best spot is a flat one (step 0) and
 ;; sloped ones are listed too; with :max-step 0 no listed spot has a step; a foreign zone over the flattest patch by the body moves the best spot
 ;; out of it; with the body's own zone there the best spot stays by the body (as with no zone).
 {:defaults
@@ -10,16 +10,16 @@
   :limit-s 60}
  :cases
  [{:name "flat-patch-ranks-first-and-sloped-ones-are-listed"
-   :blocks [[:fill [68 0 0] [70 0 63] "grass_block"] [:fill [65 0 0] [67 1 63] "grass_block"] [:fill [62 0 0] [64 2 63] "grass_block"] [:fill [59 0 0] [61 3 63] "grass_block"] [:fill [56 0 0] [58 4 63] "grass_block"] [:fill [53 0 0] [55 5 63] "grass_block"] [:fill [50 0 0] [52 6 63] "grass_block"] [:fill [47 0 0] [49 7 63] "grass_block"] [:fill [44 0 0] [46 8 63] "grass_block"] [:fill [41 0 0] [43 9 63] "grass_block"]]
-   :body {:at [76.5 0 32.5]}
-   :act [[:job (jobs.farm.find-spot {:w 5 :h 5 :center #xyz [70 -1 32] :range 12 :depth 12 :limit 8})]]
-   :expect [{:event {:source :job :kind :find-spot.found :data {:best [:near #at [73 -1 31] 6]} :message [:contains "step 0 water"]} :within-s 30 :of-job true}
+   :blocks [[:fill [68 0 0] [72 0 63] "grass_block"] [:fill [73 0 0] [127 3 63] "grass_block"] [:fill [65 0 0] [67 1 63] "grass_block"] [:fill [62 0 0] [64 2 63] "grass_block"] [:fill [59 0 0] [61 3 63] "grass_block"] [:fill [56 0 0] [58 4 63] "grass_block"] [:fill [53 0 0] [55 5 63] "grass_block"] [:fill [50 0 0] [52 6 63] "grass_block"] [:fill [47 0 0] [49 7 63] "grass_block"] [:fill [44 0 0] [46 8 63] "grass_block"] [:fill [41 0 0] [43 9 63] "grass_block"]]
+   :body {:at [70.5 1 32.5]}
+   :act [[:job (jobs.farm.find-spot {:w 5 :h 5 :center #xyz [70 -1 32] :range 3 :depth 12 :limit 8})]]
+   :expect [{:event {:source :job :kind :find-spot.found :data {:best [:near #at [68 0 32] 4]} :message [:contains "step 0 water"]} :within-s 30 :of-job true}
             {:event {:source :job :kind :find-spot.found :message [:contains "step 1 water"]} :within-s 30 :of-job true}]}
   {:name "max-step-drops-the-sloped-patches"
-   :blocks [[:fill [68 0 0] [70 0 63] "grass_block"] [:fill [65 0 0] [67 1 63] "grass_block"] [:fill [62 0 0] [64 2 63] "grass_block"] [:fill [59 0 0] [61 3 63] "grass_block"] [:fill [56 0 0] [58 4 63] "grass_block"] [:fill [53 0 0] [55 5 63] "grass_block"] [:fill [50 0 0] [52 6 63] "grass_block"] [:fill [47 0 0] [49 7 63] "grass_block"] [:fill [44 0 0] [46 8 63] "grass_block"] [:fill [41 0 0] [43 9 63] "grass_block"]]
-   :body {:at [76.5 0 32.5]}
-   :act [[:job (jobs.farm.find-spot {:w 5 :h 5 :center #xyz [70 -1 32] :range 12 :depth 12 :limit 8 :max-step 0})]]
-   :expect [{:event {:source :job :kind :find-spot.found :data {:best [:near #at [73 -1 31] 6]} :message [:not [:contains "step 1 water"]]} :within-s 30 :of-job true}
+   :blocks [[:fill [68 0 0] [72 0 63] "grass_block"] [:fill [73 0 0] [127 3 63] "grass_block"] [:fill [65 0 0] [67 1 63] "grass_block"] [:fill [62 0 0] [64 2 63] "grass_block"] [:fill [59 0 0] [61 3 63] "grass_block"] [:fill [56 0 0] [58 4 63] "grass_block"] [:fill [53 0 0] [55 5 63] "grass_block"] [:fill [50 0 0] [52 6 63] "grass_block"] [:fill [47 0 0] [49 7 63] "grass_block"] [:fill [44 0 0] [46 8 63] "grass_block"] [:fill [41 0 0] [43 9 63] "grass_block"]]
+   :body {:at [70.5 1 32.5]}
+   :act [[:job (jobs.farm.find-spot {:w 5 :h 5 :center #xyz [70 -1 32] :range 3 :depth 12 :limit 8 :max-step 0})]]
+   :expect [{:event {:source :job :kind :find-spot.found :data {:best [:near #at [68 0 32] 4]} :message [:not [:contains "step 1 water"]]} :within-s 30 :of-job true}
             {:event {:source :job :kind :completed} :within-s 30 :of-job true}]}
   {:name "no-zone-best-spot-is-by-the-body"
    :act [[:job (jobs.farm.find-spot {:w 5 :h 5 :range 12 :depth 7})]]
