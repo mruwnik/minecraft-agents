@@ -31,8 +31,9 @@
   (zones, other plans' footprints, materials, cuts) apply. Phase 2: a body still inside the box walks out through the
   gate (a jobs.movement.go-to child to the cell outside it) and jobs.animals.shut-gate shuts it. Phase 3 checks the pen
   over that box with jobs.lib.pen (see jobs.animals.pen-check): a step out of the box is a leak.
-  Nothing is placed that the plan does not ask for. A leak left after the build is a hole in the plan, or a cell
-  the build refused, gave up on or lacked material for.
+  A leak left after the build (a hole in the plan, or a cell the build refused, gave up on or lacked material for) is
+  patched once unless the call's :ways (:build, :patch) leaves :patch out: a jobs.blocks.place child puts one fence of the plan's kind in each
+  :gap cell and on top of each :climb cell, then the pen is checked again. Nothing else is placed that the plan does not ask for.
   Needs: the plan, a zone list (unless :ignore-zones?), and the blocks of the fence (fetched by the builder unless
   :fetch false). Returns, as the data of its ending, {:closed? :reason :cells :leaks :gates :built {:placed :missing
   :short :given-up :wrong :refused}}. :reason is nil when closed, else :leak, :unbounded, :unloaded or :no-start.
@@ -175,6 +176,7 @@
                               :text (str "pen build declines plan " (:plan (:args c)) ": " why)})
              {:reason :uneven :why why})))))))
 
+(def ways [:build :patch])
 (def defaults {:spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
@@ -223,6 +225,20 @@
 (defn leak-text [{:keys [pos why]}]
   (str (name why) " " (pr-str [(:x pos) (:y pos) (:z pos)])))
 
+(def patchable #{:gap :climb})
+
+(defn patch-cells
+  "The cells [x y z] a patch fills: each :gap leak's cell, the cell above each :climb leak's fence."
+  [leaks]
+  (vec (distinct (for [{:keys [pos why]} leaks :when (patchable why)]
+                   [(:x pos) (if (= :climb why) (inc (:y pos)) (:y pos)) (:z pos)]))))
+
+(defn patch-item
+  "The fence or wall item of the plan's cells to patch with: the first barrier cell that is no gate, as allotted."
+  [cells]
+  (when-let [cell (first (filter #(and (pen-read/barrier? (:want %)) (not (gate? (:want %)))) cells))]
+    (or (:item cell) (first (pen-read/want-blocks (:want cell))))))
+
 (defn ^:async finish!
   "Read the pen (looking at the remembered cells in sight first), emit the outcome and end: done when it holds, else nothing-possible with the reason."
   [c cells]
@@ -231,8 +247,13 @@
         answer (pen/summary (await (pen-read/read! c (pen-opts c cells))))
         result (result-of c answer)
         left (plan/left-text built)]
-    (if (:closed? answer)
+    (cond
+      (:closed? answer)
       (ctx/end c :done nil (assoc result :text (str "pen of " plan " holds, " (:cells answer) " cells, placed " (:placed built))))
+      (and (ctx/way? c :patch) (not (:patched (ctx/mem c))) (seq (patch-cells (:leaks answer))) (patch-item cells))
+      (do (ctx/update-mem! c assoc :phase :patch :patched true :patch-queue (patch-cells (:leaks answer)))
+          :again)
+      :else
       (do (ctx/emit! c :pen-build.leaky :warn
                      (merge {:plan plan :reason (:reason answer) :leaks (:leaks answer)
                              :refused (:refused built) :given-up (:given-up built) :short (:short built)
@@ -272,6 +293,18 @@
       (if (= :continue r)
         :continue
         (do (ctx/update-mem! c assoc :phase :build) :again)))))
+
+(defn ^:async patch-step!
+  "One fence of the patch queue by a blocks.place child (its ending, placed or not, passes it on); then back to the check."
+  [c cells]
+  (if-let [[x y z] (first (:patch-queue (ctx/mem c)))]
+    (let [r (await (ctx/call c :patch 'jobs.blocks.place
+                             (merge (select-keys (:args c) [:ignore-zones? :fetch])
+                                    {:pos [x y z] :item (patch-item cells) :for-plan (:plan (:args c))})))]
+      (if (= :continue r)
+        :continue
+        (do (ctx/update-mem! c update :patch-queue rest) :again)))
+    (do (ctx/update-mem! c assoc :phase :check) :again)))
 
 (defn ^:async build-step!
   "One round of the builder as the child; the phase moves to the exit when its round ended with its data (done, or it
@@ -329,6 +362,7 @@
       trouble :continue
       (= :trees phase) (await (trees-step! c cells))
       (= :exit phase) (await (exit-step! c cells))
+      (= :patch phase) (await (patch-step! c cells))
       (= :shut phase) (await (shut-step! c))
       (= :check phase) (do (await (look/survey! c)) (await (finish! c cells))) ; cells behind the body are not seen until it looks
       :else (await (build-step! c)))))

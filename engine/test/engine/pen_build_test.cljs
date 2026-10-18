@@ -82,7 +82,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[_ _ _ closed] (await (build! (spec kit) {"pen" (ring-plan)} {}))
-              [_ _ _ leaky] (await (build! (spec kit) {"pen" (ring-plan [[3 64 4]])} {}))]
+              [_ _ _ leaky] (await (build! (spec kit) {"pen" (ring-plan [[3 64 4]])} {:ways #{:build}}))]
           (is (= {:kind :done :cause nil} (kc closed)))
           (is (true? (get-in closed [:data :closed?])))
           (is (= {:kind :nothing-possible :cause :leak} (kc leaky)))
@@ -123,7 +123,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result seen p] (await (build! (spec kit) {"pen" (ring-plan [[3 64 4]])} {}))
+        (let [[result seen p] (await (build! (spec kit) {"pen" (ring-plan [[3 64 4]])} {:ways #{:build}}))
               warns (kinds-of seen :pen-build.leaky)]
           (is (= 7 (get-in result [:built :placed])) "everything the plan asks for is placed")
           (is (false? (:closed? result)))
@@ -132,6 +132,15 @@
           (is (= "air" (h/block-at p 3 64 4)) "nothing is placed that the plan does not ask for")
           (is (= 1 (count warns)))
           (is (= (:leaks result) (:leaks (first warns)))))))))
+
+;; Card 3f51b63a: without :ways #{} the same gap is patched.
+(deftest a-gap-in-the-ring-is-patched-with-a-fence-of-the-plans-kind
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result _ p] (await (build! (spec kit) {"pen" (ring-plan [[3 64 4]])} {}))]
+          (is (true? (:closed? result)) (pr-str (:leaks result)))
+          (is (= "oak_fence" (h/block-at p 3 64 4))))))))
 
 (deftest an-open-gate-is-a-leak
   (async done
@@ -218,7 +227,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (b/start (spec kit (dissoc built-pen "3,64,4")) {"pen" (ring-plan [[3 64 4]])} [])]
-          (core/submit! eng (list job {:plan "pen"}) {})
+          (core/submit! eng (list job {:plan "pen" :ways #{:build}}) {})
           (await (tu/run-ticks eng h/clock 6 700))
           (is (= 1 (count (kinds-of seen :pen-build.leaky))))
           (is (= [{:pos {:x 3 :y 64 :z 4} :why :gap}] (:leaks (first (kinds-of seen :pen-build.leaky))))))))))

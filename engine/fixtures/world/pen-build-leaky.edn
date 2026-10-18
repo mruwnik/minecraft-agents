@@ -1,5 +1,5 @@
 ;; Card eda1e677 (carded 8e79cb89): jobs.build.pen with a plan whose fence ring has a gap (cell [10 0 12] is not in the plan, and
-;; nothing is placed that the plan does not ask for) ends nothing-possible :leak (data :closed? false), one warn pen-build.leaky naming the leak
+;; nothing is placed that the plan does not ask for) ends (with :ways #{:build}, no patch) nothing-possible :leak (data :closed? false), one warn pen-build.leaky naming the leak
 ;; (:reason :leak), and no :completed. The ring has a gate at [14 0 12]: the body ends inside it and walks out by the gate (a gateless ring stops :inside). Should-succeed: the full ring closes (:completed, closed). Should-fail: the gap.
 {:defaults
  {:tags [:build :pen] :time :any
@@ -28,10 +28,23 @@
                     {:id "e1" :box [#at [14 0 11] #at [14 0 11]] :want "oak_fence"}
                     {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
                     {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
-   :act [[:job (jobs.build.pen {:plan "$plan:ring" :fetch false})]]
+   :act [[:job (jobs.build.pen {:plan "$plan:ring" :fetch false :ways #{:build}})]]
    :expect [{:event {:source :job :kind :pen-build.leaky :data {:reason :leak :leaks [{:why :gap}]}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 80 :until {:source :job :kind :pen-build.leaky}}]
    :after [[:not-block [10 0 12] "oak_fence"] [:item "oak_fence" 2]]}
+  ;; Card 3f51b63a: the same ring left to the default ways has the gap patched with a fence of the plan's kind.
+  {:name "ring-with-a-gap-is-patched"
+   :plans [{:id "ring" :metadata {:by "$body"}
+            :parts [{:id "n" :box [#at [10 0 10] #at [14 0 10]] :want "oak_fence"}
+                    {:id "s" :box [#at [10 0 14] #at [14 0 14]] :want "oak_fence"}
+                    {:id "w1" :box [#at [10 0 11] #at [10 0 11]] :want "oak_fence"}
+                    {:id "w2" :box [#at [10 0 13] #at [10 0 13]] :want "oak_fence"}
+                    {:id "e1" :box [#at [14 0 11] #at [14 0 11]] :want "oak_fence"}
+                    {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
+                    {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
+   :act [[:job (jobs.build.pen {:plan "$plan:ring" :fetch false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
+   :after [[:block [10 0 12] "oak_fence"]]}
   ;; Card 3f51b63a (f449d14b): a tree inside the ring (leaves reach the fence tops) is cleared first; the pen closes and the ground stays.
   {:name "a-tree-inside-the-ring-is-cleared"
    :blocks [[:fill [11 0 13] [11 1 13] "oak_log"] [:fill [11 1 12] [11 1 12] "oak_leaves"] [:fill [10 1 13] [10 1 13] "oak_leaves"] [:fill [11 2 13] [11 2 13] "oak_leaves"]]
