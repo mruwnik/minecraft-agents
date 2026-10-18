@@ -586,7 +586,10 @@
 
 (defn pause-sync [ms] (js/Atomics.wait (js/Int32Array. (js/SharedArrayBuffer. 4)) 0 0 ms))
 
-(def lease-dir (path/join (os/tmpdir) "world-test-plot-leases"))
+;; Not os/tmpdir: agents run with their own TMPDIR, and leases and the time lock must be one set for the machine.
+(def shared-dir (or (.. js/process -env -WORLD_TEST_SHARED_DIR) "/tmp"))
+
+(def lease-dir (path/join shared-dir "world-test-plot-leases"))
 
 (defn lease-file [i] (path/join lease-dir (str "plot-" i ".lease")))
 
@@ -661,8 +664,8 @@
 
 ;; ------------------------------------------------------------------ time lock
 
-(def time-lock-dir (path/join (os/tmpdir) "mc-time-lock"))
-(def time-guard-file (path/join (os/tmpdir) "mc-time-lock.guard"))
+(def time-lock-dir (path/join shared-dir "mc-time-lock"))
+(def time-guard-file (path/join shared-dir "mc-time-lock.guard"))
 
 (defn with-guard
   "Runs thunk holding a short-lived exclusive guard file (a dead holder's guard is reclaimed)."
@@ -1629,7 +1632,7 @@
     (js/Promise.resolve {:held true})
     (acquire-time-lock! phase (str id " depends on the time of day") batch)))
 
-(def default-time-log (path/join (os/tmpdir) "mc-world-test-time.log"))
+(def default-time-log (path/join shared-dir "mc-world-test-time.log"))
 
 (defn day-opts
   "opts for a case with no :time or :time :day (no :time-set, no weather) in a run that may not set the time: it may set day, so
