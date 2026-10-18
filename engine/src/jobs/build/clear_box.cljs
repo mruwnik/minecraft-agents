@@ -28,7 +28,7 @@
   :zone or :footprint, one clear-box.refused info per round). The chosen cell is checked again before the dig.
   A cell that is the wall of an own pen holding livestock is skipped for good (reason :own-pen, one clear-box.refused
   info) unless :open-pens?.
-  A dig hazard not in :accept counts a try (reason :hazard after two).
+  A dig hazard not in :accept counts a try (reason :hazard after two). A cell reached but still unseen counts a try (reason :unloaded after two).
   Refused before it starts: {:reason :bad-args :why} (impossible: a missing corner or too many cells), as can-start?
   refusals {:reason :no-zones} (no zone list read, unless :ignore-zones?, also in the middle of the job) and
   {:reason :refused :zones :plans} (every pending cell is refused, before the first round).
@@ -320,7 +320,8 @@
           (if (nil? n)
             (let [w (await (common/walk! c pos 3 {:zone-tolls true}))]
               (when (= :blocked w) (bump! c pos :unreachable))
-              (if (or (= :continue w) (and (= :there w) (nil? (u/seen-name (:primitives c) pos)))) :continue :again))
+              (when (and (= :there w) (nil? (u/seen-name (:primitives c) pos))) (bump! c pos :unloaded))
+              (if (= :continue w) :continue :again))
             (do (ctx/update-mem! c assoc :target pos)
                 (await (dig! c pos))))
           (await (step-off! c allowed)))))))

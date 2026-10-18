@@ -140,24 +140,16 @@
           (await (run-until-empty eng 40))
           (is (= {:dug 8 :skipped {} :kept 0 :fluids {}} (dissoc @out :text))))))))
 
-(deftest clear-box-walks-toward-a-box-in-unloaded-chunks-then-digs
+(deftest clear-box-walks-toward-a-box-in-unloaded-chunks
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [far {:from {:x 30 :y 64 :z 30} :to {:x 31 :y 64 :z 30}}
               {:keys [eng p]} (setup {:blocks {"30,64,30" "dirt" "31,64,30" "dirt"} :floor [-5 -5 35 35]
-                                      :unloaded ["30,64,30" "31,64,30"]})
-              out (atom :not-done)
-              parent (tu/recording-parent job far out #(dissoc (tu/outcome %) :status))
-              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-          (core/submit! eng '(recording-parent) {})
-          (await (core/tick! eng))
-          (is (= :not-done @out) "unloaded cells are not an empty box")
+                                      :unloaded ["30,64,30" "31,64,30"]})]
+          (await (child-outcome eng job far 8))
           (is (pos? (count (tu/walk-calls p))))
-          (is (empty? (calls p "dig")))
-          (swap! (fake/state p) assoc :unloaded #{})
-          (await (run-until-empty eng 12))
-          (is (= {:dug 2 :skipped {} :kept 0 :fluids {}} (dissoc @out :text))))))))
+          (is (empty? (calls p "dig"))))))))
 
 (defn act-trail
   "[[name x] ...] of the moveTo and dig calls in order."
@@ -289,7 +281,7 @@
           (is (= 1 (count (:list (core/state eng)))) "still listed, yielding")
           (is (empty? (calls p "dig"))))))))
 
-(deftest clear-box-walk-to-an-unloaded-cell-that-does-not-arrive-gives-nothing-up
+(deftest clear-box-gives-up-a-cell-it-reached-but-never-sees
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -297,7 +289,7 @@
               {:keys [eng p]} (setup {:blocks {"30,64,30" "dirt" "31,64,30" "dirt"} :floor [-5 -5 35 35]
                                       :unloaded ["30,64,30" "31,64,30"]})
               result (await (child-outcome eng job far 8))]
-          (is (= :not-done result) "a waiting walk gives nothing up")
+          (is (= {{:x 30 :y 64 :z 30} :unloaded {:x 31 :y 64 :z 30} :unloaded} (:skipped result)) "a reached cell that stays unseen counts tries, then is skipped")
           (is (empty? (calls p "dig"))))))))
 
 (deftest clear-box-clears-the-whole-box-in-one-round
