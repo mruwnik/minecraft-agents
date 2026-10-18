@@ -117,7 +117,7 @@
   mine.tunnel-skipped, also down a stair to a floor) and never digs a torch. 0 means no tunnel: then no
   target ends :wet when a seen block was rejected only for water, else :none. Each step walks back onto the last
   cell of the run (a go-to child; failing: :walk-failed) and cuts the next by a jobs.access.stair child of one :level
-  step (:cut-only with :stay-level, which then walks in itself): its stops and its handling of exposed lava (sealed), laid-open water (plugged, a stop), a missing floor
+  step (:cut-only with :stay-level, which then walks in itself): its stops and its handling of exposed lava (sealed), laid-open water (the dug cell itself is filled, which closes the line, so a stop; lava is filled beside the line and the cut goes on), a missing floor
   (bridged) and refilled cells (:refills) are the stair's. Water beside the cut is taken with :wet, a falling block
   when :accept has it, lava never. A cut of :block is collected like a target. Ore that comes into view is dug before the next step.
 
