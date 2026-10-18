@@ -83,7 +83,7 @@
       "blocked" :nothing-possible
       "out-of-reach" :nothing-possible
       "cannot" :nothing-possible
-      "already-mounted" :condition-failed
+      "no-item" :condition-failed
       "missing" :condition-failed
       "occupied" :condition-failed
       "gone" :condition-failed
@@ -323,7 +323,7 @@
                                  (stopped seen))))))))))
 
 (deftest every-failure-kind-is-an-ending-kind
-  (is (every? contract/all-kinds (vals primitive-job/failure-kinds))))
+  (is (every? contract/all-kinds (vals primitive/failure-kinds))))
 
 (deftest every-arg-of-the-table-has-a-spec-of-its-own
   (is (= [] (for [[k {:keys [args]}] primitive/table, arg args :when (not (contains? primitive-job/arg-specs arg))] [k arg])))

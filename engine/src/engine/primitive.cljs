@@ -71,16 +71,23 @@
   []
   (+ 1 (/ (+ (js-setting "use-on/wait-ms" 1000) (js-setting "use-on/consume-wait-ms" 300)) 1000)))
 
-(defn entry [args target done quote-of] {:args args :target target :quote-of quote-of :ending (ending-of done)})
+(defn fails
+  "The failure statuses of a primitive as {status kind}: condition-failed ones name a false precondition, nothing-possible
+  ones an act that ran and did not reach its end. Statuses every act can return are in ending-of and failure-kinds."
+  [condition-failed nothing-possible]
+  (merge (zipmap condition-failed (repeat :condition-failed)) (zipmap nothing-possible (repeat :nothing-possible))))
 
-(defn fixed [args target done most] (entry args target done (fn [_ _] (timed most))))
+(defn entry [args target done fails quote-of]
+  {:args args :target target :quote-of quote-of :fails fails :ending (ending-of done)})
+
+(defn fixed [args target done fails most] (entry args target done fails (fn [_ _] (timed most))))
 
 (def table
-  {:moveTo (entry [:pos :range :timeoutS :maxDistance :maxDropDown] [:pos] #{"arrived"}
+  {:moveTo (entry [:pos :range :timeoutS :maxDistance :maxDropDown] [:pos] #{"arrived"} (fails #{} #{"unreachable" "blocked" "partial" "out-of-reach"})
                   (fn [p {:keys [pos timeoutS maxDropDown]}]
                     (assoc-in (timed (min (or timeoutS 20) 60)) [:uses :health]
                               [0 0 (fall p pos (or maxDropDown own-max-drop))])))
-   :dig (entry [:pos :timeoutS] [:pos] #{"dug"}
+   :dig (entry [:pos :timeoutS] [:pos] #{"dug"} (fails #{"missing" "gone"} #{"cannot" "unreachable"})
                (fn [p {:keys [pos timeoutS]}]
                  (let [ms (or (when pos (.digTime p (clj->js pos))) 0)
                        bound (+ (/ (if (js/Number.isFinite ms) ms 0) 1000)
@@ -88,14 +95,14 @@
                        tool (held p)]
                    (cond-> (timed (min bound (or timeoutS ##Inf)))
                      tool (assoc-in [:uses :wear tool] [0 1 1])))))
-   :place (entry [:pos :item :click] [:pos] #{"placed"} (fn [_ {:keys [item]}] (use-items (timed 5) item 1)))
-   :jumpPlace (entry [:item :count] [] #{"done"}
+   :place (entry [:pos :item :click] [:pos] #{"placed"} (fails #{"missing" "occupied" "no-item" "no-support"} #{"cannot" "unreachable"}) (fn [_ {:keys [item]}] (use-items (timed 5) item 1)))
+   :jumpPlace (entry [:item :count] [] #{"done"} (fails #{"no-item" "no-support" "no-headroom"} #{"not-raised" "partial"})
                      (fn [_ {:keys [item count]}]
                        (let [n (min (or count 1) (js-setting "prim/jump-place-max" 8))]
                          (use-items (timed (* n (js-setting "prim/jump-place-block-s" 2))) item n))))
-   :collect (entry [:id :timeoutS :maxDropDown] [:id] #{"collected"} (fn [_ {:keys [timeoutS]}] (timed (min (or timeoutS 10) 20))))
-   :inspectContainer (fixed [:pos :entity] [:pos] #{"ok"} 5)
-   :transfer (entry [:pos :entity :direction :item :count] [:pos :item] #{"ok"}
+   :collect (entry [:id :timeoutS :maxDropDown] [:id] #{"collected"} (fails #{"gone"} #{"unreachable"}) (fn [_ {:keys [timeoutS]}] (timed (min (or timeoutS 10) 20))))
+   :inspectContainer (fixed [:pos :entity] [:pos] #{"ok"} (fails #{"missing"} #{"unreachable" "out-of-reach"}) 5)
+   :transfer (entry [:pos :entity :direction :item :count] [:pos :item] #{"ok"} (fails #{"missing" "no-item" "full"} #{"cannot" "unreachable" "out-of-reach"})
                     (fn [_ {:keys [direction item count]}]
                       (let [q (timed 5)]
                         (cond
@@ -103,39 +110,45 @@
                           (= "deposit" direction) (use-items q item count)
                           (string? item) (assoc-in q [:yields :items item] [0 count count])
                           :else q))))
-   :equip (fixed [:item :dest] [:item] #{"equipped"} 2)
-   :toss (entry [:item :count :slot :watchS] [:item] #{"tossed"}
+   :equip (fixed [:item :dest] [:item] #{"equipped"} (fails #{"no-item"} #{}) 2)
+   :toss (entry [:item :count :slot :watchS] [:item] #{"tossed"} (fails #{"no-item"} #{})
                 (fn [p {:keys [item count watchS]}]
                   (use-items (timed (+ 2 (min (or watchS 0) 5))) item (or count (carried p item)))))
-   :craft (entry [:item :count :table] [:item] #{"crafted"} (fn [_ {:keys [count]}] (timed (min 60 (+ 4 (* 6 (or count 1)))))))
-   :furnace (fixed [:pos :op :input :fuel :output] [:pos] #{"ok"} 5)
-   :enchant (fixed [:pos :op :item :choice :levelCost] [:pos] #{"ok" "enchanted"} 15)
-   :chat (fixed [:message :to] [] #{"sent"} 3)
-   :eat (entry [:item] [:item] #{"ate"} (fn [_ {:keys [item]}] (use-items (timed 5) item 1)))
-   :fish (entry [:pos :timeoutS] [:pos] #{"caught"}
+   :craft (entry [:item :count :table] [:item] #{"crafted"} (fails #{"no-item" "full"} #{"cannot" "partial" "unreachable" "out-of-reach"}) (fn [_ {:keys [count]}] (timed (min 60 (+ 4 (* 6 (or count 1)))))))
+   :furnace (fixed [:pos :op :input :fuel :output] [:pos] #{"ok"} (fails #{"missing" "no-item" "busy"} #{"cannot" "rejected" "unreachable"}) 5)
+   :enchant (fixed [:pos :op :item :choice :levelCost] [:pos] #{"ok" "enchanted"} (fails #{"missing" "no-item" "no-lapis" "no-levels" "full"} #{"cannot" "unreachable"}) 15)
+   :chat (fixed [:message :to] [] #{"sent"} (fails #{"gone"} #{}) 3)
+   :eat (entry [:item] [:item] #{"ate"} (fails #{"no-item" "no-food"} #{}) (fn [_ {:keys [item]}] (use-items (timed 5) item 1)))
+   :fish (entry [:pos :timeoutS] [:pos] #{"caught"} (fails #{"missing" "no-rod" "no-water"} #{"nothing" "unreachable"})
                 (fn [_ {:keys [timeoutS]}] (timed (+ 5 (or timeoutS (js-setting "prim/fish-wait-s" 45))))))
-   :attack (fixed [:id] [:id] #{"hit" "killed"} 1)
-   :interact (entry [:id :item] [:id] #{"used"} (fn [_ {:keys [item]}] (use-items (timed 2) item 1)))
-   :trade (fixed [:id :op :offer :times] [:id] #{"bought" "ok"} 8)
-   :unequip (fixed [:dest] [] #{"ok" "empty"} 2)
-   :sleep (fixed [:pos] [:pos] #{"sleeping"} 5)
-   :look (fixed [:pos :yaw :pitch] [:pos] #{"ok"} 1)
-   :swim (entry [:ms :toward] [] #{"surfaced" "landed" "timeout"}
+   :attack (fixed [:id] [:id] #{"hit" "killed"} (fails #{"gone"} #{"out-of-reach"}) 1)
+   :interact (entry [:id :item] [:id] #{"used"} (fails #{"gone" "no-item" "full"} #{"cannot" "out-of-reach" "no-effect"}) (fn [_ {:keys [item]}] (use-items (timed 2) item 1)))
+   :trade (fixed [:id :op :offer :times] [:id] #{"bought" "ok"} (fails #{"gone" "no-item" "full"} #{"cannot" "out-of-reach"}) 8)
+   :unequip (fixed [:dest] [] #{"ok" "empty"} (fails #{"full"} #{}) 2)
+   :sleep (fixed [:pos] [:pos] #{"sleeping"} (fails #{"missing" "occupied" "not-night" "monsters-near"} #{"unreachable"}) 5)
+   :look (fixed [:pos :yaw :pitch] [:pos] #{"ok"} (fails #{} #{}) 1)
+   :swim (entry [:ms :toward] [] #{"surfaced" "landed" "timeout"} (fails #{} #{})
                 (fn [_ {:keys [ms]}]
                   (timed (/ (min (or ms (js-setting "prim/swim-default-ms" 3000)) (js-setting "prim/swim-max-ms" 10000))
                             1000))))
-   :useOn (entry [:pos :item :face] [:pos] #{"used"} (fn [_ {:keys [item]}] (use-items (timed (use-on-s)) (when (not= "none" item) item) 1)))
-   :steer (entry [:decide :timeoutS] [] #{"done"} (fn [_ {:keys [timeoutS]}] (timed (or timeoutS (js-setting "steer/default-timeout-s" 60)))))
-   :mount (fixed [:id] [:id] #{"mounted" "already-mounted"} 2)
-   :dismount (fixed [:yaw :pitch] [] #{"dismounted"} 2)
-   :paddle (fixed [:ticks :turn :forward] [] #{"ok"} 4)
-   :wait (entry [:ms] [] #{"ok"}
+   :useOn (entry [:pos :item :face] [:pos] #{"used"} (fails #{"missing" "no-item" "no-room"} #{"cannot" "unreachable" "unchanged"}) (fn [_ {:keys [item]}] (use-items (timed (use-on-s)) (when (not= "none" item) item) 1)))
+   :steer (entry [:decide :timeoutS] [] #{"done"} (fails #{} #{}) (fn [_ {:keys [timeoutS]}] (timed (or timeoutS (js-setting "steer/default-timeout-s" 60)))))
+   :mount (fixed [:id] [:id] #{"mounted" "already-mounted"} (fails #{"gone" "not-mountable" "hand-full"} #{"blocked" "out-of-reach"}) 2)
+   :dismount (fixed [:yaw :pitch] [] #{"dismounted"} (fails #{"not-mounted"} #{}) 2)
+   :paddle (fixed [:ticks :turn :forward] [] #{"ok"} (fails #{"not-mounted" "not-a-boat"} #{"blocked"}) 4)
+   :wait (entry [:ms] [] #{"ok"} (fails #{} #{})
                 (fn [_ {:keys [ms why]}]
                   (let [s (/ (min (max (if (number? ms) ms 0) 0) (js-setting "prim/wait-max-ms" 10000)) 1000)]
                     (if why {:uses {:job-time [0 0 0] :wall-time [s s s]}} {:uses {:job-time [s s s]}}))))
-   :offline (entry [:ms :why] [] #{"ok"}
+   :offline (entry [:ms :why] [] #{"ok"} (fails #{} #{})
                    (fn [_ {:keys [ms]}]
                      (let [s (/ (min (or ms (js-setting "prim/offline-default-ms" 300000))
                                      (js-setting "prim/offline-max-ms" 600000))
                                 1000)]
                        {:uses {:job-time [0 s (+ s (reconnect-s))]}})))})
+
+(def failure-kinds
+  "Every status a primitive reports that is not a done one, with its kind: the entries' :fails and the statuses any act
+  can return. engine/js/prim-statuses.test.mjs fails on a status the JavaScript returns that this file does not name."
+  (merge {"refused-mounted" :condition-failed "unsupported" :impossible "error" :nothing-possible}
+         (into {} (mapcat :fails) (vals table))))

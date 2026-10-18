@@ -24,25 +24,12 @@
 (a/defargs settings
   {::job-time-s {:default 300 :doc "Seconds one primitive act may take before it gives up (:limit-reached); an offline act is the longest." :spec (a/num-in 0 nil)}})
 
-(def failure-kinds
-  "The kind of every status a primitive reports that is not a done one: a false precondition is a failed condition,
-  an act that ran and did not reach its end nothing possible. engine/js/prim-statuses.test.mjs fails on a status the
-  JavaScript returns that no table entry or this map names."
-  (merge (zipmap ["missing" "occupied" "gone" "not-night" "monsters-near" "no-item" "no-room" "no-support" "no-headroom"
-                  "no-water" "no-rod" "no-food" "no-lapis" "no-levels" "not-mounted" "not-a-boat" "not-mountable"
-                  "hand-full" "full" "empty" "busy" "refused-mounted" "already-mounted"]
-                 (repeat :condition-failed))
-         (zipmap ["failed" "cannot" "unreachable" "out-of-reach" "blocked" "partial" "rejected" "not-raised" "no-effect"
-                  "unchanged" "nothing" "error"]
-                 (repeat :nothing-possible))
-         {"unsupported" :impossible}))
-
 (defn read-ending
-  "The table's ending e with the kind its cause has in failure-kinds when the act failed; an unlisted cause is nothing
+  "The table's ending e with the kind its cause has in primitive/failure-kinds when the act failed; an unlisted cause is nothing
   possible."
   [e]
   (if (= :condition-failed (:kind e))
-    (assoc e :kind (get failure-kinds (name (:cause e)) :nothing-possible))
+    (assoc e :kind (get primitive/failure-kinds (name (:cause e)) :nothing-possible))
     e))
 
 (defn failure-text
