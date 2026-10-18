@@ -1,0 +1,29 @@
+;; Card 9fee7db8 (and 22e49506): scaffold-left cleanup does not walk the body after scaffold it cannot reach on foot.
+;; Three left-over cobblestone (off the body's line to the low one, which hidden cells would read as roof) sit on top of a bare 6 high stone pole (no way up on foot), as scaffold left on a tree trunk.
+;; The planner proves no walk gets within reach, so cleanup holds them :no-way and the body stays where it stands.
+;; Should-succeed: the low entry is walked to and taken back, the high ones stay open (cleanup.left) and the body ends by the low one, not the pole.
+;; Should-fail (high only): no entry is removed, none dug, body never leaves.
+{:defaults
+ {:tags [:cleanup :scaffold-left :access :survival] :time :day
+  :plot {:length 120 :width 16 :height 12}
+  :blocks [[:fill [10 0 3] [10 5 3] "stone"] [:fill [10 6 3] [10 8 3] "cobblestone"]]
+  :body {:at [14.5 0 8.5] :inventory [["iron_pickaxe" 1] ["iron_sword" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 100}
+ :cases
+ [{:name "high-scaffold-held-low-one-taken-back"
+   :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}]
+   :blocks [[:set [6 0 8] "cobblestone"]]
+   :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}
+                                              {:cell #at [10 6 3] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}
+                                              {:cell #at [10 7 3] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}
+                                              {:cell #at [10 8 3] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}]}}]
+   :expect [{:event {:source :job :kind :cleanup.done :data {:removed 1 :open [:>= 3]}} :within-s 70}]
+   :after [[:not-block [6 0 8] "cobblestone"] [:block [10 6 3] "cobblestone"] [:block [10 8 3] "cobblestone"] [:body-near [8.5 0 8.5] 5]]}
+  {:name "high-scaffold-only-is-never-walked-to"
+   :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}]
+   :memory [{:kind :scaffold :data {:entries [{:cell #at [10 6 3] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}
+                                              {:cell #at [10 7 3] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}
+                                              {:cell #at [10 8 3] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}]}}]
+   :expect [{:no-event {:source :job :kind :cleanup.done :data {:removed [:>= 1]}} :for-s 40}]
+   :after [[:block [10 6 3] "cobblestone"] [:block [10 7 3] "cobblestone"] [:block [10 8 3] "cobblestone"] [:body-near [14.5 0 8.5] 5]]
+   :limit-s 50}]}
