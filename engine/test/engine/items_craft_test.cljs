@@ -737,7 +737,7 @@
           (is (empty? (calls p "place")) "no table placed")
           (is (= 1 (get (inv p) "crafting_table"))))))))
 
-(def house {"house" {:id "house" :parts [{:id "all" :cells (vec (for [x (range -2 3) y [64 65] z (range -2 3)] [x y z])) :want {:block "stone"}}]}})
+(def house {"house" {:id "house" :metadata {:by "Fake"} :parts [{:id "all" :cells (vec (for [x (range -2 3) y [64 65] z (range -2 3)] [x y z])) :want {:block "stone"}}]}})
 
 (deftest craft-puts-its-table-in-the-callers-own-plan-footprint-only-when-told-it-is-the-callers
   (async done

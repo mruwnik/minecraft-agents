@@ -1,8 +1,8 @@
 ;; Card 28fab314: jobs.build.from-plan passes its plan to the craft it fetches, so the crafting table may stand in the plan's own cells.
 ;; Sealed bedrock room, 3x1 floor and 2 high; [13 0 12] is bedrock and the plan wants a fence in the three other cells beside the body,
 ;; so no cell outside the plan is left for the table. Should-succeed: the fetch of the fences is done (the table stood in a plan cell,
-;; the old code found no table spot and the fetch failed) and two fences are placed in the plan's cells and one is left over. The table that stays in its
-;; cell is a kept block the build never digs (a separate card), so the case does not wait for the build to complete.
+;; the old code found no table spot and the fetch failed), the craft digs the table up again (the build would keep it and end :wrong-blocks),
+;; and the build completes with all three cells fences.
 {:defaults
  {:tags [:build :craft] :time :any
   :plot {:height 8}
@@ -15,5 +15,5 @@
  [{:name "table-stands-in-the-plans-own-cells-then-the-fences-are-placed"
    :act [[:job (jobs.build.from-plan {:plan "$plan:fences"})]]
    :expect [{:event {:source :job :kind :fetch.done} :within-s 60 :of-job true}
-            {:event {:source :job :kind :stopped} :within-s 100 :of-job true}]
-   :after [[:item "oak_fence" 1] [:not-block [12 1 12] "crafting_table"]]}]}
+            {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:block [11 0 12] "oak_fence"] [:block [11 1 12] "oak_fence"] [:block [13 1 12] "oak_fence"]]}]}

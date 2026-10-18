@@ -83,12 +83,14 @@
 
 (defn pickup-spot
   "The table cell this call put down and is still to dig up, else nil: not with :keep-table, once dug, gone, in an area of the
-  body's own or refused by a zone."
+  body's own (but a cell of the :for-plan plan is dug: the build needs it) or refused by a zone."
   [c]
-  (let [spot (:table-placed (ctx/mem c))]
+  (let [spot (:table-placed (ctx/mem c))
+        for-plan (:for-plan (:args c))
+        in-plan? (and for-plan spot (= for-plan (get (known/footprints c) (mapv #(js/Math.floor %) [(:x spot) (:y spot) (:z spot)]))))]
     (when (and spot (not (:keep-table (:args c))) (not (:picked-up (ctx/mem c)))
                (= "crafting_table" (u/seen-name (:primitives c) spot))
-               (not (access/in-own-area? c spot))
+               (or in-plan? (not (access/in-own-area? c spot)))
                (:ok (access/may? (access/rules-input c {:except (:for-plan (:args c))}) :dig spot)))
       spot)))
 
