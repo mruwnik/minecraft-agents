@@ -23,7 +23,7 @@ cover every file in the patch, else exit 3 listing the others. `--expect-hunks N
 count, else exit 5; the patch must be zero-context (`git diff -U0`, else exit 9); the tool prints every changed line so foreign lines show. Keep each hunk header as git printed it: the old-side start is checked against HEAD (a mismatch or overlap is exit 10), the new-side numbers are rebuilt.
 
 Refuses (exit 1, nothing left staged) when:
-- an engine-core path (`engine/src/engine/{core,expr,triggers,takeover,trigger_api}.cljs`, `registry.clj`,
+- an engine-core path (`engine/src/engine/{core,expr,triggers,trigger_api}.cljs`, `registry.clj`,
   `registry.cljs`) is given without `--approved-core <card>`;
 - a new or largely changed (40+ added lines and at least half the file) `.js/.mjs/.cjs` file has no `Why JavaScript:` line;
 - a path under `docs/` or `.claude/` is given without `--owner-said <card>` (committed only when the owner says so);

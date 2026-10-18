@@ -9,7 +9,7 @@
 (def low-health 6)
 (def low-food 6)
 
-(def status-order {:manual 0 :trouble 1 :working 2 :idle 3 :offline 4})
+(def status-order {:trouble 0 :working 1 :idle 2 :offline 3})
 
 (defn ago [now t] (logic/time-ago-text (- now t)))
 
@@ -46,30 +46,9 @@
           hud (:hud view)]
       (into [] (keep #(% signals hud now)) rules))))
 
-(defn manual?
-  "Is an online body under manual control (takeover_started without a later takeover_ended)? Not a trouble."
-  [{:keys [up engine]}]
-  (boolean (and up (get-in engine [:signals :takeover?]))))
-
-(defn since-text
-  "HH:MM (local time) of an epoch-ms time, nil for anything else."
-  [t]
-  (when (number? t)
-    (let [d (js/Date. t)
-          two #(.padStart (str %) 2 "0")]
-      (str (two (.getHours d)) ":" (two (.getMinutes d))))))
-
-(defn manual-text
-  "\"driven by <who> since HH:MM\", nil when the body is not under manual control."
-  [body]
-  (when (manual? body)
-    (let [{:keys [takeover-who takeover-t]} (get-in body [:engine :signals])]
-      (str "driven by " (or takeover-who "someone") (when-let [s (since-text takeover-t)] (str " since " s))))))
-
 (defn status [body now]
   (cond
     (not (:up body)) :offline
-    (manual? body) :manual
     (seq (reasons body now)) :trouble
     (get-in body [:engine :job]) :working
     :else :idle))
@@ -78,7 +57,7 @@
   (vec (sort-by (juxt #(status-order (status % now)) :name) bodies)))
 
 (defn counts [bodies now]
-  (merge {:manual 0 :working 0 :idle 0 :trouble 0 :offline 0}
+  (merge {:working 0 :idle 0 :trouble 0 :offline 0}
          (frequencies (map #(status % now) bodies))))
 
 (defn short-name [s]
@@ -124,15 +103,9 @@
     (when p
       (str "parked: " (short-name (:label p)) ": " (:failed p) (when more (str " (+" (count more) " more)"))))))
 
-(defn mine?
-  "Does this page (its own `who`) hold the body? Only then does the card get the red edge."
-  [body who]
-  (boolean (and who (manual? body) (= who (get-in body [:engine :signals :takeover-who])))))
-
 (defn card-model
-  "Everything a body card shows, as plain data. `who`: this page load's name, to tell its own takeover from another's."
-  ([body now] (card-model body now nil))
-  ([{:keys [name world up engine view goal] :as body} now who]
+  "Everything a body card shows, as plain data."
+  [{:keys [name world up engine view goal] :as body} now]
   (let [st (status body now)
         top (first (reasons body now))
         last-event (peek (vec (:recent engine)))
@@ -141,8 +114,6 @@
      :world world
      :status st
      :reason (:text top)
-     :manual (manual-text body)
-     :mine? (mine? body who)
      :severity (:severity top)
      :thumb (thumb-src world name view)
      :pose-mtime (:poseMtimeMs view)
@@ -158,4 +129,4 @@
      :event (:text last-event)
      :event-age (when last-event (ago now (:t last-event)))
      :event-attention (keyword (clojure.core/name (or (:attention last-event) "none")))
-     :offline (when-not up (offline-text (:age-ms engine)))})))
+     :offline (when-not up (offline-text (:age-ms engine)))}))

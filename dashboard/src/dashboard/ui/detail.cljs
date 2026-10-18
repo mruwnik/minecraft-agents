@@ -1,12 +1,11 @@
 (ns dashboard.ui.detail
-  "The body popup: header, the live view with takeover chrome, HUD, inventory, job stack and the action log."
+  "The body popup: header, the live view, HUD, inventory, job stack and the action log."
   (:require [re-frame.core :as rf]
             [reagent.core :as r]
             [dashboard.ui.livecards :as live]
             [dashboard.ui.bodies :as bodies]
             [dashboard.ui.chatsend :as cs]
             [dashboard.ui.detail-model :as detail-model]
-            [dashboard.ui.drive :as drive]
             [dashboard.ui.eventlog :as eventlog]
             [dashboard.ui.hudmodel :as hudmodel]
             [dashboard.ui.logic :as logic]
@@ -35,30 +34,13 @@
    [:span.spacer]
    [:button.dclose {:title "close (Esc)" :on-click #(rf/dispatch [:close-detail])} "close ✕"]])
 
-;; ---------------------------------------------------------------- the view and the takeover chrome
-(defn banner []
-  (let [{:keys [kind text countdown]} @(rf/subscribe [:drive-banner])]
-    (case kind
-      :ours [:div.dbanner.ours
-             [:b text]
-             (when countdown [:span.countdown countdown])
-             [:button.release {:on-click #(rf/dispatch [:drive-release])} "Release (Esc)"]]
-      :other [:div.dbanner.other [:b text]]
-      nil)))
-
+;; ---------------------------------------------------------------- the view and its chrome
 (defn chrome [online?]
-  (let [{:keys [kind]} @(rf/subscribe [:drive-banner])
-        error (:error @(rf/subscribe [:drive]))]
-    [:div.dchrome {:class (when-not online? "empty")}
-     (case (if online? kind :none)
-       :none (when online? [:<> [:span.hint drive/hint]
-                            [:button.take {:on-click #(rf/dispatch [:drive-take])} "Take control"]])
-       [banner])
-     [:span.spacer]
-     (when online?
-       [:button.stats {:class (when @(rf/subscribe [:detail-stats?]) "on") :title "show the view page's debug overlay"
-                       :on-click #(rf/dispatch [:detail-stats])} "stats"])
-     (when error [:span.derr error])]))
+  [:div.dchrome {:class (when-not online? "empty")}
+   [:span.spacer]
+   (when online?
+     [:button.stats {:class (when @(rf/subscribe [:detail-stats?]) "on") :title "show the view page's debug overlay"
+                     :on-click #(rf/dispatch [:detail-stats])} "stats"])])
 
 (defn frame-loaded
   "window.__view.loaded of the view page in our iframe, nil until it has one."
@@ -79,16 +61,15 @@
           [:div.nodata "no world data yet"]))})))
 
 (defn view-box [{:keys [name online? iframe-src thumb offline-text]}]
-  (let [driven? (and online? (= :ours (:kind @(rf/subscribe [:drive-banner]))))]
-    [:div.viewarea
-     [:div.viewbox {:class [(when driven? "driven") (when-not online? "offline")]}
-      (if online?
-        ^{:key name} [:<> [:iframe {:id "view-frame" :src iframe-src :title (str "live view of " name) :allow "pointer-lock; fullscreen"
+  [:div.viewarea
+   [:div.viewbox {:class [(when-not online? "offline")]}
+    (if online?
+      ^{:key name} [:<> [:iframe {:id "view-frame" :src iframe-src :title (str "live view of " name) :allow "pointer-lock; fullscreen"
                                   :on-load #(rf/dispatch [:frame-loaded])}]
-        [frame-nodata]]
-        [:<>
-         (if thumb [:img {:src thumb :alt (str "last view of " name)}] [:div.noview "no view"])
-         [:div.offline-note offline-text]])]]))
+                    [frame-nodata]]
+      [:<>
+       (if thumb [:img {:src thumb :alt (str "last view of " name)}] [:div.noview "no view"])
+       [:div.offline-note offline-text]])]])
 
 (defn whisper-box
   "A private message to this body only."

@@ -12,8 +12,8 @@ import { readEDN, keyword } from './edn.mjs'
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url))
 const cli = path.join(repo, 'engine/tools/workspace.mjs')
-const commands = ['observe', 'jobs', 'quote', 'triggers', 'say', 'entities', 'drive', 'world', 'map', 'plans', 'blueprints', 'world-changes', 'time', 'snapshot', 'goal', 'progress']
-const bodyTools = new Set(['observe', 'jobs', 'quote', 'triggers', 'say', 'entities', 'drive', 'world', 'snapshot', 'goal', 'progress'])
+const commands = ['observe', 'jobs', 'quote', 'triggers', 'say', 'entities', 'world', 'map', 'plans', 'blueprints', 'world-changes', 'time', 'snapshot', 'goal', 'progress']
+const bodyTools = new Set(['observe', 'jobs', 'quote', 'triggers', 'say', 'entities', 'world', 'snapshot', 'goal', 'progress'])
 function fixture (t) {
   const dir = fs.mkdtempSync('/tmp/ws-')
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
@@ -83,7 +83,7 @@ test('all tool routing preserves arguments and binds shared tools without a body
     if (['map', 'world-changes'].includes(command)) expected.push('--repo-root', path.resolve(repo))
     if (command === 'world-changes') expected.push('--observer', 'B')
     if (command === 'snapshot') expected.push('--workspace', f.workspace)
-    if (['drive', 'world'].includes(command)) expected.push('--who', 'B')
+    if (command === 'world') expected.push('--who', 'B')
     assert.deepEqual(tools.workspaceRoute(f.context, command, input), [...expected, ...input])
     for (const override of ['--world', '--worlds=/other', '--state', '--body=B', '--agent', '--repo', '--repo-root=/other', '--workspace=/other']) {
       assert.throws(() => tools.workspaceRoute(f.context, command, [override]), /cannot override/)
@@ -137,9 +137,7 @@ test('player help shows the ./bin form, no body/world plumbing, and says what ou
     const text = help(command)
     assert.doesNotMatch(text, /omit the body|<agent>|<body>|BODY|--world <world>|--world WORLD|--worlds|--state|npm run build-agent-tools/, command)
   }
-  assert.match(help('world'), /\.\/bin\/drive take --who NAME --why .* --idle-s N/)
-  assert.match(help('drive'), /usage: \.\/bin\/drive <op>/)
-  assert.match(help('drive'), /take --who NAME --why/)
+  assert.match(help('world'), /--exclusive/)
   for (const [command, word] of [['entities', /:age-ms/], ['map', /:box/], ['world-changes', /:cursor/], ['observe', /:unknown-job/], ['time', /:time-of-day/]]) {
     assert.match(help(command), word, command)
   }
@@ -233,19 +231,13 @@ test('body wrappers use the bound Unix sockets; quoting reaches chat unchanged',
     req.on('data', data => { body += data })
     req.on('end', () => {
       requests.push({ url: req.url, body })
-      if (req.url === '/drive') {
-        res.setHeader('content-type', 'application/json')
-        res.end('{"ok":true}')
-      } else {
-        res.setHeader('content-type', 'application/edn')
-        res.end('{:ok true :world "w" :body "B" :online? true :now 1000 :ttl-ms 60000 :entities []}')
-      }
+      res.setHeader('content-type', 'application/edn')
+      res.end('{:ok true :world "w" :body "B" :online? true :now 1000 :ttl-ms 60000 :entities []}')
     })
   })
   await new Promise((resolve, reject) => { control.once('error', reject); control.listen(path.join(engine, 'control.sock'), resolve) })
   t.after(() => new Promise(resolve => control.close(resolve)))
   for (const [command, args, endpoint] of [
-    ['drive', ['state'], '/drive'],
     ['entities', ['--center', '1,2,3', '--dimension', 'overworld'], '/entities']
   ]) {
     const result = await runAsync(f.workspace, command, args)

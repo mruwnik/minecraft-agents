@@ -11,7 +11,6 @@
             [engine.fake :as fake]
             [engine.job-api :as job-api]
             [engine.memory :as mem]
-            [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
@@ -968,9 +967,8 @@
           (.hold world "dig")
           (let [running (core/tick! eng)]
             (await (dig-reached! world))
-            (takeover/take! eng {:who "claude" :why "cut"})
+            (core/cut! eng (core/holder eng) :test nil)
             (await running))
-          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (tick-out! s))
           (is (= :done (:status @out)))
           (is (= [3 62 0] (:at @out)))
@@ -985,10 +983,9 @@
           (.override world "dig" (fn ^:async f [token a impl]
                                    (let [r (await (impl token a))]
                                      (.override world "dig" nil)
-                                     (takeover/take! eng {:who "claude" :why "cut"})
+                                     (core/cut! eng (core/holder eng) :test nil)
                                      r)))
           (dotimes [_ 3] (await (core/tick! eng)))
-          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (tick-out! s))
           (is (= :done (:status @out)))
           (is (= 6 (count (:dug @out))))

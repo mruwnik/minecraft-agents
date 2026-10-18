@@ -146,7 +146,7 @@
     ss))
 
 (defn stays-listed?
-  "Whether a skip leaves c's job queued: a listed root not yet started, not a reflex's nor the driver's slot job."
+  "Whether a skip leaves c's job queued: a listed root not yet started, not a reflex's nor an exclusive run."
   [c]
   (and (empty? (:slots c)) (not (started? c)) (not (:reflex c)) (not= (:root c) (exclusive-job (:engine c)))))
 

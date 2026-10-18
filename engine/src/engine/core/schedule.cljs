@@ -2,7 +2,7 @@
   "The scheduling pass: readiness of listed jobs (checks, job.waiting, the next one to run), who holds
   the body, cuts, firing reflexes and holding them off during a section (ctx/atomic), tick! and do-now!."
   (:require [engine.args :as a]
-            [engine.core.base :refer [add-instance dead? drop-reflex-job! emit! flush-save-stats! free-owner! job-fields job-of exclusive-job manual? new-id! now paused? reflex-text running save-memory! state ttl-now wait-reason waiting-text]]
+            [engine.core.base :refer [add-instance dead? drop-reflex-job! emit! flush-save-stats! free-owner! job-fields job-of exclusive-job new-id! now paused? reflex-text running save-memory! state ttl-now wait-reason waiting-text]]
             [engine.core.attention :refer [request-attention!]]
             [engine.core.fruitless :refer [reset-backoff!]]
             [engine.core.register :refer [effective-register evaluate-register! expire-changes! levels preempts?]]
@@ -72,18 +72,15 @@
     ok?))
 
 (defn choose-listed
-  "The listed job to run next, never a failed one nor, while the body is dead, one kept through the death: a holder
-  while its check passes (else the list runs until it does), else the cut job, else round-robin from the cursor over
-  passing checks."
+  "The listed job to run next, never a failed one nor, while the body is dead, one kept through the death: the cut
+  job, else round-robin from the cursor over passing checks."
   [eng]
   (let [{:keys [list instances resume cursor]} (state eng)
         n (count list)
         dead (dead? eng)
         failed? (fn [id] (contains? (:failed (state eng)) id))
-        runnable? (fn [id] (and (not (failed? id)) (not (and dead (:survive-death? (instances id)))) (check-passes? eng id)))
-        holder (some #(when (and (:hold? (instances %)) (not (failed? %))) %) list)]
+        runnable? (fn [id] (and (not (failed? id)) (not (and dead (:survive-death? (instances id)))) (check-passes? eng id)))]
     (cond
-      (and holder (runnable? holder)) holder
       (and resume (some #{resume} list) (runnable? resume)) resume
       (zero? n) nil
       :else (some (fn [i] (let [id (nth list (mod (+ cursor i) n))] (when (runnable? id) id)))
@@ -219,9 +216,8 @@
     (reset! (:last-sweep eng) (now eng))
     (save-memory! eng)))
 
-(defn tick-manual!
-  "One pass under manual control or an exclusive run: no trigger, no loop. A listed job still in its cleanup (an old
-  slot job the driver replaced, a cancelled run) runs first. Then the exclusive job gets one call (see
+(defn tick-exclusive!
+  "One pass under an exclusive run: no trigger, no loop. A listed job still in its cleanup (a cancelled run) runs first. Then the exclusive job gets one call (see
   settle/end-slot!): a failing check ends it at once with the check's reason. With it gone the body idles."
   [eng]
   (housekeep! eng)
@@ -251,14 +247,14 @@
 (defn tick!
   "One scheduling pass. Synchronous; returns the promise of a round it
   started (resolving once that round is settled), or nil. Does nothing while
-  the body is offline or settling. Under manual control or an exclusive run only that one job runs (tick-manual!).
+  the body is offline or settling. Under an exclusive run only that one job runs (tick-exclusive!).
   The first ready tick after a pause clears the backoff and judges the reflex
   ends deferred meanwhile."
   [eng]
   (clear-asked! eng)
   (cond
     (paused? eng) (do (reset! (:was-paused eng) true) (restart-body-idle! eng) nil)
-    (or (manual? eng) (exclusive-job eng)) (do (reset! (:was-paused eng) true) (restart-body-idle! eng) (tick-manual! eng))
+    (exclusive-job eng) (do (reset! (:was-paused eng) true) (restart-body-idle! eng) (tick-exclusive! eng))
     :else
     (do (when @(:was-paused eng)
           (reset! (:was-paused eng) false)
@@ -271,7 +267,7 @@
   after the run, a reflex job is dropped unless it is in its cleanup), no trigger or other job runs until the job ends.
   The caller has checked that the body is online and no run is in flight."
   [eng spec]
-  (expr/parse-spec (:jobs eng) spec)
+  (expr/parse (:jobs eng) spec)
   (when-let [h (holder eng)] (cut! eng h :exclusive nil))
   (submit! eng spec {:exclusive? true :by :agent}))
 
@@ -280,7 +276,7 @@
   next, and the cut one, memory kept, continues right after it yields or ends. A running reflex is not cut; the new job
   waits behind it, as does a running exclusive run."
   [eng spec]
-  (expr/parse-spec (:jobs eng) spec)
+  (expr/parse (:jobs eng) spec)
   (let [r (running eng)]
     (when (and r (not (:reflex r)) (not (exclusive-job eng)))
       (cut! eng r :do-now nil))

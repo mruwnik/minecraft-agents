@@ -1770,9 +1770,7 @@
                    r)))
         (.then (fn [r] (write-trace! opts r (or @setup-cursor start-cursor))))
         (.then (fn [r]
-                 (-> (run-cleanup! [#(when (some (fn [s] (#{:cli :http} (first s))) (:act c))
-                                       (exec-file ["engine/tools/drive.mjs" (:body opts) "release" "--force" "--world" (:world opts)]))
-                                    #(exec-file ["engine/tools/jobs.mjs" (:body opts) "--world" (:world opts) "cancel-all"])
+                 (-> (run-cleanup! [#(exec-file ["engine/tools/jobs.mjs" (:body opts) "--world" (:world opts) "cancel-all"])
                                     #(rcon! (f/cleanup-commands grid origin (:body opts) rc))
                                     #(when (lease/weather-x? rc) (set-weather! opts :clear (str (:id c) " ended")))
                                     #(when (and (:night-barrier opts) (:night-batch opts)) (barrier-leave! nil (:night-batch opts) (.-pid js/process)))

@@ -8,7 +8,6 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
-            [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
@@ -176,7 +175,7 @@
           (.override (.-world p) "dig"
                      (fn ^:async f [token args impl]
                        (let [r (await (impl token args))]
-                         ((get {2 #(takeover/take! (:eng a) {:who "claude" :why "cut"})} (count (calls p "dig")) (constantly nil)))
+                         ((get {2 #(core/cut! (:eng a) (core/holder (:eng a)) :test nil)} (count (calls p "dig")) (constantly nil)))
                          r)))
           (core/submit! (:eng a) (list job {}) {})
           (await (core/tick! (:eng a)))

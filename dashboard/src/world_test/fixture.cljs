@@ -245,8 +245,8 @@
 
 (def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set :restart-body :cli :http :until :until-seen :until-rcon :until-effect-gone :until-pos})
 (def after-kinds #{:block :not-block :any-not-block :body-near :body-far :item :entities :memory :file})
-(def http-ops #{:submit :cancel :cancel-all :take :release})
-(def cli-tools #{"jobs" "drive" "plans" "map" "world" "say" "time" "triggers" "entities" "observe" "workspace" "blueprints" "quote" "snapshot"})
+(def http-ops #{:submit :cancel :cancel-all})
+(def cli-tools #{"jobs" "plans" "map" "world" "say" "time" "triggers" "entities" "observe" "workspace" "blueprints" "quote" "snapshot"})
 
 (defn seen-check
   "The :until check of an :until-seen target: {:entity type} (at least :min, default 1, entities the body has seen) or {:block name} (blocks in its memory)."
@@ -995,16 +995,12 @@
 ;; ------------------------------------------------------------------ tool steps and file checks
 
 (defn http-argv
-  "The agent-tool arguments of an [:http op arg ...] step: jobs.mjs for submit/cancel (arg: the spec and flags / the job
-  id), drive.mjs for the manual lease (arg: {:who :why :idle-s})."
+  "The agent-tool arguments of an [:http op arg ...] step: jobs.mjs for submit/cancel (arg: the spec and flags / the job id)."
   [body world [_ op arg flags]]
-  (let [opt (fn [k] (when-let [v (get arg k)] [(str "--" (name k)) (str v)]))]
-    (case op
-      :submit (into ["engine/tools/jobs.mjs" body "--world" world "submit" (pr-str arg)] (map #(str "--" (name %)) flags))
-      :cancel ["engine/tools/jobs.mjs" body "--world" world "cancel" arg]
-      :cancel-all ["engine/tools/jobs.mjs" body "--world" world "cancel-all"]
-      :take (into ["engine/tools/drive.mjs" body "take" "--world" world] (mapcat opt [:who :why :idle-s]))
-      :release (into ["engine/tools/drive.mjs" body "release" "--world" world] (opt :who)))))
+  (case op
+    :submit (into ["engine/tools/jobs.mjs" body "--world" world "submit" (pr-str arg)] (map #(str "--" (name %)) flags))
+    :cancel ["engine/tools/jobs.mjs" body "--world" world "cancel" arg]
+    :cancel-all ["engine/tools/jobs.mjs" body "--world" world "cancel-all"]))
 
 (defn step-argv
   "The node arguments of a :cli or :http step. In strings \"$body\", \"$world\", \"$job\" (the last submitted job id) and

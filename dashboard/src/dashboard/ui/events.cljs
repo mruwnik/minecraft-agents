@@ -5,7 +5,6 @@
             [dashboard.ui.chatsend :as cs]
             [dashboard.ui.db :as db]
             [dashboard.ui.detail-events :as detail-events]
-            [dashboard.ui.drive :as drive]
             [dashboard.ui.listprefs :as listprefs]
             [dashboard.ui.logic :as logic]
             [dashboard.ui.mapmodel :as mm]
@@ -22,7 +21,7 @@
 (rf/reg-event-fx
  :init
  (fn [_ [_ search page]]
-   (let [fresh (db/initial-db search (drive/new-who js/Math.random))
+   (let [fresh (db/initial-db search)
          initial (merge fresh (listprefs/open-flags (select-keys fresh (keys listprefs/list-names)) (listprefs/read-stored)))
          initial (assoc initial :status-filter (statusfilter/parse-stored (statusfilter/read-stored)))]
      {:db initial
@@ -88,7 +87,7 @@
  :set-world
  (fn [{:keys [db]} [_ world]]
    (let [closed (detail-events/close-fx db)]
-     (assoc (select-keys closed [:stop-timers :drive-invoke])
+     (assoc (select-keys closed [:stop-timers])
             :db (assoc (:db closed) :world world :state nil :chat [] :user-view nil :selected nil :status "connecting..."
                        :villages nil :villagers nil)
             :push-url (logic/with-world (.-pathname js/location) world)

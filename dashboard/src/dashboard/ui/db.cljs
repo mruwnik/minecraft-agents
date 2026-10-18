@@ -5,9 +5,8 @@
             [dashboard.ui.logic :as logic]
             [dashboard.ui.statusfilter :as statusfilter]))
 
-(defn initial-db [search who]
-  {:who who
-   :world (logic/world-from-search search)
+(defn initial-db [search]
+  {:world (logic/world-from-search search)
    :worlds []
    :state nil
    :chat []
@@ -30,7 +29,6 @@
    :detail-chip :all
    :detail-text ""
    :detail-debug? false
-   :drive {}
    :notices {}})
 
 (defn world-of [db] (first (get-in db [:state :worlds])))

@@ -17,7 +17,7 @@
 
 (defn detail-model
   "The popup's model for a /api/state body at time now; action is the running action's name from the log, if any."
-  [body now action who]
+  [body now action]
   (if-not body
     {:online? false}
     (let [{:keys [name engine view up world at]} body
@@ -40,16 +40,16 @@
        :world world
        :last-seen (when age (logic/time-ago-text age))
        :thumb (:thumb card)
-       :iframe-src (when up (str "/view?agent=" (js/encodeURIComponent world) "/" (js/encodeURIComponent name) "&embed=1&who=" (js/encodeURIComponent who)))
+       :iframe-src (when up (str "/view?agent=" (js/encodeURIComponent world) "/" (js/encodeURIComponent name) "&embed=1"))
        :offline-text (when-not up (offline-text at age))
        :hud (:hud view)
        :jobs (:jobs engine)
        :reflexes (:reflexes engine)})))
 
-;; The view page draws a debug overlay, a button bar and a takeover banner; the popup has its own chrome. The stats
+;; The view page draws a debug overlay and a button bar; the popup has its own chrome. The stats
 ;; toggle brings the overlay back.
 (defn hidden-selectors [stats?]
-  (if stats? ["#bar" "#drive-banner"] ["#overlay" "#bar" "#drive-banner"]))
+  (if stats? ["#bar"] ["#overlay" "#bar"]))
 
 (defn embed-css [stats?]
   (str (clojure.string/join ", " (hidden-selectors stats?)) " { display: none !important; }"))

@@ -1518,7 +1518,6 @@ test('while the connection is down every primitive answers offline, never succes
   assert.deepEqual(p.self(), { status: 'offline' })
   assert.deepEqual(p.entities({}), [])
   assert.equal(p.blockAt(at(2, 64, 0)), null)
-  assert.deepEqual(p.drive('t1', { look: { yaw: 90 } }), { status: 'offline' })
   assert.deepEqual(await p.look('t1', { pos: at(1, 64, 1) }), { status: 'offline' })
   assert.deepEqual(await p.dig('t1', { pos: at(2, 64, 0) }), { status: 'offline' })
   assert.deepEqual(await p.offline('t1', { ms: 1000 }), { status: 'offline' })
@@ -2625,7 +2624,7 @@ test('forcedMove measures from the last position the body was known at', async (
   assert.equal(p.isSettling(), false)
 })
 
-// ---- drive (manual takeover) ----
+// ---- look conversion ----
 
 const near = (a, b) => Math.abs(a - b) < 1e-9
 
@@ -2653,64 +2652,6 @@ for (const [label, mc, want] of [
     assert.ok(near(back.yaw, want.yaw) && near(back.pitch, want.pitch))
   })
 }
-
-test('drive with the owner token sets control states and looks, and returns pos and degrees', () => {
-  const { bot, p } = rig({})
-  const res = p.drive('t1', { controls: { forward: true, sprint: true }, look: { yaw: 90, pitch: 10 } })
-  assert.deepEqual(bot.controlState, { forward: true, sprint: true })
-  assert.ok(near(bot.entity.yaw, Math.PI / 2) && near(bot.entity.pitch, -10 * Math.PI / 180))
-  assert.ok(near(res.yaw, 90) && near(res.pitch, 10))
-  assert.deepEqual(res.pos, p.self().pos)
-})
-
-test('drive returns yaw and pitch rounded to 2 decimals, a look of 0 0 exactly 0', () => {
-  const { p } = rig({})
-  const res = p.drive('t1', { look: { yaw: 0, pitch: 0 } })
-  assert.equal(res.yaw, 0)
-  assert.equal(res.pitch, 0)
-  const odd = p.drive('t1', { look: { yaw: 123.456789, pitch: -12.3456 } })
-  assert.equal(odd.yaw, 123.46)
-  assert.equal(odd.pitch, -12.35)
-})
-
-test('drive with a relative look adds to the current degrees', () => {
-  const { p } = rig({})
-  p.drive('t1', { look: { yaw: 350, pitch: 80 } })
-  const res = p.drive('t1', { look: { dyaw: 20, dpitch: 30 } })
-  assert.ok(near(res.yaw, 10) && near(res.pitch, 90))
-})
-
-test('drive keeps the current value for a missing look key', () => {
-  const { p } = rig({})
-  p.drive('t1', { look: { yaw: 45, pitch: 20 } })
-  const res = p.drive('t1', { look: { pitch: -5 } })
-  assert.ok(near(res.yaw, 45) && near(res.pitch, -5))
-})
-
-test('drive with a stale token throws cut and sets nothing', () => {
-  const { bot, p } = rig({})
-  assert.throws(() => p.drive('old', { controls: { forward: true }, look: { yaw: 90, pitch: 0 } }), { code: 'cut' })
-  assert.deepEqual(bot.controlState, {})
-  assert.ok(!names(bot).includes('look'))
-})
-
-for (const next of ['t2', null]) {
-  test(`setOwner(${next}) after drive clears the control states`, () => {
-    const { bot, p } = rig({})
-    p.drive('t1', { controls: { forward: true } })
-    p.drive('t1', { controls: { jump: true } })
-    p.setOwner(next)
-    assert.deepEqual(bot.controlState, {})
-    assert.equal(names(bot).filter(n => n === 'clearControlStates').length, 1)
-  })
-}
-
-test('stopDriving clears the control states without a token', () => {
-  const { bot, p } = rig({})
-  p.drive('t1', { controls: { forward: true } })
-  p.stopDriving()
-  assert.deepEqual(bot.controlState, {})
-})
 
 // Sleeping bodies: mineflayer's wake() sends a wrong id here, so leave_bed is sent by name.
 const leaveBeds = bot => bot.calls.filter(c => c.name === 'write' && c.args[1].actionId === 'leave_bed')
@@ -2748,12 +2689,6 @@ test('a body that never wakes within the bound: the act proceeds and fails as th
   assert.equal(leaveBeds(bot).length, 1)
   assert.ok(acted(bot).includes('dig'))
   assert.deepEqual(r, { status: 'failed', reason: 'asleep' })
-})
-
-test('drive on a sleeping body writes leave_bed', () => {
-  const { bot, p } = rig({ sleeping: true })
-  p.drive('t1', { controls: { forward: true } })
-  assert.equal(leaveBeds(bot).length, 1)
 })
 
 test('craft with bad args rejects with bad-args', async () => {

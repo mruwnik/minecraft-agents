@@ -4,7 +4,6 @@
   (:require [agent-tools.workspace]
             [clojure.set]
             [agent-tools.changes :as changes]
-            [agent-tools.drive :as drive]
             [agent-tools.entities :as entities]
             [agent-tools.inventory :as inventory]
             [agent-tools.jobs :as jobs]
@@ -96,12 +95,6 @@
 (def say-usage (clj->js say/usage))
 (defn say-request-for [argv] (compat/to-js (say/request-for (vec argv))))
 (defn say-main [argv] (say/main! (vec argv)))
-
-(def drive-usage (clj->js drive/usage))
-(def drive-default-state-dir map-tool/default-state-dir)
-(defn drive-main [argv] (drive/main! (vec argv)))
-(defn drive-request-for [argv] (compat/to-js (drive/request-for (vec argv))))
-(defn drive-socket-path-for [request] (drive/socket-path-for (compat/from-js request)))
 
 (def world-usage (clj->js world/usage))
 (defn world-main [argv] (world/main! (vec argv)))

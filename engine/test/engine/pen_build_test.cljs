@@ -7,7 +7,6 @@
             [engine.fake :as fake]
             [engine.farm-contract-test :refer [ending-of kc]]
             [engine.harvest-test :as h]
-            [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [jobs.build.pen :as pen]
             [jobs.lib.pen-read :as pen-read]))
@@ -315,10 +314,9 @@
           (core/submit! eng (list job {:plan "pen"}) {})
           (let [round (core/tick! eng)]
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
-            (is (= {:ok true} (takeover/take! eng {:who "claude" :why "test"})))
+            (core/cut! eng (core/holder eng) :test nil)
             (await round)
             (release))
-          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (tu/run-ticks eng h/clock 40 700))
           (is (every? #(= "oak_fence" (h/block-at p (first %) (second %) (nth % 2))) fenced-ring))
           (is (= "oak_fence_gate" (h/block-at p 3 64 2)))

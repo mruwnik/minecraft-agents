@@ -20,7 +20,6 @@
             ["fs" :as fs]
             ["path" :as path]
             [jobs.lib.world-files :as world-files]
-            [engine.takeover :as takeover]
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
             [jobs.movement.go-to :as go-to]
@@ -344,10 +343,9 @@
           (.hold world "steer")
           (let [running (core/tick! eng)]
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
-            (takeover/take! eng {:who "claude" :why "cut"})
+            (core/cut! eng (core/holder eng) :test nil)
             (await running))
           (is (= {} (:controls @(fake/state p))) "no control is left pressed")
-          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (tick-out! eng 10))
           (is (= {:arrived true} @out))
           (is (= [10 64 0] (at p)))
@@ -675,13 +673,12 @@
                        (await (js/Promise. (fn [r] (js/setTimeout r 5))))
                        (recur (inc i))))
                    (is (>= @paces 2) "the search loop paced")
-                   (takeover/take! eng {:who "claude" :why "cut"})
+                   (core/cut! eng (core/holder eng) :test nil)
                    (let [at-cut @plans]
                      (await running)
                      (is (<= @plans (inc at-cut)) "at most the slice in flight ran after the cut")
                      (is (= [] @returns) "the cut call returned nothing")
                      (is (= [] (moved eng)) "it walked nowhere")))
-                 (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
                  (await (tick-out! eng 10))
                  (is (= {:arrived true} @out) (pr-str @out))
                  (is (= [6 64 0] (at p)))
@@ -805,9 +802,8 @@
                              (when (and (< @paces target) (< i 400))
                                (await (js/Promise. (fn [r] (js/setTimeout r 5))))
                                (recur (inc i)))))
-                         (takeover/take! eng {:who "claude" :why "cut"})
+                         (core/cut! eng (core/holder eng) :test nil)
                          (await running)
-                         (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
                          (recur (inc n) (core/tick! eng)))))
                  (await (tick-out! eng 10))
                  (is (= {:arrived true} @out) (pr-str @out))
@@ -869,7 +865,7 @@
                                  (when-let [pred @armed]
                                    (when (pred pose)
                                      (reset! armed nil)
-                                     (takeover/take! eng {:who "claude" :why "cut"})))
+                                     (core/cut! eng (core/holder eng) :test nil)))
                                  (decide pose))]
                    (impl token (js/Object.assign #js {} a #js {:decide wrapped})))))
     (reset! id (core/submit! eng '(returns-parent) {}))
@@ -880,7 +876,6 @@
                        (await (core/tick! eng))
                        (after! p)
                        (let [m (kid-mem)]
-                         (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
                          (recur more (conj mems m))))))]
       (await (tick-out! eng 30))
       (assoc s :eng eng :out out :returns returns :mems mems))))

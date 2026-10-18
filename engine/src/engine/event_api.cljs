@@ -294,7 +294,6 @@
              :name (short-text (expr/label (:spec inst)) 160)
              :round (:round inst)
              :status (instance-status s id running-id)
-             :hold? (boolean (:hold? inst))
              :reflex (:reflex inst)}
       (:survive-death? inst) (assoc :survive-death? true)
       waiting (assoc :waiting (bounded-value waiting 0 (volatile! 32))))))
@@ -321,7 +320,6 @@
         current (or (core/holder eng)
                     (when-let [id (:resume s)] {:id id}))
         current-id (:id current)
-        manual @(:manual eng)
         limit (or requested-limit (setting "status-job-limit"))
         queue-count (count (:list s))
         queue (mapv #(job-summary s % (core/waiting eng %) (:id (core/running eng))) (take limit (:list s)))
@@ -333,18 +331,13 @@
      {:body (.-username self)
      :generation-id (:generation-id s)
      :cursor (events/cursor (:events eng))
-     :mode (cond (core/manual? eng) :manual
-                 (core/exclusive-job eng) :exclusive
+     :mode (cond (core/exclusive-job eng) :exclusive
                  (core/offline? eng) :offline
                  (core/settling? eng) :settling
                  :else :scheduled)
      :offline (core/away eng)
      :exclusive (when-let [id (core/exclusive-job eng)]
                   {:job id :name (some-> (get-in s [:instances id :spec]) expr/label (short-text 80))})
-     :manual (when manual
-               (cond-> (select-keys manual [:who :why :since])
-                 (:who manual) (update :who #(short-text (str %) 80))
-                 (string? (:why manual)) (update :why #(short-text % 160))))
      :position (or (core/self-pos p) (some-> known :pos (select-keys [:x :y :z])))
      :last-known (when known true)
      :health (let [h (if known (:health known) (.-health self))] (when (number? h) h))
@@ -389,7 +382,6 @@
     (if-let [done (and (not (get-in s [:instances id])) (get (core/recent-results eng) id))]
       {:ok true :generation-id (:generation-id s) :id id :name (short-text (:name done) 160) :finished? true
        :status (:status done) :result (some-> (:result done) (bounded-value 0 (volatile! 32)))
-       :died (:died done)
        :ended-at (:ended-at done)}
     (when-let [inst (get-in s [:instances id])]
       (let [[_ args] (core/job-of eng inst)
@@ -402,7 +394,7 @@
         (let [budget (volatile! 64)]
         {:ok true :generation-id (:generation-id s) :id id :name (short-text (expr/label (:spec inst)) 160)
          :spec (bounded-value (:spec inst) 0 budget)
-         :args (bounded-value args 0 budget) :bounded? true :round (:round inst) :hold? (boolean (:hold? inst))
+         :args (bounded-value args 0 budget) :bounded? true :round (:round inst)
          :survive-death? (boolean (:survive-death? inst))
          :reflex (:reflex inst) :status (instance-status s id (:id (core/running eng)))
          :waiting (some-> (core/waiting eng id) (bounded-value 0 (volatile! 32)))

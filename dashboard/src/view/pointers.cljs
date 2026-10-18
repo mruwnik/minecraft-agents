@@ -3,6 +3,11 @@
    off screen. Pure maths over the entity boxes the scene hands the renderer (positions relative to the eye); the DOM drawing is
    tools/view/web/app.mjs. Pixels have y down; :angle is the arrow's direction in radians (atan2 of pixel dy, dx).")
 
+(defn agent-key?
+  "Whether ?agent= names a body: <world>/<name>, each of letters, digits, _ and - (the view server's rule, tools/view/serve.mjs)."
+  [value]
+  (and (string? value) (boolean (re-matches #"[A-Za-z0-9_-]+/[A-Za-z0-9_-]+" value))))
+
 (def MAX-POINTERS 12)
 (def EDGE-MARGIN 28)
 (def MIN-DIST 0.5)

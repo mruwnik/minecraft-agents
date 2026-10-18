@@ -16,15 +16,15 @@
 
 (defn usage-for [prefix]
   "Build the usage string with the given invocation prefix (e.g., 'jobs.mjs' or './bin/jobs')."
-  (str "usage: " prefix " <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit '(jobs.storage.deposit {:items [\"bread\"]})' [--hold] [--survive-death] [--next | --now] [--alongside] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
-       "While manual control holds the body (drive.mjs take) only the driver's one job runs (world.mjs submit): others stay :queued and list/submit say who holds it; drive.mjs <body> release frees it.\n"
+  (str "usage: " prefix " <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit '(jobs.storage.deposit {:items [\"bread\"]})' [--survive-death] [--next | --now | --exclusive] [--alongside] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
        "A job that depends on where the body stands (access.stair, access.bridge, access.pillar, gather.mine) gets :submitted-at (the body's position at submit) added to its args; if the body is then over 6 blocks from it when the job starts, the job waits :moved-since-submit (something moved the body meanwhile) instead of running there. Give :here true in the args (any job takes it) to run wherever the body is.\n"
-       "submit appends the job to the end of the list (jobs take turns). --hold makes the job hold the body: no other job gets a round until it ends or fails (reflexes still come first).\n"
+       "submit appends the job to the end of the list (jobs take turns).\n"
        "A spec is a job name then its args map: submit '(jobs.movement.go-to {:pos {:x 1 :y 64 :z 2}})' or '(jobs.items.get-tool {:item \"stone_pickaxe\"})'. Find a job's args with observe.mjs <body> catalog job <name> (catalog jobs [prefix] lists names).\n"
        "  --survive-death  the job stays listed through the body's death and runs again once the respawn reflexes (recover-drops, night) are done; other jobs are cancelled; a (repeat ...) spec does this by default\n"
        "  --next  list it directly after the current job: it gets the next round, nothing is cut\n"
        "  --now    cut the current job and run this one at once (a normal job); the cut job keeps its memory and\n"
        "           continues right after this one yields or ends. Reflexes still come first: --now queues behind a running reflex (night, hostile) and the answer's :hint names it. --now and --next cannot be combined (refused).\n"
+       "  --exclusive  run this job alone, at once: the whole engine is paused (no triggers, no other job) until it ends; any ending, a yield (:continue) included, returns to you and normal work resumes. Cuts what runs now (a listed job continues after). One run at a time; refused offline or settling; takes no --next, --now or --survive-death; a restart or death ends it.\n"
        "  --alongside  submit even when a job of the same job name, or another digging job (mine, stair, tunnel, strip.*), is running or queued on this body: without it such a submit is held back and the answer names the clashing job; two of one job can undo each other's work. A (repeat ...) submit is never held\n"
        "  --wait   block until the job ends, or until anything that ends observe --wait (addressed chat, attention, an\n"
        "           engine restart, the --timeout), and print {:job .. :wait <the wake>}: the job's last events and a\n"
@@ -77,11 +77,12 @@
     (let [{:keys [positionals values]} (map-tool/parse-options argv
           {:state {:type "string"} :worlds {:type "string"} :world {:type "string"}
            :request-id {:type "string"} :limit {:type "string"} :offset {:type "string"}
-           :reason {:type "string"} :hold {:type "boolean"} :survive-death {:type "boolean"} :next {:type "boolean"} :now {:type "boolean"}
+           :reason {:type "string"} :exclusive {:type "boolean"} :survive-death {:type "boolean"} :next {:type "boolean"} :now {:type "boolean"}
            :wait {:type "boolean"} :timeout {:type "string"} :alongside {:type "boolean"}})
           [body op arg & extra] positionals
           op (keyword (or op "list"))
           interrupt? (and (= op :submit) (true? (:now values)))
+          exclusive? (and (= op :submit) (true? (:exclusive values)))
           no-argument? (#{:list :cancel-all} op)
           mutating? (boolean (#{:submit :cancel :cancel-all :retry :resolve} op))
           spec-op? (= :submit op)]
@@ -102,8 +103,10 @@
         (throw (js/Error. "resolve uses the attention request ID positional argument")))
       (when (and (not= op :list) (or (:limit values) (:offset values)))
         (throw (js/Error. "--limit and --offset require list")))
-      (when (and (contains? values :hold) (not spec-op?))
-        (throw (js/Error. "--hold requires submit")))
+      (when (and (contains? values :exclusive) (not spec-op?))
+        (throw (js/Error. "--exclusive requires submit")))
+      (when (and (:exclusive values) (or (:next values) (:now values) (:survive-death values)))
+        (throw (js/Error. "--exclusive runs alone, once, now: it takes no --next, --now or --survive-death")))
       (when (and (contains? values :survive-death) (not spec-op?))
         (throw (js/Error. "--survive-death requires submit")))
       (when (and (contains? values :next) (not= op :submit))
@@ -152,10 +155,9 @@
                 (when-not (re-matches #"[A-Za-z0-9_.:-]{1,80}" id)
                   (throw (js/Error. "--request-id must be a short identifier")))
                 (assoc base :path "/jobs"
-                       :request (cond-> {:op (if interrupt? :interrupt op) :request-id id}
+                       :request (cond-> {:op (cond interrupt? :interrupt exclusive? :exclusive :else op) :request-id id}
                                   spec-op? (assoc :spec (spec-for arg))
                                   (#{:cancel :retry} op) (assoc :id arg)
-                                  (contains? values :hold) (assoc :hold? (:hold values))
                                   (or (:survive-death values) (and spec-op? (standing? arg))) (assoc :survive-death? true)
                                   (contains? values :next) (assoc :next? (:next values)))))))))))
     (catch :default error {:error (.-message error)})))
@@ -273,12 +275,6 @@
 
 (def finished-hint "no such job in the list: it may have finished already (finished jobs leave it); jobs show <jID> gives its outcome")
 
-(def hold-hint "--hold holds the body, it does not pause the job: it runs now; cancel <jID> stops it while it is listed")
-
-(defn manual-hint [{:keys [who why]}]
-  (str "waiting: manual control held by " who (when (seq why) (str " (" why ")"))
-       "; only its job runs meanwhile, queued jobs run after drive.mjs <body> release"))
-
 (defn reflex-hint
   "Why a queued job waits behind the running reflex of /status's :current: its id, name and, for the night handler, until when."
   [{:keys [id name reflex]}]
@@ -293,27 +289,25 @@
       (some #(= :queued (:status %)) (:items value))))
 
 (defn with-hint
-  "The mutation answer plus a :hint where its meaning is easily misread: a cancel/retry of a job that is gone, a held submit,
-  a queued job while manual (the :manual map of /status) holds the body."
+  "The mutation answer plus a :hint where its meaning is easily misread: a cancel/retry of a job that is gone, a queued job
+  behind a reflex or while the body is logged out."
   ([r value] (with-hint r value nil))
-  ([r value {:keys [manual current offline]}]
+  ([r value {:keys [current offline]}]
   (cond
-    (and manual (queued? value)) (assoc value :hint (manual-hint manual))
     (and (:reflex current) (queued? value)) (assoc value :hint (reflex-hint current))
     (and offline (queued? value)) (assoc value :hint (away-hint offline))
     (and (:mutating r) (= :job-not-found (:reason value))) (assoc value :hint finished-hint)
-    (and (:mutating r) (true? (get-in value [:job :hold?]))) (assoc value :hint hold-hint)
     :else value)))
 
-(defn manual-for
-  "A promise of /status's {:manual :current :offline} when the answer has queued jobs (a list, or a submit), else nil; nil when status is unreadable."
+(defn status-for
+  "A promise of /status's {:current :offline} when the answer has queued jobs (a list, or a submit), else nil; nil when status is unreadable."
   [r response opts]
   (let [value (when (http/edn-response? (:content-type response)) (try (data/read-edn (:text response)) (catch :default _ nil)))]
     (if-not (and (= 200 (:status response)) (queued? value)
-                 (or (str/starts-with? (:path r) "/jobs?") (#{:submit :interrupt} (get-in r [:request :op]))))
+                 (or (str/starts-with? (:path r) "/jobs?") (#{:submit :interrupt :exclusive} (get-in r [:request :op]))))
       (js/Promise.resolve nil)
       (-> (get! (:socketPath r) "/status" opts)
-          (.then (fn [status] (when (http/edn-response? (:content-type status)) (select-keys (data/read-edn (:text status)) [:manual :current :offline]))))
+          (.then (fn [status] (when (http/edn-response? (:content-type status)) (select-keys (data/read-edn (:text status)) [:current :offline]))))
           (.catch (fn [_] nil))))))
 
 (defn deliver! [r output {:keys [status content-type text] :as response} & [opts]]
@@ -398,8 +392,8 @@
                (deliver! r output response)
                (let [get! (fn [socket endpoint options]
                             (observe/get! socket endpoint (cond-> options request-fn (assoc :request-fn request-fn))))]
-                 (.then (manual-for r response opts)
-                        (fn [manual]
+                 (.then (status-for r response opts)
+                        (fn [status]
                           (.then (vitals/around! (:socketPath r) get!
                                                  #(observe/wait-for! {:agent (:body r) :world (:world r) :state (:state r) :socket-path (:socketPath r)}
                                                                      {:watch [id] :timeout (get-in r [:wait :timeout])} get!))
@@ -408,7 +402,7 @@
                                      (.then (if (:follow waited) (job-now r id get! opts) (js/Promise.resolve nil))
                                             (fn [now]
                                               (let [waited (wait-result answer id wake now)]
-                                              (output (str (data/write-edn (-> (with-hint r waited (when (:follow waited) manual))
+                                              (output (str (data/write-edn (-> (with-hint r waited (when (:follow waited) status))
                                                                                (cond-> now (assoc :now now))
                                                                                (assoc :vitals report))) "\n"))
                                               (if (:follow waited) 1 0)))))))))))))))
@@ -435,7 +429,7 @@
 (defn run-submit! [r output opts]
   (if (:wait r)
     (submit-and-wait! r output opts)
-    (.then (exchange! r opts) (fn [response] (.then (manual-for r response opts) (fn [manual] (deliver! r output response (assoc opts :status manual))))))))
+    (.then (exchange! r opts) (fn [response] (.then (status-for r response opts) (fn [status] (deliver! r output response (assoc opts :status status))))))))
 
 (defn run-request!
   "Send the request map r (request-for's shape) and print the answer; a promise of the exit code."

@@ -1,7 +1,5 @@
-// Why JavaScript: tests control.mjs, which stays JS: thin adapter; HTTP framing of the body's control socket, the rules live in cljs (engine.lease).
+// Why JavaScript: tests control.mjs, which stays JS: thin adapter; HTTP framing of the body's control socket, the rules live in cljs (engine.main).
 // control.mjs is a stateless HTTP adapter over a unix socket: these tests cover the framing only.
-// The takeover rules are engine.lease (test/engine/lease_test.cljs), applied by engine.takeover
-// (test/engine/takeover_test.cljs, which also runs test/contract/drive-contract.json).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -37,7 +35,7 @@ test('serves the handle reply over a real unix socket with mode 0600, and close 
   await control.listen()
   try {
     assert.equal(fs.statSync(socketPath).mode & 0o777, 0o600)
-    const r = await request(socketPath, 'POST', '/drive', JSON.stringify({ op: 'take' }))
+    const r = await request(socketPath, 'POST', '/probe', JSON.stringify({ op: 'take' }))
     assert.equal(r.status, 201)
     assert.match(r.type, /application\/json/)
     assert.deepEqual(JSON.parse(r.text), { ok: true, echo: { op: 'take' } })
@@ -53,7 +51,7 @@ test('listen refuses a socket another process still serves, and leaves it in pla
   await first.listen()
   try {
     await assert.rejects(control.listen(), /already in use/)
-    assert.equal((await request(socketPath, 'GET', '/drive')).status, 200)
+    assert.equal((await request(socketPath, 'GET', '/probe')).status, 200)
   } finally {
     await first.close()
   }
@@ -63,12 +61,12 @@ test('method, path (without the query) and parsed body reach handle; an empty bo
   const { socketPath, calls, control } = rig()
   await control.listen()
   try {
-    await request(socketPath, 'POST', '/drive?x=1', JSON.stringify({ op: 'ping', n: [1] }))
-    await request(socketPath, 'GET', '/drive')
+    await request(socketPath, 'POST', '/probe?x=1', JSON.stringify({ op: 'ping', n: [1] }))
+    await request(socketPath, 'GET', '/probe')
   } finally {
     await control.close()
   }
-  assert.deepEqual(calls, [['POST', '/drive', { op: 'ping', n: [1] }], ['GET', '/drive', null]])
+  assert.deepEqual(calls, [['POST', '/probe', { op: 'ping', n: [1] }], ['GET', '/probe', null]])
 })
 
 test('entities EDN request text and EDN reply pass through without JSON conversion', async () => {
@@ -92,7 +90,7 @@ test('invalid JSON is 400 bad-json and never reaches handle', async () => {
   const { socketPath, calls, control } = rig()
   await control.listen()
   try {
-    const bad = await request(socketPath, 'POST', '/drive', '{nope')
+    const bad = await request(socketPath, 'POST', '/probe', '{nope')
     assert.equal(bad.status, 400)
     assert.deepEqual(JSON.parse(bad.text), { ok: false, reason: 'bad-json' })
   } finally {
@@ -106,7 +104,7 @@ test('rejects bodies over 16 KB', async () => {
   await control.listen()
   try {
     const big = JSON.stringify({ op: 'take', who: 'a', why: 'x'.repeat(20000) })
-    const r = await request(socketPath, 'POST', '/drive', big).catch(e => ({ status: 'error', text: e.code }))
+    const r = await request(socketPath, 'POST', '/probe', big).catch(e => ({ status: 'error', text: e.code }))
     assert.notEqual(r.status, 201)
   } finally {
     await control.close()
@@ -132,7 +130,7 @@ test('a socket path of exactly 107 bytes listens and answers', async () => {
   const { control } = rig(socketPath)
   await control.listen()
   try {
-    const r = await request(socketPath, 'POST', '/drive', JSON.stringify({ op: 'take', who: 'a', why: 'x' }))
+    const r = await request(socketPath, 'POST', '/probe', JSON.stringify({ op: 'take', who: 'a', why: 'x' }))
     assert.notEqual(r.status, undefined)
   } finally {
     await control.close()
@@ -148,7 +146,7 @@ test('close without listen is a no-op', async () => {
   await rig().control.close()
 })
 
-test('GET entities passes through an empty EDN body without a manual drive operation', async () => {
+test('GET entities passes through an empty EDN body', async () => {
   const socketPath = tmpSock()
   const calls = []
   const control = createControl({ socketPath, handle: (method, route, body) => {

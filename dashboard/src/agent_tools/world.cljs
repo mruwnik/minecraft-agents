@@ -1,7 +1,6 @@
 (ns agent-tools.world
-  "Manual actions as jobs: world.mjs <agent> submit <action> ... submits the job of that action as the driver."
-  (:require [agent-tools.drive :as drive]
-            [agent-tools.http :as http]
+  "Manual actions as jobs: world.mjs <agent> submit <action> ... submits the job of that action."
+  (:require [agent-tools.http :as http]
             [agent-tools.jobs :as jobs]
             [agent-tools.map :as map-tool]
             [agent-tools.observe.request :as observe-request]
@@ -11,7 +10,7 @@
             ["node:path" :as path]))
 
 (def usage
-  (str "usage: world.mjs <agent> submit <action> [args] --world <world> [--worlds <dir>] [--state <legacy-parent>] [--who NAME]\n"
+  (str "usage: world.mjs <agent> submit <action> [args] --world <world> [--worlds <dir>] [--state <legacy-parent>] [--who NAME] [--exclusive]\n"
        "  submit move-to <x> <y> <z> | <x> <z> (a column: its surface) [--range <n>] [--doors shut|leave-open|never] [--no-escalate]   (jobs.movement.go-to)\n"
        "  submit dig <x> <y> <z> [--ignore-zones] | submit place <x> <y> <z> <item> [--ignore-zones]   (jobs.blocks.dig / place)\n"
        "  submit use-on <x> <y> <z> [--item <item>|none] [--face up|down|north|south|east|west]   (jobs.blocks.use-on)\n"
@@ -20,9 +19,7 @@
        "  submit wear [<item>]   (jobs.items.wear: a carried armour piece; no item: the best carried piece for each empty or weaker slot)\n"
        "  submit equip <item> [--hand main|off]   (jobs.items.equip: hold a carried item in the main hand or off-hand; refuses a missing item)\n"
        "  submit mount <entity-id|name> | submit dismount   (jobs.movement.mount: walk to a boat, raft, minecart or rideable mob (by id, or the nearest of a name) and get on; jobs.movement.leave-vehicle: get off)\n"
-       "Acquire the body first: drive.mjs take --who NAME --why \"<text>\" --idle-s N, and pass the same --who here.\n"
-       "Under manual control the driver's job is the one slot: no other job runs, a new submit replaces the running one, and the body idles after it;\n"
-       "jobs.mjs cancel <jID> or drive.mjs stop cancels it. Without manual control (or as another --who) the job joins the normal list.\n"
+       "The job joins the normal list; add --exclusive to run it alone and at once: the engine is paused (no triggers, no other job) until it ends, and any ending, a yield included, returns to you.\n"
        "Submit returns at once with the job; add --wait [--timeout 60s] to block until it ends (or until anything that ends observe --wait)\n"
        "and print {:job .. :wait <the wake>}. Status, cancel and inventory: jobs.mjs show|cancel, observe inventory."))
 
@@ -30,7 +27,11 @@
   {:who {:type "string" :default "claude"} :state {:type "string"} :worlds {:type "string"} :world {:type "string"}
    :range {:type "string"} :doors {:type "string"} :no-escalate {:type "boolean"} :ignore-zones {:type "boolean"}
    :item {:type "string"} :hand {:type "string"} :face {:type "string"} :request-id {:type "string"}
-   :wait {:type "boolean"} :timeout {:type "string"}})
+   :wait {:type "boolean"} :timeout {:type "string"} :exclusive {:type "boolean"}})
+
+;; parseArgs would read "-10" as a short option, so hide negative numbers from it
+(defn hide [token] (if (re-matches #"-\d+(\.\d+)?" token) (str (char 0) token) token))
+(defn unhide [token] (if (str/starts-with? token (char 0)) (subs token 1) token))
 
 (def action-options [:range :doors :no-escalate :ignore-zones :item :face :hand])
 
@@ -91,21 +92,21 @@
         request-id (or (:request-id values) (.randomUUID crypto))]
     (when-not (re-matches #"[A-Za-z0-9._-]{1,80}" request-id)
       (fail "--request-id must be 1..80 letters, digits, dot, _ or -"))
-    {:op :submit :request-id request-id :by who :spec spec}))
+    {:op (if (:exclusive values) :exclusive :submit) :request-id request-id :by who :spec spec}))
 
 (defn command-request [command action args who values]
   (case command
     "submit" (submit-request action args who values)
     "status" (fail "status is gone: jobs.mjs show <jID> (the submit answer names the job)")
-    "cancel" (fail "cancel is gone: jobs.mjs cancel <jID>, or drive.mjs stop")
+    "cancel" (fail "cancel is gone: jobs.mjs cancel <jID>")
     "inventory" (fail "inventory is gone: observe inventory")
     (fail (str "unknown command " command))))
 
 (defn request-for-unsafe
   "The jobs.cljs request map (see agent-tools.jobs/request-for) of a world.mjs command, or {:error text}."
   [argv]
-  (let [{:keys [positionals values]} (map-tool/parse-options (mapv drive/hide argv) options)
-        [agent command action & args] (map drive/unhide positionals)
+  (let [{:keys [positionals values]} (map-tool/parse-options (mapv hide argv) options)
+        [agent command action & args] (map unhide positionals)
         world (:world values)
         who (:who values)]
     (cond

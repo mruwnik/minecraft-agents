@@ -5,7 +5,6 @@
             [engine.fake]
             [engine.core :as core]
             [engine.ctx :as ctx]
-            [engine.takeover :as takeover]
             [engine.memory :as mem]
             [engine.events :as events]
             [jobs.lib.ledger :as ledger]
@@ -984,11 +983,10 @@
                        (let [r (await (impl token args))]
                          (when-not @cut?
                            (reset! cut? true)
-                           (takeover/take! eng {:who "claude" :why "cut"}))
+                           (core/cut! eng (core/holder eng) :test nil))
                          r)))
           (core/submit! eng '(recording-parent) {})
           (await (core/tick! eng))
-          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (h/run-until-empty eng 40))
           (is (= 9 (:placed @out))))))))
 

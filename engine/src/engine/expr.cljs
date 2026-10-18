@@ -8,7 +8,6 @@
     (repeat e)                          e again, fresh, each time it is done
     (repeat n e)                        the same, done after n runs (n a positive integer)
     (until g e)                         e repeated, done once g's check passes
-    (hold e)                            e, holding the body; top level only
 
   Nodes: {:op :leaf :job sym :args map}, {:op :seq|:any :children [node]},
   {:op :repeat :child node :times n?}, {:op :until :children [guard child]}. They are plain EDN, so they persist."
@@ -17,7 +16,7 @@
             [engine.contract :as contract]
             [engine.settings :as settings]))
 
-(def combinators #{'seq 'any 'repeat 'until 'hold})
+(def combinators #{'seq 'any 'repeat 'until})
 
 (defn fail [msg form]
   (throw (ex-info msg {:form form})))
@@ -54,7 +53,7 @@
              (str/join ", " ks) "; " listing)))))
 
 (defn parse-form
-  "The node for form (the wrapper hold is peeled off before)."
+  "The node for job spec form; throws with a message naming the problem."
   [registry form]
   (let [head (when (and (seq? form) (seq form)) (first form))
         parts (when (seq? form) (rest form))
@@ -62,9 +61,6 @@
     (cond
       (not (and (seq? form) (symbol? head)))
       (fail (str "a job spec is a list such as (jobs.survival.eat) or (seq ...), not " (pr-str form)) form)
-
-      (= 'hold head)
-      (fail "hold is only allowed around a whole job spec, not inside one" form)
 
       (and (= 'repeat head) (= 1 n))
       {:op :repeat :child (parse-form registry (first parts))}
@@ -89,7 +85,7 @@
 
       (not (contains? registry head))
       (fail (str "unknown job or combinator " head "; jobs are namespaces under jobs/,"
-                 " combinators are seq, any, repeat, until and hold")
+                 " combinators are seq, any, repeat, until")
             form)
 
       (> n 1) (fail (str head " takes at most one args map") form)
@@ -101,39 +97,18 @@
 
       :else {:op :leaf :job head :args (second (leaf registry head (first parts)))})))
 
-(defn peel
-  "Unwrap the top-level (hold e) of form: {:form inner :hold? bool}."
-  [form]
-  (let [head (when (seq? form) (first form))
-        parts (when (seq? form) (rest form))]
-    (cond
-      (= 'hold head)
-      (if (= 1 (count parts))
-        (assoc (peel (first parts)) :hold? true)
-        (fail "hold takes exactly one job spec" form))
-
-      :else {:form form :hold? false})))
-
-(defn parse-spec
-  "{:node node :hold? bool} for a job spec form; throws with a message naming the problem and the whole spec."
+(defn parse
+  "The node for a job spec form; throws with a message naming the problem and the whole spec."
   [registry form]
   (try
-    (let [{:keys [form hold?]} (peel form)]
-      {:node (parse-form registry form) :hold? hold?})
+    (parse-form registry form)
     (catch :default e
       (throw (ex-info (str (ex-message e) ", in " (pr-str form)) {:form form} e)))))
-
-(defn parse
-  "The node for a job spec form that must not hold."
-  [registry form]
-  (let [{:keys [node hold?]} (parse-spec registry form)]
-    (when hold? (fail (str "hold is not allowed here, in " (pr-str form)) form))
-    node))
 
 (defn problem
   "The message of what is wrong with form, or nil."
   [registry form]
-  (try (parse-spec registry form) nil
+  (try (parse registry form) nil
        (catch :default e (ex-message e))))
 
 (defn label

@@ -192,27 +192,27 @@
           (is (re-find #"dirt not worth the detour" unworthy) "what was seen and why it was left")
           (is (re-find #"no loose item" none)))))))
 
-(deftest a-held-job-with-nothing-worth-it-waits
+(deftest a-job-with-nothing-worth-it-waits
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup (world dirt-down))]
-          (core/submit! eng '(jobs.items.pick-up-loose) {:hold? true})
+          (core/submit! eng '(jobs.items.pick-up-loose) {})
           (core/submit! eng '(jobs.items.pick-up-loose) {})
           (dotimes [_ 6] (await (core/tick! eng)))
           (is (= 2 (count (:list (core/state eng)))))
           (is (empty? (filterv #(= :stopped (:kind %)) @seen)))
           (is (= #{:nothing-worth-it} (into #{} (map :reason) (filterv #(= :waiting (:kind %)) @seen)))))))))
 
-(deftest a-waiting-held-job-lets-the-next-listed-job-run
+(deftest a-waiting-job-lets-the-next-listed-job-run
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup (world dirt-down))]
-          (core/submit! eng '(jobs.items.pick-up-loose) {:hold? true})
+          (core/submit! eng '(jobs.items.pick-up-loose) {})
           (core/submit! eng '(jobs.movement.go-to {:pos [4.5 64 0.5] :range 1}) {})
           (dotimes [_ 40] (await (core/tick! eng)))
-          (is (= 1 (count (:list (core/state eng)))) "the go-to ran and left; only the waiting holder is listed")
+          (is (= 1 (count (:list (core/state eng)))) "the go-to ran and left; only the waiting job is listed")
           (is (some #(and (= :result (:kind %)) (true? (:arrived %))) @seen) (pr-str (take-last 6 @seen))))))))
 
 (deftest register-args-cut-the-running-job-at-most-once

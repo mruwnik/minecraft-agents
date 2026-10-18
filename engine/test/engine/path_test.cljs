@@ -5,7 +5,6 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
-            [engine.takeover :as takeover]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
@@ -137,9 +136,8 @@
           (let [running (core/tick! eng)]
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
             (is (= 1 (count (calls p "useOn"))) "the first use held")
-            (takeover/take! eng {:who "claude" :why "cut"})
+            (core/cut! eng (core/holder eng) :test nil)
             (await running))
-          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (run-until-empty eng 12))
           (is (= {:pathed 4 :skipped {}} (dissoc @out :text)))
           (is (= ["dirt_path"] (distinct (map #(block-at p %) (path/cells box))))))))))

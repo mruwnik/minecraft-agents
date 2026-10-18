@@ -8,7 +8,7 @@
 
 ;; ---------------------------------------------------------------- the live view, on this origin
 ;; js/viewmount.mjs builds tools/view/serve.mjs's request handler without listening; its paths (/view, /pose/, /hud/,
-;; /drive/, /web/ ...) are forwarded to it. Loaded once at startup, like the thumbnailer; absent when it fails to load.
+;; /web/ ...) are forwarded to it. Loaded once at startup, like the thumbnailer; absent when it fails to load.
 (def viewmount-module (or (.-VIEWMOUNT_MODULE js/process.env) (.join path dashboard-dir "js" "viewmount.mjs")))
 
 (defonce view-mount (atom nil))

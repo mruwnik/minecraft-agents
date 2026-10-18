@@ -10,7 +10,6 @@
             [engine.job-api :as job-api]
             [engine.memory :as mem]
             [engine.registry :as registry]
-            [engine.takeover :as takeover]
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -378,9 +377,8 @@
           (.hold world "dig")
           (let [running (core/tick! eng)]
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
-            (takeover/take! eng {:who "claude" :why "cut"})
+            (core/cut! eng (core/holder eng) :test nil)
             (await running))
-          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (tick-out! s))
           (is (= :reached (:reason @out)))
           (is (= 22 (count (:dug @out))))

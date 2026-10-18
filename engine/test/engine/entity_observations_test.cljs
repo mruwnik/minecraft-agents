@@ -7,8 +7,7 @@
             [engine.perception :as perception]
             [engine.senses :as senses]
             [engine.settings :as settings]
-            [engine.test-util :as tu]
-            [engine.takeover :as takeover]))
+            [engine.test-util :as tu]))
 
 (defn entity [id type uuid x]
   #js {:id id :name type :type "mob" :uuid uuid :position #js {:x x :y 64 :z 0}})
@@ -253,10 +252,10 @@
           (is (true? (:truncated? result))))))
     (is (false? (:truncated? (seen/snapshot c 120000))))))
 
-(deftest endpoint-returns-edn-without-a-manual-lease
+(deftest endpoint-returns-edn
   (let [c (cache {:now (constantly 500)}) bot (js-obj)]
     (seen/observe! c (sample bot [(entity 1 "villager" "v" 0)]) 0)
-    (let [response (takeover/handle {:seen-entities c} {} "GET" "/entities" nil "")
+    (let [response (seen/request c "GET")
           body (reader/read-string (.-text response))]
       (is (= 200 (.-status response)))
       (is (= "application/edn" (.-contentType response)))
@@ -264,8 +263,8 @@
       (is (= "Probe" (:body body)))
       (is (= 120000 (:ttl-ms body)))
       (is (= 1 (:count body))))
-    (is (= 405 (.-status (takeover/handle {:seen-entities c} {} "POST" "/entities" nil ""))))
-    (is (= 503 (.-status (takeover/handle {} {} "GET" "/entities" nil ""))))))
+    (is (= 405 (.-status (seen/request c "POST"))))
+    (is (= 503 (.-status (seen/request nil "GET"))))))
 
 (deftest recorder-capability-failure-is-explicit-and-listeners-clean-up
   (doseq [provider [#js {} #js {:entityObservation (fn [] (throw (js/Error. "provider unavailable")))}]]

@@ -7,7 +7,7 @@
 
 (def storage-key "dashboard.status-filter")
 
-(def states [[:manual "manual"] [:working "working"] [:idle "idle"] [:trouble "in trouble"] [:offline "offline"]])
+(def states [[:working "working"] [:idle "idle"] [:trouble "in trouble"] [:offline "offline"]])
 
 (defn only-states
   "The bodies whose state (the one the counts use) is in `pressed`; all of them when nothing is pressed. Bodies named in

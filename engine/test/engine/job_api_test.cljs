@@ -21,7 +21,6 @@
         good '(done)
         response (command eng "request-1" :submit {:spec good})]
     (is (= "j1" (get-in response [:job :id])))
-    (is (false? (get-in response [:job :hold?])) "ordinary submissions echo their effective hold state")
     (is (= true (:duplicate (command eng "request-1" :submit {:spec good}))))
     (is (= ["j1"] (:list (core/state eng))))
     (is (= :request-id-conflict (:reason (command eng "request-1" :submit {:spec '(wait)}))))
@@ -58,20 +57,6 @@
       (is (= :request-uncertain (:reason (api/mutate! again (assoc request :request-id "pending")))))
       (is (= ["j1"] (:list (core/state again))))
       (core/shutdown! again))
-    (core/shutdown! eng)))
-(deftest manual-lease-allows-queueing-but-refuses-interrupt
-  (let [{:keys [eng]} (setup)]
-    (reset! (:manual eng) {:who "driver" :token "manual"})
-    (is (true? (:ok (command eng "queue" :submit {:spec '(done)}))))
-    (is (= :manual-control (:reason (command eng "interrupt" :interrupt {:spec '(done)}))))
-    (is (= {:who "driver" :token "manual"} @(:manual eng)))
-    (core/shutdown! eng)))
-(deftest a-job-queued-under-manual-lease-says-it-waits-for-the-lease
-  (let [{:keys [eng]} (setup)]
-    (reset! (:manual eng) {:who "driver" :token "manual"})
-    (let [job (:job (command eng "queue" :submit {:spec '(done)}))]
-      (is (= {:reason :manual-control :who "driver"} (:waiting job)) (pr-str job))
-      (is (= {:reason :manual-control :who "driver"} (:waiting (first (:items (api/list-jobs eng 0 10)))))))
     (core/shutdown! eng)))
 (deftest failed-interrupt-parks-with-attention-and-predecessor-resumes
   (async done
@@ -113,38 +98,33 @@
           (is (= ["j2" "j1"] @ran) "the new job yields after one round, then the cut job continues")
           (is (= ["j2" "j1"] (:list (core/state eng))))
           (core/shutdown! eng))))))
-(deftest submit-takes-front-hold-and-who-added-it
+(deftest submit-takes-front-and-who-added-it
   (let [{:keys [eng]} (setup)]
     (command eng "first" :submit {:spec '(wait)})
-    (let [r (command eng "second" :submit {:spec '(done) :next? true :hold? true :by "steward"})
+    (let [r (command eng "second" :submit {:spec '(done) :next? true :by "steward"})
           id (get-in r [:job :id])]
       (is (true? (:ok r)))
-      (is (true? (get-in r [:job :hold?])) "held submissions echo their effective hold state")
       (is (= [id "j1"] (:list (core/state eng))))
-      (is (= {:hold? true :by "steward"}
-             (select-keys (get-in (core/state eng) [:instances id]) [:hold? :backoff :by])))
+      (is (= {:by "steward"} (select-keys (get-in (core/state eng) [:instances id]) [:backoff :by])))
     (is (= :agent (get-in (core/state eng) [:instances "j1" :by])) "who defaults to :agent")
-    (let [duplicate (command eng "second" :submit {:spec '(done) :next? true :hold? true :by "steward"})]
-      (is (true? (:duplicate duplicate)))
-      (is (true? (get-in duplicate [:job :hold?])) "idempotent replay re-reads effective hold state from the created instance"))
+    (is (true? (:duplicate (command eng "second" :submit {:spec '(done) :next? true :by "steward"}))))
     (is (= :request-id-conflict (:reason (command eng "second" :submit {:spec '(done)}))) "the options are part of the request")
     (command eng "cancel-second" :cancel {:id id})
-    (let [replay (command eng "second" :submit {:spec '(done) :next? true :hold? true :by "steward"})]
-      (is (= :absent (get-in replay [:job :status])))
-      (is (true? (get-in replay [:job :hold?])) "replay keeps the created job's hold value after it leaves the active instance map")))
+    (let [replay (command eng "second" :submit {:spec '(done) :next? true :by "steward"})]
+      (is (= :absent (get-in replay [:job :status])))))
     (core/shutdown! eng)))
 (deftest bad-submit-options-are-refused-before-anything-changes
   (let [{:keys [eng]} (setup)]
     (are [extra reason] (= reason (:reason (command eng (str (random-uuid)) :submit (merge {:spec '(done)} extra))))
       {:next? "yes"} :bad-field
-      {:hold? 1} :bad-field
+      {:hold? true} :unknown-field
       {:backoff {:after 2}} :unknown-field
       {:by 7} :bad-by)
     (is (= [] (:list (core/state eng))))
     (is (empty? (get-in (core/state eng) [:job-requests :records])))
     (core/shutdown! eng)))
 (defn cancelled-events [seen] (filterv #(= :cancelled (:kind %)) @seen))
-(deftest cancel-all-cancels-every-listed-job-held-ones-included-and-leaves-the-register
+(deftest cancel-all-cancels-every-listed-job-and-leaves-the-register
   (async done
     (tu/run-async done
       (fn ^:async run []
@@ -161,13 +141,13 @@
           (command eng "a" :submit {:spec '(wait)})
           (command eng "b" :submit {:spec '(fail)})
           (command eng "c" :submit {:spec '(done)})
-          (command eng "d" :submit {:spec '(done) :hold? true})
+          (command eng "d" :submit {:spec '(done)})
           (command eng "e" :submit {:spec '(done)})
           (command eng "e-cancel" :cancel {:id "j5" :by "scout"})
           (is (= [["j5" "scout"]] (mapv (juxt :job :by) (cancelled-events seen))) "a single cancel records who asked too")
           (reset! seen [])
           (let [running (core/tick! eng)]
-            (is (= "j4" (:id (core/running eng))) "the held job has the body")
+            (is (= "j1" (:id (core/running eng))) "the first job has the body")
             (let [r (command eng "all" :cancel-all {:by "steward"})]
               (is (= {:ok true :cancelled ["j1" "j2" "j3" "j4"]} (select-keys r [:ok :cancelled])))
               (is (= [] (:list (core/state eng))))

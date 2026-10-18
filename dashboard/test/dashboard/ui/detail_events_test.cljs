@@ -27,38 +27,8 @@
     (is (= [90 91] (mapv :seq (:events reconciled))))
     (is (= {"r90" {:request-id "r90"}} (:outstanding reconciled)))))
 
-(def lease {:who "dashboard-k3x9ab" :expiresAt 9000})
-
-(deftest drive-poll-keeps-our-lease-and-countdown
-  (let [db {:who "dashboard-k3x9ab" :detail-body "Bob" :drive {:driving? true :expires-at 5000}}
-        polled (detail-events/drive-polled db "Bob" lease 100)]
-    (is (= {:driving? true :expires-at 9000 :manual lease :at 100} (:drive polled)))))
-
-(deftest drive-poll-of-someone-elses-lease-stops-us-driving
-  (let [db {:who "dashboard-k3x9ab" :detail-body "Bob" :drive {:driving? true :expires-at 5000}}
-        other {:who "claude" :expiresAt 9000}
-        polled (detail-events/drive-polled db "Bob" other 100)]
-    (is (= {:driving? false :expires-at nil :manual other :at 100} (:drive polled)))))
-
-(deftest drive-poll-for-a-closed-body-changes-nothing
-  (let [db {:who "me" :detail-body "Al" :drive {:driving? true}}]
-    (is (= db (detail-events/drive-polled db "Bob" nil 100)))))
-
-(deftest failed-drive-poll-keeps-our-lease
-  (let [db {:who "dashboard-k3x9ab" :detail-body "Bob" :drive {:driving? true :manual lease :expires-at 9000}}]
-    (is (= db (detail-events/drive-poll-failed db "Bob" 100)))))
-
-(deftest failed-drive-poll-of-a-body-we-do-not-drive-clears-it
-  (let [db {:who "me" :detail-body "Bob" :drive {:manual {:who "other"}}}]
-    (is (nil? (get-in (detail-events/drive-poll-failed db "Bob" 100) [:drive :manual])))))
-
-(deftest closing-the-popup-releases-a-body-we-drive
-  (let [db {:who "dashboard-k3x9ab" :world "w" :detail-body "Bob" :detail-events [1] :drive {:driving? true :manual lease}}
-        fx (detail-events/close-fx db)]
+(deftest closing-the-popup-drops-the-body-and-stops-its-poll
+  (let [fx (detail-events/close-fx {:detail-body "Bob" :detail-events [1]})]
     (is (nil? (get-in fx [:db :detail-body])))
-    (is (= {} (get-in fx [:db :drive])))
-    (is (= [:detail-log :detail-drive] (:stop-timers fx)))
-    (is (= {:op :release :name "Bob" :world "w"} (select-keys (:drive-invoke fx) [:op :name :world])))))
-
-(deftest closing-the-popup-of-an-undriven-body-releases-nothing
-  (is (nil? (:drive-invoke (detail-events/close-fx {:who "me" :detail-body "Bob" :drive {}})))))
+    (is (= [] (get-in fx [:db :detail-events])))
+    (is (= [:detail-log] (:stop-timers fx)))))

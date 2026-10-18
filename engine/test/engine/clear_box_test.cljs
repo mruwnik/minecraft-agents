@@ -5,7 +5,6 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
-            [engine.takeover :as takeover]
             [engine.fake :as fake]
             [engine.blocks-dig-test :as bd]
             [engine.test-util :as tu :refer [run-until-empty]]
@@ -136,9 +135,8 @@
               (when (empty? (calls p "dig"))
                 (await (js/Promise. (fn [resolve] (js/setTimeout resolve 5))))
                 (recur)))
-            (takeover/take! eng {:who "claude" :why "cut"})
+            (core/cut! eng (core/holder eng) :test nil)
             (await running))
-          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (run-until-empty eng 40))
           (is (= {:dug 8 :skipped {} :kept 0 :fluids {}} (dissoc @out :text))))))))
 

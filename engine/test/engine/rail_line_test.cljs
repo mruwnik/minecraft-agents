@@ -9,7 +9,6 @@
             [engine.memory :as mem]
             [jobs.blocks.dig :as dig]
             [jobs.build.rail :as builder]
-            [engine.takeover :as takeover]
             [jobs.build.rail-line :as rail-line]
             [engine.fake :as fake]
             [engine.test-util :as tu]
@@ -283,10 +282,9 @@
           (core/submit! eng (list job {:plan "line"}) {})
           (let [round (core/tick! eng)]
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
-            (is (= {:ok true} (takeover/take! eng {:who "claude" :why "test"})))
+            (core/cut! eng (core/holder eng) :test nil)
             (await round)
             (release))
-          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (tu/run-ticks eng h/clock 120 700))
           (is (every? #(= "rail" (h/block-at p % 64 0)) [0 1 28 29]))
           (is (every? #(= "powered_rail" (h/block-at p % 64 0)) [2 3 4 5 24 25 26 27]))
@@ -549,10 +547,9 @@
           (core/submit! eng (list job {:plan "line"}) {})
           (let [round (core/tick! eng)]
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
-            (is (= {:ok true} (takeover/take! eng {:who "claude" :why "test"})))
+            (core/cut! eng (core/holder eng) :test nil)
             (await round)
             (release))
-          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (tu/run-ticks eng h/clock 160 700))
           (is (= ["east_west" "south_west" "north_south"] (mapv #(shape-of p %) [[18 64 0] [19 64 0] [19 64 1]])))
           (is (= 1 (count (h/events-of seen :completed))))

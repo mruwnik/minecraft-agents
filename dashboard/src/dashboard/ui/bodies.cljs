@@ -6,7 +6,7 @@
             [dashboard.ui.statusfilter :as statusfilter]
             [dashboard.ui.trouble :as trouble]))
 
-(def status-label {:manual "manual" :trouble "in trouble" :working "working" :idle "idle" :offline "offline"})
+(def status-label {:trouble "in trouble" :working "working" :idle "idle" :offline "offline"})
 
 (defn short-label [s] (trouble/short-name s))
 
@@ -58,9 +58,9 @@
 (defn job-line [{:keys [job]}]
   [:div.line.job {:title job} [:span.lbl "Job" ":"] (if job [:span.text job] [:span.dim "no job"])])
 
-(defn body-card [{:keys [name status reason manual severity mine? health food parked event event-age event-attention] :as card}]
+(defn body-card [{:keys [name status reason severity health food parked event event-age event-attention] :as card}]
   ^{:key name}
-  [:div.bcard {:class [(clojure.core/name status) (when mine? "mine") (when reason (str "sev-" (clojure.core/name severity)))]
+  [:div.bcard {:class [(clojure.core/name status) (when reason (str "sev-" (clojure.core/name severity)))]
                :tabIndex 0 :role "button"
                :on-click #(rf/dispatch [:open-detail name])
                :on-key-down #(when (= "Enter" (.-key %)) (rf/dispatch [:open-detail name]))}
@@ -72,7 +72,6 @@
     (when parked [:div.line.parked {:title parked} parked])
     [:div.line.event {:class (when (#{:notice :required} event-attention) (clojure.core/name event-attention)) :title event}
      (if event [:<> [:span.text event] [:span.age event-age]] [:span.dim "no events"])]
-    (when manual [:div.reason.manual manual])
     (when reason [:div.reason {:class (clojure.core/name severity)} reason])
     [show-on-map name (get @(rf/subscribe [:body-positions]) name) @(rf/subscribe [:current-world])]]])
 

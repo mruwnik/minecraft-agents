@@ -1,15 +1,12 @@
 (ns dashboard.ui.detail-events
-  "The body popup's state: open and close (with ?body= in the URL), the action-log poll, and manual takeover
-  (a 1 s poll of /drive/<name>, postMessage from the view page, take and release requests)."
+  "The body popup's state: open and close (with ?body= in the URL), the action-log poll and the embedded view's chrome."
   (:require [re-frame.core :as rf]
             [dashboard.ui.api :as api]
             [dashboard.ui.db :as db]
             [dashboard.ui.detail-model :as detail-model]
-            [dashboard.ui.drive :as drive]
             [dashboard.ui.logic :as logic]))
 
 (def log-ms 2000)
-(def drive-ms 1000)
 (def log-limit 300)
 (def frame-id "view-frame")
 
@@ -28,7 +25,6 @@
      :notices (->> events (filter #(= :notice (:attention %))) (take-last 5) reverse vec)}))
 
 ;; a body is <world>/<name>; the popup's body is always of the page's world
-(defn drive-url [world name] (str "/drive/" (js/encodeURIComponent world) "/" (js/encodeURIComponent name)))
 (defn body-path [db name] (str (js/encodeURIComponent (db/current-world db)) "/" (js/encodeURIComponent name)))
 
 (defn body-url [body]
@@ -37,36 +33,28 @@
 (rf/reg-event-fx
  :open-detail
  (fn [{:keys [db]} [_ name]]
-   {:db (assoc db :detail-body name :detail-events [] :detail-chip :all :detail-text "" :drive {}
+   {:db (assoc db :detail-body name :detail-events [] :detail-chip :all :detail-text ""
                :detail-stream nil :attention-outstanding (db/body-outstanding (:state db) name)
                :attention-error nil :detail-notices [])
     :replace-url (body-url name)
-    :fx [[:start-timers [[:detail-log log-ms [:poll-detail-log]] [:detail-drive drive-ms [:poll-drive]]]]
-         [:dispatch [:poll-detail-log]]
-         [:dispatch [:poll-drive]]]}))
+    :fx [[:start-timers [[:detail-log log-ms [:poll-detail-log]]]]
+         [:dispatch [:poll-detail-log]]]}))
 
-;; a body we drive is released before the popup goes away: through the view page when it can, else straight to the socket.
-;; The effects of dropping the popup (also used when the world changes): db without the body's state, timers stopped, the release.
+;; The effects of dropping the popup (also used when the world changes): db without the body's state, timers stopped.
 (defn close-fx [db]
-  (let [name (:detail-body db)
-        driving? (drive/driving-now? (:drive db) (:who db))]
-    (cond-> {:db (assoc db :detail-body nil :detail-events [] :drive {})
-             :stop-timers [:detail-log :detail-drive]}
-      (and name driving?) (assoc :drive-invoke {:op :release :world (db/current-world db) :name name :request (drive/release-request (:drive db) (:who db)) :both? true}))))
+  {:db (assoc db :detail-body nil :detail-events [])
+   :stop-timers [:detail-log]})
 
 (rf/reg-event-fx
  :close-detail
  (fn [{:keys [db]} _]
    (assoc (close-fx db) :replace-url (body-url nil))))
 
-;; Esc: stop driving first, close when nobody is driven by us
+;; Esc closes the popup
 (rf/reg-event-fx
  :escape
  (fn [{:keys [db]} _]
-   (cond
-     (not (:detail-body db)) {}
-     (drive/driving-now? (:drive db) (:who db)) {:dispatch [:drive-release]}
-     :else {:dispatch [:close-detail]})))
+   (if (:detail-body db) {:dispatch [:close-detail]} {})))
 
 (rf/reg-event-fx
  :poll-detail-log
@@ -118,54 +106,6 @@
 (rf/reg-event-db :detail-debug? (fn [db [_ on?]] (assoc db :detail-debug? on?)))
 (rf/reg-event-db :detail-text (fn [db [_ text]] (assoc db :detail-text text)))
 
-;; ---------------------------------------------------------------- takeover
-(rf/reg-event-fx
- :poll-drive
- (fn [{:keys [db]} _]
-   (when-let [name (:detail-body db)]
-     {:fetch-json {:key :detail-drive :url (drive-url (db/current-world db) name)
-                   :on-ok [:drive-poll-ok name] :on-err [:drive-poll-err name]}})))
-
-(defn drive-polled
-  "db after a /drive poll of body `name` showed `manual` (nil: nobody drives); ignored once another body is open."
-  [db name manual now]
-  (if (= name (:detail-body db)) (update db :drive drive/apply-poll manual now (:who db)) db))
-
-(rf/reg-event-db :drive-poll-ok (fn [db [_ name data]] (drive-polled db name (:manual data) (js/Date.now))))
-
-;; no body listening (offline) or no reply: nobody drives it, unless we do: a lost reply must not drop our own lease
-(defn drive-poll-failed [db name now]
-  (if (drive/driving-now? (:drive db) (:who db)) db (drive-polled db name nil now)))
-
-(rf/reg-event-db :drive-poll-err (fn [db [_ name _]] (drive-poll-failed db name (js/Date.now))))
-
-(rf/reg-event-db
- :drive-message
- (fn [db [_ msg]] (update db :drive drive/apply-message msg (js/Date.now))))
-
-(rf/reg-event-fx
- :drive-take
- (fn [{:keys [db]} _]
-   {:db (assoc-in db [:drive :error] nil)
-    :drive-invoke {:op :take :world (db/current-world db) :name (:detail-body db) :request (drive/take-request (:who db))}}))
-
-(rf/reg-event-fx
- :drive-release
- (fn [{:keys [db]} _]
-   {:drive-invoke {:op :release :world (db/current-world db) :name (:detail-body db) :request (drive/release-request (:drive db) (:who db))}}))
-
-(rf/reg-event-fx
- :drive-reply
- (fn [{:keys [db]} [_ data]]
-   (let [refused (when (false? (:ok data)) (str "refused: " (:reason data)))]
-     {:db (assoc-in db [:drive :error] refused)
-      :dispatch [:poll-drive]})))
-
-(rf/reg-event-fx
- :drive-error
- (fn [{:keys [db]} [_ text]]
-   {:db (assoc-in db [:drive :error] text)}))
-
 (def embed-style-id "dashboard-embed-style")
 
 (defn apply-embed-style!
@@ -189,28 +129,3 @@
  (fn [{:keys [db]} _]
    (let [on? (not (:detail-stats? db))]
      {:db (assoc db :detail-stats? on?) :embed-style on?})))
-
-(defn frame-drive
-  "window.__drive of the view page in our iframe (same origin), when it has one."
-  []
-  (some-> (js/document.getElementById frame-id) .-contentWindow .-__drive))
-
-(defn post-request! [world name request]
-  (api/post-json! {:url (drive-url world name) :body (clj->js request) :on-ok [:drive-reply] :on-err [:drive-error]}))
-
-;; the view page's own __drive.take/release when it has them (it then knows it is driving), else the socket via the proxy
-(rf/reg-fx
- :drive-invoke
- (fn [{:keys [op world name request both?]}]
-   (let [page (frame-drive)
-         f (when page (aget page (clojure.core/name op)))]
-     (when (fn? f) (.call f page))
-     (when (or both? (not (fn? f))) (post-request! world name request)))))
-
-(defn on-message
-  "A window message: only the view page in our own iframe is believed."
-  [e]
-  (let [frame (js/document.getElementById frame-id)]
-    (when (and frame (= (.-origin e) (.-origin js/location)) (identical? (.-source e) (.-contentWindow frame)))
-      (when-let [msg (drive/parse-message (js->clj (.-data e) :keywordize-keys true))]
-        (rf/dispatch [:drive-message msg])))))

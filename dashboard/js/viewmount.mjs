@@ -2,7 +2,7 @@
 import path from 'node:path'
 import { createViewServer } from '../../tools/view/serve.mjs'
 
-const prefixes = ['/pose/', '/web/', '/columns/', '/blocks/', '/textures/', '/hud/', '/drive/', '/elements/', '/biomes/']
+const prefixes = ['/pose/', '/web/', '/columns/', '/blocks/', '/textures/', '/hud/', '/elements/', '/biomes/']
 const exact = new Set(['/view', '/view/', '/agents', '/poses'])
 
 // Serves the live 3D view from another server's origin: the view's http.Server is built but never listened on.

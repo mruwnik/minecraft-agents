@@ -220,16 +220,6 @@
     (testing title
       (is (= expected (into {} (:backoffs (signals events))))))))
 
-(deftest signals-takeover-who-and-since
-  (doseq [[title events expected]
-          [["started" [(ev 1 {:source "system" :kind "takeover_started" :who "operator"})] {:takeover? true :takeover-who "operator" :takeover-t (+ t0 1000)}]
-           ["never" [(ev 1)] {}]
-           ["ended clears who and since" [(ev 1 {:source "system" :kind "takeover_started" :who "operator"}) (ev 2 {:source "system" :kind "takeover_ended"})] {:takeover? false}]
-           ["a new holder replaces" [(ev 1 {:source "system" :kind "takeover_started" :who "a"}) (ev 3 {:source "system" :kind "takeover_started" :who "b"})]
-            {:takeover? true :takeover-who "b" :takeover-t (+ t0 3000)}]]]
-    (testing title
-      (is (= expected (select-keys (signals events) [:takeover? :takeover-who :takeover-t]))))))
-
 (deftest split-chunk-cases
   (doseq [[title state chunk text rest-text skipping?]
           [["whole lines" {} "a\nb\n" "a\nb\n" "" false]

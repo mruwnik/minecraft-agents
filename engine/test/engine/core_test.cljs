@@ -254,20 +254,6 @@
           (is (= ["j1"] (listed eng)))
           (is (some #(= :failed (:kind %)) @seen)))))))
 
-(deftest a-holding-job-whose-check-declines-lets-the-list-run
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup)]
-          (reset! flag false)
-          (core/submit! eng '(count) {})
-          (core/submit! eng '(gated) {:hold? true})
-          (await (core/tick! eng))
-          (is (= ["j1"] (ran seen)) "the holder declines; the others run")
-          (reset! flag true)
-          (dotimes [_ 2] (await (core/tick! eng)))
-          (is (= ["j1" "j2" "j2"] (ran seen)) "ready again, the holder has the body"))))))
-
 (deftest done-removes-the-job-and-its-memory
   (async done
     (tu/run-async done
@@ -281,16 +267,6 @@
           (is (some #(= [:completed "j1"] [(:kind %) (:job %)]) @seen))
           (await (core/tick! eng))
           (is (= ["j1" "j2"] (ran seen))))))))
-
-(deftest a-holding-job-is-always-chosen
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup)]
-          (core/submit! eng '(count) {})
-          (core/submit! eng '(count) {:hold? true})
-          (dotimes [_ 3] (await (core/tick! eng)))
-          (is (= ["j2" "j2" "j2"] (ran seen))))))))
 
 (deftest a-throwing-listed-job-stays-listed-with-its-memory-marked-failed-and-is-skipped
   (async done
@@ -321,17 +297,6 @@
           (await (core/tick! eng))
           (is (= ["j1"] (listed eng)))
           (is (contains? (:failed (core/state eng)) "j1")))))))
-
-(deftest a-failed-holding-job-does-not-hold-the-body
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup)]
-          (core/submit! eng '(fail) {:hold? true})
-          (core/submit! eng '(count) {})
-          (await (core/tick! eng))
-          (dotimes [_ 2] (await (core/tick! eng)))
-          (is (= ["j1" "j2" "j2"] (ran seen))))))))
 
 (deftest retry-clears-the-failed-mark-so-the-job-runs-again
   (async done
@@ -872,18 +837,6 @@
           (await walking)
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= ["j1" y x "j2"] (ran seen))))))))
-
-(deftest a-front-job-waits-behind-a-held-job
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup)]
-          (core/submit! eng '(count) {:hold? true})
-          (await (core/tick! eng))
-          (let [front (core/submit! eng '(count) {:next? true})]
-            (is (= ["j1" front] (listed eng)))
-            (dotimes [_ 3] (await (core/tick! eng)))
-            (is (= ["j1" "j1" "j1" "j1"] (ran seen)) "the held job keeps the body")))))))
 
 (deftest a-front-job-whose-check-is-false-is-skipped-like-any-other
   (async done
@@ -1601,31 +1554,6 @@
           (await (core/tick! eng))
           (is (= [] (listed eng)) "done once the guard's check passes"))))))
 
-(deftest hold-makes-the-list-entry-hold-the-body
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (expr-setup)]
-          (core/submit! eng '(count) {})
-          (core/submit! eng '(hold (repeat (twice))) {})
-          (is (true? (get-in (core/state eng) [:instances "j2" :hold?])))
-          (dotimes [_ 3] (await (core/tick! eng)))
-          (is (= ["j2" "j2" "j2"] (ran seen))))))))
-
-(deftest held-repeat-runs-a-round-per-tick-and-is-never-done
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (expr-setup)]
-          (core/submit! eng '(count) {})
-          (core/submit! eng '(hold (repeat (twice))) {})
-          (dotimes [_ 6] (await (core/tick! eng)))
-          (is (= (repeat 6 "j2") (ran seen)) "the held repeat takes every round, the other job waits")
-          (is (= ["j1" "j2"] (listed eng)) "the held repeat is never done")
-          (core/cancel! eng "j2")
-          (await (core/tick! eng))
-          (is (= "j1" (last (ran seen))) "cancelling the holder frees the body"))))))
-
 (deftest combinators-nest-and-survive-a-restart
   (async done
     (tu/run-async done
@@ -1648,7 +1576,7 @@
 (deftest a-bad-spec-is-refused-at-submit-and-register
   (let [{:keys [eng]} (expr-setup)]
     (is (thrown-with-msg? js/Error #"unknown job or combinator nope" (core/submit! eng '(nope) {})))
-    (is (thrown-with-msg? js/Error #"hold is not allowed here" (core/register-reflex! eng {:trigger :hurt :job '(hold (eat))})))
+    (is (thrown-with-msg? js/Error #"unknown job or combinator hold" (core/submit! eng '(hold (eat)) {})))
     (is (= [] (listed eng)))))
 
 (deftest a-restored-job-whose-namespace-is-gone-is-dropped-with-a-warn

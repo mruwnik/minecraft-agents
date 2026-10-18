@@ -3,7 +3,6 @@
             [dashboard.ui.chatsend :as cs]
             [dashboard.ui.db :as db]
             [dashboard.ui.detail-model :as detail-model]
-            [dashboard.ui.drive :as drive]
             [dashboard.ui.eventlog :as eventlog]
             [dashboard.ui.logic :as logic]
             [dashboard.ui.mapmodel :as mm]
@@ -12,7 +11,7 @@
 
 (defn reg-key-sub [k] (rf/reg-sub k (fn [d _] (get d k))))
 
-(doseq [k [:status :selected :chat-open? :places-open? :players-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-stream :detail-chip :detail-text :detail-debug? :attention-outstanding :attention-error :detail-notices :drive :notices :chat :worlds :detail-stats? :chat-send :chat-sender :who :status-filter]]
+(doseq [k [:status :selected :chat-open? :places-open? :players-open? :chat-filter :hide-whispers? :detail-body :detail-events :detail-stream :detail-chip :detail-text :detail-debug? :attention-outstanding :attention-error :detail-notices :notices :chat :worlds :detail-stats? :chat-send :chat-sender :status-filter]]
   (reg-key-sub k))
 
 (rf/reg-sub :whisper-send (fn [d [_ name]] (get-in d [:whisper-send name] cs/initial)))
@@ -48,10 +47,9 @@
  :cards
  :<- [:split-bodies]
  :<- [:now]
- :<- [:who]
  :<- [:status-filter]
- (fn [[{:keys [engine]} now who pressed] _]
-   (mapv #(trouble/card-model % now who) (trouble/sort-bodies (statusfilter/only-states engine pressed now) now))))
+ (fn [[{:keys [engine]} now pressed] _]
+   (mapv #(trouble/card-model % now) (trouble/sort-bodies (statusfilter/only-states engine pressed now) now))))
 
 (rf/reg-sub
  :status-counts
@@ -129,9 +127,8 @@
  :<- [:split-bodies]
  :<- [:detail-events]
  :<- [:now]
- :<- [:who]
- (fn [[name {:keys [engine]} events now who] _]
-   (detail-model/detail-model (first (filter #(= name (:name %)) engine)) (or now 0) (eventlog/current-action events) who)))
+ (fn [[name {:keys [engine]} events now] _]
+   (detail-model/detail-model (first (filter #(= name (:name %)) engine)) (or now 0) (eventlog/current-action events))))
 
 (rf/reg-sub
  :detail-rows
@@ -141,15 +138,3 @@
  :<- [:detail-debug?]
  :<- [:attention-outstanding]
  (fn [[events chip text debug? outstanding] _] (eventlog/rows events outstanding {:chip chip :text text :debug? debug?})))
-
-(rf/reg-sub
- :drive-banner
- :<- [:drive]
- :<- [:who]
- (fn [[d who] _] (drive/banner d (or (:at d) 0) who)))
-
-(rf/reg-sub
- :driving-now?
- :<- [:drive]
- :<- [:who]
- (fn [[d who] _] (drive/driving-now? d who)))

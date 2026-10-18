@@ -35,7 +35,6 @@
     {:allive? false} :idle :live
     {:allive? false} :trouble :live
     {:allive? false} :offline :last-image
-    {:allive? false} :manual :live
     {:allive? true} :offline :live
     {:allive? true} :working :live))
 
@@ -97,7 +96,6 @@
   ;; on unmount), so the transition is exactly a change of this value
   (are [status expected] (= expected (lc/card-view :hub (lc/card-plan {:allive? false} status) true))
     :working :live
-    :manual :live
     :offline :img
     :idle :live))
 

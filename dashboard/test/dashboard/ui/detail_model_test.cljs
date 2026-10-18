@@ -14,7 +14,7 @@
 (def offline (-> online (assoc :up false) (assoc-in [:engine :up] false) (assoc :at (- now 2460000)) (assoc-in [:engine :age-ms] 2460000)))
 
 (deftest model-fields
-  (let [mdl (m/detail-model online now "wait" "dashboard-k3x9ab")]
+  (let [mdl (m/detail-model online now "wait")]
     (are [k expected] (= expected (k mdl))
       :name "Bob"
       :status :working
@@ -25,11 +25,11 @@
       :dimension "overworld"
       :world "w1"
       :last-seen "2s ago"
-      :iframe-src "/view?agent=w1/Bob&embed=1&who=dashboard-k3x9ab"
+      :iframe-src "/view?agent=w1/Bob&embed=1"
       :offline-text nil)))
 
 (deftest offline-model
-  (let [mdl (m/detail-model offline now nil "dashboard-k3x9ab")]
+  (let [mdl (m/detail-model offline now nil)]
     (are [k expected] (= expected (k mdl))
       :online? false
       :status :offline
@@ -38,20 +38,20 @@
     (is (re-find #"^offline since \d\d:\d\d:\d\d \(41m ago\)$" (:offline-text mdl)))))
 
 (deftest missing-body
-  (are [k expected] (= expected (k (m/detail-model nil now nil "dashboard-k3x9ab")))
+  (are [k expected] (= expected (k (m/detail-model nil now nil)))
     :name nil
     :online? false))
 
 (deftest no-pos
-  (is (= "-" (:pos-text (m/detail-model (assoc online :view nil :engine {:up true}) now nil "me")))))
+  (is (= "-" (:pos-text (m/detail-model (assoc online :view nil :engine {:up true}) now nil)))))
 
 (deftest embed-css-hides-the-view-chrome
   (are [stats? expected-hidden] (= expected-hidden (m/hidden-selectors stats?))
-    false ["#overlay" "#bar" "#drive-banner"]
-    true ["#bar" "#drive-banner"])
+    false ["#overlay" "#bar"]
+    true ["#bar"])
   (are [stats? expected] (= expected (m/embed-css stats?))
-    false "#overlay, #bar, #drive-banner { display: none !important; }"
-    true "#bar, #drive-banner { display: none !important; }"))
+    false "#overlay, #bar { display: none !important; }"
+    true "#bar { display: none !important; }"))
 
 (deftest attention-note-cases
   (are [error online? expected] (= expected (m/attention-note error online?))
@@ -63,8 +63,8 @@
 
 (deftest iframe-src-encodes-world-and-name
   (let [odd (assoc online :name "a&b#c" :world "w 1")]
-    (is (= "/view?agent=w%201/a%26b%23c&embed=1&who=me" (:iframe-src (m/detail-model odd now nil "me"))))))
+    (is (= "/view?agent=w%201/a%26b%23c&embed=1" (:iframe-src (m/detail-model odd now nil))))))
 
 (deftest the-goal-wait-reaches-the-model
-  (let [mdl (m/detail-model (assoc online :goal {:text "t" :wait "waiting: x" :since (- now 1000)}) now "wait" "k")]
+  (let [mdl (m/detail-model (assoc online :goal {:text "t" :wait "waiting: x" :since (- now 1000)}) now "wait")]
     (is (= "waiting: x" (:goal-wait mdl)))))

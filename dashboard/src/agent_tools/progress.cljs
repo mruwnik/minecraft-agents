@@ -130,7 +130,6 @@
         died (:died s)]
     (vec (concat
           (when (:offline s) ["offline"])
-          (when (= :manual (:mode s)) [(str "manual (" (get-in s [:manual :who]) ")")])
           (when (and died (< (or (:ago-s died) 0) recent-death-s))
             [(str "died " (:ago-s died) "s ago" (when (:cause died) (str " (" (:cause died) ")")))])
           (when (seq (:muted-triggers s)) [(str "muted " (str/join "," (map word (:muted-triggers s))))])

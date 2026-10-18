@@ -30,7 +30,7 @@
   (let [plain (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)")
         now (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--now")]
     (is (= :submit (get-in plain [:request :op])))
-    (is (= {:op :submit} (select-keys (:request plain) [:op :next? :hold?])) "a plain submit appends")
+    (is (= {:op :submit} (select-keys (:request plain) [:op :next? :exclusive?])) "a plain submit appends")
     (is (= :interrupt (get-in now [:request :op])))
     (is (= '(jobs.time.wait-for-day) (get-in now [:request :spec]))))
   (doseq [[pattern args] [[#"unknown operation" ["interrupt" "(jobs.time.wait-for-day)"]]
@@ -103,9 +103,9 @@
     (is (true? (get-in kept [:request :survive-death?])))
     (is (not (contains? (:request one-shot) :survive-death?)))))
 
-(deftest cancel-all-has-no-job-argument-and-hold-and-front-are-submission-options
+(deftest cancel-all-has-no-job-argument-and-front-and-exclusive-are-submission-options
   (let [cancel (request "Bob" "--world" "w" "cancel-all" "--request-id" "all")
-        held (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--hold")
+        exclusive (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--exclusive")
         front (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--next")
         plain (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)")]
     (is (= :cancel-all (get-in cancel [:request :op])))
@@ -113,13 +113,12 @@
     (is (not (contains? (:request cancel) :id)))
     (is (not (contains? (:request cancel) :spec)))
     (is (true? (:mutating cancel)))
-    (is (true? (get-in held [:request :hold?])))
-    (is (re-find #":hold\? true" (data/write-edn (:request held))))
+    (is (= :exclusive (get-in exclusive [:request :op])))
     (is (true? (get-in front [:request :next?])))
     (is (re-find #":next\? true" (data/write-edn (:request front))))
-    (is (not (contains? (:request plain) :hold?)))
     (is (not (contains? (:request plain) :next?))))
-  (doseq [args [["cancel-all" "j1"] ["cancel-all" "--hold"] ["list" "--hold"] ["show" "j1" "--hold"] ["retry" "j1" "--hold"]]]
+  (doseq [args [["cancel-all" "j1"] ["cancel-all" "--exclusive"] ["list" "--exclusive"] ["show" "j1" "--exclusive"] ["retry" "j1" "--exclusive"]
+                ["submit" "(jobs.x {})" "--exclusive" "--next"] ["submit" "(jobs.x {})" "--exclusive" "--now"] ["submit" "(jobs.x {})" "--exclusive" "--survive-death"]]]
     (is (string? (:error (apply request "Bob" "--world" "w" args))) (pr-str args)))
   (doseq [args [["list" "--next"] ["show" "j1" "--next"]
                 ["cancel-all" "--next"] ["cancel" "j1" "--next"] ["retry" "j1" "--next"]]]
@@ -143,7 +142,7 @@
   (let [state (state-dir)]
     (async done
       (-> (run-main! state ["submit" "(seq (jobs.time.wait-for-day) (jobs.movement.go-to {:pos {:x -1 :y 64 :z 2}}))"
-                            "--hold" "--next" "--request-id" "held"] engine)
+                            "--survive-death" "--next" "--request-id" "held"] engine)
           (.then (fn [first-run]
                    (is (= 0 (:code first-run)))
                    (is (= {:ok true} (data/read-edn (:out first-run))))
@@ -151,7 +150,7 @@
                          sent (data/read-edn (:body (first posts)))]
                      (is (= 1 (count posts)))
                      (is (= "/jobs" (:path (first posts))))
-                     (is (true? (:hold? sent)))
+                     (is (true? (:survive-death? sent)))
                      (is (true? (:next? sent)))
                      (is (= "generation" (:generation-id sent)))
                      (is (= 'seq (first (:spec sent))))
@@ -232,11 +231,6 @@
                    (is (string? (:hint (data/read-edn out))) out)))
           (.then (fn [_] (run-main! state ["retry" "j5"] gone)))
           (.then (fn [{:keys [out]}] (is (string? (:hint (data/read-edn out))) out)))
-          (.then (fn [_] (run-main! state ["submit" "(jobs.x {})" "--hold"]
-                                    (fn [{:keys [path]}] {:text (if (= "/snapshot" path) snap "{:ok true :job {:id \"j5\" :status :queued :hold? true}}")}))))
-          (.then (fn [{:keys [code out]}]
-                   (is (= 0 code))
-                   (is (string? (:hint (data/read-edn out))) out)))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
 (deftest an-uncertain-mutation-reports-its-request-id
@@ -351,21 +345,6 @@
     (is (not (str/includes? (note-of {:status :running}) "queued")))
     (is (str/includes? (note-of {:status :queued}) "j7 is queued"))))
 
-(deftest a-waited-submit-under-manual-control-says-who-holds-the-body
-  (let [state (state-dir)
-        events (atom [(event-of 1 :system :started {})])
-        held {:who "Wren" :why "probing" :since 5}
-        engine (fn [req] (if (= "/status" (:path req))
-                           {:text (str "{:mode :manual :manual " (pr-str held) "}")}
-                           ((waiting-engine events) req)))]
-    (async done
-      (-> (run-main! state ["submit" "(jobs.time.wait-for-day)" "--wait" "--timeout" "100ms"] engine)
-          (.then (fn [{:keys [out]}]
-                   (let [result (data/read-edn out)]
-                     (is (re-find #"manual control held by Wren" (str (:hint result))) out)
-                     (is (= :timeout (get-in result [:wait :wake]))))))
-          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
-
 (deftest a-refused-submit-does-not-wait
   (let [state (state-dir)]
     (async done
@@ -379,37 +358,11 @@
                    (is (= ["GET" "GET" "POST"] (mapv :method seen)) "the job list, the snapshot, the post; no event reads")))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
-(defn manual-engine [manual]
-  (fn [{:keys [path]}]
-    {:text (cond (= "/snapshot" path) "{:generation-id \"generation\"}"
-                 (= "/status" path) (str "{:mode :manual :manual " (pr-str manual) "}")
-                 (str/starts-with? path "/jobs?") "{:total 1 :items [{:id \"j1\" :name \"go\" :status :queued}]}"
-                 :else "{:ok true :job {:id \"j2\" :status :queued}}")}))
-
-(deftest queued-jobs-under-manual-control-say-who-holds-the-body
-  (let [state (state-dir)
-        held {:who "Wren" :why "probing" :since 5}]
-    (async done
-      (-> (run-main! state ["list"] (manual-engine held))
-          (.then (fn [{:keys [out]}]
-                   (let [hint (:hint (data/read-edn out))]
-                     (is (re-find #"manual control" hint) out)
-                     (is (re-find #"Wren" hint) out)
-                     (is (re-find #"drive.mjs.*release" hint) out))))
-          (.then (fn [_] (run-main! state ["submit" "(jobs.x {})"] (manual-engine held))))
-          (.then (fn [{:keys [out]}] (is (re-find #"Wren" (str (:hint (data/read-edn out)))) out)))
-          (.then (fn [_] (run-main! state ["list"] (fn [{:keys [path]}]
-                                                     {:text (if (= "/status" path)
-                                                              "{:mode :scheduled :manual nil}"
-                                                              "{:total 1 :items [{:id \"j1\" :status :queued}]}")}))))
-          (.then (fn [{:keys [out]}] (is (nil? (:hint (data/read-edn out))) out)))
-          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
-
 (defn reflex-engine [current]
   (fn [{:keys [path]}]
     {:text (cond (= "/snapshot" path) "{:generation-id \"generation\"}"
-                 (= "/status" path) (str "{:mode :scheduled :manual nil :current " (pr-str current) "}")
-                 :else "{:ok true :job {:id \"j2\" :status :queued :hold? true}}")}))
+                 (= "/status" path) (str "{:mode :scheduled :current " (pr-str current) "}")
+                 :else "{:ok true :job {:id \"j2\" :status :queued}}")}))
 
 (deftest a-now-submit-queued-behind-a-reflex-says-which-one-and-until-when
   (let [state (state-dir)
@@ -434,7 +387,7 @@
   (is (re-find #"\(jobs\.movement\.go-to \{:pos" jobs/usage))
   (is (re-find #"observe\.mjs.*catalog job" jobs/usage))
   (is (re-find #"queues behind a running reflex" jobs/usage))
-  (is (re-find #"manual control" jobs/usage)))
+  (is (re-find #"--exclusive" jobs/usage)))
 
 (deftest submit-usage-and-argument-errors-show-the-list-form
   (is (str/includes? (jobs/usage-for "./bin/jobs") "submit '(jobs."))
@@ -558,13 +511,13 @@
 
 (defn vitals-engine
   "waiting-engine whose /status health falls from 20 to 14 between its first and later answers."
-  [events manual]
+  [events exclusive]
   (let [calls (atom 0)]
     (fn [req]
       (if (= "/status" (:path req))
         (let [n (swap! calls inc)]
           {:text (pr-str (cond-> {:mode :scheduled :health (if (< n 3) 20 14) :food 18 :position {:x 0 :y 64 :z 0}}
-                           manual (assoc :manual {:who "Wren" :why "probing"})))})
+                           exclusive (assoc :exclusive {:job "j1" :name "wait"})))})
         ((waiting-engine events) req)))))
 
 (deftest a-waited-submit-reports-health-lost-and-the-reflexes-off-reminder

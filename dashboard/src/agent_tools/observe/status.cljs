@@ -73,7 +73,7 @@
   ([s now]
   (if (false? (:ok s))
     s
-    (let [{:keys [current jobs failed outstanding manual]} s
+    (let [{:keys [current jobs failed outstanding exclusive]} s
           items (:items jobs)
           queued (remove #(= (:id %) (:id current)) items)
           queued-total (- (or (:total jobs) 0) (if (some #(= (:id %) (:id current)) items) 1 0))]
@@ -88,7 +88,7 @@
        :health (:health s)
        :food (:food s)
        :current (when current (job-view current))
-       :manual (when manual (clean-pairs :who (clip (:who manual) 80) :why (clip (:why manual) 160)))
+       :exclusive (when exclusive (clean-pairs :job (:job exclusive) :name (clip (:name exclusive) 80)))
        :jobs (when (nonzero queued-total)
                (cond-> (array-map :total queued-total :items (mapv job-view queued))
                  (:more? jobs) (assoc :more? true)))

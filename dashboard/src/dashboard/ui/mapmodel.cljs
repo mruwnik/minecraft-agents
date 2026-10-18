@@ -19,7 +19,7 @@
 
 (def villager-color "#c792ea")
 
-(def status-colors {:manual "#f85149" :working "#3fb950" :idle "#8b949e" :trouble "#d29922" :offline "#6e7681"})
+(def status-colors {:working "#3fb950" :idle "#8b949e" :trouble "#d29922" :offline "#6e7681"})
 
 (def place-label-scale 0.5)
 

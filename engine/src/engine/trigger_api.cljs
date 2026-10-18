@@ -114,10 +114,8 @@
 (defn job-problem
   "Why job spec job cannot be a register entry's job, or nil."
   [jobs job]
-  (if (and (seq? job) (= 'hold (first job)))
-    (str "hold is not allowed in a register entry, in " (pr-str job))
-    (try (expr/parse jobs job) nil
-         (catch :default e (ex-message e)))))
+  (try (expr/parse jobs job) nil
+       (catch :default e (ex-message e))))
 
 (defn backoff-problem [cfg]
   (try (backoff/validate! cfg) nil

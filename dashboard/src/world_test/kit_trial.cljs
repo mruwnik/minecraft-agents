@@ -136,12 +136,11 @@
   (some #(when (and (= :queued (:kind %)) (= "jobs.items.get-kit" (get-in % [:data :name]))) (first (get-in % [:context :chain]))) events))
 
 (defn interventions
-  "Jobs queued at top level that are not the goal job, and takeovers: nothing but the goal and the body's own reflexes act."
+  "Jobs queued at top level that are not the goal job: nothing but the goal and the body's own reflexes act."
   [events goal-job]
   (vec (for [e events
              :let [chain (get-in e [:context :chain])]
-             :when (or (and (= :queued (:kind e)) (= :job (:source e)) (not= goal-job (first chain)) (= :agent (get-in e [:data :by])))
-                       (re-find #"takeover|manual" (name (:kind e))))]
+             :when (and (= :queued (:kind e)) (= :job (:source e)) (not= goal-job (first chain)) (= :agent (get-in e [:data :by])))]
          {:kind (:kind e) :at-ms (ms e) :job (first chain)})))
 
 (defn crashes

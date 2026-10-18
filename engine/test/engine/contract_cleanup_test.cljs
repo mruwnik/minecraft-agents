@@ -5,8 +5,6 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
-            [engine.job-api :as api]
-            [engine.takeover :as takeover]
             [engine.test-util :as tu]))
 
 (def world (atom {}))
@@ -262,19 +260,15 @@
               (log! [:cleanup (:kind e)])
               (if (< (count (:log @world)) 3) :continue (ctx/end c :done nil)))})
 
-(deftest a-manual-slot-job-that-leaves-the-slot-runs-its-whole-cleanup
+(deftest an-exclusive-run-that-leaves-the-slot-runs-its-whole-cleanup
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {'yields yields})]
-          (takeover/take! eng {:who "driver" :why "test"})
-          (api/mutate! eng {:op :submit :spec '(yields) :by "driver" :request-id "r1"
-                            :generation-id (:generation-id (core/state eng))})
+          (core/exclusive-run! eng '(yields))
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= [:round [:cleanup :cut-off] [:cleanup :cut-off]] (:log @world)))
           (is (= [] (:list (core/state eng)))))))))
-
-(def quick {:round (fn [c] (log! :quick) (ctx/end c :done nil))})
 
 (defn ends-slot-mid-cleanup [end!]
   {:round (fn [_] (log! :round) :continue)
@@ -286,31 +280,13 @@
 (defn slot-cleanup-ends-with [end!]
   (fn ^:async t []
     (let [{:keys [eng]} (setup {'yields (ends-slot-mid-cleanup end!)})]
-      (takeover/take! eng {:who "driver" :why "test"})
-      (api/mutate! eng {:op :submit :spec '(yields) :by "driver" :request-id "r1"
-                        :generation-id (:generation-id (core/state eng))})
+      (core/exclusive-run! eng '(yields))
       (dotimes [_ 4] (await (core/tick! eng)))
       (is (= [:round [:cleanup :cut-off] [:cleanup :cut-off] [:cleanup :cut-off]] (:log @world)))
       (is (= [] (:list (core/state eng)))))))
 
-(deftest the-driver-stopping-the-slot-job-mid-cleanup-does-not-cut-its-cleanup
-  (async done (tu/run-async done (slot-cleanup-ends-with (fn [eng id] (core/cancel! eng id :driver))))))
-
-(deftest a-release-mid-cleanup-does-not-cut-the-slot-jobs-cleanup
-  (async done (tu/run-async done (slot-cleanup-ends-with (fn [eng _] (takeover/release! eng {:who "driver" :reason "test"}))))))
-
-(deftest a-driver-replacing-the-slot-job-mid-cleanup-lets-the-old-cleanup-finish-first
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [replace! (fn [eng _] (api/mutate! eng {:op :submit :spec '(quick) :by "driver" :request-id "r2"
-                                                     :generation-id (:generation-id (core/state eng))}))
-              {:keys [eng]} (setup {'yields (ends-slot-mid-cleanup replace!) 'quick quick})]
-          (takeover/take! eng {:who "driver" :why "test"})
-          (api/mutate! eng {:op :submit :spec '(yields) :by "driver" :request-id "r1"
-                            :generation-id (:generation-id (core/state eng))})
-          (dotimes [_ 5] (await (core/tick! eng)))
-          (is (= [:round [:cleanup :cut-off] [:cleanup :cut-off] [:cleanup :cut-off] :quick] (:log @world))))))))
+(deftest cancelling-the-exclusive-run-mid-cleanup-does-not-cut-its-cleanup
+  (async done (tu/run-async done (slot-cleanup-ends-with (fn [eng id] (core/cancel! eng id :agent))))))
 
 (def paused-low
   {:round (fn [c] (ctx/end c :nothing-possible :stuck))

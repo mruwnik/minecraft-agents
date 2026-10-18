@@ -15,8 +15,8 @@
     (is (not (contains? v :hurt)))
     (is (= 20 (:health v)))))
 
-(deftest a-held-take-adds-the-reflexes-off-reminder
-  (is (re-find #"reflexes are off" (:reflexes-off (vitals/view calm (assoc calm :manual {:who "x"}) {}))))
+(deftest an-exclusive-run-adds-the-reflexes-off-reminder
+  (is (re-find #"reflexes are off" (:reflexes-off (vitals/view calm (assoc calm :exclusive {:job "j1"}) {}))))
   (is (not (contains? (vitals/view calm calm {}) :reflexes-off))))
 
 (deftest hostiles-seen-are-named-with-distance-and-heard-ones-listed

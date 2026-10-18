@@ -106,7 +106,7 @@
     (is (= "air" (:name (block-at p 3 64 0))))))
 
 (def not-acting
-  #{"world" "setOwner" "isOwner" "drive" "stopDriving" "isOffline" "isSettling" "self" "worldAge" "entities" "blocks"
+  #{"world" "setOwner" "isOwner" "isOffline" "isSettling" "self" "worldAge" "entities" "blocks"
     "digTime" "clearTime" "harvestTools" "blockAt" "pathWorld" "onBodyEvent" "close"})
 
 (deftest the-primitive-table-has-every-acting-primitive-of-the-fake
@@ -812,21 +812,6 @@
     true true
     false false))
 
-(deftest drive-records-controls-and-look-a-stale-token-throws-cut
-  (let [p (owned)
-        _ (.drive p "t1" (clj->js {:controls {:forward true :jump true}}))
-        _ (.drive p "t1" (clj->js {:controls {:jump false} :look {:yaw 90 :pitch 10}}))
-        controls (:controls @(fake/state p))
-        look [(:yaw @(fake/state p)) (:pitch @(fake/state p))]
-        _ (.drive p "t1" (clj->js {:look {:dyaw 300}}))
-        yaw (:yaw @(fake/state p))
-        e (thrown #(.drive p "old" (clj->js {:controls {:back true}})))]
-    (is (= {:forward true :jump false} controls))
-    (is (= [90 10] look))
-    (is (= 30 yaw))
-    (is (= "cut" (some-> e .-code)))
-    (is (nil? (:back (:controls @(fake/state p)))))))
-
 (deftest steer-turns-the-head-to-the-decides-yaw-and-pitch-as-live-bot-look-does
   (async-test
    (fn ^:async t []
@@ -836,15 +821,14 @@
            _ (await (act p "steer" {:decide decide}))]
        (is (= [270 (/ (* 0.5 180) js/Math.PI)] [(:yaw @(fake/state p)) (:pitch @(fake/state p))]))))))
 
-(deftest fake-drive-clears-the-controls
-  (are [label clear]
+(deftest fake-an-owner-change-clears-the-controls
+  (are [change]
        (let [p (owned)]
-         (.drive p "t1" (clj->js {:controls {:forward true}}))
-         (clear p)
+         (swap! (fake/state p) assoc :controls {:forward true})
+         (change p)
          (= {} (:controls @(fake/state p))))
-    "stopDriving" (fn [p] (.stopDriving p))
-    "an owner change" (fn [p] (.setOwner p "t2"))
-    "a null owner" (fn [p] (.setOwner p nil))))
+    (fn [p] (.setOwner p "t2"))
+    (fn [p] (.setOwner p nil))))
 
 (deftest fakes-do-not-share-nested-default-self-objects
   (let [first-p (fake/create {})

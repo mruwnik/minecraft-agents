@@ -8,7 +8,6 @@
             [engine.perception :as perception]
             [jobs.lib.animals :as animals]
             [engine.memory :as mem]
-            [engine.takeover :as takeover]
             [engine.fake :as fake]
             [engine.look-support :as ls]
             [engine.test-util :as tu]))
@@ -253,10 +252,9 @@
           (let [round (core/tick! eng)]
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
             (is (= 1 (count (interacts s))) "the first feed is in flight")
-            (is (= {:ok true} (takeover/take! eng {:who "claude" :why "test"})))
+            (core/cut! eng (core/holder eng) :test nil)
             (await round)
             (release))
-          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 0} #(run-ticks s 4 700)))
           (is (finished? s))
           (is (= :fed (:reason (done-event s))))
@@ -354,10 +352,9 @@
           (core/submit! eng '(jobs.animals.breed {:mob "cow"}) {})
           (let [round (core/tick! eng)]
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
-            (is (= {:ok true} (takeover/take! eng {:who "claude" :why "test"})))
+            (core/cut! eng (core/holder eng) :test nil)
             (await round)
             (release))
-          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 0} #(run-ticks s 4 700)))
           (is (finished? s))
           (is (= :fed (:reason (done-event s))))

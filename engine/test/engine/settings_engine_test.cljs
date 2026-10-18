@@ -7,13 +7,12 @@
             [engine.event-api :as event-api]
             [engine.events :as events]
             [engine.hurt :as hurt]
-            [engine.lease :as lease]
             [engine.perception :as perception]
             [engine.senses :as senses]
             [engine.settings :as settings]))
 
 (def families
-  {:lease lease/settings :events events/settings :event-api event-api/settings :backoff backoff/settings
+  {:events events/settings :event-api event-api/settings :backoff backoff/settings
    :hurt hurt/settings :entities obs/settings :perception perception/settings})
 
 (def all-specs (apply merge (vals families)))
@@ -28,15 +27,6 @@
   (doseq [[fam specs] families [k spec] specs :when (number? (:default spec)) :let [v (inc (:default spec))]]
     (settings/with-settings {k v}
       (fn [] (is (= v (settings/get specs k)) (str fam " " k))))))
-
-(deftest lease-limits-follow-the-settings
-  (is (nil? (lease/ms-error 10000)))
-  (settings/with-settings {:engine.lease/max-ms 50}
-    (fn []
-      (is (some? (lease/ms-error 51)))
-      (is (nil? (lease/ms-error 50)))))
-  (settings/with-settings {:engine.lease/max-idle-s 10}
-    (fn [] (is (false? (lease/valid-idle-s? 11))))))
 
 (deftest events-paging-follows-the-settings
   (is (= 256 (events/bounded-page-size nil)))

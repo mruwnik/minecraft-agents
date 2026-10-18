@@ -22,7 +22,6 @@
   (cond-> {:id (:id instance)
            :label (label (:spec instance))
            :current? (= current (:id instance))
-           :hold? (boolean (:hold? instance))
            :round (:round instance)}
     (contains? failed (:id instance)) (assoc :failed (or (get-in failed [(:id instance) :error]) "failed"))))
 

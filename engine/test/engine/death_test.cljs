@@ -13,7 +13,6 @@
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.settings :as settings]
-            [engine.takeover :as takeover]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.lib.body :as body]
@@ -397,7 +396,7 @@
           (is (= {:decision :abandoned :items 0} (select-keys (recovered eng) [:decision :items]))))))))
 
 (defn ^:async cut-at-the-walk!
-  "Run the job until it is held at its first walk act, cut it by a takeover, call between, then release the body."
+  "Run the job until it is held at its first walk act, cut it, then call between."
   [eng p between]
   (.hold (.-world p) "moveTo")
   (.hold (.-world p) "steer")
@@ -406,10 +405,9 @@
       (when (and (empty? (tu/walk-calls p)) (< i 400))
         (await (js/Promise. (fn [r] (js/setTimeout r 5))))
         (recur (inc i))))
-    (takeover/take! eng {:who "claude" :why "cut"})
+    (core/cut! eng (core/holder eng) :test nil)
     (await running)
-    (between)
-    (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})))
+    (between)))
 
 (deftest recover-drops-counts-items-picked-up-on-the-walk
   (async done
@@ -799,10 +797,10 @@
 (defn cancelled-by [seen]
   (->> @seen (filter #(= [:job :cancelled] [(:source %) (:kind %)])) (mapv (juxt :job :by))))
 
-(deftest a-death-drops-every-queued-and-held-job
+(deftest a-death-drops-every-queued-job
   (let [{:keys [eng p seen]} (setup {})
         a (core/submit! eng job {})
-        b (core/submit! eng job {:hold? true})
+        b (core/submit! eng job {})
         c (core/submit! eng job {:next? true})]
     (die-event p)
     (is (= [] (:list (core/state eng))))

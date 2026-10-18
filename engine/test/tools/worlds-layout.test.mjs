@@ -9,8 +9,6 @@ import http from 'node:http'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { requestFor as observe } from '../../tools/observe.mjs'
-const drive = argv => tools.driveRequestFor(argv)
-const socketPathFor = request => tools.driveSocketPathFor(request)
 import { requestFor as world } from '../../tools/world.mjs'
 import { requestFor as triggers } from '../../tools/triggers.mjs'
 import tools from '../../tools/agent-tools-loader.mjs'
@@ -32,10 +30,7 @@ function fixture (t) {
 
 test('every body command uses arbitrary canonical worlds directories and preserves legacy state', t => {
   const fx = fixture(t)
-  for (const command of [observe, drive]) {
-    const args = command === drive ? ['Bob', 'state'] : ['Bob']
-    assert.match(command([...args, '--world', 'a', '--worlds', fx.worlds, '--state', fx.legacy]).error, /choose/)
-  }
+  assert.match(observe(['Bob', '--world', 'a', '--worlds', fx.worlds, '--state', fx.legacy]).error, /choose/)
   for (const flags of [['--worlds', fx.worlds], ['--state', fx.legacy]]) {
     const expected = path.join(flags[0] === '--worlds' ? fx.worlds : path.join(fx.legacy, 'worlds'), 'a', 'agents', 'Bob', 'engine')
     for (const request of [observe(['Bob', '--world', 'a', ...flags]), triggers(['Bob', '--world', 'a', 'list', ...flags]),
@@ -43,9 +38,6 @@ test('every body command uses arbitrary canonical worlds directories and preserv
       assert.equal(request.error, undefined)
       assert.equal(request.socketPath, path.join(expected, 'events.sock'))
     }
-    const driven = drive(['Bob', 'state', '--world', 'a', ...flags])
-    assert.equal(driven.error, undefined)
-    assert.equal(socketPathFor(driven), path.join(expected, 'control.sock'))
     const submitted = world(['Bob', 'submit', 'wear', '--world', 'a', ...flags])
     assert.equal(submitted.error, undefined)
     assert.equal(submitted.socketPath, path.join(expected, 'events.sock'))

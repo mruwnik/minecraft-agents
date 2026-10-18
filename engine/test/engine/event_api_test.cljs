@@ -58,7 +58,6 @@
    :triggers triggers/all
    :results (atom {})
    :running (atom running)
-   :manual (atom nil)
    :now (constantly 123)})
 
 (deftest status-names-the-engine-build-and-its-start
@@ -176,7 +175,7 @@
                :store (atom {:now js/Date.now :data {}})
                :state (atom {:generation-id "gen-api"
                              :list ["j1"] :current "j1"
-                             :instances {"j1" {:id "j1" :round 2 :hold? true
+                             :instances {"j1" {:id "j1" :round 2
                                                :spec {:op :leaf :job 'jobs.movement.look-around
                                                       :args {:every-ms 2500}}}}
                              :attention {"req-1" {:request-id "req-1" :job-id "j1"
@@ -186,7 +185,6 @@
                :jobs registry/jobs
                :triggers triggers/all
                :running (atom {:id "j1" :round 2 :reflex :hungry})
-               :manual (atom nil)
                :now (constantly 123)}
           server (event-api/create socket-path eng)
           sid (:stream-id (events/cursor stream))]
@@ -251,7 +249,6 @@
                       (let [job (edn-response response)]
                         (is (= 200 (:status response)))
                         (is (= {:every-ms 2500} (:args job)))
-                        (is (= true (:hold? job)))
                         (is (= :running (:status job)))
                         (is (= true (:current? job)))
                         (request socket-path "GET"

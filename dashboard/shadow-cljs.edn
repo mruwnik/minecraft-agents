@@ -139,11 +139,6 @@
                                :goalMain agent-tools.goal/main!
                                :progressUsage agent-tools.progress/usage
                                :progressMain agent-tools.progress/main!
-                               :driveUsage agent-tools.api/drive-usage
-                               :driveDefaultStateDir agent-tools.api/drive-default-state-dir
-                               :driveMain agent-tools.api/drive-main
-                               :driveRequestFor agent-tools.api/drive-request-for
-                               :driveSocketPathFor agent-tools.api/drive-socket-path-for
                                :worldUsage agent-tools.api/world-usage
                                :worldMain agent-tools.api/world-main
                                :worldRequestFor agent-tools.api/world-request-for
@@ -191,10 +186,7 @@
                                         viewHub view.hub/view-hub
                                         createSceneCore view.scene/create-scene
                                         decodePriority view.scene/decode-priority
-                                        whoFrom view.drive/who-from
-                                        withTimeout view.drive/with-timeout
-                                        createDriver view.takeover/create-driver
-                                        isAgentKey view.takeover/agent-key?
+                                        isAgentKey view.pointers/agent-key?
                                         directionFor view.camera/js-direction-for
                                         cameraBasis view.camera/js-camera-basis
                                         rayDir view.camera/js-ray-dir

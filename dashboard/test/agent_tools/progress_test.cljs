@@ -62,8 +62,7 @@
   (is (some #(str/includes? % "no jobs") (progress/needs-you {:idle true :health 20})))
   (is (some #(str/includes? % "died") (progress/needs-you {:died {:ago-s 30 :cause "zombie"} :current {:id "j1"}})))
   (is (empty? (progress/needs-you {:died {:ago-s 4000 :cause "zombie"} :current {:id "j1"}})) "an old death is not news")
-  (is (some #(str/includes? % "offline") (progress/needs-you {:offline {:reason "kicked"} :current {:id "j1"}})))
-  (is (some #(str/includes? % "manual") (progress/needs-you {:mode :manual :manual {:who "Ann"} :current {:id "j1"}}))))
+  (is (some #(str/includes? % "offline") (progress/needs-you {:offline {:reason "kicked"} :current {:id "j1"}}))))
 
 (deftest needs-you-names-a-low-hp
   (is (some #(str/includes? % "hp 1.8") (progress/needs-you {:health 1.8 :current {:id "j1"}})))

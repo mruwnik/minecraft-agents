@@ -1,6 +1,6 @@
-// Why JavaScript: thin adapter; HTTP framing of the body's control socket, the rules live in cljs (engine.lease).
-// The control socket: HTTP framing only. Drive remains JSON for compatibility; world actions
-// pass bounded EDN text through to the ClojureScript owner-token handler.
+// Why JavaScript: thin adapter; HTTP framing of the body's control socket, the rules live in cljs (engine.main).
+// The control socket: HTTP framing only. JSON bodies are parsed; /entities passes bounded EDN text
+// through to the ClojureScript handler.
 import fs from 'node:fs'
 import http from 'node:http'
 import net from 'node:net'

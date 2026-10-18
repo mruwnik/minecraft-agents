@@ -29,12 +29,12 @@ const shadowExports = () => {
 
 test('stale bundle report names the missing exports and the rebuild command', () => {
   const bundle = { sayMain: () => {} }
-  assert.deepEqual(missingExports(bundle, ['driveMain', 'sayMain', 'worldMain']), ['driveMain', 'worldMain'])
-  assert.match(buildRequiredMessage(['driveMain', 'worldMain']), /stale/)
-  assert.match(buildRequiredMessage(['driveMain', 'worldMain']), /npm run build-agent-tools/)
+  assert.deepEqual(missingExports(bundle, ['goalMain', 'sayMain', 'worldMain']), ['goalMain', 'worldMain'])
+  assert.match(buildRequiredMessage(['goalMain', 'worldMain']), /stale/)
+  assert.match(buildRequiredMessage(['goalMain', 'worldMain']), /npm run build-agent-tools/)
   assert.equal(
-    buildRequiredEdn(['driveMain', 'worldMain']),
-    '{:ok false :reason :build-required :missing-exports ["driveMain" "worldMain"] :message "The compiled agent-tools bundle is stale; missing exports: driveMain, worldMain. Rebuild it once with: cd dashboard && npm run build-agent-tools"}',
+    buildRequiredEdn(['goalMain', 'worldMain']),
+    '{:ok false :reason :build-required :missing-exports ["goalMain" "worldMain"] :message "The compiled agent-tools bundle is stale; missing exports: goalMain, worldMain. Rebuild it once with: cd dashboard && npm run build-agent-tools"}',
   )
 })
 

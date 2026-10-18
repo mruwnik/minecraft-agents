@@ -1,7 +1,7 @@
 (ns engine.core.settle
   "Settling a round: booking a listed job's or a reflex job's outcome, judging reflex ends against the
   entry's persistence, and starting a round."
-  (:require [engine.core.base :refer [delete-root! drop-instance! drop-reflex-job! emit! free-owner! job-fields exclusive-job manual? now paused? reflex-text remove-listed running save-memory! set-owner! state stopped-result? wait-reason waiting-text]]
+  (:require [engine.core.base :refer [delete-root! drop-instance! drop-reflex-job! emit! free-owner! job-fields exclusive-job now paused? reflex-text remove-listed running save-memory! set-owner! state stopped-result? wait-reason waiting-text]]
             [engine.core.attention :refer [request-attention! resolve-job-attention!]]
             [engine.core.ending :refer [refused?]]
             [engine.core.fruitless :refer [book-round! note-fruitless!]]
@@ -39,7 +39,7 @@
       (swap! (:waiting eng) dissoc id))))
 
 (defn end-slot!
-  "The driver's slot job gets one call and leaves the slot: unlisted, one job.stopped with reason (a check's reason, or
+  "The exclusive run's job gets one call and leaves the slot: unlisted, one job.stopped with reason (a check's reason, or
   :yielded for a round that returned :continue or :declined) plus the wait map w it gave, if any."
   [eng id reason w]
   (let [data (merge {:status :stopped :reason reason} (when w (dissoc w :reason)))
@@ -135,7 +135,7 @@
                             {:source :job :kind :yielded :level :debug :status status}))))))
 
 (defn settle-listed!
-  "Book a listed job's round. The driver's slot job gets one call and ends: :continue or :declined and :cut end it
+  "Book a listed job's round. The exclusive run's job gets one call and ends: :continue or :declined and :cut end it
   stopped (see end-slot!), :error ends it failed (fail-slot!); :done is booked as for any listed job."
   [eng {:keys [id] :as run} {:keys [status child-wait error] :as outcome}]
   (if (= id (exclusive-job eng))
@@ -169,7 +169,7 @@
 
 (defn end-reflex!
   "A reflex job ended on its own with outcome; classify and apply the entry's
-  persistence. While the body is settling, offline or under manual control the
+  persistence. While the body is settling or offline the
   senses cannot say whether the trigger still holds: the end is deferred to the first ready tick. A :stopped
   outcome carries the result's reason; a contract job's, its ending e."
   [eng {:keys [id reflex]} outcome reason & [e]]
@@ -179,7 +179,7 @@
               reason (assoc :reason reason)
               e (assoc :kind (:kind e)))]
     (drop-instance! eng id :ended)
-    (if (or (paused? eng) (manual? eng))
+    (if (paused? eng)
       (swap! (:state eng) update :deferred-ends conj end)
       (judge-end! eng end {}))))
 

@@ -977,17 +977,6 @@
                              (swap! pending disj entry)
                              ((:reject entry) (cut-error))))
               "isOwner" (fn [token] (= token @owner))
-              ;; Manual takeover: records controls (booleans) and the look in Minecraft degrees on the state.
-              "drive" (fn [token a]
-                        (check-owner token)
-                        (let [{:keys [controls look]} (args-in (or a #js {}))
-                              {:keys [yaw dyaw pitch dpitch]} look]
-                          (swap! state (fn [w]
-                                         (cond-> (update w :controls merge (or controls {}))
-                                           look (assoc :yaw (mod (+ (mod (or yaw (+ (:yaw w) (or dyaw 0))) 360) 360) 360)
-                                                       :pitch (min 90 (max -90 (or pitch (+ (:pitch w) (or dpitch 0)))))))))
-                          #js {:pos (pos-js (body-pos @state)) :yaw (:yaw @state) :pitch (:pitch @state)}))
-              "stopDriving" (fn [] (swap! state assoc :controls {}))
               "isOffline" (fn [] (:offline @state))
               "isSettling" (fn [] (and (not (:offline @state)) (:settling @state)))
               "self" (fn [] (if (:offline @state) #js {:status "offline"} (self-view @state)))

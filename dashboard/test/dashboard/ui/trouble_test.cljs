@@ -23,11 +23,10 @@
            ["health just above" (body {:hud {:health 7 :food 20}}) []]
            ["fractional health rounds up for display" (body {:hud {:health 5.5 :food 20}}) [{:severity :danger :text "health 6"}]]
            ["low food" (body {:hud {:health 20 :food 6}}) [{:severity :warn :text "food 6"}]]
-           ["manual takeover is not a trouble" (body {:signals {:takeover? true}}) []]
-           ["offline bodies are never in trouble" (body {:up false :signals {:takeover? true :died-t now}}) []]
+           ["offline bodies are never in trouble" (body {:up false :signals {:died-t now}}) []]
            ["no hud, no signals" {:name "A" :up true :engine {}} []]
            ["order: died, health, hurt, backoff, food"
-            (body {:signals {:takeover? true :died-t now :hurt-t now :backoffs {"x" 1}} :hud {:health 2 :food 1}})
+            (body {:signals {:died-t now :hurt-t now :backoffs {"x" 1}} :hud {:health 2 :food 1}})
             [{:severity :danger :text "died 0s ago"} {:severity :danger :text "health 2"}
              {:severity :warn :text "hurt 0s ago"} {:severity :warn :text "backoff: x"} {:severity :warn :text "food 1"}]]]]
     (testing title
@@ -38,10 +37,6 @@
           [["working" (body {:job {:id "j1" :name "dig"}}) :working]
            ["idle" (body) :idle]
            ["trouble beats working" (body {:job {:id "j1"} :signals {:hurt-t now}}) :trouble]
-           ["manual beats trouble and working" (body {:job {:id "j1"} :signals {:takeover? true :died-t now}}) :manual]
-           ["manual alone" (body {:signals {:takeover? true}}) :manual]
-           ["takeover ended" (body {:signals {:takeover? false}}) :idle]
-           ["offline beats manual" (body {:up false :signals {:takeover? true}}) :offline]
            ["offline beats all" (body {:up false :job {:id "j1"}}) :offline]]]
     (testing title
       (is (= expected (t/status b now))))))
@@ -49,14 +44,14 @@
 (deftest sort-bodies-by-status-then-name
   (let [mk (fn [n o] (assoc (body o) :name n))
         bodies [(mk "Zed" {:up false}) (mk "Amy" {}) (mk "Bob" {:job {:id "j"}}) (mk "Cat" {:job {:id "j"}})
-                (mk "Ann" {:signals {:takeover? true}}) (mk "Abe" {:signals {:hurt-t now}}) (mk "Eve" {:signals {:takeover? true}})]]
-    (is (= ["Ann" "Eve" "Abe" "Bob" "Cat" "Amy" "Zed"] (map :name (t/sort-bodies bodies now))))))
+                (mk "Abe" {:signals {:hurt-t now}})]]
+    (is (= ["Abe" "Bob" "Cat" "Amy" "Zed"] (map :name (t/sort-bodies bodies now))))))
 
 (deftest counts
   (let [mk (fn [o] (body o))]
-    (is (= {:manual 1 :working 2 :idle 1 :trouble 1 :offline 1}
-           (t/counts [(mk {:job {:id "j"}}) (mk {:job {:id "k"}}) (mk {}) (mk {:signals {:takeover? true}}) (mk {:signals {:hurt-t now}}) (mk {:up false})] now)))
-    (is (= {:manual 0 :working 0 :idle 0 :trouble 0 :offline 0} (t/counts [] now)))))
+    (is (= {:working 2 :idle 1 :trouble 1 :offline 1}
+           (t/counts [(mk {:job {:id "j"}}) (mk {:job {:id "k"}}) (mk {}) (mk {:signals {:hurt-t now}}) (mk {:up false})] now)))
+    (is (= {:working 0 :idle 0 :trouble 0 :offline 0} (t/counts [] now)))))
 
 (deftest short-job-text
   (doseq [[job edn-job expected]
@@ -121,50 +116,6 @@
 (deftest card-model-carries-the-mark
   (is (= "12 s old" (:thumb-age (t/card-model {:name "A" :up true :engine {} :view {:poseMtimeMs (- now 12000)}} now))))
   (is (nil? (:thumb-age (t/card-model {:name "A" :up false :engine {} :view {:poseMtimeMs (- now 12000)}} now)))))
-
-(deftest since-text-table
-  (are [t expected] (= expected (t/since-text t))
-    nil nil
-    "x" nil
-    (.getTime (js/Date. 2026 9 3 7 5 0)) "07:05"
-    (.getTime (js/Date. 2026 9 3 23 59 59)) "23:59"
-    (.getTime (js/Date. 2026 9 3 0 0 0)) "00:00"))
-
-(deftest manual-text-table
-  (let [at (.getTime (js/Date. 2026 9 3 14 30 0))]
-    (are [b expected] (= expected (t/manual-text b))
-      (body {:signals {:takeover? true :takeover-who "operator" :takeover-t at}}) "driven by operator since 14:30"
-      (body {:signals {:takeover? true :takeover-who "operator"}}) "driven by operator"
-      (body {:signals {:takeover? true}}) "driven by someone"
-      (body {:signals {:takeover? false :takeover-who "operator" :takeover-t at}}) nil
-      (body {:up false :signals {:takeover? true :takeover-who "operator"}}) nil
-      (body) nil)))
-
-(deftest card-model-manual
-  (let [at (.getTime (js/Date. 2026 9 3 14 30 0))
-        card (t/card-model (body {:signals {:takeover? true :takeover-who "operator" :takeover-t at :hurt-t now}}) now)]
-    (are [k expected] (= expected (k card))
-      :status :manual
-      :manual "driven by operator since 14:30"
-      :reason "hurt 0s ago")))
-
-(deftest card-model-mine
-  (let [mine (fn [who] (:mine? (t/card-model (body {:signals {:takeover? true :takeover-who "dashboard-k3x9ab"}}) now who)))]
-    (are [who expected] (= expected (mine who))
-      "dashboard-k3x9ab" true
-      "dashboard-other1" false
-      "dashboard" false
-      nil false))
-  (are [b expected] (= expected (:mine? (t/card-model b now "dashboard-k3x9ab")))
-    (body {:signals {:takeover? false :takeover-who "dashboard-k3x9ab"}}) false
-    (body {:up false :signals {:takeover? true :takeover-who "dashboard-k3x9ab"}}) false
-    (body) false))
-
-(deftest manual-for-any-driver-is-counted-and-sorted-first
-  (let [mk (fn [name who] {:name name :up true :engine {:signals {:takeover? true :takeover-who who}} :view {}})
-        bodies [(body) (mk "Z" "someone-else") (mk "Y" "dashboard-k3x9ab")]]
-    (is (= [:manual :manual :idle] (mapv #(t/status % now) (t/sort-bodies bodies now))))
-    (is (= 2 (:manual (t/counts bodies now))))))
 
 (deftest card-model-shows-the-goal-and-its-age
   (let [card (t/card-model (assoc full-body :goal {:text "world-test pen/closed: event job.completed (run 1, retry 0)" :by "world-test" :since (- now 12000)}) now)]

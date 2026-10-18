@@ -111,20 +111,16 @@
   (some-> (:results eng) deref))
 
 (defn result-entry
-  "The recent-results entry of a job's terminal event: {:name :status :result :ended-at :reflex? :died :n}, :died true
-  when the body died since the manual takeover that is held now began (the driver's next job runs on the respawned body), :result the
-  event's data (dropped with :result-clipped true when it prints past max-result-chars). name and reflex come from
+  "The recent-results entry of a job's terminal event: {:name :status :result :ended-at :reflex? :n}, :result the event's data (dropped with :result-clipped true when it prints past max-result-chars). name and reflex come from
   the event, else from the job's instance."
   [eng event ended-at]
   (let [data (:data event)
         inst (get-in (state eng) [:instances (:job event)])
         clipped? (> (count (pr-str data)) max-result-chars)
         reflex (or (:reflex event) (:reflex inst))
-        name (or (:name event) (some-> (:spec inst) expr/label))
-        died-t (some-> (mem/latest (mem/view (:store eng)) :died) :t)]
+        name (or (:name event) (some-> (:spec inst) expr/label))]
     (cond-> {:name name :status (:kind event) :ended-at ended-at}
       reflex (assoc :reflex? true)
-      (and died-t (some-> @(:manual eng) :since (<= died-t))) (assoc :died true)
       (and (seq data) (not clipped?)) (assoc :result data)
       clipped? (assoc :result-clipped true)
       (string? (:text event)) (assoc :text (subs (:text event) 0 (min 200 (count (:text event))))))))
@@ -344,29 +340,19 @@
         t #(:t (mem/latest view %) -1)]
     (> (t :died) (max (t :respawned) (t :spawned)))))
 
-(defn manual?
-  "Whether someone drives the body by hand (see engine.takeover). Not persisted."
-  [eng]
-  (some? @(:manual eng)))
-
 (defn paused?
-  "Whether the scheduler must stand still: offline or settling. Manual control does not pause it: the
-  scheduler then runs only the driver's slot job (see schedule/tick-manual!)."
+  "Whether the scheduler must stand still: offline or settling. An exclusive run does not pause it: the
+  scheduler then runs only that job (see schedule/tick-exclusive!)."
   [eng]
   (or (offline? eng) (settling? eng)))
 
 (defn free-owner!
-  "Nobody's round holds the body: the lease token owns it while someone drives, else no one."
+  "Nobody's round holds the body."
   [eng]
-  (set-owner! eng (some-> @(:manual eng) :token)))
-
-(defn driver?
-  "Whether by (a name or keyword) is who holds the manual lease."
-  [eng by]
-  (and (manual? eng) (= (if (keyword? by) (name by) (str by)) (:who @(:manual eng)))))
+  (set-owner! eng nil))
 
 (defn exclusive-job
-  "The id of the exclusive run's job (or the manual driver's slot job) while it is listed, else nil."
+  "The id of the exclusive run's job while it is listed, else nil."
   [eng]
   (let [id (some-> (:exclusive eng) deref)]
     (when (and id (some #{id} (:list (state eng)))) id)))

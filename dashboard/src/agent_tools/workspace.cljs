@@ -8,9 +8,9 @@
             ["node:path" :as path]
             ["node:url" :refer [pathToFileURL]]))
 
-(def commands ["observe" "jobs" "quote" "triggers" "say" "entities" "drive" "world"
+(def commands ["observe" "jobs" "quote" "triggers" "say" "entities" "world"
                "map" "plans" "blueprints" "world-changes" "time" "snapshot" "goal" "progress"])
-(def body-tools #{"observe" "jobs" "quote" "triggers" "say" "entities" "drive" "world" "snapshot" "goal" "progress"})
+(def body-tools #{"observe" "jobs" "quote" "triggers" "say" "entities" "world" "snapshot" "goal" "progress"})
 (def format-id :minecraft-agent-workspace/v1)
 (def wrapper-marker "// Generated Minecraft agent workspace tool v1\n")
 (def usage "usage: node engine/tools/workspace.mjs <directory> --body <body> --world <world> [--worlds <directory>] [--update-tools] [--adopt-existing]\nCreate an agent workspace for an existing or future body; does not start it.\nReruns preserve AGENTS.md, briefing.md and notes/. --update-tools refreshes generated wrappers only; bindings cannot change.\n--adopt-existing requires a canonical body folder and matching config.json; it preserves existing documents and runtime files.")
@@ -51,8 +51,8 @@
                       (not (some #(re-matches #"^--(?:observer|cursor)(?:=.*)?$" %) (take-while #(not= "--" %) argv))))
                  (into ["--observer" (:body ctx)])
                  (= "snapshot" command) (into ["--workspace" (:dir ctx)])
-                 ;; drive and world must agree on who drives: default to the body, so take then submit match
-                 (and (#{"drive" "world"} command) (not (some #(re-matches #"^--who(?:=.*)?$" %) (take-while #(not= "--" %) argv))))
+                 ;; world submits as the body unless told otherwise
+                 (and (= "world" command) (not (some #(re-matches #"^--who(?:=.*)?$" %) (take-while #(not= "--" %) argv))))
                  (into ["--who" (:body ctx)]))]
     (into prefix argv)))
 ;; :dir, the workspace itself, is where context.edn lies; snapshot writes its pictures there.
@@ -123,7 +123,7 @@
        "Run `./bin/<tool>` here, or use its absolute path from elsewhere. Body/world/worlds/repository are bound; do not supply them. Each tool has `--help`. Bindings guide routing, not a security sandbox.\n\n"
        "Start with `./bin/observe`, then `./bin/observe inventory` or `./bin/entities` as needed. Discover jobs and triggers with `./bin/observe catalog jobs` and `./bin/observe catalog triggers`; inspect exact catalog entries (args, target, ways, defaults) before submitting unfamiliar work, and `./bin/quote jobs.movement.go-to '{:pos {:x 1 :y 64 :z 2}}'` to ask a job (or primitive, jobs.primitive.*) what a call would cost, without running it. `./bin/observe settings --changed` shows the tuning values that differ from the code defaults and the game tick rate; `./bin/observe settings set :ns/key <edn>` and `unset` edit your own settings.edn. To find crafting tables, furnaces, chests, beds and ores the body has seen (nearest first, with distance, nothing through walls), run `./bin/observe seen` (read-only, answers at once; `--radius 32 --names chest,*_ore --limit 16`; the radius is 1 to 64, a larger one is refused).\n\n"
        "Use `./bin/jobs` for managed work and `./bin/triggers` for event rules. `./bin/jobs submit` appends a job to the list; `--now` cuts the current job and runs the new one at once (the cut one continues after it); `--wait` blocks until the job ends and prints what happened meanwhile. To check in cheaply, run `./bin/progress --goal j12 --want iron_ingot:24` (one line; goal and want are kept), then `./bin/progress --wait 60m` in the background: it returns only when the goal ends, the body dies or you are needed; do not poll. Follow other jobs with `./bin/observe --wait --watch j12`; retrieve recorded outcomes with `./bin/observe result j12` after completion. To review what happened before a death or during a job, run `./bin/observe events --until death` (or `--job j12`, `--kinds hurt,fired`, `--since 10m`; page back with `--before` the printed `:next-before`). Use `./bin/say 'message'` to communicate. `./bin/snapshot` draws what the body sees into `snapshots/` (a PNG) and says what is under the crosshair; `--yaw`/`--pitch`/`--look-at X,Y,Z` (commas, block coordinates) turn only the picture. `./bin/goal 'what you are doing now'` sets the line the dashboard shows for your body; set it when your aim changes, `--clear` when done.\n\n"
-       "Manual actions require `./bin/drive take --why 'reason' --idle-s 30`; `--who` defaults to the body name for drive and world (keep any other name the same on both), poll returned request IDs, then release control.\n\n"
+       "`./bin/world submit` runs one body action (move-to, dig, place...) as a job; `./bin/jobs submit --exclusive` or `./bin/world submit --exclusive` runs a job alone with the engine paused (no triggers, no other job) until it ends, then returns to you.\n\n"
        "Shared memory: `./bin/map`, `./bin/plans`, `./bin/blueprints`, and `./bin/world-changes`. Read records before edits and use their revisions and an explicit author. `./bin/time clock` reads world time; `./bin/time dawn` waits for daylight.\n\n"
        "Observe before acting, protect existing builds and starter stock, and record task constraints in briefing.md. The repository's AGENTS.md governs code changes.\n"))
 

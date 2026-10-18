@@ -14,7 +14,7 @@ const mount = mountView({ repo, stateDir })
 
 const handlesCases = [
   ['/view', true], ['/view/', true], ['/pose/w/Bob', true], ['/web/app.mjs', true], ['/columns/w/0.0.bin', true],
-  ['/blocks/1.21', true], ['/textures/x', true], ['/hud/w/Bob', true], ['/drive/w/Bob', true], ['/agents', true],
+  ['/blocks/1.21', true], ['/textures/x', true], ['/hud/w/Bob', true], ['/agents', true],
   ['/poses', true], ['/elements/1.21.bin', true], ['/biomes/w.json', true], ['/posesx', false],
   ['/', false], ['/nope', false], ['/viewer', false], ['/agents/x', false], ['/api/bodies', false], ['/webx', false]
 ]
@@ -63,26 +63,6 @@ test('/web/app.mjs is javascript and /agents is json', async () => {
   assert.match(js.type, /javascript/)
   assert.match(json.type, /json/)
 })
-
-const driveCases = [
-  ['forged Origin', { origin: 'http://evil.example', 'content-type': 'application/json' }, 403],
-  ['Origin null', { origin: 'null', 'content-type': 'application/json' }, 403],
-  ['forged Host', { host: 'evil.example', 'content-type': 'application/json' }, 403],
-  ['form content type', { 'content-type': 'application/x-www-form-urlencoded' }, 403]
-]
-for (const [name, headers, status] of driveCases) {
-  test(`POST /drive/test/ProbeWater with ${name} is refused`, async () => {
-    const server = await listen()
-    const res = await new Promise((resolve, reject) => {
-      const req = http.request({ host: '127.0.0.1', port: server.address().port, path: '/drive/test/ProbeWater', method: 'POST', headers }, resolve)
-      req.on('error', reject)
-      req.end('{"cmd":"stop"}')
-    })
-    res.resume()
-    server.close()
-    assert.equal(res.statusCode, status)
-  })
-}
 
 test('close() resolves, also when the server never listened, and the mount can be closed twice', async () => {
   const own = mountView({ repo, stateDir })

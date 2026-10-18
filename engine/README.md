@@ -54,7 +54,7 @@ Layout:
   Other `js/*.mjs` files are helpers per primitive (furnace, enchant, trade, vehicle, leash, light, sight, ...).
 - `src/engine/` the engine core only: `core` (API and lifecycle; parts in `core.*`: list edits, register, scheduler, round with act wrapper and ctx/call, settling, backoff, restart), `memory`, `events`,
   `ctx`, `expr`, `composite`, `registry` (compile-time registries), `triggers` (the trigger registry), `hooks` (job code
-  the engine calls), `condition`, `scenario`, `takeover`/`lease`, `perception` (+ `perception.light|store|rays|mobs|persist`), `main`; `engine.path.*` is the planner.
+  the engine calls), `condition`, `scenario`, `perception` (+ `perception.light|store|rays|mobs|persist`), `main`; `engine.path.*` is the planner.
   Perception sees dark cells within `:near` (4) blocks, within `:near-torch` (7) with a torch in either hand.
   A sight line passes a block that does not fill its cell (door, trapdoor, slab, stairs) except where it meets its collision boxes, from inside its cell too.
   One cell: `sensedAt`/`perception/sensed` answers felt, visible (one-ray glance, view cone), remembered (`ageMs`; fluids, doors, gates, trapdoors, fire, and non-solid cells beside a remembered fluid, older than 10 s read unknown) or `{unknown}`; `feel`, `glance`; the wrapped `look` glances where it turned. `blockAt` stays raw.
@@ -253,9 +253,8 @@ Wherever a job is named (scenarios, register entries, `submit!`, `do-now!`, the 
 | `(repeat n e)` | the same, done after `n` runs |
 | `(until g e)` | repeat `e`; done at the top of a round once `g` would not wait (`g` never runs), e.g. `(until (jobs.time.wait-for-dusk) e)`; a daily routine is `(repeat (seq (jobs.time.wait-for-day) ... (jobs.time.wait-for-dusk)))` |
 | a refused child | combinators are contract jobs calling children with `ctx/call`; a child ending other than `:done` ends `seq` with its kind and cause (the child's ending as `:because`); `any` skips it and tries the next, ending as the last refusal; `repeat` and `until` end so only when it was impossible or cut off (or in a reflex job), else rest (`:engine.composite/rest-s` 30 s, doubled for each such run in a row up to `rest-max-s` 600 s; wait `:resting`) and run it again. A child that would wait is not called: a combinator's `can-run?` gives that child's status with its `:slot`, so a listed combinator waits with it, a reflex one ends `:condition-failed`, a `:never` ends it `:impossible` |
-| `(hold e)` | like `e`, but the list entry holds the body; around a whole spec only, not in a register entry |
 
-An unknown symbol, a wrong arity, an undeclared arg, a bad position arg (`[x y z]` or `{:x :y :z}`) or a nested `hold`
+An unknown symbol, a wrong arity, an undeclared arg, a bad position arg (`[x y z]` or `{:x :y :z}`)
 is refused at load with a message naming the spec. Specs are limited to 256 nodes and depth 24. Memory nests by child
 slot (`:c0`, `:c1`, ...). Events name a job by its label (`jobs.forestry.fell-tree`, `(seq jobs.a (repeat jobs.b))`).
 
@@ -304,7 +303,7 @@ a finished job's goes to body memory `:job-report` (cap 256), with its ending's 
 (limit, a thrown round, parent's end or cancel; innermost first; not on a reflex cut, death or restart), before the caller sees the ending,
 on its own call (`cleanup-defaults`, default `{:spend {:job-time 30 :wall-time 60}}`); its data merges into the ending, a
 failed or overrun one adds `:cleanup {:kind :cause}` and warns `job.cleanup_failed`. A cancelled job stays listed
-(`job.cleaning_up`) until it ran; a cancel meanwhile does not cut it. A reflex root and the driver's slot job (also when they
+(`job.cleaning_up`) until it ran; a cancel meanwhile does not cut it. A reflex root and an exclusive run (also when they
 leave on `:continue`: ending `:cut-off :ended`) run their cleanups to the end in that round, a physics step between cleanup rounds. Call keys `:use :ways :spend :floor :checks :deadline :least` freeze at the first round (`:submitted-at` and `:here`: before the first round a call whose body stands over `engine.contract/moved-limit` (6) from `:submitted-at` waits `:moved-since-submit` `{:from :at :distance :limit}`, unless `:here true`; the agent tool adds `:submitted-at` to stair, bridge, pillar and mine) (an empty `:ways` is impossible `:bad-args`). A check returns a status `[kind text data]`
 (`:ok :later :never :look`, data with `:reason`; `contract/ok|later|never|look`; an ending's cause is data plus `:text`).
 `can-start?` (until the start) and `can-run?` (every round, between steps) give one (none: `:ok`); `safe?` and `fit?` (required exports: a checker fn or a quoted condition form; `ready/ok` for none) are asked with `can-run?` before a start and each resume, not between steps (call key `:checks {:safe? form :fit? form}`, checked at submit, kept as forms, replaces them per key for the frame and its children; job-only entries `(job-safe) (job-fit) (exposed) (threatened) (starving) (always)` come from hook `:ready/vocabulary`; a job's `defaults` may carry `:checks`: the escape jobs (respond-to-hostile, retreat, fight-back, block-arrow-gap, shut-in, dig-pocket, unwedge, breathe, extinguish, night, dig-in) default `{:safe? (always) :fit? (always)}`, bed-down, sleep and go-home `{:safe? (not (threatened)) :fit? (always)}`, get-food `{:safe? (or (and (starving) (not (threatened))) (job-safe)) :fit? (always)}`, so their walks do not wait on the danger they escape): `:later` waits (a
@@ -491,7 +490,7 @@ waits, so it fires in the gap. Urgent sections: door transit, table placement an
 scheduler emits one `job.waiting` when a check first declines and again only when the reason changes; it shows as
 `:waiting` in `jobs show`/`list` and `observe`. A parent whose round returns a child's `:declined` keeps the child's reason.
 
-**List edits** (agent): `submit!` (appends; opts `:hold?`, `:next?`, `:now?`, `:by`), `cancel!`, `retry!`
+**List edits** (agent): `submit!` (appends; opts `:next?`, `:now?`, `:exclusive?`, `:survive-death?`, `:by`), `cancel!`, `retry!`
 (clears a failed mark), `do-now!` (cuts the running listed job, sections or not, never a reflex, lists the new job directly before it as a
 holder; the cut job continues afterwards with its memory). `:next?` lists the job directly after the current one so it gets
 the very next round, without cutting anything.
@@ -529,7 +528,7 @@ Listed jobs are never backed off.
   seconds, doubling per further fruitless run up to `:max-s`.
 - Config, most specific wins: engine `:backoff` < the trigger's `:backoff` in `triggers/defaults.edn` < the entry's.
   `false` turns it off (`:suffocating`, `:burning`, `:hostile-near`, `:night`).
-- State is the non-persisted `:backoffs` atom, cleared after every pause (offline, settling, manual control).
+- State is the non-persisted `:backoffs` atom, cleared after every pause (offline, settling, an exclusive run).
 - Events: warn `reflex.backoff`, repeated at most every `:backoff-alert-ms` (300000); info `reflex.recovered`.
 
 ## Events and the local API
@@ -583,38 +582,17 @@ nothing; `:by` names who asks, `:generation-id` is checked when given):
 `POST /jobs {:op :cancel-all ...}` cancels every listed job (running, queued, held, failed) through the single-cancel path,
 one `job.cancelled` event each; the register is untouched, so reflexes keep running.
 
-## Manual takeover
+## Exclusive run
 
-For rescuing a stuck body by hand. A death under manual control emits a `takeover_body_died` warn with attention `:notice` (besides the body's `died`); the takeover goes on, and the recorded result (`/job`, results.edn) of each job that ends after the death carries `:died true`. The body listens on `worlds/<world>/agents/<name>/engine/control.sock` (mode 0600).
-An exclusive run (`:exclusive`, `core/exclusive-run!`; online only, one at a time, no `:next?`/`:hold?`/`:survive-death?`) pauses the whole engine: the holder is cut at once, no trigger or other job runs, and the job gets one round; any ending, a yield included, ends it (`:stopped :yielded`). Other jobs wait (`:waiting {:reason :exclusive-run}`), `do-now!` lists without cutting, a takeover is refused (`exclusive-run`). Not saved: a restart ends it `:restart`. `/status` shows `:mode :exclusive`.
-Three control modes exist: normal scheduling, `do-now!` (an urgent holder), and manual takeover. `take` cuts the current
-holder and mutes all triggers and the loop until release or lease expiry: only the driver's slot job runs (the job the
-driver submits with `:by` = the lease's `who`; a new one replaces it). It gets one call and leaves the slot whatever it returns: `:done`/`:stopped` as returned, an error ends it `job.failed` with attention (unlisted, not parked), a cut ends it `:stopped` reason `:cut`, `:continue` or `:declined` end it `:stopped` reason `:yielded` (or the child's wait reason) plus the wait text, a failing check ends it at once `:stopped` with the check's reason. Then the body idles. Jobs from others queue and
-wait (their summary says `:waiting {:reason :manual-control :who ..}`), `:next?`/`interrupt` from them are refused `:manual-control`, release cancels the slot job, and a slot round in
-flight keeps the lease alive (nothing else does); `/drive set` answers 409 `job-running` while a slot job exists; `/drive stop` cancels the slot job (running or just submitted), then stops. A cut listed job (not the slot job) stays listed; a cut
-reflex job is dropped. Who drives is decided by a lease, first come (`take` is refused `held-by <who>` otherwise). The
-lease is not saved; restart or going offline ends it.
+An agent's "run this job now": `jobs.mjs submit --exclusive` / `world.mjs submit --exclusive` (`POST /jobs` op `:exclusive`, `core/exclusive-run!`). Online only, one at a time, no `:next?`/`:survive-death?`. It pauses the whole engine: the holder is cut at once (a listed job continues afterwards, a reflex job is dropped), no trigger or other job runs, and the job gets one round. Any ending ends the run and returns to the agent: `:done`/`:stopped` as returned, an error `job.failed` with attention (unlisted, not parked), a cut `:stopped :cut`, `:continue` or `:declined` `:stopped :yielded` (or the child's wait reason) plus the wait text, a failing check at once `:stopped` with the check's reason. Then normal scheduling resumes. Other jobs wait (`:waiting {:reason :exclusive-run}`), `do-now!` lists without cutting, a death cancels the run, a restart ends it `:restart`, `cancel` ends it. Not saved. `/status` shows `:mode :exclusive`.
 
-- `POST /drive` body `{op, who, ...}`: `take` (`why`, optional `idleS` 1..3600), `set` (`controls`, `look`, `ms`), `stop`,
-  `ping`, `release` (`force` reclaims). `GET /drive` reads the state without resetting the silence clock.
-  Refusals: `offline`, `settling`, `held-by <who>`, `not-taken`, `not-driver` (`detail {:holder :idle-left-s}`), `bad-args`.
-- Dead-man: untimed controls are released after 1 s without an op. The takeover ends after 15 s of silence by default
-  (`--drive-idle-s`, or `idleS` on `take`); `ping` keeps the lease. Timed holds last at most 10 s.
 - `world.mjs submit <move-to|dig|place|use-on|interact|wear|equip|mount|dismount>` submits the job of that action (`go-to`, `blocks.dig`, `blocks.place`,
-  `blocks.use-on`, `items.interact`, `items.wear`, `items.equip`, `movement.mount`, `movement.leave-vehicle`) with `:by` = `--who`: under manual control it is the slot job.
-- Rules live in `engine.lease` (pure); `engine.takeover` applies them; `engine/js/control.mjs` is a stateless socket adapter.
-- Events: `system.takeover_started`, `system.takeover_ended` (reason `released`, `forced`, `idle`, `offline`, `shutdown`),
-  `system.drive_deadman`.
+  `blocks.use-on`, `items.interact`, `items.wear`, `items.equip`, `movement.mount`, `movement.leave-vehicle`) with `:by` = `--who`; `--exclusive` makes it an exclusive run.
+- `engine/js/control.mjs` is a stateless socket adapter for `body/control.sock` (mode 0600), which serves `GET /entities`.
 
 ```
-node engine/tools/drive.mjs ProbeDrive --world test take --who claude --why "stuck in a pit" [--idle-s 30]
-node engine/tools/drive.mjs ProbeDrive --world test look 270 0 --who claude      # yaw 0 south, 90 west, 270 east
-node engine/tools/drive.mjs ProbeDrive --world test hold forward,jump 2000 --who claude
-node engine/tools/drive.mjs ProbeDrive --world test state | stop | release [--force]
-node engine/tools/world.mjs ProbeDrive --world test submit move-to -5 64 -7 --who claude [--wait --timeout 60s]
+node engine/tools/world.mjs ProbeDrive --world test submit move-to -5 64 -7 --who claude --exclusive [--wait --timeout 60s]
 ```
-
-Exit codes: 0 ok, 1 refused, 2 no running body or bad usage. The view page can drive too (`docs/view-format.md`).
 
 ## Running a body: scenarios
 
@@ -625,16 +603,16 @@ A scenario is EDN read with `cljs.reader`:
             {:trigger :hostile-near :args {:radius 12}
              :job (jobs.survival.retreat {:radius 12 :settings {:jobs.survival.retreat-flight/step 10}})}]
  :queue    [(jobs.movement.go-to {:pos {:x 10 :y 64 :z 0}})
-            (hold (jobs.time.wait-for-day))]}
+            (jobs.time.wait-for-day)]}
 ```
 
 `npm run body -- --agent <name> --world <world> --scenario <file>` loads `worlds/<world>/agents/<name>/config.json`
 (`username`, optional `viewDistance` chunks, default 8) and `worlds/<world>/world.json` (`host`, `port`). It refuses to start when `--world` is missing, and with exit
 code 3 when that body is already running (it binds `engine/body.sock` first). If `engine/engine.edn` exists the saved list
-and register are restored (entries still `:by :scenario` or `:upgrade` are refreshed to the current default spec, keeping mute and place, one `trigger.refreshed` event each; agent edits stay; a manual slot job is ended, `cancelled` by `restart`, cut-off); `--fresh` discards saved engine state (memory is kept). The scenario is validated
+and register are restored (entries still `:by :scenario` or `:upgrade` are refreshed to the current default spec, keeping mute and place, one `trigger.refreshed` event each; agent edits stay; an exclusive run is ended, `cancelled` by `restart`, cut-off); `--fresh` discards saved engine state (memory is kept). The scenario is validated
 before connecting; on a restart an unknown trigger in it is skipped with a warn and an attention request, and scenario triggers the
 body never had are offered in one attention request: `triggers upgrade [ids]` adds them (`--upgrade` at start adds all), `triggers
-decline [ids]` never offers them again; ids not in the offer come back under `:ignored` with a reason. Other flags: `--worlds <dir>`, `--blueprints <dir>`, `--drive-idle-s <s>`.
+decline [ids]` never offers them again; ids not in the offer come back under `:ignored` with a reason. Other flags: `--worlds <dir>`, `--blueprints <dir>`.
 
 `survival.edn` lists the survival triggers and queues `(repeat (jobs.movement.look-around))`.
 `woodcutter-cuts.edn` registers an ad hoc `:look-timer` condition to cut a long job on a schedule.
@@ -827,7 +805,7 @@ the recorded pins (`planner_{bench,options,goals,courses}_golden.cljs`, `js/path
 
 ## Agent command-line tools
 
-All take `<body> --world <world>`, print EDN, read through the local sockets, and never start a body or take a lease unless
+All take `<body> --world <world>`, print EDN, read through the local sockets, and never start a body unless
 noted. Most run a prebuilt bundle: build it once with `cd dashboard && npm run build-agent-tools`. The loader warns on stderr when a source is newer than the bundle: rebuild with `tools/compile dashboard agent-tools`.
 
 ```
@@ -841,7 +819,7 @@ node engine/tools/observe.mjs Bob --world test inventory [--slots] | equipment
 node engine/tools/observe.mjs Bob --world test settings [--changed] [--raw] | settings reload | settings set :jobs.x/key <edn> | settings unset :jobs.x/key   # keys with layer and the game rate; dashboard popup has the same
 node engine/tools/entities.mjs Bob --world test [--type zombie --radius 32 --player Alex --limit 20]
 node engine/tools/jobs.mjs Bob --world test list | show j17 | cancel j17 | cancel-all | retry j17 | resolve <attention> --reason handled
-node engine/tools/jobs.mjs Bob --world test submit '(jobs.movement.go-to {:pos {:x 10 :y 64 :z 20}})' [--next|--now|--hold] [--alongside] [--wait --timeout 5m]
+node engine/tools/jobs.mjs Bob --world test submit '(jobs.movement.go-to {:pos {:x 10 :y 64 :z 20}})' [--next|--now|--exclusive] [--alongside] [--wait --timeout 5m]
 node engine/tools/triggers.mjs Bob --world test list | show hungry | upgrade [ids] | decline [ids] | add hungry --trigger hungry | mute hungry --for 10m | unmute | move X --before Y | reset X --property position | remove X
 node engine/tools/triggers.mjs Bob --world test put near-home --when '(< (inventory "bread") 8)' --job '(jobs.movement.look-around)' --persistence cooldown --cooldown-s 30
 node engine/tools/say.mjs Bob --world test [--to Steve] "message"       # chat, shares the engine's rate limits
@@ -860,15 +838,14 @@ Every workspace `bin/` call appends a `:start` and an `:end` line (tool, argv, o
 - `jobs.mjs show jID` of a job the scheduler no longer holds answers from the event history, as `observe job` does.
 - `jobs.mjs submit` of a plain job call is held back (exit 1, `:reason :job-clash`, `:clashes`, `:hint`) while a job of the same name, or any two of mine, stair, tunnel and strip.* jobs, is running, queued or resuming on the body; `--alongside` overrides, a `(repeat ...)` or combinator spec is never held (tool only; the engine accepts both).
 - `jobs.mjs submit` appends to the list; `--next` lists after the current job without cutting; `--now` cuts the current
-  listed job and runs the new one next as a normal job; the cut job continues right after it yields or ends (a running reflex is not cut); `--hold` keeps the body while the check
-  declines; `--survive-death` keeps the job listed through a death (it runs again after the respawn reflexes); a `(repeat ...)` spec gets it by default. `--wait` blocks until the job ends (or a wake) and prints the result and a bounded summary. Mutations carry a
+  listed job and runs the new one next as a normal job; the cut job continues right after it yields or ends (a running reflex is not cut); `--exclusive` runs it alone with the engine paused until it ends (see Exclusive run); `--survive-death` keeps the job listed through a death (it runs again after the respawn reflexes); a `(repeat ...)` spec gets it by default. `--wait` blocks until the job ends (or a wake) and prints the result and a bounded summary. Mutations carry a
   request id (`--request-id` to retry safely); the engine keeps the latest 128 ids and a duplicate returns the original
-  result. A manual lease rejects `--now` with `:manual-control`.
+  result.
 - `triggers.mjs` uses `GET/POST /triggers`; built-ins cannot be replaced or removed, only muted or moved. `put`/`add`
   replace a custom entry and reset its condition, latch, cooldown and backoff state.
 - `entities.mjs` reads the body's perception cache (a row has the numeric `:id` when known; `:sense` is `:seen`, `:heard` or `:remembered` (also a seen row no sample has refreshed for 3 s); a `:heard` row has no `:pos`, only `:direction` (8 compass points)
   and `:band` (`:near` within 8, else `:far`); rows older than two minutes expire). Engine reflexes do not read it.
-- `drive.mjs` and `world.mjs` are the manual takeover tools above.
+- `world.mjs` submits one body action as a job (see Exclusive run).
 
 ### Plan, blueprint and map tools
 

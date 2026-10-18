@@ -33,10 +33,6 @@
          [:await {:source :job :kind :waiting :data {:reason :not-night}} 20]
          [:cli "observe" ["$body" "--world" "$world" "status" "--wait" "--timeout" "4s" "--watch" "$job"] {:wake :timeout}]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-night}} :within-s 30 :of-job true}]}
-  {:name "death-under-manual-control-is-announced"
-   :act [[:http :take {:who "wt" :why "fixture" :idle-s 60} {:ok true}]
-         [:kill-body] [:await {:source :body :kind :respawned} 30]]
-   :expect [{:event {:source :system :kind :takeover_body_died :level :warn} :within-s 30}]}
   {:name "finished-job-result-is-answered-and-unknown-id-refused"
    :act [[:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1})]
          [:await {:source :job :kind :result} 40]
@@ -72,13 +68,4 @@
          [:until [:cli "snapshot" ["$body" "--world" "$world" "--width" "160" "--height" "90"]
                   {:ok true :text [:contains " m centre"]}] 30]
          [:job (jobs.debug.notify {:text "snap"})]]
-   :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}]}
-  {:name "drive-look-uses-minecraft-pitch-sign"
-   :time :day
-   :body {:at [16.5 0 16.5] :yaw 270 :spawnpoint [4 0 4]}
-   :act [[:cli "drive" ["$body" "take" "--who" "fixture" "--why" "pitch sign" "--idle-s" "30" "--world" "$world"] {:ok true}]
-         [:cli "drive" ["$body" "look" "0" "60" "--who" "fixture" "--world" "$world"] {:ok true :manual {:pitch [:>= 59]}}]
-         [:cli "drive" ["$body" "turn" "10" "-20" "--who" "fixture" "--world" "$world"] {:ok true :manual {:pitch [:< 45]}}]
-         [:cli "drive" ["$body" "release" "--who" "fixture" "--world" "$world"] {:ok true}]
-         [:job (jobs.debug.notify {:text "pitch"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}]}]}

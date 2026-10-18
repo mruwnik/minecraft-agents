@@ -6,8 +6,8 @@ import * as viewer from '../tools/view/web/cljs/viewer.mjs'
 
 const pose = (t, x, extra = {}) => ({ t, status: 'online', eye: { x, y: 65.62, z: 0 }, pos: { x, y: 64, z: 0 }, yaw: 1, pitch: 0, world: 'w', ...extra })
 
-test('every export drive.mjs and scene.mjs import is a function', () => {
-  for (const name of ['poseInterpolator', 'viewHub', 'createSceneCore', 'decodePriority', 'whoFrom', 'withTimeout', 'createDriver', 'isAgentKey']) {
+test('every export app.mjs and scene.mjs import is a function', () => {
+  for (const name of ['poseInterpolator', 'viewHub', 'createSceneCore', 'decodePriority', 'isAgentKey']) {
     assert.equal(typeof viewer[name], 'function', name)
   }
 })
@@ -48,8 +48,3 @@ test('viewHub without a surface: the unsupported hub', () => {
   assert.deepEqual(hub.stats(), { supported: false, scenes: {} })
 })
 
-test('whoFrom and withTimeout run under their exported names', async () => {
-  assert.equal(viewer.whoFrom('?who=dash:Bob'), 'dash:Bob')
-  const f = viewer.withTimeout((url, init) => Promise.resolve([url, init.method, init.signal.aborted]), 50)
-  assert.deepEqual(await f('/x', { method: 'POST' }), ['/x', 'POST', false])
-})

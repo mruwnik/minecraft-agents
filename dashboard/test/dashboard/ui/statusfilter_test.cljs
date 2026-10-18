@@ -10,7 +10,6 @@
 
 (def bodies
   [(body "Off" {:up false})
-   (body "Man" {:signals {:takeover? true}})
    (body "Work" {:job {:id "j1" :name "dig"}})
    (body "Idle" {})
    (body "Hurt" {:signals {:died-t now}})
@@ -20,12 +19,12 @@
 
 (deftest only-states-keeps-the-pressed-states
   (are [pressed expected] (= expected (names (sf/only-states bodies pressed now)))
-    #{} ["Off" "Man" "Work" "Idle" "Hurt" "Work2"]
-    nil ["Off" "Man" "Work" "Idle" "Hurt" "Work2"]
+    #{} ["Off" "Work" "Idle" "Hurt" "Work2"]
+    nil ["Off" "Work" "Idle" "Hurt" "Work2"]
     #{:working} ["Work" "Work2"]
     #{:working :idle} ["Work" "Idle" "Work2"]
-    #{:offline :trouble :manual} ["Off" "Man" "Hurt"]
-    #{:idle :working :manual :trouble :offline} ["Off" "Man" "Work" "Idle" "Hurt" "Work2"]))
+    #{:offline :trouble} ["Off" "Hurt"]
+    #{:idle :working :trouble :offline} ["Off" "Work" "Idle" "Hurt" "Work2"]))
 
 (deftest a-state-with-no-bodies-shows-none
   (is (= [] (sf/only-states [(body "Idle" {})] #{:working} now))))
@@ -35,12 +34,12 @@
     #{:working} #{"Off"} ["Off" "Work" "Work2"]
     #{:working} #{"Work"} ["Work" "Work2"]
     #{:working} #{"nobody"} ["Work" "Work2"]
-    #{} #{"Off"} ["Off" "Man" "Work" "Idle" "Hurt" "Work2"]))
+    #{} #{"Off"} ["Off" "Work" "Idle" "Hurt" "Work2"]))
 
 (deftest shown-bodies-match-the-counts
   (let [counts (trouble/counts bodies now)]
     (are [k] (= (get counts k) (count (sf/only-states bodies #{k} now)))
-      :manual :working :idle :trouble :offline)))
+      :working :idle :trouble :offline)))
 
 (deftest toggle-adds-and-removes
   (are [pressed k expected] (= expected (sf/toggle pressed k))
@@ -56,12 +55,12 @@
   (is (= {:db {:status-filter #{}} :store-status-filter #{}}
          (sf/toggle-fx {:status-filter #{:idle}} :idle))))
 
-(def counts {:manual 1 :working 2 :idle 0 :trouble 3})
+(def counts {:working 2 :idle 0 :trouble 3})
 
 (defn chip-of [chips k] (first (filter #(= k (:state %)) chips)))
 
 (deftest chips-list-every-state-with-the-full-counts
-  (are [pressed] (= [[:manual 1] [:working 2] [:idle 0] [:trouble 3] [:offline 0]]
+  (are [pressed] (= [[:working 2] [:idle 0] [:trouble 3] [:offline 0]]
                     (mapv (juxt :state :count) (sf/chips counts pressed)))
     #{} #{:working} #{:idle :offline}))
 
@@ -77,7 +76,6 @@
 (deftest chips-title-the-click
   (are [pressed k expected] (= expected (:title (chip-of (sf/chips counts pressed) k)))
     #{} :working "show only working bodies"
-    #{} :manual "show only manual bodies"
     #{} :trouble "show only bodies in trouble"
     #{} :offline "show only offline bodies"
     #{:working} :working "stop filtering by working"
@@ -85,15 +83,15 @@
     #{:working} :idle "show only idle bodies"))
 
 (deftest chips-carry-the-label
-  (is (= ["manual" "working" "idle" "in trouble" "offline"] (mapv :label (sf/chips {} #{})))))
+  (is (= ["working" "idle" "in trouble" "offline"] (mapv :label (sf/chips {} #{})))))
 
 (deftest empty-text-names-the-pressed-states
   (are [pressed expected] (= expected (sf/empty-text pressed))
     #{:working} "no body is working"
     #{:trouble} "no body is in trouble"
     #{:idle :working} "no body is working or idle"
-    #{:manual :working :idle} "no body is manual, working or idle"
-    #{:offline :manual :trouble :working} "no body is manual, working, in trouble or offline"))
+    #{:trouble :working :idle} "no body is working, idle or in trouble"
+    #{:offline :trouble :working} "no body is working, in trouble or offline"))
 
 (deftest rubbish-stored-text-gives-no-filter
   (are [text expected] (= expected (sf/parse-stored text))
@@ -115,4 +113,4 @@
                            (= pressed (sf/parse-stored text)))
     #{} "[]"
     #{:idle} "[\"idle\"]"
-    #{:offline :manual :idle} "[\"manual\",\"idle\",\"offline\"]"))
+    #{:offline :working :idle} "[\"working\",\"idle\",\"offline\"]"))

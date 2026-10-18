@@ -13,7 +13,6 @@
             [engine.scenario :as scenario]
             [engine.settings :as settings]
             [engine.shelter-support :as st]
-            [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.child :as child]
@@ -142,16 +141,15 @@
           (await (tu/run-until-empty eng 200))
           (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "the escape's walk does not wait for day"))))))
 
-(deftest a-manual-go-to-at-night-ends-at-once-with-the-reason-and-walks-with-a-checks-override
+(deftest an-exclusive-go-to-at-night-ends-at-once-with-the-reason-and-walks-with-a-checks-override
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [[args walks?] [[{:pos [15 64 0]} false] [{:pos [15 64 0] :checks {:safe? '(not (threatened))}} true]]]
           (let [{:keys [eng p seen]} (st/setup (night-hut {}))
-                _ (:ok (takeover/take! eng {:who "claude" :why "own order"}))
-                id (core/submit! eng (list 'jobs.movement.go-to args) {:by "claude"})]
+                id (core/exclusive-run! eng (list 'jobs.movement.go-to args))]
             (await (ticks eng 40))
-            (is (nil? (waiting-of eng id)) "the driver's own go-to is not held until day")
+            (is (nil? (waiting-of eng id)) "the exclusive go-to is not held until day")
             (is (= walks? (> 2 (js/Math.abs (- 15 (:x (st/pos-of p)))))) (pr-str args))
             (is (= (not walks?) (some? (some #(= :exposed (:reason %)) (st/emitted seen :stopped)))) (pr-str args))))))))
 

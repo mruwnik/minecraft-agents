@@ -11,7 +11,6 @@
             [engine.hut-shelter-test :as hs]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
-            [engine.takeover :as takeover]
             [jobs.lib.world-files :as ew]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -357,7 +356,7 @@
 ;; ---------------------------------------------------------------- cut and resume
 
 (defn ^:async cut-at-transfer!
-  "Run a get-food round until it is held at its transfer, cut it by a takeover, call (between) and release."
+  "Run a get-food round until it is held at its transfer, cut it, call (between)."
   [eng p between]
   (.hold (.-world p) "transfer")
   (let [running (core/tick! eng)]
@@ -365,10 +364,9 @@
       (when (and (empty? (calls p "transfer")) (< i 400))
         (await (js/Promise. (fn [r] (js/setTimeout r 5))))
         (recur (inc i))))
-    (takeover/take! eng {:who "claude" :why "cut"})
+    (core/cut! eng (core/holder eng) :test nil)
     (await running)
-    (between)
-    (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})))
+    (between)))
 
 (deftest a-cut-round-resumes-and-finishes-from-the-world
   (async done

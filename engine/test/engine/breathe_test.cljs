@@ -15,7 +15,6 @@
             [jobs.survival.breathe :as b]
             [jobs.survival.breathe.air :as air]
             [engine.fake :as fake]
-            [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -638,11 +637,10 @@
           (core/register-reflex! eng {:trigger :suffocating})
           (.override (.-world p) "steer"
                      (fn ^:async f [token args impl]
-                       (when (= 1 (swap! steers inc)) (takeover/take! eng {:who "claude" :why "cut"}))
+                       (when (= 1 (swap! steers inc)) (core/cut! eng (core/holder eng) :test nil))
                        (await (impl token args))))
           (await (core/tick! eng))
           (is (not-any? #{[:completed nil]} (ended seen)) "the cut run did not complete")
-          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (set-self! p {"oxygen" 4 "pos" [0 62 0] "inWater" true})
           (await (core/tick! eng))
           (is (>= (:x (core/self-pos p)) 7) "the refire starts from the world and lands"))))))
@@ -747,13 +745,12 @@
           (.override (.-world p) "swim"
                      (fn ^:async f [token args impl]
                        (if (= 1 (swap! swims inc))
-                         (do (takeover/take! eng {:who "claude" :why "cut"}) #js {:status "timeout"})
+                         (do (core/cut! eng (core/holder eng) :test nil) #js {:status "timeout"})
                          (await (impl token args)))))
           (await (core/tick! eng))
           (is (= 1 @swims) "the cut round acts no more")
           (is (= {:x 0 :y 64 :z 0} (core/self-pos p)) "still under water")
           (is (not-any? #{[:stopped :no-air]} (ended seen)) "a cut is not a failed try")
-          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (core/tick! eng))
           (is (= 2 @swims) "the refire swims up")
           (is (= {:x 0 :y 67 :z 0} (core/self-pos p))))))))

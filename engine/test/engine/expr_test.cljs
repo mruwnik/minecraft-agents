@@ -19,7 +19,7 @@
    'jobs.free {:round noop-round}})
 
 (defn problem [form]
-  (try (expr/parse-spec reg form) nil
+  (try (expr/parse reg form) nil
        (catch :default e (ex-message e))))
 
 (deftest a-leaf-merges-its-args-over-the-defaults
@@ -39,20 +39,15 @@
   (is (= "(repeat 3 jobs.b)" (expr/label (expr/parse reg '(repeat 3 (jobs.b))))))
   (is (= "(until jobs.a jobs.b)" (expr/label (expr/parse reg '(until (jobs.a) (jobs.b)))))))
 
-(deftest hold-is-a-flag-on-the-top
-  (is (= {:node {:op :leaf :job 'jobs.b :args {}} :hold? true} (expr/parse-spec reg '(hold (jobs.b)))))
-  (is (= {:node {:op :leaf :job 'jobs.b :args {}} :hold? false} (expr/parse-spec reg '(jobs.b)))))
-
 (deftest bad-specs-are-refused-with-a-message
   (is (re-find #"unknown job or combinator jobs.nope" (problem '(jobs.nope))))
   (is (re-find #"unknown job or combinator map" (problem '(map (jobs.a)))))
-  (is (re-find #"hold is only allowed" (problem '(seq (hold (jobs.a))))))
+  (is (re-find #"unknown job or combinator hold" (problem '(seq (hold (jobs.a))))))
   (is (re-find #"repeat takes an optional count" (problem (quote (repeat (jobs.a) (jobs.b))))))
   (is (re-find #"repeat takes exactly one" (problem (quote (repeat 2 (jobs.a) (jobs.b))))))
   (is (re-find #"repeat takes an optional count" (problem '(repeat 0 (jobs.a)))))
   (is (re-find #"repeat takes an optional count" (problem '(repeat :x (jobs.a)))))
   (is (re-find #"until takes a guard" (problem '(until (jobs.a)))))
-  (is (re-find #"hold takes exactly one" (problem '(hold))))
   (is (re-find #"unknown job or combinator backoff" (problem '(backoff {} (jobs.a)))) "listed jobs have no backoff")
   (is (re-find #"seq takes at least one" (problem '(seq))))
   (is (re-find #"any takes at least one" (problem '(any))))
@@ -120,7 +115,7 @@
 
 (deftest a-default-of-the-wrong-type-is-refused-too
   (let [r {'jobs.d {:round noop-round :args (a/declare! 'jobs.d {:n {:spec (a/int-in nil nil) :default "x"}})}}]
-    (is (re-find #"jobs.d :n must be a whole number" (try (expr/parse-spec r '(jobs.d)) nil (catch :default e (ex-message e)))))))
+    (is (re-find #"jobs.d :n must be a whole number" (try (expr/parse r '(jobs.d)) nil (catch :default e (ex-message e)))))))
 
 (def pos-args
   "The position-valued args of real jobs: [job arg]. go-to's :pos also takes a column (engine.go-to-column-test)."

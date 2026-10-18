@@ -13,7 +13,7 @@
              :job (jobs.survival.night {:roof-height 4})}
             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
              :job (jobs.storage.make-room {:free 4})}]
- :queue [(hold (jobs.combat.hunt {:mob "cow" :count 2 :keep 0 :radius 16}))
+ :queue [(jobs.combat.hunt {:mob "cow" :count 2 :keep 0 :radius 16})
          (repeat (jobs.movement.look-around))]}
 ;; ---- other cases of this feature: swap the commented form in for the active one above ----
 ;; -- case from live-ProbeStuck-g1
@@ -32,7 +32,7 @@
 ;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
-;;  :queue [(hold (jobs.gather.get-seeds {:count 2 :radius 12}))
+;;  :queue [(jobs.gather.get-seeds {:count 2 :radius 12})
 ;;          (repeat (jobs.movement.look-around))]}
 ;; -- case from live-ProbeStuck-g2
 ;; ;; ProbeStuck (composite-a) live case: get-seeds from a chest
@@ -50,7 +50,7 @@
 ;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
-;;  :queue [(hold (jobs.gather.get-seeds {:count 2 :radius 12 :chest {:x 5003 :y 87 :z -5000}}))
+;;  :queue [(jobs.gather.get-seeds {:count 2 :radius 12 :chest {:x 5003 :y 87 :z -5000}})
 ;;          (repeat (jobs.movement.look-around))]}
 ;; -- case from live-ProbeStuck-g3
 ;; ;; ProbeStuck (composite-a) live case: get-seeds count 64 (small patch / boxed grass / none)
@@ -68,7 +68,7 @@
 ;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
-;;  :queue [(hold (jobs.gather.get-seeds {:count 64 :radius 12}))
+;;  :queue [(jobs.gather.get-seeds {:count 64 :radius 12})
 ;;          (repeat (jobs.movement.look-around))]}
 ;; -- case from live-ProbeStuck-h0
 ;; ;; ProbeStuck (composite-a) live case: idle, survival register, to place the body
@@ -103,7 +103,7 @@
 ;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
-;;  :queue [(hold (jobs.combat.hunt {:mob "cow" :count 1 :keep 0 :radius 16}))
+;;  :queue [(jobs.combat.hunt {:mob "cow" :count 1 :keep 0 :radius 16})
 ;;          (repeat (jobs.movement.look-around))]}
 ;; -- case from live-ProbeStuck-h2
 ;; ;; ProbeStuck (composite-a) live case: hunt pigs count 3 keep 2
@@ -121,7 +121,7 @@
 ;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
-;;  :queue [(hold (jobs.combat.hunt {:mob "pig" :count 3 :keep 2 :radius 16}))
+;;  :queue [(jobs.combat.hunt {:mob "pig" :count 3 :keep 2 :radius 16})
 ;;          (repeat (jobs.movement.look-around))]}
 ;; -- case from live-ProbeStuck-h4
 ;; ;; ProbeStuck (composite-a) live case: hunt adults only, babies spared, keep 1
@@ -139,7 +139,7 @@
 ;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
-;;  :queue [(hold (jobs.combat.hunt {:mob "cow" :count 5 :keep 1 :radius 16}))
+;;  :queue [(jobs.combat.hunt {:mob "cow" :count 5 :keep 1 :radius 16})
 ;;          (repeat (jobs.movement.look-around))]}
 ;; -- case from live-ProbeStuck-m1
 ;; ;; ProbeStuck (composite-a) live case: mine sand count 6
@@ -157,7 +157,7 @@
 ;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
-;;  :queue [(hold (jobs.gather.mine {:block "sand" :count 6 :radius 10}))
+;;  :queue [(jobs.gather.mine {:block "sand" :count 6 :radius 10})
 ;;          (repeat (jobs.movement.look-around))]}
 ;; -- case from live-ProbeStuck-m3
 ;; ;; ProbeStuck (composite-a) live case: mine bedrock
@@ -175,7 +175,7 @@
 ;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
-;;  :queue [(hold (jobs.gather.mine {:block "bedrock" :count 2 :radius 10}))
+;;  :queue [(jobs.gather.mine {:block "bedrock" :count 2 :radius 10})
 ;;          (repeat (jobs.movement.look-around))]}
 ;; -- case from live-ProbeStuck-m5
 ;; ;; ProbeStuck (composite-a) live case: mine stone floor under the start, mend
@@ -193,7 +193,7 @@
 ;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
-;;  :queue [(hold (jobs.gather.mine {:block "stone" :count 6 :radius 4}))
+;;  :queue [(jobs.gather.mine {:block "stone" :count 6 :radius 4})
 ;;          (repeat (jobs.movement.look-around))]}
 ;; -- case from live-ProbeStuck-m6
 ;; ;; ProbeStuck (composite-a) live case: mine stone radius 10 (lava beside, walled)
@@ -211,7 +211,7 @@
 ;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
-;;  :queue [(hold (jobs.gather.mine {:block "stone" :count 2 :radius 10}))
+;;  :queue [(jobs.gather.mine {:block "stone" :count 2 :radius 10})
 ;;          (repeat (jobs.movement.look-around))]}
 ;; -- case from live-ProbeStuck-m7
 ;; ;; ProbeStuck (composite-a) live case: mine stone count 6 radius 10 (floor + hill, floor only, no pickaxe)
@@ -229,5 +229,5 @@
 ;;              :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}
 ;;             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
-;;  :queue [(hold (jobs.gather.mine {:block "stone" :count 6 :radius 10}))
+;;  :queue [(jobs.gather.mine {:block "stone" :count 6 :radius 10})
 ;;          (repeat (jobs.movement.look-around))]}

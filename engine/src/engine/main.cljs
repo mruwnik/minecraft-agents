@@ -12,7 +12,6 @@
             [engine.game :as game]
             [engine.heap :as heap]
             [engine.hurt :as hurt]
-            [engine.lease :as lease]
             [engine.notes :as notes]
             [engine.path.offsets :as offsets]
             [engine.perception :as perception]
@@ -22,7 +21,6 @@
             [engine.settings :as settings]
             [engine.senses :as senses]
             [engine.single :as single]
-            [engine.takeover :as takeover]
             [engine.trigger-api :as trigger-api]
             [engine.triggers :as triggers]
             ["fs" :as fs]
@@ -40,7 +38,7 @@
 
 (defn parse-args [args]
   (loop [[a b & more :as all] args
-         opts {:agent nil :world nil :scenario nil :fresh? false :upgrade? false :state-dir nil :drive-idle-s 15}]
+         opts {:agent nil :world nil :scenario nil :fresh? false :upgrade? false :state-dir nil}]
     (cond
       (empty? all) opts
       (= a "--agent") (recur more (assoc opts :agent b))
@@ -49,7 +47,6 @@
       (= a "--state-dir") (recur more (assoc opts :state-dir b))
       (= a "--worlds") (recur more (assoc opts :worlds b))
       (= a "--blueprints") (recur more (assoc opts :blueprints b))
-      (= a "--drive-idle-s") (recur more (assoc opts :drive-idle-s (js/parseFloat b)))
       (= a "--fresh") (recur (rest all) (assoc opts :fresh? true))
       (= a "--upgrade") (recur (rest all) (assoc opts :upgrade? true))
       :else (recur (rest all) opts))))
@@ -122,13 +119,15 @@
       :else {:root root :cfg cfg :plan plan :stale stale :state-dir state-dir})))
 
 (defn ^:async start-control!
-  "Serve the manual-control socket under the engine dir; resolves to the control, or nil (with an
+  "Serve the control socket (/entities) under the engine dir; resolves to the control, or nil (with an
   error event) when it cannot listen."
-  [root eng cfg opts]
+  [root eng cfg]
   (let [create-control (.-createControl ((createRequire (str root "/")) "./js/control.mjs"))
         control (create-control #js {:socketPath (path/join (:engine-dir cfg) "control.sock")
                                      :handle (fn [method path body content-type]
-                                               (takeover/handle eng opts method path body content-type))})]
+                                               (if (= path "/entities")
+                                                 (entity-observations/request (:seen-entities eng) method)
+                                                 #js {:status 404 :json #js {:ok false :reason "not-found"}}))})]
     (try
       (await (.listen control))
       control
@@ -221,14 +220,13 @@
                                              {:died game/death-status :build build/status-extra})]
       (try
         (await ((:listen event-socket)))
-        (let [lease-opts {:idle-ms (* 1000 (:drive-idle-s opts))}
-              control (await (start-control! root eng cfg lease-opts))
-              stop-ticks (core/start! eng {:tick-ms 250 :before-tick #(do (takeover/tick! eng lease-opts) (trigger-api/tick! eng))})]
+        (let [control (await (start-control! root eng cfg))
+              stop-ticks (core/start! eng {:tick-ms 250 :before-tick #(trigger-api/tick! eng)})]
           {:engine eng :stop (fn ^:async stop []
                                ((:stop seen))
                                (stop-heap)
                                (let [saved (stop-perception)]
-                                 (stop-ticks) (takeover/close! eng) (some-> control .close)
+                                 (stop-ticks) (some-> control .close)
                                  ((:close event-socket)) (core/shutdown! eng)
                                  (await saved)
                                  (core/save-memory! eng true)

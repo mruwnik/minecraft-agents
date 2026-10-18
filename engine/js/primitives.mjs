@@ -9,7 +9,7 @@ import { connectBot } from './connect.mjs'
 import { createGameClock } from './game-clock.mjs'
 import { createView } from './view.mjs'
 import { createRawWorld } from './raw-world.mjs'
-import { leaveBed, ensureAwake } from './bed.mjs'
+import { ensureAwake } from './bed.mjs'
 import { createUseOn } from './use-on.mjs'
 import { createSteer } from './steer.mjs'
 import { trackLeashes } from './leash.mjs'
@@ -22,7 +22,7 @@ import { missingPatches, missingRequired } from './deps-check.mjs'
 import { wrapBlockAt } from './offset-shapes.mjs'
 import { say } from './chat.mjs'
 import vec3 from 'vec3'
-import { BODY_HALF_WIDTH, EYE_HEIGHT, mcToMineflayerLook, mineflayerToMcLook, sleepMs, waitForWorld, xyz, isNum, vec, cutError, badArgs, isCut, failed, need, attempt, sleepStatusOf, spawnSetMessage, droppedItem, itemCounts } from './prim-base.mjs'
+import { BODY_HALF_WIDTH, EYE_HEIGHT, sleepMs, waitForWorld, xyz, isNum, vec, cutError, badArgs, isCut, failed, need, attempt, sleepStatusOf, spawnSetMessage, droppedItem, itemCounts } from './prim-base.mjs'
 import { createWalk } from './prim-walk.mjs'
 import { createSense } from './prim-sense.mjs'
 import { createMove } from './prim-move.mjs'
@@ -147,7 +147,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   }
 
   // Control-adjacent chat is independent of the body ownership token: sending a
-  // message must not cut a running job or wait for a manual-control lease.
+  // message must not cut a running job.
   // It is deliberately online-only, so requests are never deferred until reconnect.
   const chatDirect = async (a = {}) => {
     if (closed || away || down || !bot.player) return { status: 'disconnected' }
@@ -160,32 +160,6 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     finally { cleanups.splice(0).reverse().forEach(fn => { try { fn() } catch {} }) }
   }
 
-
-  // Manual takeover: sets control states and rotation for the owner, synchronously. The first call with a token
-  // registers an inflight entry so that any owner change releases every control.
-  const driveNow = (token, a = {}) => {
-    if (!isOwner(token)) throw cutError()
-    if (isOffline()) return { status: 'offline' }
-    if (bot.isSleeping) leaveBed(bot)
-    if (![...inflight].some(c => c.drive && c.token === token)) {
-      const call = { drive: true, token, cut: () => { inflight.delete(call); bot.clearControlStates() } }
-      inflight.add(call)
-    }
-    for (const [name, value] of Object.entries(a.controls ?? {})) bot.setControlState(name, value)
-    const l = a.look
-    if (l) {
-      const cur = mineflayerToMcLook({ yaw: bot.entity.yaw ?? 0, pitch: bot.entity.pitch ?? 0 })
-      const yaw = isNum(l.yaw) ? l.yaw : cur.yaw + (isNum(l.dyaw) ? l.dyaw : 0)
-      const pitch = isNum(l.pitch) ? l.pitch : cur.pitch + (isNum(l.dpitch) ? l.dpitch : 0)
-      const mf = mcToMineflayerLook({ yaw, pitch: Math.min(90, Math.max(-90, pitch)) })
-      bot.look(mf.yaw, mf.pitch, true)
-    }
-    const out = mineflayerToMcLook({ yaw: bot.entity.yaw ?? 0, pitch: bot.entity.pitch ?? 0 })
-    const round2 = x => Math.round(x * 100) / 100
-    const yaw = round2(out.yaw)
-    return { pos: here(), yaw: yaw >= 360 ? 0 : yaw, pitch: round2(out.pitch) + 0 }
-  }
-  const stopDriving = () => bot.clearControlStates()
 
   // Waits `ms` (clamped to 0..WAIT_MAX_MS, scaled by timeScale) without touching the bot; a cut rejects at once.
   const wait = async (token, a = {}) => {
@@ -576,7 +550,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     .map(([name, fn]) => [name, whenUp(fn)]))
   // the raw world engine.perception looks at (stateAt, lightAt, eye, block changes): body-side only, never a job's
   const rawWorld = createRawWorld({ getBot: () => bot, isOffline: () => isOffline() || down, lightOverlay: (cx, cz, s) => view?.lightOverlay?.(cx, cz, s) })
-  return { setOwner, isOwner, drive: driveNow, stopDriving, self, worldAge, entities, blockAt, harvestTools, digTime, clearTime, pathWorld, ...acting, chatDirect, wait, isOffline, isSettling, lastKnown, offline, onBodyEvent, entityObservation, onEntityDeath, rawWorld, physicsMs: () => bot.physicsClock?.intervalMs() ?? 50, close }
+  return { setOwner, isOwner, self, worldAge, entities, blockAt, harvestTools, digTime, clearTime, pathWorld, ...acting, chatDirect, wait, isOffline, isSettling, lastKnown, offline, onBodyEvent, entityObservation, onEntityDeath, rawWorld, physicsMs: () => bot.physicsClock?.intervalMs() ?? 50, close }
 }
 
 const OWN_WORK_MS = 15000

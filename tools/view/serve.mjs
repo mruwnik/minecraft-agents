@@ -1,12 +1,10 @@
 // Why JavaScript: binary/web boundary; HTTP and server-sent-event server for the WebGL view and the dumped column files.
 // HTTP server for the browser view: static pages, the dumped column files, and a server-sent event stream that
-// pushes an agent's pose, hud and changed columns. Reads state/ (the body writes it atomically) and also proxies
-// driving commands to a body's control socket.
+// pushes an agent's pose, hud and changed columns. Reads state/ (the body writes it atomically).
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 import { createAssetCache, buildAssetsInWorker } from './view-assets.mjs'
-import { createDriveProxy } from './drive-proxy.mjs'
 import { SEVERITIES, severityOf } from './block-issues.mjs'
 import { biomeTable } from './biome-colors.mjs'
 import { createBlockScanner, classifyReal, findClientJar } from './block-scan.mjs'
@@ -63,7 +61,6 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
   const trackStreamed = world => { if (blockScan) scanner.track(world) }
   const jarPath = blockJar === undefined ? findClientJar() : blockJar
   const scanner = createBlockScanner({ stateDir, textureDir, jar: jarPath, sweepMs: blockSweepMs, writeMs: blockWriteMs })
-  const driveProxy = createDriveProxy({ stateDir })
   const agentFile = ({ world, name }, file) => path.join(bodyDir(stateDir, world, name), 'view', file)
   // one build per version (in a worker thread, see view-assets.mjs) serves both the table and the texture bytes
   const buildFor = createAssetCache(version => buildAssetsInWorker(version, textureDir, jarPath))
@@ -301,7 +298,6 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
     const parts = url.pathname.split('/').slice(1)
     const [head, ...rest] = parts
     const body = rest.length === 2 ? bodyOfKey(rest.join('/')) : null
-    if (head === 'drive' && body) return driveProxy(req, res, body)
     if (req.method !== 'GET') return send(res, 405, 'method not allowed')
     if (url.pathname === '/') return serveStatic(res, 'index.html')
     if (head === 'web' && rest.length === 1 && WEB_FILE.test(rest[0])) return serveStatic(res, rest[0])

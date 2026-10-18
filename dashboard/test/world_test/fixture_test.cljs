@@ -630,9 +630,6 @@
   (let [argv #(f/step-argv "B" "test" % "j7")]
     (is (= ["engine/tools/plans.mjs" "check" "--body" "B" "--world" "test"]
            (argv [:cli "plans" ["check" "--body" "$body" "--world" "$world"]])))
-    (is (= ["engine/tools/drive.mjs" "B" "take" "--world" "test" "--who" "wt" "--why" "t"]
-           (argv [:http :take {:who "wt" :why "t"}])))
-    (is (= ["engine/tools/drive.mjs" "B" "release" "--world" "test" "--who" "wt"] (argv [:http :release {:who "wt"}])))
     (is (= ["engine/tools/jobs.mjs" "B" "--world" "test" "cancel" "j7"] (argv [:http :cancel "$job"])))
     (is (= ["engine/tools/jobs.mjs" "B" "--world" "test" "cancel" "j3"]
            (f/step-argv "B" "test" [:http :cancel "$event-job"] "j7" "j3"))
@@ -685,7 +682,7 @@
 
 (deftest cli-http-restart-steps-and-file-checks-validate
   (let [ps #(f/problems (merge {:name "x" :time :day :plot {:height 16} :body {:at [0 0 0]} :expect [{:event {} :within-s 1}]} %))]
-    (is (empty? (ps {:act [[:restart-body] [:cli "plans" ["check"] {:ok true}] [:http :take {:who "w"}] [:http :cancel "j1" {:ok true}]]
+    (is (empty? (ps {:act [[:restart-body] [:cli "plans" ["check"] {:ok true}] [:http :cancel-all] [:http :cancel "j1" {:ok true}]]
                      :after [[:memory {:deaths [:any]}] [:file "engine/a.edn" {}]]})))
     (is (some #(re-find #":act steps" %) (ps {:act [[:http :bogus]]})))
     (is (some #(re-find #":act steps" %) (ps {:act [[:cli "no/such" []]]})))

@@ -25,7 +25,7 @@
         (update :instances #(apply dissoc % (concat reflex-ids slot-ids))))))
 
 (defn drop-leftover-slot-jobs!
-  "After a restore: end the manual slot job saved held (restore unlisted it) with one cancelled event, cut off by :restart."
+  "After a restore: end the exclusive run saved held (restore unlisted it) with one cancelled event, cut off by :restart."
   [eng saved]
   (doseq [[id inst] (:instances saved)
           :when (:exclusive? inst)]
@@ -63,7 +63,7 @@
                                 [[] []] kids))]
     (cond
       (not (symbol? head)) [form []]
-      (#{'seq 'any 'repeat 'hold} head) (let [[out stale] (kids parts)] [(apply list head out) stale])
+      (#{'seq 'any 'repeat} head) (let [[out stale] (kids parts)] [(apply list head out) stale])
       (not (map? (first parts))) [form []]
       :else (let [args (first parts)
                   ks (stale-keys registry head args)]

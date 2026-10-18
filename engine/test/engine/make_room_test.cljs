@@ -8,7 +8,6 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.registry :as registry]
-            [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -631,12 +630,11 @@
         (let [{:keys [eng p out returns]} (with-parent {:inventory (many "junk" 35)} {})
               looks (atom 0)]
           (.override (.-world p) "look" (fn ^:async f [token a impl]
-                                          (when (= 2 (swap! looks inc)) (takeover/take! eng {:who "claude" :why "cut"}))
+                                          (when (= 2 (swap! looks inc)) (core/cut! eng (core/holder eng) :test nil))
                                           (await (impl token a))))
           (await (core/tick! eng))
           (is (= [] @returns) "the cut call returned nothing")
           (is (= 34 (stack-count p)) "one toss before the cut")
-          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (tick-out! eng 10))
           (is (= [:done] @returns) "the resumed call ended done")
           (is (= 32 (stack-count p)))
@@ -690,11 +688,10 @@
               spots #(mem/entries (mem/view (:store eng)) :make-room-tossed)]
           (core/register-reflex! eng {:trigger :inventory-nearly-full :args {} :job (list 'jobs.storage.make-room {})})
           (.override (.-world p) "look" (fn ^:async f [token a impl]
-                                          (when (= 2 (swap! looks inc)) (takeover/take! eng {:who "claude" :why "cut"}))
+                                          (when (= 2 (swap! looks inc)) (core/cut! eng (core/holder eng) :test nil))
                                           (await (impl token a))))
           (await (core/tick! eng))
           (is (= 1 (count (spots))) "the first toss's spot outlives the cut reflex")
-          (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (loop [i 0]
             (await (core/tick! eng))
             (when (and (< i 60) (seq (:instances (core/state eng)))) (recur (inc i))))

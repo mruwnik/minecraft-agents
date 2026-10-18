@@ -279,7 +279,7 @@
                                (if (or (= :done r) (= :done (:kind r))) r (or (own-limit nil) r)))
                              (catch :default e (or (own-limit e) (throw e))))]
                   (if (contract/ending? r) (await (cleanup/close eng def c r below)) r)))
-            ;; a reflex root and the driver's slot job get this round only
+            ;; a reflex root and an exclusive run get this round only
             r (if (or (:reflex run) (= (:id run) (exclusive-job eng))) (await (cleanup/run-out eng def c r below)) r)]
         (assoc (normalize-result r) :child-wait @child-wait))
       (catch :default e

@@ -68,7 +68,7 @@ Act steps:
 - `[:rcon-until "cmd" {:until pattern :every-s n :limit-s n}]`: sends cmd every n s until an event matching pattern is logged (or limit-s passes, no error); for shoves that must outlast a job.
 - `[:kill-body]`, `[:time-set ticks]` (needs `--allow-time`), `[:restart-body]` (stops the body, starts it keeping memory, position, the queue and the register).
 - `[:cli "tool" [args] pattern?]`: runs `engine/tools/<tool>.mjs` with `$body $world $job $event-job` (last awaited event's job) `$plan:<id>` `$tag` filled in, in the pattern too (an unfilled id fails the step); a map argument is printed as EDN, a position vector spread; the printed EDN must match the pattern, else exit 0.
-- `[:http op arg pattern?]`: `:submit spec [flags]` (its id becomes `$job` and joins the run's jobs), `:cancel id`, `:cancel-all`, `:take {:who :why :idle-s}`, `:release {:who}` through jobs.mjs / drive.mjs; the manual lease is force-released after the run.
+- `[:http op arg pattern?]`: `:submit spec [flags]` (its id becomes `$job` and joins the run's jobs), `:cancel id`, `:cancel-all` through jobs.mjs (flags `[:next]`, `[:now]`, `[:exclusive]`, ...).
 - `:memory` pattern: the body's `engine/memory.edn` is `{:entries {kind [{:t :wt :data {...}}]} :policies {...}}`, so match `{:entries {:deaths [{:data {:pos [:any]}}]}}`.
 
 Expectations: `{:event pattern :within-s n}` passes when a matching event is logged within n s of t0;

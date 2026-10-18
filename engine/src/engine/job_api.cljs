@@ -22,13 +22,11 @@
 (defn summary [eng id]
   (when-let [inst (get-in (core/state eng) [:instances id])]
     (cond-> {:id id :name (text (expr/label (:spec inst)) 160) :status (status eng id)
-             :round (:round inst) :hold? (boolean (:hold? inst))}
+             :round (:round inst)}
       (:survive-death? inst) (assoc :survive-death? true)
       (= id (core/exclusive-job eng)) (assoc :exclusive true)
       (and (core/exclusive-job eng) (not= id (core/exclusive-job eng)))
       (assoc :waiting {:reason :exclusive-run :job (core/exclusive-job eng)})
-      (and (core/manual? eng) (not (core/exclusive-job eng)))
-      (assoc :waiting {:reason :manual-control :who (:who @(:manual eng))})
       (core/waiting eng id) (assoc :waiting (core/waiting eng id))
       (core/holding eng id) (assoc :holding (core/holding eng id)))))
 (defn list-jobs [eng offset limit]
@@ -68,7 +66,7 @@
            (str ":checks " k ": " (:message r)))))
 (defn fingerprint [request]
   (let [canonical (walk/postwalk #(if (map? %) (into (sorted-map-by (fn [a b] (compare (pr-str a) (pr-str b)))) %) %)
-                                (select-keys request [:op :id :spec :generation-id :next? :hold? :survive-death? :by]))]
+                                (select-keys request [:op :id :spec :generation-id :next? :survive-death? :by]))]
     (.digest (.update (.createHash crypto "sha256") (pr-str canonical)) "hex")))
 (defn remember! [eng id record]
   (swap! (:state eng)
@@ -78,9 +76,9 @@
                  order (vec (take-last max-requests order))]
              (assoc s :job-requests {:order order :records (select-keys (assoc (:records ledger) id record) order)})))))
 (defn submit-opts
-  "core/submit! opts from a request's :next? :hold? :survive-death? :by."
+  "core/submit! opts from a request's :next? :survive-death? :by."
   [request by]
-  (merge {:by by} (select-keys request [:next? :hold? :survive-death?])))
+  (merge {:by by} (select-keys request [:next? :survive-death?])))
 (defn mutate! [eng {:keys [op id spec request-id generation-id by] :or {by :agent} :as request}]
   (let [prior (get-in (core/state eng) [:job-requests :records request-id])
         signature (fingerprint request)
@@ -89,33 +87,29 @@
     (cond
       (not (map? request)) (fail :bad-request)
       (not (contains? #{:submit :interrupt :exclusive :cancel :cancel-all :retry} op)) (fail :bad-op)
-      (seq (remove #{:op :id :spec :request-id :generation-id :next? :hold? :survive-death? :by} (keys request))) (fail :unknown-field)
+      (seq (remove #{:op :id :spec :request-id :generation-id :next? :survive-death? :by} (keys request))) (fail :unknown-field)
       (not (valid-request-id? request-id)) (fail :bad-request-id)
       (not= generation-id (:generation-id (core/state eng))) (fail :generation-mismatch)
       prior (if (= signature (:signature prior))
               (if-let [result (:result prior)]
                 (cond-> (assoc result :duplicate true)
                   (get-in result [:job :id]) (assoc :job (or (summary eng (get-in result [:job :id]))
-                                                          (merge {:id (get-in result [:job :id]) :status :absent}
-                                                                 (select-keys (:job result) [:hold?])))))
+                                                          {:id (get-in result [:job :id]) :status :absent})))
                   (fail :request-uncertain "A previous attempt was interrupted; it will not be executed again."))
               (fail :request-id-conflict))
       spec-error (fail :bad-spec spec-error)
       (and spec (checks-problem spec)) (fail :bad-args (checks-problem spec))
-      (some #(and (contains? request %) (not (boolean? (get request %)))) [:next? :hold? :survive-death?]) (fail :bad-field ":next?, :hold? and :survive-death? are true or false")
+      (some #(and (contains? request %) (not (boolean? (get request %)))) [:next? :survive-death?]) (fail :bad-field ":next? and :survive-death? are true or false")
       (not (valid-by? by)) (fail :bad-by ":by is a short string or keyword naming who asks")
       (and (#{:cancel :retry} op) (not (valid-job-id? id))) (fail :bad-job-id)
       (and (#{:cancel :retry} op) (nil? (get-in (core/state eng) [:instances id]))) (fail :job-not-found)
       (and (= op :cancel-all) (contains? request :id)) (fail :bad-field ":cancel-all takes no :id; it clears the whole list")
-      (and (= op :submit) (:next? request) (core/manual? eng) (not (core/driver? eng by)))
-      (fail :manual-control "Manual control is held: only its holder may submit :next?; a plain submit queues and waits.")
-      (and (= op :exclusive) (some request [:next? :hold? :survive-death?]))
-      (fail :bad-field "an exclusive run takes no :next?, :hold? or :survive-death?: it runs alone, once, now")
+      (and (= op :exclusive) (some request [:next? :survive-death?]))
+      (fail :bad-field "an exclusive run takes no :next? or :survive-death?: it runs alone, once, now")
       (and (= op :exclusive) (or (core/offline? eng) (core/settling? eng)))
       (fail :offline "The body is offline or settling: an exclusive run needs it online.")
-      (and (= op :exclusive) (or (core/exclusive-job eng) (core/manual? eng)))
-      (fail :exclusive-running (str "An exclusive run is in flight (" (or (core/exclusive-job eng) "manual control") "); wait for it to end."))
-      (and (= op :interrupt) (core/manual? eng)) (fail :manual-control "Release the exclusive body lease before interrupting; submit can still queue work.")
+      (and (= op :exclusive) (core/exclusive-job eng))
+      (fail :exclusive-running (str "An exclusive run is in flight (" (core/exclusive-job eng) "); wait for it to end."))
       :else
       (do
         ;; The state watch saves this record before the job change below, so a crash leaves it :pending.

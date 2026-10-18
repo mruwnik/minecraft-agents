@@ -34,7 +34,6 @@
 (defn init []
   (let [page (logic/page-for-path (.-pathname js/location))]
     (.addEventListener js/document "keydown" on-key)
-    (.addEventListener js/window "message" detail-events/on-message)
     (rf/dispatch-sync [:init (.-search js/location) page])
     (case page
       :plans (rf/dispatch [:plans/start true])

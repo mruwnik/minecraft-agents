@@ -1,28 +1,19 @@
 (ns agent-tools.workspace-test
   (:require [cljs.test :refer [deftest is are]]
             [clojure.string :as str]
-            [agent-tools.drive :as drive]
             [agent-tools.world :as world]
             [agent-tools.workspace :as workspace]))
 
 (def ctx {:body "Probe" :world "w" :worlds "/x" :repo "/r"})
 
-(defn who-of [command argv]
-  (let [routed (workspace/route ctx command argv)]
-    (case command
-      "drive" (get-in (drive/request-for routed) [:body :who])
-      "world" (get-in (world/request-for routed) [:request :by]))))
+(defn who-of [argv]
+  (get-in (world/request-for (workspace/route ctx "world" argv)) [:request :by]))
 
-(deftest drive-and-world-share-the-body-identity-by-default
-  (are [command argv] (= "Probe" (who-of command argv))
-    "drive" ["take" "--why" "x" "--idle-s" "30"]
-    "drive" ["release"]
-    "world" ["submit" "dig" "1" "2" "3"]))
+(deftest world-submits-as-the-body-by-default
+  (is (= "Probe" (who-of ["submit" "dig" "1" "2" "3"]))))
 
 (deftest an-explicit-who-is-kept
-  (are [command argv] (= "Other" (who-of command argv))
-    "drive" ["take" "--who" "Other"]
-    "world" ["submit" "dig" "1" "2" "3" "--who" "Other"]))
+  (is (= "Other" (who-of ["submit" "dig" "1" "2" "3" "--who" "Other"]))))
 
 (deftest plans-check-gets-the-workspace-body
   (is (= ["--world" "w" "--worlds" "/x" "--repo" "/r" "--body" "Probe" "check" "p1"]
@@ -82,7 +73,7 @@
   "The help output shown by runBound should not contain .mjs <body> or .mjs <agent> after using usage-for and player-usage"
   (let [;; Simulating what runBound does: build the usage string with the ./bin/ prefix,
         ;; then apply player-usage to cut other tool references
-        jobs-with-prefix "usage: ./bin/jobs <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit '(jobs.movement.go-to {...})'. Find a job's args with observe.mjs <body> catalog job <name>. While manual control holds the body (drive.mjs take) only the driver's one job runs (world.mjs submit): others stay :queued."
+        jobs-with-prefix "usage: ./bin/jobs <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit '(jobs.movement.go-to {...})'. Find a job's args with observe.mjs <body> catalog job <name>. A one-off body action is world.mjs submit: others stay :queued."
         observe-with-prefix "usage: ./bin/observe <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12] | inventory [--raw] [--slots]]"
         jobs-cut (workspace/player-usage jobs-with-prefix)
         observe-cut (workspace/player-usage observe-with-prefix)]
@@ -96,5 +87,5 @@
         (str "observe help should contain 'usage: ./bin/observe': " observe-cut))
     (is (re-find #"\./bin/observe" jobs-cut)
         (str "jobs help should contain './bin/observe' after cutting other tool refs: " jobs-cut))
-    (is (re-find #"\./bin/drive" jobs-cut)
-        (str "jobs help should contain './bin/drive' after cutting other tool refs: " jobs-cut))))
+    (is (re-find #"\./bin/world" jobs-cut)
+        (str "jobs help should contain './bin/world' after cutting other tool refs: " jobs-cut))))

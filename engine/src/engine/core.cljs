@@ -9,7 +9,7 @@
   The state atom holds plain EDN, written on every change. Memory (engine.memory)
   is saved at every round end and whenever the engine itself writes to it.
     :list [id]              listed instance ids, in cycle order
-    :instances {id inst}    {:id :spec :round :hold? :reflex}; :spec is a parsed
+    :instances {id inst}    {:id :spec :round :reflex}; :spec is a parsed
                             job expression node (engine.expr)
     :register [entry]       {:id :trigger :job :args :persistence :cooldown-s :backoff :builtin?}
     :seen-triggers #{id}    every trigger id the body has had, removed or declined ones too; never offered as new
@@ -69,9 +69,7 @@
 (def empty-state base/empty-state)
 (def job-memory base/job-memory)
 (def job-of base/job-of)
-(def manual? base/manual?)
 (def exclusive-job base/exclusive-job)
-(def driver? base/driver?)
 (def free-owner! base/free-owner!)
 (def now base/now)
 (def offline? base/offline?)
@@ -199,11 +197,7 @@
       (hurt/record! eng #(emit! eng %) m)
       (emit! eng (merge (dissoc m :kind)
                         {:source :body :kind (keyword (:kind m))
-                         :level (body-event-level (:kind m))})))
-    (when (and (= "died" (:kind m)) (manual? eng))
-      (let [who (:who @(:manual eng))]
-        (emit! eng {:source :system :kind :takeover_body_died :level :warn :attention :notice :who who
-                    :text (str "the body died under manual control by " who "; jobs and reflexes stay off until release")})))))
+                         :level (body-event-level (:kind m))})))))
 
 (defn create
   "An engine over primitives with state under dir. Restores engine.edn and
@@ -254,7 +248,6 @@
              :results (atom (or (fsu/read-edn (path/join dir "results.edn")) {}))
              :running (atom nil)
              :tokens (atom 0)
-             :manual (atom nil)
              :exclusive (atom nil)
              :away (atom nil)
              :waiting (atom {})

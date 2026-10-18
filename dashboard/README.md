@@ -70,18 +70,17 @@ The compile JVM is capped (`:jvm-opts ["-Xmx1G"]` in `shadow-cljs.edn`) because 
   502 `{error}` when RCON fails. `DASHBOARD_CHAT_DRY=1` logs the command instead of sending. Code: `dashboard.chat-send`
   (pure), `dashboard.rcon` (socket, password read in-process).
 - Guard (`dashboard.guard`) on every state-changing route, including POST `/api/attention/<world>/<body>/resolve`, applies the loopback
-  Host/Origin restrictions used by `tools/view/drive-proxy.mjs`; attention resolution requires `application/edn`. Existing
+  Host/Origin restrictions; attention resolution requires `application/edn`. Existing
   mutation routes use JSON.
-  `/drive/<world>/<body>` goes through drive-proxy and keeps its own check.
 - The live 3D view is mounted on this origin by `js/viewmount.mjs` (the handler of `tools/view/serve.mjs`, never listening):
-  `/view?agent=<world>/<body>`, `/agents`, `/pose/<world>/<body>`, `/hud/<world>/<body>`, `/drive/<world>/<body>` (POST takeover controls, loopback only), `/web/`, `/columns/`,
+  `/view?agent=<world>/<body>`, `/agents`, `/pose/<world>/<body>`, `/hud/<world>/<body>`, `/web/`, `/columns/`,
   `/blocks/`, `/textures/`.
-- The view pages' ClojureScript (`src/view/`: pose interpolation (`interp`), the takeover adapters over `drive.keys` (`drive`) and the page's takeover state machine behind it (`takeover`: take/release, lease replies, key and mouse control, leave handling, request queue; `drive.mjs` only forwards DOM events), the hub's scheduling and stream replay (`schedule`, `hub`), the scene's pose following and column fetch/upload (`scene`) and its toroidal column window (`window`), the camera basis, ray and pixel projection (`camera`) and the pixel-check region stats (`stats`; `tools/view-web-check.mjs` stays a thin runner)) is the
+- The view pages' ClojureScript (`src/view/`: pose interpolation (`interp`), the hub's scheduling and stream replay (`schedule`, `hub`), the scene's pose following and column fetch/upload (`scene`) and its toroidal column window (`window`), the camera basis, ray and pixel projection (`camera`) and the pixel-check region stats (`stats`; `tools/view-web-check.mjs` stays a thin runner)) is the
   `:viewer` build: `shadow-cljs release viewer` writes one ES module, `tools/view/web/cljs/viewer.mjs` (gitignored), imported by
-  `hub.mjs`, `scene.mjs` and `drive.mjs` and served at `/web/cljs/viewer.mjs`. `node ../tools/view/build-cljs.mjs` builds it when a source
+  `hub.mjs` and `scene.mjs` and served at `/web/cljs/viewer.mjs`. `node ../tools/view/build-cljs.mjs` builds it when a source
   is newer; `npm run build`, the launcher's restart and the root `npm test` (pretest) run that.
 
-Pages `/` (bodies: a card per body with a thumbnail, click for the popup with live view and takeover), `/map` (places, zones,
+Pages `/` (bodies: a card per body with a thumbnail, click for the popup with live view), `/map` (places, zones,
 plans (outlined, coloured by completion; zoomed in, their elements too; a click opens the plan) and live bodies; the default view fits places and plans, "home" returns to it, "fit all" and "fit bodies" refit; a body
 off screen gets an arrow on the edge, click it to pan there), `/plans` (plan files compared with the dumped chunks, see "Plans"), `/villages`,
 `/villagers`, `/blueprints`, `/jobs` (every job and trigger by category, with filter) serve `public/index.html`; static files come from

@@ -34,7 +34,7 @@
       (is (= 6 (count ps)))
       (is (= "unknown trigger :nope" (first ps)))
       (is (re-find #"unknown job or combinator jobs.fly" (nth ps 1)))
-      (is (re-find #"hold is not allowed in a register entry" (nth ps 2)))
+      (is (re-find #"unknown job or combinator hold" (nth ps 2)))
       (is (re-find #"a job spec is a list" (nth ps 3)) "the old map form is refused")
       (is (re-find #"unknown job or combinator jobs.fly" (nth ps 4)))
       (is (re-find #"seq takes at least one" (nth ps 5))))))

@@ -60,3 +60,7 @@
 (deftest at-most-max-pointers
   (let [many (for [i (range 30)] (assoc zombie :min [0 0 (- (+ 5 i))] :max [1 2 (- (+ 4 i))]))]
     (is (= p/MAX-POINTERS (count (p/pointers basis eye many W H))))))
+
+(deftest agent-key-cases
+  (are [v expected] (= expected (p/agent-key? v))
+    "claude/ProbeDrive" true "w_1/Bob-2" true "ProbeDrive" false "a/b/c" false "/b" false "a/" false "a b/c" false "" false nil false js/undefined false))

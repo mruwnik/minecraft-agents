@@ -1,13 +1,13 @@
 (ns agent-tools.vitals
   "What a waiting agent is told besides the wake: health, food, hostiles near, a hit taken meanwhile, and that reflexes
-  are off under a manual take. Best effort: a silent engine adds nothing."
+  are off during an exclusive run. Best effort: a silent engine adds nothing."
   (:require [agent-tools.snapshot :as snapshot]
             [jobs.lib.cost.threat :as threat]
             ["node:fs" :as fs]
             ["node:path" :as path]
             [agent-tools.world-data :as data]))
 
-(def reflexes-off "manual control: reflexes are off (no breathe, hostile, night); go-to still keeps air; hits are still reported (observe --wait wakes on a hit, :vitals carries health)")
+(def reflexes-off "exclusive run: reflexes are off (no breathe, hostile, night); go-to still keeps air; hits are still reported (observe --wait wakes on a hit, :vitals carries health)")
 
 (def hostile-radius 24)
 
@@ -39,7 +39,7 @@
            (keep (fn [[k v]] (when (some? v) [k v]))
                  [[:health (:health after)] [:food (:food after)]
                   [:hostiles (not-empty (:hostiles seen))] [:heard (not-empty (:heard seen))]
-                  [:reflexes-off (when (:manual after) reflexes-off)]])))))
+                  [:reflexes-off (when (:exclusive after) reflexes-off)]])))))
 
 (defn pose-version
   "The minecraft version in the body's view/pose.json next to its engine socket, or nil."
