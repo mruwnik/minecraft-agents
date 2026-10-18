@@ -283,7 +283,7 @@
 
 (def skipped
   "Debug tools: not jobs a body runs for itself."
-  #{'jobs.debug.access-check 'jobs.debug.notify 'jobs.debug.ready-probe 'jobs.debug.walk-plan})
+  #{'jobs.debug.notify 'jobs.debug.ready-probe})
 
 (def known-cases
   "Cases per job of the run that found the entries of known: a narrower run may miss them."

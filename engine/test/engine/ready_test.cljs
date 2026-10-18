@@ -6,7 +6,6 @@
             [engine.registry :as registry]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
-            [jobs.debug.walk-plan :as walk-plan]
             [jobs.explore.look :as look]
             [jobs.explore.search :as search]
             [jobs.movement.look-around :as look-around]
@@ -213,7 +212,6 @@
     follow/safe? open-night {} :later
     boat-drive/safe? open-night {:pos [15 64 0]} :later
     boat-drive/safe? (assoc open-night :time st/noon) {:pos [15 64 0]} :ok
-    walk-plan/safe? open-night {:to [15 64 0]} :later
     linger-near/safe? open-night {:pos [15 64 0]} :later
     mount/safe? open-night {} :later
     mount/safe? (assoc open-night :time st/noon) {} :ok

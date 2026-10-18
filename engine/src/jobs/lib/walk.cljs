@@ -1,6 +1,6 @@
 (ns jobs.lib.walk
   "The walk driver: plan from the body's cell to a goal within the executor's abilities, follow the plan with steer, plan
-  again when the body ends off it. Jobs that walk (jobs.debug.walk-plan, the stair, tunnel and cleanup jobs) call this
+  again when the body ends off it. Jobs that walk (the stair, tunnel and cleanup jobs) call this
   namespace; walk-to! is the whole loop, the other functions are its pieces; the pieces live in jobs.lib.walk.plan (planning), .search (the budgeted search a round), .watch (the look-ahead) and .world (the pathWorld and its decorations)."
   (:require [engine.args :as a]
             [engine.settings :as settings]
@@ -460,7 +460,7 @@
   "Walk the body to within range of the goal cell to ([x y z]): settle, plan, follow the plan (follow!: at most timeout-s
   seconds a walk, planning again in the same call when the way ahead changes, a partial plan is refreshed or a mob is in the
   way), plan again when the body ends off it (at most 5 times). The caller has checked that path-world is there.
-  {:result :walked :walk-ms}: result is {:status ...} as in the walk-plan job doc, with :replans; walked is the blocks of
+  {:result :walked :walk-ms}: result is a {:status ...} map with :replans; walked is the blocks of
   every plan followed, walk-ms the time inside steer acts. announce! is called (kind data) with :plan before each walk,
   :replan when the body is off its plan and for each of follow!'s replans (those have :why). :fall-margin the hp falls may cost over
   the plan before an info :damage-mismatch (default jobs.lib.walk.watch/fall-margin)."

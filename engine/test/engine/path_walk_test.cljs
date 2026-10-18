@@ -156,7 +156,7 @@
           (is (= [:plan] announced) "the island part was walked, no replan")
           (is (<= (first at) 5) "the body never went down the drop"))))))
 
-;; walk-to! (walk-plan's driver) never takes a one-way step, even when the land below runs on into unloaded land (go-to
+;; walk-to! never takes a one-way step, even when the land below runs on into unloaded land (go-to
 ;; does, jobs.lib.near)
 (deftest walk-to-stops-at-a-one-way-step-even-toward-unloaded-land
   (async done

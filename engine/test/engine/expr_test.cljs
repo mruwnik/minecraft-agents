@@ -127,7 +127,7 @@
   [['jobs.blocks.dig :pos] ['jobs.blocks.place :pos] ['jobs.blocks.use-on :pos]
    ['jobs.access.toggle :pos] ['jobs.movement.leave-vehicle :toward]
    ['jobs.storage.withdraw :chest] ['jobs.storage.deposit :chest] ['jobs.items.smelt :furnace] ['jobs.items.kitchen :chest]
-   ['jobs.build.clear-box :from] ['jobs.build.clear-box :to] ['jobs.access.tunnel :target] ['jobs.debug.walk-plan :to]
+   ['jobs.build.clear-box :from] ['jobs.build.clear-box :to] ['jobs.access.tunnel :target]
    ['jobs.animals.pen-check :at] ['jobs.memory.set-place :pos]])
 
 (deftest real-jobs-take-position-args-as-a-vector-or-a-map-and-refuse-junk-at-submit
