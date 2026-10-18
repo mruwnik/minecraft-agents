@@ -56,3 +56,17 @@
           (is (= :out-of-sight (:why @out)) (pr-str @out))
           (is (< ticks 30) "ends")
           (is (seq (gt/events-of s :unreachable))))))))
+
+(deftest see-with-no-stand-in-the-loaded-land-does-not-tour-to-its-edge
+  ;; the buried goal is in loaded land: the search running out of it is no frontier to explore, so the body ends
+  ;; where the search left it instead of walking out to the loaded edge away from the goal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [start {:x 9.5 :y 65 :z 0.5}
+              {:keys [out p]} (await (gt/go! (-> pit-world
+                                                 (update :blocks #(-> (merge % (box 12 60 -3 15 64 3 "stone")) (assoc "5,62,0" "gold_block")))
+                                                 (assoc :self {:pos start} :unloaded (keys (box 16 55 -3 40 70 3 "x"))))
+                                             {:pos [5 62 0] :range 3 :see true :ways #{:walk :clear-seal}}))]
+          (is (= :out-of-sight (:why @out)) (pr-str @out))
+          (is (< (first (gt/at p)) 11) (str "did not walk out to the loaded edge: " (gt/at p))))))))

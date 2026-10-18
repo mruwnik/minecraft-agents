@@ -307,7 +307,9 @@
 
       :else
       (let [_ (forget-known-land! c)
-            opts (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
+            seen-goal? (and (see-cell c) (not (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))))
+            opts (cond-> (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
+                   seen-goal? (assoc :explore false))
             stair-check (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d)))
             {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))
             _ (ctx/hold-still! c (when (= "searching" status) :searching))
