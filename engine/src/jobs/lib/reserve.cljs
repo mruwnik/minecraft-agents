@@ -3,7 +3,7 @@
   :by \"agent\"|job instance id :why :until ms|nil :not #{chooser..} the choosers it does not bind}. Writing an id replaces its entry. An entry counts while :until has
   not passed and its :by job still lives. It covers carried units only.
   (entries view) the live entries. (rows c chooser) [{:name :count :strength}] of the carried units reserved, strongest
-  first: the register plus the built-in rules (the bait foods, the 3-day food reserve, precious food, a chooser's
+  first: the register plus the built-in rules (the 3-day food reserve, precious food, a chooser's
   :choose/override :avoid names), each at strength 1. (held c chooser) {name count} of those units, the one answer to
   \"what may this chooser not use\". (price c name n) the extra cost of using n units of name: the units over the free
   surplus, lowest strength first, each (cost/reserve-cost value strength); ##Inf when one is strength 1.
@@ -61,7 +61,6 @@
   [c chooser inv carried]
   (let [whole (fn [names] (into {} (keep (fn [n] (when (carried n) [n (carried n)]))) names))]
     (merge-with max
-                (whole (foods/reserved (ctx/view c)))
                 (whole (filter foods/precious (map :name inv)))
                 (food/food-reserve inv)
                 (whole (:avoid (overrides c chooser))))))
@@ -83,6 +82,16 @@
                          (recur more (- left take-n) (conj out {:name n :count take-n :strength s})))))))
          (sort-by (juxt #(- (:strength %)) :name))
          vec)))
+
+(defn spared
+  "The set of names the sensed self carries that an unnamed meal leaves alone: those the live entries cover, none once
+  food is nearly starving. Needs only a view, for the triggers."
+  [view self]
+  (if (foods/nearly-starving? (.-food self))
+    #{}
+    (let [carried (into {} (map (fn [i] [(.-name i) 1])) (array-seq (.-inventory self)))]
+      (into #{} (mapcat #(keys (units carried %)))
+            (remove #(or (zero? (:strength % 1)) (contains? (:not %) :eat)) (entries view))))))
 
 (defn held
   "See the ns doc."

@@ -14,6 +14,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [jobs.lib.foods :as foods]
+            [jobs.lib.reserve :as reserve]
             [jobs.survival.eat :as eat]
             [jobs.survival.get-food.animals :as animals]
             [jobs.survival.get-food.cook :as cook]
@@ -257,8 +258,8 @@
   [c]
   (let [self (.self (:primitives c))]
     (not (or (wants-food? c)
-             (foods/top-up? (.-food self) (.-health self) (foods/carried-names self (foods/reserved (ctx/view c))))
-             (foods/eat-now? self (:args c) (foods/reserved (ctx/view c)))))))
+             (foods/top-up? (.-food self) (.-health self) (foods/carried-names self (reserve/spared (ctx/view c) self)))
+             (foods/eat-now? self (:args c) (reserve/spared (ctx/view c) self))))))
 
 (defn no-food-found
   "Something to try while hungry, else :no-food-found (:look until a look round from here found nothing)."

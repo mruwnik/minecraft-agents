@@ -274,7 +274,7 @@
       (fn ^:async t []
         (let [ate (fn ^:async ate* [reserve?]
                     (let [{:keys [eng p]} (held-starving [] {:food 5 :health 20} [{:name "carrot" :count 10}])]
-                      (when reserve? (mem/write! (:store eng) :bait-reserve {:foods ["carrot"]} {:cap 5 :ttl :forever}))
+                      (when reserve? (mem/write! (:store eng) :reserve {:id "bait-carrot" :item "carrot" :count :all :strength 0.8} {:cap 100 :ttl :forever}))
                       (await (core/tick! eng))
                       (count (filterv #(= "eat" (.-name %)) (.-calls (.-world p))))))]
           (is (zero? (await (ate true))) "reserved bait is not eaten at food 5")

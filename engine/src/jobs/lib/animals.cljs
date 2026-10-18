@@ -6,6 +6,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.pen :as pen]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.util :as u]))
 
 (defn in-box?
@@ -16,6 +17,8 @@
 
 (def breeding-food bait/breeding-food)
 
+(def bait-ms (* 5 60 1000))
+
 (defn food-carried
   "The first food of mob's list the body carries, else nil."
   [p mob]
@@ -23,9 +26,14 @@
     (first (filter have (get breeding-food mob)))))
 
 (defn reserve-bait!
-  "Tell the hunger reflexes the foods of mob are bait this job needs: an unnamed meal leaves them alone for 5 minutes (foods/reserved). Call it each round."
+  "Reserve the foods of mob as bait in the register (strength 0.8, 5 minutes, ended with this job): an unnamed meal leaves them alone until near starving. Call it each round."
   [c mob]
-  (ctx/remember! c :bait-reserve {:foods (get breeding-food mob)} {:cap 5 :ttl 300000}))
+  (let [until (+ (:now (ctx/view c)) bait-ms)]
+    (ctx/forget-where! c reserve/kind #(= (:id c) (:by %)))
+    (doseq [food (get breeding-food mob)]
+      (ctx/remember! c reserve/kind {:id (str (:id c) "-bait-" food) :item food :count :all :strength 0.8 :by (:id c)
+                                     :why "bait for the animal job" :until until}
+                     reserve/policy))))
 
 (defn herd
   "The JS entities named mob within radius of the body, nearest first, as a vector."

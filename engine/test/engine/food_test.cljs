@@ -8,6 +8,7 @@
             [engine.core :as core]
             [engine.events :as events]
             [jobs.lib.foods :as foods]
+            [jobs.lib.reserve :as reserve]
             [engine.memory :as mem]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
@@ -180,7 +181,7 @@
       (fn ^:async t []
         (let [fed (fn ^:async fed* [food reserve?]
                     (let [{:keys [eng]} (setup {:self {:food food} :inventory [{:name "carrot" :count 10}]})]
-                      (when reserve? (mem/write! (:store eng) :bait-reserve {:foods ["carrot"]} {:cap 5 :ttl 300000}))
+                      (when reserve? (mem/write! (:store eng) :reserve {:id "bait-carrot" :item "carrot" :count :all :strength 0.8} {:cap 100 :ttl :forever}))
                       (core/submit! eng '(jobs.survival.eat) {})
                       (await (core/tick! eng))
                       (count (entries eng :fed))))]
@@ -208,10 +209,13 @@
 
 (deftest reserved-bait-is-not-food-for-the-hungry-checks
   (let [self (fn [food] #js {:food food :health 20 :inventory #js [#js {:name "carrot" :count 10}]})
-        res #{"carrot"}]
-    (is (not (foods/carries-food? (self 5) res)))
-    (is (foods/carries-food? (self 5)))
-    (is (foods/carries-food? (self 1) res))))
+        spared (fn [food entry] (reserve/spared {:now 0 :data {:policies {:reserve reserve/policy} :entries {:reserve [{:t 0 :data entry}]}}} (self food)))
+        bait {:id "b" :item "carrot" :count :all :strength 0.8}]
+    (is (= #{"carrot"} (spared 5 bait)))
+    (is (= #{} (spared 1 bait)) "near starving: eaten")
+    (is (= #{} (spared 5 (assoc bait :not #{:eat}))))
+    (is (not (foods/carries-food? (self 5) (spared 5 bait))))
+    (is (foods/carries-food? (self 1) (spared 1 bait)))))
 
 (deftest eat-goes-on-until-fed-or-out-of-food
   (async done
@@ -485,12 +489,12 @@
           (is (= 1 (count (filter #(and (= :stopped (:kind %)) (= :not-food (:reason %))) @seen)))))))))
 
 (deftest eat-keeps-harmful-and-precious-food-last-whatever-their-points
-  (is (= "dried_kelp" (eat/best-food [{:name "spider_eye"} {:name "dried_kelp"}] true nil 20 20 #{})) "harmful last")
-  (is (= "dried_kelp" (eat/best-food [{:name "golden_apple"} {:name "dried_kelp"}] false nil 4 20 #{})) "precious after common"))
+  (is (= "dried_kelp" (eat/best-food [{:name "spider_eye"} {:name "dried_kelp"}] true nil 20 #{})) "harmful last")
+  (is (= "dried_kelp" (eat/best-food [{:name "golden_apple"} {:name "dried_kelp"}] false nil 4 #{})) "precious after common"))
 
 (deftest eat-chooses-by-saturation-when-points-tie
-  (is (= "cooked_mutton" (eat/best-food [{:name "cooked_chicken"} {:name "cooked_mutton"}] false nil 20 20 #{})))
-  (is (= "cooked_mutton" (eat/best-food [{:name "honey_bottle"} {:name "cooked_mutton"}] false nil 20 20 #{}))))
+  (is (= "cooked_mutton" (eat/best-food [{:name "cooked_chicken"} {:name "cooked_mutton"}] false nil 20 #{})))
+  (is (= "cooked_mutton" (eat/best-food [{:name "honey_bottle"} {:name "cooked_mutton"}] false nil 20 #{}))))
 
 (deftest golden-apples-are-rare-for-the-top-up-trigger
   (is (not (foods/top-up? 16 8 ["golden_apple"])))

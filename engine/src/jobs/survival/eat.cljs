@@ -7,6 +7,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.foods :as foods]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]))
 
@@ -57,11 +58,11 @@
 
 (defn best-food
   "The name of the carried item to eat, or nil: the common foods by most hunger points then most saturation, then
-  precious ones, then harmful ones (allow-bad). Ties by carrying order. Only item when given. Reserved bait (foods/reserved) is left when no item is named."
-  [inventory allow-bad item health food reserved]
+  precious ones, then harmful ones (allow-bad). Ties by carrying order. Only item when given. Reserved names (jobs.lib.reserve/spared) are left when no item is named."
+  [inventory allow-bad item health reserved]
   (->> inventory
        (map :name)
-       (remove #(and (nil? item) (foods/spared? food % reserved)))
+       (remove #(and (nil? item) (contains? reserved %)))
        (filter #(or (nil? item) (= item %)))
        (filter #(eaten? allow-bad item health %))
        (sort-by (fn [n] [(cond (contains? foods/harmful n) 2 (contains? foods/precious n) 1 :else 0)
@@ -90,7 +91,7 @@
   (let [{:keys [item allow-bad]} (:args c)
         self (.self (:primitives c))
         inventory (if item (u/inventory (:primitives c)) (spare-seeds (u/inventory (:primitives c)) (.-food self) (seeds-owed c)))]
-    (best-food inventory allow-bad item (.-health self) (.-food self) (foods/reserved (ctx/view c)))))
+    (best-food inventory allow-bad item (.-health self) (reserve/spared (ctx/view c) self))))
 
 (defn refusal
   "The cause when the :item is not eaten at all (not a food, or harmful without :allow-bad), else nil."

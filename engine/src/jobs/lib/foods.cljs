@@ -3,7 +3,6 @@
   and the three short judgement lists on top of it: harmful, precious and named-only foods. The data names
   mob and fish buckets as foods (they are not eaten); those are left out."
   (:require [engine.args :as a]
-            [engine.memory :as mem]
             [engine.settings :as settings]
             ["minecraft-data" :as minecraft-data]
             [clojure.string :as str]
@@ -12,7 +11,7 @@
 
 (a/defargs settings
   {::starving-rest-ms {:default 60000 :doc "The rest after a fruitless food search while starving (food 0, or hurt and hungry), for get-food's ask cooldown and the hungry trigger." :spec (a/num-in 0 nil)}
-   ::reserve-eat-below {:default 3 :doc "At this much food or less bait reserved by a running animal job is eaten as well." :spec (a/int-in 0 20)}
+   ::reserve-eat-below {:default 3 :doc "At this much food or less reserved items are eaten as well." :spec (a/int-in 0 20)}
    ::low-health {:default 10 :doc "Below this health (of 20) precious food is eaten unnamed." :spec (a/int-in 0 nil)}
    ::fragile-health {:default 6 :doc "At or below this health a body with no food carried walks out for food only on a calm day (jobs.lib.dawn/calm?) and never past a known hostile that would likely kill it (the hungry trigger, get-food)." :spec (a/num-in 0 20)}})
 
@@ -106,28 +105,18 @@
   (boolean (and (< health 20) (< food top-up-food)
                 (some #(and (edible? %) (not (rare-food %))) carried-names))))
 
-(defn reserved
-  "The item names animal jobs have reserved as bait lately (jobs.lib.animals/reserve-bait!), from a memory view."
-  [view]
-  (into #{} (mapcat :foods) (map :data (mem/entries view :bait-reserve))))
-
 (defn nearly-starving?
-  "Whether food is at or below ::reserve-eat-below, where meals no longer spare reserved bait or seeds."
+  "Whether food is at or below ::reserve-eat-below, where meals no longer spare reserved items or seeds."
   [food]
   (<= food (settings/get settings ::reserve-eat-below)))
 
-(defn spared?
-  "Whether an unnamed meal leaves name alone: it is in reserved and food is above ::reserve-eat-below."
-  [food name reserved]
-  (and (contains? reserved name) (not (nearly-starving? food))))
-
 (defn carried-names
-  "Names of the carried items an unnamed meal may eat: not the reserved bait (names), unless nearly starving."
+  "Names of the carried items an unnamed meal may eat: not the reserved names (jobs.lib.reserve/spared)."
   ([self] (carried-names self #{}))
   ([self reserved]
    (->> (array-seq (.-inventory self))
         (map #(.-name %))
-        (remove #(spared? (.-food self) % reserved)))))
+        (remove reserved))))
 
 (defn eaten-unnamed?
   "Whether a meal that names no item would eat item at health: food, not harmful, not named-only, and precious only

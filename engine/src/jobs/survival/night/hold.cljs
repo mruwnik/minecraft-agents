@@ -4,6 +4,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.foods :as foods]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.survival.eat :as eat]
             [jobs.survival.get-food.cook :as cook]))
@@ -45,7 +46,7 @@
         self (.self p)]
     (and (not (sh-sense/sleeping? p))
          (foods/starving? self {})
-         (not (foods/carries-food? self (foods/reserved (ctx/view c))))
+         (not (foods/carries-food? self (reserve/spared (ctx/view c) self)))
          (zero? (ctx/count-in c :hungry (foods/starving-rest-ms)))
          (not (danger-q/danger-near? p (danger-q/hostile-radius) (danger-q/ranged-radius))))))
 

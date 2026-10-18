@@ -6,6 +6,7 @@
             [engine.settings :as settings]
             [jobs.lib.dawn :as dawn]
             [jobs.lib.foods :as foods]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.shelter.sense :as sh-sense]
             [engine.memory :as mem]))
 
@@ -49,7 +50,7 @@
         learned (:t (mem/latest view :food-source))]
     (boolean (and gave-up
                   (< (- (:now view) gave-up) (* 1000 (rest-s self args)))
-                  (not (foods/carries-food? self (foods/reserved view)))
+                  (not (foods/carries-food? self (reserve/spared view self)))
                   (< (wheat-carried self) (bake-wheat))
                   (not (and learned (> learned gave-up)))))))
 
@@ -65,7 +66,7 @@
   searching again every cooldown. The rest ends when food is carried, wheat to bake is, or a food source is learned."
   [world memory args]
   (let [self (.self world)
-        reserved (foods/reserved memory)
+        reserved (reserve/spared memory self)
         urgent? (or (foods/eat-now? self args reserved) (<= (.-food self) (settings/get settings ::urgent-food)))]
     (and (not (body/recovery-pending? memory :hungry))
          (or (foods/hungry? (.-food self) (.-health self) args)

@@ -87,7 +87,7 @@
    :body {:inventory [["carrot" 13]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]]
-   :memory [{:kind :bait-reserve :data {:foods ["carrot" "potato" "beetroot"]} :policy {:cap 5 :ttl :forever}}]
+   :memory [{:kind :reserve :data {:id "wt-bait" :item "carrot" :count :all :strength 0.8} :policy {:cap 100 :ttl :forever}}]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
             {:event {:source :reflex :kind :ended :context {:reflex-id :hungry}} :within-s 70}]
    :after [[:item "carrot" 13]]}

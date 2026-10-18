@@ -13,6 +13,7 @@
             [jobs.lib.need :as need]
             [jobs.lib.look :as look]
             [jobs.lib.foods :as foods]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.near :as near]
             [jobs.lib.near :as near]
             [jobs.lib.tool-kind :as kind]
@@ -41,7 +42,7 @@
     (boolean (and gave-up
                   (< (- (:now view) gave-up) (* 1000 (settings/get food-settings ::gave-up-s)))
                   (foods/hungry? (.-food self) (.-health self) {})
-                  (not (foods/carries-food? self (foods/reserved view)))))))
+                  (not (foods/carries-food? self (reserve/spared view self)))))))
 
 (defn spare-fraction [] (settings/get spare-settings ::spare-fraction))
 

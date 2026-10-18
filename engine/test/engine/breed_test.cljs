@@ -76,6 +76,17 @@
                               [[{:name "wheat" :count 1}] "zombie" nil]]]
     (is (= expected (animals/food-carried (tu/fake {:inventory inv}) mob)) (str mob inv))))
 
+(deftest reserve-bait-writes-one-register-entry-per-food-and-replaces-them
+  (let [kept (atom [])
+        c {:id "j1" :view (constantly {:now 1000})
+           :remember (fn [kind data _] (swap! kept conj [kind data]))
+           :forget (fn [kind pred] (is (= :reserve kind)) (is (pred {:by "j1"})) (is (not (pred {:by "j2"}))))}]
+    (animals/reserve-bait! c "pig")
+    (is (= [[:reserve {:id "j1-bait-carrot" :item "carrot" :count :all :strength 0.8 :by "j1"
+                       :why "bait for the animal job" :until (+ 1000 animals/bait-ms)}]]
+           (take 1 (filter #(= "carrot" (:item (second %))) @kept))))
+    (is (= (count (animals/breeding-food "pig")) (count @kept)))))
+
 (deftest herd-adults-and-babies
   (let [p (tu/fake {:entities [(cow 1 5) (cow 2 2) (cow 3 3 {:baby true}) (cow 4 40) (ent 5 "pig" 1)]})
         ids (fn [es] (mapv #(.-id %) es))]
