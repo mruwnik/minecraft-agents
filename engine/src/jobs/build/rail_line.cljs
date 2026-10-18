@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [engine.contract :as contract]
             [jobs.lib.check-cache :as check-cache]
+            [jobs.lib.child :as child]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.near :as near]
@@ -330,7 +331,7 @@
         n (or (:settled (ctx/mem c)) 0)]
     (when (and (seq breaks) (every? #(#{:unlit :lit-brake} (:why %)) breaks) (< n (settle-reads)))
       (ctx/update-mem! c assoc :settled (inc n))
-      (await (ctx/act c :wait #js {:ms 250}))
+      (await (child/pause! c 0.25 :power-spreading))
       :continue)))
 
 (defn finish!
