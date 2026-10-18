@@ -35,7 +35,7 @@
        "A job case (no :register, no :wait-full true, only :event expectations pending) ends :idle-grace-s (default 3) s after every job it submitted has ended, failed or parked (\"no job active: ...\", :ended-early-s and :idle-grace-s in the result).\n"
        "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
-       "such a case is skipped. A case that depends on the time of day (with --allow-time, every case) holds a time lock shared by phase (day cases together,\n"
+       "such a case is skipped, and a case with no :time still gets day (logged to a default file in the temp dir). A case that depends on the time of day (with --allow-time, every case) holds a time lock shared by phase (day cases together,\n"
        "night cases together; the other phase waits; the first holder sets the time) for its whole run; a manual `time set` takes it too: node tools/time-set.mjs <ticks|day|noon|night|midnight>. A failed case whose day time jumped meanwhile (a foreign `time set`) is INCONCLUSIVE. "
        "Exit code 0 when every run passed, 1 when one failed, 2 on a usage or setup error."))
 
@@ -1621,14 +1621,25 @@
         (assoc r :trace (trace/write! (:trace-dir opts) (:id r) (:run r) attempt doc)))
       (catch :default e (log! "world-test: trace not written: " (.-message e)) r))))
 
+(def default-time-log (path/join (os/tmpdir) "mc-world-test-time.log"))
+
+(defn day-opts
+  "opts for a case with no :time or :time :day (no :time-set, no weather) in a run that may not set the time: it may set day, so
+  a one-off run does not depend on the clock of the shared world. Other cases keep opts."
+  [opts rc]
+  (if (or (:allow-time opts) (not (contains? #{nil :day} (:time rc))) (not (contains? #{nil :day} (lease/time-phase rc))))
+    opts
+    (assoc opts :allow-time true :time-log (or (:time-log opts) default-time-log))))
+
 (defn run-case!
   "One run of case c on plot i (leased by the caller); stop! (a thunk to a promise) stops the previous body before the
   time lock is waited for, start! starts or keeps the body once the lock is held. Resolves to a result map. register: the entries to put on the body once it stands in
   the built plot (the body was just started with none), nil when it keeps the register it has."
-  [opts c i run register stop! start!]
+  [opts0 c i run register stop! start!]
   (let [grid (f/case-grid c)
         origin (f/plot-origin grid i)
-        rc (-> (f/resolve-tags c origin) (f/resolve-expect-refs (plan-prefix opts)))
+        rc (-> (f/resolve-tags c origin) (f/resolve-expect-refs (plan-prefix opts0)))
+        opts (day-opts opts0 rc)
         started (js/Date.now)
         plan-files (atom [])
         t-start (atom nil)

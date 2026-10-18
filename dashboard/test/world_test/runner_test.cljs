@@ -425,6 +425,16 @@
           (r/lock-phase {} {:time :night-exclusive})
           (r/lock-phase {} {:time :any :act [[:time-set 1000]]})])))
 
+(deftest a-case-with-no-time-may-set-day-even-in-a-run-without-allow-time
+  (let [no-time (r/day-opts {} {:act []})]
+    (is (true? (:allow-time no-time)))
+    (is (= :day (r/lock-phase no-time {:act []})))
+    (is (some? (:time-log no-time))))
+  (is (= {:time-log "f"} (select-keys (r/day-opts {:time-log "f"} {:act []}) [:time-log])))
+  (is (true? (:allow-time (r/day-opts {} {:time :day}))))
+  (doseq [rc [{:time :any} {:time :night} {:time :night-exclusive} {:act [[:time-set 14000]]} {:weather :rain}]]
+    (is (nil? (:allow-time (r/day-opts {} rc))) (pr-str rc))))
+
 (defn share-env [files read-phase told]
   {:ops {:guard (fn [f] (f))
          :entries (fn [] @files)
