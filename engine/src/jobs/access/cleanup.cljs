@@ -239,10 +239,10 @@
 ;; ------------------------------------------------------------------ steps
 
 (defn count-fail
-  "m with one more failure on cell; held with why at the give-up-th."
-  [m cell why give-up]
+  "m with one more failure on cell; held with why at the limit-th."
+  [m cell why limit]
   (let [n (inc (get-in m [:fails cell] 0))]
-    (if (>= n give-up)
+    (if (>= n limit)
       (-> m (update :fails dissoc cell) (assoc-in [:held cell] why))
       (assoc-in m [:fails cell] n))))
 
