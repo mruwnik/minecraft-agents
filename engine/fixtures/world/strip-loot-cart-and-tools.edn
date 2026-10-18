@@ -3,7 +3,7 @@
 ;; Cart cases: a chest_minecart with 3 iron ingots and 2 bread at [19.5 0 16.5], the body at [16.5 0 16.5] facing east (yaw 270).
 ;; Unverified live (card notes): openContainer on a chest_minecart, and that the broken cart vanishes from sight.
 ;; Should-succeed: the loot and the cart item are in the bag, the cart is gone; shears cut a cobweb to a cobweb item; a sword gets
-;; string; the field base is built. Should-fail: an unknown cart id stops; a cart in another owner's zone stops :refused and keeps its loot.
+;; string; the field base is built. Should-fail: a hostile near the cart makes the job wait (:hostile-near), cart untouched; an unknown cart id stops; a cart in another owner's zone stops :refused and keeps its loot.
 {:defaults
  {:tags [:strip :loot-cart :tools :build] :time :any
   :plot {:height 8 :floor "grass_block"}
@@ -24,6 +24,16 @@
    :expect [{:event {:source :job :kind :waiting :data {:reason :gone}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20}]
    :after [[:item "iron_ingot" 0] [:entities "type=chest_minecart,tag=wt" [[10 -1 10] [26 6 22]] 1]]}
+  {:name "cart-with-a-hostile-near-waits-and-keeps-its-loot"
+   :time :day
+   :act [[:summon "chest_minecart" [19.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"]
+         [:summon "zombie" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:until-seen {:entity "chest_minecart"} 10]
+         [:job (jobs.strip.loot-cart {})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :hostile-near}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20}]
+   :after [[:item "iron_ingot" 0] [:entities "type=chest_minecart,tag=wt" [[10 -1 10] [26 6 22]] 1]]
+   :limit-s 70}
   {:name "cart-in-another-owners-zone-is-refused"
    :zones [{:name "z" :min [18 -1 15] :max [20 2 17] :owner "SomeoneElse"}]
    :act [[:summon "chest_minecart" [19.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"]
