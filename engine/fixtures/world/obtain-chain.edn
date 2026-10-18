@@ -131,4 +131,12 @@
    :act [[:job (jobs.gather.mine {:block "stone" :count 2 :radius 10})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}]
    :after [[:block [4 0 28] "iron_ore"] [:item "raw_iron" 0] [:body-near [22 0 17] 14]]
-   :limit-s 120}]}
+   :limit-s 120}
+  ;; card 2c993abb: a chest 14 blocks off (contents unknown, in sight) is not walked to when the carried planks and sticks make the pick
+  {:name "carried-materials-craft-before-a-far-chest"
+   :blocks [[:set [30 0 16] "chest[facing=west]{Items:[{Slot:0b,id:\"minecraft:wooden_pickaxe\",count:1}]}"]]
+   :body {:inventory [["oak_planks" 8] ["stick" 4]]}
+   :act [[:job (jobs.items.obtain {:item "wooden_pickaxe" :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :obtain.chest} :for-s 60 :until {:source :job :kind :completed}}]
+   :after [[:item "wooden_pickaxe" 1] [:body-near [16 0 16] 6]]}]}
