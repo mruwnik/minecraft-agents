@@ -126,23 +126,43 @@
 
 (defn cell-of [v] (if (map? v) v (zipmap [:x :y :z] v)))
 
-(defn seal-cell
-  "The entry's own seal cell (memory :seals, else the breach cell :at) that is a solid block now, can be dug (zones, hazards beyond lava and water
-  beside it taken as known) and is in reach but not beside the body, so lava let out cannot reach the stand at once; nil when none."
-  [c entry]
+(defn seal-cells
+  "The entry's own seal cells (memory :seals, else the breach cell :at) that are solid blocks now, can be dug (zones, hazards beyond lava and water
+  beside it taken as known) and lie between lo and 4.5 blocks from the body."
+  [c entry lo]
   (let [p (:primitives c)
         here (u/self-pos c)
         in (b/rules-in c)]
     (->> (or (seq (:seals entry)) [(:at entry)])
          (keep #(some-> % cell-of))
          (filter #(and (solid? p %)
-                       (<= 2 (u/dist here %) 4.5)
-                       (= :ok (access/judge (access/may-dig? in %) [:lava-adjacent :fluid-adjacent]))))
-         first)))
+                       (<= lo (u/dist here %) 4.5)
+                       (= :ok (access/judge (access/may-dig? in %) [:lava-adjacent :fluid-adjacent])))))))
+
+(defn seal-cell
+  "The entry's seal cell in reach but not beside the body, so lava let out cannot reach the stand at once; nil when none."
+  [c entry]
+  (first (seal-cells c entry 2)))
+
+(defn ^:async back-off!
+  "The walk can end against the seal: step back to 4 blocks from it, along the line from the seal to the body. True when the body stands there."
+  [c entry]
+  (when-let [seal (first (seal-cells c entry 0))]
+    (let [here (u/self-pos c)
+          cx (+ (:x seal) 0.5)
+          cz (+ (:z seal) 0.5)
+          dx (- (:x here) cx)
+          dz (- (:z here) cz)
+          n (max 1e-6 (Math/hypot dx dz))
+          goal {:x (Math/floor (+ cx (* 4 (/ dx n)))) :y (:y seal) :z (Math/floor (+ cz (* 4 (/ dz n))))}]
+      (= :there (await (walk! c goal 1))))))
 
 (defn ^:async open-seal!
-  "Dig the seal of a breach entry the body stands near, and look through the hole, so the lava behind it is seen. Nothing when no seal qualifies."
+  "Dig the seal of a breach entry the body stands near (stepping back first when it stands against it), and look through the hole, so the lava
+  behind it is seen. Nothing when no seal qualifies."
   [c entry]
+  (when-not (seal-cell c entry)
+    (await (back-off! c entry)))
   (when-let [seal (seal-cell c entry)]
     (when (= "dug" (.-status (await (tidy/dig! c seal))))
       (await (dig-look/look-at! c (vec (first (or (seq (:lava entry)) (:cells entry)))))))))
