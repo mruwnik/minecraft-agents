@@ -1,0 +1,25 @@
+;; Reserve register step 6: with no home bed placed the register's built-in rule keeps one carried bed; once a :bed place is known it is put away like any item.
+;; Should-succeed: deposit with no :bed place leaves the one bed carried and stores the dirt; with a :bed place it stores the bed too.
+;; Should-fail: a bed put in the chest while no home bed exists.
+{:defaults
+ {:tags [:storage :reserve :jobs]
+  :time :any
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 80}
+ :cases
+ [{:name "deposit-keeps-the-carried-bed-with-no-home-bed"
+   :blocks [[:set [20 0 16] "chest[facing=west]"]]
+   :memory [{:kind :chest :data {:pos #xyz [20 0 16]} :policy {:cap 1 :ttl :forever}}]
+   :body {:inventory [["white_bed" 1] ["dirt" 5]]}
+   :act [[:job (jobs.storage.deposit {})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.storage.deposit"}} :within-s 60 :of-job true}]
+   :after [[:item "white_bed" 1] [:item "dirt" 0]]}
+  {:name "deposit-stores-the-carried-bed-once-a-home-bed-exists"
+   :blocks [[:set [20 0 16] "chest[facing=west]"]]
+   :memory [{:kind :chest :data {:pos #xyz [20 0 16]} :policy {:cap 1 :ttl :forever}}
+            {:kind :bed :data {:pos #xyz [10 0 10]} :policy {:cap 1 :ttl :forever}}]
+   :body {:inventory [["white_bed" 1] ["dirt" 5]]}
+   :act [[:job (jobs.storage.deposit {})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.storage.deposit"}} :within-s 60 :of-job true}]
+   :after [[:item "white_bed" 0] [:item "dirt" 0]]}]}

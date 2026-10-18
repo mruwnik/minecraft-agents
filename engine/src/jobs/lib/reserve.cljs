@@ -3,7 +3,7 @@
   :by \"agent\"|job instance id :why :until ms|nil :not #{chooser..} the choosers it does not bind}. Writing an id replaces its entry. An entry counts while :until has
   not passed and its :by job still lives. It covers carried units only.
   (entries view) the live entries. (rows c chooser) [{:name :count :strength}] of the carried units reserved, strongest
-  first: the register plus the built-in rules (the 3-day food reserve, precious food, a chooser's
+  first: the register plus the built-in rules (the 3-day food reserve, precious food, one carried bed while no home bed is placed, a chooser's
   :choose/override :avoid names), each at strength 1. (held c chooser) {name count} of those units, the one answer to
   \"what may this chooser not use\". (price c name n) the extra cost of using n units of name: the units over the free
   surplus, lowest strength first, each (cost/reserve-cost value strength); ##Inf when one is strength 1.
@@ -59,8 +59,10 @@
 (defn- builtin
   "{name n} the built-in rules keep off limits for chooser."
   [c chooser inv carried]
-  (let [whole (fn [names] (into {} (keep (fn [n] (when (carried n) [n (carried n)]))) names))]
+  (let [whole (fn [names] (into {} (keep (fn [n] (when (carried n) [n (carried n)]))) names))
+        bed (first (sort (filter (:bed tags) (keys carried))))]
     (merge-with max
+                (when (and bed (not (mem/place (ctx/view c) :bed))) {bed 1})
                 (whole (filter foods/precious (map :name inv)))
                 (food/food-reserve inv)
                 (whole (:avoid (overrides c chooser))))))

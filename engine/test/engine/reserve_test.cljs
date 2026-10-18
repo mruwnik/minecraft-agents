@@ -10,12 +10,13 @@
 
 (defn body
   "A ctx holding items, with register entries (maps) at time 1000 and live job instances (ids)."
-  [items entries & {:keys [jobs overrides]}]
+  [items entries & {:keys [jobs overrides home-bed]}]
   (let [add (fn [d kind data policy] (mem/add-entry d kind {:t 0 :data data} policy))
         data (as-> mem/empty-data d
                (reduce #(add %1 :reserve %2 reserve/policy) d entries)
                (reduce #(add %1 (mem/job-kind %2) {} mem/job-policy) d jobs)
-               (reduce #(add %1 :choose/override %2 {:cap 20 :ttl :forever}) d overrides))]
+               (reduce #(add %1 :choose/override %2 {:cap 20 :ttl :forever}) d overrides)
+               (cond-> d home-bed (add :bed {:pos home-bed} mem/place-policy)))]
     {:primitives (tu/fake {:inventory items}) :view (fn [] {:data data :now 1000})}))
 
 (deftest reserve-cost-is-value-times-odds
@@ -52,6 +53,11 @@
   (let [c (body [(item "golden_apple" 2) (item "stone_pickaxe" 1) (item "bread" 4)]
                 [])]
     (is (= {"golden_apple" 2 "bread" 4} (reserve/held c :tools)))))
+
+(deftest one-carried-bed-is-held-until-a-home-bed-is-placed
+  (let [items [(item "red_bed" 2) (item "white_bed" 1)]]
+    (is (= {"red_bed" 1} (reserve/held (body items []) :deposit)))
+    (is (= {} (reserve/held (body items [] :home-bed [1 0 1]) :deposit)))))
 
 (deftest rows-are-strongest-first-and-capped-by-what-is-carried
   (let [c (body [(item "diamond" 4)] [{:item "diamond" :count 3 :strength 0.5} {:item "diamond" :count 3 :strength 0.8}])]
