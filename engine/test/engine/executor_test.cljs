@@ -215,6 +215,12 @@
     (is (= 1 (:i (:state r))))
     (is (= 0 (:since (:state r))))))
 
+(deftest tick-walks-on-from-just-short-of-a-stand-point-in-the-next-cell
+  ;; a gate step's stand point lies 1/16 inside its cell: a body just short of the cell is within :still-xz of it and must still walk in
+  (let [steps (assoc straight 4 (step 4 64 3 :walk {:px 4.0625}))
+        r (ex/tick p (state-at steps 4) (pose 3.994 64 3.5))]
+    (is (true? (:forward (controls-of r))))))
+
 ;; arrival
 
 (deftest arrived-needs-distance-and-ground

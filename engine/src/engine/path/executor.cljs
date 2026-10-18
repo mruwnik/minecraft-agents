@@ -46,7 +46,7 @@
    :climb-settle 0.1       ; on a vine or ladder more than this above a non-climb step's stand-y: no forward (see controls-for)
    :climb-over 0.2         ; keep climbing until feet are this far above a climb step's stand-y
    :crossing-xz 0.3        ; steer at a crossing point until this close to it
-   :still-xz 0.1           ; closer than this to the aim: no forward, keep the yaw
+   :still-xz 0.1           ; closer than this to the aim, and in the step's cell: no forward, keep the yaw
    :gap-jump {1 {:from 0.2 :sprint false}  ; by gap width: jump once the feet are within :from of the takeoff
               2 {:from 0.4 :sprint true}   ; edge; a walking jump falls short over 2 cells or more: they need a sprint for the run and the flight
               3 {:from 0.1 :sprint true}}
@@ -555,7 +555,7 @@
   (let [step (nth steps i)
         [ax az :as aim] (aim-point policy step pose)
         dist (dist-xz x z ax az)
-        moving? (>= dist (:still-xz policy))
+        moving? (or (>= dist (:still-xz policy)) (not (in-cell? step pose)))
         yaw' (if moving? (yaw-to x z ax az) (or yaw 0))
         prev (when (pos? i) (nth steps (dec i)))
         forward? (and moving?
