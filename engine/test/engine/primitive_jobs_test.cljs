@@ -9,6 +9,7 @@
             [engine.expr :as expr]
             [engine.fake :as fake]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.primitive :as primitive]
             [jobs.primitive :as primitive-job]))
@@ -60,6 +61,15 @@
     (let [q (quote-of :dig p {:pos {:x 0 :y 63 :z 0}})]
       (is (= 9 (get-in q [:uses :job-time 2])) "3 s of digging, the dig margin 5 and the drop wait 1")
       (is (= [0 1 1] (get-in q [:uses :wear "iron_pickaxe"]))))))
+
+(deftest a-craft-is-quoted-4-s-plus-6-per-item-up-to-the-craft-max-setting
+  (let [p (tu/fake {})
+        job-time #(get-in (quote-of :craft p {:item "stick" :count %}) [:uses :job-time 2])]
+    (is (= 10 (job-time 1)))
+    (is (= 60 (job-time 20)) "no setting loaded: the default bound")
+    (settings/with-settings {:prim/craft-max-s 8}
+      #(do (swap! settings/state assoc :specs (settings/js-specs #js {"prim/craft-max-s" #js {:default 60 :spec #js ["num-in" 0 nil] :doc "d"}}))
+           (is (= 8 (job-time 20)) "the setting bounds the quote")))))
 
 (deftest a-wait-is-quoted-its-time-and-offline-its-reconnect-too
   (let [p (tu/fake {})]

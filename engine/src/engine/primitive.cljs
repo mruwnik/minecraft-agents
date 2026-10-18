@@ -119,7 +119,7 @@
    :toss (entry [:item :count :slot :watchS] [:item] #{"tossed"} (fails #{"no-item"} #{})
                 (fn [p {:keys [item count watchS]}]
                   (use-items (timed (+ 2 (min (or watchS 0) 5))) item (or count (carried p item)))))
-   :craft (entry [:item :count :table] [:item] #{"crafted"} (fails #{"no-item" "full"} #{"cannot" "partial" "unreachable" "out-of-reach"}) (fn [_ {:keys [count]}] (timed (min 60 (+ 4 (* 6 (or count 1)))))))
+   :craft (entry [:item :count :table] [:item] #{"crafted"} (fails #{"no-item" "full"} #{"cannot" "partial" "unreachable" "out-of-reach"}) (fn [_ {:keys [count]}] (timed (min (js-setting "prim/craft-max-s" 60) (+ 4 (* 6 (or count 1)))))))
    :furnace (fixed [:pos :op :input :fuel :output] [:pos] #{"ok"} (fails #{"missing" "no-item" "busy"} #{"cannot" "rejected" "unreachable"}) 5)
    :enchant (fixed [:pos :op :item :choice :levelCost] [:pos] #{"ok" "enchanted"} (fails #{"missing" "no-item" "no-lapis" "no-levels" "full"} #{"cannot" "unreachable"}) 15)
    :chat (fixed [:message :to] [] #{"sent"} (fails #{"gone"} #{}) 3)
