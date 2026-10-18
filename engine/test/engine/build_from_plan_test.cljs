@@ -627,6 +627,21 @@
             (is (not (reach/enclosed? p)))
             (is (not (and (<= 1 (js/Math.floor (.-x pos)) 4) (<= 1 (js/Math.floor (.-z pos)) 4))))))))))
 
+(deftest a-box-built-in-a-pit-gets-its-interior-roof-before-the-last-wall-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "box" :parts [{:id "walls" :outline [[10 64 10] [13 65 13]] :want "dirt"}
+                                      {:id "roof" :box [[10 66 10] [13 66 13]] :want "dirt"}]}
+              pit (into {} (for [x (range 4 20) z (range 4 20) y (range 63 69)
+                                 :when (or (= y 63) (not (and (<= 8 x 15) (<= 8 z 15))))]
+                             [(h/cell-key x y z) "stone"]))
+              {:keys [eng]} (start {:blocks pit :inventory [{:name "dirt" :count 64}]
+                                    :self {:pos {:x 11.5 :y 64 :z 11.5}}}
+                                   {"box" plan} [])
+              result (await (child-outcome eng job {:plan "box"} 600))]
+          (is (= 40 (:placed result))))))))
+
 (deftest a-solid-block-in-a-clear-cell-is-dug-and-listed-wrong-only-when-it-stays
   (async done
     (tu/run-async done

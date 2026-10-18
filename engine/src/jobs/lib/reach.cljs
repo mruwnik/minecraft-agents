@@ -425,14 +425,16 @@
 
 (defn walls-in?
   "Whether a walker on the floor under pos [x y z] (within four cells) can walk to fewer than 64 cells with cell solid,
-  and to more without (a small room only: the floods stay cheap)."
+  and to more without, shut in or not (a small room only: the floods stay cheap)."
   [p [x y z] cell]
   (let [base (lookup p body-kind-of)
         floor-y (first (filter #(and (passable? base x % z) (passable? base x (inc %) z) (keyword-identical? :solid (base x (dec %) z)))
                                (range (dec y) (- y 5) -1)))
         filled (fn [x y z] (if (= [x y z] (vec cell)) :solid (base x y z)))
-        closed? (fn [kind-at] (some? (flood-cells (fn [x y z] (forward kind-at x y z)) [x floor-y z] 64)))]
-    (boolean (and floor-y (not= [x floor-y z] (vec cell)) (closed? filled) (not (closed? base))))))
+        visit (fn [kind-at] (flood-visit (fn [x y z] (forward kind-at x y z)) [x floor-y z] 64))]
+    (boolean (and floor-y (not= [x floor-y z] (vec cell))
+                  (let [with (visit filled)]
+                    (and (:closed? with) (< (.-length (:cells with)) (.-length (:cells (visit base))))))))))
 
 (defn seen-free? [p kind-at x y z]
   (and (some? (u/seen-block p {:x x :y y :z z})) (passable? kind-at x y z)))
