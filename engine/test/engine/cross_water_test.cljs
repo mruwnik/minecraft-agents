@@ -182,7 +182,7 @@
       (fn ^:async t []
         (let [{:keys [res]} (await (run (dissoc world :inventory) {:pos [7 64 0]}))]
           (is (= :no-boat (:reason res)) (pr-str res))
-          (is (= :need (contract/cause-key (:because (:ending res)))) (pr-str res)))))))
+          (is (= :need (contract/cause-key (:because (:because (:ending res))))) (pr-str res)))))))
 
 (deftest a-boat-in-a-chest-is-fetched-then-the-crossing-goes-on
   (async done

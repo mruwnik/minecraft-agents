@@ -14,36 +14,29 @@
             [jobs.lib.vehicle :as vehicle]))
 
 (def doc
-  "Put a boat on the water and get in it (:action :launch, the default), or take one back (:action :recover).
+  "Put a boat on the water and get in it.
 
-  Launch: the boat item is :item, else the first carried boat or raft; none carried is fetched (jobs.blocks.place :fetch, oak_boat).
+  The boat item is :item, else the first carried boat or raft; none carried is fetched (jobs.blocks.place :fetch, oak_boat).
   The water cell is :pos, else the nearest water in sight (:radius) that has air above it and room round it for the boat (no bank block within a cell).
   jobs.blocks.place puts the boat down (it walks into reach); then, with :board, jobs.movement.mount boards it. The placed boat is
-  remembered, so a restart boards it rather than placing another.
+  remembered, so a restart boards it rather than placing another; a remembered boat seen gone is replaced by a new one.
   Impossible: :bad-args (:item is no boat, :pos names no cell). Conditions at the start: :aboard (already on a vehicle), :no-water (none in sight),
   :no-room (water in sight, none with room for a boat); the engine looks round once first. A listed call waits on them.
-  Ends done (data {:id :boat name :pos :boarded bool}), info boat.launched, or
-  condition-failed: the place's own (:need, :not-allowed, :no-support, :occupied ...; its ending, nothing-possible :unreachable too, is the :because), or
-  nothing-possible: :no-boat (the placed boat is not in sight and its place was not seen), :board-failed (mount's ending is the :because).
-
-  Recover: the boat is :id, else the nearest boat or raft in sight. When aboard, it gets off first (jobs.movement.leave-vehicle),
-  walks into reach (jobs.movement.go-to), hits it until it breaks and collects the dropped item (jobs.items.collect-drops).
-  Condition at the start: :no-boat (none in sight). Ends done (data {:id :item name :collected n}), info boat.recovered, or
-  condition-failed :gone (the boat is no longer in sight), or
-  nothing-possible: :leave-failed, :unreachable (the walk failed twice), :not-collected (the item was not picked up), or
-  limit-reached :job-time (the engine ends it when the call's :spend :job-time ran out; data {:id :hits} of a recovery, {:placed} of a launch).
+  Done once the boat is down and, with :board, the body is aboard it (data {:id :boat name :pos :boarded bool}), info boat.launched, or
+  condition-failed: :place-failed with the place's ending as the :because (its :need, :not-allowed, :no-support, :occupied ...) when that was a condition, else
+  nothing-possible :place-failed (the because says why, :unreachable too), or
+  nothing-possible: :no-boat (the placed boat is not in sight and its place was not seen), :board-failed (mount's ending is the :because), or
+  limit-reached :job-time (the engine ends it when the call's :spend :job-time ran out; data {:placed}).
 
   Never :continue except when a child waits on the world.")
 
 (a/defargs args
-  {:action {:doc ":launch or :recover" :spec #{:launch :recover} :default :launch}
-   :pos {:doc "launch: the water cell to put the boat on, [x y z] or {:x :y :z}; nil: the nearest suitable water in sight" :spec ::a/pos :default nil}
-   :item {:doc "launch: the boat item to place; nil: the first carried boat or raft" :spec a/item? :default nil}
-   :board {:doc "launch: get in once it is down" :spec boolean? :default true}
-   :id {:doc "recover: the entity id of the boat; nil: the nearest in sight" :spec (a/int-in 1 nil) :default nil}
-   :radius {:doc "how far to look for water or a boat" :spec (a/num-in 0 nil) :default 12}})
+  {:pos {:doc "the water cell to put the boat on, [x y z] or {:x :y :z}; nil: the nearest suitable water in sight" :spec ::a/pos :default nil}
+   :item {:doc "the boat item to place; nil: the first carried boat or raft" :spec a/item? :default nil}
+   :board {:doc "get in once it is down" :spec boolean? :default true}
+   :radius {:doc "how far to look for water" :spec (a/num-in 0 nil) :default 12}})
 
-(def target [:action :pos :id])
+(def target [:pos])
 
 (def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
 (def fit? ready/ok)
@@ -51,13 +44,11 @@
 (def defaults {:spend {:job-time ::job-time-s}})
 
 (a/defargs settings
-  {::job-time-s {:default 120 :doc "Seconds a launch or a recovery may take (a boat that does not break is hit until then)." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 120 :doc "Seconds a launch may take." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (def default-item "oak_boat")
-(def reach 3)
 (def launch-s "Seconds a launch takes without a walk, for the quote." 4)
-(def recover-s "Seconds a recovery takes without a walk, for the quote." 8)
 
 (defn boat-name? [n] (boolean (and (string? n) (re-find #"_(boat|raft)$" n))))
 
@@ -118,20 +109,17 @@
     (launch-pos c)
     (await (sense/decide! c ::water #(find-water c) {:verify-guesses true}))))
 
-(defn launching? [c] (= :launch (or (:action (:args c)) :launch)))
-
 (def bad-args
-  "Never :bad-args for a launch of an item that is no boat or onto a :pos that names no cell."
+  "Never :bad-args for an item that is no boat or onto a :pos that names no cell."
   (checks/args-fit "needs a boat :item and a cell :pos"
                    (fn [c] (let [{:keys [item pos]} (:args c)]
-                             (not (and (launching? c)
-                                       (or (and item (not (boat-name? item)))
-                                           (and (some? pos) (nil? (:pos (b/parse (:args c))))))))))))
+                             (not (or (and item (not (boat-name? item)))
+                                    (and (some? pos) (nil? (:pos (b/parse (:args c)))))))))))
 
 (defn aboard
-  "Later :aboard at the start of a launch while the body is on a vehicle."
+  "Later :aboard at the start while the body is on a vehicle."
   [c]
-  (if (and (launching? c) (vehicle/mounted? (:primitives c)))
+  (if (vehicle/mounted? (:primitives c))
     (contract/later :aboard "on a vehicle" :hint "get off the vehicle first")
     (contract/ok :on-foot "on foot")))
 
@@ -140,39 +128,32 @@
     {:reason r :hint (no-water-text r)}))
 
 (defn no-water
-  "At the start of a launch: later :no-water or :no-room while no cell has room for a boat; a look first while the body has not looked round."
+  "At the start: later :no-water or :no-room while no cell has room for a boat; a look first while the body has not looked round."
   [c]
-  (if (and (launching? c) (nil? (launch-pos c)))
+  (if (nil? (launch-pos c))
     (let [{:keys [reason hint]} (no-water-cause c)]
       (contract/look reason hint :hint hint))
     (contract/ok :water "room for a boat")))
 
-(defn pick-boat [c]
-  (let [id (:id (:args c))
-        boats (boats-in-sight c)]
-    (if id (first (filter #(= id (:id %)) boats)) (first boats))))
-
-(defn no-boat
-  "At the start of a recovery: later :no-boat while none is in sight."
-  [c]
-  (if (and (not (launching? c)) (nil? (pick-boat c)))
-    (contract/later :no-boat "no boat in sight" :hint "no boat in sight")
-    (contract/ok :boat "a boat in sight")))
-
-(def can-start? (cond/and bad-args aboard no-water no-boat))
+(def can-start? (cond/and bad-args aboard no-water))
 
 (defn done?
-  "A launch is done once its boat is down; a recovery's end is its event."
+  "Ok once the placed boat is in sight and, with :board, the body sits in it."
   [c]
-  (let [{:keys [placed hits]} (ctx/mem c)
-        placed (and (launching? c) (some? placed))]
-    (contract/later (if (launching? c) :launching :recovering) (if placed "the boat is down" "no boat down yet")
-                    :units :boats :done (if placed 1 0) :left (if placed 0 1)
-                    :result (if (launching? c) {:placed placed} {:id (:id (:args c)) :hits (or hits 0)}))))
+  (let [p (:primitives c)
+        {:keys [id pos]} (:placed (ctx/mem c))
+        boat (when id (first (filter #(= id (:id %)) (boats-in-sight c))))
+        ride (vehicle/vehicle-of (.self p))
+        aboard (and ride (= id (:id ride)))
+        boarded (boolean (and boat aboard))]
+    (if (and boat (or boarded (not (:board (:args c)))))
+      (contract/ok :launched "the boat is down" :units :boats :done 1 :left 0 :result {:id id :boat (:name boat) :pos pos :boarded boarded})
+      (contract/later :launching (if boat "the boat is down, not boarded" "no boat down yet")
+                      :units :boats :done (if boat 1 0) :left (if boat 0 1) :result {:placed (some? boat)}))))
 
 (defn quote-of [c]
   (let [most (or (get-in (ctx/frozen-call c) [:spend :job-time]) (time-s))
-        mean (min most (if (launching? c) launch-s recover-s))]
+        mean (min most launch-s)]
     {:uses {:job-time [(min 1 mean) mean most]}}))
 
 (defn placed-boat
@@ -214,7 +195,7 @@
       (let [e (await (ctx/call c :place 'jobs.blocks.place {:pos cell :item item :fetch true}))]
         (cond
           (= :continue e) :continue
-          (not= :done (:kind e)) (ctx/end c (:kind e) (:cause e) {:pos cell})
+          (not= :done (:kind e)) (ctx/end c (if (= :condition-failed (:kind e)) :condition-failed :nothing-possible) :place-failed {:pos cell})
           :else
           (let [boat (placed-boat c cell)]
             (cond
@@ -226,41 +207,5 @@
                     (do (ctx/emit! c :boat.launched :info {:id (:id boat) :boat (:name boat) :pos cell :text (str "put " (:name boat) " on the water")})
                         (ctx/end c :done nil {:id (:id boat) :boat (:name boat) :pos cell :boarded false})))))))))))
 
-(defn ^:async recover! [c]
-  (let [p (:primitives c)
-        id (:id (:args c))
-        aboard (when (vehicle/mounted? p) (await (ctx/call c :leave 'jobs.movement.leave-vehicle {})))]
-    (cond
-      (= :continue aboard) :continue
-      (and (some? aboard) (not= :done (:kind aboard))) (ctx/end c :nothing-possible :leave-failed {:id id})
-      :else
-      (loop [hits 0 failed 0]
-        (let [boat (pick-boat c)]
-          (cond
-            (nil? boat) (ctx/end c :condition-failed :gone {:id id})
-            (> (u/dist (u/self-pos c) (:pos boat)) reach)
-            (let [w (await (child/call-walk* c :walk {:pos (:pos boat) :range 2 :ways #{:walk :clear-seal}}))]
-              (cond
-                (= :continue w) :continue
-                (= :done (:kind w)) (recur hits failed)
-                (>= (inc failed) 2) (ctx/end c :nothing-possible :unreachable {:id (:id boat) :why (contract/cause-key w)})
-                :else (recur hits (inc failed))))
-            :else
-            (let [r (await (ctx/act c :attack #js {:id (:id boat)}))]
-              (if (= "killed" (.-status r))
-                (let [item (:name boat)
-                      k (await (ctx/call c :collect 'jobs.items.collect-drops
-                                         {:near (:pos boat) :radius 4 :items [item]}))
-                      n (:collected (:data k) 0)]
-                  (cond
-                    (= :continue k) :continue
-                    (zero? n) (ctx/end c :nothing-possible :not-collected {:id (:id boat) :item item})
-                    :else (do (ctx/emit! c :boat.recovered :info {:id (:id boat) :item item :collected n :text (str "took back " item)})
-                              (ctx/end c :done nil {:id (:id boat) :item item :collected n}))))
-                (do (ctx/update-mem! c assoc :hits (inc hits))
-                    (recur (inc hits) failed))))))))))
-
 (defn ^:async round [c]
-  (if (launching? c)
-    (await (launch! c))
-    (await (recover! c))))
+  (await (launch! c)))

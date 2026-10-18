@@ -23,7 +23,7 @@
                       ['jobs.movement.leave-vehicle {}]
                       ['jobs.movement.boat-drive {:pos [10 63 2]}]
                       ['jobs.movement.boat-launch {}]
-                      ['jobs.movement.boat-launch {:action :recover}]
+                      ['jobs.movement.boat-recover {}]
                       ['jobs.movement.boat-land {:recover true}]
                       ['jobs.movement.cross-water {:pos [7 64 0]}]]]
     (is (fn? (:can-start? (job sym))) (str sym " has can-start?"))
@@ -55,7 +55,8 @@
   (is (= [:player] (:target (job 'jobs.movement.follow))))
   (is (= [:pos] (:target (job 'jobs.movement.linger-near))))
   (is (= [:pos] (:target (job 'jobs.movement.boat-drive))))
-  (is (= [:action :pos :id] (:target (job 'jobs.movement.boat-launch))))
+  (is (= [:pos] (:target (job 'jobs.movement.boat-launch))))
+  (is (= [:id] (:target (job 'jobs.movement.boat-recover))))
   (is (= [:pos] (:target (job 'jobs.movement.boat-land))))
   (is (= [10.5 63 2.5] (:moves-to ((:quote-of (job 'jobs.movement.boat-drive))
                                    {:primitives (tu/fake {}) :args {:pos [10 63 2]} :quote-call {}})))))

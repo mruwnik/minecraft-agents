@@ -19,7 +19,7 @@
    ['jobs.movement.leave-vehicle {} :ok {}]
    ['jobs.movement.boat-drive {:pos [10 63 2] :range 2} :later {}]
    ['jobs.movement.boat-launch {} :later {}]
-   ['jobs.movement.boat-launch {:action :recover :id 7} :later {}]
+   ['jobs.movement.boat-recover {:id 7} :later {}]
    ['jobs.movement.boat-land {} :later {}]
    ['jobs.movement.cross-water {:pos [7 64 0]} :later {}]
    ['jobs.access.clear-path {:heading :east} :later {}]

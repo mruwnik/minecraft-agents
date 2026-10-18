@@ -125,13 +125,13 @@
 
 (defn ^:async launch! [c spot]
   (let [{:keys [item]} (:args c)
-        r (await (ctx/call c :launch 'jobs.movement.boat-launch {:action :launch :item item}))]
+        r (await (ctx/call c :launch 'jobs.movement.boat-launch {:item item}))]
     (cond
       (= :continue r) :continue
       (= :done (:kind r))
       (do (ctx/remember! c crossing-kind {:job (:root c) :land (:land spot)} crossing-policy)
           (await (land! c (:land spot))))
-      :else (failure c r launch-stops))))
+      :else (failure c (if (= :place-failed (contract/cause-key r)) (:because r) r) launch-stops))))
 
 (defn spot-of
   "The far-shore spot the body would cross to now: {:land :water}, a given cell still not made out ({:land cell}), or nil."

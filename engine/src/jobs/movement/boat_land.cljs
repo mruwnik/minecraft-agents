@@ -17,7 +17,7 @@
   The shore is a land cell the body has seen (feet and head air over a solid block, no hazard) with seen water beside it at the level of that block:
   :pos names the land cell, else the nearest within :radius of the boat. jobs.movement.boat-drive steers to the water cell beside it
   (a spot the boat cannot reach is dropped for the next, up to the max-spots setting, 3), then jobs.movement.leave-vehicle steps off facing the land cell.
-  With :recover the boat is then taken back (jobs.movement.boat-launch :recover; it needs the boat in sight).
+  With :recover the boat is then taken back (jobs.movement.boat-recover; it needs the boat in sight).
   A given :pos the body cannot make out after a look is driven nearer once (boat-drive to the water cell on the boat's side of it), then decided again.
   Impossible: :bad-args (:pos names no cell). Conditions (the not-aboard one before every round too): :not-aboard (on foot, with no landing of this call remembered: jobs.movement.boat-launch
   puts the body in a boat), :no-shore (no :pos given and no shore in sight; the engine looks round once first). A listed call waits on them.
@@ -141,7 +141,7 @@
     :else "the given cell is no shore"))
 
 (defn ^:async recover! [c land boat-id]
-  (let [e (await (ctx/call c :recover 'jobs.movement.boat-launch {:action :recover :id boat-id}))]
+  (let [e (await (ctx/call c :recover 'jobs.movement.boat-recover {:id boat-id}))]
     (if (= :continue e)
       :continue
       (do (ctx/forget-where! c landed-kind #(= (:root c) (:job %)))

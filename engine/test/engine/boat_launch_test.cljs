@@ -1,5 +1,5 @@
 (ns engine.boat-launch-test
-  "jobs.movement.boat-launch against the fake world: put a boat on water and board it, and take it back."
+  "jobs.movement.boat-launch against the fake world: put a boat on water and board it."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -105,85 +105,9 @@
           (is (= 1 (count (boats p))) "a new boat is down")
           (is (not= 99 (:id (:placed @m)))))))))
 
-(deftest recovers-a-boat-and-picks-up-the-item
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [boat {:id 9 :name "oak_boat" :uuid "u-9" :kind "other" :pos {:x 1.5 :y 64 :z 0.5} :health 1
-                    :drops [{:name "oak_boat" :count 1}]}
-              {:keys [res p]} (await (run {:blocks pond :entities [boat]} {:action :recover}))]
-          (is (= :done (:status res)) (pr-str res))
-          (is (= 1 (:collected res)))
-          (is (= 1 (get (lt/inv p) "oak_boat")))
-          (is (empty? (boats p))))))))
-
-(deftest recover-with-no-boat-waits
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (lt/setup {})]
-          (core/submit! eng '(jobs.movement.boat-launch {:action :recover}) {})
-          (await (tu/run-until-empty eng 3))
-          (is (= [:no-boat] (mapv :reason (filterv #(= :waiting (:kind %)) @seen)))))))))
-
-(deftest recover-gets-off-first
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [boat {:id 9 :name "oak_boat" :uuid "u-9" :kind "other" :pos {:x 1.5 :y 64 :z 0.5} :health 1
-                    :drops [{:name "oak_boat" :count 1}] :passengers [fake/fake-body-id]}
-              {:keys [res p]} (await (run {:blocks pond :entities [boat] :self {:vehicle 9}} {:action :recover}))]
-          (is (= :done (:status res)) (pr-str res))
-          (is (= 1 (get (lt/inv p) "oak_boat"))))))))
-
 (deftest boat-names
   (is (every? bl/boat-name? ["oak_boat" "bamboo_raft" "oak_chest_boat"]))
   (is (not-any? bl/boat-name? ["minecart" nil "boat_x"])))
-
-(defn boat-at [id x & {:as more}]
-  (merge {:id id :name "oak_boat" :uuid (str "u-" id) :kind "other" :pos {:x x :y 64 :z 0.5} :health 1
-          :drops [{:name "oak_boat" :count 1}]}
-         more))
-
-(deftest recover-a-boat-that-takes-many-hits
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [res p]} (await (run {:blocks pond :entities [(boat-at 9 1.5 :health 100)]} {:action :recover}))]
-          (is (= :done (:status res)) (pr-str res))
-          (is (= 1 (get (lt/inv p) "oak_boat"))))))))
-
-(deftest recover-walks-to-a-far-boat-once-it-arrives
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [res p]} (await (run {:blocks pond :entities [(boat-at 9 9.5)] :radius 20} {:action :recover :radius 20}))]
-          (is (= :done (:status res)) (pr-str res))
-          (is (= 1 (get (lt/inv p) "oak_boat"))))))))
-
-(deftest recover-an-id-picks-that-boat
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [res]} (await (run {:blocks pond :entities [(boat-at 8 1.5 :drops [{:name "oak_boat" :count 1}]) (boat-at 9 3.5 :name "birch_boat" :drops [{:name "birch_boat" :count 1}])]}
-                                        {:action :recover :id 9}))]
-          (is (= {:status :done :id 9 :item "birch_boat"} (select-keys res [:status :id :item]))))))))
-
-(deftest recover-a-boat-that-never-breaks-ends-at-the-time-spend
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p clock]} (lt/setup {:blocks pond :entities [(boat-at 9 1.5 :invulnerable true)]})
-              _ (.override (.-world p) "attack" (fn [token a impl] (swap! clock + 100) (impl token a)))
-              res (await (tu/child-outcome eng 'jobs.movement.boat-launch {:action :recover :spend {:job-time 0.3}} 40))]
-          (is (= {:status :stopped :reason :job-time} (select-keys res [:status :reason])) "the engine refuses the hit the time left cannot hold"))))))
-
-(deftest recover-without-a-drop-is-not-collected
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [res]} (await (run {:blocks pond :entities [(boat-at 9 1.5 :drops [])]} {:action :recover}))]
-          (is (= {:status :stopped :reason :not-collected} (select-keys res [:status :reason]))))))))
 
 (deftest board-failed-carries-the-cause
   (async done
@@ -231,24 +155,37 @@
   (is (= :ok (first (bl/bad-args {:args {:item "oak_boat"}}))))
   (is (= :ok (first (bl/bad-args {:args {}})))))
 
-(deftest aboard-is-a-start-condition-for-a-launch-only
+(deftest aboard-is-a-start-condition
   (let [other {:id 5 :name "minecart" :uuid "u-5" :kind "other" :pos {:x 0.5 :y 64 :z 0.5}}
         c (fn [args] (assoc (st/stub-ctx (:p (lt/setup {:blocks pond :entities [other] :self {:vehicle 5}}))) :args args))]
-    (is (= [:later :aboard] ((juxt first #(:reason (nth % 2))) (bl/aboard (c {:action :launch})))))
-    (is (= :ok (first (bl/aboard (c {:action :recover})))))))
+    (is (= [:later :aboard] ((juxt first #(:reason (nth % 2))) (bl/aboard (c {})))))))
 
 (deftest no-water-is-a-condition-that-asks-for-a-look
-  (let [c (fn [world] (assoc (st/stub-ctx (:p (lt/setup world))) :args {:radius 12 :action :launch}))]
+  (let [c (fn [world] (assoc (st/stub-ctx (:p (lt/setup world))) :args {:radius 12}))]
     (is (= :ok (first (bl/no-water (c {:blocks pond})))))
     (is (= [:look :no-water] ((juxt first #(:reason (nth % 2))) (bl/no-water (c {})))))
     (is (= [:look :no-room] ((juxt first #(:reason (nth % 2))) (bl/no-water (c {:blocks channel})))))))
 
-(deftest done-carries-the-result-so-far-for-a-limit-ending
-  (let [c (fn [m args] {:primitives (tu/fake {}) :root "j1" :slots [] :args args
-                        :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data m}]}}})})]
-    (is (= {:units :boats :done 1 :left 0 :result {:placed true}}
-           (select-keys (nth (bl/done? (c {:placed {:id 7}} {})) 2) [:units :done :left :result])))
-    (is (= {:done 0 :left 1 :result {:placed false}}
-           (select-keys (nth (bl/done? (c {} {})) 2) [:done :left :result])))
-    (is (= {:done 0 :result {:id 7 :hits 2}}
-           (select-keys (nth (bl/done? (c {:hits 2} {:action :recover :id 7})) 2) [:done :result])))))
+(defn done-of [world args mem]
+  (let [p (:p (lt/setup world))]
+    (bl/done? {:primitives p :root "j1" :slots [] :args args
+               :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data mem}]}}})})))
+
+(def placed-boat {:id 9 :name "oak_boat" :uuid "u-9" :kind "other" :pos {:x 5.5 :y 63 :z 0.5}})
+
+(deftest done-is-ok-once-the-boat-is-down-and-boarded
+  (are [world args mem kind] (= kind (first (done-of world (assoc args :radius 12) mem)))
+    {:blocks pond} {:board true} {} :later
+    {:blocks pond :entities [placed-boat]} {:board true} {:placed {:id 9}} :later
+    {:blocks pond :entities [placed-boat] :self {:vehicle 9}} {:board true} {:placed {:id 9}} :ok
+    {:blocks pond :entities [placed-boat]} {:board false} {:placed {:id 9}} :ok
+    {:blocks pond} {:board false} {:placed {:id 9}} :later))
+
+(deftest a-place-that-fails-is-place-failed-with-its-ending-as-the-because
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res]} (await (run {:blocks pond} {:board false :item "oak_boat"}))]
+          (is (= :place-failed (:reason res)) (pr-str res))
+          (is (some? (:because (:ending res))) "the place's ending is kept")
+          (is (not= :place-failed (contract/cause-key (:because (:ending res))))))))))
