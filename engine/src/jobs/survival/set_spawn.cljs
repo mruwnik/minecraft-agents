@@ -41,7 +41,7 @@
   (if-let [given (:bed (:args c))]
     (:pos (places/parse-pos given))
     (or (when-not (remembered-gone? c) (sh-beds/bed c (:bed-radius (:args c))))
-        (sh-beds/seen-bed (:primitives c)))))
+        (sh-beds/seen-bed (:primitives c) (constantly true) (:bed-radius (:args c))))))
 
 (a/defargs settings
   {::job-time-s {:default 60 :doc "Seconds the walk to the bed and the click may take." :spec (a/num-in 0 nil)}

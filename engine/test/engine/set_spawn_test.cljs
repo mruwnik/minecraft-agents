@@ -92,6 +92,14 @@
           (is (= {:gone true :was bed} (:data (mem/latest (mem/view (:store eng)) :bed))))
           (is (= [{:pos seen-bed}] (entries eng :spawn-bed))))))))
 
+(deftest set-spawn-uses-a-seen-bed-beyond-the-night-sleep-radius
+  (async done
+    (run-async done
+      (fn ^:async t []
+        (let [far {:x 11 :y 64 :z 0}
+              {:keys [p]} (await (run-set-spawn {:time noon :blocks {"11,64,0" "red_bed"}} {} (constantly nil)))]
+          (is (= [far] (mapv st/arg-pos (calls p "useOn")))))))))
+
 (deftest set-spawn-finding-the-respawn-bed-gone-says-the-spawn-is-lost-once
   (async done
     (run-async done

@@ -60,9 +60,10 @@
 (defn seen-bed
   "A bed block the body can see in its room: found by a flood fill from its feet over free cells at feet height, within
   seen-bed-radius (a bed behind a wall is not seen), skipping beds permit? refuses (default all permitted). The nearest
-  cell of it, or nil."
+  cell of it, or nil. A radius replaces the setting."
   ([p] (seen-bed p (constantly true)))
-  ([p permit?]
+  ([p permit?] (seen-bed p permit? (seen-bed-radius)))
+  ([p permit? radius]
   (let [{:keys [x y z] :as start} (sh-sense/feet p)]
     (loop [queue [start] seen #{start}]
       (when-let [pos (first queue)]
@@ -72,7 +73,7 @@
             (let [next (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
                              :let [n {:x (+ (:x pos) dx) :y y :z (+ (:z pos) dz)}]
                              :when (and (not (seen n))
-                                        (<= (max (js/Math.abs (- (:x n) x)) (js/Math.abs (- (:z n) z))) (seen-bed-radius))
+                                        (<= (max (js/Math.abs (- (:x n) x)) (js/Math.abs (- (:z n) z))) radius)
                                         (sh-sense/walkable-at? p n))]
                          n)]
               (recur (into (subvec (vec queue) 1) next) (into seen next))))))))))
