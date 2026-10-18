@@ -17,7 +17,7 @@
             [jobs.lib.world :as known]))
 
 (def doc
-  "Carry :count more of :item (a planting material) than at the start, renewably.
+  "Carry at least :count of :item (a planting material), renewably.
 
   The way depends on the material:
   - wheat_seeds: break grass (:sources, 1 drop in 8).
@@ -27,7 +27,7 @@
   - A :chest or :plan always means the chest way. :sources always means the break way. Any other material
     with neither declines.
 
-  The goal (carried + :count) is fixed in the first step. One call runs these steps until the job ends (it yields with :continue only while a child or
+  The goal (:count carried, so a body that carries it is done at once) is fixed in the first step. One call runs these steps until the job ends (it yields with :continue only while a child or
   a walk waits on the world, and after 400 steps):
   1. Carrying the goal ends :count.
   2. Chest way: the withdraw child takes the item. It ends :count when the goal is carried, else :short (warn
@@ -59,7 +59,7 @@
 
 (a/defargs args
   {:item {:doc "the planting material to gather" :spec a/item? :default "wheat_seeds"}
-   :count {:doc "how many more to carry than at the start" :spec (a/int-in 0 nil) :default 8}
+   :count {:doc "how many to carry at least" :spec (a/int-in 0 nil) :default 8}
    :radius {:doc "source blocks within this many blocks of the body count" :spec (a/num-in 0 nil) :default 16}
    :sources {:doc "block names to break for the item; nil: the material's own (grass for wheat_seeds)" :spec (a/coll-of a/name?) :default nil}
    :chest {:doc "chest position: take the item from it instead of breaking blocks" :spec ::a/pos :default nil}
@@ -194,17 +194,21 @@
             (checks/refusing :zones-read "zone list read" no-zones)
             (checks/refusing :in-range "a source in range" nothing-in-range)))
 
+(defn got
+  "How many more are carried than when the first round began."
+  [c]
+  (max 0 (- (carried c) (:had (ctx/mem c) (carried c)))))
+
 (defn done?
-  "The goal fixed by the first round (:count more than were carried) is carried and no child is under way (a collect
+  "The :count is carried (already at the start, or after the first round) and no child is under way (a collect
   still picks up); the seeds got and still wanted."
   [c]
   (let [{:keys [item count]} (:args c)
-        goal (:goal (ctx/mem c))
-        left (max 0 (- (or goal (+ (carried c) count)) (carried c)))
-        got (max 0 (- count left))
+        left (max 0 (- count (carried c)))
+        got (got c)
         data [:units :items :done got :left left]]
     (cond
-      (or (nil? goal) (pos? left))
+      (pos? left)
       (apply contract/later :short (str "get-seeds: " left " " item " to get") (conj data :result {:got got}))
 
       (checks/child-under-way? c)
@@ -237,8 +241,7 @@
   "End the job: :done for :count, condition-failed for :refused and :withdraw-declined (a zone, claim
   or chest can change), else nothing-possible with the reason."
   [c reason]
-  (let [{:keys [goal]} (ctx/mem c)
-        got (max 0 (- (carried c) (- goal (:count (:args c)))))
+  (let [got (got c)
         data {:got got :reason reason :text (str "get-seeds done: " (if (= :none reason) (none-why c) (name reason)) ", got " got)}]
     (if (= :count reason)
       (ctx/end c :done nil data)
@@ -368,7 +371,7 @@
 (defn ^:async step [c]
   (when-not (:goal (ctx/mem c))
     (let [now (carried c)]
-      (ctx/update-mem! c assoc :goal (+ now (:count (:args c))) :last-carried now :dry 0 :barren 0)))
+      (ctx/update-mem! c assoc :goal (:count (:args c)) :had now :last-carried now :dry 0 :barren 0)))
   (let [{:keys [goal collecting dry]} (ctx/mem c)
         {:keys [dry-digs]} (:args c)
         chest? (= :chest (mode (:args c)))

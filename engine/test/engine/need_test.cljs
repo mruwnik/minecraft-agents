@@ -227,3 +227,14 @@
           (await (run! (fn [c] (need/item! c "cobblestone" (- 16 (swap! round inc))))
                        {:obtain-step step} 2))
           (is (= [nil {:have 0 :target 26}] @mems) "the second round resumes the first one's booked target"))))))
+
+(deftest obtain-is-asked-for-the-carried-plus-the-lack-and-the-goal-stays-put
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (setup #(need/item! % "cobblestone" 2) {:obtain-step (constantly :continue)})]
+          (give! (:p r) "cobblestone" 3)
+          (await (core/tick! (:eng r)))
+          (give! (:p r) "cobblestone" 1)
+          (await (core/tick! (:eng r)))
+          (is (= [5 5] (mapv :count @(:obtain r))) "the 2 more are on top of the 3 carried when the fetch began"))))))

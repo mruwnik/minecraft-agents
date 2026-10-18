@@ -165,7 +165,7 @@
                 (not chest?) {:skip :no-chest}
                 (and (not table?) (not (:fetch a true))) {:skip :no-table}
                 (not (pos? n)) {:skip :no-wheat}
-                :else {:call {:slot :bake :job (jobs :bake) :args {:item "bread" :count n :fetch (:fetch a true)}}}))
+                :else {:call {:slot :bake :job (jobs :bake) :args {:item "bread" :count (+ n (get carried "bread" 0)) :fetch (:fetch a true)}}}))
       :deposit (let [items (vec (filter #(pos? (min (get made % 0) (get carried % 0))) (conj cooked-foods "bread")))
                      spare-wheat? (> (get carried "wheat" 0) (or wheat0 (get carried "wheat" 0)))
                      items (cond-> items spare-wheat? (conj "wheat"))

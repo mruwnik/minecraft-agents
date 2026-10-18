@@ -27,12 +27,12 @@
             [jobs.lib.storage :as storage]))
 
 (def doc
-  "Craft :count more of :item. 2x2 recipes work anywhere. Bigger ones need a crafting table: :table, else the
+  "Craft until at least :count of :item are carried. 2x2 recipes work anywhere. Bigger ones need a crafting table: :table, else the
   nearest within :radius, else the nearest seen within :far (up to 64), walking there when out of reach (a go-to child;
   a carried table is put down instead, with no :table, also with :fetch false; a seen table the walk cannot reach is
   left, and the carried or a fetched table is put down).
-  The count carried at the start is kept in memory and the target is that plus :count, so a cut or a partial
-  batch loses nothing.
+  The count carried at the start is kept in memory for :made; the target is :count carried, so a body that carries it
+  is done at once and a cut or a partial batch loses nothing.
   Needs: an item name (impossible :bad-args).
   Ends :done with {:made n :item :text}, the number of items gained (plus :spent and :spent-at when it put a table down).
   Stopping short it ends with :made, :item and a :text as well: condition-failed with the cause :need (data :short {name n}, an ingredient
@@ -51,7 +51,7 @@
 
 (a/defargs args
   {:item {:doc "item name to craft" :spec a/item? :default nil}
-   :count {:doc "how many more to end up with" :spec (a/int-in 0 nil) :default 1}
+   :count {:doc "how many to carry at least" :spec (a/int-in 0 nil) :default 1}
    :table {:doc "crafting table position; the nearest seen within :radius when nil and the recipe needs one" :spec ::a/pos :default nil}
    :radius {:doc "how far to look for a crafting table" :spec (a/num-in 0 nil) :default 32}
    :far {:doc "how far a seen crafting table is walked to when none is within :radius (the seen memory reaches 64)" :spec (a/num-in 0 64) :default 64}
@@ -95,14 +95,14 @@
       spot)))
 
 (defn done?
-  "Done once :count more of :item are carried than at the start; else progress."
+  "Done once :count of :item are carried; else progress."
   [c]
   (let [{:keys [item count]} (:args c)
         have (storage/carried (u/inventory (:primitives c)) item)
         start (:start (ctx/mem c) have)
         made (max 0 (- have start))
-        data [:units :items :done made :left (max 0 (- count made)) :result {:made made}]]
-    (if (>= made count)
+        data [:units :items :done made :left (max 0 (- count have)) :result {:made made}]]
+    (if (>= have count)
       (apply contract/ok :crafted (str "crafted " made " " item) data)
       (apply contract/later :crafting (str "craft: " made " of " count " " item) data))))
 
@@ -113,11 +113,12 @@
     (assoc (storage/carried-totals (reserve/free c :craft)) item (storage/carried (u/inventory (:primitives c)) item))))
 
 (defn quote-of
-  "P: the cheapest recipe for :count more of :item from what is carried. It uses its ingredients (net of the item
-  itself, a least of 0 since another recipe may serve) and yields at least :count."
+  "P: the cheapest recipe for the rest of :count of :item from what is carried. It uses its ingredients (net of the item
+  itself, a least of 0 since another recipe may serve) and yields at least that rest."
   [c]
-  (let [{:keys [item count]} (:args c)
+  (let [{:keys [item]} (:args c)
         p (:primitives c)
+        count (max 0 (- (:count (:args c)) (storage/carried (u/inventory p) item)))
         rs (get (recipes/recipes-for (game/version-of p)) item)
         st {:have (storage/carried-totals (u/inventory p))}
         r (first (sort-by #(recipes/short-count st % (recipes/ceil-div count (:count %))) rs))
@@ -159,7 +160,7 @@
         data (cond-> (merge {:made made :item (:item (:args c))} (dissoc extra :reason))
                (seq placed) (merge (spent/summary placed)
                                    {:text (str/join "; " (keep identity [(spent/text placed "crafting table") (:text extra)]))}))
-        total (:count (:args c))]
+        total (max 0 (- (:count (:args c)) (:start (ctx/mem c) 0)))]
     (cond
       (nil? reason) (ctx/end c :done nil data)
       (condition-reasons reason) (least/end! c :condition-failed (cond-> {:reason reason} (:short extra) (assoc :short (:short extra))) data made total)
@@ -456,7 +457,7 @@
         {:keys [item count]} (:args c)
         have (spendable c)
         start (:start (ctx/mem c) (get have item 0))
-        todo (or n (max 1 (- (+ start count) (get have item 0))))
+        todo (or n (max 1 (- count (get have item 0))))
         rs (get (recipes/recipes-for (game/version-of p)) item)
         needs (for [r rs :let [b (recipes/ceil-div todo (:count r))]]
                 (into {} (map (fn [[k v]] [k (* v b)])) (dissoc (:needs r) item)))]
@@ -478,7 +479,7 @@
         _ (when-not (contains? (ctx/mem c) :start)
             (ctx/update-mem! c assoc :start (storage/carried (u/inventory p) item)))
         start (:start (ctx/mem c))
-        target (+ start count)
+        target count
         have (storage/carried (u/inventory p) item)]
     (if (>= have target)
       (finish! c (- have start) {})
@@ -502,7 +503,7 @@
           made (- (storage/carried (u/inventory p) item) start)]
       (when table (ctx/update-mem! c assoc :table table))
       (case status
-        "crafted" (if (< made (:count (:args c)))
+        "crafted" (if (< (storage/carried (u/inventory p) item) (:count (:args c)))
                     (do (u/progress! c) :again)
                     (finish! c made {:text (str "crafted " made " " item)}))
         "no-item" (await (short-from! c item r made))

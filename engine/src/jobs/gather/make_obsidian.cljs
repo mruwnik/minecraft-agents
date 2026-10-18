@@ -246,7 +246,7 @@
   "The seen obsidian mined with a mine child, which is kept under way (memory :mining) until it ends: the dug block is no longer seen while the child picks it up. :again, :continue while it works, or its ending when it got none."
   [c got]
   (let [e (await (ctx/call c :mine 'jobs.gather.mine
-                           {:block "obsidian" :item "obsidian" :count (- (:count (:args c)) got) :fetch (if (contains? (:what (need/opts c 'jobs.gather.make-obsidian)) :tool) mine-fetch false) :mend false :radius (:radius (:args c))
+                           {:block "obsidian" :item "obsidian" :count (+ (carried c "obsidian") (- (:count (:args c)) got)) :fetch (if (contains? (:what (need/opts c 'jobs.gather.make-obsidian)) :tool) mine-fetch false) :mend false :radius (:radius (:args c))
                             :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (ctx/update-mem! c assoc :mining (= :continue e))
     (cond

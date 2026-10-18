@@ -214,7 +214,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (shafted via-shaft (assoc ore-east "7,60,-4" "iron_ore") [] 400))
-              _ (core/submit! (:eng s) (spec via-shaft) {})
+              _ (core/submit! (:eng s) (spec (assoc via-shaft :count 2)) {})
               _ (await (run-ticks s 400))
               e (second (done-events s))]
           (is (= 2 (get (inv s) "raw_iron")))
@@ -227,7 +227,7 @@
       (fn ^:async t []
         (let [s (await (shafted via-shaft (assoc ore-east "7,60,-4" "iron_ore") [] 400))
               _ (doseq [y [60 61]] (fake/set-block! (:p s) [7 y 0] "bedrock"))
-              _ (core/submit! (:eng s) (spec via-shaft) {})
+              _ (core/submit! (:eng s) (spec (assoc via-shaft :count 2)) {})
               _ (await (run-ticks s 400))
               [no] (events-of s :mine.no-shaft)
               second-done (second (done-events s))]

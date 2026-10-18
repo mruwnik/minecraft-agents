@@ -3,7 +3,8 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
-            [jobs.lib.storage :as storage]))
+            [jobs.lib.storage :as storage]
+            [jobs.lib.util :as u]))
 
 (a/defargs settings
   {:jobs.items.obtain.base/max-inspections {:default 4 :doc "Looks at a place before the search for it gives up." :spec (a/int-in 0 nil)}
@@ -33,6 +34,11 @@
 
 (defn carried-of [inv names]
   (reduce + 0 (map #(storage/carried inv %) names)))
+
+(defn shortfall
+  "How many more of names than are carried the call's :count asks for."
+  [c names]
+  (max 0 (- (:count (:args c)) (carried-of (u/inventory (:primitives c)) names))))
 
 (def all-ways #{:chest :craft :smelt :gather})
 

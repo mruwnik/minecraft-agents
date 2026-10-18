@@ -10,7 +10,7 @@
             [jobs.gather.mine.end :refer [end-run to-mend! wrap-up! home-round! wanted]]
             [jobs.gather.mine.mend :refer [mend-round!]]
             [jobs.gather.mine.side :as wall]
-            [jobs.gather.mine.targets :refer [reach air kinds carried rules-in soil-blocks scan snapshot way-floor last-exit? skip! skip-failed! skip-unreachable! stalled! zone-margin within-own-zone drop-in-line? next-target!]]
+            [jobs.gather.mine.targets :as targets :refer [owed reach air kinds carried rules-in soil-blocks scan snapshot way-floor last-exit? skip! skip-failed! skip-unreachable! stalled! zone-margin within-own-zone drop-in-line? next-target!]]
             [jobs.gather.mine.torches :as torches]
             [jobs.gather.mine.tunnel :as tunnel]
             [jobs.lib.access :as access]
@@ -36,7 +36,7 @@
             [jobs.lib.world :as known]))
 
 (def doc
-  "Mine like a player: dig out :count more of one block kind (:block) that the body has seen, strip-tunnelling
+  "Mine like a player: carry at least :count of one block kind (the item it drops) (:block) that the body has seen, strip-tunnelling
   to find more (for an ore at its ore level, :level), then mend the pit under where it started and walk back to the start cell.
   An ore's stone and deepslate kinds both count (:variants): {:block \"iron_ore\" :count 8} gets 8 raw_iron from iron_ore and
   deepslate_iron_ore.
@@ -66,7 +66,7 @@
   Before a descent or strip tunnel it stocks torches when under 8 are carried (jobs.lib.trip/torches-ready!: obtain, charcoal from logs; warn torch.no-stock, then it digs dark).
   Before the first round it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!).
 
-  The first round writes to job memory before any dig: the goal (carried + :count), the start cell, the
+  The first round writes to job memory before any dig: the goal (:count) and the count carried (:had), the start cell, the
   tunnel heading (:heading, else :direction, else the way the body faces) and the ground (the solid cells of the 5x5 under the
   start at y-1 and y-2; empty when :mend is false). So a cut or restart still mends.
 
@@ -185,7 +185,7 @@
 (a/defargs args
   {:block {:doc "name of the block to mine (required)" :spec a/name? :default nil}
    :item {:doc "the item the block drops; nil: the drop-item table, else the block name" :spec a/item? :default nil}
-   :count {:doc "how many more to carry than at the start" :spec (a/int-in 0 nil) :default 8}
+   :count {:doc "how many to carry at least (carried at the start count)" :spec (a/int-in 0 nil) :default 8}
    :radius {:doc "seen blocks within this many blocks of the body count" :spec (a/num-in 0 nil) :default 16}
    :center {:doc "the centre of the area the job works, a cell [x y z] or {:x :y :z}; nil: where the body stands when the job first runs (jobs.lib.area)" :spec a/position? :default nil}
    :wet {:doc "dig blocks that touch water, and tunnel beside water" :spec boolean? :default false}
@@ -278,14 +278,15 @@
 (def can-run? checks/low-health)
 
 (defn done?
-  "Progress in items: got against :count. :ok once the run has finished (mend and walk home done, :finished in memory) with
+  "Progress in items: got against :count carried. :ok at once when :count is carried before the run began, else once the run has finished (mend and walk home done, :finished in memory) with
   the wanted items carried and the body home; else :later, the round ends the run."
   [c]
   (let [n (:count (:args c))
         m (ctx/mem c)
-        got (if-let [goal (:goal m)] (max 0 (- (carried c) (- goal n))) 0)
-        extra {:units :items :done got :left (max 0 (- n got)) :result {:got got}}]
-    (if (and (:finished m) (not= :not-home (:reason m)) (>= got (wanted c)))
+        got (if (:goal m) (targets/got c) 0)
+        extra {:units :items :done got :left (max 0 (- (owed c) got)) :result {:got got}}]
+    (if (or (and (:finished m) (not= :not-home (:reason m)) (>= got (wanted c)))
+            (and (not (:goal m)) (>= (carried c) n)))
       (apply contract/ok :mined (str "mine: " got " of " n ", home") (mapcat identity extra))
       (apply contract/later :mining (str "mine: " got " of " n ", the round ends the run") (mapcat identity extra)))))
 
@@ -553,7 +554,7 @@
             start (cell-of (u/self-pos c))
             heading (or (toward start heading) (heading-name direction))]
         (ctx/update-mem! c assoc
-                         :goal (+ now (:count (:args c))) :start start :start-floor (u/feel-name (:primitives c) {:x (:x start) :y (dec (:y start)) :z (:z start)})
+                         :goal (:count (:args c)) :had now :start start :start-floor (u/feel-name (:primitives c) {:x (:x start) :y (dec (:y start)) :z (:z start)})
                          :failures 0 :dry 0 :last-carried now
                          :heading (or heading faced)
                          :ground (if (:mend (:args c)) (snapshot c start) [])
@@ -568,7 +569,7 @@
 (defn digs-left
   "The digs the call still has to make: items short of the goal once it is written, else :count (an ore drops at least one item per dig)."
   [c]
-  (max 1 (if-let [goal (:goal (ctx/mem c))] (- goal (carried c)) (:count (:args c)))))
+  (max 1 (- (:count (:args c)) (carried c))))
 
 (defn ^:async round
   [c]

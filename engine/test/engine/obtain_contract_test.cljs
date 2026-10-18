@@ -126,12 +126,15 @@
 
 (deftest done-carries-the-got-and-tried-for-a-limit-ending
   (let [done? (export 'jobs.items.obtain :done?)
-        c (fn [m inventory] {:primitives (tu/fake {:inventory inventory}) :root "j1" :slots [] :args {:item "oak_log" :count 3}
+        c (fn [m inventory] {:primitives (tu/fake {:inventory inventory}) :root "j1" :slots [] :args {:item "oak_log" :count 4}
                              :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data m}]}}})})
         d (done? (c {:start {:have 1 :target 4} :tried [:craft]} [{:name "oak_log" :count 3}]))]
     (is (= [:later {:done 2 :left 1 :result {:got 2 :tried [:craft] :item "oak_log"}}]
            [(first d) (select-keys (nth d 2) [:done :left :result])]))
-    (is (= {:got 0} (:result (nth (done? (c {} [])) 2))) "before the start")))
+    (is (= :later (first (done? (c {} [])))) "before the start, nothing carried")
+    (is (= [:ok {:done 0 :left 0}]
+           (let [d (done? (c {} [{:name "oak_log" :count 4}]))] [(first d) (select-keys (nth d 2) [:done :left])]))
+        "the count carried before the start is done")))
 
 (deftest a-water-bucket-with-no-water-seen-is-no-source-that-says-so
   (async done

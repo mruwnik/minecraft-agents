@@ -171,14 +171,23 @@
           (is (= {:item "dragon_egg" :made 0 :status :stopped :reason :cannot :detail "no-recipe"} (dissoc result :text)))
           (is (empty? (filter #(str/starts-with? (name (:kind %)) "craft.") @seen)) "the ending carries it"))))))
 
-(deftest craft-count-is-on-top-of-what-is-carried
+(deftest craft-count-is-the-total-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p _ eng] (await (craft {:inventory [{:name "oak_planks" :count 4} {:name "oak_log" :count 1}]}
+                                       {:item "oak_planks" :count 8}))]
+          (is (= {"oak_planks" 8} (inv p)))
+          (is (= {:made 4 :status :done} (select-keys result [:made :status]))))))))
+
+(deftest craft-is-done-when-the-count-is-already-carried
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [[result p _ eng] (await (craft {:inventory [{:name "oak_planks" :count 4} {:name "oak_log" :count 1}]}
                                        {:item "oak_planks" :count 4}))]
-          (is (= {"oak_planks" 8} (inv p)))
-          (is (= {:made 4 :status :done} (select-keys result [:made :status]))))))))
+          (is (= {"oak_planks" 4 "oak_log" 1} (inv p)))
+          (is (= {:made 0 :status :done} (select-keys result [:made :status]))))))))
 
 (deftest craft-gives-up-on-an-unreachable-table
   (async done

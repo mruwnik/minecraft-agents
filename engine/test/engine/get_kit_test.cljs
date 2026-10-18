@@ -322,4 +322,4 @@
       (fn ^:async t []
         (await (settings/with-settings {:jobs.items.get-kit/minutes 2}
                  (fn ^:async two-minutes []
-                   (is (= {:job-time 120} (:spend (kit/obtain-args {:args {:items ["iron_pickaxe"]}} "iron_pickaxe" 1)))))))))))
+                   (is (= {:job-time 120} (:spend (kit/obtain-args {:primitives (tu/fake {}) :args {:items ["iron_pickaxe"]}} "iron_pickaxe" 1)))))))))))

@@ -10,7 +10,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.look :refer [cell-of]]
-            [jobs.gather.mine.targets :refer [kinds not-solid carried left-behind]]))
+            [jobs.gather.mine.targets :refer [kinds not-solid carried left-behind owed got]]))
 
 (a/defargs settings
   {::home-dip {:default 16 :doc "Blocks under the body (and over the start) the walk home may plan through while the start lies fewer than this many blocks above the body (go-to :y-margin): no way round through deep caves; the walk's escalation digs out instead. From deeper, go-to's own climb rules hold." :spec (a/num-in 0 nil)}})
@@ -47,9 +47,9 @@
   #{:none :wet :refused :own-zone :no-shaft :flooded :no-tool})
 
 (defn wanted
-  "The items the call needs for :done: :count, or the call's :least when that is a number."
+  "The items more than carried at the start the call needs for :done: up to :count carried, or the call's :least when that is a number."
   [c]
-  (let [n (:count (:args c))
+  (let [n (owed c)
         least (:least (ctx/frozen-call c) :all)]
     (if (number? least) (min n least) n)))
 
@@ -84,11 +84,11 @@
 (defn finish!
   "End the job (end-run) with the outcome."
   [c]
-  (let [{:keys [goal mended dig-reason resumes tunnel left descent wet-skipped] :as m} (ctx/mem c)
+  (let [{:keys [mended dig-reason resumes tunnel left descent wet-skipped] :as m} (ctx/mem c)
         suggest (shaft-suggest m (:args c))
         unreached (into [] (comp (filter (fn [[x y z]] (contains? (kinds (:args c)) (u/seen-name (:primitives c) {:x x :y y :z z})))) (take 10)) (:unreached m))
         m (assoc m :shaft-suggest suggest :unreached unreached)
-        got (max 0 (- (carried c) (- goal (:count (:args c)))))
+        got (got c)
         reason (if (and (zero? got) (pos? (or wet-skipped 0)) (#{:none :no-drops :tunnel-length :tunnel-stopped} (:reason m))) :wet (:reason m))
         wet-text (when (= :wet reason) (str "; " (or wet-skipped 0) " seen blocks beside water skipped, pass :wet true to dig them"))
         why (cond-> {} dig-reason (assoc :dig-reason dig-reason) (or (= :no-stone-found reason) (pos? (:steps descent 0))) (assoc :descent descent) (= :wet reason) (assoc :wet-skipped (or wet-skipped 0)) resumes (assoc :resumes resumes) suggest (assoc :shaft-suggest suggest) (seq unreached) (assoc :unreached unreached) (seq (:holes-open m)) (assoc :holes-open (:holes-open m))
@@ -103,7 +103,7 @@
                         (cond
                           (zero? got) {:text (str "mine got nothing: " (name reason) soil tail mended-text)}
                           (= :not-home reason) {:text (str "mine got " got " but did not get back to its start" mended-text (dug-text m reason) (tunnel-tail tunnel))}
-                          (< got (:count (:args c))) {:text (str "mine got " got " of " (:count (:args c)) ": " (name reason) tail mended-text)}
+                          (< got (owed c)) {:text (str "mine got " got " of " (owed c) ": " (name reason) tail mended-text)}
                           :else {:text (str "mine done: " (name reason) ", got " got ", mended " (or mended 0) soil tail)}))
                       {:got got :reason reason :mended (or mended 0)}
                       (:end-cause m)

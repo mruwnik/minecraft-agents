@@ -204,7 +204,7 @@
           fetch? (and (map? limits) (not (:error limits)) (or (nil? (:what limits)) (contains? (:what limits) :item)))
           fuel (torch/fuel-held (:primitives c))
           want (- (torch-stock) held)
-          args {:item "torch" :count (if (pos? fuel) (min want (* 4 fuel)) want) :avoid (line-ahead c) :explore false}]
+          args {:item "torch" :count (+ (torch/torches-carried (:primitives c)) (if (pos? fuel) (min want (* 4 fuel)) want)) :avoid (line-ahead c) :explore false}]
       (when (and fetch? (< held (torch-low)) (not (:torches-tried (ctx/mem c))) (not (food-short? c)))
         (when-not (:torches-from (ctx/mem c)) (ctx/update-mem! c assoc :torches-from (u/self-pos c)))
         (let [e (await (ctx/call c :torches 'jobs.items.obtain args))]

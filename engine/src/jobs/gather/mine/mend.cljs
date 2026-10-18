@@ -6,7 +6,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.gather.mine.end :refer [wrap-up!]]
-            [jobs.gather.mine.targets :refer [air carried scan off-ground?]]
+            [jobs.gather.mine.targets :refer [air carried had scan off-ground?]]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.choose :as choose]
             [jobs.lib.gate :as gate]
@@ -55,9 +55,8 @@
   "Whether the mend ate into what the dig brought, leaving fewer than the goal carried."
   [c]
   (let [{:keys [goal at-mend]} (ctx/mem c)
-        now (carried c)
-        start (- goal (:count (:args c)))]
-    (and (< now goal) (< now at-mend) (> at-mend start))))
+        now (carried c)]
+    (and (< now goal) (< now at-mend) (> at-mend (had c)))))
 
 (defn max-resumes [] (settings/get settings ::max-resumes))
 

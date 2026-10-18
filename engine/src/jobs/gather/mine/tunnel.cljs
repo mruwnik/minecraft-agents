@@ -8,7 +8,7 @@
             [engine.settings :as settings]
             [jobs.gather.mine-stay :as stay]
             [jobs.gather.mine.end :refer [to-mend!]]
-            [jobs.gather.mine.targets :refer [kinds carried rules-in book-ground! step-cell within-own-zone]]
+            [jobs.gather.mine.targets :as targets :refer [kinds carried rules-in book-ground! step-cell within-own-zone]]
             [jobs.gather.mine.torches :as torches]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
@@ -87,10 +87,10 @@
   "The tunnel is done (stop: :tunnel-length or why it stopped at cell at): one warn mine.tunnel-end, then the mend.
   walk: for :walk-failed, what stopped the walk (step-to!)."
   [c stop at & [next walk]]
-  (let [{:keys [goal tunnel]} (ctx/mem c)
+  (let [{:keys [tunnel]} (ctx/mem c)
         {:keys [heading steps]} tunnel
         fluid (when (and at (= :fluid-in-cut stop)) (u/seen-name (:primitives c) at))
-        got (max 0 (- (carried c) (- goal (:count (:args c)))))]
+        got (targets/got c)]
     (if (and (if (:stay-level (:args c)) (leg-stops stop) (and (zero? steps) (heading-stops stop)))
              (< (+ steps (:spent (ctx/mem c) 0)) (:tunnel-length (:args c)))
              (turn-heading! c stop))
@@ -103,7 +103,7 @@
                                    (if (= :tunnel-length stop) "its length is used up" (str "stopped, " (name stop) (when fluid (str " (" fluid ")"))))
                                    (when at (str " at " (str/join "," (access/cell at))))
                                    (when walk (walk-text walk))
-                                   "; got " got " of " (:count (:args c)))}
+                                   "; got " got " of " (targets/owed c))}
                  at (assoc :at (access/cell at))
                  fluid (assoc :fluid (keyword fluid))
                  next (assoc :next (access/cell next))

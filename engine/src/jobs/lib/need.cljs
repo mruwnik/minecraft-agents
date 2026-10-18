@@ -162,7 +162,19 @@
       (do (some-> (:child-wait c) (reset! (contract/status-cause s))) :continue)
       (await (ctx/call c slot job args)))))
 
+(defn total-of
+  "The count to carry at least for a fetch of args' :count more of its item(s): booked in the caller's memory when the child
+  is fresh, so the carried items the child brings in do not move the goal."
+  [c slot job args fresh?]
+  (when (and (= 'jobs.items.obtain job) (:count args))
+    (if fresh?
+      (let [t (+ (:count args) (reduce + 0 (vals (counts c (if (:item args) [(:item args)] (:any-of args))))))]
+        (ctx/update-mem! c assoc-in [:need/total slot] t)
+        t)
+      (get-in (ctx/mem c) [:need/total slot]))))
+
 (defn ^:async fetch!
+  "Get :count more of what args name (jobs.items.obtain's :count is the amount to carry, so the carried is added here)."
   [c job args cause-reason wanted {:keys [slot how explore return? minutes for-plan]}]
   (let [slot (or slot :need)
         args (cond-> (merge (assoc args :explore (boolean explore)) (child-limits job {:how how :minutes minutes}))
@@ -177,7 +189,8 @@
       (do
         (when (and fresh? return? (not (:need/return (ctx/mem c))))
           (ctx/update-mem! c assoc :need/return {:cell (feet c)}))
-        (let [r (await (call! c slot job args))
+        (let [total (total-of c slot job args fresh?)
+              r (await (call! c slot job (cond-> args total (assoc :count total))))
               e (if (= :continue r) :continue (ending-for r cause-reason wanted))]
           (when (= :done (:kind e))
             (ctx/update-mem! c #(cond-> (assoc % :need/done {:want want :have (counts c (got-names wanted e))})

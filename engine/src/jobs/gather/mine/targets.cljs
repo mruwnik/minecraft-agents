@@ -48,6 +48,21 @@
   (let [item (blocks/item-name (:args c))]
     (transduce (comp (filter #(= item (:name %))) (map :count)) + 0 (u/inventory (:primitives c)))))
 
+(defn had
+  "The count carried when the run began (now, before it began)."
+  [c]
+  (:had (ctx/mem c) (carried c)))
+
+(defn got
+  "How many more are carried than when the run began."
+  [c]
+  (max 0 (- (carried c) (had c))))
+
+(defn owed
+  "How many more than were carried at the start the call's :count asks for."
+  [c]
+  (max 0 (- (:count (:args c)) (had c))))
+
 (defn around [{:keys [x y z]} [dx dy dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
 
 (defn face-names

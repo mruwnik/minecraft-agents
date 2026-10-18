@@ -54,6 +54,11 @@
   [items name]
   (transduce (comp (filter #(= name (:name %))) (map :count)) + 0 items))
 
+(defn plus-carried
+  "The count to carry at least to have n more of name: n and what is carried now (an item goal is \"carry at least\")."
+  [items name n]
+  (+ n (carried items name)))
+
 (defn carried-totals
   "{name total} of the carried items."
   [items]

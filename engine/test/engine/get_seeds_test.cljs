@@ -89,14 +89,14 @@
         (let [s (await (scenario {:count 2} {:blocks (patch "short_grass" (range 2 6) (range 0 4)) :drops seed-drops} 40))]
           (is (= (dig-count s) (count (ce/ends s :dug)))))))))
 
-(deftest the-goal-is-relative-to-what-is-carried
+(deftest the-count-is-what-is-carried-in-all
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup-seeing {:inventory [{:name "wheat_seeds" :count 5}]
                           :blocks (patch "short_grass" (range 2 6) (range 0 4)) :drops seed-drops})]
           (tu/shutdown-at! s "dig" 1)
-          (core/submit! (:eng s) (spec {:count 2}) {})
+          (core/submit! (:eng s) (spec {:count 7}) {})
           (await (run-ticks s 1 700))
           (is (= 7 (:goal (job-mem s))))
           (await (run-ticks s 40 700))

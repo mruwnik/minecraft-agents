@@ -5,7 +5,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.items.obtain.base :refer [args-error carried-of holds makes? max-inspections names-of tried! wanted-fields way?]]
+            [jobs.items.obtain.base :refer [args-error carried-of holds makes? max-inspections names-of shortfall tried! wanted-fields way?]]
             [jobs.items.obtain.chest :refer [blocked-text candidates inspect! withdraw!]]
             [jobs.items.obtain.craft :refer [craft-step! plan-table pick-plan-table!]]
             [jobs.items.obtain.gather :refer [finish-tree! gather-step!]]
@@ -18,8 +18,8 @@
             [clojure.string]))
 
 (def doc
-  "Get :count more of :item (or of any of :any-of, in that order of preference) than were carried at the first round.
-  The target is booked once, so a cut or restart goes on toward the same count. One call is the whole attempt: it yields (:continue) only while a child waits on the world.
+  "Carry at least :count of :item (or of any of :any-of, in that order of preference; carried names are added up).
+  A body that carries them is done at once. The count carried at the first round is booked, so :got and a cut or restart stay right. One call is the whole attempt: it yields (:continue) only while a child waits on the world.
 
   Ways, in order (:ways, default all; the target met is done):
   - :chest: the containers the body has seen (perception's seenBlocks, never x-ray) within 32 blocks,
@@ -67,7 +67,7 @@
 (a/defargs args
   {:item {:doc "the item to get" :spec a/item? :default nil}
    :any-of {:doc "items, any one will do, the first preferred (instead of :item)" :spec (a/coll-of a/item?) :default nil}
-   :count {:doc "how many more than carried at the start (counts above 64 are taken as 64)" :spec (a/int-in 1 nil) :default 1}
+   :count {:doc "how many to carry at least (carried at the start count)" :spec (a/int-in 1 nil) :default 1}
    :fail-minutes {:doc "passed on to the smelt child's fetch; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
    :for-plan {:doc "id of the plan whose work this is: a crafting table may stand in its own cells; passed to the craft steps" :spec a/name? :default nil}
    :avoid {:doc "cells [x y z] a crafting table is never put in or dug for (a caller's dig line); passed to the craft steps" :spec (a/coll-of a/position?) :default nil}
@@ -99,8 +99,9 @@
   [c]
   (let [a (:args c)
         names (names-of a)
-        n (:count a)]
+        n (shortfall c names)]
     (cond
+      (zero? n) nil
       (and (way? c :chest) (seq (candidates c names))) nil
       (and (makes? c) (craft-plan c names n)) nil
       (and (way? c :gather) (gather-viable? c names n)) nil
@@ -138,10 +139,10 @@
         names (names-of (:args c))
         have (carried-of inv names)
         got (max 0 (- have (:have start 0)))
-        left (if start (max 0 (- (:target start) have)) (:count (:args c)))
+        left (max 0 (- (:count (:args c)) have))
         data [:units :items :done (if start got 0) :left left]]
     (cond
-      (or (nil? start) (pos? left))
+      (pos? left)
       (apply contract/later :short (str "obtain: " left " " (clojure.string/join "/" names) " to get") (conj data :result
              (if start (merge {:got got :tried (:tried m)} (wanted-fields (:args c))) {:got 0})))
 
@@ -159,7 +160,7 @@
   [c]
   (let [a (:args c)
         names (names-of a)
-        n (min 64 (:count a 1))
+        n (max 1 (shortfall c names))
         pl (or (craft-plan c names n) (gather-plan c names n))
         steps (:steps pl)
         smelts (reduce + 0 (map :count (filter #(= :smelt (:op %)) steps)))
@@ -204,7 +205,7 @@
       :else
       (let [_ (when-not (:start (ctx/mem c))
                 (ctx/update-mem! c update :craft dissoc :table-unreachable)
-                (ctx/update-mem! c assoc :start {:have have :target (+ have (min 64 (:count a)))}))
+                (ctx/update-mem! c assoc :start {:have have :target (:count a)}))
             {:keys [target] :as start} (:start (ctx/mem c))
             got (max 0 (- have (:have start)))
             m (ctx/mem c)
@@ -235,7 +236,7 @@
                          (some->> (get-in m [:gather :why]) (str ": ")))]
             (ctx/end c :nothing-possible (merge {:reason k :why why} (wanted-fields a)) (assoc data :tried (:tried m) :why why)))
           :else
-          (let [why (str "no source for " (clojure.string/join "/" names) ": " (no-source-why c names (:count a))
+          (let [why (str "no source for " (clojure.string/join "/" names) ": " (no-source-why c names (shortfall c names))
                          (blocked-text (:blocked-chests m))
                          (tried-text (:tried m) (get-in m [:gather :why]) (get-in m [:craft :detail])))]
             (ctx/end c :nothing-possible (merge {:reason :no-source :why why} (wanted-fields a))

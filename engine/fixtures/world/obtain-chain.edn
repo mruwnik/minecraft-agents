@@ -98,7 +98,21 @@
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "birch_log"]}} :within-s 50 :of-job true}]
    :after [[:item "oak_log" 0] [:block [22 0 22] "birch_log"]]
    :limit-s 70}
-  ;; card ff7ec4e1: obsidian is mined when seen, or made with a water bucket on a seen lava source; a diamond pickaxe is needed
+  ;; card 412862ae: :count is the number to carry at least, carried ones count
+  {:name "count-already-carried-is-done-at-once"
+   :blocks [[:fill [22 0 14] [26 2 18] "stone"]]
+   :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 5]]}
+   :act [[:job (jobs.items.obtain {:item "cobblestone" :count 3 :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 20 :of-job true}]
+   :after [[:item "cobblestone" 5] [:block [22 0 16] "stone"]]
+   :limit-s 30}
+  {:name "count-counts-the-carried-so-only-the-rest-is-mined"
+   :blocks [[:fill [22 0 14] [26 2 18] "stone"]]
+   :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 2]]}
+   :act [[:job (jobs.items.obtain {:item "cobblestone" :count 3 :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}]
+   :after [[:item "cobblestone" 3]]
+   :limit-s 130}
   {:name "seen-obsidian-is-mined-with-a-diamond-pickaxe"
    :blocks [[:fill [22 0 14] [26 2 18] "stone"] [:set [22 0 16] "obsidian"]]
    :body {:inventory [["diamond_pickaxe" 1]]}

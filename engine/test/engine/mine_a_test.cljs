@@ -390,7 +390,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "dirt" :count 4}
+        (let [s (await (scenario {:block "dirt" :count 14}
                                  {:blocks floor :drops {"dirt" nil} :inventory [{:name "dirt" :count 10}]} 80))
               dug-ground (for [x (range -2 3) y [62 63] z (range -2 3)] (block-at s x y z))]
           (is (= :no-drops (:reason (done-event s))))

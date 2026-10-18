@@ -1,5 +1,6 @@
 (ns jobs.items.get-kit
   (:require [jobs.lib.ready :as ready]
+            [jobs.lib.storage :as storage]
             [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -155,7 +156,7 @@
 (defn obtain-args [c item n]
   (let [a (:args c)]
     (assoc (if (vector? item) {:any-of item} {:item item})
-           :count (min 64 n) :explore (:explore a)
+           :count (+ (min 64 n) (reduce + 0 (map #(storage/carried (u/inventory (:primitives c)) %) (if (vector? item) item [item])))) :explore (:explore a)
            :spend {:job-time (* 60 (settings/get settings ::minutes))})))
 
 (defn armed?
