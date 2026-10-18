@@ -82,11 +82,6 @@ const zeroStats = () => ({
   relightMs: 0, relightMaxMs: 0, relightTableMs: 0, relightStatesMs: 0, relightLightMs: 0, relightFloodMs: 0, relightWriteMs: 0, relightBoxes: 0, relightCells: 0, relightCarried: 0
 })
 
-const noView = Object.freeze({
-  attach: () => {}, detach: async () => {}, stop: () => {}, markCell: () => {}, flushColumns: async () => {}, tickPose: async () => {}, tickHud: async () => {},
-  idle: async () => {}, pendingCount: () => 0, stats: () => zeroStats()
-})
-
 // BODY_VIEW_POSE_HZ: pose writes per second at most; 0 = every physics tick (the default), with a POSE_REFRESH_MS timer for when none arrive
 export function poseHzFromEnv (env = process.env) {
   const hz = Number(env.BODY_VIEW_POSE_HZ ?? POSE_HZ)
@@ -119,7 +114,6 @@ export function nearestK (points, at, k) {
 }
 
 export function createView ({ stateDir, agent, world, onEvent = () => {}, now = Date.now, enabled = process.env.BODY_VIEW !== '0', poseHz = poseHzFromEnv(), relightBudgetMs = RELIGHT_BUDGET_MS, relightMaxPoints = RELIGHT_MAX_POINTS, relightRange, relightBacklogMax, dirtyColumnsMax, dirtyPointsMax }) {
-  if (!enabled) return noView
   let bot = null
   let unhook = () => {}
   let timers = []
@@ -427,6 +421,10 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     const target = bot
     const writes = []
     const blocked = relight(target)
+    if (!enabled) {
+      pending.clear() // the server sends no light update after a block change, so perception needs the relit overlay even with no dump
+      return Promise.resolve()
+    }
     for (const key of [...pending]) {
       if (writes.length >= MAX_COLUMNS_PER_FLUSH) break
       if (inflight.has(key) || blocked.has(key)) continue
@@ -454,7 +452,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
 
   // main-thread time here (snapshot, change key, stringify) is counted as poseMs, apart from the column ms
   const tickPose = () => {
-    if (!bot) return Promise.resolve()
+    if (!bot || !enabled) return Promise.resolve()
     const start = performance.now()
     const json = (() => {
       try {
@@ -482,7 +480,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   }
 
   const tickHud = () => {
-    if (!bot) return Promise.resolve()
+    if (!bot || !enabled) return Promise.resolve()
     const hud = (() => {
       try { return timed(() => hudSnapshot(bot, now())) } catch (err) { reportError(err); return null }
     })()
@@ -584,7 +582,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     // columns that arrived before attach (the spawn column) never fire chunkColumnLoad for us
     const loaded = target.world?.getColumns?.() ?? []
     loaded.forEach(({ chunkX, chunkZ }) => markColumn(Number(chunkX), Number(chunkZ)))
-    track(writeBiomes(target)).catch(reportError)
+    if (enabled) track(writeBiomes(target)).catch(reportError)
     const tableStart = performance.now()
     try { tableFor(target) } catch (err) { reportError(err) }
     stats.relightTableMs += performance.now() - tableStart
@@ -596,6 +594,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     unhook()
     unhook = () => {}
     bot = null
+    if (!enabled) return Promise.resolve()
     return track(writePose(JSON.stringify(offlinePose({ world, now: now(), mcVersion, last: lastPose }))))
   }
 

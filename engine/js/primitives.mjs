@@ -586,7 +586,7 @@ const readRepoFile = rel => { try { return readFileSync(join(REPO_ROOT, rel), 'u
 
 // The README's factory: connects, resolves once spawned.
 // `connect` and `timeScale` exist for tests: a stand-in for connectBot, and shrunken time bounds.
-// `opts.view` ({stateDir, agent, world, onEvent}) turns on the view dump (docs/view-format.md); BODY_VIEW=0 turns it off.
+// `opts.view` ({stateDir, agent, world, onEvent}) turns on the view dump (docs/view-format.md); BODY_VIEW=0 turns the dump off (the light overlay perception reads stays on).
 // A patch the planner relies on (deps-check REQUIRED) that is gone makes it refuse: before it connects, with the fix named.
 export async function createPrimitives ({ view: viewOpts, settings, ...opts }, { connect = connectBot, timeScale = 1, worldTimeoutMs, settleMs, readFile = readRepoFile } = {}) {
   useSettings(settings) // the live reader from main (key -> value); every tuning number is read at use, so a reload reaches here

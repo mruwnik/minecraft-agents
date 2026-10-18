@@ -477,16 +477,25 @@ test('stats count columns, compressed bytes and main-thread ms, then reset', asy
   assert.deepEqual(view.stats(), { columns: 0, bytes: 0, ms: 0, poses: 0, poseMs: 0, poseBytes: 0, huds: 0, relightMs: 0, relightMaxMs: 0, relightTableMs: 0, relightStatesMs: 0, relightLightMs: 0, relightFloodMs: 0, relightWriteMs: 0, relightBoxes: 0, relightCells: 0, relightCarried: 0 })
 })
 
-test('disabled view creates no directories and ignores everything', async () => {
+// the server sends no update_light after a block change (card ef0d3768), so perception relies on the relit overlay with the dump off too
+test('disabled view writes nothing but still relights a block change', async () => {
   const dir = tmp()
-  const bot = fakeBot({ columns: { '0,0': makeColumn() } })
+  const columns = { '0,0': new ChunkColumn() }
+  const bot = fakeBot({ columns })
+  bot.registry = undefined
+  bot.entity.position = new Vec3(8.5, 65, 10.5)
   const view = createView({ stateDir: dir, agent: 'Bob', world: 'w', onEvent: () => {}, enabled: false })
   view.attach(bot)
   bot.emit('chunkColumnLoad', new Vec3(0, 0, 0))
+  columns['0,0'].setBlockStateId({ x: 8, y: 64, z: 8 }, stateOf('stone'))
+  columns['0,0'].setBlockStateId({ x: 8, y: 65, z: 8 }, stateOf('torch'))
+  bot.emit('blockUpdate', { position: new Vec3(8, 65, 8), stateId: AIR }, { position: new Vec3(8, 65, 8), stateId: stateOf('torch') })
   await view.flushColumns()
+  await view.idle()
   await view.tickPose()
   await view.detach()
   view.stop()
+  assert.equal(view.lightOverlay(0, 0, (65 + 64) >> 4)?.block[((65 + 64) & 15) << 8 | 8 << 4 | 8], 14)
   assert.deepEqual(fs.readdirSync(dir), [])
 })
 
