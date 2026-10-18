@@ -114,12 +114,13 @@
   (if (= "debug" (second (str/split (str ns-sym) #"\."))) :debug :goal))
 
 (defn job-meta
-  "{:category :goal|:phase|:reflex|:debug :part-of [job-sym ...]} of job ns-sym from the (def meta {...}) in forms:
-  what it declares over the default category, :part-of [] when absent."
+  "{:category :goal|:phase|:reflex|:debug :part-of [job-sym ...] :tags [kw ...]} of job ns-sym from the (def meta {...}) in forms:
+  what it declares over the default category, :part-of and :tags [] when absent."
   [ns-sym forms]
   (let [declared (some-> (def-value "meta" forms) unquote-form)]
     {:category (or (:category declared) (default-category ns-sym))
-     :part-of (vec (:part-of declared))}))
+     :part-of (vec (:part-of declared))
+     :tags (vec (:tags declared))}))
 
 (defn ns-doc
   "The docstring of the ns form (the first form), or nil."
@@ -134,7 +135,7 @@
   (str "engine/src/" (second (re-find #"/engine/src/(.+)$" (str/replace (.getPath file) "\\" "/")))))
 
 (defn file-metadata
-  "{:id :file :ns-doc :doc :args :category :part-of}, with :args the (def args ...) value itself, for the source file of
+  "{:id :file :ns-doc :doc :args :category :part-of :tags}, with :args the (def args ...) value itself, for the source file of
   namespace id. A file that cannot be read gets {:id :file :error \"...\"} instead of throwing."
   [id file]
   (let [base {:id (str id) :file (repo-path file)}]
@@ -178,7 +179,7 @@
     []))
 
 (defmacro job-registry
-  "{ns-symbol {:round :doc :args :idle-ok :category :part-of}} for every job namespace under jobs/; a contract job's entry also
+  "{ns-symbol {:round :doc :args :idle-ok :category :part-of :tags}} for every job namespace under jobs/; a contract job's entry also
   holds :can-start? :can-run? :safe? :fit? (a checker fn or a quoted condition form) :target :ways :defaults :done? :quote-of :cleanup :cleanup-defaults  and its namespace's
   :settings. Each
   primitive of the engine/primitive.cljs table is a job too, as jobs.primitive.<kebab-case> (jobs.primitive/job)."

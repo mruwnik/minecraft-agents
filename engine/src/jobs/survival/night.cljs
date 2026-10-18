@@ -121,7 +121,7 @@
 
 (def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s :wall-time ::wall-time-s} :ways (set ways)})
 
-(def meta {:category :reflex})
+(def meta {:category :reflex :tags [:sleep :shelter]})
 
 (def safe? ready/ok)
 

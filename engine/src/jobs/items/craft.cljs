@@ -558,3 +558,5 @@
   "The whole craft in one call: step! until it ends; the ending (the table is picked up by cleanup)."
   [c]
   (await (pace/steps! c #(step! c))))
+
+(def meta {:tags [:craft]})

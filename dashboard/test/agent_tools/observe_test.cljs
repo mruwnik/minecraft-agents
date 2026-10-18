@@ -86,7 +86,8 @@
            [["catalog" "trigger" "health-low"] "/catalog?kind=trigger&name=health-low"]
            [["catalog" "jobs" "jobs.movement." "--limit" "5" "--offset" "10"]
             "/catalog?kind=jobs&prefix=jobs.movement.&limit=5&offset=10"]
-           [["catalog" "triggers"] "/catalog?kind=triggers&prefix=&limit=20&offset=0"]]]
+           [["catalog" "triggers"] "/catalog?kind=triggers&prefix=&limit=20&offset=0"]
+           [["catalog" "jobs" "--tag" "mine"] "/catalog?kind=jobs&prefix=&limit=20&offset=0&tag=mine"]]]
     (is (= expected (:path (apply request "--world" "w" "ProbeBody" argv))) (pr-str argv))))
 
 (deftest inventory-and-equipment-are-read-only-observe-modes-with-explicit-raw-or-slot-detail

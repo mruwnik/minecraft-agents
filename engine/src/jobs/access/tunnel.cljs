@@ -498,3 +498,5 @@
   (or (await (stock/torches! c))
       (let [n (atom 0)]
         (await (pace/steps! c #(if (< (swap! n inc) (if-let [m (:max-steps (:args c))] (inc m) (stair/max-steps))) (step! c) :continue))))))
+
+(def meta {:tags [:mine :dig :light]})

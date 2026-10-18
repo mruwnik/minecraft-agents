@@ -447,3 +447,5 @@
             s s
             (and (:collect (:args c)) (seq (:ids (:dug m)))) (await (collect! c pos))
             :else (done)))))))
+
+(def meta {:tags [:dig]})

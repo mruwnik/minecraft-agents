@@ -516,3 +516,5 @@
     (cond-> {:uses {:job-time [(+ walk (/ cook 2)) (+ walk cook) (if (or furnace (nearest-furnace c nil)) (+ walk cook 120) ##Inf)]}}
       (seq items) (assoc-in [:uses :items] items)
       (seq yields) (assoc :yields {:items yields}))))
+
+(def meta {:tags [:smelt :fuel]})

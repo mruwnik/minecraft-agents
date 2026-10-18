@@ -57,6 +57,11 @@
     'jobs.survival.night :reflex []
     'jobs.survival.bed-down :phase '[jobs.survival.night]))
 
+(deftest a-job-declares-its-tags
+  (is (= [:mine :dig :ore :light] (:tags (get registry/jobs 'jobs.gather.mine))))
+  (is (= [:food] (:tags (get registry/jobs 'jobs.survival.get-food))))
+  (is (= [] (:tags (get registry/jobs 'jobs.movement.go-to)))))
+
 (deftest a-primitive-job-refuses-unknown-arg-keys
   (is (re-find #"jobs.primitive.dig has no arg :bogus; its args are .*:pos"
                (expr/problem registry/jobs '(jobs.primitive.dig {:bogus 1}))))

@@ -363,3 +363,5 @@
   (if-let [ks (kinds c)]
     (await (kinds-round c ks))
     (await (hunt-round c))))
+
+(def meta {:tags [:food :fight]})

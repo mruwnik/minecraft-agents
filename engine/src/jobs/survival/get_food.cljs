@@ -158,7 +158,7 @@
 (def defaults {:checks {:safe? '(job-safe-or-starving) :fit? '(always)}
                :spend {:job-time ::job-time-s} :ways (set ways)})
 
-(def meta {:category :reflex})
+(def meta {:category :reflex :tags [:food]})
 
 (def safe? ready/ok)
 

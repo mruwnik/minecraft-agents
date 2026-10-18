@@ -182,3 +182,5 @@
     t
     (let [r (await (pace/steps! c #(step c)))]
       (if (= :yield r) :continue r))))
+
+(def meta {:tags [:food :fight]})

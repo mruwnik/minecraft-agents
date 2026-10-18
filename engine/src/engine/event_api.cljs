@@ -432,6 +432,13 @@
                          :else (assoc e :default-from :code))]))
           described)))
 
+(defn tags-of
+  "The search tags of job sym: its declared :tags, its family (jobs.<family>.x) and the words of its name, as sorted
+  keywords."
+  [sym entry]
+  (let [[_ family & more] (str/split (str sym) #"\.")]
+    (vec (sort (distinct (concat (:tags entry) (map keyword (cons family (str/split (str (last more)) #"-")))))))))
+
 (defn catalog-entry [eng kind name]
   (case kind
     "job" (let [sym (symbol name)
@@ -439,6 +446,7 @@
             (when entry
               (merge
                (cond-> (select-keys entry [:category :part-of :target :ways :defaults])
+                 true (assoc :tags (tags-of sym entry))
                  (:defaults entry) (update :defaults (partial walk/postwalk #(if (fn? %) :from-args %))))
                {:ok true :kind :job :name sym
                 :doc (short-text (:doc entry) (setting "catalog-doc-limit"))
@@ -467,11 +475,12 @@
                  (catch :default e
                    {:ok false :reason (if (:form (ex-data e)) :bad-args :quote-failed) :message (short-text (ex-message e) 500)})))))
 
-(defn catalog-list [eng kind prefix offset limit category]
+(defn catalog-list [eng kind prefix offset limit category tag]
   (let [name-of (fn [x] (if (keyword? x) (name x) (str x)))
         names (case kind
                 "jobs" (sort-by name-of (cond->> (:jobs eng)
                                           category (filter #(= category (some-> (:category (val %)) name)))
+                                          tag (filter #(some (fn [t] (= tag (name t))) (tags-of (key %) (val %))))
                                           true (map key)))
                 "triggers" (sort-by name-of (keys (:triggers eng)))
                 nil)]
@@ -588,6 +597,7 @@
                               limit (number-param params "limit" (setting "catalog-page-limit") (setting "max-catalog-page-limit"))
                               offset (number-param params "offset" 0 10000)
                               category (.get params "category")
+                              tag (.get params "tag")
                               exact? (contains? #{"job" "trigger"} kind)
                               list? (contains? #{"jobs" "triggers"} kind)
                               valid-name? (and (string? name)
@@ -605,6 +615,7 @@
                                                                    (boolean (re-matches #"[a-z][a-z0-9-]*" prefix)))
                                                    false))]
                           (if (and (or (nil? category) (and (= "jobs" kind) (contains? #{"goal" "phase" "reflex" "debug"} category)))
+                                   (or (nil? tag) (and (= "jobs" kind) (re-matches #"[a-z][a-z0-9-]{0,40}" tag)))
                                    (or (and exact? valid-name?)
                                        (and list? valid-prefix? limit (pos? limit) offset))
                                    (or (not exact?) (nil? (.get params "prefix"))))
@@ -612,7 +623,7 @@
                               (if-let [entry (catalog-entry eng kind name)]
                                 (respond! res 200 entry)
                                 (bad! res 404 :capability-not-found))
-                              (respond! res 200 (catalog-list eng kind prefix offset limit (.get params "category"))))
+                              (respond! res 200 (catalog-list eng kind prefix offset limit category tag)))
                             (bad! res 400 :bad-query)))
 
                         (and (= method "GET") (= pathname "/quote"))

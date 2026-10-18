@@ -627,7 +627,20 @@
 
 (deftest catalog-list-filters-jobs-by-category
   (let [eng {:jobs {'jobs.a.goal {:category :goal} 'jobs.a.step {:category :phase :part-of '[jobs.a.goal]}}}]
-    (are [category items] (= items (:items (event-api/catalog-list eng "jobs" "" 0 10 category)))
+    (are [category items] (= items (:items (event-api/catalog-list eng "jobs" "" 0 10 category nil)))
       nil ["jobs.a.goal" "jobs.a.step"]
       "phase" ["jobs.a.step"])
     (is (= [:phase '[jobs.a.goal]] ((juxt :category :part-of) (event-api/catalog-entry eng "job" "jobs.a.step"))))))
+
+(deftest catalog-list-finds-jobs-by-tag-family-or-name-word
+  (let [eng {:jobs {'jobs.gather.mine {:tags [:mine :light]} 'jobs.access.tunnel {:tags [:mine]}
+                    'jobs.items.smelt {:tags [:fuel]} 'jobs.movement.go-to {}}}
+        found #(:items (event-api/catalog-list eng "jobs" "" 0 10 nil %))]
+    (are [tag items] (= items (found tag))
+      "mine" ["jobs.access.tunnel" "jobs.gather.mine"]
+      "light" ["jobs.gather.mine"]
+      "items" ["jobs.items.smelt"]
+      "smelt" ["jobs.items.smelt"]
+      "to" ["jobs.movement.go-to"]
+      "nothing" [])
+    (is (= [:fuel :items :smelt] (:tags (event-api/catalog-entry eng "job" "jobs.items.smelt"))))))

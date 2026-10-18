@@ -331,3 +331,5 @@
   "The whole fight: steps until the job finishes (cleared, gave up, lost, absent) or the engine's limit ends it."
   [c]
   (await (pace/steps! c #(step c))))
+
+(def meta {:tags [:fight]})

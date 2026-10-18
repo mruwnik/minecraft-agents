@@ -309,3 +309,5 @@
 (defn quote-of [c]
   (let [{:keys [from to]} (seg-of (:segment (:args c)))]
     {:uses {:job-time [1 (max 1 (- (or to 0) (or from 0))) (settings/get settings ::job-time-s)]}}))
+
+(def meta {:tags [:mine :light]})

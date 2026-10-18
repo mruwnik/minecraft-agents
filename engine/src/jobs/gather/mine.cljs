@@ -598,3 +598,5 @@
       (ctx/end c :done nil {})
       (do (ctx/update-mem! c assoc :cleaning true)
           (await (home-round! c))))))
+
+(def meta {:tags [:mine :dig :ore :light]})

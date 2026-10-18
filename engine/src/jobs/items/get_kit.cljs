@@ -290,3 +290,5 @@
                         (ctx/emit! c :kit.progress :info {:item item :have (inc (count have)) :of (count items)
                                                           :text (str "got " item " (" (inc (count have)) " of " (count items) ")")})
                         :again)))))))))
+
+(def meta {:tags [:craft]})

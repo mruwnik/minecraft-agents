@@ -209,7 +209,7 @@ built-in recipe table, and instant, deterministic behaviour (`moveTo` jumps to t
 
 A job is a namespace under `src/jobs/` exporting `round` (and `can-start?`, `can-run?`, each defaulting to `:ok`; Contract jobs below), and optionally `doc`, `args` and `idle-ok` (`true`: its acts are no work, see
 `body.idle`). The namespace follows the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry.fell-tree`).
-`(def meta {:category :phase :part-of '[jobs.survival.night]})` is read at compile time: `:category` is `:goal` (default), `:phase`, `:reflex` or `:debug` (default for `jobs.debug.*`); `catalog jobs --category` lists one kind.
+`(def meta {:category :phase :part-of '[jobs.survival.night]})` is read at compile time: `:category` is `:goal` (default), `:phase`, `:reflex` or `:debug` (default for `jobs.debug.*`); `catalog jobs --category` lists one kind. `:tags [:mine :light]` (resource or goal words, in the job file) add to the tags the catalog derives itself (the family and the words of the name); `catalog jobs --tag mine` lists the jobs with that tag.
 
 ```clojure
 (ns jobs.survival.eat
@@ -560,7 +560,7 @@ HTTP over `worlds/<world>/agents/<name>/engine/events.sock` (mode 0600; all bodi
 | `GET /chests?max=` | chest stock the body saw (memory `:fetch/stock`, kept 6 h, latest per chest), nearest first with `:pos`, `:distance`, `:age-ms`, `:items {name n}`; max capped at 64; read-only (`observe <agent> chests`) |
 | `GET /job?id=` | one job's parsed spec, args, state, linked requests; a finished job answers its recorded outcome (`:finished? true :status :result :ended-at`) from the results record: the last `engine.core.base/recent-results-limit` (100) ended listed jobs and `reflex-results-limit` (20) reflex jobs, in `results.edn`, not in the state or `/snapshot` |
 | `GET /results?ids=j1,j2` | the recorded outcomes of up to 32 job ids |
-| `GET /catalog?kind=jobs\|triggers&prefix=` / `kind=job\|trigger&name=` | names page / one description (a contract job's also `:target :ways :defaults`; each arg shows its effective `:default` and `:default-from` `:code`, `:world` or `:body`) |
+| `GET /catalog?kind=jobs\|triggers&prefix=[&category=][&tag=]` / `kind=job\|trigger&name=` | names page / one description (a contract job's also `:target :ways :defaults`; each arg shows its effective `:default` and `:default-from` `:code`, `:world` or `:body`) |
 | `GET /quote?name=jobs.x&args=<EDN map>` | the job's quote for a call with those args; runs no round |
 | `GET /settings` | every key `{:value :layer :doc}` plus `:game-rate`, `:rate-source`, `:frozen?`, `:physics-ms` |
 | `POST /settings/reload` / `/settings/set` `{:key :value}` / `/settings/unset` `{:key}` | re-read the files / validate and write the key in the body's `settings.edn` (only that entry is edited, comments kept; temp file + rename), then reload; 409 `{:ok false :reason}` on refusal |

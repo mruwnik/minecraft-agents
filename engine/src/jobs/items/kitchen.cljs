@@ -293,3 +293,5 @@
     (ctx/update-mem! c assoc :todo steps :report {} :tried #{} :failed nil
                      :wheat0 (storage/carried (u/inventory (:primitives c)) "wheat")))
   (await (pace/steps! c #(step! c))))
+
+(def meta {:tags [:food :smelt]})
