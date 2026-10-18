@@ -596,7 +596,7 @@
             (is (empty? (:list (core/state eng))) "the second ends done: nothing is offered")
             (is (= n (.-length (.-calls (.-world p)))))))))))
 
-(deftest no-zone-list-declines-with-one-warn
+(deftest no-zone-list-declines-without-a-warn
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -605,7 +605,7 @@
           (core/submit! eng (list job) {})
           (await (ticks s eng 10))
           (is (= "dirt" (block p [0 64 0])))
-          (is (= 1 (count (of-kind seen :cleanup.declined)))))))))
+          (is (empty? (of-kind seen :cleanup.declined))))))))
 
 (deftest a-block-that-needs-a-pickaxe-is-held-no-tool-without-one
   (are [carried reason] (= reason (:reason (first (:open (step :entries [(entry [1 64 0] :item "cobblestone")]

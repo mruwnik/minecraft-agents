@@ -49,10 +49,10 @@
   its entry.
 
   Then one step, passes repeated (paced) until nothing is left to do:
-  - Dig the highest (then nearest) cell within :reach of the eye that may be dug. The entry is marked
+  - Dig the highest (then nearest) cell within ::reach of the eye that may be dug. The entry is marked
     :removing before the dig, so a cut or restart is decided from the cell.
   - Else walk to within 3 of the nearest (jobs.movement.go-to as a child, :ways #{:walk}: never digging a way), in legs of
-    :leg-s. Before each leg a known hostile within ::danger-radius of the cell, or a flight from one near it or the body,
+    ::leg-s. Before each leg a known hostile within ::danger-radius of the cell, or a flight from one near it or the body,
     holds that cell :danger instead (the hostile reflex acts; the cell is offered again after the hold).
   - Else finish.
 
@@ -81,8 +81,8 @@
   (:hazard; lava beside is :lava-adjacent) keeps the entry open, and so does :no-tool (the block needs a tool no
   carried one is: dug by hand it drops nothing). A cell the planner proves no walk reaches to within ::walk-range of (cut off, closed in: up a tree, behind a wall), asked
   before the walk, is held :no-way with no walk made; a go-to that proves no way (see permanent-walk?) holds it
-  :unreachable at once. After :give-up walks ending out of reach the cell is held :out-of-reach, after
-  :give-up failed digs :dig-failed.
+  :unreachable at once. After ::give-up walks ending out of reach the cell is held :out-of-reach, after
+  ::give-up failed digs :dig-failed.
 
   Ends by collecting the removed items' drops (jobs.items.collect-drops, filtered to the items they drop;
   a wall torch gives the torch). Data {:removed [{:cell :item}] :dropped [{:cell :item :found}] :open [{:cell
@@ -91,8 +91,7 @@
   once. Ends :done when nothing is left open, else nothing-possible :left-open (what could be taken back, was);
   :too-many-passes (nothing-possible) after ::max-passes steps.
 
-  Impossible: :bad-args (:job is not nil, :all or an instance id). Condition: :no-zones (no zone list has been read, with one warn
-  cleanup.declined, unless :ignore-zones?). Done at once when nothing is offered (after a look around when a cell was
+  Impossible: :bad-args (:job is not nil, :all or an instance id). Condition: :no-zones (no zone list has been read, unless :ignore-zones?). Done at once when nothing is offered (after a look around when a cell was
   never seen). Quote: from the entries it would work on.")
 
 (a/defargs args
@@ -102,15 +101,15 @@
    :accept {:doc "dig hazards accepted: :fluid-adjacent (water beside), :lava-adjacent, :falling-block"
             :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent}}
    :ignore-zones? :shared
-   :reach {:doc "cells whose centre is this close to the eye are dug from where the body stands, in blocks" :spec (a/num-in 0 nil) :default u/bucket-reach}
    :keep-at-night? {:doc "a shelter's block (:shelter, :retreat-plug) stays all night; false takes it back at night too" :spec boolean? :default true}
-   :spare-own-builds {:doc "a block on the footprint of a plan this body made is the plan's, not scaffold: its entry is dropped and never dug" :spec boolean? :default true}
-   :leg-s {:doc "a walk goes in legs of this many seconds; the danger is weighed again after each" :spec (a/num-in 0.1 120) :default 6}
-   :give-up {:doc "walks ending out of reach, or failed digs, after which a cell is held" :spec (a/int-in 1 nil) :default 2}})
+   :spare-own-builds {:doc "a block on the footprint of a plan this body made is the plan's, not scaffold: its entry is dropped and never dug" :spec boolean? :default true}})
 
 
 (a/defargs settings
-  {::walk-range {:default 3 :doc "How near a scaffold block the body walks before it digs it." :spec (a/int-in 0 nil)}
+  {::reach {:default u/bucket-reach :doc "Cells whose centre is this close to the eye are dug from where the body stands, in blocks." :spec (a/num-in 0 nil)}
+   ::leg-s {:default 6 :doc "A walk goes in legs of this many seconds; the danger is weighed again after each." :spec (a/num-in 0.1 120)}
+   ::give-up {:default 2 :doc "Walks ending out of reach, or failed digs, after which a cell is held." :spec (a/int-in 1 nil)}
+   ::walk-range {:default 3 :doc "How near a scaffold block the body walks before it digs it." :spec (a/int-in 0 nil)}
    ::max-collect-radius {:default 48 :doc "Blocks around the body in which dropped scaffold is collected, at most." :spec (a/int-in 0 nil)}
    ::roof-height {:default 4 :doc "Blocks above a scaffold block within which a solid block (not scaffold) roofs it; a roofed one is not walked to from the open (:roofed)." :spec (a/int-in 0 nil)}
    ::died-radius {:default 24 :doc "Blocks around a place the body died within which a scaffold is not walked to (:died-near)." :spec (a/num-in 0 nil)}
@@ -128,6 +127,12 @@
 (defn max-collect-radius [] (settings/get settings ::max-collect-radius))
 
 (defn max-passes [] (settings/get settings ::max-passes))
+
+(defn dig-reach [] (settings/get settings ::reach))
+
+(defn leg-s [] (settings/get settings ::leg-s))
+
+(defn give-up [] (settings/get settings ::give-up))
 
 (defn danger-radius [] (settings/get settings ::danger-radius))
 
@@ -161,12 +166,12 @@
 (defn inputs
   "next-step's input now: entries to work on, the whole ledger l for the rules."
   [c l entries zones]
-  (let [{:keys [accept reach]} (:args c)]
+  (let [{:keys [accept]} (:args c)]
     (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
            {:feet (reach/standing-vec (:primitives c)) :eye (eye-of c) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :entries entries
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
             :hostile-near? (hostile-near? (:primitives c)) :night? (sh-sense/night? (:primitives c)) :keep-at-night? (:keep-at-night? (:args c))
-            :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
+            :ledger (ledger/cells l) :zones zones :accept (set accept) :reach (dig-reach)
             :spare-own-builds (:spare-own-builds (:args c))
             :guard-walks? (and (nil? (:job (:args c))) (nil? (:near (:args c))))
             :max-below (ledger/max-below) :roof-height (roof-height)
@@ -192,21 +197,12 @@
 (defn offered-now [c]
   (ledger/offered (ctx/view c) (access/sensed-at (:primitives c) nil) (:job (:args c)) (ledger/near-of-args c (:args c))))
 
-(defn no-zones
-  "Later :no-zones while no zone list has been read, with one kind warn."
-  [c]
-  (let [s (checks/zones-read c)]
-    (when-not (= :ok (first s))
-      (ctx/warn-once! c :no-zones :cleanup.declined
-                      {:reason "no zone list has been read" :text "cleanup declines: no zone list has been read"}))
-    s))
-
 (defn nothing-to-do?
   "Nothing is offered, no pick-up is due, and a cell never seen has been looked at (or none is unseen): the goal holds."
   [c]
   (not (or (:collect (ctx/mem c)) (seq (offered-now c)) (and (not (look/surveyed? c)) (unseen-entries? c)))))
 
-(def can-start? (cond/and bad-args no-zones))
+(def can-start? (cond/and bad-args checks/zones-read))
 
 (def meta {:category :phase :part-of '[jobs.movement.go-to jobs.access.stair]})
 
@@ -258,7 +254,7 @@
         e (ledger/entry-at l cell)
         under? (= cell (update (reach/standing-vec (:primitives c)) 1 dec))]
     (if-let [why (if e (blocker (inputs c l [e] (known/zones c)) e) {:reason :gone})]
-      (do (ctx/update-mem! c count-fail cell why (:give-up (:args c)))
+      (do (ctx/update-mem! c count-fail cell why (give-up))
           :again)
       (do
         (await (tools/equip-tool! c item {:fast true}))
@@ -271,7 +267,7 @@
           (cond
             (= :continue outcome) :continue
             (#{:dug :missing} outcome) (ctx/update-mem! c assoc :collect true)
-            :else (ctx/update-mem! c count-fail cell {:reason :dig-failed :dig outcome} (:give-up (:args c))))
+            :else (ctx/update-mem! c count-fail cell {:reason :dig-failed :dig outcome} (give-up)))
           (if (= :continue outcome) :continue :again))))))
 
 
@@ -296,14 +292,14 @@
     :else
     (let [e (await (child/call-walk* c :walk {:pos cell :range (walk-range) :ways #{:walk} :zone-tolls true
                                               :ignore-zones? (boolean (:ignore-zones? (:args c)))
-                                              :spend {:job-time (:leg-s (:args c))}}))
+                                              :spend {:job-time (leg-s)}}))
           status (if (= :done (:kind e)) :done :stopped)]
       (cond
         (:leg (:data e)) nil
         (result/permanent-walk? e)
         (ctx/update-mem! c assoc-in [:held cell] {:reason :unreachable :walk status})
-        (or (= :continue e) (= :stopped status) (> (distance (eye-of c) (centre cell)) (:reach (:args c))))
-        (ctx/update-mem! c count-fail cell {:reason :out-of-reach :walk status} (:give-up (:args c))))
+        (or (= :continue e) (= :stopped status) (> (distance (eye-of c) (centre cell)) (dig-reach)))
+        (ctx/update-mem! c count-fail cell {:reason :out-of-reach :walk status} (give-up)))
       :again)))
 
 (defn ^:async retreat!
