@@ -318,6 +318,16 @@
     (boolean (and (<= by cy (+ by 2))
                   (reach/closes-in? p cell)))))
 
+(defn shuts-out?
+  "Whether placing cell would wall in the floor under a higher cell still owed, which can then only be placed from inside
+  (the interior of a roof): the cell waits while anything else can be placed."
+  [c cell owed]
+  (let [y (get (:pos cell) 1)
+        [cx _ cz] (:pos cell)
+        close? #(and (> (get (:pos %) 1) y) (<= (js/Math.abs (- cx (nth (:pos %) 0))) 4) (<= (js/Math.abs (- cz (nth (:pos %) 2))) 4))
+        above (vals (into {} (map (fn [o] [[(nth (:pos o) 0) (nth (:pos o) 2)] (:pos o)])) (filter close? owed)))]
+    (boolean (some #(reach/walls-in? (:primitives c) % (:pos cell)) above))))
+
 (defn exit-point
   "A cell two blocks outside the box of the planned cells, on the side nearest the body, at its feet height."
   [cells body]
@@ -474,11 +484,14 @@
   (let [_ (ctx/update-mem! c retry-walks (u/self-pos c) false)
         closed #(merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
         wanted (buildable cells (storage/carried-totals (u/inventory (:primitives c))) (closed))
-        todo (placeable c (permitted c wanted))
+        placeable-now (placeable c (permitted c wanted))
         digs (diggable c (digging cells) (closed))
         given-up (closed)
-        lowest (when (seq todo) (apply min (map #(get (:pos %) 1) todo)))
-        layer (filter #(= lowest (get (:pos %) 1)) todo)
+        lowest-of #(when (seq %) (apply min (map (fn [x] (get (:pos x) 1)) %)))
+        layer-of (fn [cs] (let [y (lowest-of cs)] (filter #(= y (get (:pos %) 1)) cs)))
+        held (set (filter #(shuts-out? c % wanted) (in-reach c (layer-of placeable-now))))
+        todo (let [open (remove held placeable-now)] (if (seq open) open placeable-now))
+        layer (layer-of todo)
         near (in-reach c layer)
         mine (body-cells (u/self-pos c))
         feet (first (sort mine))

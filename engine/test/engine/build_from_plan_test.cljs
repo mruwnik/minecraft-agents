@@ -620,8 +620,10 @@
               {:keys [eng p]} (start {:blocks wide-ground :inventory [{:name "dirt" :count 64}]
                                       :self {:pos {:x 2.5 :y 64 :z 2.5}}}
                                      {"box" plan} [])]
-          (await (child-outcome eng job {:plan "box"} 400))
-          (let [pos (.-pos (.self p))]
+          (let [result (await (child-outcome eng job {:plan "box"} 400))
+                pos (.-pos (.self p))]
+            (is (= 40 (:placed result)))
+            (is (< (.indexOf (mapv first (places p)) [2 66 2]) (.indexOf (mapv first (places p)) [3 65 1])) "the interior roof goes up from inside before the last wall cell shuts the room")
             (is (not (reach/enclosed? p)))
             (is (not (and (<= 1 (js/Math.floor (.-x pos)) 4) (<= 1 (js/Math.floor (.-z pos)) 4))))))))))
 
@@ -1215,7 +1217,7 @@
       (fn ^:async t []
         (let [plan {:id "box" :parts [{:id "walls" :outline [[10 64 10] [13 65 13]] :want "dirt"}
                                       {:id "roof" :box [[10 66 10] [13 66 13]] :want "dirt"}]}
-              island (into {} (concat (for [x (range 0 48) z (range 0 48)] [(h/cell-key x 61 z) "stone"])
+              island (into {} (concat (for [x (range 0 48) z (range 0 48)] [(h/cell-key x 60 z) "stone"])
                                       (for [x (range 9 15) z (range 9 15)] [(h/cell-key x 63 z) "stone"])))
               {:keys [eng p]} (start {:blocks island :inventory [{:name "dirt" :count 64}]
                                       :self {:pos {:x 11.5 :y 64 :z 11.5}}}
