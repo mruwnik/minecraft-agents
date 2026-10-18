@@ -95,9 +95,9 @@
    :blocks [[:fill [4 0 15] [24 3 17] "water"]
             [:fill [18 3 15] [21 3 17] "air"]
             [:set [12 -1 16] "magma_block"]]
-   ;; the pocket (x 18..21) is 12+ from the body: past the default :air-radius 8
+   ;; the pocket (x 18..21) is 12+ from the body: past the default air-radius setting 8
    :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-               :job (jobs.survival.breathe {:min-oxygen 12 :air-radius 16})}]
+               :job (jobs.survival.breathe {:min-oxygen 12 :settings {:jobs.survival.breathe.air/air-radius 16}})}]
    :body {:at [6.5 1 16.5] :yaw 270}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :job :kind :child_started :data {:slot :air}} :within-s 40}

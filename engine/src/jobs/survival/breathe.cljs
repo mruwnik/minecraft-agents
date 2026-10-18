@@ -21,8 +21,8 @@
   "Get air when drowning or stuck inside a block, then out of the water, in one run (a reflex; never yields).
   Each pass reads the world again:
   - Drowning (in water, head under, oxygen below :min-oxygen): swim up the own column when it reaches air within
-    :reach blocks, else step sideways, at the feet's height, to the nearest column within :radius that does; else a go-to
-    child to the nearest air-reaching surface within :air-radius, else to the nearest seen air below the feet within :depth
+    the reach setting (10) blocks, else step sideways, at the feet's height, to a nearby column that does; else a go-to
+    child to the nearest air-reaching surface within the air-radius setting (8), else to the nearest seen air below the feet within the depth setting (24)
     (the way the body came; a failed target is not tried again); else dig up through a cap within 3 blocks over the head
     when it is natural (jobs.lib.escape/natural?), not protected and not sand or gravel, one cell a pass, at most 3 digs
     (zones respected, trespass only as a last resort), with the best tool, and only when the dig fits jobs.survival.breathe.air/cap-dig-share of the air left.
@@ -38,18 +38,18 @@
   - Enclosed (head cell holds a suffocating block, see jobs.lib.breath): step to a side cell with room
     to stand, once; then dig the head block, the block above it if solid, and step up.
   - Surfaced and still in water: the ways out are read from what is seen; when none shows, the unseen cells that read touched are looked at (jobs.lib.sense/decide!, bounded) before the run gives up. Each pass takes the first way left: swim to the nearest shore cell (land with its
-    rim at most one block above the water) within :shore-radius, another direction after each failed swim; a go-to
-    child onto land within :search-radius (at most 3 targets per spot, a failed target excludes its direction);
+    rim at most one block above the water) within the shore-radius setting (6), another direction after each failed swim; a go-to
+    child onto land within the search-radius setting (48) (at most 3 targets per spot, a failed target excludes its direction);
     then a step block: with a carried pillar block (jobs.lib.choose/fillers :climb), one placed (jobs.blocks.place child,
-    zones respected) in the nearest top water cell within :shore-radius that has support and two air cells above,
+    zones respected) in the nearest top water cell within the shore-radius setting that has support and two air cells above,
     written to the scaffold ledger (purpose :breathe-step, for jobs.access.cleanup), at most 2 per spot; the next
-    pass's shore swim climbs onto it; then a swim leg, a go-to to the farthest loaded surface water 8..:leg-length blocks out, outward from the run's
-    start only, inside :swim-range of it, at most :max-legs legs (a leg that moved starts afresh at its end).
+    pass's shore swim climbs onto it; then a swim leg, a go-to to the farthest loaded surface water 8..leg-length (32) blocks out, outward from the run's
+    start only, inside swim-range (96) of it, at most max-legs (6) legs (a leg that moved starts afresh at its end).
   Done at once when the body is neither drowning, enclosed nor surfaced but still in water. A reflex
   (level danger): it exhausts its ways before it stops and never yields :continue (only a cut round returns it, unseen). Ends :done when the head is clear
   and, after a swim, the body stands on solid ground out of the water. Else nothing-possible:
   :no-land-in-range (data :searched :swum :legs :headings-failed :step, one of :no-wall :no-blocks :refused :failed) when
-  every way out of the water is spent or the run has gone 3 x :swim-range blocks; the searched area (the start and the
+  every way out of the water is spent or the run has gone 3 x the swim-range setting blocks; the searched area (the start and the
   failed headings) is remembered (:breathe-afloat, 5 min), so a refire there swims no leg the run already did;
   :no-blocks when only a step cell was left and no pillar block is carried;
   :no-air (data :air-radius, :cap why no cap was dug: :no-cap :unseen :not-natural :protected :gravity :too-slow :dig-failed,
@@ -61,25 +61,26 @@
 (a/defargs args
   {:min-oxygen {:doc "oxygen (of 20) below which being in water with the head submerged is drowning"
                 :spec (a/num-in 0 20) :default breath/default-min-oxygen}
-   :radius {:doc "columns this far sideways are searched for air" :spec (a/num-in 0 nil) :default 2}
-   :reach {:doc "blocks above the feet the search climbs" :spec (a/num-in 0 nil) :default 10}
-   :air-radius {:doc "when no air is near, a go-to child searches for air-reaching water this many blocks sideways, 1 to 32" :spec (a/int-in 1 32) :default 8}
-   :depth {:doc "blocks below the feet a drowning body looks for seen air, the way it came (within :air-radius sideways)" :spec (a/int-in 0 64) :default 24}
-   :shore-radius {:doc "after surfacing, land this many blocks sideways is swum to" :spec (a/num-in 0 nil) :default 6}
-   :search-radius {:doc "land beyond :shore-radius up to this many blocks sideways is gone to with go-to" :spec (a/num-in 0 nil) :default 48}
-   :leg-length {:doc "blocks one swim leg goes out at most" :spec (a/num-in 0 nil) :default 32}
-   :swim-range {:doc "blocks from the run's start no swim leg goes beyond" :spec (a/num-in 0 nil) :default 96}
-   :max-legs {:doc "swim legs one run makes at most" :spec (a/int-in 1 nil) :default 6}
    :pocket {:doc "with no air seen, make a dry pocket: dig into the wall beside the body, step in and plug the opening with a carried block" :spec boolean? :default true}
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::job-time-s {:default 120 :doc "Seconds getting air and out of the water may take." :spec (a/num-in 0 nil)}
+  {::shore-radius {:default 6 :doc "After surfacing, land this many blocks sideways is swum to." :spec (a/num-in 0 nil)}
+   ::search-radius {:default 48 :doc "Land beyond shore-radius up to this many blocks sideways is gone to with go-to." :spec (a/num-in 0 nil)}
+   ::leg-length {:default 32 :doc "Blocks one swim leg goes out at most." :spec (a/num-in 0 nil)}
+   ::swim-range {:default 96 :doc "Blocks from the run's start no swim leg goes beyond." :spec (a/num-in 0 nil)}
+   ::max-legs {:default 6 :doc "Swim legs one run makes at most." :spec (a/int-in 1 nil)}
+   ::job-time-s {:default 120 :doc "Seconds getting air and out of the water may take." :spec (a/num-in 0 nil)}
    ::land-tries {:default 3 :doc "Go-to targets one spot tries before it swims a leg." :spec (a/int-in 0 nil)}
    ::min-leg {:default 8 :doc "Blocks a swim leg must move to count as moved." :spec (a/int-in 0 nil)}
    ::max-passes {:default 120 :doc "Passes one run makes before it stops :no_way_out, a safety net against a world that never changes." :spec (a/int-in 0 nil)}
    ::afloat-near {:default 16 :doc "Blocks around a spot in which a later run takes over the start and failed headings of an earlier stop." :spec (a/int-in 0 nil)}
    ::max-steps {:default 2 :doc "Step blocks one spot places at most." :spec (a/int-in 0 nil)}})
+(defn shore-radius [] (settings/get settings ::shore-radius))
+(defn search-radius [] (settings/get settings ::search-radius))
+(defn leg-length [] (settings/get settings ::leg-length))
+(defn swim-range [] (settings/get settings ::swim-range))
+(defn max-legs [] (settings/get settings ::max-legs))
 (defn land-tries [] (settings/get settings ::land-tries))
 (defn min-leg [] (settings/get settings ::min-leg))
 (defn max-passes [] (settings/get settings ::max-passes))
@@ -214,29 +215,28 @@
     {:start (:start d) :failed (into #{} (map vec) (:headings d))}))
 
 (defn leg-target
-  "The farthest loaded surface water cell along heading, min-leg to :leg-length blocks out, inside :swim-range of
+  "The farthest loaded surface water cell along heading, min-leg to the leg-length setting blocks out, inside swim-range of
   start; nil if none."
-  [p pos start [hx hz] {:keys [leg-length swim-range reach]}]
+  [p pos start [hx hz]]
   (let [fx (js/Math.floor (:x pos)) fy (js/Math.floor (:y pos)) fz (js/Math.floor (:z pos))]
     (some (fn [k]
             (let [x (+ fx (* hx k)) z (+ fz (* hz k))
-                  cell (when (<= (hdist {:x x :z z} start) swim-range) (breath/surface-in-column p x z fy reach))]
+                  cell (when (<= (hdist {:x x :z z} start) (swim-range)) (breath/surface-in-column p x z fy (air/reach)))]
               (when (and cell (= "water" (u/seen-name p cell))) cell)))
-          (range leg-length (dec (min-leg)) -1))))
+          (range (leg-length) (dec (min-leg)) -1))))
 
 (defn stop-afloat!
   "Every way out of the water is spent: remember the spot's failed headings and stop with reason (:no-land-in-range, or
   :no-blocks when a step cell was left and no block to place)."
   [c reason]
-  (let [{:keys [search-radius swim-range]} (:args c)
-        m (ctx/mem c)
+  (let [m (ctx/mem c)
         pos (u/self-pos c)
         failed (:failed-headings m #{})]
     (ctx/remember! c :breathe-afloat {:pos pos :start (:start m pos) :reason reason :headings (vec failed)} afloat-policy)
     (ctx/end c :nothing-possible reason
-             {:text (str "afloat; no land within " search-radius " blocks or a swim of " swim-range
+             {:text (str "afloat; no land within " (search-radius) " blocks or a swim of " (swim-range)
                          (when (= :no-blocks reason) ", and no block to step out on"))
-              :searched search-radius :swum (js/Math.round (hdist pos (:start m pos))) :legs (:legs m 0)
+              :searched (search-radius) :swum (js/Math.round (hdist pos (:start m pos))) :legs (:legs m 0)
               :headings-failed (count failed)
               :step (cond (= :no-blocks reason) :no-blocks (:step-refused m) :refused (seq (:failed-steps m)) :failed :else :no-wall)})))
 
@@ -299,26 +299,25 @@
     (if (on-land? (:primitives c)) :done :again)))
 
 (defn ^:async head-for-land!
-  "Surfaced and still in water: the first way left of shore swim (nearest shore cell within :shore-radius, another
+  "Surfaced and still in water: the first way left of shore swim (nearest shore cell within the shore-radius setting (6), another
   direction after each failure; the swim primitive with toward climbs out onto a rim the planner cannot path to), a
-  go-to onto land within :search-radius, a swim leg, then stopped :no_land_in_range. :done when out of the water."
+  go-to onto land within the search-radius setting, a swim leg, then stopped :no_land_in_range. :done when out of the water."
   [c]
   (let [p (:primitives c)
-        {:keys [reach shore-radius search-radius swim-range max-legs]} (:args c)
-        pos (surface-pos p (u/self-pos c) reach)
+        pos (surface-pos p (u/self-pos c) (air/reach))
         _ (when-not (:start (ctx/mem c))
             (let [{:keys [start failed]} (initial-search (ctx/entries c :breathe-afloat) pos)]
               (ctx/update-mem! c assoc :start (or start (u/self-pos c)) :failed-headings failed)))
         m (ctx/mem c)
         carried? (boolean (escape/pillar-item c))
-        in-budget? (< (:travelled m 0) (* 3 swim-range))
+        in-budget? (< (:travelled m 0) (* 3 (swim-range)))
         ways (fn []
-               (let [shore (nearest-land p pos shore-radius (:failed-shores m) shore-cell?)
+               (let [shore (nearest-land p pos (shore-radius) (:failed-shores m) shore-cell?)
                      land (when (and in-budget? (< (:land-tries m 0) (land-tries)))
-                            (nearest-land p pos search-radius (:failed-land m) (constantly true)))
-                     stepcell (when (< (:steps m 0) (max-steps)) (step-cell p pos shore-radius (:failed-steps m)))
-                     legs (when (and in-budget? (< (:legs m 0) max-legs))
-                            (some (fn [h] (when-let [t (leg-target p pos (:start m) h (:args c))] [h t]))
+                            (nearest-land p pos (search-radius) (:failed-land m) (constantly true)))
+                     stepcell (when (< (:steps m 0) (max-steps)) (step-cell p pos (shore-radius) (:failed-steps m)))
+                     legs (when (and in-budget? (< (:legs m 0) (max-legs)))
+                            (some (fn [h] (when-let [t (leg-target p pos (:start m) h)] [h t]))
                                   (legal-headings pos (:start m) (:failed-headings m #{}))))]
                  {:shore shore :land land :stepcell stepcell :legs legs}))
         ;; a way out is looked for in the cells the decision read and the body never saw before the run gives up
@@ -359,7 +358,7 @@
   [c]
   (if-not (u/count-fail! c)
     :again
-    (let [fields {:air-radius (:air-radius (:args c)) :cap (:cap (ctx/mem c) :no-cap) :pocket (:pocket (ctx/mem c) :not-tried)}
+    (let [fields {:air-radius (air/air-radius) :cap (:cap (ctx/mem c) :no-cap) :pocket (:pocket (ctx/mem c) :not-tried)}
           text (str "drowning and no air within reach (none seen within " (:air-radius fields) "; pocket: " (name (:pocket fields))
                     "; cap: " (name (:cap fields)) ")")]
       (ctx/end c :nothing-possible :no-air (assoc fields :tries (u/max-failures) :text text)))))

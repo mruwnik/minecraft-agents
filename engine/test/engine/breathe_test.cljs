@@ -6,6 +6,7 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.seek-contract-test :as sc]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.world-files :as world-files]
@@ -38,6 +39,19 @@
   (b/needs-air? {:primitives p :args args}))
 
 (def defaults {:min-oxygen 12})
+
+(def knobs
+  {:radius :jobs.survival.breathe.air/radius :air-radius :jobs.survival.breathe.air/air-radius :reach :jobs.survival.breathe.air/reach
+   :shore-radius :jobs.survival.breathe/shore-radius :search-radius :jobs.survival.breathe/search-radius
+   :leg-length :jobs.survival.breathe/leg-length :swim-range :jobs.survival.breathe/swim-range
+   :max-legs :jobs.survival.breathe/max-legs})
+
+(defn tune
+  "args with the call's :settings set for the breathe knobs given as key/value pairs."
+  [args & kvs]
+  (update args :settings merge (into {} (map (fn [[k v]] [(knobs k) v])) (partition 2 kvs))))
+
+(defn knob [args k] (get-in args [:settings (knobs k)]))
 
 (def water-column
   "Feet at y 64 in water up to y 67; air from y 68."
@@ -152,7 +166,7 @@
           (is (empty? (of-kind seen :no_air)) "the ending carries it")
           (is (every? some? ((juxt :air-radius :cap :pocket) (first (of-kind seen :stopped))))))))))
 
-(def side-args (assoc defaults :radius 1))
+(def side-args (tune defaults :radius 1))
 
 (deftest drowning-in-a-capped-column-moves-sideways-then-swims-up-in-one-run
   (async done
@@ -473,9 +487,9 @@
 
 (def small-args
   "Shrunk bounds so the fake planner stays small."
-  (assoc defaults :shore-radius 2 :search-radius 12 :leg-length 10 :swim-range 24 :max-legs 4))
+  (tune defaults :shore-radius 2 :search-radius 12 :leg-length 10 :swim-range 24 :max-legs 4))
 
-(def no-shore-args "No shore swims: only the go-to child and the legs move the body." (assoc small-args :shore-radius 0))
+(def no-shore-args "No shore swims: only the go-to child and the legs move the body." (tune small-args :shore-radius 0))
 
 (defn lake
   "Water y 62..65 over a stone floor at y 61, x from x0 to x1, z within r; air above."
@@ -560,8 +574,8 @@
           (is (= [[:stopped :no-land-in-range]] (ended seen)))
           (let [d (stopped-data seen)]
             (is (pos? (:legs d)) "it swam outward before it gave up")
-            (is (<= (:legs d) (:max-legs small-args))))
-          (is (<= (dist-from-origin p) (+ 2 (:swim-range small-args))) "never beyond the swim range"))))))
+            (is (<= (:legs d) (knob small-args :max-legs))))
+          (is (<= (dist-from-origin p) (+ 2 (knob small-args :swim-range))) "never beyond the swim range"))))))
 
 (deftest the-leg-count-is-capped-by-max-legs
   (async done
@@ -569,7 +583,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
                                          :blocks (lake -50 50 12)})]
-          (await (one-run! eng (assoc small-args :max-legs 2 :swim-range 60 :search-radius 5)))
+          (await (one-run! eng (tune small-args :max-legs 2 :swim-range 60 :search-radius 5)))
           (is (= [[:stopped :no-land-in-range]] (ended seen)))
           (is (= 2 (:legs (stopped-data seen)))))))))
 
@@ -644,7 +658,7 @@
                               [(str x "," y "," z) "stone"]))
               {:keys [eng seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
                                          :blocks (merge (lake -14 14 14) (bank 15 15 14) (bank -15 -15 14) ring)})
-              args (assoc no-shore-args :swim-range 9 :leg-length 9 :search-radius 16)]
+              args (tune no-shore-args :swim-range 9 :leg-length 9 :search-radius 16)]
           (await (one-run! eng args))
           (is (= [[:stopped :no-land-in-range]] (ended seen)))
           (is (= 2 (unreachable-count seen)) "two walled banks tried (2 x 15 blocks, beyond 3 x swim-range), not a third try"))))))
@@ -853,7 +867,7 @@
 
 ;; ---------------------------------------------------------------- drowning under a ceiling: go-to air, dig a natural cap
 
-(def cap-args "One column out is searched, so the open fake world beyond the walls is not a target." (assoc small-args :radius 1 :air-radius 1))
+(def cap-args "One column out is searched, so the open fake world beyond the walls is not a target." (tune small-args :radius 1 :air-radius 1))
 
 (defn capped-world
   "The walled water column capped at y 68 by block, stone beside it up to y 67 with the +x top as land."
@@ -883,7 +897,7 @@
                             (into {} (for [x (range 0 10) y [64 65]] [(str x "," y ",0") "water"]))
                             {"6,66,0" "water"})
               {:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}} :blocks tunnel})]
-          (await (one-run! eng (assoc defaults :air-radius 8)))
+          (await (one-run! eng defaults))
           (is (= [[:completed nil]] (ended seen)))
           (is (>= (:y (core/self-pos p)) 67) "out through the pocket, on top of the ceiling")
           (is (not (.-inWater (.self p)))))))))
@@ -966,7 +980,7 @@
   [seen? blocks]
   (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}} :blocks blocks})]
     (stub-seen! p seen?)
-    (await (one-run! eng (assoc defaults :air-radius 8)))
+    (await (one-run! eng defaults))
     {:ended (ended seen) :p p :data (stopped-data seen)
      :digs (count (filter #{"dig"} (call-names p)))
      :block (fn [cell] (.-name (.blockAt p (apply tu/pos cell))))}))
@@ -1085,7 +1099,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 72 :z 0}} :blocks flooded-shaft})]
           (swap! (fake/state p) assoc :dig-ms 60000)
-          (await (one-run! eng (assoc defaults :air-radius 8)))
+          (await (one-run! eng defaults))
           (is (= [[:completed nil]] (ended seen)))
           (is (= "stone" (.-name (.blockAt p (tu/pos 0 74 0)))) "the cap is left")
           (is (<= 1 (:x (core/self-pos p))) "in the tunnel")
@@ -1110,7 +1124,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:inWater true :oxygen 4 :pos shaft-top} :blocks flooded-shaft})]
           (swap! (fake/state p) assoc :dig-ms 100)
-          (await (one-run! eng (assoc defaults :air-radius 8)))
+          (await (one-run! eng defaults))
           (is (= "air" (.-name (.blockAt p (tu/pos 0 74 0)))) "the cap is dug")
           (is (<= 72 (:y (core/self-pos p))) "not down in the tunnel"))))))
 
@@ -1190,7 +1204,7 @@
     (is (some? (b/step-cell p pos 2 nil)) "seen: a step cell is found")
     (stub-seen! p (constantly false))
     (is (nil? (b/step-cell p pos 2 nil)) "never seen: none")
-    (is (nil? (b/leg-target p pos pos [1 0] {:leg-length 12 :swim-range 96 :reach 10})))))
+    (is (nil? (settings/with-settings {:jobs.survival.breathe/leg-length 12} #(b/leg-target p pos pos [1 0]))))))
 
 ;; ---------------------------------------------------------------- an open own column is swum first; unseen cells are not read
 
@@ -1205,7 +1219,7 @@
                                           (swap! looks conj [[(js/Math.floor (.. a -pos -x)) (js/Math.floor (.. a -pos -z))]
                                                              (boolean (some #{"swim"} (call-names p)))])
                                           #js {:status "ok"}))
-          (await (one-run! eng (assoc small-args :radius 2 :air-radius 2)))
+          (await (one-run! eng (tune small-args :radius 2 :air-radius 2)))
           (is (some #{"swim"} (call-names p)) "swam up")
           (is (every? #{[0 0]} (map first (remove second @looks))) "before the swim up only the own column was looked at (after it the land search may look)"))))))
 
@@ -1219,7 +1233,7 @@
           (.override (.-world p) "look" (fn [_ a _]
                                           (swap! looks conj [(js/Math.floor (.. a -pos -x)) (js/Math.floor (.. a -pos -z))])
                                           #js {:status "ok"}))
-          (await (one-run! eng (assoc defaults :radius 2 :air-radius 1)))
+          (await (one-run! eng (tune defaults :radius 2 :air-radius 1)))
           (is (some #(not= [0 0] %) @looks) "a seen cap sends the look sideways"))))))
 
 (deftest a-kelp-column-is-swum-up-not-dug
@@ -1314,7 +1328,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (crossing-world true))]
-          (await (one-run! eng (assoc defaults :radius 2 :air-radius 1)))
+          (await (one-run! eng (tune defaults :radius 2 :air-radius 1)))
           (is (not-any? #(some-> % .-args .-pos .-x (>= 1)) (array-seq (.. p -world -calls))) "no move past x=0")
           (is (> 1 (js/Math.floor (:x (core/self-pos p))))))))))
 
@@ -1354,7 +1368,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}} :blocks (drag-tunnel)
                                            :states {"3,64,0" {:drag true} "3,65,0" {:drag true}}})]
-          (await (one-run! eng (assoc defaults :air-radius 8)))
+          (await (one-run! eng defaults))
           (is (not-any? #{[:stopped :no-air]} (ended seen)) "the go-to leg routes round the column")
           (is (= [[:completed nil]] (ended seen)))
           (is (not (.-inWater (.self p)))))))))
@@ -1378,7 +1392,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (drag-corner))]
           (is (breath/drag-between? p 0 0 1 1 64) "the corner cell counts")
-          (await (one-run! eng (assoc defaults :radius 2 :air-radius 1)))
+          (await (one-run! eng (tune defaults :radius 2 :air-radius 1)))
           (is (not-any? #(and (= "moveTo" (.-name %)) (= [1 64 1] (some-> % .-args .-pos (as-> q [(.-x q) (.-y q) (.-z q)]))))
                         (array-seq (.. p -world -calls)))
               "no raw moveTo past the corner"))))))
@@ -1417,7 +1431,7 @@
                                      (if (= top (y))
                                        (do (set-self! p {"oxygen" 20}) #js {:status "surfaced"})
                                        #js {:status "timeout"}))))))
-          (await (one-run! eng (assoc defaults :reach 20)))
+          (await (one-run! eng (tune defaults :reach 20)))
           (is @pulled "drowned a second time")
           (is (not-any? #{[:stopped :no-air]} (ended seen)) "rises below the first surfacing are progress")
           (is (< 4 @n) "swam up again"))))))
@@ -1595,7 +1609,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup (-> (crossing-world true) (assoc-in [:blocks "0,68,0"] "oak_planks") (assoc-in [:self :pos] {:x 0 :y 64 :z 0})
                           (update :blocks merge (into {} (for [x (range -2 4) z (range -2 3)] [(str x ",63," z) "stone"])))))]
-          (await (one-run! eng (assoc defaults :radius 2 :air-radius 4)))
+          (await (one-run! eng (tune defaults :radius 2 :air-radius 4)))
           (is (= [[:stopped :no-air]] (ended seen)))
           (is (> 1 (js/Math.floor (:x (core/self-pos p)))) "never past the dragging column")
           (is (not-any? #{"steer"} (call-names p)) "no go-to child was sent through it"))))))

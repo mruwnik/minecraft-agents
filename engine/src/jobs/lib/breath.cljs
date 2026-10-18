@@ -271,9 +271,8 @@
 (defn ^:async find-air!
   "The nearest air target after looking: up the own column first, then, only when a block is seen over the own column,
   once at each other column in radius (the first cell not seen there); nil if none."
-  [c pos]
-  (let [{:keys [radius reach]} (:args c)
-        p (:primitives c)
+  [c pos radius reach]
+  (let [p (:primitives c)
         fx (js/Math.floor (:x pos)) fy (js/Math.floor (:y pos)) fz (js/Math.floor (:z pos))]
     (await (look-column! c fx fz fy reach false))
     (or (nearest-air p pos radius reach)

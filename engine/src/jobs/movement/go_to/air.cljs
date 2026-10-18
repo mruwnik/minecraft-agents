@@ -113,7 +113,7 @@
   [c walk-opts goal why counted]
   (let [p (:primitives c)
         pos (u/self-pos c)
-        target (or (await (breath/find-air! (assoc c :args look-args) pos))
+        target (or (await (breath/find-air! c pos (:radius look-args) (:reach look-args)))
                    (breath/nearest-air p pos air-radius (:reach look-args) nil false))]
     (if-not target
       (if (breath/column-open? p (js/Math.floor (:x pos)) (js/Math.floor (:z pos)) (js/Math.floor (:y pos)) (:reach look-args))

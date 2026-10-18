@@ -14,8 +14,16 @@
             [jobs.survival.breathe-pocket :as pocket]))
 
 (a/defargs settings
-  {::max-cap-digs {:default 3 :doc "Cap digs one run makes at most." :spec (a/int-in 0 nil)}
+  {::radius {:default 2 :doc "Columns this far sideways are searched for air." :spec (a/num-in 0 nil)}
+   ::reach {:default 10 :doc "Blocks above the feet the air search climbs." :spec (a/num-in 0 nil)}
+   ::air-radius {:default 8 :doc "When no air is near, a go-to child searches for air-reaching water this many blocks sideways." :spec (a/int-in 1 32)}
+   ::depth {:default 24 :doc "Blocks below the feet a drowning body looks for seen air, the way it came (within air-radius sideways)." :spec (a/int-in 0 64)}
+   ::max-cap-digs {:default 3 :doc "Cap digs one run makes at most." :spec (a/int-in 0 nil)}
    ::cap-dig-share {:default 0.5 :doc "Share of the air left (oxygen, then health) a cap dig may take; a slower dig is not started and the dig gives up at it." :spec (a/num-in 0 1)}})
+(defn radius [] (settings/get settings ::radius))
+(defn reach [] (settings/get settings ::reach))
+(defn air-radius [] (settings/get settings ::air-radius))
+(defn depth [] (settings/get settings ::depth))
 (defn max-cap-digs [] (settings/get settings ::max-cap-digs))
 (defn cap-dig-share [] (settings/get settings ::cap-dig-share))
 
@@ -32,13 +40,13 @@
 (defn status [r] (.-status r))
 
 (defn cap-beyond-dig?
-  "The own column over the head is water or air, unseen included, up to a seen block within reach that lies farther than
+  "The own column over the head is water or air, unseen included, up to a seen block within rise that lies farther than
   the 3 cells dig-cap reaches: the body must rise under it first."
-  [p head reach]
+  [p head rise]
   (loop [k 0]
-    (let [n (when (<= k (inc reach)) (breath/seen-water-name p (update head :y + k)))]
+    (let [n (when (<= k (inc rise)) (breath/seen-water-name p (update head :y + k)))]
       (cond
-        (> k (inc reach)) false
+        (> k (inc rise)) false
         (or (nil? n) (breath/passable-water-or-air? n)) (recur (inc k))
         :else (> k 3)))))
 
@@ -50,8 +58,7 @@
   counts when it surfaced or rose above the best height reached); :no-air
   when there is no air in reach; nil when the move failed (failure counted)."
   [c target]
-  (let [{:keys [reach]} (:args c)
-        p (:primitives c)
+  (let [p (:primitives c)
         pos (u/self-pos c)
         fx (js/Math.floor (:x pos))
         fy (js/Math.floor (:y pos))
@@ -66,14 +73,14 @@
                     (ctx/update-mem! c update :best-y #(max (or % y) y)))
                   (or surfaced? rose)))]
     (cond
-      (and (nil? target) (breath/column-open? p fx fz fy reach))
+      (and (nil? target) (breath/column-open? p fx fz fy (reach)))
       (or (await (swim!)) :no-air)
 
-      (and (nil? target) (cap-beyond-dig? p (breath/eye-cell (.self p)) reach))
+      (and (nil? target) (cap-beyond-dig? p (breath/eye-cell (.self p)) (reach)))
       (or (await (swim!)) :no-air)
 
       (nil? target) :no-air
-      (breath/surface-in-column p fx fz fy reach) (await (swim!))
+      (breath/surface-in-column p fx fz fy (reach)) (await (swim!))
 
       :else
       ;; raw moveTo kept: an emergency step to air or out of water (range 0), where the planner may have no standable cell; no time for a plan.
@@ -141,18 +148,17 @@
       ms)))
 
 (defn ^:async go-air!
-  "Drowning with no air near: a go-to child to the nearest air-reaching surface within :air-radius, else to the nearest
-  seen air below the feet joined to the body by water or air within :depth (breath/nearest-pocket: the way the body
+  "Drowning with no air near: a go-to child to the nearest air-reaching surface within the air-radius setting, else to the nearest
+  seen air below the feet joined to the body by water or air within the depth setting (breath/nearest-pocket: the way the body
   came), not failed before, when the swim there fits the air left and is not dearer than the cap dig (cap-dig-ms). True
   on arrival (the body has surfaced); nil when it did not, :none when there is no target. The target is remembered as
   tried either way, so a world that stays drowning does not loop on it."
   [c]
-  (let [{:keys [air-radius reach depth]} (:args c)
-        p (:primitives c)
+  (let [p (:primitives c)
         pos (u/self-pos c)
         failed (:failed-air (ctx/mem c))
-        surface (breath/nearest-air p pos air-radius reach failed false)
-        pocket (when-not surface (breath/nearest-pocket p pos air-radius depth failed))
+        surface (breath/nearest-air p pos (air-radius) (reach) failed false)
+        pocket (when-not surface (breath/nearest-pocket p pos (air-radius) (depth) failed))
         swim-ms (* (:steps pocket 0) (breath/swim-ms))
         pocket? (and pocket
                      (< swim-ms (breath/air-left-ms (.self p)))
@@ -234,7 +240,7 @@
   with those spent a footing block for the pocket, then a cap dig that fits all the air left. True on progress; nil
   after a failed try, the pocket's and the cap's reasons kept for the stop."
   [c]
-  (let [target (await (breath/find-air! c (u/self-pos c)))
+  (let [target (await (breath/find-air! c (u/self-pos c) (radius) (reach)))
         site (when (or (nil? target) (pos? (:failures (ctx/mem c) 0))) (await (pocket/site! c)))
         _ (when (:why site) (ctx/update-mem! c assoc :pocket (:why site)))
         far (when (:cells site) (await (go-air! c)))
