@@ -4,6 +4,7 @@
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.access :as access]
             [jobs.lib.tidy :as tidy]
@@ -14,7 +15,7 @@
 (def doc
   "Get out of a block that fills the feet cell (jobs.lib.breath), e.g. sand that fell on the body.
   One run, paced between tries, until the feet cell is no longer a full block (then :done):
-  - Once, step to a free side cell (feet and head cells passable, something to stand on).
+  - Once, step to a free side cell (looking around first for the sides it has not seen; feet and head cells passable, something to stand on).
   - Else dig the feet block with the best carried tool (a last resort, tidied up like breathe's digs).
     A block the dig reports :cannot (bedrock) is final; other failed digs (or a dig refused because lava touches
     the cell) count, three in a row are final.
@@ -93,9 +94,13 @@
   "One try at the wedged cell: the side step once, else a dig. Resolves :again or an ending."
   [c cell]
   (let [p (:primitives c)
-        side (when (and (ctx/way? c :step) (not (:side-tried (ctx/mem c)))) (breath/side-cell p (.self p)))]
+        try-step? (and (ctx/way? c :step) (not (:side-tried (ctx/mem c))))
+        side-of #(breath/side-cell p (.self p))
+        ;; the sides count only when seen, and the view cone may face away from them
+        side (when try-step? (or (side-of) (await (look/look-around-until! c side-of))))]
     (if-not side
-      (await (dig-feet! c cell))
+      (do (when try-step? (ctx/update-mem! c assoc :side-tried true))
+          (await (dig-feet! c cell)))
       (do (ctx/update-mem! c assoc :side-tried true)
           ;; raw moveTo kept: an emergency step out of a block (range 0), where the planner may have no standable cell.
           (await (ctx/act c :moveTo (clj->js {:pos side :range 0})))
