@@ -28,7 +28,7 @@
    :limit-s 70}
   {:name "no-blocks-and-no-tool-is-nothing-possible"
    :act [[:job (jobs.survival.shut-in {})]]
-   :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :round_started :round [:> 20]} :for-s 30 :until {:source :job :kind :completed} :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :cause :no-way}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :round_started :round [:> 20]} :for-s 30 :until {:source :job :kind :stopped} :of-job true}]
    :after [[:not-block [6 0 16] "cobblestone"]]
    :limit-s 40}]}
