@@ -17,6 +17,14 @@
          [:cli "observe" ["$body" "--world" "$world" "status" "--wait" "--timeout" "3s"]
           {:wake :timeout :summary {:counts {:died [:>= 1]}}}]]
    :expect [{:event {:source :body :kind :died :data {:cause [:any]}} :within-s 20}]}
+  {:name "repeated-notice-is-one-missed-item-with-its-count"
+   :time :day
+   :act [[:cli "observe" ["$body" "--world" "$world" "status" "--wait" "--timeout" "2s"]]
+         [:job (repeat 4 (jobs.debug.notify {:text "again"}))]
+         [:await {:source :job :kind :completed} 30]
+         [:cli "observe" ["$body" "--world" "$world" "status"]
+          {:missed {:items [:has {:event :job.notify :count 4}]}}]]
+   :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}]}
   {:name "old-death-does-not-wake-a-watch"
    :time :day
    :act [[:cli "observe" ["$body" "--world" "$world" "status" "--wait" "--timeout" "2s"]]
