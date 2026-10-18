@@ -1,7 +1,7 @@
 ;; Cards 3a1a9591, 381267c0: the food reserve (jobs.lib.cost/food-reserve: 3 days of 20 hunger points = 60 points = 20 carrots,
 ;; 12 bread) never blocks replanting what a harvest cut, but holds back sowing cells that were already bare and food taken
 ;; or put away. Carrots: 3 points each, so 5 carried plus the drops of two cut plants stay under 20.
-;; Should-succeed: both cut cells replanted below the reserve; kit tops the food up to the reserve (12 bread) from a big stack.
+;; Should-succeed: both cut cells replanted below the reserve; get-food :stock tops the food up to the reserve (12 bread) from a big stack.
 ;; Should-fail: already-bare planned cells stay unsown below the reserve; make-room (no chest: it tosses junk) never tosses the reserve food.
 ;; Floor y -1 is the ground layer; farmland at y -1 with water beside, crops at y 0.
 {:defaults
@@ -29,10 +29,10 @@
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:cut 2 :replanted 2}} :within-s 70 :of-job true}]
    :after [[:block [10 0 16] "carrots[age=0]"] [:block [11 0 16] "carrots[age=0]"]
            [:block [12 0 16] "air"] [:block [13 0 16] "air"]]}
-  {:name "kit-tops-food-up-to-the-reserve"
+  {:name "stock-tops-food-up-to-the-reserve"
    :blocks [[:set [14 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:40}]}"]]
    :body {:at [12.5 0 16.5] :inventory [["bread" 5]]}
-   :act [[:job (jobs.storage.kit {:tools [] :chest #xyz [14 0 16]})]]
+   :act [[:job (jobs.survival.get-food {:stock 60 :explore false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "bread" [:>= 12]] [:item "bread" [:<= 14]]]}
   {:name "make-room-keeps-the-food-reserve"

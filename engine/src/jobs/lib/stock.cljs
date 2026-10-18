@@ -1,6 +1,6 @@
 (ns jobs.lib.stock
   "Chests the body has seen and what they held when last looked into or moved from: body memory :fetch/stock
-  (booked by withdraw, deposit, kit and obtain, so obtain goes first to a chest known to hold the item and skips one
+  (booked by withdraw, deposit and obtain, so obtain goes first to a chest known to hold the item and skips one
   known not to)."
   (:require [engine.args :as a]
             [engine.ctx :as ctx]

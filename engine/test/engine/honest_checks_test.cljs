@@ -94,8 +94,7 @@
     'jobs.farm.tend {:box box} :nothing-to-do
     'jobs.farm.tidy {:plan "nope"} :plan-trouble
     'jobs.forestry.maintain {:plan "nope"} :plan-trouble
-    'jobs.forestry.prepare {:plan "nope"} :plan-trouble
-    'jobs.storage.kit {} :no-chest))
+    'jobs.forestry.prepare {:plan "nope"} :plan-trouble))
 
 (deftest survival-and-maintenance-checks-say-why-they-decline
   (are [job args reason] (= reason (waiting-reason job args))

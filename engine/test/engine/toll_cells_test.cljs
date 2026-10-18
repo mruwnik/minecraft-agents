@@ -132,9 +132,9 @@
   (await (job-trail (list 'jobs.movement.go-to (merge {:pos [40 64 0] :range 1 :ways #{:walk :clear-seal}} args)) {})))
 
 (defn ^:async kit-trail
-  "job-trail of a kit run on a chest at 40 64 0 with args."
+  "job-trail of a withdraw run on a chest at 40 64 0 with args."
   [args]
-  (await (job-trail (list 'jobs.storage.kit (merge {:chest {:x 40 :y 64 :z 0} :tools [] :spare 0 :food 2 :craft false} args))
+  (await (job-trail (list 'jobs.storage.withdraw (merge {:chest {:x 40 :y 64 :z 0} :items {"bread" 2}} args))
                     {:containers {"40,64,0" [{:name "bread" :count 8}]}})))
 
 (deftest kit-bends-round-another-bodys-zone-unless-ignoring-zones

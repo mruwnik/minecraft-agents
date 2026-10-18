@@ -1,5 +1,5 @@
 (ns engine.zones-containers-test
-  "Containers as job rules: withdraw, deposit, kit, bake, get-seeds, get-food and smelt consult jobs.lib.access
+  "Containers as job rules: withdraw, deposit, bake, get-seeds, get-food and smelt consult jobs.lib.access
   before taking from or putting into another's chest."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
@@ -28,7 +28,6 @@
 (def chest {:x 10 :y 64 :z 0})
 (def vault {:name "vault" :min [9 60 -1] :max [11 70 1] :owner "Miles"})
 (def stock {"10,64,0" [{:name "bread" :count 32} {:name "wheat" :count 30}]})
-(def refused {:gave-up true :reason :refused :zones ["vault"] :claims []})
 (def refused-ending {:kind :condition-failed :cause {:reason :refused :zones ["vault"] :claims []}
                      :data {:gave-up true :zones ["vault"] :claims []}})
 (def own-claim {:id "c1" :owner "Miles" :status :active :until 99999999999 :min [9 60 -1] :max [11 70 1]})
@@ -91,17 +90,6 @@
             (is (= ({true nil false refused-ending} put?) ({true nil false result} put?)) (pr-str [zone extra]))))))))
 
 ;; ------------------------------------------------------------------ the parents propagate :refused
-
-(deftest kit-passes-the-refusal-up
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [[job args pred] [['jobs.storage.kit {:chest chest :tools ["hoe"] :spare 1 :food 12 :craft false}
-                                  #(= refused (select-keys % [:gave-up :reason :zones :claims]))]]]
-          (let [{:keys [eng p]} (setup {:containers stock :blocks {"11,64,0" "crafting_table"}} [vault])
-                result (await (child-outcome eng job args 60))]
-            (is (empty? (calls p "transfer")) (str job))
-            (is (pred result) (pr-str job result))))))))
 
 (deftest get-seeds-from-a-foreign-chest-ends-short-with-the-refusal
   (async done

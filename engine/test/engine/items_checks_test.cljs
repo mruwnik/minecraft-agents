@@ -10,7 +10,7 @@
 (def area
   '[jobs.items.craft jobs.items.enchant jobs.items.equip jobs.items.get-kit jobs.items.get-tool jobs.items.interact
     jobs.items.kitchen jobs.items.obtain jobs.items.pick-up-loose jobs.items.smelt jobs.items.wear
-    jobs.storage.deposit jobs.storage.haul jobs.storage.kit jobs.storage.make-room jobs.storage.withdraw
+    jobs.storage.deposit jobs.storage.haul jobs.storage.make-room jobs.storage.withdraw
     jobs.food.fish jobs.memory.forget-place jobs.memory.remember jobs.memory.set-place])
 
 (deftest every-job-of-the-area-has-a-check
@@ -83,7 +83,7 @@
    'jobs.items.get-tool {:kind "pickaxe"} 'jobs.items.interact {:id 7} 'jobs.items.give {:player "Steve" :item "bread"}
    'jobs.items.kitchen {:chest {:x 10 :y 64 :z 0}} 'jobs.items.obtain {:item "oak_log"} 'jobs.items.pick-up-loose {}
    'jobs.items.smelt {:item "beef"} 'jobs.items.wear {} 'jobs.storage.deposit {} 'jobs.storage.haul {:from [[1 64 0]]}
-   'jobs.storage.kit {:tools ["hoe"]} 'jobs.storage.make-room {} 'jobs.storage.withdraw {:items {"bread" 1}}
+   'jobs.storage.make-room {} 'jobs.storage.withdraw {:items {"bread" 1}}
    'jobs.food.fish {} 'jobs.memory.forget-place {:name "home"} 'jobs.memory.remember {:kind :note}
    'jobs.memory.set-place {:name "home"}})
 
@@ -147,7 +147,7 @@
       helmet {} :later {:worn []})))
 
 (deftest a-later-done-carries-a-result-map
-  (doseq [sym '[jobs.items.enchant jobs.items.interact jobs.items.get-kit jobs.storage.haul jobs.storage.kit
+  (doseq [sym '[jobs.items.enchant jobs.items.interact jobs.items.get-kit jobs.storage.haul
                 jobs.items.pick-up-loose jobs.storage.withdraw jobs.memory.remember jobs.items.kitchen
                 jobs.memory.set-place jobs.memory.forget-place]
           :let [s (done-of sym {} (done-args sym))]]

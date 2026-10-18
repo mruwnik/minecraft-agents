@@ -18,8 +18,6 @@
                 '(jobs.storage.deposit {:keep [1 2]})
                 '(jobs.storage.withdraw {:items true})
                 '(jobs.storage.withdraw {:items ["a"]})
-                '(jobs.storage.kit {:tools false})
-                '(jobs.storage.kit {:craft-tiers {:x "a"}})
                 '(jobs.survival.dig-in {:use {:blocks false}})
                 '(jobs.survival.retreat {:use {:tools true}})
                 '(jobs.survival.retreat {:use {:blocks {:x "a"}}})]]
@@ -46,9 +44,6 @@
                 '(jobs.items.obtain {:item "stick" :count 0})
                 '(jobs.storage.deposit {:free "text"})
                 '(jobs.storage.deposit {:ignore-zones? 3})
-                '(jobs.storage.kit {:spare -7})
-                '(jobs.storage.kit {:craft :kw})
-                '(jobs.storage.kit {:food "text"})
                 '(jobs.survival.dig-in {:max-places 0})
                 '(jobs.survival.dig-in {:enclose "text"})
                 '(jobs.survival.retreat {:radius "text"})
@@ -60,7 +55,6 @@
                 '(jobs.items.obtain {:item "stick" :count 64})
                 '(jobs.items.obtain {:item "stick" :count 100})
                 '(jobs.storage.deposit {:free 2})
-                '(jobs.storage.kit {:spare 0})
                 '(jobs.survival.dig-in {:max-places 4 :enclose true})
                 '(jobs.survival.retreat {:radius 8 :max-places 6})]]
     (is (nil? (expr/problem registry/jobs form)) (pr-str form))))

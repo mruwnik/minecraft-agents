@@ -23,7 +23,6 @@
             [jobs.items.pick-up-loose :as pick-up-loose]
             [jobs.items.smelt :as smelt]
             [jobs.storage.deposit :as deposit]
-            [jobs.storage.kit :as storage-kit]
             [jobs.storage.withdraw :as withdraw]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.danger :as danger]
@@ -94,7 +93,6 @@
   (are [check args] (= :later (lit 0 15 #(first (check (assoc (ctx-of open-night) :args args)))))
     deposit/safe? {:chest outside}
     withdraw/safe? {:chest outside}
-    storage-kit/safe? {:chest outside}
     smelt/safe? {:furnace outside}
     kitchen/safe? {:furnace outside}
     pick-up-loose/safe? {}

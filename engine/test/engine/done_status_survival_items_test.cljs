@@ -52,8 +52,3 @@
     [] {} {:deposited 2 :moved 5 :offered true} [:ok :deposited]
     [{:name "dirt" :count 5}] {:free 30} {} [:ok :deposited]))
 
-(deftest kit-is-done-when-every-kind-is-carried
-  (are [inventory want] (= want (tu/kind-reason (done-of 'jobs.storage.kit {:inventory inventory :floor [-3 -3 3 3] :blocks {"3,64,0" "chest"}} {:chest [3 64 0] :tools ["hoe"]} {})))
-    [] [:later :stocking]
-    [{:name "stone_hoe" :count 1} {:name "bread" :count 12}] [:later :stocking]
-    [{:name "stone_hoe" :count 2} {:name "bread" :count 12}] [:ok :stocked]))

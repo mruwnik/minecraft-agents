@@ -1,5 +1,5 @@
 (ns jobs.lib.crafting-table
-  "Finding a crafting table the body has seen; shared by craft, obtain's plan and the kit job."
+  "Finding a crafting table the body has seen; shared by craft and obtain's plan."
   (:require [jobs.lib.look :as look]))
 
 (defn cell-vec [pos] (mapv #(js/Math.floor %) [(:x pos) (:y pos) (:z pos)]))
