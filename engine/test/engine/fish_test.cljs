@@ -1,6 +1,7 @@
 (ns engine.fish-test
   "jobs.food.fish against the fake world: a pond with a bank, casts that bite after some misses."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.ctx :as ctx]
             [engine.library-test :as lt]
             [engine.test-util :as tu]
             [jobs.food.fish :as fish]))
@@ -59,6 +60,13 @@
       (fn ^:async t []
         (let [{:keys [res]} (await (run {:blocks bank :inventory [rod]} {:count 1}))]
           (is (= [:condition-failed :no-water] [(:kind (:ending res)) (:reason res)])))))))
+
+(deftest water-gone-mid-run-looks-once-then-waits-no-water
+  (let [status (fn [mem] (with-redefs [ctx/mem (constantly mem)]
+                           (fish/can-run? {:primitives (tu/fake-on-floor {:blocks bank :inventory [rod]}) :args {:count 3 :radius 24}})))
+        kind-reason (fn [mem] ((juxt first (comp :reason last)) (status mem)))]
+    (is (= [:look :no-water] (kind-reason {})) "not looked yet: the round looks")
+    (is (= [:later :no-water] (kind-reason {:looked [0 64 0]})) "looked, still no water: waits")))
 
 (deftest some-fish-then-a-stop-is-done-when-the-least-was-caught
   (let [c (fn [least] {:primitives (tu/fake {:inventory [{:name "cod" :count 2}]}) :root "j1" :slots [] :args {:count 3}

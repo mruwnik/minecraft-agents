@@ -5,8 +5,8 @@
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
-            [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
+            [jobs.lib.foods :as foods]
             [jobs.lib.need :as need]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
@@ -23,11 +23,11 @@
   Ends with the data {:got n :text}, info fish.caught per fish, and the ending:
   - :done: :count fish (cod, salmon, tropical fish, pufferfish) are carried, or the call's :least (default 1, :all = :count)
     before any stop below, or when the time ends it (the engine's rule: report :limit).
-  Before the first cast it waits (can-start?) on :no-rod (none carried and :fetch false) and :no-water (no seen water with a bank
-  within :radius).
-  - :condition-failed :no-water (the water gone mid-run), or a failed rod fetch (the cause names the rod, :because the fetch's ending).
+  - :condition-failed: a failed rod fetch (the cause names the rod, :because the fetch's ending).
   - :nothing-possible :unreachable (the bank could not be walked to) or :no-bite (the max-misses setting, 8, casts in a row caught nothing).
   - :limit-reached: the call's :spend :job-time (default ::job-time-s) is used up with fewer than :least caught; the engine ends it, with {:got}.
+  It waits (can-start?, before the first cast) on :no-rod (none carried and :fetch false) and :no-water (no seen water with a bank
+  within :radius); can-run? waits on :no-water again after a look round (the water gone mid-run).
   The goal is to carry :count fish: the carried fish are counted at every round, so a body already carrying them is done,
   and fish eaten or stored mid-job are caught again.")
 
@@ -105,6 +105,14 @@
     (if (= :no-water cause) (contract/look cause text) (contract/later cause text))
     (contract/ok :ready "a rod and water to cast at")))
 
+(defn can-run?
+  "Look, then later :no-water, while no seen water has a bank in reach (the round surveys)."
+  [c]
+  (cond
+    (seq (spots c)) (checks/holds)
+    (look/surveyed? c) (contract/later :no-water "no seen water with a bank in reach")
+    :else (contract/look :no-water "no seen water with a bank in reach")))
+
 (defn ^:async cast! [c {:keys [water]}]
   (let [r (await (ctx/act c :fish (clj->js {:pos water :timeoutS (cast-s)})))
         status (.-status r)]
@@ -143,8 +151,7 @@
       (if-let [spot (first (spots c))]
         (let [w (await (walk! c spot))]
           (if (= :arrived w) (await (cast! c spot)) w))
-        (or (await (look/survey! c))
-            (stop! c :condition-failed :no-water "no seen water with a bank in reach"))))))
+        (or (await (look/survey! c)) :continue)))))
 
 (defn ^:async round [c]
   (await (pace/steps! c #(step c))))
