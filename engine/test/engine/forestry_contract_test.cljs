@@ -88,7 +88,7 @@
                                        (swap! (fake/state (:primitives c)) update :entities (fn [es] (remove #(= (:id x) (:id %)) es)))))
                                    e)))
               {:keys [end]} (await (harvest-end oak {:species "oak" :radius 10} 40 clear))]
-          (is (= {:kind :nothing-possible :cause :nothing-collected} (kc end))))))))
+          (is (= {:kind :nothing-possible :cause :none-collected} (kc end))))))))
 
 ;; ------------------------------------------------------------------ tidy
 

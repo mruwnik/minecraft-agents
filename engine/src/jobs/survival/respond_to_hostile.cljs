@@ -42,8 +42,8 @@
   (:ranged-radius for ranged mobs) and the retreat is not hiding (sealed in, up a pillar or down a pit).
   Done at once (0 hostiles) with no real danger near. The weapons are the call's :use :tools (default the
   weapons carried), handed to both children as their :use :tools.
-  Ends :done when the danger is gone or left heard-only; :nothing-possible with the retreat's own kind and cause (:cannot_escape)
-  when the retreat ends otherwise, or :no_response after ::max-unchanged (3) calls in a row that change
+  Ends :done when the danger is gone or left heard-only; :nothing-possible with the retreat's own kind and cause (:cannot-escape)
+  when the retreat ends otherwise, or :no-response after ::max-unchanged (3) calls in a row that change
   neither the body's cell, its health, the dangers near nor the fight's hits; never :continue. Its time budget (::job-time-s) may end it :limit-reached; the hostile trigger fires again at once while the danger stands.
   Memory: writes one :hostile entry {:mob :decision} plus :pos (seen) or :direction :band :from (heard only) per encounter,
   and says it in one hostile.decided event.
@@ -62,7 +62,7 @@
   {::job-time-s {:default 480 :doc "Seconds a response to a hostile may take: above retreat's (a hide runs long)." :spec (a/num-in 0 nil)}
    ::hold-radius {:default 16 :doc "Hostiles known within this many blocks count for holding position at night." :spec (a/num-in 0 nil)}
    ::hit-window-s {:default 5 :doc "A flight hit twice within this long is failing: the body fights. Also how recent a hurt keeps a fight from leaving heard mobs, and makes a round look once more." :spec (a/num-in 0 nil)}
-   ::max-unchanged {:default 3 :doc "Calls of a child in a row that leave the body and the dangers as they were before the reflex stops :no_response." :spec (a/int-in 1 nil)}
+   ::max-unchanged {:default 3 :doc "Calls of a child in a row that leave the body and the dangers as they were before the reflex stops :no-response." :spec (a/int-in 1 nil)}
    ::struck-s {:default 30 :doc "Seconds the hits the fight landed outlive the round (:struck-hits), so a refired reflex still counts them." :spec (a/num-in 0 nil)}
    ::struck-cap {:default 8 :doc "How many :struck-hits entries memory keeps." :spec (a/int-in 1 nil)}
    ::quote-mean-s {:default 20 :doc "Seconds an encounter is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
@@ -336,7 +336,7 @@
 
 (defn ^:async round
   "One whole attempt: respond (or let the retreat hide on) while a danger is near; :nothing-possible when the retreat
-  ends other than :done, or :no_response after max-unchanged calls in a row that changed nothing; never for the time a
+  ends other than :done, or :no-response after max-unchanged calls in a row that changed nothing; never for the time a
   danger stays."
   [c]
   (when-not (contains? (ctx/mem c) :goal)
@@ -362,5 +362,5 @@
           (let [n (if (= before (signature c after)) (inc unchanged) 0)]
             (if (>= n (max-unchanged))
               (do (mute-heard! c hs)
-                  (ctx/end c :nothing-possible :no_response {:text (str "a hostile is still near and " n " tries changed nothing")}))
+                  (ctx/end c :nothing-possible :no-response {:text (str "a hostile is still near and " n " tries changed nothing")}))
               (do (await (pace/pace!)) (recur n false)))))))))

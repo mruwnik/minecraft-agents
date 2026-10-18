@@ -1,6 +1,6 @@
 ;; Cards 2b670ae6 (fell-tree pillars on the logs it just cut: no dirt or cobblestone, no fetch), f37e64e6 (the body ends on the
 ;; ground, not on the canopy), b3241e1c (a canopy leaf beside the trunk is no stand), d7409d96 (the sapling goes on the ground,
-;; not on a log), f89b18a5 (the logs that came in count: no :nothing-collected), b5d6f4aa (an axe is fetched from a seen chest),
+;; not on a log), f89b18a5 (the logs that came in count: no :none-collected), b5d6f4aa (an axe is fetched from a seen chest),
 ;; 9a44c786 (a tree of the body's own plan is skipped silently), 7b23de3a (tidy fells a part-cut trunk, leaves a log wall).
 ;; Tree: 10 logs at x 16, z 16 (y 0..9), persistent oak leaves round the top and two leaves beside the trunk at y 6 and 7.
 ;; The body carries no blocks unless a case says; the top logs are out of reach from the ground, so every felling pillars.

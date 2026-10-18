@@ -17,7 +17,7 @@
   reflex that judged otherwise cannot fire it again for them. One info event loose-items.picked {:collected :items :left}.
   Ends :done with data {:collected n :items [names] :left [ids]}. With nothing worth it a listed call waits
   (condition :nothing-worth-it); a started one ends condition-failed :nothing-worth-it, the text naming the radius, what within it was left
-  and why, and the nearest item seen beyond it; with items picked at but none taken, nothing-possible :none-taken.
+  and why, and the nearest item seen beyond it; with items picked at but none taken, nothing-possible :none-collected.
   Quote: the items worth it in sight, a second of walking each.")
 
 (a/defargs args
@@ -98,4 +98,4 @@
                                          (when (seq left) (str "; left " (count left))))))
         (if (pos? n)
           (ctx/end c :done nil out)
-          (ctx/end c :nothing-possible :none-taken out))))))
+          (ctx/end c :nothing-possible :none-collected out))))))

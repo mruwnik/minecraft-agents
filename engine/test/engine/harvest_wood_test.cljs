@@ -191,7 +191,7 @@
           (after-last-dig! p #(clear-drops! p))
           (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
           (await (tu/run-until-empty eng 30))
-          (is (= [:nothing-collected] (mapv :reason (filterv #(= :stopped (:kind %)) @seen))) "no item came in: stopped with a reason, not completed")
+          (is (= [:none-collected] (mapv :reason (filterv #(= :stopped (:kind %)) @seen))) "no item came in: stopped with a reason, not completed")
           (is (zero? (get (lt/inv p) "oak_log" 0))))))))
 
 (deftest logs-picked-up-during-the-felling-count-as-collected
@@ -341,5 +341,5 @@
                          (when (= 6 (swap! n inc)) (clear-drops! p))
                          r)))
           (let [r (await (tu/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 12 :count 6} 80))]
-            (is (= {:status :stopped :reason :nothing-collected :got 3} (select-keys r [:status :reason :got]))
+            (is (= {:status :stopped :reason :none-collected :got 3} (select-keys r [:status :reason :got]))
                 "the first tree's 3 logs are carried: the stop says so")))))))

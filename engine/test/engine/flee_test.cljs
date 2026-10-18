@@ -399,7 +399,7 @@
         (let [{:keys [eng seen out]} (await (run-job! (assoc-in (setup {}) [:eng :jobs 'sweeper] sweeper) 'sweeper {}))]
           (is (= [] (:list (core/state eng))) "two failed sweeps end the job")
           (is (= :stopped (:status out)))
-          (is (= :cannot_escape (:reason out)) "the stop reason reaches the caller")
+          (is (= :cannot-escape (:reason out)) "the stop reason reaches the caller")
           (is (= 1 (count (filter #(= :retreat_blocked (:kind %)) @seen))) "warned once"))))))
 
 (defn backer
@@ -608,7 +608,7 @@
               s (assoc-in s [:eng :jobs 'jobs.survival.retreat] declining)
               {:keys [calls out]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
           (is (= [:done] calls))
-          (is (= {:status :stopped :reason :no_response} (select-keys out [:status :reason])))
+          (is (= {:status :stopped :reason :no-response} (select-keys out [:status :reason])))
           (is (= :nothing-possible (get-in out [:ending :kind]))))))))
 
 (deftest respond-to-hostile-stops-with-the-cause-of-a-retreat-that-cannot-escape
@@ -616,12 +616,12 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {:entities [(zombie 7 5 {:chase false})]})
-              cornered {:round (fn ^:async no-escape [c] (ctx/end c :nothing-possible :cannot_escape))}
+              cornered {:round (fn ^:async no-escape [c] (ctx/end c :nothing-possible :cannot-escape))}
               s (assoc-in s [:eng :jobs 'jobs.survival.retreat] cornered)
               {:keys [out]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
-          (is (= {:status :stopped :reason :cannot_escape} (select-keys out [:status :reason])))
+          (is (= {:status :stopped :reason :cannot-escape} (select-keys out [:status :reason])))
           (is (= :nothing-possible (get-in out [:ending :kind])))
-          (is (= :cannot_escape (get-in out [:ending :because :cause])) "the retreat's ending is the because"))))))
+          (is (= :cannot-escape (get-in out [:ending :because :cause])) "the retreat's ending is the because"))))))
 
 (deftest respond-to-hostile-passes-the-kind-of-a-retreat-that-ends-impossible-or-limit-reached
   (async done

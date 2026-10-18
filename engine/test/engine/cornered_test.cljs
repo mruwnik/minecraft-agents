@@ -1012,7 +1012,7 @@
           (core/submit! eng retreat {})
           (await (core/tick! eng))
           (is (<= 60 @calls) "kept trying until the zombie was gone")
-          (is (not-any? #(re-find #"cannot_escape" (pr-str %)) @seen) "never gives up on the mob that is hurting it"))))))
+          (is (not-any? #(re-find #"cannot-escape" (pr-str %)) @seen) "never gives up on the mob that is hurting it"))))))
 
 (deftest a-body-in-water-hunted-by-a-drowned-tries-to-swim-out-before-anything-else
   (is (= [:swim-out :plug :pillar :back-off :plug-dig :fight] (cornered/escape-order {:swim? true})))

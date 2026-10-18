@@ -31,7 +31,7 @@
   No tree in range before the first is felled is a condition (:no-tree, after the condition's look round): a listed job waits, a called one ends condition-failed :no-tree. Endings otherwise are the felling's, passed up with :got (the logs carried) and :replant-owed in the data: condition-failed
   :no-tree when no tree is left after the first (with :count); a fell that ends for want of an axe or pillar blocks (:need, :tool, :free-slots)
   or hunger, a limit, or nothing-possible :tree-unreachable / :tree-blocked (data :why, :columns); nothing-possible
-  :nothing-collected when a felling brings in no item at all (the inventory count of the filter's items, before the felling against
+  :none-collected when a felling brings in no item at all (the inventory count of the filter's items, before the felling against
   after the collecting). A felling at night in a shelter yields :continue. With no axe carried, fell-tree fetches one for a big tree (:fetch).
   A missing sapling is fetched by plant-sapling (a seen chest, or breaking the seen leaves of its tree); when none can be got it stays owed.
   Quote: the felling's, per tree.")
@@ -166,7 +166,7 @@
           (= :continue e) :continue
           (= :fell phase) (fell-ended! c e)
           (and (= :collect phase) (:tree (ctx/mem c)) (not (pos? (- (carried-count c) (:carried-before (ctx/mem c))))))
-          (ctx/end c :nothing-possible :nothing-collected {:got (logs-carried c) :text "felled a tree but no drop came into the inventory"})
+          (ctx/end c :nothing-possible :none-collected {:got (logs-carried c) :text "felled a tree but no drop came into the inventory"})
           (and (= :plant phase) (more-trees? c))
           (do (ctx/update-mem! c #(-> % (assoc :phase :fell :tree nil :carried-before nil :logs-before nil :want nil :origin nil)
                                       (update :felled (fnil inc 0))

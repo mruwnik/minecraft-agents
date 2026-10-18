@@ -489,7 +489,7 @@
           (core/submit! eng respond {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (<= 6 @hits) "the fight went on past three hurt-yields")
-          (is (not-any? #(= :no_response (:reason %)) @seen) "a fight that costs health is a response"))))))
+          (is (not-any? #(= :no-response (:reason %)) @seen) "a fight that costs health is a response"))))))
 
 (deftest respond-does-not-stop-no-response-while-the-fight-lands-hits
   (async done
@@ -506,7 +506,7 @@
           (core/submit! eng respond {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (<= 6 @hits) "the fight went on past three pauses that each landed a hit")
-          (is (not-any? #(= :no_response (:reason %)) @seen) "a landed hit is a response"))))))
+          (is (not-any? #(= :no-response (:reason %)) @seen) "a landed hit is a response"))))))
 
 (deftest respond-looks-again-before-ending-a-fight-that-yielded-when-no-danger-is-seen-once
   (async done

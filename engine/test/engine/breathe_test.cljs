@@ -216,7 +216,7 @@
           (is (= [] (:list (core/state eng))))
           (is (= ["dig" "dig" "dig"] (call-names p)) "three tries in the one run, no moveTo")
           (is (= [[:stopped :no-way-out]] (ended seen)))
-          (is (empty? (of-kind seen :no_way_out)) "the ending carries it"))))))
+          (is (empty? (of-kind seen :no-way-out)) "the ending carries it"))))))
 
 (deftest enclosed-digs-that-work-but-leave-the-head-enclosed-are-progress-not-failures
   (async done
