@@ -24,7 +24,7 @@
       (perception/pass! (aget w "perception")))
     w))
 
-(defn read [w] (pen/read-pen {:primitives w :args {:max-cells 500}} cells))
+(defn read [w] (pen/read-pen {:primitives w :args {}} cells))
 
 (deftest read-pen-needs-sight-of-the-cells
   (is (not (:closed? (read (scanned blocks true)))) "behind a wall: unknown, not read")

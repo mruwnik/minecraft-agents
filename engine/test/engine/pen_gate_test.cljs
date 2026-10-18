@@ -175,10 +175,10 @@
     {:eng eng :p p :seen seen}))
 
 (defn ^:async run-job
-  "Submit the job with args (:open-s 0 unless given: no grace) and tick up to n times until the list is empty; {:eng :p :seen :ticks}."
+  "Submit the job with args (the open-s setting 0 unless given: no grace) and tick up to n times until the list is empty; {:eng :p :seen :ticks}."
   [spec plans args n & [extra-jobs]]
   (let [s (start spec plans extra-jobs)]
-    (core/submit! (:eng s) (list 'jobs.animals.shut-gate (merge {:open-s 0} args)) {})
+    (core/submit! (:eng s) (list 'jobs.animals.shut-gate (merge {:settings {:jobs.animals.shut-gate/open-s 0}} args)) {})
     (loop [i 0]
       (if (or (>= i n) (empty? (:list (core/state (:eng s)))))
         (assoc s :ticks i)
@@ -235,8 +235,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:open-s 0} 30))]
-          (is (< (waited-ms-before-click s) 1000) ":open-s 0: no grace")
+        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:settings {:jobs.animals.shut-gate/open-s 0}} 30))]
+          (is (< (waited-ms-before-click s) 1000) "open-s 0: no grace")
           (is (not (gate-open? (:p s) 2 64 0))))
         (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:plan "pen-a"} 30))]
           (is (< (waited-ms-before-click s) 1000) "with :plan the caller asked: no grace"))))))
@@ -251,20 +251,20 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:open-s 4} 3))]
+        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:settings {:jobs.animals.shut-gate/open-s 4}} 3))]
           (is (seq (:list (core/state (:eng s)))) "the run waits, it does not end")
           (is (gate-open? (:p s) 2 64 0))
           (is (zero? (clicks s)) "no click inside the grace")
           (await (tick-n s 30))
           (is (empty? (:list (core/state (:eng s)))))
-          (is (not (gate-open? (:p s) 2 64 0)) "after :open-s the same run shuts it")
+          (is (not (gate-open? (:p s) 2 64 0)) "after open-s the same run shuts it")
           (is (= 1 (:shut (last (events-of s :completed))))))))))
 
 (deftest a-gate-a-player-shuts-in-the-grace-is-left-alone
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:open-s 4} 3))]
+        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:settings {:jobs.animals.shut-gate/open-s 4}} 3))]
           (swap! (fake/state (:p s)) assoc-in [:states [2 64 0] :open] false)
           (await (tick-n s 30))
           (is (empty? (:list (core/state (:eng s)))))
@@ -369,7 +369,7 @@
       (fn ^:async t []
         (let [s (start (pen-world true 2 7 {:unreachable ["2,64,0"]}) {"pen-a" pen-a})
               p (:p s)]
-          (core/submit! (:eng s) '(jobs.animals.shut-gate {:open-s 0}) {})
+          (core/submit! (:eng s) '(jobs.animals.shut-gate {:settings {:jobs.animals.shut-gate/open-s 0}}) {})
           (dotimes [_ 12]
             (swap! clock + 700)
             (await (core/tick! (:eng s))))

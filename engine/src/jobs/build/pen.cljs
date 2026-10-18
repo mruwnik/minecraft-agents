@@ -3,6 +3,7 @@
             [engine.contract :as contract]
             [clojure.string :as str]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
@@ -24,7 +25,7 @@
   "Build the fence a plan wants (:plan, optionally only its :part) and prove it holds animals.
   The pen is the bounding box of the plan's cells that want a fence, a fence gate or a wall.
   A plan with :surface true is put on the ground the body has seen (a pen on a slope follows it).
-  Phase 1 runs jobs.build.from-plan on the plan. Its args :reach :give-up :accept pass through, and its rules
+  Phase 1 runs jobs.build.from-plan on the plan. Its args :reach :accept and the give-up setting (3) pass through, and its rules
   (zones, other plans' footprints, materials, cuts) apply. Phase 2: a body still inside the box walks out through the
   gate (a jobs.movement.go-to child to the cell outside it) and jobs.animals.shut-gate shuts it. Phase 3 checks the pen
   over that box with jobs.lib.pen (see jobs.animals.pen-check): a step out of the box is a leak.
@@ -53,9 +54,7 @@
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
    :reach {:doc "as jobs.build.from-plan" :spec (a/num-in 0 nil) :default u/eye-reach}
-   :give-up {:doc "as jobs.build.from-plan" :spec (a/int-in 1 nil) :default 3}
    :accept {:doc "as jobs.build.from-plan" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
-   :max-cells {:doc "most cells the pen check visits before it gives up with :unbounded" :spec (a/int-in 1 nil) :default pen/default-max-cells}
    :fetch {:doc "as jobs.build.from-plan: get the blocks the plan lacks; false builds with what is carried" :spec need/option? :default {:explore true}}
    :uneven? {:doc "build although the ring steps more than 1 between neighbouring fences or the inside drops more than 1 at the gate" :spec boolean? :default false}
    :ignore-zones? :shared})
@@ -63,7 +62,11 @@
 ;; ------------------------------------------------------------------ the pen from the plan
 
 (a/defargs settings
-  {::job-time-s {:default 1800 :doc "Seconds one pen build may take." :spec (a/int-in 1 nil)}})
+  {::job-time-s {:default 1800 :doc "Seconds one pen build may take." :spec (a/int-in 1 nil)}
+   ::give-up {:default 3 :doc "As the :give-up arg of jobs.build.from-plan." :spec (a/int-in 1 nil)}
+   ::max-cells {:default pen/default-max-cells :doc "Most cells the pen check visits before it gives up with :unbounded." :spec (a/int-in 1 nil)}})
+(defn give-up [] (settings/get settings ::give-up))
+(defn max-cells [] (settings/get settings ::max-cells))
 
 (defn gate? [want] (boolean (some #(str/ends-with? % "_fence_gate") (pen-read/want-blocks want))))
 
@@ -118,7 +121,7 @@
           {:trouble trouble :later? (and (not= plan/no-zones trouble) (known/unreadable? answer))}))))
 
 (defn pen-opts [c cells]
-  {:box (pen-read/barrier-box cells) :max-cells (:max-cells (:args c))})
+  {:box (pen-read/barrier-box cells) :max-cells (max-cells)})
 
 (defn read-pen
   "The pen check over what the body sees or remembers (pen-read/read; the round's finish! looks first): an unseen cell is an :unloaded leak."
@@ -133,7 +136,7 @@
     (sense/targets p (u/self-pos c) (:remembered (read-pen c cells)) #{})))
 
 (defn build-args [c]
-  (select-keys (:args c) [:plan :part :reach :give-up :accept :fetch :ignore-zones?]))
+  (assoc (select-keys (:args c) [:plan :part :reach :accept :fetch :ignore-zones?]) :give-up (give-up)))
 
 ;; ------------------------------------------------------------------ conditions
 

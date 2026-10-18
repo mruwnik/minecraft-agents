@@ -18,7 +18,7 @@
 (def doc
   "Carry :count fish, caught with a fishing rod from a bank beside seen water.
   The bank is a land cell with seen water (two deep) beside it at the level below, within :radius of the body (:pos names the water cell
-  to cast at instead). The body walks there (go-to), holds the rod and casts: one cast waits for a bite up to :cast-s, then reels.
+  to cast at instead). The body walks there (go-to), holds the rod and casts: one cast waits for a bite up to the cast-s setting (45), then reels.
   A body with no rod gets one first (jobs.lib.need, unless :fetch is false).
   Ends with the data {:got n :text}, info fish.caught per fish, and the ending:
   - :done: :count fish (cod, salmon, tropical fish, pufferfish) are carried, or the call's :least (default 1, :all = :count)
@@ -26,7 +26,7 @@
   Before the first cast it waits (can-start?) on :no-rod (none carried and :fetch false) and :no-water (no seen water with a bank
   within :radius).
   - :condition-failed :no-water (the water gone mid-run), or a failed rod fetch (the cause names the rod, :because the fetch's ending).
-  - :nothing-possible :unreachable (the bank could not be walked to) or :no-bite (:max-misses casts in a row caught nothing).
+  - :nothing-possible :unreachable (the bank could not be walked to) or :no-bite (the max-misses setting, 8, casts in a row caught nothing).
   - :limit-reached: the call's :spend :job-time (default ::job-time-s) is used up with fewer than :least caught; the engine ends it, with {:got}.
   The goal is to carry :count fish: the carried fish are counted at every round, so a body already carrying them is done,
   and fish eaten or stored mid-job are caught again.")
@@ -35,12 +35,14 @@
   {:count {:doc "fish to catch" :spec (a/int-in 1 nil) :default 3}
    :pos {:doc "the water cell to cast at, [x y z] or {:x :y :z}; nil: the nearest bank in sight" :spec ::a/pos :default nil}
    :radius {:doc "how far from the body to look for a bank" :spec (a/num-in 1 nil) :default 24}
-   :cast-s {:doc "seconds one cast waits for a bite" :spec (a/num-in 1 nil) :default 45}
-   :max-misses {:doc "casts in a row without a catch before the job gives up :no-bite" :spec (a/int-in 1 nil) :default 8}
    :fetch {:doc "get a rod when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-rod" :spec need/option? :default true}})
 
 (a/defargs settings
-  {::job-time-s {:default 600 :doc "Seconds from the first round before fishing gives up." :spec (a/num-in 1 nil)}})
+  {::cast-s {:default 45 :doc "Seconds one cast waits for a bite." :spec (a/num-in 1 nil)}
+   ::max-misses {:default 8 :doc "Casts in a row without a catch before the job gives up :no-bite." :spec (a/int-in 1 nil)}
+   ::job-time-s {:default 600 :doc "Seconds from the first round before fishing gives up." :spec (a/num-in 1 nil)}})
+(defn cast-s [] (settings/get settings ::cast-s))
+(defn max-misses [] (settings/get settings ::max-misses))
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (def target [:pos])
@@ -104,7 +106,7 @@
     (contract/ok :ready "a rod and water to cast at")))
 
 (defn ^:async cast! [c {:keys [water]}]
-  (let [r (await (ctx/act c :fish (clj->js {:pos water :timeoutS (:cast-s (:args c))})))
+  (let [r (await (ctx/act c :fish (clj->js {:pos water :timeoutS (cast-s)})))
         status (.-status r)]
     (case status
       "caught" (do (ctx/update-mem! c assoc :misses 0)
@@ -131,10 +133,11 @@
 
 (defn ^:async step [c]
   (let [m (ctx/mem c)
-        {:keys [count max-misses]} (:args c)]
+        count (:count (:args c))
+        most (max-misses)]
     (cond
       (>= (got c) count) (let [n (got c)] (ctx/end c :done nil {:got n :text (str "caught " n " fish")}))
-      (>= (:misses m 0) max-misses) (stop! c :nothing-possible :no-bite (str max-misses " casts in a row caught nothing"))
+      (>= (:misses m 0) most) (stop! c :nothing-possible :no-bite (str most " casts in a row caught nothing"))
       (not (rod-carried? c)) (await (get-rod! c))
       :else
       (if-let [spot (first (spots c))]

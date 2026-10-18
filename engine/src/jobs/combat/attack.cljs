@@ -30,7 +30,7 @@
   - :unreachable: three blocked walks or out-of-reach swings in a row. A landed hit resets the count.
     An out-of-reach swing right after a walk that arrived (the target moved on) does not count.
   - :no-damage: :no-damage-hits swings in a row that did no damage.
-  - :too-many-hits: :max-hits hits without a kill.
+  - :too-many-hits: the max-hits setting (40) hits without a kill.
   A kill counts only when the attack reports killed. A killed target or player is not attacked again in this run,
   even after respawning.
   Ends with the data {:reason :killed [ids] :given-up {id reason} :names {id name} :text}, plus the
@@ -49,14 +49,15 @@
    :radius {:doc "targets within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :attack-gap-ms {:doc "least time between swings; nil: the held weapon's cooldown" :spec (a/num-in 0 nil) :default nil}
    :no-damage-hits {:doc "swings in a row that do no damage before a target is given up on" :spec (a/int-in 1 nil) :default 4}
-   :max-hits {:doc "hits without a kill before a target is given up on" :spec (a/int-in 1 nil) :default 40}
    :walk-timeout-s {:doc "bound of one walk towards a target" :spec (a/num-in 0 nil) :default 5}
    :absent {:doc ":done ends the job with reason :absent when no target is present after a 2 s grace; :wait makes the check decline until one is" :spec #{:done :wait} :default :done}})
 
 (a/defargs settings
-  {::vehicle-gap-ms {:default 150 :doc "Least time between swings at a minecart or boat: its damage drains 1 a tick and each hit adds only 10, so slower hits never break it." :spec (a/int-in 0 nil)}
+  {::max-hits {:default 40 :doc "Hits without a kill before a target is given up on." :spec (a/int-in 1 nil)}
+   ::vehicle-gap-ms {:default 150 :doc "Least time between swings at a minecart or boat: its damage drains 1 a tick and each hit adds only 10, so slower hits never break it." :spec (a/int-in 0 nil)}
    ::reach {:default 3 :doc "How near the target the body stands to swing, in blocks." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds from the first round before a fight gives up." :spec (a/num-in 0 nil)}})
+(defn max-hits [] (settings/get settings ::max-hits))
 (defn reach [] (settings/get settings ::reach))
 (defn time-s [] (settings/get settings ::job-time-s))
 
@@ -209,10 +210,10 @@
                                      (assoc-in [:quiet id] (if quiet? (inc (get-in m [:quiet id] 0)) 0)))
                            (number? h) (assoc-in [:health id] h))))
     (let [{:keys [hits quiet]} (ctx/mem c)
-          {:keys [no-damage-hits max-hits]} (:args c)]
+          no-damage-hits (:no-damage-hits (:args c))]
       (cond
         (>= (get quiet id 0) no-damage-hits) (give-up! c target :no-damage)
-        (>= (get hits id 0) max-hits) (give-up! c target :too-many-hits)))))
+        (>= (get hits id 0) (max-hits)) (give-up! c target :too-many-hits)))))
 
 (defn ^:async walk!
   "Walk within reach of target when further than reach (near/go-near! range 2, doors :shut, each leg bounded by

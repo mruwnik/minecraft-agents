@@ -59,7 +59,6 @@
    :box {:doc "the destination pen {:min :max} (feet cells, inclusive): animals in it are not lured, and the job arrives only when the led animal stands in it; none: the animal within 6 blocks of :pos" :spec a/box? :default nil}
    :range {:doc "how close to :pos counts as there" :spec (a/num-in 0 nil) :default 2}
    :radius {:doc "animals within this many blocks of where the job starts are lured" :spec (a/num-in 0 nil) :default 8}
-   :watch-radius {:doc "how far from the body the lured animal is looked for" :spec (a/num-in 0 nil) :default 64}
    :fetch {:doc "get the food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}
    :uuid {:doc "lead only this animal (its uuid or the start of it, as the entities tool shows; the id when it has none); nothing else takes its place. An empty or ambiguous start (more than one animal matches) never starts; one already at the destination ends the job at once (done? :ok)" :spec string? :default nil}
    :include-penned? {:doc "also lure animals standing in a closed pen" :default false :spec boolean?}
@@ -92,10 +91,10 @@
       :else (contract/ok :order "the order is complete"))))
 
 (defn uuid-matches
-  "The keys of the animals within :watch-radius whose key starts with the :uuid argument."
+  "The keys of the animals within the watch-radius setting (escort, 64) whose key starts with the :uuid argument."
   [c]
-  (let [{:keys [mob uuid watch-radius]} (:args c)]
-    (->> (animals/adults (:primitives c) mob watch-radius)
+  (let [{:keys [mob uuid]} (:args c)]
+    (->> (animals/adults (:primitives c) mob (escort/watch-radius))
          (map animals/key-of)
          (filter #(str/starts-with? (str %) uuid))
          distinct
@@ -120,9 +119,9 @@
 (defn named-there
   "The animal the :uuid start names when it already stands at the destination before the lure chose one."
   [c]
-  (let [{:keys [uuid mob watch-radius]} (:args c)]
+  (let [{:keys [uuid mob]} (:args c)]
     (when (and uuid (not (str/blank? uuid)) (nil? (:animal (ctx/mem c))))
-      (let [found (filterv #(str/starts-with? (str (animals/key-of %)) uuid) (animals/adults (:primitives c) mob watch-radius))]
+      (let [found (filterv #(str/starts-with? (str (animals/key-of %)) uuid) (animals/adults (:primitives c) mob (escort/watch-radius)))]
         (when (and (= 1 (count found)) (at-destination? c (first found)))
           (first found))))))
 
@@ -172,7 +171,7 @@
   [c]
   (let [me (u/self-pos c)
         {:keys [animal last-seen]} (ctx/mem c)
-        near (first (sort-by #(u/flat-dist me (u/pos-of (.-pos %))) (animals/adults (:primitives c) (:mob (:args c)) (:watch-radius (:args c)))))]
+        near (first (sort-by #(u/flat-dist me (u/pos-of (.-pos %))) (animals/adults (:primitives c) (:mob (:args c)) (escort/watch-radius))))]
     {:tracked animal
      :last-seen last-seen
      :last-seen-dist (some->> last-seen (u/flat-dist me))
@@ -248,7 +247,7 @@
   "The adults within radius of the start, on nobody's lead, none already in :box, nearest first. The animal sighted at the
   start stays one when it wandered past the radius while the food was fetched."
   [c]
-  (let [{:keys [mob radius uuid watch-radius include-penned?]} (:args c)
+  (let [{:keys [mob radius uuid include-penned?]} (:args c)
         {:keys [origin sighting]} (ctx/mem c)
         pens (atom #{})
         in-reach? (fn [e] (or (= (:key sighting) (animals/key-of e))
@@ -257,7 +256,7 @@
                            (not (and (:box (:args c)) (animals/in-box? (:box (:args c)) (u/pos-of (.-pos e)))))
                            (or include-penned? (not (spare/enclosed? c pens e)))))]
     (->> (if uuid
-           (filterv #(and (str/starts-with? (str (animals/key-of %)) uuid) (not (animals/leashed? %))) (animals/adults (:primitives c) mob watch-radius))
+           (filterv #(and (str/starts-with? (str (animals/key-of %)) uuid) (not (animals/leashed? %))) (animals/adults (:primitives c) mob (escort/watch-radius)))
            (filterv free? (animals/adults (:primitives c) mob (+ radius (if sighting radius 0) (u/flat-dist origin (u/self-pos c))))))
          (sort-by #(u/flat-dist (u/self-pos c) (u/pos-of (.-pos %))))
          vec)))

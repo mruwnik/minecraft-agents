@@ -3,6 +3,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.blocks :as b]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
@@ -15,7 +16,7 @@
   "Bring the boat the body is in to a shore and get off onto land.
   The shore is a land cell the body has seen (feet and head air over a solid block, no hazard) with seen water beside it at the level of that block:
   :pos names the land cell, else the nearest within :radius of the boat. jobs.movement.boat-drive steers to the water cell beside it
-  (a spot the boat cannot reach is dropped for the next, up to :max-spots), then jobs.movement.leave-vehicle steps off facing the land cell.
+  (a spot the boat cannot reach is dropped for the next, up to the max-spots setting, 3), then jobs.movement.leave-vehicle steps off facing the land cell.
   With :recover the boat is then taken back (jobs.movement.boat-launch :recover; it needs the boat in sight).
   A given :pos the body cannot make out after a look is driven nearer once (boat-drive to the water cell on the boat's side of it), then decided again.
   Impossible: :bad-args (:pos names no cell). Conditions (the not-aboard one before every round too): :not-aboard (on foot, with no landing of this call remembered: jobs.movement.boat-launch
@@ -30,7 +31,6 @@
 (a/defargs args
   {:pos {:doc "the land cell to step onto, [x y z] or {:x :y :z}; nil: the nearest shore in sight" :spec ::a/pos :default nil}
    :radius {:doc "how far from the boat to look for a shore" :spec (a/num-in 1 nil) :default 12}
-   :max-spots {:doc "shore spots tried before giving up :blocked" :spec (a/int-in 1 nil) :default 3}
    :recover {:doc "take the boat back after landing" :spec boolean? :default false}})
 
 (def target [:pos])
@@ -71,7 +71,10 @@
     (contract/ok :shore "a shore to land on")))
 
 (a/defargs settings
-  {::job-time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
+  {::max-spots {:default 3 :doc "Shore spots tried before giving up :blocked." :spec (a/int-in 1 nil)}
+   ::job-time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
+
+(defn max-spots [] (settings/get settings ::max-spots))
 
 (def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
 (def fit? ready/ok)
@@ -188,7 +191,7 @@
             approached (when (empty? found) (await (approach! c reads)))
             found (if (= :approached approached) (await (sense/decide! c :boat-land.shore #(candidates c) {:retry? empty?})) found)
             [_ reads] (if (= :approached approached) (sense/decide #(candidates c)) [nil reads])
-            spots (take (:max-spots (:args c)) found)]
+            spots (take (max-spots) found)]
         (cond
           (= :continue approached) :continue
           (empty? spots) (ctx/end c :condition-failed {:reason :no-shore :hint (no-shore-text c reads)})

@@ -135,8 +135,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [res]} (await (run blocked-world {:max-spots 1}))
-              {res2 :res} (await (run blocked-world {:max-spots 40}))]
+        (let [{:keys [res]} (await (run blocked-world {:settings {:jobs.movement.boat-land/max-spots 1}}))
+              {res2 :res} (await (run blocked-world {:settings {:jobs.movement.boat-land/max-spots 40}}))]
           (is (= {:status :stopped :reason :blocked} (select-keys res [:status :reason])) (pr-str res))
           (is (= :done (:status res2)) "with room to try on, the reachable east bank lands")
           (is (= 21 (:x (:land res2)))))))))
@@ -145,7 +145,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [res]} (await (run (assoc blocked-world :blocks (merge lake (island-pond))) {:max-spots 2}))]
+        (let [{:keys [res]} (await (run (assoc blocked-world :blocks (merge lake (island-pond))) {:settings {:jobs.movement.boat-land/max-spots 2}}))]
           (is (= :blocked (:reason res)) (pr-str res))
           (is (= :blocked (contract/cause-key (:because (:ending res)))) (pr-str res)))))))
 
@@ -194,7 +194,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [res]} (await (run (assoc-in world [:entities 0 :name] "minecart") {:max-spots 3}))]
+        (let [{:keys [res]} (await (run (assoc-in world [:entities 0 :name] "minecart") {:settings {:jobs.movement.boat-land/max-spots 3}}))]
           (is (= :drive-failed (:reason res)) (pr-str res))
           (is (some? (:because (:ending res)))))))))
 

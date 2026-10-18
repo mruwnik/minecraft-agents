@@ -272,7 +272,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:gather-tries 1 :gather-radius 0.5} {:inventory lead :entities [(cow 1 3 {:trail 5})]} 40))]
+        (let [s (await (scenario {:gather-radius 0.5 :settings {:jobs.animals.lead-to/gather-tries 1}} {:inventory lead :entities [(cow 1 3 {:trail 5})]} 40))]
           (is (= :unleashed (:reason (done-event s))))
           (is (false? (:gathered (done-event s))))
           (let [xs (mapv :x (tu/walked-to (:eng s)))]

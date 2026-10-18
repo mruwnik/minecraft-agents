@@ -35,7 +35,7 @@
   With :fence the block there must be a fence (name ends _fence), else :no-fence before anything is leashed; a post not yet seen (far off) is checked again on arrival.
   A tie counts only when the sensing then shows the animal held by something else than this body.
 
-  Before each walking round the animal is looked up (within :watch-radius). Seen off this body's lead: ends
+  Before each walking round the animal is looked up (within the escort watch-radius setting, 64). Seen off this body's lead: ends
   :lead-broke. Not seen: ends :lost after 3 s unseen (see :walk), in every phase.
 
   The legs and the pull-reach check are planned here (jobs.animals.escort/leg-plan) to choose where each leg ends and to
@@ -46,7 +46,7 @@
 
   Gather: a led animal trails about a lead length behind the body. On arrival, if the animal is farther than
   :gather-radius from :pos, the body walks on past :pos (range 1) so the lead pulls it in. It waits for the
-  animal to settle between pulls, at most :gather-tries pulls. A pull stays within 11 blocks of the animal (the
+  animal to settle between pulls, at most the gather-tries setting (3) pulls. A pull stays within 11 blocks of the animal (the
   lead breaks past 12). A pull walks in the same legs, aiming a block past the point that would just gather; it is given up before it starts when the planned walk strays more than 11
   blocks from the animal (a wall in the way). An animal 10 or more blocks from :pos is never pulled. None of
   this is a failure: the animal is let go where it is, with a warn
@@ -82,16 +82,16 @@
    :range {:doc "how close to :pos counts as there" :spec (a/num-in 0 nil) :default 2}
    :radius {:doc "animals within this many blocks of where the job starts are leashed" :spec (a/num-in 0 nil) :default 8}
    :gather-radius {:doc "without :fence the animal is let go once it is within this many blocks of :pos" :spec (a/num-in 0 nil) :default 3}
-   :gather-tries {:doc "without :fence how many times the body walks on to pull a trailing animal nearer" :spec (a/int-in 0 nil) :default 3}
-   :watch-radius {:doc "how far from the body the led animal is looked for" :spec (a/num-in 0 nil) :default 64}
    :fetch {:doc "get a lead when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false waits for one (later :no-lead); a failed fetch ends :no-lead" :spec need/option? :default true}
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::timeout-s {:default 180 :doc "Seconds from the first round before the leading gives up." :spec (a/num-in 0 nil)}
+  {::gather-tries {:default 3 :doc "Without :fence how many times the body walks on to pull a trailing animal nearer." :spec (a/int-in 0 nil)}
+   ::timeout-s {:default 180 :doc "Seconds from the first round before the leading gives up." :spec (a/num-in 0 nil)}
    ::max-ties {:default 2 :doc "Ties tried before the job gives up." :spec (a/int-in 0 nil)}
    ::tie-settle-ms {:default 250 :doc "How long to wait between looks at the animal after the click on the post." :spec (a/int-in 0 nil)}
    ::tie-settle-tries {:default 6 :doc "How often the animal is looked at again after the click before the tie counts as not taken." :spec (a/int-in 0 nil)}})
+(defn gather-tries [] (settings/get settings ::gather-tries))
 (defn max-ties [] (settings/get settings ::max-ties))
 
 (defn stop-text
@@ -193,11 +193,11 @@
 (defn tied-at-post
   "An animal of :mob in sight held by a knot on the :fence cell, else nil."
   [c]
-  (let [{:keys [mob fence watch-radius]} (:args c)
+  (let [{:keys [mob fence]} (:args c)
         at-post? (fn [k] (and (= (:x fence) (js/Math.floor (.-x (.-pos k)))) (= (:z fence) (js/Math.floor (.-z (.-pos k))))))]
     (when fence
       (some #(when-let [k (unleash/knot-of c %)] (when (at-post? k) %))
-            (animals/herd (:primitives c) mob watch-radius)))))
+            (animals/herd (:primitives c) mob (escort/watch-radius))))))
 
 (defn gates-shut?
   "True when no gate or door this job's legs opened is still open."
@@ -339,14 +339,14 @@
   otherwise the animal is looked at: near enough (or the pulls spent) is :arrive, one still moving
   is given time to settle (the animal lags the body), else a pull starts."
   [c a]
-  (let [{:keys [pos gather-radius gather-tries]} (:args c)
+  (let [{:keys [pos gather-radius]} (:args c)
         {:keys [pull-target pulls gather-seen settles] :or {pulls 0 settles 0}} (ctx/mem c)
         animal-pos (u/pos-of (.-pos a))
         d (u/flat-dist animal-pos pos)]
     (cond
       pull-target (await (pull! c pull-target animal-pos))
       (<= d gather-radius) (do (ctx/update-mem! c assoc :gathered true) (set-phase! c :arrive) :again)
-      (>= pulls gather-tries) (stop-gathering! c d)
+      (>= pulls (gather-tries)) (stop-gathering! c d)
       (and (< settles max-settles) (or (nil? gather-seen) (> (u/flat-dist gather-seen animal-pos) moved-eps)))
       (do (ctx/update-mem! c assoc :gather-seen animal-pos :settles (inc settles))
           (await (escort/wait-for-animal! c)))
@@ -359,7 +359,7 @@
 
 (defn ^:async let-go! [c]
   (let [e (await (ctx/call c :unleash 'jobs.animals.unleash {:mob (:mob (:args c)) :animal (:animal (ctx/mem c))
-                                                              :radius (:watch-radius (:args c))
+                                                              :radius (escort/watch-radius)
                                                               :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (cond
       (= :continue e) :yield
@@ -450,7 +450,7 @@
   [c _]
   (let [e (when (:still-led (ctx/mem c))
             (await (ctx/call c :unleash 'jobs.animals.unleash {:mob (:mob (:args c)) :animal (:animal (ctx/mem c))
-                                                                :radius (:watch-radius (:args c))
+                                                                :radius (escort/watch-radius)
                                                                 :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
     (if (= :continue e)
       :continue

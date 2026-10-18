@@ -48,7 +48,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [res]} (await (run (world [rod] {:misses 100}) {:count 2 :max-misses 4}))]
+        (let [{:keys [res]} (await (run (world [rod] {:misses 100}) {:count 2 :settings {:jobs.food.fish/max-misses 4}}))]
           (is (= :stopped (:status res)))
           (is (= :no-bite (:reason res)))
           (is (= 0 (:got res))))))))
@@ -74,7 +74,7 @@
   (let [{:keys [eng p clock]} (lt/setup (world [rod] {:catch ["cod"] :misses misses}))
         casts (atom 0)
         _ (.override (.-world p) "fish" (fn [token a impl] (when (< 1 (swap! casts inc)) (swap! clock + 50000)) (impl token a)))]
-    (await (tu/child-outcome eng 'jobs.food.fish {:count 50 :max-misses 1000 :cast-s 10 :spend {:job-time 40}} 120))))
+    (await (tu/child-outcome eng 'jobs.food.fish {:count 50 :settings {:jobs.food.fish/max-misses 1000 :jobs.food.fish/cast-s 10} :spend {:job-time 40}} 120))))
 
 (deftest a-budget-end-with-fish-caught-is-done-at-the-least
   (async done

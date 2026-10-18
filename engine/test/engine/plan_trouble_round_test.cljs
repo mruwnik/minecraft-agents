@@ -76,7 +76,7 @@
         (let [plans {"pen-a" pg/pen-a}
               {:keys [eng]} (pg/start (pg/pen-world true 2 -7) plans)
               w (:world eng)]
-          (is (true? (await (alive-after-plan-loss? eng w 'jobs.animals.shut-gate '(jobs.animals.shut-gate {:plan "pen-a" :open-s 0}) 3)))))))))
+          (is (true? (await (alive-after-plan-loss? eng w 'jobs.animals.shut-gate '(jobs.animals.shut-gate {:plan "pen-a"}) 3)))))))))
 
 (deftest animals-tend-round-leaves-plan-trouble-to-the-checks
   (async done

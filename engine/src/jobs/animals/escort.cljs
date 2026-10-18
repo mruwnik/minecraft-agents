@@ -49,10 +49,18 @@
                                                         :text (str "the gates the legs opened were not all shut: " (name (:kind e)))}))
               (conclude! c (:ending (ctx/mem c)))))))))
 
+(a/defargs settings
+  {::watch-radius {:default 64 :doc "Blocks from the body within which the lured or led animal is looked for." :spec (a/num-in 0 nil)}
+   ::stall-s {:default 10 :doc "Seconds a seen animal beyond the safe gap may make no progress toward the body before the walk ends :animal-stalled." :spec (a/num-in 0 nil)}
+   ::back-blocks {:default 12 :doc "An animal out of sight for unseen-lost-ms is looked for by walking back toward where it was last seen, when that is no farther from the body than this." :spec (a/num-in 0 nil)}})
+(defn watch-radius [] (settings/get settings ::watch-radius))
+(defn stall-ms [] (* 1000 (settings/get settings ::stall-s)))
+(defn back-blocks [] (settings/get settings ::back-blocks))
+
 (defn animal-now
   "The led animal as the sensing shows it, or nil when it is not seen."
   [c]
-  (animals/find-by-key (:primitives c) (:mob (:args c)) (:watch-radius (:args c)) (:animal (ctx/mem c))))
+  (animals/find-by-key (:primitives c) (:mob (:args c)) (watch-radius) (:animal (ctx/mem c))))
 
 (defn ^:async plan-or-nil
   "The walk plan to the cell of target (floored by places/parse-pos, as go-to does; a promise: the search yields to
@@ -130,12 +138,6 @@
   (if (= :lure (:method (ctx/mem c)))
     (hr/holds-food? c)
     (animals/led-by-me? a)))
-
-(a/defargs settings
-  {::stall-s {:default 10 :doc "Seconds a seen animal beyond the safe gap may make no progress toward the body before the walk ends :animal-stalled." :spec (a/num-in 0 nil)}
-   ::back-blocks {:default 12 :doc "An animal out of sight for unseen-lost-ms is looked for by walking back toward where it was last seen, when that is no farther from the body than this." :spec (a/num-in 0 nil)}})
-(defn stall-ms [] (* 1000 (settings/get settings ::stall-s)))
-(defn back-blocks [] (settings/get settings ::back-blocks))
 
 (def back-near "Blocks from the last sighting at which the body counts as back there." 4)
 

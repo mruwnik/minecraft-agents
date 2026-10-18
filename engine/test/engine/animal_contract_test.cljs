@@ -59,9 +59,9 @@
         (is (= {:event :waiting :reason :no-water}
                (await (angle {:count 1} {:inventory rod :blocks bank}))))
         (is (= {:event :stopped :kind :nothing-possible :reason :no-bite}
-               (await (angle {:count 2 :max-misses 3} {:inventory rod :fish {:misses 100}}))))
+               (await (angle {:count 2 :settings {:jobs.food.fish/max-misses 3}} {:inventory rod :fish {:misses 100}}))))
         (is (= {:event :stopped :kind :limit-reached :reason :job-time}
-               (await (angle {:count 2 :spend {:job-time 0} :max-misses 1000} {:inventory rod :fish {:misses 100}}))))))))
+               (await (angle {:count 2 :spend {:job-time 0} :settings {:jobs.food.fish/max-misses 1000}} {:inventory rod :fish {:misses 100}}))))))))
 
 ;; ------------------------------------------------------------------ shear
 

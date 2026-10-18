@@ -19,8 +19,8 @@
 
   - Without :plan: the open planned gates within :radius of the body. This is the job of the pen-gate trigger,
     which fires for a gate seen open with the body more than 2 blocks away, so a job that holds a gate open on
-    purpose is not fought. A gate seen open for the first time is given :open-s (4 s) of grace, so a gate a player just opened
-    is not shut on them: the run waits (later :gate-grace) :open-s, then shuts it if it still stands open.
+    purpose is not fought. A gate seen open for the first time is given the open-s setting (4 s) of grace, so a gate a player just opened
+    is not shut on them: the run waits (later :gate-grace) that long, then shuts it if it still stands open.
   - With :plan: every open gate of that plan, wherever it is. A gate the body has not seen lately is walked to and
     looked at, never taken for shut; one that still cannot be read is left (:unseen).
 
@@ -28,7 +28,7 @@
   waits a few moments (pass/shut-waits) when an animal stands in the gate (never pushes it), clicks it with an empty hand and reads
   the block again. A gate the body stands in is left (reason :standing-in), as is one an animal never left
   (:animal-in-the-way), or one the walk to it was interrupted for (:walk-interrupted); both get a 30 s :gate-gave-up
-  entry, no warn. A gate that could not be reached or did not shut after :tries clicks is given up with one warn
+  entry, no warn. A gate that could not be reached or did not shut after the tries setting (3) clicks is given up with one warn
   shut-gate.gave-up and a :gate-gave-up memory entry, which keeps the trigger away from it for 10 minutes.
 
   Ends :done with the data {:shut n :left []} when every open gate was shut; a call that finds none open (or unread) at its start ends done at once, with no event (done?); with any left, :nothing-possible :left with warn shut-gate.stopped and {:shut n :left [{:cell [x y z] :reason r}]}.
@@ -37,16 +37,18 @@
 (a/defargs args
   {:plan {:doc "id of a plan whose open gates are all shut; nil: the open planned gates of every active plan within :radius" :spec a/name? :default nil}
    :radius {:doc "without :plan, how far from the body a gate is looked for, in blocks" :spec (a/num-in 0 nil) :default 64}
-   :open-s {:doc "without :plan, seconds to wait before shutting a gate that stands open (0: shut at once)" :spec (a/num-in 0 nil) :default 4}
-   :reach {:doc "walk until within this many cells of the gate (the click reaches 4.5 from the eye)" :spec (a/num-in 0 nil) :default 3}
-   :tries {:doc "failed clicks on one gate before it is given up" :spec (a/int-in 1 nil) :default 3}})
+   :reach {:doc "walk until within this many cells of the gate (the click reaches 4.5 from the eye)" :spec (a/num-in 0 nil) :default 3}})
 
 (def quiet-ttl-ms (* 1000 (:quiet-s pg/defaults)))
 
 (a/defargs settings
-  {::job-time-s {:default 120 :doc "Seconds a shut-gate run may take." :spec (a/num-in 0 nil)}
+  {::open-s {:default 4 :doc "Without :plan, seconds to wait before shutting a gate that stands open (0: shut at once)." :spec (a/num-in 0 nil)}
+   ::tries {:default 3 :doc "Failed clicks on one gate before it is given up." :spec (a/int-in 1 nil)}
+   ::job-time-s {:default 120 :doc "Seconds a shut-gate run may take." :spec (a/num-in 0 nil)}
    ::pause-ttl-ms {:default 30000 :doc "How long a gate stays paused after a failed shut, in ms." :spec (a/int-in 0 nil)}
    ::unreachable-ttl-ms {:default 120000 :doc "How long the trigger leaves a gate the walk could not reach, in ms (the body may be shut in; it tries again then)." :spec (a/int-in 0 nil)}})
+(defn open-s [] (settings/get settings ::open-s))
+(defn tries [] (settings/get settings ::tries))
 (defn unreachable-ttl-ms [] (settings/get settings ::unreachable-ttl-ms))
 (defn pause-ttl-ms [] (settings/get settings ::pause-ttl-ms))
 
@@ -181,7 +183,7 @@
           (let [reason (await (click! c cell))]
             (cond
               (nil? reason) (do (ctx/emit! c :gate.shut :info {:cell cell :text (str "gate " cell " shut")}) nil)
-              (< n (:tries (:args c))) (recur (inc n))
+              (< n (tries)) (recur (inc n))
               :else reason)))))))
 
 (def target [:plan])
@@ -189,11 +191,11 @@
 (def defaults {:spend {:job-time ::job-time-s}})
 
 (defn grace-cells
-  "Without :plan, the open watched gates still inside their :open-s of grace (graced by an earlier round of this call)."
+  "Without :plan, the open watched gates still inside their open-s grace (graced by an earlier round of this call)."
   [c]
-  (let [{:keys [plan open-s]} (:args c)
+  (let [plan (:plan (:args c))
         [cells trouble] (watched-cells c)
-        since (- (ctx/now c) (* 1000 open-s))
+        since (- (ctx/now c) (* 1000 (open-s)))
         graced (into #{} (comp (filter #(> (:t %) since)) (keep #(some-> % :data :cell vec))) (ctx/entries c :gate-graced))]
     (if (or plan trouble) [] (filterv graced (open-now c cells [])))))
 
@@ -239,11 +241,11 @@
 
 (defn grace!
   "Without :plan, a watched gate that stands open and was not graced yet is remembered as graced; can-run? then waits
-  :open-s seconds before the round shuts it. The cells newly graced, or nil."
+  open-s seconds before the round shuts it. The cells newly graced, or nil."
   [c cells]
-  (let [{:keys [plan open-s]} (:args c)
+  (let [plan (:plan (:args c))
         graced (into #{} (keep #(some-> % :data :cell vec)) (ctx/entries c :gate-graced))
-        fresh (when (and (not plan) (pos? open-s)) (vec (remove graced (open-now c cells []))))]
+        fresh (when (and (not plan) (pos? (open-s))) (vec (remove graced (open-now c cells []))))]
     (when (seq fresh)
       (doseq [cell fresh]
         (ctx/remember! c :gate-graced {:cell cell} {:cap 50 :ttl graced-ttl-ms}))

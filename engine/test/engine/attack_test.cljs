@@ -237,7 +237,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:targets [7] :max-hits 6}
+        (let [s (await (scenario {:targets [7] :settings {:jobs.combat.attack/max-hits 6}}
                                  {:inventory h/sword :entities [(ent 7 "chest_minecart" "vehicle" 2 {:invulnerable true})]} 8))]
           (is (= 6 (count (attacked s))))
           (is (= {7 :too-many-hits} (:given-up (done-event s)))))))))
@@ -246,7 +246,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:targets [7] :max-hits 3}
+        (let [s (await (scenario {:targets [7] :settings {:jobs.combat.attack/max-hits 3}}
                                  {:inventory h/sword :entities [(ent 7 "zombie" "hostile" 2 {:health 1000})]} 4))]
           (is (= 3 (count (attacked s))))
           (is (= {7 :too-many-hits} (:given-up (done-event s))))
@@ -256,7 +256,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:targets [7] :spend {:job-time 3} :no-damage-hits 100 :max-hits 1000}
+        (let [s (await (scenario {:targets [7] :spend {:job-time 3} :no-damage-hits 100 :settings {:jobs.combat.attack/max-hits 1000}}
                                  {:inventory h/sword :entities [(ent 7 "zombie" "hostile" 2 {:invulnerable true})]} 7))]
           (is (finished? s))
           (is (= [:job-time] (mapv :reason (events-of s :stopped))) "the engine's limit ends it")
