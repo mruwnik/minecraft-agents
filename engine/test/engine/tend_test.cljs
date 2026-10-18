@@ -13,7 +13,7 @@
 
 (def box {:min {:x 0 :y 60 :z -5} :max {:x 8 :y 70 :z 5}})
 
-(defn spec [args] (list 'jobs.animals.tend (merge {:box box} args)))
+(defn spec [args] (list 'jobs.animals.tend (merge {:box box :mob "cow"} args)))
 
 (def cow-drops [{:name "beef" :count 1} {:name "leather" :count 1}])
 

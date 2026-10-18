@@ -29,7 +29,7 @@
                       ['jobs.animals.pen-check {:at [2 64 2]}]
                       ['jobs.animals.cull {:mob "cow" :keep 1}]
                       ['jobs.animals.shut-gate {}]
-                      ['jobs.animals.tend {:box {:min {:x 0 :y 60 :z 0} :max {:x 4 :y 70 :z 4}}}]
+                      ['jobs.animals.tend {:mob "cow" :box {:min {:x 0 :y 60 :z 0} :max {:x 4 :y 70 :z 4}}}]
                       ['jobs.animals.lead-to {:mob "cow" :pos {:x 5 :y 64 :z 0}}]
                       ['jobs.animals.lure-to {:mob "cow" :pos {:x 5 :y 64 :z 0}}]
                       ['jobs.animals.herd {:mob "cow" :box {:min {:x 0 :y 60 :z 0} :max {:x 4 :y 70 :z 4}} :target 2}]]]
@@ -233,11 +233,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:event :completed} (select-keys (await (ending (list 'jobs.animals.tend {:box pen :target 4}) {:inventory wheat :entities [(cow-at 1 2) (cow-at 2 3)]})) [:event])))
+        (is (= {:event :completed} (select-keys (await (ending (list 'jobs.animals.tend {:mob "cow" :box pen :target 4}) {:inventory wheat :entities [(cow-at 1 2) (cow-at 2 3)]})) [:event])))
         (is (= {:event :stopped :kind :impossible :reason :no-box}
                (await (ending '(jobs.animals.tend {}) {:entities [(cow-at 1 2)]}))) "no box and no plan: it can never start")
+        (is (= {:event :stopped :kind :impossible :reason :no-mob}
+               (await (ending (list 'jobs.animals.tend {:box pen}) {:entities [(cow-at 1 2)]}))) "no mob and no plan: it can never start")
         (is (= {:event :completed}
-               (select-keys (await (ending (list 'jobs.animals.tend {:box pen :target 2}) {:entities [(cow-at 1 2) (cow-at 2 3)]})) [:event]))
+               (select-keys (await (ending (list 'jobs.animals.tend {:mob "cow" :box pen :target 2}) {:entities [(cow-at 1 2) (cow-at 2 3)]})) [:event]))
             "at target with nothing to do: done at once")))))
 
 (deftest lead-to-ends-with-a-kind-and-a-cause

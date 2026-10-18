@@ -38,7 +38,7 @@
   :no-food and :no-shears (only with :fetch off), :within-target, :not-sheep, :none-shearable, :no-drops, :no-chest, :nothing-to-store,
   or :declined when the child declined.
 
-  Done (:already before the start) when the box needs no look, no step would run and the herd is at :target. It starts when some step would run. Without a :box and a :plan it can never start (impossible :no-box). Otherwise it
+  Done (:already before the start) when the box needs no look, no step would run and the herd is at :target. It starts when some step would run. Without a :box and a :plan it can never start (impossible :no-box), nor without a :mob and a :plan (:no-mob). Otherwise it
   waits, so the job is cheap under repeat: :nothing-to-do with the census {:adults :babies :target} and
   {:skipped {step reason}}.
 
@@ -56,7 +56,7 @@
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world; with :part, the pen is that part (its :box, :herd {:mob :target}) and :box, :mob and :target are not used" :spec a/name? :default nil}
    :part {:doc "with :plan, the id of the pen part" :spec a/name? :default nil}
-   :mob {:doc "mob type name of the animals in the pen" :spec a/name? :default "cow"}
+   :mob {:doc "mob type name of the animals in the pen; required without :plan" :spec a/name? :default nil}
    :box {:doc "the pen: {:min {:x :y :z} :max {:x :y :z}}, inclusive; required without :plan" :spec a/box? :default nil}
    :target {:doc "adult herd size wanted; babies count toward it, they grow" :spec (a/int-in 0 nil) :default 4}
    :chest {:doc "chest position {:x :y :z} for the produce; nil: do not store" :spec ::a/pos :default nil}
@@ -267,15 +267,16 @@
       :else (contract/never :plan-trouble trouble :why trouble))))
 
 (defn can-start?
-  "Never :no-box without a box or a plan; later for :plan-trouble, :away (far from the pen while another job is listed) or nothing to do."
+  "Never :no-box without a box or a plan, :no-mob without :mob or a plan; later for :plan-trouble, :away (far from the pen while another job is listed) or nothing to do."
   [c]
-  (let [{:keys [plan box]} (:args c)
+  (let [{:keys [plan box mob]} (:args c)
         {:keys [trouble] :as pen} (pen-of c)
         c (if pen (with-pen c pen) c)
         {:keys [min max]} (:box (:args c))
         away (when min (standing/away-cause c {:x (/ (+ (:x min) (:x max)) 2) :y (:y min) :z (/ (+ (:z min) (:z max)) 2)}))]
     (cond
       (not (or plan box)) (contract/never :no-box "tend needs a :box or a :plan")
+      (not (or plan mob)) (contract/never :no-mob "tend needs a :mob or a :plan")
       trouble (can-run? c)
       away (checks/cause-status :later away)
       :else (pen-fact c))))
