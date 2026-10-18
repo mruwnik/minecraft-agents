@@ -111,7 +111,7 @@
       (= :continue r) :continue
       (= :done (:kind r))
       (do (ctx/forget-where! c crossing-kind #(= (:root c) (:job %)))
-          (ctx/end c :done nil (select-keys (:data r) [:land :boat :recovered])))
+          (ctx/end c :done nil (merge {:land land :recovered false} (select-keys (:data r) [:land :boat :recovered]))))
       ;; on foot after the launch with the landing already done: done only if the body is on the far shore
       (and (crossing c) (= :not-aboard (contract/cause-key r)) (on-shore? c land))
       (do (ctx/forget-where! c crossing-kind #(= (:root c) (:job %)))
