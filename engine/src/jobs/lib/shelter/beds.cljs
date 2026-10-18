@@ -10,7 +10,8 @@
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.shelter.spawn :as sh-spawn]))
+            [jobs.lib.shelter.spawn :as sh-spawn]
+            [jobs.lib.solid :as solid]))
 
 (a/defargs settings
   {::seen-bed-radius {:default 6 :spec (a/int-in 1 nil)
@@ -64,19 +65,21 @@
   ([p] (seen-bed p (constantly true)))
   ([p permit?] (seen-bed p permit? (seen-bed-radius)))
   ([p permit? radius]
-  (let [{:keys [x y z] :as start} (sh-sense/feet p)]
-    (loop [queue [start] seen #{start}]
-      (when-let [pos (first queue)]
-        (let [named (u/seen-name p pos)]
-          (if (and (some? named) (.endsWith named "_bed") (not= pos start) (permit? pos))
-            pos
-            (let [next (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
-                             :let [n {:x (+ (:x pos) dx) :y y :z (+ (:z pos) dz)}]
-                             :when (and (not (seen n))
-                                        (<= (max (js/Math.abs (- (:x n) x)) (js/Math.abs (- (:z n) z))) radius)
-                                        (sh-sense/walkable-at? p n))]
-                         n)]
-              (recur (into (subvec (vec queue) 1) next) (into seen next))))))))))
+   (let [{:keys [x y z] :as start} (sh-sense/feet p)
+         bed? (fn [named] (and (some? named) (.endsWith named "_bed")))
+         free? (fn [named] (and (some? named) (or (bed? named) (not (solid/solid? named)))))]
+     (loop [queue (conj cljs.core/PersistentQueue.EMPTY start) seen #{start}]
+       (when-let [pos (peek queue)]
+         (let [step (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                          :let [n {:x (+ (:x pos) dx) :y y :z (+ (:z pos) dz)}]
+                          :when (and (not (seen n))
+                                     (<= (max (js/Math.abs (- (:x n) x)) (js/Math.abs (- (:z n) z))) radius))
+                          :let [named (u/seen-name p n)]
+                          :when (free? named)]
+                      [n named])
+               found (some (fn [[n named]] (when (and (bed? named) (permit? n)) n)) step)]
+           (or found
+               (recur (into (pop queue) (map first step)) (into seen (map first step))))))))))
 
 (def sleep-failed-policy
   "The :sleep-failed entry the night job writes when a sleep ended without sleeping (bed taken, monsters near, ...):

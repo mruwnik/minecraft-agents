@@ -6,6 +6,7 @@
             [engine.memory :as mem]
             [engine.test-util :as tu :refer [run-async run-until-empty]]
             [engine.sense-test :as sense]
+            [jobs.lib.shelter.beds :as sh-beds]
             [engine.shelter-support :as st :refer [setup know-bed! calls entries emitted noon night]]))
 
 (def bed {:x 6 :y 64 :z 0})
@@ -205,3 +206,12 @@
           (is (= 0 (count (calls p "useOn"))))
           (is (= [:unchanged] (mapv :why (emitted seen :completed))))
           (is (= [{:pos bed}] (entries eng :spawn-bed))))))))
+
+(deftest seen-bed-reads-each-cell-of-its-radius-once
+  (let [{:keys [p]} (setup {:time noon})
+        reads (atom 0)
+        counting (js/Proxy. p #js {:get (fn [t k]
+                                          (let [v (aget t k)]
+                                            (if (fn? v) (fn [& args] (swap! reads inc) (.apply v t (to-array args))) v)))})]
+    (is (nil? (sh-beds/seen-bed counting (constantly true) 48)))
+    (is (< @reads (* 1.2 97 97)) "a flood fill over open floor must not read a cell twice, or set-spawn's per-round calls pass the fuzz cap")))
