@@ -17,6 +17,13 @@
    :act [[:job (jobs.items.craft {:item "white_bed"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:item "white_bed" 1]]}
+  ;; card 689bca47: the craft act times out (bound shrunk by :prim/craft-max-s) although the item arrived: the job reads the inventory and is done
+  {:name "craft-act-timing-out-after-the-item-arrived-is-done"
+   :settings {:prim/craft-max-s 0.25}
+   :body {:inventory [["oak_planks" 2]]}
+   :act [[:job (jobs.items.craft {:item "stick"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "stick" 4]]}
   {:name "white-bed-short-of-planks-and-no-table-is-not-crafted"
    :body {:inventory [["white_wool" 3] ["oak_planks" 1]]}
    :act [[:job (jobs.items.craft {:item "white_bed" :fetch false})]]

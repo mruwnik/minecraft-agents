@@ -168,7 +168,7 @@ export function createItems (env) {
     need(typeof a.item === 'string' && a.item !== '', 'craft needs item, an item name')
     need(a.count === undefined || a.count === null || (Number.isInteger(a.count) && a.count > 0), 'craft count must be a positive integer')
     need(!a.table || (isNum(a.table.x) && isNum(a.table.y) && isNum(a.table.z)), 'craft table must have numeric x, y, z')
-    return act(token, { boundS: Math.min(60, 4 + 6 * (a.count ?? 1)) }, ctx => craftItem(env.bot, ctx, a, { timeScale }))
+    return act(token, { boundS: Math.min(setting('prim/craft-max-s'), 4 + 6 * (a.count ?? 1)) }, ctx => craftItem(env.bot, ctx, a, { timeScale }))
   }
 
   const furnaceLoad = part => part === undefined || (typeof part?.item === 'string' && (part.count === undefined || (Number.isInteger(part.count) && part.count > 0)))
