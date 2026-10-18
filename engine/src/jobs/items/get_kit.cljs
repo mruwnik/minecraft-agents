@@ -1,5 +1,6 @@
 (ns jobs.items.get-kit
   (:require [jobs.lib.ready :as ready]
+            [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -209,7 +210,13 @@
         version (game/version-of (:primitives c))
         m (ctx/mem c)]
     (cond
-      (nil? (:since m)) (ctx/update-mem! c assoc :since (ctx/now c))
+      (nil? (:since m)) (let [st (state c)
+                              todo (remove #(had? (:carried st) (:worn st) %) items)
+                              short (furnace-short version todo (:carried st))]
+                          (ctx/update-mem! c assoc :since (ctx/now c))
+                          (ctx/emit! c :kit.plan :info {:items (vec todo) :short short
+                                                        :text (str "kit: getting " (str/join ", " todo)
+                                                                   (when (seq short) (str " (needs " (str/join ", " (map (fn [[k n]] (str n " " k)) short)) " from the furnace)")))}))
       (stale? m (ctx/latest c :died))
       (do (ctx/update-mem! c restarted (ctx/now c))
           (ctx/emit! c :kit.resumed :info {:text "died since the kit began: starting again from what is carried and worn"})))

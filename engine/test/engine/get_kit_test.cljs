@@ -89,7 +89,8 @@
           (is (= 1 (get (f/inv s) "iron_pickaxe")))
           (is (= {"head" "iron_helmet"} (worn s)))
           (is (= {:status :done :made ["iron_pickaxe" "iron_helmet"]} (select-keys @(:out s) [:status :made])))
-          (is (= ["iron_pickaxe" "iron_helmet"] (mapv :item (f/events-of s :kit.progress)))))))))
+          (is (= ["iron_pickaxe" "iron_helmet"] (mapv :item (f/events-of s :kit.progress))))
+          (is (= [["iron_pickaxe" "iron_helmet"]] (mapv :items (f/events-of s :kit.plan))) "the plan is stated once at the start"))))))
 
 (deftest ingots-that-cannot-be-got-stop-the-job-at-once-naming-the-ingots
   (async done
