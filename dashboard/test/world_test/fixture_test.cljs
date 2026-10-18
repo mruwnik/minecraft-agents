@@ -395,8 +395,9 @@
     (is (= 28 (count (re-seq #"if block" (apply str cmds)))))
     (is (every? #(<= (count %) 400) cmds))
     (is (= [[1 2] [3]] (map vec (f/group-replies [2 1] [1 2 3]))))
-    (is (:pass? (f/judge-after [0 0 0] check (f/join-after-replies ["Test passed" "Test failed" "Test passed"]))))
-    (is (not (:pass? (f/judge-after [0 0 0] check (f/join-after-replies ["Test passed" "Test passed" "Test passed"])))))))
+    (is (:pass? (f/judge-after [0 0 0] check (f/join-after-replies check ["Test passed" "Test failed" "Test passed"]))))
+    (is (not (:pass? (f/judge-after [0 0 0] check (f/join-after-replies check ["Test passed" "Test passed" "Test passed"])))))
+    (is (:pass? (f/judge-after [0 0 0] check (f/join-after-replies check ["" "Test passed" "Test passed"]))))))
 
 (deftest body-start-plan-gives-each-case-clean-memory
   (is (= :restart-clean (f/body-start-plan {} true)))

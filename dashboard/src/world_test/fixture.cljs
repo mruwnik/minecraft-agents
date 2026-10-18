@@ -873,9 +873,12 @@
     (if (nil? n) out (recur (conj out (take n rs)) more (drop n rs)))))
 
 (defn join-after-replies
-  "The single reply of a check from its commands' replies: an :any-not-block cell set differs when any chunk's test failed."
-  [replies]
-  (or (first (filter #(str/includes? % "Test failed") replies)) (last replies)))
+  "The single reply of a check from its commands' replies. An :any-not-block cell set differs when any chunk's test failed; a
+  chained `execute if` that fails before its last condition prints nothing, so a blank reply counts as failed."
+  [[op] replies]
+  (if (= op :any-not-block)
+    (if (some #(str/blank? %) replies) "Test failed" (or (first (filter #(str/includes? % "Test failed") replies)) (last replies)))
+    (last replies)))
 
 (defn entity-probe-command
   "The RCON command that dumps one entity matching a failed :entities check (nil for other checks)."

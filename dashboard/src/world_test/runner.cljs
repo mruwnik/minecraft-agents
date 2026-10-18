@@ -1483,7 +1483,7 @@
         cmds (mapv #(f/after-commands origin (:body opts) (f/case-grid c) c %) rcon-checks)]
     (.then (rcon! (vec (apply concat cmds)))
            (fn [replies]
-             (let [joined (map f/join-after-replies (f/group-replies (map count cmds) replies))
+             (let [joined (map #(f/join-after-replies %1 %2) rcon-checks (f/group-replies (map count cmds) replies))
                    judged (map vector rcon-checks (map #(f/judge-after origin %1 %2) rcon-checks joined))
                    by-check (into {} (map (fn [[chk r]] [chk r])) judged)
                    results (mapv (fn [chk] (if (file? chk) (judge-file-check opts chk) (by-check chk))) checks)
