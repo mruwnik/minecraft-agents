@@ -107,7 +107,7 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :stopped :kind :nothing-possible :reason :no-gap}
-               (await (gap-end {:blocks (merge gt/ground gt/pit gt/shell)  :entities [gt/pit-skeleton]} {:reach 0}))))))))
+               (await (gap-end {:blocks (merge gt/ground gt/pit gt/shell)  :entities [gt/pit-skeleton]} {:settings {:jobs.survival.block-arrow-gap/reach 0}}))))))))
 
 ;; ------------------------------------------------------------------ extinguish
 
