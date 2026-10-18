@@ -425,6 +425,12 @@
   [opts]
   (fs/rmSync (path/join (repo-path "worlds" (:world opts) "notes") (str (:body opts) ".edn")) #js {:force true}))
 
+(defn clear-observer-checkpoints!
+  "Deletes the observe checkpoints of the body (worlds/<world>/observers/<body>): one from an earlier case holds an old
+  engine generation, so the first observe of a fresh start would answer :reset :engine-restarted."
+  [opts]
+  (fs/rmSync (repo-path "worlds" (:world opts) "observers" (:body opts)) #js {:recursive true :force true}))
+
 (defn reset-body-log!
   "Drops the body.log an earlier run kept, so this run's log holds only this run (start-body! appends across restarts)."
   [opts]
@@ -444,6 +450,7 @@
   (when-not keep-memory?
     (clear-stale-plans! opts)
     (clear-body-notes! opts)
+    (clear-observer-checkpoints! opts)
     (doseq [name f/clean-start-files
             :let [file (path/join (body-dir opts) "engine" name)]
             :when (fs/existsSync file)]

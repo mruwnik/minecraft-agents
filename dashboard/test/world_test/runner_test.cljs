@@ -945,6 +945,21 @@
         (.catch (fn [e] (is false (.-message e))))
         (.finally done))))
 
+(deftest clear-observer-checkpoints-drops-only-this-bodys-checkpoint-test
+  (async done
+    (-> (with-body-dir
+    (fn [opts _]
+      (let [dir (path/join (r/world-file opts "observers"))]
+        (doseq [n ["B" "BB"]]
+          (fs/mkdirSync (path/join dir n) #js {:recursive true})
+          (fs/writeFileSync (path/join dir n "agent.edn") "{}"))
+        (r/clear-observer-checkpoints! opts)
+        (is (= ["BB"] (vec (fs/readdirSync dir))))
+        (r/clear-observer-checkpoints! opts)
+        (js/Promise.resolve nil))))
+        (.catch (fn [e] (is false (.-message e))))
+        (.finally done))))
+
 (deftest write-plans-settled-waits-for-the-body-to-re-read-each-plan-file
   (async done
     (-> (with-body-dir
