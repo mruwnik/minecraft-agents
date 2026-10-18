@@ -7,16 +7,19 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.test-util :as tu :refer [child-outcome]]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [jobs.lib.world-files :as ew]))
 
-(defn setup [world]
+(defn setup
+  ([world] (setup world (ew/of-data {} {} [])))
+  ([world store]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor world)
         now (tu/act-clock clock p 300)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now :world store
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
-    {:eng eng :p p :seen seen :clock clock}))
+    {:eng eng :p p :seen seen :clock clock})))
 
 (defn inv [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
 (defn cart-ids [p] (set (map :id (filter #(= "chest_minecart" (:name %)) (fake/entities p)))))
@@ -97,4 +100,14 @@
               result (await (child-outcome eng job {:id 50} 15))]
           (is (= [:cannot-break] (mapv :reason (filter #(= :loot-cart.stopped (:kind %)) @seen))))
           (is (= {:kind :nothing-possible :cause :cannot-break} (select-keys (:ending result) [:kind :cause])))
+          (is (= #{50} (cart-ids p))))))))
+
+(deftest a-cart-in-another-plans-footprint-is-refused
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "hut" :metadata {:by "Other"} :parts [{:id "p" :box [[0 60 -5] [8 70 5]] :want "air"}]}
+              {:keys [eng p]} (setup {:entities [(cart 50 [2 64 0])]} (ew/of-data {"hut" plan} {} []))
+              result (await (child-outcome eng job {:id 50} 12))]
+          (is (= [:stopped :refused ["hut"] 0] ((juxt :status :reason :plans :collected) result)))
           (is (= #{50} (cart-ids p))))))))

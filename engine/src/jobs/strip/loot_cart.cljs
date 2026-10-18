@@ -18,7 +18,7 @@
   jobs.items.collect-drops child, radius 4 round the cart): the cart item, and the stacks the bag had no room for.
   The cart is :id (an entity id) or the nearest chest_minecart within :radius of :near (default the body). It starts
   only when a cart is in sight (condition :gone; start only). Its safe? is ready/safe-at-by-night :near, else ready/safe-if-lit. A cart in
-  another owner's zone or claim is refused (:ignore-zones? true skips that). Broken-and-gone carts are not looked for again:
+  another owner's zone, claim or plan footprint is refused (:ignore-zones? true skips that). Broken-and-gone carts are not looked for again:
   a restart re-reads the world and goes on from there.
   Ends :done {:collected n :items {name n}} (what came into the bag, counted from the inventory at the start), with :full true
   when the bag had no room for a stack. Else condition-failed :gone (the cart vanished), :refused (zones) or :bag-full (no
@@ -136,10 +136,10 @@
       :else
       (let [id (:id cart)
             pos (:pos cart)
-            verdict (access/container-refusal c :take pos)]
+            verdict (access/trespass-refusal c :take pos)]
         (ctx/update-mem! c assoc :pos pos)
         (if verdict
-          (stop! c :refused "the cart is in another's zone or claim" (dissoc (access/refused-result verdict) :reason :gave-up))
+          (stop! c :refused "the cart is in another's zone, claim or plan" (select-keys (access/refusal-fields [verdict]) [:zones :claims :plans]))
           (let [w (await (near/go-near! c pos 2))]
             (cond
               (= :blocked w) (stop! c :unreachable "cannot walk within reach of the cart")

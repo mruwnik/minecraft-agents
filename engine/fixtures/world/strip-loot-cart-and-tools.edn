@@ -42,6 +42,14 @@
    :expect [{:event {:source :job :kind :stopped} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20}]
    :after [[:item "iron_ingot" 0] [:entities "type=chest_minecart,tag=wt" [[10 -1 10] [26 6 22]] 1]]}
+  {:name "cart-in-another-plans-footprint-is-refused"
+   :plans [{:id "other" :metadata {:by "SomeoneElse"} :parts [{:id "p" :cells [#at [19 0 16]] :want [:any "stone"]}]}]
+   :act [[:summon "chest_minecart" [19.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"]
+         [:until-seen {:entity "chest_minecart"} 10]
+         [:job (jobs.strip.loot-cart {})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20}]
+   :after [[:item "iron_ingot" 0] [:entities "type=chest_minecart,tag=wt" [[10 -1 10] [26 6 22]] 1]]}
   {:name "shears-cut-a-cobweb-to-a-cobweb-item"
    :blocks [[:set [18 0 16] "cobweb"]]
    :body {:inventory [["shears" 1]]}
