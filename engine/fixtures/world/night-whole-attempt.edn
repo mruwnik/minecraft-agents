@@ -52,7 +52,9 @@
          ;; integer execute coordinates are block centres, so ~16 ~ ~16 is the start cell's centre (~16.5 lands on [17 0 17])
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16"]
          [:time-set 14000]
-         [:job (jobs.survival.night)]]
+         [:job (jobs.survival.night)]
+         ;; the expectations below are met by night 1's events, so wait here until night 2 has dug the start cell
+         [:until-rcon "execute positioned $X $Y $Z unless block ~16 ~-1 ~16 minecraft:dirt" "passed" 120]]
    :expect [{:event {:source :job :kind :shelter.relocated} :within-s 150}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 300 :of-job true}]
    :after [[:not-block [16 -1 16] "dirt"]]
