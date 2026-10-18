@@ -1,5 +1,5 @@
-(ns engine.plug-in-test
-  "jobs.survival.plug-in: seals the body in where it stands, by walls, a pit or a side pocket, and ends done once enclosed."
+(ns engine.shut-in-test
+  "jobs.survival.shut-in: seals the body in where it stands, by walls, a pit or a side pocket, and ends done once enclosed."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.cornered-test :as ct]
@@ -18,7 +18,7 @@
 (def pick [{:name "stone_pickaxe" :count 1}])
 
 (defn ^:async plug!
-  "Run plug-in with args over world (its :zones go to the engine) through a recording parent (setup! gets the fake first): {:out the ending :p :eng :continues}."
+  "Run shut-in with args over world (its :zones go to the engine) through a recording parent (setup! gets the fake first): {:out the ending :p :eng :continues}."
   [world args & [setup!]]
   (let [zones (:zones world)
         world (dissoc world :zones)
@@ -31,7 +31,7 @@
         _ (when setup! (setup! p))
         now (tu/act-clock clock p 1000)
         caller {:round (fn ^:async caller-round [c]
-                         (let [r (await (ctx/call c :plug 'jobs.survival.plug-in args))]
+                         (let [r (await (ctx/call c :plug 'jobs.survival.shut-in args))]
                            (if (= :continue r) (do (swap! continues inc) (when-not @digs-at-first (reset! digs-at-first (count (ct/calls p "dig")))) :continue) (do (reset! out r) (ctx/end c :done nil)))))}
         eng (core/create {:primitives p :world (world-files/of-data {} {} (or zones [])) :jobs (assoc registry/jobs 'caller caller) :triggers triggers/all :dir (tu/tmp-dir)
                           :now now :events (events/make {:body "Fake" :sinks [sink] :now now})})]
@@ -57,11 +57,11 @@
           (is (= #{:retreat-plug} (purposes eng)))
           (is (= [{:cell [1 64 0] :item "cobblestone"} {:cell [1 65 0] :item "cobblestone"}] (:placed (:data out))) "every placed block, for a caller to take back"))))))
 
-(deftest the-callers-purpose-labels-the-ledger-entries
+(deftest the-callers-for-labels-the-ledger-entries
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (await (plug! {:blocks ct/dead-end :inventory cobble} {:purpose :shelter}))]
+        (let [{:keys [eng]} (await (plug! {:blocks ct/dead-end :inventory cobble} {:for :night}))]
           (is (= #{:shelter} (purposes eng))))))))
 
 (deftest walls-beside-an-open-iron-door-step-away-from-it-and-wall-the-cell-between

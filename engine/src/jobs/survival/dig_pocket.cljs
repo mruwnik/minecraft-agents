@@ -1,4 +1,4 @@
-(ns jobs.survival.plug-pocket
+(ns jobs.survival.dig-pocket
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -16,12 +16,12 @@
   with no pocket that fits, a dig that fails or a way in that cannot be walled. A pocket that lays open fluid or a cave is
   dropped (lava is filled first, :on-lava :seal). With no side that fits at the feet it first walks (go-to) to the nearest seen
   standing cell within the ::walk-radius setting (6), at the same height, from where one does (a rock wall of the room), not to a cell a hostile
-  stands on; the quote adds the walk. The walls go to the scaffold ledger with :purpose (default :retreat-plug, taken
-  back by jobs.access.cleanup once no hostile is near; :shelter is left alone). Quote: time (##Inf when no side fits). Picked by
-  jobs.survival.plug-in, which shuts the body in by the cheapest way.")
+  stands on; the quote adds the walk. The walls go to the scaffold ledger with :for (default :danger, ledger :retreat-plug, taken
+  back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote: time (##Inf when no side fits). Picked by
+  jobs.survival.shut-in, which shuts the body in by the cheapest way.")
 
 (a/defargs args
-  {:purpose {:doc "ledger purpose of the placed blocks (:retreat-plug: taken back by the cleanup near no hostile; :shelter: left alone)" :spec #{:retreat-plug :shelter} :default :retreat-plug}
+  {:for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
    :radius {:doc "melee hostiles within this many blocks decide which side is walled first and stand in the way of a cell" :spec (a/num-in 0 nil) :default 8}
    :ranged-radius {:doc "ranged hostiles within this many blocks decide which side is walled first" :spec (a/num-in 0 nil) :default 16}

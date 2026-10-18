@@ -1,5 +1,5 @@
 (ns jobs.survival.dig-in.walls
-  "dig-in's walls and plug modes: the body walled in by jobs.survival.plug-in, or one block in the roof of a closed room."
+  "dig-in's walls and plug modes: the body walled in by jobs.survival.shut-in, or one block in the roof of a closed room."
   (:require [engine.ctx :as ctx]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.blocks :as lb]
@@ -10,20 +10,20 @@
             [jobs.survival.dig-in.site :as site]))
 
 (defn note-placed!
-  "Job memory: the blocks a plug-in ending (its data's :placed) placed, as the :placed cells, their items and the spent counts."
+  "Job memory: the blocks a shut-in ending (its data's :placed) placed, as the :placed cells, their items and the spent counts."
   [c data]
   (doseq [{:keys [cell item]} (:placed data)
           :let [cell (u/cell-pos cell)]]
     (ctx/update-mem! c #(-> % (update :placed (fnil conj #{}) cell) (assoc-in [:placed-items cell] item) (update-in [:spent item] (fnil inc 0))))))
 
 (defn ^:async walls-round
-  "One attempt of walls mode: jobs.survival.plug-in with the walls way and the shelter's blocks. Out of blocks (the carried ones
+  "One attempt of walls mode: jobs.survival.shut-in with the walls way and the shelter's blocks. Out of blocks (the carried ones
   were used up or lost, or the body moved to a cell with more open cells than blocks) it forgets the mode so the next round
   chooses again: a pit dug with what it can harvest."
   [c]
   (let [{:keys [max-places roof-height]} (:args c)
-        e (await (ctx/call c :plug 'jobs.survival.plug-in
-                           {:ways #{:walls} :purpose :shelter :roof-height roof-height :max-places max-places :use {:blocks (mode/blocks c)}}))]
+        e (await (ctx/call c :plug 'jobs.survival.shut-in
+                           {:ways #{:walls} :for :night :roof-height roof-height :max-places max-places :use {:blocks (mode/blocks c)}}))]
     (if (= :continue e)
       :yield
       (do (note-placed! c (:data e))

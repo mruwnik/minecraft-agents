@@ -1,5 +1,5 @@
 (ns jobs.survival.retreat-refuge
-  "A cornered body's refuges (jobs.survival.retreat): a pillar (retreat-pillar) or a plug (jobs.survival.plug-in), and the hiding in them."
+  "A cornered body's refuges (jobs.survival.retreat): a pillar (retreat-pillar) or a plug (jobs.survival.shut-in), and the hiding in them."
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.settings :as settings]
@@ -72,13 +72,12 @@
 (def all-ways #{:walls :pit :pocket})
 
 (defn ^:async plug!
-  "Shut the body in with jobs.survival.plug-in by ways and hide there (a :plug refuge): :again while it works or once shut
+  "Shut the body in with jobs.survival.shut-in by ways and hide there (a :plug refuge): :again while it works or once shut
   in, nil when no way shuts it. :plugging marks the option, ways and cell a plug is under way at (plugging-here?)."
   [c option ways]
-  (let [{:keys [radius ranged-radius max-places on-lava purpose]} (:args c)
-        e (await (ctx/call c option 'jobs.survival.plug-in
+  (let [{:keys [radius ranged-radius max-places on-lava]} (:args c)
+        e (await (ctx/call c option 'jobs.survival.shut-in
                            (cond-> {:ways ways :radius radius :ranged-radius ranged-radius :max-places max-places :on-lava on-lava}
-                             purpose (assoc :purpose purpose)
                              (ctx/use c :blocks) (assoc :use {:blocks (ctx/use c :blocks)}))))
         feet (sh-sense/feet (:primitives c))]
     (cond

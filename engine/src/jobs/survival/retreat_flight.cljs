@@ -41,9 +41,9 @@
   (or (ctx/use c :blocks) (choose/fillers :build)))
 
 (defn plug-purpose
-  "The ledger purpose of the blocks a seal or plug places: the call's :purpose, else :retreat-plug (jobs.access.cleanup)."
+  "The ledger purpose of the blocks a seal or plug places: :shelter for the call's :for :night, else :retreat-plug (jobs.access.cleanup)."
   [c]
-  (or (:purpose (:args c)) :retreat-plug))
+  (if (= :night (:for (:args c))) :shelter :retreat-plug))
 
 (defn note-placed!
   "Job memory: item was placed at cell, for the plug's result (:placed)."

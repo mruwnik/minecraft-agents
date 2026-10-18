@@ -164,7 +164,7 @@
     (cond
       (empty? open) (do (forget!) :sealed)
       (empty? cells) (unfillable)
-      (and (not= :shelter (:purpose (:args c))) (some (seal/hostile-cells p radius) cells)) (do (forget!) :failed)
+      (and (not= :night (:for (:args c))) (some (seal/hostile-cells p radius) cells)) (do (forget!) :failed)
       (nil? (lb/pick c blocks)) (do (forget!) :failed)
       :else
       (do (when (seal/off-centre? p) (await (seal/centre! c)))
@@ -183,7 +183,7 @@
   "Fill the open cells around the body (dig-in's 1x1: sides at feet and head
   height, a roof support, the roof) with carried :blocks, at most
   :max-places this step. :sealed when none is left open, :again while
-  more are owed, :failed when a hostile stands in one (not with :purpose :shelter: the place is tried and a mob in its cell waited out), none is carried, a
+  more are owed, :failed when a hostile stands in one (not with :for :night: the place is tried and a mob in its cell waited out), none is carried, a
   placement is refused, or only cells it cannot fill are left open (place-seal!'s :seal-occupied: a torch, chest or bed
   in a side cell, which the seal leaves alone).
   A door standing open in a side cell is no wall (dig-cells/sealed?): it is shut. Cells it has not sensed (a ceiling

@@ -39,10 +39,10 @@
   A pit that would cut into the footprint of a plan the body made (a pen) is not dug (:spared, a
   dig_in_failed warning naming the cell and the plan): the shelter looks elsewhere. Walls and plug are not affected.
   - plug: the body is in a closed room with a door and a hole in the roof over it. One carried block mends the hole.
-  - walls: enough of the call's :use :blocks (default the shelter fillers) are carried for every open cell. Calls jobs.survival.plug-in (walls way, :purpose :shelter), which places the four sides at feet height, the four at head height,
+  - walls: enough of the call's :use :blocks (default the shelter fillers) are carried for every open cell. Calls jobs.survival.shut-in (walls way, :for :night), which places the four sides at feet height, the four at head height,
     a support beside the roof cell, then the roof cell, at most :max-places per step, and takes the open cells from the current feet cell. If the blocks run out, it chooses again; a walls attempt that fails ends the call.
   - :enclose: walls mode only, for a body under an overhang or in a cave: the walls it needs, else :no-blocks.
-  - dig: calls jobs.survival.plug-in (pit way, :purpose :shelter), which digs a pit two deep (three on flat ground, where the
+  - dig: calls jobs.survival.shut-in (pit way, :for :night), which digs a pit two deep (three on flat ground, where the
     start cell has no solid side to roof against) and places one block at the roof cell from a carried or dug block.
     The body never drops onto a floor it has not seen solid (it cannot see under the block it stands on): straight down
     only when every floor is known, else it zigzags between its column and an open side column (every dig beside or

@@ -1,5 +1,5 @@
 (ns jobs.survival.dig-in.pit
-  "dig-in's pit mode: jobs.survival.plug-in with the pit way, and the stops it names."
+  "dig-in's pit mode: jobs.survival.shut-in with the pit way, and the stops it names."
   (:require [engine.ctx :as ctx]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.survival.dig-in.site :as site]
@@ -24,11 +24,11 @@
     (stop-round c {:reason stop :text text :needs needs})))
 
 (defn ^:async pit-round
-  "One attempt of pit mode: jobs.survival.plug-in with the pit way and the shelter's blocks. A pit that stops names its reason."
+  "One attempt of pit mode: jobs.survival.shut-in with the pit way and the shelter's blocks. A pit that stops names its reason."
   [c]
   (let [{:keys [roof-height on-lava hand-clear-ms]} (:args c)
-        e (await (ctx/call c :pit 'jobs.survival.plug-in
-                           {:ways #{:pit} :purpose :shelter :roof-height roof-height :on-lava on-lava :hand-clear-ms hand-clear-ms :use {:blocks (mode/blocks c)}}))]
+        e (await (ctx/call c :pit 'jobs.survival.shut-in
+                           {:ways #{:pit} :for :night :roof-height roof-height :on-lava on-lava :hand-clear-ms hand-clear-ms :use {:blocks (mode/blocks c)}}))]
     (if (= :continue e)
       :yield
       (do (walls/note-placed! c (:data e))

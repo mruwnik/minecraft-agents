@@ -1,4 +1,4 @@
-(ns jobs.survival.plug-in
+(ns jobs.survival.shut-in
   (:require [jobs.lib.ready :as ready]
             [clojure.string :as str]
             [engine.args :as a]
@@ -14,19 +14,19 @@
   "Shut the body in where it stands, atomically: no night or hostile logic, no walking; whoever calls it decides when.
   Needs nothing to start. One call is a whole attempt: it ends :done {:pos :way :placed} once the body is enclosed (a roof within
   :roof-height over no open cell round the feet), at once when it already is.
-  Ways (:ways) are child jobs: jobs.survival.plug-walls (the open sides, a roof support and the roof with carried blocks),
-  plug-pit (dig down under a solid side and plug the hole), plug-pocket (dig a pocket beside the body, step in, wall the way in).
+  Ways (:ways) are child jobs: jobs.survival.wall-in (the open sides, a roof support and the roof with carried blocks),
+  dig-pit (dig down under a solid side and plug the hole), dig-pocket (dig a pocket beside the body, step in, wall the way in).
   It quotes the ways the call allows, starts the cheapest (ties in the order walls, pit, pocket) and, when that one ends other than
   :done, the next cheapest (after a :continue step when a hostile is within 2 blocks); a way that cannot be done here (quote ##Inf) is dropped. Blocks are the call's :use :blocks, else every
   :build filler, carried or dug. None left is nothing-possible :no-way {:text :tried [ways that failed] :dropped [ways that cannot be done]
-  :why {way the child's cause} :stops {way {:reason :needs}} (plug-pit's stop reason)}.
-  :placed the blocks placed ({:cell [x y z] :item}), also with an ending other than :done. Every placed block goes to the scaffold ledger with :purpose (default :retreat-plug, taken back by jobs.access.cleanup once no
-  hostile is near; :shelter is left alone). A cell in another's zone is used only as a last resort (retreat.trespass-last-resort).
+  :why {way the child's cause} :stops {way {:reason :needs}} (dig-pit's stop reason)}.
+  :placed the blocks placed ({:cell [x y z] :item}), also with an ending other than :done. Every placed block goes to the scaffold ledger with :for (default :danger, ledger :retreat-plug, taken back by jobs.access.cleanup once no
+  hostile is near; :night: ledger :shelter, left alone). A cell in another's zone is used only as a last resort (retreat.trespass-last-resort).
   Quote: time.")
 
 (a/defargs args
   {:ways {:doc "the ways to enclose the body, tried in the order :walls, :pit, :pocket" :spec (a/set-of #{:walls :pit :pocket}) :default #{:walls :pit :pocket}}
-   :purpose {:doc "ledger purpose of the placed blocks (:retreat-plug: taken back by the cleanup near no hostile; :shelter: left alone)" :spec #{:retreat-plug :shelter} :default :retreat-plug}
+   :for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
    :radius {:doc "melee hostiles within this many blocks decide which side is walled first and stand in the way of a cell" :spec (a/num-in 0 nil) :default 8}
    :ranged-radius {:doc "ranged hostiles within this many blocks decide which side is walled first" :spec (a/num-in 0 nil) :default 16}
@@ -35,7 +35,7 @@
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pit or pocket is dropped and the lava left" :spec #{:seal :stop} :default :seal}})
 
 (a/defargs settings
-  {::job-time-s {:default 120 :doc "Seconds a plug-in may take." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 120 :doc "Seconds a shut-in may take." :spec (a/num-in 0 nil)}
    ::mean-s {:default 12 :doc "Seconds an enclosing is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
 
 (def target [])
@@ -50,9 +50,9 @@
 
 (def children
   "Each way's job and the args of this call it takes."
-  {:walls ['jobs.survival.plug-walls [:purpose :roof-height :radius :ranged-radius :max-places]]
-   :pit ['jobs.survival.plug-pit [:purpose :roof-height :radius :on-lava :hand-clear-ms]]
-   :pocket ['jobs.survival.plug-pocket [:purpose :roof-height :radius :ranged-radius :max-places :on-lava]]})
+  {:walls ['jobs.survival.wall-in [:for :roof-height :radius :ranged-radius :max-places]]
+   :pit ['jobs.survival.dig-pit [:for :roof-height :radius :on-lava :hand-clear-ms]]
+   :pocket ['jobs.survival.dig-pocket [:for :roof-height :radius :ranged-radius :max-places :on-lava]]})
 
 (defn done? [c] (way/done? c (:way (ctx/mem c)) (merge (spent/summary (spent/log c)) (select-keys (ctx/mem c) [:placed :roof :start]))))
 

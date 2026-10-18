@@ -75,7 +75,7 @@
      - an angry enderman near (one the client flags angry, that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else a seen 2-high gap under a roof within 8 blocks (a 3-tall enderman cannot enter; walks there and holds), else plug in, last of all fight.
      - a drowned near while the body is in water (and no fight wins): swims to the nearest seen dry stand within 16 blocks first (past the mob if need be), before seal, pillar or a fist fight.
      - fight (jobs.survival.fight-back) only when jobs.lib.cost/fight-damage leaves :reserve health. Never against a creeper.
-     - plug in (jobs.survival.plug-in, a child: the walls, and later a pit or side pocket, never at home; the early refuge the walls alone): shuts the body
+     - plug in (jobs.survival.shut-in, a child: the walls, and later a pit or side pocket, never at home; the early refuge the walls alone): shuts the body
        in with carried blocks (or, with none to wall with, ones it digs), the sides towards a seen ranged hostile first. Every
        plug block goes to the scaffold ledger (purpose :retreat-plug), taken back by jobs.access.cleanup once no hostile is near.
      - pillar up 3 (jobs.access.pillar, the carried block with the most, at least 3). Needs a solid floor, free cells above and no slope or ledge a mob could climb to beside its top.

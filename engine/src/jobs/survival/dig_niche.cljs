@@ -236,12 +236,12 @@
       (fail! c :dig-failed (str "cannot dig the niche: " (.-status r))))))
 
 (defn ^:async plug-step!
-  "Shut the opening with jobs.survival.plug-in (walls way, ledger :shelter): :again once it is shut, :continue while it works."
+  "Shut the opening with jobs.survival.shut-in (walls way, ledger :shelter): :again once it is shut, :continue while it works."
   [c]
   (if (nil? (lb/pick c (mode/blocks c)))
     (fail! c :no-blocks "nothing to plug the niche with")
-    (let [e (await (ctx/call c :plug 'jobs.survival.plug-in
-                             {:ways #{:walls} :purpose :shelter :roof-height (:roof-height (:args c)) :use {:blocks (mode/blocks c)}}))]
+    (let [e (await (ctx/call c :plug 'jobs.survival.shut-in
+                             {:ways #{:walls} :for :night :roof-height (:roof-height (:args c)) :use {:blocks (mode/blocks c)}}))]
       (cond
         (= :continue e) :continue
         (= :done (:kind e)) (do (spent/absorb! c (:data e)) :again)

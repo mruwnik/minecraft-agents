@@ -1,5 +1,5 @@
 (ns jobs.survival.plug-way
-  "What the plug ways share (jobs.survival.plug-walls, plug-pit, plug-pocket; picked between by jobs.survival.plug-in):
+  "What the plug ways share (jobs.survival.wall-in, dig-pit, dig-pocket; picked between by jobs.survival.shut-in):
   the enclosed test, the goal, the quote and the stepping round."
   (:require [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
@@ -32,7 +32,7 @@
                   :result (merge {:pos (sh-sense/feet (:primitives c)) :way way} extra)}))))
 
 (defn quote-of
-  "Time of a way: 0 once enclosed, else seconds (##Inf when it cannot be done here, which plug-in drops)."
+  "Time of a way: 0 once enclosed, else seconds (##Inf when it cannot be done here, which shut-in drops)."
   [c seconds job-time-s]
   (let [mean (if (enclosed? c) 0 seconds)]
     {:uses {:job-time [0 mean (if (infinite? mean) mean (max (* 3 mean) job-time-s))]} :done [0 1 1]}))

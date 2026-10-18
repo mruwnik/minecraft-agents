@@ -1,4 +1,4 @@
-(ns jobs.survival.plug-pit
+(ns jobs.survival.dig-pit
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -16,11 +16,11 @@
   :fluid-above, :hazard-below, :no-tool (:needs the block), :hostile-near (a melee hostile stands in the way), :no-blocks, :dig-failed, :descent-stalled, :roof-failed, :lays-open (a dig
   laid a cave or fluid open). The pit is never dug into what the body sees as fluid, a hazard or open air, and it is planned again
   when the body has left its column. Lava a dig lays open is filled first (:on-lava :seal). Every plug goes to the scaffold ledger
-  with :purpose (default :retreat-plug, taken back by jobs.access.cleanup once no hostile is near; :shelter is left alone). Quote:
-  time (##Inf when no pit fits). Picked by jobs.survival.plug-in, which shuts the body in by the cheapest way.")
+  with :for (default :danger, ledger :retreat-plug, taken back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote:
+  time (##Inf when no pit fits). Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.")
 
 (a/defargs args
-  {:purpose {:doc "ledger purpose of the placed blocks (:retreat-plug: taken back by the cleanup near no hostile; :shelter: left alone)" :spec #{:retreat-plug :shelter} :default :retreat-plug}
+  {:for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
    :radius {:doc "melee hostiles within this many blocks stand in the way of a cell" :spec (a/num-in 0 nil) :default pit/default-radius}
    :hand-clear-ms {:doc "a block the carried tools cannot harvest is dug by hand, once a block to roof with is in hand, when the hand breaks it within this many ms; default jobs.lib.tools quick-clear-ms" :spec (a/int-in 0 nil)}
