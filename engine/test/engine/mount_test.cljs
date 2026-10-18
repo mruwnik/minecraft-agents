@@ -2,7 +2,6 @@
   "jobs.movement.mount against the fake world: every mount status maps to a job status."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
-            [engine.core.legacy :as legacy]
             [engine.test-util :as tu]
             [engine.registry :as registry]
             [jobs.movement.mount :as mount]
@@ -31,7 +30,10 @@
         r (await (mount/round c))]
     {:r r :p p :seen @(:seen c)}))
 
-(defn result-of [{:keys [r]}] (legacy/result-of r))
+(defn result-of [{:keys [r]}]
+  (if (= :done (:kind r))
+    (assoc (:data r) :status :done)
+    (assoc (:data r) :status :stopped :reason (contract/cause-key r))))
 
 (deftest mounts-a-boat-in-reach
   (async done

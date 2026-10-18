@@ -250,8 +250,7 @@
                                      :policies {(mem/job-kind "j1") mem/job-policy}}})
    :update-mem (fn [f more] (apply swap! mem* f more))
    :remember (fn [_ _ _] nil)
-   :emit (fn [kind _ _] (swap! emitted conj kind))
-   :call-child (fn [_ _ _] (js/Promise.resolve :continue))})
+   :emit (fn [kind _ _] (swap! emitted conj kind))})
 
 (defn fail-entry [mem*] {(mem/job-kind "j1") [{:t 1000000 :data @mem*}]})
 

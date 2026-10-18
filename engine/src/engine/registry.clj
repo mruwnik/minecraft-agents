@@ -55,19 +55,16 @@
         (str/replace "_" "-")
         symbol)))
 
-(def check-names "The exports that make a file defining round a job (a contract job, engine.contract)."
-  '#{can-start? can-run?})
-
 (defn job?
-  "A job file defines round and can-start? or can-run? (round alone: no old check either); any other file under jobs/ is a helper."
+  "A job file defines round; any other file under jobs/ is a helper."
   [defines]
-  (boolean (and (defines 'round) (or (some defines check-names) (not (defines 'check))))))
+  (boolean (defines 'round)))
 
 (declare job-meta)
 
 (defn describe
   "{:ns sym :defines #{...} :meta (job-meta)} for a job file, nil for a helper file (job?), or throws when a job file's ns does not match
-  its path, a file defines round and check but none of check-names (an old job), or a job lacks safe? or fit?."
+  its path, a job defines check (the old start check; a job declares can-start? or can-run?), or a job lacks safe? or fit?."
   [dir file]
   (let [forms (read-forms file)
         ns-form (first forms)
@@ -75,8 +72,8 @@
         want (expected-ns dir file)
         defines (defined-names forms)]
     (cond
-      (and (defines 'round) (defines 'check) (not (some defines check-names)))
-      (throw (ex-info (str "job file " (.getPath file) " defines check but no can-start? or can-run?; a job declares those")
+      (and (defines 'round) (defines 'check))
+      (throw (ex-info (str "job file " (.getPath file) " defines check; a job declares can-start? or can-run?")
                       {:file (.getPath file)}))
       (not (job? defines)) nil
       (not= want ns-sym)
@@ -181,7 +178,7 @@
     []))
 
 (defmacro job-registry
-  "{ns-symbol {:check :round :doc :args :idle-ok :category :part-of}} for every job namespace under jobs/; a contract job's entry also
+  "{ns-symbol {:round :doc :args :idle-ok :category :part-of}} for every job namespace under jobs/; a contract job's entry also
   holds :can-start? :can-run? :safe? :fit? (a checker fn or a quoted condition form) :target :ways :defaults :done? :quote-of :cleanup :cleanup-defaults  and its namespace's
   :settings. Each
   primitive of the engine/primitive.cljs table is a job too, as jobs.primitive.<kebab-case> (jobs.primitive/job)."
@@ -189,7 +186,7 @@
   (into (into {} (map (fn [k] [(list 'quote (primitive-job-name k)) (list 'jobs.primitive/job k (list 'quote (primitive-job-name k)))])) (primitive-keys))
         (map (fn [{:keys [ns defines] declared :meta}]
                (let [ref (fn [k] (when (defines k) (symbol (str ns) (str k))))]
-                 [(list 'quote ns) (cond-> (merge {:check (ref 'check) :round (ref 'round)
+                 [(list 'quote ns) (cond-> (merge {:round (ref 'round)
                                                   :doc (ref 'doc) :args (ref 'args) :idle-ok (ref 'idle-ok)}
                                                  (update declared :part-of #(list 'quote %)))
                                      (job? defines)

@@ -274,38 +274,6 @@
           (is (= [:round [:cleanup :cut-off] [:cleanup :cut-off]] (:log @world)))
           (is (= [] (:list (core/state eng)))))))))
 
-(def old-mid
-  {:check (constantly true)
-   :round (fn ^:async old-mid [c]
-            (await (ctx/call c :kid 'runner {}))
-            :done)})
-
-(defn caller-of [job]
-  {:round (fn ^:async caller [c]
-            (let [r (await (ctx/call-child c :kid job {}))]
-              (swap! world assoc :kid [r (ctx/child-result c :kid)])
-              (ctx/end c :done nil)))})
-
-(deftest call-child-of-an-old-job-that-ends-runs-the-cleanup-of-a-contract-child-under-it
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (setup {'top (caller-of old-mid) 'runner runner})]
-          (core/submit! eng '(top) {})
-          (await (core/tick! eng))
-          (is (= [[:runner-cleanup :cut-off]] (:log @world))))))))
-
-(deftest call-child-runs-a-contract-childs-whole-cleanup-in-the-callers-round
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (setup {'top (caller-of 'stuck) 'stuck stuck})]
-          (core/submit! eng '(top) {})
-          (await (core/tick! eng))
-          (is (= (repeat 3 [:cleanup :nothing-possible :stuck]) (:log @world)))
-          (is (= [:done {:status :stopped :reason :stuck :let-go true}]
-                 (update (:kid @world) 1 select-keys [:status :reason :let-go]))))))))
-
 (def quick {:round (fn [c] (log! :quick) (ctx/end c :done nil))})
 
 (defn ends-slot-mid-cleanup [end!]
@@ -411,28 +379,3 @@
           (core/register-reflex! eng {:trigger :low})
           (dotimes [_ 4] (await (core/tick! eng)))
           (is (= 1 (count (filter #(and (= [:reflex :fired] [(:source %) (:kind %)]) (= :low (-> % :context :reflex-id))) @seen)))))))))
-
-(def old-done
-  {:check (constantly true)
-   :round (fn ^:async old-done [c]
-            (await (ctx/call c :kid 'cut-in-cleanup {}))
-            (ctx/result! c {:x 1})
-            :done)})
-
-(def cut-in-cleanup
-  {:round (fn [_] :continue)
-   :cleanup (fn [c e]
-              (log! [:cleanup (:kind e)])
-              (when (= 1 (count (:log @world))) (core/do-now! (:engine c) '(quick)))
-              (if (< (count (:log @world)) 2) :continue (ctx/end c :done nil)))})
-
-
-(deftest an-old-child-cut-mid-cleanup-under-call-child-still-hands-its-done-and-result-over
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (setup {'top (caller-of old-done) 'cut-in-cleanup cut-in-cleanup 'quick quick})]
-          (core/submit! eng '(top) {})
-          (dotimes [_ 3] (await (core/tick! eng)))
-          (is (= [[:cleanup :cut-off] :quick [:cleanup :cut-off]] (:log @world)))
-          (is (= [:done {:status :done :x 1}] (update (:kid @world) 1 select-keys [:status :x]))))))))

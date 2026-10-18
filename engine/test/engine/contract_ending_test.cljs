@@ -3,7 +3,6 @@
   and how a root job's ending is told."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
-            [engine.core.legacy :as legacy]
             [engine.core :as core]
             [engine.core.ending :as ending]
             [engine.ctx :as ctx]
@@ -616,41 +615,3 @@
           (swap! world assoc :drop true)
           (await (core/tick! eng))
           (is (= [[(str id "/leaf") :abandoned]] (cut-offs seen))))))))
-
-;; ---------------------------------------------------------------- old results (engine.core.legacy)
-
-(deftest an-old-stopped-reason-reads-as-the-doc-kind
-  (are [reason kind cause]
-       (= {:kind kind :cause cause} (legacy/ending-of {:status :stopped :reason reason}))
-    :no-tool :condition-failed :no-tool
-    :hungry :limit-reached {:line :food :reason :hungry}
-    :danger :condition-failed :danger
-    :hostile-near :condition-failed :hostile-near
-    :gone :condition-failed :gone
-    :no-target :condition-failed :no-target
-    :no-source :condition-failed :no-source
-    :no-tree :condition-failed :no-tree
-    :no-sapling :condition-failed :no-sapling
-    :no-composter :condition-failed :no-composter
-    :no-boat :condition-failed :no-boat
-    :no-vehicle :condition-failed :no-vehicle
-    :not-found :condition-failed :not-found
-    :chest-lacks :condition-failed :chest-lacks
-    :no-food :condition-failed :no-food
-    :timeout :limit-reached {:line :job-time :reason :timeout}
-    :low-health :limit-reached {:line :health :reason :low-health}
-    :tool-spent :condition-failed :tool-spent
-    :bad-args :impossible :bad-args
-    :bad-pos :impossible :bad-pos
-    :unsupported :impossible :unsupported
-    :no-pen :impossible :no-pen
-    :unreachable :nothing-possible :unreachable
-    :cannot :nothing-possible :cannot
-    :no-stone-found :nothing-possible :no-stone-found
-    :no-drops :nothing-possible :no-drops
-    :not-mounted :done nil
-    :no-hostile :done nil
-    :no-way :nothing-possible :no-way))
-
-(deftest a-limit-reason-survives-the-round-trip-to-an-old-parent
-  (is (= :low-health (:reason (legacy/result-of (legacy/ending-of {:status :stopped :reason :low-health}))))))

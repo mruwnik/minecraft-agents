@@ -52,7 +52,7 @@ Layout:
 - `js/primitives.mjs` the real mineflayer layer (lifecycle, reconnect, events; its acting and sensing live in `js/prim-*.mjs`); `js/step-trace.mjs` (off unless `MC_STEP_TRACE=<file>`: a bounded ring of one line per physics tick and per world act, rewritten to the file twice a second; world-test `--trace-dir` sets it and keeps the tail in a failed case's trace as `:steps-tail`); `js/compile-cache.mjs` (first import of primitives.mjs) turns on node's compile cache in `state/compile-cache` (`MC_COMPILE_CACHE=off` disables); `js/connect.mjs` makes the bot (`js/tick-rate-physics.mjs` swaps in physics that follows `/tick rate`, `set_ticking_state` and `step_tick`; stock at 20 TPS; on by default, `:engine.game/follow-tick-rate false` turns it off; a patch that no longer matches runs stock physics and logs `tick-rate.stock`); `js/testing/stub-bot.mjs` is a bare stub for primitive
   tests; `js/view.mjs` writes the view dump for the renderer (skips a reloaded column whose content is unchanged; `BODY_VIEW=0` disables; format in `docs/view-format.md`).
   Other `js/*.mjs` files are helpers per primitive (furnace, enchant, trade, vehicle, leash, light, sight, ...).
-- `src/engine/` the engine core only: `core` (API and lifecycle; parts in `core.*`: list edits, register, scheduler, round with act wrapper and call-child, settling, backoff, restart), `memory`, `events`,
+- `src/engine/` the engine core only: `core` (API and lifecycle; parts in `core.*`: list edits, register, scheduler, round with act wrapper and ctx/call, settling, backoff, restart), `memory`, `events`,
   `ctx`, `expr`, `composite`, `registry` (compile-time registries), `triggers` (the trigger registry), `hooks` (job code
   the engine calls), `condition`, `scenario`, `takeover`/`lease`, `perception` (+ `perception.light|store|rays|mobs|persist`), `main`; `engine.path.*` is the planner.
   Perception sees dark cells within `:near` (4) blocks, within `:near-torch` (7) with a torch in either hand.
@@ -270,7 +270,6 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(ctx/view ctx)`, `latest`, `entries`, `since`, `count-in` | body-memory reads (time-filtered) |
 | `(ctx/remember! ctx kind data policy?)`, `forget-where!`, `forget-until!` | body-memory writes |
 | `(await (ctx/act ctx :moveTo #js {...}))` | call an acting primitive |
-| `(await (ctx/call-child ctx slot job args))` | run one round of a child (`:done`, `:continue`, `:declined`) |
 | `(await (jobs.lib.child/call-walk* ctx slot go-to-args))` | a go-to round through `ctx/call`: `:continue`, or go-to's ending; when go-to's `safe?` says later (`:exposed`, `:hostile-near`); a child's wait is its parent's wait, shown with that reason. `child/run!*` of go-to returns `:continue` at once on such a wait. Old `call-walk` is its `ctx/call-child` form |
 | `(await (ctx/call ctx slot job args))` | one round of a child: `:continue` or its ending (Contract jobs); a call of the same job on the same target args (`:target`) as a frame on its chain ends `:condition-failed` `{:reason :duplicate-call :of frame-id}`, with no round and no `:job-report` entry; a call nested more than `:engine.core.ending/max-call-depth` (12) frames deep ends `:condition-failed` `{:reason :too-deep}` the same way |
 | `(ctx/end ctx kind cause data?)` | a contract job's ending, returned by its round |
@@ -280,7 +279,6 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(await (ctx/next-way ctx quote-of-way thing?))` | `{:way k :dropped {way why}}`, the next way to try (Quotes) |
 | `(ctx/check-status ctx def)`, `(ctx/child-status ctx slot job args)` | the status def (the child in slot) would start with now; `jobs.lib.pace/steps!` also asks `(ctx/can-run ctx)` between steps |
 | `(ctx/wait ctx reason)` | in a check: false, noting why the job waits |
-| `(ctx/result! ctx data)`, `(ctx/child-result ctx slot)` | hand data to the parent in the round that ends `:done` |
 | `(ctx/submit! ctx spec opts)` | put a peer job at the end of the list; returns its id |
 | `(ctx/emit! ctx kind level fields)` | an event, `:level` kept in the log (the dashboard hides `:debug` unless ticked; dropped once the round is cut); `:warn`/`:error` without `:attention` stores `:notice`. Warn only for a give-up |
 | `(ctx/hold-still! ctx reason)` | the round holds the body still on purpose until it ends (`nil` clears); `act :wait` with `:why` does the same while it waits |
@@ -307,7 +305,7 @@ a finished job's goes to body memory `:job-report` (cap 256), with its ending's 
 on its own call (`cleanup-defaults`, default `{:spend {:job-time 30 :wall-time 60}}`); its data merges into the ending, a
 failed or overrun one adds `:cleanup {:kind :cause}` and warns `job.cleanup_failed`. A cancelled job stays listed
 (`job.cleaning_up`) until it ran; a cancel meanwhile does not cut it. A reflex root and the driver's slot job (also when they
-leave on `:continue`: ending `:cut-off :ended`) and a call-child child run their cleanups to the end in that round, a physics step between cleanup rounds. Call keys `:use :ways :spend :floor :checks :deadline :least` freeze at the first round (an empty `:ways` is impossible `:bad-args`). A check returns a status `[kind text data]`
+leave on `:continue`: ending `:cut-off :ended`) run their cleanups to the end in that round, a physics step between cleanup rounds. Call keys `:use :ways :spend :floor :checks :deadline :least` freeze at the first round (an empty `:ways` is impossible `:bad-args`). A check returns a status `[kind text data]`
 (`:ok :later :never :look`, data with `:reason`; `contract/ok|later|never|look`; an ending's cause is data plus `:text`).
 `can-start?` (until the start) and `can-run?` (every round, between steps) give one (none: `:ok`); `safe?` and `fit?` (required exports: a checker fn or a quoted condition form; `ready/ok` for none) are asked with `can-run?` before a start and each resume, not between steps (call key `:checks {:safe? form :fit? form}`, checked at submit, kept as forms, replaces them per key for the frame and its children; job-only entries `(job-safe) (job-fit) (exposed) (threatened) (starving) (always)` come from hook `:ready/vocabulary`; a job's `defaults` may carry `:checks`: the escape jobs (respond-to-hostile, retreat, fight-back, block-arrow-gap, plug-in, unwedge, breathe, extinguish, night, dig-in, dig-niche) default `{:safe? (always) :fit? (always)}`, bed-down, sleep and go-home `{:safe? (not (threatened)) :fit? (always)}`, get-food `{:safe? (or (and (starving) (not (threatened))) (job-safe)) :fit? (always)}`, so their walks do not wait on the danger they escape): `:later` waits (a
 called child ends `:condition-failed`; from `can-run?`, `safe?` or `fit?` it yields, bounded by the call's limits, and a child's wait is its caller's, so under a reflex or exclusive root the root ends; a reflex root ends
@@ -328,13 +326,11 @@ has left: a crossing (cause with `:act`) refuses the act, inside `ctx/atomic` to
 Unwinding frames act unchecked (cleanup); frames further out are still checked. moveTo's health most is the drops a path
 along the straight line could hold (`maxDropDown` 3: none hurts).
 
-**Old callers of contract jobs (engine.core.legacy).** A contract job through `call-child` answers `:declined` or `:done` with its ending in
-the child-result.
 
-**call-child.** The child's memory is the parent's `[:children slot]` sub-map. The same slot resumes the same child while
-it returns `:continue` or `:declined`; on `:done` the sub-map is cleared so the next call starts fresh. A cut anywhere ends
+**Child calls.** The child's memory is the parent's `[:children slot]` sub-map. The same slot resumes the same child while
+it returns `:continue`; on an ending the sub-map is cleared so the next call starts fresh. A cut anywhere ends
 the whole chain's round; cancel and done take the subtree. `submit!` is delegation (a peer on the list), not a child.
-Each call emits debug `job.child_started` and `job.child_ended` (`:slot :chain :status :reason`; a stopped result is `:stopped`).
+Each call emits debug `job.child_started` and `job.child_ended`.
 
 **World knowledge.** `jobs.lib.world-files` reads the plans (`worlds/<world>/plans/<id>.edn`; a part names its cells by `:box`, `:outline`, `:cells`, or `:stair {:from [x y z] :heading h :to-y y}`: the 3 cells per step `access.stair` digs going down from the feet cell `:from`, shared geometry in `plan.shape/step-cells`), blueprints
 (`<id>.edn` in the repo's `blueprints/` beside the engine, or the folder of `--blueprints <dir>` / `:engine.main/blueprints-dir`; the files are untracked, so a worktree body must point at the main checkout's), zones, claims and the shared markers (`places.json`, written by the agent tools only) read-only (`jobs.lib.world/marker`, `find-markers` {:text :kind :near :limit}, 50 at most, default 10; coordinates as given, no dimension), re-stat-ed every 3 s by a timer (so a plan written at any time logs `world.reloaded`); a file that turns invalid keeps its last
@@ -677,8 +673,7 @@ them: `act!` and the primitives check neither, and a job may ignore them. The he
 
 Each job declares its args with defaults and its full rules in `doc`: read it with
 `node engine/tools/observe.mjs <body> --world <w> catalog job <name>`. Failed rounds are usually counted in job memory as
-`:failures`; after a few the job warns and ends. Ends are: `:done` (normal), a `:short`/`:gave-up` style hand-over result
-(`ctx/result!`), or a warn. Jobs that need to be rethought for a world state decline (`ctx/wait`) rather than spin.
+`:failures`; after a few the job warns and ends. Ends are: `:done` (normal), an ending with a cause, or a warn. Jobs that need to be rethought for a world state decline (`ctx/wait`) rather than spin.
 
 **Movement and time**
 

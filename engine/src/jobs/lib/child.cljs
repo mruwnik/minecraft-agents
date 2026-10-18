@@ -73,27 +73,13 @@
   ([c slot job args {:keys [max-calls] :or {max-calls (default-max-calls)}}]
    (run-with ctx/call c slot job args max-calls)))
 
-(defn ^:async call-walk
-  "A go-to child in slot with args (one round, ctx/call-child): :continue while it walks or waits."
-  [c slot args]
-  (await (ctx/call-child c slot 'jobs.movement.go-to args)))
-
 (def entry-depth "Blocks below both ends a walk to or from a line's entry may plan." 16)
 
 (defn walk-into-args [slot cell]
   (cond-> {:pos cell :range 0 :ways #{:walk :clear-seal}}
     (#{:in :out} slot) (assoc :y-margin entry-depth)))
 
-(defn ^:async walk-into!
-  "Walk the body into cell [x y z] with a go-to child in slot (no escalation: the dig is this job's own): :continue
-  while it walks, else the child's result. The walk's checks are the caller's (an escape's defaults flow down). The walks to and from the entry (:in, :out)
-  plan no deeper than entry-depth below the lower of body and cell: a way through deep caves is no way, the job digs."
-  [c slot cell]
-  (if (= :done (await (call-walk c slot (walk-into-args slot cell))))
-    (ctx/child-result c slot)
-    :continue))
-
 (defn ^:async walk-into!*
-  "walk-into! through ctx/call: :continue while it walks, else go-to's ending (its :data has the old child-result)."
+  "walk-into! through ctx/call: :continue while it walks, else go-to's ending."
   [c slot cell]
   (await (call-walk* c slot (walk-into-args slot cell))))

@@ -166,8 +166,7 @@
 
 (defn ^:async drain-on
   "After a step of the closing frame of c gave r: while r is :continue and the round holds the body, a tick, then the
-  next step. For a frame whose caller cannot come back for the rest (a reflex root, the driver's slot job, a call-child
-  child)."
+  next step. For a frame whose caller cannot come back for the rest (a reflex root, the driver's slot job)."
   [eng def c r ctx-below]
   (if (and (= :continue r) (owner? eng (:token c)))
     (do (await (next-tick eng))

@@ -35,7 +35,7 @@
   :line :job-time}; a give-up (:reason :unreachable) is
   of the kind its :why maps to (why-kinds, else :nothing-possible) with the cause {:reason :unreachable :why ..} (and
   :line for a limit); a refusal is :condition-failed (refusal-kinds aside) with its reason as the cause. The result
-  less :status and :reason is the ending's data, so an old caller (child-result) reads what it read before."
+  less :status and :reason is the ending's data, so a caller reads the same keys."
   [c {:keys [status reason why] :as result}]
   (let [data (dissoc result :status :reason)]
     (cond

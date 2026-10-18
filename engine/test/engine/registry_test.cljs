@@ -146,9 +146,11 @@
   (is (not (choose/use-spec? :blocks :nonsense)))
   (is (not (choose/use-spec? :food :build))))
 
-(deftest a-job-file-with-a-check-and-no-can-start-or-can-run-fails-to-load
-  (is (re-find #"defines check but no can-start\? or can-run\?"
+(deftest a-job-file-with-a-check-fails-to-load
+  (is (re-find #"defines check; a job declares can-start\? or can-run\?"
                (describe-message "(ns jobs.probe)\n(defn check [c] nil)\n(defn round [c] :continue)")))
+  (is (re-find #"defines check"
+               (describe-message "(ns jobs.probe)\n(defn check [c] nil)\n(defn can-start? [c] nil)\n(defn round [c] :continue)")))
   (is (nil? (describe-message "(ns jobs.probe)\n(def safe? 1)\n(def fit? 1)\n(def conditions [])\n(defn round [c] :continue)"))))
 
 (deftest a-job-without-safe-or-fit-fails-to-load-naming-the-missing-export

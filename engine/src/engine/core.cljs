@@ -210,7 +210,7 @@
   memory.edn when present, sweeps memory and appends a :restart entry.
   Options:
     :primitives, :dir, :now, :events, :body
-    :jobs        the registry {sym {:check :round :doc :args}}; a contract job's {:can-start? :round ...} is wrapped
+    :jobs        the registry {sym {:round :doc :args}}; a contract job's {:can-start? :round ...} is wrapped
                  (engine.core.ending)
     :triggers    {name trigger}
     :world       the body's world store (hooks :world/open; :world/blank when not given)

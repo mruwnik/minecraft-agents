@@ -1,14 +1,13 @@
 (ns engine.core.round
   "One round: the ctx a round or check receives, the act wrapper (token check, memory saves, action
-  events) and call-child."
-  (:require [engine.core.base :refer [cut-error cut? cut-off! cut-off-dropped! distance emit! job-of exclusive-job normalize-result now offline-cut-error owner? save-memory! self-pos stopped-result? wait-reason]]
+  events) and ctx/call."
+  (:require [engine.core.base :refer [cut-error cut? cut-off! cut-off-dropped! distance emit! job-of exclusive-job normalize-result now offline-cut-error owner? save-memory! self-pos]]
             [engine.core.attention :refer [request-attention! resolve-attention!]]
             [engine.core.fruitless :refer [record-act!]]
             [engine.core.activity :refer [act-ended! act-started! body-act! close-section! hold-still! log-out-record open-section! useful-act?]]
             [engine.core.list-edits :refer [submit!]]
             [engine.core.cleanup :as cleanup]
             [engine.core.ending :as ending]
-            [engine.core.legacy :as legacy]
             [engine.core.limits :as limits]
             [engine.core.quote :as quote]
             [engine.core.tally :as tally]
@@ -17,7 +16,7 @@
             [engine.memory :as mem]
             ["crypto" :as crypto]))
 
-(declare call call-child quote-ctx)
+(declare call quote-ctx)
 
 (defn own!
   "Throw unless the token of base is current: a cut; a quote ctx (no token) gets a plain error."
@@ -84,15 +83,12 @@
   "The ctx a round or a check receives. base is {:root :slots :chain :token
   :args :round :reflex}; :root is the top-level instance id and :slots the
   child slots below it ([] for the instance itself). A check gets :token nil,
-  so it cannot write or act. :results holds the results children handed over
-  with result! during this round of the top-level job; a fresh one is made
-  when base has none, so results never outlive the round."
+  so it cannot write or act."
   [eng {:keys [root slots chain token args round reflex] :as base}]
   (let [store (:store eng)
-        results (or (:results base) (atom {}))
         child-wait (or (:child-wait base) (atom nil))
         child-ending (atom nil)
-        base (assoc base :results results :child-wait child-wait
+        base (assoc base :child-wait child-wait
                     :section-depth (or (:section-depth base) (atom 0)) :held (or (:held base) (atom nil)))
         id (mem/path->id root slots)
         check! #(own! eng base)
@@ -129,14 +125,11 @@
                      (wrote! kind))
      :act (fn [k act-args] (act! eng base id k act-args))
      :note-walk (fn [status moved] (check!) (record-act! eng base :walk #js {:status status} moved))
-     :call-child (fn [slot def child-args] (call-child eng base slot def child-args))
      :call (fn [slot def child-args] (call eng base child-ending slot def child-args))
      :quote (fn [def quote-args deadline self?]
               (quote/quote! eng base def quote-args deadline self? #(quote-ctx eng base def quote-args % self?)))
      :next-way quote/next-way
      :child-ending child-ending
-     :result (fn [data] (check!) (swap! results assoc id data))
-     :child-result (fn [slot] (get @results (mem/path->id root (conj slots slot))))
      :submit (fn [spec opts] (check!) (submit! eng spec (assoc opts :by id)))
      :request-attention (fn [kind reason data message]
                           (check!)
@@ -175,96 +168,12 @@
     (make-ctx eng (assoc base :slots slots :args args :t0s (conj (or (:t0s base) []) (now eng))
                          :chain (conj (:chain base) (mem/path->id (:root base) slots))))))
 
-(defn child-end-fields
-  "The :status and :reason of a child call's job.child_ended: a :done child whose result is :stopped is :stopped with
-  the result's reason; a declining one carries its check's wait reason."
-  [status result wait]
-  (cond
-    (and (= :done status) (stopped-result? result)) (cond-> {:status :stopped} (:reason result) (assoc :reason (:reason result)))
-    (and (= :declined status) wait) {:status :declined :reason (:reason wait)}
-    :else {:status status}))
-
 (defn ctx-below
   "The ctx of the frame at rel (slots relative to c's frame) below c, each with its args from memory."
   [eng c rel]
   (reduce (fn [c slot]
             (child-ctx eng c slot (:args (mem/job-mem (mem/view (:store eng)) (:root c) (conj (:slots c) slot)))))
           c rel))
-
-(defn ^:async close-child
-  "A call-child child c (def) whose round gave res: when it ended (an ending, or an old :done with result), its cleanups
-  run to their end in this round, since an old caller does not come back for the rest; res, with a contract child's
-  ending as its cleanup left it. An old :done waits as its ending, so a call resumed after a cut still hands it over."
-  [eng def c res result below]
-  (if (#{:ended :done} (:status res))
-    (let [e (await (cleanup/close-now eng def c (or (:ending res) (legacy/ending-of result)) below))]
-      (if (:ending res) (normalize-result e) res))
-    res))
-
-(defn ^:async call-child
-  "One round of the child job def in slot under parent base (see README.md).
-  The child's memory is the parent's [:children slot] sub-map. It is created
-  with the args when missing and cleared only when the child is :done.
-  Resolves to :declined when the child's check or round declines, else :done or :continue.
-  A :done child's result! data stays readable with child-result for the rest of the parent's round.
-  A contract child answers as an old one (engine.core.legacy): any ending is :done, with result-of it as the result.
-  The child shares the parent's token, so a cut anywhere ends the whole chain's round.
-  Each call emits a debug job.child_started and, unless cut, job.child_ended."
-  [eng base slot def args]
-  (let [def (ending/wrap def)
-        store (:store eng)
-        slots (conj (:slots base) slot)
-        child-id (mem/path->id (:root base) slots)
-        chain (conj (:chain base) child-id)
-        fields {:source :job :level :debug :job child-id :slot slot :chain chain :round (:round base)
-                :reflex (:reflex base)}
-        ended! (fn [status result wait report]
-                 (emit! eng (cond-> (merge fields {:kind :child_ended} (child-end-fields status result wait))
-                              report (assoc :report report)
-                              (:ending result)
-                              (assoc :ending (dissoc (contract/for-event (:ending result)) :report)))))
-        clear! #(mem/update-job! store (:root base) (:slots base) update :children dissoc slot)]
-    (own! eng base)
-    (limits/refuse! eng base)
-    (emit! eng (assoc fields :kind :child_started))
-    (swap! (:results base) dissoc child-id)
-    (when (empty? (mem/job-mem (mem/view store) (:root base) slots))
-      (mem/update-job! store (:root base) slots assoc :args args :children {}))
-    (let [c (child-ctx eng base slot args)
-          wait (atom nil)
-          child-wait (:child-wait base)
-          closing? (cleanup/closing? eng (:root base) slots)]
-      (reset! child-wait nil)
-      (if-not (or closing? ((:check def) (assoc c :wait wait)))
-        (let [w (when @wait (wait-reason @wait))]
-          (reset! child-wait w)
-          (ended! :declined nil w nil)
-          :declined)
-        (let [t0 (now eng)
-              below #(ctx-below eng %1 %2)
-              {:keys [status error ending]} (try (if closing?
-                                                   (normalize-result (await (cleanup/drain eng def c below)))
-                                                   (let [res (try (limits/check! eng c)
-                                                                  (normalize-result (or (ending/with-progress def c (limits/ending eng (:root base) slots nil))
-                                                                                        (await ((:round def) c))))
-                                                                  (catch :default e
-                                                                    (if-let [l (ending/with-progress def c (limits/ending eng (:root base) slots e))] {:status :ended :ending l} (throw e))))]
-                                                     (await (close-child eng def c res (get @(:results base) child-id) below))))
-                                                 (finally (tally/add-time! eng (:root base) slots (- (now eng) t0))))
-              report (merge (tally/report eng (:root base) slots) (:report ending))
-              status (if ending :done status)]
-          (when-not (owner? eng (:token base)) (throw (cut-error)))
-          (when (= status :error) (ended! :error nil nil report) (throw error))
-          (when-not (= status :declined) (reset! child-wait nil))
-          (when ending (swap! (:results base) assoc child-id (legacy/result-of (assoc ending :report report))))
-          (when (= status :done) (cut-off! eng (:root base) slots (mem/job-mem (mem/view store) (:root base) slots) :ended))
-          (ended! status (get @(:results base) child-id) @child-wait report)
-          (if (= status :done)
-            (do (tally/remember! eng (:sym def) (some->> (:target def) (select-keys args)) report)
-                (clear!))
-            (swap! (:results base) dissoc child-id))
-          (limits/check! eng base)
-          status)))))
 
 (defn quote-ctx
   "The ctx def's quote-of gets for a call with args under base, qd the quote deadline: token-less, so it cannot act,
@@ -284,7 +193,7 @@
 (defn ^:async call
   "One round of job def as the child in slot under parent base (ctx/call): :continue, or its ending with the :report;
   the child's memory goes with any ending, and an ending other than :done is
-  kept in child-ending, the parent round's. Shares the parent's token, like call-child; each call emits
+  kept in child-ending, the parent round's. Shares the parent's token; each call emits
   job.child_started and job.child_ended (with :ending)."
   [eng base child-ending slot def args]
   (let [def (ending/wrap def)
@@ -350,11 +259,10 @@
 
 (defn ^:async run-round [eng run inst]
   (let [[def args] (job-of eng inst)
-        results (atom {})
         child-wait (atom nil)
         t0 (now eng)
         c (make-ctx eng {:root (:id run) :slots [] :chain [(:id run)] :token (:token run)
-                         :args args :round (:round run) :reflex (:reflex run) :results results
+                         :args args :round (:round run) :reflex (:reflex run)
                          :child-wait child-wait :t0s [t0]})
         own-limit #(ending/with-progress def c (limits/ending eng (:id run) [] %))
         ;; flat: a nested let here compiles to an awaited async fn, a tick before the round starts, in which a reflex could cut it
@@ -373,7 +281,7 @@
                   (if (contract/ending? r) (await (cleanup/close eng def c r below)) r)))
             ;; a reflex root and the driver's slot job get this round only
             r (if (or (:reflex run) (= (:id run) (exclusive-job eng))) (await (cleanup/run-out eng def c r below)) r)]
-        (assoc (normalize-result r) :result (get @results (:id run)) :child-wait @child-wait))
+        (assoc (normalize-result r) :child-wait @child-wait))
       (catch :default e
         (cond
           (cut? e) {:status :cut :error e}

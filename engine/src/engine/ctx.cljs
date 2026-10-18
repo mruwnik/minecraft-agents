@@ -94,14 +94,6 @@
     (update (expr/leaf (:jobs (:engine ctx)) job args) 0 assoc :sym job)
     [job args]))
 
-(defn call-child
-  "Run one round of job (a definition map, or a job namespace symbol) as the
-  child in slot, with args. A promise of :done, :continue or :declined (its
-  check failed)."
-  [ctx slot job args]
-  (let [[def args] (child-job ctx job args)]
-    ((:call-child ctx) slot def args)))
-
 (defn call
   "Run one round of job (a definition map, or a job namespace symbol) as the
   child in slot, with args (its own and the call keys). A promise of :continue, or the child's ending with its
@@ -129,18 +121,6 @@
   other than :done after next-way chose a way books that way as failed on thing. Quotes cost: ask when choosing."
   ([ctx quote-of-way] (next-way ctx quote-of-way nil))
   ([ctx quote-of-way thing] ((:next-way ctx) ctx quote-of-way thing)))
-
-(defn result!
-  "Hand data to the parent as this job's result. Only the round that ends
-  :done hands it over; the parent reads it with child-result."
-  [ctx data]
-  ((:result ctx) data))
-
-(defn child-result
-  "The data the child in slot handed over with result! in the round it
-  finished, read during that same round of the parent; nil otherwise."
-  [ctx slot]
-  ((:child-result ctx) slot))
 
 (defn wait
   "For a check that declines: returns false and notes why the job waits.
