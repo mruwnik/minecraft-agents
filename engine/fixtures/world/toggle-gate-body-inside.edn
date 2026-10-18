@@ -1,0 +1,14 @@
+;; Card c5ecef73: access.toggle :closed on an open fence gate the body stands in steps to a free cell beside it, then shuts it
+;; (no waiting "standing-in"). Gate in a fence line x 10..22 at z 12; the body starts in the gate cell.
+{:defaults
+ {:tags [:access :toggle :gate] :time :day
+  :plot {:floor "grass_block"}
+  :blocks [[:fill [10 0 12] [22 0 12] "oak_fence"]
+           [:set [16 0 12] "oak_fence_gate[facing=south,open=true]"]]
+  :body {:at [16.5 0 12.5] :settle-s 3 :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "body-inside-open-gate-steps-out-and-shuts-it"
+   :act [[:job (jobs.access.toggle {:pos #at [16 0 12] :state :closed})]]
+   :expect [{:event {:source :job :kind :completed :data {:wanted :closed}} :within-s 40 :of-job true}]
+   :after [[:block [16 0 12] "oak_fence_gate[open=false]"]]}]}
