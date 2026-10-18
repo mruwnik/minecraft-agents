@@ -9,6 +9,13 @@
    :act [[:job (jobs.blocks.dig {:pos #at [18 0 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :dug}} :within-s 60 :of-job true}]
    :after [[:block [18 0 16] "air"] [:item "cobblestone" [:>= 1]]]}
+  {:name "dig-says-what-the-cell-holds-after"
+   ;; card b60c2e2d: a dug block's result names what the cell now holds (read after the post-dig look)
+   :blocks [[:set [18 0 16] "stone"]]
+   :body {:inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.blocks.dig {:pos #at [18 0 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :dug :now "air" :text [:contains "the cell is now clear"]}} :within-s 60 :of-job true}]
+   :after [[:block [18 0 16] "air"]]}
   {:name "dig-far-walks-and-collects"
    :blocks [[:set [26 0 16] "stone"]]
    :body {:inventory [["iron_pickaxe" 1]]}
