@@ -38,11 +38,11 @@
    :expect [{:event {:source :job :kind :stair.done :data {:steps 4}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :stair.stopped} :for-s 120 :until {:source :job :kind :stair.done}}]
    :after [[:not-block [11 8 16] "air"] [:body-near [14.5 5 16.5] 2.5]]}
-  ;; should-fail (card 94cba87f): the cave (x 12..13, y 0..6) opens under the floor of step 3 (x 13); its only solid cell in line, [11 6 16],
-  ;; lies under the stone floor of step 2 and cannot be seen from the shaft (the cell between is air under that stone), so no cell can be aimed at:
+  ;; should-fail (card 94cba87f): the cave (x 12..30, y 0..6) opens under the floor of step 3 (x 13) and runs on east, so no stone shows at
+  ;; its end; its only solid cell in line, [11 6 16], lies under the stone floor of step 2 and cannot be seen from the shaft, so no cell can be aimed at:
   ;; the stair stops :no-support-floor and shuts the cut cell over the floor
   {:name "stair-down-over-a-cave-whose-only-support-is-hidden-under-the-floor-above-stops"
-   :blocks [[:fill [12 0 12] [13 6 20] "air"] [:set [14 6 16] "air"]]
+   :blocks [[:fill [12 0 12] [30 6 20] "air"]]
    :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 4})]]
    :expect [{:event {:source :job :kind :stair.stopped :data {:reason :no-support-floor :steps 2}} :within-s 120 :of-job true}]
@@ -53,7 +53,7 @@
    :body {:inventory [["iron_pickaxe" 1]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 4})]]
    :expect [{:event {:source :job :kind :stair.stopped :data {:reason :no-floor :filler :none}} :within-s 90 :of-job true}]
-   :after [[:item "cobblestone" 0]]}
+   :after [[:block [11 8 16] "air"]]}
   ;; a stair up from the stone top over open air: each floor is placed at the body's own height beside it, so the body steps to the middle
   ;; of its cell first (its box at x .77 reached into the floor cell and the server refused the block)
   {:name "stair-up-in-open-air-centres-before-placing-the-floor"
