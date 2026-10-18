@@ -43,6 +43,17 @@
    :expect [{:event {:source :job :kind :stopped :data {:text [:contains "looks of 8 blocks round"]}} :within-s 70 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 70 :of-job true :until {:source :job :kind :stopped}}]
    :limit-s 80}
+  ;; card d5729c6e: an emerald the body saw 20 blocks east (beyond :scan-radius 8, inside :max-distance 30) is found from memory,
+  ;; one allowed leg unused: the old search walked its 8-block leg, saw nothing in range and stopped.
+  {:name "seen-target-beyond-the-scan-radius-is-found"
+   :blocks [[:set [28 0 16] "emerald_block"]]
+   :body {:yaw 270}
+   :act [[:until-seen {:block "emerald_block"} 15]
+         [:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 8 :scan-radius 8
+                                     :use-notes false :max-distance 30 :max-legs 1 :spend {:job-time 60}})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 70 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 70 :of-job true :until {:source :job :kind :completed}}]
+   :limit-s 90}
   ;; card 4df607c2: a target already in sight (ahead or behind) ends the search at the origin with no leg walked. The count of look acts
   ;; (0 here, one per arrival spot otherwise) is a primitive-call count, not an event: pinned by explore-search-test, not here.
   {:name "target-in-sight-ahead-ends-at-the-origin"
