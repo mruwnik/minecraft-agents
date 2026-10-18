@@ -70,7 +70,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:keep 2} {:inventory h/sword :entities (mapv #(cow % (+ 2 %)) (range 1 5))} 1))]
+        (let [s (await (scenario {:keep 2} {:inventory h/sword :entities (mapv #(cow % (+ 2 %)) (range 1 5))} 3))]
           (is (finished? s))
           (is (= :keep (:reason (done-event s))))
           (is (= 2 (get (inv s) "beef"))))))))
@@ -293,3 +293,19 @@
           (core/submit! (:eng s) (spec {:keep 0 :count 1}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 40 700))
           (is (= #{1} (set (attacked s))) "it looked round, saw the cow and culled it"))))))
+
+(deftest two-cows-in-view-before-the-look-do-not-end-the-cull-at-keep
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory h/sword :entities (mapv #(cow % (+ 2 %)) (range 1 5))} 50)]
+          (let [p (:p s)
+                entities (.-entities p)]
+            (aset p "entities" (fn [q] (let [all (array-seq (.call entities p q))]
+                                         (if (some #(= "look" (.-name %)) (.-calls (.-world p)))
+                                           (to-array all)
+                                           (to-array (take 2 all)))))))
+          (core/submit! (:eng s) (spec {:keep 2}) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 60 700))
+          (is (= 2 (:killed (done-event s))) "the four cows were seen before the goal was judged")
+          (is (= 2 (count (world-ids s)))))))))

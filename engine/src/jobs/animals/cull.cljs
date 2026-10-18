@@ -16,7 +16,7 @@
 
   The herd is the animals of the kind inside a bound: :box when set, else :radius blocks around :center
   ({:x :z}, horizontal), else :radius blocks around the body. Babies are never targets and never count as
-  adults. With :keep or fewer adults in the bound at the start the goal holds and it ends done :already; it waits
+  adults. It looks around first (animals count only while in view); with :keep or fewer adults in the bound after that the goal holds and it ends done :already; it waits
   while the zone rules refuse every adult and fewer than :least are killed (:refused, :no-zones, before every round), so a held cull never blocks the queue. The weapons are the call's :use :tools (default
   the best carried).
 
@@ -116,7 +116,7 @@
         killed (or killed 0)
         adults (count (:adults (census c)))
         reason (cond (and wanted (>= killed wanted)) :count
-                     (and (<= adults keep) (or (pos? adults) (look/surveyed? c))) :keep)
+                     (and (<= adults keep) (look/surveyed? c)) :keep)
         left (cond-> (max 0 (- adults keep)) wanted (min (- wanted killed)) reason (* 0))
         data [:units :animals :done killed :left left :result (result c reason)]]
     (cond
@@ -166,11 +166,11 @@
     (cond
       target (await (hunting/attack! c (attack-opts c)))
       collecting (await (hunting/collect! c :yield))
+      (not (look/surveyed? c)) (await (look/survey! c)) ; cows count only while in view
       :else
       (let [next-target (first (candidates c (:adults (census c))))]
         (cond
           (and (nil? next-target) (seq skipped)) (give-up! c :unreachable)
-          (and (nil? next-target) (not (look/surveyed? c))) (await (look/survey! c)) ; cows count only while in view
           (nil? next-target) (await (hunting/search! c none!))
           :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
                     (await (hunting/attack! c (attack-opts c)))))))))
