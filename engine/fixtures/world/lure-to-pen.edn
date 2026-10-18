@@ -72,7 +72,7 @@
    :act [[:summon "cow" [21.5 0 16.5] "{NoAI:1b,UUID:[I;20381,9,1,3]}"]
          [:job (jobs.animals.lure-to {:mob "cow" :uuid "00004f9d" :pos #xyz [21 0 16] :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 30 :of-job true}]
-   :after [[:item "wheat" 0] [:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]]
+   :after [[:item "wheat" 4] [:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]]
    :limit-s 50}
   {:name "empty-uuid-never-starts"
    :act [[:summon "cow" [10.5 0 18.5] "{NoAI:1b}"]
