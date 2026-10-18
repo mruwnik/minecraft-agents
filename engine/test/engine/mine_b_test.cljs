@@ -475,6 +475,15 @@
             (is (= behind (:behind (first (:legs (done-event s))))))
             (is (= [behind] (map #(select-keys (:data %) [:names :cells]) (mem/entries (mem/view (:store (:eng s))) :breach-behind))))))))))
 
+(deftest remember-behind-keeps-the-sealed-cells-and-the-lava-among-the-cells
+  (let [kept (atom nil)
+        c {:primitives #js {:self (fn [] #js {:dimension "overworld"})}
+           :remember (fn [kind data _] (reset! kept [kind data]))}
+        names {{:x 2 :y 64 :z 1} "lava" {:x 2 :y 64 :z -1} "air"}
+        b {:names ["air" "lava"] :cells [[2 64 -1] [2 64 1]]}]
+    (stay/remember-behind! c {:x 2 :y 64 :z 0} b #(names % "stone") [{:x 2 :y 64 :z 0} {:x 2 :y 65 :z 0}])
+    (is (= [:breach-behind (assoc b :dim "overworld" :at {:x 2 :y 64 :z 0} :seals [[2 64 0] [2 65 0]] :lava [[2 64 1]])] @kept))))
+
 (deftest stay-level-takes-the-air-of-its-own-stair-for-no-breach
   (async done
     (tu/run-async done
