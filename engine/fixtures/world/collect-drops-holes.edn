@@ -1,7 +1,7 @@
 ;; Cards b5ad3b11 (and 8bf24e33's "left, not silently skipped" half): collect-drops with :holes leaves a drop that sits in the cave
 ;; a dug shaft opened, one column over from the shaft, at the rim: it is booked left (debug collect-drops.left :too-deep or
 ;; :unreachable) and the body does not go down. Stone mass x 8..24, z 8..24, y 0..9; the shaft [16 9..7 16] opens into a
-;; cave cell row [17 6 16]; the body stands on the rim at [16.5 10 16.5].
+;; cave cell row [17 6 16]; the body stands on the rim at [16.5 10 16.5] (the left case: [15.5 10 16.5], beside the shaft: over it the body falls in and picks the drop up).
 ;; Should-succeed: a drop one down in the open shaft floor (seen solid under it) is collected; with :dig the cave drop is dug to and collected
 ;; (card 8bf24e33; the collect action's own unreachable answer cannot be forced here, unsure 55% this route is taken). Should-fail: the drop in the cave without :dig.
 {:defaults
@@ -19,6 +19,7 @@
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "cobblestone" 1]]}
   {:name "drop-in-the-cave-a-column-over-is-left"
+   :body {:at [15.5 10 16.5]}
    ;; column 17 is open to the rim so the drop is in sight (an unseen drop ends done? at once and the :holes rule would not run)
    :blocks [[:fill [16 7 16] [16 9 16] "air"] [:fill [17 6 16] [17 9 16] "air"] [:set [16 6 16] "air"]]
    :act [[:summon "item" [17.5 6.2 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
