@@ -345,6 +345,10 @@
             (is (empty? (:left result)))
             (is (empty? (bd/left-drops seen)))))))))
 
+(deftest a-drop-routes-over-the-floor-under-it-though-that-floor-is-out-of-sight
+  (let [pit-top {[1 65 0] "air" [1 64 0] "air" [1 63 0] "air" [1 62 0] "air" [1 61 0] "air" [0 63 0] "stone"}]
+    (is (= {:dig []} (job-ns/drop-route #(get pit-top %) [0 64 0] [1 61 0])))))
+
 (deftest the-job-is-a-contract-job-naming-what-it-collects
   (let [{:keys [eng]} (bd/setup {:self body})
         entry (get (:jobs eng) job)]

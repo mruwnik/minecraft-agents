@@ -174,16 +174,22 @@
       (and (= :done (:kind r)) (:arrived (:data r))) :arrived
       :else :unreachable)))
 
+(defn drop-route
+  "dig-route/route from a feet cell to the cell of a drop lying at goal; block-at answers a cell's name or nil when never
+  seen. A drop at rest has a solid floor, seen or not (a deep pit's floor is out of sight from its rim)."
+  [block-at from [gx gy gz :as goal]]
+  (dig-route/route (fn [cell] (or (block-at cell) (when (= cell [gx (dec gy) gz]) "stone")))
+                   from goal
+                   {:max-digs (settings/get settings ::dig-max-cells) :margin (settings/get settings ::dig-margin)
+                    :max-fall (settings/get settings ::dig-max-fall)}))
+
 (defn ^:async dig-to!
   "Dig the route to item (jobs.lib.dig-route): one jobs.blocks.dig child per cell, in walking order. :dug when every
   cell is open now, :continue while a dig waits on the world, else why not: :no-route or the failed dig's outcome
   (:refused, :cannot, :unreachable ...)."
   [c item]
   (let [p (:primitives c)
-        at (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
-        r (dig-route/route at (u/cell-vec (u/self-pos c)) (item-cell item)
-                              {:max-digs (settings/get settings ::dig-max-cells) :margin (settings/get settings ::dig-margin)
-                               :max-fall (settings/get settings ::dig-max-fall)})]
+        r (drop-route (fn [[x y z]] (u/seen-name p {:x x :y y :z z})) (u/cell-vec (u/self-pos c)) (item-cell item))]
     (if (:problem r)
       :no-route
       (loop [cells (:dig r)]
