@@ -1,0 +1,15 @@
+;; Card a8abb44f: jobs.survival.shut-in picks the pit way (child job dig-pit) in a stone dead end with a pickaxe and no blocks carried:
+;; the pit is dug down and plugged with the dug stone. Stone mass x 2..30, z 10..22, y -6..4; tunnel 1x2 along z 16 from x 5 (closed end, body) to x 30.
+{:defaults
+ {:tags [:survival :cornered]
+  :time :any
+  :register []
+  :blocks [[:fill [2 -6 10] [30 4 22] "stone"] [:fill [5 0 16] [29 1 16] "air"]]
+  :body {:at [5.5 0 16.5]}}
+ :cases
+ [{:name "stone-and-pickaxe-no-blocks-is-the-pit"
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.survival.shut-in {:ways #{:pit}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:body-far [5.5 0 16.5] 1.5]]
+   :limit-s 80}]}
