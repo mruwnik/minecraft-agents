@@ -1,0 +1,15 @@
+;; Card 01d88c8f (Q98 C5): build.clear-box reads its box cells through what the body has seen. A box 10 blocks behind the body
+;; (body at [16.5 0 16.5] faces south, yaw 0; box at z 6..7) starts unknown: the job walks within 3 of it, looks, then digs.
+;; Should-succeed: the two dirt cells behind the body are dug (air) and the job completes.
+{:defaults
+ {:tags [:build :sensing]
+  :time :day
+  :plot {:height 8 :floor "grass_block"}
+  :body {:at [16.5 0 16.5] :yaw 0 :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]] :settle-s 2}
+  :limit-s 120}
+ :cases
+ [{:name "box-behind-the-body-is-walked-to-looked-at-and-dug"
+   :blocks [[:fill [16 0 6] [17 1 6] "dirt"]]
+   :act [[:job (jobs.build.clear-box {:from #at [16 0 6] :to #at [17 1 6]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:block [16 0 6] "air"] [:block [17 1 6] "air"]]}]}
