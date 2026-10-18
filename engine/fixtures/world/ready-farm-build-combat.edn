@@ -1,0 +1,48 @@
+;; Card 07571160 (readiness sweep H): farm, build and combat jobs bind safe?/fit? (jobs.lib.work-place, ready/safe-if-lit). Queued at night in the open
+;; each waits (the open ground is dark); at day each runs. Needs --allow-time --time-log. Ground is open stone, no hut, no hostiles (the runner kills them).
+;; Should-succeed: plant, build.path, hunt and attack all hold at night (no completion for ~10 s after the first wait) and finish once the day comes.
+;; Should-fail (old code): attack/hunt ran at night; plant walked out to its field.
+{:defaults
+ {:tags [:readiness :night :farm :build :combat]
+  :time :night
+  :plot {:height 6}
+  :body {:at [10.5 0 12.5] :inventory [["iron_sword" 1] ["wheat_seeds" 6] ["stone_shovel" 1]] :effects [["resistance" 900 4]] :settle-s 2}
+  :limit-s 150}
+ :cases
+ [{:name "plant-field-queued-at-night-waits-then-sows-at-day"
+   :blocks [[:fill [10 -1 20] [13 -1 20] "farmland[moisture=7]"]]
+   :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 20] :max #xyz [13 -1 20]}})]
+         [:await {:source :job :kind :waiting} 30]
+         [:wait-s 10]
+         [:time-set 1000]]
+   :expect [{:no-event {:source :job :kind :completed :data {:name "jobs.farm.plant"}} :for-s 10}
+            {:event {:source :job :kind :completed :data {:planted 4 :status :completed}} :within-s 90 :of-job true}]
+   :after [[:block [10 0 20] "wheat"] [:block [13 0 20] "wheat"]]}
+  {:name "path-box-queued-at-night-waits-then-paths-at-day"
+   :blocks [[:fill [10 -1 20] [12 -1 22] "grass_block"]]
+   :act [[:job (jobs.build.path {:from #at [10 -1 20] :to #at [12 -1 22]})]
+         [:await {:source :job :kind :waiting} 30]
+         [:wait-s 10]
+         [:time-set 1000]]
+   :expect [{:no-event {:source :job :kind :completed :data {:pathed 9}} :for-s 10}
+            {:event {:source :job :kind :completed :data {:pathed 9}} :within-s 90 :of-job true}]
+   :after [[:block [11 -1 21] "dirt_path"]]}
+  {:name "hunt-queued-at-night-in-the-open-waits-dark-then-hunts-at-day"
+   :act [[:summon "cow" [13.5 0 12.5] "{NoAI:1b}"]
+         [:job (jobs.combat.hunt {:mob "cow" :count 1 :keep 0})]
+         [:await {:source :job :kind :waiting :data {:reason :dark}} 30]
+         [:wait-s 10]
+         [:time-set 1000]]
+   :expect [{:no-event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :for-s 10}
+            {:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 90 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 0]]}
+  {:name "attack-zombie-in-reach-at-night-waits-dark-then-kills-at-day"
+   :act [[:summon "zombie" [12.5 0 12.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:until-seen {:entity "zombie" :min 1} 10]
+         [:job (jobs.combat.attack {:targets "zombie"})]
+         [:await {:source :job :kind :waiting :data {:reason :dark}} 30]
+         [:wait-s 10]
+         [:time-set 1000]]
+   :expect [{:no-event {:source :job :kind :completed :data {:name "jobs.combat.attack"}} :for-s 10}
+            {:event {:source :job :kind :completed :data {:reason :cleared}} :within-s 90 :of-job true}]
+   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 3 31]] 0]]}]}
