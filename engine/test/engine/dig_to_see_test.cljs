@@ -48,13 +48,15 @@
     (core/submit! eng '(recording-parent) {})
     {:eng eng :p p :clock clock :seen seen :out out}))
 
-(defn ^:async tick-out! [{:keys [eng clock] :as s}]
+(defn ^:async tick-out!
+  ([s] (tick-out! s 400))
+  ([{:keys [eng clock] :as s} max-ticks]
   (loop [i 0]
-    (when (and (< i 400) (seq (:list (core/state eng))))
+    (when (and (< i max-ticks) (seq (:list (core/state eng))))
       (swap! clock + 500)
       (await (core/tick! eng))
       (recur (inc i))))
-  s)
+  s))
 
 (defn ^:async run! [spec job args]
   (await (tick-out! (setup (sensing spec) job args))))
@@ -381,5 +383,7 @@
       (fn ^:async t []
         (let [p (sensing {:blocks dirt-ground :inventory []})
               _ (set! (.-look p) (fn [_] (js/Promise.resolve #js {:status "ok"})))
-              {:keys [out]} (await (tick-out! (setup p 'jobs.access.stair (assoc stair-east :fetch false))))]
-          (is (not= :no-tool (:reason @out)) (pr-str @out)))))))
+              {:keys [out seen]} (await (tick-out! (setup p 'jobs.access.stair (assoc stair-east :fetch false)) 30))]
+          (is (not= :no-tool (:reason @out)) (pr-str @out))
+          (is (some #(= :unseen (:reason %)) (filter #(= :waiting (:kind %)) @seen))
+              "the stair holds, waiting for cells it has not seen"))))))
