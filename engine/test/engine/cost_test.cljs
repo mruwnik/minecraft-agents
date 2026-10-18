@@ -254,6 +254,14 @@
     (is (= {:chance (cost/spawn-chance [15 64 0]) :lowered-by #{:look} :look-at [[15 64 0]]}
            (cost/exposure p {:x 15.5 :z 0.2})))))
 
+(deftest exposure-of-a-solid-seen-goal-is-judged-by-the-air-over-it
+  (let [p (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"15,64,0" "grass_block"}})
+        sky (fn [_ at] (if (= 64 (:y at)) 0 15))]
+    (with-redefs [sh-sense/seen-cell? (constantly true) sh-sense/block-light-at (constantly 0)
+                  sh-sense/sky-light-at sky sh-inside/walk-leaves-shelter? (constantly nil)]
+      (is (= #{:dawn} (:lowered-by (cost/exposure p {:x 15 :y 64 :z 0}))) "the grass cell is dark by day too; the air over it lowers at dawn")
+      (is (= (cost/exposure p {:x 15 :y 65 :z 0}) (cost/exposure p {:x 15 :y 64 :z 0}))))))
+
 (def far {:x 100 :y 64 :z 0})
 
 (deftest death-costs-more-the-farther-from-respawn-and-the-more-levels
