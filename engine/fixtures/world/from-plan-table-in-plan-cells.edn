@@ -1,0 +1,19 @@
+;; Card 28fab314: jobs.build.from-plan passes its plan to the craft it fetches, so the crafting table may stand in the plan's own cells.
+;; Sealed bedrock room, 3x1 floor and 2 high; [13 0 12] is bedrock and the plan wants a fence in the three other cells beside the body,
+;; so no cell outside the plan is left for the table. Should-succeed: the fetch of the fences is done (the table stood in a plan cell,
+;; the old code found no table spot and the fetch failed) and two fences are placed in the plan's cells and one is left over. The table that stays in its
+;; cell is a kept block the build never digs (a separate card), so the case does not wait for the build to complete.
+{:defaults
+ {:tags [:build :craft] :time :any
+  :plot {:height 8}
+  :blocks [[:fill [10 0 11] [14 2 13] "bedrock" :hollow] [:fill [11 0 12] [13 1 12] "air"] [:set [13 0 12] "bedrock"] [:set [12 1 11] "glowstone"]]
+  :body {:at [12.5 0 12.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["oak_planks" 14] ["stick" 4]]}
+  :plans [{:id "fences" :metadata {:by "$body"}
+           :parts [{:id "cell" :cells [#at [11 0 12] #at [11 1 12] #at [13 1 12]] :want "oak_fence"}]}]
+  :limit-s 150}
+ :cases
+ [{:name "table-stands-in-the-plans-own-cells-then-the-fences-are-placed"
+   :act [[:job (jobs.build.from-plan {:plan "$plan:fences"})]]
+   :expect [{:event {:source :job :kind :fetch.done} :within-s 60 :of-job true}
+            {:event {:source :job :kind :stopped} :within-s 100 :of-job true}]
+   :after [[:item "oak_fence" 1] [:not-block [12 1 12] "crafting_table"]]}]}
