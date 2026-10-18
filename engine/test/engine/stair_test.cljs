@@ -1091,19 +1091,21 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [landed (atom false)
-              prep (fn [p]
-                     (let [world (.-world p)]
-                       (.override world "steer"
-                                  (fn ^:async f [token a impl]
-                                    (when-not @landed
-                                      (reset! landed true)
-                                      (swap! (.. world -state) assoc-in [:blocks [1 64 0]] "gravel"))
-                                    (await (impl token a))))))
-              {:keys [out p]} (await (stair! {:blocks ground} east prep))]
-          (is (= :done (:status @out)))
-          (is (= 3 (:steps @out)))
-          (is (= "air" (block-at p [1 64 0]))))))))
+        (await (tu/each-async [[1 64 0] [1 65 0]]
+          (fn ^:async land-in [cell]
+          (let [landed (atom false)
+                prep (fn [p]
+                       (let [world (.-world p)]
+                         (.override world "steer"
+                                    (fn ^:async f [token a impl]
+                                      (when-not @landed
+                                        (reset! landed true)
+                                        (swap! (.. world -state) assoc-in [:blocks cell] "gravel"))
+                                      (await (impl token a))))))
+                {:keys [out p]} (await (stair! {:blocks ground} east prep))]
+            (is (= :done (:status @out)) (pr-str cell))
+            (is (= 3 (:steps @out)) (pr-str cell))
+            (is (= "air" (block-at p cell)) (pr-str cell))))))))))
 
 (deftest a-cell-put-back-that-does-not-fall-is-named-as-placed
   (async done

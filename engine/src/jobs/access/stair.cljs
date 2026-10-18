@@ -314,8 +314,9 @@
 
 (defn ^:async step!
   "Walk into the cut step. :again, :continue while the walk waits, or a stop map. A step on the goal cell of a go-to up the
-  chain is the same call as that go-to (a duplicate), so it is walked to the cell's centre: the same place."
-  [c next-feet]
+  chain is the same call as that go-to (a duplicate), so it is walked to the cell's centre: the same place. A cut cell
+  that filled again while the body walked in (gravel landing in the head or feet cell) is dug again."
+  [c next-feet cut]
   (let [r (await (child/walk-into!* c :walk next-feet))
         r (if (= :duplicate-call (when (= :condition-failed (:kind r)) (contract/cause-key r)))
             (await (child/call-walk* c :walk-centre (update (child/walk-into-args :walk next-feet) :pos (fn [[x y z]] [(+ x 0.5) y (+ z 0.5)]))))
@@ -325,7 +326,8 @@
       (and (:arrived (:data r)) (= next-feet (reach/standing-vec (:primitives c))))
       (do (ctx/emit! c :stair.step :info {:at next-feet :text (str "stepped to " (pr-str next-feet))})
           :again)
-      (rules/falling? ((:block-at (judge/rules-in c (reach/standing-vec (:primitives c)))) next-feet)) :again ; landed while the body walked in: work! digs it
+      (let [block-at (:block-at (judge/rules-in c (reach/standing-vec (:primitives c))))]
+        (some #(when-let [b (block-at %)] (not (rules/air b))) cut)) :again
       :else {:reason :step-failed :cell next-feet
              :walk (merge (select-keys (:data r) [:why :arrived])
                           {:status (if (= :done (:kind r)) :done :stopped) :reason (contract/cause-key r)})})))
@@ -387,7 +389,7 @@
                     (if-let [cell (first (remove #(rules/air ((:block-at in) %)) cut))]
                       (or (await (sstep/peek! c cell))
                           (let [r (await (sstep/dig! c in cell cut accept))] (case r :continue :again :yield :continue r)))
-                      (or (await (settle! c cut)) (if (:cut-only (:args c)) :finished (await (step! c next)))))))))))))))
+                      (or (await (settle! c cut)) (if (:cut-only (:args c)) :finished (await (step! c next cut)))))))))))))))
 
 (defn back-cell
   "The stair's cell one step back toward its origin from where the body stands, or nil at the origin or off the line."
