@@ -1,0 +1,16 @@
+;; A failed place primitive ends with a :text naming the block that holds the cell ("place: occupied by white_bed"), so a player building blind can tell stone from a bed (card 05b5e28e).
+{:defaults
+ {:tags [:primitives :jobs] :time :day
+  :body {:at [16.5 0 16.5] :inventory [["cobblestone" 8]]}
+  :limit-s 40}
+ :cases
+ [{:name "occupied-stone-text-names-block"
+   :blocks [[:set [18 0 16] "stone"]]
+   :act [[:job (jobs.primitive.place {:pos #at [18 0 16] :item "cobblestone"})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :occupied :text [:contains "place: occupied by stone"]}} :within-s 15 :of-job true}]
+   :after [[:block [18 0 16] "stone"] [:item "cobblestone" 8]]}
+  {:name "occupied-bed-text-names-block"
+   :blocks [[:set [18 0 16] "white_bed[facing=east,part=foot]"] [:set [19 0 16] "white_bed[facing=east,part=head]"]]
+   :act [[:job (jobs.primitive.place {:pos #at [18 0 16] :item "cobblestone"})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :occupied :text [:contains "place: occupied by white_bed"]}} :within-s 15 :of-job true}]
+   :after [[:item "cobblestone" 8]]}]}
