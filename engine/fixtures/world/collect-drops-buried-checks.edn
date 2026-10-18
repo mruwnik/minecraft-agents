@@ -1,0 +1,17 @@
+;; Card 187c16d4: a buried collect-drops walk keeps the call's :safe? form (recover-drops passes (always): the trip prices its own
+;; danger) instead of forcing (not (threatened)), so a hostile standing near the way does not make the walk wait :hostile-near.
+;; A sealed 2-high tunnel x 12..24, z 16 in stone (buried: no sky light); a helmeted NoAI zombie in an alcove beside it; the drop lies past it.
+{:defaults
+ {:tags [:forestry :collect-drops :survival :jobs] :time :day
+  :plot {:height 12}
+  :blocks [[:fill [8 0 8] [30 6 24] "stone"] [:fill [12 0 16] [24 1 16] "air"] [:fill [20 0 17] [20 1 17] "air"]]
+  :body {:at [12.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [;; should succeed: (always) from the call reaches the buried walk
+  {:name "always-form-walks-past-a-hostile"
+   :act [[:summon "zombie" [20.5 0 17.5] "{NoAI:1b,Silent:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "item" [23.5 0 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
+         [:job (jobs.items.collect-drops {:radius 14 :checks {:safe? (always)}})]]
+   :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 60 :of-job true}]
+   :after [[:item "cobblestone" 1]]}]}
