@@ -32,10 +32,10 @@
   1. Carrying the goal ends :count.
   2. Chest way: the withdraw child takes the item. It ends :count when the goal is carried, else :short (warn
      get-seeds.gave-up with withdraw's reason when it gave up).
-  3. After a dig batch the collect-drops child picks up the item (only it) within :collect-radius.
+  3. After a dig batch the collect-drops child picks up the item (only it) within the collect-radius setting (8).
   4. :dry-digs digs in a row that brought no new item end :dry (warn get-seeds.gave-up).
   5. Otherwise a batch: the nearest source blocks within :radius not skipped (for a stand: its cut cells) are
-     judged by jobs.lib.access.rules. At most :per-round of the permitted ones are walked to (within 3) and
+     judged by jobs.lib.access.rules. At most the per-round setting (4) of the permitted ones are walked to (within 3) and
      dug, each judged again right before its dig.
 
   Skipped blocks: a cell in a zone that bars :dig or in an active plan's footprint is skipped for good and
@@ -62,19 +62,21 @@
    :count {:doc "how many more to carry than at the start" :spec (a/int-in 0 nil) :default 8}
    :radius {:doc "source blocks within this many blocks of the body count" :spec (a/num-in 0 nil) :default 16}
    :sources {:doc "block names to break for the item; nil: the material's own (grass for wheat_seeds)" :spec (a/coll-of a/name?) :default nil}
-   :per-round {:doc "blocks dug per step at most" :spec (a/int-in 1 nil) :default 4}
    :chest {:doc "chest position: take the item from it instead of breaking blocks" :spec ::a/pos :default nil}
    :plan {:doc "id of a plan: take the item from the chest cell (want \"chest\") of the plan" :spec a/name? :default nil}
-   :collect-radius {:doc "how far around to collect drops after a batch" :spec (a/num-in 0 nil) :default 8}
    :dry-digs {:doc "digs in a row that brought no new item before giving up" :spec (a/int-in 1 nil) :default 40}
    :ignore-zones? :shared
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent water, :lava-adjacent seen lava, :falling-block)"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:falling-block}}})
 
 (a/defargs settings
-  {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+  {::per-round {:default 4 :doc "Blocks dug per step at most." :spec (a/int-in 1 nil)}
+   ::collect-radius {:default 8 :doc "How far around to collect drops after a batch, in blocks." :spec (a/num-in 0 nil)}
+   ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds a gathering may take: the walks, digs, drops and the chest." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
+(defn per-round [] (settings/get settings ::per-round))
+(defn collect-radius [] (settings/get settings ::collect-radius))
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (def target [:item :chest :plan])
@@ -342,8 +344,8 @@
       :else (finish! c :short))))
 
 (defn ^:async collect! [c]
-  (let [{:keys [item collect-radius]} (:args c)
-        r (await (ctx/call c :collect 'jobs.items.collect-drops {:radius collect-radius :items [item]}))]
+  (let [{:keys [item]} (:args c)
+        r (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (collect-radius) :items [item]}))]
     (when (not= :continue r)
       (let [now (carried c)]
         (ctx/update-mem! c (fn [m]
@@ -368,9 +370,9 @@
     (let [now (carried c)]
       (ctx/update-mem! c assoc :goal (+ now (:count (:args c))) :last-carried now :dry 0 :barren 0)))
   (let [{:keys [goal collecting dry]} (ctx/mem c)
-        {:keys [dry-digs per-round]} (:args c)
+        {:keys [dry-digs]} (:args c)
         chest? (= :chest (mode (:args c)))
-        targets (when-not (or chest? collecting) (vec (take per-round (vet! c (source-blocks c)))))]
+        targets (when-not (or chest? collecting) (vec (take (per-round) (vet! c (source-blocks c)))))]
     (cond
       (>= (carried c) goal) (finish! c :count)
       chest? (await (take! c))

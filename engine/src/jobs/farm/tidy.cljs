@@ -35,8 +35,8 @@
   Cells that are not loaded hold no strays.
   Every dig is checked against zones and the footprints of all other active plans, when the cell is chosen and
   again before the dig. A zone, claim, footprint or undiggable cell is refused at once. A dig hazard that
-  :accept does not name defers the cell until nothing else is left. It is then tried :give-up times and refused
-  as :hazard. A cell that cannot be walked to or reached :give-up times is refused as :unreachable.
+  :accept does not name defers the cell until nothing else is left. It is then tried give-up (3) times and refused
+  as :hazard. A cell that cannot be walked to or reached give-up times is refused as :unreachable.
   Refused cells are in the result's :refused [{:pos :block :reason}] and the warn tidy.refused.
   The sweep goes top-down, nearest first. It ends by collecting the drops within the field's extent plus 4 blocks
   (jobs.items.collect-drops as a child).
@@ -52,12 +52,14 @@
    :part {:doc "only the cells of this part (and the air above its crop cells)" :spec a/name? :default nil}
    :accept {:doc "dig hazards accepted: :fluid-adjacent (water beside; lava beside is :lava-adjacent and is not accepted by default), :falling-block"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent}}
-   :reach {:doc "cells whose centre is this close to the eye are dug without walking, in blocks" :spec (a/num-in 0 nil) :default u/eye-reach}
-   :give-up {:doc "failed walks, failed digs or hazard-blocked tries after which a cell is refused" :spec (a/int-in 1 nil) :default 3}
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::job-time-s {:default 600 :doc "Seconds a tidy run may take: the digs, the walks and the sweep of the drops." :spec (a/num-in 0 nil)}})
+  {::reach {:default u/eye-reach :doc "Cells whose centre is this close to the eye are dug without walking, in blocks." :spec (a/num-in 0 nil)}
+   ::give-up {:default 3 :doc "Failed walks, failed digs or hazard-blocked tries after which a cell is refused." :spec (a/int-in 1 nil)}
+   ::job-time-s {:default 600 :doc "Seconds a tidy run may take: the digs, the walks and the sweep of the drops." :spec (a/num-in 0 nil)}})
+(defn reach [] (settings/get settings ::reach))
+(defn give-up [] (settings/get settings ::give-up))
 
 
 ;; ------------------------------------------------------------------ access
@@ -125,7 +127,7 @@
 
 ;; ------------------------------------------------------------------ reading the world
 
-(defn in-reach? [c pos] (<= (u/eye-dist (u/self-pos c) pos) (:reach (:args c))))
+(defn in-reach? [c pos] (<= (u/eye-dist (u/self-pos c) pos) (reach)))
 
 (defn pos-map [[x y z]] {:x x :y y :z z})
 
@@ -166,18 +168,17 @@
       (update :refused (fnil conj []) (merge {:pos pos :block block} why))))
 
 (defn count-fail
-  "m with one more failure on the stray; refused with :reason why at the give-up-th."
-  [m {:keys [pos] :as stray} why give-up]
+  "m with one more failure on the stray; refused with :reason why at the give-up-th failure."
+  [m {:keys [pos] :as stray} why]
   (let [n (inc (get-in m [:fails pos] 0))]
-    (if (>= n give-up)
+    (if (>= n (give-up))
       (refuse m stray {:reason why})
       (assoc-in m [:fails pos] n))))
 
 (defn ^:async dig-one!
   "Dig the stray (a blocks.dig child) after asking the access rules once more; a refusal, a failure or a dig that did nothing is booked."
   [c {:keys [pos] :as stray}]
-  (let [give-up (:give-up (:args c))
-        d (tr/decide c pos)]
+  (let [d (tr/decide c pos)]
     (cond
       (and (vector? d) (= :refuse (first d))) (ctx/update-mem! c refuse stray (second d))
       (not= :dig d) nil
@@ -196,19 +197,18 @@
             :cannot (ctx/update-mem! c refuse stray {:reason :cannot})
             :refused (let [[kind _ data] (ctx/child-status c :dig 'jobs.blocks.dig (merge {:collect false :need-drop false :fetch false} dig-args {:pos (pos-map pos)}))
                              why (if (= :later kind) (:reason data) :hazard)]
-                       (ctx/update-mem! c count-fail stray why give-up))
-            :unreachable (ctx/update-mem! c count-fail stray :unreachable give-up)
-            (ctx/update-mem! c count-fail stray :failed give-up)))))))
+                       (ctx/update-mem! c count-fail stray why))
+            :unreachable (ctx/update-mem! c count-fail stray :unreachable)
+            (ctx/update-mem! c count-fail stray :failed)))))))
 
 (defn ^:async walk-to!
   "Walk to within 3 of the stray; a walk that is blocked, or ends out of reach, counts a failure."
   [c {:keys [pos] :as stray}]
-  (let [give-up (:give-up (:args c))
-        w (await (near/go-near! c (pos-map pos) 3 {:tolls (tc/walk-tolls c (near/cell-of pos))}))]
+  (let [w (await (near/go-near! c (pos-map pos) 3 {:tolls (tc/walk-tolls c (near/cell-of pos))}))]
     (when (= :blocked w)
-      (ctx/update-mem! c count-fail stray :unreachable give-up))
+      (ctx/update-mem! c count-fail stray :unreachable))
     (when (and (= :there w) (not (in-reach? c pos)))
-      (ctx/update-mem! c count-fail stray :unreachable give-up))
+      (ctx/update-mem! c count-fail stray :unreachable))
     (if (= :partial w) :continue :again)))
 
 (defn split-by-decision
@@ -250,7 +250,7 @@
                        (if (in-reach? c (:pos stray))
                          (do (ctx/update-mem! c (fn [m]
                                                   (let [n (inc (get-in m [:fails (:pos stray)] 0))]
-                                                    (if (>= n (:give-up (:args c)))
+                                                    (if (>= n (give-up))
                                                       (refuse m stray {:reason :hazard :hazards reasons})
                                                       (assoc-in m [:fails (:pos stray)] n)))))
                              :again)

@@ -100,7 +100,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "sand" :count 1 :tunnel-length 0 :max-failures 1 :mend false}
+        (let [s (await (scenario {:block "sand" :count 1 :tunnel-length 0 :settings {:jobs.gather.mine/max-failures 1} :mend false}
                                  {:floor [0 0 0 0] :blocks {"0,63,0" "sand" "0,62,0" "stone"}} 20))]
           (is (empty? (dug-cells s)) "a pillar top is never dug from on top")
           (is (= [{:x 0 :y 63 :z 0}] (mapv :pos (events-of s :mine.refused))))

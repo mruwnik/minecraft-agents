@@ -79,7 +79,7 @@
    :ages (ages 7 (range 2 5) (range 2 5))
    :drops wheat-drops})
 
-(defn plain-args [p] (merge {:radius 12 :crops nil :give-up 4 :reach 4.2 :replant true} p))
+(defn plain-args [p] (merge {:radius 12 :crops nil :replant true} p))
 
 (deftest ripe-crops-picks-ripe-wanted-cells-near-the-centre
   (let [p (tu/seeing-all (tu/fake {:blocks {"1,64,0" "wheat" "2,64,0" "wheat" "3,64,0" "carrots" "4,64,0" "carrots"

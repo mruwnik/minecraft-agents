@@ -198,7 +198,7 @@
       (fn ^:async t []
         (let [s (start {:world {:blocks (cells "sand" [3 4 5 6 7 8] [64] [0])}})]
           (.override (.-world (:p s)) "dig" (fn ^:async f [_ _ _] #js {:status "cannot"}))
-          (core/submit! (:eng s) (spec {:block "sand" :max-failures 2 :tunnel-length 0}) {})
+          (core/submit! (:eng s) (spec {:block "sand" :settings {:jobs.gather.mine/max-failures 2} :tunnel-length 0}) {})
           (await (run-ticks s 30))
           (is (= :none (:reason (done-event s))))
           (is (zero? (:failures (job-mem s) 0)))

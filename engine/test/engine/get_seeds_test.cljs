@@ -184,7 +184,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [cells (patch "short_grass" (range 6 12) [0])
-              s (await (scenario {:per-round 3} {:blocks cells :drops seed-drops :unreachable (vec (keys cells))} 40))
+              s (await (scenario {:settings {:jobs.gather.get-seeds/per-round 3}} {:blocks cells :drops seed-drops :unreachable (vec (keys cells))} 40))
               warns (events-of s :get-seeds.gave-up)]
           (is (= :none (:reason (done-event s))))
           (is (zero? (count warns)))
@@ -288,7 +288,7 @@
         (let [cells (patch "short_grass" (range 5 16) (range 0 6))
         ;; every patch cell is unreachable (the fake walls in the cells round each); the one beyond them, at z 9, is not
               far "11,64,9"
-              s (await (scenario {:count 1 :per-round 8}
+              s (await (scenario {:count 1 :settings {:jobs.gather.get-seeds/per-round 8}}
                                  {:blocks (assoc cells far "short_grass") :drops seed-drops :unreachable (vec (keys cells))} 200))]
           (is (= 1 (dig-count s)) "the one reachable cell, past the skipped ones, is dug")
           (is (= :count (:reason (done-event s)))))))))
@@ -474,7 +474,7 @@
               p (tu/seeing-all (tu/fake-on-floor {:blocks (merge (stand "sugar_cane" 3 0 3) (stand "sugar_cane" 5 2 3) (stand "sugar_cane" 7 4 3))}))
               s (start {:p p :dir dir})]
           (tu/shutdown-at! s "dig" 2)
-          (core/submit! (:eng s) (spec {:item "sugar_cane" :count 3 :per-round 1}) {})
+          (core/submit! (:eng s) (spec {:item "sugar_cane" :count 3 :settings {:jobs.gather.get-seeds/per-round 1}}) {})
           (await (run-ticks s 1 700))
           (is (not (finished? s)))
           (is (= 3 (:goal (job-mem s))))

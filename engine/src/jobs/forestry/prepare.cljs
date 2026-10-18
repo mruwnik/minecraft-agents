@@ -69,7 +69,8 @@
   Quote: time only.")
 
 (a/defargs settings
-  {::job-time-s {:default 1200 :doc "Seconds a prepare run may take: the digs, soil, plants and walks." :spec (a/num-in 0 nil)}
+  {::collect-radius {:default 8 :doc "How far from where the body stands the drops are collected, in blocks." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 1200 :doc "Seconds a prepare run may take: the digs, soil, plants and walks." :spec (a/num-in 0 nil)}
    ::max-steps {:default 400 :doc "Steps of one round before it gives the body back with :continue." :spec (a/int-in 1 nil)}})
 
 (a/defargs args
@@ -78,7 +79,6 @@
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :falling-block; lava beside is :lava-adjacent and never taken by default"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent}}
    :headroom {:doc "{species cells} overriding the table of growth space above a planted cell (the cell included)" :spec (a/map-of a/name? (a/int-in 1 nil)) :default {}}
-   :collect-radius {:doc "how far from where the body stands the drops are collected, in blocks" :spec (a/num-in 0 nil) :default 8}
    :ignore-zones? :shared})
 
 ;; ------------------------------------------------------------------ notes
@@ -314,7 +314,7 @@
   "One collect-drops round while the drops of the digs are owed. :again, :continue while it waits."
   [c]
   (let [e (await (ctx/call c :collect 'jobs.items.collect-drops
-                           {:radius (:collect-radius (:args c))
+                           {:radius (settings/get settings ::collect-radius)
                             :holes (vec (remove nil? (cons (:collect (ctx/mem c)) (:holes (ctx/mem c)))))}))]
     (when-not (= :continue e) (ctx/update-mem! c dissoc :collect))
     (if (= :continue e) :continue :again)))

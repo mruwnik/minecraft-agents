@@ -306,7 +306,7 @@
                                    (reset! moved? true)
                                    (ew/set-zones! world [(assoc zone :owner "Miles")]))
                                  (orig pos))))
-          (core/submit! eng (list job {:plan "mix" :reach 0.1}) {})
+          (core/submit! eng (list job {:plan "mix" :settings {:jobs.farm.plant/reach 0.1}}) {})
           (is (< (await (run-until-empty eng 60)) 60) "the job ended")
           (is (true? @moved?) "the body walked"))))))
 

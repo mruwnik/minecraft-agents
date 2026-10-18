@@ -79,7 +79,7 @@
      sight is told once, info mine.drop-lost {:cell}, and listed in the result's :lost. The result's :left is re-checked after the walk
      home and keeps only drops still lying then.
   2. Carrying the goal ends :count.
-  3. :max-failures failures end :gave-up (warn mine.gave-up). :dry-digs digs in a row after which the carried
+  3. The max-failures setting (3) failures end :gave-up (warn mine.gave-up). :dry-digs digs in a row after which the carried
      count did not rise end :no-drops (warn mine.gave-up).
   4. Dig the nearest target by walking (one bounded search, jobs.lib.targets, going on in the next step; a seen
      block out of every stand's reach is passed over; when the search finds none reachable, the nearest in a straight
@@ -198,7 +198,6 @@
    :spare-own-builds {:doc "a cell of a plan this body made is never a target; false: it may be dug" :spec boolean? :default true}
    :mend {:doc "fill the ground under the start again afterwards" :spec boolean? :default true}
    :collect-radius {:doc "how far around to collect drops after a dig" :spec (a/num-in 0 nil) :default 6}
-   :max-failures {:doc "failures in a row before giving up" :spec (a/int-in 1 nil) :default 3}
    :dry-digs {:doc "digs in a row after which the carried count of the item did not rise before giving up (:no-drops)" :spec (a/int-in 1 nil) :default 3}
    :heading {:doc "the strip tunnel's heading, over :direction: north, south, east or west (n/s/e/w), or a cell [x y z] (the dominant axis from the start toward it); nil: :direction" :spec (a/pred "a heading name or a cell [x y z]" #(or (and (or (string? %) (keyword? %)) (heading-name %)) (and (sequential? %) (= 3 (count %)) (every? number? %)))) :default nil}
    :direction {:doc "the strip tunnel's heading: north, south, east or west (n/s/e/w); nil: the way the body faces when the job starts" :spec (a/pred "north, south, east or west (n/s/e/w), a string or keyword" #(and (or (string? %) (keyword? %)) (heading-name %))) :default nil}
@@ -216,7 +215,8 @@
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}})
 
 (a/defargs settings
-  {::job-time-s {:default 1800 :doc "Seconds a mine call may take by default (its :spend :job-time)." :spec (a/num-in 0 nil)}
+  {::max-failures {:default 3 :doc "Dig failures in a row before giving up." :spec (a/int-in 1 nil)}
+   ::job-time-s {:default 1800 :doc "Seconds a mine call may take by default (its :spend :job-time)." :spec (a/num-in 0 nil)}
    ::stay-margin {:default 8 :doc "Blocks over the higher or under the lower of body and ore that a :stay-level walk to ore may plan through (go-to :y-margin): a body a reflex took far off does not climb a hill to get back." :spec (a/num-in 0 nil)}
    ::item-s {:default 6 :doc "Mean seconds one item takes (walk, dig, collect), for the quote." :spec (a/num-in 0 nil)}})
 
@@ -402,16 +402,16 @@
 
 (defn ^:async dig-round-1! [c]
   (let [{:keys [goal failures dry looked]} (ctx/mem c)
-        {:keys [max-failures wet dry-digs tunnel-length]} (:args c)
+        {:keys [wet dry-digs tunnel-length]} (:args c)
         {:keys [targets refused wet? wet-n side far]} (scan c)
-        ready? (and (< (carried c) goal) (< (or dry 0) dry-digs) (< failures max-failures) (some? looked))
+        ready? (and (< (carried c) goal) (< (or dry 0) dry-digs) (< failures (settings/get settings ::max-failures)) (some? looked))
         pos (when ready? (await (next-target! c targets)))]
     (when (seq far) (ctx/update-mem! c update :unreached #(into (vec %) (remove (set %)) far)))
     (cond
       (>= (carried c) goal) (to-mend! c :count)
       (>= (or dry 0) dry-digs) (do (ctx/emit! c :mine.gave-up :warn {:reason :no-drops :dry dry :text (str "mine gave up: " dry " digs brought nothing")})
                                    (to-mend! c :no-drops))
-      (>= failures max-failures) (do (ctx/emit! c :mine.gave-up :warn {:failures failures :text (str "mine gave up after " failures " failures")})
+      (>= failures (settings/get settings ::max-failures)) (do (ctx/emit! c :mine.gave-up :warn {:failures failures :text (str "mine gave up after " failures " failures")})
                                      (to-mend! c :gave-up))
       (nil? looked) (do (await (look-around! c)) :again)
       (= :searching pos) :again

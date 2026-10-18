@@ -29,7 +29,7 @@
   and potatoes are sown only above the food reserve (jobs.lib.cost/food-reserve); harvest replants whatever the reserve.
   A missing seed is fetched before the run starts (jobs.lib.need, :fetch; a failed fetch ends the call with its ending as
   the :because), unless :fetch is false.
-  One call plants the bare cells within :reach, walking to the nearest (a go-to child) when none is. A cell whose place is
+  One call plants the bare cells within the reach setting (eye reach), walking to the nearest (a go-to child) when none is. A cell whose place is
   refused or unreachable, or whose walk is blocked, three times is skipped (warn plant.gave-up).
   :plan (optionally :part) makes the plan's crop cells the field instead (:box and :seed are then unused); each bare
   planned cell is sown with the seed of the crop the plan wants there, when carried. Zones and other active plans'
@@ -47,14 +47,15 @@
 (a/defargs args
   {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; the ground layer is y = (:y :min); required without :plan" :spec a/box? :default nil}
    :seed {:doc "item name to plant; the carried seed with the largest count when nil" :spec a/item? :default nil}
-   :reach {:doc "cells whose centre is this close to the eye (place accepts 4.5) are planted without walking, in blocks" :spec (a/num-in 0 nil) :default u/eye-reach}
    :plan {:doc "id of a plan of the body's world whose crop cells are the field (then :box and :seed are not used)" :spec a/name? :default nil}
    :part {:doc "with :plan, only the cells of this part" :spec a/name? :default nil}
    :fetch {:doc "get a missing seed (jobs.lib.need): true, a set of kinds or a map of limits; false refuses the call :need" :spec need/option? :default true}
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::max-fails {:default 3 :doc "Failures before the job gives up." :spec (a/int-in 0 nil)}})
+  {::reach {:default u/eye-reach :doc "Cells whose centre is this close to the eye (place accepts 4.5) are planted without walking, in blocks." :spec (a/num-in 0 nil)}
+   ::max-fails {:default 3 :doc "Failures before the job gives up." :spec (a/int-in 0 nil)}})
+(defn reach [] (settings/get settings ::reach))
 (defn max-fails [] (settings/get settings ::max-fails))
 
 ;; ------------------------------------------------------------------ pure helpers
@@ -326,7 +327,7 @@
                          (seq (fld/planned-bare (:primitives c) (:cells field))) :refused)
                  {:refused refused :short (vec (sort short))})
       (let [here (u/self-pos c)
-            near (filterv #(<= (u/eye-dist here (:pos %)) (:reach (:args c))) ready)
+            near (filterv #(<= (u/eye-dist here (:pos %)) (reach)) ready)
             target (first (sort-by #(u/dist here (:pos %)) ready))
             walked (when (empty? near) (await (common/walk-to! c (:pos target) 3)))]
         (case walked
@@ -382,7 +383,7 @@
       (nil? seed) (conclude! c (no-seed-cause) nil)
       :else
       (let [here (u/self-pos c)
-            near (filterv #(<= (u/eye-dist here %) (:reach (:args c))) cells)
+            near (filterv #(<= (u/eye-dist here %) (reach)) cells)
             target (fld/nearest p cells)
             walked (when (empty? near) (await (common/walk-to! c target 3)))]
         (case walked

@@ -24,8 +24,8 @@
   The centre is :center, or the body's position when the job first runs (kept in memory).
   One call is the whole run: it does the first step that applies, again and again, until it finishes:
   1. Replant: seed the bare farmland of cells it cut, from the seeds carried.
-  2. Cut the ripe crops, walking (a go-to child) to the nearest when out of :reach. A crop it cannot reach is skipped.
-     After :give-up such crops it stops cutting (warn harvest.gave-up); replanting and collecting go on.
+  2. Cut the ripe crops, walking (a go-to child) to the nearest when out of the reach setting (eye reach). A crop it cannot reach is skipped.
+     After the give-up setting (4) such crops it stops cutting (warn harvest.gave-up); replanting and collecting go on.
      A body farther than :radius from the centre with nothing cut yet walks there first (step 2b).
   3. Collect the drops (a jobs.items.collect-drops child).
   4. Finish.
@@ -55,8 +55,6 @@
    :replant {:doc "replant what was cut" :spec boolean? :default true}
    :replant-bare {:doc "with :plan, also sow the planned cells that stood bare before; false: only the cells this run cut" :spec boolean? :default true}
    :crops {:doc "crop block names to cut; all known crops when nil" :spec (a/coll-of a/name?) :default nil}
-   :give-up {:doc "unreachable crops after which cutting stops" :spec (a/int-in 1 nil) :default 4}
-   :reach {:doc "cells whose centre is this close to the eye (dig and place accept 4.5) are worked without walking, in blocks" :spec (a/num-in 0 nil) :default u/eye-reach}
    :plan {:doc "id of a plan of the body's world whose crop cells are the field (then :radius and :center are not used)" :spec a/name? :default nil}
    :part {:doc "with :plan, only the cells of this part" :spec a/name? :default nil}
    :ignore-zones? :shared})
@@ -107,10 +105,14 @@
       (update :unreachable (fnil inc 0))))
 
 (a/defargs settings
-  {::max-place-fails {:default 3 :doc "Failed placements before the job gives up." :spec (a/int-in 0 nil)}
+  {::give-up {:default 4 :doc "Unreachable crops after which cutting stops." :spec (a/int-in 1 nil)}
+   ::reach {:default u/eye-reach :doc "Cells whose centre is this close to the eye (dig and place accept 4.5) are worked without walking, in blocks." :spec (a/num-in 0 nil)}
+   ::max-place-fails {:default 3 :doc "Failed placements before the job gives up." :spec (a/int-in 0 nil)}
    ::failed-reach {:default 3.0 :doc "Reach for a block a failed attempt left, in blocks." :spec (a/num-in 0 nil)}
    ::max-walk-fails {:default 3 :doc "Failed walks before the job gives up." :spec (a/int-in 0 nil)}
    ::max-home-fails {:default 3 :doc "Failed walks home before the job gives up." :spec (a/int-in 0 nil)}})
+(defn give-up [] (settings/get settings ::give-up))
+(defn reach [] (settings/get settings ::reach))
 (defn max-place-fails [] (settings/get settings ::max-place-fails))
 
 (defn fail-debt
@@ -122,8 +124,8 @@
 
 (defn debt-reach
   "The eye-to-centre distance within which debt is placed without walking: a cell that was refused once needs the body closer."
-  [debt reach]
-  (if (pos? (:fails debt 0)) (failed-reach) reach))
+  [debt]
+  (if (pos? (:fails debt 0)) (failed-reach) (reach)))
 
 (defn walk-range
   "The range walked to when out of reach: 3, or 2 for a debt that was refused."
@@ -226,7 +228,7 @@
            (permitted-debts c)))))
 
 (defn gave-up? [c]
-  (>= (:unreachable (ctx/mem c) 0) (:give-up (:args c))))
+  (>= (:unreachable (ctx/mem c) 0) (give-up)))
 
 (defn cutting? [c]
   (not (gave-up? c)))
@@ -358,8 +360,7 @@
         plantable (permitted-debts c (filterv #(have (:seed %)) owed))]
     (when (seq plantable)
       (let [here (u/self-pos c)
-            reach (:reach (:args c))
-            near (filterv #(<= (u/eye-dist here (:pos %)) (debt-reach % reach)) plantable)
+            near (filterv #(<= (u/eye-dist here (:pos %)) (debt-reach %)) plantable)
             nearest-debt (first (sort-by #(u/dist here (:pos %)) plantable))
             walked (when (empty? near) (await (common/walk-to! c (:pos nearest-debt) (walk-range nearest-debt))))
             targets (if (seq near) near [nearest-debt])]
@@ -416,7 +417,7 @@
         ripe (when (cutting? c) (ripe-of c (:skipped m)))]
     (when (seq ripe)
       (let [here (u/self-pos c)
-            near (filterv #(<= (u/eye-dist here %) (:reach (:args c))) ripe)
+            near (filterv #(<= (u/eye-dist here %) (reach)) ripe)
             walked (when (empty? near) (await (common/walk-to! c (first ripe) 3)))
             targets (if (seq near) near [(first ripe)])
             targets (still-ripe p targets)]
