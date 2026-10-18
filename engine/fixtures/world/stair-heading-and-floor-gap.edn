@@ -63,6 +63,15 @@
    :expect [{:event {:source :job :kind :stair.done :data {:steps 4}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :stair.stopped} :for-s 120 :until {:source :job :kind :stair.done}}]
    :after [[:not-block [12 6 16] "air"] [:body-near [14.5 9 16.5] 2.5]]}
+  ;; a stair up into open air (x 12..16, y 5..12, z 13..19 all air): the only solid cell near the second floor [12 6 16] is the first floor
+  ;; [11 5 16], diagonal to it; with :fetch false the stair places the cell under the floor against that one, then the floor on it, and climbs on
+  {:name "stair-up-into-open-air-with-no-side-wall-bridges-from-the-previous-floor"
+   :blocks [[:fill [10 5 16] [10 6 16] "air"] [:fill [12 5 13] [16 12 19] "air"]]
+   :body {:at [10.5 5 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 3 :fetch false})]]
+   :expect [{:event {:source :job :kind :stair.done :data {:steps 3}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :stair.stopped} :for-s 120 :until {:source :job :kind :stair.done}}]
+   :after [[:not-block [12 6 16] "air"] [:not-block [13 7 16] "air"] [:body-near [13.5 8 16.5] 2.5]]}
   ;; a stair up from the stone top over open air: each floor is placed at the body's own height beside it, so the body steps to the middle
   ;; of its cell first (its box at x .77 reached into the floor cell and the server refused the block)
   {:name "stair-up-in-open-air-centres-before-placing-the-floor"
