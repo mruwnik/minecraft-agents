@@ -1,6 +1,7 @@
 ;; Card 6039c7c5: go-to costs sensed hostiles and remembered :threat spots (planner danger cost, finite). A NoAI zombie 20
 ;; (18-20 for the gap case) blocks ahead on the straight line, goal 68 blocks east. Unarmed: the walk skirts it (the reflex never fires); armed:
 ;; may pass nearer. A zombie the body cannot see (behind thick stone) or cannot reach (fenced pad) costs nothing.
+;; A :threat spot of a creeper the client no longer tracks (it blew up) at the goal is dropped (gone-creeper-at-goal-does-not-block).
 ;; Case verdicts that need the path (min distance to the zombie) are read from the body's moved events by hand.
 {:defaults
  {:tags [:movement :hostile :planner]
@@ -36,6 +37,13 @@
    :act [[:job (jobs.movement.go-to {:pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 100 :of-job true}]
    :after [[:body-near [70.5 0 24.5] 3]]}
+  {:name "gone-creeper-at-goal-does-not-block"
+   :memory [{:kind :threat :data {:mob "creeper" :id 98 :uuid "00000000-0000-0000-0000-000000000098" :key "00000000-0000-0000-0000-000000000098"
+                                  :pos #xyz [30.5 0 24.5] :ended :lost}}]
+   :act [[:job (jobs.movement.go-to {:pos #at [30 0 24] :range 1 :goal-danger :end :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :goal-in-danger} :for-s 5}]
+   :after [[:body-near [30.5 0 24.5] 3]]}
   {:name "threat-memory-expired-straight"
    :memory [{:kind :threat :policy {:ttl 2000}
              :data {:mob "zombie" :id 99 :uuid "00000000-0000-0000-0000-000000000099" :key "00000000-0000-0000-0000-000000000099"
