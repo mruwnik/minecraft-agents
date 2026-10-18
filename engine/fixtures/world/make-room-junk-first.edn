@@ -24,6 +24,19 @@
             {:no-event {:source :job :kind :make-room.tossed :data {:item "raw_copper"}} :for-s 120 :until {:source :job :kind :completed :data {:tossed [:any :any :any]}}}]
    :after [[:item "coal" 30] [:item "raw_copper" 12] [:item "diamond" 3] [:item "tuff" 0]]
    :limit-s 130}
+  ;; Card f78c374e: items make-room tossed are not taken back by the loose-items reflex after the 2 s toss window, even
+  ;; with the kinds on :always (the old judge took them once the spawn record no longer matched the toss).
+  {:name "tossed-junk-not-fetched-back-by-loose-items"
+   :register [{:trigger :loose-items}]
+   :settings {:jobs.lib.loose/always ["granite" "tuff"]}
+   :body {:inventory [["cobblestone" 64] ["granite" 64] ["tuff" 20] ["coal" 30] ["raw_copper" 12] ["diamond" 3] ["wooden_pickaxe" 1] ["stone_pickaxe" 1] ["iron_pickaxe" 1] ["golden_pickaxe" 1] ["diamond_pickaxe" 1] ["netherite_pickaxe" 1] ["wooden_axe" 1] ["stone_axe" 1] ["iron_axe" 1] ["golden_axe" 1] ["diamond_axe" 1] ["netherite_axe" 1] ["wooden_shovel" 1] ["stone_shovel" 1] ["iron_shovel" 1] ["golden_shovel" 1] ["diamond_shovel" 1] ["netherite_shovel" 1] ["wooden_hoe" 1] ["stone_hoe" 1] ["iron_hoe" 1] ["golden_hoe" 1] ["diamond_hoe" 1] ["netherite_hoe" 1] ["wooden_sword" 1] ["stone_sword" 1] ["iron_sword" 1] ["golden_sword" 1]]}
+   :act [[:job (jobs.storage.make-room {:free 4})]
+         [:await {:source :job :kind :completed} 90]
+         [:wait-s 40]]
+   :expect [{:event {:source :job :kind :completed :data {:tossed [{:item "granite" :count 64} {:item "tuff" :count 20}]}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :loose-items.picked} :for-s 120}]
+   :after [[:item "granite" 0] [:item "tuff" 0] [:item "coal" 30]]
+   :limit-s 170}
   {:name "chest-known-deposits-instead-of-tossing"
    :blocks [[:set [20 0 16] "chest[facing=west]"]]
    :memory [{:kind :chest :data {:pos #xyz [20 0 16]} :policy {:cap 1 :ttl :forever}}]
