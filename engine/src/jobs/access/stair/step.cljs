@@ -173,6 +173,13 @@
                       (:dug :missing) :continue
                       {:reason :dig-failed :cell cell :block block :dig outcome})))))))))))
 
+(defn ^:async clear-own-cell!
+  "A falling block (gravel, sand) landed in the body's own head or feet cell as it walked in, so no walk out of it starts
+  standable: dug, head first. Nil when both cells are open, else dig!'s result."
+  [c in feet accept]
+  (when-let [cell (first (filter #(rules/falling? ((:block-at in) %)) [(update feet 1 inc) feet]))]
+    (await (dig! c in cell [cell] accept))))
+
 (defn take-back-floor?
   "Whether a floor this stair places goes into the scaffold ledger: a go-to stair (:note), unless the setting keeps it."
   [c]

@@ -80,7 +80,7 @@
 
   The level run walked is remembered as a :tunnel-way, so go-to's own way up links it.
 
-  A run cell that fills again before the walk (gravel) is dug again.
+  A run cell that fills again before the walk (gravel), or gravel landing in the body's own head or feet cell, is dug again.
 
   The body's cell is the progress. On the stair line the stair child goes on, on the run line the run, at the
   stand it is done, anywhere else it walks to the entry. A cell dug before a cut is air and is not dug again.
@@ -227,7 +227,8 @@
         {:keys [next cut] :as cells} (assoc base :bridged? (contains? (:bridged (ctx/mem c)) (:floor base))
                                                  :filler? (some? (choose/filler c :build)))]
     (await (sstep/look-ahead! c feet next cut))
-    (or (await (sstep/lava-step! c :tunnel.sealed (:block-at in) feet cut))
+    (or (when-let [r (await (sstep/clear-own-cell! c in feet accept))] (if (= :continue r) :again r))
+        (await (sstep/lava-step! c :tunnel.sealed (:block-at in) feet cut))
         (let [stop (await (sstep/judge! c in cells accept))]
           (if (and (= :no-floor (:reason stop)) (rules/air (:block stop)))
             (await (sstep/bridge! c in cells))

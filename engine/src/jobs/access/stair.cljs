@@ -381,6 +381,7 @@
                                                                  :filler? (some? (choose/filler c :build)))))
                     _ (await (sstep/look-ahead! c feet next cut))
                     stop (or (await (sstep/lava-step! c :stair.sealed (:block-at in) feet cut))
+                             (when-let [r (await (sstep/clear-own-cell! c in feet accept))] (case r :continue :again :yield :continue r))
                              (await (sstep/water-step! c (:block-at in) accept cut))
                              (await (sstep/judge! c in step-cells accept)))]
                 (if (and (= :no-floor (:reason stop)) (rules/air (:block stop)))
