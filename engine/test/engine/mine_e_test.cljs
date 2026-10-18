@@ -134,6 +134,15 @@
           (is (= [0 64 0] (feet s)))
           (is (finished? s)))))))
 
+(deftest digging-the-start-floor-drops-the-floor-felt-at-the-start
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks {"0,63,0" "sand" "0,62,0" "lava"}}})]
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0}) {})
+          (await (run-ticks s 30))
+          (is (not (contains? (job-mem s) :start-floor)) "the felt floor is stale once the run digs it: an unseen hole is no solid floor"))))))
+
 (deftest the-go-to-args-of-the-walk-home-stay-the-same-while-the-walk-goes-on
   (async done
     (tu/run-async done

@@ -327,7 +327,8 @@
         verdict (access/judge v (:accept (:args c)))]
     (if (not= :ok verdict)
       (do (refused! c pos v verdict) :again)
-      (let [_ (ctx/update-mem! c assoc :digging pos)
+      (let [_ (ctx/update-mem! c #(cond-> (assoc % :digging pos)
+                                   (= (access/cell pos) (when-let [{:keys [x y z]} (:start %)] [x (dec y) z])) (dissoc :start-floor)))
             outcome (await (dig-cell! c pos))]
         (when-not (= :continue outcome) (ctx/update-mem! c dissoc :digging))
         (case outcome
