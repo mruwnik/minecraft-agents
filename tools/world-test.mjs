@@ -19,7 +19,7 @@ const args = process.argv.slice(2)
 if (args.includes('--bodies') && !args.includes('--list') && !args.includes('--check')) {
   process.exit(await (await import('./world-test-pool.mjs')).main(args))
 }
-if (!process.env.WORLD_TEST_SLOT_HELD && !args.includes('--list') && !args.includes('--check') && !args.includes('--night-batch-end') && !args.includes('--sleep-rule-restore') && !args.includes('--sleep-rule-restore-dead')) {
+if (!process.env.WORLD_TEST_SLOT_HELD && !args.includes('--list') && !args.includes('--check') && !args.includes('--refresh-build') && !args.includes('--stop-stale-bodies') && !args.includes('--night-batch-end') && !args.includes('--sleep-rule-restore') && !args.includes('--sleep-rule-restore-dead')) {
   const claimDir = process.env.RES_SLOT_DIR ?? '/tmp/mc-res', body = bodyName(args)
   const claim = claimBody(claimDir, body, process.pid, (pid) => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } })
   if (!claim.ok) { console.error(`world-test: ${claim.why}`); process.exit(75) }
