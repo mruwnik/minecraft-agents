@@ -1,5 +1,5 @@
 ;; Bed rule (card d9c87329, commit 2d0fa06d): a roofed body at night sleeps in a free bed it sees in its hut and skips a bed
-;; whose block state says occupied (no sleep call, no :bed written; the :night trigger still fires, the body only looks). Zones and a second
+;; whose block state says occupied (no sleep call, no :bed written; roofed with no bed to use, the :night trigger does not hold, the body stays put). Zones and a second
 ;; sleeping body are not in a fixture: the own-zone refusal and the lying-player case are hand-run.
 ;; The body faces the bed (:yaw), since it sleeps only in a bed it has seen.
 ;; Needs night: run with --allow-time --time-log <the shared time log>.
@@ -28,6 +28,6 @@
    :blocks [[:set [10 0 12] "red_bed[facing=east,part=foot,occupied=true]"] [:set [11 0 12] "red_bed[facing=east,part=head,occupied=true]"]]
    :expect [{:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 40}
             {:no-event {:source :job :kind :place.set :data {:name :bed}} :for-s 40}
-            {:event {:source :reflex :kind :fired :context {:reflex-id :night}} :within-s 40}]
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 40}]
    :after [[:body-near [13.5 0 13.5] 1.5]]
    :limit-s 50}]}
