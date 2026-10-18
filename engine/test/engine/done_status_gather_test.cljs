@@ -68,12 +68,11 @@
 (def seeds {:inventory [{:name "wheat_seeds" :count 5}]})
 
 (deftest get-seeds-is-done-when-the-goal-is-carried-and-no-child-is-under-way
-  (are [m reason] (= reason (tu/kind-reason (done-of 'jobs.gather.get-seeds seeds {:count 2} m)))
-    {:goal 5} [:ok :carried]
-    {:goal 5 :children {:collect {}}} [:later :wrapping-up]
-    {:goal 6} [:later :short]
-    {} [:later :short])
-  (is (= {:got 2 :reason :count} (:result (nth (done-of 'jobs.gather.get-seeds seeds {:count 2} {:goal 5}) 2)))))
+  (are [args m reason] (= reason (tu/kind-reason (done-of 'jobs.gather.get-seeds seeds args m)))
+    {:count 5} {} [:ok :carried]
+    {:count 5} {:children {:collect {}}} [:later :wrapping-up]
+    {:count 6} {} [:later :short])
+  (is (= {:got 2 :reason :count} (:result (nth (done-of 'jobs.gather.get-seeds seeds {:count 5} {:had 3}) 2)))))
 
 (deftest make-obsidian-is-done-at-the-count-gained-and-no-child-under-way
   (are [m reason] (= reason (tu/kind-reason (done-of 'jobs.gather.make-obsidian {:inventory [{:name "obsidian" :count 1}]} {:count 1} m)))
@@ -254,8 +253,8 @@
     (is (= [:later :collecting] (tu/kind-reason ((:done? (get registry/jobs 'jobs.items.collect-drops)) c))))))
 
 (deftest mine-is-done-once-finished-with-the-count-carried-and-home
-  (are [m reason] (= reason (tu/kind-reason (done-of 'jobs.gather.mine {:inventory [{:name "cobblestone" :count 5}]} {:block "stone" :count 2} m)))
-    {:goal 3 :finished true} [:ok :mined]
-    {:goal 3} [:later :mining]
-    {:goal 6 :finished true} [:later :mining]
-    {:goal 3 :finished true :reason :not-home} [:later :mining]))
+  (are [count m reason] (= reason (tu/kind-reason (done-of 'jobs.gather.mine {:inventory [{:name "cobblestone" :count 5}]} {:block "stone" :count count} m)))
+    5 {:goal 5 :had 3 :finished true} [:ok :mined]
+    5 {:goal 5 :had 3} [:later :mining]
+    8 {:goal 8 :had 3 :finished true} [:later :mining]
+    5 {:goal 5 :had 3 :finished true :reason :not-home} [:later :mining]))

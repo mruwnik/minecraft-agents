@@ -109,7 +109,7 @@
     'jobs.items.obtain {:inventory [{:name "oak_log" :count 2}]} {:item "oak_log"} {:start {:have 1 :target 2}} [:ok :carried]
     'jobs.items.obtain {:inventory [{:name "oak_log" :count 2}]} {:item "oak_log"} {:start {:have 1 :target 2} :children {:craft {}}} [:later :wrapping-up]
     'jobs.items.obtain {:inventory [{:name "oak_log" :count 2}]} {:item "oak_log"} {:start {:have 1 :target 2} :gather {:tree {}}} [:later :wrapping-up]
-    'jobs.items.obtain {:inventory [{:name "oak_log" :count 2}]} {:item "oak_log"} {} [:later :short]
+    'jobs.items.obtain {:inventory [{:name "oak_log" :count 2}]} {:item "oak_log" :count 3} {} [:later :short]
     'jobs.items.equip {:self {:held "iron_pickaxe"}} {:item "iron_pickaxe"} {} [:ok :held]
     'jobs.items.equip {:self {:held "iron_pickaxe"}} {:item "iron_pickaxe"} {:children {:fetch {}}} [:later :wrapping-up]
     'jobs.items.equip {} {:item "iron_pickaxe"} {} [:later :not-held]))
