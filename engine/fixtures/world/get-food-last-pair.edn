@@ -1,6 +1,6 @@
 ;; Card 4058b81f: survival.get-food never hunts the last :keep-adults (2) adults of a kind in sight, even when hungry and carrying no food,
 ;; unless the setting ::kept-lifted-below lifts it (default -1: never). Hunger is drained by RCON (food 9-10), hp 15; only a sword.
-;; Should-fail (the default): exactly 2 cows in the open are kept (the :no-food ending), both stay. Should-succeed: with ::kept-lifted-below 19
+;; Should-fail (the default): exactly 2 cows in the open are kept (the :no-food ending), both stay and the ending text names each cow's cell (card 4025d210). Should-succeed: with ::kept-lifted-below 19
 ;; (food 19 or less with none carried counts) one of the two is killed. (Three cows: get-food-own-pen.edn.)
 {:defaults
  {:tags [:survival :get-food :animals]
@@ -14,7 +14,7 @@
   :limit-s 100}
  :cases
  [{:name "the-last-pair-is-kept-by-default"
-   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 90}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food} :message [:contains "passed over 2 animals (cow: kept for breeding at ["]} :within-s 90}
             {:no-event {:source :job :kind :food.killed} :for-s 90 :until {:source :job :kind :stopped :data {:reason :no-food}}}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}
   {:name "the-last-pair-is-hunted-when-the-setting-lifts-it"
