@@ -4,16 +4,16 @@
 ;; it steps aside first, so the hole is dug from the rim.
 {:defaults
  {:tags [:forestry :collect-drops :mining :survival]
-  :time :any
+  :time :day
   :plot {:height 20}
   :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
   :body {:at [16.5 10 16.5] :inventory [["iron_pickaxe" 1]] :effects [["resistance" 600 4] ["fire_resistance" 600 0]]}
   :limit-s 90}
  :cases
- [;; should succeed: seen solid stone under the hole, the drop is collected
+ [;; should succeed: seen solid stone under the hole, the drop is collected and the walk down is told (card 1fef8d9e)
   {:name "safe-hole-drop-collected"
    :act [[:job (jobs.blocks.dig {:pos #at [16 9 16]})]]
-   :expect [{:event {:source :job :kind :completed :data {:dug true}} :within-s 80 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:dug true :stepped-down [:any]}} :within-s 80 :of-job true}]
    :after [[:item "cobblestone" [:>= 1]]]}
   ;; should stay: a 1-cell cave under the dug cell, the drop is left (too-deep at rest in the cave, or unsafe-floor if judged in the dug cell over air)
   {:name "cave-opening-drop-left"
