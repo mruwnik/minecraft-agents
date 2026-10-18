@@ -25,7 +25,7 @@
    :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
    :radius {:doc "melee hostiles within this many blocks decide which side is walled first and stand in the way of a cell" :spec (a/num-in 0 nil) :default 8}
    :ranged-radius {:doc "ranged hostiles within this many blocks decide which side is walled first" :spec (a/num-in 0 nil) :default 16}
-   :walk-radius {:doc "blocks, at the body's height, within which it walks to a standing cell with a side to pocket when none fits where it stands (0: never walks)" :spec (a/num-in 0 nil) :default 6}
+   :walk-radius {:doc "blocks, at the body's height, within which it walks to a standing cell with a side to pocket when none fits where it stands (0: never walks; at most 16, the body sees no farther and the scan reads every cell of the square)" :spec (a/num-in 0 16) :default 6}
    :max-places {:doc "placements per step" :spec (a/int-in 1 nil) :default 4}
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pocket is dropped and the lava left" :spec #{:seal :stop} :default :seal}})
 
@@ -42,18 +42,6 @@
 
 (defn side-here? [c feet] (boolean (some #(pit/pocket-cells c feet %) dig-cells/sides)))
 
-(def max-scan "Blocks of reach the stand search reads at most: the body sees no farther, and a huge :walk-radius would read millions of cells." 16)
-
-(defn scan-cells
-  "The cells around feet within r (capped at max-scan) at feet height, nearest first, feet left out."
-  [feet r]
-  (let [r (min r max-scan)]
-    (->> (for [dx (range (- r) (inc r)) dz (range (- r) (inc r))
-               :let [cell (assoc feet :x (+ (:x feet) dx) :z (+ (:z feet) dz))]
-               :when (and (not= cell feet) (<= (+ (* dx dx) (* dz dz)) (* r r)))]
-           cell)
-         (sort-by #(u/dist feet %)))))
-
 (defn stand-cell
   "The nearest cell within :walk-radius at feet height that the body sees open (feet and head over a solid floor), holds no
   hostile and has a pocket side (pocket-cells), nil when none."
@@ -65,7 +53,13 @@
               (and (dig-cells/open-cell? p cell) (dig-cells/open-cell? p (update cell :y inc))
                    (dig-cells/known-solid? p (update cell :y dec)) (not (mobs cell))
                    (side-here? c cell)))]
-    (first (filter ok? (scan-cells feet r)))))
+    (->> (for [dx (range (- r) (inc r)) dz (range (- r) (inc r))
+               :let [cell (assoc feet :x (+ (:x feet) dx) :z (+ (:z feet) dz))]
+               :when (and (not= cell feet) (<= (+ (* dx dx) (* dz dz)) (* r r)))]
+           cell)
+         (sort-by #(u/dist feet %))
+         (filter ok?)
+         first)))
 
 (defn quote-of [c]
   (let [feet (sh-sense/feet (:primitives c))

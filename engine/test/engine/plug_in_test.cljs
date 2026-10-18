@@ -12,7 +12,6 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world-files]
             [jobs.lib.ledger :as ledger]
-            [jobs.survival.plug-pocket :as pocket]
             [jobs.survival.plug-way :as way]))
 
 (def cobble [{:name "cobblestone" :count 20}])
@@ -129,9 +128,6 @@
           (is (= [:done :pocket] [(:kind out) (:way (:data out))]))
           (is (<= 3 (max (js/Math.abs x) (js/Math.abs z))) "a pocket in a wall 3 blocks from the room's centre")
           (is (= 2 (count (cells-of p "dig")))))))))
-
-(deftest the-stand-search-reads-a-bounded-area-whatever-the-walk-radius
-  (is (= (count (pocket/scan-cells {:x 0 :y 64 :z 0} 16)) (count (pocket/scan-cells {:x 0 :y 64 :z 0} 1000)))))
 
 (deftest a-body-already-enclosed-is-done-before-anything-is-placed
   (async done
