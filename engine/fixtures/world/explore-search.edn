@@ -54,6 +54,16 @@
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 70 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 70 :of-job true :until {:source :job :kind :completed}}]
    :limit-s 90}
+  ;; card bfe3cf4d: :heading accepts the diagonals. Body at [8.5 0 8.5], emerald 16 south-east on both axes, outward legs run :south-east;
+  ;; the old search refused the heading at submit and never ended :found.
+  {:name "diagonal-heading-south-east-finds-the-target"
+   :blocks [[:set [24 0 24] "emerald_block"]]
+   :body {:at [8.5 0 8.5]}
+   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :south-east :spacing 8 :scan-radius 8
+                                     :use-notes false :max-distance 30 :max-legs 6 :spend {:job-time 110}})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 120 :of-job true}
+            {:no-event {:source :system :kind :error} :for-s 60 :until {:source :job :kind :completed}}]
+   :limit-s 130}
   ;; card 4df607c2: a target already in sight (ahead or behind) ends the search at the origin with no leg walked. The count of look acts
   ;; (0 here, one per arrival spot otherwise) is a primitive-call count, not an event: pinned by explore-search-test, not here.
   {:name "target-in-sight-ahead-ends-at-the-origin"
