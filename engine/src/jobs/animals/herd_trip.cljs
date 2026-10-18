@@ -220,7 +220,7 @@
 (defn ^:async regather! [c]
   (if (lure? c)
     (set-phase! c :leash)
-    (let [e (await (ctx/call c :collect 'jobs.forestry.collect-drops {:radius (regather-radius) :filter ["lead"]}))]
+    (let [e (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (regather-radius) :items ["lead"]}))]
       (if (= :continue e) :continue (set-phase! c :leash)))))
 
 

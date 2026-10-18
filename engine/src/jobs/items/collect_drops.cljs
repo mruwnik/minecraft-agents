@@ -1,4 +1,4 @@
-(ns jobs.forestry.collect-drops
+(ns jobs.items.collect-drops
   (:require [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -26,7 +26,7 @@
   the body has seen the floor under it solid and safe and the cells round it (no lava, fluid or cave opening, nothing
   hazardous beside it), the walk dropping one block at most; else it is left, with a debug collect-drops.left
   {:pos :reason :unseen-floor|:unseen-cell|:unsafe-floor|:too-deep}. A drop still falling is judged at rest.
-  With :search, when fewer than :want items (those named in :want-items, else any) were collected and no item is in sight (trunks or terrain hide drops), the body walks (a go-to child)
+  With :search, when fewer than the call's :least (default 1) items (those named in :least-items, else any) were collected and no item is in sight (trunks or terrain hide drops), the body walks (a go-to child)
   to standable cells round the anchor, nearest first (a cell whose floor is unseen counts when nothing seen forbids it: walking there is how it gets looked at), and looks again at each, until an item is seen or the cells within :search
   blocks are tried. Underground a walk goes on at night; a search that go-to made wait :search-waits calls in a row ends with :reason :search-waited.
   While it runs it holds its work area (jobs.lib.loose :collecting), so the :loose-items reflex leaves those drops to it.
@@ -36,17 +36,16 @@
   are its rules), then the walk is tried again. No such way leaves the drop :no-route, a dig that fails with that dig's outcome (:refused, :cannot, :unreachable ...).
   Needs nothing; the sweep is the whole job. Ends :done with data {:collected n}, the number of items that entered the
   inventory, with :left [{:pos :reason}] for those (also in :loose-left, so the :loose-items reflex leaves them); none in
-  sight at all is :done with 0 (an open sweep). Drops tried, or a :search (with :want above 0) that found none, and none collected: :nothing-possible :none-collected, same data;
+  sight at all is :done with 0 (an open sweep). Drops tried, or a :search that found none, and none collected: :nothing-possible :none-collected, same data;
   :nothing-possible :search-waited when the search was held up; :cut-off :cut when cut.
-  Quote: what is in sight within :radius (yields by name), time to walk to each, unbounded with :search or :dig.")
+  Quote: what is in sight within :radius (yields by name), time to walk to each, unbounded with :search or :dig (also the items it may yet find).")
 
 (a/defargs args
   {:radius {:doc "search radius in blocks" :spec (a/num-in 0 nil) :default default-radius}
-   :filter {:doc "item names to collect; everything when nil" :spec (a/coll-of a/item?) :default nil}
+   :items {:doc "item names to collect; everything when nil" :spec (a/coll-of a/item?) :default nil}
    :near {:doc "{:x :y :z} the work area is centred on, instead of where the body stands when the job begins" :spec ::a/pos :default nil}
-   :search {:doc "blocks round the anchor to walk to and look from when no drop is in sight and fewer than :want were collected; 0: no search" :spec (a/num-in 0 nil) :default 0}
-   :want {:doc "items the caller expects to come in; the :search goes on while fewer were collected" :spec (a/num-in 0 nil) :default 1}
-   :want-items {:doc "item names that count towards :want; every collected item when nil" :spec (a/coll-of a/item?) :default nil}
+   :search {:doc "blocks round the anchor to walk to and look from when no drop is in sight and fewer than the call's :least were collected; 0: no search" :spec (a/num-in 0 nil) :default 0}
+   :least-items {:doc "item names that count towards the call's :least; every collected item when nil" :spec (a/coll-of a/item?) :default nil}
    :ids {:doc "entity ids to collect (only those); any item when nil" :spec (a/coll-of number?) :default nil}
    :dig {:doc "dig a way to a drop that cannot be walked to (the cells are left for the caller's tidy)" :spec boolean? :default false}
    :holes {:doc "cells the caller dug: an item lower than the feet at or under one of them, or one column beside, is in that hole"
@@ -90,7 +89,7 @@
   [c anchor]
   (let [{:keys [radius ids]} (:args c)
         only-ids (some-> ids set)
-        wanted (some-> (:filter (:args c)) set)
+        wanted (some-> (:items (:args c)) set)
         skipped (set (:skipped (ctx/mem c)))]
     (->> (look/seen-items (:primitives c) {:radius (+ radius (u/dist anchor (u/self-pos c))) :max (if (or only-ids wanted) 1024 32)})
          (filter #(if-let [p (.-pos %)] (<= (u/dist anchor (u/pos-of p)) radius) true))
@@ -262,9 +261,15 @@
     (->> by-column (map first) (sort-by #(u/dist (u/self-pos c) %)))))
 
 (defn wanted-count
-  "How many of the :want items came in."
+  "How many of the :least-items came in."
   [c]
   (:wanted (ctx/mem c) 0))
+
+(defn least
+  "The call's :least as a number (:all: no number is enough, the search tries every cell)."
+  [c]
+  (let [l (or (:least (ctx/frozen-call c)) 1)]
+    (if (= :all l) ##Inf l)))
 
 (defn ^:async search-step!
   "Walks to the next unvisited search cell (one go-to call, slot :search; a cell go-to cannot reach is dropped).
@@ -294,8 +299,8 @@
                   (pos? in-sight) :collecting
                   (seq (:left m)) :left
                   (seq (remove (set (:skipped m)) (:ids (:args c)))) :ids-unseen
-                  (and (pos? (:search (:args c))) (< (wanted-count c) (:want (:args c)))) :searching
-                  (and (zero? n) (or (seq (:skipped m)) (and (pos? (:want (:args c))) (pos? (:search (:args c)))))) :skipped)]
+                  (and (pos? (:search (:args c))) (< (wanted-count c) (least c))) :searching
+                  (and (zero? n) (or (seq (:skipped m)) (pos? (:search (:args c))))) :skipped)]
     (if waiting
       (contract/later waiting (str "collect-drops: " n " collected, " in-sight " in sight") :units :items :done n :left in-sight :result {:collected n})
       (contract/ok :collected (str "collect-drops: " n " collected, no drop in sight") :units :items :done n :left 0 :result {:collected n}))))
@@ -311,7 +316,7 @@
         names (frequencies (keep #(some-> (.-item %) .-name) items))]
     {:uses {:job-time [0 mean (if (or (pos? search) dig) ##Inf (* 3 mean))]}
      :yields {:items (update-vals names (fn [k] [0 k k]))}
-     :done [0 n n]}))
+     :done [0 n (if (or (pos? search) dig) ##Inf n)]}))
 
 (defn cleanup
   "However the job ends: the :collecting hold on its area is released."
@@ -334,7 +339,7 @@
         data (fn [] (cond-> {:collected (:collected (ctx/mem c) 0)}
                       (seq (:left (ctx/mem c))) (assoc :left (:left (ctx/mem c)))))
         swept! (fn []
-                 (if (and (zero? (:collected (ctx/mem c) 0)) (or (seq (:skipped (ctx/mem c))) (and (pos? (:want (:args c))) (pos? (:search (:args c))))))
+                 (if (and (zero? (:collected (ctx/mem c) 0)) (or (seq (:skipped (ctx/mem c))) (pos? (:search (:args c)))))
                    (done! :nothing-possible :none-collected (data))
                    (done! :done nil (data))))]
     (loop []
@@ -342,7 +347,7 @@
             _ (note-last-cells! c items)
             item (first items)]
         (if (and (not item) (ctx/alive? c) (pos? (:search (:args c)))
-                 (< (wanted-count c) (:want (:args c))) (empty? (:left (ctx/mem c))))
+                 (< (wanted-count c) (least c)) (empty? (:left (ctx/mem c))))
           (let [r (await (search-step! c anchor))]
             (if (= :continue r)
               :continue
@@ -393,9 +398,9 @@
                     ;; the walk down can pick the drop up before the collect act runs
                     (let [acts (reduce + 0 (map gained-count (remove nil? [r r2])))
                           extra (max 0 (- (held) start-held acts))
-                          wants? (or (nil? (:want-items (:args c))) ((set (:want-items (:args c))) item-name))]
+                          wants? (or (nil? (:least-items (:args c))) ((set (:least-items (:args c))) item-name))]
                       (ctx/update-mem! c (fn [m] (reduce (fn [m r] (-> m (update :collected (fnil + 0) (gained-count r))
-                                                                      (update :wanted (fnil + 0) (gained-count r (some-> (:want-items (:args c)) set)))))
+                                                                      (update :wanted (fnil + 0) (gained-count r (some-> (:least-items (:args c)) set)))))
                                                          (cond-> (update m :collected (fnil + 0) extra)
                                                            wants? (update :wanted (fnil + 0) extra))
                                                          (remove nil? [r r2])))))

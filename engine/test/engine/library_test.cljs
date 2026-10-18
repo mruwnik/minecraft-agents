@@ -245,7 +245,7 @@
       (fn ^:async t []
         (let [item (fn [id x name] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name name :count 1}})
               {:keys [eng p]} (setup {:entities [(item 1 6 "oak_log") (item 2 2 "stick") (item 3 4 "oak_sapling") (item 4 40 "oak_log")]})]
-          (core/submit! eng (list 'jobs.forestry.collect-drops {:radius 10 :filter ["oak_log" "oak_sapling"]}) {})
+          (core/submit! eng (list 'jobs.items.collect-drops {:radius 10 :items ["oak_log" "oak_sapling"]}) {})
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))) "every matching item in one round")
           (is (= [3 1] (mapv #(.-id (.-args %)) (calls p "collect"))))
@@ -257,7 +257,7 @@
       (fn ^:async t []
         (let [item (fn [id x name] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name name :count 1}})
               {:keys [eng p]} (setup {:entities [(item 1 2 "stick") (item 2 3 "dirt")] :unreachable ["2,64,0"]})]
-          (core/submit! eng (list 'jobs.forestry.collect-drops {:radius 10}) {})
+          (core/submit! eng (list 'jobs.items.collect-drops {:radius 10}) {})
           (is (<= (await (run-until-empty eng 8)) 4) "an unreachable item does not loop forever")
           (is (= {"dirt" 1} (inv p))))))))
 
@@ -267,7 +267,7 @@
       (fn ^:async t []
         (let [item (fn [id x name] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name name :count 1}})
               {:keys [eng p]} (setup {:entities [(item 1 6 "dirt") (item 2 14 "dirt") (item 3 22 "dirt") (item 4 30 "dirt")]})]
-          (core/submit! eng (list 'jobs.forestry.collect-drops {:radius 10}) {})
+          (core/submit! eng (list 'jobs.items.collect-drops {:radius 10}) {})
           (await (run-until-empty eng 10))
           (is (= [1] (mapv #(.-id (.-args %)) (calls p "collect")))
               "the next item is in reach of where the body walked to, not of where it started: left alone"))))))
@@ -278,7 +278,7 @@
       (fn ^:async t []
         (let [item (fn [id x name] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name name :count 1}})
               {:keys [eng p]} (setup {:entities [(item 1 3 "dirt") (item 2 9 "dirt")]})]
-          (core/submit! eng (list 'jobs.forestry.collect-drops {:radius 10}) {})
+          (core/submit! eng (list 'jobs.items.collect-drops {:radius 10}) {})
           (await (run-until-empty eng 10))
           (is (= [1 2] (mapv #(.-id (.-args %)) (calls p "collect")))))))))
 
@@ -358,10 +358,10 @@
           (is (= {:status :done :collected 2 :left [{:pos {:x 2 :y 64 :z 0} :reason :unreachable}]}
                  (await (child-outcome (:eng (setup {:entities [(item 1 2 "stick") (item 2 3 "dirt") (item 3 4 "dirt")]
                                                      :unreachable ["2,64,0"]}))
-                                       'jobs.forestry.collect-drops {:radius 10} 8)))
+                                       'jobs.items.collect-drops {:radius 10} 8)))
               "the unreachable stick is not counted but booked left")
           (is (= {:status :done :collected 0 :already? true :text "collect-drops: 0 collected, no drop in sight"}
-                 (await (child-outcome (:eng (setup {})) 'jobs.forestry.collect-drops {:radius 10} 3)))))))))
+                 (await (child-outcome (:eng (setup {})) 'jobs.items.collect-drops {:radius 10} 3)))))))))
 
 (deftest collect-drops-counts-the-items-that-entered-the-inventory-not-the-entities
   (async done
@@ -370,7 +370,7 @@
         (let [stack (fn [id x n] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name "dirt" :count n}})]
           (is (= {:status :done :collected 7}
                  (await (child-outcome (:eng (setup {:entities [(stack 1 2 5) (stack 2 3 2)]}))
-                                       'jobs.forestry.collect-drops {:radius 10} 8)))))))))
+                                       'jobs.items.collect-drops {:radius 10} 8)))))))))
 
 (deftest collect-drops-tries-each-item-once-when-collect-says-gone
   (async done
@@ -379,7 +379,7 @@
         (let [item (fn [id x] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name "dirt" :count 1}})
               {:keys [eng p]} (setup {:entities [(item 1 2) (item 2 3)]})]
           (.override (.-world p) "collect" (fn ^:async f [_ _ _] #js {:status "gone" :gained #js []}))
-          (core/submit! eng (list 'jobs.forestry.collect-drops {:radius 10}) {})
+          (core/submit! eng (list 'jobs.items.collect-drops {:radius 10}) {})
           (is (<= (await (run-until-empty eng 8)) 2) "an item collect calls gone does not loop")
           (is (= [1 2] (sort (mapv #(.-id (.-args %)) (calls p "collect")))) "each item once"))))))
 
@@ -737,7 +737,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {})]
           (set! (.-entities p) (fn [_] #js [#js {:id 7 :name "item" :kind "item" :item nil :distance 2 :pos #js {:x 2 :y 64 :z 0}}]))
-          (core/submit! eng (list 'jobs.forestry.collect-drops {:filter ["oak_log"]}) {})
+          (core/submit! eng (list 'jobs.items.collect-drops {:items ["oak_log"]}) {})
           (await (core/tick! eng))
           (is (= [] (calls p "collect")) "an unknown stack is not collected when a filter is set")
           (is (= [] (:list (core/state eng))))
@@ -835,7 +835,7 @@
         (let [item (fn [id x name] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name name :count 1}})
               junk (map #(item % 1 "stick") (range 1 41))
               {:keys [eng p]} (setup {:entities (conj (vec junk) (item 100 9 "oak_log"))})]
-          (core/submit! eng (list 'jobs.forestry.collect-drops {:radius 10 :filter ["oak_log"]}) {})
+          (core/submit! eng (list 'jobs.items.collect-drops {:radius 10 :items ["oak_log"]}) {})
           (await (core/tick! eng))
           (is (= [100] (mapv #(.-id (.-args %)) (calls p "collect")))))))))
 
@@ -845,6 +845,6 @@
       (fn ^:async t []
         (let [item (fn [id x vis] {:id id :name "item" :kind "item" :visible vis :pos {:x x :y 64 :z 0} :item {:name "dirt" :count 1}})
               {:keys [eng p]} (setup {:entities [(item 1 3 false) (item 2 5 true)]})]
-          (core/submit! eng (list 'jobs.forestry.collect-drops {:radius 10}) {})
+          (core/submit! eng (list 'jobs.items.collect-drops {:radius 10}) {})
           (await (run-until-empty eng 10))
           (is (= [2] (mapv #(.-id (.-args %)) (calls p "collect")))))))))

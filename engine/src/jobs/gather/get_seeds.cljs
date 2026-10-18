@@ -343,7 +343,7 @@
 
 (defn ^:async collect! [c]
   (let [{:keys [item collect-radius]} (:args c)
-        r (await (ctx/call c :collect 'jobs.forestry.collect-drops {:radius collect-radius :filter [item]}))]
+        r (await (ctx/call c :collect 'jobs.items.collect-drops {:radius collect-radius :items [item]}))]
     (when (not= :continue r)
       (let [now (carried c)]
         (ctx/update-mem! c (fn [m]

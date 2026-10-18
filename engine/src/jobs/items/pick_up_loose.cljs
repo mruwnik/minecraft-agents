@@ -12,7 +12,7 @@
 (def doc
   "Pick up the loose items the body sees nearby that are worth it (jobs.lib.loose: seen, within :radius, worth the
   detour or on :always, not thrown, owed to another live job or in another's zone or claim). The :loose-items reflex runs it.
-  One jobs.forestry.collect-drops child takes them by entity id; its go-to leaves what it cannot reach. Items not
+  One jobs.items.collect-drops child takes them by entity id; its go-to leaves what it cannot reach. Items not
   picked up are remembered (:loose-left) for :left-s; so are the seen items when it finds none worth it, so a
   reflex that judged otherwise cannot fire it again for them. One info event loose-items.picked {:collected :items :left}.
   Ends :done with data {:collected n :items [names] :left [ids]}. With nothing worth it a listed call waits
@@ -87,7 +87,7 @@
       (do (loose/left! c (into [] (comp (map #(.-id %)) (remove (loose/left-ids view))) (loose/seen p o)) o)
           (ctx/end c :condition-failed :nothing-worth-it
                    {:collected 0 :text (stop-text (loose/explain p view (:world (:engine c)) (:args c) (:root c)))}))
-      (let [r (await (child/run!* c :collect 'jobs.forestry.collect-drops {:ids ids :radius (+ (:radius o) (:collect-pad o))}))
+      (let [r (await (child/run!* c :collect 'jobs.items.collect-drops {:ids ids :radius (+ (:radius o) (:collect-pad o))}))
             n (or (:collected (:data r)) 0)
             still (set (map #(.-id %) (look/seen-items p {:radius (:check-radius o) :ids ids})))
             left (filterv still ids)

@@ -52,7 +52,7 @@
   :fetch false: off) and wears the armour (jobs.items.wear); nothing known to be in a chest: unchanged.
   A kit fetch waiting on the world is waited for (declared hold :fetching-kit); a fetch that ended the job drops the kit (warn recover-drops.kit-dropped).
   Fetch: walks to the death point (jobs.movement.go-to, in legs of :leg-s seconds; after each leg the value and cost are weighed again from where the body stands, at its health, a pile gone dear with danger backing off as above), then collects (passes, up to 3) the pile's items it can see within :collect-radius
-  (jobs.forestry.collect-drops; only the carried item names, never items out of sight). Drops that went out of sight
+  (jobs.items.collect-drops; only the carried item names, never items out of sight). Drops that went out of sight
   (down a shaft) get one walk to the cell the first was last seen in and a look again before the trip ends :partial, and so do drops never in sight at the pile: once, a walk to four cells 3 blocks round it.
   The pile out of reach (go-to :goal-enclosed, or no item in sight at it) with blocks this body placed within ::seal-radius of it (the scaffold ledger, a flee
   seal): once per trip they are taken back (jobs.access.cleanup, event recover-drops.seal) and the walk goes on.
@@ -287,8 +287,8 @@
                 (when (await (search-round! c (mapv pos [:x :y :z]) pos names radius))
                   :next))
               (finish-collect! c pile ids))
-          (let [swept (await (child/run!* c :collect 'jobs.forestry.collect-drops
-                                          {:radius (+ radius (cfg/stray-range) 4) :ids ids :filter names :checks own-checks}))
+          (let [swept (await (child/run!* c :collect 'jobs.items.collect-drops
+                                          {:radius (+ radius (cfg/stray-range) 4) :ids ids :items names :checks own-checks}))
                 cell (pl/look-cell (:data swept))]
             (if (empty? (pl/left-over c pile))
               (finish-collect! c pile [])

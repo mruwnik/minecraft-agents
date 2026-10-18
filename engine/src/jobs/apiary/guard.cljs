@@ -190,7 +190,7 @@
 (defn ^:async collect-carpet!
   "Pick up the carpet that was dug up."
   [c carpet]
-  (await (ctx/call c :collect 'jobs.forestry.collect-drops {:radius 6 :filter [carpet]})))
+  (await (ctx/call c :collect 'jobs.items.collect-drops {:radius 6 :items [carpet]})))
 
 (defn abandon!
   "Give up the sink: clear it and skip the fire."

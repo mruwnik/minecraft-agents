@@ -27,7 +27,7 @@
     food carried (breed fetches it unless :fetch is off).
   - :cull (jobs.animals.cull): adults exceed :keep, the larger of 2 and :target minus the babies.
   - :shear (jobs.animals.shear): sheep, shears carried (shear fetches them unless :fetch is off), an adult not sheared.
-  - :collect (jobs.forestry.collect-drops): items lie in the box, only those item names.
+  - :collect (jobs.items.collect-drops): items lie in the box, only those item names.
   - :deposit (jobs.storage.deposit): a :chest is given and produce of the kind is carried above its :carry
     entry. Produce is the hunt drops table plus eggs for chickens, never tools or breeding food.
 
@@ -77,7 +77,7 @@
    :breed 'jobs.animals.breed
    :cull 'jobs.animals.cull
    :shear 'jobs.animals.shear
-   :collect 'jobs.forestry.collect-drops
+   :collect 'jobs.items.collect-drops
    :deposit 'jobs.storage.deposit})
 
 (def extra-produce
@@ -179,7 +179,7 @@
   [_args {:keys [drops reach]}]
   (if (empty? drops)
     {:skip :no-drops}
-    {:call {:slot :collect :job (jobs :collect) :args {:radius reach :filter drops}}}))
+    {:call {:slot :collect :job (jobs :collect) :args {:radius reach :items drops}}}))
 
 (defn decide
   "{:skip reason} or {:call {:slot :job :args}} for a step."

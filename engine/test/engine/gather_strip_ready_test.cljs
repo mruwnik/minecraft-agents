@@ -4,7 +4,7 @@
   (:require [cljs.test :refer [deftest is are]]
             [engine.ready-test :as rt]
             [engine.shelter-support :as st]
-            [jobs.forestry.collect-drops :as collect-drops]
+            [jobs.items.collect-drops :as collect-drops]
             [jobs.forestry.fell-from-pillar :as fell-from-pillar]
             [jobs.forestry.fell-tree :as fell-tree]
             [jobs.forestry.harvest-wood :as harvest-wood]

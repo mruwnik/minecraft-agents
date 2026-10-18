@@ -1,5 +1,5 @@
 (ns engine.collect-drops-test
-  "jobs.forestry.collect-drops against the fake world: a drop down a seen slope is walked to (go-to), a drop in a hole the
+  "jobs.items.collect-drops against the fake world: a drop down a seen slope is walked to (go-to), a drop in a hole the
   caller dug only from a seen solid safe floor."
   (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
@@ -8,11 +8,11 @@
             [engine.event-api :as event-api]
             [engine.fake :as fake]
             [engine.test-util :as tu]
-            [jobs.forestry.collect-drops :as job-ns]
+            [jobs.items.collect-drops :as job-ns]
             [jobs.lib.loose :as loose]
             [jobs.lib.shelter.sense :as sh-sense]))
 
-(def job 'jobs.forestry.collect-drops)
+(def job 'jobs.items.collect-drops)
 (def body {:pos {:x 0 :y 64 :z 0}})
 
 (defn drop! [p pos item] (swap! (fake/state p) fake/spawn pos item 1))
@@ -35,7 +35,7 @@
         (let [{:keys [eng p seen]} (bd/setup {:self body :blocks steps})]
           (drop! p [3 61 0] "porkchop")
           (seen-from-above! p)
-          (let [result (await (tu/child-outcome eng job {:radius 6 :filter ["porkchop"]} 30))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :items ["porkchop"]} 30))]
             (is (= 1 (:collected result)))
             (is (= :done (:status result)))
             (is (= 1 (bd/carried p "porkchop")))
@@ -151,7 +151,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (bd/setup {:self body :blocks wall})]
           (drop! p [4 64 0] "oak_log")
-          (let [result (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :items ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60))]
             (is (= 1 (:collected result)))
             (is (= 1 (bd/carried p "oak_log")))))))))
 
@@ -164,7 +164,7 @@
                                          #js {:unknown true}
                                          (.blockAt p pos))))
           (drop! p [4 64 0] "oak_log")
-          (let [result (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :items ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60))]
             (is (= 1 (:collected result)))
             (is (= 1 (bd/carried p "oak_log")))))))))
 
@@ -174,7 +174,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (bd/setup {:self body :blocks wall})]
           (drop! p [4 64 0] "oak_log")
-          (let [result (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0}} 30))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :items ["oak_log"] :near {:x 4 :y 64 :z 0}} 30))]
             (is (= 0 (:collected result)))
             (is (= 0 (bd/carried p "oak_log")))))))))
 
@@ -184,7 +184,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (bd/setup {:self body})]
           (drop! p [1 64 0] "oak_log")
-          (let [result (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3 :want 3} 80))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :items ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3 :least 3} 80))]
             (is (= 1 (:collected result)))
             (is (= 1 (bd/carried p "oak_log")))))))))
 
@@ -193,7 +193,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (bd/setup {:self body})
-              result (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 80))]
+              result (await (tu/child-outcome eng job {:radius 6 :items ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 80))]
           (is (= [:stopped :none-collected 0] ((juxt :status :reason :collected) result))))))))
 
 (def night-ms 14000)
@@ -205,7 +205,7 @@
         (let [{:keys [eng p]} (bd/setup {:self body :time night-ms :blocks (assoc wall "0,66,0" "stone")})]
           (drop! p [4 64 0] "oak_log")
           (let [result (with-redefs [sh-sense/buried? (constantly true)]
-                         (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60)))]
+                         (await (tu/child-outcome eng job {:radius 6 :items ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60)))]
             (is (= 1 (:collected result)))))))))
 
 (deftest a-buried-walk-forces-its-dark-form-only-where-the-caller-has-none
@@ -213,15 +213,15 @@
     (is (= {:safe? '(not (threatened))} (:checks (job-ns/walk-args {:quote-call {}} {}))))
     (is (nil? (:checks (job-ns/walk-args {:quote-call {:checks {:safe? '(always)}}} {}))))))
 
-(deftest only-the-want-items-count-towards-want
+(deftest only-the-least-items-count-towards-least
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (bd/setup {:self body :blocks wall})]
           (drop! p [-1 64 0] "oak_sapling")
           (drop! p [4 64 0] "oak_log")
-          (let [result (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log" "oak_sapling"] :want-items ["oak_log"]
-                                                         :near {:x 4 :y 64 :z 0} :search 3 :want 1} 80))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :items ["oak_log" "oak_sapling"] :least-items ["oak_log"]
+                                                         :near {:x 4 :y 64 :z 0} :search 3 :least 1} 80))]
             (is (= 2 (:collected result)))
             (is (= 1 (bd/carried p "oak_log")))))))))
 
@@ -327,7 +327,7 @@
                      (fn [token args impl]
                        (impl token args)
                        #js {:status "ok" :gained #js []}))
-          (let [result (await (tu/child-outcome eng job {:radius 6 :filter ["porkchop"]} 30))]
+          (let [result (await (tu/child-outcome eng job {:radius 6 :items ["porkchop"]} 30))]
             (is (= 1 (bd/carried p "porkchop")))
             (is (= 1 (:collected result)))
             (is (= :done (:status result)))))))))
@@ -379,17 +379,9 @@
         (let [{:keys [eng p]} (bd/setup {:self body :blocks {"0,62,0" "stone"}})
               held #(mem/entries (mem/view (:store eng)) loose/hold-kind)]
           (drop! p [0 63 0] "dirt")
-          (core/submit! eng '(jobs.forestry.collect-drops {:radius 6 :holes [[0 63 0]]}) {})
+          (core/submit! eng '(jobs.items.collect-drops {:radius 6 :holes [[0 63 0]]}) {})
           (await (core/tick! eng))
           (is (seq (held)) "held while it waits")
           (core/cancel! eng (first (:list (core/state eng))))
           (await (tu/run-until-empty eng 20))
           (is (empty? (held)) "the cleanup released it"))))))
-
-(deftest a-search-with-want-zero-finding-nothing-ends-done-zero
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (bd/setup {:self body})
-              result (await (tu/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3 :want 0} 80))]
-          (is (= [:done 0] ((juxt :status :collected) result))))))))

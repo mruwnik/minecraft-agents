@@ -84,7 +84,7 @@
   :unreachable at once. After :give-up walks ending out of reach the cell is held :out-of-reach, after
   :give-up failed digs :dig-failed.
 
-  Ends by collecting the removed items' drops (jobs.forestry.collect-drops, filtered to the items they drop;
+  Ends by collecting the removed items' drops (jobs.items.collect-drops, filtered to the items they drop;
   a wall torch gives the torch). Data {:removed [{:cell :item}] :dropped [{:cell :item :found}] :open [{:cell
   :item :reason}] :collected n}, info cleanup.done, and warn cleanup.left while :open is not empty. Open cells
   are held (:scaffold-held, 10 minutes) so the conditions and the scaffold-left trigger do not offer them again at
@@ -324,8 +324,8 @@
   "One collect-drops call. :continue means it waits on the world: asked again on the next pass; else the drops are
   not asked for again."
   [c removed]
-  (let [r (await (ctx/call c :collect 'jobs.forestry.collect-drops
-                           {:radius (collect-radius c removed) :filter (vec (distinct (map (comp placement/item-of :item) removed)))
+  (let [r (await (ctx/call c :collect 'jobs.items.collect-drops
+                           {:radius (collect-radius c removed) :items (vec (distinct (map (comp placement/item-of :item) removed)))
                             :holes (mapv :cell removed)}))]
     (when-not (= :continue r)
       (ctx/update-mem! c #(-> % (dissoc :collect)

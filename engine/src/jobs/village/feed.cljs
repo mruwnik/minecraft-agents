@@ -16,7 +16,7 @@
   feeding: find the villager within :radius, walk to a cell 2 to 3 blocks from it (jobs.movement.go-to legs of 5 s, it
   wanders; nearer, the body's own pickup reach takes the drop back before the villager's does), look at its feet and
   toss with a pickup receipt (the toss primitive's :watchS reports who collected the drop, by uuid). Only what that
-  villager collected counts as fed; the rest of the drop lying near the toss is collected back (a jobs.forestry.collect-drops child), never left as litter.
+  villager collected counts as fed; the rest of the drop lying near the toss is collected back (a jobs.items.collect-drops child), never left as litter.
   :item is the food to give (carried), nil for the first carried of bread, carrot, potato, beetroot. Villagers pick
   up only bread, potato, carrot, wheat, beetroot and seeds: any other :item is impossible (:bad-args).
   When none is carried it is fetched (jobs.lib.need, :fetch true; condition-failed :no-food when :fetch is off or the fetch ended).
@@ -228,14 +228,14 @@
   (count (filter #(= item (:item (:data %))) (ctx/since c :fed t))))
 
 (defn ^:async clean-up!
-  "Collect back the drop of the last toss that lies near its spot (a jobs.forestry.collect-drops child for those drops);
+  "Collect back the drop of the last toss that lies near its spot (a jobs.items.collect-drops child for those drops);
   each round that gathers nothing counts through u/count-fail! (the third ends as litter). :again, :continue while the
   child waits, or the ending."
   [c {:keys [item at skip]}]
   (let [drops (lying c item at skip)]
     (if (empty? drops)
       (do (ctx/update-mem! c dissoc :cleanup) :again)
-      (let [r (await (child/run!* c :collect 'jobs.forestry.collect-drops {:ids (mapv :id drops) :near (select-keys at [:x :y :z]) :radius (:radius (:args c))}))]
+      (let [r (await (child/run!* c :collect 'jobs.items.collect-drops {:ids (mapv :id drops) :near (select-keys at [:x :y :z]) :radius (:radius (:args c))}))]
         (cond
           (= :continue r) :continue
           (pos? (:collected (:data r) 0)) (do (u/progress! c) :again)

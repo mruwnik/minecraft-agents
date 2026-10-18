@@ -149,8 +149,8 @@
       (:done tb) nil
       (not target)
       (if (and (pos? (:dug tb 0)) (not (:collected tb)))
-        (let [r (await (ctx/call c :take-back-collect 'jobs.forestry.collect-drops
-                                       {:radius take-back-radius :near (:pos (:data (ctx/latest c :shelter))) :filter (vec (distinct (map :item (:take-back (:data (ctx/latest c :shelter))))))}))]
+        (let [r (await (ctx/call c :take-back-collect 'jobs.items.collect-drops
+                                       {:radius take-back-radius :near (:pos (:data (ctx/latest c :shelter))) :items (vec (distinct (map :item (:take-back (:data (ctx/latest c :shelter))))))}))]
           (if (= :continue r)
             :continue
             (do (update-take-back! c assoc :collected true :done true)
@@ -222,7 +222,7 @@
     all four are tried again with :ignore-zones?, the survival last resort.
     The cells dug in another's zone or claim are noted as :tidy entries.
   The pit and the stair are left dug. Out of it, with :take-back? (default true), the valuable blocks the shelter placed
-  (the :take-back cells of its entry, still the placed block) are dug and their drops collected (jobs.forestry.collect-drops);
+  (the :take-back cells of its entry, still the placed block) are dug and their drops collected (jobs.items.collect-drops);
   a cell it cannot reach or dig is left, with a debug dig-in.take-back-skipped. Events: dig-in.took-back (info).
   Events: dig-in.left (info), dig-in.staying (info, unsafe), dig-in.trapped (warn, no way out)."
   ([c] (leave! c {}))

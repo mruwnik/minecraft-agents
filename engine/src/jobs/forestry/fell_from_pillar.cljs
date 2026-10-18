@@ -22,7 +22,7 @@
 (def doc
   "Fell the logs of the tree at :base that are out of reach from the ground, standing on a pillar that is taken back.
   jobs.lib.access.approach/plan picks the stand or the pillar base for the highest logs (the logs cut so far are
-  collected first, jobs.forestry.collect-drops), the body walks there (go-to), builds the pillar (jobs.access.pillar,
+  collected first, jobs.items.collect-drops), the body walks there (go-to), builds the pillar (jobs.access.pillar,
   every block in the scaffold ledger), digs the logs in reach top-down (jobs.blocks.dig) and the cleanup export
   (jobs.access.cleanup) takes the pillar back however the call ends, a cut included (and when the call starts with
   this job's scaffold still open).
@@ -219,8 +219,8 @@
   [c]
   (let [ids (own-log-drops c (base c))
         e (if (seq ids)
-            (await (child/run!* c :pcollect 'jobs.forestry.collect-drops
-                                {:radius (settings/get settings ::drop-radius) :ids ids :near (base c) :search 0 :want 0}))
+            (await (child/run!* c :pcollect 'jobs.items.collect-drops
+                                {:radius (settings/get settings ::drop-radius) :ids ids :near (base c) :search 0}))
             :done)]
     (if (= :continue e)
       :continue

@@ -174,7 +174,7 @@
 (defn ^:async collect-drops!
   "Pick up the harvest items within radius (collect-drops): :again when some came in, else nil."
   [c radius]
-  (let [e (await (child/run!* c :collect 'jobs.forestry.collect-drops {:radius radius :filter (vec harvest-items)}))]
+  (let [e (await (child/run!* c :collect 'jobs.items.collect-drops {:radius radius :items (vec harvest-items)}))]
     (cond
       (= :continue e) :continue
       (pos? (:collected (:data e) 0)) :again)))

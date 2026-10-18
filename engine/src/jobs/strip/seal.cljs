@@ -130,7 +130,7 @@
       :else (stop! c :wrong-side {:cell stand-cell}))))
 
 (defn ^:async collect! [c]
-  (let [r (await (ctx/call c :collect 'jobs.forestry.collect-drops {:radius 3}))]
+  (let [r (await (ctx/call c :collect 'jobs.items.collect-drops {:radius 3}))]
     (if (= :continue r)
       :continue
       (do (ctx/update-mem! c dissoc :collect) :again))))

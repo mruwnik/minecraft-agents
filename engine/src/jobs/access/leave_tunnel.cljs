@@ -31,7 +31,7 @@
   (a go-to child). It asks jobs.lib.access.rules/may-dig?. A refusal books the torch as left
   with that reason and is never forced. Otherwise the scaffold ledger entry is marked :removing, the torch is
   dug and the entry dropped once the cell is air. A cell still holding the torch is left :dig-failed. The drops
-  are then collected (jobs.forestry.collect-drops, radius 3).
+  are then collected (jobs.items.collect-drops, radius 3).
 
   Then it walks to the entry and seals the mouth. The mouth is the dug cells at or above the entry's floor that
   are open now and touch an open cell the tunnel did not dig (flat ground, a stair down, a hill face). Deeper
@@ -326,7 +326,7 @@
 (defn ^:async collect!
   "Pick the dropped torches up near the body; the flag clears when the pick-up ends (done, or it cannot run)."
   [c]
-  (let [r (await (ctx/call c :collect 'jobs.forestry.collect-drops {:radius 3 :filter ["torch"]}))]
+  (let [r (await (ctx/call c :collect 'jobs.items.collect-drops {:radius 3 :items ["torch"]}))]
     (if (= :continue r)
       :continue
       (do (ctx/update-mem! c dissoc :collect) :again))))

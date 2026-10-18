@@ -234,7 +234,7 @@
               holds (atom nil)
               held #(mapv (comp (juxt :anchor :radius) :data) (mem/entries (mem/view (:store eng)) loose/hold-kind))]
           (.override (.-world p) "collect" (fn [_ _] (reset! holds (held)) #js {:status "failed"}))
-          (core/submit! eng '(jobs.forestry.collect-drops {:radius 6 :near {:x 1 :y 64 :z 0}}) {})
+          (core/submit! eng '(jobs.items.collect-drops {:radius 6 :near {:x 1 :y 64 :z 0}}) {})
           (await (tu/run-until-empty eng 20))
           (is (= [[{:x 1 :y 64 :z 0} 6]] @holds) "held while it collects")
           (is (= [] (held)) "released at the end"))))))

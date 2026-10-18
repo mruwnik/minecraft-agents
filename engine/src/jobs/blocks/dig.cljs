@@ -22,7 +22,7 @@
 (def doc
   "Dig the one block at :pos ([x y z] or {:x :y :z}) and pick up what it dropped, as a player would. One call is the
   whole attempt: get a missing tool (:fetch, jobs.lib.need), walk into reach (one jobs.movement.go-to call), dig, pick up
-  the drops (jobs.forestry.collect-drops: a drop in the dug hole only from a seen solid safe floor). It yields :continue
+  the drops (jobs.items.collect-drops: a drop in the dug hole only from a seen solid safe floor). It yields :continue
   only when a child waits on the world. Needs a tool that harvests the block (with :need-drop), room for the drop (with :collect) and
   a cell zones, claims and hazards allow. Quote: the walk and dig time, 1 s at least.
 
@@ -274,10 +274,11 @@
   (if room? left (mapv #(assoc % :reason :inventory-full) left)))
 
 (defn ^:async collect!
-  "Pick up the dug block's drops (jobs.forestry.collect-drops child); :continue while it waits, else the call's ending."
+  "Pick up the dug block's drops (jobs.items.collect-drops child); :continue while it waits, else the call's ending."
   [c pos]
   (let [{:keys [block ids want]} (:dug (ctx/mem c))
-        r (await (child/run!* c :collect 'jobs.forestry.collect-drops {:radius (collect-radius) :ids ids :holes [pos] :search search-blocks :want want}))]
+        r (await (child/run!* c :collect 'jobs.items.collect-drops (cond-> {:radius (collect-radius) :ids ids :holes [pos]}
+                                                                               (pos? want) (assoc :search search-blocks :least want))))]
     (if (= :continue r)
       :continue
       (let [res (:data r)]

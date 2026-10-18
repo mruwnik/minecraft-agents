@@ -28,7 +28,7 @@
   2. Replace natural ground under the cell (stone, sand, gravel, cobblestone, deepslate ...) with carried dirt. It
      digs, then places. A hole this job dug is filled first, also after a restart.
   3. Plant the sapling when it is carried (jobs.forestry.plant-sapling as a child).
-  Drops are collected (jobs.forestry.collect-drops) when the next step is on another cell or none is left.
+  Drops are collected (jobs.items.collect-drops) when the next step is on another cell or none is left.
   Bringing saplings and dirt is another job, e.g. (seq (jobs.storage.withdraw ...) (jobs.forestry.prepare ...)).
   Water in the cell is repaired. A source in the cell is filled with carried dirt (the dirt is then dug as a
   stray). A source beside it on its level is dammed first, since it would flood the dug cell back. A flow is
@@ -313,7 +313,7 @@
 (defn ^:async collect!
   "One collect-drops round while the drops of the digs are owed. :again, :continue while it waits."
   [c]
-  (let [e (await (ctx/call c :collect 'jobs.forestry.collect-drops
+  (let [e (await (ctx/call c :collect 'jobs.items.collect-drops
                            {:radius (:collect-radius (:args c))
                             :holes (vec (remove nil? (cons (:collect (ctx/mem c)) (:holes (ctx/mem c)))))}))]
     (when-not (= :continue e) (ctx/update-mem! c dissoc :collect))

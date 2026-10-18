@@ -1,4 +1,4 @@
-;; jobs.forestry.collect-drops sees only visible items (card 917aa5a3, after 6017115f): drops of the body's own dig in a 1-wide
+;; jobs.items.collect-drops sees only visible items (card 917aa5a3, after 6017115f): drops of the body's own dig in a 1-wide
 ;; tunnel are all collected (strict: every dug ore's drop is in the inventory); an item in a sealed stone cell is never chased.
 {:defaults
  {:tags [:forestry :collect-drops :mine :jobs] :time :any
@@ -19,12 +19,12 @@
    :blocks [[:fill [20 0 14] [24 3 18] "stone"] [:fill [22 0 16] [22 1 16] "air"]]
    :act [[:summon "item" [18.5 0 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
          [:summon "item" [22.5 0 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
-         [:job (jobs.forestry.collect-drops {:radius 10})]]
+         [:job (jobs.items.collect-drops {:radius 10})]]
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 60 :of-job true}]
    :after [[:item "cobblestone" 1] [:entities "type=item,tag=wt" [[0 -1 0] [31 4 31]] 1] [:body-far [22.5 0 16.5] 3]]}
   {:name "only-walled-item-is-not-chased"
    :blocks [[:fill [20 0 14] [24 3 18] "stone"] [:fill [22 0 16] [22 1 16] "air"]]
    :act [[:summon "item" [22.5 0 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
-         [:job (jobs.forestry.collect-drops {:radius 10})]]
+         [:job (jobs.items.collect-drops {:radius 10})]]
    :expect [{:no-event {:source :action :kind :started :data {:name "collect"}} :for-s 20}]
    :after [[:item "cobblestone" 0] [:entities "type=item,tag=wt" [[0 -1 0] [31 4 31]] 1] [:body-near [16.5 0 16.5] 3]]}]}

@@ -21,7 +21,7 @@
   failed (:failed).
 
   Shearing stops when :count sheep are shorn (every one in radius when nil), none is left, the shears are gone
-  or three sheep in a row were fruitless (no shears are fetched while nothing is left to shear). Unless :collect is false it then runs jobs.forestry.collect-drops for
+  or three sheep in a row were fruitless (no shears are fetched while nothing is left to shear). Unless :collect is false it then runs jobs.items.collect-drops for
   the wool in :radius and ends.
 
   Ends with a warn shear.gave-up unless the reason is :shorn, the data {:reason :shorn [keys]
@@ -192,7 +192,7 @@
   "One round of the pick-up phase; finish with the stored reason when it is done."
   [c]
   (let [{:keys [radius]} (:args c)
-        e (await (ctx/call c :collect 'jobs.forestry.collect-drops {:radius radius :filter wool-names}))]
+        e (await (ctx/call c :collect 'jobs.items.collect-drops {:radius radius :items wool-names}))]
     (if (= :continue e)
       :continue
       (do (ctx/update-mem! c assoc :collected (get-in e [:data :collected] 0))

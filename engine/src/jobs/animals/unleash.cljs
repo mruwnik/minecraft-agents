@@ -27,7 +27,7 @@
   freed nothing (:no-effect), it vanished (:gone), the server said it cannot (:cannot) or the use failed
   (:failed).
 
-  Unless :collect is false the job then waits 0.8 s for the drops and runs jobs.forestry.collect-drops for the
+  Unless :collect is false the job then waits 0.8 s for the drops and runs jobs.items.collect-drops for the
   leads in :radius.
 
   Ends with a warn unleash.gave-up unless the reason is :unleashed. The data {:reason :freed
@@ -220,7 +220,7 @@
     (if (= :continue waited)
       :continue
       (do (ctx/update-mem! c assoc :dropped true)
-          (let [e (await (ctx/call c :collect 'jobs.forestry.collect-drops {:radius (:radius (:args c)) :filter ["lead"]}))]
+          (let [e (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (:radius (:args c)) :items ["lead"]}))]
             (if (= :continue e)
               :continue
               (finish! c (:reason (ctx/mem c)))))))))

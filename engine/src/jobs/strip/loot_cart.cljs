@@ -15,7 +15,7 @@
 (def doc
   "Empty a chest minecart and take the cart: walk within reach (jobs.lib.near/go-near!), open it and move every stack into the bag
   (a jobs.storage.withdraw-entity child), then break it (a jobs.combat.attack child) and pick up what falls (a
-  jobs.forestry.collect-drops child, radius 4 round the cart): the cart item, and the stacks the bag had no room for.
+  jobs.items.collect-drops child, radius 4 round the cart): the cart item, and the stacks the bag had no room for.
   The cart is :id (an entity id) or the nearest chest_minecart within :radius of :near (default the body). It starts
   only when a cart is in sight (condition :gone; start only). Its safe? is ready/safe-at-by-night :near, else ready/safe-if-lit. A cart in
   another owner's zone or claim is refused (:ignore-zones? true skips that). Broken-and-gone carts are not looked for again:
@@ -118,7 +118,7 @@
 (defn ^:async collect!
   "Pick up the drops round the cart's place: :done, or :continue while the child waits."
   [c pos]
-  (let [r (await (child/run!* c :collect 'jobs.forestry.collect-drops {:radius (:radius (:args c)) :near pos}))]
+  (let [r (await (child/run!* c :collect 'jobs.items.collect-drops {:radius (:radius (:args c)) :near pos}))]
     (if (= :continue r) :continue :done)))
 
 (defn ^:async round

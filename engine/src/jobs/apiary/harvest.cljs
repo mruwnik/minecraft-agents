@@ -138,7 +138,7 @@
   comb-waits rounds while no comb shows yet (the spawn may not have reached the body); any other end of it
   (done, declined) closes the phase."
   [c]
-  (let [e (await (ctx/call c :collect 'jobs.forestry.collect-drops {:radius 8 :filter ["honeycomb"]}))
+  (let [e (await (ctx/call c :collect 'jobs.items.collect-drops {:radius 8 :items ["honeycomb"]}))
         done? (= :done (:kind e))
         got (if done? (get-in e [:data :collected] 0) 0)
         waits (:comb-waits (ctx/mem c) 0)]

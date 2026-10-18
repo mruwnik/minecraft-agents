@@ -27,7 +27,7 @@
   nothing-possible: :no-boat (the placed boat is not in sight and its place was not seen), :board-failed (mount's ending is the :because).
 
   Recover: the boat is :id, else the nearest boat or raft in sight. When aboard, it gets off first (jobs.movement.leave-vehicle),
-  walks into reach (jobs.movement.go-to), hits it until it breaks and collects the dropped item (jobs.forestry.collect-drops).
+  walks into reach (jobs.movement.go-to), hits it until it breaks and collects the dropped item (jobs.items.collect-drops).
   Condition at the start: :no-boat (none in sight). Ends done (data {:id :item name :collected n}), info boat.recovered, or
   condition-failed :gone (the boat is no longer in sight), or
   nothing-possible: :leave-failed, :unreachable (the walk failed twice), :not-collected (the item was not picked up), or
@@ -249,8 +249,8 @@
             (let [r (await (ctx/act c :attack #js {:id (:id boat)}))]
               (if (= "killed" (.-status r))
                 (let [item (:name boat)
-                      k (await (ctx/call c :collect 'jobs.forestry.collect-drops
-                                         {:near (:pos boat) :radius 4 :filter [item]}))
+                      k (await (ctx/call c :collect 'jobs.items.collect-drops
+                                         {:near (:pos boat) :radius 4 :items [item]}))
                       n (:collected (:data k) 0)]
                   (cond
                     (= :continue k) :continue

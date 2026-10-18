@@ -94,8 +94,8 @@
   or its call is held by a floor)."
   [c waiting]
   (let [{:keys [mob] :as a} (:args c)
-        e (await (ctx/call c :collect 'jobs.forestry.collect-drops
-                                 {:radius collect-radius :filter (or (:drops a) (get drops mob))}))]
+        e (await (ctx/call c :collect 'jobs.items.collect-drops
+                                 {:radius collect-radius :items (or (:drops a) (get drops mob))}))]
     (if (collect-ended? e)
       (do (ctx/update-mem! c dissoc :collecting) :again)
       waiting)))

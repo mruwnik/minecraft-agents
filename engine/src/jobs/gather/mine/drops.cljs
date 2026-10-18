@@ -124,8 +124,8 @@
 
 (defn ^:async collect! [c]
   (await (look-for-drop! c))
-  (let [r (await (ctx/call c :collect 'jobs.forestry.collect-drops
-                           (cond-> {:radius (drop-radius c) :filter [(blocks/item-name (:args c))] :dig true}
+  (let [r (await (ctx/call c :collect 'jobs.items.collect-drops
+                           (cond-> {:radius (drop-radius c) :items [(blocks/item-name (:args c))] :dig true}
                              (:dug-at (ctx/mem c)) (assoc :holes [(:dug-at (ctx/mem c))]))))
         why (into {} (map (fn [{:keys [pos reason]}] [[(:x pos) (:y pos) (:z pos)] reason])) (when (map? r) (:left (:data r))))
         w (when (not= :continue r) (await (walk-to-drop! c)))]

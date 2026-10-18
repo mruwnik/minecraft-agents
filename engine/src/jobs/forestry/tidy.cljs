@@ -103,8 +103,8 @@
   "The children in order: [phase job args] for the trunk tree {:base :species :ground}."
   [{:keys [radius ignore-zones? fetch]} {:keys [base species ground]}]
   [[:fell 'jobs.forestry.fell-tree (cond-> {:at base :ignore-zones? ignore-zones?} (some? fetch) (assoc :fetch fetch))]
-   [:collect 'jobs.forestry.collect-drops {:radius radius :filter (drop-filter species) :near base :search radius
-                                           :want-items [(str species "_log")]}]
+   [:collect 'jobs.items.collect-drops {:radius radius :items (drop-filter species) :near base :search radius
+                                           :least-items [(str species "_log")]}]
    [:plant 'jobs.forestry.plant-sapling (cond-> {:at ground :species species :ignore-zones? ignore-zones?}
                                           (some? fetch) (assoc :fetch fetch))]])
 

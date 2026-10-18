@@ -56,7 +56,7 @@
   [[:fell 'jobs.forestry.fell-tree (cond-> {:species species :radius radius :ignore-zones? ignore-zones?}
                                      (some? fetch) (assoc :fetch fetch)
                                      (seq avoid) (assoc :avoid avoid))]
-   [:collect 'jobs.forestry.collect-drops {:radius radius :filter (or filter (drop-filter species)) :want-items (if species [(str species "_log")] trees/log-names) :near tree :search radius}]
+   [:collect 'jobs.items.collect-drops {:radius radius :items (or filter (drop-filter species)) :least-items (if species [(str species "_log")] trees/log-names) :near tree :search radius}]
    [:plant 'jobs.forestry.plant-sapling (cond-> {:species species :ignore-zones? ignore-zones? :near origin :within radius}
                                          (some? fetch) (assoc :fetch fetch))]])
 
@@ -157,7 +157,10 @@
   (let [_ (when-not (:origin (ctx/mem c)) (ctx/update-mem! c assoc :origin (u/self-pos c)))
         _ (when-not (:carried-before (ctx/mem c)) (ctx/update-mem! c assoc :carried-before (carried-count c) :logs-before (logs-carried c)))
         [phase job args] (current-phase c)
-        args (cond-> args (= :collect phase) (assoc :want (:want (ctx/mem c) 1)))]
+        args (if (= :collect phase)
+                (let [want (:want (ctx/mem c) 1)]
+                  (if (pos? want) (assoc args :least want) (assoc args :search 0)))
+                args)]
     (let [e (await (ctx/call c phase job args))]
         (cond
           (= :continue e) :continue

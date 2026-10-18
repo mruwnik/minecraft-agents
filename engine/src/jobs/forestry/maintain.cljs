@@ -248,9 +248,9 @@
   "Step 1: one collect-drops call while a sweep is owed. :again, :continue while it waits."
   [c]
   (when-let [species (:collect (ctx/mem c))]
-    (let [r (await (ctx/call c :collect 'jobs.forestry.collect-drops
+    (let [r (await (ctx/call c :collect 'jobs.items.collect-drops
                                    {:radius (:collect-radius (:args c))
-                                    :filter (vec (distinct (mapcat forestry/drop-filter species)))
+                                    :items (vec (distinct (mapcat forestry/drop-filter species)))
                                     :holes (:holes (ctx/mem c))}))]
       (when (not= :continue r) (ctx/update-mem! c dissoc :collect))
       (if (= :continue r) :continue :again))))

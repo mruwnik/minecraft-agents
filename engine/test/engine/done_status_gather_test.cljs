@@ -34,7 +34,7 @@
    'jobs.farm.compost {}
    'jobs.farm.find-spot {}
    'jobs.farm.tend {:plan "p"}
-   'jobs.forestry.collect-drops {}
+   'jobs.items.collect-drops {}
    'jobs.forestry.fell-tree {}
    'jobs.forestry.fell-from-pillar {:at [0 64 0]}
    'jobs.forestry.harvest-wood {}
@@ -240,17 +240,18 @@
     {"3,63,0" "dirt"} [{:name "oak_sapling" :count 1}] {:begun true} [:later :planting]))
 
 (deftest collect-drops-is-done-when-no-wanted-drop-is-in-sight
-  (are [args m reason] (= reason (tu/kind-reason (done-of 'jobs.forestry.collect-drops {} args m)))
+  (are [args m reason] (= reason (tu/kind-reason (done-of 'jobs.items.collect-drops {} args m)))
     {} {} [:ok :collected]
     {} {:collected 2} [:ok :collected]
-    {:search 4 :want 3} {:collected 1} [:later :searching]
+    {:search 4} {:collected 1} [:later :searching]
+    {:search 4} {:collected 1 :wanted 1} [:ok :collected]
     {} {:collected 0 :skipped [7]} [:later :skipped]
     {} {:left [7]} [:later :left]
     {:ids [7]} {} [:later :ids-unseen]
     {:ids [7]} {:collected 1 :skipped [7]} [:ok :collected])
-  (let [c (ctx-of 'jobs.forestry.collect-drops {} {} {})]
+  (let [c (ctx-of 'jobs.items.collect-drops {} {} {})]
     (swap! (fake/state (:primitives c)) fake/spawn [1 64 1] "apple" 1)
-    (is (= [:later :collecting] (tu/kind-reason ((:done? (get registry/jobs 'jobs.forestry.collect-drops)) c))))))
+    (is (= [:later :collecting] (tu/kind-reason ((:done? (get registry/jobs 'jobs.items.collect-drops)) c))))))
 
 (deftest mine-is-done-once-finished-with-the-count-carried-and-home
   (are [m reason] (= reason (tu/kind-reason (done-of 'jobs.gather.mine {:inventory [{:name "cobblestone" :count 5}]} {:block "stone" :count 2} m)))

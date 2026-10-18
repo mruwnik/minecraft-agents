@@ -27,7 +27,7 @@
   2. Cut the ripe crops, walking (a go-to child) to the nearest when out of :reach. A crop it cannot reach is skipped.
      After :give-up such crops it stops cutting (warn harvest.gave-up); replanting and collecting go on.
      A body farther than :radius from the centre with nothing cut yet walks there first (step 2b).
-  3. Collect the drops (a jobs.forestry.collect-drops child).
+  3. Collect the drops (a jobs.items.collect-drops child).
   4. Finish.
   With no crop seen at all (ripe or not), or with :plan and no ripe crop known while a planned crop is remembered out of view, it looks around once from where it stands first; if still none it ends
   condition-failed :no-crop-seen (warn harvest.no-crop-seen).
@@ -460,8 +460,8 @@
   "Step 3: one collect-drops round while a sweep is owed."
   [c]
   (when (:collect (ctx/mem c))
-    (let [r (await (ctx/call c :collect 'jobs.forestry.collect-drops
-                             {:radius (+ (:radius (:args c)) 4) :filter collect-items}))]
+    (let [r (await (ctx/call c :collect 'jobs.items.collect-drops
+                             {:radius (+ (:radius (:args c)) 4) :items collect-items}))]
       (when-not (= :continue r) (ctx/update-mem! c dissoc :collect))
       (if (= :continue r) :continue :again))))
 

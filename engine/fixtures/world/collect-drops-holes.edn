@@ -15,7 +15,7 @@
  [{:name "drop-one-down-in-the-hole-collected"
    :blocks [[:set [16 9 16] "air"]]
    :act [[:summon "item" [16.5 9.2 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
-         [:job (jobs.forestry.collect-drops {:radius 6 :holes [#at [16 9 16]]})]]
+         [:job (jobs.items.collect-drops {:radius 6 :holes [#at [16 9 16]]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "cobblestone" 1]]}
   {:name "drop-in-the-cave-a-column-over-is-left"
@@ -23,14 +23,14 @@
    :blocks [[:fill [16 7 16] [16 9 16] "air"] [:fill [17 6 16] [17 9 16] "air"] [:set [16 6 16] "air"]]
    :act [[:summon "item" [17.5 6.2 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
          [:wait-s 2]
-         [:job (jobs.forestry.collect-drops {:radius 6 :holes [#at [16 9 16]]})]]
+         [:job (jobs.items.collect-drops {:radius 6 :holes [#at [16 9 16]]})]]
    :expect [{:event {:source :job :level :debug :kind :collect-drops.left :data {:reason :too-deep}} :within-s 60 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "collect"}} :for-s 50 :until {:source :job :kind :completed}}]
    :after [[:item "cobblestone" 0] [:body-far [17.5 6.2 16.5] 2]]}
   {:name "drop-in-the-cave-a-column-over-is-dug-to-with-dig"
    :blocks [[:fill [16 7 16] [16 9 16] "air"] [:fill [17 6 16] [17 7 16] "air"] [:set [16 6 16] "air"]]
    :act [[:summon "item" [17.5 6.2 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
-         [:job (jobs.forestry.collect-drops {:radius 6 :holes [#at [16 9 16]] :dig true})]]
+         [:job (jobs.items.collect-drops {:radius 6 :holes [#at [16 9 16]] :dig true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:item "cobblestone" [:>= 1]]]
    :limit-s 100}]}

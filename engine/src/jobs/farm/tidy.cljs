@@ -39,7 +39,7 @@
   as :hazard. A cell that cannot be walked to or reached :give-up times is refused as :unreachable.
   Refused cells are in the result's :refused [{:pos :block :reason}] and the warn tidy.refused.
   The sweep goes top-down, nearest first. It ends by collecting the drops within the field's extent plus 4 blocks
-  (jobs.forestry.collect-drops as a child).
+  (jobs.items.collect-drops as a child).
   Ends :done with data {:dug n :collected n :kept [...] :wrong [...] :refused [...]}; over a tidy
   field it digs nothing and is done. When strays were found, none dug and some refused, it ends condition-failed
   :refused with the same data.
@@ -266,7 +266,7 @@
     (min 48 (+ 4 (js/Math.ceil (apply js/Math.hypot (map - hi lo)))))))
 
 (defn ^:async collect! [c cells]
-  (let [e (await (ctx/call c :collect 'jobs.forestry.collect-drops {:radius (field-radius cells) :holes (:holes (ctx/mem c))}))]
+  (let [e (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (field-radius cells) :holes (:holes (ctx/mem c))}))]
     (when-not (= :continue e)
       (ctx/update-mem! c #(-> % (dissoc :collect) (update :collected (fnil + 0) (get-in e [:data :collected] 0)))))
     (if (= :continue e) :continue :again)))

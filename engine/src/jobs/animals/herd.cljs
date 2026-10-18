@@ -77,7 +77,7 @@
 
   Lead watching: an animal seen off this body's lead is given up on (:lead-broke), one not seen at all too
   (:lost); a lured animal seen beyond follow-range while the gate stands open is kept (the pinned steps go back for it). With nobody led, the open gate is shut, leads within 8 blocks are picked up
-  (jobs.forestry.collect-drops) and leashing starts again once, with the :lead-broke animals forgiven. A second time ends :lost. An end with an animal on the lead lets it go where the body
+  (jobs.items.collect-drops) and leashing starts again once, with the :lead-broke animals forgiven. A second time ends :lost. An end with an animal on the lead lets it go where the body
   stands and shuts the gate from the body's side; a cut by the engine's limit or a cancel does the same in the job's cleanup.
 
   One call is the whole run: it ends with the run, never yields. Waits for an animal to settle or a cell to clear are

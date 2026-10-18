@@ -13,18 +13,18 @@
  [{:name "drop-3-down-a-slope-collected"
    :blocks [[:fill [15 0 8] [16 1 24] "stone"] [:fill [17 0 8] [18 0 24] "stone"]]
    :act [[:summon "item" [22.5 0 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
-         [:job (jobs.forestry.collect-drops {:radius 12})]]
+         [:job (jobs.items.collect-drops {:radius 12})]]
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 80 :of-job true}
             {:no-event {:source :job :level :debug :kind :collect-drops.left} :for-s 60 :until {:source :job :kind :completed}}]
    :after [[:item "cobblestone" 1]]}
   {:name "drop-3-down-a-cliff-collected"
    :act [[:summon "item" [20.5 0 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
-         [:job (jobs.forestry.collect-drops {:radius 12})]]
+         [:job (jobs.items.collect-drops {:radius 12})]]
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 80 :of-job true}]
    :after [[:item "cobblestone" 1]]}
   ;; should stay: the same drop named as lying in a dug hole is 3 down, so it is left
   {:name "drop-in-a-dug-hole-3-down-left"
    :act [[:summon "item" [20.5 0 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
-         [:job (jobs.forestry.collect-drops {:radius 12 :holes [#at [20 0 16]]})]]
+         [:job (jobs.items.collect-drops {:radius 12 :holes [#at [20 0 16]]})]]
    :expect [{:event {:source :job :level :debug :kind :collect-drops.left :data {:reason :too-deep}} :within-s 60 :of-job true}]
    :after [[:item "cobblestone" 0] [:body-far [20.5 0 16.5] 3]]}]}

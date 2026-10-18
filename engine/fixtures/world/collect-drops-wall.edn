@@ -1,4 +1,4 @@
-;; jobs.forestry.collect-drops with :search: a drop behind a stone wall is out of sight; the body walks round the anchor and picks it up (card 2fda7e5a).
+;; jobs.items.collect-drops with :search: a drop behind a stone wall is out of sight; the body walks round the anchor and picks it up (card 2fda7e5a).
 {:defaults
  {:tags [:forestry :collect-drops :jobs] :time :any
   :plot {:height 12}
@@ -8,28 +8,28 @@
  [{:name "drop-behind-wall-found-by-search"
    :blocks [[:fill [20 0 12] [20 3 20] "stone"]]
    :act [[:summon "item" [24.5 0 16.5] "{Item:{id:\"minecraft:oak_log\",count:1}}"]
-         [:job (jobs.forestry.collect-drops {:radius 10 :near #at [24 0 16] :search 4})]]
+         [:job (jobs.items.collect-drops {:radius 10 :near #at [24 0 16] :search 4})]]
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 80 :of-job true}]
    :after [[:item "oak_log" 1]]}
   ;; should stay: without :search the unseen drop is not looked for
   {:name "drop-behind-wall-left-without-search"
    :blocks [[:fill [20 0 12] [20 3 20] "stone"]]
    :act [[:summon "item" [24.5 0 16.5] "{Item:{id:\"minecraft:oak_log\",count:1}}"]
-         [:job (jobs.forestry.collect-drops {:radius 10 :near #at [24 0 16]})]]
+         [:job (jobs.items.collect-drops {:radius 10 :near #at [24 0 16]})]]
    :expect [{:no-event {:source :action :kind :started :data {:name "collect"}} :for-s 20}]
    :after [[:item "oak_log" 0]]}
-  ;; card 43744712: a sapling in sight does not count towards :want-items, so the search goes on for the log behind the wall
+  ;; card 43744712: a sapling in sight does not count towards :least-items, so the search goes on for the log behind the wall
   {:name "sapling-in-sight-does-not-end-the-search-for-the-log"
    :blocks [[:fill [20 0 12] [20 3 20] "stone"]]
    :act [[:summon "item" [14.5 0 16.5] "{Item:{id:\"minecraft:oak_sapling\",count:1}}"]
          [:summon "item" [24.5 0 16.5] "{Item:{id:\"minecraft:oak_log\",count:1}}"]
-         [:job (jobs.forestry.collect-drops {:radius 12 :near #at [24 0 16] :search 4 :want 1 :want-items ["oak_log"]})]]
+         [:job (jobs.items.collect-drops {:radius 12 :near #at [24 0 16] :search 4 :least 1 :least-items ["oak_log"]})]]
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 80 :of-job true}]
    :after [[:item "oak_log" 1] [:item "oak_sapling" 1]]}
   {:name "search-exhausted-with-fewer-than-wanted-still-ends-completed"
    :blocks [[:fill [20 0 12] [20 3 20] "stone"]]
    :act [[:summon "item" [24.5 0 16.5] "{Item:{id:\"minecraft:oak_log\",count:1}}"]
-         [:job (jobs.forestry.collect-drops {:radius 10 :near #at [24 0 16] :search 4 :want 3 :want-items ["oak_log"]})]]
+         [:job (jobs.items.collect-drops {:radius 10 :near #at [24 0 16] :search 4 :least 3 :least-items ["oak_log"]})]]
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 85 :of-job true}]
    :after [[:item "oak_log" 1]]
    :limit-s 100}]}
