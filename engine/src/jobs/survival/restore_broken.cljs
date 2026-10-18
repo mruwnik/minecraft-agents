@@ -1,6 +1,5 @@
 (ns jobs.survival.restore-broken
   (:require [jobs.lib.ready :as ready]
-            [engine.contract :as contract]
             [jobs.lib.checks :as checks]
             [engine.settings :as settings]
             [engine.args :as a]
@@ -19,8 +18,8 @@
   entries jobs.lib.tidy and jobs.movement.go-to write; the body's own diggings elsewhere stay). A dug block is placed
   again from an item of the same name carried, or for an escalation hole what the block drops (cobblestone for stone). An escalation hole waits while
   the body is shut in (:shut-in), as it is the body's way on. A placed block is dug again. Both go through jobs.blocks.place / jobs.blocks.dig children (zones ignored on purpose, nothing fetched, no sight needed: the cell is one the body itself dug), so a cell with nothing solid beside it cannot be placed. It digs nothing else.
-  Works only when the body is safe: health at least :min-health and no hostile within :danger-radius (can-run?, asked before every pass); when that stops
-  holding mid-run the run yields (a reflex ends condition-failed; no cell is skipped for it).
+  Works only when the body is safe and fit (the standard readiness checks, asked before every round); a danger mid-run
+  is the hostile reflex's: it cuts the run, and no cell is skipped for it.
   Touches only a cell whose block is still what the job left (a changed cell is somebody's, left alone),
   with at most 3 tries per cell.
   One run over every entry, paced between steps, a cell put back forgotten at once; a step takes the first cell
@@ -36,9 +35,7 @@
   to warn once per set of cells.")
 
 (a/defargs args
-  {:min-health {:doc "least health to restore anything" :spec (a/num-in 0 20) :default 14}
-   :danger-radius {:doc "a hostile this close postpones restoring" :spec (a/num-in 0 nil) :default 8}
-   :reach {:doc "walk to within this many blocks of a cell" :spec (a/num-in 0 nil) :default 3}})
+  {:reach {:doc "walk to within this many blocks of a cell" :spec (a/num-in 0 nil) :default 3}})
 
 (declare skip!)
 
@@ -172,14 +169,6 @@
 
 (def fit? ready/fit?)
 
-
-(defn can-run?
-  "Before every round and between passes: :later :low-health under :min-health, :later :hostile-near with a danger within :danger-radius."
-  [c]
-  (cond
-    (not (tidy/unsafe? (:primitives c) (:args c))) (contract/ok :safe "safe to restore")
-    (< (.-health (.self (:primitives c))) (:min-health (:args c))) (contract/later :low-health "health too low to restore")
-    :else (contract/later :hostile-near "a danger is near: restoring waits")))
 
 (defn done?
   "No :tidy entry waits; the cells put back so far against the entries waiting."

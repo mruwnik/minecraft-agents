@@ -1,7 +1,6 @@
 (ns triggers.survival.tidy-pending
   "The tidy-pending trigger: a job that trespassed (jobs.lib.tidy) tidies up after itself without being asked.
-  It holds while the body is safe (health at least :min-health, no hostile within :danger-radius) and a :tidy entry
-  is pending. An entry is pending when its cell is loaded and either:
+  It holds while a :tidy entry is pending; it fires only when restore-broken's readiness checks (safe, fit) pass. An entry is pending when its cell is loaded and either:
     it is restorable now: the block is as the job left it, a dug block's item is carried, and it has had fewer than
       jobs.lib.tidy/max-tries tries; or
     the last run of jobs.survival.restore-broken has not reported it (its cell is not in the latest :tidy-reported).
@@ -23,7 +22,7 @@
             [jobs.lib.util :as u]
             [engine.memory :as mem]))
 
-(def defaults {:min-health 14 :danger-radius 8 :reach 3 :move-far 8})
+(def defaults {:reach 3 :move-far 8})
 
 (a/defargs settings
   {::range {:default 48 :doc "Blocks from the body within which a :tidy entry is held for; farther ones wait until the body comes near." :spec (a/int-in 1 nil)}
@@ -77,6 +76,6 @@
         h (u/self-pos {:primitives p})
         here {:x (:x h) :y (:y h) :z (:z h)}
         enclosed (delay (reach/enclosed? p))
-        pending (when-not (or (body/recovery-pending? view :tidy-pending) (airborne? p) (tidy/unsafe? p args))
+        pending (when-not (or (body/recovery-pending? view :tidy-pending) (airborne? p))
                   (holds? p view args live enclosed here))]
     (boolean (some #(not (tried-lately? args now here (tidy/restorable? p % enclosed) %)) pending))))

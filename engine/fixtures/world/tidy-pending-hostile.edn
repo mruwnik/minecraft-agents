@@ -1,4 +1,4 @@
-;; Card c7fcc5ef: tidy-pending's safety check (tidy/unsafe?) and the hostile-near fact use the trigger's danger definition
+;; Card c7fcc5ef: tidy-pending's safety check (the tidy-pending trigger's checks) and the hostile-near fact use the trigger's danger definition
 ;; (reach/nearest-danger): a mob that can reach the body, or a ranged one with a line of fire. A pending :tidy entry is seeded into
 ;; body memory (a dug cobblestone cell, cobblestone carried). A zombie sealed in glass 4 blocks away is no danger: the tidy run goes
 ;; ahead and restores the cell. A NoAI skeleton in the open 6 blocks away has a line of fire: tidy-pending never fires.

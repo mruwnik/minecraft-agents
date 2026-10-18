@@ -13,7 +13,6 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.crops :as crops]
-            [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
             [jobs.lib.spent :as spent]
             [jobs.lib.tools :as tools]
@@ -31,13 +30,6 @@
 (def reported-policy
   "Body memory policy of :tidy-reported, the cells still waiting when restore-broken last ended."
   {:cap 1 :ttl (* 6 60 60 1000)})
-
-(defn unsafe?
-  "Whether the body should not be busy with other people's blocks now: health under :min-health or a real danger (jobs.lib.danger/danger-near?)
-  within :danger-radius."
-  [p {:keys [min-health danger-radius]}]
-  (or (< (.-health (.self p)) min-health)
-      (danger-q/danger-near? p danger-radius danger-radius {:sight? false})))
 
 (defn carried? [p item] (boolean (some #(= item (:name %)) (u/inventory p))))
 

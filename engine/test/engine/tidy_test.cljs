@@ -77,14 +77,6 @@
 
 (def aside {:self {:pos [2 64 0]}})
 
-(deftest an-unsafe-moment-makes-can-run-later-and-skips-no-cell
-  (let [{:keys [p]} (setup (assoc aside :inventory [{:name "stone" :count 2}] :self {:pos [2 64 0] :health 6}) [(zs/whole-zone "Miles")])
-        c {:primitives p :args {:min-health 14 :danger-radius 8 :reach 3}}]
-    (is (= [:later :low-health] ((juxt first #(:reason (nth % 2))) (restore-broken/can-run? c))))
-    (swap! (fake/state p) assoc-in [:self :health] 20)
-    (is (= :ok (first (restore-broken/can-run? c))))
-    (is (= :restore (first (restore-broken/decide c [dug]))))))
-
 (deftest restore-places-the-dug-block-when-carried-and-safe
   (async done
     (tu/run-async done
@@ -357,8 +349,6 @@
            [{} [[:tidy dug] reported] false "not carried and reported: nothing changed"]
            [{:blocks {"0,65,0" "dirt"}} [[:tidy dug] reported] false "changed cell reported"]
            [{:blocks {"0,65,0" "dirt"}} [[:tidy dug]] true "changed cell is forgotten by one run"]
-           [(assoc with-stone :self {:health 6}) [[:tidy dug]] false "unsafe: health"]
-           [(assoc with-stone :entities [zombie]) [[:tidy dug]] false "unsafe: hostile"]
            [(assoc with-stone :entities [(assoc-in zombie [:pos :x] 5)] :blocks (into {} (for [x [2 3] y [64 65 66]] [(str x "," y ",0") "stone"]))) [[:tidy dug]] true "a walled-off hostile is no danger"]
            [with-stone [] false "no entries"]
            [with-stone [[:tidy (assoc dug :tries (tidy/max-tries))] reported] false "given up and reported"]
@@ -738,7 +728,7 @@
         flood reach/flood
         verdict (with-redefs [reach/search (fn [& xs] (swap! searches inc) (apply search xs))
                               reach/flood (fn [& xs] (swap! floods inc) (apply flood xs))]
-                  (first (restore-broken/decide {:primitives p :args {:min-health 14 :danger-radius 8 :reach 3}} (holes n))))]
+                  (first (restore-broken/decide {:primitives p :args {:reach 3}} (holes n))))]
     {:verdict verdict :searches @searches :floods @floods}))
 
 (deftest one-pass-decision-does-bounded-work-however-many-entries-wait
@@ -787,7 +777,7 @@
 
 (deftest a-pass-decision-in-cramped-terrain-expands-a-bounded-number-of-cells
   (let [{:keys [p]} (setup (assoc two-fields-world :self {:pos [-10 64 0]}) [(zs/whole-zone "Miles")])
-        {:keys [result nodes]} (count-work #(restore-broken/decide {:primitives p :args {:min-health 14 :danger-radius 8 :reach 3}}
+        {:keys [result nodes]} (count-work #(restore-broken/decide {:primitives p :args {:reach 3}}
                                                                    (tunnel-holes 5 16)))]
     (is (= :restore (first result)) "a seal search that runs out of budget is no seal")
     (is (<= nodes 12000) (str nodes " cells expanded"))))
@@ -816,7 +806,7 @@
 
 (deftest decide-looks-past-the-first-window-for-a-cell-that-seals-no-other
   (let [{:keys [p]} (setup (assoc with-hitbox :floor [-30 -30 30 30] :self {:pos [0 64 0]}) [(zs/whole-zone "Miles")])
-        c {:primitives p :args {:min-health 14 :danger-radius 8 :reach 3}}
+        c {:primitives p :args {:reach 3}}
         waiting (holes 6)
         sixth (last waiting)]
     (with-redefs [restore-broken/seals-others? (fn [_ e _ _] (not= sixth e))]
