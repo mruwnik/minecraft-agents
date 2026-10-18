@@ -44,7 +44,7 @@
   "The cells to dig (head cell first within a step, in walking order) of the cheapest route from feet cell from to feet
   cell goal, at most :max-digs of them, within :margin cells of both ends, falls of at most :max-fall; each step's floor must be a seen solid block.
   Priced :step-s a step and (:dig-s name) a cell dug (default 0 and 1: the fewest digs); a block :dig-s prices nil is
-  not dug. {:dig [cell ..]} or {:problem :no-route}."
+  not dug; nor is a cell under sand or gravel (it would fall on the body walking in). {:dig [cell ..]} or {:problem :no-route}."
   [block-at from goal {:keys [dig-s step-s] :or {dig-s (constantly 1) step-s 0} :as opts}]
   (let [max-digs (get opts :max-digs (settings/get settings ::max-digs))
         margin (get opts :margin (settings/get settings ::margin))
@@ -54,8 +54,10 @@
         inside? (fn [c] (every? true? (map #(<= %1 %2 %3) lo c hi)))
         step (fn [m n]
                (when (floor-ok? (block-at [(n 0) (dec (n 1)) (n 2)]))
-                 (let [names (map block-at (step-cells m n))
-                       digs (map cell-cost names)
+                 (let [cells (step-cells m n)
+                       names (map block-at cells)
+                       roofed? (fn [cell name] (and (pos? (or (cell-cost name) 1)) (falling (block-at (update cell 1 inc)))))
+                       digs (map #(if (roofed? %1 %2) nil (cell-cost %2)) cells names)
                        prices (map (fn [n d] (if (pos? d) (dig-s n) 0)) names digs)]
                    (when (every? some? (concat digs prices))
                      [(+ step-s (reduce + prices)) (reduce + digs)]))))]

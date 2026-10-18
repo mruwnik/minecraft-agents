@@ -33,4 +33,12 @@
          [:job (jobs.items.collect-drops {:radius 6 :holes [#at [16 9 16]] :dig true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:item "cobblestone" [:>= 1]]]
+   :limit-s 100} ;; gravel on the rim over the cell nearest the cave: the dig route must not open a cell under it (the body would be buried)
+  {:name "drop-in-the-cave-dug-to-without-opening-under-gravel"
+   :blocks [[:fill [16 7 16] [16 9 16] "air"] [:fill [17 6 16] [17 7 16] "air"] [:set [16 6 16] "air"] [:set [17 10 16] "gravel"] [:set [17 10 15] "gravel"] [:set [17 10 17] "gravel"]]
+   :act [[:summon "item" [17.5 6.2 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
+         [:job (jobs.items.collect-drops {:radius 6 :holes [#at [16 9 16]] :dig true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :completed}}]
+   :after [[:item "cobblestone" [:>= 1]]]
    :limit-s 100}]}
