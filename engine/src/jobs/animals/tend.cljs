@@ -146,12 +146,12 @@
     :else {:call {:slot :mend :job (jobs :mend) :args (cond-> {:plan plan} (some? fetch) (assoc :fetch fetch))}}))
 
 (defn decide-breed
-  [{:keys [mob target fetch]} {:keys [adults babies food reach]}]
+  [{:keys [mob target fetch box]} {:keys [adults babies food reach]}]
   (cond
     (>= (+ adults babies) target) {:skip :at-target}
     (< adults 2) {:skip :too-few-adults}
     (and (nil? food) (not (need/allows? fetch :item))) {:skip :no-food}
-    :else {:call {:slot :breed :job (jobs :breed) :args (cond-> {:mob mob :count 2 :radius reach} (some? fetch) (assoc :fetch fetch))}}))
+    :else {:call {:slot :breed :job (jobs :breed) :args (cond-> {:mob mob :count 2 :radius reach :box box} (some? fetch) (assoc :fetch fetch))}}))
 
 (defn decide-cull
   [{:keys [mob box target]} {:keys [adults babies]}]

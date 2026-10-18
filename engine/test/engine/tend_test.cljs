@@ -251,9 +251,9 @@
     :too-few-adults {:adults 1 :babies 0}
     :no-food {:adults 2 :babies 0 :food nil}
     nil {:adults 2 :babies 0 :food "wheat" :reach 5})
-  (is (= {:call {:slot :breed :job 'jobs.animals.breed :args {:mob "cow" :count 2 :radius 5 :fetch true}}}
-         (tend/decide :breed {:mob "cow" :target 4 :fetch true} {:adults 2 :babies 0 :food nil :reach 5}))
-      "no food but :fetch on: breed is called and fetches")
+  (is (= {:call {:slot :breed :job 'jobs.animals.breed :args {:mob "cow" :count 2 :radius 5 :box box :fetch true}}}
+         (tend/decide :breed {:mob "cow" :target 4 :box box :fetch true} {:adults 2 :babies 0 :food nil :reach 5}))
+      "no food but :fetch on: breed is called with the pen and fetches")
   (is (= {:call {:slot :shear :job 'jobs.animals.shear :args {:radius 5 :fetch true}}}
          (tend/decide :shear {:mob "sheep" :fetch true} {:shears false :shearable 2 :reach 5}))
       "no shears but :fetch on: shear is called and fetches")
