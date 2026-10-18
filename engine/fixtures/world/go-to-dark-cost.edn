@@ -33,8 +33,8 @@
    :time :night
    :limit-s 120
    :act [[:job (jobs.movement.go-to {:pos #at [19 0 24] :range 0})]
-         [:job (jobs.movement.go-to {:pos #at [28 0 20] :range 0})]
-         [:job (jobs.movement.go-to {:pos #at [2 0 16] :range 0})]
+         [:job (jobs.movement.go-to {:pos #at [28 0 20] :range 0}) [:alongside]]
+         [:job (jobs.movement.go-to {:pos #at [2 0 16] :range 0}) [:alongside]]
          [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:> 35]}}}] 110]]
    :expect [{:count-event {:source :job :kind :result :data {:arrived true}} :for-s 90 :at-least 3 :at-most 3 :of-job true}
             {:no-event {:level :error} :for-s 2}]
