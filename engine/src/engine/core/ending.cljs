@@ -406,6 +406,8 @@
   [def]
   (if (or (not (contract-job? def)) (::wrapped def))
     def
-    (assoc def ::wrapped true :check #(check def %) :passed-status passed-status :round #(run def %))))
+    (assoc def ::wrapped true :passed-status passed-status
+           :check #(settings/scoped (:settings (:args %)) (fn [] (check def %)))
+           :round #(settings/scoped (:settings (:args %)) (fn [] (run def %))))))
 
 (defn registry "jobs with every contract job wrapped." [jobs] (some-> jobs (update-vals wrap)))

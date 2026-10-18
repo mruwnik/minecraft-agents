@@ -228,6 +228,8 @@
                               #(cond (not (map? %)) "not a map"
                                      (seq (remove #{:safe? :fit?} (keys %))) "an unknown key"
                                      (not-every? seq? (vals %)) "a value not a form"))}
+   :settings {:doc "tuning settings for this run and the jobs it calls, {setting-key value}, each a declared setting; they beat the world's and the body's" :default nil
+              :spec (a/valid-by "a map {setting-key value} of declared settings" #(when-not (map? %) "not a map"))}
    :deadline {:doc "the wall-clock ms by which the call must have ended; default the caller's" :default nil
               :spec (a/num-in 0 nil)}
    :least {:doc "the least work accepted, in the job's units, or :all; default 1" :default nil
@@ -238,8 +240,10 @@
   [sym ways args]
   (let [given (select-keys args (keys call-keys))
         {:keys [path want value]} (a/first-problem 'engine.contract call-keys given)
-        unknown (remove (set ways) (:ways given))]
+        unknown (remove (set ways) (:ways given))
+        bad-setting (first (keep (fn [[k v]] (when-let [why (a/setting-problem k v)] (str k " " why ", got " (pr-str v)))) (:settings given)))]
     (cond
+      bad-setting (str sym " :settings " bad-setting)
       path (str sym " " (a/path-text path) " must be " want ", got " (pr-str value))
       (and (contains? given :ways) (empty? (:ways given))) (str sym " :ways is empty, so no way may run")
       (seq unknown) (str sym " has no way " (str/join ", " (sort unknown)) "; "

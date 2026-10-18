@@ -34,6 +34,24 @@
      (settings/load! (assoc files :specs specs :body name :emit #(swap! events conj %)))
      [@events (settings/resolved) files])))
 
+(deftest a-scope-overrides-get-for-its-awaits-and-nests-then-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wait #(settings/get specs :jobs.demo/wait-ms)
+              later (fn ^:async later [] (await (js/Promise. (fn [ok] (js/setTimeout ok 5)))) (wait))]
+          (is (= 5000 (wait)))
+          (is (= [1 1 2 1 5000]
+                 [(settings/scoped {:jobs.demo/wait-ms 1} wait)
+                  (await (settings/scoped {:jobs.demo/wait-ms 1} later))
+                  (settings/scoped {:jobs.demo/wait-ms 1} #(settings/scoped {:jobs.demo/wait-ms 2} wait))
+                  (settings/scoped {:jobs.demo/wait-ms 1} #(settings/scoped {} wait))
+                  (wait)])
+              "own await keeps it; an inner scope wins; an empty one inherits; none outlives its run")
+          (is (= [1 2] (js->clj (await (js/Promise.all #js [(settings/scoped {:jobs.demo/wait-ms 1} later)
+                                                   (settings/scoped {:jobs.demo/wait-ms 2} later)]))))
+              "interleaved runs keep their own"))))))
+
 (deftest get-reads-the-default-and-throws-on-an-unknown-key
   (settings/with-settings {}
     (fn []

@@ -244,6 +244,11 @@
     (nil? v) "a value, not nil"
     (and (s/get-spec k) (not (s/valid? k v))) (get @wants k)))
 
+(defn setting-problem
+  "Why k is no setting or v does not fit it, or nil."
+  [k v]
+  (if (s/get-spec k) (when-let [want (problem k v)] (str "must be " want)) "is not a declared setting"))
+
 (defn described
   "The data map of job ns-sym with each :spec given as the text of what it wants (for the catalog)."
   ([ns-sym data] (described ns-sym data []))

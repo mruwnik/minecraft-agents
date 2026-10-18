@@ -4,7 +4,20 @@
   (:refer-clojure :exclude [get])
   (:require [engine.args :as a]
             [cljs.reader :as reader]
-            ["fs" :as fs]))
+            ["fs" :as fs]
+            ["async_hooks" :refer [AsyncLocalStorage]]))
+
+(defonce call-scope
+  ;; AsyncLocalStorage, not a dynamic var: a job's rounds await, and the scope must follow them
+  (AsyncLocalStorage.))
+
+(defn scoped
+  "Run f with the overrides {k v} laid over those of the enclosing scope, for f and everything it awaits. A call's
+  :settings key (engine.core.ending/wrap)."
+  [overrides f]
+  (if (empty? overrides)
+    (f)
+    (.run call-scope (merge (.getStore call-scope) overrides) f)))
 
 (a/defargs settings
   "The engine's own keys, :engine.<area>/<name>, each {:default :doc :spec} (engine.args, as job args)."
@@ -17,14 +30,17 @@
   (atom {:body nil :specs {} :values {} :layers {}}))
 
 (defn get
-  "The value of key k: the layered override, else the :default of k in specs (the declaring namespace's own
+  "The value of key k: the enclosing call's :settings override (scoped), else the layered override, else the :default of k in specs (the declaring namespace's own
   `settings` map). Throws on a key specs lacks."
   [specs k]
   (let [spec (clojure.core/get specs k)]
     (when-not spec
       (throw (ex-info (str "unknown setting " k) {:key k})))
-    (let [values (:values @state)]
-      (if (contains? values k) (clojure.core/get values k) (:default spec)))))
+    (let [values (:values @state)
+          scope (.getStore call-scope)]
+      (cond (contains? scope k) (clojure.core/get scope k)
+            (contains? values k) (clojure.core/get values k)
+            :else (:default spec)))))
 
 (defn js-specs
   "{key spec} of the JavaScript primitives' tuning numbers, registered as settings: specs is the SPECS object of

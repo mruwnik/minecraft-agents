@@ -2,11 +2,13 @@
   "A call equal to one of its ancestors' (same job, same target args) is refused: condition-failed :duplicate-call,
   booked nowhere as a failure."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.lib.need :as need]))
 
@@ -86,3 +88,36 @@
           (let [deepest (first (filter #(= :condition-failed (:kind (nth % 2))) @endings))]
             (is (= 13 @depth) "the root plus 12 nested calls run; the 13th is refused")
             (is (= :too-deep (contract/cause-key (nth deepest 2))))))))))
+
+(def knob-specs (a/declare-settings! {:jobs.callscope/knob {:default 7 :doc "A knob." :spec (a/int-in 0 nil)}}))
+(def knob-seen (atom []))
+(defn read-knob! [tag] (swap! knob-seen conj [tag (settings/get knob-specs :jobs.callscope/knob)]))
+
+(def knob-jobs
+  {'outer {:round (fn ^:async outer [c]
+                    (read-knob! :outer-before)
+                    (await (ctx/call c :a 'inner {}))
+                    (await (ctx/call c :b 'inner {:settings {:jobs.callscope/knob 3}}))
+                    (read-knob! :outer-after)
+                    (ctx/end c :done nil))}
+   'inner {:round (fn ^:async inner [c]
+                    (await (js/Promise. (fn [ok] (js/setTimeout ok 1))))
+                    (read-knob! :inner)
+                    (ctx/end c :done nil))}})
+
+(deftest a-calls-settings-reach-its-round-and-its-children-only
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (reset! knob-seen [])
+        (let [{:keys [eng]} (setup knob-jobs)]
+          (core/submit! eng '(outer {:settings {:jobs.callscope/knob 5}}) {})
+          (await (core/tick! eng))
+          (is (= [[:outer-before 5] [:inner 5] [:inner 3] [:outer-after 5]] @knob-seen)
+              "the caller's override flows to a child, the child's own wins below it")
+          (is (= 7 (settings/get knob-specs :jobs.callscope/knob)) "and ends with the run"))))))
+
+(deftest a-settings-call-key-must-name-a-declared-setting-with-a-fitting-value
+  (is (nil? (contract/call-problem 'x nil {:settings {:jobs.callscope/knob 3}})))
+  (is (some? (contract/call-problem 'x nil {:settings {:jobs.callscope/knob -1}})))
+  (is (some? (contract/call-problem 'x nil {:settings {:jobs.callscope/nope 1}}))))
