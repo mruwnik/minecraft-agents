@@ -347,16 +347,20 @@
           (is (= {} @wsearch/searches) "the body walks on: a new search from where it gets to"))))))
 
 (defn ^:async one-budgeted-call
-  "One plan-walk! with budget (chunk-expansions 16) from pos toward goal with opts: its plan."
+  "One plan-walk! with budget (chunk-expansions 16) from pos toward goal with opts: its plan. round-ms is lifted: under load
+  the wall-clock cap would end the search before its expansion budget."
   [blocks pos goal budget opts]
   (let [p (tu/fake {:blocks blocks :self {:pos pos}})
-        chunk wplan/chunk-expansions]
+        chunk wplan/chunk-expansions
+        ms wsearch/round-ms]
     (reset! wsearch/searches {})
     (set! wplan/chunk-expansions 16)
-    (let [plan (await (walk/plan-walk! {:primitives p} (.pathWorld p) goal 0 walk/default-weight (assoc opts :budget budget)))]
-      (set! wplan/chunk-expansions chunk)
-      (reset! wsearch/searches {})
-      plan)))
+    (set! wsearch/round-ms 1e9)
+    (try (await (walk/plan-walk! {:primitives p} (.pathWorld p) goal 0 walk/default-weight (assoc opts :budget budget)))
+         (finally
+           (set! wplan/chunk-expansions chunk)
+           (set! wsearch/round-ms ms)
+           (reset! wsearch/searches {})))))
 
 ;; a ledge (feet 64, x 0..1, z 0..63) whose first move east is a 3-drop to a floor (feet 61, x 2..47) running on to the
 ;; loaded edge (x 48 on is unloaded), the goal far east in unloaded land (live: go-to's first move a gap jump down, 100
