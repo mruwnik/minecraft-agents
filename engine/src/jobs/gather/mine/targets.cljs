@@ -52,8 +52,9 @@
 
 (defn face-names
   "The names of the 6 faces of cell pos, as the body knows them: the last seen block, nil for a cell never seen. The cells
-  it stands in are felt, and lava directly on top shows as drips, so those read the world."
-  [c pos]
+  it stands in are felt, and lava directly on top shows as drips, so those read the world. The cell open (a cell a cut is about to
+  dig), when given, reads as air."
+  [c pos open]
   (let [p (:primitives c)
         feet (cell-of (u/self-pos c))
         own? #(or (= % feet) (= % (update feet :y inc)))]
@@ -61,6 +62,7 @@
            (let [cell (around pos f)
                  seen (look/seen-block p cell)]
              (cond
+               (= cell open) "air"
                (own? cell) (u/seen-name p cell)
                (and (= [0 1 0] f) (= "lava" (u/seen-name p cell))) "lava"
                (not (:unknown seen)) (:name seen))))
@@ -68,14 +70,16 @@
 
 (defn classify
   "How the cell of a block would be dug: :ok, :wet (only water stops it), :buried (no seen air face) or :no (seen
-  lava beside it, or lava on top). A face never seen is neither air nor a hazard."
-  [c wet pos]
-  (let [names (face-names c pos)]
-    (cond
-      (not-any? air names) :buried
-      (some #{"lava"} names) :no
-      (and (some #{"water"} names) (not wet)) :wet
-      :else :ok)))
+  lava beside it, or lava on top). A face never seen is neither air nor a hazard. The cell open, when given, is a face the dig will
+  have opened (the end of a side cut)."
+  ([c wet pos] (classify c wet pos nil))
+  ([c wet pos open]
+   (let [names (face-names c pos open)]
+     (cond
+       (not-any? air names) :buried
+       (some #{"lava"} names) :no
+       (and (some #{"water"} names) (not wet)) :wet
+       :else :ok))))
 
 (defn rules-in
   "The rules input: another's plans always refuse, this body's own too unless :spare-own-builds is false; a base
@@ -121,7 +125,7 @@
                     (remove #(stay/beside-body? (cell-of here) %))
                     (keep (fn [pos] (when-let [cut (stay/side-cut (cell-of here) heading (:ore-reach (:args c)) pos)] (assoc cut :pos pos))))
                     (filter #(not-any? (comp rules/air (fn [cell] (u/seen-name p cell))) (stay/side-cells (cell-of here) %)))
-                    (filter #(and (= :ok (classify c wet (:pos %))) (= :ok (access/judge (access/may-dig? (rules-in c) (:pos %)) accept))))
+                    (filter #(and (= :ok (classify c wet (:pos %) (stay/side-face (cell-of here) %))) (= :ok (access/judge (access/may-dig? (rules-in c) (:pos %)) accept))))
                     (sort-by #(u/dist here (:pos %)))
                     vec))
         graded (map (juxt identity #(classify c wet %)) cells)

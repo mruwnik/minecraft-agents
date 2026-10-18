@@ -42,6 +42,11 @@
     (for [k (range 1 (inc steps)) dy [0 1]]
       {:x (+ (:x body) (* k dx)) :y (+ (:y body) dy) :z (+ (:z body) (* k dz))})))
 
+(defn side-face
+  "The cell of a side cut (cut: side-cut's result with :pos, the ore) that lies against the ore: the dig opens it, so it is the ore's face."
+  [body {:keys [pos] :as cut}]
+  (first (filter #(= (:y pos) (:y %)) (take-last 2 (side-cells body cut)))))
+
 (def around [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]])
 
 (defn breaches

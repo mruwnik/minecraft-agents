@@ -41,6 +41,16 @@
           (is (= 1 (get (inv s) "raw_iron")) (pr-str (keep :text @(:seen s)) (dug-cells s) (feet s)))
           (is (= "cobblestone" (block-at s 1 64 -1)) "the side cut is shut behind"))))))
 
+(deftest stay-level-takes-ore-seen-through-glass-by-a-side-cut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world (update (rock-world {"0,65,-1" "glass" "0,65,-2" "glass" "1,65,-2" "iron_ore"}) :inventory into [{:name "cobblestone" :count 5}])})]
+          (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :ore-reach 2 :mend false}) {})
+          (await (run-ticks s 500))
+          (is (= 1 (get (inv s) "raw_iron")) (pr-str (keep :text @(:seen s)))))))))
+
 (deftest a-side-cut-under-way-goes-on-after-a-restart
   (async done
     (tu/run-async done
