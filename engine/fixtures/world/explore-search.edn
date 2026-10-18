@@ -34,6 +34,15 @@
             {:no-event {:source :job :kind :limit_reached} :for-s 100 :of-job true :until {:source :job :kind #{:completed :stopped}}}
             {:no-event {:source :system :kind :error} :for-s 60}]
    :limit-s 120}
+  ;; card ad1a4e62: a target beyond :scan-radius (and :max-distance) is not found, and the ending says how far each look reached,
+  ;; so "not found" is not read as "blocks in view were ignored". Emerald 30 east of the body, scan 8, distance bound 10.
+  {:name "not-found-text-names-the-look-radius"
+   :blocks [[:set [38 0 16] "emerald_block"]]
+   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 8 :scan-radius 8
+                                     :use-notes false :max-distance 10 :max-legs 2 :spend {:job-time 60}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:text [:contains "looks of 8 blocks round"]}} :within-s 70 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 70 :of-job true :until {:source :job :kind :stopped}}]
+   :limit-s 80}
   ;; card 4df607c2: a target already in sight (ahead or behind) ends the search at the origin with no leg walked. The count of look acts
   ;; (0 here, one per arrival spot otherwise) is a primitive-call count, not an event: pinned by explore-search-test, not here.
   {:name "target-in-sight-ahead-ends-at-the-origin"
