@@ -460,4 +460,4 @@
     (when-not (:heading (:args c0)) (ctx/update-mem! c assoc :heading (name (:heading (:args c)))))
     (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (next! c) :continue)))))
 
-(def meta {:tags [:mine :dig]})
+(def meta {:tags [:mine :dig] :position-bound? true})

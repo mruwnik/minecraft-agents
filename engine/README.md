@@ -209,7 +209,7 @@ built-in recipe table, and instant, deterministic behaviour (`moveTo` jumps to t
 
 A job is a namespace under `src/jobs/` exporting `round` (and `can-start?`, `can-run?`, each defaulting to `:ok`; Contract jobs below), and optionally `doc`, `args` and `idle-ok` (`true`: its acts are no work, see
 `body.idle`). The namespace follows the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry.fell-tree`).
-`(def meta {:category :phase :part-of '[jobs.survival.night]})` is read at compile time: `:category` is `:goal` (default), `:phase`, `:reflex` or `:debug` (default for `jobs.debug.*`); `catalog jobs --category` lists one kind. `:tags [:mine :light]` (resource or goal words, in the job file) add to the tags the catalog derives itself (the family and the words of the name); `catalog jobs --tag mine` lists the jobs with that tag.
+`(def meta {:category :phase :part-of '[jobs.survival.night]})` is read at compile time: `:category` is `:goal` (default), `:phase`, `:reflex` or `:debug` (default for `jobs.debug.*`); `catalog jobs --category` lists one kind. `:tags [:mine :light]` (resource or goal words, in the job file) add to the tags the catalog derives itself (the family and the words of the name); `catalog jobs --tag mine` lists the jobs with that tag. `:position-bound? true` marks a job whose meaning depends on where the body stands: the agent tool stamps its submit with `:submitted-at`.
 
 ```clojure
 (ns jobs.survival.eat

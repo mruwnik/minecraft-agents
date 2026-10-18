@@ -11,7 +11,8 @@
             [clojure.string :as str]
             ["node:fs" :as fs]
             ["node:path" :as path]
-            ["node:crypto" :as crypto]))
+            ["node:crypto" :as crypto])
+  (:require-macros [dashboard.jobs-registry :refer [position-bound-jobs]]))
 
 (defn usage-for [prefix]
   "Build the usage string with the given invocation prefix (e.g., 'jobs.mjs' or './bin/jobs')."
@@ -222,8 +223,8 @@
       spec)))
 
 (def from-jobs
-  "Jobs whose meaning depends on where the body stands: they get :submitted-at."
-  #{"jobs.access.stair" "jobs.access.bridge" "jobs.access.pillar" "jobs.gather.mine"})
+  "Jobs whose meaning depends on where the body stands (:position-bound? in their meta): they get :submitted-at."
+  (position-bound-jobs))
 
 (defn takes-from?
   "Whether the spec's job is one of from-jobs."

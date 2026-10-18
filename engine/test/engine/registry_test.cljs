@@ -62,6 +62,10 @@
   (is (= [:food] (:tags (get registry/jobs 'jobs.survival.get-food))))
   (is (= [] (:tags (get registry/jobs 'jobs.movement.go-to)))))
 
+(deftest a-job-declares-it-is-position-bound
+  (is (= #{'jobs.access.stair 'jobs.access.bridge 'jobs.access.pillar 'jobs.gather.mine}
+         (set (keep (fn [[id e]] (when (:position-bound? e) id)) registry/jobs)))))
+
 (deftest a-primitive-job-refuses-unknown-arg-keys
   (is (re-find #"jobs.primitive.dig has no arg :bogus; its args are .*:pos"
                (expr/problem registry/jobs '(jobs.primitive.dig {:bogus 1}))))

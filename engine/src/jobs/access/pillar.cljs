@@ -430,3 +430,5 @@
   [c]
   (or (await (fetch-first! c))
       (await (ctx/atomic c :urgent :pillar #(pace/steps! c (fn [] (step! c)))))))
+
+(def meta {:position-bound? true})

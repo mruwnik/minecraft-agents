@@ -35,6 +35,11 @@
     (merge {:kind :trigger :category "triggers" :name (:id m)}
            (update m :args #(when (some? %) (pretty %))))))
 
+(defmacro position-bound-jobs
+  "A literal set of the id strings of the jobs that declare :position-bound? in their meta."
+  []
+  (into #{} (comp (filter :position-bound?) (map :id)) (registry/job-metadata)))
+
 (defmacro compile-entries
   "A literal vector of every job and trigger entry, read when the build runs."
   []

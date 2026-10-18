@@ -589,4 +589,4 @@
       (do (ctx/update-mem! c assoc :cleaning true)
           (await (home-round! c))))))
 
-(def meta {:tags [:mine :dig :ore :light]})
+(def meta {:tags [:mine :dig :ore :light] :position-bound? true})

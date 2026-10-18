@@ -317,3 +317,5 @@
   "The whole bridge: step! until it ends, a pace between blocks."
   [c]
   (await (pace/steps! c #(step! c))))
+
+(def meta {:position-bound? true})
