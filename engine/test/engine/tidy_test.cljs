@@ -7,6 +7,7 @@
             [engine.blocks-dig-test :as bd]
             [engine.core :as core]
             [engine.events :as events]
+            [engine.ctx :as ctx]
             [jobs.lib.reach :as reach]
             [jobs.lib.tidy :as tidy]
             [jobs.survival.restore-broken :as restore-broken]
@@ -171,6 +172,19 @@
             (is (= [] (zs/calls p "place")) (pr-str reason))
             (is (= [] (zs/calls p "dig")) (pr-str reason))
             (is (= 1 (count (tidy-entries eng))) (pr-str reason))))))))
+
+(deftest a-put-back-that-waits-for-the-world-yields-the-run-and-costs-no-try
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (restore! (merge aside {:inventory [{:name "stone" :count 2}]}) [(zs/whole-zone "Miles")] [dug])
+              orig ctx/call
+              hostile-near {:kind :condition-failed :cause {:reason :hostile-near :text "a hostile is near"}}]
+          (set! ctx/call (fn [c slot job & more] (if (= 'jobs.blocks.place job) (js/Promise.resolve hostile-near) (apply orig c slot job more))))
+          (await (zs/run-until-empty eng 6))
+          (set! ctx/call orig)
+          (is (= [] (not-restored-runs seen)) "a wait for the world is no failed cell")
+          (is (= [0] (mapv :tries (tidy-entries eng)))))))))
 
 (deftest a-cell-replanted-by-its-harvester-counts-as-restored-and-the-message-counts-only-real-failures
   (async done

@@ -202,13 +202,17 @@
 
 (defn ^:async put-back!
   "Place the recorded block again (a jobs.blocks.place child), or dig the placed one (jobs.blocks.dig): both act in
-  the cell of another's zone on purpose. True when it worked, :continue while the child waits."
+  the cell of another's zone on purpose. True when it worked, :continue while the child waits or stopped for a
+  wait reason (a hostile near, low health): that is the world's, not this cell's failure."
   [c {:keys [cell action was]}]
   (let [pos (zipmap [:x :y :z] cell)
         r (await (if (= :dig action)
                    (child/run!* c :put 'jobs.blocks.place {:pos pos :item (place-item c cell was) :ignore-zones? true :fetch false :clear false :see false})
                    (child/run!* c :put 'jobs.blocks.dig {:pos pos :ignore-zones? true :fetch false :collect false :need-drop false})))]
-    (if (= :continue r) :continue (= :done (:kind r)))))
+    (cond
+      (= :continue r) :continue
+      (contains? ready/wait-reasons (-> r :cause :reason)) :wait
+      :else (= :done (:kind r)))))
 
 (defn ^:async restore-one!
   "One try at putting entry e back: a walk that yields (:continue) is no try (the next pass walks again); else the
@@ -222,6 +226,7 @@
           (let [put (when walked (await (put-back! c e)))]
             (cond
               (= :continue put) :continue
+              (= :wait put) (do (tidy/refund-try! c cell) :continue)
               put (do (tidy/forget-cell! c cell)
                       (ctx/update-mem! c update :restored (fnil conj []) cell)
                       (ctx/update-mem! c update :seen (fnil conj #{}) cell))

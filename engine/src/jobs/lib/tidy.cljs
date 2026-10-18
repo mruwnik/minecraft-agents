@@ -136,6 +136,13 @@
     (forget-cell! c cell)
     (ctx/remember! c :tidy (assoc e :tried (tried-record (u/self-pos c) (ctx/now c) (restorable? (:primitives c) e))) tidy-policy)))
 
+(defn refund-try!
+  "Take back the try count-try! counted for cell: the run waited for the world and did not fail the cell."
+  [c cell]
+  (when-let [e (first (filter #(= cell (:cell %)) (entries c)))]
+    (forget-cell! c cell)
+    (ctx/remember! c :tidy (update e :tries dec) tidy-policy)))
+
 (defn noting?
   "Whether acts of this job are noted: a job run with :ignore-zones?, or any act with last-resort? set (a survival
   job's trespass, chosen because no permitted option existed)."
