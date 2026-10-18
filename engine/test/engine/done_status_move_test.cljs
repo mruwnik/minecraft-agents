@@ -49,3 +49,7 @@
   (doseq [[sym args _ mem] later-cases
           :let [[_ _ {:keys [done left]}] ((:done? (get registry/jobs sym)) (ctx-of args mem))]]
     (is (not (and (pos? done) (zero? left))) (str sym " " args " counts nothing left yet is :later"))))
+
+(deftest a-bridge-not-yet-started-says-so
+  (is (= :not-started (:reason (nth ((:done? (get registry/jobs 'jobs.access.bridge)) (ctx-of {:heading :east :length 3})) 2)))
+      "no :start in memory yet: not the :building of a row under way"))

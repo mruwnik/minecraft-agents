@@ -198,7 +198,8 @@
 (def can-start? start-fact)
 
 (defn done?
-  "Done when the body stands on the row's last block: the blocks placed and the body walked onto them."
+  "Done when the body stands on the row's last block: the blocks placed and the body walked onto them. Before the first
+  round there is no start cell (it is the body's cell then), so it is :later :not-started."
   [c]
   (let [{:keys [heading length]} (:args c)
         start (:start (ctx/mem c))
@@ -208,7 +209,7 @@
         i (when start (progress (pl/feet-cell c) start heading))]
     (if (and i (pos? (or length 0)) (>= i length))
       (contract/ok :bridged (str "bridge of " (count cells) " blocks " (name heading)) :units :blocks :done (count cells) :left 0 :result result)
-      (contract/later :building "the bridge is being built" :units :blocks :done (count cells) :left (max 0 (- (or length 0) (count cells))) :result result))))
+      (contract/later (if start :building :not-started) (if start "the bridge is being built" "the bridge is not started: the start cell is taken in the first round") :units :blocks :done (count cells) :left (max 0 (- (or length 0) (count cells))) :result result))))
 
 (defn quote-of [c]
   (let [{:keys [length item]} (:args c)
