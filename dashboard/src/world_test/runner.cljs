@@ -699,7 +699,7 @@
 
 (defn lock-phase
   "The time-lock phase of case rc: its own when it depends on the time of day; else :day when the run may set the time
-  (it then waits out night, and the first holder sets day), else :any (joins the current phase)."
+  (it then waits out night, and the first holder sets day), else :any (takes no lock: it runs under whatever time it is)."
   [opts rc]
   (or (lease/time-phase rc) (if (:allow-time opts) :day :any)))
 
@@ -1621,6 +1621,14 @@
         (assoc r :trace (trace/write! (:trace-dir opts) (:id r) (:run r) attempt doc)))
       (catch :default e (log! "world-test: trace not written: " (.-message e)) r))))
 
+(defn case-lock!
+  "Promise of the time lock for a case of phase. A time-independent case (:any) takes none, so it never queues behind a
+  day or night wanter nor makes one wait."
+  [phase id batch]
+  (if (= :any phase)
+    (js/Promise.resolve {:held true})
+    (acquire-time-lock! phase (str id " depends on the time of day") batch)))
+
 (def default-time-log (path/join (os/tmpdir) "mc-world-test-time.log"))
 
 (defn day-opts
@@ -1658,7 +1666,7 @@
               batch (lock-batch opts rc)]
           (hold-phase!
            {:stop! stop!
-            :acquire! #(acquire-time-lock! phase (str (:id c) (if (= :any phase) " runs under the current time" " depends on the time of day")) batch)
+            :acquire! #(case-lock! phase (:id c) batch)
             :first-set! (fn []
                           (-> (if (and (:sleep-skip rc) (not= :any phase))
                                 (reset-stray-sleep-rule! rcon! opts (str (:id c) " needs the vanilla night skip"))

@@ -435,6 +435,12 @@
   (doseq [rc [{:time :any} {:time :night} {:time :night-exclusive} {:act [[:time-set 14000]]} {:weather :rain}]]
     (is (nil? (:allow-time (r/day-opts {} rc))) (pr-str rc))))
 
+(deftest a-time-independent-case-takes-no-time-lock
+  (async done
+    (-> (r/case-lock! :any "a/b" nil)
+        (.then (fn [held] (is (= {:held true} held))))
+        (.finally done))))
+
 (defn share-env [files read-phase told]
   {:ops {:guard (fn [f] (f))
          :entries (fn [] @files)
