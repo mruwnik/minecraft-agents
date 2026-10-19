@@ -214,6 +214,17 @@
     (is (seq (ps {:name "a" :expect [{:no-event {:kind :x}}]})) "a :no-event needs :for-s")
     (is (seq (ps {:name "a" :plot {:height 40}})))))
 
+(deftest a-time-lock-needs-a-clock-reason-or-a-place-on-the-shrinking-allow-list
+  (let [[a b c d] (f/file-cases "{:defaults {:time :night} :cases [{:name \"a\"} {:name \"b\" :time-why :sleep} {:name \"c\" :time :any} {:name \"d\" :time-why :nap}]}" "f")
+        [untimed] (f/file-cases "{:name \"u\"}" "g")
+        lint (fn [allowed] (f/time-rule-problems [a b c untimed] allowed))]
+    (is (= #{"f/a"} (set (keys (lint #{})))) "only a locked case without a reason offends; an untimed one does not")
+    (is (re-find #"use light" (get (lint #{}) "f/a")))
+    (is (empty? (lint #{"f/a"})))
+    (is (re-find #"no longer offends" (get (lint #{"f/a" "f/b"}) "f/b")) "a listed case that stopped offending")
+    (is (re-find #"no longer offends" (get (lint #{"f/a" "f/gone"}) "f/gone")) "a listed case that no longer exists")
+    (is (some #(re-find #":time-why" %) (:problems d)))))
+
 (deftest a-case-of-only-unanchored-no-events-checks-nothing
   (let [ps (fn [c] (f/problems (f/merge-case {} (merge {:name "a"} c))))]
     (is (seq (ps {:expect [{:no-event {:kind :x} :for-s 5}]})) "silence on an empty log proves nothing")

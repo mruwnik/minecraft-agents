@@ -214,6 +214,12 @@
     (into #{} (mapcat #(f/kinds-in-text (fs/readFileSync (repo-path %) "utf8")))
           (mapcat walk ["engine/src" "engine/js" "dashboard/src"]))))
 
+(defn read-time-allow-list
+  "Case ids that may keep a :time lock without :time-why (engine/fixtures/time-allow-list.edn)."
+  []
+  (let [file (repo-path "engine" "fixtures" "time-allow-list.edn")]
+    (if (fs/existsSync file) (set (reader/read-string (fs/readFileSync file "utf8"))) #{})))
+
 (defn check-fixtures
   "Loads every fixture file without a server: one {:id :run :status :why} per case (a file that does not parse is one
   failed result named by its stem). An entity UUID literal used by more than one case fails them all."
@@ -226,17 +232,22 @@
         all (mapcat :cases loaded)
         reuse (f/uuid-reuse all)
         emitted (emitted-kinds)
+        stems (into #{} (map :file) all)
+        allowed (into #{} (filter #(or (empty? paths) (stems (first (str/split % #"/"))))) (read-time-allow-list))
+        time-problems (f/time-rule-problems all allowed)
         stale-kinds (fn [c] (when-let [ks (seq (f/unknown-kinds c emitted))] (str "event kind " (str/join ", " (map pr-str ks)) " is emitted by no source")))
         shared-by (fn [c] (for [[u ids] reuse :when (some #{(:id c)} ids)] (str "UUID " u " also in " (str/join ", " (remove #{(:id c)} ids)))))]
-    (vec (mapcat (fn [{:keys [cases error]}]
+    (vec (concat
+          (for [[id why] time-problems :when (not-any? #(= id (:id %)) all)] {:id id :run 1 :status :fail :why why})
+          (mapcat (fn [{:keys [cases error]}]
                    (if error
                      [error]
                      (let [repeated (set (keep (fn [[id n]] (when (< 1 n) id)) (frequencies (map :id cases))))]
-                       (map (fn [c] (let [ps (cond-> (into (vec (:problems c)) (shared-by c)) (stale-kinds c) (conj (stale-kinds c)) (repeated (:id c)) (conj "case name repeated in the file"))]
+                       (map (fn [c] (let [ps (cond-> (into (vec (:problems c)) (shared-by c)) (stale-kinds c) (conj (stale-kinds c)) (repeated (:id c)) (conj "case name repeated in the file") (time-problems (:id c)) (conj (time-problems (:id c))))]
                                       (cond-> {:id (:id c) :run 1 :status (if (seq ps) :fail :pass)}
                                         (seq ps) (assoc :why (str/join "; " ps)))))
                             cases))))
-                 loaded))))
+                 loaded)))))
 
 (defn check-exit-code [results] (if (every? #(= :pass (:status %)) results) 0 1))
 

@@ -381,6 +381,25 @@
     (concat (filter #(and (coords? %) (out? 0 %)) block-corners)
             (filter #(and (coords? %) (out? 0 %) (not (out? far-margin %))) at-positions))))
 
+(def time-reasons
+  "Why a case may hold the clock; every other case uses light (a dark or lit plot, :time :any)."
+  #{:sleep :bees :villager-schedule :sunlight-burn :dawn-decision :weather})
+
+(defn offends-time-rule?
+  "A case that sets :time (its own or its file's) other than :any, with no :time-why. An untimed case is the default day and holds no lock of its own."
+  [c]
+  (and (:timed c) (not= :any (:time c)) (nil? (:time-why c))))
+
+(defn time-rule-problems
+  "{case id message} for the time lint, given the allow-list ids (offenders tolerated for now; it only shrinks): an
+  unlisted offender, and a listed id that no longer offends or names no case."
+  [cases allowed]
+  (let [offenders (into #{} (comp (filter offends-time-rule?) (map :id)) cases)]
+    (merge (into {} (for [id (remove allowed offenders)]
+                      [id (str "use light: a dark or lit plot with :time :any; set :time only with :time-why, one of " (str/join " " (sort time-reasons)))]))
+           (into {} (for [id allowed :when (not (offenders id))]
+                      [id "is on the time allow-list but no longer offends: remove it from engine/fixtures/time-allow-list.edn"])))))
+
 (defn problems
   "Why a merged case cannot run, as a vector of strings (empty when it can)."
   [c]
@@ -393,6 +412,7 @@
       (not (contains? #{nil :keep} (:mobs c))) (conj ":mobs must be :keep (or absent)")
       (not (string? (:name c))) (conj ":name must be a string")
       (not (#{:day :night :night-exclusive :any} (:time c))) (conj ":time must be :day, :night, :night-exclusive or :any")
+      (not (or (nil? (:time-why c)) (contains? time-reasons (:time-why c)))) (conj (str ":time-why must be one of " (sort time-reasons)))
       (not (contains? #{nil :rain :thunder :clear} (:weather c))) (conj ":weather must be :rain, :thunder or :clear")
       (not (and (int? h) (< 1 h 32))) (conj ":plot :height must be an integer 2..31")
       (not (every? #(and (keyword? (:kind %)) (map? (:data %))) (:memory c))) (conj ":memory entries need a keyword :kind and a map :data")
@@ -456,7 +476,7 @@
                   ps (cond-> (problems m)
                        (and (some job-step? (:act file-defaults)) (some job-step? (:act c)))
                        (conj "a job in :defaults :act runs before this case's own job: put it in the cases that need it"))]
-              (cond-> (assoc m :id (str stem "/" (:name m)) :file stem)
+              (cond-> (assoc m :id (str stem "/" (:name m)) :file stem :timed (contains? (merge file-defaults c) :time))
                 (seq ps) (assoc :problems ps))))
           cases)))
 
