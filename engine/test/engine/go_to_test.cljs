@@ -12,6 +12,7 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.perception :as perception]
+            [engine.perception.rays :as rays]
             [jobs.lib.danger :as danger-q]
             [engine.fake.raw-world :as fake-raw]
             [jobs.lib.walk.world :as wworld]
@@ -33,12 +34,13 @@
 
 (defn setup
   "A world key :light [sky block] makes the body see through perception, in that light everywhere; :jitter (0.5) fixes
-  where each pass's rays fall in their grid cells; :clock is the atom of the fake time (ms)."
+  where each pass's rays fall in their grid cells; :clock is the atom of the fake time (ms); :sight true runs the sight
+  passes on a timer as the body's does (main.cljs starts them), else the body sees only what its jobs look at; :stop stops them."
   ([world] (setup world nil))
   ([world shared]
   (let [clock (or (:clock world) (atom 1000000))
         [seen sink] (tu/legacy-capture-sink)
-        raw (tu/fake (merge {:self {:pos start}} (dissoc world :light :jitter :clock :ray-deg :jobs)))
+        raw (tu/fake (merge {:self {:pos start}} (dissoc world :light :jitter :clock :ray-deg :jobs :sight)))
         _ (when-let [l (:light world)] (swap! (fake/state raw) assoc :light-default l))
         p (if (:light world)
             (perception/wrap raw (perception/create (fake-raw/create raw) {:radius 16 :ray-deg (:ray-deg world 2) :now #(deref clock)
@@ -47,7 +49,10 @@
         eng (core/create (cond-> {:primitives p :jobs (merge registry/jobs (:jobs world)) :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
                            shared (assoc :world shared)))]
-    {:eng eng :p p :seen seen})))
+    {:eng eng :p p :seen seen
+     :stop (if (:sight world)
+             (let [timer (doto (js/setInterval #(rays/step! (aget p "perception")) 2) .unref)] #(js/clearInterval timer))
+             (fn []))})))
 
 (defn recording-parent
   "A parent that runs go-to with args as its child (ctx/call) and keeps the child's result (result-of) in out."
@@ -70,11 +75,13 @@
 (defn ^:async go!
   "Run go-to with args as a child over world; {:eng :p :seen :out :ticks}, out the child's result."
   [world args]
-  (let [{:keys [eng] :as s} (setup world)
+  (let [{:keys [eng stop] :as s} (setup world)
         out (atom :not-done)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out args)))]
     (core/submit! eng '(recording-parent) {})
-    (assoc s :eng eng :out out :ticks (await (tick-out! eng 30)))))
+    (let [ticks (await (tick-out! eng 30))]
+      (stop)
+      (assoc s :eng eng :out out :ticks ticks))))
 
 (defn at [p] (let [pos (.-pos (.self p))] [(.-x pos) (.-y pos) (.-z pos)]))
 
@@ -363,12 +370,14 @@
 (defn ^:async go-prepped!
   "go! with (prepare! p) run on the fake primitives before the job starts."
   [world args prepare!]
-  (let [{:keys [eng p] :as s} (setup world)
+  (let [{:keys [eng p stop] :as s} (setup world)
         out (atom :not-done)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out args)))]
     (prepare! p)
     (core/submit! eng '(recording-parent) {})
-    (assoc s :eng eng :out out :ticks (await (tick-out! eng 30)))))
+    (let [ticks (await (tick-out! eng 30))]
+      (stop)
+      (assoc s :eng eng :out out :ticks ticks))))
 
 (defn steer-through
   "A steer override that runs the walk's decide against pose-of (a fn of the tick count) for at most 200 ticks, as the real
@@ -597,7 +606,7 @@
   "Run go-to with args under returns-parent over world; {:eng :p :seen :out :returns}."
   ([world args] (go-returns! world args nil))
   ([world args seed]
-   (let [{:keys [eng] :as s} (setup world)
+   (let [{:keys [eng stop] :as s} (setup world)
          out (atom :not-done)
          returns (atom [])
          eng (assoc eng :jobs (assoc (:jobs eng) 'returns-parent (returns-parent out returns args seed)))]

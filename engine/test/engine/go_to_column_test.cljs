@@ -415,8 +415,8 @@
         ;; the column x 60 is 60 blocks off, out of sight (radius 16) from the start, its ground 20 above or below the
         ;; feet: no ground within approach-range of the feet-y estimate; walking toward it brings it into view
         (doseq [[label y0 dir to] [["hill" 64 1 84] ["valley" 84 -1 64]]]
-          (let [{:keys [out p]} (await (go! {:blocks (slope y0 dir) :light [15 0] :ray-deg 3 :self {:pos {:x 0 :y y0 :z 0}}}
-                                            {:pos [60 0] :range 0}))]
+          (let [{:keys [out p]} (await (go! {:blocks (slope y0 dir) :light [15 0] :ray-deg 3 :sight true :exact-eye true :bodyHitbox true :self {:pos {:x 0 :y y0 :z 0}}}
+                                            {:pos [60 0] :range 0 :unknown true}))]
             (is (= {:arrived true :resolved {:x 60 :y to :z 0} :why :surface} @out) (str label " " (pr-str @out)))
             (is (= [60 to 0] (mapv #(js/Math.floor %) (at p))) (str label " at " (at p)))))))))
 
