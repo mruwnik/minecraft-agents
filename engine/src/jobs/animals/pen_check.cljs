@@ -21,11 +21,11 @@
   cells it has not seen (jobs.lib.sense/decide!); a cell that stays unseen (hidden behind a block) is walked to, at
   most 3 times, until the eye sees it, unless the fill already leaves through a seen gap: that is answered at once (an open gate may divide the pen, so it waits for the look). Never digs or places. Ends impossible :no-pen without :at, :box and :plan; waits (:plan-trouble) while :plan is missing or unreadable and ends impossible :plan-trouble when it has no fence, wall or gate cells.
 
-  The fill stops after :max-cells cells: a bigger pen is not closed, reason :unbounded. A fill without a box
+  The fill stops after ::max-cells cells (a setting): a bigger pen is not closed, reason :unbounded. A fill without a box
   that finds no wall either side of a gap says that too.
 
   Ends with the data {:closed? :reason :cells :leaks :gates}: :done when closed or when a leak was found (a leak is
-  the answer, not a failure), else condition-failed with the :reason as the cause (the check could not be made):
+  the answer, not a failure), else condition-failed (:no-start) or nothing-possible (:unbounded, :unloaded: the check gave up) with the :reason as the cause:
   - :reason is nil when closed, else :leak, :unbounded, :unloaded (a cell, or the start's floor, was never seen) or :no-start (:at is no floor to stand on).
   - :leaks lists {:pos {:x :y :z} :why}, why one of :open-gate :gap :climb :perch-in :open :unloaded (:perch-in: open ground within a block of a fence top outside the pen; :climb with a box names the fence, wall or gate top first stood on, reached from a block or raised floor beside it). At most 12 are
     listed, :leaks-total gives the count when more.
@@ -41,8 +41,7 @@
   {:at {:doc "feet cell [x y z] or {:x :y :z} of a spot inside the pen (the floor's top, where the animal's feet are)" :spec ::a/pos :default nil}
    :box {:doc "the pen: {:min :max}, each corner {:x :y :z} or [x y z], inclusive; a step out of it is a leak" :spec pen-read/box-arg :default nil}
    :plan {:doc "id of a plan of the body's world: the pen is the box round its fence, gate and wall cells (instead of :box)" :spec a/name? :default nil}
-   :part {:doc "with :plan, only the cells of this part" :spec a/name? :default nil}
-   :max-cells {:doc "most cells the fill visits before it gives up with :unbounded" :spec (a/int-in 1 nil) :default pen/default-max-cells}})
+   :part {:doc "with :plan, only the cells of this part" :spec a/name? :default nil}})
 
 (defn pen-box
   "{:box} for the args (:box, else the box of :plan), {:trouble text}, or {} with only :at."
@@ -63,12 +62,15 @@
 
 (a/defargs settings
   {::job-time-s {:default 30 :doc "Seconds a pen check may take besides the look at its cells; the default time spend is this plus ::cell-s a cell the fill may visit." :spec (a/num-in 0 nil)}
-   ::cell-s {:default 0.03 :doc "Seconds of the default time spend per cell the fill may visit (the :max-cells, or the footprint of a given :box when smaller)." :spec (a/num-in 0 nil)}})
+   ::cell-s {:default 0.03 :doc "Seconds of the default time spend per cell the fill may visit (::max-cells, or the footprint of a given :box when smaller)." :spec (a/num-in 0 nil)}
+   ::max-cells {:default pen/default-max-cells :doc "Most cells the fill visits before it gives up with :unbounded." :spec (a/int-in 1 nil)}
+   ::max-walks {:default 3 :doc "Walks to the same unseen cell (no progress) before the answer is given." :spec (a/int-in 0 nil)}
+   ::animal-radius {:default 48 :doc "Blocks round the body within which animals on the pen's cells are listed." :spec (a/num-in 1 nil)}})
 
 (defn default-time
   "The call's default :spend :job-time: ::job-time-s plus ::cell-s for each cell the fill may visit."
-  [{:keys [box max-cells]}]
-  (let [max-cells (or max-cells pen/default-max-cells)
+  [{:keys [box]}]
+  (let [max-cells (settings/get settings ::max-cells)
         {:keys [min max]} (when box (pen-read/norm-box box))
         area (when box (* (inc (- (:x max) (:x min))) (inc (- (:z max) (:z min)))))]
     (+ (settings/get settings ::job-time-s)
@@ -106,10 +108,6 @@
 
 (defn quote-of [_c]
   {:uses {:job-time [1 5 30]}})
-
-(def max-walks "Walks to the same unseen cell (no progress) before the answer is given." 3)
-
-(def animal-radius 48)
 
 (defn unseen-leak
   "The nearest-listed leak cell that is unseen and not more than one layer below the start cell at, as {:x :y :z}: an
@@ -162,7 +160,8 @@
   (u/cell-vec (or (work-place/spot c) (u/self-pos c))))
 
 (defn ^:async read-pen! [c]
-  (let [{:keys [at max-cells]} (:args c)
+  (let [{:keys [at]} (:args c)
+        max-cells (settings/get settings ::max-cells)
         box (:box (pen-box c))
         near (or (:near (ctx/mem c)) (start-near c))
         _ (ctx/update-mem! c assoc :near near)
@@ -174,13 +173,13 @@
         unseen (when-not (seen-leak? p (or final checked) at) (unseen-leak checked at))
         {:keys [walks last-unseen] :or {walks 0}} (ctx/mem c)
         stuck (if (= unseen last-unseen) walks 0)
-        walk (when (and unseen (< stuck max-walks))
+        walk (when (and unseen (< stuck (settings/get settings ::max-walks)))
                (await (near/go-near! c unseen 1 {:doors :never :ways #{:walk :clear-seal}})))]
     (case walk
       :partial :continue
       :there (do (ctx/update-mem! c assoc :walks (inc stuck) :last-unseen unseen) :continue)
       (let [checked (or final checked)
-            rows (animals/in-pen-rows p checked animal-radius)
+            rows (animals/in-pen-rows p checked (settings/get settings ::animal-radius))
             result (merge (pen/summary checked) (pen-read/listed checked (u/self-pos c)) {:animals rows :animals-in (count rows)} (animal-coverage checked))
             result (assoc result :text (if (:closed? result)
                                          (str "pen closed, " (:cells result) " cells" (gate-drop-text result))
@@ -188,7 +187,7 @@
         (ctx/update-mem! c assoc :cells (:cells result))
         (if (contains? #{nil :leak} (:reason result))
           (ctx/end c :done nil result)
-          (ctx/end c :condition-failed (:reason result) result))))))
+          (ctx/end c (if (= :no-start (:reason result)) :condition-failed :nothing-possible) (:reason result) result))))))
 
 (defn ^:async round [c]
   (if (:trouble (pen-box c))

@@ -57,7 +57,7 @@
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
    :expect [{:event {:source :job :kind :completed :data {:closed? false :reason :leak}} :within-s 25 :of-job true}]}
   {:name "bound-too-small-unbounded"
-   :act [[:job (jobs.animals.pen-check {:at #at [5 0 5] :max-cells 10})]]
+   :act [[:job (jobs.animals.pen-check {:at #at [5 0 5] :settings {:jobs.animals.pen-check/max-cells 10}})]]
    :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :unbounded}} :within-s 20 :of-job true}]}
   {:name "box-with-a-gap-names-the-crossing"
    :blocks [[:set [8 0 5] "air"]]

@@ -65,7 +65,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [event]} (await (run-job {:at [2 64 2] :max-cells 100}
+        (let [{:keys [event]} (await (run-job {:at [2 64 2] :settings {:jobs.animals.pen-check/max-cells 100}}
                                               (world {"2,64,-1" "oak_fence_gate"} {"2,64,-1" {:open true}})))]
           (is (false? (:closed? event)))
           (is (= :leak (:reason event)))
@@ -138,7 +138,7 @@
         (let [event (await (run-seeing {:at [2 64 2]} (assoc (world {}) :self {:pos {:x 6 :y 64 :z 2}}) 270))]
           (is (= {:closed? true :cells 25} (select-keys event [:closed? :reason :cells]))
               "the ring behind the body, outside it: no false :unloaded or :climb leak"))
-        (let [event (await (run-seeing {:at [2 64 2] :max-cells 100} (world {"2,64,-1" "air"}) 0))]
+        (let [event (await (run-seeing {:at [2 64 2] :settings {:jobs.animals.pen-check/max-cells 100}} (world {"2,64,-1" "air"}) 0))]
           (is (= :leak (:reason event)) "the gap in the fence behind the body is seen")
           (is (some #{{:x 2 :y 64 :z -1}} (map :pos (:leaks event)))))))))
 
@@ -190,7 +190,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[cell event] (await (check-twice {:at [2 64 2] :max-cells 100}))]
+        (let [[cell event] (await (check-twice {:at [2 64 2] :settings {:jobs.animals.pen-check/max-cells 100}}))]
           (is (= :leak (:reason event)))
           (is (some #{{:x (cell 0) :y (cell 1) :z (cell 2)}} (map :pos (:leaks event)))))))))
 
@@ -366,8 +366,8 @@
         box (fn [n] {:min [0 0 0] :max [(dec n) 0 (dec n)]})]
     (is (< 30 (time-of {:at [1 0 1]})) "no box: up to the most cells the fill visits")
     (is (< (time-of {:box (box 3)}) (time-of {:box (box 20)})))
-    (is (< (time-of {:box (box 20)}) (time-of {:box (box 200)})) "a big box is capped by :max-cells")
-    (is (< (time-of {:at [1 0 1] :max-cells 50}) (time-of {:at [1 0 1]})))
+    (is (< (time-of {:box (box 20)}) (time-of {:box (box 200)})) "a big box is capped by ::max-cells")
+    (is (< (settings/scoped {:jobs.animals.pen-check/max-cells 50} #(time-of {:at [1 0 1]})) (time-of {:at [1 0 1]})))
     (is (= 5 (time-of {:at [1 0 1] :spend {:job-time 5}})) "a given time stays")))
 
 (defn walled-water
