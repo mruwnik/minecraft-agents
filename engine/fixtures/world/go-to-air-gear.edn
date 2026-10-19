@@ -63,12 +63,13 @@
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 116 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 116 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [41.5 1 8.5] 3]]}
-  ;; go-to's quote (dry run) of the 18 s turtle dive reports no :drown (the grace drowns nothing); the body stands on stone with its head
-  ;; out (a body sunk to the shaft's floor has its head under water, and a dive begun under water counts no grace); a quote
-  ;; never looks, so the body looks around first (an unseen tunnel is :start-enclosed)
+  ;; go-to's quote (dry run) of the 18 s turtle dive reports no :drown (the grace drowns nothing); the body starts with its head out (a dive begun
+  ;; under water counts no grace); a quote never looks, so the body looks around first. The shaft floor is water too: over a stone floor the
+  ;; planner cannot take the body from the shaft cell into the 2 high tunnel under the glass (the diagonal dip brushes the stone), so the quote
+  ;; read :start-enclosed
   {:name "turtle-helmet-dive-18s-preview-has-no-drown"
    :blocks [[:fill [3 0 7] [42 4 9] "stone"]
-            [:fill [4 0 8] [41 1 8] "water"] [:set [4 0 8] "stone"]
+            [:fill [4 0 8] [41 1 8] "water"]
             [:fill [4 2 8] [4 3 8] "air"] [:fill [41 2 8] [41 3 8] "air"]
             [:fill [5 2 8] [40 2 8] "glass"]]
    :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "turtle_helmet"}}}] 10]
