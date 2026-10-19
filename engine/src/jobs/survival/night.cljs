@@ -39,7 +39,7 @@
   entered, shut-in, niche, a breached room walled in, the exposed retry), :flee (a walk somewhere safer, a
   cave walled in). A door is always shut and the morning always runs.
   Condition at the start: the night trigger's (a listed night waits :not-night, :spawn with the respawn bed's state);
-  sheltered with nothing for the night to do, it is done before its first round. Quote: the time left of the night (jobs.time.wait-for-day) and ::morning-s, least 0.
+  sheltered with nothing for the night to do, it is done before its first round. Quote: the time left of the night (jobs.time.wait-for-light) and ::morning-s, least 0.
   The round repeats one choice, each time from the world as it is now (the first that applies), with a 50 ms timer between:
   - day: a doorway the night filled (:doorway-filled, still holding the block it put there) is dug again and the drop walked over (a cell it cannot open waits :doorway-open-failed, 2 minutes, and warns night.doorway-stuck once per cell and cause); a dug-in or exposed night leaves the shelter (dig-in-leave/leave!); :no-way-out ends it nothing-possible :no-way-out (shelter.failed warn,
     a :shelter-trapped entry, 5 minutes); then a bed it put down outside its own zones (:bed-placed) is dug up and its
@@ -149,7 +149,7 @@
                [:sheltered "sheltered, nothing for the night to do"] [:night "the night is not over"] {:units :nights}))
 
 (defn quote-of
-  "The time left of the night (jobs.time.wait-for-day's quote), a bed possibly ending it at once, and ::morning-s on top."
+  "The time left of the night (jobs.time.wait-for-light's quote), a bed possibly ending it at once, and ::morning-s on top."
   [c]
   (let [[_ mean most] (get-in (sh-clock/night-left-quote c) [:uses :job-time])]
     {:uses {:job-time [0 mean (+ most (settings/get settings ::morning-s))]}}))

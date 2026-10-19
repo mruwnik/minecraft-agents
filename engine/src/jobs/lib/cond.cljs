@@ -154,6 +154,9 @@
 (defn daytime []
   (flag :daytime [:daytime "day"] [:night "night"] (online (fn [_ s] (boolean-or-unknown (.-isDay s))))))
 
+(defn lit-here []
+  (flag :lit-here [:lit "lit"] [:dark "dark"] (online (fn [c _] (sh-sense/lit-here? (world c) (sh-sense/feet (world c)))))))
+
 (defn mounted []
   (flag :mounted [:mounted "aboard"] [:not-aboard "on foot"] (online (fn [_ s] (some? (.-vehicle s))))))
 

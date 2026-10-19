@@ -251,7 +251,7 @@ Wherever a job is named (scenarios, register entries, `submit!`, `do-now!`, the 
 | `(any e1 e2 ...)` | each round, call the first child that would not wait |
 | `(repeat e)` | when the child is done, start it fresh; never done; a child done `:already` (a `seq` whose children all were, an `any` whose child was) is not counted and rests |
 | `(repeat n e)` | the same, done after `n` runs |
-| `(until g e)` | repeat `e`; done at the top of a round once `g` would not wait (`g` never runs), e.g. `(until (jobs.time.wait-for-dusk) e)`; a daily routine is `(repeat (seq (jobs.time.wait-for-day) ... (jobs.time.wait-for-dusk)))` |
+| `(until g e)` | repeat `e`; done at the top of a round once `g` would not wait (`g` never runs), e.g. `(until (jobs.time.wait-for-dusk) e)`; a daily routine is `(repeat (seq (jobs.time.wait-for-light) ... (jobs.time.wait-for-dusk)))` |
 | a refused child | combinators are contract jobs calling children with `ctx/call`; a child ending other than `:done` ends `seq` with its kind and cause (the child's ending as `:because`); `any` skips it and tries the next, ending as the last refusal; `repeat` and `until` end so only when it was impossible or cut off (or in a reflex job), else rest (`:engine.composite/rest-s` 30 s, doubled for each such run in a row up to `rest-max-s` 600 s; wait `:resting`) and run it again. A child that would wait is not called: a combinator's `can-run?` gives that child's status with its `:slot`, so a listed combinator waits with it, a reflex one ends `:condition-failed`, a `:never` ends it `:impossible` |
 
 An unknown symbol, a wrong arity, an undeclared arg, a bad position arg (`[x y z]` or `{:x :y :z}`)
@@ -509,7 +509,7 @@ the token so the in-flight round is never booked; the job stays listed.
 - `job.holding` (info): a declared hold (`ctx/hold-still!`, `act :wait` with `:why`); `jobs show` gives
   `:holding {:reason :since}`.
 - `body.idle` (info, once per stretch; wakes `observe --wait`; memory `:body-idle`): no act but `:wait` from a job not
-  `idle-ok` (linger-near, wait-for-day/-dusk) for `:engine.core.activity/body-idle-s` (10); lists each job with
+  `idle-ok` (linger-near, wait-for-light/-dusk) for `:engine.core.activity/body-idle-s` (10); lists each job with
   its `:waiting`/`:holding` reason. A useful act or a list change re-arms it.
 - `job.fruitless`: a required attention request when every act of a listed job failed in 3 rounds in a row (a round that
   ends the job does not count; a round with no act neither counts nor resets); resolved by a round with progress. It only flags.
@@ -605,7 +605,7 @@ A scenario is EDN read with `cljs.reader`:
             {:trigger :hostile-near :args {:radius 12}
              :job (jobs.survival.retreat {:radius 12 :settings {:jobs.survival.retreat-flight/step 10}})}]
  :queue    [(jobs.movement.go-to {:pos {:x 10 :y 64 :z 0}})
-            (jobs.time.wait-for-day)]}
+            (jobs.time.wait-for-light)]}
 ```
 
 `npm run body -- --agent <name> --world <world> --scenario <file>` loads `worlds/<world>/agents/<name>/config.json`
@@ -670,7 +670,8 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `movement.boat-drive` `{:pos :range}` | Steers the boat the body is in to the water cell `:pos` with `paddle` strokes (turn toward it, then forward); done within `:range`; a cell not made out after a look is steered toward and judged once seen; impossible `:bad-args`, `:not-a-boat`, `:not-water` (can-run?, asked between strokes); condition `:not-aboard` (on foot a listed call waits, also if it got out on the way); nothing-possible `:blocked` (land in the way), `:failed`; limit-reached `:job-time` (`:spend :job-time`, default 120 s) |
 | `movement.boat-land` `{:pos :recover}` | Brings the boat the body is in to the nearest seen shore (a stand cell with water beside it at the block's level; `:pos` names the land cell), via `boat-drive` into the water cell itself (range 0.6, else the dismount lands in water), then `leave-vehicle` facing the land; `:recover` then takes the boat back (`boat-recover`); `done?` is ok on foot at a given `:pos` with no recovery owed; a given `:pos` not made out is driven nearer once. Impossible `:bad-args`; start conditions `:not-aboard` (unless a landing of this call is left to recover), `:no-shore` (no `:pos` given); condition-failed `:no-shore` (given cell), `:not-aboard`; nothing-possible `:blocked`, `:drive-failed`, `:not-landed`, `:recover-failed` (the child's ending is the `:because`) |
 | `movement.cross-water` `{:pos :goal :radius :min-cross :item :recover}` | Crosses water by boat (done, `:already` before the start, once it stands on the far shore with no recovery owed): `boat-launch` (a boat not carried is fetched; skipped when already aboard), then `boat-land` with `:pos` the far shore and `:recover` (default true: the boat comes along). The far shore is `:pos` (must be a seen shore) else a seen shore within `:radius`, at least `:min-cross` away and across water from the body: nearest `:goal` if given, else the farthest; on foot after a restart it is `:done` only on the far shore (else `:not-landed`); a given `:pos` not made out is crossed toward; `:bad-args` impossible; condition-failed `:no-far-shore`, `:not-water` (start facts, a look first), `:no-boat` (launch found none), `:boat-not-seen`, the launch's and landing's endings as the `:because`. A job for callers/travel to choose; go-to never boats |
-| `time.wait-for-day`, `time.wait-for-dusk` | Done once it is day / evening (also `done?`); a failed condition waits `:day-not-come` / `:dusk-not-come`; quote: ticks left at the game rate |
+| `time.wait-for-light` | Done once the body's cell is lit enough that monsters cannot spawn (block light, or sky light less the darkening: dawn, a torch; also `done?`); waits `:dark` within the `::job-time-s` budget; quote: `shelter.sense/light-in` seconds, ##Inf when no sky light reaches the cell |
+| `time.wait-for-dusk` | Done once it is evening (the clock; only tests and `until` guards use it); a failed condition waits `:dusk-not-come`; quote: ticks left at the game rate |
 | `time.noop` | An intentional pause (`jobs.lib.child/pause!`): `:wait` acts for `:seconds`, holding `:why`, in one round, so reflexes cut in and the time counts against the caller's job time and wall time; a cut pause waits what is left (its deadline is written once; the waits add no action events) |
 
 **Survival (reflex and need jobs)**

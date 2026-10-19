@@ -50,13 +50,38 @@
               (when (>= (- sky subtract) (look/dark-light)) (sh-clock/ticks->s (* k light-in-step-ticks)))))
           (range (inc (/ 24000 light-in-step-ticks))))))
 
+(defn sky-state
+  "{:t :rain :thunder} now: the raw sky when the perception has one, else the self's clock and weather flags."
+  [p]
+  (if-let [^js sky (some-> (aget p "perception") :raw (.sky))]
+    {:t (.-timeOfDay sky) :rain (or (.-rain sky) 0) :thunder (or (.-thunder sky) 0)}
+    (let [self (.self p)]
+      {:t (.-timeOfDay self) :rain (if (.-raining self) 1 0) :thunder (if (.-thundering self) 1 0)})))
+
+(defn sky-subtract-now
+  "What the sky's light is reduced by now (look/sky-subtract, from sky-state)."
+  [p]
+  (let [{:keys [t rain thunder]} (sky-state p)]
+    (js/Math.round (* 11 (/ (- 1 (light/sky-darken t rain thunder)) 0.8)))))
+
 (defn light-in
   "light-in-s of the cell from the body's perception; nil when waiting never lights it or no light data is loaded
   there (sky-light-at tells which)."
   [p cell]
   (when-let [sky (sky-light-at p cell)]
-    (let [s (.sky ^js (:raw (aget p "perception")))]
-      (light-in-s sky (.-timeOfDay s) (or (.-rain s) 0) (or (.-thunder s) 0)))))
+    (let [{:keys [t rain thunder]} (sky-state p)]
+      (light-in-s sky t rain thunder))))
+
+(defn lit-here?
+  "Whether the cell is lit enough that monsters cannot spawn: block light of 1 or more, or sky light less the sky
+  darkening at dark-light, from any source (dawn, a torch). Without light data there, the sky decides (look/sky-dark?)."
+  [p cell]
+  (let [raw (some-> (aget p "perception") :raw)
+        {:keys [x y z]} cell]
+    (if (and raw (<= 0 (.stateAt ^js raw x y z)))
+      (let [packed (.lightAt ^js raw x y z)]
+        (or (pos? (bit-and packed 15)) (>= (- (bit-shift-right packed 4) (sky-subtract-now p)) (look/dark-light))))
+      (not (look/sky-dark? p)))))
 
 (defn buried-by-column?
   "Fallback without light data: the cell two over the feet cell is a block the body has seen (only that one shows from inside)."

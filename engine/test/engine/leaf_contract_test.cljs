@@ -9,7 +9,7 @@
             [engine.test-util :as tu]))
 
 (def leaves
-  '[jobs.memory.forget-place jobs.memory.remember jobs.memory.set-place jobs.memory.reserve jobs.memory.unreserve jobs.time.wait-for-day
+  '[jobs.memory.forget-place jobs.memory.remember jobs.memory.set-place jobs.memory.reserve jobs.memory.unreserve jobs.time.wait-for-light
     jobs.time.wait-for-dusk jobs.time.noop jobs.debug.notify jobs.explore.look jobs.movement.look-around])
 
 (deftest every-leaf-exports-the-contract-and-quotes-validly
@@ -20,8 +20,8 @@
       (is (vector? (:target job)) (str sym " has a target"))
       (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args {}}))) (str sym)))))
 
-(deftest waiting-for-the-day-is-quoted-by-the-ticks-left-of-the-night
-  (let [quote-of (fn [time] (get-in ((:quote-of (get registry/jobs 'jobs.time.wait-for-day)) {:primitives (tu/fake {:time time})})
+(deftest waiting-for-light-is-quoted-by-the-ticks-left-of-the-night
+  (let [quote-of (fn [time] (get-in ((:quote-of (get registry/jobs 'jobs.time.wait-for-light)) {:primitives (tu/fake {:time time})})
                                     [:uses :job-time]))]
     (is (= [0 0 0] (quote-of 1000)) "day: nothing to wait for")
     (is (< 0 (second (quote-of 13000)) (nth (quote-of 13000) 2)))

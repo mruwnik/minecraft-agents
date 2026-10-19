@@ -70,16 +70,16 @@
 ;;  :queue [(seq (jobs.time.noop {:seconds 3 :why :idle})
 ;;               (jobs.movement.go-to {:pos {:x 2860 :y 161 :z 3250}}))]}
 ;; -- case from live-ProbeMove-4
-;; ;; ProbeMove live test: wait-for-day held at the head of the list, look-around queued behind it,
+;; ;; ProbeMove live test: wait-for-light held at the head of the list, look-around queued behind it,
 ;; ;; and a :burning reflex reporting through jobs.debug.notify (does a reflex still cut in while it waits?).
 ;; {:register [{:trigger :burning :persistence :cooldown :cooldown-s 5
 ;;              :job (jobs.debug.notify {:text "burning fired"})}]
-;;  :queue [(jobs.time.wait-for-day)
+;;  :queue [(jobs.time.wait-for-light)
 ;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeMove-5
-;; ;; ProbeMove live test: wait-for-day not held, look-around queued behind it (does the idle job run at night?).
+;; ;; ProbeMove live test: wait-for-light not held, look-around queued behind it (does the idle job run at night?).
 ;; {:register []
-;;  :queue [(jobs.time.wait-for-day)
+;;  :queue [(jobs.time.wait-for-light)
 ;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeNight-2
 ;; ;; ProbeNight job tests: the real get-food and shelter reflexes only, plus idle.

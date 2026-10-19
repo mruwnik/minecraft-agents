@@ -27,25 +27,25 @@
   (is (= :interrupt (get-in (request "--world" "w" "Bob" "submit" "(repeat (jobs.movement.look-around))" "--now") [:request :op]))))
 
 (deftest submit-appends-by-default-and-now-cuts-in-front-of-the-current-job
-  (let [plain (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)")
-        now (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--now")]
+  (let [plain (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)")
+        now (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)" "--now")]
     (is (= :submit (get-in plain [:request :op])))
     (is (= {:op :submit} (select-keys (:request plain) [:op :next? :exclusive?])) "a plain submit appends")
     (is (= :interrupt (get-in now [:request :op])))
-    (is (= '(jobs.time.wait-for-day) (get-in now [:request :spec]))))
-  (doseq [[pattern args] [[#"unknown operation" ["interrupt" "(jobs.time.wait-for-day)"]]
-                          [#"--now and --next" ["submit" "(jobs.time.wait-for-day)" "--now" "--next"]]
+    (is (= '(jobs.time.wait-for-light) (get-in now [:request :spec]))))
+  (doseq [[pattern args] [[#"unknown operation" ["interrupt" "(jobs.time.wait-for-light)"]]
+                          [#"--now and --next" ["submit" "(jobs.time.wait-for-light)" "--now" "--next"]]
                           [#"--now requires submit" ["list" "--now"]]
                           [#"--now requires submit" ["cancel" "j1" "--now"]]]]
     (is (re-find pattern (str (:error (apply request "Bob" "--world" "w" args)))) (pr-str args))))
 
 (deftest wait-and-its-timeout-belong-to-submit
-  (is (= {:timeout "5m"} (select-keys (:wait (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--wait" "--timeout" "5m")) [:timeout])))
-  (is (some? (:wait (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--now" "--wait"))))
-  (is (nil? (:wait (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)"))))
+  (is (= {:timeout "5m"} (select-keys (:wait (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)" "--wait" "--timeout" "5m")) [:timeout])))
+  (is (some? (:wait (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)" "--now" "--wait"))))
+  (is (nil? (:wait (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)"))))
   (doseq [[pattern args] [[#"--wait requires submit" ["cancel" "j1" "--wait"]]
-                          [#"--timeout requires --wait" ["submit" "(jobs.time.wait-for-day)" "--timeout" "5s"]]
-                          [#"--timeout must be" ["submit" "(jobs.time.wait-for-day)" "--wait" "--timeout" "forever"]]]]
+                          [#"--timeout requires --wait" ["submit" "(jobs.time.wait-for-light)" "--timeout" "5s"]]
+                          [#"--timeout must be" ["submit" "(jobs.time.wait-for-light)" "--wait" "--timeout" "forever"]]]]
     (is (re-find pattern (str (:error (apply request "Bob" "--world" "w" args)))) (pr-str args))))
 
 (deftest list-show-cancel-and-retry-use-fixed-endpoints-and-validate-arguments
@@ -91,23 +91,23 @@
         (.then done))))
 
 (deftest survive-death-is-a-submission-option
-  (let [kept (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--survive-death")
-        plain (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)")]
+  (let [kept (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)" "--survive-death")
+        plain (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)")]
     (is (true? (get-in kept [:request :survive-death?])))
     (is (not (contains? (:request plain) :survive-death?)))
     (is (string? (:error (request "Bob" "--world" "w" "list" "--survive-death"))))))
 
 (deftest a-standing-repeat-job-survives-death-by-default
   (let [kept (request "Bob" "--world" "w" "submit" "(repeat (jobs.farm.tend {}))")
-        one-shot (request "Bob" "--world" "w" "submit" "(seq (jobs.time.wait-for-day))")]
+        one-shot (request "Bob" "--world" "w" "submit" "(seq (jobs.time.wait-for-light))")]
     (is (true? (get-in kept [:request :survive-death?])))
     (is (not (contains? (:request one-shot) :survive-death?)))))
 
 (deftest cancel-all-has-no-job-argument-and-front-and-exclusive-are-submission-options
   (let [cancel (request "Bob" "--world" "w" "cancel-all" "--request-id" "all")
-        exclusive (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--exclusive")
-        front (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--next")
-        plain (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)")]
+        exclusive (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)" "--exclusive")
+        front (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)" "--next")
+        plain (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)")]
     (is (= :cancel-all (get-in cancel [:request :op])))
     (is (= "all" (get-in cancel [:request :request-id])))
     (is (not (contains? (:request cancel) :id)))
@@ -141,7 +141,7 @@
 (deftest submit-options-and-cancel-all-go-through-the-generation-aware-api
   (let [state (state-dir)]
     (async done
-      (-> (run-main! state ["submit" "(seq (jobs.time.wait-for-day) (jobs.movement.go-to {:pos {:x -1 :y 64 :z 2}}))"
+      (-> (run-main! state ["submit" "(seq (jobs.time.wait-for-light) (jobs.movement.go-to {:pos {:x -1 :y 64 :z 2}}))"
                             "--survive-death" "--next" "--request-id" "held"] engine)
           (.then (fn [first-run]
                    (is (= 0 (:code first-run)))
@@ -321,7 +321,7 @@
   (let [state (state-dir)
         events (atom [(event-of 1 :system :started {})])]
     (async done
-      (-> (run-main! state ["submit" "(jobs.time.wait-for-day)" "--wait" "--timeout" "100ms"] (waiting-engine events))
+      (-> (run-main! state ["submit" "(jobs.time.wait-for-light)" "--wait" "--timeout" "100ms"] (waiting-engine events))
           (.then (fn [{:keys [code out]}]
                    (let [result (data/read-edn out)]
                      (is (= 1 code) "a script can tell the job did not end")
@@ -348,7 +348,7 @@
 (deftest a-refused-submit-does-not-wait
   (let [state (state-dir)]
     (async done
-      (-> (run-main! state ["submit" "(jobs.time.wait-for-day)" "--wait"]
+      (-> (run-main! state ["submit" "(jobs.time.wait-for-light)" "--wait"]
                      (fn [{:keys [method path]}]
                        {:status (if (= "POST" method) 400 200)
                         :text (if (= "/snapshot" path) "{:generation-id \"g\"}" "{:ok false :reason :bad-spec}")}))
@@ -524,7 +524,7 @@
   (let [state (state-dir)
         events (atom [(event-of 1 :system :started {})])]
     (async done
-      (-> (run-main! state ["submit" "(jobs.time.wait-for-day)" "--wait" "--timeout" "100ms"] (vitals-engine events true))
+      (-> (run-main! state ["submit" "(jobs.time.wait-for-light)" "--wait" "--timeout" "100ms"] (vitals-engine events true))
           (.then (fn [{:keys [out]}]
                    (let [v (:vitals (data/read-edn out))]
                      (is (= "lost 6 health during the wait (20 -> 14)" (:hurt v)) out)
@@ -537,7 +537,7 @@
         events (atom [(event-of 1 :system :started {})])]
     (js/setTimeout #(swap! events conj (event-of 2 :body :hurt {} {:data {:health 14 :causes ["zombie"]}})) 150)
     (async done
-      (-> (run-main! state ["submit" "(jobs.time.wait-for-day)" "--wait" "--timeout" "5s"] (vitals-engine events false))
+      (-> (run-main! state ["submit" "(jobs.time.wait-for-light)" "--wait" "--timeout" "5s"] (vitals-engine events false))
           (.then (fn [{:keys [out]}]
                    (is (= :danger (get-in (data/read-edn out) [:wait :wake])) out)))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))

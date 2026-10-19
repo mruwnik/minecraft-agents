@@ -50,12 +50,12 @@
 (deftest usage-join
   (let [bodies [{:name "A" :engine {:jobs [{:label "jobs.movement.pace"} {:label "repeat jobs.movement.go-to"}]
                                     :reflexes [{:job "jobs.survival.eat"}]}}
-                {:name "B" :engine {:jobs [{:label "seq(jobs.movement.pace, jobs.time.wait-for-day)"}]
+                {:name "B" :engine {:jobs [{:label "seq(jobs.movement.pace, jobs.time.wait-for-light)"}]
                                     :reflexes []}}
                 {:name "C" :engine nil}]]
     (is (= {"jobs.movement.pace" {:running ["A" "B"] :reflex []}
             "jobs.movement.go-to" {:running ["A"] :reflex []}
-            "jobs.time.wait-for-day" {:running ["B"] :reflex []}
+            "jobs.time.wait-for-light" {:running ["B"] :reflex []}
             "jobs.survival.eat" {:running [] :reflex ["A"]}}
            (reg/usage bodies)))))
 

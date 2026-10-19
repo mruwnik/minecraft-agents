@@ -106,6 +106,12 @@
   (is (< (sh-sense/light-in-s 15 22000 0 0) (sh-sense/light-in-s 15 14000 0 0)) "closer to dawn")
   (is (> (sh-sense/light-in-s 9 22000 0 0) (sh-sense/light-in-s 15 22000 0 0)) "a dim cell lights later"))
 
+(deftest a-cell-is-lit-by-any-source-not-by-the-clock
+  (are [light lit] (= lit (sh-sense/lit-here? (seen-dark cave-blocks light) {:x 0 :y 64 :z 0}))
+    nil false
+    {[0 64 0] [0 14]} true
+    {[0 64 0] [15 0]} false))
+
 (def dug-room-blocks
   "A mine's room the body dug: 5x4 cells, 2 high (ceiling at y 66), light 7."
   (merge (into {} (for [x (range -2 3) z (range -2 2) y [63 66]] [(str x "," y "," z) "stone"]))

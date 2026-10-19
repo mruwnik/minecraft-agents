@@ -13,7 +13,7 @@
 (def scenario-text
   "{:register [{:trigger :hungry}]
     :queue [(jobs.movement.go-to {:pos {:x 30 :y 64 :z 0} :checks {:safe? (not (threatened))}})
-            (jobs.time.wait-for-day)]}")
+            (jobs.time.wait-for-light)]}")
 
 (defn setup [world]
   (let [clock (atom 1000000)
@@ -39,7 +39,7 @@
       (is (re-find #"unknown job or combinator jobs.fly" (nth ps 4)))
       (is (re-find #"seq takes at least one" (nth ps 5))))))
 
-(deftest go-to-wait-for-day-and-hungry-end-to-end
+(deftest go-to-wait-for-light-and-hungry-end-to-end
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -49,7 +49,7 @@
           (await (core/tick! eng))
           (is (= {:x 29 :y 64 :z 0} (core/self-pos p)) "go-to walked, to range 1 of the target")
           (await (core/tick! eng))
-          (is (= ["j2"] (:list (core/state eng))) "go-to is done; wait-for-day declines at night")
+          (is (= ["j2"] (:list (core/state eng))) "go-to is done; wait-for-light declines at night")
           (is (nil? (core/tick! eng)) "night: nothing ready")
           (fake/swap-self! p assoc :health 6 :food 10)
           (await (core/tick! eng))
@@ -61,7 +61,7 @@
           (.setTime world 1000)
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
-          (is (= ["jobs.movement.go-to" "jobs.survival.get-food" "jobs.time.wait-for-day"]
+          (is (= ["jobs.movement.go-to" "jobs.survival.get-food" "jobs.time.wait-for-light"]
                  (->> @seen (filter #(= :round_started (:kind %))) (map :name) dedupe vec))))))))
 
 (deftest go-to-gives-up-at-the-edge-and-a-new-call-goes-on

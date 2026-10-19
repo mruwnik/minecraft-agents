@@ -34,7 +34,7 @@
             [jobs.survival.set-spawn :as set-spawn]
             [jobs.survival.restore-broken :as restore-broken]
             [jobs.time.noop :as noop]
-            [jobs.time.wait-for-day :as wait-for-day]
+            [jobs.time.wait-for-light :as wait-for-light]
             [jobs.time.wait-for-dusk :as wait-for-dusk]))
 
 (defn ctx-of
@@ -263,7 +263,7 @@
 
 (deftest jobs-with-nothing-to-check-are-ok-at-night-with-a-hostile-and-hurt
   (let [world (assoc open-night :entities [zombie] :self {:pos {:x 0 :y 64 :z 0} :health 5})]
-    (doseq [check [log-out/safe? log-out/fit? eat/safe? eat/fit? noop/safe? noop/fit? wait-for-day/safe? wait-for-day/fit?
+    (doseq [check [log-out/safe? log-out/fit? eat/safe? eat/fit? noop/safe? noop/fit? wait-for-light/safe? wait-for-light/fit?
                    wait-for-dusk/safe? wait-for-dusk/fit? shut-doors/fit?]]
       (is (= :ok (kind check world))))))
 

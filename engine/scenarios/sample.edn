@@ -2,4 +2,4 @@
 ;; day, as one seq; eat when hungry or hurt.
 {:register [{:trigger :hungry}]
  :queue [(seq (jobs.movement.go-to {:pos {:x 0 :y 64 :z 0} :range 2})
-              (jobs.time.wait-for-day))]}
+              (jobs.time.wait-for-light))]}
