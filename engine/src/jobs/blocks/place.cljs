@@ -284,8 +284,7 @@
   "One step of the place: fetch the item if due, clear a plant, walk into reach, or place. A walk that fails or leaves
   the cell out of reach is tried once more, then the call ends :unreachable. :again, :continue or the ending."
   [c pos items fails]
-  (let [_ (await (see-target! c pos))
-        block (b/target-name (:primitives c) pos "air")
+  (let [block (b/target-name (:primitives c) pos "air")
         full (occupied-by c pos items)
         already (some #{block} items)
         lacking? (and (not full) (not already) (nil? (b/chosen c items)))
@@ -313,8 +312,15 @@
           (unreachable c pos items :out-of-reach nil)
           d)))))
 
+(defn ^:async look-first!
+  "A look at the cell, when due, is a step of its own, so can-run? judges what it shows (no support) before anything is placed."
+  [c pos step]
+  (if (or (b/to-see? c pos) (b/stale-support? c pos))
+    (do (await (see-target! c pos)) :again)
+    (await (step))))
+
 (defn ^:async round [c]
   (let [{:keys [pos items]} (parse c)]
     (when-not (= pos (:for (ctx/mem c))) (ctx/update-mem! c b/fresh-mem pos))
     (let [fails (atom 0)]
-      (await (pace/steps! c #(attempt! c pos items fails))))))
+      (await (pace/steps! c #(look-first! c pos (fn [] (attempt! c pos items fails))))))))
