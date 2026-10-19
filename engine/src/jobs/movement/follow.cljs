@@ -13,7 +13,7 @@
   A player in range is looked at (the head) and waited on for 500 ms, then the job yields (:continue): it is an
   ongoing watch. One farther off is walked to in one round (jobs.movement.go-to calls, re-aimed at where the
   player is, doors :shut) until in range. A player out of sight is walked to where they were last seen, then
-  waited for there. A player never seen is waited for beside the body (a started call, so :wall-time and :job-time bound it).
+  waited for there. A player never seen is waited for beside the body (held as :player-unseen, or :player-out-of-sight at the last-seen cell; a started call, so :wall-time and :job-time bound it).
   Ends with a result {:reason ...}:
   - \"unreachable\": a walk go-to gave up on (it retries itself).
   - \"out-of-range\": three walks in a row that arrived or got closer but left the body out of range.
@@ -60,9 +60,9 @@
 (def can-start? bad-args)
 
 (defn ^:async idle!
-  "A noop pause, then :continue."
-  [c]
-  (await (child/pause! c (/ idle-ms 1000) :following))
+  "A noop pause held for why, then :continue."
+  [c why]
+  (await (child/pause! c (/ idle-ms 1000) why))
   :continue)
 
 (defn ^:async look-at-head!
@@ -128,7 +128,7 @@
   [c pos]
   (if (u/within? (u/self-pos c) pos (:range (:args c)))
     (do (await (look-at-head! c pos))
-        (await (idle! c)))
+        (await (idle! c :following)))
     (await (walk! c pos (:range (:args c))
                   #(find-player (:primitives c) (:player (:args c)) (radius))))))
 
@@ -137,7 +137,7 @@
   [c]
   (let [{:keys [last-seen]} (ctx/mem c)]
     (if (or (nil? last-seen) (u/within? (u/self-pos c) last-seen last-seen-reach))
-      (await (idle! c))
+      (await (idle! c (if last-seen :player-out-of-sight :player-unseen)))
       (await (walk! c last-seen 1)))))
 
 (defn ^:async round

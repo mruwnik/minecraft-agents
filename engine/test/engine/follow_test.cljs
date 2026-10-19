@@ -23,17 +23,18 @@
 (defn setup
   "An engine over the fake world; a recording parent runs the job as its child
   and puts the child's result in :out when it finishes."
-  [world args]
+  ([world args] (setup world args {}))
+  ([world args stubs]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor world)
         out (atom :not-done)
         parent (tu/recording-parent job args out)
-        eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)
+        eng (core/create {:primitives p :jobs (merge registry/jobs stubs {'recording-parent parent})
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (core/submit! eng '(recording-parent) {})
-    {:eng eng :p p :clock clock :seen seen :out out}))
+    {:eng eng :p p :clock clock :seen seen :out out})))
 
 (defn ^:async run-ticks
   "Tick n times, the clock moving step ms before each; before-tick, when given,
@@ -117,6 +118,18 @@
           (is (has-event? s :limit_reached) "a started call, so its wall time ends it")
           (is (= 0 (count (move-targets (:eng s)))) "nothing to walk to")
           (is (<= (Math/abs (self-x p)) 1)))))))
+
+(deftest the-idle-wait-says-why
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [whys (atom [])
+              stub {:round (fn ^:async stub-round [c] (swap! whys conj (:why (:args c))) (ctx/end c :done nil {}))}
+              unseen (setup {} {:player "Steve"} {'jobs.time.noop stub})
+              _ (await (run-ticks unseen 3 500))
+              seen-one (setup {:entities [(steve 1)]} {:player "Steve"} {'jobs.time.noop stub})
+              _ (await (run-ticks seen-one 3 500))]
+          (is (= #{:player-unseen :following} (set @whys))))))))
 
 (deftest one-blocked-go-to-is-unreachable
   (async done
