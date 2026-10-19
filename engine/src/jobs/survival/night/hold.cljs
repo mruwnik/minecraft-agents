@@ -8,6 +8,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.foods :as foods]
             [jobs.lib.reserve :as reserve]
+            [jobs.lib.shelter.inside :as inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
@@ -28,11 +29,12 @@
                   (nil? (tools/harvest-need names (js->clj (.harvestTools p "furnace"))))))))
 
 (defn ^:async pick-up-furnace!
-  "Dig the furnace the hold put down (memory :placed-furnace) and take it back, once: carried gear stays carried."
+  "Dig the furnace the hold put down (memory :placed-furnace) and take it back: carried gear stays carried. It is forgotten
+  only once dug up; a failed dig keeps it, so the next hold retries. True while the dig goes on."
   [c]
   (let [pos (:placed-furnace (ctx/mem c))
         e (await (ctx/call c :unplace 'jobs.blocks.dig {:pos pos :fetch false}))]
-    (when-not (= :continue e)
+    (when (= :done (:kind e))
       (ctx/update-mem! c dissoc :placed-furnace :furnace)
       (when (= pos (mem/place (ctx/view c) :furnace))
         (ctx/remember! c :furnace {:gone true :was pos} mem/place-policy)))
@@ -40,14 +42,14 @@
 
 (defn ^:async cooking-in-shelter?
   "Raw food carried and a furnace or smoker seen within cook's ::shelter-cook-reach, else a carried furnace put down
-  beside the body (can-place-furnace?, once it stands it is the seen one), or a cook under way, and the cook not rushed
+  beside the body once the body is safe from the night (inside/safe-from-night?; an exposed hold cooks only at a furnace it sees; can-place-furnace?, once it stands it is the seen one), or a cook under way, and the cook not rushed
   (cook/rushed?) nor failed in this job: run it (cook/cook!, fetching nothing). The furnace it put down is dug up when
   the cook ends. True while it goes on (do not eat raw), nil when it ended (the cooked food is eaten next) or none is
   possible."
   [c]
   (let [raw? (and (seq (cook/raw-carried c)) (not (:no-cook (ctx/mem c))))
         seen (when raw? (cook/seen-cooker c (cook/shelter-cook-reach)))
-        placed (when (and raw? (not seen) (not (:placed-furnace (ctx/mem c))) (can-place-furnace? c) (not (cook/rushed? c)))
+        placed (when (and raw? (not seen) (not (:placed-furnace (ctx/mem c))) (can-place-furnace? c) (inside/safe-from-night? (:primitives c)) (not (cook/rushed? c)))
                  (await (sf/place-furnace! c)))
         _ (when (= :again placed) (ctx/update-mem! c assoc :placed-furnace (:furnace (ctx/mem c))))
         cooker (or seen (:placed-furnace (ctx/mem c)))]

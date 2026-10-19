@@ -248,11 +248,21 @@
           (is (some #{"take"} (furnace-ops p)) "the cooked beef was taken")
           (is (> (.-food (.self p)) 5) "and eaten"))))))
 
+(defn roofed-carrier
+  "A held body with a carried furnace and a stone pickaxe; when roofed?, a roof over it, its own shelter and a bed to hold for."
+  [roofed?]
+  (let [r (held-with-raw-beef nil [{:name "furnace" :count 1} {:name "stone_pickaxe" :count 1}])]
+    (when roofed?
+      (fake/set-block! (:p r) [0 66 0] "stone")
+      (fake/set-block! (:p r) [1 64 0] "red_bed")
+      (mem/write! (:store (:eng r)) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} {:cap 10 :ttl 1200000}))
+    r))
+
 (deftest a-held-hungry-body-cooks-with-a-carried-furnace-and-takes-it-back
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (held-with-raw-beef nil [{:name "furnace" :count 1} {:name "stone_pickaxe" :count 1}])
+        (let [{:keys [eng p]} (roofed-carrier true)
               placed (atom nil)]
           (.override (.-world p) "place" (fn ^:async f [token a impl]
                                            (reset! placed (js->clj (.-pos a)))
@@ -266,6 +276,26 @@
           (is (some #{"take"} (furnace-ops p)) "the cooked beef was taken")
           (is (> (.-food (.self p)) 5) "and eaten")
           (is (= 1 (:count (first (filter #(= "furnace" (:name %)) (u/inventory p))))) "the furnace is carried again"))))))
+
+(deftest a-held-body-exposed-to-the-night-does-not-put-its-furnace-down
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (roofed-carrier false)]
+          (core/submit! eng '(jobs.survival.night) {})
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (is (empty? (filter #(= "furnace" (.-item (.-args %))) (st/calls p "place"))) "no furnace put down in the open")
+          (is (= 1 (:count (first (filter #(= "furnace" (:name %)) (u/inventory p))))) "still carried"))))))
+
+(deftest a-furnace-that-cannot-be-dug-up-stays-remembered-for-the-next-hold
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (roofed-carrier true)]
+          (.override (.-world p) "dig" (fn ^:async f [token a impl] #js {:status "refused"}))
+          (core/submit! eng '(jobs.survival.night) {})
+          (dotimes [_ 8] (await (core/tick! eng)))
+          (is (< 1 (count (st/calls p "dig"))) "the dig-up is tried again, not given up"))))))
 
 (deftest a-held-hungry-body-eats-raw-beef-when-the-furnace-is-far
   (async done
