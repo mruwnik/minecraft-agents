@@ -75,6 +75,13 @@
     (mem/write! (:store eng) :sleep-status {:sleeping 1 :needed 2} nil)
     (is (false? (sh/night-holds? p (mem/view (:store eng)) {} (constantly true))) "mining goes on")))
 
+(deftest a-buried-body-in-its-own-night-shelter-logs-out-for-a-sleeper
+  (let [{:keys [eng p]} (setup (assoc (tunnel-world buried-light) :sees-all true))]
+    (st/looked-round! eng p)
+    (mem/write! (:store eng) :sleep-status {:sleeping 1 :needed 2} nil)
+    (mem/write! (:store eng) :shelter {:pos {:x 5 :y 64 :z 0} :state :built} sh/shelter-policy)
+    (is (true? (sh/night-holds? p (mem/view (:store eng)) {} (constantly true))))))
+
 (deftest a-body-the-sky-reaches-logs-out-for-a-sleeper
   (let [{:keys [eng p]} (setup (tunnel-world {}))]
     (mem/write! (:store eng) :sleep-status {:sleeping 1 :needed 2} nil)

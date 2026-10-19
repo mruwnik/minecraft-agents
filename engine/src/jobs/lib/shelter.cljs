@@ -121,7 +121,8 @@
 (defn night-holds?
   "Whether the night trigger holds (see triggers.survival.night). permit? decides whether a bed may be used (bed-permit).
   Without :bed in (:ways args) (all when absent) there are no bed terms and no bed-look.
-  A buried body is not pulled out of the ground to place a bed or log out: the night changes nothing there."
+  A buried body is not pulled out of the ground to place a bed, and logs out only from its own night shelter (a miner
+  mines on)."
   [p view args permit?]
   (let [shelter (:data (mem/latest view :shelter))
         buried (and (sh-sense/buried? p) (not (sh-sense/shut-in-hut? p)))
@@ -133,7 +134,7 @@
                      (or (some? (sh-beds/bed-to-use p view (sh-beds/bed-radius view args) permit?))
                          (unlooked-for-bed? p view)
                          (and (not buried) (sh-beds/bed-place-wanted? p view (sh-beds/bed-radius view args) permit?))
-                         (and (not buried) (sh-sleepers/log-out-for-sleepers? p view))))
+                         (and (or (not buried) (sh-inside/in-own-shelter p shelter)) (sh-sleepers/log-out-for-sleepers? p view))))
                 (not (sh-inside/safe-from-night? p (:roof-height args sh-sense/default-roof-height)))
                 (breached-home? p view)
                 (seq (open-doors p view))))
