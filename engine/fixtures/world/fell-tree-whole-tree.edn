@@ -33,7 +33,8 @@
             {:no-event {:source :job :kind #{:stopped :tree_blocked}} :for-s 150 :until {:source :job :kind :completed}}]
    :after [[:block [16 0 16] "oak_sapling"] [:item "oak_log" [:>= 9]] [:item "oak_sapling" 0]]}
   {:name "no-axe-carried-one-is-fetched-from-a-seen-chest"
-   :blocks [[:set [14 0 20] "chest{Items:[{Slot:0b,id:\"minecraft:iron_axe\",count:1}]}"]]
+   :blocks [[:set [14 0 20] "chest{Items:[{Slot:0b,id:\"minecraft:iron_axe\",count:1}]}"]
+            [:fill [14 8 14] [18 10 18] "air"] [:fill [16 8 16] [16 9 16] "oak_log"]]
    :body {:inventory []}
    :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 40 :of-job true}
