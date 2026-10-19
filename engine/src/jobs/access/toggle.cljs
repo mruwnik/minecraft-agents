@@ -206,8 +206,20 @@
                      (solid/solid? (some-> (u/block-at (:primitives c) {:x (+ bx dx) :y (dec by) :z (+ bz dz)}) .-name)))]
       {:x (+ bx dx) :y by :z (+ bz dz)})))
 
+(defn ^:async look-sides!
+  "Turns the head to each side cell's floor that is not made out yet: the cone does not reach the floor beside a body
+  standing in the gate."
+  [c]
+  (let [{:keys [x y z]} (u/self-pos c)
+        [bx by bz] (map #(js/Math.floor %) [x y z])]
+    (doseq [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+            :let [cell [(+ bx dx) (dec by) (+ bz dz)]]
+            :when (dig-look/unknown? (:primitives c) cell)]
+      (await (dig-look/look-at! c cell)))))
+
 (defn ^:async step-out! [c pos state block]
-  (let [cell (first (free-sides c))
+  (let [_ (await (look-sides! c))
+        cell (first (free-sides c))
         r (when cell (await (child/call-walk* c :walk {:pos cell :range 0 :doors :never :ways #{:walk :clear-seal}})))]
     (cond
       (= :continue r) :continue

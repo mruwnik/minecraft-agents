@@ -343,3 +343,17 @@
               result (await (child-outcome eng job {:pos at :state :on :reach 5} 40))]
           (is (= {:status :done :reason :changed} (head result [:status :reason])) (pr-str result))
           (is (true? (:powered (props p at)))))))))
+
+(deftest a-body-in-a-gate-looks-at-the-floor-beside-it-before-stepping-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (world "oak_fence_gate" {:open true} 3 0))
+              looked (atom false)
+              sensed (.-sensedAt p)
+              look (.-look p)]
+          (aset p "look" (fn [& a] (reset! looked true) (.apply look p (to-array a))))
+          (aset p "sensedAt" (fn [q] (if (and (not @looked) (= 63 (.-y q))) #js {:unknown true} (sensed q))))
+          (let [result (await (child-outcome eng job {:pos at :state :closed} 40))]
+            (is (= :changed (:reason result)) (pr-str result))
+            (is (false? (:open (props p at))))))))))
