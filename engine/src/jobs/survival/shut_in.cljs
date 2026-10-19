@@ -22,7 +22,7 @@
   Ways (:ways) are child jobs: jobs.survival.wall-in (the open sides, a roof support and the roof with carried blocks),
   dig-pit (dig down under a solid side and plug the hole), dig-pocket (dig a pocket beside the body, step in, wall the way in), and :room
   (jobs.survival.enter-room: walk into the :place, else the home or the closed room the body is in, shut its doors, fill a doorway or a hole in its roof; walks, which the others do not).
-  It quotes the ways the call allows, starts the cheapest (the :room way's quote less ::room-credit-s (8); ties in the order room, walls, pit, pocket) and, when that one ends other than
+  It quotes the ways the call allows, starts the cheapest (the :room way's quote less ::room-credit-s (9.5); ties in the order room, walls, pit, pocket) and, when that one ends other than
   :done, the next cheapest (after a :continue step when a hostile is within 2 blocks); a way that cannot be done here (quote ##Inf) is dropped. Blocks are the call's :use :blocks, else every
   :build filler (for :night the shelter fillers), carried or dug. None left is nothing-possible :no-way {:text :tried [ways that failed] :dropped [ways that cannot be done]
   :why {way the child's cause} :stops {way {:reason :needs}} (dig-pit's stop reason)}.
@@ -55,7 +55,7 @@
 (a/defargs settings
   {::job-time-s {:default 300 :doc "Seconds a shut-in may take." :spec (a/num-in 0 nil)}
    ::mean-s {:default 12 :doc "Seconds an enclosing is guessed to take, for the quote." :spec (a/num-in 0 nil)}
-   ::room-credit-s {:default 8 :doc "Seconds a room that is already built is preferred by over the cheapest new enclosure: the :room way wins when its quote less this is no more than the others'." :spec (a/num-in 0 nil)}
+   ::room-credit-s {:default 9.5 :doc "Seconds a room that is already built is preferred by over the cheapest new enclosure: the :room way wins when its quote less this is no more than the others'." :spec (a/num-in 0 nil)}
    ::night-hand-clear-ms {:default 10000 :doc "For :night, the :hand-clear-ms when the call gives none: a block the carried tools cannot harvest is dug by hand when the hand breaks it within this many ms (stone by hand takes 7500)." :spec (a/int-in 0 nil)}})
 
 (def target [])
@@ -107,6 +107,8 @@
         costs (loop [[w & more] left acc []]
                 (if (nil? w) acc (recur more (conj acc [w (await (cost-of c w))]))))
         able (remove (comp infinite? second) costs)]
+    (let [shown (into {} (map (fn [[w s]] [w (if (infinite? s) :inf (/ (js/Math.round (* 10 s)) 10))]) costs))]
+      (ctx/emit! c :shut-in.quotes :debug {:costs shown :text (str "ways quoted (seconds): " (pr-str shown))}))
     {:way (first (first (sort-by (fn [[w s]] (if (= :room w) (- s (settings/get settings ::room-credit-s)) s)) able)))
      :barred (vec barred)
      :dropped (into (vec barred) (map first (filter (comp infinite? second) costs)))}))

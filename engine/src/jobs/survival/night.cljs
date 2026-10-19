@@ -393,6 +393,9 @@
                 (ctx/update-mem! c assoc :digging start)
                 (sites/site-failed! c start :interrupted))
             place (:name (first (await (sense/decide! c ::roofed-place #(seq (room-lib/roofed-places-in c (:args c) (:walk-radius (:args c)))) {:verify-guesses true}))))
+            _ (when (and place (not= (sh-sense/feet p) (:route-looked (ctx/mem c))))
+                (ctx/update-mem! c assoc :route-looked (sh-sense/feet p))
+                (await (sense/look-round! c [])))
             d (await (ctx/call c :shut-in 'jobs.survival.shut-in
                                (cond-> {:ways (cond-> #{:walls :pit} (or place (sh-sense/roofed? p (sh-sense/room-roof-height)) (dig-cells/room-plug p (sh-sense/feet p) (dig-in-roof-height c))) (conj :room))
                                         :for :night :roof-height (dig-in-roof-height c) :wall-value (:wall-value (:args c))}

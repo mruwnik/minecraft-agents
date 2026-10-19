@@ -11,6 +11,7 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.reach :as reach]
             [jobs.lib.rooms :as room-lib]
+            [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -31,7 +32,7 @@
   Done {:pos :placed :roof} when the body is in a closed room (sh-sense/shut-in-room?) with no open door, at once when it is.
   Nothing-possible: :no-room (no place known and the body not roofed), :no-walk (go-to did not arrive), :door-open, :no-blocks (a gap or hole
   and none carried), :failed (a fill that did not hold), :open (the room cannot be closed).
-  Quote: go-to's route seconds (dark cells priced in; ##Inf with no route) plus ::door-s for a door and ::fill-s for each fill; ##Inf when
+  Quote: go-to's route seconds (dark cells priced in; ##Inf with no route), or once in the room ::door-s for a door and ::fill-s for each fill; ##Inf when
   the place is not remembered, a creeper is near, or a melee hostile reaches a door of the room first (jobs.lib.rooms/race-won?).
   Picked by jobs.survival.shut-in as its :room way, and called by the night for a door, a doorway and the walk home to a bed.")
 
@@ -149,7 +150,7 @@
       (if (or (nil? t) (race-lost? c t))
         (priced ##Inf)
         (let [route (await (room-lib/route-cost c (walk-args t)))]
-          (priced (if route (+ route (settings/get settings ::door-s)) ##Inf))))
+          (priced (or route ##Inf))))
       :else
       (let [{:keys [door gap plug stop]} (judge c)]
         (priced (cond stop ##Inf
@@ -230,6 +231,11 @@
 (defn ^:async step!
   "One step of the entering (judge): the walk, a door, the doorway or the roof, the end."
   [c]
+  (when (here? c (target-of c))
+    (when-let [roof (sh/unseen-roof-cell (:primitives c))]
+      (when-not (= roof (:roof-looked (ctx/mem c)))
+        (ctx/update-mem! c assoc :roof-looked roof)
+        (await (sense/look-at! c roof)))))
   (let [j (judge c)
         n (:steps (ctx/mem c) 0)]
     (ctx/update-mem! c assoc :steps (inc n))
