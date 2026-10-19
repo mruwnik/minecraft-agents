@@ -16,14 +16,16 @@
             [jobs.lib.strip :as strip]
             [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
+            [jobs.lib.solid :as solid]
             [jobs.lib.torch :as torch]
+            [jobs.lib.torch-plan :as tp]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one corridor trip may take: the digs, torches and walks." :spec (a/num-in 0 nil)}
-   ::lit {:default 8 :doc "Light at the feet from which no torch is hung." :spec (a/int-in 0 16)}
-   ::torch-gap {:default 3 :doc "Cells within which a torch already hung counts as lighting the feet." :spec (a/int-in 0 16)}
+   ::lit {:default 8 :doc "Light from which a cell in a spawner's box counts lit." :spec (a/int-in 0 16)}
+   ::torch-gap {:default 3 :doc "Cells within which a torch already hung counts as lighting a cell in a spawner's box." :spec (a/int-in 0 16)}
    ::hop {:default 8 :doc "Cells walked between two steps on the way to the far end: a dark corridor is seen about this far." :spec (a/int-in 1 33)}})
 
 (defn lit [] (settings/get settings ::lit))
@@ -33,7 +35,7 @@
 (def doc
   "Strip one mineshaft corridor segment (jobs.lib.strip) on one trip. The segment is read again at every step (what is left
   is what the seen blocks show, jobs.lib.strip/targets), so a restart needs nothing but the args. Each step, in this order:
-  a torch is hung on the floor beside the rail when the feet light is under 8 and none hangs within 3 cells (a
+  a torch is hung on the floor beside the rail where it lights most of the seen dark cells of the segment (jobs.lib.torch-plan; a
   jobs.blocks.place child; torches are the caller's to stock); a chest minecart in the segment is looted (jobs.strip.loot-cart
   child); else the next target is dug (jobs.blocks.dig child, no fetch, drops collected): cobwebs on the walk line first, then
   the rest outward from the :entry end, each with a carried tool of its kind (shears, axe, pickaxe). With no target left it
@@ -87,26 +89,35 @@
   (let [res (merge {:taken (:taken (ctx/mem c) {})} extra)]
     (ctx/end c (if (failed-conditions reason) :condition-failed :nothing-possible) reason res)))
 
-(defn torch-spot
-  "A cell beside the centre line at the feet's height or a step along it, free, whose floor is not seen open: where a torch stands. nil when none."
+(defn torch-spots
+  "The cells beside the centre line at the feet's height or a step along it, free, whose floor is not seen open: where a torch may stand."
   [block-at axis [x y z]]
   (let [cells (for [d [0 1 -1] side [1 -1]] (if (= axis :x) [(+ x d) y (+ z side)] [(+ x side) y (+ z d)]))]
-    (first (filter (fn [[cx cy cz]]
-                     (let [below (block-at [cx (dec cy) cz])]
-                       (and (strip/air? (block-at [cx cy cz])) (not (strip/passable? below)))))
-                   cells))))
+    (filter (fn [[cx cy cz]]
+              (let [below (block-at [cx (dec cy) cz])]
+                (and (strip/air? (block-at [cx cy cz])) (not (strip/passable? below)))))
+            cells)))
 
-(defn torch-due?
-  "The feet are dark and no torch of this trip hangs within torch-gap of them."
-  [c feet]
-  (let [dark (some-> (sh-sense/light-at (:primitives c) (zipmap [:x :y :z] feet)) (< (lit)))]
-    (boolean (and dark (not-any? #(<= (u/dist (zipmap [:x :y :z] feet) (zipmap [:x :y :z] %)) (torch-gap)) (:torches (ctx/mem c)))))))
-
-(defn ^:async hang-torch! [c seg feet]
+(defn due-spot
+  "Where to hang the torch the feet's surroundings owe: the spot (a torch-spots cell, jobs.lib.torch-plan) lighting the
+  most of the seen dark cells of the centre line that no torch of this trip lights; nil when no cell is dark or no spot reaches one."
+  [c seg feet]
   (let [p (:primitives c)
-        spot (torch-spot (access/seen-at p) (:axis seg) feet)
-        o (cond (nil? spot) :no-spot
-                :else (await (b/place-cell! c (zipmap [:x :y :z] spot) "torch" (select-keys (:args c) [:ignore-zones?]))))]
+        block-at (access/seen-at p)
+        {:keys [axis y line from to]} seg
+        cells (->> (range from (inc to)) (map #(strip/at axis y line %))
+                   (filter #(and (sh-sense/spawnable? p (zipmap [:x :y :z] %)) (torch/perceived-dark? p %))))]
+    (first (:spots (tp/plan {:cells cells :dark? (constantly true)
+                             :open? #(let [n (block-at %)] (and n (not (solid/solid? n))))
+                             :spots (torch-spots block-at axis feet)
+                             :sources (:torches (ctx/mem c))})))))
+
+(defn ^:async hang-torch!
+  "Hang a torch at spot (nil: none stands there, booked at feet so the step is not asked again)."
+  [c spot feet]
+  (let [o (if (nil? spot)
+            :no-spot
+            (await (b/place-cell! c (zipmap [:x :y :z] spot) "torch" (select-keys (:args c) [:ignore-zones?]))))]
     (case o
       :continue :continue
       :no-spot (do (ctx/update-mem! c update :torches (fnil conj []) feet) :again)
@@ -277,7 +288,7 @@
         cause (cond
                 (trip/food-short? c) {:reason :food-short}
                 (and work? (< (u/free-slots p) (or want-free (trip/want-free)))) {:reason :bag-full}
-                (and work? no-torch? (torch-due? c feet)) {:reason :no-torches}
+                (and work? no-torch? (due-spot c seg feet)) {:reason :no-torches}
                 cart nil
                 (and dark no-torch?) {:reason :no-torches}
                 (and target (not= :torch (:class target))
@@ -294,9 +305,9 @@
     (when (and target (:looked (ctx/mem c))) (ctx/update-mem! c dissoc :looked))
     (cond
       sealed-spawner (stop! c :spawner {:cell (u/cell-vec (:pos sealed-spawner))})
-      (and work? (torch-due? c feet)) (await (hang-torch! c seg feet))
+      (and work? (due-spot c seg feet)) (await (hang-torch! c (due-spot c seg feet) feet))
       cart (await (loot! c cart))
-      dark (await (hang-torch! c seg dark))
+      dark (await (hang-torch! c (first (torch-spots (access/seen-at p) (:axis seg) dark)) dark))
       target (await (dig! c target))
       (not (:looked (ctx/mem c))) (await (look-end! c seg))
       torch (await (dig! c torch))

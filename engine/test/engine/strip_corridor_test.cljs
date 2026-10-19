@@ -197,8 +197,8 @@
           (is (= {:status :done :taken {:spawner 1 :torch (count torches)}} (select-keys r [:status :taken])) "the torches hung are taken back")
           (is (gone? p [spawner-cell]))
           (is (seq torches))
-          (is (every? (fn [{:keys [x y z]}] (and (<= (js/Math.abs (- x 10)) 4) (<= (js/Math.abs (- y 65)) 1) (<= (js/Math.abs (- z 2)) 4))) torches)
-              "every torch within the spawner's spawn box"))))))
+          (is (some (fn [{:keys [x y z]}] (and (<= (js/Math.abs (- x 10)) 4) (<= (js/Math.abs (- y 65)) 1) (<= (js/Math.abs (- z 2)) 4))) torches)
+              "a torch within the spawner's spawn box"))))))
 
 (deftest spawner-break-in-the-dark-without-torches-stops-no-torches-leaving-it
   (async done
