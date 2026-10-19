@@ -1,6 +1,7 @@
 ;; Cards e37f0b2c, c2dd1070, bf6983ae: a body buried in a pocket 18 below the surface goal, its only open way leading 12 down and round (a staircase
 ;; east (3 high columns: the body must clear its head on each drop), a tunnel at y 0, a ladder shaft at x 60), does not plan the dive past :climb-dip (set to 8 here; default 24): with a pickaxe it cuts a stair
 ;; up (go-to.escalated :stair :why :way-dives) and arrives; with :ways #{:walk} it gives up unarrived and digs nothing.
+;; With :climb-dip 24 the same dive (12 down) is within the dip: the body walks it unlit (unseen cells guessed dark are priced, not refused) and arrives with no stair cut (card 57052e28).
 ;; go-home (c2dd1070) from the same pocket with no pickaxe digs that stair by hand (go-to.by-hand) and the body never walks down.
 ;; Stone mass x 2..61, y 0..29 (surface feet y 30); pocket x 4..6, y 12..13, z 16; goal [6 30 16] straight above.
 {:defaults
@@ -25,6 +26,12 @@
             {:no-event {:source :job :kind :go-to.restored} :for-s 300 :until {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}}}]
    :after [[:body-near [6.5 30 16.5] 3]
            [:memory {:entries {:stair-way [{:data {:floors [:any]}}]}}]]}
+  {:name "a-dive-within-the-dip-is-walked-in-the-dark"
+   :settings {:jobs.movement.go-to.tuning/climb-dip 24}
+   :act [[:job (jobs.movement.go-to {:pos #at [6 30 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 300 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated} :for-s 300 :until {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}}}]
+   :after [[:body-near [6.5 30 16.5] 3]]}
   {:name "walk-only-ways-give-up-without-digging"
    :act [[:job (jobs.movement.go-to {:pos #at [6 30 16] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 90 :of-job true}

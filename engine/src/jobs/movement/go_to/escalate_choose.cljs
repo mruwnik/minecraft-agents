@@ -9,11 +9,13 @@
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
+            [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.holes :refer [may-dig-fn own-placed-fn]]
             [jobs.movement.go-to.result :as end]
@@ -192,12 +194,19 @@
   "How far above the feet a goal is for a found plan to be weighed against a stair up."
   8)
 
+(defn stair-step-s-here
+  "stair-step-s, dearer by the dark factor where the body stands dark: the plan's seconds carry its dark surcharge, and the
+  stair is cut in that dark too."
+  [c]
+  (cond-> stair-step-s
+    (and (wworld/dark?) (look/dark-here? (:primitives c))) (* (+ 1 (cost/dark-factor (wworld/kit-of c))))))
+
 (defn stair-check
   "A fn of a plan and whether it is the first of its round, saying why it is not walked and a stair up is cut instead (a
   re-plan inside a walk is held to :dives only), when escalating is on, the body is not in its shelter and escape/choose would stair (steps n):
   - :dives: under a cave floor (c :cave-floor, with c :dive-stair) the plan goes below it on a cell that is no stair of
     the body's own (climb/dives?), or below c :own-floor back down a stair of its own (climb/returns?);
-  - :cheaper: it is a whole path costing more seconds than 3 such stairs, the goal is stair-first-rise or more above
+  - :cheaper: it is a whole path costing more seconds than 3 such stairs (a stair cut in the dark costs as much more as the dark walk does), the goal is stair-first-rise or more above
     the feet and the stair has not been tried this call.
   Else nil."
   [c pos]
@@ -215,7 +224,7 @@
           (cond
             (and cave (climb/dives? steps cave (ledger/ways-of c)) @stair) :dives
             (and back (climb/returns? steps back (ledger/stair-stands c)) @stair) :dives
-            (and first? cheaper? (= "found" status) (number? seconds) @stair (> seconds (* 3 stair-step-s (:steps @stair)))) :cheaper))))))
+            (and first? cheaper? (= "found" status) (number? seconds) @stair (> seconds (* 3 (stair-step-s-here c) (:steps @stair)))) :cheaper))))))
 
 (defn escalate?
   "Whether a give-up after tries fruitless walks with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), its only way dives (dive?), the goal is walled in (goal-walled?), or the walker failed max-blocked walks running (walker-fault?; one stuck walk of a :tries 1 caller is no proof) or the body is shut in (reach/enclosed?), and no door or
