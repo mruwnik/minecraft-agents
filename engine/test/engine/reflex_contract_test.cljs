@@ -95,11 +95,11 @@
       (fn ^:async t []
         (is (= :completed (:event (await (gap-end {:entities [gt/pit-skeleton] :blocks (merge gt/ground gt/pit gt/shell)} {})))))))))
 
-(deftest no-blocks-is-a-failed-condition
+(deftest no-blocks-and-no-fetch-waits
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:event :stopped :kind :condition-failed :reason :no-blocks}
+        (is (= {:event :waiting :reason :no-blocks}
                (await (gap-end {:inventory []} {:fetch false}))))))))
 
 (deftest no-open-cell-to-stop-the-arrows-is-nothing-possible

@@ -29,10 +29,11 @@
   the body first, one that ends the line alone before one that blocks half of it. A mob that was only heard is
   taken at the rough spot its direction and band give (jobs.lib.danger/mob-pos). A door, gate or trapdoor standing
   open in the way is shut, not walled over (jobs.survival.dig-in-cells/place-all!).
-  Done at once when no ranged mob within :radius has a line of fire. With no cell to fill it looks around once (yielding
+  Done at once when no ranged mob within the danger ranged radius (jobs.lib.danger/::ranged-radius) has a line of fire. With no cell to fill it looks around once (yielding
   :continue) before it ends :no-gap, for cells it has not seen yet.
   The blocks are the call's :use :blocks (default the carried shelter fillers, jobs.lib.choose/fillers).
-  With none of them carried it fetches one (:fetch, default true; jobs.lib.need, jobs.items.obtain) before it ends :condition-failed :no-blocks.
+  Needs: one of them carried, or :fetch (default true; jobs.lib.need, jobs.items.obtain) to get one; else it does not
+  start (:no-blocks); a failed fetch ends :condition-failed :no-blocks with its ending as :because.
   Ends :done with the data {:placed [cells]} once none has a line of fire (also when the mob moved away meanwhile), else
   :condition-failed :no-blocks (none carried, nothing fetched) or :refused (every cell that would help is another's zone,
   claim or plan; :ignore-zones? lifts it), or :nothing-possible :no-gap (a line of fire stays and no open cell within
@@ -43,14 +44,13 @@
   gets out as from its own shelter (go-to escalation digs a door, dig-in leave).")
 
 (a/defargs args
-  {:radius {:doc "ranged mobs within this many blocks count" :spec (a/num-in 0 nil) :default 16}
-   :ignore-zones? :shared
+  {:ignore-zones? :shared
    :fetch {:doc "get a missing block (jobs.lib.need): true, a set of kinds or a map of limits; false stops :no-blocks" :spec need/option? :default true}})
 
 (a/defargs settings
   {::reach {:default 3 :doc "Open cells within this many blocks of the body's feet may be filled." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds stopping the arrows may take, a block fetch included." :spec (a/num-in 0 nil)}
-   ::max-steps {:default 12 :doc "Rounds one call takes at most." :spec (a/int-in 0 nil)}})
+   ::max-steps {:default 12 :doc "Steps (one cell each) one round takes at most." :spec (a/int-in 0 nil)}})
 (defn max-steps [] (settings/get settings ::max-steps))
 
 (def target [])
@@ -72,9 +72,10 @@
 (def ray-heights "Heights above the body's feet the arrows are aimed at." [game/eye-height 0.9])
 
 (defn ranged-dangers
-  "The ranged mobs within radius with a line of fire to the body, nearest first."
+  "The ranged mobs within the danger ranged radius with a line of fire to the body, nearest first."
   [c]
-  (filterv combat/ranged? (danger-q/dangers (:primitives c) (:radius (:args c)) {:ranged-radius (:radius (:args c))} {})))
+  (let [r (danger-q/ranged-radius)]
+    (filterv combat/ranged? (danger-q/dangers (:primitives c) r {:ranged-radius r} {}))))
 
 (defn clear-rays
   "How many of the two arrow rays from the mob at mob-pos to the body at body-pos cross no :solid cell of kind-at."
@@ -169,13 +170,20 @@
                         :again))))))))
 
 
+(defn can-start?
+  "A block to place carried, or :fetch lets it get one."
+  [c]
+  (if (or (lb/pick c (blocks c)) (need/opts c 'jobs.survival.block-arrow-gap))
+    (contract/ok :blocks "a block to place, or one to fetch")
+    (contract/later :no-blocks "no block to stop the arrows with and no fetch")))
+
 (defn done?
   "No ranged mob has a line of fire to the body; the cells placed so far."
   [c]
   (checks/goal (empty? (ranged-dangers c)) [:covered "no ranged mob has a line of fire"] [:in-fire "a ranged mob has a line of fire"]
                {:units :cells :done (count (:placed (ctx/mem c)))}))
 
-(defn quote-of [_c] {:uses {:job-time [0 3 30]}})
+(defn quote-of [_c] {:uses {:job-time [0 3 (settings/get settings ::job-time-s)]}})
 
 (defn ^:async round
   "Fill the gap (see doc), one cell a step with a timer between."

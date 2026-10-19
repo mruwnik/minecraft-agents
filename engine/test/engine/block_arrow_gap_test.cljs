@@ -89,14 +89,6 @@
           (is (empty? (shot-at p)))
           (is (= 7 (cobble p))))))))
 
-(deftest no-blocks-to-place-fails-no-blocks
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [seen] :as s} (setup [] {:inventory []})]
-          (await (run-job! s {:fetch false}))
-          (is (= :no-blocks (:reason (failed seen)))))))))
-
 (deftest a-gap-in-a-foreign-zone-fails-refused-and-places-nothing
   (async done
     (tu/run-async done
@@ -160,11 +152,9 @@
   (await (core/tick! eng))
   s)
 
-(deftest no-blocks-fetches-them-by-default-and-stops-without-fetch
+(deftest no-blocks-fetches-them-by-default
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen]} (await (one-tick! (setup [] {:inventory [] :entities [pit-skeleton] :blocks (merge ground pit shell)}) {}))]
-          (is (some #(and (= :child_started (:kind %)) (= :need (:slot %))) @seen) "a block is fetched through a need child"))
-        (let [{:keys [seen]} (await (one-tick! (setup [] {:inventory [] :entities [pit-skeleton] :blocks (merge ground pit shell)}) {:fetch false}))]
-          (is (= :no-blocks (:reason (failed seen)))))))))
+          (is (some #(and (= :child_started (:kind %)) (= :need (:slot %))) @seen) "a block is fetched through a need child"))))))

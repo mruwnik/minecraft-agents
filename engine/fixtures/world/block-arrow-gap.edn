@@ -1,7 +1,7 @@
 ;; Card 6a70b865 (jobs.survival.block-arrow-gap): the body stands in a closed stone room (x 14..19, z 14..18, roof y 3) whose east wall has
 ;; a 1x1 slit at head height [19 1 16] (the hollow box has its floor at y -1, so the body's feet row is open); a NoAI helmeted skeleton stands 10 east of the body with an arrow line through the slit.
 ;; The only placeable cell on the line is the slit (the cells in front of the body touch no solid block). The job places there and
-;; ends done {:placed [cell]}; with no block carried (and :fetch false) it stops :no-blocks and places nothing; behind a wall with
+;; ends done {:placed [cell]}; with no block carried (and :fetch false) it waits :no-blocks and places nothing; behind a wall with
 ;; no slit there is no line of fire, so it declines and places nothing.
 {:defaults
  {:tags [:survival :hostile :jobs]
@@ -18,10 +18,11 @@
    :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 30 :until {:source :job :kind :completed}}]
    :after [[:block [19 1 16] "cobblestone"]]}
-  {:name "no-blocks-stops-places-nothing"
+  {:name "no-blocks-waits-places-nothing"
    :body {:inventory []}
    :act [[:job (jobs.survival.block-arrow-gap {:fetch false})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :no-blocks}} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-blocks}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind #{:completed :stopped}} :for-s 15 :until {:source :job :kind :waiting :data {:reason :no-blocks}} :of-job true}]
    :after [[:block [19 1 16] "air"]]}
   {:name "wall-without-a-slit-declines"
    :blocks [[:set [19 1 16] "stone"]]

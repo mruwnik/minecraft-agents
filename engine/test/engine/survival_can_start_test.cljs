@@ -49,3 +49,9 @@
 (deftest a-goal-the-round-wraps-up-holds-only-before-the-start
   (are [job world args] (= [[:ok] [:later]] [(take 1 (done-of job world args [])) (take 1 (done-of job world args running))])
     'jobs.survival.go-home {:time st/noon :self {:pos {:x 12.5 :y 64 :z 0.5}}} {}))
+
+(deftest block-arrow-gap-needs-a-block-or-a-fetch
+  (are [world args expected] (= expected (start-of 'jobs.survival.block-arrow-gap world args))
+    {:inventory [{:name "cobblestone" :count 4}]} {:fetch false} [:ok :blocks]
+    {:inventory []} {:fetch true} [:ok :blocks]
+    {:inventory []} {:fetch false} [:later :no-blocks]))

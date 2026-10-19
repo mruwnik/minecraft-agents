@@ -1,6 +1,6 @@
 (ns jobs.survival.respond-to-hostile
   (:require [jobs.lib.ready :as ready]
-            [jobs.lib.choose :as choose]
+            [jobs.survival.block-arrow-gap :as gap]
             [engine.args :as a]
             [jobs.lib.checks :as checks]
             [jobs.lib.body :as body]
@@ -289,14 +289,13 @@
          (<= cover-sides (count (filter walled? [[1 0] [-1 0] [0 1] [0 -1]]))))))
 
 (defn gap-possible?
-  "Whether the gap job could stop the arrows but for cover: only ranged mobs near, building blocks and a tool that digs stone
-  (the way out of a sealed doorway) carried, and the gap job not yet tried (tried?)."
+  "Whether the gap job could stop the arrows but for cover: only ranged mobs near, the gap job able to start without
+  fetching, a tool that digs stone (the way out of a sealed doorway) carried, and the gap job not yet tried (tried?)."
   [c hs tried?]
-  (let [p (:primitives c)]
-    (boolean (and (not tried?)
-                  (every? combat/ranged? hs)
-                  (choose/filler c :build)
-                  (tools/can-harvest? p "stone")))))
+  (boolean (and (not tried?)
+                (every? combat/ranged? hs)
+                (= :ok (first (gap/can-start? (assoc c :args {:fetch false}))))
+                (tools/can-harvest? (:primitives c) "stone"))))
 
 (defn gap-wanted?
   "Whether to stop arrows with a block rather than fight or flee: gap-possible? and the body in cover (covered?)."
@@ -313,7 +312,8 @@
   "One call of block-arrow-gap (never fetching): :continue or its ending's kind; nothing placed lets the round decide as usual.
   Tried once it has ended; a :continue (its look around) calls it again."
   [c]
-  (let [e (await (ctx/call c :gap 'jobs.survival.block-arrow-gap {:radius (danger-q/ranged-radius-in (:args c)) :fetch false}))]
+  (let [e (await (ctx/call c :gap 'jobs.survival.block-arrow-gap (cond-> {:fetch false}
+                                                                         (:ranged-radius (:args c)) (assoc :settings {::danger-q/ranged-radius (:ranged-radius (:args c))}))))]
     (when-not (= :continue e) (ctx/update-mem! c assoc :gap-tried true))
     (if (= :continue e) :continue (:kind e))))
 
