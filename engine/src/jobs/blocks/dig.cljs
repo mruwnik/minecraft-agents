@@ -315,7 +315,6 @@
   (let [before (u/inventory (:primitives c))
         r (await (tidy/dig! c pos))
         status (.-status r)
-        _ (when (= "dug" status) (await (look/look-at! c (b/cell pos))))
         ids (vec (keep #(.-id %) (array-seq (or (.-drops r) #js []))))]
     (case status
       "dug" (do (ctx/update-mem! c assoc :dug {:block block :ids ids :want (drops-wanted (.-drops r) before (u/inventory (:primitives c)))}) :collect)
@@ -388,6 +387,7 @@
                           :hint "pass :accept #{:fluid-adjacent} to dig beside water (:lava-adjacent for seen lava), or :on-fluid :wait to wait for it to drain"})
       dug?
       (let [s (await (seal-step! c pos))
+            _ (when-not s (await (look/look-at! c (b/cell pos))))
             {:keys [block ids]} (:dug (ctx/mem c))]
         (cond
           (= :again s) :again
