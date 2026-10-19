@@ -1,7 +1,7 @@
 ;; Slime landings in go-to's walking damage budget (cards 3b89b671, bacb002f, 7b246d59, 87b97383, 6fd676d2): a stone block y 0..9 fills x 1..15 (the body on top at feet y 10, x 8.5), walls all round,
 ;; the drop is east of its edge at x 16 onto slime_block laid in the floor (y -1); the planner prices a drop onto slime as free when the pad is 3x3 or a 1x1 shaft walled to the first bounce peak
 ;; (about 0.63 x the fall, rounded up), else as the full fall. :floor {:health 14} leaves a budget of 5 hp (18: 2 hp), so only a free landing may be taken.
-;; Should-succeed: a 10 drop onto a 3x3 pad then a walk on (no hurt, no walker-fault: the bounce is on plan, also when it drifts over the pad); a 10 drop into a 1x1 shaft walled 10 high at floor 14;
+;; Should-succeed: a 10 drop onto a 3x3 pad then a walk on at floor 18 (no hurt, no walker-fault: the bounce is on plan, also when it drifts over the pad; the landing is next to the cliff, so the face under the takeoff is glass (the body sees through it, as in the cliff-foot cases), and only a budget that refuses the plain 7 hp fall makes the body look first: a body that may spend 7 hp just takes the plain fall); a 10 drop into a 1x1 shaft walled 10 high at floor 14;
 ;; a 6 drop into a shaft walled 6 high at floor 18. These two shafts are walled with glass in the stone top (3x3 of glass round the shaft cell): the body sees stone walls of a 1x1 shaft only on three sides, never the one under its feet, and prices no bounce on a wall it has not seen. Should-fail: a 10 drop into a shaft walled only 2 or only 4 high at floor 18 (2 hp: the 8 and 6 hops to the wall tops cost 5 and 3 hp, so the walls are no stepping stones).
 ;; A 6 drop onto a 3x3 pad at the foot of the cliff: the pad's ring needs walls on the cliff side, and the face under the takeoff cell is never in the body's view, so it is refused (stone face) unless the face is glass (the body sees through it).
 ;; Live risk: whether a body that bounces on a 1x1 pad stays in the shaft (the walls hold it); the result of the walled cases is judged by arrival at the shaft floor, not by the bounce.
@@ -15,8 +15,8 @@
   :limit-s 90}
  :cases
  [{:name "pad-3x3-10-drop-walks-on-unhurt"
-   :blocks [[:fill [16 -1 15] [18 -1 17] "slime_block"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :blocks [[:fill [16 -1 15] [18 -1 17] "slime_block"] [:fill [15 0 15] [15 9 17] "glass"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 18}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}
             {:no-event {:source :job :level :warn :kind :walker-fault} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
