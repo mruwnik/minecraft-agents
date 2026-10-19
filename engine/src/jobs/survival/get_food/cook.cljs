@@ -135,9 +135,9 @@
   (boolean (and (can-cook? c) (or (:cooking (ctx/mem c)) (worth-cooking? c)))))
 
 (defn loaded-in
-  "The count the smelt child in slot has loaded and still owes, else nil (read from its memory)."
+  "The count the smelt child in slot has loaded while the cook is not due, else nil (read from its memory)."
   [c slot]
-  (furnace/loaded-count (mem/job-mem ((:view c)) (:root c) (conj (:slots c) slot))))
+  (furnace/loaded-count (mem/job-mem ((:view c)) (:root c) (conj (:slots c) slot)) (ctx/now c)))
 
 (defn ^:async cook!
   "Smelt the raw food carried (the smelt job, fuel as it takes it) in the furnace known (or the given one); the cooking
