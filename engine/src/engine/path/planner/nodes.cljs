@@ -268,6 +268,8 @@
         (and ^boolean (.-no-lethal s) (pos? (.-move-dmg s)) (pos? (+ (aget (.-drowns s) parent-node) (.-move-drown s)))
              (>= (.lethalCount s (.-move-closed s) (.-move-run s) (+ (aget (.-dmgs s) parent-node) (.-move-dmg s))) (.-lethal-hp s)))
         (do (set! (.-lethal-seen s) true) nil)
+        ;; an infinite toll is a cell no plan enters, the goal cell too
+        (and (some? (.-tolls s)) (== ##Inf (.tollOf s x y z))) nil
         :else
         (let [drisk (if (pos? (.-n-dangers s)) (+ drisk (.dangerRisk s x y z dsec)) drisk)
               extra (if ^boolean (.-avoiding s) (.avoidCost s x y z move dsec drisk) 0)

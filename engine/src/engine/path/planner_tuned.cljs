@@ -45,7 +45,7 @@
    - options.dark {at, factor}: a cell that at(x, y, z) calls dark (returns 1) costs factor times its own seconds
      more, in g and in cost.darkSeconds (see darkOf; jobs.lib.look builds at).
    - options.tolls {cells}: cells is a Map of cell-key (planner/cell-key) to a factor: entering such a cell costs factor
-     times its own seconds more, in g and in cost.darkSeconds (the caller's price of a cell; no zone knowledge here).
+     times its own seconds more, in g and in cost.darkSeconds (the caller's price of a cell; no zone knowledge here); Infinity: no plan enters it.
    - options.damageBudget (Infinity): the most hp of certain damage a path may take (falls over 3 blocks, plants that hurt on
      touch); a move over it is refused, and a search that finds nothing for that reason says damageRefused true. options.maxDrop
      is still the length of the longest fall. options.damageWeight (riskWeight): seconds an hp of that damage costs.

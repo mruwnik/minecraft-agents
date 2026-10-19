@@ -38,3 +38,7 @@
     (is (= (get-in plain [:path :cost :seconds]) (get-in none [:path :cost :seconds])))
     (is (= (:expanded plain) (:expanded none)))))
 
+
+(deftest an-infinite-toll-is-never-entered-even-as-the-goal
+  (let [r (pf/run world (pf/near 38 64 20) (tolls ##Inf [[38 64 20]]) from)]
+    (is (not-any? #{[38 64 20]} (pf/cells r)))))
