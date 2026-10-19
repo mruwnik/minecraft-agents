@@ -22,7 +22,6 @@
             [engine.senses :as senses]
             [engine.single :as single]
             [engine.trigger-api :as trigger-api]
-            [jobs.lib.shelter.sense :as sense]
             [engine.triggers :as triggers]
             ["fs" :as fs]
             ["path" :as path]
@@ -209,7 +208,7 @@
         seen (entity-observations/start! p {:world (:world cfg) :body (:agent opts)})
         seen-file (path/join (:engine-dir cfg) "seen.bin")
         seen-io ((createRequire (str root "/")) "./js/seen-file.mjs")
-        eng (cond-> (assoc base-eng :seen-entities seen :light-view #(sense/light-view p %))
+        eng (cond-> (assoc base-eng :seen-entities seen :light-view #((:light/view hooks/all) p %))
               per (assoc :flush-seen #(perception/save! per seen-io seen-file)))
         _ (reset! eng-ref eng)
         stop-perception (if per

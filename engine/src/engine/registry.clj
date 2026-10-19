@@ -347,7 +347,8 @@
    :world/blank "an empty world store (engine.core, when none is given)"
    :use/default "the list a call's :use gets for a purpose its job's defaults name a chooser for (engine.core.ending)"
    :ready/vocabulary "{sym entry} the condition entries only a job's :checks forms may use, (job-safe) (exposed) ... (engine.condition/compile extras)"
-   :look/around "one look round from where the body stands, aimed first at the cells a :look status names, for a condition that asks for one (engine.core.ending)"})
+   :look/around "one look round from where the body stands, aimed first at the cells a :look status names, for a condition that asks for one (engine.core.ending)"
+   :light/view "the read-only light the body perceives at a cell or cube, (view p {:cell :radius}) (engine.main, GET /light)"})
 
 (defn hook-defs
   "The hooks, resource jobs/hooks.edn: {hook-key qualified-fn-symbol}, checked: every key of hook-keys given, no
