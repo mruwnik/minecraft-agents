@@ -71,7 +71,7 @@
         {:keys [p seen]} env
         _ (when-not keeps-job? (rolls-offers! p scripts))
         result (await (child-outcome env (merge {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book"
-                                                 :settings {:jobs.village.roll/claim-s 5}} args) 300))]
+                                                 :spend {:wall-time 600}} args) 300))]
     [result p seen]))
 
 (defn digs [p] (count (vt/calls p "dig")))
@@ -176,12 +176,12 @@
                                      :wrap #(do (ls/entities-after-look (:p %)) %)} {}))]
           (is (= {:found true :rolls 0} (select-keys result [:found :rolls]))))))))
 
-(deftest no-claim-when-the-villager-never-takes-the-workstation
+(deftest the-wall-time-ends-the-wait-when-the-villager-never-takes-the-workstation
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed"})]} {}))]
-          (is (= {:found false :status :stopped :reason :no-claim} (select-keys result [:found :status :reason])))
+        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed"})]} {:spend {:wall-time 30}}))]
+          (is (= {:found false :reason :wall-time} (select-keys result [:found :reason])))
           (is (= "lectern" (workstation p))))))))
 
 (deftest a-restart-with-the-workstation-missing-places-it-first
@@ -207,13 +207,12 @@
           (is (zero? (digs p)))
           (is (= "lectern" (workstation p))))))))
 
-(deftest a-villager-that-keeps-its-job-after-the-break-stops-without-another-roll
+(deftest a-villager-that-keeps-its-job-after-the-break-is-waited-for-until-the-wall-time
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (roll {:entities [(librarian [(offer "paper")])] :keeps-job? true} {}))]
-          (is (= {:found false :rolls 1 :status :stopped :reason :still-employed}
-                 (select-keys result [:found :rolls :status :reason])))
+        (let [[_ p seen] (await (roll {:entities [(librarian [(offer "paper")])] :keeps-job? true} {:spend {:wall-time 30}}))]
+          (is (= [:wall-time] (mapv (comp :line :cause) (filter #(= :limit_reached (:kind %)) @seen))))
           (is (= 1 (digs p)))
           (is (= "lectern" (workstation p))))))))
 
@@ -322,18 +321,18 @@
       (fn ^:async t []
         (let [env (bd/setup {:entities [(librarian [(offer "paper")])] :blocks {ws-key "lectern" "2,63,0" "stone"}})
               _ (unemploys-after! env 8000 [(offer "enchanted_book")])
-              result (await (child-outcome env {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book" :settings {:jobs.village.roll/claim-s 5}} 300))]
+              result (await (child-outcome env {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book" :spend {:wall-time 600}} 300))]
           (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
           (is (= "lectern" (workstation (:p env)))))))))
 
-(deftest a-villager-that-loses-its-job-after-the-window-stops-still-employed
+(deftest a-villager-that-loses-its-job-late-is-still-rolled-no-clock-of-the-job-gives-up
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [env (bd/setup {:entities [(librarian [(offer "paper")])] :blocks {ws-key "lectern" "2,63,0" "stone"}})
-              _ (unemploys-after! env 60000 [(offer "enchanted_book")])
-              result (await (child-outcome env {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book" :settings {:jobs.village.roll/claim-s 5}} 300))]
-          (is (= :still-employed (:reason result)))
+              _ (unemploys-after! env 30000 [(offer "enchanted_book")])
+              result (await (child-outcome env {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book" :spend {:wall-time 600}} 300))]
+          (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
           (is (= "lectern" (workstation (:p env)))))))))
 
 (deftest a-roll-cut-after-the-break-places-the-workstation-back-in-its-cleanup
@@ -350,7 +349,7 @@
                        (when (and (not @cut) (not= "lectern" (get-in w [:blocks ws-pos])))
                          (reset! cut true)
                          (core/cancel! eng (first (:list (core/state eng)))))))
-          (core/submit! eng (list job {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book" :settings {:jobs.village.roll/claim-s 5}}) {})
+          (core/submit! eng (list job {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book" :spend {:wall-time 600}}) {})
           (loop [i 0]
             (when (and (< i 300) (seq (:list (core/state eng))))
               (swap! clock + 700)
