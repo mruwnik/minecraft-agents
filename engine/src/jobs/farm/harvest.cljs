@@ -12,6 +12,7 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
+            [jobs.lib.reach :as rch]
             [jobs.lib.ready :as ready]
             [jobs.lib.spent :as spent]
             [jobs.lib.work-place :as work-place]
@@ -24,7 +25,7 @@
   The centre is :center, or the body's position when the job first runs (kept in memory).
   One call is the whole run: it does the first step that applies, again and again, until it finishes:
   1. Replant: seed the bare farmland of cells it cut, from the seeds carried.
-  2. Cut the ripe crops, walking (a go-to child) to the nearest when out of the reach setting (eye reach). A crop it cannot reach is skipped.
+  2. Cut the ripe crops, walking (a go-to child) to the nearest when out of the reach setting (eye reach), or when the body is shut in (a pit: it walks out first). A crop it cannot reach is skipped.
      After the give-up setting (4) such crops it stops cutting (warn harvest.gave-up); replanting and collecting go on.
      A body farther than :radius from the centre with nothing cut yet walks there first (step 2b).
   3. Collect the drops (a jobs.items.collect-drops child).
@@ -417,8 +418,9 @@
         ripe (when (cutting? c) (ripe-of c (:skipped m)))]
     (when (seq ripe)
       (let [here (u/self-pos c)
-            near (filterv #(<= (u/eye-dist here %) (reach)) ripe)
-            walked (when (empty? near) (await (common/walk-to! c (first ripe) 3)))
+            shut-in? (rch/enclosed? p)
+            near (when-not shut-in? (filterv #(<= (u/eye-dist here %) (reach)) ripe))
+            walked (when (empty? near) (await (common/walk-to! c (first ripe) (if shut-in? 1 3))))
             targets (if (seq near) near [(first ripe)])
             targets (still-ripe p targets)]
         (when (and (empty? targets) (not (#{:continue :blocked} walked)))
