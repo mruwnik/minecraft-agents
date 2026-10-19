@@ -391,10 +391,11 @@
   "One block of the pillar (or its end): :again, :continue while a recentring go-to waits, or the ending."
   [c]
   (await (land! c))
-  (await (look-up! c))
   (if (= :continue (await (shoved-back! c)))
     :continue
-    (let [p (:primitives c)
+    ;; look from the column, after any walk back: cells seen from the shoved cell are not the column's
+    (let [_ (await (look-up! c))
+          p (:primitives c)
           seen (ledger/open-entries (ctx/view c))
           l (ledger/reconcile seen (access/sensed-at p nil))
           feet (pl/feet-cell c)

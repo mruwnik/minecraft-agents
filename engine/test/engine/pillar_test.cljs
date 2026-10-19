@@ -538,6 +538,23 @@
           (is (= [0 67 0] (feet p)))
           (is (= (repeat 3 "dirt") (blocks-at p (column base 3)))))))))
 
+(deftest cells-above-the-column-are-looked-at-after-the-walk-back-not-from-the-shoved-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:blocks {"1,64,0" "stone"}})
+              looked (atom #{})]
+          (aset p "sensedAt" (fn [pos] (let [c [(.-x pos) (.-y pos) (.-z pos)]]
+                                         (if (or (@looked c) (<= (second c) 64)) (.blockAt p pos) #js {:unknown true}))))
+          (.override (.-world p) "look"
+                     (fn [_ a _] (swap! looked conj [(js/Math.floor (.-x (.-pos a))) (js/Math.floor (.-y (.-pos a))) (js/Math.floor (.-z (.-pos a)))])
+                       (js/Promise.resolve #js {:status "ok"})))
+          (shove-after-place! p [[1 0 0]])
+          (core/submit! eng (list job {:height 3}) {})
+          (await (ticks s eng 40))
+          (is (empty? (of-kind seen :pillar.gave-up)) "an unlooked cell over the column is no ceiling")
+          (is (finished? eng)))))))
+
 (defn stub-body [x z] {:primitives #js {:self (fn [] #js {:pos #js {:x x :y 64 :z z}})}})
 
 (deftest centred-is-true-with-the-body-on-its-start-point
