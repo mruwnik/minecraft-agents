@@ -18,7 +18,7 @@
             [jobs.lib.util :as u]
             [jobs.survival.retreat-flight :as flight]
             [jobs.survival.retreat-goal :as retreat-goal]
-            [jobs.survival.retreat-home :as retreat-home]
+            [jobs.lib.rooms :as room-lib]
             [jobs.survival.retreat-pillar :as pillar]
             [jobs.survival.retreat-refuge :as refuge]
             [jobs.survival.retreat-walk :as walk]))
@@ -117,7 +117,7 @@
   "Whether the body gets away on foot from every one of hostiles that attacks at close range (jobs.lib.cost/outruns?,
   at its food). Creepers, endermen and ranged mobs have their own rules."
   [c hostiles]
-  (cost/outruns? (retreat-home/food (:primitives c))
+  (cost/outruns? (room-lib/food (:primitives c))
                  (->> hostiles
                       (remove #(or (combat/creeper? %) (combat/enderman? %) (combat/ranged? %)))
                       (map cost/mob-kind))))

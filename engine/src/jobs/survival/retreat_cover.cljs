@@ -13,7 +13,7 @@
             [jobs.lib.util :as u]
             [jobs.survival.retreat-flight :as flight]
             [jobs.survival.retreat-goal :as retreat-goal]
-            [jobs.survival.retreat-home :as retreat-home]
+            [jobs.lib.rooms :as room-lib]
             [jobs.survival.retreat-refuge :as refuge]
             [jobs.survival.retreat-walk :as walk]
             [jobs.survival.retreat-cornered :as cornered]))
@@ -33,9 +33,9 @@
 
 (defn refuges
   "The closed rooms to flee to: the latest :home or :bed (home-pos) and those behind the doors the body has seen
-  (jobs.survival.retreat-home/rooms)."
+  (jobs.lib.rooms/rooms)."
   [c]
-  (retreat-home/rooms c (home-pos c)))
+  (room-lib/rooms c (home-pos c)))
 
 (def glance-turns
   "Degrees from the way away a flight turns to look before it chooses: the view cone (about 100 degrees wide) then
@@ -136,7 +136,7 @@
          judged (retreat-goal/judge c (remove nil? [refuge (home-pos c)]))
          goal (retreat-goal/usable judged)
          home (or refuge (:home judged) goal (home-pos c))
-         flank? (and (some? (or refuge goal)) (cost/outruns-at? (retreat-home/food p) (walk/flank-turn)))]
+         flank? (and (some? (or refuge goal)) (cost/outruns-at? (room-lib/food p) (walk/flank-turn)))]
      (await (glance-away! c (walk/direction from threat-pos home flank?)))
      (walk/choose-target (cornered/block-at-fn p) from threat-pos home (keep (comp :pos :data) (ctx/entries c :hazard))
                          (flight/walk-step) {:swim-factor (swim-factor c) :covered? covered? :flank? flank?

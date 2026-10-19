@@ -13,7 +13,6 @@
             [jobs.survival.retreat-cover :as cover]
             [jobs.survival.retreat-flight :as flight]
             [jobs.survival.retreat-goal :as retreat-goal]
-            [jobs.survival.retreat-home :as retreat-home]
             [jobs.survival.retreat-pillar :as pillar]
             [jobs.survival.retreat-refuge :as refuge]
             [jobs.survival.retreat-walk :as walk]))

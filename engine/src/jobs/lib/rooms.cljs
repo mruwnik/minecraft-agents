@@ -1,7 +1,7 @@
-(ns jobs.survival.retreat-home
-  "A closed building as a flight's refuge: the body's home or any closed room it has seen (jobs.lib.reach/room: walls, a
+(ns jobs.lib.rooms
+  "Closed rooms, for a flight and for shutting in: the body's home or any closed room it has seen (jobs.lib.reach/room: walls, a
   roof or none needed, doors that shut) that it gets into before every melee chaser reaches a door of it
-  (jobs.lib.cost/reach-first?)."
+  (jobs.lib.cost/reach-first?). Shared by jobs.survival.retreat and jobs.survival.enter-room."
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -238,18 +238,3 @@
        (remove :why)
        (sort-by (comp :steps :way))
        first))
-
-(defn say-once!
-  "One retreat.home info a flight: it runs to its home or to another closed building, room."
-  [c {:keys [start home?]}]
-  (when-not (:home-said (ctx/mem c))
-    (ctx/update-mem! c assoc :home-said true)
-    (let [{:keys [x y z]} start]
-      (ctx/emit! c :retreat.home :info {:home [x y z] :own? home?
-                                        :text (str (if home? "runs home to [" "runs into the closed building at [")
-                                                   x " " y " " z "], ahead of the hostile")}))))
-
-(defn failed!
-  "A run to room got no nearer: no run to it again this flight."
-  [c room]
-  (ctx/update-mem! c update :refuges-failed (fnil conj #{}) (cell-key (:start room))))

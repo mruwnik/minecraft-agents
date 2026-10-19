@@ -10,7 +10,7 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.survival.retreat-flight :as flight]
-            [jobs.survival.retreat-home :as retreat-home]
+            [jobs.lib.rooms :as room-lib]
             [jobs.survival.retreat-walk :as walk]))
 
 (a/defargs settings
@@ -157,7 +157,7 @@
       (nil? goal) nil
       (<= (u/dist (u/self-pos c) goal) near) (do (ctx/update-mem! c assoc :goal-reached true) nil)
       (under-floor? c goal) nil
-      (cost/outruns-at? (retreat-home/food (:primitives c)) (walk/flank-turn)) goal)))
+      (cost/outruns-at? (room-lib/food (:primitives c)) (walk/flank-turn)) goal)))
 
 (defn start-leg!
   "Note the feet height the walk to the goal began at (:goal-y0), once a walk."

@@ -19,7 +19,7 @@
             [jobs.survival.retreat-cover :as cover]
             [jobs.survival.retreat-flight :as flight]
             [jobs.survival.retreat-goal :as retreat-goal]
-            [jobs.survival.retreat-home :as retreat-home]
+            [jobs.lib.rooms :as room-lib]
             [jobs.survival.retreat-refuge :as refuge]
             [jobs.survival.retreat-step :as step]))
 
@@ -36,10 +36,10 @@
   2. Runs into a closed building first (not while a creeper chases: its blast would take the door and what is inside;
      with a creeper within blast reach no room is looked for, and the one the body stands in is no refuge: it steps away
      or takes the cornered options): the latest :bed or :home within retreat-cover/home-range (64), or a room behind a wooden door or
-     gate the body has seen (jobs.survival.retreat-home/rooms, bounded by its settings), that is a closed room (walls,
+     gate the body has seen (jobs.lib.rooms/rooms, bounded by its settings), that is a closed room (walls,
      doors that shut: jobs.lib.reach/room) whose door it walks to (over seen blocks, at its own speed) ahead of every
      melee chaser (jobs.lib.cost/reach-first?), the fewest steps of those, with a go-to child to the room cell inside
-     that door (retreat.home info, once a flight); a building dropped only for unseen cells, with its door side within 6 blocks, is looked into once a flight from its doorway, up to ::door-looks (4) looks at its unseen sides (retreat-home/glance-in!) before the choice; a step that gets no nearer drops that room for the flight. Not while
+     that door (retreat.home info, once a flight); a building dropped only for unseen cells, with its door side within 6 blocks, is looked into once a flight from its doorway, up to ::door-looks (4) looks at its unseen sides (room-lib/glance-in!) before the choice; a step that gets no nearer drops that room for the flight. Not while
      low in a ranged chaser's line of fire (the cover step below comes first). Any cell of the room counts as home:
      there an open door of the room is shut (a step back to one out of reach first), and a chaser still with a way in
      gets the cornered options (4.), its plug the walls alone (no pit or pocket dug in the hut): it does not walk out.
@@ -159,12 +159,27 @@
   (await (child/pause! c (/ (flight/wait-ms) 1000) "cornered"))
   :again)
 
+(defn say-once!
+  "One retreat.home info a flight: it runs to its home or to another closed building, room."
+  [c {:keys [start home?]}]
+  (when-not (:home-said (ctx/mem c))
+    (ctx/update-mem! c assoc :home-said true)
+    (let [{:keys [x y z]} start]
+      (ctx/emit! c :retreat.home :info {:home [x y z] :own? home?
+                                        :text (str (if home? "runs home to [" "runs into the closed building at [")
+                                                   x " " y " " z "], ahead of the hostile")}))))
+
+(defn failed!
+  "A run to room got no nearer: no run to it again this flight."
+  [c room]
+  (ctx/update-mem! c update :refuges-failed (fnil conj #{}) (room-lib/cell-key (:start room))))
+
 (defn ^:async run-home!
-  "A step to room (home or another closed building) to the room cell inside its door way (retreat-home/way-in), said
+  "A step to room (home or another closed building) to the room cell inside its door way (room-lib/way-in), said
   once a flight (retreat.home): :again; a step that gets no nearer drops that room for the rest of the flight."
   [c room way]
-  (retreat-home/say-once! c room)
-  (when-not (await (cornered/step! c :home (:inside way) 0)) (retreat-home/failed! c room))
+  (say-once! c room)
+  (when-not (await (cornered/step! c :home (:inside way) 0)) (failed! c room))
   :again)
 
 
@@ -181,21 +196,21 @@
         covered? (cover/cover-fn p threats (flight/fire-spots c))
         blast (filterv #(flight/blaster? p %) threats)
         survey-now (fn []
-                     (retreat-home/survey c (cover/home-pos c)
+                     (room-lib/survey c (cover/home-pos c)
                                           (if (some #(and (not (combat/ranged? %)) (<= (danger-q/mob-distance p %) (cornered/cover-gap))) threats)
                                             0
-                                            (retreat-home/judge-per-step))))
+                                            (room-lib/judge-per-step))))
         survey0 (when (and threat (not hit?) (empty? blast)) (survey-now))
-        survey (if (and survey0 (await (retreat-home/glance-in! c survey0))) (survey-now) survey0)
+        survey (if (and survey0 (await (room-lib/glance-in! c survey0))) (survey-now) survey0)
         rooms (:rooms survey)
-        verdicts (when survey (retreat-home/verdicts p rooms threats (not (cover/exposed-low? c covered?))))
-        {:keys [room way inside?]} (retreat-home/pick verdicts)
-        home-now? (fn [] (or inside? (and (nil? survey) (retreat-home/in-home? c (cover/home-pos c)))))
+        verdicts (when survey (room-lib/verdicts p rooms threats (not (cover/exposed-low? c covered?))))
+        {:keys [room way inside?]} (room-lib/pick verdicts)
+        home-now? (fn [] (or inside? (and (nil? survey) (room-lib/in-home? c (cover/home-pos c)))))
         judged (when threat (retreat-goal/judge c (if (seq blast) [] (remove nil? [(:start (first rooms)) (cover/home-pos c)]))))
         _ (when threat (step/say-choice! c survey verdicts judged blast))
         stuck (fn ^:async stuck [why]
                 (if (seq (cornered/near-hostiles c))
-                  (await (cornered/cornered! c why (or inside? (and (seq blast) (retreat-home/in-home? c (cover/home-pos c))))))
+                  (await (cornered/cornered! c why (or inside? (and (seq blast) (room-lib/in-home? c (cover/home-pos c))))))
                   (do (ctx/update-mem! c update :since-gain (fnil inc 0))
                       (if (flight/no-gain? (ctx/mem c) (flight/no-gain-steps))
                         (flight/end-flight! c :keeps-off)

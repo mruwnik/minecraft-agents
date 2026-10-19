@@ -15,7 +15,7 @@
             [jobs.lib.reach :as reach]
             [jobs.survival.retreat :as retreat]
             [jobs.survival.retreat-cornered :as cornered]
-            [jobs.survival.retreat-home :as retreat-home]))
+            [jobs.lib.rooms :as rooms]))
 
 ;; The hut of hut-shelter-test: walls x 3..7, z -2..2, roof y 67, room x 4..6 z -1..1, a door at (5,64,2) facing south.
 
@@ -164,9 +164,9 @@
 (deftest any-cell-of-the-room-is-home
   (let [p (tu/seeing-all (tu/fake-on-floor (hut {:x 4.5 :y 64 :z -0.5} open-door [])))
         room (reach/room p home)]
-    (is (retreat-home/inside? p room) "a room cell other than the home cell")
+    (is (rooms/inside? p room) "a room cell other than the home cell")
     (swap! (fake/state p) assoc-in [:self :pos] [5.5 64 6.5])
-    (is (not (retreat-home/inside? p room)) "outside the hut")))
+    (is (not (rooms/inside? p room)) "outside the hut")))
 
 (def long-hut
   "The hut stretched north: walls x 3..7, z -8..2, roof y 67, the room x 4..6 z -7..1, the door at (5,64,2)."
@@ -308,9 +308,9 @@
   (let [unseen-ground (fn [[x y z]] (and (= 63 y) (or (not (and (<= 2 x 8) (<= -3 z 3)))
                                                        (and (<= 4 x 6) (<= -1 z 1) (not= [5 0] [x z])))))
         seen-hut (fn [states extra] (seeing-all-but (tu/fake-on-floor (hut {:x 5.5 :y 64 :z 0.5} states [] extra)) unseen-ground))]
-    (is (false? (retreat-home/refuge-room? (seen-hut {} {"5,64,2" "air" "5,65,2" "air"}) home))
+    (is (false? (rooms/refuge-room? (seen-hut {} {"5,64,2" "air" "5,65,2" "air"}) home))
         "a doorway with no door, open air round the hut over ground not seen past a block: no wall there, no refuge")
-    (is (true? (retreat-home/refuge-room? (seen-hut open-door {}) home)) "a door shuts it: a refuge whatever lies outside, its own floor not seen")))
+    (is (true? (rooms/refuge-room? (seen-hut open-door {}) home)) "a door shuts it: a refuge whatever lies outside, its own floor not seen")))
 
 (defn counting!
   "Replace the var at (getter) via (setter f) with a wrapper counting calls in counts under k; returns the restore fn."
@@ -333,7 +333,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [counts (atom {})
-              restores [(counting! counts :closed-room #(identity retreat-home/refuge-room?) #(set! retreat-home/refuge-room? %))
+              restores [(counting! counts :closed-room #(identity rooms/refuge-room?) #(set! rooms/refuge-room? %))
                         (counting! counts :room #(identity reach/room) #(set! reach/room %))
                         (counting! counts :walk-steps #(identity reach/walk-steps) #(set! reach/walk-steps %))
                         (counting! counts :steps #(identity retreat/flight-step!) #(set! retreat/flight-step! %))]
@@ -344,9 +344,9 @@
               {:keys [closed-room room walk-steps steps]} @counts]
           (is (in-room? (body p)) (str "inside the hut: " (body p)))
           (is (pos? steps))
-          (is (<= closed-room (* 2 (retreat-home/max-doors))) (str "each door side flooded once a flight: " @counts))
-          (is (<= room (+ closed-room (* steps (retreat-home/max-rooms)))) (str "rooms rebuilt per step: " @counts))
-          (is (<= walk-steps (* steps (retreat-home/max-rooms))) (str "one walk search per room door per step: " @counts)))))))
+          (is (<= closed-room (* 2 (rooms/max-doors))) (str "each door side flooded once a flight: " @counts))
+          (is (<= room (+ closed-room (* steps (rooms/max-rooms)))) (str "rooms rebuilt per step: " @counts))
+          (is (<= walk-steps (* steps (rooms/max-rooms))) (str "one walk search per room door per step: " @counts)))))))
 
 (defn reading!
   "Count p's cell reads (sensedAt) in reads."
@@ -396,7 +396,7 @@
                                           :home false))
               c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
               _ (.setOwner (:primitives eng) "tx")
-              unjudged #(count (filter (comp #{:unjudged} :why) (:dropped (retreat-home/survey c nil %))))
+              unjudged #(count (filter (comp #{:unjudged} :why) (:dropped (rooms/survey c nil %))))
               counts [(unjudged 0) (unjudged 2) (unjudged 2)]]
           (is (pos? (first counts)) (str "none judged at first: " counts))
           (is (apply > counts) (str "each later step judges more: " counts)))))))
@@ -413,7 +413,7 @@
                        (let [c (core/make-ctx eng {:root root :slots [] :chain [root] :token token :args {} :round 1})
                              _ (.setOwner (:primitives eng) token)
                              before @reads]
-                         (retreat-home/survey c open-home)
+                         (rooms/survey c open-home)
                          (- @reads before)))
               first-flight (flight "j8" "t8")
               second-flight (flight "j9" "t9")]
@@ -429,11 +429,11 @@
               _ (seeing-all-but p (fn [[x y z]] (and @hidden (= [5 64 0] [x y z]))))
               c (core/make-ctx eng {:root "j8" :slots [] :chain ["j8"] :token "t8" :args {} :round 1})
               _ (.setOwner (:primitives eng) "t8")
-              home-why #(some (fn [d] (when (= [5 64 0] (:at d)) (:why d))) (:dropped (retreat-home/survey c home)))]
+              home-why #(some (fn [d] (when (= [5 64 0] (:at d)) (:why d))) (:dropped (rooms/survey c home)))]
           (is (= :unseen (home-why)) "a cell not seen leaves the home neither closed nor open")
           (reset! hidden false)
           (is (nil? (home-why)) "seen, the home is a refuge")
-          (is (= 1 (count (:rooms (retreat-home/survey c home))))))))))
+          (is (= 1 (count (:rooms (rooms/survey c home))))))))))
 
 (deftest a-body-at-a-buildings-door-looks-at-each-unseen-side-before-it-drops-the-room
   (async done

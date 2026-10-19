@@ -6,7 +6,7 @@
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.retreat-cornered :as cornered]
-            [jobs.survival.retreat-home :as retreat-home]))
+            [jobs.lib.rooms :as room-lib]))
 
 (def door-reach
   "Farthest (blocks, feet to the cell's middle) an open door may be for the flight to shut it: within a hand's reach."
@@ -29,7 +29,7 @@
         {fx :x fy :y fz :z} (sh-sense/feet p)
         r (js/Math.ceil door-reach)
         clicked (:doors-clicked (ctx/mem c) #{})
-        mid retreat-home/mid]
+        mid room-lib/mid]
     (->> (for [x (range (- fx r) (+ fx r 1)) y (range (dec fy) (+ fy 3)) z (range (- fz r) (+ fz r 1))]
            {:x x :y y :z z})
          (keep (fn [cell]
@@ -64,7 +64,7 @@
     (->> (:doors room)
          (filter #(dig-cells/open-openable (:primitives c) (:cell %)))
          (remove #(clicked (door-key (:cell %))))
-         (sort-by #(u/dist (u/self-pos c) (retreat-home/mid (:cell %))))
+         (sort-by #(u/dist (u/self-pos c) (room-lib/mid (:cell %))))
          first)))
 
 (defn ^:async shut-home-door!
@@ -74,7 +74,7 @@
   [c {:keys [cell inside]}]
   (let [b (dig-cells/open-openable (:primitives c) cell)
         in-door? (click/standing-in? (u/self-pos c) cell (:half (click/props-of b)))]
-    (if (and (not in-door?) (<= (u/dist (u/self-pos c) (retreat-home/mid cell)) door-reach))
+    (if (and (not in-door?) (<= (u/dist (u/self-pos c) (room-lib/mid cell)) door-reach))
       (await (shut-door! c {:cell cell :name (.-name b)}))
       (do (when-not (await (cornered/step! c :home inside 0))
             (ctx/update-mem! c update :doors-clicked (fnil conj #{}) (door-key cell)))
