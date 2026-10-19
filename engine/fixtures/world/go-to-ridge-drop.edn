@@ -16,14 +16,14 @@
             [:fill [52 0 8] [52 4 24] "stone"] [:fill [53 0 8] [53 3 24] "stone"] [:fill [54 0 8] [54 2 24] "stone"]
             [:fill [55 0 8] [55 1 24] "stone"] [:fill [56 0 8] [56 0 24] "stone"]]
    :act [[:job (jobs.movement.go-to {:pos #at [30 4] :range 0 :unknown true})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 180 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 180 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 180 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 180 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [30.5 0 4.5] 2]]}
   {:name "unknown-column-goal-past-a-stepped-cliff-end-gives-up-unhurt"
    :body {:at [2.5 15 16.5]}
    :blocks [[:fill [0 0 8] [30 14 24] "stone"]
             [:fill [31 0 8] [31 13 24] "stone"] [:fill [32 0 8] [32 12 24] "stone"] [:fill [33 0 8] [33 11 24] "stone"]]
    :act [[:job (jobs.movement.go-to {:pos #at [60 16] :range 0 :unknown true})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 180 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 180 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 180 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 180 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-far [34.5 0 16.5] 8]]}]}

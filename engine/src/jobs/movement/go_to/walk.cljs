@@ -345,7 +345,7 @@
           (let [why (dissoc (:why walked) :detour)]
             (if-let [e (choose/detour-way c pos)]
               (esc/detour-escalate! c (:blocked (ctx/mem c) 0) why e)
-              (end/give-up! c pos (:blocked (ctx/mem c) 0) :detour {:status :no-path :reason :detour} why)))
+              (end/give-up! c pos {:status :no-path :reason :detour} why)))
 
           (= "stair" status)
           (do (ctx/update-mem! c assoc :stair-tried true :escalate-now true) :again)
@@ -354,7 +354,7 @@
           (end/finish! c {:arrived false :leg true})
 
           (and frontier (tour-spent? c))
-          (end/give-up! c pos (:blocked (ctx/mem c) 0) status {:status :no-path :reason :explore-spent}
+          (end/give-up! c pos {:status :no-path :reason :explore-spent}
                         (update (tour c) :explored js/Math.round))
 
           fetched fetched
@@ -384,14 +384,14 @@
           :again
 
           (and (= "searching" status) (leg-search-spent? c))
-          (end/give-up! c pos (:blocked (ctx/mem c) 0) :searching {:status :no-path :reason :leg-search-spent})
+          (end/give-up! c pos {:status :no-path :reason :leg-search-spent})
 
           (= "searching" status)
           (let [n (cond-> (:searching (ctx/mem c) 0) (:fresh walked) inc)]
             (ctx/update-mem! c assoc :searching n)
             (if (< n (max-searching))
               :again
-              (end/give-up! c pos (:blocked (ctx/mem c) 0) :searching {:status :no-path :reason :moved-while-searching})))
+              (end/give-up! c pos {:status :no-path :reason :moved-while-searching})))
 
           :else
           (let [handled (when (health/refused? c result) (await (health/heal-or-drop! c pos range)))]

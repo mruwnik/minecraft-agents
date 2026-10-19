@@ -16,14 +16,14 @@
  :cases
  [{:name "surface-swim-crosses"
    :act [[:job (jobs.movement.go-to {:pos #at [34 4 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 100 :of-job true}
-            {:no-event {:source :reflex :kind :fired} :for-s 100 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}
+            {:no-event {:source :reflex :kind :fired} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [34.5 4 8.5] 3]]}
   {:name "roofed-dive-taken"
    :blocks [[:fill [8 3 1] [29 3 14] "water"] [:fill [14 4 0] [25 9 15] "stone"]]
    :act [[:job (jobs.movement.go-to {:pos #at [34 4 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 100 :of-job true}
-            {:no-event {:source :reflex :kind :fired} :for-s 100 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}
+            {:no-event {:source :reflex :kind :fired} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [34.5 4 8.5] 3]]}
   {:name "flooded-tunnel-air-behind"
    :blocks [[:fill [8 1 1] [29 3 14] "stone"]

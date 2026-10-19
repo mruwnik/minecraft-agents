@@ -13,51 +13,51 @@
    :blocks [[:fill [4 0 14] [5 4 18] "stone"] [:fill [6 0 14] [7 3 18] "stone"] [:fill [8 0 14] [9 2 18] "stone"]
             [:fill [10 0 14] [11 1 18] "stone"] [:fill [12 0 14] [13 0 18] "stone"]]
    :act [[:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :gait :sneak :ways #{:walk :clear-seal} :spend {:health 0}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [20.5 0 16.5] 3]]}
   {:name "sneak-ladder-down-arrives"
    :blocks [[:fill [10 0 14] [12 4 18] "stone"]
             [:fill [13 0 16] [13 4 16] "ladder[facing=east]"]]
    :body {:at [11.5 5 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [18 0 16] :range 1 :gait :sneak :ways #{:walk :clear-seal} :spend {:health 0}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [18.5 0 16.5] 3]]}
   {:name "sneak-ledge-over-drop-arrives"
    :blocks [[:fill [6 0 16] [24 3 16] "stone"]]
    :body {:at [6.5 4 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 4 16] :range 1 :gait :sneak :ways #{:walk :clear-seal} :spend {:health 0}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 80 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 80 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 80 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [24.5 4 16.5] 3]]}
   {:name "sneak-ledge-one-cell-gap-arrives"
    :blocks [[:fill [6 0 16] [24 3 16] "stone"] [:fill [15 0 16] [15 3 16] "air"]]
    :body {:at [6.5 4 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 4 16] :range 1 :gait :sneak :ways #{:walk :clear-seal} :spend {:health 0}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 80 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 80 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 80 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [24.5 4 16.5] 3]]}
   {:name "sneak-scaffolding-tower-down-arrives"
    :blocks [[:fill [13 0 16] [13 3 16] "scaffolding"]]
    :body {:at [13.5 4 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [18 0 16] :range 1 :gait :sneak :ways #{:walk :clear-seal} :spend {:health 0}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [18.5 0 16.5] 3]]}
   {:name "walk-scaffolding-tower-down-arrives"
    :blocks [[:fill [13 0 16] [13 3 16] "scaffolding"]]
    :body {:at [13.5 4 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [18 0 16] :range 1 :gait :walk :ways #{:walk :clear-seal} :spend {:health 0}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [18.5 0 16.5] 3]]}
   {:name "auto-scaffolding-tower-down-arrives"
    :blocks [[:fill [13 0 16] [13 3 16] "scaffolding"]]
    :body {:at [13.5 4 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [18 0 16] :range 1 :ways #{:walk :clear-seal} :spend {:health 0}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [18.5 0 16.5] 3]]}
   ;; card 5dba17dd: a 2 cell gap in the ledge needs a sprint jump: :walk never sprints, so it refuses the crossing (arrived false, no
   ;; fall, no hurt); :auto (the default gait) crosses it
@@ -65,13 +65,13 @@
    :blocks [[:fill [6 0 16] [24 3 16] "stone"] [:fill [15 0 16] [16 3 16] "air"]]
    :body {:at [6.5 4 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 4 16] :range 1 :gait :walk :ways #{:walk :clear-seal} :spend {:health 0}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 80 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 80 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 80 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 80 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-far [24.5 4 16.5] 6] [:block [15 0 16] "air"]]}
   {:name "auto-crosses-a-two-cell-gap"
    :blocks [[:fill [6 0 16] [24 3 16] "stone"] [:fill [15 0 16] [16 3 16] "air"]]
    :body {:at [6.5 4 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 4 16] :range 1 :ways #{:walk :clear-seal} :spend {:health 0}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 80 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 80 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 80 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [24.5 4 16.5] 3]]}]}

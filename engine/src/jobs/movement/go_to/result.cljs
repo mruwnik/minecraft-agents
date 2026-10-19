@@ -48,13 +48,9 @@
                      data))))
 
 (defn finish!
-  "Emit result as a :result info event (its :kind is the event's :refused-kind: an event's own :kind is what it is) and
-  end the call with its ending. What the walk placed (torches) is added as :spent and :spent-at."
+  "End the call with result's ending. What the walk placed (torches) is added as :spent and :spent-at."
   [c result]
-  (let [result (merge result (some-> (spent/log c) spent/summary))]
-    (ctx/emit! c :result :info (cond-> (dissoc result :kind)
-                                 (:kind result) (assoc :refused-kind (:kind result))))
-    (ending c result)))
+  (ending c (merge result (some-> (spent/log c) spent/summary))))
 
 (defn feet-cell [c]
   (let [{:keys [x y z]} (reach/standing-cell (:primitives c))]
@@ -117,7 +113,7 @@
         (:band at) (str " heard " (name (:band at)) ", " (name (:direction at)))))
 
 (defn give-up-words
-  "The give-up reason in words, for the :text of the :unreachable event and the result: no map dumps."
+  "The give-up reason in words, for the :text of the result: no map dumps."
   [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at resets-spent mob mob-distance explored walks torches waypoint-why heal hp-cost hp-budget low-passage dip rise route straight in-water]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if (and escalation (not (#{:way-dives :detour} why)))
@@ -161,30 +157,19 @@
            (str "no path (" (some-> why name) ")")))
        (when waypoint-why (str "; a waypoint walk toward it failed: " (name waypoint-why)))))
 
-(defn warn-level
-  "A give-up or refusal is a warn for a root call, an info for a child's: its parent reports its own failure."
-  [c]
-  (if (seq (:slots c)) :info :warn))
-
 (defn give-up!
-  ([c pos tries status result] (give-up! c pos tries status result nil))
-  ([c pos tries status result extra]
-   (let [{:keys [why kind] :as fields} (merge {:at (feet-cell c) :near (js/Math.round (u/dist (u/self-pos c) pos))}
+  ([c pos result] (give-up! c pos result nil))
+  ([c pos result extra]
+   (let [{:keys [why] :as fields} (merge {:at (feet-cell c) :near (js/Math.round (u/dist (u/self-pos c) pos))}
                                               (give-up-fields result) (sh-inside/shelter-hint c) extra)
          fields (cond-> fields
                   (and (= :moved-while-searching why) (breath/in-water? (:primitives c))) (assoc :in-water true)
                   (= :goal-enclosed why) (merge (some->> (headroom/low-passage (:primitives c) (solid/cell (if (map? pos) pos (zipmap [:x :y :z] pos))))
                                                           (hash-map :low-passage))))
-         more (dissoc fields :why :kind)
          text (give-up-words pos fields)]
-     (ctx/emit! c :unreachable (warn-level c) (cond-> (merge {:target pos :tries tries :status status :why why
-                                                     :text text}
-                                                    more)
-                                       kind (assoc :refused-kind kind)))
      (finish! c (merge {:status :stopped :arrived false :reason :unreachable :text text} fields)))))
 
 (defn refuse! [c {:keys [reason message]}]
-  (ctx/emit! c :refused (warn-level c) {:reason reason :text message})
   (finish! c {:status :stopped :arrived false :reason reason :text message}))
 
 (defn known-frontier-result

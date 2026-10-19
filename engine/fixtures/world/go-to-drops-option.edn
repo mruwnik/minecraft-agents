@@ -14,18 +14,18 @@
  [{:name "default-takes-the-3-drop"
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:feet {:name "diamond_boots"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]}
   {:name "drop-cost-false-with-no-detour-refuses"
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:feet {:name "diamond_boots"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :settings {:jobs.lib.cost.planner/drop-cost false}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 30 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 30 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-far [22.5 0 16.5] 4]]}
   {:name "drop-cost-false-walks-the-ramp-round"
    :blocks [[:fill [13 2 28] [15 2 30] "air"] [:fill [14 1 28] [15 1 30] "air"] [:fill [15 0 28] [15 0 30] "air"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:feet {:name "diamond_boots"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :settings {:jobs.lib.cost.planner/drop-cost false}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 80 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 80 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 80 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [22.5 0 16.5] 2]]}]}

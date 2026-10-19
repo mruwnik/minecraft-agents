@@ -17,8 +17,8 @@
             [:fill [5 2 8] [44 2 8] "glass"]]
    :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet[enchantments={respiration:3}]"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "turtle_helmet"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [45 1 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [45.5 1 8.5] 3]]}
   ;; tunnel 100 cells = 50 s: planned up to 58 s, real air lasts ~70 s
   {:name "turtle-respiration3-dive-50s-arrives"
@@ -28,8 +28,8 @@
             [:fill [5 2 8] [104 2 8] "glass"]]
    :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet[enchantments={respiration:3}]"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "turtle_helmet"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [105 1 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 180 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 180 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 180 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [105.5 1 8.5] 3]]}
   {:name "respiration3-helmet-dive-20s-arrives"
    :blocks [[:fill [3 0 7] [46 4 9] "stone"]
@@ -38,8 +38,8 @@
             [:fill [5 2 8] [44 2 8] "glass"]]
    :act [[:rcon "item replace entity $BODY armor.head with minecraft:iron_helmet[enchantments={respiration:3}]"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "iron_helmet"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [45 1 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [45.5 1 8.5] 3]]}
   ;; turtle only: 10 s grace + 15 s of air; planner limit 22 s
   {:name "turtle-only-dive-20s-arrives"
@@ -49,8 +49,8 @@
             [:fill [5 2 8] [44 2 8] "glass"]]
    :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "turtle_helmet"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [45 1 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [45.5 1 8.5] 3]]}
   ;; turtle only, 18 s: past the 15 s of air, inside the 10 s grace; no drowning
   {:name "turtle-helmet-dive-18s-arrives"
@@ -60,8 +60,8 @@
             [:fill [5 2 8] [40 2 8] "glass"]]
    :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "turtle_helmet"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [41 1 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 116 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 116 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 116 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 116 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [41.5 1 8.5] 3]]}
   ;; go-to's quote (dry run) of the 18 s turtle dive reports no :drown (the grace drowns nothing); the body stands on stone with its head
   ;; out (a body sunk to the shaft's floor has its head under water, and a dive begun under water counts no grace); a quote
@@ -83,7 +83,7 @@
             [:fill [4 2 8] [4 3 8] "air"] [:fill [45 2 8] [45 3 8] "air"]
             [:fill [5 2 8] [44 2 8] "glass"]]
    :act [[:job (jobs.movement.go-to {:pos #at [45 1 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
    :after [[:body-near [4.5 1 8.5] 3]]}
   ;; 65 s is past the planner's own limit (58 s) but the dive ends in air, and a way to air may use the whole real breath (70 s: 15 s / 0.25 + the 10 s grace)
   {:name "turtle-respiration3-dive-65s-arrives"
@@ -93,8 +93,8 @@
             [:fill [5 2 8] [134 2 8] "glass"]]
    :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet[enchantments={respiration:3}]"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "turtle_helmet"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [135 1 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 180 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 180 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 180 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [135.5 1 8.5] 3]]}
   ;; card 30c625b6: Depth Strider III swims about twice as fast, so a 30 cell dive (15 s bare, past the planner's 12 s) fits the air; the same dive bare is refused
   {:name "depth-strider-3-dive-30-cells-arrives"
@@ -104,8 +104,8 @@
             [:fill [5 2 8] [32 2 8] "glass"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:iron_boots[enchantments={depth_strider:3}]"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:feet {:name "iron_boots"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [33 1 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [33.5 1 8.5] 3]]}
   {:name "bare-dive-30-cells-refused"
    :blocks [[:fill [3 0 7] [34 4 9] "stone"]
@@ -113,5 +113,5 @@
             [:fill [4 2 8] [4 3 8] "air"] [:fill [33 2 8] [33 3 8] "air"]
             [:fill [5 2 8] [32 2 8] "glass"]]
    :act [[:job (jobs.movement.go-to {:pos #at [33 1 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
    :after [[:body-near [4.5 1 8.5] 3]]}]}

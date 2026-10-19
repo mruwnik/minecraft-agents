@@ -15,7 +15,7 @@
           {:items [{:name [:contains "go-to"] :status :running}
                    {:name [:contains "forget-place"]}
                    {:name [:contains "set-place"]}]}]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [100.5 0 16.5] 2]]}
   {:name "plain-submits-keep-their-order"
    :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1})]
@@ -25,14 +25,14 @@
           {:items [{:name [:contains "go-to"] :status :running}
                    {:name [:contains "set-place"]}
                    {:name [:contains "forget-place"]}]}]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [100.5 0 16.5] 2]]}
   {:name "old-front-flag-refused"
    :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1})]
          [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.forget-place {:name :wt-c})" "--front"]
           {:ok false :reason :bad-args :message [:contains "front"]}]
          [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}] 20]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [100.5 0 16.5] 2]]}
   {:name "now-cuts-in-and-the-cut-go-to-continues-after-it"
    :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1})]
@@ -40,12 +40,12 @@
          [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.forget-place {:name :wt-c})" "--now"]
           {:ok true}]]
    :expect [{:event {:source :job :kind :completed :data {:name [:contains "forget-place"]}} :within-s 30}
-            {:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [100.5 0 16.5] 2]]}
   {:name "next-with-now-refused"
    :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1})]
          [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.forget-place {:name :wt-c})" "--next" "--now"]
           {:ok false :reason :bad-args :message [:contains "exclusive"]}]
          [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}] 20]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [100.5 0 16.5] 2]]}]}

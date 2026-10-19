@@ -11,15 +11,15 @@
    :act [[:job (jobs.memory.set-place {:name :camp :pos #at [24 0 16]})]
          [:await {:source :job :kind :completed} 10]
          [:job (jobs.movement.go-to {:place :camp :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 45 :of-job true}]
+   :expect [{:event {:source :job :kind :child_ended :data {:ending {:data {:arrived true}}}} :within-s 45 :of-job true}]
    :after [[:body-near [24.5 0 16.5] 2]]}
   {:name "unknown-place-refused-no-walk"
    :act [[:job (jobs.movement.go-to {:place :nowhere :range 1})]]
-   :expect [{:event {:source :job :kind :refused :data {:reason :unknown-place}} :within-s 15 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived false :reason :unknown-place}} :within-s 15 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :unknown-place}} :within-s 15 :of-job true}
+            {:event {:source :job :kind :stopped :data {:arrived false :reason :unknown-place}} :within-s 15 :of-job true}]
    :after [[:body-near [4.5 0 16.5] 1.5]]}
   {:name "bad-place-name-refused-no-walk"
    :act [[:job (jobs.movement.go-to {:place "" :range 1})]]
-   :expect [{:event {:source :job :kind :refused :data {:reason :bad-name}} :within-s 15 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived false :reason :bad-name}} :within-s 15 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :bad-name}} :within-s 15 :of-job true}
+            {:event {:source :job :kind :stopped :data {:arrived false :reason :bad-name}} :within-s 15 :of-job true}]
    :after [[:body-near [4.5 0 16.5] 1.5]]}]}

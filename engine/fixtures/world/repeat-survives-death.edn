@@ -24,7 +24,7 @@
          [:wait-s 2] [:kill-body]]
    :expect [{:event {:source :body :kind :died :data {:survived [:any]}} :within-s 30}
             {:event {:source :body :kind :respawned} :within-s 40}
-            {:event {:source :job :kind :result :data {:arrived true}} :within-s 100 :of-job true}
+            {:event {:source :job :kind :child_ended :data {:ending {:data {:arrived true}}}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :cancelled} :for-s 20 :of-job true}]
    :after [[:body-near [28.5 0 28.5] 3]]
    :limit-s 120}]}

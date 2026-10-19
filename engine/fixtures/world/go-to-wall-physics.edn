@@ -14,44 +14,44 @@
  [{:name "one-high-wall-from-the-cell-centre"
    :blocks [[:fill [20 0 0] [20 0 31] "stone"]]
    :act [[:job (jobs.movement.go-to {:pos #at [23 0 16] :range 0})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :walker-fault} :for-s 40 :of-job true :until {:source :job :kind :result :data {:arrived true}}}
-            {:no-event {:source :job :kind :go-to.unstuck} :for-s 40 :of-job true :until {:source :job :kind :result :data {:arrived true}}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :walker-fault} :for-s 40 :of-job true :until {:source :job :kind :completed :data {:arrived true}}}
+            {:no-event {:source :job :kind :go-to.unstuck} :for-s 40 :of-job true :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [23.5 0 16.5] 1.5]]}
   ;; the body's box (half-width .31) touches the wall face at x 20
   {:name "one-high-wall-from-the-face"
    :blocks [[:fill [20 0 0] [20 0 31] "stone"]]
    :body {:at [19.69 0 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [23 0 16] :range 0})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :walker-fault} :for-s 40 :of-job true :until {:source :job :kind :result :data {:arrived true}}}
-            {:no-event {:source :job :kind :go-to.unstuck} :for-s 40 :of-job true :until {:source :job :kind :result :data {:arrived true}}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :walker-fault} :for-s 40 :of-job true :until {:source :job :kind :completed :data {:arrived true}}}
+            {:no-event {:source :job :kind :go-to.unstuck} :for-s 40 :of-job true :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [23.5 0 16.5] 1.5]]}
   ;; along a 2-high wall from its face and round its south end
   {:name "round-a-wall-corner-from-the-face"
    :blocks [[:fill [20 0 4] [20 1 20]  "stone"]]
    :body {:at [19.69 0 8.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 8] :range 0})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 50 :of-job true}
-            {:no-event {:source :job :kind :walker-fault} :for-s 50 :of-job true :until {:source :job :kind :result :data {:arrived true}}}
-            {:no-event {:source :job :kind :go-to.unstuck} :for-s 50 :of-job true :until {:source :job :kind :result :data {:arrived true}}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 50 :of-job true}
+            {:no-event {:source :job :kind :walker-fault} :for-s 50 :of-job true :until {:source :job :kind :completed :data {:arrived true}}}
+            {:no-event {:source :job :kind :go-to.unstuck} :for-s 50 :of-job true :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [22.5 0 8.5] 1.5]]
    :limit-s 70}
   ;; a ledge one up under a ceiling three above the lower floor (a head bump on the jump up would set the body back)
   {:name "ledge-jump-under-a-low-ceiling"
    :blocks [[:fill [20 0 14] [26 0 18] "stone"] [:fill [14 3 14] [28 3 18] "stone"]]
    :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 0})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :walker-fault} :for-s 40 :of-job true :until {:source :job :kind :result :data {:arrived true}}}
-            {:no-event {:source :job :kind :go-to.unstuck} :for-s 40 :of-job true :until {:source :job :kind :result :data {:arrived true}}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :walker-fault} :for-s 40 :of-job true :until {:source :job :kind :completed :data {:arrived true}}}
+            {:no-event {:source :job :kind :go-to.unstuck} :for-s 40 :of-job true :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [24.5 1 16.5] 1.5]]}
   ;; 1-deep water at x 8..15, the bank at x 16 one block above its surface
   {:name "climb-out-of-one-deep-water-onto-a-bank"
    :blocks [[:fill [8 -2 4] [15 -2 28] "stone"] [:fill [8 -1 4] [15 -1 28] "water"] [:fill [16 0 4] [30 0 28] "stone"]]
    :body {:at [12.5 -1 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [18 1 16] :range 0})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :walker-fault} :for-s 40 :of-job true :until {:source :job :kind :result :data {:arrived true}}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :walker-fault} :for-s 40 :of-job true :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [18.5 1 16.5] 1.5]]}
   ;; should fail: a 2-high wall right across the plot is no jump, and with walking only nothing is dug or built;
   ;; the wall closes into a ring on the plot edges so the next plot's floor is no way round
@@ -59,6 +59,6 @@
    :blocks [[:fill [20 0 0] [20 1 31] "cobblestone"] [:fill [21 0 0] [31 1 0] "cobblestone"]
             [:fill [21 0 31] [31 1 31] "cobblestone"] [:fill [31 0 1] [31 1 30] "cobblestone"]]
    :act [[:until-seen {:block "cobblestone"} 10] [:job (jobs.movement.go-to {:pos #at [23 0 16] :range 0 :ways #{:walk}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :walker-fault} :for-s 40 :of-job true :until {:source :job :kind :result :data {:arrived false}}}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :walker-fault} :for-s 40 :of-job true :until {:source :job :kind :stopped :data {:arrived false}}}]
    :after [[:body-far [23.5 0 16.5] 4] [:block [20 0 16] "cobblestone"] [:block [20 1 16] "cobblestone"]]}]}

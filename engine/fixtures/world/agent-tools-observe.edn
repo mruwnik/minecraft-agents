@@ -41,10 +41,10 @@
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-night}} :within-s 30 :of-job true}]}
   {:name "finished-job-result-is-answered-and-unknown-id-refused"
    :act [[:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1})]
-         [:await {:source :job :kind :result} 40]
+         [:await {:source :job :kind #{:completed :stopped}} 40]
          [:cli "observe" ["$body" "--world" "$world" "result" "$job"] {:ok true :status [:any]}]
          [:cli "observe" ["$body" "--world" "$world" "result" "j999999"] {:ok false :reason :unknown-job}]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}]}
   {:name "seen-blocks-is-a-read-only-query"
    :body {:at [16.5 0 16.5] :yaw 270 :spawnpoint [4 0 4]}
    :blocks [[:set [20 0 16] "crafting_table"]]

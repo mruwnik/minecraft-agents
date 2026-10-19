@@ -13,23 +13,23 @@
  [{:name "oak-door-shut-behind"
    :blocks [[:set [16 0 16] "oak_door[facing=east,half=lower,open=false]"] [:set [16 1 16] "oak_door[facing=east,half=upper,open=false]"]]
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=false]"] [:body-near [22.5 0 16.5] 2]]}
   ;; card 7cd8b957: the goal range takes in the doorway, so the walk would end standing in the door's column; it steps out and shuts it
   {:name "goal-range-takes-in-the-doorway-door-shut"
    :blocks [[:set [16 0 16] "oak_door[facing=east,half=lower,open=false]"] [:set [16 1 16] "oak_door[facing=east,half=upper,open=false]"]]
    :act [[:job (jobs.movement.go-to {:pos #at [17 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=false]"] [:body-near [17.5 0 16.5] 2]]}
   {:name "oak-gate-shut-behind"
    :blocks [[:set [16 0 16] "oak_fence_gate[facing=east,open=false]"] [:set [16 1 16] "air"]]
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "oak_fence_gate[open=false]"] [:body-near [22.5 0 16.5] 2]]}
   {:name "leave-open-keeps-it-open"
    :blocks [[:set [16 0 16] "oak_fence_gate[facing=east,open=false]"] [:set [16 1 16] "air"]]
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :doors :leave-open})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "oak_fence_gate[open=true]"]]}
   {:name "door-left-reflex-shuts-a-gate-a-cut-walk-left-open"
    ;; the walk's round is cut right after the open click (a --now job: walk 9 blocks back west), so the gate stays open
@@ -48,18 +48,18 @@
   {:name "never-treats-the-door-as-a-wall"
    :blocks [[:set [16 0 16] "oak_door[facing=east,half=lower,open=false]"] [:set [16 1 16] "oak_door[facing=east,half=upper,open=false]"]]
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :doors :never :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=false]"] [:body-near [10.5 0 16.5] 8]]}
   {:name "iron-door-room-says-unreachable-in-words"
    ;; card 90f95646 (move-to is go-to now): from the room shut by the iron door the result names why, never :off-plan.
    :blocks [[:set [16 0 16] "iron_door[facing=east,half=lower,open=false]"] [:set [16 1 16] "iron_door[facing=east,half=upper,open=false]"]]
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 0 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false :reason :unreachable :why #{:exhausted :start-enclosed :goal-enclosed}}}
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why #{:exhausted :start-enclosed :goal-enclosed}}}
              :within-s 20 :of-job true}]
    :after [[:block [16 0 16] "iron_door[half=lower,open=false]"] [:body-near [10.5 0 16.5] 8]]
    :limit-s 30}
   {:name "iron-door-without-button-stays-shut"
    :blocks [[:set [16 0 16] "iron_door[facing=east,half=lower,open=false]"] [:set [16 1 16] "iron_door[facing=east,half=upper,open=false]"]]
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "iron_door[half=lower,open=false]"] [:body-near [10.5 0 16.5] 8]]}]}

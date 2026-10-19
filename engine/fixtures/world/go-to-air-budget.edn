@@ -22,8 +22,8 @@
             [:fill [25 2 8] [38 2 8] "air"]
             [:fill [5 2 8] [24 2 8] "glass"] [:fill [39 2 8] [58 2 8] "glass"]]
    :act [[:job (jobs.movement.go-to {:pos #at [59 1 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 150 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 150 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 150 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 150 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [59.5 1 8.5] 3]]}
   ;; night, open sky: the dark wait must not be taken under water; the body swims up first and walks (no drowning)
   {:name "submerged-at-night-surfaces-and-walks"
@@ -33,8 +33,8 @@
             [:fill [4 0 8] [4 3 8] "water"]]
    :body {:at [4.5 0 8.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [12 4 8] :range 1})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 90 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 90 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 90 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [12.5 4 8.5] 3]]}
   ;; should fail: two 10 s dives joined by one cell with air over it: the touch gives back about 2 s
   {:name "shaft-joined-dives-refused"
@@ -44,7 +44,7 @@
             [:fill [25 2 8] [25 2 8] "air"]
             [:fill [5 2 8] [24 2 8] "glass"] [:fill [26 2 8] [45 2 8] "glass"]]
    :act [[:job (jobs.movement.go-to {:pos #at [46 1 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
    :after [[:body-near [4.5 1 8.5] 3]]}
   ;; full air, no walk round (ridge has no gap): the 12 cell tunnel is the way and fits in the air
   {:name "replan-full-air-takes-the-tunnel"
@@ -54,8 +54,8 @@
             [:fill [11 6 0] [11 9 63] "bedrock"]]
    :body {:at [4.5 0 8.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [18 6 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [18.5 6 8.5] 3]]}
   ;; air about half spent: the tunnel does not fit, so swim up the shaft (about 1.5 s) and walk round the ridge; no drowning
   {:name "replan-low-air-surfaces-and-walks-round"
@@ -65,8 +65,8 @@
             [:fill [11 6 0] [11 9 58] "bedrock"]]
    :body {:at [4.5 0 8.5]}
    :act [[:until-rcon "data get entity $BODY Air" "data: (-?[0-9]{1,2}|1[0-5][0-9]|16[0-5])s" 25] [:job (jobs.movement.go-to {:pos #at [18 6 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 150 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 150 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 150 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 150 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [18.5 6 8.5] 3]]}
   ;; should fail: air half spent, only a 32 cell tunnel (16 s) with no way round: refused for air (the land goal is no way to air)
   {:name "replan-low-air-lethal-tunnel-refused"
@@ -76,7 +76,7 @@
             [:fill [11 6 0] [11 9 63] "bedrock"]]
    :body {:at [4.5 0 8.5] :effects [["resistance" 600 4]]}
    :act [[:until-rcon "data get entity $BODY Air" "data: (-?[0-9]{1,2}|1[0-3][0-9]|14[0-5])s" 25] [:job (jobs.movement.go-to {:pos #at [38 6 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
    :after [[:body-near [4.5 0 8.5] 8]]}
   ;; air half spent, the 32 cell tunnel (16 s) would drown lethally but the ridge gap gives a safe walk: it surfaces and walks, no drowning
   {:name "replan-lethal-shortcut-loses-to-the-walk"
@@ -86,8 +86,8 @@
             [:fill [11 6 0] [11 9 58] "bedrock"]]
    :body {:at [4.5 0 8.5]}
    :act [[:until-rcon "data get entity $BODY Air" "data: (-?[0-9]{1,2}|1[0-3][0-9]|14[0-5])s" 25] [:job (jobs.movement.go-to {:pos #at [38 6 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 180 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 180 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 180 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [38.5 6 8.5] 3]]}
   ;; oxygen about 4: the seen pocket 6 cells away is gone to (a few hp of drowning is fine)
   {:name "drowning-body-swims-to-seen-air"
@@ -97,7 +97,7 @@
             [:fill [11 2 8] [13 2 8] "air"] [:set [12 3 8] "sea_lantern"]]
    :body {:at [5.5 0 8.5] :yaw 270}
    :act [[:until-rcon "data get entity $BODY Air" "data: (-?[0-9]{1,2}|100)s" 25] [:job (jobs.movement.go-to {:pos #at [12 1 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [12.5 1 8.5] 4]]}
   ;; should fail: the goal cell is under water with stone over it (its head cell is no air): not a way to air, so a body that has used its 12 s may not swim to it
   {:name "drowning-body-goal-under-stone-is-not-air"
@@ -106,7 +106,7 @@
             [:fill [4 0 8] [20 1 8] "water"]]
    :body {:at [5.5 0 8.5] :yaw 270 :effects [["resistance" 600 4]]}
    :act [[:until-rcon "data get entity $BODY Air" "data: (-?[0-9]|-?[1-7][0-9]|80)s" 25] [:job (jobs.movement.go-to {:pos #at [12 1 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
    :after [[:body-near [5.5 0 8.5] 3]]}
   ;; should fail: the seen pocket 6 cells away, at 2 hp with the air all but spent the first drowning hit kills: refused, never swum (:why :air-lethal; a pocket the water hides is :air, the case below)
   {:name "drowning-body-at-2-hp-seen-air-lethal-refused"
@@ -119,7 +119,7 @@
          [:rcon "damage $BODY 18 minecraft:magic"] [:until-rcon "data get entity $BODY Health" "data: [0-3]\\." 5]
          [:rcon "effect give $BODY minecraft:resistance 600 4 true"] [:until-rcon "data get entity $BODY Air" "data: (-?[0-9]|-?1[0-9]|-20)s" 25]
          [:job (jobs.movement.go-to {:pos #at [12 1 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air-lethal}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :air-lethal}} :within-s 60 :of-job true}]
    :after [[:body-near [5.5 0 8.5] 3]]}
   ;; should fail: the pocket is round a bend (25 cells east, 5 north), never in sight: no way to air, refused for air
   {:name "drowning-body-unseen-air-round-a-bend-refused"
@@ -129,5 +129,5 @@
             [:fill [30 2 12] [30 2 14] "air"]]
    :body {:at [5.5 0 8.5] :yaw 270 :effects [["resistance" 600 4]]}
    :act [[:until-rcon "data get entity $BODY Air" "data: (-?[0-9]{1,2}|100)s" 25] [:job (jobs.movement.go-to {:pos #at [30 1 13] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
    :after [[:body-near [5.5 0 8.5] 3]]}]}

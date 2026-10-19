@@ -15,6 +15,6 @@
    :act [[:job (jobs.storage.make-room {:free 6})]]
    :expect [{:event {:source :job :kind :make-room.tossed} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed} :within-s 90 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived true}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :child_ended :data {:ending {:data {:arrived true}}}} :within-s 90 :of-job true}
             {:no-event {:source :job :level :warn} :for-s 90 :until {:source :job :kind :completed}}]
    :after [[:item "coal" 30] [:item "diamond" 3]]}]}

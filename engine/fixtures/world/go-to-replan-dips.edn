@@ -42,8 +42,8 @@
  :cases
  [{:name "level-corridor-and-ladder-need-no-stair"
    :act [[:job (jobs.movement.go-to {:pos #at [60 30 16] :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 300 :of-job true}
-            {:no-event {:source :job :kind :go-to.escalated} :for-s 300 :of-job true :until {:source :job :kind :result :data {:arrived true}}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 300 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated} :for-s 300 :of-job true :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [60.5 30 16.5] 3]]}
   {:name "zombie-on-the-walk-refuses-the-lane-below-and-cuts-a-stair"
    :mobs :keep
@@ -52,5 +52,5 @@
          [:summon "zombie" [54.5 12 16.5] "{NoAI:1b}"]]
    :expect [{:event {:source :job :kind :replan :data {:why :danger}} :within-s 120 :of-job true}
             {:event {:source :job :kind :go-to.escalated :data {:step :stair :why :way-dives}} :within-s 200 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived true}} :within-s 320 :of-job true}]
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 320 :of-job true}]
    :after [[:body-near [60.5 30 16.5] 3]]}]}

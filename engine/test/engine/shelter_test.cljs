@@ -45,6 +45,11 @@
 
 (def dark {:light-default [0 0]})
 
+(defn gave-ups
+  "The go-to children that gave up (child_ended with the cause :unreachable)."
+  [seen]
+  (filterv #(= :unreachable (get-in % [:ending :cause :reason])) (emitted seen :child_ended)))
+
 (defn fires-with-light?
   "The trigger over a fake wrapped in the perception, so the raw world's light is read."
   [world]
@@ -411,13 +416,13 @@
           (await (run-until-empty eng 20))
           (is (= [{:pos {:x 6 :y 64 :z 0}}] (entries eng :bed-unreachable)))
           (is (= {:cap 5 :ttl 600000} (mem/policy (mem/view (:store eng)) :bed-unreachable)))
-          (let [gave-up (count (emitted seen :unreachable))]
+          (let [gave-up (count (gave-ups seen))]
             (core/submit! eng '(jobs.survival.sleep) {})
             (is (nil? (core/tick! eng)) "declines while the entry is fresh")
-            (is (= gave-up (count (emitted seen :unreachable))))
+            (is (= gave-up (count (gave-ups seen))))
             (swap! clock + 600001)
             (await (tick-n eng 3))
-            (is (< gave-up (count (emitted seen :unreachable))) "tries the bed again once the entry expired: three more fruitless go-to rounds")))))))
+            (is (< gave-up (count (gave-ups seen))) "tries the bed again once the entry expired: three more fruitless go-to rounds")))))))
 
 (deftest sleep-still-tries-a-different-bed-than-the-unreachable-one
   (async done

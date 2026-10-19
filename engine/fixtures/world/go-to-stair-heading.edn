@@ -11,34 +11,34 @@
  :cases
  [{:name "control-goal-west-no-obstacle"
    :act [[:job (jobs.movement.go-to {:pos #at [12 4 16] :range 1})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 180 :of-job true}]
    :after [[:body-near [12.5 4 16.5] 2]]}
   {:name "control-obsidian-east-goal-west"
    :blocks [[:fill [17 0 16] [17 3 16] "obsidian"]]
    :act [[:job (jobs.movement.go-to {:pos #at [12 4 16] :range 1})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 180 :of-job true}]
    :after [[:body-near [12.5 4 16.5] 2]]}
   {:name "obsidian-east-other-heading-arrives"
    :blocks [[:fill [17 0 16] [17 3 16] "obsidian"]]
    :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
-            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 180 :of-job true}]
    :after [[:block [17 1 16] "obsidian"] [:body-near [20.5 4 16.5] 2]]}
   {:name "obsidian-east-and-north-arrives"
    :blocks [[:fill [17 0 16] [17 3 16] "obsidian"] [:fill [16 0 15] [16 3 15] "obsidian"]]
    :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
-            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 180 :of-job true}]
    :after [[:body-near [20.5 4 16.5] 2]]}
   {:name "obsidian-all-four-gives-up"
    :blocks [[:fill [14 0 14] [18 3 18] "obsidian"] [:fill [16 0 16] [16 3 16] "air"]]
    :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false}} :within-s 150 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 150 :of-job true}]
    :after [[:body-near [16.5 0 16.5] 1]]}
   {:name "bedrock-all-four-gives-up"
    :blocks [[:fill [14 0 14] [18 3 18] "bedrock"] [:fill [16 0 16] [16 3 16] "air"]]
    :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false :escalation {:step :none}}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :escalation {:step :none}}} :within-s 60 :of-job true}]
    :after [[:body-near [16.5 0 16.5] 1]]}
   {:name "up-stair-over-air-under-floor"
    ;; mass y 2..7, shaft y 3..7, body at y 3; [17 2] (under the first step's floor [17 3]) is air; other walls bedrock so east is the only heading
@@ -48,6 +48,6 @@
    :body {:at [16.5 3 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [20 8 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :result :data {:escalation {:why :cave-below}}} :for-s 180 :until {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}}}
-            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
+            {:no-event {:source :job :kind #{:completed :stopped} :data {:escalation {:why :cave-below}}} :for-s 180 :until {:source :job :kind :completed :data {:arrived true}}}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 180 :of-job true}]
    :after [[:body-near [20.5 8 16.5] 2]]}]}

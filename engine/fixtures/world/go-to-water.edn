@@ -14,8 +14,8 @@
             [:fill [4 0 4] [24 4 28] "water"]]
    :body {:at [6.5 0 16.5] :settle-s 1}
    :act [[:job (jobs.movement.go-to {:pos #at [36 5 16] :range 2 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 90 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 90 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 90 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [36.5 5 16.5] 3]]}
   {:name "water-goal-leaves-the-water"
    :plot {:height 12 :length 48 :width 32}
@@ -23,8 +23,8 @@
             [:fill [4 0 4] [24 4 28] "water"]]
    :body {:at [30.5 5 16.5] :yaw 90 :settle-s 1}
    :act [[:job (jobs.movement.go-to {:pos #at [23 4 16] :range 3 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [26.5 5 16.5] 2.6]]}
   {:name "unseen-lake-column-aims-at-the-surface"
    :plot {:height 20 :length 48 :width 32}
@@ -32,8 +32,8 @@
             [:fill [4 0 4] [24 14 28] "water"]]
    :body {:at [30.5 15 16.5] :yaw 270 :settle-s 1}
    :act [[:job (jobs.movement.go-to {:pos #at [14 16] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 100 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 100 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [14.5 15 16.5] 3]]}
   {:name "dark-shaft-go-to-swims-up"
    :plot {:height 16}
@@ -43,8 +43,8 @@
    :body {:at [16.5 1 16.5] :settle-s 1 :effects [["resistance" 600 4]]}
    :act [[:until-rcon "data get entity $BODY Air" "data: ([0-9]{1,2}|1[0-9]{2}|2[0-4][0-9])s" 15]
          [:job (jobs.movement.go-to {:pos #at [16 11 16] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :result :data {:why :air}} :for-s 60 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind #{:completed :stopped} :data {:why :air}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [16.5 11 16.5] 3]]}
   ;; card 33b39e3a: a body pressed on a bank face at a power of two (plot x or z 16 here; the plot origin is a multiple of 16) in water
   ;; 1 deep climbs out: it arrives, no walker fault. East bank face at x 16 (the pool x 6..15, z 8..24, 1 deep); north bank face at z 16.
@@ -52,15 +52,15 @@
    :blocks [[:fill [16 0 8] [30 0 24] "stone"] [:fill [6 0 8] [15 0 24] "water"]]
    :body {:at [15.69 0 16.5] :settle-s 2}
    :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :walker-fault} :for-s 60 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :walker-fault} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [24.5 1 16.5] 3]]}
   {:name "shallow-pool-pressed-on-the-north-bank-face-climbs-out"
    :blocks [[:fill [8 0 0] [24 0 15] "stone"] [:fill [8 0 16] [24 0 24] "water"]]
    :body {:at [16.5 0 16.31] :settle-s 2}
    :act [[:job (jobs.movement.go-to {:pos #at [16 1 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :walker-fault} :for-s 60 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :walker-fault} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [16.5 1 8.5] 3]]}
   ;; card f4668a26: a submerged 2-high tunnel (18 cells, the only way past the ridge) is swum, not paddled: a swim (sprint, eyes
   ;; under) is ~3.9 b/s, so up the far shaft and out within 11 s; a paddle takes 9 s for the tunnel alone (live, 1.4 s a cell: drowns)
@@ -71,6 +71,6 @@
             [:fill [11 6 0] [11 9 63] "bedrock"]]
    :body {:at [4.5 0 8.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 6 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 11 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 11 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 11 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 11 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [24.5 6 8.5] 3]]}]}

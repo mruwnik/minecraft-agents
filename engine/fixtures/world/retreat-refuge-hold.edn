@@ -51,8 +51,8 @@
    :act [[:summon "zombie" [14.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}},active_effects:[{id:\"minecraft:slowness\",amplifier:127b,duration:2400}]}"]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 50"] [:until-seen {:entity "zombie"} 10]
          [:job (jobs.movement.go-to {:pos #at [3 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :result :data {:arrived true}}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :completed :data {:arrived true}}}]
    :limit-s 70}
   {:name "hide-names-the-zombie-and-the-queued-dig-runs-after"
    :blocks [[:set [24 0 24] "dirt"]]

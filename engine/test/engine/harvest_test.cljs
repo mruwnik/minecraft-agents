@@ -389,7 +389,7 @@
                                                    }})
               _ (tu/short-walks! p 1) ; every steer runs for no time: blocked walks without a reason
               result (await (child-outcome eng job {} 100))]
-          (is (= 6 (count (filter #(= "j1/kid/walk" (:job %)) (events-of seen :result))))) ; go-to's own walks and escalation do not count
+          (is (= 6 (count (filter #(and (= "j1/kid/walk" (:job %)) (:ending %)) (events-of seen :child_ended))))) ; go-to's own walks and escalation do not count
           (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up false} (dissoc result :status :reason :text)))
           (is (= [] (:list (core/state eng)))))))))
 

@@ -534,7 +534,7 @@
   (let [e (first (filter #(and (= :job (:source %)) (= :stopped (:kind %))) @seen))]
     (merge e (:data e))))
 
-(defn unreachable-count [seen] (count (of-kind seen :unreachable)))
+(defn unreachable-count [seen] (count (filter #(= :unreachable (get-in % [:ending :cause :reason])) (of-kind seen :child_ended))))
 
 (deftest a-bank-beyond-the-shore-radius-is-reached-with-a-go-to-child
   (async done
@@ -736,7 +736,7 @@
             (is (= [[:stopped :no-land-in-range]] (ended seen)))
             (is (= 0 (:legs (stopped-data seen))) "no leg repeats the first run's")))))))
 
-(deftest children-of-a-breathe-run-leave-no-unreachable-warning
+(deftest a-walled-in-breathe-run-ends-after-its-go-to-children-gave-up
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -744,11 +744,10 @@
               {:keys [eng seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
                                          :blocks (merge (lake -6 6 6) (bank 7 7 6) (bank -7 -7 6) wall-all-round)}
                                         raw)
-              unreachable #(= :unreachable (:kind %))]
+              gave-up? #(= :unreachable (get-in % [:data :ending :cause :reason]))]
           (await (one-run! eng small-args))
           (is (= [[:stopped :no-land-in-range]] (ended seen)))
-          (is (pos? (count (filter unreachable @raw))) "the children still report, quietly")
-          (is (empty? (filter #(and (unreachable %) (= :warn (:level %))) @raw))))))))
+          (is (pos? (count (filter gave-up? @raw))) "the children gave up"))))))
 
 ;; ---------------------------------------------------------------- as a reflex: one run, cut, refire
 

@@ -32,7 +32,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p] :as s} (await (gt/go! pit-world {:pos goal :range 3 :see true}))]
-          (is (= {:arrived true} @out) (pr-str @out (map :data (gt/events-of s :unreachable))))
+          (is (= {:arrived true} @out) (pr-str @out))
           (is (>= (second (gt/at p)) 64) (str "out of the pit, at " (gt/at p)))
           (is (eye-sees? p goal) (str "sees the goal from " (gt/at p))))))))
 
@@ -54,8 +54,7 @@
                                                        {:pos [5 62 0] :range 3 :see true :ways #{:walk :clear-seal}}))]
           (is (false? (:arrived @out)) (pr-str @out))
           (is (= :out-of-sight (:why @out)) (pr-str @out))
-          (is (< ticks 30) "ends")
-          (is (seq (gt/events-of s :unreachable))))))))
+          (is (< ticks 30) "ends"))))))
 
 (deftest see-with-no-stand-in-the-loaded-land-does-not-tour-to-its-edge
   ;; the buried goal is in loaded land: the search running out of it is no frontier to explore, so the body ends

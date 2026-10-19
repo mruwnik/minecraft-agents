@@ -535,7 +535,7 @@
                     :bodyHitbox true :drops {"iron_ore" "raw_iron"} :self {:pos [0.5 top 0.5]} :inventory pickaxe}
                    120)))
 
-(defn walk-texts [s] (keep :text (events-of s :unreachable)))
+(defn walk-texts [s] (keep #(get-in % [:ending :data :text]) (events-of s :child_ended)))
 
 (deftest a-drop-of-thirteen-blocks-to-a-seen-ore-is-refused-for-its-health-cost
   (async done

@@ -142,9 +142,9 @@
       (and (:cave-climb (ctx/mem c)) (or (> n (tuning/max-escalations)) (= :none (:step e))))
       (do (ctx/update-mem! c #(-> % (dissoc :cave-climb :dive-climb :give-up) (assoc :cave-ok true)))
           :again)
-      (and failed (= :detour status)) (end/give-up! c pos tries status result (merge (select-keys result [:route :straight :allowed]) {:escalation failed}))
-      (> n (tuning/max-escalations)) (end/give-up! c pos tries status result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) {:step :spent :n (tuning/max-escalations)}) into? (assoc :into true))}))
-      (= :none (:step e)) (end/give-up! c pos tries status result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed e) into? (assoc :into true))}))
+      (and failed (= :detour status)) (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation failed}))
+      (> n (tuning/max-escalations)) (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) {:step :spent :n (tuning/max-escalations)}) into? (assoc :into true))}))
+      (= :none (:step e)) (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed e) into? (assoc :into true))}))
       :else
       (do (ctx/emit! c :go-to.escalated :info {:step (:step e) :why (if (:own e) :own-way-blocked (:why (end/give-up-fields result))) :n n :at feet
                                                :text (if (:own e) "its own stair up is blocked: cutting it again" (str "no way " (if (or into? (= :dig-route (:step e))) "in" "out") " on foot: " (name (:step e))))})
@@ -189,7 +189,7 @@
                          :give-up {:tries tries :status status
                                    :result (select-keys result [:status :reason :kind :cells :near :one-way :at :from :dip :rise :move :why :step :partial])})
         (await (escalate! c pos nil)))
-    (end/give-up! c pos tries status result
+    (end/give-up! c pos result
                   (when (and (not (sh-inside/sheltered-in c))
                              (or (escalate-reason? result (some-> (:doors (:args c)) keyword)) (sprint-only? result))
                              (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword)))

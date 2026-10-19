@@ -13,12 +13,12 @@
    :blocks [[:fill [12 0 11] [12 6 11] "stone"] [:fill [10 0 11] [10 3 11] "stone"] [:fill [11 1 11] [11 5 11] "vine[east=true]"]]
    :body {:at [11.5 0 11.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [11 6 11] :range 2.5})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [10.5 4 11.5] 1.5]]}
   {:name "high-vine-with-no-floor-in-range-is-unreachable-hanging"
    :blocks [[:fill [12 0 11] [12 8 11] "stone"] [:fill [11 1 11] [11 7 11] "vine[east=true]"]]
    :body {:at [11.5 0 11.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [10 7 11] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.hanging :data {:stand nil}} :within-s 30 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived false :reason :unreachable :why :hanging}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :died} :for-s 20 :until {:source :job :kind :result}}]}]}
+            {:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :hanging}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :died} :for-s 20 :until {:source :job :kind #{:completed :stopped}}}]}]}

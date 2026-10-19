@@ -150,7 +150,6 @@
           (await (leave-at-dawn! s))
           (is (= :east (:heading @out)) "the stair heads toward the goal")
           (await (go-to! s {:x 10 :y 64 :z 0}))
-          (is (= [] (emitted seen :unreachable)))
           (is (<= 9 (first (feet p)) 11) "arrived beside the target")
           (is (= 64 (second (feet p))) "on the surface"))))))
 

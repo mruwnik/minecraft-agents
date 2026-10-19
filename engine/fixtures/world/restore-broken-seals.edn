@@ -19,7 +19,7 @@
    :act [[:job (jobs.blocks.dig {:pos #at [12 0 10] :ignore-zones? true})] [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]
          [:job (jobs.blocks.dig {:pos #at [12 1 10] :ignore-zones? true})] [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]
          [:job (jobs.survival.restore-broken {})] [:await {:source :job :kind :stopped :data {:not-restored [:any]}} 30]
-         [:job (jobs.movement.go-to {:pos #xyz [15 0 10] :range 1})] [:await {:source :job :kind :result :data {:arrived true}} 25]
+         [:job (jobs.movement.go-to {:pos #xyz [15 0 10] :range 1})] [:await {:source :job :kind :child_ended :data {:ending {:data {:arrived true}}}} 25]
          [:job (jobs.survival.restore-broken {})]]
    :expect [{:event {:source :job :kind :stopped :data {:not-restored [{:why :seals} {:why :seals}]}} :within-s 60}
             {:event {:source :job :kind :completed :data {:cells [[:any] [:any]]}} :within-s 85}]
@@ -29,7 +29,7 @@
    :act [[:job (jobs.blocks.dig {:pos #at [10 0 12] :ignore-zones? true})] [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]
          [:job (jobs.blocks.dig {:pos #at [10 1 12] :ignore-zones? true})] [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]
          [:job (jobs.survival.restore-broken {})] [:await {:source :job :kind :stopped :data {:not-restored [:any]}} 30]
-         [:job (jobs.movement.go-to {:pos #xyz [10 0 15] :range 1})] [:await {:source :job :kind :result :data {:arrived true}} 25]
+         [:job (jobs.movement.go-to {:pos #xyz [10 0 15] :range 1})] [:await {:source :job :kind :child_ended :data {:ending {:data {:arrived true}}}} 25]
          [:job (jobs.survival.restore-broken {})]]
    :expect [{:event {:source :job :kind :stopped :data {:not-restored [{:why :seals} {:why :seals}]}} :within-s 60}
             {:event {:source :job :kind :completed :data {:cells [[:any] [:any]]}} :within-s 85}]
@@ -67,9 +67,9 @@
          [:job (jobs.blocks.dig {:pos #at [26 1 13] :ignore-zones? true})] [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]
          [:job (jobs.blocks.dig {:pos #at [26 0 14] :ignore-zones? true})] [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]
          [:job (jobs.blocks.dig {:pos #at [26 1 14] :ignore-zones? true})] [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]
-         [:job (jobs.movement.go-to {:pos #xyz [26 0 8] :range 1})] [:await {:source :job :kind :result :data {:arrived true}} 25]
+         [:job (jobs.movement.go-to {:pos #xyz [26 0 8] :range 1})] [:await {:source :job :kind :child_ended :data {:ending {:data {:arrived true}}}} 25]
          [:job (jobs.survival.restore-broken {})] [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 100]
-         [:job (jobs.movement.go-to {:pos #xyz [26 0 8] :range 1})] [:await {:source :job :kind :result :data {:arrived true}} 25]
+         [:job (jobs.movement.go-to {:pos #xyz [26 0 8] :range 1})] [:await {:source :job :kind :child_ended :data {:ending {:data {:arrived true}}}} 25]
          [:job (jobs.survival.restore-broken {})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.restore-broken"}} :within-s 220}]
    :after [[:block [26 0 10] "cobblestone"] [:block [26 1 10] "cobblestone"] [:block [26 0 11] "cobblestone"] [:block [26 1 11] "cobblestone"] [:block [26 0 12] "cobblestone"] [:block [26 1 12] "cobblestone"] [:block [26 0 13] "cobblestone"] [:block [26 1 13] "cobblestone"] [:block [26 0 14] "cobblestone"] [:block [26 1 14] "cobblestone"]]}]}

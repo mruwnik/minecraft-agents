@@ -12,21 +12,21 @@
  [{:name "stone-button-inside-opens-and-arrives"
    :blocks [[:set [15 2 17] "stone_button[face=wall,facing=north]"]]
    :act [[:job (jobs.movement.go-to {:pos #at [16 1 22] :range 1})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 90 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}]
    :after [[:body-near [16.5 1 22.5] 2]]}
   {:name "oak-button-inside-opens-and-arrives"
    :blocks [[:set [15 2 17] "oak_button[face=wall,facing=north]"]]
    :act [[:job (jobs.movement.go-to {:pos #at [16 1 22] :range 1})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 90 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}]
    :after [[:body-near [16.5 1 22.5] 2]]}
   {:name "pressure-plate-inside-opens-and-arrives"
    :blocks [[:set [16 1 17] "stone_pressure_plate"]]
    :act [[:job (jobs.movement.go-to {:pos #at [16 1 22] :range 1})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 90 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}]
    :after [[:body-near [16.5 1 22.5] 2]]}
   {:name "control-button-outside-only-escalates"
    :blocks [[:set [15 2 19] "stone_button[face=wall,facing=south]"]]
    :act [[:job (jobs.movement.go-to {:pos #at [16 1 22] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 90 :of-job true}
-            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 180 :of-job true}]
    :after [[:body-near [16.5 1 22.5] 2]]}]}

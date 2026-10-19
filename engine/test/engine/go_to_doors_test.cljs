@@ -126,8 +126,7 @@
           (is (= {:arrived false :reason :unreachable :why :door-stuck} (select-keys @out [:arrived :reason :why])))
           (is (< (first (at p)) 5) "the body ends on its own side")
           (is (false? (open? p [5 64 0])))
-          (is (= [] (opened eng)) "nothing is left recorded")
-          (is (= [:door-stuck] (mapv :why (events-of s :unreachable)))))))))
+          (is (= [] (opened eng)) "nothing is left recorded"))))))
 
 ;; ------------------------------------------------------------------ a door in a hut wall
 

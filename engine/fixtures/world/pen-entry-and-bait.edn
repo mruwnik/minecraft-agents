@@ -21,13 +21,13 @@
  [{:name "go-to-out-of-the-pen-with-wheat-cows-stay"
    :body {:at [20.5 0 16.5] :inventory [["wheat" 8]]}
    :act [[:job (jobs.movement.go-to {:pos #at [10 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 90 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}]
    :after [[:body-near [10.5 0 16.5] 2.5] [:block [18 0 16] "oak_fence_gate[open=false]"] [:item "wheat" 8]
            [:entities "type=cow,tag=wt" [[19 0 12] [25 1 20]] 2]]}
   {:name "go-to-out-of-the-pen-no-bait-cows-stay"
    :body {:at [20.5 0 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [10 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 90 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}]
    :after [[:body-near [10.5 0 16.5] 2.5] [:block [18 0 16] "oak_fence_gate[open=false]"]
            [:entities "type=cow,tag=wt" [[19 0 12] [25 1 20]] 2]]}
   {:name "go-to-away-from-an-open-stocked-gate-warns"
@@ -39,8 +39,8 @@
    :blocks [[:set [18 0 16] "oak_fence_gate[facing=east,open=true]"]]
    :body {:at [14.5 0 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :go-to.pen-gate-open} :for-s 40 :until {:source :job :kind :result}}]}
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :go-to.pen-gate-open} :for-s 40 :until {:source :job :kind #{:completed :stopped}}}]}
   {:name "place-deep-in-the-pen-declines-naming-the-pen"
    :act [[:job (jobs.blocks.place {:pos #at [22 0 16] :item "cobblestone"})]]
    :expect [{:event {:source :job :kind :blocks.pen-kept-out :level :warn} :within-s 80}]

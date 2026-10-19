@@ -15,15 +15,15 @@
  [{:name "sealed-pocket-below-is-dug-down-to"
    :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :go-to.escalation-stopped} :for-s 140 :until {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}}}]
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalation-stopped} :for-s 140 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [19.5 2 16.5] 1.5]]}
   ;; bedrock buried under the first cell of the shaft shows only once that cell is dug: the route is planned again round it
   {:name "bedrock-in-the-line-is-dug-round"
    :blocks [[:set [19 4 16] "bedrock"]]
    :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:block [19 4 16] "bedrock"] [:body-near [19.5 2 16.5] 1.5]]}
   ;; lava buried beside the second shaft cell is unseen until that cell is dug: the dig child covers what it opens and the walk goes on
   {:name "lava-beside-a-dug-cell-is-sealed"
@@ -31,14 +31,14 @@
    :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
             {:event {:source :job :kind :blocks.dig.sealed} :within-s 120 :of-job true}
-            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:not-block [20 4 16] "lava"] [:body-near [19.5 2 16.5] 1.5]]}
   ;; should fail: walk-only, the pocket is walled in: it walks to the plateau cell nearest it (within budget) and gives up there, digging nothing
   {:name "walk-only-walks-over-the-pocket-and-gives-up"
    :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :go-to.wall-walk} :within-s 30 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
-            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 60 :until {:source :job :kind :result :data {:arrived false}}}]
+            {:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 60 :until {:source :job :kind :stopped :data {:arrived false}}}]
    :after [[:block [19 5 16] "stone"] [:body-near [19.5 6 16.5] 1.5]]
    :limit-s 90}
   ;; should fail: every cell around the pocket is another owner's plan: nothing is dug, the walls stay
@@ -46,6 +46,6 @@
    :plans [{:id "other" :metadata {:by "SomeoneElse"}
             :parts [{:id "walls" :box [#at [18 1 15] #at [20 5 17]] :want [:any "stone"]}]}]
    :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 100 :of-job true}
-            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 100 :until {:source :job :kind :result :data {:arrived false}}}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 100 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 100 :until {:source :job :kind :stopped :data {:arrived false}}}]
    :after [[:block [19 5 16] "stone"] [:block [18 3 16] "stone"] [:body-far [19.5 2 16.5] 4]]}]}

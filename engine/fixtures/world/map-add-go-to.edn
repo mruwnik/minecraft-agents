@@ -11,11 +11,11 @@
    :act [[:cli "map" ["--world" "$world" "add" "marker" "hut-$tag" "--data" {:at #at [24 0 16] :kind "base"} "--by" "$tag"] {:ok true}]
          [:await {:kind :world.reloaded :data {:files [:has [:contains "places.json"]]}} 15]
          [:job (jobs.movement.go-to {:place "hut-$tag" :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 45 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 45 :of-job true}]
    :after [[:body-near [24.5 0 16.5] 2]]}
   {:name "unknown-name-refused"
    :act [[:cli "map" ["--world" "$world" "add" "marker" "hut-$tag" "--data" {:at #at [24 0 16] :kind "base"} "--by" "$tag"] {:ok true}]
          [:await {:kind :world.reloaded :data {:files [:has [:contains "places.json"]]}} 15]
          [:job (jobs.movement.go-to {:place "shed-$tag" :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false :reason :unknown-place}} :within-s 15 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unknown-place}} :within-s 15 :of-job true}]
    :after [[:body-near [4.5 0 16.5] 1.5]]}]}

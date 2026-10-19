@@ -43,5 +43,5 @@
    :plot {:height 8 :length 128}
    :limit-s 60
    :act [[:job (jobs.movement.go-to {:pos #at [110 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 50 :of-job true}
-            {:no-event {:source :body :kind :idle} :for-s 40 :until {:source :job :kind :result}}]}]}
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 50 :of-job true}
+            {:no-event {:source :body :kind :idle} :for-s 40 :until {:source :job :kind #{:completed :stopped}}}]}]}

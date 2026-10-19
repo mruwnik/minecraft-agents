@@ -14,11 +14,11 @@
  [{:name "ravine-near-goal-arrives"
    :body {:at [40.5 11 9.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [40 11 19] :range 1 :ways #{:walk}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 280 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 280 :of-job true}]
    :after [[:body-near [40.5 11 19.5] 3]]}
   {:name "ravine-no-bridge-not-arrived"
    :body {:at [40.5 11 9.5]}
    :blocks [[:fill [331 10 12] [335 10 16] "air"]]
    :act [[:job (jobs.movement.go-to {:pos #at [40 11 19] :range 1 :ways #{:walk}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 280 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 280 :of-job true}]
    :after [[:body-far [40.5 11 19.5] 3]]}]}

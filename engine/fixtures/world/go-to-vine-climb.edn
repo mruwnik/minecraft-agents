@@ -13,19 +13,19 @@
  [{:name "six-high-vines-are-climbed"
    :blocks [[:fill [20 0 16] [20 5 16] "stone"] [:fill [19 0 16] [19 5 16] "vine[east=true]"]]
    :act [[:job (jobs.movement.go-to {:pos #at [20 6 16] :range 0})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 90 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 90 :until {:source :job :kind :result :data {:arrived true}}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 90 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [20.5 6 16.5] 2]]}
   {:name "twelve-high-vines-are-climbed-at-full-health"
    :blocks [[:fill [20 0 16] [20 11 16] "stone"] [:fill [19 0 16] [19 11 16] "vine[east=true]"]]
    :act [[:job (jobs.movement.go-to {:pos #at [20 12 16] :range 0})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 90 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 90 :until {:source :job :kind :result :data {:arrived true}}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 90 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [20.5 12 16.5] 2]]}
   {:name "hurt-body-takes-no-fall-on-the-twelve-high-vines"
    :blocks [[:fill [20 0 16] [20 11 16] "stone"] [:fill [19 0 16] [19 11 16] "vine[east=true]"]]
    :act [[:rcon "effect give $BODY minecraft:instant_damage 1 1 true"]
          [:job (jobs.movement.go-to {:pos #at [20 12 16] :range 0})]]
-   :expect [{:event {:source :job :kind :result} :within-s 110 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 110 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 110 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 110 :until {:source :job :kind #{:completed :stopped}}}]
    :limit-s 130}]}

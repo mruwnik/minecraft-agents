@@ -41,16 +41,16 @@
  [{:name "j29-start-east-goal-below-arrives"
    :body {:at [220.5 13 10.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [200 0 24] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 280 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 280 :of-job true}]
    :after [[:body-near [200.5 0 24.5] 3]]}
   {:name "j30-start-middle-goal-further-arrives"
    :body {:at [200.5 13 10.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [226 0 30] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 280 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 280 :of-job true}]
    :after [[:body-near [226.5 0 30.5] 3]]}
   {:name "gaps-blocked-unreachable"
    :body {:at [220.5 13 10.5]}
    :blocks [[:fill [30 13 12] [31 14 12] "stone"] [:fill [248 13 12] [250 14 12] "stone"]]
    :act [[:job (jobs.movement.go-to {:pos #at [200 0 24] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false :reason :unreachable}} :within-s 150 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable}} :within-s 150 :of-job true}]
    :after [[:body-near [220.5 13 10.5] 40]]}]}

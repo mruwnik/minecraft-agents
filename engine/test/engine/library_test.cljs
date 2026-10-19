@@ -298,12 +298,11 @@
                             [:arrived :reason])))))))
 
 (defn ^:async go-to-with
-  "Run go-to with args; {:outcome :refusals :walks}."
+  "Run go-to with args; {:outcome :walks}."
   [args]
-  (let [{:keys [eng p seen]} (setup {:floor tu/walk-floor})
+  (let [{:keys [eng p]} (setup {:floor tu/walk-floor})
         outcome (await (child-outcome eng 'jobs.movement.go-to args 3))]
     {:outcome outcome
-     :refusals (->> @seen (filter #(= :refused (:kind %))) (mapv #(select-keys % [:reason])))
      :walks (count (tu/walk-calls p))}))
 
 (deftest go-to-refuses-a-bad-pos-as-data-without-walking
@@ -311,7 +310,6 @@
     (tu/run-async done
       (fn ^:async t []
         (let [refused {:outcome {:arrived false :reason :bad-pos}
-                       :refusals [{:reason :bad-pos}]
                        :walks 0}
               bare (fn ^:async b [args] (let [r (await (go-to-with args))]
                                           (is (= :stopped (get-in r [:outcome :status])))
@@ -322,7 +320,7 @@
           (is (= refused (await (bare {:pos {:x 1e12 :y 64 :z 9}}))) "far outside the world")
           (is (= refused (await (bare {:pos [9 64 js/Infinity]}))) "not finite")
           (is (= refused (await (bare {}))) "no pos at all")
-          (is (= {:outcome {:arrived true :status :done} :refusals [] :walks 1}
+          (is (= {:outcome {:arrived true :status :done} :walks 1}
                  (await (go-to-with {:pos [5 64 0]})))
               "the vector form of a position walks"))))))
 
@@ -334,20 +332,6 @@
                (select-keys (await (child-outcome (:eng (setup {:floor tu/walk-floor :noPath ["9,64,9"]}))
                                                   'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}} 5))
                             [:arrived :reason])))))))
-
-(deftest go-to-emits-its-result-as-an-event
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :unreachable ["9,64,9"]})
-              results #(->> @seen (filter (fn [e] (= :result (:kind e))))
-                            (mapv (fn [e] (select-keys e [:arrived :reason]))))]
-          (await (child-outcome eng 'jobs.movement.go-to {:pos {:x 5 :y 64 :z 0}} 3))
-          (is (= [{:arrived true}] (results)))
-          (await (child-outcome eng 'jobs.movement.go-to {:pos {:x 9 :y 64 :z 9}} 5))
-          (is (= [{:arrived true}
-                  {:arrived false :reason :unreachable}]
-                 (results))))))))
 
 (deftest collect-drops-hands-over-how-many-it-collected
   (async done

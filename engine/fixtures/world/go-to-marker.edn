@@ -11,23 +11,23 @@
  [{:name "marker-with-spaces-and-capitals-arrives"
    :places [{:name "WT North Farm $tag" :kind "farm" :pos [24 0 16]}]
    :act [[:job (jobs.movement.go-to {:place "WT North Farm $tag" :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 45 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 45 :of-job true}]
    :after [[:body-near [24.5 0 16.5] 2]]}
   {:name "marker-name-in-other-case-arrives"
    :places [{:name "WT Shed One $tag" :pos [24 0 10]}]
    :act [[:job (jobs.movement.go-to {:place "wt shed one $tag" :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 45 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 45 :of-job true}]
    :after [[:body-near [24.5 0 10.5] 2]]}
   {:name "own-place-wins-over-a-marker-of-the-same-name"
    :places [{:name "wtcamp-$tag" :pos [24 0 26]}]
    :act [[:job (jobs.memory.set-place {:name "wtcamp-$tag" :pos #at [24 0 6]})]
          [:await {:source :job :kind :completed} 10]
          [:job (jobs.movement.go-to {:place "wtcamp-$tag" :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 45 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 45 :of-job true}]
    :after [[:body-near [24.5 0 6.5] 2] [:body-far [24.5 0 26.5] 10]]}
   {:name "unknown-marker-refused-no-walk"
    :places [{:name "WT Real Marker $tag" :pos [24 0 16]}]
    :act [[:job (jobs.movement.go-to {:place "WT Missing Marker $tag" :range 1})]]
-   :expect [{:event {:source :job :kind :refused :data {:reason :unknown-place}} :within-s 15 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived false :reason :unknown-place}} :within-s 15 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :unknown-place}} :within-s 15 :of-job true}
+            {:event {:source :job :kind :stopped :data {:arrived false :reason :unknown-place}} :within-s 15 :of-job true}]
    :after [[:body-near [4.5 0 16.5] 1.5]]}]}

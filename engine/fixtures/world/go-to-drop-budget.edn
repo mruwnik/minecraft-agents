@@ -14,28 +14,28 @@
  :cases
  [{:name "default-takes-the-10-drop-onto-floor"
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]}
   {:name "drop-into-water-takes-no-damage"
    :blocks [[:fill [18 0 12] [26 0 20] "water"]]
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 60 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [22.5 0 16.5] 3]]}
   {:name "lava-landing-is-never-dropped-into"
    :blocks [[:fill [16 0 1] [30 0 30] "lava"] [:fill [22 0 16] [22 0 16] "stone"]]
    :act [[:job (jobs.movement.go-to {:pos #at [22 1 16] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-far [22.5 1 16.5] 4]]}
   {:name "min-health-14-does-not-take-the-10-drop"
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 14}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-far [22.5 0 16.5] 4]]}
   {:name "max-damage-0-does-not-take-the-10-drop"
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :spend {:health 0}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}]
    :after [[:body-far [22.5 0 16.5] 4]]}
   ;; card ad0a3ff7: over the damage budget a walk gives up (:needs-health) unless the caller opts in with :allow-over-budget; the 13 drop (10 hp) is over
   ;; the budget of 7 at full health, the 10 drop above is not
@@ -45,8 +45,8 @@
             [:fill [1 10 1] [15 12 30] "stone"]]
    :body {:at [8.5 13 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-far [22.5 0 16.5] 4]]}
   {:name "allow-over-budget-takes-the-13-drop"
    :plot {:height 18}
@@ -54,11 +54,11 @@
             [:fill [1 10 1] [15 12 30] "stone"]]
    :body {:at [8.5 13 16.5] :effects [["resistance" 600 4]]}
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 1}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]}
   ;; card e753a3ca: a hay bale landing cuts fall damage to a fifth, so the 9 drop (hay top y 1) fits the budget of 5 that the same drop onto stone would not
   {:name "hay-landing-9-drop-at-floor-14-arrives"
    :blocks [[:fill [16 0 12] [26 0 20] "hay_block"]]
    :act [[:job (jobs.movement.go-to {:pos #at [22 1 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 14}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [22.5 1 16.5] 2.5]]}]}

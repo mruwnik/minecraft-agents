@@ -38,7 +38,7 @@
   block's own cell, where the body's feet are. :place (a name such as :home, set by jobs.memory.set-place) walks to
   that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker).
   - Refused at submit (or the caller's ctx/call throws): an arg its spec refuses, such as a :tolls entry that is not {:x :y :z :factor} (finite cell, factor 0 or more), a :gait that is not :auto, :walk or :sneak.
-  - Ends at once, before any walk, after a :refused warn, data {:arrived false :text}: impossible :bad-pos (a :pos
+  - Ends at once, before any walk, data {:arrived false :text}: impossible :bad-pos (a :pos
     outside the world), :bad-name (a :place that is not a valid name), :unsupported (a body with no pathWorld sensing)
     or :bad-args (a given :floor :health over 20, a :spend :job-time under 0.1); condition-failed :unknown-place (no
     recorded position). A call whose :ways leave out :walk ends nothing-possible :no-way.
@@ -113,7 +113,7 @@
     go-to.restored, warn go-to.restore-skipped for cells it could not. Pillar blocks and a stair's placed floors are
     left to jobs.access.cleanup. Its walk child (ctx/call) has :ways #{:walk :clear-seal}. Jobs that must not change the world
     on the way pass :ways #{:walk}: a shut-in body then gives up with :shut-in true and says so in the text.
-  - Gives up with an :unreachable warn and the cause {:reason :unreachable :why ...}, data {:arrived false :why ... :text
+  - Gives up with the cause {:reason :unreachable :why ...}, data {:arrived false :why ... :text
     words ...}: limit-reached for :needs-health (:line :health) and :leg-search-spent (:line :job-time); condition-failed
     for :goal-dangerous and :goal-unloaded; else (:explore-spent too) nothing-possible. :why is the planner's
     reason (:exhausted, :goal-unloaded (the goal lies in unloaded land and the loaded land leads no nearer), :goal-enclosed, :goal-cut-off, :goal-on-magma, :door-stuck with :cells, :one-way with :near and :one-way ...), or :stuck
@@ -123,7 +123,7 @@
   - Under water with no way to the goal in the air left (:air), it first walks to the nearest air it sees or finds by
     looking (jobs.movement.go-to.air, info go-to.surfacing, at most 3 a call), waits there for its air to come back (the plan counts the air used), and plans again.
   - Success is :done with data {:arrived true}, with :resolved the cell when go-to chose the y, plus :provisional true (a column's
-    estimated y) or :stand-in true (a column with no ground known: the feet y). The result is also a :result info event.
+    estimated y) or :stand-in true (a column with no ground known: the feet y).
   - A body under ground (jobs.lib.shelter.sense/buried?) whose goal lies ::climb-rise blocks or more above it plans no route
     deeper than ::climb-dip blocks below where the call first found it so (it does not dive through deep caves to come
     up under the goal). With no other way it cuts a stair up toward the goal instead (setting ::climb-stair, with
@@ -318,12 +318,12 @@
           (ctx/update-mem! c assoc :cuts 0 :ref (:closest state) :resets (inc (:resets state))))
         (if cycle?
           (do (ctx/update-mem! c #(-> % (dissoc :open :goal :closest :ref :last-dist) (assoc :cuts 0)))
-              (await (end/give-up! c pos 0 :cut {:reason :cut-again} (cond-> (or (nearest-hostile c pos) {})
+              (await (end/give-up! c pos {:reason :cut-again} (cond-> (or (nearest-hostile c pos) {})
                                                                          spent? (assoc :resets-spent true)))))
           (let [danger (goal-danger c pos)]
             (when danger (ctx/emit! c :goal-in-danger :info (assoc danger :target pos)))
             (if (and danger (= :end (tuning/goal-danger)))
-              (await (end/give-up! c pos 0 :goal-dangerous {:reason :goal-dangerous} danger))
+              (await (end/give-up! c pos {:reason :goal-dangerous} danger))
               (do (pre-aim! c goal pos)
                   (await (run-steps! c goal))))))))))
 

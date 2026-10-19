@@ -14,24 +14,24 @@
  :cases
  [{:name "drop-6-onto-plain-floor-is-refused"
    :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 18}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-far [24.5 0 16.5] 4]]}
   {:name "drop-6-into-unseen-stone-shaft-is-refused"
    :blocks [[:fill [16 0 15] [17 5 17] "stone"] [:fill [16 0 16] [16 5 16] "air"] [:set [16 -1 16] "slime_block"]]
    :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 0 :ways #{:walk :clear-seal} :floor {:health 18}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-far [16.5 0 16.5] 4]]}
   {:name "drop-6-look-walks-around-pit-and-refuses"
    :blocks [[:fill [10 0 12] [11 5 20] "air"]]
    :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 18}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-far [24.5 0 16.5] 4]]}
   {:name "drop-6-into-seen-pool-after-walking-around-pit-arrives"
    :blocks [[:fill [10 0 12] [11 5 20] "air"] [:fill [18 0 12] [26 0 20] "water"]]
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 18}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [22.5 0 16.5] 3]]}]}

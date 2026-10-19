@@ -21,7 +21,7 @@
  [{:name "own-long-way-beats-the-dead-end-stair-and-a-new-one"
    :act [[:job (jobs.movement.go-to {:pos #at [61 22 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.own-way :data {:take true}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived true}} :within-s 220 :of-job true}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 220 :of-job true}
             {:no-event {:source :job :kind :go-to.escalated} :for-s 60}]
    :after [[:body-near [61.5 22 16.5] 3]]}
   ;; card 3353f381: the stair's top is capped (granite in the head of step 20 and the feet of step 21; the cut of steps 17..19 is 3 high,
@@ -32,7 +32,7 @@
    :act [[:job (jobs.movement.go-to {:pos #at [61 22 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.own-way :data {:take true}} :within-s 60 :of-job true}
             {:event {:source :job :kind :go-to.escalated :data {:step :stair :why :own-way-blocked}} :within-s 200 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived true}} :within-s 230 :of-job true}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 230 :of-job true}
             {:count-event {:source :job :kind :go-to.escalated} :for-s 230 :at-most 1}]
    :after [[:not-block [58 21 16] "granite"] [:not-block [59 21 16] "granite"] [:body-near [61.5 22 16.5] 3]]}
   ;; should-stop: the same caps with :ways #{:walk} are not dug

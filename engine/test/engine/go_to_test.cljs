@@ -120,7 +120,7 @@
       (fn ^:async t []
         (let [{:keys [out p] :as s} (await (go! {:blocks (dissoc flat "0,63,0") :self {:pos {:x 0.5 :y 64 :z 0.91}}}
                                                 {:pos [10 64 0]}))]
-          (is (= {:arrived true} @out) (str "events " (pr-str (map :data (events-of s :unreachable)))))
+          (is (= {:arrived true} @out) (pr-str @out))
           (is (< (js/Math.hypot (- 10 (first (at p))) (last (at p))) 2) (str "at " (at p))))))))
 
 (deftest go-to-already-within-range-does-not-walk
@@ -130,8 +130,7 @@
         (let [{:keys [out eng p] :as s} (await (go! {:blocks flat} {:pos [1 64 0] :range 1}))]
           (is (true? (:arrived @out)))
           (is (= [0 64 0] (at p)))
-          (is (= [] (moved eng)))
-          (is (empty? (events-of s :result)) "done? ended it before a round ran"))))))
+          (is (= [] (moved eng))))))))
 
 (deftest go-to-writes-a-moved-entry-for-the-walk
   (async done
@@ -156,11 +155,7 @@
           (is (re-find #"^gave up walking to \[10 65 1\]: .*step up" (:text @out)) "the reason in words")
           (is (not (re-find #"[{}]" (:text @out))) "no map dump")
           (is (= [0 64 1] (at p)) "the body did not move")
-          (is (= ["blocked" "blocked" "blocked"] (mapv :status (moved eng))) "one :moved entry per round")
-          (is (= [{:tries 3 :why :abilities :refused-kind :gap-up}]
-                 (mapv #(select-keys % [:tries :why :refused-kind]) (events-of s :unreachable))))
-          (is (= [{:status :stopped :arrived false :reason :unreachable :why :abilities :refused-kind :gap-up}]
-                 (mapv #(select-keys % [:status :arrived :reason :why :refused-kind]) (events-of s :result)))))))))
+          (is (= ["blocked" "blocked" "blocked"] (mapv :status (moved eng))) "one :moved entry per round"))))))
 
 (deftest an-old-caller-reads-the-result-it-read-before
   (async done
@@ -186,8 +181,7 @@
               _ (await (tick-out! eng 30))
               ev (filter #(and (= :job (:source %)) (#{:stopped :completed} (:kind %))) @seen)]
           (is (= [:stopped] (mapv :kind ev)))
-          (is (re-find #"^gave up walking to" (:text (first ev))))
-          (is (re-find #"^gave up walking to \[10 65 1\]: it needs a step up" (:text (first (filter #(= :unreachable (:kind %)) @seen))))))))))
+          (is (re-find #"^gave up walking to \[10 65 1\]: it needs a step up" (:text (first ev)))))))))
 
 (deftest go-to-reports-an-unreachable-fake-cell-as-unreachable
   (async done
@@ -328,8 +322,7 @@
           (await (tick-out! eng 10))
           (is (= {:status :stopped :arrived false :reason :unsupported} (select-keys @out [:status :arrived :reason])))
           (is (= :impossible (:kind (:ending (meta @out)))))
-          (is (= [0 64 0] (at p)))
-          (is (= [:unsupported] (mapv :reason (events-of s :refused)))))))))
+          (is (= [0 64 0] (at p))))))))
 
 (deftest a-cut-walk-leaves-no-controls_and_the-next-round-replans
   (async done
@@ -409,10 +402,7 @@
                  (select-keys result [:arrived :reason :why])))
           (is (keyword? (:kind result)) "the move the walk was stuck on")
           (is (re-find #"^no progress on step \d+" (:detail result)))
-          (is (= ["blocked" "blocked" "blocked"] (mapv :status (moved eng))))
-          (is (= [{:tries 3 :why :stuck :refused-kind (:kind result)}]
-                 (mapv #(select-keys % [:tries :why :refused-kind]) (events-of s :unreachable))))
-          (is (= (:detail result) (:detail (first (events-of s :unreachable))))))))))
+          (is (= ["blocked" "blocked" "blocked"] (mapv :status (moved eng)))))))))
 
 (deftest go-to-says-off-plan-when-the-walk-ends-off-its-plan
   (async done
@@ -564,7 +554,6 @@
             (is (> @plans 3) "several rounds searched"))
           (set! wsearch/round-budget budget)
           (is (= {:arrived true} @out))
-          (is (= [] (events-of s :unreachable)))
           (is (= ["arrived"] (mapv :status (moved eng))) "one round walked: the rounds that searched wrote nothing"))))))
 
 ;; ------------------------------------------------------- looking round on arrival (card 9970c377)
@@ -699,8 +688,7 @@
                  (await (tick-out! eng 10))
                  (is (= {:arrived true} @out) (pr-str @out))
                  (is (= [6 64 0] (at p)))
-                 (is (= [:done] @returns) "the resumed call arrived in one call")
-                 (is (= [] (events-of s :unreachable)))))))
+                 (is (= [:done] @returns) "the resumed call arrived in one call")))))
           (set! wsearch/plan-walk-budgeted! plan-walk))))))
 
 (deftest a-call-reads-its-memory-as-a-hint
@@ -824,8 +812,7 @@
                          (recur (inc n) (core/tick! eng)))))
                  (await (tick-out! eng 10))
                  (is (= {:arrived true} @out) (pr-str @out))
-                 (is (= [6 64 0] (at p)))
-                 (is (= [] (events-of s :unreachable))))))))))))
+                 (is (= [6 64 0] (at p))))))))))))
 
 (deftest cut-state-counts-only-a-restart-sent-back-from-where-the-cut-found-the-body
   (let [goal {:x 10 :y 64 :z 0}
@@ -1063,12 +1050,11 @@
         (is (re-find #":place must be a keyword or a string, got 5" (refusal {:place 5})))
         (doseq [[place reason] [[:nowhere :unknown-place] ["Bad Name" :unknown-place] ["" :bad-name]
                                       [(apply str (repeat 101 "a")) :bad-name]]]
-          (let [{:keys [out p seen]} (await (go-place! {:home {:x 10 :y 64 :z 0}} {:place place}))]
+          (let [{:keys [out p]} (await (go-place! {:home {:x 10 :y 64 :z 0}} {:place place}))]
             (is (= reason (:reason @out)) (str place))
             (is (= :stopped (:status @out)))
             (is (re-find #"place" (:text @out)))
-            (is (= [0 64 0] (at p)) "did not walk")
-            (is (= 1 (count (events-of {:seen seen} :refused))))))))))
+            (is (= [0 64 0] (at p)) "did not walk")))))))
 
 (deftest go-to-plans-with-dangers-unless-told-not-to
   (async done

@@ -16,11 +16,11 @@
          [:summon "cow" [17.5 0 17.5]]
          [:until [:cli "entities" ["$body" "--world" "$world" "--type" "cow"] {:total 2}] 10]
          [:job (jobs.movement.go-to {:pos #at [26 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false :escalation {:step :none :why :own-pen}}} :within-s 90 :of-job true}
-            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :result :data {:arrived false}}}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :own-pen}}} :within-s 90 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false}}}]
    :after [[:block [19 0 16] "stone"] [:block [20 0 16] "stone"] [:entities "type=cow,tag=wt" [[14 0 14] [18 2 18]] 2]]}
   {:name "empty-pit-dug-out-of"
    :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}]
    :after [[:body-near [26.5 0 16.5] 2]]
    :limit-s 150}]}

@@ -12,6 +12,6 @@
  :body {:at [4.5 0 4.5] :effects [["resistance" 900 4]]}
  :act [[:summon "zombie" [44.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
        [:job (jobs.movement.go-to {:pos #at [92 0 4] :range 1})]]
- :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 220 :of-job true}]
+ :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 220 :of-job true}]
  :after [[:body-near [92.5 0 4.5] 2]]
  :limit-s 230}

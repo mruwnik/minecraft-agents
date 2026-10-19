@@ -14,15 +14,15 @@
  :cases
  [{:name "edge-start-walks-south"
    :act [[:job (jobs.movement.go-to {:pos #at [16 0 24] :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 50 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 50 :of-job true}]
    :after [[:body-near [16.5 0 24.5] 2]]}
   {:name "edge-start-walks-north-round-the-hole"
    :act [[:job (jobs.movement.go-to {:pos #at [16 0 8] :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 50 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 50 :of-job true}]
    :after [[:body-near [16.5 0 8.5] 2]]}
   {:name "start-on-a-stair-low-half-walks"
    :blocks [[:set [10 0 10] "oak_stairs[facing=east,half=bottom]"]]
    :body {:at [10.2 0.5 10.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [10 0 20] :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 50 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 50 :of-job true}]
    :after [[:body-near [10.5 0 20.5] 2]]}]}

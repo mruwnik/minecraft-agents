@@ -24,7 +24,7 @@
             {:event {:source :job :kind :stopped :data {:reason :no-blocks :step :no-blocks}} :within-s 80}
             {:no-event {:source :job :kind :afloat} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no-blocks}}}
             {:no-event {:source :job :kind :holding :data {:reason :afloat}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no-blocks}}}
-            {:no-event {:source :job :level :warn :kind #{:unreachable :refused}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no-blocks}}}]
+            {:no-event {:source :job :kind :child_ended :data {:ending {:data {:arrived false}}}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no-blocks}}}]
    :after [[:body-near [15.5 3.5 15.5] 6]]}
   {:name "roofed-no-step-cell-stops-no-land"
    :blocks [[:fill [11 5 11] [20 5 20] "stone"]]
@@ -39,7 +39,7 @@
             {:event {:source :job :kind :stopped :data {:reason :no-blocks :step :no-blocks}} :within-s 80}
             {:no-event {:source :job :kind :afloat} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no-blocks}}}
             {:no-event {:source :job :kind :holding :data {:reason :afloat}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no-blocks}}}
-            {:no-event {:source :job :level :warn :kind #{:unreachable :refused}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no-blocks}}}]
+            {:no-event {:source :job :kind :child_ended :data {:ending {:data {:arrived false}}}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no-blocks}}}]
    :after [[:body-near [13.5 3.5 17.5] 6]]}
   {:name "ledge-east-lands-1"
    :blocks [[:fill [21 4 11] [21 5 20] "air"]]

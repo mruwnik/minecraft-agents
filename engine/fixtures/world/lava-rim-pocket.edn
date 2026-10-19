@@ -94,31 +94,31 @@
   {:name "out-of-the-pocket-arrives"
    :body {:at [16.5 0 7.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [4 1 21]})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 80 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["lava"]}} :for-s 80 :until {:source :job :kind :completed}}]}
   ;; should succeed: from the cave into the pocket (the goal is in it, the slides the only way in): arrives, no lava
   {:name "into-the-pocket-arrives"
    :body {:at [10.5 1 17.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [16 0 7]})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 80 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["lava"]}} :for-s 80 :until {:source :job :kind :completed}}]}
   ;; should succeed: along the rim to the rim cell [14 0 11] (world [122 -54 53]) beside the pocket's mouth, which has
   ;; a plain way along the rim: no slide over the lava, no lava :hurt
   {:name "along-the-rim-no-slide"
    :body {:at [10.5 1 17.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [14 0 11]})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 80 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["lava"]}} :for-s 80 :until {:source :job :kind :completed}}]}
   ;; should succeed: a goal on the plot floor north-east of the box, straight past the pocket (the BaseMiner home
   ;; case, which ended its walk in the pocket): arrives by walking round the box, never via the rim
   {:name "far-goal-does-not-end-on-the-rim"
    :body {:at [10.5 1 17.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [28 0 4]})]]
-   :expect [{:event {:source :job :kind :result} :within-s 80 :of-job true}
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 80 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["lava"]}} :for-s 80 :until {:source :job :kind :completed}}]}
   ;; should fail: the goal is a cell over the lava itself: unreachable, and the body never walks in
   {:name "goal-over-the-lava-declined"
    :body {:at [10.5 1 17.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [17 0 9]})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 80 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 80 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["lava"]}} :for-s 80 :until {:source :job :kind :completed}}]}]}

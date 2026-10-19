@@ -17,11 +17,11 @@
    :blocks [[:set [3 -1 16] "soul_sand"]]
    :body {:at [3.5 0 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [6 6 16] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [6.5 6 16.5] 3]]}
   {:name "drag-over-magma-down-from-the-platform"
    :blocks [[:set [3 -1 16] "magma_block"] [:fill [0 0 14] [1 5 18] "stone"] [:fill [2 0 16] [2 1 16] "air"]]
    :body {:at [6.5 6 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [2 0 16] :range 0 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [2.5 0 16.5] 1.5]]}]}

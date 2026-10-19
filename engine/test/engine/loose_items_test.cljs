@@ -211,7 +211,7 @@
           (core/submit! eng '(jobs.movement.go-to {:pos [4.5 64 0.5] :range 1}) {})
           (dotimes [_ 40] (await (core/tick! eng)))
           (is (= 1 (count (:list (core/state eng)))) "the go-to ran and left; only the waiting job is listed")
-          (is (some #(and (= :result (:kind %)) (true? (:arrived %))) @seen) (pr-str (take-last 6 @seen))))))))
+          (is (some #(and (= :completed (:kind %)) (true? (:arrived %))) @seen) (pr-str (take-last 6 @seen))))))))
 
 (deftest register-args-cut-the-running-job-at-most-once
   (async done

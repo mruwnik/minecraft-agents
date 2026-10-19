@@ -76,7 +76,7 @@
               _ (mem/write! (:store eng) :shelter (shelter-entry :built) {:cap 10 :ttl st/day-ms})
               _ (core/submit! eng '(jobs.movement.go-to {:pos [10 64 0]}) {})
               _ (await (st/tick-n eng 30))
-              u (first (st/emitted seen :unreachable))]
+              u (first (st/emitted seen :stopped))]
           (is (= {:x 0 :y 64 :z 0} (:inside-own-shelter u)))
           (is (re-find #"shelter" (:hint u))))))))
 
@@ -87,7 +87,7 @@
         (let [{:keys [eng seen]} (st/setup {:blocks st/floor :unreachable ["10,64,0"]})
               _ (core/submit! eng '(jobs.movement.go-to {:pos [10 64 0]}) {})
               _ (await (st/tick-n eng 30))
-              u (first (st/emitted seen :unreachable))]
+              u (first (st/emitted seen :stopped))]
           (is (some? u))
           (is (nil? (:inside-own-shelter u))))))))
 

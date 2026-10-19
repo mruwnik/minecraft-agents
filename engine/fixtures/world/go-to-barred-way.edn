@@ -11,11 +11,11 @@
  :cases
   [{:name "walk-only-room-walks-to-the-wall-and-gives-up"
    :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 1 :ways #{:walk}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 40 :of-job true}
-            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 40 :until {:source :job :kind :result :data {:arrived false}}}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 40 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 40 :until {:source :job :kind :stopped :data {:arrived false}}}]
    :after [[:block [20 0 16] "stone"] [:body-near [19.5 0 16.5] 1.5]]
    :limit-s 60}
   {:name "clear-path-allowed-walks-to-the-wall-and-clears-it"
    :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 1 :ways #{:walk :clear-path}})]]
-   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [26.5 0 16.5] 2]]}]}

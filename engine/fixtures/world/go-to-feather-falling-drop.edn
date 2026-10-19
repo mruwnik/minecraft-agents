@@ -13,36 +13,36 @@
    :blocks [[:fill [1 0 1] [15 3 30] "stone"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:feet {:name "diamond_boots"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :spend {:health 1.5}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]}
   {:name "feather-falling-iv-takes-a-5-drop"
    :body {:at [8.5 5 16.5]}
    :blocks [[:fill [1 0 1] [15 4 30] "stone"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:feet {:name "diamond_boots"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :spend {:health 1.5}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]}
   {:name "feather-falling-iv-refuses-a-6-drop"
    :body {:at [8.5 6 16.5]}
    :blocks [[:fill [1 0 1] [15 5 30] "stone"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:feet {:name "diamond_boots"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :spend {:health 1.5}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 30 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 30 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-far [22.5 0 16.5] 4]]}
   {:name "plain-boots-refuse-a-4-drop"
    :blocks [[:fill [1 0 1] [15 3 30] "stone"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:feet {:name "diamond_boots"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :spend {:health 0.5}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 30 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 30 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-far [22.5 0 16.5] 4]]}
   {:name "plain-boots-walk-round-a-4-drop-by-the-ramp"
    :blocks [[:fill [1 0 1] [15 3 30] "stone"] [:fill [13 3 28] [15 3 30] "air"] [:fill [14 2 28] [15 2 30] "air"] [:fill [15 1 28] [15 1 30] "air"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:feet {:name "diamond_boots"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :spend {:health 0.5}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 80 :until {:source :job :kind :result}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 80 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 80 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [22.5 0 16.5] 2]]}
   {:name "feather-falling-iv-low-health-still-arrives-over-the-4-drop"
    ;; one 18 hp magic damage (no armour or invulnerability-frame discount, unlike two instant_damage effects) leaves 2 hp, under the walk's floor: the planner refuses the drop, so with a given :floor {:health 1} go-to goes over its budget
@@ -51,5 +51,5 @@
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"]
          [:rcon "damage $BODY 18 minecraft:magic"] [:until-rcon "data get entity $BODY Health" "data: [0-3]\\." 5]
          [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 1}})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 80 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]}]}
