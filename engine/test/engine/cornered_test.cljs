@@ -1145,6 +1145,25 @@
           (is (= [] (filterv #(> (:x %) 3) (tu/walked-to eng))) "no walk through the fire to the zombie five blocks off")
           (is (zero? (count (calls p "attack")))))))))
 
+(deftest an-unseen-shooters-place-is-a-point-out-along-the-way-the-arrow-came-from
+  (let [entry (fn [data] {:data data})
+        arrow {:damageType "arrow" :dir {:x 1 :z 0}}]
+    (is (= [{:x 12.5 :y 64 :z 0.5}] (flight/shot-spots [(entry arrow)] {:x 0.5 :y 64 :z 0.5} 12)))
+    (is (= [{:x 0.5 :y 64 :z -11.5}]
+           (flight/shot-spots [(entry {:attacker {:name "pillager"} :dir {:x 0 :z -1}})] {:x 0.5 :y 64 :z 0.5} 12))
+        "a ranged attacker is a shooter")
+    (is (= [] (flight/shot-spots [(entry {:attacker {:name "zombie"} :dir {:x 1 :z 0}}) (entry {:damageType "arrow"})]
+                                 {:x 0 :y 64 :z 0} 12))
+        "a melee hit, and a shot with no way known, give no spot")))
+
+(deftest cover-from-an-unseen-shooter-is-the-far-side-of-a-wall
+  (let [p (tu/fake-on-floor {:blocks (tu/box 3 64 -2 3 66 2 "stone")})
+        spots [{:x 12.5 :y 64 :z 0.5}]
+        covered? (cover/cover-fn p [] spots)]
+    (is (nil? (cover/cover-fn p [] nil)) "no seen shooter and no spot: no cover to speak of")
+    (is (true? (covered? {:x 0 :y 64 :z 0})) "behind the wall")
+    (is (false? (covered? {:x 0 :y 64 :z 8})) "in the open beside it")))
+
 (deftest under-fire-in-a-new-cell-the-covers-that-failed-elsewhere-are-tried-again
   (is (= {:tried #{:back-off} :fire-cell [1 64 0]}
          (cornered/retry-covers {:tried #{:plug :plug-dig :back-off} :fire-cell [0 64 0]} [1 64 0])))

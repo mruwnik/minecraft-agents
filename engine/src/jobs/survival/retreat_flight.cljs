@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.choose :as choose]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
@@ -24,11 +25,36 @@
    ::died-ttl-ms {:default 3600000 :doc "Milliseconds after a death during which a flight keeps away from the place (::died-radius)." :spec (a/int-in 0 nil)}
    ::step {:default 6 :doc "Blocks per walk of a flight step." :spec (a/num-in 1 nil)}
    ::no-gain-steps {:default 20 :doc "Flight steps without a new best gap to the nearest chaser before the cornered options are tried." :spec (a/int-in 1 nil)}
+   ::shot-reach {:default 12 :doc "Blocks out along the way a shot came from that stand for the place of a shooter the body has not seen (cover, seal sides and back-off turn on it)." :spec (a/num-in 1 nil)}
+   ::shot-window-s {:default 5 :doc "Seconds a shot's direction stands for an unseen shooter (flight/fire-spots)." :spec (a/num-in 0 nil)}
    ::prefer-lit? {:default true :doc "By night or under ground a flee step ends on lit ground rather than dark (jobs.lib.look/dark-fn) while a lit end is open." :spec boolean?}})
 
 (def displaced-policy
   "One :displaced entry, half an hour: the night job may then walk back to a bed up to :urgent-bed-radius away."
   {:cap 1 :ttl 1800000})
+
+(defn shot?
+  "Whether :hurt entry e is a ranged mob's hit: its attacker is one, or the damage is an arrow (the shooter untracked)."
+  [e]
+  (let [{:keys [attacker damageType]} (:data e)]
+    (or (contains? cost/ranged-mobs (:name attacker))
+        (= "arrow" (some-> damageType (str/replace #"^minecraft:" ""))))))
+
+(defn shot-spots
+  "Pure: for each :hurt entry that is a shot (shot?) and carries a :dir, the point reach blocks out from from along it,
+  at the height of from."
+  [entries {:keys [x y z]} reach]
+  (->> entries
+       (filter shot?)
+       (keep (comp :dir :data))
+       (mapv (fn [{dx :x dz :z}] {:x (+ x (* reach dx)) :y y :z (+ z (* reach dz))}))))
+
+(defn fire-spots
+  "Where unseen shooters stand, as {:x :y :z}: shot-spots of the shots within ::shot-window-s, ::shot-reach blocks out
+  along the way each hit came from (as a player feels it), at the body's height."
+  [c]
+  (shot-spots (ctx/since c :hurt (- (ctx/now c) (* 1000 (settings/get settings ::shot-window-s))))
+              (u/self-pos c) (settings/get settings ::shot-reach)))
 
 (defn wait-ms [] (settings/get settings ::wait-ms))
 (defn walk-step [] (settings/get settings ::step))

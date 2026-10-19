@@ -82,13 +82,16 @@
           (recur more))))))
 
 (defn cover-fn
-  "(feet cell -> whether it is out of every seen ranged threat's line of fire, over the cells the body has seen: an
-  unseen cell stops no arrow), nil when no seen threat is ranged (a heard one's rough spot is no line of fire)."
-  [p threats]
-  (when-let [ranged (seq (filter #(and (combat/ranged? %) (danger-q/seen-only? %)) threats))]
-    (let [arrow-at (fn [x y z] (reach/arrow-kind-of (u/seen-block p {:x x :y y :z z})))
-          at (mapv #(danger-q/mob-pos p %) ranged)]
-      #(walk/out-of-fire? arrow-at at %))))
+  "(feet cell -> whether it is out of every seen ranged threat's line of fire and of every spot (the unseen shooters,
+  flight/fire-spots), over the cells the body has seen: an unseen cell stops no arrow), nil when no seen threat is
+  ranged and no spot is given (a heard one's rough spot is no line of fire)."
+  ([p threats] (cover-fn p threats nil))
+  ([p threats spots]
+   (let [ranged (filter #(and (combat/ranged? %) (danger-q/seen-only? %)) threats)
+         at (into (mapv #(danger-q/mob-pos p %) ranged) spots)]
+     (when (seq at)
+       (let [arrow-at (fn [x y z] (reach/arrow-kind-of (u/seen-block p {:x x :y y :z z})))]
+         #(walk/out-of-fire? arrow-at at %))))))
 
 (defn swim-factor
   "The flight's price of a swim block: :swim-factor, else jobs.lib.cost/swim-factor of the boots worn."
@@ -122,13 +125,13 @@
   "The walk target away from threats (walk/choose-target over what the body sees, after glance-away!; cover from the
   ranged ones first, a swim slow), leaning toward the first of rooms (refuges), nil when none. covered? as cover-fn
   (given so the caller shares one)."
-  ([c threats] (await (flight-target! c threats (cover-fn (:primitives c) threats) (refuges c))))
+  ([c threats] (await (flight-target! c threats (cover-fn (:primitives c) threats (flight/fire-spots c)) (refuges c))))
   ([c threats covered? rooms]
    (if-let [way (way-up c threats)]
      way
    (let [p (:primitives c)
          from (u/self-pos c)
-         threat-pos (into (mapv #(danger-q/mob-pos p %) threats) (lost-spots c threats))
+         threat-pos (into (into (mapv #(danger-q/mob-pos p %) threats) (lost-spots c threats)) (flight/fire-spots c))
          refuge (:start (first rooms))
          judged (retreat-goal/judge c (remove nil? [refuge (home-pos c)]))
          goal (retreat-goal/usable judged)

@@ -219,10 +219,15 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       if (packet.entityId !== target.entity?.id) return
       const source = packet.sourceCauseId > 0 ? target.entities?.[packet.sourceCauseId - 1] : undefined
       damages = fresh(damages) // a hit that never lowered health would otherwise stay for good
+      // Only the way the hit came from, as a player feels it (the camera tilts), never the shooter's place.
+      const from = source?.position ?? packet.sourcePosition
+      const me = target.entity?.position
+      const len = from && me ? Math.hypot(from.x - me.x, from.z - me.z) : 0
       damages.push({
         at: Date.now(),
         damageType: target.damageTypeNames?.[packet.sourceTypeId],
-        ...(source && { attacker: { id: source.id, name: source.name ?? source.username } })
+        ...(source && { attacker: { id: source.id, name: source.name ?? source.username } }),
+        ...(len > 0 && { dir: { x: (from.x - me.x) / len, z: (from.z - me.z) / len } })
       })
     }
     target._client?.on('damage_event', onDamage)

@@ -1,7 +1,6 @@
 (ns jobs.survival.retreat-cornered
   "The cornered options of a flight (jobs.survival.retreat): which to take (escape-order), the fight, back-off, water, roof and swim-out, and the settings of the retreat jobs."
-  (:require [clojure.string :as str]
-            [engine.settings :as settings]
+  (:require [engine.settings :as settings]
             [engine.args :as a]
             [jobs.lib.access :as access]
             [engine.contract :as contract]
@@ -225,9 +224,9 @@
 (defn step! [c slot target range] (leg-step! c slot target range flight-timeout-s))
 
 (defn ^:async back-off!
-  "Step back from threat (back-off-target): :again, nil when there is no such cell or the walk is blocked."
-  [c threat]
-  (when-let [target (back-off-target (block-at-fn (:primitives c)) (u/self-pos c) (danger-q/mob-pos (:primitives c) threat)
+  "Step back from the place from (back-off-target): :again, nil when there is no such cell or the walk is blocked."
+  [c from]
+  (when-let [target (back-off-target (block-at-fn (:primitives c)) (u/self-pos c) from
                                      (keep (comp :pos :data) (ctx/entries c :hazard)))]
     (if-not (await (step! c :back-off target 0))
       (do (flight/tried! c :back-off) nil)
@@ -408,19 +407,12 @@
 
 (defn fire-hits [] (settings/get settings :jobs.survival.retreat-cornered/fire-hits))
 
-(defn shot?
-  "Whether :hurt entry e is a ranged mob's hit: its attacker is one, or the damage is an arrow (the shooter untracked)."
-  [e]
-  (let [{:keys [attacker damageType]} (:data e)]
-    (or (contains? cost/ranged-mobs (:name attacker))
-        (= "arrow" (some-> damageType (str/replace #"^minecraft:" ""))))))
-
 (defn under-fire?
   "Whether a ranged mob hit the body fire-hits times within hurt-window-s, seen or not."
   [c]
   (let [n (fire-hits)]
     (and (pos? n)
-         (<= n (count (filter shot? (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s))))))))))
+         (<= n (count (filter flight/shot? (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s))))))))))
 
 (defn retry-covers
   "Pure: mem of a body under fire at feet cell: in another cell than the last time (:fire-cell), the covers that failed
@@ -477,7 +469,8 @@
                   :water (await (water! c))
                   :roof (await (roof! c))
                   :swim-out (await (swim-out! c))
-                  :back-off (when threat (await (back-off! c threat)))))]
+                  :back-off (when-let [from (or (some->> threat (danger-q/mob-pos (:primitives c))) (first (flight/fire-spots c)))]
+                              (await (back-off! c from)))))]
         (cond
           (some? r) r
           (seq more) (recur more)

@@ -99,13 +99,14 @@
                             :else (recur (concat (rest cells) [cell]) 0))))))))))
 
 (defn shooters
-  "Where the seen ranged hostiles within the flight's :ranged-radius stand."
+  "Where the seen ranged hostiles within the flight's :ranged-radius stand, and the unseen shooters of recent shots (flight/fire-spots)."
   [c]
   (let [{:keys [radius ranged-radius]} (:args c)
         p (:primitives c)]
-    (->> (danger-q/known-hostiles p radius {:ranged-radius ranged-radius})
-         (filter #(and (combat/ranged? %) (danger-q/seen-only? %)))
-         (mapv #(danger-q/mob-pos p %)))))
+    (into (->> (danger-q/known-hostiles p radius {:ranged-radius ranged-radius})
+               (filter #(and (combat/ranged? %) (danger-q/seen-only? %)))
+               (mapv #(danger-q/mob-pos p %)))
+          (flight/fire-spots c))))
 
 (defn facing-first
   "cells (dig-cells/fill-cells order) with the sides towards the nearest of shooters first, each side's feet cell then its

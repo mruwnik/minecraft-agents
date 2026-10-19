@@ -408,7 +408,7 @@
   {:defaults {:checks {:safe? '(always) :fit? '(always)}}
    :round (fn ^:async backer-round [c]
             (let [threat (first (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30}))
-                  r (await (cornered/back-off! c threat))]
+                  r (await (cornered/back-off! c (some->> threat (danger-q/mob-pos (:primitives c)))))]
               (reset! out {:r r :tried (retreat-flight/tried? c :back-off)})
               (ctx/end c :done nil)))})
 

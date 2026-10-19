@@ -3142,6 +3142,15 @@ test('the hurt event carries the amount and the attacker of the damage packet', 
   assert.equal(hurt.damageType, 'mob_attack')
 })
 
+test('the hurt event carries the horizontal direction the hit came from, not the place', () => {
+  const { bot, seen } = hurtRig()
+  bot._client.emit('damage_event', { entityId: bot.entity.id, sourceTypeId: 1, sourceCauseId: 9, sourceDirectId: 9 })
+  bot.health = 17
+  bot.emit('health')
+  const { dir } = seen.find(e => e.kind === 'hurt')
+  assert.ok(dir.x > 0 && Math.abs(Math.hypot(dir.x, dir.z) - 1) < 1e-9, 'a unit vector toward the zombie')
+})
+
 test('the hurt event carries the damage type when nothing is responsible, and nothing stale', () => {
   const { bot, seen } = hurtRig()
   bot._client.emit('damage_event', { entityId: bot.entity.id, sourceTypeId: 0, sourceCauseId: 0, sourceDirectId: 0 })
