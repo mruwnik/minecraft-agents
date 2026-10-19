@@ -47,7 +47,7 @@
   :collected}, collect {:collected}, deposit {:gave-up :reason}.
 
   With :plan and :part the pen is that part of the plan: its :box, and :mob and :target from its :herd
-  {:mob :target}; it waits :plan-trouble while the plan is missing or unreadable, and ends impossible :plan-trouble when the part or its :herd is missing. A pass that leaves
+  {:mob :target}; it waits :plan-trouble while the plan is missing or unreadable, and ends impossible :plan-trouble when the part or its :herd is missing.
 
   Limit: the box is the only pen there is. An animal inside it may be outside the fence. Breed, shear and
   collect-drops look in a radius around the body that covers the box, so animals or items just outside it can
@@ -311,7 +311,6 @@
   [c report]
   (let [{:keys [mob target]} (:args c)
         {:keys [adults babies]} (hunting/census c)
-        f (facts c)
         out {:mob mob :target target :adults (count adults) :babies (count babies) :steps report}]
     (ctx/end c :done nil (assoc out :text (str "tend done: " (count adults) " adults, " (count babies) " babies")))))
 
@@ -347,7 +346,7 @@
       (if (= :continue r) :yield :again))))
 
 (defn ^:async round
-  "The whole pass: each step's child once, until the run ends; yields only while a child waits on the world."
+  "The whole pass: each step's child once, until the run ends; yields only while a child waits on the world. A plan that goes bad after can-run? is left to the next check (plan-trouble-round-test)."
   [c0]
   (let [{:keys [trouble] :as pen} (pen-of c0)
         c (if pen (with-pen c0 pen) c0)]
