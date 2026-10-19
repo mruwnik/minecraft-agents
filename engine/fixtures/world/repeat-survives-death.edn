@@ -8,7 +8,7 @@
   :limit-s 90}
  :cases
  [{:name "repeat-job-survives-a-death"
-   :act [[:http :submit (repeat (jobs.movement.look-around {:every-ms 500})) [] {:ok true}]
+   :act [[:http :submit (repeat (jobs.time.noop {:seconds 0.5 :why :idle})) [] {:ok true}]
          [:kill-body] [:await {:source :body :kind :respawned} 30]
          [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]]
    :expect [{:event {:source :body :kind :respawned} :within-s 40}

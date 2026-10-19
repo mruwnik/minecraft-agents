@@ -34,4 +34,4 @@
             {:trigger :tidy-pending :persistence :cooldown :cooldown-s 10}
             {:trigger :pen-gate :persistence :cooldown :cooldown-s 5}
             {:trigger :mounted :persistence :cooldown :cooldown-s 30}]
- :queue [(repeat (jobs.movement.look-around))]}
+ :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}

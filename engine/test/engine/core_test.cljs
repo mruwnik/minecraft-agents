@@ -1727,19 +1727,16 @@
             (is (pos? (:bytes e)))
             (is (>= (:ms e) (:max-ms e) 0))))))))
 
-(defn look-calls [world]
-  (filterv #(= "look" (.-name %)) (.-calls world)))
-
 (defn wait-calls [world]
   (filterv #(= "wait" (.-name %)) (.-calls world)))
 
-(deftest look-around-looks-once-then-waits-so-ticks-do-not-spin
+(deftest a-pause-parks-its-round-so-ticks-do-not-spin
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p clock]} (setup {})
               world (.-world p)]
-          (core/submit! eng '(repeat (jobs.movement.look-around)) {})
+          (core/submit! eng '(repeat (jobs.time.noop {:seconds 2 :why :idle})) {})
           (.hold world "wait")
           (core/tick! eng)
           (loop [i 0]
@@ -1750,18 +1747,18 @@
             (core/tick! eng)
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 5))))
             (swap! clock + 250))
-          (is (= 1 (count (look-calls world))) "the round is parked in its wait, so ticks start nothing")
+          (is (= 1 (count (wait-calls world))) "the round is parked in its wait, so ticks start nothing")
           (is (= [2000] (mapv #(.. % -args -ms) (wait-calls world)))
-              "it waits :every-ms, default 2000"))))))
+              "it waits the pause's seconds"))))))
 
-(deftest a-cut-rejects-look-around-s-wait-at-once
+(deftest a-cut-rejects-a-pause-s-wait-at-once
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen p]} (setup {:inventory [{:name "bread" :count 3}]})
               world (.-world p)]
           (core/register-reflex! eng {:trigger :hurt})
-          (core/submit! eng '(repeat (jobs.movement.look-around)) {})
+          (core/submit! eng '(repeat (jobs.time.noop {:seconds 2 :why :idle})) {})
           (.hold world "wait")
           (let [looking (core/tick! eng)]
             (swap! (.. world -state) assoc-in [:self :health] 6)

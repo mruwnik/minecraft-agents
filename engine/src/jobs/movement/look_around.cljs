@@ -1,24 +1,18 @@
 (ns jobs.movement.look-around
   (:require [jobs.lib.ready :as ready]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.lib.child :as child]
-            [jobs.lib.util :as u]
+            [jobs.lib.look :as look]
             [engine.primitive :as primitive]))
 
-(def idle-ok true)
-
 (def doc
-  "Face a random point 3 blocks away (any yaw, from a block below to 1.5 above the body),
-  write a :looked entry to body memory (a condition can read it: (since :looked)),
-  then wait :every-ms so an idle body does not spin. It only turns, so no hostile or dark makes it wait.")
+  "Look around like a player: turn through the four headings (level, down at the floor ahead and, unless that ray is
+  seen already, up) with a sight pass after each look, so what lies beside or behind the body enters perception's
+  memory. Then write a :looked entry to body memory (a condition can read it: (since :looked)) and end :done. It only
+  turns, so no hostile or dark makes it wait; it does not pause (to idle, use jobs.time.noop). Needs nothing.")
 
-(a/defargs args
-  {:every-ms {:doc "milliseconds to wait after each look" :spec (a/num-in 0 nil) :default 2000}})
-
-(def look-ahead 3)
-
-(def looked-policy {:cap 1 :ttl :forever})
+(a/defargs args {})
 
 (def target [])
 
@@ -30,27 +24,25 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(defn quote-of
-  "The quotes of its two acts, the look and the wait, added."
-  [c]
-  (let [p (:primitives c)
-        quote-act #(let [{:keys [quote-of]} (get primitive/table %)] (quote-of p %2))
-        [l m x] (get-in (quote-act :look {}) [:uses :job-time])
-        [wl wm wx] (get-in (quote-act :wait {:ms (:every-ms (:args c))}) [:uses :job-time])]
-    {:uses {:job-time [(+ l wl) (+ m wm) (+ x wx)]}}))
+(def looks "Looks of one full turn: three per heading." 12)
 
-(defn look-point
-  "The point look-ahead blocks from pos horizontally at yaw 2*pi*u, and
-  y - 1 + 2.5*v high (u and v in [0, 1))."
-  [{:keys [x y z]} u v]
-  (let [yaw (* 2 js/Math.PI u)]
-    {:x (+ x (* look-ahead (js/Math.cos yaw)))
-     :y (+ y -1 (* 2.5 v))
-     :z (+ z (* look-ahead (js/Math.sin yaw)))}))
+(defn done?
+  "Done once the body has looked round on this run."
+  [c]
+  (if (look/surveyed? c)
+    (contract/ok :looked "the body has looked round")
+    (contract/later :looking "the body has not looked round yet" :units :looks :done 0 :left looks)))
+
+(defn quote-of
+  "The quote of one look, times the looks of a turn."
+  [c]
+  (let [{:keys [quote-of]} (get primitive/table :look)
+        [l m x] (get-in (quote-of (:primitives c) {}) [:uses :job-time])]
+    {:uses {:job-time [(* looks l) (* looks m) (* looks x)]}}))
+
+(def looked-policy {:cap 1 :ttl :forever})
 
 (defn ^:async round [c]
-  (let [pos (look-point (u/self-pos c) (rand) (rand))]
-    (await (ctx/act c :look (clj->js {:pos pos})))
-    (ctx/remember! c :looked {} looked-policy)
-    (await (child/pause! c (/ (:every-ms (:args c)) 1000) :looking))
-    (ctx/end c :done nil)))
+  (await (look/look-around-until! c (constantly nil)))
+  (ctx/remember! c :looked {} looked-policy)
+  (ctx/end c :done nil))

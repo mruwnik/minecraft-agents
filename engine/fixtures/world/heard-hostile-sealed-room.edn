@@ -16,12 +16,12 @@
  :cases
  [{:name "heard-skeleton-behind-the-wall-lets-the-queued-job-run"
    :act [[:summon "skeleton" [24.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.movement.look-around {})]]
+         [:job (jobs.movement.look-around)]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
             {:count-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 60 :at-most 6}]}
   {:name "heard-zombie-behind-the-wall-roofed-body-stays"
    :act [[:summon "zombie" [24.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.movement.look-around {})]]
+         [:job (jobs.movement.look-around)]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :retreat.target} :for-s 40}]
    :after [[:body-near [16.5 0 16.5] 3.5]]}]}

@@ -13,7 +13,7 @@
  [{:name "calm-enderman-fires-no-reflex"
    :act [[:summon "enderman" [21.5 0 16.5] "{NoAI:1b}"]
          [:until-seen {:entity "enderman"} 10]
-         [:job (jobs.movement.look-around {})]]
+         [:job (jobs.movement.look-around)]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 40}]
    :after [[:entities "type=enderman,tag=wt" [[0 0 0] [31 6 31]] 1]]}]}

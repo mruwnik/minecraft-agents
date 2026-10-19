@@ -90,7 +90,7 @@
                  (mapv :id (:register (core/state eng)))))
           (await (run-ticks eng clock 3 1000))
           (is (= [] (fired seen)) "a healthy body in daylight fires nothing")
-          (is (= #{"(repeat jobs.movement.look-around)"} (names-started seen)) "it idles looking around")
+          (is (= #{"(repeat jobs.time.noop)"} (names-started seen)) "it idles in a pause")
 
           (fake/swap-self! p assoc :health 5 :food 10)
           (await (run-ticks eng clock 3 1000))

@@ -19,12 +19,12 @@
 ;; -- case from live-composite-b-4
 ;; ;; withdraw live: a 5 s pause (items are given meanwhile), then withdraw (composite-b).
 ;; {:register []
-;;  :queue [(seq (jobs.movement.look-around {:every-ms 5000})
+;;  :queue [(seq (jobs.time.noop {:seconds 5 :why :idle})
 ;;               (jobs.storage.withdraw {:chest {:x -5003 :y 101 :z -5000} :items {"bread" 12 "stone_hoe" 2}}))]}
 ;; -- case from live-composite-b-6
 ;; ;; kit live: a 5 s pause (items may be given meanwhile), then a hoe kit with food (composite-b).
 ;; {:register []
-;;  :queue [(seq (jobs.movement.look-around {:every-ms 5000})
+;;  :queue [(seq (jobs.time.noop {:seconds 5 :why :idle})
 ;;               (jobs.storage.kit {:tools ["hoe"] :spare 1 :food 12 :chest {:x -5003 :y 101 :z -5000}}))]}
 ;; -- case from live-composite-b-7
 ;; ;; kit live: no chest given and none remembered: the listed job must never run (composite-b).
@@ -41,5 +41,5 @@
 ;; -- case from live-composite-b-13
 ;; ;; harvest live: a 5 s pause (the inventory is filled meanwhile, so no seed can be picked up), then harvest (composite-b).
 ;; {:register []
-;;  :queue [(seq (jobs.movement.look-around {:every-ms 5000})
+;;  :queue [(seq (jobs.time.noop {:seconds 5 :why :idle})
 ;;               (jobs.farm.harvest {:radius 12}))]}

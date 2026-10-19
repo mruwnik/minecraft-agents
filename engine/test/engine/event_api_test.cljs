@@ -252,12 +252,12 @@
                         (is (= :running (:status job)))
                         (is (= true (:current? job)))
                         (request socket-path "GET"
-                                 "/catalog?kind=job&name=jobs.movement.look-around" {} nil))))
+                                 "/catalog?kind=job&name=jobs.time.noop" {} nil))))
              (.then (fn [response]
                       (let [job (edn-response response)]
                         (is (= 200 (:status response)))
                         (is (= :job (:kind job)))
-                        (is (= 2000 (get-in job [:args :every-ms :default])))
+                        (is (= 0 (get-in job [:args :seconds :default])))
                         (is (string? (:doc job)))
                         (request socket-path "GET" "/catalog?kind=trigger&name=hungry" {} nil))))
              (.then (fn [response]

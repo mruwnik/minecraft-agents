@@ -17,7 +17,6 @@
             [jobs.forestry.fell-tree.log :as fell-log]
             [jobs.lib.near :as near]
             [jobs.lib.world-files :as ew]
-            [jobs.movement.look-around :as look-around]
             [jobs.storage.deposit :as dep]))
 
 (defn setup
@@ -688,26 +687,17 @@
 
 ;; ------------------------------------------------------------- look-around
 
-(deftest look-around-looks-once-and-records-when
+(deftest look-around-turns-through-four-headings-and-records-when
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {})]
           (core/submit! eng '(jobs.movement.look-around) {})
           (await (core/tick! eng))
-          (is (= 1 (count (calls p "look"))))
+          (is (= 8 (count (calls p "look"))) "level and down along each of four headings; up only where unseen")
+          (is (empty? (calls p "wait")) "it does not pause")
           (is (= [] (:list (core/state eng))))
           (is (= 1000000 (:t (mem/latest (mem/view (:store eng)) :looked)))))))))
-
-(defn rounded [pos] (update-vals pos #(/ (js/Math.round (* 1e6 %)) 1e6)))
-
-(deftest look-point-is-look-ahead-away-in-the-direction-and-height-given
-  (let [here {:x 10 :y 64 :z 20}]
-    (are [u v want] (= want (rounded (look-around/look-point here u v)))
-      0 0 {:x 13 :y 63 :z 20}
-      0.5 0 {:x 7 :y 63 :z 20}
-      0.25 1 {:x 10 :y 65.5 :z 23}
-      0.75 0.4 {:x 10 :y 64 :z 17})))
 
 (defn view-with
   "A memory view at now-ms holding one entry of kind written at t, or none."

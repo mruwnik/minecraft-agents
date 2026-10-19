@@ -35,7 +35,7 @@
    :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}]}
   {:name "idle-notice-names-the-waiting-job"
    :limit-s 60
-   :act [[:http :submit (repeat (jobs.movement.look-around {:every-ms 500})) [] {:ok true}]
+   :act [[:http :submit (repeat (jobs.time.noop {:seconds 0.5 :why :idle})) [] {:ok true}]
          [:http :submit (jobs.items.get-tool {:item "stone_pickaxe" :explore false}) [] {:ok true}]
          [:cli "observe" ["$body" "--world" "$world" "status" "--wait" "--timeout" "40s"] {:wake :idle}]]
    :expect [{:event {:source :body :kind :idle} :within-s 40}]}

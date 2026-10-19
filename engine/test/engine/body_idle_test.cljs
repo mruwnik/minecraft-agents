@@ -121,6 +121,6 @@
           (is (= 3 (count (idles seen)))))))))
 
 (deftest idle-ok-jobs-declare-it
-  (doseq [sym '[jobs.movement.look-around jobs.movement.linger-near jobs.time.wait-for-day jobs.time.wait-for-dusk]]
+  (doseq [sym '[jobs.movement.linger-near jobs.time.wait-for-day jobs.time.wait-for-dusk]]
     (is (true? (:idle-ok (get registry/jobs sym))) (str sym)))
   (is (nil? (:idle-ok (get registry/jobs 'jobs.items.get-tool)))))

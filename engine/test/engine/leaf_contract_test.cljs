@@ -18,7 +18,7 @@
             :let [job (get registry/jobs sym)]]
       (is (fn? (:round job)) (str sym " has a round"))
       (is (vector? (:target job)) (str sym " has a target"))
-      (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args {:every-ms 2000}}))) (str sym)))))
+      (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args {}}))) (str sym)))))
 
 (deftest waiting-for-the-day-is-quoted-by-the-ticks-left-of-the-night
   (let [quote-of (fn [time] (get-in ((:quote-of (get registry/jobs 'jobs.time.wait-for-day)) {:primitives (tu/fake {:time time})})

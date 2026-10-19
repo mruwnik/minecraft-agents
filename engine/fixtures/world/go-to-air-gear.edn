@@ -72,7 +72,7 @@
             [:fill [4 2 8] [4 3 8] "air"] [:fill [41 2 8] [41 3 8] "air"]
             [:fill [5 2 8] [40 2 8] "glass"]]
    :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "turtle_helmet"}}}] 10]
-         [:job (jobs.movement.look-around {})] [:await {:source :job :kind :completed} 30]
+         [:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
          [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [41 1 8] :range 1}] {:ok true :quote {:route {:found true :drown nil}}}] 30]]
    :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:body-near [4.5 1 8.5] 1]]}

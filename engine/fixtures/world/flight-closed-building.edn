@@ -59,7 +59,7 @@
   ;; 31887403: already inside the hut, on a cell other than the :home cell: that is at home, the body does not run out again
   {:name "inside-the-room-away-from-the-home-cell-stays-and-shuts-the-door"
    :body {:at [14.5 0 14.5]}
-   :act [[:job (jobs.movement.look-around {})] [:await {:source :job :kind :completed} 30]
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
          [:job (jobs.memory.set-place {:name :home :pos #at [18 0 18]})] [:await {:source :job :kind :completed} 10]
          [:summon "zombie" [17.5 0 23.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.door-shut} :within-s 40}]

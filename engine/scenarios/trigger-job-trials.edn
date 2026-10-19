@@ -6,7 +6,7 @@
             {:trigger :night :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
              :job (jobs.survival.night {:roof-height 4})}
             ]
- :queue [(repeat (jobs.movement.look-around))]}
+ :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; ---- other cases of this feature: swap the commented form in for the active one above ----
 ;; -- case from live-ClaudeProbe-2
 ;; ;; Log-out live test, body B: the real shelter (log-out after 60 s offline) and a hungry notify.
@@ -14,41 +14,41 @@
 ;;              :job (jobs.debug.notify {:text "hungry fired"})}
 ;;             {:trigger :night :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
 ;;              :job (jobs.survival.night {:roof-height 4})}]
-;;  :queue [(repeat (jobs.movement.look-around))]}
+;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ClaudeProbe-3
 ;; ;; Log-out live test, body B: shelter with log-out forbidden.
 ;; {:register [{:trigger :night :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
 ;;              :job (jobs.survival.night {:roof-height 4})}]
-;;  :queue [(repeat (jobs.movement.look-around))]}
+;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeDrive-2
 ;; ;; ProbeView takeover live test: pacing only, no reflexes, on the pad at -3500 64 3495.
 ;; {:register []
-;;  :queue [(repeat (jobs.movement.look-around))]}
+;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeFight-1
 ;; ;; ProbeFight trigger test: hostile-near against notify.
 ;; {:register [{:trigger :hostile-near :args {:radius 8}
 ;;              :job (jobs.debug.notify {:text "hostile-near fired"})}]
-;;  :queue [(repeat (jobs.movement.look-around))]}
+;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeFight-2
 ;; ;; ProbeFight job test: respond-to-hostile as in survival.edn, nothing else.
 ;; {:register [{:trigger :hostile-near :args {:radius 8}
 ;;              :job (jobs.survival.respond-to-hostile {:radius 8})}]
-;;  :queue [(repeat (jobs.movement.look-around))]}
+;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeFight-3
 ;; ;; ProbeFight re-test: hostiles above health as in survival.edn, nothing else.
 ;; {:register [{:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
 ;;              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
-;;  :queue [(repeat (jobs.movement.look-around))]}
+;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeFight-4
 ;; ;; Backoff live proof, before: a go-to into a sealed box target under repeat with backoff off, plus look-around.
 ;; {:register []
 ;;  :queue [(backoff false (repeat (jobs.movement.go-to {:pos {:x 1980 :y 101 :z -1979}})))
-;;          (repeat (jobs.movement.look-around))]}
+;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeFight-5
 ;; ;; Backoff live proof, after: the same go-to under repeat with the default backoff, plus look-around.
 ;; {:register []
 ;;  :queue [(repeat (jobs.movement.go-to {:pos {:x 1980 :y 101 :z -1979}}))
-;;          (repeat (jobs.movement.look-around))]}
+;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeFight-6
 ;; ;; Backoff live proof, before, alone: the sealed-box go-to under repeat with backoff off.
 ;; {:register []
@@ -62,12 +62,12 @@
 ;; ;; The look-around first gives the target's chunks time to arrive after login: a go-to started
 ;; ;; at once burns its blocked tries on instant noPath results while they load.
 ;; {:register []
-;;  :queue [(seq (jobs.movement.look-around {:every-ms 3000})
+;;  :queue [(seq (jobs.time.noop {:seconds 3 :why :idle})
 ;;               (jobs.movement.go-to {:pos {:x 2902 :y 161 :z 3216}}))]}
 ;; -- case from live-ProbeMove-3
 ;; ;; ProbeMove live test: pace between two points 30 blocks apart (8 rounds of 3 laps).
 ;; {:register []
-;;  :queue [(seq (jobs.movement.look-around {:every-ms 3000})
+;;  :queue [(seq (jobs.time.noop {:seconds 3 :why :idle})
 ;;               (jobs.movement.go-to {:pos {:x 2860 :y 161 :z 3250}}))]}
 ;; -- case from live-ProbeMove-4
 ;; ;; ProbeMove live test: wait-for-day held at the head of the list, look-around queued behind it,
@@ -75,19 +75,19 @@
 ;; {:register [{:trigger :burning :persistence :cooldown :cooldown-s 5
 ;;              :job (jobs.debug.notify {:text "burning fired"})}]
 ;;  :queue [(jobs.time.wait-for-day)
-;;          (repeat (jobs.movement.look-around))]}
+;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeMove-5
 ;; ;; ProbeMove live test: wait-for-day not held, look-around queued behind it (does the idle job run at night?).
 ;; {:register []
 ;;  :queue [(jobs.time.wait-for-day)
-;;          (repeat (jobs.movement.look-around))]}
+;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeNight-2
 ;; ;; ProbeNight job tests: the real get-food and shelter reflexes only, plus idle.
 ;; {:register [{:trigger :hungry :args {:food 6}
 ;;              :job (jobs.survival.get-food {:food 6})}
 ;;             {:trigger :night :args {:roof-height 4}
 ;;              :job (jobs.survival.night {:roof-height 4})}]
-;;  :queue [(repeat (jobs.movement.look-around))]}
+;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeNight-3
 ;; ;; ProbeNight livelock probe: shelter registered ABOVE get-food, to see whether a
 ;; ;; lower reflex ever gets the body while shelter holds it all night.
@@ -95,17 +95,17 @@
 ;;              :job (jobs.survival.night {:roof-height 4})}
 ;;             {:trigger :hungry :args {:food 6}
 ;;              :job (jobs.survival.get-food {:food 6})}]
-;;  :queue [(repeat (jobs.movement.look-around))]}
+;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeStuck-cull-1
 ;; ;; ProbeStuck live case: jobs.animals.cull
 ;; {:register []
 ;;  :queue [(repeat (jobs.animals.cull {:mob "cow" :keep 2 :radius 12}))
-;;          (repeat (jobs.movement.look-around))]}
+;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeStuck-cull-4
 ;; ;; ProbeStuck live case: jobs.animals.cull
 ;; {:register []
 ;;  :queue [(repeat (jobs.animals.cull {:mob "cow" :keep 1 :radius 12}))
-;;          (repeat (jobs.movement.look-around))]}
+;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeStuck-farm-tend-nochest
 ;; ;; ProbeStuck live case: jobs.farm.tend on a 7x7 field, no chest given
 ;; {:register []
@@ -138,19 +138,19 @@
 ;;              :job (jobs.debug.notify {:text "suffocating fired"})}
 ;;             {:trigger :burning
 ;;              :job (jobs.debug.notify {:text "burning fired"})}]
-;;  :queue [(repeat (jobs.movement.look-around))]}
+;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeWater-2
 ;; ;; ProbeWater live test: the real breathe and extinguish reflexes only.
 ;; {:register [{:trigger :suffocating :args {:min-oxygen 12}
 ;;              :job (jobs.survival.breathe {:min-oxygen 12})}
 ;;             {:trigger :burning
 ;;              :job (jobs.survival.extinguish {:water-radius 6})}]
-;;  :queue [(repeat (jobs.movement.look-around))]}
+;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeWater-3
 ;; ;; Log-out live test, body A (sleeper): the real shelter, which sleeps in the remembered bed.
 ;; {:register [{:trigger :night :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
 ;;              :job (jobs.survival.night {:roof-height 4})}]
-;;  :queue [(repeat (jobs.movement.look-around))]}
+;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeWater-build-plan
 ;; ;; trial: build plan trial-builder-pen (a 7x7 fence pen with a gate and two torches) from what the body carries.
 ;; {:register []
@@ -172,27 +172,27 @@
 ;; ;; most 2 of the 36 main slots are free, and never runs make-room.
 ;; {:register [{:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 10 :args {:free 2}
 ;;              :job (jobs.debug.notify {:text "inventory-nearly-full fired"})}]
-;;  :queue [(repeat (jobs.movement.look-around))]}
+;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-inventory-2
 ;; ;; Live test of make-room as the inventory-nearly-full reflex, alone, with a
 ;; ;; short cooldown so each set-up is answered quickly.
 ;; {:register [{:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 15 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4})}]
-;;  :queue [(repeat (jobs.movement.look-around))]}
+;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-inventory-3
 ;; ;; Live test of make-room with a short chest range (8), to see the toss path
 ;; ;; take over when the known chest is farther away.
 ;; {:register [{:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 15 :args {:free 2}
 ;;              :job (jobs.storage.make-room {:free 4 :settings {:jobs.storage.make-room/chest-range 8}})}]
-;;  :queue [(repeat (jobs.movement.look-around))]}
+;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-probenight-1
 ;; ;; Live test of get-food as the hungry reflex, alone, with a short cooldown so
 ;; ;; each set-up (crops by setblock, a :food-source seeded in memory) is
 ;; ;; answered quickly.
 ;; {:register [{:trigger :hungry :persistence :cooldown :cooldown-s 15 :args {:food 6}
 ;;              :job (jobs.survival.get-food {:food 6})}]
-;;  :queue [(repeat (jobs.movement.look-around))]}
+;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-probestuck-4
 ;; ;; ProbeStuck: the real recover-drops job under the died trigger, idling.
 ;; {:register [{:trigger :died :job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 6}})}]
-;;  :queue [(repeat (jobs.movement.look-around))]}
+;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}

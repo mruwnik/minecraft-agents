@@ -23,4 +23,4 @@
             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
              :job (jobs.storage.make-room {:free 4})}
             {:trigger :tidy-pending :persistence :cooldown :cooldown-s 10}]
- :queue [(repeat (jobs.movement.look-around))]}
+ :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
