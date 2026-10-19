@@ -204,7 +204,7 @@
         (await (tu/each-async
                 [['(jobs.items.obtain {:item "bread" :count 1}) {:blocks {"30,64,0" "chest"} :containers {"30,64,0" [{:name "bread" :count 4}]}}]
                  ['(jobs.items.enchant {:item "diamond_sword" :table {:x 40 :y 64 :z 0}}) {:inventory [{:name "diamond_sword" :count 1} {:name "lapis_lazuli" :count 9}] :self {:experience {:level 30}} :blocks {"40,64,0" "enchanting_table"}}]
-                 ['(jobs.items.give {:player "Steve" :item "bread" :radius 60}) {:inventory [{:name "bread" :count 5}] :entities [{:id 5 :name "Steve" :kind "player" :pos {:x 40 :y 64 :z 0}}]}]]
+                 ['(jobs.items.give {:player "Steve" :item "bread"}) {:inventory [{:name "bread" :count 5}] :entities [{:id 5 :name "Steve" :kind "player" :pos {:x 30 :y 64 :z 0}}]}]]
                 (fn ^:async one [[form extra]]
                   (let [trail (await (job-trail form extra))]
                     (is (seq trail) (pr-str form))

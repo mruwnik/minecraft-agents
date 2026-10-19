@@ -263,7 +263,7 @@
               _ (tu/seeing-after-look p)
               e (await (ending-of w job {:plan "pen" :fetch false} 100))]
           (is (empty? (h/calls p "place")))
-          (is (= {:kind :condition-failed :cause {:reason :no-items :needs {"oak_fence" 7 "oak_fence_gate" 1}}} (kc e))))))))
+          (is (= [:condition-failed :no-items {"oak_fence" 7 "oak_fence_gate" 1}] [(:kind e) (get-in e [:cause :reason]) (get-in e [:cause :needs])])))))))
 
 (deftest the-default-fetch-explores-for-fences-that-are-short
   (async done
