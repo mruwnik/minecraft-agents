@@ -168,6 +168,15 @@
                                    {:inventory h/sword :entities [{:id 1 :name mob :kind "hostile" :pos {:x 20 :y 64 :z 0} :drops [{:name item :count 1}]}]} 40))]
             (is (seq (attacked s)) item)))))))
 
+(deftest a-hurt-or-unarmed-body-does-not-hunt-a-spider-for-string
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spider [{:id 1 :name "spider" :kind "hostile" :pos {:x 20 :y 64 :z 0} :drops [{:name "string" :count 1}]}]]
+          (doseq [world [{:inventory h/sword :self {:health 4} :entities spider}
+                         {:inventory [] :entities spider}]]
+            (is (empty? (attacked (await (scenario {:item "string" :count 1} world 40)))) (pr-str (dissoc world :entities)))))))))
+
 (deftest a-hunt-that-spared-animals-says-which-rule-spared-them
   (is (= "left alone: 3 pen" (gather/spared-why {:spared-by {:pen 3}})))
   (is (nil? (gather/spared-why {:killed 0}))))
