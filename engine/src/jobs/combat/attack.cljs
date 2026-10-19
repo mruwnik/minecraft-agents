@@ -64,7 +64,7 @@
    :hold {:doc "true: never walk toward a melee mob; strike one that comes within reach" :spec boolean? :default false}
    :skip {:doc "with :hostiles, entity ids already dead: not fought" :spec (a/coll-of number?) :default []}
    :attack-gap-ms {:doc "least time between swings; nil: the held weapon's cooldown" :spec (a/num-in 0 nil) :default nil}
-   :no-damage-hits {:doc "swings in a row that do no damage before a target is given up on" :spec (a/int-in 1 nil) :default 4}
+   :no-damage-hits {:doc "swings in a row that do no damage before a target is given up on (a lagging server drops many swings at the cooldown, so it is many)" :spec (a/int-in 1 nil) :default 16}
    :walk-timeout-s {:doc "bound of one walk towards a target" :spec (a/num-in 0 nil) :default 5}
    :absent {:doc ":done ends the job with reason :absent when no target is present after a 2 s grace; :wait makes the check decline until one is" :spec #{:done :wait} :default :done}})
 

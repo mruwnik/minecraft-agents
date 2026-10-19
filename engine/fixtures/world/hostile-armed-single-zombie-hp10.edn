@@ -1,8 +1,8 @@
 ;; Card dd0f2aad: a fight begun at full health goes on against one zombie when the body drops to 10 hp (hysteresis health is
 ;; 8; the Linden trial fled at 10 hp and died on the run). A fresh fight at 10 hp is judged by cost and may flee. Hunger stops
-;; regeneration, then `damage` leaves 10 hp. The zombie is NoAI, helmeted, with 100 hp so the fight outlasts the damage.
+;; regeneration, then `damage` leaves 10 hp. The zombie is NoAI, helmeted, with 100 hp so the fight outlasts the damage. The zombie may or may not die in the window, so no :after count.
 {:defaults
- {:tags [:hostile :combat] :time :day
+ {:tags [:hostile :combat]
   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
   :body {:at [16.5 0 16.5] :inventory [["stone_sword" 1]]}}
@@ -14,5 +14,4 @@
          [:rcon "damage $BODY 10 minecraft:generic"]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :fight}} :within-s 20}
             {:no-event {:source :job :kind :child_started :data {:slot :flee}} :for-s 30}]
-   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [32 4 32]] 0]]
    :limit-s 60}]}

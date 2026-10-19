@@ -229,8 +229,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:targets [7]}
-                                 {:inventory h/sword :entities [(ent 7 "zombie" "hostile" 2 {:invulnerable true})]} 5))]
-          (is (= 4 (count (attacked s))))
+                                 {:inventory h/sword :entities [(ent 7 "zombie" "hostile" 2 {:invulnerable true})]} 20))]
+          (is (= 16 (count (attacked s))))
           (is (= {7 :no-damage} (:given-up (done-event s))))
           (is (finished? s))
           (is (= :gave-up (:reason (done-event s)))))))))
@@ -431,7 +431,7 @@
                                             (.then (impl t a) (fn [r]
                                                                 (when (= 4 (swap! n inc)) (swap! (fake/state p) assoc-in [:entities 0 :pos] [0 64 40]))
                                                                 r))))
-          (core/submit! (:eng s) (spec {:targets [7]}) {})
+          (core/submit! (:eng s) (spec {:targets [7] :no-damage-hits 4}) {})
           (await (core/tick! (:eng s)))
           (is (= :gave-up (:reason (done-event s))))
           (is (= {7 :no-damage} (:given-up (done-event s)))))))))

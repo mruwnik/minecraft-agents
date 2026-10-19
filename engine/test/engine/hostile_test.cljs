@@ -490,7 +490,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen]} (await (first-round-ms fight {:inventory sword :entities [(invulnerable-zombie)]} 20))]
-          (is (= 4 (count (calls p "attack"))) "four swings without damage, then no more")
+          (is (= 16 (count (calls p "attack"))) "sixteen swings without damage, then no more")
           (is (empty? (filter #(= "fight_no_damage" (name (:kind %))) @seen)) "the ending carries the reason")
           (is (re-find #"no-damage" (str (:text (first (filter #(= :stopped (:kind %)) @seen)))))))))))
 
@@ -499,7 +499,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (await (flight-round respond {:inventory sword :entities [(invulnerable-zombie)]}))]
-          (is (= 4 (count (calls p "attack"))) "the fight stops after four useless swings")
+          (is (= 16 (count (calls p "attack"))) "the fight stops after sixteen useless swings")
           (is (pos? (count (tu/walked-to eng))) "and the body retreats"))))))
 
 (deftest respond-does-not-stop-no-response-while-the-fight-costs-health

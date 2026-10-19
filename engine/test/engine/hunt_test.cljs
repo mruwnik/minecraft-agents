@@ -207,7 +207,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:keep 0} {:inventory h/sword :entities [(animal 1 "cow" 3 {:invulnerable true})]} 30))]
-          (is (<= (count (attacked s)) 8) "bounded: attack gives up after four no-damage hits")
+          (is (<= (count (attacked s)) 20) "bounded: attack gives up after sixteen no-damage hits")
           (is (= :none (:reason (done-event s))))
           (is (= 0 (:killed (done-event s))))
           (is (finished? s)))))))
