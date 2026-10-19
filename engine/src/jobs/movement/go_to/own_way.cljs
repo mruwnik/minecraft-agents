@@ -1,6 +1,29 @@
 (ns jobs.movement.go-to.own-way
   "go-to's walk up a body's own stairs when its goal lies far above it under ground, the dive floor that bounds its plans, and
-  the detour bound on a whole plan."
+  the detour bound on a whole plan.
+
+  Rules of go-to:
+  - A body under ground (jobs.lib.shelter.sense/buried?) whose goal lies ::climb-rise blocks or more above it plans no route
+    deeper than ::climb-dip blocks below where the call first found it so (it does not dive through deep caves to come
+    up under the goal). With no other way it cuts a stair up toward the goal instead (setting ::climb-stair, with
+    :stair: the escalation's stair, a go-to.escalated {:step :stair :why :way-dives}), stair after stair with no walk
+    in between while it is under ground below the goal; else, or when no stair can be cut, it gives up :why :way-dives
+    with :dip and :rise. Such a body (jobs.movement.go-to.climb):
+    - first walks its own way up, once a call (setting ::climb/own-way): over its stairs and tunnels (memory :stair-way,
+      :tunnel-way) and standable cells it has seen, to the nearest of its stairs that stands at the goal's height or
+      at its top under the open sky (a stair that ends in rock is no way), in hops of ::climb/own-way-reach; the walk is weighed
+      against a new stair first (info go-to.own-way {:take :to :blocks :walk-s :cut-steps :cut-s}) and a slower one
+      is not taken; a hop it cannot walk, standing on such a stair, has the stair cut again from
+      there (a go-to.escalated {:step :stair :why :own-way-blocked}; these holes stay open);
+    - walks no plan (first or re-plan inside a walk) that goes more than ::climb/cave-dip below where the call began over cells that are no stair of
+      its own, while a stair up can be cut there (with :stair and ::climb-stair): it climbs as from a dive
+      (:why :way-dives); when no stair can be cut it walks the plan after all. Likewise, once at the end of its own
+      way (memory :own-way-top), a plan that goes more than ::climb/cave-dip below it back down a stair of its own.
+    A set jobs.lib.walk.world/y-margin switches all of this off.
+  - A body under ground (jobs.lib.shelter.sense/buried?) whose goal is under ::climb-rise above it
+    walks no found way longer than ::detour/ratio times the distance to its goal at the call's start (at least
+    ::detour/floor blocks) when half or more of its cells were never seen: it gives up :why :detour with :route,
+    :straight and :allowed (blocks) before it sets out. See jobs.movement.go-to.detour."
   (:require [engine.ctx :as ctx]
             [jobs.lib.stair-memory :as stair-mem]
             [jobs.lib.near :as near]

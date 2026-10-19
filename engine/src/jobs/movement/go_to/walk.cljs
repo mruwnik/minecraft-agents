@@ -1,6 +1,29 @@
 (ns jobs.movement.go-to.walk
   "One step of a go-to call's walk: the round toward the goal and what follows it (arrival, a look, a waypoint, torches, air, a
-  retry, the give-up or escalation)."
+  retry, the give-up or escalation).
+
+  Rules of go-to:
+  - The walk settings (per world, body or call :settings): jobs.lib.walk.world/dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
+    longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
+  - Setting go-to.tuning/goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
+  - Setting jobs.lib.walk.world/dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). A
+    :spend :job-time of n walks one leg of at most n s and, when it got more than 1 block nearer, ends limit-reached
+    {:reason :leg :line :job-time}, data {:arrived false :leg true}, for a caller chasing a moving target to call again; a
+    leg that got no nearer goes on as any round, and a search that goes on past n s gives up :leg-search-spent.
+  - A call starts afresh from the world: its walk counters are per call (the cut count carries over only a cut of this run's call to the same goal), and a saved escalation is dropped when the body
+    is already there (a cut call's memory is a hint).
+  - A walk that gets more than 1 block nearer is progress. Three walks in a row without progress give up (or escalate, below), and so
+    does a goal the planner proves walled in (:goal-enclosed, :goal-cut-off) or on magma (:goal-on-magma), at once; a
+    walled-in goal it does not escalate into is first walked up to (the cell nearest it the body can reach, once a call, when
+    that walk fits the time left; info go-to.wall-walk).
+  - A search that runs out of loaded land walks to its frontier (the loaded edge), and a walk that gets nearer that edge
+    is progress too: a tour of frontiers ends when every frontier within 1000 blocks of the goal is spent, or at the end of
+    a frontier walk once the tour's price (jobs.lib.cost/tour-cost of the blocks and walks since the body last came nearer its goal than
+    ever in the call) passes what the goal is worth (the setting jobs.lib.cost.value/tour-worth, default jobs.lib.cost/tour-worth of the goal's straight
+    blocks at the call's start): it gives up :why :explore-spent (:explored the blocks, :walks the walks).
+  - A walk stuck or off its plan at a cell is a :walker-fault warn; the next plans of the call cost that cell
+    (up to 16; after a fall also the cells above it) far more (wworld/with-avoid), so a way round is taken when there is one.
+    A body such a walk left stuck in water first swims at a bank beside it (go-to.unstick, info go-to.unstuck)."
   (:require [engine.ctx :as ctx]
             [jobs.lib.breath :as breath]
             [jobs.lib.combat :as combat]

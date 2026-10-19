@@ -7,7 +7,14 @@
   and has no floor, keeps a stand-in y (the body's feet); go-to aims again every step, so it resolves from
   seen cells on approach; a provisional one it first walks to within approach-range of. A y with no standable cell within the
   range is re-aimed to its column's standable cell nearest it, at most :y-slack blocks off, never past a solid (leads-to?;
-  seen cells, an unseen one from the world the plans read)."
+  seen cells, an unseen one from the world the plans read).
+
+  Rules of go-to: :pos [x z] or {:x :z} (no y) walks to the seen ground of that
+  column nearest the body's feet (unseen: first to within 8 of a height estimated from the seen columns around it, then looks); a y the planner finds no standable cell within :range of, or under :unknown a y seen in the ground with no seen stand within :range (asked before the first walk, pre-aim!), is re-aimed once to its column's
+  ground nearest it, at most the y-slack setting (4) blocks off and never past a solid (info goal-resolved {:goal :to}); see jobs.movement.go-to.column. A
+  column whose ground is not made out is looked at after a fruitless walk (at most 3 a call); with no stand in reach of its guess it walks to seen stands toward it (column/waypoint, off the line past a cliff), until ::max-waypoint-misses bring it no nearer. A cell over a short floor (farmland, a path, a bottom slab) stands for that
+  block's own cell, where the body's feet are. :place (a name such as :home, set by jobs.memory.set-place) walks to
+  that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker)."
   (:require [engine.args :as a]
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]

@@ -1,6 +1,21 @@
 (ns jobs.movement.go-to.torch
   "go-to :unknown's off-hand torch: held in the dark to see the floors ahead, put back before a child runs and when the
-  call ends. The hold is written to body memory, so the next call returns a torch a cut call left in the hand."
+  call ends. The hold is written to body memory, so the next call returns a torch a cut call left in the hand.
+
+  Rules of go-to:
+  - :unknown true (default false) plans over what the body has seen or felt only: a cell it never saw is unknown (air to
+    the body), a floor it never saw is stepped onto only after the walk stops to look at it (jobs.lib.walk.sight), and
+    only where it can see it from the takeoff (a drop deeper than it sees in the dark is refused). An unseen y goal
+    behind a seen solid, or one a found plan tours round (jobs.movement.go-to.walk/lookout-check), is first looked at
+    from the nearest seen stand within 4 of it that sees it (info go-to.lookout, at most 3 stands a call). The prices are the settings of jobs.lib.cost.planner (::unknown-prices). When a dark drop was the better way it gives up :why :unseen-floor-dark; in the
+    dark with a torch carried and the off hand empty it first holds the torch in the off hand (info go-to.off-hand-torch,
+    once a call: it sees deeper) and plans again; it puts the torch back into the inventory before an escalation child runs and when the call ends (full: it
+    stays, info go-to.off-hand-kept); one a cut call left in the hand goes back at the next call's start.
+  - :torches :carried or :fetch (with :unknown; default :never) may light such a dark floor instead: the planner prices a torch
+    (jobs.lib.cost/light-cost) where it can stand on the takeoff, in no other owner's zone or
+    claim; the walk stops there, places one (an off-hand stack goes back to the inventory first; info walk.torch-placed) and
+    walks on once it sees the floor. With none carried, :fetch fetches torches once a call (a jobs.lib.need child);
+    with none and :carried it gives up :unseen-floor-dark saying so. A torch that cannot go there is not tried there again."
   (:require [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.access.zones :as zones]

@@ -3,7 +3,14 @@
   does not heal or eat: the walk gives up :needs-health ({:heal how the body could gain hp, :health :hp-cost :hp-budget}),
   and the caller or the hurt and hungry reflexes heal. Only a call with a :floor :health of 1 or less goes over the budget
   (go-to's walk-limits; mem :over-budget; info go-to.over-budget {:health}): the walks then plan with the survivable
-  budget, all but 1 hp. Not with a higher floor (never crossed) or a :spend :health (a cap)."
+  budget, all but 1 hp. Not with a higher floor (never crossed) or a :spend :health (a cap).
+
+  Rules of go-to:
+  - A drop or plant that costs hp is planned only within a damage budget (jobs.lib.cost/damage-budget: the health over
+    the call's :floor :health, default 12, less 1, at most its :spend :health; a caller's floor counts only above 12
+    unless this call gives one, walk-limits). When that budget is why no way was found, go-to does not heal or eat: it gives up :why :needs-health (limit-reached
+    :health; :heal says how the body could gain hp) and the caller or the hurt and hungry reflexes heal. Only a given :floor :health of 1
+    or less goes over it, down to 1 hp (info go-to.over-budget). See jobs.movement.go-to.health."
   (:require [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]

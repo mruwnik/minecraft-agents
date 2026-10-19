@@ -1,6 +1,15 @@
 (ns jobs.movement.go-to.air
   "go-to and water: under water when no way to the goal fits the air left (or a search goes on with little air left, or
-  keeps beginning afresh), swim to air first, then plan again; an arrival in water reads a dry stand in range."
+  keeps beginning afresh), swim to air first, then plan again; an arrival in water reads a dry stand in range.
+
+  Rules of go-to:
+  - An arrival in water walks on to the nearest seen dry stand within :range and ::dry-radius of the body (settings), once
+    a call, a short walk of its own; with none, or that walk failing, it ends {:arrived true :in-water true} with an info
+    go-to.in-water saying which. The leave-water setting false keeps an arrival in water. Under water with its search going on (no
+    walk) it swims to air first (go-to.surfacing) when under ::surface-air seconds of air are left (always), or when the
+    search began afresh more than ::wet-restarts times (at most 3 such swims in a row that leave the head under).
+  - Under water with no way to the goal in the air left (:air), it first walks to the nearest air it sees or finds by
+    looking (jobs.movement.go-to.air, info go-to.surfacing, at most 3 a call), waits there for its air to come back (the plan counts the air used), and plans again."
   (:require [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.perception :as perception]

@@ -1,6 +1,13 @@
 (ns jobs.movement.go-to.preview
   "go-to's dry run, what its quote reports: the route the planner finds to the goal from where the body stands, with
-  go-to's policy, costs, dangers and tolls. Nothing is walked, opened or dug."
+  go-to's policy, costs, dangers and tolls. Nothing is walked, opened or dug.
+
+  Rules of go-to:
+  - Its quote (./bin/quote) is a dry run: one plan from where the body stands with the call's args, nothing walked,
+    opened or dug. :uses :job-time [s s 3s] from the planner's seconds (partial or no route: no most; none and no way that
+    changes the world: ##Inf), :health the planned damage, :moves-to the goal cell, and :route {:found :length :seconds
+    :summary :steps :moves :doors :waypoints :damage :drown :nodes :dark :dark-seconds} (:dark: feet cells seen dark, or unseen at night; :dark-seconds the planner's extra seconds for them), or {:found false :reason :near :partial} (:reason
+    as :why, :bad-pos and other refusals, :late past the quote deadline); with :unknown :unseen-floors and :dark-best."
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.cost.planner :as cost-planner]

@@ -30,13 +30,11 @@
 
 (def doc
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
-  it (a sphere; range 0: in that cell, 1: next to it); with :see a cell in it counts only where the eye sees the block at
-  :pos (jobs.lib.aim), and a search that finds no such stand gives up :why :out-of-sight. :pos [x z] or {:x :z} (no y) walks to the seen ground of that
-  column nearest the body's feet (unseen: first to within 8 of a height estimated from the seen columns around it, then looks); a y the planner finds no standable cell within :range of, or under :unknown a y seen in the ground with no seen stand within :range (asked before the first walk, pre-aim!), is re-aimed once to its column's
-  ground nearest it, at most the y-slack setting (4) blocks off and never past a solid (info goal-resolved {:goal :to}); see jobs.movement.go-to.column. A
-  column whose ground is not made out is looked at after a fruitless walk (at most 3 a call); with no stand in reach of its guess it walks to seen stands toward it (column/waypoint, off the line past a cliff), until ::max-waypoint-misses bring it no nearer. A cell over a short floor (farmland, a path, a bottom slab) stands for that
-  block's own cell, where the body's feet are. :place (a name such as :home, set by jobs.memory.set-place) walks to
-  that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker).
+  it (a sphere; range 0: in that cell, 1: next to it). :pos [x z] (no y) walks to the seen ground of that column nearest the
+  body's feet (jobs.movement.go-to.column); :place (a name such as :home) walks to that place's recorded position
+  instead, a name not in memory falling back to the shared marker of that name (jobs.lib.world/marker). With :see a cell
+  counts only where the eye sees the block at :pos (jobs.lib.aim); a search that finds no such stand gives up :why :out-of-sight.
+  How it walks, escalates, climbs and swims is in the docstrings of jobs.movement.go-to.* (walk, escalation, own-way, air, torch, health, preview).
   - Refused at submit (or the caller's ctx/call throws): an arg its spec refuses, such as a :tolls entry that is not {:x :y :z :factor} (finite cell, factor 0 or more), a :gait that is not :auto, :walk or :sneak.
   - Ends at once, before any walk, data {:arrived false :text}: impossible :bad-pos (a :pos
     outside the world), :bad-name (a :place that is not a valid name), :unsupported (a body with no pathWorld sensing)
@@ -56,63 +54,6 @@
     toward walk by walk, and to the edge of loaded land when that is the only way on. It returns :continue only while
     an escalation or put-back child is waiting on the world. Each fruitless round that plans again says so (info go-to.retrying: reason, try); each books a try, and a call whose :spend :tries (its own, or a caller's least) is used up
     gives up instead (a caller that re-aims itself passes {:tries 1}).
-  - A drop or plant that costs hp is planned only within a damage budget (jobs.lib.cost/damage-budget: the health over
-    the call's :floor :health, default 12, less 1, at most its :spend :health; a caller's floor counts only above 12
-    unless this call gives one, walk-limits). When that budget is why no way was found, go-to does not heal or eat: it gives up :why :needs-health (limit-reached
-    :health; :heal says how the body could gain hp) and the caller or the hurt and hungry reflexes heal. Only a given :floor :health of 1
-    or less goes over it, down to 1 hp (info go-to.over-budget). See jobs.movement.go-to.health.
-  - :unknown true (default false) plans over what the body has seen or felt only: a cell it never saw is unknown (air to
-    the body), a floor it never saw is stepped onto only after the walk stops to look at it (jobs.lib.walk.sight), and
-    only where it can see it from the takeoff (a drop deeper than it sees in the dark is refused). An unseen y goal
-    behind a seen solid, or one a found plan tours round (jobs.movement.go-to.walk/lookout-check), is first looked at
-    from the nearest seen stand within 4 of it that sees it (info go-to.lookout, at most 3 stands a call). The prices are the settings of jobs.lib.cost.planner (::unknown-prices). When a dark drop was the better way it gives up :why :unseen-floor-dark; in the
-    dark with a torch carried and the off hand empty it first holds the torch in the off hand (info go-to.off-hand-torch,
-    once a call: it sees deeper) and plans again; it puts the torch back into the inventory before an escalation child runs and when the call ends (full: it
-    stays, info go-to.off-hand-kept); one a cut call left in the hand goes back at the next call's start.
-  - :torches :carried or :fetch (with :unknown; default :never) may light such a dark floor instead: the planner prices a torch
-    (jobs.lib.cost/light-cost) where it can stand on the takeoff, in no other owner's zone or
-    claim; the walk stops there, places one (an off-hand stack goes back to the inventory first; info walk.torch-placed) and
-    walks on once it sees the floor. With none carried, :fetch fetches torches once a call (a jobs.lib.need child);
-    with none and :carried it gives up :unseen-floor-dark saying so. A torch that cannot go there is not tried there again.
-  - The walk settings (per world, body or call :settings): jobs.lib.walk.world/dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
-    longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
-  - Setting go-to.tuning/goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
-  - Setting jobs.lib.walk.world/dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). A
-    :spend :job-time of n walks one leg of at most n s and, when it got more than 1 block nearer, ends limit-reached
-    {:reason :leg :line :job-time}, data {:arrived false :leg true}, for a caller chasing a moving target to call again; a
-    leg that got no nearer goes on as any round, and a search that goes on past n s gives up :leg-search-spent.
-  - An arrival in water walks on to the nearest seen dry stand within :range and ::dry-radius of the body (settings), once
-    a call, a short walk of its own; with none, or that walk failing, it ends {:arrived true :in-water true} with an info
-    go-to.in-water saying which. The leave-water setting false keeps an arrival in water. Under water with its search going on (no
-    walk) it swims to air first (go-to.surfacing) when under ::surface-air seconds of air are left (always), or when the
-    search began afresh more than ::wet-restarts times (at most 3 such swims in a row that leave the head under).
-  - A call starts afresh from the world: its walk counters are per call (the cut count carries over only a cut of this run's call to the same goal), and a saved escalation is dropped when the body
-    is already there (a cut call's memory is a hint).
-  - A walk that gets more than 1 block nearer is progress. Three walks in a row without progress give up (or escalate, below), and so
-    does a goal the planner proves walled in (:goal-enclosed, :goal-cut-off) or on magma (:goal-on-magma), at once; a
-    walled-in goal it does not escalate into is first walked up to (the cell nearest it the body can reach, once a call, when
-    that walk fits the time left; info go-to.wall-walk).
-  - A search that runs out of loaded land walks to its frontier (the loaded edge), and a walk that gets nearer that edge
-    is progress too: a tour of frontiers ends when every frontier within 1000 blocks of the goal is spent, or at the end of
-    a frontier walk once the tour's price (jobs.lib.cost/tour-cost of the blocks and walks since the body last came nearer its goal than
-    ever in the call) passes what the goal is worth (the setting jobs.lib.cost.value/tour-worth, default jobs.lib.cost/tour-worth of the goal's straight
-    blocks at the call's start): it gives up :why :explore-spent (:explored the blocks, :walks the walks).
-  - A walk stuck or off its plan at a cell is a :walker-fault warn; the next plans of the call cost that cell
-    (up to 16; after a fall also the cells above it) far more (wworld/with-avoid), so a way round is taken when there is one.
-    A body such a walk left stuck in water first swims at a bank beside it (go-to.unstick, info go-to.unstuck).
-  - :dig-out: a body sealed in its own shelter (a :shelter entry) by day, when the walk finds no way, leaves it first (dig-in-leave/leave!, a go-to.escalated {:step :leave-shelter}); never at night.
-  - With an escalating way: a body that is shut in (jobs.lib.reach/enclosed?), not in its own shelter, and whose
-    search ran out of land (:exhausted, :goal-enclosed or :goal-cut-off), any body whose only way needs a sprint it lacks the food for (:abilities :corner-jump or :gap-sprint), or any body whose last 3 walks failed at the walker (stuck, off-plan, steer failed, no nearer; escalation/walker-fault?) with no door it can open beside its room, makes a way instead of giving up, one child job
-    each (jobs.lib.escape/choose, over the ways the call allows), at most 3 in a row that start no nearer the goal than one before (escalation/count-escalation): standing on a stair of its own under the goal, that stair cut again (escalation/own-stair: a cap it put in the stair is dug, :why :own-way-blocked); else jobs.access.pillar up out of a pit when it carries enough blocks; else
-    jobs.access.clear-path through a wall up to 3 thick toward the goal (into a walled-in goal no door or stair reaches:
-    the fewest cells dug down or across to it, escalation/dig-way, tried first for a shut-in body); else jobs.access.stair up out of a pit or
-    toward a higher goal (as far as the goal is above, at most 8; a stair that leaves the body shut in under the goal is
-    followed by the next escalation at once); else a walk to the nearest wall first. Each emits go-to.escalated {:step :why :n}. Once
-    through, it puts back what clear-path or stair dug in another's zone, claim or plan (with :ignore-zones?;
-    its own diggings elsewhere stay) (jobs.blocks.place, the dug block or its drop, when carried): info
-    go-to.restored, warn go-to.restore-skipped for cells it could not. Pillar blocks and a stair's placed floors are
-    left to jobs.access.cleanup. Its walk child (ctx/call) has :ways #{:walk :clear-seal}. Jobs that must not change the world
-    on the way pass :ways #{:walk}: a shut-in body then gives up with :shut-in true and says so in the text.
   - Gives up with the cause {:reason :unreachable :why ...}, data {:arrived false :why ... :text
     words ...}: limit-reached for :needs-health (:line :health) and :leg-search-spent (:line :job-time); condition-failed
     for :goal-dangerous and :goal-unloaded; else (:explore-spent too) nothing-possible. :why is the planner's
@@ -120,36 +61,8 @@
     (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress, :cut-again (sent back by 3 cuts, each restart more than send-back-margin farther than where the cut found the body, with no 2 blocks gained on the closest approach in between (in-place cuts do not count or break it); a restart that knows of no hostile within the hostile-near radius of the way ahead clears the count instead; an escalation child's own walk is its own call, a parent waiting on it is not walking; :nearest-hostile names a guess at the cause, :nearest-hostile-at its cell, or {:direction :band} when only heard) or :moved-while-searching; :at is the
     body's feet cell and :near its blocks from the goal. A failed
     escalation adds :escalation {:step :reason ...}, the child's reason or wait.
-  - Under water with no way to the goal in the air left (:air), it first walks to the nearest air it sees or finds by
-    looking (jobs.movement.go-to.air, info go-to.surfacing, at most 3 a call), waits there for its air to come back (the plan counts the air used), and plans again.
   - Success is :done with data {:arrived true}, with :resolved the cell when go-to chose the y, plus :provisional true (a column's
     estimated y) or :stand-in true (a column with no ground known: the feet y).
-  - A body under ground (jobs.lib.shelter.sense/buried?) whose goal lies ::climb-rise blocks or more above it plans no route
-    deeper than ::climb-dip blocks below where the call first found it so (it does not dive through deep caves to come
-    up under the goal). With no other way it cuts a stair up toward the goal instead (setting ::climb-stair, with
-    :stair: the escalation's stair, a go-to.escalated {:step :stair :why :way-dives}), stair after stair with no walk
-    in between while it is under ground below the goal; else, or when no stair can be cut, it gives up :why :way-dives
-    with :dip and :rise. Such a body (jobs.movement.go-to.climb):
-    - first walks its own way up, once a call (setting ::climb/own-way): over its stairs and tunnels (memory :stair-way,
-      :tunnel-way) and standable cells it has seen, to the nearest of its stairs that stands at the goal's height or
-      at its top under the open sky (a stair that ends in rock is no way), in hops of ::climb/own-way-reach; the walk is weighed
-      against a new stair first (info go-to.own-way {:take :to :blocks :walk-s :cut-steps :cut-s}) and a slower one
-      is not taken; a hop it cannot walk, standing on such a stair, has the stair cut again from
-      there (a go-to.escalated {:step :stair :why :own-way-blocked}; these holes stay open);
-    - walks no plan (first or re-plan inside a walk) that goes more than ::climb/cave-dip below where the call began over cells that are no stair of
-      its own, while a stair up can be cut there (with :stair and ::climb-stair): it climbs as from a dive
-      (:why :way-dives); when no stair can be cut it walks the plan after all. Likewise, once at the end of its own
-      way (memory :own-way-top), a plan that goes more than ::climb/cave-dip below it back down a stair of its own.
-    A set jobs.lib.walk.world/y-margin switches all of this off.
-  - A body under ground (jobs.lib.shelter.sense/buried?) whose goal is under ::climb-rise above it
-    walks no found way longer than ::detour/ratio times the distance to its goal at the call's start (at least
-    ::detour/floor blocks) when half or more of its cells were never seen: it gives up :why :detour with :route,
-    :straight and :allowed (blocks) before it sets out. See jobs.movement.go-to.detour.
-  - Its quote (./bin/quote) is a dry run: one plan from where the body stands with the call's args, nothing walked,
-    opened or dug. :uses :job-time [s s 3s] from the planner's seconds (partial or no route: no most; none and no way that
-    changes the world: ##Inf), :health the planned damage, :moves-to the goal cell, and :route {:found :length :seconds
-    :summary :steps :moves :doors :waypoints :damage :drown :nodes :dark :dark-seconds} (:dark: feet cells seen dark, or unseen at night; :dark-seconds the planner's extra seconds for them), or {:found false :reason :near :partial} (:reason
-    as :why, :bad-pos and other refusals, :late past the quote deadline); with :unknown :unseen-floors and :dark-best.
   - Every walk writes a :moved memory entry {:from :to :status :target} (arrived, partial or blocked) for
     the stuck trigger.
   - :doors (jobs.lib.pass): :shut (default) opens a shut door, gate or trapdoor with an empty hand, passes and
