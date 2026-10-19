@@ -1,6 +1,6 @@
 ;; A time budget (:spend :job-time) ends a job through the engine's limit, its cleanup run and its data kept: lead-to's
 ;; cleanup lets the cow go and shuts the gates; attack has no cleanup and reports :killed so far (done?'s data).
-;; Should-succeed: lead-to a spot 80 blocks off under :spend {:job-time 25} (the walk takes ~27 s) stops :limit-reached with :still-led false and
+;; Should-succeed: lead-to a spot 80 blocks off under :spend {:job-time 12} (the walk takes 22 s or more of job time) stops :limit-reached with :still-led false and
 ;; the lead back; attack on an invulnerable zombie under :spend {:job-time 8} stops :limit-reached with :killed [].
 ;; Should-fail (control): lead-to a near spot with ample time (180) is done :unleashed with no limit reached.
 {:defaults
@@ -12,7 +12,7 @@
  :cases
  [{:name "lead-to-far-spot-short-budget-reaches-its-limit-and-cleanup-lets-the-cow-go"
    :act [[:summon "cow" [8.5 0 16.5]]
-         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [90 0 16] :radius 20 :spend {:job-time 25}})]]
+         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [90 0 16] :radius 20 :spend {:job-time 12}})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :limit-reached :still-led false}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :completed :data {:reason :unleashed}} :for-s 120 :until {:source :job :kind :stopped}}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [99 3 31]] 1] [:item "lead" [:>= 1]]]}
