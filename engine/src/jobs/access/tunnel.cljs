@@ -131,7 +131,6 @@
    :ignore-zones? :shared
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop (jobs.access.stair)" :spec #{:seal :stop} :default :seal}
    :keep {:doc "a tunnel that stays: torches left and the tunnel left open; false (a dead end): torches go into the scaffold ledger for jobs.access.leave-tunnel to take back" :spec boolean? :default false}
-   :max-steps {:doc "give the round back with :continue after this many steps (a stair segment, a run cell), for a caller that looks around between them; nil: the stair's ::max-steps" :spec (a/int-in 1 nil) :default nil}
    :fetch {:doc "get a missing pickaxe instead of ending :no-tool (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-tool" :spec need/option? :default true}
    :by-hand {:doc "a block whose tool could not be got is dug bare-handed (slow, no drop); false ends :no-tool instead" :spec boolean? :default true}
    :spent-ok {:doc "dig on with tools down to 3 uses instead of stopping :tool-spent (see jobs.access.stair)" :spec boolean? :default false}
@@ -493,6 +492,6 @@
   [c]
   (or (await (stock/torches! c))
       (let [n (atom 0)]
-        (await (pace/steps! c #(if (< (swap! n inc) (if-let [m (:max-steps (:args c))] (inc m) (stair/max-steps))) (step! c) :continue))))))
+        (await (pace/steps! c #(if (< (swap! n inc) (stair/max-steps)) (step! c) :continue))))))
 
 (def meta {:tags [:mine :dig :light]})
