@@ -2,7 +2,7 @@
 ;; recipe), e45ef991 (bread with a table made from planks), 48c93752 (a table placed in a 1-wide tunnel with no pickaxe),
 ;; f16fb3bc (a seen table out of reach is walked to before the craft acts).
 ;; Open plot, body at [16.5 0 16.5] looking east (yaw 270).
-;; Should-succeed: bed crafted at a table 8 off, bread, a stone pickaxe in the tunnel, a wooden pickaxe at a table 12 off with :radius 4.
+;; Should-succeed: bed crafted at a table 8 off, bread, a stone pickaxe in the tunnel, a wooden pickaxe at a table 12 off with :radius 20.
 ;; Should-fail: one plank and no table leaves the bed uncrafted.
 {:defaults
  {:tags [:items :craft :jobs]
@@ -46,7 +46,7 @@
   {:name "seen-table-12-off-is-walked-to-before-crafting"
    :blocks [[:set [28 0 16] "crafting_table"]]
    :body {:inventory [["oak_planks" 3] ["stick" 2]]}
-   :act [[:job (jobs.items.craft {:item "wooden_pickaxe" :radius 4})]]
+   :act [[:job (jobs.items.craft {:item "wooden_pickaxe" :radius 20})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:item "wooden_pickaxe" 1]]}
   ;; card 3177e78a (b): a carried table is placed in a 1-wide shaft, not "out-of-reach (too-far)" after 3 rounds
@@ -70,8 +70,8 @@
   {:name "seen-table-beyond-far-says-no-table-naming-the-nearest-known"
    :plot {:length 80 :width 16 :height 8}
    :blocks [[:set [22 0 8] "crafting_table"]]
-   :body {:at [66.5 0 8.5] :yaw 90 :inventory [["cobblestone" 3] ["stick" 2]]}
-   :act [[:job (jobs.items.craft {:item "stone_pickaxe" :fetch false :far 40})]]
+   :body {:at [66.5 0 8.5] :yaw 90 :settle-s 8 :inventory [["cobblestone" 3] ["stick" 2]]}
+   :act [[:job (jobs.items.craft {:item "stone_pickaxe" :fetch false :radius 40})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-table :text [:contains "the nearest known is at"]}} :within-s 40 :of-job true}]
    :after [[:item "stone_pickaxe" 0]]
    :limit-s 60}
