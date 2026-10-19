@@ -166,7 +166,10 @@
     (cond
       target (await (hunting/attack! c (attack-opts c)))
       collecting (await (hunting/collect! c :yield))
-      (not (look/surveyed? c)) (await (look/survey! c)) ; cows count only while in view
+      (not (look/surveyed? c)) (let [r (await (look/survey! c))] ; cows count only while in view
+                                 (if (and (zero? (:killed (ctx/mem c) 0)) (= :ok (first (done? c))))
+                                   (ctx/end c :done :already (result c :keep))
+                                   r))
       :else
       (let [next-target (first (candidates c (:adults (census c))))]
         (cond

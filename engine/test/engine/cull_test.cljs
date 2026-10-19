@@ -87,6 +87,13 @@
                  [{:keep 0} [] "keep zero and nothing there"]]]
           (is (= {:finished true :acted 0} (await (too-few-outcome args entities))) note))))))
 
+(deftest a-goal-that-holds-after-the-look-ends-done-already
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:keep 2} {:inventory h/sword :entities [(cow 1 3) (cow 2 4)]} 10))]
+          (is (= :already (:cause (done-event s)))))))))
+
 (deftest a-surplus-of-one-with-calves-around-kills-one-adult
   (async done
     (tu/run-async done
