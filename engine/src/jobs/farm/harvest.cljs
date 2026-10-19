@@ -22,33 +22,26 @@
 
 (def doc
   "Cut the ripe crops within :radius of a centre and replant them, then collect the drops.
-  The centre is :center, or the body's position when the job first runs (kept in memory).
-  One call is the whole run: it does the first step that applies, again and again, until it finishes:
-  1. Replant: seed the bare farmland of cells it cut, from the seeds carried.
-  2. Cut the ripe crops, walking (a go-to child) to the nearest when out of the reach setting (eye reach), or when the body is shut in (a pit: it walks out first). A crop it cannot reach is skipped.
-     After the give-up setting (4) such crops it stops cutting (warn harvest.gave-up); replanting and collecting go on.
-     A body farther than :radius from the centre with nothing cut yet walks there first (step 2b).
+  The centre is :center, or the body's position when the job first runs (kept in memory). With :plan (optionally :part) the
+  plan's crop cells are the field instead (:radius and :center unused), read again every step: a cell is cut only when ripe and
+  holding the crop the plan wants, a planned bare cell is sown unless :replant-bare is false (food seeds only above the food
+  reserve), crops outside the plan stand.
+  Needs: a zone list (unless :ignore-zones?), seeds carried to replant. Another owner's zone, claim or plan footprint is left
+  alone (harvest.declined warn); :ignore-zones? skips the check.
+  One call is the whole run, doing the first step that applies until it finishes:
+  1. Replant the bare farmland of cells it cut (what it cuts is written to memory with its seed before the dig).
+  2. Cut the ripe crops, walking (a go-to child) to the nearest when out of the reach setting; a shut-in body walks out first.
+     A body farther than :radius from the centre with nothing cut walks there first. After the give-up setting such crops
+     stop it cutting (warn harvest.gave-up); replanting and collecting go on.
   3. Collect the drops (a jobs.items.collect-drops child).
-  4. Finish.
-  With no crop seen at all (ripe or not), or with :plan and no ripe crop known while a planned crop is remembered out of view, it looks around once from where it stands first; if still none it ends
-  condition-failed :no-crop-seen (warn harvest.no-crop-seen).
-  Each cell it cuts is written to memory with its seed before the dig, because bare farmland does not show
-  which seed was there. A restart or reflex in between loses nothing.
-  :plan (optionally :part) makes the plan's crop cells the field instead (:radius and :center are then unused).
-  The plan is read again every step. A cell is cut only when ripe and holding the crop the plan wants there.
-  Crops outside the plan are left standing. A planned cell standing bare is sown unless :replant-bare is false,
-  food seeds only above the food reserve. A cell it cut is always replanted.
-  Zones: a crop or bare cell in another owner's zone or claim, or in another's plan footprint (never the body's own plan), is left alone (one
-  harvest.declined warn, :reason :refused); :ignore-zones? true skips the check.
-  Refused before it starts, as failed conditions: {:reason :no-zones} (no zone list read, unless :ignore-zones?),
-  {:reason :plan-trouble :why} (the plan is missing or unreadable: a wait; it has no crop cells: impossible, also later in the call), :refused (every ripe crop is
-  refused) and :nothing-to-do (no ripe crop and nothing owed).
-  Ends with data {:cut :replanted :bare :lost :gave-up :spent :spent-at (the seeds replanted)}: cells that could not be replanted, or stopped being a crop
-  afterwards, are named in :bare and a harvest.bare warn. Done when it cut or replanted some and the number meets :least
-  (cells, default 1; :all wants every ripe crop it found); with none cut and crops given up on, nothing-possible
-  :gave-up; some cut but fewer than :least with nothing left, nothing-possible :partial; none, condition-failed
-  :nothing-to-do. done? holds once no ripe crop, owed seed, sweep or given-up cell is left (and :least is met): a
-  field with nothing ripe at the start ends :done :already.")
+  With no crop seen (or, with :plan, none known ripe while planned crops are out of view) it looks around once first.
+  Refused before it starts as failed conditions: {:reason :no-zones}, {:reason :plan-trouble :why} (missing or unreadable plan: a
+  wait; no crop cells: impossible), :refused (every ripe crop is refused), :nothing-to-do (no ripe crop, nothing owed).
+  Ends with data {:cut :replanted :bare :lost :gave-up :spent :spent-at}: cells not replanted, or no longer a crop, are in :bare
+  and :lost. Done when it cut or replanted some and the number meets :least (cells, default 1; :all wants every ripe crop it
+  found); no crop seen: condition-failed :no-crop-seen; crops given up on: nothing-possible :gave-up; fewer than :least cut with
+  nothing left: nothing-possible :partial; none cut: condition-failed :nothing-to-do. done? holds once no ripe crop, owed seed,
+  sweep or given-up cell is left (and :least is met): a field with nothing ripe at the start ends :done :already.")
 
 (a/defargs args
   {:radius {:doc "how far around the centre to harvest, in blocks" :spec (a/num-in 0 nil) :default 12}
@@ -73,37 +66,11 @@
   [p targets]
   (filterv #(some->> (u/seen-name p %) (fld/ripe-at? p %)) targets))
 
-(defn sync-debts
-  "m with :replant made the debts of bare (those given up as :bare excepted), each keeping the counts of its old debt,
-  followed by the debts of cells this job cut (:cut) that bare no longer names: what it cut it still owes, also when
-  the plan dropped the cell meanwhile."
-  [m bare]
-  (let [old (into {} (map (juxt :pos identity)) (:replant m))
-        given-up (set (:bare m))
-        planned (set (map :pos bare))]
-    (assoc m :replant (vec (concat (for [{:keys [pos] :as debt} bare :when (not (given-up pos))]
-                                     (merge (dissoc (old pos) :seed) debt))
-                                   (filter #(and (:cut %) (not (planned (:pos %)))) (:replant m)))))))
-
 (defn center-of
   "The centre: the :center arg, else the remembered one (a bare ctx of a quote test has no job memory), else the
   body's position."
   [c]
   (or (:center (:args c)) (when (:view c) (:center (ctx/mem c))) (u/self-pos c)))
-
-(defn below [pos] (update pos :y dec))
-
-(defn drop-debt [m pos]
-  (update m :replant (fn [debts] (vec (remove #(= pos (:pos %)) debts)))))
-
-(defn bare-debt [m pos]
-  (-> (drop-debt m pos)
-      (update :bare (fn [cells] (vec (distinct (conj (vec cells) pos)))))))
-
-(defn skip-crop [m pos]
-  (-> (drop-debt m pos)
-      (update :skipped (fnil conj []) pos)
-      (update :unreachable (fnil inc 0))))
 
 (a/defargs settings
   {::give-up {:default 4 :doc "Unreachable crops after which cutting stops." :spec (a/int-in 1 nil)}
@@ -111,7 +78,13 @@
    ::max-place-fails {:default 3 :doc "Failed placements before the job gives up." :spec (a/int-in 0 nil)}
    ::failed-reach {:default 3.0 :doc "Reach for a block a failed attempt left, in blocks." :spec (a/num-in 0 nil)}
    ::max-walk-fails {:default 3 :doc "Failed walks before the job gives up." :spec (a/int-in 0 nil)}
-   ::max-home-fails {:default 3 :doc "Failed walks home before the job gives up." :spec (a/int-in 0 nil)}})
+   ::max-home-fails {:default 3 :doc "Failed walks home before the job gives up." :spec (a/int-in 0 nil)}
+   ::max-per-round {:default 8 :doc "Most crops one step cuts or plants; the rest wait for the next step." :spec (a/int-in 1 nil)}
+   ::walk-range {:default 3 :doc "How near a crop or a cell to sow the body walks when out of reach, in blocks." :spec (a/int-in 0 nil)}
+   ::failed-walk-range {:default 2 :doc "The walk range for a cell whose placement was refused, in blocks." :spec (a/int-in 0 nil)}
+   ::shut-in-walk-range {:default 1 :doc "How near a crop or the centre a shut-in body walks, in blocks." :spec (a/int-in 0 nil)}
+   ::collect-margin {:default 4 :doc "Blocks beyond :radius the drops are collected from." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 600 :doc "Seconds a call may take: the digs, the walks and the sweep of the drops." :spec (a/num-in 0 nil)}})
 (defn give-up [] (settings/get settings ::give-up))
 (defn reach [] (settings/get settings ::reach))
 (defn max-place-fails [] (settings/get settings ::max-place-fails))
@@ -119,7 +92,7 @@
 (defn fail-debt
   "Count a refused place on the debt at pos; the cell is bare once it has failed max-place-fails times."
   [m pos]
-  (crops/count-debt m :fails pos (max-place-fails) bare-debt))
+  (crops/count-debt m :fails pos (max-place-fails) fld/bare-debt))
 
 (defn failed-reach [] (settings/get settings ::failed-reach))
 
@@ -129,37 +102,23 @@
   (if (pos? (:fails debt 0)) (failed-reach) (reach)))
 
 (defn walk-range
-  "The range walked to when out of reach: 3, or 2 for a debt that was refused."
+  "The range walked to when out of reach, smaller for a debt that was refused."
   [debt]
-  (if (pos? (:fails debt 0)) 2 3))
+  (settings/get settings (if (pos? (:fails debt 0)) ::failed-walk-range ::walk-range)))
 
 (defn max-walk-fails [] (settings/get settings ::max-walk-fails))
 
 (defn walk-fail-crop
   "Count a blocked walk to the crop at pos in :walk-fails [{:pos :n}]; the crop is skipped at the max-walk-fails-th."
   [m pos]
-  (crops/count-entry m :walk-fails pos (max-walk-fails) skip-crop))
+  (crops/count-entry m :walk-fails pos (max-walk-fails) fld/skip-crop))
 
 (defn walk-fail-debt
   "Count a blocked walk to the debt at pos; the cell is bare at the max-walk-fails-th."
   [m pos]
-  (crops/count-debt m :walk-fails pos (max-walk-fails) bare-debt))
+  (crops/count-debt m :walk-fails pos (max-walk-fails) fld/bare-debt))
 
 (def inc-in crops/inc-in)
-
-(defn sort-debts
-  "{:owed [debts to plant] :gone [pos no longer to plant] :bare [pos with no farmland]} for the debts, read off p."
-  [p debts]
-  (reduce
-   (fn [acc {:keys [pos] :as debt}]
-     (let [here (u/seen-name p pos)]
-       (cond
-         (nil? here) (update acc :owed conj debt)
-         (not= "air" here) (update acc :gone conj pos)
-         (not= "farmland" (u/seen-name p (below pos))) (update acc :bare conj pos)
-         :else (update acc :owed conj debt))))
-   {:owed [] :gone [] :bare []}
-   debts))
 
 (defn permitted
   "The poss the job may act on with action: zones, claims and the footprints of plans but its own (see jobs.lib.gate).
@@ -250,7 +209,7 @@
          (not (crop-seen? c)))))
 
 (def target [:center :radius :plan :part])
-(def defaults {:least 1})
+(def defaults {:least 1 :spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
 
@@ -329,28 +288,26 @@
 (defn drop-settled!
   "Forget the debts whose cell is no longer bare air, move the farmland-less ones to :bare; the owed debts."
   [c]
-  (let [{:keys [owed gone bare]} (sort-debts (:primitives c) (:replant (ctx/mem c)))]
+  (let [{:keys [owed gone bare]} (fld/sort-debts (:primitives c) (:replant (ctx/mem c)))]
     (when (or (seq gone) (seq bare))
-      (ctx/update-mem! c (fn [m] (reduce bare-debt (reduce drop-debt m gone) bare))))
+      (ctx/update-mem! c (fn [m] (reduce fld/bare-debt (reduce fld/drop-debt m gone) bare))))
     owed))
 
 (defn ^:async plant-one!
   "Place the seed of debt at its cell and settle the debt by the status."
   [c {:keys [pos seed]}]
   (if-not (seq (permitted c :sow [pos]))
-    (ctx/update-mem! c bare-debt pos)
+    (ctx/update-mem! c fld/bare-debt pos)
     (let [outcome (await (blocks/place-cell! c pos seed {:ignore-zones? true}))]
       (when (= :placed outcome) (spent/note! c seed pos))
       (case outcome
         :continue :continue
-        (:placed :already :occupied) (ctx/update-mem! c (fn [m] (-> (drop-debt m pos)
+        (:placed :already :occupied) (ctx/update-mem! c (fn [m] (-> (fld/drop-debt m pos)
                                                                     (inc-in :replanted)
                                                                     (update :planted (fn [cells] (vec (distinct (conj (vec cells) pos))))))))
         (ctx/update-mem! c fail-debt pos)))))
 
-(def max-per-round
-  "Most crops one step cuts or plants; the rest wait for the next step."
-  8)
+(defn max-per-round [] (settings/get settings ::max-per-round))
 
 (defn ^:async replant!
   "Step 1: :again when a seed was planted or a walk made, else nil."
@@ -368,7 +325,7 @@
         (case walked
           :continue :continue
           :blocked (do (ctx/update-mem! c walk-fail-debt (:pos (first targets))) :again)
-          (loop [todo (take max-per-round targets)]
+          (loop [todo (take (max-per-round) targets)]
             (if (empty? todo)
               :again
               (if (= :continue (await (plant-one! c (first todo))))
@@ -388,7 +345,7 @@
         :continue :continue
         :dug (ctx/update-mem! c inc-in :cut)
         :missing nil
-        (ctx/update-mem! c skip-crop pos)))))
+        (ctx/update-mem! c fld/skip-crop pos)))))
 
 (defn warn-gave-up! [c]
   (let [m (ctx/mem c)]
@@ -420,18 +377,18 @@
       (let [here (u/self-pos c)
             shut-in? (rch/enclosed? p)
             near (when-not shut-in? (filterv #(<= (u/eye-dist here %) (reach)) ripe))
-            walked (when (empty? near) (await (common/walk-to! c (first ripe) (if shut-in? 1 3))))
+            walked (when (empty? near) (await (common/walk-to! c (first ripe) (if shut-in? (settings/get settings ::shut-in-walk-range) (settings/get settings ::walk-range)))))
             targets (if (seq near) near [(first ripe)])
             targets (still-ripe p targets)]
         (when (and (empty? targets) (not (#{:continue :blocked} walked)))
-          (ctx/update-mem! c skip-crop (first ripe)))
+          (ctx/update-mem! c fld/skip-crop (first ripe)))
         (case walked
           :continue :continue
           :blocked (do (ctx/update-mem! c walk-fail-crop (first ripe))
                        (warn-gave-up! c)
                        :again)
           (do (ctx/update-mem! c assoc :collect true)
-              (let [r (loop [todo (take max-per-round (still-planned c targets))]
+              (let [r (loop [todo (take (max-per-round) (still-planned c targets))]
                         (if (empty? todo)
                           :again
                           (if (= :continue (await (cut-cell! c (first todo))))
@@ -455,7 +412,7 @@
                (or shut-in? (> (u/dist (u/self-pos c) center) radius)))
       (if (>= (:home-fails m 0) (max-home-fails))
         :finish
-        (case (await (common/walk-to! c center (if shut-in? 1 (quot radius 2))))
+        (case (await (common/walk-to! c center (if shut-in? (settings/get settings ::shut-in-walk-range) (quot radius 2))))
           :there (do (ctx/update-mem! c assoc :left-pit true) :again)
           :continue :continue
           (do (ctx/update-mem! c inc-in :home-fails) :again))))))
@@ -465,7 +422,7 @@
   [c]
   (when (:collect (ctx/mem c))
     (let [r (await (ctx/call c :collect 'jobs.items.collect-drops
-                             {:radius (+ (:radius (:args c)) 4) :items collect-items}))]
+                             {:radius (+ (:radius (:args c)) (settings/get settings ::collect-margin)) :items collect-items}))]
       (when-not (= :continue r) (ctx/update-mem! c dissoc :collect))
       (if (= :continue r) :continue :again))))
 
@@ -486,14 +443,6 @@
         done-text (str "harvest done: cut " (:cut m 0) ", replanted " (:replanted m 0) ", bare " (count bare))
         worked (max (:cut result) (:replanted result))
         left (count (:skipped m))]
-    (when no-crop?
-      (ctx/emit! c :harvest.no-crop-seen :warn
-                 {:text (str "harvest saw no crop within " (:radius (:args c)) " of " (pr-str (center-of c)) " after looking around")}))
-    (when (seq bare)
-      (ctx/emit! c :harvest.bare :warn
-                 {:cells bare :lost lost
-                  :text (str "harvest could not replant " (count bare) " cells: " (str/join ", " (map pr-str bare))
-                             (when (seq lost) (str "; lost after replanting: " (str/join ", " (map pr-str lost)))))}))
     (cond
       no-crop? (ctx/end c :condition-failed :no-crop-seen result)
       (and (pos? worked) (common/enough? c worked (+ worked left))) (ctx/end c :done nil (assoc result :text done-text))
@@ -508,7 +457,7 @@
     (let [m (ctx/mem c)
           bare (when (:replant-bare (:args c))
                  (fld/above-reserve (u/inventory (:primitives c)) (fld/planned-bare (:primitives c) (:plan-cells c))))
-          synced (sync-debts m bare)]
+          synced (fld/sync-debts m bare)]
       (when (not= (:replant m) (:replant synced))
         (ctx/update-mem! c assoc :replant (:replant synced))))))
 

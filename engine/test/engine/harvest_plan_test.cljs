@@ -4,7 +4,7 @@
             [engine.core :as core]
             [engine.events :as events]
             [engine.harvest-test :as h]
-            [jobs.farm.harvest :as harvest]
+            [jobs.farm.field :as fld]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -124,7 +124,7 @@
 (deftest a-cell-this-job-cut-stays-owed-when-its-row-leaves-the-plan
   (let [a {:x 1 :y 64 :z 0} b {:x 2 :y 64 :z 0} c {:x 3 :y 64 :z 0}]
     (is (= [{:pos a :seed "wheat_seeds" :fails 1} {:pos b :seed "wheat_seeds" :cut true}]
-           (:replant (harvest/sync-debts {:replant [{:pos b :seed "wheat_seeds" :cut true} {:pos c :seed "carrot"}
+           (:replant (fld/sync-debts {:replant [{:pos b :seed "wheat_seeds" :cut true} {:pos c :seed "carrot"}
                                                     {:pos a :seed "carrot" :fails 1}]}
                                          [{:pos a :seed "wheat_seeds"}]))))))
 

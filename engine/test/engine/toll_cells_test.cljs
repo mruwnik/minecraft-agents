@@ -5,7 +5,7 @@
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.test-util :as tu]
-            [jobs.farm.field :as fld]
+            [jobs.lib.job-common :as common]
             [engine.ctx :as ctx]
             [jobs.lib.need :as need]
             [jobs.lib.world-files :as ew]
@@ -60,7 +60,7 @@
           (is (nil? own)))))))
 
 (defn ^:async walk-trail
-  "fld/walk! from the origin to [40 64 0] over blocks; the [x z] cells the body steered through."
+  "common/walk-to! from the origin to [40 64 0] over blocks; the [x z] cells the body steered through."
   [blocks]
   (let [{:keys [p] :as w} (setup blocks [])
         trail (atom [])]
@@ -70,7 +70,7 @@
                        logged (fn [pose] (swap! trail conj [(js/Math.floor (.-x pose)) (js/Math.floor (.-z pose))]) (decide pose))]
                    (impl token (walk/steer-args (.-timeoutS args) logged)))))
     (await (in-round w (fn ^:async walking [c]
-                         (loop [i 0] (let [r (await (fld/walk! c {:x 40 :y 64 :z 0} 1))]  (when (and (< i 6) (not= :there r)) (recur (inc i))))))))
+                         (loop [i 0] (let [r (await (common/walk-to! c {:x 40 :y 64 :z 0} 1))]  (when (and (< i 6) (not= :there r)) (recur (inc i))))))))
     @trail))
 
 (defn on-strip?

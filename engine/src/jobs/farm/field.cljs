@@ -2,8 +2,6 @@
   "Reading a farm field: the crop cells of a plan, which are ripe or bare, where to walk."
   (:require [jobs.lib.crops :as crops]
             [jobs.lib.farm :as farm]
-            [jobs.lib.near :as near]
-            [jobs.lib.toll-cells :as tc]
             [jobs.lib.util :as u]))
 
 (def ripe-age crops/ripe-age)
@@ -95,12 +93,46 @@
          (filter #(<= (u/dist % center) (:radius args)))
          (remove skipped))))
 
-(defn ^:async walk!
-  "Walk until within range of pos (near/go-near!, doors :shut): :there, :partial (closer or an escalation waiting, call
-  again) or :blocked (it gave up, maybe only this time, or no pathWorld sensing)."
-  [c pos range]
-  (near/go-near! c pos range {:tolls (tc/walk-tolls c (near/cell-of pos))}))
-
 (defn nearest [p cells]
   (let [here (u/pos-of (.-pos (.self p)))]
     (first (sort-by #(u/dist here %) cells))))
+
+(defn sync-debts
+  "m with :replant made the debts of bare (those given up as :bare excepted), each keeping the counts of its old debt,
+  followed by the debts of cells this job cut (:cut) that bare no longer names: what it cut it still owes, also when
+  the plan dropped the cell meanwhile."
+  [m bare]
+  (let [old (into {} (map (juxt :pos identity)) (:replant m))
+        given-up (set (:bare m))
+        planned (set (map :pos bare))]
+    (assoc m :replant (vec (concat (for [{:keys [pos] :as debt} bare :when (not (given-up pos))]
+                                     (merge (dissoc (old pos) :seed) debt))
+                                   (filter #(and (:cut %) (not (planned (:pos %)))) (:replant m)))))))
+
+(defn below [pos] (update pos :y dec))
+
+(defn drop-debt [m pos]
+  (update m :replant (fn [debts] (vec (remove #(= pos (:pos %)) debts)))))
+
+(defn bare-debt [m pos]
+  (-> (drop-debt m pos)
+      (update :bare (fn [cells] (vec (distinct (conj (vec cells) pos)))))))
+
+(defn skip-crop [m pos]
+  (-> (drop-debt m pos)
+      (update :skipped (fnil conj []) pos)
+      (update :unreachable (fnil inc 0))))
+
+(defn sort-debts
+  "{:owed [debts to plant] :gone [pos no longer to plant] :bare [pos with no farmland]} for the debts, read off p."
+  [p debts]
+  (reduce
+   (fn [acc {:keys [pos] :as debt}]
+     (let [here (u/seen-name p pos)]
+       (cond
+         (nil? here) (update acc :owed conj debt)
+         (not= "air" here) (update acc :gone conj pos)
+         (not= "farmland" (u/seen-name p (below pos))) (update acc :bare conj pos)
+         :else (update acc :owed conj debt))))
+   {:owed [] :gone [] :bare []}
+   debts))

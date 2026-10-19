@@ -194,13 +194,11 @@
         (let [{:keys [eng seen]} (start {:world {:blocks (field "carrots" 7 [1 2] [2 3])
                                                  :ages (ages 7 [1 2] [2 3])
                                                  :drops {"carrots" []}}})
-              result (await (child-outcome eng job {} 100))
-              warn (first (events-of seen :harvest.bare))]
+              result (await (child-outcome eng job {} 100))]
           (is (= 4 (:cut result)))
           (is (= 0 (:replanted result)))
           (is (= #{{:x 1 :y 64 :z 2} {:x 2 :y 64 :z 2} {:x 1 :y 64 :z 3} {:x 2 :y 64 :z 3}} (set (:bare result))))
-          (is (= (set (:bare result)) (set (map #(into {} %) (:cells warn)))))
-          (is (= 1 (count (events-of seen :harvest.bare))) "one event, the event stream carries no severity")
+          (is (empty? (events-of seen :harvest.bare)) "the ending carries the bare cells")
           (is (= [] (:list (core/state eng)))))))))
 
 (deftest a-body-in-a-pit-under-the-field-cuts-from-where-it-sees-the-crops
