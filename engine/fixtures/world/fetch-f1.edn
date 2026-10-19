@@ -55,8 +55,11 @@
    :after [[:block [18 0 19] "stone"] [:item "wooden_pickaxe" 0]]}
   {:name "stair-fetches-pickaxe-and-walks-back"
    ;; dirt on top (y 7..9) needs no tool, stone below does: the body is 3 steps down the stair when it lacks the pickaxe,
-   ;; walks up to the chest at the surface (20 0 16 on the plot's level 10), then back to where it left off.
+   ;; walks up to the chest at the surface (20 0 16 on the plot's level 10), then back to where it left off. The fill buries the
+   ;; cell's light layer, so a light layer above it keeps the chest visible.
+   :plot {:height 15}
    :blocks [[:fill [8 0 8] [24 6 24] "stone"] [:fill [8 7 8] [24 9 24] "dirt"]
+            [:fill [8 13 8] [24 13 24] "light"]
             [:set [18 10 16] "chest{Items:[{Slot:0b,id:\"minecraft:wooden_pickaxe\",count:1}]}"]]
    :body {:at [10.5 10 16.5]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 20"] [:until-seen {:block "chest"} 10]
