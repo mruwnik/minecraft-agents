@@ -42,7 +42,7 @@
 
 (defn eye-reach!
   "The fake measures a dig from the feet to a cell corner; the real body from the eye to the centre. Digs here run with
-  the body lifted to its eye height, as the planner counts reach. Cut logs fall to the ground at once, or with lose-logs?
+  the body lifted to its eye height, as the planner counts reach (gravity runs once it is back on its feet). Cut logs fall to the ground at once, or with lose-logs?
   vanish (none to carry)."
   ([p] (eye-reach! p false))
   ([p lose-logs?] (eye-reach! p lose-logs? nil))
@@ -52,7 +52,7 @@
                (let [st (fake/state p)]
                  (swap! st update-in [:self :pos 1] + eye-height)
                  (let [r (await (impl token args))]
-                   (swap! st update-in [:self :pos 1] - eye-height)
+                   (swap! st #(-> % (update-in [:self :pos 1] - eye-height) fake/fall))
                    (when after-dig (after-dig))
                    (swap! st update :entities (fn [es] (if lose-logs?
                                                          (vec (remove #(and (= "item" (:kind %)) (= "oak_log" (get-in % [:item :name]))) es))
@@ -269,6 +269,7 @@
               one (await (fell (assoc world :inventory [{:name "oak_log" :count 1}]) {:radius 10} 300))
               given #(- 20 (dirt-in-chest %))]
           (is (pos? (given one)) "dirt was fetched for the shortfall")
+          (is (= [] (pillar-cells (:p one))) "no pillar block left, the mixed pillar included")
           (is (= 1 (- (given none) (given one))) "one carried log cuts the fetch by one"))))))
 
 (deftest another-players-fresh-log-near-the-tree-is-not-picked-up
