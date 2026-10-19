@@ -192,7 +192,7 @@
                (select-keys (await (ending '(jobs.animals.breed {:mob "cow" :count 4 :least 1}) {:inventory [{:name "wheat" :count 1}] :entities (mapv #(cow-at % %) [1 2 3 4])})) [:event]))
             "one fed meets :least 1")))))
 
-(deftest a-pen-check-answers-closed-as-done-and-a-leaky-pen-as-a-failed-condition
+(deftest a-pen-check-answers-closed-and-a-leaky-pen-as-done-an-unbounded-fill-as-a-failed-condition
   (let [ground (into {} (for [x (range -10 16) z (range -10 16)] [(str x ",63," z) "stone"]))
         ring (into {} (for [x (range -1 6) z (range -1 6) :when (or (#{-1 5} x) (#{-1 5} z))] [(str x ",64," z) "oak_fence"]))
         w (fn [more] {:self {:pos {:x 2 :y 64 :z 2}} :blocks (merge ground ring more)})]
@@ -200,8 +200,10 @@
       (tu/run-async done
         (fn ^:async t []
           (is (= {:event :completed} (select-keys (await (ending '(jobs.animals.pen-check {:at [2 64 2]}) (w {}))) [:event])))
-          (is (= {:event :stopped :kind :condition-failed :reason :leak}
-                 (await (ending '(jobs.animals.pen-check {:at [2 64 2] :max-cells 100}) (w {"2,64,-1" "air"}))))))))))
+          (is (= {:event :completed :kind :done}
+                 (select-keys (await (ending '(jobs.animals.pen-check {:at [2 64 2] :max-cells 100}) (w {"2,64,-1" "air"}))) [:event :kind])))
+          (is (= {:event :stopped :kind :condition-failed :reason :unbounded}
+                 (await (ending '(jobs.animals.pen-check {:at [2 64 2] :max-cells 3}) (w {}))))))))))
 
 ;; ------------------------------------------------------------------ cull
 

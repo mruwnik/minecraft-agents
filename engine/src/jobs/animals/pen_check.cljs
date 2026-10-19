@@ -24,8 +24,8 @@
   The fill stops after :max-cells cells: a bigger pen is not closed, reason :unbounded. A fill without a box
   that finds no wall either side of a gap says that too.
 
-  Ends with the data {:closed? :reason :cells :leaks :gates}: :done when closed, else
-  condition-failed with the :reason as the cause:
+  Ends with the data {:closed? :reason :cells :leaks :gates}: :done when closed or when a leak was found (a leak is
+  the answer, not a failure), else condition-failed with the :reason as the cause (the check could not be made):
   - :reason is nil when closed, else :leak, :unbounded, :unloaded (a cell, or the start's floor, was never seen) or :no-start (:at is no floor to stand on).
   - :leaks lists {:pos {:x :y :z} :why}, why one of :open-gate :gap :climb :perch-in :open :unloaded (:perch-in: open ground within a block of a fence top outside the pen; :climb with a box names the fence, wall or gate top first stood on, reached from a block or raised floor beside it). At most 12 are
     listed, :leaks-total gives the count when more.
@@ -175,7 +175,7 @@
                                          (str "pen closed, " (:cells result) " cells" (gate-drop-text result))
                                          (str "pen not closed: " (name (:reason result)) (leak-text result) (gate-drop-text result))))]
         (ctx/update-mem! c assoc :cells (:cells result))
-        (if (:closed? result)
+        (if (contains? #{nil :leak} (:reason result))
           (ctx/end c :done nil result)
           (ctx/end c :condition-failed (:reason result) result))))))
 
