@@ -426,6 +426,14 @@
     mem
     (-> mem (update :tried #(reduce disj (set %) [:plug :plug-dig])) (assoc :fire-cell cell))))
 
+(defn boxed-in?
+  "Whether the body stands in a closed room with a melee mob (hitters) within hit-reach and was hit this step or within
+  hurt-window-s: no step leads out of it, so backing off only prolongs the beating and the fight is the way."
+  [c hostiles]
+  (boolean (and (seq (hitters c hostiles))
+                (or (:hit-on-the-run (ctx/mem c)) (recently-hurt? c))
+                (sh-sense/shut-in-room? (:primitives c)))))
+
 (defn ^:async cornered!
   "Nowhere worth walking to: the first option of escape-order that it can take and has not failed since the last
   start over (blocked!). home?: the body is in its home room."
@@ -436,7 +444,7 @@
         hostiles (near-hostiles c)
         threat (first hostiles)
         fire? (under-fire? c)
-        beaten (and (not fire?) (beaten? c))
+        beaten (and (not fire?) (or (beaten? c) (boxed-in? c hostiles)))
         blind? (and fire? (not-any? #(and (combat/ranged? %) (danger-q/seen-only? %)) hostiles))
         _ (when fire? (ctx/update-mem! c retry-covers (let [{:keys [x y z]} (sh-sense/feet (:primitives c))] [x y z])))
         win? (and (not blind?)

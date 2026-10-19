@@ -1061,6 +1061,25 @@
           (is (<= (count (filter #(= :retreat.target (:kind %)) @seen)) 2)
               "no flee step after the second hit"))))))
 
+(def closed-box
+  "A 3x3 room around the body, walls to y 69, roof at y 70, floor at y 63."
+  (into {} (for [x (range -2 3) z (range -2 3) y (range 63 71)
+                 :when (or (= 2 (Math/abs x)) (= 2 (Math/abs z)) (= y 63) (= y 70))]
+             [(str x "," y "," z) "stone"])))
+
+(deftest an-unarmed-body-shut-in-a-closed-room-hit-once-fights-instead-of-backing-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks closed-box :entities [(zombie 1 64 0)]})
+              leave! (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r))))]
+          (mem/write! (:store eng) :hurt {:amount 0.5 :causes ["zombie"]} {:cap 50 :ttl 60000})
+          (.override (.-world p) "attack" leave!)
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (is (seq (calls p "attack")) "one hit in a box with no way out: it swings")
+          (is (not-any? #(and (= :child_started (:kind %)) (= :back-off (:slot %))) @seen) "and never steps back"))))))
+
 (defn ^:async beset-round
   "A retreat of an armed body that carries blocks, at 8 health with zombies about and every walk blocked ((on-walk
   setup-map) runs at each); the mobs leave at its first place or attack. The setup map."
