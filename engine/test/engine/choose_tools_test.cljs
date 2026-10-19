@@ -70,6 +70,11 @@
     [(tool "stone_pickaxe" 20 131)] 21 true
     [] 5 false))
 
+(deftest the-spare-of-a-worn-axe-for-a-log-is-a-stone-axe-not-its-own-kind
+  (let [c (body [(tool "iron_axe" 2 250)])
+        need (trip/spare-need c "oak_log" 8)]
+    (is (= "stone_axe" (trip/spare-name (:primitives c) "oak_log" need)))))
+
 (deftest kind-purposes-list-the-carried-tools-of-their-kinds
   (let [c (body [(tool "iron_pickaxe" 180 250) (tool "iron_axe" 100 250) (tool "stone_sword" 20 131) (tool "iron_hoe" 50 250) (tool "shears" 100 238)])]
     (are [purpose items] (= items (map :item (:list (choose/tools-for c purpose 1))))

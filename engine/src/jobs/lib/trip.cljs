@@ -120,12 +120,13 @@
 
 (defn spare-name
   "The tool to obtain as the spare for the worn need: the cheapest tool of its kind that harvests block-name and
-  lasts (not wooden or golden: a stone pickaxe will do for stone), else the cheapest at all, else the worn tool's own name."
+  lasts (not wooden or golden: a stone pickaxe will do for stone), else the cheapest at all; a block that needs no tool (a log)
+  takes a stone tool of the kind, else the worn tool's own name."
   [p block-name need]
   (let [kind (kind/tool-kind block-name)
         harvest (filter #(kind/of-kind? % kind) (some-> (.harvestTools p block-name) js->clj))
         lasting (remove #(#{"wooden" "golden"} (weapon/material-of %)) harvest)]
-    (or (tools/cheapest-tool (seq lasting)) (tools/cheapest-tool harvest) (:item need))))
+    (or (tools/cheapest-tool (seq lasting)) (tools/cheapest-tool harvest) (when (and kind (not= kind "shears")) (str "stone_" kind)) (:item need))))
 
 (defn in-spare?
   "Whether this job runs under a spare fetch (a /spare slot in its chain): the digging that fetch needs makes no spare of its own."
