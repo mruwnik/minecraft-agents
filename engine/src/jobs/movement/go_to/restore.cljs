@@ -3,6 +3,7 @@
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.reach :as reach]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
@@ -34,13 +35,15 @@
   (> (- (second (end/feet-cell c)) y) 2))
 
 (defn skip-why
-  "Why hole e must not be filled now, or nil: :changed (no longer air: forgotten), :occupied (the body is in it),
+  "Why hole e must not be filled now, or nil: :changed (no longer air: forgotten), :kept (a cell of a stair way cut to
+  climb away from a dive, recorded in memory :stair-way: the next go-to walks it; forgotten), :occupied (the body is in it),
   :needed (filling it would shut in a body that has room now: the stair it stands on, its way out), :away (out of
   reach and deep below the feet: walking down to it would put the body inside its own refilled stair)."
   [c {:keys [cell]}]
   (let [p (:primitives c)]
     (cond
       (changed? p cell) :changed
+      (and (:dive-climb (ctx/mem c)) (contains? (ledger/own-cells c) cell)) :kept
       (tidy/in-body? p cell) :occupied
       (reach/closes-in? p cell) :needed
       (and (not (b/in-reach? c cell)) (deep-below? c cell)) :away)))
@@ -63,7 +66,7 @@
                     (ctx/update-mem! c #(-> % (update :restore-seen (fnil conj #{}) cell) (update k (fnil conj []) entry)))
                     :again)
             skip! (fn [why]
-                    (if (= :changed why)
+                    (if (#{:changed :kept} why)
                       (do (tidy/forget-cell! c cell) (done! :changed cell))
                       (done! :skipped {:cell cell :block was :why why})))]
         (if-let [why (skip-why c e)]

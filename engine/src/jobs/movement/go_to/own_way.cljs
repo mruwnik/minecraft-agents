@@ -2,6 +2,7 @@
   "go-to's walk up a body's own stairs when its goal lies far above it under ground, the dive floor that bounds its plans, and
   the detour bound on a whole plan."
   (:require [engine.ctx :as ctx]
+            [jobs.access.stair.memory :as stair-mem]
             [jobs.lib.near :as near]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
@@ -63,6 +64,7 @@
   [c way opts]
   (let [level (assoc c :dive-floor (min (:floor way) (js/Math.floor (:y (u/self-pos c)))))
         cell (dissoc way :floor)
+        _ (stair-mem/use-way! c [(:x way) (:y way) (:z way)])
         {:keys [status result from to]} (await (near/walk-round! level cell 0 (dissoc opts :progress)))
         n (cond-> (:searching (ctx/mem c) 0) (and (= "searching" status) (:fresh result)) inc)
         nearer? (< (u/dist to cell) (dec (u/dist from cell)))]

@@ -22,8 +22,10 @@
  [{:name "only-way-dives-so-a-stair-up-is-cut"
    :act [[:job (jobs.movement.go-to {:pos #at [6 30 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair :why :way-dives}} :within-s 90 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived true}} :within-s 300 :of-job true}]
-   :after [[:body-near [6.5 30 16.5] 3]]}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 300 :of-job true}
+            {:no-event {:source :job :kind :go-to.restored} :for-s 300 :until {:source :job :kind :result :data {:arrived true}}}]
+   :after [[:body-near [6.5 30 16.5] 3]
+           [:memory {:entries {:stair-way [{:data {:floors [:any]}}]}}]]}
   {:name "walk-only-ways-give-up-without-digging"
    :act [[:job (jobs.movement.go-to {:pos #at [6 30 16] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 90 :of-job true}

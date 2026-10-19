@@ -5,6 +5,7 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.access.record-stair :as rs]
             [jobs.lib.world-files :as world]))
@@ -43,21 +44,24 @@
          (into {} (for [[x y z] (stair-cells 4)] [(str x "," y "," z) "air"]))))
 
 (defn ^:async record!
-  "Run the job over the stair world with the body at at and memory seeded with the :stair-way entries olds; the engine."
-  [at args olds]
+  "Run the job over the stair world with the body at at and memory seeded with the :stair-way entries olds, then the
+  [kind data] entries extra; the engine."
+  ([at args olds] (record! at args olds nil))
+  ([at args olds extra]
   (let [clock (atom 1000000)
         [seen sink] (tu/capture-sink)
         eng (core/create {:primitives (tu/fake {:self {:pos {:x (first at) :y (second at) :z (nth at 2)}} :blocks blocks})
                           :jobs registry/jobs :dir (tu/tmp-dir) :now #(deref clock) :world (world/of-data {} {} [])
                           :events (events/make {:sinks [sink] :now #(deref clock)})})]
     (doseq [floors olds] (mem/write! (:store eng) :stair-way {:dim "overworld" :floors floors}))
+    (doseq [[kind data] extra] (mem/write! (:store eng) kind data))
     (core/submit! eng (list job args) {})
     (loop [i 0]
       (when (and (< i 30) (not-any? #(#{:completed :stopped} (:kind %)) @seen))
         (swap! clock + 500)
         (await (core/tick! eng))
         (recur (inc i))))
-    {:eng eng :end (first (filter #(#{:completed :stopped} (:kind %)) @seen))}))
+    {:eng eng :end (first (filter #(#{:completed :stopped} (:kind %)) @seen))})))
 
 (defn ways [{:keys [eng]}] (map (comp :floors :data) (mem/entries (mem/view (:store eng)) :stair-way)))
 
@@ -70,6 +74,18 @@
           (is (= :completed (:kind (:end r))))
           (is (= {:steps 4 :top [0 65 0] :bottom [4 61 0] :floors 5} (select-keys (:data (:end r)) [:steps :top :bottom :floors])))
           (is (= #{floors [[9 9 9]]} (set (ways r))) "the single floor is taken in, the unrelated way kept"))))))
+
+(deftest past-max-ways-the-oldest-way-goes-but-never-one-near-home
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far-a [[200 9 9]] far-b [[300 9 9]] near [[9 9 9]]
+              run! (fn [extra] (settings/with-settings {:jobs.access.stair.memory/max-ways 3 :jobs.access.stair.memory/home-keep 20}
+                                 #(record! [2.5 63 0.5] {} [near far-a far-b] extra)))
+              taken (fn [r] (set (map first (ways r))))]
+          (is (= #{[9 9 9] [300 9 9] [0 64 0]} (taken (await (run! [[:home {:pos {:x 9 :y 9 :z 9}}]]))))
+              "the oldest way near home is kept, the next oldest goes")
+          (is (= #{[200 9 9] [300 9 9] [0 64 0]} (taken (await (run! nil)))) "with no home it is the oldest that goes"))))))
 
 (deftest standing-off-a-stair-is-a-failed-condition
   (async done

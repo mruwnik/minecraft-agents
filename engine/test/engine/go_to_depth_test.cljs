@@ -119,7 +119,10 @@
           (is (= 60 (second (gt/at p))))
           (is (= #{:stair} (set (map :step (gt/events-of s :go-to.escalated)))))
           (is (= #{:way-dives} (set (map :why (gt/events-of s :go-to.escalated)))))
-          (is (<= 16 (lowest-walk s)) "never below the floor of the call"))))))
+          (is (<= 16 (lowest-walk s)) "never below the floor of the call")
+          (is (seq (mem/entries (mem/view (:store (:eng s))) :stair-way)) "the stair is remembered")
+          (is (empty? (concat (gt/events-of s :go-to.restored) (gt/events-of s :go-to.restore-skipped)))
+              "the stair that got the body away from the dive is not filled again"))))))
 
 ;; The mine with the floor of one step of the climb's westward stair missing ([-8 47 0]: no block carried to lay), and
 ;; more dirt south of there (x -9..0, y 44..59, z 2..14) for a stair on another heading.
@@ -247,6 +250,15 @@
           (is (true? (:arrived @out)))
           (is (> 21 (farthest-east s)) "never out of the tunnel's east end into the cave")
           (is (empty? (gt/events-of s :go-to.escalated))))))))
+
+(deftest walking-a-stair-of-its-own-makes-it-the-most-recently-used-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [other [[100 5 100]]
+              s (await (climb! (assoc in-forked :own-ways [[:stair-way {:floors other}]]) {:pos fork-top}))
+              ways (map (comp :floors :data) (mem/entries (mem/view (:store (:eng s))) :stair-way))]
+          (is (= [other stair-floors] (map vec ways)) "the stair, written first and then walked, is the newest"))))))
 
 (deftest a-goal-on-a-step-of-its-own-stair-is-walked-to-with-nothing-cut
   (async done
