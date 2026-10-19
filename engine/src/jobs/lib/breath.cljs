@@ -233,8 +233,19 @@
   []
   (/ (settings/ticks->ms (* (settings/get settings ::ticks-per-health) (/ (settings/get settings ::drown-hp) 2))) 1000))
 
-(defn reaches-air-within?
-  "Whether a swim of at most steps blocks through seen water and air reaches a cell whose head cell is air."
+(defn straight-up-reaches-air?
+  "Whether the own column, seen water all the way, has air over it within steps cells: the usual lake, found without a flood."
+  [p fx fy fz steps]
+  (loop [k 0]
+    (when (<= k steps)
+      (let [cell {:x fx :y (+ fy k) :z fz}]
+        (cond
+          (not (passable-water-or-air? (seen-water-name p cell))) false
+          (air? (seen-water-name p (update cell :y inc))) true
+          :else (recur (inc k)))))))
+
+(defn flood-reaches-air?
+  "Whether a flood of at most steps blocks through seen water and air reaches a cell whose head cell is air."
   [p self-pos steps]
   (let [fx (js/Math.floor (:x self-pos)) fy (js/Math.floor (:y self-pos)) fz (js/Math.floor (:z self-pos))
         open? (fn [{:keys [x y z] :as cell}]
@@ -251,6 +262,12 @@
                               distinct
                               (filter open?))]
                 (recur next (into seen next) (inc k)))))))
+
+(defn reaches-air-within?
+  "Whether a swim of at most steps blocks through seen water and air reaches a cell whose head cell is air."
+  [p self-pos steps]
+  (or (straight-up-reaches-air? p (js/Math.floor (:x self-pos)) (js/Math.floor (:y self-pos)) (js/Math.floor (:z self-pos)) steps)
+      (flood-reaches-air? p self-pos steps)))
 
 (defn drowning?
   "Whether a body in water with its head under must go for air now: its air left plus the allowed drowning is less than
