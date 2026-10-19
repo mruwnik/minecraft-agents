@@ -82,7 +82,7 @@
   the call's :least (default :all); else with :text naming the missing count and what it left: nothing-possible
   :incomplete when cells were given up, condition-failed {:reason :no-items :needs} when items are short, condition-failed
   :refused when the rules refuse the rest, nothing-possible :shut-in. For a block placed in the wrong state, :found names the state it came out in.
-  Events: build.short, build.gave-up, build.refused, build.wrong and build.gap (a fence or wall placed over air; warns). Event texts name
+  Events: build.short, build.gave-up, build.refused, build.wrong, build.gap (a fence or wall placed over air; warns) and build.way-in (cells the body stood in, above the plan's floor, filled with no door there; warns). Event texts name
   the count and the first few cells. The whole list is in :cells of the event and in the result.
   Start facts (one build.declined warn naming the plan and the reason): no zone list read (unless :ignore-zones?) is a
   failed condition {:reason :no-zones}; a plan that is missing, unreadable or has no cells to
@@ -216,6 +216,26 @@
     (when (and (re-find #"_(fence|wall)$" item) below (shape/air? below))
       (ctx/emit! c :build.gap :warn {:plan (:plan (:args c)) :cells [pos]
                                      :text (str "build of " (:plan (:args c)) ": " item " at " (pr-str pos) " stands over air, a gap under it")}))))
+
+(defn way-in-cells
+  "The cells of the batch that the body has stood in (feet or head), above the plan's lowest layer, that are not a door,
+  gate or trapdoor: filling them shuts the way the body came in by."
+  [c cells batch]
+  (let [floor-y (apply min (map #(get (:pos %) 1) cells))
+        stood (:stood (ctx/mem c))]
+    (vec (for [{:keys [pos item]} batch
+               :when (and (> (get pos 1) floor-y) (contains? stood pos) (not (re-find #"_(door|trapdoor|fence_gate)$" (str item))))]
+           pos))))
+
+(defn warn-way-in!
+  "A build.way-in warn, once per cell, for cells about to be filled that the body stood in."
+  [c cells batch]
+  (let [fresh (remove (set (:way-warned (ctx/mem c))) (way-in-cells c cells batch))]
+    (when (seq fresh)
+      (ctx/update-mem! c update :way-warned (fnil into []) fresh)
+      (ctx/emit! c :build.way-in :warn {:plan (:plan (:args c)) :cells (vec fresh)
+                                        :text (str "build of " (:plan (:args c)) ": filling " (str/join ", " (map pr-str (take 3 fresh)))
+                                                   ", where the body stood: the way in may close, the plan has no door there")}))))
 
 (defn ^:async place-one!
   "Place the cell's item after asking the access rules and jobs.lib.placement once more; a refusal is booked, nothing
@@ -499,6 +519,7 @@
         layer (layer-of todo)
         near (in-reach c layer)
         mine (body-cells (u/self-pos c))
+        _ (ctx/update-mem! c update :stood (fnil into #{}) mine)
         feet (first (sort mine))
         on-ground (not-any? #(= (update (:pos %) 1 inc) feet) cells)
         underfoot (when on-ground (first (filter #(mine (:pos %)) wanted)))
@@ -515,6 +536,7 @@
       (do (ctx/update-mem! c assoc :leave (exit-point cells (u/self-pos c)) :stepped-off (:pos underfoot))
           :again)
       (seq near) (do (await (watch/watch! c {}))
+                     (warn-way-in! c cells near)
                      (loop [left near]
                        (if (seq left)
                          (if (seals? c (:pos (first left)))

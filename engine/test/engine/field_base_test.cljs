@@ -50,7 +50,7 @@
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref h/clock)})
                                 :world (world/of-data {"base" plan} {"field-base" blueprint} [])})
               result (await (tu/child-outcome eng 'jobs.build.from-plan {:plan "base"} 1500))]
-          (is (every? #(<= 66 (second %)) (:missing result)) "the cell the body started on was placed from outside, not left :unreachable")
+          (is (= [] (:missing result)) "every cell is built, the one the body started on too")
           (is (= "oak_door" (name-at p (spot "door")))))))))
 
 (deftest from-plan-builds-the-base

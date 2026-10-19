@@ -175,6 +175,17 @@
               gaps (h/events-of seen :build.gap)]
           (is (= [[[4 64 3]]] (mapv :cells gaps)) "only the fence over the dip, once"))))))
 
+(deftest cells-the-body-stood-in-are-warned-of-when-filled-without-a-door
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "hut" :parts [{:id "wall" :cells [[3 64 2] [3 65 2] [3 66 2]] :want "stone"}]}
+              {:keys [eng seen]} (start {:inventory [{:name "stone" :count 8}] :blocks {"3,64,2" "stone"}
+                                         :self {:pos {:x 3.5 :y 65 :z 2.5}}} {"hut" plan})
+              _ (await (child-outcome eng job {:plan "hut"} 200))
+              warns (h/events-of seen :build.way-in)]
+          (is (= [[3 65 2] [3 66 2]] (mapcat :cells warns)) "the doorway cells, not the floor cell, once each"))))))
+
 (deftest a-cell-it-cannot-walk-to-is-given-up
   (async done
     (tu/run-async done

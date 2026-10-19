@@ -1,0 +1,16 @@
+;; jobs.build.from-plan warns (build.way-in) when it fills cells above the plan's floor that the body stood in and the plan has no door there.
+;; :time :day: from-plan declines an exposed open-sky place by night.
+{:defaults
+ {:tags [:build] :time :day
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :settle-s 2 :inventory [["cobblestone" 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "filling-the-cells-the-body-stood-in-warns"
+   :blocks [[:set [16 -1 16] "cobblestone"]]
+   :plans [{:id "doorway" :metadata {:by "$body"}
+            :parts [{:id "wall" :cells [#at [16 -1 16] #at [16 0 16] #at [16 1 16]] :want "cobblestone"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:doorway"})]]
+   :expect [{:event {:source :job :kind :build.way-in :message [:contains "where the body stood"]} :within-s 40 :of-job true}
+            {:event {:source :job :kind :completed :data {:missing []}} :within-s 60 :of-job true}]
+   :after [[:block [16 0 16] "cobblestone"] [:block [16 1 16] "cobblestone"]]}]}
