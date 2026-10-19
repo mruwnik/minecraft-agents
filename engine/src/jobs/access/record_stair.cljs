@@ -6,7 +6,7 @@
             [jobs.access.stair.memory :as smem]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
-            [jobs.lib.look :as look]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.ready :as ready]
             [jobs.lib.reach :as reach]
             [plan.shape :as shape]))
@@ -19,7 +19,7 @@
   joined with the earlier entries that hold any of them, so a stair cut before the memory kept it whole (or dug by hand) is
   known to gather.mine (:stay-level breach, way-floor guard) and go-to's own way up again. Nothing is dug, placed or walked.
 
-  :heading limits the lines to its axis. The body first looks around once; a cell not seen ends a run there.
+  :heading limits the lines to its axis. The body first looks at the cells beyond each end of the runs; a cell not seen ends a run there.
 
   Ends :done with data {:steps :top :bottom :floors} (the floors now in the entry; recording a stair already known changes
   nothing), or condition-failed :no-stair when no run of at least ::min-steps steps passes through the body's cell.")
@@ -30,6 +30,7 @@
 (a/defargs settings
   {::job-time-s {:default 30 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::min-steps {:default 2 :doc "Steps a run needs to count as a stair, not a hop." :spec (a/int-in 1 nil)}
+   ::max-looks {:default 40 :doc "Looks at cells beyond the ends of the runs before it reads what it has seen." :spec (a/int-in 0 nil)}
    ::max-steps {:default 400 :doc "Steps read along a line each way before it is cut off." :spec (a/int-in 1 nil)}})
 
 (def target [])
@@ -73,7 +74,7 @@
               back (run-along block-at cell (mapv - d) limit)
               fwd (run-along block-at cell d limit)
               stands (vec (concat (reverse back) [cell] fwd))]]
-    {:heading h :stands (if (neg? rise) stands (vec (reverse stands)))}))
+    {:heading h :d d :stands (if (neg? rise) stands (vec (reverse stands)))}))
 
 (defn best-run
   "The longest of lines, or nil when it has fewer than min-steps steps."
@@ -91,12 +92,37 @@
 
 (defn floors-of [run] (mapv #(shape/add % [0 -1 0]) (:stands run)))
 
+(defn frontier
+  "The cells of the steps just beyond each end of lines (the stand, its floor, the cells over it, the air over the lower
+  stand): what a look must have shown before the run is read."
+  [lines]
+  (distinct
+   (for [{:keys [d stands]} lines
+         [e sign] [[(first stands) 1] [(first stands) -1] [(peek stands) 1] [(peek stands) -1]]
+         :let [n (shape/add e (mapv #(* sign %) d))
+               lower (if (< (n 1) (e 1)) n e)]
+         cell [n (shape/add n [0 -1 0]) (shape/add n [0 1 0]) (shape/add lower [0 2 0])]]
+     cell)))
+
+(defn ^:async see-ends!
+  "Look at the unseen cells beyond the ends of the runs through the body's cell, nearest first, each once, at most
+  ::max-looks looks (a cell behind rock stays unseen)."
+  [c]
+  (let [p (:primitives c)
+        feet (reach/standing-vec p)
+        headings (case (:heading (:args c)) nil [:east :south] (:east :west) [:east] [:south])]
+    (loop [tried #{} n 0]
+      (let [lines (lines-through (access/seen-at p) feet headings (settings/get settings ::max-steps))
+            todo (remove tried (filter #(dig-look/unknown? p %) (frontier lines)))]
+        (when (and (seq todo) (< n (settings/get settings ::max-looks)))
+          (await (dig-look/look-at! c (first todo)))
+          (recur (conj tried (first todo)) (inc n)))))))
+
 (defn ^:async round [c]
   (let [feet (reach/standing-vec (:primitives c))
-        looked (await (look/survey! c))
-        run (when-not looked (run-of c))]
+        _ (await (see-ends! c))
+        run (run-of c)]
     (cond
-      looked :continue
       (nil? run)
       (ctx/end c :condition-failed :no-stair {:at feet :why (str "no stair of " (settings/get settings ::min-steps) " steps or more through " (pr-str feet) " in the cells seen")})
       :else
