@@ -100,9 +100,9 @@
   "The cands put on the ground (see ground-stands); empty when none can be stood on."
   [p cands]
   (let [fit (fn [[x y z]]
-              ;; a low block (bed, slab) is no floor to a stand cell above it: the body stands inside its cell, under any roof there
+              ;; a low block (bed, slab) under or in a stand cell makes it no stand: the body stands half a block high, inside the roof cell
               (some (fn [dy] (when (and (reach/standable-cell? p {:x x :y (+ y dy) :z z})
-                                        (not (low-floor? (u/seen-block p {:x x :y (+ y dy -1) :z z}))))
+                                        (not-any? #(low-floor? (u/seen-block p {:x x :y (+ y dy %) :z z})) [-1 0]))
                                [x (+ y dy) z]))
                     [0 1 -1 -2]))]
     (keep fit cands)))

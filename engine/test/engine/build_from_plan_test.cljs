@@ -814,6 +814,11 @@
           p (tu/seeing-all (tu/fake-on-floor {:blocks ground :states {(h/cell-key 14 64 10) state} :self {:pos {:x 12.5 :y 64 :z 14.5}}}))]
       (is (= [stand] (take 1 (plan/ground-stands p [[14 64 10] [13 64 8]]))) (str block state)))))
 
+(deftest a-stand-cell-holding-a-bed-is-no-stand
+  (let [ground (into {(h/cell-key 14 64 10) "white_bed"} (for [x (range 5 23) z (range 5 23)] [(h/cell-key x 63 z) "stone"]))
+        p (tu/seeing-all (tu/fake-on-floor {:blocks ground :self {:pos {:x 12.5 :y 64 :z 14.5}}}))]
+    (is (not-any? #{[14 64 10]} (plan/ground-stands p [[14 63 10] [13 64 8]])))))
+
 (def fence-chest "-2,64,3")
 
 (defn chest-fences [p] (some #(when (= "oak_fence" (:name %)) (:count %)) (get-in @(engine.fake/state p) [:containers [-2 64 3]])))
