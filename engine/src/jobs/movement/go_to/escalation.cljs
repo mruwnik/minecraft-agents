@@ -48,9 +48,13 @@
   "What a child's ending e says of why it stopped, as an escalation detail: the cause's fields, its :reason (the
   cause's key) and the child's own result fields that name the place or the wait."
   [e]
-  (merge (when (map? (:cause e)) (:cause e))
-         (select-keys (:data e) [:why :cell :block :at :short :detail :wait])
-         {:reason (contract/cause-key e)}))
+  (let [reason (contract/cause-key e)
+        because (:because e)]
+    (merge (when (map? (:cause e)) (:cause e))
+           (select-keys (:data e) [:why :cell :block :at :short :detail :wait])
+           (when (and (= :dig-waits reason) because)
+             {:wait (if (map? (:cause because)) (:cause because) {:reason (contract/cause-key because)})})
+           {:reason reason})))
 
 (defn ^:async look-level!
   "Look at each cell beside the body at level lvl above feet that it has not sensed."

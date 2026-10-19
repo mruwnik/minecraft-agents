@@ -49,7 +49,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [r (await (run-door wall nil {:heading :east :fetch false}))]
-          (is (= [:stopped :dig-waits :no-tool] [(:status r) (:reason r) (:reason (:wait r))]) (pr-str r))
+          (is (= [:stopped :dig-waits] [(:status r) (:reason r)]) (pr-str r))
           (is (= [1 65 0] (:cell r)) "the top layer first"))))))
 
 (deftest the-dig-child-gets-the-fetch-arg-default-true
@@ -97,7 +97,7 @@
               r (await (run-door (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}]) stub))]
           (is (= [:refills 8] [(:reason r) (count (:dug r))]) "a cell is dug max-cell-digs times, not max-cell-digs calls"))))))
 
-(deftest a-dig-that-fails-keeps-its-primitive-status-in-dig-failed
+(deftest a-dig-that-fails-ends-dig-failed-without-copying-its-ending
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -105,7 +105,7 @@
                      (ctx/end c :nothing-possible :failed {:dug false :primitive "timeout"}))
               r (await (run-door (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}]) stub))]
           (is (= [:stopped :dig-failed] [(:status r) (:reason r)]) (pr-str r))
-          (is (= {:reason :failed :primitive "timeout"} (:dig r)) (pr-str r)))))))
+          (is (nil? (:dig r)) "the dig child's ending is the because, not copied"))))))
 
 (deftest a-wall-with-a-floor-beyond-is-dug-and-walked-through
   (async done

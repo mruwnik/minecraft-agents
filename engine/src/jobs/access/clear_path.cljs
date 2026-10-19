@@ -31,10 +31,9 @@
   cell, ending at the far side.
   :bad-args and :no-door are conditions, checked at the start. Ends :done, or with a cause {:reason r ...}: :impossible for :bad-args (needs :heading), :condition-failed for
   :no-door (no such wall here), :protected (a block it never digs), :footprint (a cell of a plan this body made,
-  unless the spare-own-builds setting is false) and :dig-waits (the dig child's wait or decline, as :wait); :nothing-possible for
-  :dig-failed (its ending, as :dig), :refills (a cell dug max-cell-digs times, e.g. sand falling in) and :step-failed
-  (the walk through did not arrive). Data {:dug [{:cell :block}] :at [x y z] :through [x y z]}, also as a
-  clear-path.done info or clear-path.stopped warn event.
+  unless the spare-own-builds setting is false) and :dig-waits (the dig child's wait or decline, its ending the :because); :nothing-possible for
+  :dig-failed (its ending the :because), :refills (a cell dug max-cell-digs times, e.g. sand falling in) and :step-failed
+  (the walk through did not arrive). Data {:dug [{:cell :block}] :at [x y z] :through [x y z]}.
   It does not put the blocks back: jobs.movement.go-to does that once through.
   :need-drop false: a block no carried tool harvests is dug bare-handed (slow, the drop is lost) instead of stopping :dig-waits
   :no-tool; go-to's last resort when it has no pickaxe. A tool the dig lacks is fetched (:fetch, jobs.lib.need) unless :fetch is off.")
@@ -120,27 +119,14 @@
       (contract/later :digging "the door's cells are being dug"
                       :units :cells :done (count (:dug m)) :left (max 0 (- (count cells) (count (:dug m))))))))
 
-(defn ^:async cleanup
-  "After a door that ended :done: clear-path.done told."
-  [c ending]
-  (when (= :done (:kind ending))
-    (let [data (:data ending)]
-      (ctx/emit! c :clear-path.done :info (assoc data :status :done :reason :done
-                                                 :text (str "cleared a way through to " (pr-str (:through data)))))))
-  (ctx/end c :done nil {}))
-
 (defn finish!
-  "End the door: a stop tells its event and ends by reason a kind (facts condition-failed, the rest nothing possible),
-  the old result without :status and :reason as the ending's data. :done ends with the data; its event is cleanup's."
+  "End the door: a stop ends by reason a kind (facts condition-failed, the rest nothing possible), the result as the ending's data."
   [c reason detail]
   (let [data (result-of c detail)]
     (if (= :done reason)
       (ctx/end c :done nil data)
-      (do (ctx/emit! c :clear-path.stopped :warn
-                     (assoc data :status :stopped :reason reason
-                            :text (str "clear-path stopped: " (name reason)
-                                       (some->> (:cell detail) pr-str (str " at ")))))
-          (ctx/end c (if (facts reason) :condition-failed :nothing-possible) (assoc detail :reason reason) data)))))
+      (ctx/end c (if (facts reason) :condition-failed :nothing-possible)
+               {:reason reason :hint (str "clear-path stopped: " (name reason) (some->> (:cell detail) pr-str (str " at ")))} data))))
 
 (defn ^:async plan! [c]
   (let [dir (headings (:heading (:args c)))
@@ -168,8 +154,6 @@
   [e]
   (and (= :condition-failed (:kind e)) (nil? (:data e))))
 
-(defn wait-of [e] (let [cause (:cause e)] (if (map? cause) cause {:reason cause})))
-
 (defn ^:async dig-cell!
   "One dig child call on the cell being dug (:digging {:cell :block :collect}, kept until the child ends, so a resumed
   call goes on with it). :again, :continue while the child waits on the world, or the ending."
@@ -195,20 +179,16 @@
                                   (when (:dug (:data e))
                                     (ctx/update-mem! c update :dug conj {:cell cell :block block}))
                                   :again)
-          (declined? e) (do (done!) (finish! c :dig-waits {:cell cell :block block :wait (wait-of e)}))
+          (declined? e) (do (done!) (finish! c :dig-waits {:cell cell :block block}))
           :else (do (done!)
-                    (finish! c :dig-failed {:cell cell :block block
-                                            :dig (cond-> {:reason (contract/cause-key e)}
-                                                   (:primitive (:data e)) (assoc :primitive (:primitive (:data e))))})))))))
+                    (finish! c :dig-failed {:cell cell :block block})))))))
 
 (defn ^:async step-through! [c through]
   (let [r (await (child/walk-into!* c :walk through))]
     (cond
       (= :continue r) :continue
       (and (:arrived (:data r)) (= through (reach/standing-vec (:primitives c)))) (finish! c :done {})
-      :else (finish! c :step-failed {:cell through
-                                     :walk (merge (select-keys (:data r) [:why :arrived])
-                                                  {:status (if (= :done (:kind r)) :done :stopped) :reason (contract/cause-key r)})}))))
+      :else (finish! c :step-failed {:cell through}))))
 
 (defn ^:async replan!
   "The far side was a guess (:unseen) and the cells before it are dug: look at that row's unseen cells (memory
