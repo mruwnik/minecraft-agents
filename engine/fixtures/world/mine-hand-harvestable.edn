@@ -9,23 +9,23 @@
  :cases
  [{:name "sapling-is-mined-by-hand-no-fetch-spin"
    :blocks [[:set [20 -1 16] "grass_block"] [:set [20 0 16] "oak_sapling"]]
-   :act [[:job (jobs.gather.mine {:block "oak_sapling" :count 1 :direction :east :tunnel-length 4 :radius 8 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "oak_sapling" :count 1 :direction :east :tunnel-length 4 :radius 8 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :fetch.started} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "oak_sapling" 1] [:not-block [20 0 16] "oak_sapling"]]}
   {:name "flower-is-mined-by-hand-no-fetch-spin"
    :blocks [[:set [20 -1 16] "grass_block"] [:set [20 0 16] "dandelion"]]
-   :act [[:job (jobs.gather.mine {:block "dandelion" :count 1 :direction :east :tunnel-length 4 :radius 8 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "dandelion" :count 1 :direction :east :tunnel-length 4 :radius 8 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :fetch.started} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "dandelion" 1]]}
   {:name "stone-with-no-pickaxe-and-nothing-to-fetch-ends-no-tool-pickaxe"
    :blocks [[:fill [20 0 15] [22 1 17] "stone"]]
-   :act [[:job (jobs.gather.mine {:block "stone" :count 1 :direction :east :tunnel-length 4 :radius 8 :fetch false :mend false})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "stone" :count 1 :direction :east :tunnel-length 4 :radius 8 :fetch false :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :reason :no-tool :tool "pickaxe"}} :within-s 40 :of-job true}]
    :after [[:block [20 0 16] "stone"]]}
   {:name "cobweb-with-no-sword-ends-no-tool-sword"
    :blocks [[:set [20 0 16] "cobweb"]]
-   :act [[:job (jobs.gather.mine {:block "cobweb" :count 1 :direction :east :tunnel-length 4 :radius 8 :fetch false :mend false})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "cobweb" :count 1 :direction :east :tunnel-length 4 :radius 8 :fetch false :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :reason :no-tool :tool "sword"}} :within-s 40 :of-job true}]
    :after [[:block [20 0 16] "cobweb"]]}]}

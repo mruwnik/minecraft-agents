@@ -10,15 +10,15 @@
  :cases
  [{:name "lava-pocket-beside-the-line-is-not-known-and-the-mine-goes-on"
    :blocks [[:set [22 0 17] "lava"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 100 :of-job true}]
    :after [[:item "raw_iron" 1]]}
   {:name "water-pocket-beside-the-line-is-not-known-so-the-cut-is-plugged-not-refused"
    :blocks [[:set [22 0 17] "water"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:text [:contains "tunnel stopped: plugged"]}} :within-s 100 :of-job true}]}
   {:name "lava-over-a-cell-about-to-be-cut-is-sealed-and-the-mine-goes-on"
    :blocks [[:set [21 2 16] "lava"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 100 :of-job true}]
    :after [[:item "raw_iron" 1]]}]}

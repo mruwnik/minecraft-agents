@@ -141,7 +141,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (m/start {:world (m/torch-world coal-stick)})]
+        (let [s (m/start-lit (m/torch-world coal-stick) [0 0])]
           (.override (.-world (:p s)) "craft" (fn [_ _ _] (js/Promise.resolve #js {:status "failed" :reason "no-recipe"})))
           (core/submit! (:eng s) (m/spec torch-tunnel) {})
           (await (m/run-ticks s 60))
@@ -153,7 +153,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (m/start {:world (m/torch-world coal-stick)})]
+        (let [s (m/start-lit (m/torch-world coal-stick) [0 0])]
           (.override (.-world (:p s)) "craft" (fn [_ _ _] (js/Promise.resolve #js {:status "failed" :reason "no-recipe"})))
           (core/submit! (:eng s) (m/spec (assoc torch-tunnel :trip true)) {})
           (await (m/run-ticks s 60))

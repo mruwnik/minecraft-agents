@@ -31,7 +31,7 @@
             [jobs.gather.mine-stay :as stay]
             [jobs.access.stair :as stair]
             [plan.shape :as shape]
-            [engine.mine-support :refer [spec as-child floor-block sight-opts seeing start run-ticks scenario events-of done-events done-event finished? inv job-mem calls moved dig-count dug-cells block-at cells floor wide-floor sand-patch set-pos! bare-pickaxe pickaxe cobble stone-floor stone-hill ground-cell? dug-ground farm-zone pad-plan two-in-two-out zoned their-claim rock rock-world feet tunnel-ends open-line east start-x corridor bridge-run no-floor-end? deep-rock far-cave side-cave facing-west-run stay-run side-ore-run shutdown-at-cell! run-until! below-ore-run run-until shaft-plan shafted via-shaft ore-east drop-away! hide-drop-until-beside! walled-ore watched dark-ore-dug long-rock torch-world torch-xs torches8 side-room side-torch-cells branch-torches soil-over-stone soil-all-round descent-run stair-down-east classify-in walk-options spy-go-to home-go-tos home-zone no-shaft-args deep-ore home-walk-run]]))
+            [engine.mine-support :refer [spec as-child floor-block sight-opts seeing start run-ticks scenario scenario-lit start-lit events-of done-events done-event finished? inv job-mem calls moved dig-count dug-cells block-at cells floor wide-floor sand-patch set-pos! bare-pickaxe pickaxe cobble stone-floor stone-hill ground-cell? dug-ground farm-zone pad-plan two-in-two-out zoned their-claim rock rock-world feet tunnel-ends open-line east start-x corridor bridge-run no-floor-end? deep-rock far-cave side-cave facing-west-run stay-run side-ore-run shutdown-at-cell! run-until! below-ore-run run-until shaft-plan shafted via-shaft ore-east drop-away! hide-drop-until-beside! walled-ore watched dark-ore-dug long-rock torch-world torch-xs torches8 side-room side-torch-cells branch-torches soil-over-stone soil-all-round descent-run stair-down-east classify-in walk-options spy-go-to home-go-tos home-zone no-shaft-args deep-ore home-walk-run]]))
 
 (deftest a-strip-tunnel-looks-round-between-steps
   (async done
@@ -160,8 +160,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 12 :fetch false}
-                                 (torch-world [{:name "iron_pickaxe" :count 1} {:name "coal" :count 1} {:name "oak_log" :count 1}]) 300))]
+        (let [s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 12 :fetch false}
+                                 (torch-world [{:name "iron_pickaxe" :count 1} {:name "coal" :count 1} {:name "oak_log" :count 1}]) 300 [0 0]))]
           (is (= [] (torch-xs s)))
           (is (= :no-torches (:reason (done-event s)))))))))
 
@@ -169,11 +169,20 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 22}
-                                 (torch-world bare-pickaxe) 200))]
+        (let [s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 22}
+                                 (torch-world bare-pickaxe) 200 [0 0]))]
           (is (= [] (torch-xs s)))
           (is (= [:no-torches 1] [(:reason (done-event s)) (:steps (:tunnel (done-event s)))]) "the tunnel stopped at its first torch")
           (is (re-find #"no torches left for the tunnel.*jobs.gather.mine" (:text (done-event s)))))))))
+
+(deftest no-torches-in-a-lit-tunnel-digs-on-without-hanging
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 22}
+                                 (torch-world bare-pickaxe) 200 [0 8]))]
+          (is (= [] (torch-xs s)))
+          (is (= :tunnel-length (:reason (done-event s)))))))))
 
 (deftest a-missing-pickaxe-is-fetched-then-the-stone-is-dug
   (async done

@@ -23,7 +23,7 @@
    :body {:at [16.5 0 16.5] :yaw 0 :inventory [["stone_pickaxe" 1] ["cobblestone" 16]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 17 minecraft:generic"]
-         [:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]
+         [:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]
          [:await {:source :job :kind :waiting :data {:reason :low-health}} 30]
          [:rcon "effect give $BODY minecraft:instant_health 1 2 true"]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 30 :of-job true}

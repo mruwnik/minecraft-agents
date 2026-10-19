@@ -10,7 +10,7 @@
   :limit-s 120}
  :cases
  [{:name "dig-for-stays-where-the-dig-ends"
-   :act [[:job (jobs.gather.dig-for {:block "iron_ore" :level false :count 1 :tunnel-length 0 :descend-limit 0 :radius 10})]]
+   :act [[:job (jobs.gather.dig-for {:torch-interval 0 :block "iron_ore" :level false :count 1 :tunnel-length 0 :descend-limit 0 :radius 10})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1 :reason :count}} :within-s 100 :of-job true}]
    :after [[:item "raw_iron" 1] [:not-block [24 0 16] "iron_ore"] [:body-far [16.5 0 16.5] 2]]}
   {:name "dig-for-without-a-pickaxe-ends-no-tool-and-stays"
@@ -29,10 +29,16 @@
    :act [[:job (jobs.gather.dig-for {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 12 :radius 10})]]
    :expect [{:event {:source :job :kind :stopped :data {:got 0 :reason :no-torches :text [:contains "no torches left"]}} :within-s 90 :of-job true}]
    :after [[:block [24 0 16] "iron_ore"] [:item "raw_iron" 0]]}
+  {:name "dig-for-with-no-torch-in-a-lit-cut-digs-on-hanging-none"
+   :blocks [[:fill [17 0 15] [23 1 17] "stone"] [:fill [17 0 16] [17 1 16] "air"]]
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.gather.dig-for {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 12 :radius 10})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 100 :of-job true}]
+   :after [[:item "raw_iron" 1] [:not-block [18 0 16] "wall_torch"]]}
   {:name "mine-trip-crafts-a-pickaxe-digs-and-comes-home"
    :blocks [[:fill [20 0 14] [26 2 18] "stone"]]
    :body {:inventory [["oak_planks" 4] ["stick" 2] ["crafting_table" 1]]}
-   :act [[:job (jobs.gather.mine {:block "stone" :count 1 :tunnel-length 0 :descend-limit 0 :radius 10})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "stone" :count 1 :tunnel-length 0 :descend-limit 0 :radius 10})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 1] :reason :count}} :within-s 110 :of-job true}
             {:no-event {:source :job :kind :mine.not-home} :for-s 110 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "cobblestone" [:>= 1]] [:body-near [16.5 0 16.5] 2]]

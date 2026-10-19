@@ -11,19 +11,19 @@
  :cases
  [{:name "east-from-the-stair-top-cuts-its-length"
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]
-         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :stay-level true :tunnel-length 5 :mend false}) [:alongside]]]
+         [:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :count 1 :direction :east :stay-level true :tunnel-length 5 :mend false}) [:alongside]]]
    :expect [{:event {:source :job :kind :mine.tunnel-end :data {:reason :tunnel-length}} :within-s 180 :of-job true}
             {:no-event {:source :job :kind :mine.tunnel-end :data {:reason #{:breach-sealed :breach-open}}} :for-s 120}]
    :after [[:block [20 4 16] "air"] [:block [19 3 16] "air"]]}
   {:name "north-from-the-stair-top-cuts-its-length"
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]
-         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :north :stay-level true :tunnel-length 5 :mend false}) [:alongside]]]
+         [:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :count 1 :direction :north :stay-level true :tunnel-length 5 :mend false}) [:alongside]]]
    :expect [{:event {:source :job :kind :mine.tunnel-end :data {:reason :tunnel-length}} :within-s 180 :of-job true}
             {:no-event {:source :job :kind :mine.tunnel-end :data {:reason #{:breach-sealed :breach-open}}} :for-s 120}]
    :after [[:block [20 4 16] "air"] [:block [19 3 16] "air"]]}
   {:name "south-from-the-stair-top-cuts-its-length"
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]
-         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :south :stay-level true :tunnel-length 5 :mend false}) [:alongside]]]
+         [:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :count 1 :direction :south :stay-level true :tunnel-length 5 :mend false}) [:alongside]]]
    :expect [{:event {:source :job :kind :mine.tunnel-end :data {:reason :tunnel-length}} :within-s 180 :of-job true}
             {:no-event {:source :job :kind :mine.tunnel-end :data {:reason #{:breach-sealed :breach-open}}} :for-s 120}]
    :after [[:block [20 4 16] "air"] [:block [19 3 16] "air"]]}
@@ -31,7 +31,7 @@
    ;; the heading back over the body's own stair: whatever it ends with, the stair's own air is never sealed as a breach; the level run
    ;; stops rather than floor the stair's step cell [19 3 16]
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]
-         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :west :stay-level true :tunnel-length 5 :mend false}) [:alongside]]]
+         [:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :count 1 :direction :west :stay-level true :tunnel-length 5 :mend false}) [:alongside]]]
    :expect [{:event {:source :job :kind :mine.tunnel-end} :within-s 180 :of-job true}
             {:no-event {:source :job :kind :mine.tunnel-end :data {:reason #{:breach-sealed :breach-open}}} :for-s 120}]
    :after [[:block [19 3 16] "air"] [:block [18 2 16] "air"]]}
@@ -39,8 +39,8 @@
    ;; the first run cuts 3 blocks east (remembered as the body's own tunnel); the second run's cut cells touch that air and
    ;; still ends by its length, not as a breach
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]
-         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :stay-level true :tunnel-length 3 :mend false}) [:alongside]]
-         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :stay-level true :tunnel-length 3 :mend false}) [:alongside]]]
+         [:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :count 1 :direction :east :stay-level true :tunnel-length 3 :mend false}) [:alongside]]
+         [:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :count 1 :direction :east :stay-level true :tunnel-length 3 :mend false}) [:alongside]]]
    :expect [{:count-event {:source :job :kind :mine.tunnel-end :data {:reason :tunnel-length}} :for-s 190 :at-least 2}
             {:no-event {:source :job :kind :mine.tunnel-end :data {:reason #{:breach-sealed :breach-open}}} :for-s 120}]
    :limit-s 220}]}

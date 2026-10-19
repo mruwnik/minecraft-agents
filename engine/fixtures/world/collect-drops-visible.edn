@@ -10,7 +10,7 @@
    :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"]
             [:set [19 0 16] "iron_ore"] [:set [21 0 16] "iron_ore"] [:set [23 0 16] "iron_ore"]]
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4]]}
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 3 :direction :east :tunnel-length 10 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :level false :count 3 :direction :east :tunnel-length 10 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 3}} :within-s 110 :of-job true}
             {:no-event {:source :job :kind :mine.left-behind} :for-s 110 :until {:source :job :kind #{:completed :stopped} :data {:got 3}}}]
    :after [[:item "raw_iron" 3]]}

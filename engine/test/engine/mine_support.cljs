@@ -82,6 +82,21 @@
     (await (run-ticks s n))
     s))
 
+(defn start-lit
+  "start for a world whose cells all have light [sky block]."
+  [world light]
+  (let [p (tu/fake-on-floor (assoc world :floor-block floor-block))]
+    (swap! (fake/state p) assoc :light-default light)
+    (start {:p p})))
+
+(defn ^:async scenario-lit
+  "scenario in a world whose cells all have light [sky block] (a lit tunnel [0 8], a dark one [0 0])."
+  [args world n light]
+  (let [s (start-lit world light)]
+    (core/submit! (:eng s) (spec args) {})
+    (await (run-ticks s n))
+    s))
+
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
 
 (defn done-events

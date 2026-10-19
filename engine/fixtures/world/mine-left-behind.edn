@@ -17,7 +17,7 @@
  :cases
  [{:name "shallow-pit-drop-collected"
    :blocks [[:set [20 0 16] "iron_ore"] [:set [20 -1 16] "air"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :mine.left-behind} :for-s 120 :until {:source :job :kind #{:completed :stopped} :data {:got 1}}}]
    :after [[:item "raw_iron" 1] [:body-near [16.5 0 16.5] 1.5]]
@@ -27,7 +27,7 @@
    ;; the cut's end (3 away), its drop lies on the ledge in plain view and cannot be walked to; collect-drops :dig (card
    ;; dd4e8bf6) cuts to it and the body ends home with it, nothing left behind, never mine.not-home.
    :blocks [[:fill [20 -4 16] [20 1 16] "air"] [:set [21 0 16] "air"] [:set [22 0 16] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 150 :of-job true}
             {:no-event {:source :job :kind #{:mine.left-behind :mine.not-home}} :for-s 150 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "raw_iron" 1] [:body-near [16.5 0 16.5] 1.5]]
@@ -36,7 +36,7 @@
    ;; the ore hangs over a 3x3 pit 3 deep (wide, so its drop is seen): too deep to walk down for, so the drop is dug to
    ;; with a stair and collected (card dd4e8bf6); nothing is left behind
    :blocks [[:fill [20 -3 15] [22 -1 17] "air"] [:set [20 0 16] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :mine.left-behind} :for-s 150 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "raw_iron" 1] [:body-near [16.5 0 16.5] 1.5]]

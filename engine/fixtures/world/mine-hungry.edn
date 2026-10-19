@@ -12,7 +12,7 @@
  :cases
  [{:name "hungry-with-no-food-stops-before-digging"
    :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-rcon "data get entity $BODY foodLevel" "data: [0-3]$" 30]
-         [:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+         [:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
    :expect [{:event {:source :job :kind :stopped :data {:got 0 :reason :hungry}} :within-s 60 :of-job true}]
    :after [[:item "raw_iron" 0]]}
   {:name "bread-carried-the-mine-goes-on"
@@ -24,7 +24,7 @@
   ;; 177832d8: hungry is a limit on the food line; a worn last tool is a missing tool (condition-failed), neither is the other's ending
   {:name "hungry-ends-limit-reached-not-condition-failed"
    :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-rcon "data get entity $BODY foodLevel" "data: [0-3]$" 30]
-         [:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+         [:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :limit-reached}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:kind :condition-failed}} :for-s 40 :of-job true}]
    :after [[:item "raw_iron" 0]]}

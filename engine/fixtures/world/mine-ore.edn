@@ -10,14 +10,14 @@
  :cases
  [{:name "in-line-ore-collected"
    :blocks [[:set [20 0 16] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :mine.left-behind} :for-s 100 :until {:source :job :kind #{:completed :stopped} :data {:got 1}}}]
    :after [[:item "raw_iron" 1] [:not-block [20 0 16] "iron_ore"]]
    :limit-s 120}
   {:name "ore-in-line-twice"
    :blocks [[:set [19 0 16] "iron_ore"] [:set [22 0 16] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 2 :direction :east :tunnel-length 10 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :level false :count 2 :direction :east :tunnel-length 10 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 2}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :mine.left-behind} :for-s 120 :until {:source :job :kind #{:completed :stopped} :data {:got 2}}}]
    :after [[:item "raw_iron" 2]]
@@ -26,7 +26,7 @@
    ;; ores not in the tunnel's line and with no face to the tunnel (never seen): the run ends at the tunnel length with
    ;; nothing, and the ores stand
    :blocks [[:set [18 0 14] "iron_ore"] [:set [19 3 16] "iron_ore"] [:set [20 0 18] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 5 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 5 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :reason :tunnel-length}} :within-s 100 :of-job true}]
    :after [[:block [18 0 14] "iron_ore"] [:block [19 3 16] "iron_ore"] [:block [20 0 18] "iron_ore"]]
    :limit-s 120}
@@ -38,14 +38,14 @@
   {:name "stone-row-mined-to-the-count-east"
    :blocks [[:fill [2 0 8] [30 6 24] "air"] [:fill [4 0 16] [9 0 16] "granite"]]
    :body {:at [3.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.gather.mine {:block "granite" :count 6 :direction :east :tunnel-length 8 :radius 8 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "granite" :count 6 :direction :east :tunnel-length 8 :radius 8 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 6 :reason :count}} :within-s 100 :of-job true}]
    :after [[:item "granite" 6] [:not-block [4 0 16] "granite"] [:not-block [9 0 16] "granite"]]
    :limit-s 120}
   {:name "stone-row-mined-to-the-count-west"
    :blocks [[:fill [2 0 8] [30 6 24] "air"] [:fill [4 0 16] [9 0 16] "granite"]]
    :body {:at [10.5 0 16.5] :yaw 90 :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.gather.mine {:block "granite" :count 6 :direction :west :tunnel-length 8 :radius 8 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "granite" :count 6 :direction :west :tunnel-length 8 :radius 8 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 6 :reason :count}} :within-s 100 :of-job true}]
    :after [[:item "granite" 6] [:not-block [4 0 16] "granite"] [:not-block [9 0 16] "granite"]]
    :limit-s 120}
@@ -54,7 +54,7 @@
   {:name "stay-level-takes-seen-ore-two-off-the-tunnel"
    :blocks [[:set [18 1 15] "glass"] [:set [18 1 14] "diamond_ore"]]
    :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
-   :act [[:job (jobs.gather.mine {:block "diamond_ore" :count 1 :direction :east :stay-level true :tunnel-length 8 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "diamond_ore" :count 1 :direction :east :stay-level true :tunnel-length 8 :mend false})]]
    :expect [{:event {:source :job :kind :mine.side} :within-s 100 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 120 :of-job true}]
    :after [[:item "diamond" [:>= 1]] [:not-block [18 1 14] "diamond_ore"]]
@@ -62,7 +62,7 @@
   {:name "ore-reach-0-leaves-the-side-ore"
    :blocks [[:set [18 1 15] "glass"] [:set [18 1 14] "diamond_ore"]]
    :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
-   :act [[:job (jobs.gather.mine {:block "diamond_ore" :count 1 :direction :east :stay-level true :tunnel-length 8 :mend false :ore-reach 0})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "diamond_ore" :count 1 :direction :east :stay-level true :tunnel-length 8 :mend false :ore-reach 0})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :mine.side} :for-s 60}]
    :after [[:block [18 1 14] "diamond_ore"] [:item "diamond" 0]]
@@ -71,7 +71,7 @@
   {:name "stay-level-takes-seen-side-ore-eight-blocks-from-the-start"
    :blocks [[:set [24 1 15] "glass"] [:set [24 1 14] "diamond_ore"]]
    :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
-   :act [[:job (jobs.gather.mine {:block "diamond_ore" :count 1 :direction :east :stay-level true :tunnel-length 12 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "diamond_ore" :count 1 :direction :east :stay-level true :tunnel-length 12 :mend false})]]
    :expect [{:event {:source :job :kind :mine.side :level :info :data {:shut true}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :mine.side :level :warn} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "diamond" [:>= 1]] [:not-block [24 1 14] "diamond_ore"]]

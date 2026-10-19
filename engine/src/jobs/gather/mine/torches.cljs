@@ -6,9 +6,10 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.gate :as gate]
-            [jobs.lib.look :refer [cell-of headings glance!]]
+            [jobs.lib.look :as look :refer [cell-of headings glance!]]
             [jobs.lib.need :as need]
             [jobs.lib.placement :as placement]
+            [jobs.lib.shelter.sense :as sense]
             [jobs.lib.torch :as torch]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
@@ -142,9 +143,19 @@
         (booked! c branch)
         (when-not held? (left-out! c cell :place-failed branch))))))
 
+(defn lit-here?
+  "Whether the body's cell is already lit (block light, or sky light less the darkening): a torch is not needed there."
+  [c]
+  (let [p (:primitives c)
+        cell (cell-of (u/self-pos c))
+        raw (look/raw-of p)
+        block (sense/block-light-at p cell)
+        sky (sense/sky-light-at p cell)]
+    (boolean (and raw block sky (look/lit-light? block sky (look/sky-subtract raw))))))
+
 (defn ^:async torch-step!
   "One round of a torch (the tunnel's; a branch's when branch is true, the stair's when :stair): craft more when under 2 are carried and coal or
-  charcoal and a stick are, end the dig :no-torches with none to hang, else hang one. :continue."
+  charcoal and a stick are; with none to hang, leave the torch out where the cell is lit, else end the dig :no-torches; else hang one. :continue."
   [c branch]
   (let [m (ctx/mem c)
         n (torch/torches-held (:primitives c))]
@@ -154,6 +165,9 @@
         (when (and (not= :continue e) (not (and (= :done (:kind e)) (pos? (:made (:data e) 0)))))
           (ctx/update-mem! c assoc :craft-failed true))
         (if (= :continue e) :continue :again))
+
+      (and (zero? n) (lit-here? c))
+      (let [{:keys [x y z]} (cell-of (u/self-pos c))] (left-out! c [x y z] :lit branch) :again)
 
       (zero? n)
       (stop! c :no-torches

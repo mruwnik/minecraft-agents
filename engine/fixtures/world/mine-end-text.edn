@@ -10,8 +10,8 @@
  :cases
  [{:name "lava-in-the-line-says-tunnel-stopped"
    :blocks [[:set [18 0 16] "lava"] [:set [18 1 16] "lava"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:text [:contains "tunnel stopped"]}} :within-s 120 :of-job true}]}
   {:name "tunnel-length-used-up-has-no-stopped-suffix"
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 3 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 3 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:reason :tunnel-length :text [:not [:contains "stopped"]]}} :within-s 120 :of-job true}]}]}

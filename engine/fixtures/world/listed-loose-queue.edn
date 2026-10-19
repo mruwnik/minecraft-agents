@@ -8,7 +8,7 @@
  [{:name "waiting-pick-up-loose-does-not-block-a-mine-behind-it"
    :blocks [[:fill [8 0 8] [30 3 24] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
    :act [[:job (jobs.items.pick-up-loose {})]
-         [:job (jobs.gather.mine {:block "stone" :count 2 :direction "east" :tunnel-length 4 :radius 8})]]
+         [:job (jobs.gather.mine {:torch-interval 0 :block "stone" :count 2 :direction "east" :tunnel-length 4 :radius 8})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-worth-it}} :within-s 20}
             {:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 2]}} :within-s 90 :of-job true}]
    :limit-s 100}]}
