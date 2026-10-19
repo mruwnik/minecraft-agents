@@ -499,12 +499,15 @@
   (async done
     (let [files (atom {1 {:phase :night :state :hold :seq 1}})
           told (atom [])
+          waits (atom 0)
           env (assoc (share-env files #(js/Promise.resolve :day) told)
+                     :on-wait #(swap! waits inc)
                      :sleep (fn [_] (swap! files dissoc 1) (js/Promise.resolve nil)))]
       (.then (r/acquire-shared! (assoc-in env [:ops :alive?] (constantly true)) :day "x")
              (fn [res]
                (is (= {:first? true} res))
                (is (= ["waiting for time lock (day) held by 1 (x)"] @told))
+               (is (= 1 @waits) "on-wait runs once when the lock is first found taken")
                (done))))))
 
 (deftest the-previous-body-stops-before-the-time-lock-wait-and-the-new-one-starts-under-the-lock

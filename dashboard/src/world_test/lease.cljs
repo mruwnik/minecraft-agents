@@ -119,10 +119,10 @@
 
 (defn sweep-block
   "Why a run may not take the time lock for phase, or nil. While a sweep lives (marker-pid alive), only its own
-  children (sweep-env-pid = marker-pid) take a night, night-exclusive or weather lock: day and time-independent runs stay free."
+  children (sweep-env-pid = marker-pid) take any time lock, day included; time-independent (:any) runs take none."
   [phase marker-pid sweep-env-pid alive?]
   (when (and (number? marker-pid) (alive? marker-pid)
-             (not (contains? #{:day :any} phase))
+             (not= :any phase)
              (not= marker-pid sweep-env-pid))
     (str "a world sweep is running (pid " marker-pid "); time-locked cases (" (name phase) ") wait for the lead")))
 

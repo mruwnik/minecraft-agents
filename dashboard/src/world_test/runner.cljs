@@ -35,7 +35,7 @@
        "A job case (no :register, no :wait-full true, only :event expectations pending) ends :idle-grace-s (default 3) s after every job it submitted has ended, failed or parked (\"no job active: ...\", :ended-early-s and :idle-grace-s in the result).\n"
        "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
-       "such a case is skipped, and a case with no :time still gets day (logged to a default file in the temp dir). While a world sweep runs, a run outside it fails a night, night-exclusive or weather case at once (day cases stay free). A case that depends on the time of day (with --allow-time, every case) holds a time lock shared by phase (day cases together,\n"
+       "such a case is skipped, and a case with no :time still gets day (logged to a default file in the temp dir). While a world sweep runs, a run outside it fails every case that needs a time lock at once (only :time :any cases run). A case that depends on the time of day (with --allow-time, every case) holds a time lock shared by phase (day cases together,\n"
        "night cases together; the other phase waits; the first holder sets the time) for its whole run; a manual `time set` takes it too: node tools/time-set.mjs <ticks|day|noon|night|midnight>. A failed case whose day time jumped meanwhile (a foreign `time set`) is INCONCLUSIVE. "
        "Exit code 0 when every run passed, 1 when one failed, 2 on a usage or setup error."))
 
@@ -930,7 +930,7 @@
   "Resolves to {:first? bool} when this process holds the time lock for phase (:day, :night or :any), logging who it waits
   for (once per holder set). Holders of the same phase share it; :any joins the phase that holds, else the world's.
   env: {:ops lock dir ops, :read-phase (-> promise of :day or :night), :sleep, :log}."
-  [{:keys [ops read-phase sleep log batch batch-start]} phase what]
+  [{:keys [ops read-phase sleep log batch batch-start on-wait]} phase what]
   (let [pid (.-pid js/process)
         seq (or batch-start (js/Date.now))]
     (letfn [(attempt [told]
@@ -941,7 +941,8 @@
                            {:first? (:first? r)}
                            (do (when-not (= told (:waiting-on r))
                                  (log "waiting for time lock (" (name phase) ") held by " (str/join "," (:waiting-on r)) " (" what ")"))
-                               (.then (sleep 2000) #(attempt (:waiting-on r)))))))))]
+                               (.then (if (and (nil? told) on-wait) (js/Promise.resolve (on-wait)) (js/Promise.resolve nil))
+                                      (fn [_] (.then (sleep 2000) #(attempt (:waiting-on r)))))))))))]
       (attempt nil))))
 
 (defn sweep-block
@@ -952,10 +953,10 @@
                      pid-alive?))
 
 (defn acquire-time-lock!
-  [phase what & [batch]]
+  [phase what & [batch on-wait]]
   (if-let [why (sweep-block phase)]
     (js/Promise.reject (js/Error. why))
-    (acquire-shared! {:ops (time-lock-dir-ops) :batch batch
+    (acquire-shared! {:ops (time-lock-dir-ops) :batch batch :on-wait on-wait
                       :batch-start (when batch (night-batch-start batch))
                       :read-phase #(.then (rcon! ["time query day"]) (fn [[reply]] (if (night? (daytime (or reply ""))) :night :day)))
                       :sleep sleep :log log!}
@@ -1684,10 +1685,10 @@
 (defn case-lock!
   "Promise of the time lock for a case of phase. A time-independent case (:any) takes none, so it never queues behind a
   day or night wanter nor makes one wait."
-  [phase id batch]
+  [phase id batch & [on-wait]]
   (if (= :any phase)
     (js/Promise.resolve {:held true})
-    (acquire-time-lock! phase (str id " depends on the time of day") batch)))
+    (acquire-time-lock! phase (str id " depends on the time of day") batch on-wait)))
 
 (def default-time-log (path/join shared-dir "mc-world-test-time.log"))
 
@@ -1703,7 +1704,7 @@
   "One run of case c on plot i (leased by the caller); stop! (a thunk to a promise) stops the previous body before the
   time lock is waited for, start! starts or keeps the body once the lock is held. Resolves to a result map. register: the entries to put on the body once it stands in
   the built plot (the body was just started with none), nil when it keeps the register it has."
-  [opts0 c i run register stop! start!]
+  [opts0 c i run register stop! start! & [on-wait]]
   (let [grid (f/case-grid c)
         origin (f/plot-origin grid i)
         rc (-> (f/resolve-tags c origin) (f/resolve-expect-refs (plan-prefix opts0)))
@@ -1726,7 +1727,7 @@
               batch (lock-batch opts rc)]
           (hold-phase!
            {:stop! stop!
-            :acquire! #(case-lock! phase (:id c) batch)
+            :acquire! #(case-lock! phase (:id c) batch on-wait)
             :first-set! (fn []
                           (-> (if (and (:sleep-skip rc) (not= :any phase))
                                 (reset-stray-sleep-rule! rcon! opts (str (:id c) " needs the vanilla night skip"))
@@ -2072,15 +2073,20 @@
                                                      (let [plan (f/body-start-plan c (zero? n))
                                                            [from end] (f/plot-range (f/case-grid c))
                                                            i (acquire-plot! (max from (:first-plot opts)) end)
+                                                           left (atom false)
                                                            memory (when (seq (f/memory-entries c))
                                                                     (f/memory-seed (f/resolve-tags (f/memory-entries c) (f/plot-origin (f/case-grid c) i)) (js/Date.now)))]
                                                        (-> (with-goal! (body-dir opts) (case-goal c run (or (:retry opts) 0)) (case-wait c)
                                                              #(run-case! opts c i run (when-not (= :keep plan) register)
                                                                          (fn [] (if (= :keep plan) (js/Promise.resolve nil) (leave-and-stop! opts)))
-                                                                         (fn [] (if (= :keep plan)
+                                                                         (fn [] (cond
+                                                                                  (and (= :keep plan) @left) (do (reset! left false) (write-body-settings! opts c) (start-body! opts register true memory false))
+                                                                                  (= :keep plan)
                                                                                   (js/Promise.resolve nil)
+                                                                                  :else
                                                                                   (-> (if (= :restart-keep plan) (js/Promise.resolve nil) (reset-last-plot! opts))
-                                                                                      (.then (fn [] (write-body-settings! opts c) (start-body! opts register (= :restart-keep plan) memory false))))))))
+                                                                                      (.then (fn [] (write-body-settings! opts c) (start-body! opts register (= :restart-keep plan) memory false))))))
+                                                                         (when (= :keep plan) (fn [] (reset! left true) (leave-and-stop! opts)))))
                                                            (.then (fn [r] (on-result! c r)))
                                                            (.finally #(release-plot! i))))))))
                                        (js/Promise.resolve nil)

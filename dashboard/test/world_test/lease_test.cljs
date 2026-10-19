@@ -404,11 +404,11 @@
     (is (= [102 106] (mapv :pid (l/stale-body-procs procs "ProbePool" #{"ProbePoolA"}))))
     (is (= [101 102 106] (mapv :pid (l/stale-body-procs procs "ProbePool" #{}))))))
 
-(deftest a-running-sweep-blocks-only-outside-time-locked-runs
+(deftest a-running-sweep-blocks-every-outside-time-lock
   (let [alive (constantly true)]
     (doseq [[phase marker env blocked?] [[:night 7 nil true] [:night-x 7 nil true] [:weather-x 7 nil true]
                                          [:night 7 8 true] [:night 7 7 false]
-                                         [:day 7 nil false] [:any 7 nil false]
+                                         [:day 7 nil true] [:day 7 7 false] [:any 7 nil false]
                                          [:night nil nil false]]]
       (is (= blocked? (some? (l/sweep-block phase marker env alive))) (pr-str [phase marker env])))
     (is (nil? (l/sweep-block :night 7 nil (constantly false))) "a dead sweep's marker blocks nothing")
