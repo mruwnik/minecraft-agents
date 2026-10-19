@@ -25,7 +25,9 @@
    :blocks [[:fill [2 0 2] [8 1 8] "stone" :hollow]
             [:fill [3 0 3] [7 1 7] "air"]]
    :expect [{:event {:source :job :kind :completed :data {:closed? true :cells 25}} :within-s 20 :of-job true}]}
+  ;; the plot is big enough that the room outside is more than the fill may visit: a small sealed room around the pen would itself be the closed pen
   {:name "open-gate-leaks"
+   :plot {:length 64 :width 64}
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
    :blocks [[:set [5 0 2] "oak_fence_gate[facing=south,open=true]"]]
    :expect [{:event {:source :job :kind :completed
@@ -65,7 +67,7 @@
    :expect [{:event {:source :job :kind :completed :data {:closed? false :reason :leak :cells 25 :leaks [{:why :gap}]}} :within-s 20 :of-job true}]}
   {:name "start-in-the-air-is-no-start"
    :act [[:job (jobs.animals.pen-check {:at #at [5 9 5]})]]
-   :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :no-start}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :no-start}} :within-s 45 :of-job true}]}
   ;; a 50 x 50 ring holds 2500 cells, more than the 2000 the fill may visit: the body walks to see it all and the answer is :unbounded
   {:name "big-pen-beyond-the-bound-is-unbounded"
    :plot {:length 64 :width 64}

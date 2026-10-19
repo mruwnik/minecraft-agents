@@ -27,7 +27,7 @@
   Ends with the data {:closed? :reason :cells :leaks :gates}: :done when closed or when a leak was found (a leak is
   the answer, not a failure), else condition-failed (:no-start) or nothing-possible (:unbounded, :unloaded: the check gave up) with the :reason as the cause:
   - :reason is nil when closed, else :leak, :unbounded, :unloaded (a cell, or the start's floor, was never seen) or :no-start (:at is no floor to stand on).
-  - :leaks lists {:pos {:x :y :z} :why}, why one of :open-gate :gap :climb :perch-in :open :unloaded (:perch-in: open ground within a block of a fence top outside the pen; :climb with a box names the fence, wall or gate top first stood on, reached from a block or raised floor beside it). At most 12 are
+  - :leaks lists {:pos {:x :y :z} :why}, why one of :open-gate :gap :climb :perch-in :open :unloaded (only when :reason is not :leak; :perch-in: open ground within a block of a fence top outside the pen; :climb with a box names the fence, wall or gate top first stood on, reached from a block or raised floor beside it). At most 12 are
     listed, :leaks-total gives the count when more.
   - :cells counts the inside cells. For a leaky pen without a box it counts the cells the pen would enclose with
     its leaks shut, and 0 when shutting up to 4 rounds of them does not close it (a low wall all round).
@@ -179,6 +179,8 @@
       :partial :continue
       :there (do (ctx/update-mem! c assoc :walks (inc stuck) :last-unseen unseen) :continue)
       (let [checked (or final checked)
+            ;; a seen leak is the answer: the unseen ground beyond it is no extra finding
+            checked (cond-> checked (= :leak (:reason checked)) (update :leaks #(vec (remove (comp #{:unloaded} :why) %))))
             rows (animals/in-pen-rows p checked (settings/get settings ::animal-radius))
             result (merge (pen/summary checked) (pen-read/listed checked (u/self-pos c)) {:animals rows :animals-in (count rows)} (animal-coverage checked))
             result (assoc result :text (if (:closed? result)

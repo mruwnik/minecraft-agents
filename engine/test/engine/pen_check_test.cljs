@@ -358,6 +358,7 @@
             (swap! (:clock s) + 700)
             (await (core/tick! (:eng s))))
           (is (= :leak (:reason (ending-event @(:seen s)))))
+          (is (not-any? #(= :unloaded (:why %)) (:leaks (ending-event @(:seen s)))) "unseen cells past a seen leak are not listed")
           (is (< (count (h/calls (:p s) "look")) 4) "a survey is a dozen looks"))))))
 
 (deftest the-default-time-budget-grows-with-the-pen
