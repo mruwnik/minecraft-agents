@@ -5,6 +5,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.event-api :as event-api]
+            [engine.fake :as fake]
             [engine.core :as core]
             [engine.farm-contract-test :refer [ending-of]]
             [engine.fell-tree-test :as ft]
@@ -174,6 +175,9 @@
           (is (seq @dug) "the cut came while the pillar stood")
           (is (= [] (open)) "the cleanup took the pillar back"))))))
 
+(defn fake-drop [x y z]
+  #js {:id 99 :pos #js {:x x :y y :z z} :item #js {:name "oak_log"}})
+
 (deftest logs-in-reach-of-the-pillar-top-are-collected-before-the-pillar-comes-down
   (async done
     (tu/run-async done
@@ -183,14 +187,34 @@
               open-at-collect (atom [])
               call! ctx/call]
           (ft/eye-reach! (:p s) (:lose-logs? ft/tall))
-          (with-redefs [pillar/own-log-drops (fn [_ _ r] (if (= r trees/dig-reach) [99] []))
+          (with-redefs [pillar/own-log-drop-entities (fn [_ _ r] (if (= r trees/dig-reach) [(fake-drop 8.5 71 2.5)] []))
                         ctx/call (fn [c k job & more]
-                                   (when (= :tcollect k)
+                                   (when (= :tcollect0 k)
                                      (swap! open-at-collect conj (boolean (seq (ledger/open-entries (mem/view (:store eng)))))))
                                    (apply call! c k job more))]
             (core/submit! eng '(jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak" :radius 10}) {})
             (await (tu/run-until-empty eng 200)))
           (is (= [true] @open-at-collect) "one collect, made while the pillar still stood"))))))
+
+(deftest a-drop-resting-on-a-leaf-out-of-reach-is-lowered-by-digging-the-leaf
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (fm/start ft/tall {})
+              eng (:eng s)
+              lowered (atom [])
+              call! ctx/call]
+          (ft/eye-reach! (:p s) (:lose-logs? ft/tall))
+          (fake/set-block! (:p s) [8 70 2] "oak_leaves")
+          (with-redefs [pillar/own-log-drop-entities (fn [_ _ r] (if (= r trees/dig-reach) [(fake-drop 8.5 71 2.5)] []))
+                        ctx/call (fn [c k job & [args :as more]]
+                                   (when (= :lower0 k) (swap! lowered conj (:pos args)))
+                                   (if (= :tcollect0 k)
+                                     {:kind :nothing-possible :data {:left [{:pos {:x 8 :y 71 :z 2} :reason :unreachable}]}}
+                                     (apply call! c k job more)))]
+            (core/submit! eng '(jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak" :radius 10}) {})
+            (await (tu/run-until-empty eng 200)))
+          (is (= [{:x 8 :y 70 :z 2}] (distinct @lowered)) "the leaf under the drop was dug"))))))
 
 (deftest the-pillar-take-back-runs-in-an-urgent-section
   (async done

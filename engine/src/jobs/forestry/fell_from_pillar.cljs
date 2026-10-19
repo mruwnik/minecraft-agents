@@ -24,7 +24,7 @@
 (def doc
   "Fell the logs of the tree at :base that are out of reach from the ground, standing on a pillar that is taken back.
   jobs.lib.access.approach/plan picks the stand or the pillar base for the highest logs (the logs cut so far are
-  collected first, jobs.items.collect-drops, and so are the ones lying within dig reach of the pillar top before it comes down), the body walks there (go-to), builds the pillar (jobs.access.pillar,
+  collected first, jobs.items.collect-drops, and so are the ones lying within dig reach of the pillar top before it comes down, those out of walking reach lowered by digging the leaf or log they lie on), the body walks there (go-to), builds the pillar (jobs.access.pillar,
   every block in the scaffold ledger), digs the logs in reach top-down (jobs.blocks.dig) and the cleanup export
   (jobs.access.cleanup) takes the pillar back however the call ends, a cut included (and when the call starts with
   this job's scaffold still open).
@@ -55,6 +55,9 @@
 (a/defargs settings
   {::drop-radius {:default 6 :doc "Blocks round the base the cut logs are picked up from before a pillar is built." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds a pillar felling may take." :spec (a/num-in 0 nil)}
+   ::settle-ms {:default 400 :doc "Milliseconds between two looks at the cut logs still falling when the top collect starts." :spec (a/int-in 1 nil)}
+   ::settle-min {:default 5 :doc "Fewest looks at the cut logs before the top collect goes on: a drop may be seen a moment after it lands." :spec (a/int-in 0 nil)}
+   ::settle-looks {:default 8 :doc "Most looks at the falling logs before the top collect goes on." :spec (a/int-in 0 nil)}
    ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 (defn max-steps [] (settings/get settings ::max-steps))
@@ -205,13 +208,17 @@
                           {:reason (:reason r) :why :pillar :text (str "no way to reach the high logs: " (name (:reason r)))})
           (ctx/end c :nothing-possible (:reason r) (result c))))))
 
-(defn own-log-drops
-  "The ids of the logs lying within r of the centre that jobs.lib.loose lets the body take (not another player's
-  throw, not in a zone that refuses taking)."
+(defn own-log-drop-entities
+  "The logs lying within r of the centre that jobs.lib.loose lets the body take (not another player's throw, not in a
+  zone that refuses taking)."
   [c centre r]
   (->> (loose/candidates (:primitives c) (ctx/view c) (:world (:engine c)) {:radius (+ r (u/dist centre (u/self-pos c))) :always log-names} (:root c))
-       (filter #(and (log-name? (some-> (.-item %) .-name)) (<= (u/dist centre (u/pos-of (.-pos %))) r)))
-       (mapv #(.-id %))))
+       (filter #(and (log-name? (some-> (.-item %) .-name)) (<= (u/dist centre (u/pos-of (.-pos %))) r)))))
+
+(defn own-log-drops
+  "The ids of own-log-drop-entities."
+  [c centre r]
+  (mapv #(.-id %) (own-log-drop-entities c centre r)))
 
 (defn ^:async pillar-collect!
   "Pick up the logs cut so far (they are the pillar's blocks when no dirt is carried): a collect-drops child for the
@@ -277,19 +284,73 @@
           (do (ctx/update-mem! c assoc-in [:pillar :dug] true) (u/progress! c) :again)
           (pillar-failed! c (if (#{:unreachable :cannot :refused :blocked} r) :dig r)))))))
 
+(def item-half-width "An item rests on a block under any part of its 0.25-wide box." 0.13)
+
+(defn support-cells
+  "The cells a drop at pos rests on: those under its box (a log lies on the edge of a leaf beside the cell it is over)."
+  [{:keys [x y z]}]
+  (distinct (for [dx [(- item-half-width) item-half-width] dz [(- item-half-width) item-half-width]]
+              [(js/Math.floor (+ x dx)) (js/Math.floor (- y 0.01)) (js/Math.floor (+ z dz))])))
+
+(defn drop-support
+  "The leaf or log cell the drop in cell lies on (never the cell column of the body), nil for any other block. pos is
+  the drop's position when known."
+  [c cell pos]
+  (let [[x y z] cell
+        [sx _ sz] (u/cell-vec (u/self-pos c))
+        cells (if pos (support-cells pos) [[x (dec y) z]])]
+    (->> cells
+         (remove (fn [[cx _ cz]] (and (= cx sx) (= cz sz))))
+         (filter (fn [cell] (let [n (u/seen-name (:primitives c) (u/cell-pos cell))]
+                              (and n (or (log-name? n) (str/ends-with? n "_leaves"))))))
+         first)))
+
+(defn left-cells
+  "The cells of the drops collect-drops left as unreachable, from its ending."
+  [e]
+  (into [] (comp (filter #(= :unreachable (:reason %))) (map #(u/cell-vec (:pos %)))) (get-in e [:data :left])))
+
+(def max-lowered "Drops lowered by digging their support, per call." 4)
+
+(defn ^:async settle-drops!
+  "Wait until the logs lying in dig reach are seen and stop moving (a drop in the air is given up as unreachable, one
+  not yet seen is not tried): at least ::settle-min looks, at most ::settle-looks."
+  [c]
+  (let [spots #(into {} (map (juxt (fn [e] (.-id e)) (fn [e] (u/pos-of (.-pos e))))) (own-log-drop-entities c (u/self-pos c) dig-reach))]
+    (loop [before (spots) n 0]
+      (when (< n (settings/get settings ::settle-looks))
+        (await (js/Promise. (fn [resolve] (js/setTimeout resolve (settings/get settings ::settle-ms)))))
+        (let [after (spots)]
+          (when (or (not= before after) (< n (settings/get settings ::settle-min)))
+            (recur after (inc n))))))))
+
 (defn ^:async top-collect!
-  "Once, before the pillar comes down: pick up the logs lying within dig reach of the pillar top (they rest on the
-  canopy and cannot be reached from the ground). nil when done or none lie there, :continue while the child waits."
+  "Before the pillar comes down: pick up the logs lying within dig reach of the pillar top (they rest on the canopy and
+  cannot be reached from the ground). One that cannot be walked to is lowered: the leaf or log it lies on is dug, so it
+  falls to the pillar or the ground, where the final collect takes it. nil when done or none lie there, :continue
+  while a child waits."
   [c]
   (when-not (:topped (:pillar (ctx/mem c)))
-    (let [ids (own-log-drops c (u/self-pos c) dig-reach)
+    (when-not (:settled (:pillar (ctx/mem c)))
+      (await (settle-drops! c))
+      (ctx/update-mem! c assoc-in [:pillar :settled] true))
+    (let [n (:lowered (:pillar (ctx/mem c)) 0)
+          ents (own-log-drop-entities c (u/self-pos c) dig-reach)
+          ids (mapv #(.-id %) ents)
           e (if (seq ids)
-              (await (child/run!* c :tcollect 'jobs.items.collect-drops
+              (await (child/run!* c (keyword (str "tcollect" n)) 'jobs.items.collect-drops
                                   {:radius dig-reach :ids ids :near (u/self-pos c) :search 0}))
-              :done)]
-      (if (= :continue e)
-        :continue
-        (do (ctx/update-mem! c assoc-in [:pillar :topped] true) nil)))))
+              :done)
+          at (into {} (map (juxt #(u/cell-vec (u/pos-of (.-pos %))) #(u/pos-of (.-pos %)))) ents)
+          cell (when (and (map? e) (< n max-lowered)) (some #(drop-support c % (at %)) (left-cells e)))]
+      (cond
+        (= :continue e) :continue
+        (not cell) (do (ctx/update-mem! c assoc-in [:pillar :topped] true) nil)
+        :else
+        (let [d (await (ctx/call c (keyword (str "lower" n)) 'jobs.blocks.dig (log/log-dig-args c (u/cell-pos cell))))]
+          (if (= :continue d)
+            :continue
+            (do (ctx/update-mem! c update-in [:pillar :lowered] (fnil inc 0)) :again)))))))
 
 (defn ^:async pillar-clean!
   "The call ends: done when a log was dug and the pillar did not fail, else nothing-possible with the failure. The
