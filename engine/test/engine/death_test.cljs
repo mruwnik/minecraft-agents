@@ -503,7 +503,7 @@
               {:keys [eng p seen]} (setup {:floor tu/walk-floor :inventory sword :entities drops})]
           (die! eng {:pos death-pos :inventory diamonds})
           (appear-after-first-leg! p zombie)
-          (core/submit! eng (list (first job) {:leg-s 1 :danger-overrides {"zombie" 1000}}) {})
+          (core/submit! eng (list (first job) {:settings {:jobs.survival.recover-drops.config/leg-s 1} :danger-overrides {"zombie" 1000}}) {})
           (await (run-until-empty eng 3))
           (let [e (last (emitted seen :recover-drops.decided))]
             (is (true? (:retry e)) "a mob that turned up on the way makes the trip dear: it backs off")
@@ -514,21 +514,6 @@
 ;; ------------------------------------------- every :declined says why
 
 (defn declined-events [seen] (filterv #(and (= :stopped (:kind %)) (#{:danger :unreachable} (:reason %))) @seen))
-
-(deftest recover-drops-declines-with-the-danger-named
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
-              {:keys [eng seen]} (setup {:floor tu/walk-floor :inventory sword :entities (conj drops zombie)})]
-          (die! eng {:pos death-pos :inventory diamonds} 3000)
-          (core/submit! eng job {})
-          (await (core/tick! eng))
-          (let [e (first (declined-events seen))]
-            (is (= :danger (:reason e)))
-            (is (= "zombie" (:mob e)))
-            (is (= {:x 3 :y 64 :z 0} (select-keys (:mob-pos e) [:x :y :z])))
-            (is (re-find #"zombie" (:text e)))))))))
 
 (deftest recover-drops-declines-with-unreachable-when-the-walk-does-not-arrive
   (async done

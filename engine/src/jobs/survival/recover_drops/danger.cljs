@@ -2,6 +2,7 @@
   "The dangers near a recover-drops trip and the declines they cause."
   (:require [engine.ctx :as ctx]
             [jobs.lib.danger :as danger-q]
+            [jobs.survival.recover-drops.config :as cfg]
             [jobs.survival.recover-drops.deaths :as dth]))
 
 (defn decline!
@@ -14,15 +15,7 @@
 (defn threatened?
   "The nearest real danger within :danger-radius the trip has not been weighed with near (:weighed), or nil."
   [c]
-  (danger-q/nearest-danger (:primitives c) (:danger-radius (:args c)) {} {:skip (:weighed (ctx/mem c))}))
-
-(defn unpriced-threat
-  "threatened? leaving out the mobs the call prices itself (:danger-overrides): the decision weighs those."
-  [c]
-  (let [priced (set (keys (:danger-overrides (:args c))))
-        p (:primitives c)
-        ids (keep #(when (contains? priced (.-name %)) (.-id %)) (danger-q/known-hostiles p (:danger-radius (:args c)) {}))]
-    (danger-q/nearest-danger p (:danger-radius (:args c)) {} {:skip (into (set (:weighed (ctx/mem c))) ids)})))
+  (danger-q/nearest-danger (:primitives c) (cfg/danger-radius) {} {:skip (:weighed (ctx/mem c))}))
 
 (defn hit-since?
   "Whether the body was hurt since the decision was taken."
@@ -40,7 +33,7 @@
   (let [{:keys [mob mob-pos] :as fields} (danger-fields (:primitives c) m)]
     (ctx/update-mem! c assoc :hostile-cut true)
     (dth/save-trip! c)
-    (decline! c :danger (str mob " at " (pr-str mob-pos) " within " (:danger-radius (:args c)) " blocks") fields)))
+    (decline! c :danger (str mob " at " (pr-str mob-pos) " within " (cfg/danger-radius) " blocks") fields)))
 
 (defn meet-danger!
   "A danger m the trip has not been weighed with near: :next with the trip to be weighed again with it, once per mob;

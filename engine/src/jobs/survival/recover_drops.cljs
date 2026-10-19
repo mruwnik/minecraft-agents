@@ -26,55 +26,22 @@
 
 (def doc
   "After a death, go back for the drops when they are worth it.
-  Serves one :died entry no :recovered covers (its :death-t): the one a trip is keyed to, else the pile inside its window with the best value net of the walk, so an older open pile is not lost to a newer death. A death whose window has closed while a newer one is open is closed :abandoned :superseded without a trip. Once every death is decided (a skip too) the job waits (condition :no-drops) naming the decision. It starts while a death is unrecovered, however old,
-  so an expired trip still gets to write :abandoned.
-  One run is the whole trip: it holds still (declared :respawning, then :settling) until a :respawned entry newer than
-  the death exists and its 2 s have passed (no decision, no walk), decides, walks, collects and writes :recovered.
-  Every run that leaves the death open ends with a :reason (:danger with :mob and :mob-pos, :unreachable) and a text.
-  Ready: fit? ok; safe? is ok by day, ok at night when the pile despawns before morning (weighed by its route danger alone), else the exposure of the pile's cell (ready/exposed: later at night in the open or out of a shelter, so the died trigger is held with the reason and the pile is fetched by day while it lasts). The job's children walk under :checks {:safe? (always)}: the trip prices its own danger.
-  The trip owns the danger it priced (the died trigger ranks above hostile-near, so no flight cuts the run it fires; an agent's run any reflex cuts):
-  a real danger within :danger-radius has the trip weighed again with it near, once per mob, and so does a hit (:hurt) since the decision, at once: it backs off or goes on; before a decision (a mob named in :danger-overrides is left to the decision, also while the body waits for the respawn and its settling)
-  the run ends condition-failed :danger so a reflex can deal with it (the died trigger fires it again); nothing-possible :unreachable when go-to does not arrive; the despawn window ends it :abandoned.
-  A real danger is a mob that can reach the body, or a ranged one with a line of fire (jobs.lib.danger/nearest-danger).
-  Decision: skips when the value of what was carried is at most the fetch cost plus :margin.
-  - Value: jobs.lib.cost/item-value (with :value-overrides), plus 5 per level of experience.
-  - Cost: a trip of 10, 0.3 per block of straight distance, and 10 per point of route danger (jobs.lib.cost/route-danger)
-    past the hostiles the body knows of (seen or heard, jobs.lib.danger/known-hostiles; :danger-overrides, after armour),
-    many times dearer for a mob the body (its best weapon, armour, health) cannot afford to fight.
-    The killer named in the :died cause is assumed at the pile for ::killer-guard-ms after the death only, and so is
-    the killer of any other death that young where it killed. The pile itself ends the route, however far below the surface.
-  - A pile in water (its cell or the one above) or lost to drowning adds :wet-danger points of route danger (named water or drowning).
-  - Infinite when lava, fire or the void took the pile, or the walk would end after the despawn.
-  A skip for danger alone (the pile would be fetched were the route safe) is not final: the run ends condition-failed :danger and the death stays open. The danger is remembered (:recover-danger) for ::danger-memory-ms (an assumed killer alone: while its guard lasts), at most until the walk back from the flight's end (go-to's quote, the farthest priced mob's follow range past it at walking speed, plus ::collect-s) would end at the despawn, the hostile reflex taking the body away meanwhile; no such time left: :abandoned :danger. The died trigger rests and the job waits :danger-remembered for that death meanwhile, cutting no other job; then the pile is weighed anew, until the window closes. :retry weighs it now. A skip for value is final.
-  A fetch emits recover-drops.fetching. A skip emits recover-drops.decided. Both texts give the value, the cost and their parts.
-  Kit: before the decision, when the pile is worth the trip were the route safe, a body with no weapon or with an empty armour slot, whose killer or the hostiles it knows make the route
-  dangerous, fetches the best weapon and armour piece a chest of known stock (:fetch/stock) holds (jobs.lib.need, chests only,
-  :fetch false: off) and wears the armour (jobs.items.wear); nothing known to be in a chest: unchanged.
-  A kit fetch waiting on the world is waited for (declared hold :fetching-kit); a fetch that ended the job drops the kit (warn recover-drops.kit-dropped).
-  Fetch: walks to the death point (jobs.movement.go-to, in legs of :leg-s seconds; after each leg the value and cost are weighed again from where the body stands, at its health, a pile gone dear with danger backing off as above), then collects (passes, up to 3) the pile's items it can see within the ::collect-radius setting (10)
-  (jobs.items.collect-drops; only the carried item names, never items out of sight). Drops that went out of sight
-  (down a shaft) get one walk to the cell the first was last seen in and a look again before the trip ends :partial, and so do drops never in sight at the pile: once, a walk to four cells 3 blocks round it.
-  The pile out of reach (go-to :goal-enclosed, or no item in sight at it) with blocks this body placed within ::seal-radius of it (the scaffold ledger, a flee
-  seal): once per trip they are taken back (jobs.access.cleanup, event recover-drops.seal) and the walk goes on.
-  Ends by writing a :recovered entry {:decision :skip|:collected|:partial|:abandoned}.
-  :collected counts the pile's items that entered the inventory since the decision, those picked up on the walk too.
-  :abandoned with :reason :unreachable (the walk was blocked, or did not arrive or got no nearer the shared max-fruitless times; a pile too far to walk after such walks ends so, not :skip), :danger
-  (the trip was cut by a hostile, or declined for a danger, :max-hostile-cuts times), :nothing-found or :window-closed
-  (the five minute despawn window closed). :partial carries :left and :reason :unreachable or :not-visible.
-  Endings (data :decision :text :pos :items :left): :collected is done; a skip for value condition-failed :not-worth; :partial nothing-possible :unreachable or :not-visible; :abandoned by its reason, :window-closed limit-reached (line :time), :danger and :nothing-found condition-failed, :unreachable nothing-possible; a danger or a walk that did not arrive leave the death open (see above). The abandoned text names the pile and what to do.
-  A pile already carried again ends :collected without a collect step.
-  Restart-safe: the decision, the baseline of carried items and the phase are kept in a :recover-trip entry keyed to the death.
-  A run cut by a higher reflex, or a restarted body, goes on with the same trip.
-  Warns respawn_away_from_bed once per death when the body respawned over 10 blocks from its respawn bed (the live :spawn-bed, else the :bed it slept in).
-  Memory: reads :died, :respawned, :bed, :slept, :recover-trip, :recover-danger, the scaffold ledger. Writes :recovered, :recover-trip and :recover-danger.")
+  Serves one :died entry no :recovered covers (its :death-t): the one a trip is keyed to, else the open pile with the best value net of the walk. A death whose despawn window closed while a newer one is open is closed :abandoned :superseded. With every death decided the job waits (condition :no-drops) naming the decision.
+  One run is the whole trip: it holds still (:respawning, then :settling) until the respawn and its 2 s have passed, decides, walks, collects and writes :recovered {:decision :skip|:collected|:partial|:abandoned}. A run cut by a reflex, or a restarted body, goes on with the same trip (the decision, the baseline of carried items and the phase are kept in :recover-trip).
+  Ready: fit? ok; safe? is ok by day, ok at night when the pile despawns before morning, else the exposure of the pile's cell (ready/exposed). The children walk under :checks {:safe? (always)}: the trip prices its own danger.
+  Decision (settings ::margin, ::danger-radius, ::leg-s; args :value-overrides, :danger-overrides): skip when the value of what was carried (jobs.lib.cost/item-value, plus 5 per level of experience) is at most the fetch cost plus ::margin. Cost: a trip of 10, 0.3 per block, and 10 per point of route danger (jobs.lib.cost/route-danger) past the hostiles the body knows of, the killer assumed at the pile for ::killer-guard-ms; infinite for lava, fire, the void, or a walk that ends after the despawn. A pile in water adds ::wet-danger.
+  A real danger (jobs.lib.danger/nearest-danger) within ::danger-radius, or a hit, has the trip weighed again once per mob. A skip for danger alone is not final: the run ends condition-failed :danger, the danger is remembered (:recover-danger) for ::danger-memory-ms and the pile weighed anew; no time left to come back: :abandoned :danger. :retry weighs it now. A skip for value is final.
+  Kit: a body without weapon or armour whose pile is worth it were the route safe fetches the best piece a chest of known stock holds (:fetch, jobs.lib.need) and wears it; a failed fetch is dropped (warn recover-drops.kit-dropped with the ending).
+  Fetch: walks to the death point in legs of ::leg-s seconds (weighed again after each), then collects up to 3 passes the visible items within ::collect-radius (jobs.items.collect-drops). Drops out of sight get one look where they were last seen, and one walk round the pile. A pile out of reach behind blocks this body placed within ::seal-radius: they are taken back once (jobs.access.cleanup). A pile far below is reached by a stair (jobs.access.tunnel).
+  Events: recover-drops.fetching (a decision to go) and recover-drops.decided (the priced decision, read by the dashboard).
+  Endings: :collected is done (also a pile already carried); :skip condition-failed :not-worth; :partial nothing-possible :unreachable or :not-visible; :abandoned by its reason: :window-closed (the pile despawned) condition-failed :gone, :danger and :nothing-found condition-failed, :unreachable nothing-possible. Data :decision :text :pos :items :left. A danger or a walk that did not arrive leaves the death open.
+  Warns respawn_away_from_bed once per death when the body respawned over ::bed-away-blocks from its respawn bed.
+  Memory: reads :died, :respawned, :bed, :slept, :recover-trip, :recover-danger, the scaffold ledger. Writes :recovered, :recover-trip, :recover-danger.")
 
 (a/defargs args
-  {:margin {:doc "added to the fetch cost before comparing it to the value" :spec (a/num-in nil nil) :default 0}
-   :value-overrides {:doc "jobs.lib.cost/item-value overrides, a map: item name or group (ore tool armor food block unknown) -> worth of one item, or {:times n}; e.g. {\"raw_iron\" 500}" :spec (a/map-of string? (a/or-of number? map?)) :default {}}
+  {:value-overrides {:doc "jobs.lib.cost/item-value overrides, a map: item name or group (ore tool armor food block unknown) -> worth of one item, or {:times n}; e.g. {\"raw_iron\" 500}" :spec (a/map-of string? (a/or-of number? map?)) :default {}}
    :danger-overrides {:doc "jobs.lib.cost/route-danger overrides, a map: mob name -> threat in points of damage before armour, or {:times n}; e.g. {\"creeper\" 100 \"zombie\" 0}" :spec (a/map-of string? (a/or-of number? map?)) :default {}}
-   :danger-radius {:doc "a hostile this close makes the job yield without acting" :spec (a/num-in 0 nil) :default 8}
    :fetch {:doc "get a weapon and armour from a chest whose stock the body knows before walking to a pile its killer guards (jobs.lib.need limits); false: no kit fetch" :spec need/option? :default {:what #{:item} :how #{:chest} :minutes 3}}
-   :leg-s {:doc "the walk to the pile goes in legs of this many seconds; after each the danger and the cost are weighed again" :spec (a/num-in 0.1 120) :default 6}
    :retry {:doc "try a pile again that an earlier run ended :abandoned or declined for a danger still remembered, while its despawn window is open (a reflex run keeps the decision; an agent asks for another try)" :spec boolean? :default false}})
 
 (a/defargs settings
@@ -146,16 +113,16 @@
     {:uses {:job-time [least mean (max mean window-s)]}}))
 
 (def endings
-  "The kind and cause of a trip's end by its decision (and for an abandoned pile its reason); a pile not worth the trip is a fact about the goal."
+  "The kind and cause of a trip's end by its decision (and for an abandoned pile its reason); a pile not worth the trip or despawned is a fact about the goal, not a limit of the call."
   {:collected [:done nil]
    :skip [:condition-failed :not-worth]
-   [:abandoned :window-closed] [:limit-reached {:line :job-time :reason :window-closed}]
+   [:abandoned :window-closed] [:condition-failed :gone]
    [:abandoned :danger] [:condition-failed :danger]
    [:abandoned :nothing-found] [:condition-failed :nothing-found]})
 
 (defn ending-for
   "The ending of a trip that wrote decision with fields: collected is done, a skip condition-failed :not-worth, an abandoned
-  pile by its reason (:window-closed limit-reached, :danger and :nothing-found condition-failed), the rest nothing-possible
+  pile by its reason (:window-closed and :danger and :nothing-found condition-failed), the rest nothing-possible
   with the reason (:unreachable, or for a partial :unreachable / :not-visible)."
   [c decision fields text pos]
   (let [[kind cause] (or (endings decision) (endings [decision (:reason fields)]) [:nothing-possible (:reason fields)])]
@@ -166,7 +133,7 @@
   [c decision fields]
   (let [death (dth/current-death c)
         pos (:pos (:data death))
-        text (cond-> (est/decision-text decision fields (:margin (:args c)))
+        text (cond-> (est/decision-text decision fields (cfg/margin))
                (= :abandoned decision) (str "; the pile at " (str/join " " (map #(js/Math.floor (% pos)) [:x :y :z]))))]
     (ctx/remember! c :recovered (merge {:decision decision :death-t (:t death)} (dissoc fields :at :flight-s)) cfg/recovered-policy)
     (ctx/emit! c :recover-drops.decided (if (= :abandoned decision) :warn :info)
@@ -202,7 +169,7 @@
   [c pos]
   (if-let [d (dg/threatened? c)]
     [:danger d]
-    [(await (child/call-walk* c :go {:pos pos :range (cfg/arrive-range) :checks own-checks :spend {:job-time (:leg-s (:args c))}}))]))
+    [(await (child/call-walk* c :go {:pos pos :range (cfg/arrive-range) :checks own-checks :spend {:job-time (cfg/leg-s)}}))]))
 
 (defn job-time-limit?
   "Whether r is the engine's own job-time limit ending (no go-to data): the :leg-s spend ran out mid-search or look."
@@ -307,15 +274,13 @@
                   :else (finish-collect! c pile again))))))))))
 
 (defn ^:async wait-while!
-  "Hold still (reason) while (pending?) is true: nil when it clears, else the ending of a danger within :danger-radius
-  (one the call prices with :danger-overrides is left to the decision), :continue for a cut, :closed when the despawn window passes."
+  "Hold still (reason) while (pending?) is true: nil when it clears, else :continue for a cut, :closed when the despawn window passes."
   [c entry reason pending?]
   (loop []
     (cond
       (not (pending?)) (do (ctx/hold-still! c nil) nil)
       (not (ctx/alive? c)) :continue
       (dth/window-closed? c entry) (do (ctx/hold-still! c nil) :closed)
-      (dg/unpriced-threat c) (do (ctx/hold-still! c nil) (dg/decline-danger! c (dg/unpriced-threat c)))
       :else (do (await (child/pause! c (cfg/pause-s) reason)) (await (pace/pace!)) (recur)))))
 
 (defn decide!
@@ -324,7 +289,7 @@
   [c entry]
   (if (and (:decided (ctx/mem c)) (not (:recheck (ctx/mem c))) (or (zero? (:cuts (ctx/mem c) 0)) (:reestimated (ctx/mem c))))
     (:decided (ctx/mem c))
-    (let [margin (:margin (:args c))
+    (let [margin (cfg/margin)
           e (-> (est/estimate c (:data entry) (settings/ticks->ms (game/ticks-since entry (ctx/view c))))
                 (update :cost est/finite)
                 (assoc :at (ctx/now c)))
@@ -348,7 +313,7 @@
   (ctx/emit! c :recover-drops.decided :info
              (assoc (select-keys decided [:value :cost :parts :top-items :top-mobs])
                     :decision :skip :retry true :pos (:pos (:data entry)) :hold-s (js/Math.round (/ hold-ms 1000))
-                    :text (str (est/decision-text :skip decided (:margin (:args c))) "; looks again in " (js/Math.round (/ hold-ms 1000)) " s")))
+                    :text (str (est/decision-text :skip decided (cfg/margin)) "; looks again in " (js/Math.round (/ hold-ms 1000)) " s")))
   (ctx/end c :condition-failed :danger {:top-mobs (:top-mobs decided) :hold-s (js/Math.round (/ hold-ms 1000)) :pos (:pos (:data entry))}))
 
 (defn ^:async retry-later!
@@ -391,7 +356,7 @@
 (defn ^:async trip!
   "The decision, then the walk and the collect passes of a trip inside its window."
   [c entry]
-  (let [{:keys [margin]} (:args c)
+  (let [margin (cfg/margin)
         radius-to-collect (settings/get settings ::collect-radius)
         kit (await (kt/kit! c entry))
         decided (when-not kit (decide! c entry))
@@ -450,8 +415,7 @@
 
 (defn ^:async round
   "One whole run: wait for the respawn and its settling (declared holds), decide, walk, collect, write :recovered, and end
-  with the ending of the trip (see the doc). A danger within :danger-radius ends it condition-failed :danger (the hostile
-  reflex acts, the trigger fires again), a walk that did not arrive nothing-possible :unreachable, the death staying open."
+  with the ending of the trip (see the doc). A danger priced into a skip ends it condition-failed :danger, a walk that did not arrive nothing-possible :unreachable, the death staying open."
   [c]
   (doseq [d (dth/stale-deaths c)]
     (ctx/remember! c :recovered {:decision :abandoned :death-t (:t d) :reason :superseded} cfg/recovered-policy))

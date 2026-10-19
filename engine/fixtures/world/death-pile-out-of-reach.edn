@@ -20,7 +20,7 @@
              :data {:entries [{:cell #at [30 0 26] :item "dirt" :before "air" :job "j1" :purpose :retreat :state :placed}
                               {:cell #at [30 1 26] :item "dirt" :before "air" :job "j1" :purpose :retreat :state :placed}
                               {:cell #at [4 0 12] :item "dirt" :before "air" :job "j1" :purpose :retreat :state :placed}]}}]
-   :act [[:job (jobs.survival.recover-drops {:leg-s 30})]]
+   :act [[:job (jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/leg-s 30}})]]
    :expect [{:event {:source :job :kind :recover-drops.seal} :within-s 120 :of-job true}
             {:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 200 :of-job true}]
    :after [[:item "raw_iron" 24] [:not-block [30 0 26] "dirt"] [:block [4 0 12] "dirt"]]}

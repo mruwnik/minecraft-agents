@@ -48,15 +48,17 @@
           (is (= {:kind :done} (end-of seen)))
           (is (= :collected (:decision (recovered eng)))))))))
 
-(deftest a-danger-before-the-decision-ends-condition-failed-danger
+(deftest a-danger-that-makes-the-pile-dear-ends-condition-failed-danger
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
-              {:keys [eng seen]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj dt/drops zombie)})]
+              {:keys [eng seen clock]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj dt/drops zombie)})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds} 3000)
-          (core/submit! eng job {})
-          (await (run-until-empty eng 4))
+          (core/submit! eng '(jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}}) {})
+          (let [timer (js/setInterval #(swap! clock + 500) 5)]
+            (await (run-until-empty eng 12))
+            (js/clearInterval timer))
           (is (= {:kind :condition-failed :reason :danger} (end-of seen)))
           (is (nil? (recovered eng)) "the death stays open"))))))
 
@@ -91,7 +93,7 @@
           (await (run-until-empty eng 20))
           (is (= {:kind :nothing-possible :reason :not-visible} (end-of seen))))))))
 
-(deftest a-closed-window-ends-limit-reached
+(deftest a-closed-window-ends-condition-failed-gone
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -100,7 +102,7 @@
           (swap! clock + 300000)
           (core/submit! eng job {})
           (await (run-until-empty eng 5))
-          (is (= {:kind :limit-reached :reason :window-closed} (end-of seen))))))))
+          (is (= {:kind :condition-failed :reason :gone} (end-of seen))))))))
 
 (deftest nothing-left-at-the-death-point-ends-condition-failed-nothing-found
   (async done

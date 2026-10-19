@@ -115,6 +115,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (await ((run-with-pile dt/death-pile-of-the-field-report (fn ^:async stub-fetch [c names n opts] (contract/ending :nothing-possible :failed nil)))))]
           (is (some #{:recover-drops.kit-dropped} (kinds-of seen)))
+          (is (= :failed (get-in (first (filter #(= :recover-drops.kit-dropped (:kind %)) @seen)) [:because :cause])) "the fetch's ending is passed on")
           (is (some #{:recover-drops.decided} (kinds-of seen))))))))
 
 (deftest the-kit-fetch-is-limited-to-the-minutes-left-in-the-despawn-window

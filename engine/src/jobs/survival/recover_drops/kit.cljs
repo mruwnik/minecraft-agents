@@ -1,6 +1,7 @@
 (ns jobs.survival.recover-drops.kit
   "The weapon and armour a known chest holds that a body going to a guarded pile lacks."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.contract :as contract]
+            [engine.ctx :as ctx]
             [engine.settings :as settings]
             [engine.game :as game]
             [jobs.lib.armour :as armour]
@@ -12,8 +13,7 @@
             [jobs.lib.stock :as stock]
             [jobs.lib.util :as u]
             [jobs.survival.recover-drops.config :as cfg]
-            [jobs.survival.recover-drops.danger :as dg]
-            [jobs.survival.recover-drops.deaths :as dth]
+                        [jobs.survival.recover-drops.deaths :as dth]
             [jobs.survival.recover-drops.estimate :as est]))
 
 (defn stock-names
@@ -51,7 +51,7 @@
         e (est/estimate c (:data entry) elapsed)
         safe (cost/fetch-cost {:distance (when pos (u/dist (u/self-pos c) pos)) :danger 0 :elapsed-ms elapsed :cause cause})
         safe-cost (if (js/isFinite (:cost safe)) (:cost safe) js/Infinity)]
-    (boolean (and (seq (:top-mobs e)) (> (:value e) (+ safe-cost (:margin (:args c))))))))
+    (boolean (and (seq (:top-mobs e)) (> (:value e) (+ safe-cost (cfg/margin)))))))
 
 (defn ^:async wear-kit!
   "Put on what the kit fetch brought (jobs.items.wear), once its child has ended."
@@ -67,8 +67,8 @@
 (defn ^:async kit!
   "Once per run: fetch and wear a weapon and armour when the pile is worth the trip, the danger calls for them and a known
   chest has them (jobs.lib.need, one piece at a time). A fetch child waiting on the world is waited for (declared hold
-  :fetching-kit) until it ends, a danger or the despawn window. nil when done, dropped (a fetch that failed: warn) or
-  nothing to do; else the ending of a danger, or :continue for a cut."
+  :fetching-kit) until it ends, a danger or the despawn window. nil when done, dropped (a fetch that failed: warn with its ending) or
+  nothing to do, else :continue for a cut."
   [c entry]
   (let [limits (need/opts c 'jobs.survival.recover-drops)]
     (if (or (:kit-done (ctx/mem c)) (not limits) (nil? (kit-problem c)) (not (kit-called-for? c entry)))
@@ -84,11 +84,11 @@
 
             (and (not= :continue r) (not= :done (:kind r)))
             (do (ctx/update-mem! c assoc :kit-done true)
-                (ctx/emit! c :recover-drops.kit-dropped :warn {:text "recover-drops: the kit fetch failed; going without a kit"})
+                (ctx/emit! c :recover-drops.kit-dropped :warn {:text (str "recover-drops: the kit fetch ended " (name (:kind r)) " " (pr-str (contract/cause-key r)) "; going without a kit")
+                                                               :because (contract/for-event r)})
                 nil)
 
             (not= :continue r) (recur)
             (not (ctx/alive? c)) :continue
             (dth/window-closed? c entry) (do (ctx/hold-still! c nil) nil)
-            (dg/threatened? c) (do (ctx/hold-still! c nil) (dg/decline-danger! c (dg/threatened? c)))
             :else (do (await (child/pause! c (cfg/pause-s) :fetching-kit)) (await (pace/pace!)) (recur))))))))

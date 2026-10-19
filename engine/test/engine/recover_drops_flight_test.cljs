@@ -119,7 +119,7 @@
               {:keys [eng p seen]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds})
           (on-first-leg! p #(place-entity! p 8 (update (fake/body-pos @(fake/state p)) 0 + 3)))
-          (core/submit! eng (list 'jobs.survival.recover-drops {:leg-s 1 :danger-overrides {"zombie" 1000}}) {})
+          (core/submit! eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/leg-s 1} :danger-overrides {"zombie" 1000}}) {})
           (await (run-until-empty eng 30))
           (is (true? (:retry (last (emitted seen :recover-drops.decided)))) "the trip turned dear: it backs off")
           (is (nil? (recovered eng)) "the death stays open"))))))
@@ -134,7 +134,7 @@
           (on-first-leg! p (fn []
                              (swap! (fake/state p) assoc-in [:self :health] 2)
                              (mem/write! (:store eng) :hurt {:amount 18 :health 2 :attacker {:id 8 :name "zombie"}} {:cap 50 :ttl 60000})))
-          (core/submit! eng (list 'jobs.survival.recover-drops {:leg-s 1}) {})
+          (core/submit! eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/leg-s 1}}) {})
           (await (run-until-empty eng 30))
           (is (true? (:retry (last (emitted seen :recover-drops.decided)))) "hit and low, the trip backs off")
           (is (nil? (recovered eng)) "the death stays open"))))))
