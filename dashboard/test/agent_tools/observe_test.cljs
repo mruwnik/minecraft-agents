@@ -129,6 +129,17 @@
                           [["chests" "--radius" "5"] #"only valid for seen"]]]
     (is (re-find pattern (:error (apply request "--world" "w" "ProbeBody" argv))) (pr-str argv))))
 
+(deftest light-is-a-read-only-observe-query-of-a-cell-or-the-feet
+  (doseq [[argv path] [[["light"] "/light"]
+                       [["light" "--radius" "2"] "/light?radius=2"]
+                       [["light" "--radius" "0" "--" "1" "64" "-3"] "/light?x=1&y=64&z=-3&radius=0"]]]
+    (is (= path (:path (apply request "--world" "w" "ProbeBody" argv))) (pr-str argv)))
+  (doseq [[argv pattern] [[["light" "1" "2"] #"no cell"]
+                          [["light" "1" "a" "3"] #"integers"]
+                          [["light" "--radius" "9"] #"--radius"]
+                          [["light" "--names" "x"] #"--names"]]]
+    (is (re-find pattern (:error (apply request "--world" "w" "ProbeBody" argv))) (pr-str argv))))
+
 (deftest observe-rejects-malformed-names-and-limits-before-connecting
   (doseq [[argv pattern] [[["bad/name"] #"body name"]
                           [["ProbeBody" "status" "--limit" "100"] #"1 to 32"]

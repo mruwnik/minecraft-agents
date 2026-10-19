@@ -10,7 +10,7 @@
 
 (defn usage-for [prefix]
   "Build the usage string with the given invocation prefix (e.g., 'observe.mjs' or './bin/observe')."
-  (str "usage: " prefix " <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12] | inventory [--raw] [--slots] | equipment [--raw] | seen [--radius 32 (1 to 64)] [--names a,b,*_ore] [--limit 16] | chests [--limit 16] | job <id> | result <id> | events [--kinds died,hurt --job j12 --level debug|info|warn --since 10m|death|<ms> --until death|10m|<ms> --before <seq> --limit 20 (1 to 64)] | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix] [--category goal|phase|reflex|debug] [--tag <word>] | settings [--changed] [--raw] | settings reload | settings set <:ns/key> <edn> | settings unset <:ns/key>] [--limit <n>] [--offset <n>] [--worlds <dir>] [--state <legacy-parent>]\n--wait: a hit on the body wakes it too (--no-danger turns that off; --danger-below 10 wakes only when health is 10 or less after the hit); job notices wake once per kind and job; notices of a job that has since ended go to the summary; with --watch only the watched jobs' notices wake; the summary's 4 items keep job ends, deaths and notices before routine ones; events over 10 min old are only counted.\nsettings: every key with value and layer (:code, :world, :body) and the game rate; set and unset edit the body's settings.edn and reload.\nchests: what the body saw in chests it opened (remembered, may be out of date), nearest first with :distance and :age-ms.\nseen: blocks the body has seen (memory, nothing through walls), nearest first with :distance (a crop also :age and :ripe, a block within 32 of a zone :zone {:name :owner :distance}); default names are workstations, storage, beds, doors, ores and crops.\nevents: past events, newest page first, printed oldest first with :next-before (pass it as --before for older ones), :window {:scanned :oldest-seq :partial?}; debug-level noise is left out unless --level debug; --until death ends at the newest death, so a post-mortem is `events --until death`; --since/--until also take a duration back from now or an epoch ms; at most the last 8000 retained events are scanned.\nstatus: :missed lists job ends, flights, fight/flee decisions, reflex ends, deaths and one summed :hurt (damage, lowest-health, cause) since the last observe --wait. :pos [x y z], :health and :food 0-20, :current the running job, :mode scheduled or manual. job <id>: its state and outcome; an unknown id answers :unknown-job."))
+  (str "usage: " prefix " <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12] | inventory [--raw] [--slots] | equipment [--raw] | seen [--radius 32 (1 to 64)] [--names a,b,*_ore] [--limit 16] | chests [--limit 16] | light [x y z] [--radius 0 to 8] | job <id> | result <id> | events [--kinds died,hurt --job j12 --level debug|info|warn --since 10m|death|<ms> --until death|10m|<ms> --before <seq> --limit 20 (1 to 64)] | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix] [--category goal|phase|reflex|debug] [--tag <word>] | settings [--changed] [--raw] | settings reload | settings set <:ns/key> <edn> | settings unset <:ns/key>] [--limit <n>] [--offset <n>] [--worlds <dir>] [--state <legacy-parent>]\n--wait: a hit on the body wakes it too (--no-danger turns that off; --danger-below 10 wakes only when health is 10 or less after the hit); job notices wake once per kind and job; notices of a job that has since ended go to the summary; with --watch only the watched jobs' notices wake; the summary's 4 items keep job ends, deaths and notices before routine ones; events over 10 min old are only counted.\nsettings: every key with value and layer (:code, :world, :body) and the game rate; set and unset edit the body's settings.edn and reload.\nchests: what the body saw in chests it opened (remembered, may be out of date), nearest first with :distance and :age-ms.\nlight: the light the body perceives at a cell (default its feet; a negative coordinate needs `--` before x y z): :block, :sky, :sky-subtract (night's darkening), :light (effective), :lit?, :dark?, :seen?; with --radius the cube around it as :dark-fraction, :darkest, :unseen, :cells, :seen.\nseen: blocks the body has seen (memory, nothing through walls), nearest first with :distance (a crop also :age and :ripe, a block within 32 of a zone :zone {:name :owner :distance}); default names are workstations, storage, beds, doors, ores and crops.\nevents: past events, newest page first, printed oldest first with :next-before (pass it as --before for older ones), :window {:scanned :oldest-seq :partial?}; debug-level noise is left out unless --level debug; --until death ends at the newest death, so a post-mortem is `events --until death`; --since/--until also take a duration back from now or an epoch ms; at most the last 8000 retained events are scanned.\nstatus: :missed lists job ends, flights, fight/flee decisions, reflex ends, deaths and one summed :hurt (damage, lowest-health, cause) since the last observe --wait. :pos [x y z], :health and :food 0-20, :current the running job, :mode scheduled or manual. job <id>: its state and outcome; an unknown id answers :unknown-job."))
 
 (def usage (usage-for "observe.mjs"))
 
@@ -137,6 +137,18 @@
         (check (some? (:offset values)) "--offset is not valid for chests")
         ["/chests" [["max" (or (limit-param (:limit values) 64) "16")]]])
 
+    "light"
+    (let [coords (remove nil? [kind-or-id (first rest) (second rest)])
+          radius (js/Number (or (:radius values) 0))]
+      (check (not (#{0 3} (count coords))) "light takes no cell (the feet) or x y z")
+      (check (> (count rest) 2) "light takes at most x y z")
+      (check (not-every? #(re-matches #"-?[0-9]+" %) coords) "light x y z must be integers")
+      (check (some? (:limit values)) "--limit is not valid for light")
+      (check (some? (:offset values)) "--offset is not valid for light")
+      (check (not (integer-in? radius 0 8)) "--radius must be an integer from 0 to 8")
+      ["/light" (into (if (seq coords) (mapv vector ["x" "y" "z"] coords) [])
+                      (when (some? (:radius values)) [["radius" (str radius)]]))])
+
     ("job" "result")
     (do (check (or (not (truthy-text? kind-or-id)) (seq rest)) (str op " needs one job ID, such as j12"))
         (check (and (= "result" op) (not (re-matches #"j[0-9]+" kind-or-id))) "result needs a job ID such as j12")
@@ -214,7 +226,8 @@
           [agent requested-op kind-or-id & rest] positionals
           op (or requested-op "status")
           world (:world values)]
-      (check (and (or (some? (:radius values)) (some? (:names values))) (not= "seen" op)) "--radius and --names are only valid for seen")
+      (check (and (some? (:radius values)) (not (#{"seen" "light"} op))) "--radius is only valid for seen and light")
+      (check (and (some? (:names values)) (not= "seen" op)) "--names is only valid for seen")
       (check (and (:slots values) (not= "inventory" op)) "--slots is only valid for inventory")
       (check (and (some #(some? (get values %)) event-options) (not= "events" op)) "--kinds, --job, --level, --since, --until and --before are only valid for events")
       (check (not (and agent (re-matches body-name agent))) "agent must be a body name")

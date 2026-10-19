@@ -124,6 +124,14 @@
     (is (nil? (sh-sense/light-in p cells)) "the dark corner has no sky light: waiting never lights it")
     (is (zero? (sh-sense/light-in p (take 2 cells))) "the lit ones: nothing to wait for")))
 
+(deftest light-view-reports-the-light-parts-of-a-cell-and-a-cube-read
+  (let [lit (seen-dark cave-blocks {[0 64 0] [0 14] [1 64 0] [0 14]})
+        view (sh-sense/light-view lit {:cell {:x 0 :y 64 :z 0}})]
+    (is (= {:cell [0 64 0] :block 14 :sky 0 :light 14 :lit? true :dark? false}
+           (select-keys view [:cell :block :sky :light :lit? :dark?])))
+    (is (= [0 64 0] (:cell (sh-sense/light-view lit {}))) "the feet by default")
+    (is (= {:cells 27 :radius 1 :darkest 0} (select-keys (sh-sense/light-view lit {:cell {:x 0 :y 64 :z 0} :radius 1}) [:cells :radius :darkest])))))
+
 (def dug-room-blocks
   "A mine's room the body dug: 5x4 cells, 2 high (ceiling at y 66), light 7."
   (merge (into {} (for [x (range -2 3) z (range -2 2) y [63 66]] [(str x "," y "," z) "stone"]))

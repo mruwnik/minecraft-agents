@@ -1,6 +1,6 @@
 (ns engine.event-api
   "The engine's private HTTP API on a local Unix socket (mode 0600). The wire format is EDN.
-  GET   /snapshot, /status, /inventory, /seen, /chests, /events, /job, /jobs, /results, /triggers, /catalog, /quote, /settings
+  GET   /snapshot, /status, /inventory, /seen, /chests, /light, /events, /job, /jobs, /results, /triggers, /catalog, /quote, /settings
   POST  /jobs and /triggers (changes), /attention/resolve, /chat, /settings/reload, /settings/set, /settings/unset
   Bodies are limited (a setting, 16 KB). Lists are paged and bounded."
   (:require [engine.args :as a]
@@ -235,6 +235,17 @@
                     (sort-by :distance))]
       (cond-> {:ok true :chests (vec (take max rows))}
         (> (count rows) max) (assoc :more? true)))))
+
+(defn light-query
+  "The validated /light query as {:cell {:x :y :z} :radius}, {} for the feet, or nil when malformed (x, y and z come together)."
+  [params]
+  (let [coord #(.get params %)
+        radius (number-param params "radius" nil 8)
+        given (keep coord ["x" "y" "z"])
+        nums (map js/Number given)]
+    (when (and (or (nil? (.get params "radius")) radius)
+               (or (empty? given) (and (= 3 (count given)) (every? js/Number.isSafeInteger nums))))
+      (cond-> {} (seq given) (assoc :cell (zipmap [:x :y :z] nums)) radius (assoc :radius radius)))))
 
 (defn seen-query
   "The validated /seen query as {:names :radius :max}, or nil when it is malformed."
@@ -557,6 +568,13 @@
                         (and (= method "GET") (= pathname "/chests"))
                         (if-let [max (number-param (.-searchParams url) "max" 16 64)]
                           (respond! res 200 (chests-view eng {:max max}))
+                          (bad! res 400 :bad-query))
+
+                        (and (= method "GET") (= pathname "/light"))
+                        (if-let [q (light-query (.-searchParams url))]
+                          (if-let [view (:light-view eng)]
+                            (respond! res 200 {:ok true :light (view q)})
+                            (respond! res 200 {:ok false :reason :no-perception}))
                           (bad! res 400 :bad-query))
 
                         (and (= method "GET") (= pathname "/status"))

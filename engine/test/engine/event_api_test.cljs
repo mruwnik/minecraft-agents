@@ -565,6 +565,12 @@
     (is (= [[5 64 0]] (mapv :pos (:chests (event-api/chests-view eng {:max 1})))))
     (is (true? (:more? (event-api/chests-view eng {:max 1}))))))
 
+(deftest light-query-takes-a-whole-cell-and-a-bounded-radius
+  (let [q #(event-api/light-query (js/URLSearchParams. %))]
+    (is (= {} (q "")) "the feet")
+    (is (= {:cell {:x 1 :y 64 :z -2} :radius 3} (q "x=1&y=64&z=-2&radius=3")))
+    (are [bad] (nil? (q bad)) "x=1&y=2" "x=a&y=1&z=1" "radius=9" "radius=x")))
+
 (def wide-args
   (into {} (for [i (range 40)] [(keyword (str "arg" i)) {:default i :doc "d"}])))
 

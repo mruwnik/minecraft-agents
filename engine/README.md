@@ -559,6 +559,7 @@ HTTP over `worlds/<world>/agents/<name>/engine/events.sock` (mode 0600; all bodi
 | `GET /seen?names=a,*_ore&radius=&max=` | blocks remembered by perception (never x-ray), nearest first with `:pos`, `:distance` and `:age-ms` (a crop also `:age` and `:ripe`; a block within 32 of a zone `:zone {:name :owner :distance}`) (air left out when no names); radius and max capped at 64; offline: `{:ok false :reason :offline}`; read-only |
 | `POST /seen/flush` | writes perception memory to seen.bin now (`plans check` calls it first); `{:ok false :reason :no-perception}` without perception |
 | `GET /chests?max=` | chest stock the body saw (memory `:fetch/stock`, kept 6 h, latest per chest), nearest first with `:pos`, `:distance`, `:age-ms`, `:items {name n}`; max capped at 64; read-only (`observe <agent> chests`) |
+| `GET /light?x&y&z&radius=` | the light the body perceives at a cell (default its feet): `:block :sky :sky-subtract :light :lit? :dark? :seen?`; with radius (0-8) the cube's `light-read` (`:dark-fraction :darkest :unseen`) plus `:cells :seen`; read-only (`observe <agent> light [x y z] [--radius n]`) |
 | `GET /job?id=` | one job's parsed spec, args, state, linked requests; a finished job answers its recorded outcome (`:finished? true :status :result :ended-at`) from the results record: the last `engine.core.base/recent-results-limit` (100) ended listed jobs and `reflex-results-limit` (20) reflex jobs, in `results.edn`, not in the state or `/snapshot` |
 | `GET /results?ids=j1,j2` | the recorded outcomes of up to 32 job ids |
 | `GET /catalog?kind=jobs\|triggers&prefix=[&category=][&tag=]` / `kind=job\|trigger&name=` | names page / one description (a contract job's also `:target :ways :defaults`; each arg shows its effective `:default` and `:default-from` `:code`, `:world` or `:body`) |
@@ -819,6 +820,7 @@ node engine/tools/observe.mjs Bob --world test events [--until death] [--kinds d
 node engine/tools/observe.mjs Bob --world test catalog jobs jobs.farm. --limit 10 | catalog job <name> | catalog trigger <name>
 node engine/tools/quote.mjs Bob --world test jobs.movement.go-to '{:pos {:x 1 :y 64 :z 2}}'   (also jobs.primitive.*)
 node engine/tools/observe.mjs Bob --world test inventory [--slots] | equipment
+node engine/tools/observe.mjs Bob --world test light [x y z] [--radius 0-8]   # perceived light at a cell (default the feet): block, sky, sky-subtract, effective, lit/dark, seen
 node engine/tools/observe.mjs Bob --world test settings [--changed] [--raw] | settings reload | settings set :jobs.x/key <edn> | settings unset :jobs.x/key   # keys with layer and the game rate; dashboard popup has the same
 node engine/tools/entities.mjs Bob --world test [--type zombie --radius 32 --player Alex --limit 20]
 node engine/tools/jobs.mjs Bob --world test list | show j17 | cancel j17 | cancel-all | retry j17 | resolve <attention> --reason handled

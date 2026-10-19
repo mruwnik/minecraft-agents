@@ -1,0 +1,23 @@
+;; Perceived light through `observe light`: the reading follows a torch placed and broken beside the body in a sealed cave.
+;; Dark and sealed, so no clock is involved.
+{:defaults
+ {:tags [:agent-tools :observe :light] :time :any
+  :plot {:height 12}
+  :blocks [[:fill [10 0 10] [22 8 22] "stone"] [:fill [14 4 14] [18 6 18] "air"]]
+  :body {:at [16.5 4 16.5] :spawnpoint [16 4 16]}
+  :limit-s 90}
+ :cases
+ [{:name "light-reading-follows-a-torch-placed-and-broken"
+   :act [[:until [:cli "observe" ["$body" "--world" "$world" "light"]
+                  {:ok true :light {:seen? true :light 0 :dark? true :lit? false}}] 20]
+         [:until [:cli "observe" ["$body" "--world" "$world" "light" "--radius" "2"]
+                  {:ok true :light {:dark-fraction 1 :darkest 0 :cells 125}}] 10]
+         [:rcon "execute positioned $X $Y $Z run setblock ~18 ~4 ~16 torch"]
+         [:until [:cli "observe" ["$body" "--world" "$world" "light"]
+                  {:ok true :light {:block [:>= 10] :light [:>= 10] :dark? false :lit? true}}] 15]
+         [:until [:cli "observe" ["$body" "--world" "$world" "light" "--radius" "2"]
+                  {:ok true :light {:dark-fraction [:< 1] :darkest 0}}] 10]
+         [:rcon "execute positioned $X $Y $Z run setblock ~18 ~4 ~16 air"]
+         [:until [:cli "observe" ["$body" "--world" "$world" "light"]
+                  {:ok true :light {:block 0 :light 0 :dark? true}}] 15]]
+   :after [[:body-near [16.5 4 16.5] 1.5]]}]}
