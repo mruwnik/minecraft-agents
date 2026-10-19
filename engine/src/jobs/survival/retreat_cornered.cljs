@@ -3,6 +3,7 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [jobs.lib.access :as access]
+            [jobs.lib.blocks :as lb]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
@@ -405,6 +406,12 @@
                     (map #(:hits (:data %) 1))
                     (reduce + 0))))))
 
+(defn beaten-fights?
+  "Pure: whether a beaten body (beaten?) fights before it seals or pillars: armed, or with no blocks to wall with. An
+  unarmed body that carries blocks builds first (a spider cannot be fought with fists)."
+  [{:keys [beaten? armed? blocks?]}]
+  (boolean (and beaten? (or armed? (not blocks?)))))
+
 (defn fire-hits [] (settings/get settings :jobs.survival.retreat-cornered/fire-hits))
 
 (defn under-fire?
@@ -443,6 +450,8 @@
         beaten (and (not fire?) (or (beaten? c) (boxed-in? c hostiles)))
         blind? (and fire? (not-any? #(and (combat/ranged? %) (danger-q/seen-only? %)) hostiles))
         _ (when fire? (ctx/update-mem! c retry-covers (let [{:keys [x y z]} (sh-sense/feet (:primitives c))] [x y z])))
+        armed? (some? (combat/best-weapon (:primitives c) weapons))
+        beaten-fight? (beaten-fights? {:beaten? beaten :armed? armed? :blocks? (boolean (seq (lb/carried c (flight/blocks c))))})
         win? (and (not blind?)
                   (fight-wins? c (if (and (:hit-on-the-run (ctx/mem c)) (not fire?)) (hitters c hostiles) hostiles)))
         order (escape-order {:win? win?
@@ -452,14 +461,14 @@
                              :ranged? (boolean (or fire? (and threat (combat/ranged? threat))))
                              :climber? (boolean (some combat/climber? hostiles))
                              :faster? (not (outrun? c hostiles))
-                             :pressed? (or beaten (and (not fire?) (pressed? c hostiles)))
+                             :pressed? (or beaten-fight? (and (not fire?) (pressed? c hostiles)))
                              :swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (in-water? c))
                              :home? home?
                              :lean? (pillar/lean? c)})]
     (loop [[option & more] order]
       (let [r (when-not (flight/tried? c option)
                 (case option
-                  :fight (if (fist-hold? {:armed? (or beaten (some? (combat/best-weapon (:primitives c) weapons))) :win? win?
+                  :fight (if (fist-hold? {:armed? (or beaten-fight? armed?) :win? win?
                                           :sweeps (:sweeps (ctx/mem c) 0) :fist-sweeps max-fist-sweeps})
                            (await (fist-look! c))
                            (await (fight! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons)) blind?)))

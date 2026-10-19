@@ -86,7 +86,7 @@
        A pillared body that is hit raises the pillar `retreat-pillar/::pillar-extend` (2) blocks, once, before the refuge fails.
      Order: fight if it wins, then plug in (walls), pillar (not against a ranged mob or a spider), back off (not from a mob that outruns the body), plug in by a pit or pocket (not at home), fight.
      Against a creeper back off comes first.
-     Hit ::beaten-hits times in ::hurt-window-s by melee mobs within close-radius, the fight comes first, armed or not.
+     Hit ::beaten-hits times in ::hurt-window-s by melee mobs within close-radius, the fight comes first if armed or with no blocks to wall with, else it walls in first.
      Under fire (::fire-hits hits within ::hurt-window-s whose attacker is a ranged mob, or arrow damage: the mob need not be seen or known) cover comes before any fight: the order is
      plug in (walls), back off, plug in (pit or pocket), fight, though a melee mob is at the body; the fight is weighed over every hostile near, and never counts as won
      while no ranged hostile near has been seen. With none seen the last-resort fight swings only at a mob within 3 blocks, none walked to. In another cell than the

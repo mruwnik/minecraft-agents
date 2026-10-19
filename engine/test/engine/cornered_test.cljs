@@ -2,7 +2,7 @@
   "A retreat in a 1-wide tunnel: it walks back down the stair it came up, and
   a body with no way out escalates (seal with carried blocks, fight with a tool
   or the fist) instead of failing the same round again and again."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [clojure.string :as str]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.world-files :as ew]
@@ -1040,6 +1040,14 @@
   (is (= [:fight :plug :pillar :plug-dig] (cornered/escape-order {:pressed? true :faster? true})))
   (is (= :back-off (first (cornered/escape-order {:pressed? true :creeper? true}))) "a creeper is never fought first")
   (is (= :water (first (cornered/escape-order {:pressed? true :enderman? true})))))
+
+(deftest a-beaten-body-fights-first-only-if-armed-or-out-of-blocks
+  (are [armed? blocks? fights?] (= fights? (cornered/beaten-fights? {:beaten? true :armed? armed? :blocks? blocks?}))
+    true true true
+    true false true
+    false false true
+    false true false)
+  (is (false? (cornered/beaten-fights? {:beaten? false :armed? true :blocks? false}))))
 
 (deftest an-unarmed-body-hit-twice-on-the-run-fights-instead-of-fleeing-on
   (async done
