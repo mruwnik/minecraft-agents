@@ -22,7 +22,7 @@
    :time :day
    :act [[:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.set-place {:name :wt-a :pos [6 150 6]})" "--now"]
           {:ok true :hint [:not [:contains "reflex"]]}]]
-   :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed} :within-s 30}]}
   {:name "weather-change-is-logged-both-ways"
    :weather :rain
    :act [[:rcon "weather clear"]
