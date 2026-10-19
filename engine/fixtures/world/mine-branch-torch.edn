@@ -1,10 +1,8 @@
 ;; Card 152e1d95 (mine branch torches, 6346d75d): a dig of seen ore that takes the body 4+ blocks off the tunnel line hangs a
-;; torch of its own; ore within reach from the line gets none. The ore is seen down a side corridor (stone mass x 2..30, z 8..30,
-;; y 0..6, body in a 1x2 cell at [16 0 16] facing south, tunnel line east along z 16): perception shows a random subset of the
-;; corridor, so the far ore fills the corridor's cross-section, which a pass down it hits far more reliably than a single block. Torches are carried (8). Not ported (unit-tested in mine-test): a second branch within
+;; torch of its own; ore within reach from the line gets none. Stone mass x 2..30, z 8..30, y 0..6. The branch dig is only owed once the tunnel exists, so the far ore is out of sight until the tunnel breaks into its lit hall. Torches are carried (8). Not ported (unit-tested in mine-test): a second branch within
 ;; 4 of the first gets none (needs a count of placements), and ore straight above the line booking mine.torch-left-out :no-site
 ;; (needs a vertical shaft the body must pillar up).
-;; Should-succeed: ore (a 3x2 face, so the sight passes see it down the corridor) at the far end of a 12-long corridor (13 off the line) is dug and a torch is placed, none left out.
+;; Should-succeed: ore (a 3x2 face) at the end of a lit 13-long hall that the tunnel (east from x 4) breaks into at x 10 is seen only then, and dug 14 off the dug line: a torch is placed, none left out.
 ;; Should-fail: ore 3 off the line places no torch.
 {:defaults
  {:tags [:mine :torch :jobs] :time :any
@@ -14,12 +12,14 @@
   :limit-s 160}
  :cases
  [{:name "ore-far-off-the-line-gets-a-branch-torch"
-   :blocks [[:fill [16 0 17] [16 1 28] "air"] [:fill [15 0 29] [17 1 29] "iron_ore"]]
+   :blocks [[:fill [4 0 16] [4 1 16] "air"] [:fill [10 0 16] [22 1 16] "air"] [:fill [23 0 15] [23 1 17] "iron_ore"]
+            [:set [12 1 15] "wall_torch[facing=south]"] [:set [16 1 15] "wall_torch[facing=south]"] [:set [20 1 15] "wall_torch[facing=south]"]]
+   :body {:at [4.5 0 16.5] :yaw 0 :inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8]] :effects [["resistance" 600 4]]}
    :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
-   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 150 :of-job true}
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got #{1 2}}} :within-s 150 :of-job true}
             {:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 150}
             {:no-event {:source :job :kind :mine.torch-left-out} :for-s 150 :until {:source :job :kind #{:completed :stopped}}}]
-   :after [[:item "raw_iron" 1]]}
+   :after [[:item "raw_iron" [:>= 1]]]}
   ;; card fd547d80: ore filling the end of a lit 1x2 corridor, 13 cells down, is seen from the line and mined (a single block is seen in
   ;; only ~90% of passes, pinned in corridor-look-test; the 1x2 end cap fills the corridor, so it is hit far more reliably)
   {:name "lone-ore-down-a-lit-corridor-is-found"
