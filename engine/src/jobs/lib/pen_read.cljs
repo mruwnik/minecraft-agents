@@ -48,7 +48,7 @@
 
 (defn ^:async read!
   "read, looking at the remembered cells within sight first (see the ns); while retry? (default: the pen is not
-  closed) holds, after a look round (once per body cell, ended at the first look whose read is positive) and at unseen cells as sense/decide! does. A read fills the
+  closed) holds, after a look round (once per body cell; with :early? ended at the first look whose read no longer retries: a half-seen pen reads wrong for callers whose retry? is not about leaks) and at unseen cells as sense/decide! does. A read fills the
   whole pen, so the looks come in batches (usually 3 reads a call). Call it from a round only: it acts."
   ([c opts] (read! c opts #(not (:closed? %))))
   ([c opts retry?]
@@ -57,7 +57,7 @@
          stale (take (sense/max-looks) (sense/targets p (u/self-pos c) (:remembered answer) #{}))]
      (if (and (empty? stale) (not (retry? answer)))
        answer
-       (do (when-not (and (retry? answer) (await (look/survey-until! c :cell (positive-every p opts retry?))))
+       (do (when-not (and (retry? answer) (await (if (:early? opts) (look/survey-until! c :cell (positive-every p opts retry?)) (look/survey! c :cell))))
              (loop [[cell & more] stale]
                (when cell
                  (when (remembered? p cell) (await (sense/look-at! c cell)))

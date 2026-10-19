@@ -168,7 +168,7 @@
         _ (ctx/update-mem! c assoc :near near)
         p (:primitives c)
         opts {:at at :box box :max-cells max-cells :near near}
-        checked (await (pen-read/read! c opts #(not (answered? p opts % at))))
+        checked (await (pen-read/read! c (assoc opts :early? true) #(not (answered? p opts % at))))
         final (when (= :unloaded (:reason checked))
                 (pen-read/read p (assoc opts :final? true)))
         unseen (when-not (seen-leak? p (or final checked) at) (unseen-leak checked at))
