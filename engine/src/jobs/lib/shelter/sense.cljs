@@ -5,6 +5,8 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
+            [jobs.lib.shelter.clock :as sh-clock]
+            [engine.perception.light :as light]
             [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]))
 
@@ -34,6 +36,27 @@
   (let [raw (some-> (aget p "perception") :raw)]
     (when (and raw (<= 0 (.stateAt ^js raw x y z)))
       (bit-shift-right (.lightAt ^js raw x y z) 4))))
+
+(def light-in-step-ticks "Resolution of light-in's scan of the day ahead." 100)
+
+(defn light-in-s
+  "Seconds (at the live game rate) until a cell with sky light sky (0-15, before darkening) is lit enough that monsters
+  cannot spawn there (sky less the sky darkening reaches look/dark-light): 0 when it already is, nil when waiting never
+  does it (no sky light reaches the cell). t is the time of day in ticks; rain and thunder (0-1) are assumed to last."
+  [sky t rain thunder]
+  (when (pos? sky)
+    (some (fn [k]
+            (let [subtract (js/Math.round (* 11 (/ (- 1 (light/sky-darken (+ t (* k light-in-step-ticks)) rain thunder)) 0.8)))]
+              (when (>= (- sky subtract) (look/dark-light)) (sh-clock/ticks->s (* k light-in-step-ticks)))))
+          (range (inc (/ 24000 light-in-step-ticks))))))
+
+(defn light-in
+  "light-in-s of the cell from the body's perception; nil when waiting never lights it or no light data is loaded
+  there (sky-light-at tells which)."
+  [p cell]
+  (when-let [sky (sky-light-at p cell)]
+    (let [s (.sky ^js (:raw (aget p "perception")))]
+      (light-in-s sky (.-timeOfDay s) (or (.-rain s) 0) (or (.-thunder s) 0)))))
 
 (defn buried-by-column?
   "Fallback without light data: the cell two over the feet cell is a block the body has seen (only that one shows from inside)."
@@ -140,10 +163,14 @@
                 (>= (cave-cells p) cave-width))))
 
 (defn unsafe-night?
-  "Night, awake, and not under a roof and not buried underground, or buried in a dark open cave (open-cave?)."
+  "Awake, not under a roof and not buried, with darkness at the feet that waiting lifts (light-in is above 0). A cell
+  no sky light reaches (a cave) is dark whatever the hour: waiting is no cure. Without light data at the feet, the clock."
   [p roof-height]
-  (and (night? p) (not (sleeping? p))
-       (or (and (not (roofed? p roof-height)) (not (buried? p))) (open-cave? p))))
+  (and (not (sleeping? p))
+       (not (roofed? p roof-height)) (not (buried? p))
+       (if (sky-light-at p (feet p))
+         (pos? (or (light-in p (feet p)) 0))
+         (night? p))))
 
 (defn walkable-at?
   "Whether the cell at pos is one a body stands or walks in: not solid, or a bed."

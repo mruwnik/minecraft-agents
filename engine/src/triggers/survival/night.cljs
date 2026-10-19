@@ -6,7 +6,7 @@
     a look round first (sh/unlooked-for-bed?): a bed known or carried and cells beside the feet never seen, or a closed hut
       not looked round from tonight while it could still sleep
     someone else on the server asleep (sh-sleepers/log-out-for-sleepers?)
-    nothing solid within :roof-height blocks straight above, not buried and not in a closed room, or buried in a dark open cave (sh-sense/open-cave?: 16+ standable cells under a ceiling within 3 blocks, under 8 block light; its own 1-wide tunnel is not one) (sh-sense/unsafe-night?)
+    nothing solid within :roof-height blocks straight above, not buried, with sky-light darkness at the feet that waiting lifts (sh-sense/light-in above 0; a cave never lights, so it is no night to wait out) (sh-sense/unsafe-night?)
     an open door in the closed room the body stands in (sh/open-room-doors), also one the night could not shut
   By day it holds while the body is shut in its own latest :shelter (no :shelter-trapped entry for the cell), or a bed
   it put down outside its own zone (:bed-placed) still stands. Roofed, buried or shut in (its dug-in shelter too) with no bed and no sleeper it does not

@@ -57,10 +57,11 @@
     (merge dark {:blocks (stone-above 10 1)}) false
     ;; a shaft or ravine: sky light comes straight down to the body
     {:blocks (stone-above 10 5) :light {[0 64 0] [15 0] [0 65 0] [15 0]}} true
-    ;; a cave mouth under a thin ceiling, open to the side: dim sky light
-    {:blocks (stone-above 6 5) :light {[0 64 0] [3 0] [0 65 0] [3 0]}} true
-    ;; head cell alone lit
-    (merge dark {:light {[0 65 0] [1 0]}}) true
+    ;; a cave mouth under a thin ceiling: dim sky light the sun lifts to enough, or never
+    {:blocks (stone-above 6 5) :light {[0 64 0] [9 0] [0 65 0] [9 0]}} true
+    {:blocks (stone-above 6 5) :light {[0 64 0] [3 0] [0 65 0] [3 0]}} false
+    ;; no sky light at the feet, so no dawn lifts it
+    (merge dark {:light {[0 65 0] [1 0]}}) false
     ;; torchlight is not sky light
     (merge dark {:light {[0 64 0] [0 14]}}) false))
 
@@ -90,13 +91,20 @@
         per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})]
     (tu/seeing-all (perception/wrap raw-p per))))
 
-(deftest a-body-buried-in-a-wide-dark-cave-is-unsafe-at-night
+(deftest a-body-buried-in-a-wide-dark-cave-is-no-night-to-wait-out
   (is (>= (sh-sense/cave-cells (seen-dark cave-blocks)) 16))
   (is (< (sh-sense/cave-cells (seen-dark tunnel-blocks)) 16) "its own 1-wide tunnel")
   (is (true? (sh-sense/open-cave? (seen-dark cave-blocks))))
   (is (false? (sh-sense/open-cave? (seen-dark tunnel-blocks))))
-  (is (true? (sh-sense/unsafe-night? (seen-dark cave-blocks) sh-sense/default-roof-height)))
+  (is (false? (sh-sense/unsafe-night? (seen-dark cave-blocks) sh-sense/default-roof-height)) "no sky light: waiting never lights it")
   (is (false? (sh-sense/unsafe-night? (seen-dark tunnel-blocks) sh-sense/default-roof-height))))
+
+(deftest light-in-s-is-the-wait-until-the-sky-light-is-enough
+  (is (nil? (sh-sense/light-in-s 0 18000 0 0)) "no sky light reaches it")
+  (is (zero? (sh-sense/light-in-s 15 6000 0 0)) "noon")
+  (is (pos? (sh-sense/light-in-s 15 18000 0 0)) "midnight")
+  (is (< (sh-sense/light-in-s 15 22000 0 0) (sh-sense/light-in-s 15 14000 0 0)) "closer to dawn")
+  (is (> (sh-sense/light-in-s 9 22000 0 0) (sh-sense/light-in-s 15 22000 0 0)) "a dim cell lights later"))
 
 (def dug-room-blocks
   "A mine's room the body dug: 5x4 cells, 2 high (ceiling at y 66), light 7."
@@ -125,11 +133,11 @@
     (await (tick-n eng 3))
     (count (calls p "place"))))
 
-(deftest a-body-in-a-wide-dark-cave-digs-in-where-it-stands-but-keeps-mining-in-its-own-tunnel
+(deftest the-night-trigger-leaves-a-wide-dark-cave-and-its-own-tunnel-alone
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (pos? (await (places-at-night cave-blocks))) "an open cave: sealed in where it stands")
+        (is (zero? (await (places-at-night cave-blocks))) "an open cave: no sky light, waiting for day is no cure")
         (is (zero? (await (places-at-night tunnel-blocks))) "its own tunnel: nothing to do")))))
 
 (deftest a-dig-at-the-end-of-its-own-closed-tunnel-is-done-at-night
