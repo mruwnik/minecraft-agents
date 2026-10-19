@@ -1,11 +1,12 @@
-;; jobs.movement.go-to :unknown in the dark with torches CARRIED (no shield, so the off hand is free): the dark-floor aid holds a torch in
+;; jobs.movement.go-to :unknown in the dark with torches CARRIED (the aid cases leave the off hand free): the dark-floor aid holds a torch in
 ;; the off hand to see deeper; the stack must come back to the inventory when the call ends (the fixture's :item check counts the
 ;; inventory, not the off hand), :torches must still see the torches it carries, and a torch left by a cut call is returned
 ;; at the next call. Same sealed ledge as go-to-torch-fetch.edn: corridor (x 11..13, feet y 3) over a low corridor (x 14..24, feet y -2: a 5-block drop, past what the body sees in the dark).
 ;; Should-succeed: carried torches light the drop (a shield in the off hand, one torch placed, 3 in the inventory, nothing fetched); without :torches the off-hand
 ;; torch is back (4 in the inventory); a cancelled call's off-hand torch is back after the next call.
-;; Should-fail: a zone over the takeoff cells refuses the torch (none placed; the call may still arrive when the peek sees the floor). The first case's result also carries :spent (card 99785eb0: the torch placed).
-;; A pickaxe is the first item so the held (main hand) slot is not a torch: a torch in the main hand lights the drop by itself.
+;; Should-fail: a zone over the takeoff cells refuses the torch (none placed): the dark drop is refused, the call ends :unseen-floor-dark. The first case's result also carries :spent (card 99785eb0: the torch placed).
+;; The :carried cases put a pickaxe in the main hand and a shield in the off hand: a torch in either hand lets the body see 7 blocks in the dark,
+;; and a drop of 5 is then sometimes seen without a placed torch.
 {:defaults
  {:tags [:movement :go-to :torch]
   :time :any
@@ -17,8 +18,7 @@
   :limit-s 120}
  :cases
  [{:name "carried-torch-lights-the-drop-without-fetching"
-   ;; a shield holds the off hand, so the dark-floor aid is out and only a placed torch lights the drop
-   :act [[:rcon "item replace entity $BODY weapon.offhand with shield"] [:wait-s 2]
+   :act [[:rcon "item replace entity $BODY weapon.offhand with shield"] [:rcon "clear $BODY minecraft:torch"] [:rcon "item replace entity $BODY weapon.mainhand with minecraft:stone_pickaxe"] [:rcon "give $BODY minecraft:torch 4"] [:wait-s 2]
          [:job (jobs.movement.go-to {:pos #at [24 -2 16] :range 1 :ways #{:walk :clear-seal} :unknown true :torches :carried :ignore-zones? true})]]
    :expect [{:event {:kind :walk.torch-placed} :within-s 100 :of-job true}
             {:event {:source :job :kind :result :data {:arrived true :spent [:any]}} :within-s 110 :of-job true}
@@ -43,8 +43,8 @@
   {:name "zone-over-the-takeoff-refuses-the-torch"
    ;; the feet and head cells of the corridor's end belong to another owner: no torch goes there
    :zones [{:name "takeoff" :min [12 3 16] :max [13 4 16] :owner "Other" :allow #{}}]
-   :act [[:rcon "item replace entity $BODY weapon.offhand with shield"] [:wait-s 2]
+   :act [[:rcon "item replace entity $BODY weapon.offhand with shield"] [:rcon "clear $BODY minecraft:torch"] [:rcon "item replace entity $BODY weapon.mainhand with minecraft:stone_pickaxe"] [:rcon "give $BODY minecraft:torch 4"] [:wait-s 2]
          [:job (jobs.movement.go-to {:pos #at [24 -2 16] :range 1 :ways #{:walk :clear-seal} :unknown true :torches :carried})]]
-   :expect [{:event {:source :job :kind :result} :within-s 100 :of-job true}
+   :expect [{:event {:source :job :kind :unreachable :data {:why :unseen-floor-dark}} :within-s 100 :of-job true}
             {:no-event {:kind :walk.torch-placed} :for-s 100 :until {:source :job :kind :result}}]
    :after [[:not-block [13 4 16] "wall_torch"] [:not-block [12 4 16] "wall_torch"] [:item "torch" 4]]}]}
