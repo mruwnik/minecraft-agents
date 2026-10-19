@@ -1,7 +1,7 @@
 ;; Cards e37f0b2c, c2dd1070, bf6983ae: a body buried in a pocket 18 below the surface goal, its only open way leading 12 down and round (a staircase
-;; east, a tunnel at y 0, a ladder shaft at x 60), does not plan the dive past :climb-dip (set to 8 here; default 24): with a pickaxe it cuts a stair
+;; east (3 high columns: the body must clear its head on each drop), a tunnel at y 0, a ladder shaft at x 60), does not plan the dive past :climb-dip (set to 8 here; default 24): with a pickaxe it cuts a stair
 ;; up (go-to.escalated :stair :why :way-dives) and arrives; with :ways #{:walk} it gives up unarrived and digs nothing.
-;; go-home (c2dd1070) from the same pocket with no pickaxe stops, naming the dive, and the body never walks down.
+;; go-home (c2dd1070) from the same pocket with no pickaxe digs that stair by hand (go-to.by-hand) and the body never walks down.
 ;; Stone mass x 2..61, y 0..29 (surface feet y 30); pocket x 4..6, y 12..13, z 16; goal [6 30 16] straight above.
 {:defaults
  {:tags [:movement :go-to]
@@ -10,20 +10,19 @@
   :settings {:jobs.movement.go-to.tuning/climb-dip 8}
   :blocks [[:fill [2 0 2] [61 14 29] "stone"] [:fill [2 15 2] [61 29 29] "stone"]
            [:fill [4 12 16] [6 13 16] "air"]
-           [:fill [7 12 16] [7 13 16] "air"] [:fill [8 11 16] [8 12 16] "air"] [:fill [9 10 16] [9 11 16] "air"]
-           [:fill [10 9 16] [10 10 16] "air"] [:fill [11 8 16] [11 9 16] "air"] [:fill [12 7 16] [12 8 16] "air"]
-           [:fill [13 6 16] [13 7 16] "air"] [:fill [14 5 16] [14 6 16] "air"] [:fill [15 4 16] [15 5 16] "air"]
-           [:fill [16 3 16] [16 4 16] "air"] [:fill [17 2 16] [17 3 16] "air"] [:fill [18 1 16] [18 2 16] "air"]
-           [:fill [19 0 16] [60 1 16] "air"] [:fill [60 0 16] [60 29 16] "ladder[facing=west]"]
-           [:set [4 12 16] "torch"]]
+           [:fill [7 12 16] [7 14 16] "air"] [:fill [8 11 16] [8 13 16] "air"] [:fill [9 10 16] [9 12 16] "air"] [:fill [10 9 16] [10 11 16] "air"]
+           [:fill [11 8 16] [11 10 16] "air"] [:fill [12 7 16] [12 9 16] "air"] [:fill [13 6 16] [13 8 16] "air"] [:fill [14 5 16] [14 7 16] "air"]
+           [:fill [15 4 16] [15 6 16] "air"] [:fill [16 3 16] [16 5 16] "air"] [:fill [17 2 16] [17 4 16] "air"] [:fill [18 1 16] [18 3 16] "air"]
+           [:fill [19 0 16] [19 2 16] "air"]
+           [:fill [20 0 16] [60 1 16] "air"] [:fill [60 0 16] [60 30 16] "ladder[facing=west]"] [:set [61 30 16] "stone"]]
   :body {:at [5.5 12 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1]]}
   :limit-s 320}
  :cases
  [{:name "only-way-dives-so-a-stair-up-is-cut"
    :act [[:job (jobs.movement.go-to {:pos #at [6 30 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair :why :way-dives}} :within-s 90 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived true}} :within-s 300 :of-job true}
-            {:no-event {:source :job :kind :go-to.restored} :for-s 300 :until {:source :job :kind :result :data {:arrived true}}}]
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 300 :of-job true}
+            {:no-event {:source :job :kind :go-to.restored} :for-s 300 :until {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}}}]
    :after [[:body-near [6.5 30 16.5] 3]
            [:memory {:entries {:stair-way [{:data {:floors [:any]}}]}}]]}
   {:name "walk-only-ways-give-up-without-digging"
@@ -33,10 +32,11 @@
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :result :data {:arrived false}}}]
    :after [[:body-far [6.5 30 16.5] 10]]
    :limit-s 100}
-  {:name "go-home-without-a-pickaxe-stops-instead-of-diving"
+  {:name "go-home-without-a-pickaxe-digs-the-stair-by-hand-and-never-walks-down"
    :body {:inventory []}
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [6 30 16]}) [:now]]
          [:job (jobs.survival.go-home {})]]
-   :expect [{:event {:source :job :kind :stopped :message [:contains "dives"]} :within-s 90 :of-job true}]
-   :after [[:body-near [5.5 12 16.5] 3]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair :why :way-dives}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :go-to.by-hand} :within-s 60 :of-job true}]
+   :after [[:body-near [5.5 12 16.5] 6]]
    :limit-s 100}]}
