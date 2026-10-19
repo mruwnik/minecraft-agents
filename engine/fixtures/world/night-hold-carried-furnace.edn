@@ -1,0 +1,29 @@
+;; The night hold cooks with a furnace it carries (card 2acf52c6): it puts the furnace down beside itself, cooks, eats, digs the furnace up again.
+;; A bedrock yard x 8..16, z 8..16 with no roof and a bedrock floor: nothing can be dug in, so the night holds exposed. The body carries a furnace,
+;; a stone pickaxe, coal and raw beef and is hungry by RCON (food 8, hp 15). Night is needed: the hold only exists while the night waits for dawn.
+;; Should-succeed: the cook child ends done, the body eats (shelter.ate) and carries its furnace again.
+;; Should-fail: without a pickaxe the furnace could not be dug up again, so it is not put down; the beef is eaten raw and the furnace stays carried.
+{:defaults
+ {:tags [:night :survival :get-food :cook]
+  :time :night
+  :time-why :dawn-decision
+  :plot {:height 6}
+  :blocks [[:fill [8 -1 8] [16 3 16] "bedrock" :hollow] [:fill [9 -1 9] [15 -1 15] "bedrock"]
+           [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
+  :body {:at [12.5 0 12.5] :settle-s 2}
+  :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+        [:rcon "damage $BODY 5 minecraft:generic"]
+        [:job (jobs.survival.night {})]]
+  :limit-s 150}
+ :cases
+ [{:name "hold-cooks-with-the-carried-furnace-and-keeps-it"
+   :body {:inventory [["beef" 2] ["coal" 2] ["furnace" 1] ["stone_pickaxe" 1]]}
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 100}
+            {:event {:source :job :kind :shelter.ate} :within-s 120}]
+   :after [[:item "beef" 0] [:item "furnace" 1]]}
+  {:name "hold-without-a-pickaxe-leaves-the-carried-furnace-in-the-pack"
+   :body {:inventory [["beef" 2] ["coal" 2] ["furnace" 1]]}
+   :expect [{:event {:source :job :kind :shelter.ate} :within-s 100}
+            {:no-event {:source :job :kind :child_ended :data {:slot :cook}} :for-s 20}]
+   :after [[:item "furnace" 1]]
+   :limit-s 120}]}

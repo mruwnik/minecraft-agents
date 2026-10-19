@@ -1,11 +1,16 @@
 (ns jobs.survival.night.hold
   "The night's holds: hold still on purpose, eating or cooking first, and the bookkeeping of what the night did."
   (:require [engine.ctx :as ctx]
+            [engine.memory :as mem]
+            [jobs.items.smelt.fetch :as sf]
+            [jobs.items.smelt.plan :as sp]
             [jobs.lib.child :as child]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.foods :as foods]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.tools :as tools]
+            [jobs.lib.util :as u]
             [jobs.survival.eat :as eat]
             [jobs.survival.get-food.cook :as cook]))
 
@@ -13,16 +18,47 @@
   "How long one hold waits before the night looks again (the wait primitive does not wake a sleeping body)."
   5000)
 
-(defn ^:async cooking-in-shelter?
-  "Raw food carried and a furnace or smoker seen within cook's ::shelter-cook-reach, or a cook under way, and the
-  cook not rushed (cook/rushed?) nor failed in this job: run it (cook/cook!). True while it goes on (do not eat
-  raw), nil when it ended (the cooked food is eaten next) or none is possible."
+(defn can-place-furnace?
+  "A furnace carried with raw food, fuel and a tool that digs it up again: the hold may put it down in the shelter."
   [c]
-  (let [cooker (when (and (seq (cook/raw-carried c))
-                          (not (:no-cook (ctx/mem c))))
-                 (cook/seen-cooker c (cook/shelter-cook-reach)))]
-    (when (and (or cooker (:cooking (ctx/mem c))) (not (cook/rushed? c)))
-      (= :continue (await (cook/cook! c cooker))))))
+  (let [p (:primitives c)
+        names (map :name (u/inventory p))]
+    (boolean (and (some #{"furnace"} names)
+                  (some #(sp/fuel-per-unit "furnace" %) names)
+                  (nil? (tools/harvest-need names (js->clj (.harvestTools p "furnace"))))))))
+
+(defn ^:async pick-up-furnace!
+  "Dig the furnace the hold put down (memory :placed-furnace) and take it back, once: carried gear stays carried."
+  [c]
+  (let [pos (:placed-furnace (ctx/mem c))
+        e (await (ctx/call c :unplace 'jobs.blocks.dig {:pos pos :fetch false}))]
+    (when-not (= :continue e)
+      (ctx/update-mem! c dissoc :placed-furnace :furnace)
+      (when (= pos (mem/place (ctx/view c) :furnace))
+        (ctx/remember! c :furnace {:gone true :was pos} mem/place-policy)))
+    (= :continue e)))
+
+(defn ^:async cooking-in-shelter?
+  "Raw food carried and a furnace or smoker seen within cook's ::shelter-cook-reach, else a carried furnace put down
+  beside the body (can-place-furnace?, once it stands it is the seen one), or a cook under way, and the cook not rushed
+  (cook/rushed?) nor failed in this job: run it (cook/cook!, fetching nothing). The furnace it put down is dug up when
+  the cook ends. True while it goes on (do not eat raw), nil when it ended (the cooked food is eaten next) or none is
+  possible."
+  [c]
+  (let [raw? (and (seq (cook/raw-carried c)) (not (:no-cook (ctx/mem c))))
+        seen (when raw? (cook/seen-cooker c (cook/shelter-cook-reach)))
+        placed (when (and raw? (not seen) (not (:placed-furnace (ctx/mem c))) (can-place-furnace? c) (not (cook/rushed? c)))
+                 (await (sf/place-furnace! c)))
+        _ (when (= :again placed) (ctx/update-mem! c assoc :placed-furnace (:furnace (ctx/mem c))))
+        cooker (or seen (:placed-furnace (ctx/mem c)))]
+    (cond
+      (= :continue placed) true
+      (and (or cooker (:cooking (ctx/mem c))) (not (cook/rushed? c)))
+      (let [going (= :continue (await (cook/cook! c cooker {:fetch false})))]
+        (if (or going (not (:placed-furnace (ctx/mem c))))
+          going
+          (await (pick-up-furnace! c))))
+      (:placed-furnace (ctx/mem c)) (await (pick-up-furnace! c)))))
 
 (defn ^:async eat-if-hungry!
   "The hungry reflex (below night in the shipped registers) cannot reach a held body, so a hold eats one bite (a

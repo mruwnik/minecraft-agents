@@ -273,16 +273,16 @@
 ;; ------------------------------------------------------------------ cooking while held
 (defn held-with-raw-beef
   "A held (exposed, nothing to build with) night, food 5, 4 raw beef and coal; a furnace at furnace-pos. The clock moves 20 s a hold."
-  [furnace-pos]
+  [furnace-pos & [carried]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake {:offlineScale 0.0001 :floor tu/walk-floor :time night
-                                   :blocks (assoc st/hard-ground furnace-pos "furnace") :self {:food 5}
-                                   :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]}))
+                                   :blocks (cond-> st/hard-ground furnace-pos (assoc furnace-pos "furnace")) :self {:food 5}
+                                   :inventory (into [{:name "beef" :count 4} {:name "coal" :count 2}] carried)}))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (st/refuse-placing! p)
+    (when-not carried (st/refuse-placing! p))
     (st/dawn-after! p 12 (fn [_] (swap! clock + 20000)))
     {:eng eng :p p :seen seen}))
 

@@ -142,12 +142,13 @@
   "Smelt the raw food carried (the smelt job, fuel as it takes it) in the furnace known (or the given one); the cooking
   wait yields the round (once the furnace holds the load, the world must move on before the next look; the child is not called while it waits, since an ending would wipe its load). :again when it ended, :continue while it goes on, else nil with :no-cook remembered."
   ([c] (await (cook! c nil)))
-  ([c cooker]
+  ([c cooker] (await (cook! c cooker nil)))
+  ([c cooker extra]
   (let [cooking
         (or (:cooking (ctx/mem c))
             (let [{:keys [name count]} (first (raw-carried c))
                   furnace (or cooker (nearest-cooker c))]
-              {:item name :args (cond-> {:item name :count count} furnace (assoc :furnace furnace))}))
+              {:item name :args (cond-> (merge {:item name :count count} extra) furnace (assoc :furnace furnace))}))
         args (:args cooking)
         _ (ctx/update-mem! c assoc :cooking cooking)]
     (loop [n 1]

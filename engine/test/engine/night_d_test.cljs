@@ -19,6 +19,7 @@
             [engine.scenario :as scenario]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
+            [jobs.lib.util :as u]
             [engine.triggers :as triggers]
             
             [jobs.lib.targets :as targets]
@@ -246,6 +247,25 @@
           (await (core/tick! eng))
           (is (some #{"take"} (furnace-ops p)) "the cooked beef was taken")
           (is (> (.-food (.self p)) 5) "and eaten"))))))
+
+(deftest a-held-hungry-body-cooks-with-a-carried-furnace-and-takes-it-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (held-with-raw-beef nil [{:name "furnace" :count 1} {:name "stone_pickaxe" :count 1}])
+              placed (atom nil)]
+          (.override (.-world p) "place" (fn ^:async f [token a impl]
+                                           (reset! placed (js->clj (.-pos a)))
+                                           (await (impl token a))))
+          (.override (.-world p) "dig" (fn ^:async f [token a impl]
+                                         (if (= @placed (js->clj (.-pos a)))
+                                           (await (impl token a))
+                                           #js {:status "refused"})))
+          (core/submit! eng '(jobs.survival.night) {})
+          (dotimes [_ 8] (await (core/tick! eng)))
+          (is (some #{"take"} (furnace-ops p)) "the cooked beef was taken")
+          (is (> (.-food (.self p)) 5) "and eaten")
+          (is (= 1 (:count (first (filter #(= "furnace" (:name %)) (u/inventory p))))) "the furnace is carried again"))))))
 
 (deftest a-held-hungry-body-eats-raw-beef-when-the-furnace-is-far
   (async done
