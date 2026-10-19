@@ -357,14 +357,17 @@
 
 (defn ^:async replan-route!
   "Plan the :dig-route escalation again from the feet into goal pos with what the body sees now (route-cells): :again,
-  the walk on (escalated!) when nothing is left to dig, or the escalation fails :no-route when no route is left or it
-  planned tuning/max-route-replans times."
+  the walk on (escalated!) when nothing is left to dig or the only thing missing is a pocket's floor (it shows once the
+  body walks the cut), or the escalation fails :no-route when no route is left or it planned tuning/max-route-replans times."
   [c pos cell]
   (let [m (ctx/mem c)
         n (inc (:route-replans m 0))
-        cells (when (<= n (tuning/max-route-replans))
-                (route-cells (:primitives c) (end/feet-cell c) (mapv #(js/Math.floor (% pos)) [:x :y :z]) (may-dig-fn c) (own-placed-fn c)))]
+        plan (fn [floors-unseen-ok?]
+               (route-cells (:primitives c) (end/feet-cell c) (mapv #(js/Math.floor (% pos)) [:x :y :z]) (may-dig-fn c) (own-placed-fn c) floors-unseen-ok?))
+        in-range? (<= n (tuning/max-route-replans))
+        cells (when in-range? (plan false))]
     (cond
+      (and in-range? (nil? cells) (some? (plan true))) (await (escalated! c pos (:escalation m) true))
       (nil? cells) (await (escalation-failed! c pos {:step :dig-route :reason :no-route :cell cell}))
       (empty? cells) (await (escalated! c pos (:escalation m) true))
       :else (do (ctx/update-mem! c #(-> % (assoc-in [:escalation :cells] cells) (assoc :route-replans n))) :again))))

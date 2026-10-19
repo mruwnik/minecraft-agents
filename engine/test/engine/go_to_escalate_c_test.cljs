@@ -437,6 +437,13 @@
         cells (choose/route-cells p [0 64 0] [3 64 0] (constantly true) (constantly false))]
     (is (some #(= 1 (nth (:cell %) 2)) cells) "it digs round the seen-open cell whose floor is unseen")))
 
+(deftest a-pocket-floor-seen-only-from-inside-is-no-bar-when-floors-unseen-are-ok
+  (let [world (apply dissoc (box 0 60 -1 6 70 1 "stone") (for [x (range 3) y [64 65]] (str x "," y ",0")))
+        p (hiding world #(= [2 63 0] %))
+        cells #(choose/route-cells p [0 64 0] [3 64 0] (constantly true) (constantly false) %)]
+    (is (some #(= 1 (nth (:cell %) 2)) (cells false)))
+    (is (not-any? #(= 1 (nth (:cell %) 2)) (cells true)) "it goes straight over the unseen floor")))
+
 (deftest every-escalation-child-runs-hurt
   (doseq [e [{:step :pillar :height 2} {:step :stair :heading :east :steps 2} {:step :clear-path :heading :east} {:step :approach :pos [1 64 0]}]]
     (is (= '(always) (get-in (second (esc/escalation-job e nil false false false)) [:checks :fit?])) (str (:step e)))))

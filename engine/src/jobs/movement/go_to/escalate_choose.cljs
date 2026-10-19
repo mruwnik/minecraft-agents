@@ -111,18 +111,19 @@
   "[{:cell :block :guess}]: the cheapest cells to dig for a walk from feet cell from down or across into goal
   (jobs.lib.dig-route priced by jobs.lib.cost: a block's walk and dig-cost; at most the dig-route settings' digs and fall),
   in walking order, every one escape/diggable?, :guess on a cell not seen (read as rock); [] when nothing is left to
-  dig, nil when no such route."
-  [p from goal may-dig? own?]
+  dig, nil when no such route. A floor never seen under a cell seen open may be a void: dig-route reads it as no floor,
+  unless floors-unseen-ok? (a pocket's floor shows only from inside it)."
+  ([p from goal may-dig? own?] (route-cells p from goal may-dig? own? false))
+  ([p from goal may-dig? own? floors-unseen-ok?]
   (let [block-at (escape/block-at-of p)
-        ;; a floor never seen under a cell seen open may be a void: dig-route reads nil as no floor
         seen-floor (fn [[x y z :as cell]]
-                     (when-not (and (dig-look/unknown? p cell) (dig-route/open? (block-at [x (inc y) z]))
+                     (when-not (and (not floors-unseen-ok?) (dig-look/unknown? p cell) (dig-route/open? (block-at [x (inc y) z]))
                                     (not (dig-look/unknown? p [x (inc y) z])))
                        (block-at cell)))
         cells (:dig (dig-route/route seen-floor from goal {:dig-s cost/dig-cost
                                                          :step-s (:cost (cost/walk-cost {:distance 1}))}))]
     (when (and cells (every? #(escape/diggable? block-at may-dig? own? %) cells))
-      (mapv (fn [cell] {:cell cell :block (block-at cell) :guess (dig-look/unknown? p cell)}) cells))))
+      (mapv (fn [cell] {:cell cell :block (block-at cell) :guess (dig-look/unknown? p cell)}) cells)))))
 
 (defn dig-way
   "{:step :dig-route :cells (route-cells)} when there are cells to dig, else nil."
