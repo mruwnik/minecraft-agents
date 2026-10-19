@@ -78,8 +78,8 @@
               :spots spots :sources torches})))
 
 (defn frontier
-  "The nearest cell of the area not yet seen that touches a seen open cell and has not been walked to: where the room goes on out
-  of sight. Cells inside rock never qualify."
+  "The nearest cell of the area not walked to yet whose light is unread (a seen spawnable cell), or that is unseen and touches
+  a seen open cell: where the room goes on out of sight. Cells inside rock never qualify."
   [c]
   (let [p (:primitives c)
         block-at (access/seen-at p)
@@ -87,8 +87,10 @@
         here (u/self-pos c)
         open? #(let [n (block-at %)] (and n (not (solid/solid? n))))]
     (->> (area c)
-         (filter #(and (nil? (block-at %)) (not (looked %))
-                       (some (fn [d] (open? (mapv + % d))) tp/neighbours)))
+         (filter #(and (not (looked %))
+                       (or (and (nil? (block-at %)) (some (fn [d] (open? (mapv + % d))) tp/neighbours))
+                           (and (sh-sense/spawnable? p (zipmap [:x :y :z] %))
+                                (nil? (sh-sense/light-at p (zipmap [:x :y :z] %)))))))
          (sort-by #(u/dist here (zipmap [:x :y :z] %)))
          first)))
 
