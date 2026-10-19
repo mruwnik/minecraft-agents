@@ -81,13 +81,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [clear (fn [real] (fn ^:async f [c]
-                                 (let [e (await (real c))]
-                                   (when (and (map? e) (= :done (:kind e)))
-                                     (doseq [x (fake/entities (:primitives c))]
-                                       (swap! (fake/state (:primitives c)) update :entities (fn [es] (remove #(= (:id x) (:id %)) es)))))
-                                   e)))
-              {:keys [end]} (await (harvest-end oak {:species "oak" :radius 10} 40 clear))]
+        (let [{:keys [eng p]} (lt/setup oak)
+              _ (.override (.-world p) "dig"
+                           (fn ^:async dig [token args impl]
+                             (let [r (await (impl token args))]
+                               (doseq [x (fake/entities p)]
+                                 (swap! (fake/state p) update :entities (fn [es] (remove #(= (:id x) (:id %)) es))))
+                               r)))
+              end (await (ending-of {:eng eng} harvest {:species "oak" :radius 10} 40))]
           (is (= {:kind :nothing-possible :cause :none-collected} (kc end))))))))
 
 ;; ------------------------------------------------------------------ tidy

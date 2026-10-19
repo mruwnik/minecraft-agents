@@ -25,12 +25,41 @@
        (filter #(and (= (:x column) (get-in % [:pos :x])) (= (:z column) (get-in % [:pos :z]))))
        (sort-by #(get-in % [:pos :y]))))
 
+(def max-tree-logs "The most logs of one tree the flood reads." 64)
+
+(defn connected-logs
+  "The logs of the same species as the seed logs, seen, that touch them (by face, edge or corner) or each other, at most
+  max-tree-logs, lowest first, then nearest the first seed: branches and the other columns of a 2x2 trunk."
+  [p seeds]
+  (let [{:keys [x z]} (:pos (first seeds))
+        item (:name (first seeds))
+        key (fn [pos] [(:x pos) (:y pos) (:z pos)])
+        near (fn [{:keys [pos]}] (let [{px :x pz :z} pos] (+ (* (- px x) (- px x)) (* (- pz z) (- pz z)))))]
+    (loop [found (into {} (map (juxt (comp key :pos) identity)) seeds)
+           queue (vec seeds)]
+      (if (or (empty? queue) (>= (count found) max-tree-logs))
+        (->> (vals found) (sort-by (juxt #(get-in % [:pos :y]) near)) vec)
+        (let [{:keys [pos]} (peek queue)
+              next (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]
+                         :let [q {:x (+ (:x pos) dx) :y (+ (:y pos) dy) :z (+ (:z pos) dz)}]
+                         :when (and (not (found (key q))) (= item (u/seen-name p q)))]
+                     {:name item :pos q})
+              next (take (- max-tree-logs (count found)) next)]
+          (recur (into found (map (juxt (comp key :pos) identity)) next)
+                 (into (pop queue) next)))))))
+
 (defn tree-logs
-  "The logs of the tree {:column :species} : read from :at up when the call has one, else those in radius."
-  [c radius {:keys [species] :as tree}]
-  (if-let [at (:at (:args c))]
-    (logs-at (:primitives c) at species)
-    (column-logs (:primitives c) radius tree)))
+  "The logs of the tree {:column :species}: the logs of its column, read from :at up when the call has one, else those in
+  radius, and the ones still standing of those it had (:logs-seen), and every log joined to them (connected-logs). Lowest
+  first. The column alone would lose the branches once its own logs are dug."
+  [c radius {:keys [species logs-seen] :as tree}]
+  (let [p (:primitives c)
+        item (str species "_log")
+        column (if-let [at (:at (:args c))]
+                 (logs-at p at species)
+                 (column-logs p radius tree))
+        seeds (into (vec column) (keep #(when (= item (u/seen-name p %)) {:name item :pos %})) logs-seen)]
+    (if (seq seeds) (connected-logs p (vec (distinct seeds))) seeds)))
 
 (defn record-debt!
   "Write the replant debt for the tree of base and species, once. True when it wrote one."
@@ -76,10 +105,11 @@
 
 (defn log-dig-args
   "The jobs.blocks.dig args for the log at pos: no tool needed (an axe is held when carried), the drop left on the
-  ground, the dig hazards of :accept taken."
-  [c pos]
-  (merge (select-keys (:args c) [:for-plan :ignore-zones? :accept])
-         {:pos pos :collect false :need-drop false}))
+  ground unless collect?, the dig hazards of :accept taken."
+  ([c pos] (log-dig-args c pos false))
+  ([c pos collect?]
+   (merge (select-keys (:args c) [:for-plan :ignore-zones? :accept])
+          {:pos pos :collect (boolean collect?) :need-drop false})))
 
 (defn outcome
   "What one round of the dig child (its return e: :continue or its ending) means for the tree: :ok (dug, gone, or still
@@ -96,11 +126,11 @@
 
 (defn ^:async dig-log!
   "Dig the log l of the tree at base (one blocks.dig child round), walking in reach first. Commits the replant debt
-  before the base log is dug (write-ahead; withdrawn when the log is still standing after the round). Resolves to :ok,
+  before the base log is dug (write-ahead; withdrawn when the log is still standing after the round). With collect? the dig picks up its drop. Resolves to :ok,
   :partial (the walk made progress but is not in reach yet; call again), :high (the log is out of reach from the ground
   and a pillar is allowed) or a non-ok outcome for the round to count as a failure (:unreachable, :cannot, :refused and
   :out-of-reach mean the tree cannot be dug from here)."
-  [c l {:keys [base species]}]
+  [c l {:keys [base species collect?]}]
   (let [pos (:pos l)
         w (await (approach! c pos (:y base)))]
     (case w
@@ -111,7 +141,7 @@
         (and (:pillar? (:args c)) (> (u/eye-dist (u/self-pos c) pos) dig-reach)) :high
         :else
         (let [wrote? (and (= pos base) (record-debt! c base species))
-              e (await (ctx/call c :dig 'jobs.blocks.dig (log-dig-args c pos)))]
+              e (await (ctx/call c :dig 'jobs.blocks.dig (log-dig-args c pos collect?)))]
           (when (:dug (:data e)) (ctx/update-mem! c update :dug (fnil inc 0)))
           (when (and wrote? (some-> (u/seen-name (:primitives c) pos) log-name?))
             (ctx/forget-where! c replant-kind #(= pos (:pos %))))

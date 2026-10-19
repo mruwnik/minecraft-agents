@@ -8,6 +8,7 @@
             [jobs.forestry.fell-tree.log :as log]
             [jobs.lib.access :as access]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.choose :as choose]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
@@ -47,18 +48,19 @@
   Before the first log, a carried axe that is the last of its kind and worn gets a spare (jobs.lib.trip/tool-ready!,
   unless :fetch is false or lacks :tool).
   Each log is dug by a jobs.blocks.dig child. That child holds the best carried axe and leaves the drop on the
-  ground (jobs.forestry.harvest-wood collects it).
+  ground; a log dug from the ground has its drop collected by that child (jobs.blocks.dig :collect), one dug from a
+  pillar by jobs.forestry.fell-from-pillar.
   Zones: a tree whose base log is in another owner's zone or claim, or in a plan's footprint (but :for-plan's
   own), is not a candidate. A later log that turns out refused makes the tree count as unreachable. The job warns
   fell-tree.declined once, with :reason :refused (or :no-zones when no zone list was read). :ignore-zones? true
   skips the check.
 
-  Conditions: :no-tree (none in sight after one look around from where it stands, the condition's look; data :radius,
+  Conditions: :food-short (later, between trees: no food carried and get-food gave up lately); :no-tree (none in sight after one look around from where it stands, the condition's look; data :radius,
   :species; a listed job waits; with :at and no log there it is impossible, data :at).
   Its safe? is ready/safe-at-by-night :at with :at, else ready/safe-if-lit.
   Ends :done with {:base pos :logs n :axe why} of the tree it felled: n logs dug; :axe is :carried, :skipped-fetch-off,
   :skipped-small-tree or :none-found (fetch failed: chopped by hand). Condition-failed :no-tree when the look found none;
-  limit-reached {:line :food :reason :hungry} when no food is carried and get-food found none; nothing-possible :tree-unreachable when every tree in sight proved out of
+  nothing-possible :tree-unreachable when every tree in sight proved out of
   reach (data {:unreachable n :columns :why}) and :tree-blocked when a log cannot be dug or the pillar not taken back; the
   pillar's fetch ending when its blocks cannot be had.
   Quote: time by the walk to the nearest tree and the logs standing.")
@@ -147,7 +149,7 @@
 (defn commit-tree!
   "Commit the column, species and base of the tree t to fell."
   [c t]
-  (ctx/update-mem! c #(-> % (merge (select-keys t [:column :species :base])) (assoc :partials 0)))
+  (ctx/update-mem! c #(-> % (merge (select-keys t [:column :species :base])) (assoc :partials 0) (dissoc :logs-seen)))
   t)
 
 (defn mark-all-unreachable!
@@ -179,7 +181,7 @@
    (ctx/update-mem! c (fn [m] (-> m
                              (cond-> why (assoc :unreachable-why why))
                              (update :unreachable (fnil conj []) [(get-in m [:column :x]) (get-in m [:column :z])])
-                             (dissoc :column :species :base :pillar)
+                             (dissoc :column :species :base :pillar :logs-seen)
                              (assoc :partials 0))))))
 
 ;; ------------------------------------------------------------------ the pillar
@@ -311,6 +313,7 @@
 
       :else
       (do
+        (ctx/update-mem! c assoc :logs-seen (mapv :pos logs))
         (when (and (zero? (:dug (ctx/mem c) 0)) (not (:first-logs (ctx/mem c))))
           (ctx/update-mem! c assoc :first-logs (count logs)))
         (or (await (axe! c logs))
@@ -319,7 +322,7 @@
             (let [_ (when-let [low (lower-base (ctx/mem c) logs)] (rebase! c low))
                   _ (await (watch/watch! c {:before-dig (:pos (first logs))}))
                   m (ctx/mem c)
-                  r (await (log/dig-log! c (first logs) {:base (:base m) :species (:species m)}))]
+                  r (await (log/dig-log! c (first logs) {:base (:base m) :species (:species m) :collect? true}))]
               (case r
                 :ok (do (ctx/update-mem! c assoc :partials 0)
                         (u/progress! c)
@@ -346,10 +349,6 @@
 
       (and (not chosen) (:at (:args c)) (not (:at-looked (ctx/mem c))) (not (u/seen-name (:primitives c) (:at (:args c)))))
       (do (ctx/update-mem! c assoc :at-looked true) :again)
-
-      (and fresh? chosen (trip/food-short? c))
-      (do (ctx/emit! c :tree.hungry :warn {:text "felling stopped: hungry, no food carried and get-food found none"})
-          (ctx/end c :limit-reached {:line :food :reason :hungry} {:logs (:dug (ctx/mem c) 0)}))
 
       (and (not chosen) (seq (:unreachable (ctx/mem c))))
       (let [why (:unreachable-why (ctx/mem c))
@@ -410,7 +409,14 @@
   (checks/refusing #(cond (:at (:args %)) :never (look/surveyed? % :near) :later :else :look)
                    :tree-found "a tree to fell" tree-missing))
 
-(def can-start? no-tree)
+(def not-hungry
+  "Later :food-short between trees while no food is carried and get-food found none: a hungry trigger gets its try first."
+  (checks/refusing :food "food to eat or none needed"
+                   (fn [c] (when (and (not (:column (ctx/mem c))) (trip/food-short? c)) :food-short))))
+
+(def can-start? (cond/and no-tree not-hungry))
+
+(def can-run? not-hungry)
 
 (defn done?
   "Ok once the chosen tree is down: logs were dug, none of its column is left and the body is off the canopy, no child

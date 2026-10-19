@@ -83,8 +83,8 @@
         (let [{:keys [p]} (await (fell tall {:radius 10} 200))
               ys (dug-ys p)]
           (is (= 8 (count ys)))
-          (is (apply < (take 5 ys)) "the low logs go bottom-up from the ground")
-          (is (apply > (drop 5 ys)) "the high ones top-down from the pillar"))))))
+          (is (apply < (take 6 ys)) "the low logs go bottom-up from the ground")
+          (is (apply > (drop 6 ys)) "the high ones top-down from the pillar"))))))
 
 (def tall-9 {:blocks (lt/tree 6 0 "oak" 9) :inventory []})
 
@@ -557,16 +557,25 @@
         (let [s (await (fell fenced {:radius 12} 150))]
           (is (= "exhausted" (:why (:out s))) "a walk tried and gave its reason"))))))
 
-(deftest a-hungry-body-with-no-food-and-a-failed-get-food-stops-before-the-next-tree
+(deftest a-hungry-body-with-no-food-and-a-failed-get-food-waits-before-the-next-tree
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (fm/start (assoc tall :self {:food 2}) {})
               _ (mem/write! (:store (:eng s)) :hungry {:food 2} {:cap 10 :ttl 3600000})
               out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 50))]
-          (is (= :hungry (:reason out)))
-          (is (= [:limit-reached {:line :food :reason :hungry}] ((juxt :kind :cause) (:ending out))))
+          (is (not= :limit-reached (:kind (:ending out))) "no made-up limit")
           (is (empty? (dug-ys (:p s))) "dug nothing"))))))
+
+(deftest a-branch-is-felled-with-the-trunk-and-every-log-is-picked-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks (merge (lt/tree 6 0 "oak" 4) {"7,65,0" "oak_log" "7,66,0" "oak_log"}) :inventory []}
+              {:keys [p out]} (await (fell world {:radius 10 :fetch false} 100))]
+          (is (= 6 (:logs out)) "trunk and branch")
+          (is (= 6 (count (fm/digs p))))
+          (is (= 6 (get (lt/inv p) "oak_log")) "the logs are in the bag"))))))
 
 (defn ^:async fell-far-unseen
   "fell over a world where the trunk at x 30 reads as never seen until the body stands within `within` blocks of it."

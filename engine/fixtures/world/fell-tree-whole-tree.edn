@@ -21,6 +21,11 @@
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
             {:no-event {:source :job :kind #{:tree_blocked :fell-tree.declined :fetch.started :fetch.failed}} :for-s 150 :until {:source :job :kind :completed}}]
    :after [[:not-block [16 9 16] "oak_log"] [:not-block [16 0 16] "oak_log"] [:item "oak_log" [:>= 9]] [:body-far [16.5 9 16.5] 5]]}
+  {:name "branch-logs-are-felled-with-the-trunk-and-carried"
+   :blocks [[:fill [17 4 16] [18 4 16] "oak_log"]]
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
+   :after [[:not-block [16 0 16] "oak_log"] [:not-block [17 4 16] "oak_log"] [:not-block [18 4 16] "oak_log"] [:item "oak_log" [:>= 12]]]}
   {:name "harvest-wood-replants-the-sapling-on-the-ground"
    :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 16})]]

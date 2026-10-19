@@ -62,7 +62,7 @@
           (is (= [{:pos {:x 3 :y 64 :z 0} :species "oak"}] (debts eng))
               "the replant debt is committed with the base position")
           (is (= [] (:list (core/state eng))) "the one round ends the job")
-          (is (nil? (get (inv p) "oak_log")) "the logs are drops on the ground, not collected")
+          (is (= 4 (get (inv p) "oak_log")) "each log is collected as it is dug")
           (is (= [{:pos {:x 3 :y 64 :z 0} :species "oak"}] (debts eng))
               "the debt is recorded once"))))))
 

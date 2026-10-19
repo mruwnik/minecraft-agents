@@ -172,6 +172,16 @@
                    (when (= 3 (swap! n inc)) (f))
                    r)))))
 
+(defn after-dig-from!
+  "Call (f) after every dig from the nth on: the drops of those digs are gone before anything picks them up."
+  [p nth f]
+  (let [n (atom 0)]
+    (.override (.-world p) "dig"
+               (fn ^:async dig [token args impl]
+                 (let [r (await (impl token args))]
+                   (when (<= nth (swap! n inc)) (f))
+                   r)))))
+
 (deftest a-body-moved-away-after-the-felling-still-collects-the-drops
   (async done
     (tu/run-async done
@@ -188,7 +198,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
-          (after-last-dig! p #(clear-drops! p))
+          (after-dig-from! p 1 #(clear-drops! p))
           (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
           (await (tu/run-until-empty eng 30))
           (is (= [:none-collected] (mapv :reason (filterv #(= :stopped (:kind %)) @seen))) "no item came in: stopped with a reason, not completed")
@@ -333,13 +343,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup {:blocks (merge (lt/tree 3 0 "oak" 3) (lt/tree 3 6 "oak" 3) {"3,63,0" "grass_block" "3,63,6" "grass_block"})
-                                         :inventory [{:name "oak_sapling" :count 2}]})
-              n (atom 0)]
-          (.override (.-world p) "dig"
-                     (fn ^:async dig [token args impl]
-                       (let [r (await (impl token args))]
-                         (when (= 6 (swap! n inc)) (clear-drops! p))
-                         r)))
+                                         :inventory [{:name "oak_sapling" :count 2}]})]
+          (after-dig-from! p 4 #(clear-drops! p))
           (let [r (await (tu/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 12 :count 6} 80))]
             (is (= {:status :stopped :reason :none-collected :got 3} (select-keys r [:status :reason :got]))
                 "the first tree's 3 logs are carried: the stop says so")))))))

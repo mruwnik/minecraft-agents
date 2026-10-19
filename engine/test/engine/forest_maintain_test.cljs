@@ -225,7 +225,7 @@
               result (await (tu/child-outcome eng job {:plan "forest"} 300))]
           (is (= 12 (count (digs p))))
           (is (= (set (map (fn [[x z]] [x 64 z "dark_oak_sapling"]) cells)) (set (places p))))
-          (is (= {:felled 4 :planted 4 :left [] :bare []} (dissoc result :status :text))))))))
+          (is (= {:felled 1 :planted 4 :left [] :bare []} (dissoc result :status :text)) "the four trunks are one tree"))))))
 
 (defn ^:async cell-case
   "Run the job over the oak cell at 3 64 0 in a world of blocks and inventory: [digs places events of kind]."
