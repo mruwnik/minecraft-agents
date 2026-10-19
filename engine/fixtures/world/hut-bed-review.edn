@@ -27,7 +27,7 @@
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
             [:set [10 0 12] "red_bed[facing=east,part=foot]"] [:set [11 0 12] "red_bed[facing=east,part=head]"]]
-   :body {:at [13.5 0 13.5]}
+   :body {:at [13.5 0 13.5] :yaw 90}
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}
             {:event {:source :job :kind :place.set :data {:name :bed :auto true}} :within-s 60}]
    :after [[:body-near [10.5 0 12.5] 6]]
@@ -42,16 +42,17 @@
             {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 60 :until {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}}]
    :after [[:body-near [16.5 0 14.5] 4]]
    :limit-s 70}
-  {:name "tunnel-miner-remembered-bed-8-away-walked-to-and-slept"
+  {:name "tunnel-miner-remembered-bed-8-away-not-walked-to-no-room-no-place"
    :blocks [[:fill [4 0 4] [26 4 20] "stone"] [:fill [10 0 12] [16 1 12] "air"]
             [:fill [17 0 11] [19 2 13] "air"] [:set [18 1 12] "torch"] [:set [11 1 12] "torch"]
             [:set [18 0 12] "red_bed[facing=east,part=foot]"] [:set [19 0 12] "red_bed[facing=east,part=head]"]]
    :body {:at [10.5 0 12.5] :inventory [["red_bed" 1]]}
    :memory [{:kind :bed :data {:pos #xyz [18 0 12]} :policy {:cap 1 :ttl :forever}}]
    :expect [{:event {:source :reflex :kind :fired} :within-s 20}
-            {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}
-            {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 60 :until {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}}]
-   :after [[:item "red_bed" 1] [:body-near [18.5 0 12.5] 3]]
+            {:event {:source :job :kind :child_ended :data {:ending {:cause :bed-place-failed}}} :within-s 20}
+            {:no-event {:source :action :kind :done :data {:name "sleep"}} :for-s 40}
+            {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 40}]
+   :after [[:item "red_bed" 1] [:body-near [10.5 0 12.5] 1.5]]
    :limit-s 80}
   {:name "tunnel-miner-remembered-bed-60-away-not-walked-to-no-room-no-place"
    :blocks [[:fill [4 0 4] [26 4 20] "stone"] [:fill [10 0 12] [16 1 12] "air"]

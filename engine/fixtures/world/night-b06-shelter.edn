@@ -237,10 +237,10 @@
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 40 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 40}]
    :limit-s 50}
-  ;; 8e4c3127: a one-cell home walled in stone, a carried bed: go-to digs in, the bed goes down by the doorway and is slept in, no walk loop
+  ;; 8e4c3127: a small room walled in stone (a bed needs three cells in a row beyond any one-wide gap, which counts as a doorway), a carried bed: go-to digs in, the bed goes down in the room and is slept in, no walk loop
   {:name "walled-in-home-with-a-carried-bed-sleeps"
    :time :night-exclusive
-   :blocks [[:fill [10 0 10] [14 3 14] "stone"] [:fill [12 0 12] [12 1 12] "air"]]
+   :blocks [[:fill [10 0 10] [17 3 14] "stone"] [:fill [12 0 11] [15 1 13] "air"]]
    :body {:at [4.5 0 12.5] :inventory [["stone_pickaxe" 1] ["red_bed" 1]]}
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [12 0 12]})]
          [:job (jobs.survival.night)]
