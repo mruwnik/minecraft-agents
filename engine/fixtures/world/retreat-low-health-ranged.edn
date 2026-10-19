@@ -10,6 +10,7 @@
   :limit-s 60}
  :cases
  [{:name "low-body-in-a-witchs-line-seals-in-at-once"
+   :plot {:light :sky}
    :act [[:rcon "damage $BODY 60 minecraft:generic"]
          [:job (jobs.survival.retreat {})]]
    :expect [{:event {:source :job :kind :retreat_sealed} :within-s 12}]

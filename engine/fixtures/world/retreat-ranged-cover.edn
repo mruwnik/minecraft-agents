@@ -24,6 +24,7 @@
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
    :after [[:body-far [8.5 0 20.5] 4.5]]}
   {:name "low-health-seals"
+   :plot {:light :sky}
    :body {:inventory [["cobblestone" 20]]}
    :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.survival.retreat {:settings {:jobs.survival.retreat-flight/hide-health 20}})]]

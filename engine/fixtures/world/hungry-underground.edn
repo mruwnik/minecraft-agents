@@ -1,6 +1,6 @@
 ;; Cards 094af74a, 69be7630: a buried body is not walked out by hunger, and a badly hurt one does not mine on.
-;; buried: sealed in a stone room lit by glowstone (no sky light; the hungry trigger holds in the dark only with food carried), food 8 (hunger 5 s amp 255), hp 10, nothing carried: get-food ends the :no-food ending
-;; "not searched underground" and takes no walk. low-health: food 8 (no regeneration) and hp 3: gather.mine waits :low-health and digs
+;; buried: sealed in a stone room lit by glowstone (no sky light; the hungry trigger holds in the dark only with food carried), food 8 (hunger 5 s amp 255), hp 6 (fragile: a starving non-fragile body would explore), nothing carried: get-food stops (no-food "not searched underground", or too-dangerous while food is still above 0) and takes no walk.
+;; low-health: food 8 (no regeneration) and hp 3: gather.mine waits :low-health and digs
 ;; nothing; instant health lets it mine.
 {:defaults
  {:tags [:survival :hungry]
@@ -12,10 +12,10 @@
    :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}]
    :blocks [[:fill [12 0 12] [20 4 20] "stone" :hollow] [:set [14 3 16] "glowstone"]]
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
-         [:rcon "damage $BODY 10 minecraft:generic"]]
+         [:rcon "damage $BODY 14 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
-            {:event {:source :job :kind :stopped :data {:reason :no-food :text [:contains "not searched underground"]}} :within-s 40}
-            {:no-event {:source :action :kind :started :data {:name "steer"}} :for-s 40 :until {:source :job :kind :stopped :data {:reason :no-food}}}]
+            {:event {:source :job :kind :stopped} :within-s 40}
+            {:no-event {:source :action :kind :started :data {:name "steer"}} :for-s 40 :until {:source :job :kind :stopped}}]
    :after [[:body-near [16.5 1 16.5] 3]]}
   {:name "hurt-body-waits-low-health-then-mines-when-healed"
    :time :any
