@@ -1616,3 +1616,12 @@
           (is (= [[:stopped :no-air]] (ended seen)))
           (is (> 1 (js/Math.floor (:x (core/self-pos p)))) "never past the dragging column")
           (is (not-any? #{"steer"} (call-names p)) "no go-to child was sent through it"))))))
+
+(deftest the-walk-to-air-may-go-over-the-damage-budget
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [seen (atom nil)
+              c (assoc (stub-child-ctx (contract/ending :done nil {:arrived true})) :call (fn [_ _ args] (reset! seen args) (js/Promise.resolve :continue)))]
+          (await (air/go! c :leg {:x 0 :y 64 :z 0} 2))
+          (is (= {:health 1} (:floor @seen)) "go-to no longer heals: a drowning body must not end :needs-health"))))))

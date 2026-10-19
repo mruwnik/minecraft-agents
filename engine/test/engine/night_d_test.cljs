@@ -44,7 +44,7 @@
           (st/dawn-after! p 6)
           (let [log (await (with-child-log #(tu/run-until-empty eng 80)))]
             (is (= 1 (count (filter #(= :flee (first %)) log))) "one walk, never the same target twice")
-            (is (= {:place :home :range 0} (nth (first (filter #(= :flee (first %)) log)) 2))))
+            (is (= {:place :home :range 0 :floor {:health 1}} (nth (first (filter #(= :flee (first %)) log)) 2))))
           (is (= 1 (count (st/emitted seen :shelter.flee_failed))))
           (is (= 1 (count (st/emitted seen :shelter.exposed))))
           (is (= [[:exposed 1]] (mapv (juxt :reason :fled) (st/emitted seen :stopped)))))))))
