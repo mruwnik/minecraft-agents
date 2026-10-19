@@ -110,7 +110,7 @@
         (let [s (await (scenario {} {:inventory [] :entities [(cow 1 3)]} 12))
               e (first (stopped s))]
           (is (= :no-food (:reason e)) (pr-str e))
-          (is (= :no-source (:why e)) "the fetch's cause comes up, not just :no-food"))))))
+          (is (some? (:because e)) "the fetch's ending comes up, not just :no-food"))))))
 
 (deftest a-chicken-lure-with-no-seeds-breaks-grass-for-them-first
   (async done
@@ -371,13 +371,6 @@
           (is (= "u2" (:animal (done-event s))) "the penned cow stays")
           (is (< (first (:pos (cow-of s 1))) 12) "the penned cow is still inside the ring"))))))
 
-(deftest the-penned-animal-can-be-lured-when-asked
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {:include-penned? true} {:self {:pos {:x 14 :y 64 :z 0}} :inventory wheat :blocks ring :entities [(cow 1 11) (cow 2 20)]} 40))]
-          (is (= "u1" (:animal (done-event s)))))))))
-
 (deftest the-animal-named-by-uuid-is-the-only-one-led
   (async done
     (tu/run-async done
@@ -550,17 +543,24 @@
   (let [c {:primitives (tu/fake {:floor tu/walk-floor :blocks ring}) :args {:mob "cow" :pos {:x 7 :y 64 :z 0}}}]
     (is (re-find #"closed pen" (lure-to/stop-text c :unreachable)))))
 
-(deftest an-ambiguous-or-empty-uuid-start-is-refused-naming-the-matches
+(deftest an-empty-uuid-start-never-starts
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[uuid pat] [["ab12" #"matches 2 animals"] ["" #"empty"]]]
-          (let [s (await (scenario {:uuid uuid} {:inventory wheat
+        (let [s (await (scenario {:uuid ""} {:inventory wheat :entities [(cow 1 3 {:uuid "ab12-1111"})]} 8))]
+          (is (finished? s))
+          (is (= :stopped (:kind (done-event s))))
+          (is (re-find #"empty" (pr-str (done-event s))))
+          (is (empty? (tu/walked-to (:eng s))) "no animal is led"))))))
+
+(deftest an-ambiguous-uuid-start-waits-and-leads-nobody
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:uuid "ab12"} {:inventory wheat
                                                  :entities [(cow 1 3 {:uuid "ab12-1111"}) (cow 2 4 {:uuid "ab12-2222"})]} 8))]
-            (is (finished? s) (pr-str uuid))
-            (is (= :stopped (:kind (done-event s))) (pr-str (done-event s)))
-            (is (re-find pat (pr-str (done-event s))) (pr-str uuid))
-            (is (empty? (tu/walked-to (:eng s))) "no animal is led")))))))
+          (is (not (finished? s)) "the animals may move apart: it waits")
+          (is (empty? (tu/walked-to (:eng s))) "no animal is led"))))))
 
 (def gate-lane
   "A fence across the lane at x 15 (floor under it) with a shut gate at z 0."

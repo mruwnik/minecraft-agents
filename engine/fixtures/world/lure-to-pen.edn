@@ -45,8 +45,8 @@
   {:name "cow-that-never-follows-is-not-arrived"
    :act [[:summon "cow" [10.5 0 18.5] "{NoAI:1b}"]
          [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [21 0 16] :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
-   :expect [{:event {:source :job :kind :lure-to.gave-up :data {:reason #{:animal-stalled :animal-outside :lost :unreachable}}} :within-s 150 :of-job true}
-            {:no-event {:source :job :kind :completed :data {:reason :arrived}} :for-s 150 :until {:source :job :kind :lure-to.gave-up}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason #{:animal-stalled :animal-outside :lost :unreachable}}} :within-s 150 :of-job true}
+            {:no-event {:source :job :kind :completed :data {:reason :arrived}} :for-s 150 :until {:source :job :kind :stopped}}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 0]]}
   {:name "chicken-with-no-seeds-gets-seeds-from-grass"
    :blocks [[:fill [4 0 4] [11 0 13] "short_grass"]]
@@ -63,10 +63,10 @@
    :act [[:summon "chicken" [10.5 0 18.5]] [:summon "chicken" [9.5 0 15.5]]
          [:job (jobs.animals.lure-to {:mob "chicken" :pos #xyz [21 0 16] :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :arrived}} :within-s 190 :of-job true}
-            {:no-event {:source :job :kind :lure-to.gave-up :data {:reason #{:lost :no-hold}}} :for-s 190 :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind :stopped :data {:reason #{:lost :no-hold}}} :for-s 190 :until {:source :job :kind :completed}}]
    :after [[:item "wheat_seeds" [:>= 7]]]
    :limit-s 220}
-  ;; card 8d02af07: an empty :uuid would match every animal, and a start that two animals share names none of them: neither starts
+  ;; card 8d02af07: an empty :uuid would match every animal, and a start that two animals share names none of them: it waits, leading nobody
   ;; card c6817a46: the named animal already in the box ends the lure at once, without fetching food
   {:name "named-animal-already-in-the-box-ends-at-once"
    :act [[:summon "cow" [21.5 0 16.5] "{NoAI:1b,UUID:[I;20381,9,1,3]}"]
@@ -80,10 +80,10 @@
    :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :empty-uuid}} :within-s 30 :of-job true}]
    :after [[:item "wheat" 4]]
    :limit-s 50}
-  {:name "uuid-start-two-cows-share-never-starts"
+  {:name "uuid-start-two-cows-share-waits-and-leads-none"
    :act [[:summon "cow" [10.5 0 18.5] "{NoAI:1b,UUID:[I;20381,9,1,1]}"]
          [:summon "cow" [12.5 0 18.5] "{NoAI:1b,UUID:[I;20381,9,1,2]}"]
          [:job (jobs.animals.lure-to {:mob "cow" :uuid "00004f9d-0000-0009" :pos #xyz [21 0 16] :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :ambiguous-uuid}} :within-s 30 :of-job true}]
+   :expect [{:no-event {:source :job :kind #{:completed :stopped}} :for-s 30 :of-job true}]
    :after [[:item "wheat" 4] [:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 0]]
    :limit-s 50}]}
