@@ -49,8 +49,9 @@
           (if-let [i (first (keep-indexed (fn [i f] (when (contains? (:inside f) k) i)) found))]
             (recur (rest todo) (update-in found [i :animals] inc) unseen?)
             (let [answer (binding [u/*reads* nil]
-                           (pen/check {:block-at block-at :at cell :max-cells (settings/get settings ::max-cells)}))
-                  ring? (and (= :unloaded (:reason answer)) (fenced? block-at (:inside answer)))]
+                           (pen/check {:block-at block-at :at cell :near k :max-cells (settings/get settings ::max-cells)}))
+                  ring? (and (#{:unloaded :leak} (:reason answer))
+                             (fenced? block-at (into (:inside answer) (map (comp (juxt :x :y :z) :pos)) (:leaks answer))))]
               (when ring?
                 (doseq [l (:leaks answer) :let [leak ((juxt :x :y :z) (:pos l))] :when (sense/unknown? p leak)]
                   (u/note-read! :cells leak)))

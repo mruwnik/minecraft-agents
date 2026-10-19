@@ -76,3 +76,28 @@
               _ (perception/pass! (aget p "perception"))
               c (st/stub-ctx p)]
           (is (= [[{:x 18 :y 64 :z 16}]] (map :gates (await (pen-entry/pens! c))))))))))
+
+(defn hiding
+  "p with the cells in hidden reported as never seen, the rest as the body sees them."
+  [p hidden]
+  (let [q (js/Object.create p)]
+    (set! (.-sensedAt q) (fn [pos] (if (contains? hidden [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.sensedAt p pos))))
+    q))
+
+(deftest a-pen-whose-fence-cell-is-unseen-beside-seen-ground-is-looked-at
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[p _] (seeing-body world)
+              hidden #{[18 64 14]}
+              q (hiding p hidden)
+              c (st/stub-ctx q)
+              found (await (pen-entry/pens! c))]
+          (is (every? (fn [pos] (sense/unknown? q pos)) hidden) "the fence cell is unseen")
+          (is (not (sense/unknown? q [17 64 14])) "the ground outside it is seen")
+          (is (some #{[18.5 64.5 14.5]} (st/look-points p)) "the unseen fence cell is looked at")
+          (is (= [[{:x 18 :y 64 :z 16}]] (map :gates found))))))))
+
+(deftest two-cows-in-one-pen-are-one-entry-of-two
+  (let [[p _] (seeing-body world)]
+    (is (= [2] (map :animals (pen-entry/pens {:primitives p}))))))
