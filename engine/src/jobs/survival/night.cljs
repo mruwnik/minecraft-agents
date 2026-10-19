@@ -8,11 +8,11 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]
-            [jobs.survival.retreat-doors :as retreat-doors]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.look :as look]
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
+            [jobs.lib.rooms :as room-lib]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.beds :as sh-beds]
@@ -27,7 +27,6 @@
             [jobs.survival.bed-down :as bed-down]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.night.flee :as flee]
-            [jobs.survival.night.doorway :as doorway]
             [jobs.survival.night.hold :as hold]
             [jobs.survival.night.morning :as morning]
             [jobs.survival.night.sites :as sites]))
@@ -36,7 +35,7 @@
 (def doc
   "The night: one round from the trigger until the night is over and the body is out of its shelter.
   Ways (the call's :ways, all by default): :bed (a bed used or put down, a sleeper's log-out), :shelter (a roofed place
-  walked to, dig-in, relocation, niche, a breached room walled in, the exposed retry), :flee (a walk somewhere safer, a
+  entered, dig-in, relocation, niche, a breached room walled in, the exposed retry), :flee (a walk somewhere safer, a
   cave walled in). A door is always shut and the morning always runs.
   Condition at the start: the night trigger's (a listed night waits :not-night, :spawn with the respawn bed's state);
   sheltered with nothing for the night to do, it is done before its first round. Quote: the time left of the night (jobs.time.wait-for-day) and ::morning-s, least 0.
@@ -49,30 +48,26 @@
   - roofed and sheltered (slept, dug in, or shut in its own latest :shelter): a log-out stint while someone else sleeps,
     else hold (:sheltered) while the trigger would still fire (a bed to use, a sleeper), else the job ends: a body
     that is safe leaves the queue to run (the morning's trigger lets it out).
-  - a bed to use or a carried bed to put down, with a roofed :roofed-places place within the night.sites ::home-radius setting (12) and the body not roofed: walks into the place first (go-to :place, lit or not; one try, a failed walk is not repeated tonight). A carried bed is never put down in the open while such a place is close (info night.bed-kept once); the night goes on below.
+  - a bed to use or a carried bed to put down, with a roofed :roofed-places place within the night.sites ::home-radius setting (12) and the body not roofed: enters the place first (jobs.survival.enter-room {:place}: go-to, lit or not, its doors shut and doorway filled; one try, a failed walk is not repeated tonight). A carried bed is never put down in the open while such a place is close (info night.bed-kept once); the night goes on below.
   - an open door of the closed room the body stands in is shut before any bed is used or put down (below).
-  - roofed, with a carried bed to put down under the roof and a doorway out of the room (night.doorway/gap): the doorway is filled first (jobs.blocks.fill-cells: a carried wooden door, else building blocks; never a cell an animal or mob stands in; tried once a night; the cells remembered as :doorway-filled, a day).
+  - roofed, with a carried bed to put down under the roof and a doorway out of the room (jobs.lib.rooms/gap): the doorway is filled first (jobs.survival.enter-room, with jobs.blocks.fill-cells: a carried wooden door, else building blocks; never a cell an animal or mob stands in; tried once a night, :doorway-tried; the cells remembered as :doorway-filled, a day).
   - a bed-down in flight (its walk to the bed or to where the bed goes down) is called again until it ends; one that stops hostile-near makes the night hold :monsters-near (5 s) first.
   - a bed (sh-beds/bed-to-use: seen, or remembered within :bed-radius, :urgent-bed-radius once :max-days-awake days without
     sleep; never an occupied one, one given up on, or, unless :max-days-awake days without sleep or another player sleeps and the bed is within `courtesy-radius` 32, one whose walk leaves an underground, dug-in or room shelter): jobs.survival.bed-down sleeps in it (jobs.survival.sleep). A sleep that ends without sleeping writes
     :sleep-failed (5 minutes).
-  - a bed item carried and no bed to use (jobs.survival.bed-down): put down beside the body (roofed cells first, else in the open, never in the open from a closed home (night.doorway/closed-home?: every cell roofed, or one doorway shuts the roof); never in a
+  - a bed item carried and no bed to use (jobs.survival.bed-down): put down beside the body (roofed cells first, else in the open, never in the open from a closed home (jobs.lib.rooms/closed-home?: every cell roofed, or one doorway shuts the roof); never in a
     doorway or another's zone), slept in, recorded as :bed unless a live :bed is; outside its own zones also as
     :bed-placed for the morning (info night.bed-placed {:pos :own-zone} says where). No room writes :bed-place-failed (10 minutes, or until the body is 6+ blocks away).
   - someone else asleep (sh-sleepers/log-out-for-sleepers?): jobs.survival.log-out, a 30 s stint at most until morning, again
     while anyone sleeps or nothing is known. A log-out that is not ok or cut is not tried again tonight.
-  - a closed room around the body (roofed within :room-roof-height) with an open door (an iron one too, which no hand shuts): the door is shut (retreat-doors/shut-home-door!,
+  - a closed room around the body (roofed within :room-roof-height) with an open door (an iron one too, which no hand shuts): the door is shut (jobs.survival.enter-room: retreat-doors/shut-home-door!,
     walking to it when out of reach); a door that stays open writes :night-door-failed (shelter.door-failed warn) and the
     night goes on as below.
   - a roof over a room with a hole (a fresh :bed-open entry within sh/breach-near and no closed room, sh/breached-home?): says so once
     (shelter.room_open warn) and walls the body in under the roof (the :enclose step), not ending roofed.
   - roofed, buried or shut in a closed room: done {:night :roofed} (the queue runs).
   - by day, a dug-in body with a known hostile near (jobs.lib.dawn/hostile-hold?) stays in (info night.dawn-hold) until it is gone or the dawn grace passes.
-  - else, before any pit and while no site has failed tonight: a remembered roofed place (:roofed-places, nearest first)
-    within :walk-radius whose column is not seen open (a roof cell unseen after a look counts as roof), and whose route (go-to's quote, dark cells priced in) costs at most
-    sites/dig-in-seconds (8) seconds (quoted again after a look round): walk there (go-to :place). A walk
-    that does not arrive is not tried again tonight, and the night digs in; arrived, the next pass is roofed.
-  - else a safe place: jobs.survival.shut-in (:for :night, the ways room, walls, pit) here, unless a site tonight failed within 8 blocks. A shut-in that does not
+  - else a safe place: jobs.survival.shut-in (:for :night, the ways walls and pit, and room when a remembered roofed place (:roofed-places, nearest first) lies within :walk-radius, its column not seen open (a roof cell unseen after a look counts as roof), or the body is under a roof: the room way enters that place, priced by quote against the others) here, unless a site tonight failed within 8 blocks. A shut-in that does not
     roof the body (any other ending) writes a :night-site {:pos :reason} entry, and the body walks (go-to) to the
     nearest cell within 16 blocks, 9+ from every failed site, that looks dry and solid from the surface (shelter.relocated info; dig-in finds out the
     rest), to dig in there. After max-sites failed sites, or with no such cell, it cuts a niche (jobs.survival.shut-in with the pocket way, once, :niche;
@@ -94,7 +89,7 @@
   An overdue body (no sleep for :max-days-awake in-game days) warns needs_bed once an in-game day (:needs-bed). A respawn bed
   it sees is no bed is written :spawn-lost and warned (spawn_lost) once; its waiting reasons carry :spawn ({:bed pos} or {:lost pos :why}).
   Memory: job memory :enclose (the cave cell being walled in), :sheltered (:slept, :dug-in, :logged-out, :exposed), :log-out-failed, :relocating, :digging (the
-  site of a dig-in in flight), :bed-down (a bed-down in flight), :doorway-tried, :pit-trapped and leave!'s :dig-out; :roof-walk-failed (no second walk to a roofed place tonight); body memory :night-site (failed sites, forgotten whenever the night ends, with dig-in's :dig-in-futile when it ends by day or dug in, at most a day), so a
+  site of a dig-in in flight), :bed-down (a bed-down in flight), :pit-trapped and leave!'s :dig-out; :roof-walk-failed (no second walk to a roofed place tonight); body memory :doorway-tried and :night-site (failed sites, forgotten whenever the night ends, with dig-in's :dig-in-futile when it ends by day or dug in, at most a day), so a
   firing after a cut does not dig a failed site again.
   Muting :night does not end a running night job: the agent cancels it too.")
 
@@ -193,13 +188,13 @@
 (defn ^:async bed-down-step
   "Sleep in bed, or put the carried bed down (bed nil) and sleep: jobs.survival.bed-down. Asleep it is :sheltered :slept;
   the next pass chooses again. While the child goes on (:continue) job memory :bed-down holds {:bed bed}, so the next
-  pass calls it again rather than choosing anew. In a closed home (night.doorway/closed-home?) the bed goes down under the roof only (:roofed-only)."
+  pass calls it again rather than choosing anew. In a closed home (jobs.lib.rooms/closed-home?) the bed goes down under the roof only (:roofed-only)."
   [c bed]
   (hold/busy! c)
   (let [d (await (ctx/call c :bed-down 'jobs.survival.bed-down
                                  (cond-> (select-keys (:args c) [:roof-height :bed-radius :urgent-bed-radius :max-days-awake])
                                    bed (assoc :bed bed)
-                                   (doorway/closed-home? (:primitives c)) (assoc :roofed-only true))))]
+                                   (room-lib/closed-home? (:primitives c)) (assoc :roofed-only true))))]
     (if (= :continue d)
       (ctx/update-mem! c assoc :bed-down {:bed bed})
       (ctx/update-mem! c dissoc :bed-down))
@@ -211,14 +206,21 @@
 
 ;; ------------------------------------------------------------------ a safe place
 
-(defn ^:async roof-walk!
-  "Walk (go-to :place) to the roofed place; :again. A walk that ends without arriving, or arrives and is still not roofed (or its room is breached), is marked :roof-walk-failed."
-  [c {:keys [name]}]
+(defn walk-home-wanted?
+  "Whether to walk to a roofed place before using a bed: none failed tonight, no shut-in in flight, no walk failed."
+  [c]
+  (let [m (ctx/mem c)]
+    (and (not (:roof-walk-failed m)) (not (:digging m)) (empty? (sites/failed-sites c)))))
+
+(defn ^:async enter-room!
+  "jobs.survival.enter-room (into the :place if given: walks, shuts its doors, fills its doorway or roof hole); :again. A
+  walk is made once a night: once its call ends, :roof-walk-failed is set whatever came of it (a body that got in is roofed, and
+  no walk is wanted)."
+  [c place]
   (hold/busy! c)
-  (let [w (await (ctx/call c :roof-walk 'jobs.movement.go-to {:place name :range 0}))]
-    (when (and (not= :continue w)
-               (not (and (:arrived (:data w)) (sh-sense/roofed? (:primitives c) (:roof-height (:args c)))
-                         (not (sh/breached-home? (:primitives c) (ctx/view c))))))
+  (let [w (await (ctx/call c :enter-room 'jobs.survival.enter-room (cond-> {:roof-height (:roof-height (:args c))}
+                                                                     place (assoc :place place))))]
+    (when (and place (not= :continue w))
       (ctx/update-mem! c assoc :roof-walk-failed true))
     :again))
 
@@ -390,30 +392,20 @@
                 (ctx/emit! c :night.dig-in-why :info (dig-in-inputs p))
                 (ctx/update-mem! c assoc :digging start)
                 (sites/site-failed! c start :interrupted))
-            d (await (ctx/call c :shut-in 'jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night :roof-height (dig-in-roof-height c) :wall-value (:wall-value (:args c))}))]
+            place (:name (first (await (sense/decide! c ::roofed-place #(seq (room-lib/roofed-places-in c (:args c) (:walk-radius (:args c)))) {:verify-guesses true}))))
+            d (await (ctx/call c :shut-in 'jobs.survival.shut-in
+                               (cond-> {:ways (cond-> #{:walls :pit} (or place (sh-sense/roofed? p (sh-sense/room-roof-height)) (dig-cells/room-plug p (sh-sense/feet p) (dig-in-roof-height c))) (conj :room))
+                                        :for :night :roof-height (dig-in-roof-height c) :wall-value (:wall-value (:args c))}
+                                 place (assoc :place place))))]
         (if (= :continue d)
           :again
           (do (ctx/update-mem! c dissoc :digging)
               (ctx/forget-where! c :night-site #(= {:pos start :reason :interrupted} %))
-              (if (and (= :done (:kind d)) (sh-sense/roofed? p (dig-in-roof-height c)))
-                (hold/sheltered! c :dug-in)
-                (sites/site-failed! c start (site-reason d)))
+              (cond
+                (not (and (= :done (:kind d)) (sh-sense/roofed? p (dig-in-roof-height c)))) (sites/site-failed! c start (site-reason d))
+                (not (and (= :room (:way (:data d))) (empty? (:placed (:data d))))) (hold/sheltered! c :dug-in))
               :again))))))
 
-
-(defn ^:async shut-room-door!
-  "Shut an open door of the closed room the body stands in (retreat-doors/shut-home-door!: from where it stands within a hand's
-  reach, else a step to the room cell inside it first). No zone rule applies: shutting a door changes no block. A door still
-  open once tried (clicked, or no step got nearer) writes :night-door-failed for this door (shelter.door-failed warn), so the
-  night does not call the body safe behind it. :again."
-  [c door]
-  (await (retreat-doors/shut-home-door! c door))
-  (when (and (some #(= (sh/door-key (:cell door)) (sh/door-key (:cell %))) (sh/open-doors (:primitives c) (ctx/view c)))
-             (contains? (:doors-clicked (ctx/mem c) #{}) (retreat-doors/door-key (:cell door))))
-    (ctx/emit! c :shelter.door-failed :warn {:cell (retreat-doors/door-key (:cell door))
-                                             :text "an open door of the room would not shut; the room is not safe"})
-    (ctx/remember! c :night-door-failed {:door (sh/door-key (:cell door))} {:cap 1 :ttl (sh/door-failed-ms)}))
-  :again)
 
 (defn note-bed-far!
   "Once a night, with no bed to use: say the nearest known bed or :home is too far, so the agent can carry a bed on long trips."
@@ -487,7 +479,7 @@
       (let [bed (when bed-way (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c)))))
             bed-wanted (and bed-way (carried-bed-wanted? c))
             door (sh/open-room-door p (ctx/view c))
-            home-near (when-not roofed (sites/near-roofed-home c))]
+            home-near (when-not roofed (first (room-lib/roofed-places-in c (:args c) (sites/home-radius))))]
         (when (and bed-way (not bed)) (note-bed-far! c))
         (when (and bed-way home-near (:roof-walk-failed (ctx/mem c)) (not bed)) (note-bed-kept! c))
         (when breached
@@ -495,10 +487,10 @@
           (when-not (or door (:enclose (ctx/mem c)) (sites/failed-here? c) (not (ctx/way? c :shelter)))
             (ctx/update-mem! c assoc :enclose (sh-sense/feet p))))
         (cond
-          door (await (shut-room-door! c door))
+          door (await (enter-room! c nil))
           (:bed-down (ctx/mem c)) (await (bed-down-step c (:bed (:bed-down (ctx/mem c)))))
-          (and roofed bed-wanted (not bed) (bed-down/bed-layout c true) (doorway/gap c)) (await (doorway/shut! c (doorway/gap c)))
-          (and home-near (sites/roof-walk-wanted? c) (or bed bed-wanted)) (await (roof-walk! c home-near))
+          (and roofed bed-wanted (not bed) (bed-down/bed-layout c true) (room-lib/gap c)) (await (enter-room! c nil))
+          (and home-near (walk-home-wanted? c) (or bed bed-wanted)) (await (enter-room! c (:name home-near)))
           (or bed (and bed-wanted (not home-near))) (await (bed-down-step c bed))
           (and bed-way (log-out-wanted? c)) (await (log-out-step c))
           (and (:enclose (ctx/mem c)) (not= :dug-in sheltered)) (await (enclose! c))
@@ -510,10 +502,7 @@
           (and (= :exposed sheltered) (ctx/way? c :shelter) (sites/retry-due? c)) (do (retry-dig-in! c) (await (shelter! c)))
           (= :exposed sheltered) (await (hold/hold! c (str "exposed: " (sites/exposed-why (sites/failed-sites c)))))
           (not (ctx/way? c :shelter)) (await (flee-or-hold! c))
-          :else (if-let [place (and (sites/roof-walk-wanted? c)
-                                    (await (sites/roofed-place! c (await (sense/decide! c ::roofed-place #(seq (sites/roofed-places-in c (:walk-radius (:args c)))) {:verify-guesses true})))))]
-                  (await (roof-walk! c place))
-                  (await (shelter! c))))))))
+          :else (await (shelter! c)))))))
 
 (defn ^:async round
   "The whole night in one round (see doc): passes until one ends it."

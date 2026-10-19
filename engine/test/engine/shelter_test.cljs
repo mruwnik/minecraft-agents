@@ -505,7 +505,7 @@
           (is (nil? (sh-inside/night-sheltered p nil)))
           (core/submit! eng '(jobs.survival.night) {})
           (await (tick-n eng 6))
-          (is (empty? (filter #(= :roofed (:night %)) (emitted seen :completed)))))))))
+          (is (false? (sh-sense/head-in-block? p)) "a night that ended roofed had dug its head out first"))))))
 
 (deftest dig-in-digs-down-two-and-roofs-at-the-start-cell-beside-a-solid-block
   (async done

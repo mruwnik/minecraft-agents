@@ -10,10 +10,13 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.access :as access]
             [jobs.lib.look :as look]
+            [jobs.lib.pillar :as pillar]
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]))
 
 (defn mid [{:keys [x y z]}] {:x (+ x 0.5) :y y :z (+ z 0.5)})
@@ -238,3 +241,74 @@
        (remove :why)
        (sort-by (comp :steps :way))
        first))
+
+;; ------------------------------------------------------------------ doorways
+
+(defn carried-door
+  "A wooden door item the body carries, or nil."
+  [p]
+  (some #(let [n (:name %)] (when (and (.endsWith n "_door") (not= "iron_door" n)) n)) (u/inventory p)))
+
+(defn around
+  "The cell and its four horizontal neighbours."
+  [{:keys [x y z] :as cell}]
+  (cons cell (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]] {:x (+ x dx) :y y :z (+ z dz)})))
+
+(defn shut-by
+  "The first doorway (sh-sense/doorway?, not the feet, passing ok?) among the cells round e whose two cells [d, d above] shut the
+  room: the flood from the feet has no unroofed cell once they are solid. An overhang beside a gap has one."
+  [p feet e ok?]
+  (first (filter #(and (not= feet %) (sh-sense/doorway? p %) (ok? %)
+                       (nil? (:cell (reach/unroofed-cell p feet #{[(:x %) (:y %) (:z %)] [(:x %) (inc (:y %)) (:z %)]}))))
+                 (around e))))
+
+(defn closed-home?
+  "Whether the body stands in a home closed to the night but for a doorway: every cell of its room is roofed, or one
+  doorway (sh-sense/doorway?) shuts it so that every cell is (shut-by). Under an overhang or a lone roof: false."
+  [p]
+  (let [feet (sh-sense/feet p)
+        cell (:cell (reach/unroofed-cell p feet))]
+    (or (nil? cell) (some? (shut-by p feet cell any?)))))
+
+(def doorway-tried-policy
+  "The :doorway-tried entries: doorways filled or refused tonight; a day at most."
+  {:cap 4 :ttl 86400000})
+
+(defn gap
+  "The cells [feet head] that shut the room around the body: the doorway where the room's flood first leaves the roof
+  (reach/unroofed-cell, closed flood or not: a walled yard is open to the night too) or beside that cell that shuts the
+  room (shut-by), those still free; nil when the room is shut, no doorway shuts it (open ground), the body or a seen
+  animal or mob stands in it, the place is refused, or this doorway was tried tonight (body memory :doorway-tried, doorway-tried-policy)."
+  [c]
+  (let [p (:primitives c)
+        feet (sh-sense/feet p)
+        seen (delay (look/seen-entities p {:radius 8}))
+        free? (fn [{:keys [x y z] :as cell}]
+                (and (#{"air" "cave_air"} (u/seen-name p cell)) (not (pillar/mob-in @seen [x y z]))))]
+    (when-let [e (:cell (reach/unroofed-cell p feet))]
+      (when-let [d (shut-by p feet e free?)]
+        (when-not (or (some #(= d (:data %)) (ctx/entries c :doorway-tried))
+                      (access/trespass-refusal (access/rules-input c) :place d))
+          (seq (filter free? [d (update d :y inc)])))))))
+
+
+;; ------------------------------------------------------------------ named places
+
+(defn roofed-places-in
+  "The remembered places of names (the night's :roofed-places) within radius and roofed within roof-height, as
+  [{:name :pos}] nearest first. A roof cell the body has not seen is guessed solid (u/block-name-or): from the ground the
+  cell over a home hides behind the roof's near edge; a column seen open is no roof."
+  [c {:keys [roofed-places roof-height]} radius]
+  (let [p (:primitives c)
+        here (sh-sense/feet p)
+        roofed? (fn [pos] (some #(solid/solid? (u/block-name-or p (update pos :y + %) "stone")) (range 1 (inc roof-height))))]
+    (->> roofed-places
+         (keep (fn [nm] (when-let [pos (mem/place (ctx/view c) nm)] {:name nm :pos pos})))
+         (filter (fn [{:keys [pos]}] (and (<= (u/dist here pos) radius) (roofed? pos))))
+         (sort-by #(u/dist here (:pos %))))))
+
+(defn ^:async route-cost
+  "Seconds go-to's quote plans for the walk go-to-args, dark cells priced in (the planner's own cost), or nil with no route."
+  [c go-to-args]
+  (let [r (:route (await (ctx/quote c 'jobs.movement.go-to go-to-args)))]
+    (when (:found r) (+ (:seconds r) (or (:dark-seconds r) 0)))))

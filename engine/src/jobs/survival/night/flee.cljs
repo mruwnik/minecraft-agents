@@ -8,6 +8,7 @@
             [jobs.lib.access.rules :as rules]
             [jobs.lib.escape :as escape]
             [jobs.lib.look :as look]
+            [jobs.lib.rooms :as room-lib]
             [jobs.lib.seal :as seal]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -77,7 +78,7 @@
       (let [here (sh-sense/feet p)
             bed (when-let [pos (sh-beds/bed-to-use p (ctx/view c) flee-radius (bed-down/bed-permit c))]
                   (when (> (u/dist here pos) (bed-down/radius c)) [{:kind :bed :pos pos}]))
-            places (map #(assoc % :kind :roofed-place) (sites/roofed-places-in c flee-radius))
+            places (map #(assoc % :kind :roofed-place) (room-lib/roofed-places-in c (:args c) flee-radius))
             cands (->> (concat bed places (cave-sites c flee-radius) (ground-sites c flee-radius))
                        (remove #(contains? tried (:pos %)))
                        (sort-by #(u/dist here (:pos %)))

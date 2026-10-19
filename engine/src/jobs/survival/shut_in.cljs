@@ -21,8 +21,8 @@
   :roof-height over no open cell round the feet, or with the :room way a roof over a closed room), at once when it already is.
   Ways (:ways) are child jobs: jobs.survival.wall-in (the open sides, a roof support and the roof with carried blocks),
   dig-pit (dig down under a solid side and plug the hole), dig-pocket (dig a pocket beside the body, step in, wall the way in), and :room
-  (not a child yet: one carried block in the hole of the roof of a closed room with a door, quoted ::mend-s).
-  It quotes the ways the call allows, starts the cheapest (ties in the order room, walls, pit, pocket) and, when that one ends other than
+  (jobs.survival.enter-room: walk into the :place, else the home or the closed room the body is in, shut its doors, fill a doorway or a hole in its roof; walks, which the others do not).
+  It quotes the ways the call allows, starts the cheapest (the :room way's quote less ::room-credit-s (8); ties in the order room, walls, pit, pocket) and, when that one ends other than
   :done, the next cheapest (after a :continue step when a hostile is within 2 blocks); a way that cannot be done here (quote ##Inf) is dropped. Blocks are the call's :use :blocks, else every
   :build filler (for :night the shelter fillers), carried or dug. None left is nothing-possible :no-way {:text :tried [ways that failed] :dropped [ways that cannot be done]
   :why {way the child's cause} :stops {way {:reason :needs}} (dig-pit's stop reason)}.
@@ -41,6 +41,7 @@
   {:ignore-zones? :shared
    :ways {:doc "the ways to enclose the body, tried by quote and, at a tie, in the order :room, :walls, :pit, :pocket (:room only when named)" :spec (a/set-of #{:room :walls :pit :pocket}) :default #{:walls :pit :pocket}}
    :for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}
+   :place {:doc "the :room way: the room to enter, a remembered place name (default the home)" :spec (a/or-of keyword? string?) :default nil}
    :fetch {:doc "dig-pocket: get a missing tool (jobs.lib.need): true, a set of kinds or a map of limits" :spec need/option? :default false}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
    :radius {:doc "melee hostiles within this many blocks decide which side is walled first and stand in the way of a cell" :spec (a/num-in 0 nil) :default 8}
@@ -54,8 +55,8 @@
 (a/defargs settings
   {::job-time-s {:default 300 :doc "Seconds a shut-in may take." :spec (a/num-in 0 nil)}
    ::mean-s {:default 12 :doc "Seconds an enclosing is guessed to take, for the quote." :spec (a/num-in 0 nil)}
-   ::night-hand-clear-ms {:default 10000 :doc "For :night, the :hand-clear-ms when the call gives none: a block the carried tools cannot harvest is dug by hand when the hand breaks it within this many ms (stone by hand takes 7500)." :spec (a/int-in 0 nil)}
-   ::mend-s {:default 0.01 :doc "Seconds mending the roof of a closed room is guessed to take, for the :room way's quote." :spec (a/num-in 0 nil)}})
+   ::room-credit-s {:default 8 :doc "Seconds a room that is already built is preferred by over the cheapest new enclosure: the :room way wins when its quote less this is no more than the others'." :spec (a/num-in 0 nil)}
+   ::night-hand-clear-ms {:default 10000 :doc "For :night, the :hand-clear-ms when the call gives none: a block the carried tools cannot harvest is dug by hand when the hand breaks it within this many ms (stone by hand takes 7500)." :spec (a/int-in 0 nil)}})
 
 (def target [])
 
@@ -69,7 +70,8 @@
 
 (def children
   "Each way's job and the args of this call it takes."
-  {:walls ['jobs.survival.wall-in [:for :ignore-zones? :roof-height :radius :ranged-radius :max-places :wall-value]]
+  {:room ['jobs.survival.enter-room [:place :roof-height]]
+   :walls ['jobs.survival.wall-in [:for :ignore-zones? :roof-height :radius :ranged-radius :max-places :wall-value]]
    :pit ['jobs.survival.dig-pit [:for :ignore-zones? :roof-height :radius :on-lava :hand-clear-ms]]
    :pocket ['jobs.survival.dig-pocket [:for :ignore-zones? :fetch :roof-height :radius :ranged-radius :max-places :on-lava]]})
 
@@ -92,10 +94,8 @@
 (defn ^:async cost-of
   "Seconds the child of way quotes, ##Inf when it cannot be done here or cannot be quoted."
   [c way]
-  (if (= :room way)
-    (if (night/mend-cell c) (settings/get settings ::mend-s) ##Inf)
-    (let [q (await (ctx/quote c (first (children way)) (child-args c way)))]
-      (if (contract/ending? q) ##Inf (get-in q [:uses :job-time 1] ##Inf)))))
+  (let [q (await (ctx/quote c (first (children way)) (child-args c way)))]
+    (if (contract/ending? q) ##Inf (get-in q [:uses :job-time 1] ##Inf))))
 
 (defn ^:async choose
   "{:way the cheapest allowed way not failed (nil when none) :dropped [ways that cannot be done]}."
@@ -107,7 +107,7 @@
         costs (loop [[w & more] left acc []]
                 (if (nil? w) acc (recur more (conj acc [w (await (cost-of c w))]))))
         able (remove (comp infinite? second) costs)]
-    {:way (first (first (sort-by second able)))
+    {:way (first (first (sort-by (fn [[w s]] (if (= :room w) (- s (settings/get settings ::room-credit-s)) s)) able)))
      :barred (vec barred)
      :dropped (into (vec barred) (map first (filter (comp infinite? second) costs)))}))
 
@@ -140,11 +140,9 @@
       (when (and (night/night? c) (ctx/way? c :pit)) (await (dig-pit/look! (with-defaults c)))))))
 
 (defn ^:async run-way!
-  "One step of way: the child job, or for :room the mend."
+  "One step of way: its child job."
   [c way]
-  (if (= :room way)
-    (await (night/mend! c))
-    (await (ctx/call c way (first (children way)) (child-args c way)))))
+  (await (ctx/call c way (first (children way)) (child-args c way))))
 
 (defn failed-way!
   "A way ended other than :done: dropped for this call, remembered for the night, its cause kept for the :no-way ending."

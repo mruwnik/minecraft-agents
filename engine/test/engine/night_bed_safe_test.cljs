@@ -15,7 +15,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.reach :as reach]
-            [jobs.survival.night.doorway :as doorway]
+            [jobs.lib.rooms :as room-lib]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -283,6 +283,6 @@
   (:p (setup {:floor [0 0 20 20] :self {:pos {:x 10.5 :y 64 :z 0.5}} :time st/night :sees-all true :blocks blocks})))
 
 (deftest only-a-doorway-the-night-can-fill-leaves-a-home-closed
-  (is (true? (doorway/closed-home? (home-p roofed-room))) "the north doorway is the roof's only way out")
-  (is (false? (doorway/closed-home? (home-p overhang-beside-gap))) "shutting the gap leaves the roof's open side")
-  (is (true? (doorway/closed-home? (home-p (assoc roofed-room "11,64,-1" "stone" "11,65,-1" "stone")))) "a shut room"))
+  (is (true? (room-lib/closed-home? (home-p roofed-room))) "the north doorway is the roof's only way out")
+  (is (false? (room-lib/closed-home? (home-p overhang-beside-gap))) "shutting the gap leaves the roof's open side")
+  (is (true? (room-lib/closed-home? (home-p (assoc roofed-room "11,64,-1" "stone" "11,65,-1" "stone")))) "a shut room"))

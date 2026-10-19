@@ -1,5 +1,5 @@
 ;; Cards dcedd0f5, a9ae340d: at night a body without a bed walks to a close remembered roofed place (:roofed-places [:home], :walk-radius 32)
-;; when go-to's planned route (a cell seen dark or unseen at night costs twice a lit one) costs at most night.sites/dig-in-seconds (8),
+;; when go-to's planned route (a cell seen dark or unseen at night costs twice a lit one) is no dearer than the walls' quote plus shut-in's ::room-credit-s (8) (the :room way of survival.shut-in, survival.enter-room),
 ;; else it digs in where it stands (dig-in.sealed; cobblestone carried). Open ground (64x32 plot,
 ;; body at x 4.5, z 16.5); home = a stone slab at y 2 over 3x3 cells (roofed within the default roof height 4), torches beside the line at z 15.
 ;; The walk's success is the completed night job with the body at home and no dig-in; failure is dig-in.sealed with the body near its start.

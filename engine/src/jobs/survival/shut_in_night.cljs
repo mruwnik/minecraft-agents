@@ -1,17 +1,14 @@
 (ns jobs.survival.shut-in-night
-  "What jobs.survival.shut-in adds for :for :night: the roof of a closed room mended with one block (the :room way), the
-  :shut-in-failed memory of a way that failed on a site, the :shelter entry and the sealed/unsealed events."
+  "What jobs.survival.shut-in adds for :for :night: the :shut-in-failed memory of a way that failed on a site, the :shelter
+  entry and the sealed/unsealed events."
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.lib.blocks :as lb]
             [jobs.lib.choose :as choose]
-            [jobs.lib.ledger :as ledger]
             [jobs.lib.pen-gate :as pen-gate]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]))
 
@@ -42,33 +39,6 @@
   [c way reason]
   (when (and (night? c) (not (#{:no-blocks :no-tool} reason)))
     (ctx/remember! c :shut-in-failed {:pos (sh-sense/feet (:primitives c)) :way way :reason reason} failed-policy)))
-
-(defn mend-cell
-  "In a closed room with a door whose roof has a hole over the body: the cell to mend (dig-cells/room-plug), when a block is carried."
-  [c]
-  (when (seq (lb/carried c (blocks c)))
-    (dig-cells/room-plug (:primitives c) (sh-sense/feet (:primitives c)) (:roof-height (:args c)))))
-
-(defn ^:async mend!
-  "The :room way: one block in the hole of the roof over the body. Resolves to :continue while a mob in the cell is waited out,
-  else an ending-like {:kind :done|:nothing-possible :data {:placed [{:cell :item}] :text}}."
-  [c]
-  (let [item (lb/pick c (blocks c))
-        plug (mend-cell c)]
-    (if (or (nil? item) (nil? plug))
-      {:kind :nothing-possible :cause :failed :data {:text "cannot mend the roof: no block or no hole"}}
-      (let [r (await (tidy/place! c plug item true))
-            status (.-status r)
-            at (u/cell-vec plug)]
-        (cond
-          (#{"placed" "occupied"} status)
-          (do (dig-cells/forget-wait! c :mob-since)
-              (when (= "placed" status)
-                (ledger/remember! c (-> (ledger/intend (ledger/open-entries (ctx/view c)) {:cell at :item item :before "air" :job (:id c) :purpose :shelter})
-                                        (ledger/confirm at))))
-              {:kind :done :data {:placed (if (= "placed" status) [{:cell at :item item}] [])}})
-          (dig-cells/keep-waiting! c :mob-since r) :continue
-          :else {:kind :nothing-possible :cause :failed :data {:text (str "cannot mend the roof: " status (dig-cells/mob-text r)) :status status}})))))
 
 (defn near-gate?
   "Whether cell {:x :y :z} lies within ::take-back-gate-range of a door or fence gate some plan wants (jobs.lib.pen-gate)."

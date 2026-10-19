@@ -1,4 +1,4 @@
-;; A flight runs into a closed building (retreat-home/rooms, owner Q132), not only its own home: cards 1cac54f6 (any closed
+;; A flight runs into a closed building (jobs.lib.rooms/rooms, owner Q132), not only its own home: cards 1cac54f6 (any closed
 ;; building), 58b2e704 (flee into the hut by day), a6ca17e9 (home ahead of a chaser, race), 31887403 (home is any cell of the room), 096cba8d (no room within blast reach
 ;; of a creeper), 659f5e6d (no run into the hut ahead of a creeper). Hut: stone walls x 12..20, z 12..20, roof y 3, interior 7x7, door gap at [16 0 20]/[16 1 20] facing south.
 ;; The cases that start in the room turn the body through four yaws at two pitches (the sight cone is ~100 x 70 degrees; one look-around glance sees a part of the room only), so the whole room is seen before the body leaves.
