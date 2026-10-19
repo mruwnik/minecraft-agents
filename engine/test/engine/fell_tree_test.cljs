@@ -414,13 +414,15 @@
       (fn ^:async t []
         (let [s (await (fell (axe-world [] []) {:radius 10} 400))]
           (is (= 8 (:logs (:out s))) "felled without an axe")
-          (is (= 1 (count (kinds s :fetch.failed)))))))))
+          (is (= 2 (count (kinds s :fetch.failed))) "the fetch, and the craft-only ask again after two logs"))))))
 
 (deftest a-failed-axe-fetch-is-asked-again-by-crafting-once-two-logs-are-dug
   (let [c {:primitives (tu/fake {:blocks {}}) :args {}}
         logs (vec (repeat 8 {:name "oak_log"}))
         wanted (fn [m] (with-redefs [ctx/mem (constantly m)] (fell-tree/axe-wanted? c logs)))]
     (is (true? (wanted {:dug 0})) "before the first log")
+    (is (true? (wanted {:dug 1})) "a tree first seen small gets another look at its size")
+    (is (false? (wanted {:dug 2})) "not after two logs")
     (is (false? (wanted {:dug 0 :axe-failed true})) "not at once after a failed fetch")
     (is (false? (wanted {:dug 1 :axe-failed true})))
     (is (true? (wanted {:dug 2 :axe-failed true})) "logs in the bag may now craft one")

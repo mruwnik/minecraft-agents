@@ -42,7 +42,7 @@
   failed round (tree_blocked after a few). When the pillar's blocks cannot be had the call ends with the fetch's ending.
   Once a tree is chosen the rest of it is a comfort section (ctx/atomic): reflexes at or below that level wait for it,
   up to their caps.
-  Before the first log of a tree big enough for an axe to pay (jobs.lib.trees/axe-worth-fetching?) with none carried it
+  Before the third log of a tree big enough for an axe to pay (jobs.lib.trees/axe-worth-fetching?) with none carried it
   gets one (jobs.lib.need, a seen chest or crafted) unless :fetch is false or lacks :tool; a failed fetch is
   warned (fetch.failed) and the tree chopped by hand, asking once more (craft only) after two logs are dug.
   Before the first log, a carried axe that is the last of its kind and worn gets a spare (jobs.lib.trip/tool-ready!,
@@ -231,15 +231,16 @@
   (boolean (some #(str/ends-with? (:name %) "_axe") (u/inventory (:primitives c)))))
 
 (defn axe-wanted?
-  "Whether an axe should be got before the next log of a tree of logs: none carried, a tree an axe pays for, and either
-  none dug yet and no fetch failed, or a fetch failed and two logs are dug since (they may now craft one; once)."
+  "Whether an axe should be got before the next log of a tree of logs: none carried, a tree an axe pays for (the logs dug
+  and still seen: the first sight of a tall tree misses its top), and either fewer than two dug and no fetch failed, or a
+  fetch failed and two logs are dug since (they may now craft one; once)."
   [c logs]
   (let [{:keys [dug axe-failed axe-retried]} (ctx/mem c)]
     (boolean (and (not (axe-carried? c))
-                  (axe-worth-fetching? (count logs))
+                  (axe-worth-fetching? (+ (or dug 0) (count logs)))
                   (if axe-failed
                     (and (>= (or dug 0) 2) (not axe-retried))
-                    (zero? (or dug 0)))))))
+                    (< (or dug 0) 2))))))
 
 (defn axe-fetch-opts
   "The limits {:how :explore} for getting an axe, nil when :fetch does not allow tools; retry? asks only to craft."
