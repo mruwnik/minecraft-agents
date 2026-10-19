@@ -663,3 +663,15 @@
           (let [result (await (outcome eng job {:plan "line"} 400))]
             (is (true? (:ok? result)) "the line is sound once the power arrived")
             (is (seq (h/calls p "wait")) "the unlit reading was waited out, not judged at once")))))))
+
+(deftest a-slope-through-invisible-light-blocks-is-built-over-them
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [lit (into {} (for [x (range 14 28) z (range -1 2) :when (> 66 (up-top x))] [(h/cell-key x 66 z) "light"]))
+              world (update (route-world slope-route {} up-top) :blocks merge lit)
+              [result seen p] (await (build-route! slope-route {} world {}))]
+          (is (true? (:ok? result)))
+          (is (= [] (get-in result [:built :wrong])))
+          (is (= "powered_rail" (h/block-at p 21 66 0)))
+          (is (empty? (h/events-of seen :rail-build.broken))))))))

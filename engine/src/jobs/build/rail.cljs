@@ -260,7 +260,7 @@
         p (:primitives c)
         answer (known/plan c plan)]
     (when (and answer (not (:broken answer)))
-      (plan/judged p answer part (set (keys (storage/carried-totals (u/inventory p)))) nil))))
+      (plan/loosened (plan/judged p answer part (set (keys (storage/carried-totals (u/inventory p)))) nil)))))
 
 (defn ^:async round
   "Build in steps (pace/steps!); :continue while a walk or the dig child waits on the world."

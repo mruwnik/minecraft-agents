@@ -550,7 +550,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (fence-run {"4,64,3" "leaf_litter" "5,64,3" "fern"} kit {} {}))]
+        (let [[result p] (await (fence-run {"4,64,3" "leaf_litter" "5,64,3" "fern" "2,64,3" "light"} kit {} {}))]
           (is (empty? (h/calls p "dig")))
           (is (= "oak_fence" (block p [4 64 3])))
           (is (= {:placed 9 :wrong [] :missing []} (select-keys result [:placed :wrong :missing]))))))))

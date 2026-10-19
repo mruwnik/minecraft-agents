@@ -273,29 +273,38 @@
 
 (def opening-pattern #"(_door|_fence_gate|_trapdoor)$")
 
+(defn loosened
+  "Cells (as judged) with a replaceable block read as the placement sees it: a wrong cell holding one is :missing
+  (placed into directly), a :clear cell holding one is :match."
+  [cells]
+  (mapv (fn [{:keys [answer found] :as cell}]
+          (cond
+            (not (rules/replaceable found)) cell
+            (= :wrong answer) (assoc cell :answer :missing)
+            (= :extra answer) (assoc cell :answer :match)
+            :else cell))
+        cells))
+
 (defn prepared
-  "Cells (as judged) ready for the rounds: a wrong cell holding a replaceable block is :missing (placed into
-  directly); a companion half is marked :companion; a wrong block of another kind that the body carries the item for,
+  "Cells (as judged) ready for the rounds: loosened; a companion half is marked :companion; a wrong block of another kind that the body carries the item for,
   that is no container, door or gate, no rail of the wanted kind (its shape settles as its neighbours land), not already misplaced by this job, is marked :dig? (dug, then placed). So is a block that is
   no replaceable one in a :clear cell (:extra), whatever is carried."
   [cells carried misplaced]
   (mapv (fn [{:keys [answer found want item pos] :as cell}]
           (let [wrong? (= :wrong answer)
-                loose? (and wrong? (rules/replaceable found))
-                extra? (and (= :extra answer) (not (rules/replaceable found)))
+                extra? (= :extra answer)
                 settling? (and (rail/rail-name? found) (= found (shape/want-block want)))
                 dug? #(and (not (contains? misplaced pos))
                            (not settling?)
                            (not (kept/kept? [] found))
                            (not (re-find opening-pattern found)))
-                digs? (and (or extra? (and wrong? (not loose?) item (contains? carried item))) (dug?))
-                short? (and wrong? (not loose?) item (not (contains? carried item)) (dug?))]
+                digs? (and (or extra? (and wrong? item (contains? carried item))) (dug?))
+                short? (and wrong? item (not (contains? carried item)) (dug?))]
             (cond-> cell
               short? (assoc :short? true)
               (companion? want) (assoc :companion true)
-              loose? (assoc :answer :missing)
               digs? (assoc :dig? true))))
-        cells))
+        (loosened cells)))
 
 (defn sturdy-ground?
   "Whether the plan of the call says (:sturdy-ground true) that a sturdy block on the ground of its rail line is no wrong block."
