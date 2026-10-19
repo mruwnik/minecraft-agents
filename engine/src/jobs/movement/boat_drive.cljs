@@ -22,7 +22,7 @@
   Impossible: :bad-args, and between strokes :not-a-boat (another vehicle), :not-water (the cell is seen not to be water).
   Condition: :not-aboard (on foot, at the start or got out on the way: a listed call waits; jobs.movement.boat-launch puts the body in a boat).
   Ends done (data {:left blocks}) or
-  nothing-possible: :blocked (land in the way: two forward strokes in a row that could not move),
+  nothing-possible: :blocked (land in the way: max-blocked, 2, forward strokes in a row that could not move),
   :failed (any other paddle status, data :primitive); limit-reached :job-time (the call's :spend :job-time used up, data the distance left).
 
   Never :continue.")
@@ -39,14 +39,18 @@
 (def defaults {:spend {:job-time ::job-time-s}})
 
 (a/defargs settings
-  {::job-time-s {:default 120 :doc "Seconds a drive may take before it gives up." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 120 :doc "Seconds a drive may take before it gives up." :spec (a/num-in 0 nil)}
+   ::aligned-deg {:default 8 :doc "A heading this close to the cell's bearing (degrees) is straight ahead." :spec (a/num-in 0 nil)}
+   ::forward-while-turning-deg {:default 30 :doc "A turn stroke also paddles forward while the heading error is under this (degrees)." :spec (a/num-in 0 nil)}
+   ::max-turn-ticks {:default 10 :doc "Most ticks of one turning stroke." :spec (a/int-in 1 nil)}
+   ::max-forward-ticks {:default 20 :doc "Most ticks of one forward stroke." :spec (a/int-in 1 nil)}
+   ::max-blocked {:default 2 :doc "Blocked forward strokes before the drive ends :nothing-possible :blocked." :spec (a/int-in 1 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
-
-(def aligned-deg 8)
-(def forward-while-turning-deg 30)
-(def max-turn-ticks 10)
-(def max-forward-ticks 20)
-(def max-blocked 2)
+(defn aligned-deg [] (settings/get settings ::aligned-deg))
+(defn forward-while-turning-deg [] (settings/get settings ::forward-while-turning-deg))
+(defn max-turn-ticks [] (settings/get settings ::max-turn-ticks))
+(defn max-forward-ticks [] (settings/get settings ::max-forward-ticks))
+(defn max-blocked [] (settings/get settings ::max-blocked))
 (def boat-speed "Blocks a second a boat covers, for the quote." 5)
 
 (defn centre-of [{:keys [x z]}] {:x (+ x 0.5) :z (+ z 0.5)})
@@ -110,12 +114,12 @@
   [{:keys [x z]} yaw goal range turn-deg speed]
   (let [err (heading-error yaw (vehicle/yaw-toward {:x x :z z} goal))
         miss (u/dist {:x x :y 0 :z z} (assoc goal :y 0))]
-    (if (> (js/Math.abs err) aligned-deg)
+    (if (> (js/Math.abs err) (aligned-deg))
       {:turn (if (pos? err) "right" "left")
-       :forward (< (js/Math.abs err) forward-while-turning-deg)
-       :ticks (min max-turn-ticks (js/Math.ceil (/ (js/Math.abs err) turn-deg)))}
+       :forward (< (js/Math.abs err) (forward-while-turning-deg))
+       :ticks (min (max-turn-ticks) (js/Math.ceil (/ (js/Math.abs err) turn-deg)))}
       {:turn nil :forward true
-       :ticks (max 1 (min max-forward-ticks (js/Math.ceil (/ (- miss range) speed))))})))
+       :ticks (max 1 (min (max-forward-ticks) (js/Math.ceil (/ (- miss range) speed))))})))
 
 (defn pose-of [r] {:pos {:x (.. r -pos -x) :y (.. r -pos -y) :z (.. r -pos -z)} :yaw (.-yaw r) :turn-deg (.-turnDeg r) :speed (.-speed r)})
 
@@ -145,7 +149,7 @@
                 status (.-status out)]
             (cond
               (= "blocked" status)
-              (if (and (:forward s) (>= (inc blocked) max-blocked))
+              (if (and (:forward s) (>= (inc blocked) (max-blocked)))
                 (stop! :nothing-possible :blocked {:pos (js->clj (.-pos out) :keywordize-keys true) :left left})
                 (do (reset! st {:strokes (inc strokes) :blocked (inc blocked) :looked-from looked}) :again))
               (= "ok" status) (do (reset! st {:strokes (inc strokes) :blocked 0 :looked-from looked}) :again)
