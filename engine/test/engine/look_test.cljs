@@ -187,6 +187,15 @@
   (is (= 1 (dark-of midnight [6 64 0] nil)))
   (is (= 0 (dark-of day [6 64 0] nil))))
 
+(deftest an-unseen-cell-is-dark-by-day-when-the-body-is-underground
+  (let [p (seeing {:time day :blocks wall})]
+    (swap! (fake/state p) assoc :light {[0 64 0] [0 0] [0 65 0] [0 0]})
+    (is (= 1 ((:at (look/dark-fn p)) 6 64 0)))))
+
+(deftest sky-dark-follows-the-sky-light-not-the-clock-alone
+  (is (true? (look/sky-dark? (seeing {:time midnight}))))
+  (is (false? (look/sky-dark? (seeing {:time day})))))
+
 (deftest a-seen-cell-is-lit-by-block-light-or-by-day-sky
   (is (= 0 (dark-of midnight [0 64 5] [0 1])) "a torch's light 1 at night")
   (is (= 1 (dark-of midnight [0 64 5] [15 0])) "open sky at night")

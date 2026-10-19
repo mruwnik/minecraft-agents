@@ -13,6 +13,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger]
+            [jobs.lib.look :as look]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.storage :as storage]))
@@ -72,7 +73,7 @@
     {::exposure (fn [c] (exposed c (f c))) ::plain true}))
 
 (defn safe-at-by-night
-  "The checker of a job that goes to the place (f c): at night safe-at it, by day or when body and place are both
+  "The checker of a job that goes to the place (f c): while the open sky is dark safe-at it, by day or when body and place are both
   underground only not threatened (an unseen place's light is no reason to wait, and darkness underground does not end
   at dawn; a walk from a tunnel to open ground is exposed). A buried body's unseen place no higher than its feet is
   underground (Q279: caves count only reachable hostiles); one above them may be open ground."
@@ -84,7 +85,7 @@
                           at (f c)
                           to (cond (nil? at) feet
                                    (:y at) (update-vals at js/Math.floor))]
-                      (and (sh-sense/night? p)
+                      (and (look/sky-dark? p)
                            (not (and to (sh-sense/buried? p)
                                      (or (sh-sense/buried-at? p to)
                                          (and (not (sh-sense/seen-cell? p to)) (<= (:y to) (:y feet)))))))))]
@@ -102,11 +103,11 @@
   (safe-at-by-night (fn [c] (let [args (:args c)] (when-not (:here args) (a/cell (:submitted-at args)))))))
 
 (defn dark-sky
-  "Later :dark at night above ground."
+  "Later :dark while the sky is dark (look/sky-dark?) above ground."
   [c]
   (let [p (:primitives c)]
-    (if (and (sh-sense/night? p) (not (sh-sense/buried? p)))
-      (contract/later :dark "night above ground, waits for dawn")
+    (if (and (look/sky-dark? p) (not (sh-sense/buried? p)))
+      (contract/later :dark "dark sky above ground, waits for light")
       (contract/ok :lit "lit or underground"))))
 
 (def safe-if-lit

@@ -36,6 +36,7 @@
             [jobs.lib.cost.tolls :as tolls]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.cost.value :as value]
+            [jobs.lib.look :as look]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]))
 
@@ -134,7 +135,7 @@
                         (when-let [block (and (sh-sense/seen-cell? p at) (sh-sense/block-light-at p at))] {:block block :sky (or (sh-sense/sky-light-at p at) 0)})))
          open-sky (fn [_] {:block 0 :sky 15})
          leaves? (sh-inside/walk-leaves-shelter? p shelter to 1)
-         [light night?] (if leaves? [open-sky true] [seen (sh-sense/night? p)])
+         [light night?] (if leaves? [open-sky true] [seen (look/sky-dark? p)])
          chance (spawn-chance cell {:light light :night? night?})]
      (if (and (not leaves?) (nil? (seen cell)))
        {:chance chance :lowered-by #{:look} :look-at [cell]}

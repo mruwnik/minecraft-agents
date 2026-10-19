@@ -306,11 +306,30 @@
   (let [packed (.lightAt raw x y z)]
     (max (bit-and packed 15) (- (bit-shift-right packed 4) (sky-subtract raw)))))
 
+(defn sky-dark?
+  "Whether the sky's light now, less its darkening (time of day, rain, thunder), is below dark-light: open ground is dark.
+  Read from the live sky when the body has a perception, else from its self's timeOfDay."
+  [p]
+  (let [subtract (if-let [raw (some-> (aget p "perception") :raw)]
+                   (sky-subtract raw)
+                   (let [s (.self p)
+                         darken (perception/sky-darken (.-timeOfDay s) (if (.-raining s) 1 0) (if (.-thundering s) 1 0))]
+                     (js/Math.round (* 11 (/ (- 1 darken) 0.8)))))]
+    (< (- 15 subtract) (dark-light))))
+
+(defn buried-feet?
+  "Whether the sky light at the feet cell and the cell over it is 0 (underground), read from raw; false without light data there."
+  [^js raw pos]
+  (let [x (js/Math.floor (.-x pos)) y (js/Math.floor (.-y pos)) z (js/Math.floor (.-z pos))]
+    (and (<= 0 (.stateAt raw x y z))
+         (zero? (bit-shift-right (.lightAt raw x y z) 4))
+         (zero? (bit-shift-right (.lightAt raw x (inc y) z) 4)))))
+
 (defn dark-fn
   "The planner's test of a feet cell (options.dark.at), {:at (fn [x y z] 1 dark, 0 lit) :night? whether the sky is dark},
   for the body of primitives p; nil without a perception. A cell the body has seen is lit by block light of 1 or more
   (mobs do not spawn there) or by sky light still at dark-light after the sky darkening; a seen cave stays dark by day.
-  A cell never seen is dark only when the sky is (night?): by day it costs like a lit one; with :unseen-dark? false never
+  A cell never seen is dark when the sky is (night?) or the body is underground: otherwise it costs like a lit one; with :unseen-dark? false never
   (a masked plan prices unseen cells itself). Light is read only for cells seen, as a player would know them."
   ([p] (dark-fn p nil))
   ([p {:keys [unseen-dark?]}]
@@ -320,7 +339,7 @@
              subtract (sky-subtract raw)
              dark (dark-light)
              night? (< (- 15 subtract) dark)
-             unseen (if (and night? (not (false? unseen-dark?))) 1 0)
+             unseen (if (and (or night? (buried-feet? raw (.-pos (.self p)))) (not (false? unseen-dark?))) 1 0)
              ^js sections (store/store-of st (.-dim st))]
          {:night? night?
           :at (fn [x y z]
