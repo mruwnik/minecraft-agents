@@ -1048,13 +1048,15 @@ test('relight: a backlog over relightBacklogMax keeps only the nearest points', 
 
 const torchCell = (cx) => ((65 + 64) & 15) << 8 | 8 << 4 | 8
 
-test('a server light update drops the column overlay, so the server light wins over the relit copy', async () => {
+test('a server light update drops the overlay of the sections it carries, so the server light wins over the relit copy', async () => {
   const { view, torch, bot } = torchWorld({ relightRange: 1000, relightBudgetMs: 1e9 })
   torch(8)
   await view.flushColumns()
   await view.idle()
   assert.equal(view.lightOverlay(0, 0, (65 + 64) >> 4)?.block[torchCell()], 14)
-  bot._client.emit('update_light', { chunkX: 0, chunkZ: 0 })
+  bot._client.emit('update_light', { chunkX: 0, chunkZ: 0, skyLightMask: [[0, 1 << 3]] })
+  assert.equal(view.lightOverlay(0, 0, (65 + 64) >> 4)?.block[torchCell()], 14, 'a packet for other sections keeps the relit copy')
+  bot._client.emit('update_light', { chunkX: 0, chunkZ: 0, blockLightMask: [[0, 1 << 9]] })
   assert.equal(view.lightOverlay(0, 0, (65 + 64) >> 4), undefined)
 })
 

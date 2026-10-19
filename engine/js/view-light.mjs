@@ -13,7 +13,7 @@ const SECTION_VOLUME = 4096
 // ---- light: masks, nibbles, and the local relight overlay ----
 
 // bit i of a long-array mask of [hi, lo] int32 pairs
-const maskBit = (mask, i) => ((mask?.[i >> 6]?.[(i & 63) >= 32 ? 0 : 1] ?? 0) >>> (i & 31)) & 1
+export const maskBit = (mask, i) => ((mask?.[i >> 6]?.[(i & 63) >= 32 ? 0 : 1] ?? 0) >>> (i & 31)) & 1
 const copyMask = mask => (mask ?? []).map(pair => [...pair])
 function setMaskBit (mask, i, on) {
   while (mask.length <= (i >> 6)) mask.push([0, 0])

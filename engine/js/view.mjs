@@ -11,7 +11,7 @@ import { relightBox } from './light.mjs'
 import { setting } from './settings.mjs'
 import { bodyDir, worldsDir } from './bodies.mjs'
 import { writeAtomic } from './write-atomic.mjs'
-import { RELIGHT_BUDGET_MS, RELIGHT_MAX_POINTS, RELIGHT_REACH, columnLightSection, columnStateSection, hasSkyLight, tableFor, mergeOverlapping } from './view-light.mjs'
+import { RELIGHT_BUDGET_MS, RELIGHT_MAX_POINTS, RELIGHT_REACH, columnLightSection, columnStateSection, hasSkyLight, maskBit, tableFor, mergeOverlapping } from './view-light.mjs'
 import { VIEW_VERSION, encodeColumn } from './view-column.mjs'
 import { poseJson, poseSnapshot, bodyKey, poseKey, offlinePose, hudSnapshot, hudKey } from './view-pose.mjs'
 export * from './view-light.mjs'
@@ -505,8 +505,11 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   // mineflayer applies update_light without emitting a bot event, so listen on the raw client
   const onLight = safely(packet => {
     const key = `${packet.chunkX},${packet.chunkZ}`
-    overlays.delete(key) // the server's light is fresher than our frozen copy
-    dirty.delete(key)
+    // only the sections the packet carries are fresher than our relit copy; the rest keep it
+    const sent = l => [packet.skyLightMask, packet.blockLightMask, packet.emptySkyLightMask, packet.emptyBlockLightMask].some(m => maskBit(m, l))
+    const kept = overlays.get(key)
+    for (const s of [...(kept?.keys() ?? [])]) if (sent(s + 1)) kept.delete(s)
+    if (kept?.size === 0) overlays.delete(key)
     markColumn(packet.chunkX, packet.chunkZ)
   })
 
