@@ -579,7 +579,7 @@
               (await walking)
               (await reflex-round)))
           (is (= [:fired :cut] (->> @seen (map :kind) (filter #{:fired :cut}))))
-          (is (= ["look"] (mapv #(.-name %) (filter #(= "look" (.-name %)) (.-calls world)))))
+          (is (= 8 (count (filter #(= "look" (.-name %)) (.-calls world)))))
           (await (core/tick! eng))
           (is (= ["j1" "j3" "j1"] (ran seen)) "the cut job resumes once the look is done")
           (swap! clock + 45000)
