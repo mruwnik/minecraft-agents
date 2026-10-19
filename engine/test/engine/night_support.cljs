@@ -120,7 +120,9 @@
 ;; ------------------------------------------------------------------ job: a roofed place close by
 (def home-roof {"10,66,0" "stone"})
 
-(def lit-world {:time night :inventory st/dirt-stack :blocks (merge wide-ground home-roof) :light-default [15 4]})
+(def lit-world
+  "A lit route home with the body's own cell dark: darkness is the light of the cell it stands in, so a lit cell is no night to shelter from."
+  {:time night :inventory st/dirt-stack :blocks (merge wide-ground home-roof) :light-default [15 4] :light {[0 64 0] [15 0]}})
 
 (defn know-home! [eng pos] (mem/write! (:store eng) :home {:pos pos} mem/place-policy))
 

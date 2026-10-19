@@ -31,7 +31,7 @@
   ([file world ms-per-call]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/seeing-all (tu/fake-on-floor world))
+        p (cond-> (tu/seeing-all (tu/fake-on-floor world)) (contains? world :time) tu/with-sky-only)
         now (tu/act-clock clock p ms-per-call)
         eng (core/create {:primitives p :jobs registry/jobs :triggers all-triggers :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})
@@ -182,7 +182,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen clock]} (boot "scenarios/survival.edn"
                                                {:time 14000
-                                                :inventory [{:name "dirt" :count 16}]})]
+                                                :inventory [{:name "dirt" :count 16} {:name "stone_sword" :count 1}]})]
           ;; the night is one round until morning: day comes at its first hold
           (.override (.-world p) "wait" (fn ^:async g [token a impl]
                                           (when (= 5000 (.-ms a)) (.setTime (.-world p) 1000))
@@ -201,7 +201,7 @@
     (tu/run-async done
       (fn ^:async t []
         ;; morning comes before the pile despawns, so the pile is held; earlier at night recover-drops walks for a pile that would not last
-        (let [{:keys [eng p seen clock]} (boot "scenarios/survival.edn" {:time 21000 :floor [-30 -10 260 10] :blocks dirt-ground} 1000)
+        (let [{:keys [eng p seen clock]} (boot "scenarios/survival.edn" {:time 21000 :floor [-30 -10 260 10] :blocks dirt-ground :inventory [{:name "stone_sword" :count 1}]} 1000)
               store (:store eng)
               pile (for [i (range 3)] {:name "iron_ingot" :count 30 :slot i})]
           (mem/write! store :home {:pos {:x 200 :y 64 :z 0}} mem/place-policy)
@@ -212,9 +212,9 @@
           (mem/write! store :respawned {:pos {:x 0 :y 64 :z 0}} nil)
           (swap! clock + 5000)
           (await (run-ticks eng clock 8 1000))
-          (is (not-any? #{:dusk-home :needs-bed} (fired seen)) "no walk home at night, no bed errand")
+          (is (not-any? #{:dusk-home} (fired seen)) "no walk home at night")
           (is (some #{:night} (fired seen)) "the night reflex has the body")
-          (is (< (js/Math.abs (first (:pos (fake/self p)))) 10) "it stays where it stands")
+          (is (< (js/Math.abs (first (:pos (fake/self p)))) 10) "it stays where it stands: needs-bed may fire, its job's safe? keeps it from walking in the dark")
           (is (seq (filter #(= "place" (.-name %)) (.-calls (.-world p)))) "and shelters"))))))
 
 (def scenario-files

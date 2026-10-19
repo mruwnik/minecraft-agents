@@ -78,7 +78,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home (assoc lit-world :light {[5 64 0] [15 0]}) {:x 10 :y 64 :z 0}))]
+        (let [{:keys [eng p]} (await (night-at-home (update lit-world :light assoc [5 64 0] [15 0]) {:x 10 :y 64 :z 0}))]
           (await (tu/run-until-empty eng 40))
           (is (= [] (st/calls p "place")) "one dark cell costs a little more, not a refusal: walked")
           (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z]))))))))
