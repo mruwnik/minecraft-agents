@@ -215,7 +215,7 @@
       (fn ^:async t []
         (let [env (world :blocks (assoc corridor "10,65,2" "spawner"))
               r (await (run! env (assoc args :spawner :seal)))]
-          (is (= {:reason :spawner :cell [10 65 2]} (select-keys (cause r) [:reason :cell])))
+          (is (= [:nothing-possible :spawner [10 65 2]] [(:kind (:ending r)) (:reason r) (:cell (:data (:ending r)))]))
           (is (empty? (bd/calls (:p env) "dig")))
           (is (= "spawner" (bd/block-at (:p env) spawner-cell))))))))
 
@@ -297,8 +297,8 @@
               ends (fn ^:async ends [env a] (let [e (:ending (await (run! env a)))] [(:kind e) (if (map? (:cause e)) (:reason (:cause e)) (:cause e))]))]
           (is (= [:impossible :bad-args] (await (ends (world) {:segment "nonsense"})))
               "a segment from the args that cannot be read is never possible")
-          (is (= [:impossible :bag-full] (await (ends (world :inventory (into kit filler)) args))))
-          (is (= [:impossible :no-tool] (await (ends (world :inventory (vec (take 2 kit))) args))))
+          (is (= [:condition-failed :bag-full] (await (ends (world :inventory (into kit filler)) args))))
+          (is (= [:condition-failed :no-tool] (await (ends (world :inventory (vec (take 2 kit))) args))))
           (is (= [:condition-failed :refused]
                  (await (ends (world :zones [{:name "farm" :min [0 60 -3] :max [12 70 3] :owner "Miles"}]) args)))))))))
 

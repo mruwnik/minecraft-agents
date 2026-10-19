@@ -5,7 +5,7 @@
 ;; The spawner sits in the wall at [16 1 18] (RequiredPlayerRange 0: it spawns nothing); its spawn box takes in the centre line x 12..20.
 ;; Should-succeed: cobweb (shears) and rails (pickaxe) are taken, the torches hung are taken back; a support's fences and planks go to
 ;; an axe; a chest minecart is looted; :light leaves the spawner with torches round it, :break digs it, :skip leaves it unlit.
-;; Should-fail: no shears ends impossible :no-tool with the cobweb left; no torches stops :no-torches; :seal stops :spawner, spawner left.
+;; Should-fail: no shears waits :no-tool with the cobweb left; no torches waits :no-torches; :seal stops :spawner, spawner left.
 ;; A zombie in the corridor: the job waits :hostile-near, then strips once it is gone.
 {:defaults
  {:tags [:strip :corridor :mineshaft :jobs] :time :any
@@ -38,19 +38,19 @@
    :act [[:summon "chest_minecart" [12.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"]
          [:wait-s 2]
          [:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:rail] :want-free 0})]]
-   :expect [{:event {:source :job :kind :strip.corridor.stopped :data {:reason :bag-full}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :strip.corridor.stopped :data {:reason :cart-failed}} :for-s 100 :until {:source :job :kind :strip.corridor.stopped}}]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :bag-full}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :cart-failed}} :for-s 100 :until {:source :job :kind :stopped}}]
    :after [[:item "iron_ingot" 0] [:entities "type=chest_minecart,tag=wt" [[2 -1 10] [30 4 22]] 1]]}
   {:name "no-shears-stops-no-tool-leaving-the-cobweb"
    :body {:inventory [["stone_pickaxe" 1] ["torch" 8] ["bread" 8]]}
    :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:cobweb]})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :no-tool}} :within-s 100 :of-job true}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15}]
    :after [[:block [10 1 16] "cobweb"]]}
   {:name "dark-without-torches-stops-no-torches"
    :body {:inventory [["stone_pickaxe" 1] ["shears" 1] ["bread" 8]]}
    :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:cobweb :rail]})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :no-torches}} :within-s 100 :of-job true}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-torches}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15}]
    :after [[:block [14 0 16] "rail"]]}
   {:name "spawner-default-is-lit-and-left"
@@ -62,7 +62,7 @@
    :blocks [[:set [16 1 18] "spawner{RequiredPlayerRange:0s}"]]
    :body {:inventory [["stone_pickaxe" 1] ["bread" 8]]}
    :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:ore]})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :no-torches}} :within-s 100 :of-job true}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-torches}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15}]
    :after [[:block [16 1 18] "spawner"]]}
   {:name "spawner-break-lights-it-then-digs-it"
@@ -73,7 +73,7 @@
   {:name "spawner-seal-stops-spawner-and-leaves-it"
    :blocks [[:set [16 1 18] "spawner{RequiredPlayerRange:0s}"]]
    :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:ore] :spawner :seal})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :spawner}} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :spawner}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15}]
    :after [[:block [16 1 18] "spawner"]]}
   ;; a seen zombie (NoAI, helmeted) in the corridor can reach the body: the job waits :hostile-near, and takes the rails once it is gone
