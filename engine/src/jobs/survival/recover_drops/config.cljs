@@ -20,7 +20,6 @@
    ::pause-s {:default 1 :doc "Seconds one wait for the respawn, the settling or a kit fetch pauses (jobs.time.noop) before it looks again." :spec (a/num-in 0 nil)}
    ::danger-memory-ms {:default 150000 :doc "How long a skip for danger is remembered: the died trigger rests and the job waits (:danger-remembered) for that death, then the danger is weighed anew. A skip for the assumed killer alone lasts only while the killer guard does." :spec (a/num-in 0 nil)}
    ::margin {:default 0 :doc "Added to the fetch cost before comparing it to the value." :spec (a/num-in nil nil)}
-   ::danger-radius {:default 8 :doc "A hostile this close to the body is weighed into the trip again." :spec (a/num-in 0 nil)}
    ::leg-s {:default 6 :doc "The walk to the pile goes in legs of this many seconds; after each the danger and the cost are weighed again." :spec (a/num-in 0.1 120)}
    ::bed-away-blocks {:default 10 :doc "A respawn farther than this from the bed the body slept in is reported." :spec (a/int-in 0 nil)}})
 
@@ -71,6 +70,5 @@
 
 (defn margin [] (settings/get settings ::margin))
 
-(defn danger-radius [] (settings/get settings ::danger-radius))
 
 (defn leg-s [] (settings/get settings ::leg-s))

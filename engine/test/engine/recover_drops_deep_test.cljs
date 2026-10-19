@@ -75,6 +75,19 @@
           (is (some :retry (filter #(= :recover-drops.decided (:kind %)) @seen)) "the zombie is weighed and the trip backs off")
           (is (> (feet-y p) 50) "the stair was not carried on to the pile"))))))
 
+(deftest a-skeleton-beyond-eight-blocks-with-a-line-of-fire-is-weighed-not-an-unreachable-stair
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks deep-ground :inventory [{:name "iron_pickaxe" :count 1} {:name "torch" :count 16}]
+                                           :entities [{:id 1 :name "item" :kind "item" :pos pile-pos :item {:name "diamond" :count 5}}
+                                                      {:id 9 :name "skeleton" :kind "hostile" :pos {:x 12.5 :y 64 :z 0.5}}]})]
+          (die! eng {:pos pile-pos :inventory pile} 5000)
+          (core/submit! eng (list (first job) {:danger-overrides {"skeleton" 1000}}) {})
+          (await (settings/scoped {:jobs.access.stair/round-s 0} #(run-until-empty eng 200)))
+          (is (not= :unreachable (:reason (recovered eng))) (pr-str (recovered eng)))
+          (is (some :retry (filter #(= :recover-drops.decided (:kind %)) @seen)) "the skeleton is weighed and the trip backs off"))))))
+
 (def slope-pile-pos {:x 20 :y 82 :z 0})
 
 (def open-slope

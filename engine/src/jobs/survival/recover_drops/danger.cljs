@@ -1,8 +1,9 @@
 (ns jobs.survival.recover-drops.danger
   "The dangers near a recover-drops trip and the declines they cause."
   (:require [engine.ctx :as ctx]
+            [jobs.lib.body :as body]
             [jobs.lib.danger :as danger-q]
-            [jobs.survival.recover-drops.config :as cfg]
+            [jobs.lib.ready :as ready]
             [jobs.survival.recover-drops.deaths :as dth]))
 
 (defn decline!
@@ -13,9 +14,13 @@
     (ctx/end c (if (= :unreachable reason) :nothing-possible :condition-failed) reason (assoc fields :text text))))
 
 (defn threatened?
-  "The nearest real danger within :danger-radius the trip has not been weighed with near (:weighed), or nil."
+  "The nearest real danger the hostile-near trigger sees (its radii and options: the same test as the (threatened) check)
+  that the trip has not been weighed with near (:weighed), or nil."
   [c]
-  (danger-q/nearest-danger (:primitives c) (cfg/danger-radius) {} {:skip (:weighed (ctx/mem c))}))
+  (let [args (ready/trigger-args c)]
+    (danger-q/nearest-danger (:primitives c) (danger-q/radius-in args) {:ranged-radius (danger-q/ranged-radius-in args)}
+                             {:skip (:weighed (ctx/mem c)) :sight? (:visible-only args true)
+                              :ignore-heard? (body/heard-muted? (ctx/view c))})))
 
 (defn hit-since?
   "Whether the body was hurt since the decision was taken."
@@ -33,7 +38,7 @@
   (let [{:keys [mob mob-pos] :as fields} (danger-fields (:primitives c) m)]
     (ctx/update-mem! c assoc :hostile-cut true)
     (dth/save-trip! c)
-    (decline! c :danger (str mob " at " (pr-str mob-pos) " within " (cfg/danger-radius) " blocks") fields)))
+    (decline! c :danger (str mob " at " (pr-str mob-pos)) fields)))
 
 (defn meet-danger!
   "A danger m the trip has not been weighed with near: :next with the trip to be weighed again with it, once per mob;

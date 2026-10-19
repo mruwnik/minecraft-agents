@@ -11,7 +11,7 @@
             [engine.test-util :as tu :refer [run-until-empty]]))
 
 (def guard
-  "A skeleton 5.7 blocks from the pile: inside :danger-radius of the body once it stands there."
+  "A skeleton 5.7 blocks from the pile: inside the hostile-near radius of the body once it stands there."
   {:id 9 :name "skeleton" :kind "hostile" :pos {:x 24 :y 64 :z 4}})
 
 (def zombie-near-the-body {:id 8 :name "zombie" :kind "hostile" :pos {:x 4.5 :y 64 :z 3.5}})
