@@ -27,6 +27,7 @@
    ::zone-tolls {:default true :doc "Whether walks also toll the cells of other bodies' zones near each walk (jobs.lib.toll-cells/zone-walk-tolls), so a way round a neighbour's field is taken; none under the call's :ignore-zones?." :spec boolean?}
    ::dark {:default true :doc "Whether walks cost a dark cell (seen dark, or unseen at night) twice a lit one; false plans dark cells like lit ones." :spec boolean?}
    ::y-margin {:default false :doc "Blocks a walk's search may reach above the higher and below the lower of body and goal (a route dipping deeper, such as through deep caves, is not planned); false: 96, and a buried body's dive floor applies." :spec (a/or-of false? (a/int-in 0 nil))}
+   ::unknown-max-nodes {:default 100000 :doc "The most nodes a walk's search over what the body has seen only (go-to :unknown) holds before it ends :budget: a goal no seen route reaches floods unseen cells otherwise to the planner's limit (200000)." :spec (a/int-in 1000 nil)}
    ::gait {:default :auto :doc "How go-to walks when its :gait is nil: :auto, :walk or :sneak." :spec cost/gaits}})
 
 (defn unknown-spec
@@ -256,6 +257,7 @@
 
 (defn dangers? "Whether walks keep away from known dangers (the setting ::dangers)." [] (settings/get settings ::dangers))
 (defn zone-tolls? "Whether walks toll other bodies' zones (the setting ::zone-tolls)." [] (settings/get settings ::zone-tolls))
+(defn unknown-max-nodes "The setting ::unknown-max-nodes." [] (settings/get settings ::unknown-max-nodes))
 (defn dark? "Whether walks cost dark cells (the setting ::dark)." [] (settings/get settings ::dark))
 (defn y-margin "The setting ::y-margin, nil when none." [] (or (settings/get settings ::y-margin) nil))
 

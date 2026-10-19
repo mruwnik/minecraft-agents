@@ -65,9 +65,11 @@
   (with-dangers) as options.dangers, its dark (with-dark) as options.dark and its snapshot's mask (wworld/path-world with
   unknown) as options.unknown."
   [pw weight limits box]
-  (js/Object.assign #js {:table (.-table pw) :space (.-space pw) :weight weight :limits limits :dangers (.-dangers pw) :avoid (.-avoid pw)
-                         :dark (.-dark pw) :tolls (.-tolls pw) :unknown (wworld/unknown-of pw)}
-                    (clj->js box)))
+  (let [unknown (wworld/unknown-of pw)]
+    (js/Object.assign #js {:table (.-table pw) :space (.-space pw) :weight weight :limits limits :dangers (.-dangers pw) :avoid (.-avoid pw)
+                           :dark (.-dark pw) :tolls (.-tolls pw) :unknown unknown}
+                      (when unknown #js {:maxNodes (wworld/unknown-max-nodes)})
+                      (clj->js box))))
 
 (defn goal-stand-problem
   "The planner's verdict on the goal alone, before any search or goal flood: :goal-not-standable (no cell within range

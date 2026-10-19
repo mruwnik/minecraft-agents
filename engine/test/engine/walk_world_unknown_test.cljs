@@ -62,6 +62,14 @@
       (is (= @void (state decorated 3 64 0))))
     (is (identical? (wworld/unknown-of pw) (.-unknown (wplan/plan-options pw 1 nil nil))) "the planner's options.unknown")))
 
+(deftest a-masked-search-ends-at-the-unknown-node-limit-a-plain-one-keeps-the-planners
+  (let [{:keys [w]} (sensed wall-world)
+        masked (wworld/path-world w (wworld/unknown-spec))
+        plain (wworld/path-world w)]
+    (is (= 100000 (.-maxNodes (wplan/plan-options masked 1 nil nil))) "a goal no seen route reaches floods unseen cells: stops at the setting")
+    (is (= 5000 (.-maxNodes (settings/with-settings {:jobs.lib.walk.world/unknown-max-nodes 5000} #(wplan/plan-options masked 1 nil nil)))))
+    (is (undefined? (.-maxNodes (wplan/plan-options plain 1 nil nil))) "an unmasked search keeps the planner's 200000")))
+
 (deftest the-spec-holds-the-prices-the-mask-id-and-sight
   (let [{:keys [w]} (sensed wall-world)
         u (wworld/unknown-of (wworld/path-world w (settings/with-settings {:jobs.lib.cost.planner/unknown-prices {:peek-s 2}} wworld/unknown-spec)))]
