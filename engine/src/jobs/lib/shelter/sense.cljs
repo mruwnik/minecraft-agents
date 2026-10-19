@@ -212,7 +212,7 @@
 
 (defn light-view
   "Read-only light the body perceives, for observe light. A cell {:x :y :z} gives {:cell :seen? :block :sky :sky-subtract
-  :light (effective) :lit? :dark?}, nil values where no light data is loaded. With :radius (a cube around the cell)
+  :light (effective) :lit?}, nil values where no light data is loaded. With :radius (a cube around the cell)
   the light-read of its cells plus :cells :seen. The cell defaults to the feet."
   [p {:keys [cell radius]}]
   (let [cell (or cell (feet p))
@@ -220,7 +220,7 @@
     (if-not radius
       {:cell [x y z] :seen? (or (some? (cell-light p cell)) (seen-cell? p cell))
        :block (block-light-at p cell) :sky (sky-light-at p cell) :sky-subtract (sky-subtract-now p)
-       :light (light-at p cell) :lit? (lit-here? p cell) :dark? (dark-at? p cell)}
+       :light (light-at p cell) :lit? (lit-here? p cell)}
       (let [cells (for [dx (range (- radius) (inc radius)) dy (range (- radius) (inc radius)) dz (range (- radius) (inc radius))]
                     {:x (+ x dx) :y (+ y dy) :z (+ z dz)})]
         (assoc (light-read p cells) :cell [x y z] :radius radius :cells (count cells)

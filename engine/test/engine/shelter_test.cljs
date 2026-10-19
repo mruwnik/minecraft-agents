@@ -127,8 +127,8 @@
 (deftest light-view-reports-the-light-parts-of-a-cell-and-a-cube-read
   (let [lit (seen-dark cave-blocks {[0 64 0] [0 14] [1 64 0] [0 14]})
         view (sh-sense/light-view lit {:cell {:x 0 :y 64 :z 0}})]
-    (is (= {:cell [0 64 0] :block 14 :sky 0 :light 14 :lit? true :dark? false}
-           (select-keys view [:cell :block :sky :light :lit? :dark?])))
+    (is (= {:cell [0 64 0] :block 14 :sky 0 :light 14 :lit? true}
+           (select-keys view [:cell :block :sky :light :lit?])))
     (is (= [0 64 0] (:cell (sh-sense/light-view lit {}))) "the feet by default")
     (is (= {:cells 27 :radius 1 :darkest 0} (select-keys (sh-sense/light-view lit {:cell {:x 0 :y 64 :z 0} :radius 1}) [:cells :radius :darkest])))))
 
