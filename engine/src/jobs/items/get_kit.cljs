@@ -78,11 +78,11 @@
 
 (defn kit-entries
   "The reserve entries (strength 0.9, by job id) for the furnace material the missing items need together and the raw
-  input it is smelted from: a deposit or craft leaves those carried units alone."
+  input it is smelted from: a deposit leaves those carried units alone; the kit's own craft and smelt children spend them."
   [id version items]
   (vec (for [[mat n] (furnace-short version items {})
              item [mat (get smelt-plan/made-from mat)]]
-         {:id (str id "-kit-" item) :item item :count n :strength 0.9 :by id :why "material for the kit"})))
+         {:id (str id "-kit-" item) :item item :count n :strength 0.9 :by id :why "material for the kit" :not #{:craft :smelt}})))
 
 (defn reserve-kit!
   "Replace this job's reserve entries with kit-entries for todo; none once nothing is missing."

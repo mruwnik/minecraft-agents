@@ -69,8 +69,8 @@
   (is (= {"iron_ingot" 32} (kit/furnace-short game/default-version kit/iron-kit {}))))
 
 (deftest the-kit-reserves-the-ingots-and-raw-iron-its-missing-pieces-need
-  (is (= [{:id "k-kit-iron_ingot" :item "iron_ingot" :count 3 :strength 0.9 :by "k" :why "material for the kit"}
-          {:id "k-kit-raw_iron" :item "raw_iron" :count 3 :strength 0.9 :by "k" :why "material for the kit"}]
+  (is (= [{:id "k-kit-iron_ingot" :item "iron_ingot" :count 3 :strength 0.9 :by "k" :why "material for the kit" :not #{:craft :smelt}}
+          {:id "k-kit-raw_iron" :item "raw_iron" :count 3 :strength 0.9 :by "k" :why "material for the kit" :not #{:craft :smelt}}]
          (kit/kit-entries "k" game/default-version ["iron_pickaxe"])))
   (is (= [] (kit/kit-entries "k" game/default-version []))))
 
