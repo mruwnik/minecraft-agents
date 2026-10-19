@@ -120,6 +120,13 @@
           (is (true? (await (waits? (merge xp (stacks "iron_sword" "lapis_lazuli")) 'jobs.items.enchant {:item "iron_sword"}))) "no table in sight, after a look round")
           (is (true? (await (waits? {} 'jobs.items.give {:player "Steve" :item "bread"})))))))))
 
+(deftest wear-fetches-a-named-piece-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= :need (:cause (kc (await (ending-of (stacks "dirt") 'jobs.items.wear {:item "iron_helmet"}))))) "no source: the fetch fails as :need")
+        (is (= :no-item (:cause (kc (await (ending-of (stacks "dirt") 'jobs.items.wear {:item "iron_helmet" :fetch false}))))))))))
+
 (deftest enchant-fetches-the-lapis-and-the-item-by-default
   (async done
     (tu/run-async done
@@ -135,5 +142,5 @@
     (tu/run-async done
       (fn ^:async t []
         (is (false? (await (waits? (stacks "dirt") 'jobs.items.wear {:item "dirt"}))) "no armour piece is impossible, not waiting")
-        (is (true? (await (waits? (stacks "dirt") 'jobs.items.wear {:item "iron_helmet"}))) "not carried")
+        (is (true? (await (waits? (stacks "dirt") 'jobs.items.wear {:item "iron_helmet" :fetch false}))) "not carried")
         (is (true? (await (waits? {} 'jobs.items.pick-up-loose {}))) "no loose item in sight")))))

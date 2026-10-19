@@ -60,7 +60,7 @@
     'jobs.storage.withdraw {} {} :no-chest
     'jobs.storage.haul {} {:from [[1 64 0]]} :no-chest
     'jobs.items.equip {:inventory [{:name "dirt" :count 1}]} {:item "iron_pickaxe" :hand "main" :fetch false} :no-item
-    'jobs.items.wear {:inventory [{:name "dirt" :count 1}]} {:item "iron_helmet"} :no-item))
+    'jobs.items.wear {:inventory [{:name "dirt" :count 1}]} {:item "iron_helmet" :fetch false} :no-item))
 
 (deftest a-started-withdraw-waits-when-its-chest-is-gone
   (is (= [:later :no-chest] (kind+reason (verdict-of :can-run? 'jobs.storage.withdraw {} {:items {"bread" 1}})))))

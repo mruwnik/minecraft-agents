@@ -14,8 +14,7 @@
   "Hold a carried item in the main hand (:hand \"main\", default) or the off-hand (:hand \"off\"). Needs the item
   carried; a missing one is fetched (jobs.lib.need) unless :fetch is false. done? holds when it is held there.
   Ends :done {:item :hand :text}. Impossible: :bad-args (no :item), :unknown-item (no such item for the body's version). Conditions (a listed root job waits): :no-item (not carried, :fetch false). A failed fetch ends as {:reason :need} with its ending as
-  the :because. Nothing-possible :failed (the server did not take it, data :equip the primitive's status; warn
-  equip.refused). Quote: A, a fixed time.")
+  the :because. Nothing-possible :failed (the server did not take it, data :equip the primitive's status). Quote: A, a fixed time.")
 
 (a/defargs args
   {:item {:doc "the item to hold" :spec a/item? :default nil}
@@ -87,8 +86,7 @@
 
 (defn refuse!
   [c kind reason text data]
-  (ctx/emit! c :equip.refused :warn (assoc data :reason reason :text text))
-  (ctx/end c kind reason data))
+  (ctx/end c kind reason (assoc data :text text)))
 
 (defn ^:async round
   [c]

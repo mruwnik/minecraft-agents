@@ -97,7 +97,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (wear (stacks "dirt") {:item "iron_helmet"}))]
+        (let [{:keys [out]} (await (wear (stacks "dirt") {:item "iron_helmet" :fetch false}))]
           (is (= [:condition-failed :no-item] ((juxt (comp :kind :ending) :reason) @out))))))))
 
 (deftest wearing-quotes-a-time-per-piece
