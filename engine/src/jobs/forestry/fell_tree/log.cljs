@@ -29,8 +29,9 @@
 
 (defn connected-logs
   "The logs of the same species as the seed logs, seen, that touch them (by face, edge or corner) or each other, at most
-  max-tree-logs, lowest first, then nearest the first seed: branches and the other columns of a 2x2 trunk."
-  [p seeds]
+  max-tree-logs, lowest first, then nearest the first seed: branches and the other columns of a 2x2 trunk. Cells in skip
+  (a pillar's scaffold, logs placed beside the trunk) are no part of the tree."
+  [p seeds skip]
   (let [{:keys [x z]} (:pos (first seeds))
         item (:name (first seeds))
         key (fn [pos] [(:x pos) (:y pos) (:z pos)])
@@ -42,7 +43,7 @@
         (let [{:keys [pos]} (peek queue)
               next (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]
                          :let [q {:x (+ (:x pos) dx) :y (+ (:y pos) dy) :z (+ (:z pos) dz)}]
-                         :when (and (not (found (key q))) (= item (u/seen-name p q)))]
+                         :when (and (not (found (key q))) (not (skip (key q))) (= item (u/seen-name p q)))]
                      {:name item :pos q})
               next (take (- max-tree-logs (count found)) next)]
           (recur (into found (map (juxt (comp key :pos) identity)) next)
@@ -58,8 +59,12 @@
         column (if-let [at (:at (:args c))]
                  (logs-at p at species)
                  (column-logs p radius tree))
-        seeds (into (vec column) (keep #(when (= item (u/seen-name p %)) {:name item :pos %})) logs-seen)]
-    (if (seq seeds) (connected-logs p (vec (distinct seeds))) seeds)))
+        skip (set (map vec (ledger/cells (ledger/open-entries (ctx/view c)))))
+        skip? #(skip [(:x %) (:y %) (:z %)])
+        seeds (->> (into (vec column) (keep #(when (= item (u/seen-name p %)) {:name item :pos %})) logs-seen)
+                   (remove (comp skip? :pos))
+                   distinct vec)]
+    (if (seq seeds) (connected-logs p seeds skip) seeds)))
 
 (defn record-debt!
   "Write the replant debt for the tree of base and species, once. True when it wrote one."

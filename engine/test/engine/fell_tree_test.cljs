@@ -76,6 +76,17 @@
           (is (= [] (ledger/open-entries (mem/view (:store eng)))) "ledger empty")
           (is (= [] (pillar-cells p)) "no pillar block left"))))))
 
+(deftest a-scaffold-log-beside-the-trunk-is-no-part-of-the-tree
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (fm/start {:blocks (assoc (lt/tree 6 0 "oak" 3) "7,64,0" "oak_log")} {})
+              _ (ledger/write! (:store (:eng s)) [{:cell [7 64 0] :item "oak_log" :state :placed :job "other" :purpose :pillar}])
+              _ (eye-reach! (:p s))
+              out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10 :fetch false} 100))]
+          (is (= 3 (:logs out)) "the trunk only")
+          (is (= [[6 64 0] [6 65 0] [6 66 0]] (mapv #(subvec % 0 3) (fm/digs (:p s))))))))))
+
 (deftest logs-above-the-ground-reach-are-dug-top-down
   (async done
     (tu/run-async done
