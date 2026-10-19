@@ -34,7 +34,7 @@
         at (str "health " (.toFixed health 1))]
     (cond
       (not (foods/fragile? self)) nil
-      (or (sh-sense/night? p) (not (dawn/calm? p)))
+      (or (sh-sense/dark-outside? p) (not (dawn/calm? p)))
       (str at ": waits sheltered for a calm day (night, first light or a hostile known near)")
       (nil? pos) nil
       :else (let [{:keys [danger mobs]} (walk-danger p pos)]

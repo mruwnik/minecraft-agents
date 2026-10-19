@@ -64,14 +64,6 @@
   (let [{:keys [t rain thunder]} (sky-state p)]
     (js/Math.round (* 11 (/ (- 1 (light/sky-darken t rain thunder)) 0.8)))))
 
-(defn light-in
-  "light-in-s of the cell from the body's perception; nil when waiting never lights it or no light data is loaded
-  there (sky-light-at tells which)."
-  [p cell]
-  (when-let [sky (sky-light-at p cell)]
-    (let [{:keys [t rain thunder]} (sky-state p)]
-      (light-in-s sky t rain thunder))))
-
 (defn lit-here?
   "Whether the cell is lit enough that monsters cannot spawn: block light of 1 or more, or sky light less the sky
   darkening at dark-light, from any source (dawn, a torch). Without light data there, the sky decides (look/sky-dark?)."
@@ -188,6 +180,60 @@
   (boolean (and (buried? p) (not (shut-in-room? p))
                 (< (or (block-light-at p (feet p)) 0) lit-level)
                 (>= (cave-cells p) cave-width))))
+
+(defn sky-in
+  "Seconds until the open sky is bright enough (light-in-s of full sky light now): 0 by day, the time left of the night
+  at night, longer in a storm that darkens it."
+  [p]
+  (let [{:keys [t rain thunder]} (sky-state p)]
+    (light-in-s 15 t rain thunder)))
+
+(defn dark-outside?
+  "Whether the open sky is dark now and waiting lifts it (the night): what a body shut in a shelter waits out."
+  [p]
+  (pos? (or (sky-in p) 0)))
+
+(defn spawnable?
+  "Whether a monster can spawn at the cell as the body has seen it: a solid floor under it and two cells of air."
+  [p {:keys [x y z]}]
+  (let [air? (fn [dy] (let [n (u/seen-name p {:x x :y (+ y dy) :z z})] (and n (not (solid/solid? n)))))]
+    (and (air? 0) (air? 1) (solid-at? p {:x x :y (dec y) :z z}))))
+
+(defn spawnable-cells [p cells] (filter #(spawnable? p %) cells))
+
+(defn cell-light-in
+  "Seconds until the cell is lit (0 when it is: lit-here?), nil when waiting never does it; nil too without light data."
+  [p cell]
+  (cond
+    (nil? (block-light-at p cell)) nil
+    (lit-here? p cell) 0
+    :else (when-let [sky (sky-light-at p cell)]
+            (let [{:keys [t rain thunder]} (sky-state p)]
+              (light-in-s sky t rain thunder)))))
+
+(defn light-read
+  "How dark the cells are, as the body knows them: {:dark-fraction share of the cells dark now, :darkest the lowest
+  light (block or sky less the darkening), :unseen cells with no light data (guessed dark, counted in the fraction)}.
+  One dark corner is the risk, so no median. A point is the one-cell case."
+  [p cells]
+  (let [subtract (sky-subtract-now p)
+        light (fn [c] (when-let [block (block-light-at p c)] (max block (- (sky-light-at p c) subtract))))
+        lights (map light cells)
+        unseen (count (filter nil? lights))
+        seen (remove nil? lights)]
+    {:dark-fraction (if (seq cells) (/ (count (remove #(and (light %) (lit-here? p %)) cells)) (count cells)) 0)
+     :darkest (when (seq seen) (apply min seen))
+     :unseen unseen}))
+
+(defn light-in
+  "Seconds until no cell of cells (a cell, or a vector of them) is dark: the slowest of cell-light-in, nil when some
+  dark cell is never lit. Cells with no light data are left out. 0 when none is dark."
+  [p cells]
+  (let [cells (if (map? cells) [cells] cells)
+        ts (keep (fn [c] (if-let [t (cell-light-in p c)] t (when (some? (block-light-at p c)) :never))) cells)]
+    (cond (some #{:never} ts) nil
+          (seq ts) (apply max ts)
+          :else 0)))
 
 (defn unsafe-night?
   "Awake, not under a roof and not buried, with darkness at the feet that waiting lifts (light-in is above 0). A cell

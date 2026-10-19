@@ -13,7 +13,7 @@
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
-            [jobs.lib.shelter.clock :as sh-clock]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
@@ -60,7 +60,7 @@
   (weighed by its route danger alone), else the exposure of the pile's cell."
   [c]
   (let [d (first (dth/open-deaths c))
-        night-ms (sh-clock/ms-until-morning (.-timeOfDay (.self (:primitives c))))]
+        night-ms (* 1000 (or (sh-sense/sky-in (:primitives c)) 0))]
     (if (or (nil? d) (zero? night-ms) (>= night-ms (settings/ticks->ms (game/despawn-left-ticks d (ctx/view c)))))
       (contract/ok :ready "no night to wait out for the pile")
       (ready/exposed c (:pos (:data d))))))

@@ -170,7 +170,7 @@
     (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
            {:feet (reach/standing-vec (:primitives c)) :eye (eye-of c) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :floor-at (access/seen-at (:primitives c)) :entries entries
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
-            :hostile-near? (hostile-near? (:primitives c)) :night? (sh-sense/night? (:primitives c)) :keep-at-night? (:keep-at-night? (:args c))
+            :hostile-near? (hostile-near? (:primitives c)) :night? (sh-sense/dark-outside? (:primitives c)) :keep-at-night? (:keep-at-night? (:args c))
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach (dig-reach)
             :spare-own-builds (access/spare-own-builds)
             :guard-walks? (and (nil? (:job (:args c))) (nil? (:near (:args c))))

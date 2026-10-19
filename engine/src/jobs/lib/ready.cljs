@@ -39,11 +39,11 @@
         {:keys [chance lowered-by look-at]} (cost/exposure p to shelter)
         where (place-text to)]
     (cond
-      (and (sh-sense/night? p) (sh-inside/safe-from-night? p) (not (sh-inside/walk-leaves-shelter? p shelter to 1)))
+      (and (sh-sense/dark-outside? p) (sh-inside/safe-from-night? p) (not (sh-inside/walk-leaves-shelter? p shelter to 1)))
       (contract/ok :sheltered (str "sheltered at " where))
       (<= chance (settings/get settings ::risk-limit)) (contract/ok :unexposed (str "no spawn risk at " where))
       (contains? lowered-by :look) (contract/look :exposed (str "light at " where " not seen") :look-at look-at)
-      (contains? lowered-by :dawn) (contract/later :exposed (str "dark at " where " until dawn") :lowered-by lowered-by :chance chance)
+      (contains? lowered-by :light) (contract/later :exposed (str "dark at " where " until light") :lowered-by lowered-by :chance chance)
       :else (contract/never :exposed (str "exposed at " where ", nothing lowers it") :chance chance))))
 
 (defn exposed

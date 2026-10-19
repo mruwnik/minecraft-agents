@@ -231,7 +231,7 @@
 
 (deftest exposure-of-a-walk-out-of-shelter-is-the-open-sky-night-figure-lowered-by-dawn
   (let [p (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone" "15,67,0" "stone"}})]
-    (is (= {:chance open-night-chance :lowered-by #{:dawn}} (cost/exposure p {:x 15 :y 64 :z 0})))))
+    (is (= {:chance open-night-chance :lowered-by #{:light}} (cost/exposure p {:x 15 :y 64 :z 0})))))
 
 (deftest exposure-of-a-walk-in-the-open-is-the-spawn-chance-at-its-end
   (let [night (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}}})
@@ -247,7 +247,7 @@
 (deftest exposure-takes-the-shelter-entry-of-the-body
   (let [p (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone"}})]
     (with-redefs [sh-inside/walk-leaves-shelter? (fn [_ shelter _ _] (when (= :entry shelter) :dug-in))]
-      (is (= #{:dawn} (:lowered-by (cost/exposure p {:x 15 :y 64 :z 0} :entry))))
+      (is (= #{:light} (:lowered-by (cost/exposure p {:x 15 :y 64 :z 0} :entry))))
       (is (= #{:look} (:lowered-by (cost/exposure p {:x 15 :y 64 :z 0})))))))
 
 (deftest exposure-floors-the-goal-and-takes-a-column-at-the-feet-height
@@ -260,7 +260,7 @@
         sky (fn [_ at] (if (= 64 (:y at)) 0 15))]
     (with-redefs [sh-sense/seen-cell? (constantly true) sh-sense/block-light-at (constantly 0)
                   sh-sense/sky-light-at sky sh-inside/walk-leaves-shelter? (constantly nil)]
-      (is (= #{:dawn} (:lowered-by (cost/exposure p {:x 15 :y 64 :z 0}))) "the grass cell is dark by day too; the air over it lowers at dawn")
+      (is (= #{:light} (:lowered-by (cost/exposure p {:x 15 :y 64 :z 0}))) "the grass cell is dark by day too; the air over it lowers at dawn")
       (is (= (cost/exposure p {:x 15 :y 65 :z 0}) (cost/exposure p {:x 15 :y 64 :z 0}))))))
 
 (def far {:x 100 :y 64 :z 0})

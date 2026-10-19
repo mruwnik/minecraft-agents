@@ -39,7 +39,7 @@
   "At night, awake and safe from it (roofed or buried, or shut-in-room?), the kind of shelter the body is in (:dug-in
   the one shelter says it is shut in, :room, :underground, :roofed), else nil: outdoor work waits for day then."
   [p shelter]
-  (when (and (sh-sense/night? p) (not (sh-sense/sleeping? p)) (safe-from-night? p))
+  (when (and (sh-sense/dark-outside? p) (not (sh-sense/sleeping? p)) (safe-from-night? p))
     (cond
       (in-own-shelter p shelter) :dug-in
       (sh-sense/shut-in-room? p) :room
@@ -52,7 +52,7 @@
   latest :shelter entry) is the one the body is shut in. :room: no cell of the closed room is within dist of the goal.
   :underground: buried, and the goal is not below the feet (unless open-air-above?), has nothing solid within default-roof-height over it, and is no solid block with no open cell seen over it (a wall in the rock: a walk deeper stays underground). :roofed: any other roof."
   [p shelter goal dist]
-  (when (and (sh-sense/night? p) (not (sh-sense/sleeping? p)) (safe-from-night? p))
+  (when (and (sh-sense/dark-outside? p) (not (sh-sense/sleeping? p)) (safe-from-night? p))
     (let [goal (update-vals goal js/Math.floor)
           near? (fn [cell] (if (:y goal) (u/within? cell goal dist) (u/within? (assoc cell :y 0) (assoc goal :y 0) dist)))
           room (when (sh-sense/shut-in-room? p) (reach/room p (sh-sense/feet p)))]
@@ -74,7 +74,7 @@
   "By day: the body is shut in its own shelter (data) and no :shelter-trapped entry (data) says leave! found no way
   out of this cell. Never at night."
   [p shelter trapped]
-  (boolean (and (not (sh-sense/night? p))
+  (boolean (and (not (sh-sense/dark-outside? p))
                 (in-own-shelter p shelter)
                 (not= (:pos shelter) (:pos trapped)))))
 

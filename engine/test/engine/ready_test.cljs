@@ -62,9 +62,9 @@
   (let [check (ready/safe-at (constantly outside))
         s (lit 0 15 #(check (ctx-of open-night)))]
     (is (= :later (first s)))
-    (is (= #{:dawn} (:lowered-by (nth s 2))))
+    (is (= #{:light} (:lowered-by (nth s 2))))
     (is (re-find #"15 64 0" (second s)) "names the place")
-    (is (re-find #"dawn" (second s)) "and what helps")))
+    (is (re-find #"until light" (second s)) "and what helps")))
 
 (deftest safe-at-a-sheltered-place-is-ok-and-a-walk-out-of-the-hut-is-not
   (are [world to expected] (= expected (kind (ready/safe-at (constantly to)) world))

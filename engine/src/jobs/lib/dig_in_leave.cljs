@@ -25,7 +25,7 @@
   "Why the shelter must stay shut now: :night; nil when the body may leave. Hostiles do not keep it shut: by day the
   body leaves whatever is around, and a real danger is the hostile reflex's to deal with, as anywhere else."
   [p]
-  (when (sh-sense/night? p) :night))
+  (when (sh-sense/dark-outside? p) :night))
 
 (def headings {:north [0 -1] :east [1 0] :south [0 1] :west [-1 0]})
 

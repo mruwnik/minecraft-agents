@@ -17,7 +17,7 @@
              frontiers against what its goal is worth; light-cost: a torch go-to places; dig-cost: the seconds a block takes to dig (jobs.lib.cost.value);
              per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; spawn-chance: the chance a mob spawns at a cell or
              over an area (a set or {:min :max} box of cells) per second, from the light the body knows (unseen counts as dark); exposure: the chance a walk meets and
-             what lowers it ({:chance :lowered-by #{:dawn}}).
+             what lowers it ({:chance :lowered-by #{:light}}).
     planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; swim-profile: its swimH from Depth Strider on the boots; swim-factor: a swim block in walk blocks (a flight's water price); gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's prices of unseen cells (jobs.lib.cost.planner).
     tolls    farm-tolls, zone-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort
              (jobs.lib.cost.tolls).
@@ -123,7 +123,7 @@
   "{:chance :lowered-by} of the walk of p to `to` ({:x :y :z}, a column {:x :z} at the feet's height; floored): the mob spawn chance per second it meets and
   what lowers it, data the readiness checks read (empty: nothing foreseeable does, so never). A walk that leaves shelter
   (sh-inside/walk-leaves-shelter?, with the body's latest :shelter entry data when given) meets the open-sky night figure, any
-  other the spawn-chance at `to` from the light p has seen; :dawn lowers a chance that night alone puts there. A cell p
+  other the spawn-chance at `to` from the light p has seen; :light lowers a chance that darkness alone puts there and light-in says waiting lifts. A cell p
   has no light data of is guessed dark and lowered by #{:look}, with :look-at [[x y z]]. A solid seen `to` is judged by the air cell over it (a solid cell has no light that night changes). Lava and the like are not spawn
   chance. A crude stub."
   ([p to] (exposure p to nil))
@@ -140,7 +140,7 @@
      (if (and (not leaves?) (nil? (seen cell)))
        {:chance chance :lowered-by #{:look} :look-at [cell]}
        {:chance chance
-        :lowered-by (if (and night? (> chance (spawn-chance cell {:light light :night? false}))) #{:dawn} #{})}))))
+        :lowered-by (if (and night? (> chance (spawn-chance cell {:light light :night? false})) (if leaves? (sh-sense/sky-in p) (sh-sense/light-in p {:x (nth cell 0) :y (nth cell 1) :z (nth cell 2)}))) #{:light} #{})}))))
 (defn per-dark [] (value/per-dark))
 (defn dark-factor ([] (value/dark-factor)) ([kit] (value/dark-factor kit)))
 

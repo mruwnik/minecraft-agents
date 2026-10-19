@@ -420,7 +420,7 @@
           (await (look/look-around! c))
           (ctx/remember! c :night-looked {:cell (sh-sense/feet p)} sh/night-looked-policy)
           :again)
-      (not (sh-sense/night? p)) (await (morning/morning! c))
+      (not (sh-sense/dark-outside? p)) (await (morning/morning! c))
       (sh-sense/sleeping? p) (do (when-not (= :slept sheltered) (hold/sheltered! c :slept)) (await (hold/hold! c :sleeping)))
       (and roofed (or (#{:slept :dug-in} sheltered) (dig-leave/sheltered-in c)))
       (do (when-not sheltered (hold/sheltered! c :dug-in))

@@ -112,6 +112,13 @@
     {[0 64 0] [0 14]} true
     {[0 64 0] [15 0]} false))
 
+(deftest light-read-reports-the-darkest-spawnable-corner-not-a-median
+  (let [p (seen-dark cave-blocks {[0 64 0] [0 14] [1 64 0] [0 14]})
+        cells [{:x 0 :y 64 :z 0} {:x 1 :y 64 :z 0} {:x 2 :y 64 :z 0}]]
+    (is (= {:dark-fraction (/ 1 3) :darkest 0 :unseen 0} (sh-sense/light-read p cells)))
+    (is (nil? (sh-sense/light-in p cells)) "the dark corner has no sky light: waiting never lights it")
+    (is (zero? (sh-sense/light-in p (take 2 cells))) "the lit ones: nothing to wait for")))
+
 (def dug-room-blocks
   "A mine's room the body dug: 5x4 cells, 2 high (ceiling at y 66), light 7."
   (merge (into {} (for [x (range -2 3) z (range -2 2) y [63 66]] [(str x "," y "," z) "stone"]))
