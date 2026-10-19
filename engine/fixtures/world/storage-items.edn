@@ -73,7 +73,7 @@
   {:name "withdraw-short-names-what-the-chest-held"
    :blocks [[:set [20 0 16] "chest[facing=west]{Items:[{Slot:0b,id:\"minecraft:feather\",count:3}]}"]]
    :act [[:job (jobs.storage.withdraw {:chest #xyz [20 0 16] :items {"shears" 1}})]]
-   :expect [{:event {:source :job :kind :withdraw.short :message [:contains "feather"]} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :message [:contains "feather"]} :within-s 40 :of-job true}]
    :after [[:item "shears" 0]]
    :limit-s 60}
   {:name "withdraw-partial-take-ends-with-the-took-text"

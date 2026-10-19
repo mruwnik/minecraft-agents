@@ -28,8 +28,7 @@
 (def chest {:x 10 :y 64 :z 0})
 (def vault {:name "vault" :min [9 60 -1] :max [11 70 1] :owner "Miles"})
 (def stock {"10,64,0" [{:name "bread" :count 32} {:name "wheat" :count 30}]})
-(def refused-ending {:kind :condition-failed :cause {:reason :refused :zones ["vault"] :claims []}
-                     :data {:gave-up true :zones ["vault"] :claims []}})
+(def refused-at-start {:kind :condition-failed :cause {:reason :refused :zones ["vault"] :claims [] :text "refused: zone vault"}})
 (def own-claim {:id "c1" :owner "Miles" :status :active :until 99999999999 :min [9 60 -1] :max [11 70 1]})
 
 ;; ------------------------------------------------------------------ withdraw
@@ -50,17 +49,16 @@
             (is (= taken? (pos? (count (calls p "transfer")))) (pr-str [zone extra]))
             (is (= ({true :done false :condition-failed} taken?) (:kind result)) (pr-str [zone extra]))
             (is (= ({true "withdraw: everything wanted is carried" false nil} taken?) (get-in result [:data :text])) (pr-str [zone extra]))
-            (is (= ({true nil false refused-ending} taken?) ({true nil false result} taken?)) (pr-str [zone extra]))))))))
+            (is (= ({true nil false refused-at-start} taken?) ({true nil false result} taken?)) (pr-str [zone extra]))))))))
 
-(deftest withdraw-from-a-foreign-chest-warns-and-never-inspects-its-way-in
+(deftest withdraw-from-a-foreign-chest-never-inspects-its-way-in
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:containers stock} [vault])]
+        (let [{:keys [eng p]} (setup {:containers stock} [vault])]
           (await (child-outcome eng 'jobs.storage.withdraw {:chest chest :items {"bread" 8}} 12))
           (is (empty? (calls p "transfer")))
-          (is (= {} (inv p)))
-          (is (= [["vault"]] (mapv :zones (events-of seen :withdraw.refused)))))))))
+          (is (= {} (inv p))))))))
 
 (deftest a-claim-of_another_refuses_withdraw
   (async done
@@ -70,12 +68,11 @@
           (swap! (:state (:world eng)) assoc :area-claims {:value [own-claim]})
           (let [result (await (wt/ending-of eng 'jobs.storage.withdraw {:chest chest :items {"bread" 8}} 12))]
             (is (empty? (calls p "transfer")))
-            (is (= {:kind :condition-failed :cause {:reason :refused :zones [] :claims ["c1"]}
-                    :data {:gave-up true :zones [] :claims ["c1"]}} result))))))))
+            (is (= {:kind :condition-failed :cause {:reason :refused :zones [] :claims ["c1"] :text "refused: claim c1"}} result))))))))
 
 ;; ------------------------------------------------------------------ deposit
 
-(deftest deposit-into-a-foreign-chest-is-refused-and-into-an-own-or-allowed-one-is-not
+(deftest deposit-into-a-foreign-chest-is-refused-at-start-and-into-an-own-or-allowed-one-is-not
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -87,7 +84,7 @@
                 result (await (wt/ending-of eng 'jobs.storage.deposit (merge {:chest chest} extra) 12))]
             (is (= put? (pos? (count (calls p "transfer")))) (pr-str [zone extra]))
             (is (= ({true :done false :condition-failed} put?) (:kind result)) (pr-str [zone extra]))
-            (is (= ({true nil false refused-ending} put?) ({true nil false result} put?)) (pr-str [zone extra]))))))))
+            (is (= ({true nil false refused-at-start} put?) ({true nil false result} put?)) (pr-str [zone extra]))))))))
 
 ;; ------------------------------------------------------------------ the parents propagate :refused
 
@@ -142,11 +139,11 @@
         (doseq [[zone extra touched?] [[{:name "forge" :min [0 60 -1] :max [2 70 1] :owner "Miles"} {} false]
                                        [{:name "forge" :min [0 60 -1] :max [2 70 1] :owner "FAKE"} {} true]
                                        [{:name "forge" :min [0 60 -1] :max [2 70 1] :owner "Miles"} {:ignore-zones? true} true]
-                                       [{:name "forge" :min [0 60 -1] :max [2 70 1] :owner "Miles" :allow #{:put}} {} true]
+                                       [{:name "forge" :min [0 60 -1] :max [2 70 1] :owner "Miles" :allow #{:put}} {} false]
                                        [{:name "forge" :min [0 60 -1] :max [2 70 1] :owner "Miles" :allow #{:take}} {} false]]]
           (let [{:keys [eng p seen]} (setup {:blocks {"1,64,0" "furnace"}
                                              :inventory [{:name "raw_iron" :count 5} {:name "coal" :count 3}]} [zone])]
             (core/submit! eng (list 'jobs.items.smelt (merge {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3} extra)) {})
             (await (run-until-empty eng 3))
             (is (= touched? (pos? (count (calls p "furnace")))) (pr-str [zone extra]))
-            (is (= ({true [] false [:refused]} touched?) (mapv :reason (events-of seen :stopped))) (pr-str [zone extra]))))))))
+            (is (= touched? (empty? (filter #(and (= :waiting (:kind %)) (= :refused (:reason %))) @seen))) (pr-str [zone extra]))))))))

@@ -4,7 +4,6 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.lib.access :as access]
             [jobs.lib.checks :as checks]
             [jobs.lib.pace :as pace]
             [jobs.lib.storage :as storage]
@@ -19,13 +18,13 @@
   or no source holds anything more; else walk to the next source chest, inspect it, take one bag load (one slot is
   left free; jobs.storage.withdraw as carry-at-least targets), repeat. The targets are saved before the take, so a
   restart takes the same load again without doubling it; the chests and the bag are the rest of the state.
-  Needs (can-start? and can-run?): a main chest (:to, else the storage group, so a known :chest place), else :no-chest; some :from, else :no-source.
+  Needs (can-start? and can-run?): some :from, else never :bad-args; a main chest (:to, else the storage group, so a known :chest place), else waits :no-chest;
+  no source left to empty that zones or claims of another refuse :take, else waits :refused {:zones :claims}. :ignore-zones? skips it.
   Sources that are in the storage group are not meant: withdraw may then take from the group's other chests.
   Ends done {:trips n :moved {name n}} once every source is empty (or holds only :keep), or at any other ending when at
   least the call's :least items are moved (default :all: only a clean finish); n counts the deposits. The data of
   every other ending has :trips and :moved so far (and :gave-up true):
-  - condition-failed :refused {:zones :claims} (a source in another's zone), :bag-full (nothing to deposit yet
-    no room to take), or the child's cause (:missing, ..);
+  - condition-failed :bag-full (nothing to deposit yet no room to take), or the child's cause (:missing, ..);
   - nothing-possible :unreachable (no route to a source), :to-full (deposit found no room and could not place a chest), else the child's cause.")
 
 (a/defargs args
@@ -46,16 +45,19 @@
 (def fit? ready/ok)
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
-(defn no-source [c]
-  (when (empty? (:from (:args c))) {:reason :no-source}))
-
 (defn no-chest
   "A main chest is known."
   [c]
   (when-not (or (some? (:to (:args c))) (seq (storage/group (ctx/view c))))
     {:reason :no-chest}))
 
-(defn can-start? [c] (contract/all [(checks/cause-status :later (no-source c)) (checks/cause-status :later (no-chest c))]))
+(defn sources-left [c]
+  (map deposit/cell-pos (remove (set (:empty (ctx/mem c))) (map storage/cell-of (:from (:args c))))))
+
+(defn can-start? [c]
+  (contract/all [((checks/args-fit "haul: no :from chest to empty" #(seq (:from (:args %)))) c)
+                 (checks/cause-status :later (no-chest c))
+                 ((checks/container-refused some :take sources-left) c)]))
 
 (def can-run? can-start?)
 
@@ -156,11 +158,8 @@
   "Walk to the chest and size one bag load from what it holds: saves the intent, or marks the chest empty."
   [c cell inv free]
   (let [chest (deposit/cell-pos cell)
-        refusal (when-not (:ignore-zones? (:args c)) (access/container-refusal c :take chest))
-        w (when-not refusal (await (deposit/walk! c chest)))]
+        w (await (deposit/walk! c chest))]
     (cond
-      refusal (let [fields (select-keys (access/refusal-fields [refusal]) [:zones :claims])]
-                (stop! c :condition-failed (assoc fields :reason :refused) fields))
       (= :unreachable w) (stop! c :nothing-possible :unreachable)
       w w
       :else

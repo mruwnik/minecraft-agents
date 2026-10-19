@@ -22,16 +22,14 @@
   "Walk to the chest (one go-to) and deposit every stack in one call: the named :items in the order named, or everything but tools
   and armour (saplings included) and the units the reserve register holds (jobs.lib.reserve/held: the 3-day food reserve, bait, entries) in inventory order.
   :keep leaves at least that many of a name carried. :free ends the call, clean, once that many slots are free. With explicit :items the reserve is ignored.
-  Needs: a chest, the :chest argument or the known :chest place; none known waits :no-chest (can-start? and can-run?: a chest place lost mid-job waits, a reflex ends condition-failed).
+  Needs (can-start? and can-run?): a chest, the :chest argument or the known :chest place, else waits :no-chest (a chest place lost mid-job waits, a reflex ends
+  condition-failed); a chest of the pool that zones or claims of another do not refuse :put, else waits :refused {:zones :claims}. :ignore-zones? skips it.
   Ends done when nothing is left to put away (also at once when nothing is), or at any other ending when at least the
   call's :least items are put in (:all wants every one). The data of every other ending is
   {:gave-up true :moved n}, n the items put in; the report counts the items still to put away.
-  - condition-failed :refused {:zones [..] :claims [..]}: a chest in another owner's zone or claim that does not allow :put,
-    checked before the walk and again before the transfer (one deposit.refused warn, nothing put in). :ignore-zones? skips it.
   - condition-failed :missing (no container at the chest; a recorded :chest place is retracted, one chest_missing warn)
     or :no-chest: at once.
-  - nothing-possible, the cause the transfer status (:unreachable, :full, :nothing-moved, ..): after three failed transfers in a row
-    (warn chest_unusable).
+  - nothing-possible, the cause the transfer status (:unreachable, :full, :nothing-moved, ..): after three failed transfers in a row.
   Memory: a :chest argument that took at least one item and finished clean, not in another body's zone or claim, is offered to the :chest place. It is
   recorded when none is recorded or the recorded one is gone, never over a different live one (place.kept
   event; jobs.memory.set-place moves it).
@@ -81,9 +79,6 @@
 (def safe? ready/safe-at-chest)
 (def fit? ready/ok)
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
-
-(def can-start? checks/chest-known)
-(def can-run? checks/chest-known)
 
 (defn spare-items
   "{name n} the call would put away now: the carried names the pick rules allow, each by its spare over the keep."
@@ -144,10 +139,9 @@
   (stop! c (if (= "missing" status) :condition-failed :nothing-possible) (keyword status)))
 
 (defn give-up!
-  "u/fail!: :again until the third failure in a row, then end nothing-possible with the cause (a warn of kind first)."
-  [c kind text cause]
-  (let [r (u/fail! c kind text)]
-    (if (= :done r) (status-stop! c (name cause)) :again)))
+  "Count a failure: :again until the third in a row, then end nothing-possible with the cause."
+  [c cause]
+  (if (u/count-fail! c) (status-stop! c (name cause)) :again))
 
 (defn retracted?
   "retract-if-missing!, and true when status is \"missing\" at the recorded chest place (so the job ends at once)."
@@ -156,21 +150,14 @@
     (places/retract-if-missing! c :chest chest status)
     (and (= "missing" status) (some? recorded) (= chest recorded))))
 
-(defn refuse!
-  "End refused: one deposit.refused warn naming the zones and claims; they are the cause and the data."
-  [c verdict]
-  (let [fields (access/refusal-fields [verdict])
-        refused (select-keys fields [:zones :claims])]
-    (ctx/emit! c :deposit.refused :warn (assoc fields :text (str "deposit refused: " (access/refusal-text fields))))
-    (end! c :condition-failed (assoc refused :reason :refused) (assoc refused :gave-up true))))
-
 (defn cell-pos [cell] (zipmap [:x :y :z] cell))
 
 (defn chests
   "{:pool cells :open cells :group? bool}: the chests to try. group? when the body's storage group is in play (no :chest
   argument, or one in the group): the :chest argument or place first, then the group nearest first. Else only the
   argument. open is the pool without the ones found full this call."
-  [c]
+  ([c] (chests c :put))
+  ([c action]
   (let [view (ctx/view c)
         args (:args c)
         main (some-> (storage/chest-of view args) storage/cell-of)
@@ -179,8 +166,14 @@
         here (u/self-pos c)
         near (sort-by (fn [[x y z]] (+ (js/Math.abs (- x (:x here))) (js/Math.abs (- y (:y here))) (js/Math.abs (- z (:z here))))) members)
         pool (vec (if group? (distinct (concat (when main [main]) near)) (when main [main])))
-        full (:full (ctx/mem c) #{})]
-    {:pool pool :open (vec (remove full pool)) :group? group?}))
+        full (:full (ctx/mem c) #{})
+        refused? (fn [cell] (access/container-refusal c action (cell-pos cell)))]
+    {:pool pool :open (vec (remove #(or (full %) (refused? %)) pool)) :group? group?})))
+
+(defn pool-positions [action] (fn [c] (map cell-pos (:pool (chests c action)))))
+
+(def can-start? (fn [c] (contract/all [(checks/chest-known c) ((checks/container-refused every? :put (pool-positions :put)) c)])))
+(def can-run? can-start?)
 
 (defn chest-spots
   "Free cells beside the chests at cells that a chest could stand in: seen air with a seen solid floor, level with the
@@ -233,7 +226,7 @@
                 :again)
             (and (= :nothing-possible (:kind e)) (not= :unreachable (contract/cause-key e)))
             (do (ctx/update-mem! c #(-> % (dissoc :chest-spot) (update :chest-tried (fnil conj #{}) (storage/cell-of spot))))
-                (give-up! c :chest_unusable "could not place a new storage chest" :no-chest-spot))
+                (give-up! c :no-chest-spot))
             :else
             (let [why (contract/cause-key e)]
               (ctx/emit! c :deposit.no-chest :warn {:text (str "cannot place a new storage chest at " (pr-str (storage/cell-of spot)) ": " (name why))})
@@ -290,16 +283,13 @@
                       (ctx/end c :done nil))
       (empty? pool) (stop! c :condition-failed :no-chest)
       (nil? chest) (await (make-chest! c pool))
-      (access/container-refusal c :put chest) (refuse! c (access/container-refusal c :put chest))
       :else
       (let [w (await (walk! c chest))]
         (cond
-          (= :unreachable w) (give-up! c :chest_unusable "cannot reach the chest" :unreachable)
+          (= :unreachable w) (give-up! c :unreachable)
           w w
           :else
-        (if-let [v (access/container-refusal c :put chest)]
-          (refuse! c v)
-          (let [r (await (ctx/act c :transfer (clj->js {:pos chest :direction "deposit"
+        (let [r (await (ctx/act c :transfer (clj->js {:pos chest :direction "deposit"
                                                          :item (:name (:stack pick)) :count (:count pick)})))
                 _ (when (.-items r) (stock/note-stock! c chest (.-items r)))]
             (if (= "ok" (.-status r))
@@ -308,13 +298,13 @@
                 (do (ctx/update-mem! c #(-> % (update :deposited (fnil inc 0)) (update :moved (fnil + 0) (.-moved r))))
                     (u/progress! c)
                     :again)
-                (if group? (mark-full! c chest) (give-up! c :chest_unusable "nothing moved into the chest" :nothing-moved)))
+                (if group? (mark-full! c chest) (give-up! c :nothing-moved)))
               (cond
                 (and group? (= "full" (.-status r))) (mark-full! c chest)
                 (and group? (= "missing" (.-status r)) (not= (storage/cell-of chest) (some-> (mem/place (ctx/view c) :chest) storage/cell-of)))
                 (do (storage/drop-from-group! c chest) (mark-full! c chest))
                 (retracted? c chest (.-status r)) (status-stop! c (.-status r))
-                :else (give-up! c :chest_unusable (str "chest not usable: " (.-status r)) (keyword (.-status r))))))))))))
+                :else (give-up! c (keyword (.-status r)))))))))))
 
 (defn ^:async round
   "The whole put-away in one call: stacks one after another (the inventory is read again before each, so a restart

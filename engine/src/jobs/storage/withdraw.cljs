@@ -5,7 +5,6 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.lib.access :as access]
             [jobs.lib.stock :as stock]
             [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]
@@ -18,19 +17,17 @@
   "Walk to the chest (one go-to) and take items out, every name in one call, until at least the wanted count of
   each name in :items is carried. What is short is re-derived from the inventory before each take, so a cut or
   restart loses nothing.
-  Needs: a chest, the :chest argument or the known :chest place; none known waits :no-chest (can-start? and can-run?: a chest place lost mid-job
-  waits, a reflex ends condition-failed).
+  Needs (can-start? and can-run?): a chest, the :chest argument or the known :chest place, else waits :no-chest (a chest place lost mid-job
+  waits, a reflex ends condition-failed); a chest of the group that zones or claims of another do not refuse :take, else waits
+  :refused {:zones :claims}. :ignore-zones? true skips it.
   Ends done when everything is carried (also at once when it already is), or when at least the call's :least items
   toward the wanted ones are carried at any other ending (:all wants every one). The data of every other ending has :gave-up and
   :short {name n}, what is still missing; the report counts the items carried toward the wanted ones.
   - condition-failed :chest-lacks {:gave-up false :held {name n} :short}: the chest, and the next ones of the group, hold
-    none of what is short (info withdraw.short says so in words); some of the names may have been taken.
-  - condition-failed :refused {:zones [..] :claims [..]}: a chest in another owner's zone or claim that does not allow
-    :take, checked before the walk and again before the transfer (one withdraw.refused warn, nothing taken).
-    :ignore-zones? true skips the check.
+    none of what is short (the ending's text says so in words); some of the names may have been taken.
   - condition-failed :missing (no container at the chest; a recorded :chest place is retracted, one chest_missing warn): at once.
   - nothing-possible, the cause the inspect or transfer status (:unreachable, :full, :nothing-moved, ..): after three failed attempts
-    in a row (warn withdraw.gave-up).
+    in a row.
   Storage group: with no :chest, or a :chest of the group (jobs.lib.storage/group), a chest that lacks what is short
   is followed by the next one; :chest-lacks is reported only once the last has been looked into.
   Stock: what the chest holds is booked in body memory :fetch/stock when inspected and after each take
@@ -62,8 +59,9 @@
 (def fit? ready/ok)
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
-(def can-start? checks/chest-known)
-(def can-run? checks/chest-known)
+(defn can-start? [c]
+  (contract/all [(checks/chest-known c) ((checks/container-refused every? :take (deposit/pool-positions :take)) c)]))
+(def can-run? can-start?)
 
 (def carried-text "withdraw: everything wanted is carried")
 
@@ -107,10 +105,9 @@
   (stop! c (if (= "missing" status) :condition-failed :nothing-possible) (keyword status) short))
 
 (defn give-up!
-  "u/fail!: :again until the third failure in a row, then end nothing-possible with the status as the cause."
+  "Count a failure: :again until the third in a row, then end nothing-possible with the status as the cause."
   [c status short]
-  (let [r (u/fail! c :withdraw.gave-up (str "withdraw gave up: " status))]
-    (if (= :done r) (status-stop! c status short) :again)))
+  (if (u/count-fail! c) (status-stop! c status short) :again))
 
 (defn held-in
   "How many of name the inspected container items hold."
@@ -133,14 +130,6 @@
        (str "took " (str/join ", " (map (fn [[n k]] (str n " " k)) (sort taken)))
             "; no more " (str/join ", " names) " in the chests (the last " holds ")")))))
 
-(defn refuse!
-  "End refused: one withdraw.refused warn naming the zones and claims; they are the cause and the data."
-  [c verdict]
-  (let [fields (access/refusal-fields [verdict])
-        refused (select-keys fields [:zones :claims])]
-    (ctx/emit! c :withdraw.refused :warn (assoc fields :text (str "withdraw refused: " (access/refusal-text fields))))
-    (end! c :condition-failed (assoc refused :reason :refused) (assoc refused :gave-up true))))
-
 (defn ^:async take!
   "Inspect the chest in reach and take the first short name the chest holds: :again, or :done."
   [c chest short]
@@ -156,14 +145,12 @@
         (cond
           (nil? pick) (let [held (held-items (.-items seen))
                             lacking (into {} short)
-                            others (rest (:open (deposit/chests c)))]
+                            others (rest (:open (deposit/chests c :take)))]
                         (when (seq others) (deposit/mark-full! c chest))
                         (if (seq others)
                           :again
                           (let [text (lacks-text (map first short) held (:taken (ctx/mem c)))]
-                            (ctx/emit! c :withdraw.short :info {:short lacking :held held :text text})
                             (end! c :condition-failed :chest-lacks {:gave-up false :held held :short lacking :text text}))))
-          (access/container-refusal c :take chest) (refuse! c (access/container-refusal c :take chest))
           :else
           (let [[name n] pick
                 before (u/inventory (:primitives c))
@@ -185,11 +172,10 @@
   holds none of what is short, or it stopped. The shortfall is read at the start of the step."
   [c]
   (let [{:keys [items]} (:args c)
-        chest (some-> (first (:open (deposit/chests c))) deposit/cell-pos)
+        chest (some-> (first (:open (deposit/chests c :take))) deposit/cell-pos)
         short (shortfall (u/inventory (:primitives c)) items)]
     (cond
       (empty? short) (ctx/end c :done nil {:text carried-text})
-      (access/container-refusal c :take chest) (refuse! c (access/container-refusal c :take chest))
       :else
       (let [w (await (deposit/walk! c chest))]
         (cond

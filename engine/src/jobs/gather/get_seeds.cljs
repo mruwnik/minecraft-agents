@@ -340,6 +340,7 @@
     (cond
       (= :continue e) :continue
       (>= (carried c) goal) (finish! c :count)
+      (and (= :condition-failed (:kind e)) (= :refused (contract/cause-key e))) (give-up! c :refused (select-keys (:cause e) [:zones :claims]))
       (and (= :condition-failed (:kind e)) (not (contains? out :gave-up))) (give-up! c :withdraw-declined)
       (:gave-up out) (let [why (contract/cause-key e)]
                        (ctx/emit! c :get-seeds.gave-up :warn (merge (select-keys out [:zones :claims]) {:reason why :text (str "get-seeds: withdraw gave up: " (name why))}))

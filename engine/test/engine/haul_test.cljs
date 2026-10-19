@@ -89,14 +89,14 @@
 
 (def two-sources {"10,64,0" (stacks "a" 5) "10,64,4" (stacks "b" 5) "20,64,0" []})
 
-(deftest haul-without-sources-stops-with-a-reason
+(deftest haul-without-sources-is-a-bad-call
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [args [{} {:from []} {:to [20 64 0]}]]
           (let [{:keys [eng]} (setup {:containers {"20,64,0" []}})
                 result (await (wt/ending-of eng 'jobs.storage.haul args 10))]
-            (is (= {:kind :condition-failed :cause {:reason :no-source}} (update (select-keys result [:kind :cause]) :cause dissoc :text)) (pr-str args))))))))
+            (is (= {:kind :impossible :cause {:reason :bad-args}} (update (select-keys result [:kind :cause]) :cause dissoc :text)) (pr-str args))))))))
 
 (deftest haul-cut-at-a-transfer-resumes-without-doubling-the-load
   (async done
@@ -145,7 +145,7 @@
               result (await (wt/ending-of eng 'jobs.storage.haul {:from [[10 64 0]]} 30))]
           (is (= {:kind :nothing-possible :cause :unreachable} (select-keys result [:kind :cause]))))))))
 
-(deftest haul-stops-refused-for-a-source-in-another-agents-zone
+(deftest haul-is-refused-at-start-for-a-source-in-another-agents-zone
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -153,7 +153,6 @@
           (let [w (ew/of-data {} {} [{:name "farm" :owner "Miles" :min [10 60 -5] :max [12 70 5]}])
                 {:keys [eng p]} (setup {:containers two-sources} w)
                 result (await (wt/ending-of eng 'jobs.storage.haul (merge {:from [[10 64 0]]} args) 30))]
-            (is (= gave-up (boolean (:gave-up (:data result)))) (pr-str args))
             (is (= cause (some-> result :cause :reason)) (pr-str args))
             (is (= gave-up (boolean (seq (get (containers p) [10 64 0])))) (pr-str args))))))))
 

@@ -3,6 +3,7 @@
   jobs.lib.cond holds the checks of the agent language."
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.access :as access]
             [jobs.lib.job-common :as common]
             [jobs.lib.body :as body]
             [jobs.lib.cond :as cond]
@@ -53,6 +54,17 @@
   (if (storage/chest-of (ctx/view c) (:args c))
     (contract/ok :chest "a chest is known")
     (contract/later :no-chest "no chest known")))
+
+(defn container-refused
+  "Later :refused with the zones and claims as data when enough? (every? or some?) of the positions of (positions c) is
+  refused for action (:take or :put), else ok. A zone can be changed, so it is a wait, not an ending."
+  [enough? action positions]
+  (fn [c]
+    (let [verdicts (map #(access/container-refusal c action %) (positions c))]
+      (if (and (seq verdicts) (enough? some? verdicts))
+        (let [fields (access/refusal-fields (remove nil? verdicts))]
+          (contract/later :refused (str "refused: " (access/refusal-text fields)) (select-keys fields [:zones :claims])))
+        (contract/ok :allowed "a container may be used")))))
 
 (defn refusing
   "The check of problem (c -> nil, or the cause map the job cannot run for): nil is ok with ok-reason and ok-text, a
