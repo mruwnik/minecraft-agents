@@ -45,7 +45,7 @@
 (a/defargs args
   {:bed-radius {:doc "a remembered bed farther than this many blocks from the body is not used (nil: the jobs.lib.shelter.beds/default-bed-radius setting)"
                 :spec (a/num-in 0 nil) :default nil}
-   :open-bed {:doc "false: a bed that is not shut in a closed, roofed room is not lain in (the job ends :stopped :bed-open once the body is beside it)"
+   :open-bed {:doc "false: a bed that is not shut in a closed, roofed room is not lain in (the job ends condition-failed :bed-open once the body is beside it)"
               :spec boolean? :default true}
    :bed {:doc "bed position [x y z] or {:x :y :z} to sleep in instead of the remembered :bed (no radius); it is recorded as :bed when that is unset or gone" :spec ::a/pos
          :default nil}})
@@ -68,22 +68,19 @@
     (or (sh-beds/bed c (sh-beds/arg-radius (:args c)))
         (sh-spawn/standing-bed (:primitives c) (ctx/view c) (sh-beds/arg-radius (:args c))))))
 
-(def leave-shelter-radius
-  "A body in a shelter at night walks to a bed only when it is this near (blocks); a farther one is waited for."
-  16)
-
-(defn far-from-shelter
-  "The kind of kept shelter (sh-beds/kept-shelters: not a bare roof) a walk to a bed beyond leave-shelter-radius would leave, else nil; none when another sleeps and the bed is near (courtesy-walk?)."
-  [c bed]
-  (let [p (:primitives c)]
-    (when (and (> (u/dist (u/self-pos c) bed) leave-shelter-radius) (not (sh-beds/courtesy-walk? p (ctx/view c) bed)))
-      (sh-beds/kept-shelters (sh-inside/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) bed 2)))))
-
 (a/defargs settings
   {::pause-s {:default 5 :doc "Seconds one hold pauses (jobs.time.noop) before the call looks again." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 300 :doc "Seconds the walk to the bed and the sleep may take." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 600 :doc "Seconds a sleep may last from its start, the holds for an occupied bed or the night in a shelter included." :spec (a/num-in 0 nil)}
+   ::leave-shelter-radius {:default 16 :doc "A body in a shelter at night walks to a bed only when it is this near (blocks); a farther one is waited for." :spec (a/num-in 0 nil)}
    ::speed {:default 4.3 :doc "Blocks a second the walk to the bed covers, for the quote." :spec (a/num-in 0 nil)}})
+
+(defn far-from-shelter
+  "The kind of kept shelter (sh-beds/kept-shelters: not a bare roof) a walk to a bed beyond ::leave-shelter-radius would leave, else nil; none when another sleeps and the bed is near (courtesy-walk?)."
+  [c bed]
+  (let [p (:primitives c)]
+    (when (and (> (u/dist (u/self-pos c) bed) (settings/get settings ::leave-shelter-radius)) (not (sh-beds/courtesy-walk? p (ctx/view c) bed)))
+      (sh-beds/kept-shelters (sh-inside/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) bed 2)))))
 
 (defn bed-block? [c bed]
   (.endsWith (or (u/seen-name (:primitives c) bed) "") "_bed"))
@@ -144,7 +141,7 @@
 (def fit? ready/ok)
 
 (defn done? [c]
-  (let [d (and (not (checks/running? c)) (sh-sense/sleeping? (:primitives c)))]
+  (let [d (sh-sense/sleeping? (:primitives c))]
     (checks/goal d [:sleeping "already asleep"] [:awake "not asleep"] {:units :sleeps :done (if d 1 0) :left (if d 0 1)})))
 
 (defn quote-of [c]

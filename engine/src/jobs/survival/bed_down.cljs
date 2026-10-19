@@ -37,6 +37,7 @@
 (a/defargs settings
   {::job-time-s {:default 900 :doc "Seconds a bed-down may take: the walk, the bed put down or fetched (an obtain may take its own 600 without a change), the sleep." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 1800 :doc "Seconds a bed-down may last from its start, the jobs that run between its rounds included." :spec (a/num-in 0 nil)}
+   ::bed-tries {:default 3 :doc "Placements of the carried bed the server may refuse before :bed-place-failed; a foot cell refused twice is left for another row." :spec (a/int-in 1 nil)}
    ::walk-speed {:default 4.3 :doc "Blocks a second the walk to the bed covers, for the quote." :spec (a/num-in 0 nil)}})
 
 (defn bed-permit
@@ -100,7 +101,7 @@
     (contract/later :not-night "not night")))
 
 (defn done? [c]
-  (let [d (and (not (checks/running? c)) (sh-sense/sleeping? (:primitives c)))]
+  (let [d (sh-sense/sleeping? (:primitives c))]
     (checks/goal d [:sleeping "already asleep"] [:awake "not asleep"] {:units :sleeps :done (if d 1 0) :left (if d 0 1)})))
 
 (defn quote-of [c]
@@ -127,10 +128,6 @@
                                                             :text "could not sleep in the bed; not trying again for a while"})))))
 
 (def bed-dirs [[1 0] [-1 0] [0 1] [0 -1]])
-
-(def bed-tries
-  "Placements of the carried bed the server may refuse before :bed-place-failed; a foot cell refused twice is left for another row."
-  3)
 
 (defn refused-twice? [c {:keys [x y z]}]
   (<= 2 (get (:bed-refused (ctx/mem c)) [x y z] 0)))
@@ -189,7 +186,7 @@
 (defn ^:async put-down-bed!
   "Walk to the layout's stand cell if the body is not on it, then place the carried bed on the foot cell (facing along
   the row) and record it as :bed unless a live :bed is recorded, and as :bed-placed when outside the body's own zones.
-  A placement the server refuses is counted (job memory :bed-refused) and tried again while fewer than bed-tries failed.
+  A placement the server refuses is counted (job memory :bed-refused) and tried again while fewer than ::bed-tries failed.
   :continue while walking or trying again; the foot cell when a bed block stands there after; else nil."
   [c]
   (let [p (:primitives c)
@@ -200,7 +197,7 @@
         (let [r (await (tidy/place! c foot item false (click-for layout)))
               refused (:bed-refused (ctx/mem c))]
           (cond
-            (and (not= "placed" (.-status r)) (< (inc (reduce + 0 (vals refused))) bed-tries))
+            (and (not= "placed" (.-status r)) (< (inc (reduce + 0 (vals refused))) (settings/get settings ::bed-tries)))
             (do (ctx/update-mem! c update-in [:bed-refused [(:x foot) (:y foot) (:z foot)]] (fnil inc 0))
                 :continue)
             (and (= "placed" (.-status r)) (await (bed-visible? c foot)))

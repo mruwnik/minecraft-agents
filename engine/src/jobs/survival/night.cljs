@@ -36,60 +36,25 @@
 (def doc
   "The night: one round from the trigger until the night is over and the body is out of its shelter.
   Ways (the call's :ways, all by default): :bed (a bed used or put down, a sleeper's log-out), :shelter (a roofed place
-  entered, shut-in, niche, a breached room walled in, the exposed retry), :flee (a walk somewhere safer, a
-  cave walled in). A door is always shut and the morning always runs.
-  Condition at the start: the night trigger's (a listed night waits :not-night, :spawn with the respawn bed's state);
-  sheltered with nothing for the night to do, it is done before its first round. Quote: the time left of the night (jobs.time.wait-for-light) and ::morning-s, least 0.
-  The round repeats one choice, each time from the world as it is now (the first that applies), with a 50 ms timer between:
-  - day: a doorway the night filled (:doorway-filled, still holding the block it put there) is dug again and the drop walked over (a cell it cannot open waits :doorway-open-failed, 2 minutes, and warns night.doorway-stuck once per cell and cause); a dug-in or exposed night leaves the shelter (dig-in-leave/leave!); :no-way-out ends it nothing-possible :no-way-out (shelter.failed warn,
-    a :shelter-trapped entry, 5 minutes); then a bed it put down outside its own zones (:bed-placed) is dug up and its
-    drop walked over (go-to), unless it is the respawn bed (:spawn-bed); then the job ends: done {:night :slept|:dug-in|:logged-out}, or nothing-possible :exposed {:sites} after a
-    night with no shelter.
+  entered, shut-in, niche, a breached room walled in, the exposed retry), :flee (a walk somewhere safer, a cave walled in).
+  A door is always shut and the morning always runs.
+  Condition at the start: the night trigger's (a listed night waits :not-night, :spawn with the respawn bed's state); sheltered with nothing for the night to do, it is done before its first round. Quote: the time left of the night plus ::morning-s.
+  Each pass chooses again from the world as it is, the first that applies:
+  - day: the morning (night.morning): a doorway the night filled is dug again, a dug-in or exposed night leaves the shelter (:no-way-out ends nothing-possible), a bed put down outside its own zones is picked up (not the respawn bed); a dug-in body stays while a known hostile is near and the dawn grace lasts (night.dawn-hold). Then it ends done {:night :slept|:dug-in|:logged-out|:roofed :fled n}, or nothing-possible :exposed after a night with no shelter.
   - asleep: hold (:sleeping).
-  - roofed and sheltered (slept, dug in, or shut in its own latest :shelter): a log-out stint while someone else sleeps,
-    else hold (:sheltered) while the trigger would still fire (a bed to use, a sleeper), else the job ends: a body
-    that is safe leaves the queue to run (the morning's trigger lets it out).
-  - a bed to use or a carried bed to put down, with a roofed :roofed-places place within the night.sites ::home-radius setting (12) and the body not roofed: enters the place first (jobs.survival.enter-room {:place}: go-to, lit or not, its doors shut and doorway filled; one try, a failed walk is not repeated tonight). A carried bed is never put down in the open while such a place is close (info night.bed-kept once); the night goes on below.
-  - an open door of the closed room the body stands in is shut before any bed is used or put down (below).
-  - roofed, with a carried bed to put down under the roof and a doorway out of the room (jobs.lib.rooms/gap): the doorway is filled first (jobs.survival.enter-room, with jobs.blocks.fill-cells: a carried wooden door, else building blocks; never a cell an animal or mob stands in; tried once a night, :doorway-tried; the cells remembered as :doorway-filled, a day).
-  - a bed-down in flight (its walk to the bed or to where the bed goes down) is called again until it ends; one that stops hostile-near makes the night hold :monsters-near (5 s) first.
-  - a bed (sh-beds/bed-to-use: seen, or remembered within :bed-radius, :urgent-bed-radius once :max-days-awake days without
-    sleep; never an occupied one, one given up on, or, unless :max-days-awake days without sleep or an underground body sees another player sleep and the bed is within `courtesy-radius` 32, one whose walk leaves an underground, dug-in or room shelter): jobs.survival.bed-down sleeps in it (jobs.survival.sleep). A sleep that ends without sleeping writes
-    :sleep-failed (5 minutes).
-  - a bed item carried and no bed to use (jobs.survival.bed-down): put down beside the body (roofed cells first, else in the open, never in the open from a closed home (jobs.lib.rooms/closed-home?: every cell roofed, or one doorway shuts the roof); never in a
-    doorway or another's zone), slept in, recorded as :bed unless a live :bed is; outside its own zones also as
-    :bed-placed for the morning (info night.bed-placed {:pos :own-zone} says where). No room writes :bed-place-failed (10 minutes, or until the body is 6+ blocks away).
-  - someone else asleep (sh-sleepers/log-out-for-sleepers?): jobs.survival.log-out, a 30 s stint at most until morning, again
-    while anyone sleeps or nothing is known. A log-out that is not ok or cut is not tried again tonight.
-  - a closed room around the body (roofed within :room-roof-height) with an open door (an iron one too, which no hand shuts): the door is shut (jobs.survival.enter-room: retreat-doors/shut-home-door!,
-    walking to it when out of reach); a door that stays open writes :night-door-failed (shelter.door-failed warn) and the
-    night goes on as below.
-  - a roof over a room with a hole (a fresh :bed-open entry within sh/breach-near and no closed room, sh/breached-home?): says so once
-    (shelter.room_open warn) and walls the body in under the roof (the :enclose step), not ending roofed.
-  - roofed, buried or shut in a closed room: done {:night :roofed} (the queue runs).
-  - by day, a dug-in body with a known hostile near (jobs.lib.dawn/hostile-hold?) stays in (info night.dawn-hold) until it is gone or the dawn grace passes.
-  - else a safe place: jobs.survival.shut-in (:for :night, the ways walls and pit, and room when a remembered roofed place (:roofed-places, nearest first) lies within :walk-radius, its column not seen open (a roof cell unseen after a look counts as roof), or the body is under a roof: the room way enters that place, priced by quote against the others) here (its pit walks to other ground when the feet are a site that failed tonight, jobs.survival.dig-pit-site). A shut-in that does not
-    roof the body is called again while its pit failed and another site may be left, at most max-sites calls. Then, or with no such site, it cuts a niche (jobs.survival.shut-in with the pocket way, once, :niche;
-    out of a failed pit first; never a tool fetched in the dark), else flees somewhere safer, else holds exposed until day (one shelter.exposed
-    warn, hold :exposed), still taking a bed or a sleeper's log-out when one turns up. A body held exposed digs in again
-     when it has moved off its spot or retry-after-ms passed, at most max-retries times.
-  Fleeing (:flee-radius, 0 never): to the candidate within the radius that is not tried tonight which go-to reaches soonest
-  (one planner search over them, jobs.lib.targets/nearest!: known mobs and darkness costed), at most max-flees
-  walks (the route need not be lit): a known bed farther than :bed-radius, a :roofed-places
-  place with a seen roof, a seen cave or overhang cell (a seen solid floor and roof, two free dry cells, within about 16
-  blocks: only those seen, and only while the carried blocks (dig-in's) cover every wall cell still open; none whose
-  wall a zone refuses), or seen natural ground (never sand or gravel) the carried tools dig, 9+ from every failed
-  site, with standing room (dig-pit-site/pit-site?). While that search goes on the night holds its pass. Arrived at a cave cell it walls itself in (shut-in with the walls way only, never a
-  pit): sealed, it holds :dug-in until morning; a refusal is shut-in's failed site and the roofed body ends the night :roofed. shelter.fled info on arrival, shelter.flee_failed when not arrived; a walk cut by a
-  reflex resumes the same target. Arrived: the next pass sleeps, is roofed, or digs in there (a niche is tried again).
-  Done {:night how :fled n} (nothing-possible :exposed {:fled n}) when it fled.
-  Every hold is declared (ctx/hold-still!) and waits hold-ms at a time, eating one carried food when the hungry
-  trigger's condition holds (hungry?, or below 7 hp; not asleep); a starving body with no food runs get-food (when no danger is near).
-  An overdue body (no sleep for :max-days-awake in-game days) warns needs_bed once an in-game day (:needs-bed). A respawn bed
-  it sees is no bed is written :spawn-lost and warned (spawn_lost) once; its waiting reasons carry :spawn ({:bed pos} or {:lost pos :why}).
-  Memory: job memory :enclose (the cave cell being walled in), :sheltered (:slept, :dug-in, :logged-out, :exposed), :log-out-failed, :no-site and :shut-ins (shut-in calls made), :digging (a shut-in call in flight), :bed-down (a bed-down in flight), :pit-trapped and leave!'s :dig-out; :roof-walk-failed (no second walk to a roofed place tonight); body memory :doorway-tried and shut-in's :shut-in-failed (failed sites, forgotten whenever the night ends, at most ten minutes), so a
-  firing after a cut does not dig a failed site again.
-  Muting :night does not end a running night job: the agent cancels it too.")
+  - sheltered (slept, dug in, shut in): log out for a stint while someone else sleeps, else hold (:sheltered) while a bed to use or a sleeper keeps the trigger firing, else end so the queue runs.
+  - a roofed :roofed-places place within the night.sites ::home-radius setting, a bed to use or carry and the body not roofed: jobs.survival.enter-room walks in (one try tonight); a carried bed is not put down in the open while one is close (night.bed-kept).
+  - an open door of the closed room the body stands in is shut; the room's doorway is filled before a carried bed goes down (:doorway-tried, :doorway-filled).
+  - a bed to use or carried (sh-beds/bed-to-use): jobs.survival.bed-down, called again until it ends; one that stops hostile-near makes the night hold :monsters-near.
+  - someone else asleep: jobs.survival.log-out, a 30 s stint, not retried tonight when not ok.
+  - a roof over a room with a hole (shelter.room_open warn): walled in under the roof (:enclose).
+  - roofed, buried or shut in a closed room: done {:night :roofed}.
+  - else jobs.survival.shut-in {:for :night} (walls, pit, room by quote; its pit walks to other ground after a failed site, jobs.survival.dig-pit-site; called again while another site may be left, at most max-sites), then a niche (pocket way, once), then a flee, then hold exposed (one shelter.exposed warn), still taking a bed or log-out that turns up, and digging in again after moving or retry-after-ms (max-retries).
+  Fleeing (:flee-radius, 0 never; at most max-flees walks): to the not-yet-tried candidate go-to reaches soonest (jobs.lib.targets/nearest!): a known bed, a :roofed-places place, a seen cave or overhang cell (walled in on arrival), or seen natural ground the carried tools dig. shelter.fled on arrival, shelter.flee_failed otherwise.
+  Every hold is declared (ctx/hold-still!), waits hold-ms, and (night.hold) cooks, eats or runs get-food first.
+  An overdue body warns needs_bed once a day; a respawn bed seen gone is written :spawn-lost (warn spawn_lost once).
+  Memory: job memory :enclose, :sheltered, :log-out-failed, :no-site, :shut-ins, :digging, :bed-down, :pit-trapped, :roof-walk-failed; body memory :doorway-tried and shut-in's :shut-in-failed (forgotten when the night ends, at most ten minutes).
+  Muting :night does not end a running night job: cancel it too.")
 
 (a/defargs args
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
