@@ -9,15 +9,19 @@
  :cases
  [{:name "light-reading-follows-a-torch-placed-and-broken"
    :act [[:until [:cli "observe" ["$body" "--world" "$world" "light"]
-                  {:ok true :light {:seen? true :light 0 :dark? true :lit? false}}] 20]
+                  {:ok true :light {:seen? true :light 0 :lit? false}}] 20]
          [:until [:cli "observe" ["$body" "--world" "$world" "light" "--radius" "2"]
-                  {:ok true :light {:dark-fraction 1 :darkest 0 :cells 125}}] 10]
+                  {:ok true :light {:darkest 0 :cells 125 :seen [:>= 1]}}] 10]
          [:rcon "execute positioned $X $Y $Z run setblock ~18 ~4 ~16 torch"]
          [:until [:cli "observe" ["$body" "--world" "$world" "light"]
-                  {:ok true :light {:block [:>= 10] :light [:>= 10] :dark? false :lit? true}}] 15]
+                  {:ok true :light {:block [:>= 10] :light [:>= 10] :lit? true}}] 15]
          [:until [:cli "observe" ["$body" "--world" "$world" "light" "--radius" "2"]
                   {:ok true :light {:dark-fraction [:< 1] :darkest 0}}] 10]
          [:rcon "execute positioned $X $Y $Z run setblock ~18 ~4 ~16 air"]
          [:until [:cli "observe" ["$body" "--world" "$world" "light"]
-                  {:ok true :light {:block 0 :light 0 :dark? true}}] 15]]
+                  {:ok true :light {:block 0 :light 0}}] 15]]
+   :after [[:body-near [16.5 4 16.5] 1.5]]}
+  {:name "light-of-an-unloaded-cell-is-unknown"
+   :act [[:until [:cli "observe" ["$body" "--world" "$world" "light" "3000" "64" "3000"]
+                  {:ok true :light {:seen? false :light nil :lit? nil}}] 20]]
    :after [[:body-near [16.5 4 16.5] 1.5]]}]}

@@ -230,6 +230,18 @@
         (do (end-slot! eng id (:reason (waiting eng id) :not-ready) (waiting eng id))
             nil)))))
 
+(defonce rechecked (js/WeakMap.))
+
+(defn recheck-waits!
+  "While a reflex holds the body, the listed jobs' wait reasons are asked again every held-recheck-ms: a reason told
+  before it started (the dark of a night gone) would else stay on the list."
+  [eng]
+  (let [t (now eng)
+        key (:waiting eng)]
+    (when (>= (- t (or (.get rechecked key) 0)) (settings/get settings ::held-recheck-ms))
+      (.set rechecked key t)
+      (doseq [id (:list (state eng))] (check-passes? eng id)))))
+
 (defn tick-online!
   "One scheduling pass for a body that is on the server."
   [eng]
@@ -241,7 +253,7 @@
         firing (choose-firing! eng order (remove #(contains? paused (:id %)) (evaluate-register! eng order)) h)]
     (cond
       firing (fire! eng firing h)
-      (running eng) (check-idle! eng)
+      (running eng) (do (when (:reflex h) (recheck-waits! eng)) (check-idle! eng))
       :else (when-let [id (or (paused-reflex eng order) (choose-listed eng))] (start-round! eng id)))))
 
 (defn tick!

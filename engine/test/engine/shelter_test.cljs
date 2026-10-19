@@ -130,6 +130,7 @@
     (is (= {:cell [0 64 0] :block 14 :sky 0 :light 14 :lit? true}
            (select-keys view [:cell :block :sky :light :lit?])))
     (is (= [0 64 0] (:cell (sh-sense/light-view lit {}))) "the feet by default")
+    (is (= {:seen? false :light nil :lit? nil} (select-keys (sh-sense/light-view (tu/with-light-data (tu/fake {:time night :blocks cave-blocks :unloaded ["40,64,0"]})) {:cell {:x 40 :y 64 :z 0}}) [:seen? :light :lit?])) "no light data: unknown, not a guess")
     (is (= {:cells 27 :radius 1 :darkest 0} (select-keys (sh-sense/light-view lit {:cell {:x 0 :y 64 :z 0} :radius 1}) [:cells :radius :darkest])))))
 
 (def dug-room-blocks

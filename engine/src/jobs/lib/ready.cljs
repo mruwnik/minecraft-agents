@@ -3,7 +3,8 @@
   safe-at, safe-at-by-night and safe-if-lit are :later while the place is exposed (the estimate of jobs.lib.cost/exposure is
   above ::risk-limit; :look while the light there is unseen and the body has not looked round, then :later; :never when light is further off than the job waits; darkness no sky light reaches is no exposure) or a danger is near
   (threatened); fit? is :later below the risky health or while poisoned (fit-armed also while unarmed); ok never refuses."
-  (:require [engine.args :as a]
+  (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -29,7 +30,7 @@
   [c forms]
   (apply dissoc forms (keys (:checks (ctx/frozen-call c)))))
 
-(defn place-text [{:keys [x y z]}] (str x " " y " " z))
+(defn place-text [{:keys [x y z]}] (str/join " " (remove nil? [x y z])))
 
 (defn at-status
   "The status of the exposure of the walk of c's body to `to`: ok while sheltered or the chance is within ::risk-limit,

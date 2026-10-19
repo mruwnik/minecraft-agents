@@ -238,6 +238,28 @@
 
 (def always {:name :r :persistence :retry :when (fn [_ _ _] true)})
 
+(deftest a-queued-jobs-wait-is-asked-again-while-a-reflex-holds-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [release (atom nil)
+              held (js/Promise. (fn [res] (reset! release res)))
+              {:keys [eng clock]} (setup {'root (assoc (leaf :safe?) :round (count-round :rounds))
+                                          'reflex {:safe? (gate :always :never) :fit? (gate :always :never)
+                                                   :round (fn ^:async r [c] (await held) (ctx/end c :done nil))}}
+                                         {:r (assoc always :job '(reflex))})
+              id (core/submit! eng '(root) {})]
+          (await (core/tick! eng))
+          (is (= :dark (:reason (core/waiting eng id))))
+          (swap! world assoc :go true :always true)
+          (core/register-reflex! eng {:trigger :r})
+          (swap! clock + 5000)
+          (core/tick! eng)
+          (swap! clock + 5000)
+          (await (core/tick! eng))
+          (is (nil? (core/waiting eng id)) "the reason of before the reflex began is gone")
+          (@release nil))))))
+
 (deftest a-held-trigger-asks-its-check-once-per-window
   (async done
     (tu/run-async done
