@@ -1,6 +1,8 @@
 (ns jobs.survival.retreat-seal
   "A cornered body's seal (jobs.survival.retreat): the open cells round it filled with carried blocks."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
             [jobs.lib.click :as click]
@@ -34,16 +36,17 @@
          (filter #(and (not (combat/ranged? %)) (danger-q/seen-only? %)))
          (mapv #(danger-q/mob-pos p %)))))
 
-(def hit-reach
-  "Blocks within which a melee mob that hurt the body during a seal step ends the step (the fight is decided anew)."
-  3)
+(a/defargs settings
+  {::hit-reach {:default 3 :doc "Blocks within which a melee mob that hurt the body during a seal step ends the step (the fight is decided anew)." :spec (a/num-in 0 nil)}})
+
+(defn hit-reach [] (settings/get settings ::hit-reach))
 
 (defn hit-while-placing?
   "Whether the body lost health since health0 with a seen melee hostile within hit-reach: more blocks beside it only cost more hits."
   [c health0]
   (let [p (:primitives c)]
     (boolean (and (< (.-health (.self p)) health0)
-                  (some #(<= (u/dist (u/self-pos c) %) hit-reach) (melee-spots c))))))
+                  (some #(<= (u/dist (u/self-pos c) %) (hit-reach)) (melee-spots c))))))
 
 (defn ^:async place-seal!
   "Place carried blocks at cells in order, each ledgered (flight/plug-purpose) for the cleanup. :hit once a melee mob hit the body during the step (hit-while-placing?: no more blocks beside it), :ok, :wait while a mob stands in a cell (the place is refused and tried again
