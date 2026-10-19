@@ -259,6 +259,12 @@
     {:x 40 :y 50 :z 0} :ok
     {:x 40 :y 70 :z 0} :later))
 
+(deftest safe-at-by-night-takes-a-goal-the-sky-never-reaches-as-underground
+  (are [sky expected] (= expected (with-redefs [sh-sense/seen-cell? (constantly false) sh-sense/sky-light-at (constantly sky)]
+                                    (kind (ready/safe-at-by-night (constantly {:x 40 :y 70 :z 0})) tunnel)))
+    0 :ok
+    15 :later))
+
 (deftest safe-at-by-night-judges-a-column-goal-at-its-surface
   (is (= :later (lit 0 15 #(kind (ready/safe-at-by-night (constantly {:x 4 :z 0})) tunnel)))))
 

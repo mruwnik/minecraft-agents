@@ -130,6 +130,16 @@
             (is (= [[2 64 0]] (mapv #(let [a (.-pos (.-args %))] [(.-x a) (.-y a) (.-z a)]) (bd/calls p "dig"))) plant)
             (is (= "cobblestone" (bd/block-at p at)) plant)))))))
 
+(deftest a-light-block-in-the-cell-is-placed-over-not-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body :blocks {"2,64,0" "light" "2,63,0" "stone"} :inventory cobble})
+              result (await (tu/child-outcome eng job {:pos at :item "cobblestone"} 8))]
+          (is (:placed result))
+          (is (empty? (bd/calls p "dig")))
+          (is (= "cobblestone" (bd/block-at p at))))))))
+
 (deftest without-the-item-it-waits-need
   (async done
     (tu/run-async done

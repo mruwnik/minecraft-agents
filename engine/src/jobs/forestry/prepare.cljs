@@ -44,7 +44,7 @@
     gives :no-soil with :why :other-block, :kept, :hollow, :fluid or :planned. Natural ground with no dirt
     carried gives :no-soil :no-dirt.
   - above the cell: nothing is dug. A block in the growth space that a tree cannot grow through (anything but
-    air, leaves, saplings, plants, snow, vines) leaves the cell untouched and reported as :cramped
+    air, leaves, saplings, plants, snow, vines, light blocks) leaves the cell untouched and reported as :cramped
     {:pos :at :block}.
   The growth space is HEADROOM cells from the planned cell up, the cell included: oak 7, birch 8, spruce 9,
   jungle 13, acacia 10, dark_oak 10, pale_oak 10, cherry 9. These are approximate (about 70% sure of each).

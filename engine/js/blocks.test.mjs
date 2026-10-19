@@ -2,7 +2,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { isInteractable } from './blocks.mjs'
+import { isInteractable, isReplaceable } from './blocks.mjs'
 
 const source = readFileSync(new URL('../src/jobs/lib/interactable_blocks.txt', import.meta.url), 'utf8').trim()
 const table = new RegExp(source)
@@ -12,4 +12,9 @@ test('isInteractable follows the shared table in jobs/lib/interactable_blocks.tx
     'lever', 'stone', 'oak_planks', 'oak_log', 'air', 'oak_fence', 'torch']) {
     assert.equal(isInteractable(name), table.test(name), name)
   }
+})
+
+test('an invisible light block is a free cell for a placement', () => {
+  assert.equal(isReplaceable('light'), true)
+  assert.equal(isReplaceable('stone'), false)
 })

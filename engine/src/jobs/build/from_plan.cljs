@@ -144,6 +144,7 @@
         cells-of (mapv :pos hidden)]
     (when-not (or trouble
                   (empty? (owed cells))
+                  (empty? (shortage (owed cells) carried))
                   (seq (buildable cells carried {}))
                   (seq (digging cells)))
       (let [here (u/self-pos c)

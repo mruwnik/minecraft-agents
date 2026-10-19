@@ -61,10 +61,10 @@
 
 ;; ------------------------------------------------------------------ pure
 
-(deftest a-tree-grows-through-air-leaves-saplings-and-plants-only
+(deftest a-tree-grows-through-air-leaves-saplings-plants-and-light-blocks-only
   (are [name free] (= free (rule/tree-free? name))
     "air" true "cave_air" true "oak_leaves" true "short_grass" true "tall_grass" true "poppy" true "snow" true
-    "vine" true "birch_sapling" true "stone" false "dirt" false "oak_log" false "oak_planks" false "water" false))
+    "vine" true "birch_sapling" true "light" true "stone" false "dirt" false "oak_log" false "oak_planks" false "water" false))
 
 (deftest headroom-is-the-species-table-and-the-argument-overrides-it
   (are [species over expected] (= expected (rule/headroom-of species over))

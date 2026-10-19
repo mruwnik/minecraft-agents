@@ -77,7 +77,7 @@
    :limit-s 120}
   {:name "in-a-pit-walks-out-and-places"
    :plot {:height 8 :floor "stone"}
-   :blocks [[:fill [0 0 0] [31 2 31] "stone"] [:fill [16 0 16] [16 2 16] "air"]]
+   :blocks [[:fill [0 0 0] [31 2 31] "stone"] [:fill [16 0 16] [16 2 16] "air"] [:fill [0 4 0] [31 4 31] "light"]]
    :body {:at [16.5 0 16.5] :inventory [["iron_pickaxe" 1] ["dirt" 4]]}
    :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [10 3 10] #at [11 3 10]] :want "dirt"}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]

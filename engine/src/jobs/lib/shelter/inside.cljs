@@ -50,7 +50,7 @@
   "At night, awake and safe from it (roofed or buried, or shut-in-room?), the shelter a walk to goal ({:x :y :z}, or {:x
   :z} a column) within dist would leave, else nil. A goal within dist of the feet leaves none. :dug-in: shelter (the
   latest :shelter entry) is the one the body is shut in. :room: no cell of the closed room is within dist of the goal.
-  :underground: buried, and the goal is not below the feet (unless open-air-above?), has nothing solid within default-roof-height over it, and is no solid block with no open cell seen over it (a wall in the rock: a walk deeper stays underground). :roofed: any other roof."
+  :underground: buried, and the goal is not below the feet (unless open-air-above?), has nothing solid within default-roof-height over it, and is no solid block with no open cell seen over it (a wall in the rock: a walk deeper stays underground), and gets no sky light (a room of rock taller than the roof height is still underground). :roofed: any other roof."
   [p shelter goal dist]
   (when (and (sh-sense/dark-outside? p) (not (sh-sense/sleeping? p)) (safe-from-night? p))
     (let [goal (update-vals goal js/Math.floor)
@@ -62,7 +62,8 @@
         room (when-not (some (fn [[x y z]] (near? {:x x :y y :z z})) (:cells room)) :room)
         (sh-sense/buried? p) (when-not (and (:y goal) (or (and (< (:y goal) (:y (sh-sense/feet p))) (not (sh-sense/open-air-above? p goal (:y (sh-sense/feet p)))))
                                                  (some #(sh-sense/solid-at? p (update goal :y + %)) (range 1 (inc sh-sense/default-roof-height)))
-                                                 (and (sh-sense/solid-at? p goal) (not (sh-sense/seen-open-over? p goal)))))
+                                                 (and (sh-sense/solid-at? p goal) (not (sh-sense/seen-open-over? p goal)))
+                                                 (= 0 (sh-sense/sky-light-at p goal))))
                       :underground)
         :else :roofed))))
 

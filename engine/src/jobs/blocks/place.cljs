@@ -106,9 +106,10 @@
          {:pos pos :collect false :need-drop false :accept #{:fluid-adjacent :falling-block}}))
 
 (defn clears?
-  "Whether the call digs block out of the cell before placing (jobs.lib.blocks/clearable, unless :clear is false)."
+  "Whether the call digs block out of the cell before placing (jobs.lib.blocks/clearable, unless :clear is false). An
+  invisible light block cannot be dug and is overwritten by the placement."
   [c block]
-  (and (:clear (:args c) true) (b/clearable block)))
+  (and (:clear (:args c) true) (b/clearable block) (not= "light" block)))
 
 (defn place-verdict
   "The rules' place verdict for pos, a plant there counted as gone (it is dug first). A block without collision

@@ -25,9 +25,9 @@
     "wildflowers" "leaf_litter" "short_dry_grass" "tall_dry_grass" "bush" "firefly_bush"})
 
 (defn tree-free?
-  "Whether a tree's growth may take the place of the block: air, leaves, saplings, plants, snow, vines."
+  "Whether a tree's growth may take the place of the block: air, leaves, saplings, plants, snow, vines, invisible light blocks."
   [n]
-  (boolean (or (rules/air n) (str/ends-with? n "_leaves") (str/ends-with? n "_sapling") (tree-plants n))))
+  (boolean (or (rules/air n) (= "light" n) (str/ends-with? n "_leaves") (str/ends-with? n "_sapling") (tree-plants n))))
 
 (def natural-names
   #{"stone" "cobblestone" "deepslate" "cobbled_deepslate" "andesite" "diorite" "granite" "tuff" "calcite" "sand"

@@ -245,6 +245,21 @@
           (is (= :no-items (:reason result)))
           (is (= 0 (count (h/calls p "place")))))))))
 
+(deftest unseen-cells-the-body-carries-the-items-for-are-not-a-no-items-wait
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[seen sink] (tu/legacy-capture-sink)
+              p (doto (tu/seeing-after-look (tu/fake-on-floor {:inventory kit}))
+                  (aset "seenBlocks" (fn [_] #js []))
+                  (aset "seenBlockAt" (fn [pos] #js {:unknown true :pos pos}))
+                  (tu/set-sensed! (fn [_] #js {:unknown true})))
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref h/clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref h/clock)})
+                                :world (world/of-data {"pen" (pen-plan)} {} [])})
+              result (await (child-outcome eng job {:plan "pen" :fetch false} 60))]
+          (is (not= :no-items (:reason result))))))))
+
 (defn declines
   "Submit the job with args over the world spec and plans, tick a few times: [places, build.declined warns]."
   ([spec plans args] (declines spec plans args []))

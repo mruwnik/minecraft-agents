@@ -2,7 +2,7 @@
 ;; are crafted from logs it fetches, exploring for more trees), 24cde5af (:fetch false waits for materials), 8c74eba0 (the ring follows rising
 ;; ground), d943725f (a leaf canopy above the ring is not ground). Ring plan: outline x 10..17, z 10..17 at y 0 (28 cells).
 ;; The ring has a gate at 13 0 10 (the body builds from inside and leaves by it; without a gate it would end :inside).
-;; Should-succeed: ring closed in each case. Should-fail: no fences and :fetch false ends condition-failed :no-items, nothing placed.
+;; Should-succeed: ring closed in each case. Should-fail: no fences and :fetch false waits :no-items, nothing placed.
 {:defaults
  {:tags [:build :pen :animals]
   :time :any
@@ -19,8 +19,8 @@
    :after [[:block [10 0 10] "birch_fence"] [:block [17 0 14] "birch_fence"]]}
   {:name "no-fences-and-no-fetch-ends-no-items"
    :act [[:job (jobs.build.pen {:plan "$plan:ring" :fetch false})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-items}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :stopped}}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-items}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :waiting}}]
    :after [[:not-block [10 0 10] "oak_fence"]]
    :limit-s 60}
   {:name "ring-on-rising-ground-follows-the-surface"
