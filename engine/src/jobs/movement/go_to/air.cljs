@@ -124,6 +124,21 @@
         (let [{:keys [status]} (await (near/walk-round! c target 0 walk-opts))]
           (contains? #{"arrived" "partial" "searching"} status))))))
 
+(def breath-wait-ms "One wait of breathe-back!." 250)
+
+(def max-breath-waits "Waits of breathe-back! at most: vanilla refills 4 of 300 air a tick, a full breath in under 4 s." 20)
+
+(defn ^:async breathe-back!
+  "With the head out after a swim to air, wait until the air is back: the plan counts the air used, so planning at once
+  would find the dive after the surface too long. Ends when the head goes under again or the tries are spent."
+  [c]
+  (let [p (:primitives c)]
+    (loop [n 0]
+      (let [oxygen (.-oxygen (.self p))]
+        (when (and (< n max-breath-waits) (number? oxygen) (< oxygen 20) (not (breath/head-under? p)))
+          (await (ctx/act c :wait #js {:ms breath-wait-ms :why "getting its breath back"}))
+          (recur (inc n)))))))
+
 (defn ^:async surface!
   "A round refused :air with the head under water: the planner refuses a swim past the air limit unless the goal is a
   way to air, so a far goal leaves the body under water: swim-to-air!, at most max-surfacings a call (mem :surfacings).
@@ -131,7 +146,9 @@
   [c walk-opts goal]
   (let [n (:surfacings (ctx/mem c) 0)]
     (when (and (< n max-surfacings) (breath/head-under? (:primitives c)))
-      (await (swim-to-air! c walk-opts goal "short of air" #(ctx/update-mem! c assoc :surfacings (inc n)))))))
+      (let [swam (await (swim-to-air! c walk-opts goal "short of air" #(ctx/update-mem! c assoc :surfacings (inc n))))]
+        (when swam (await (breathe-back! c)))
+        swam))))
 
 (defn ^:async surface-while-searching!
   "A round whose search goes on (no walk) with the head under water: swim-to-air! first, as a player swims up while

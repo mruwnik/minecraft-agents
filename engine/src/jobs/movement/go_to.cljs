@@ -120,7 +120,7 @@
     body's feet cell and :near its blocks from the goal. A failed
     escalation adds :escalation {:step :reason ...}, the child's reason or wait.
   - Under water with no way to the goal in the air left (:air), it first walks to the nearest air it sees or finds by
-    looking (jobs.movement.go-to.air, info go-to.surfacing, at most 3 a call) and plans again.
+    looking (jobs.movement.go-to.air, info go-to.surfacing, at most 3 a call), waits there for its air to come back (the plan counts the air used), and plans again.
   - Success is :done with data {:arrived true}, with :resolved the cell when go-to chose the y, plus :provisional true (a column's
     estimated y) or :stand-in true (a column with no ground known: the feet y). The result is also a :result info event.
   - A body under ground (jobs.lib.shelter.sense/buried?) whose goal lies ::climb-rise blocks or more above it plans no route

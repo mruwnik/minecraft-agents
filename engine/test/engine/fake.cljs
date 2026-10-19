@@ -653,6 +653,13 @@
       (or (> (dist (body-pos w') toward) 6) (not (steer/swim-lands? w' toward))) [(crest w') {:status "timeout" :oxygen oxygen}]
       :else [(-> w' (assoc-in [:self :pos] toward) settle (assoc-in [:self :onGround] true)) {:status "landed" :oxygen oxygen}])))
 
+(defn breathe
+  "A wait with the head out of the water: the air comes back (a swim refills it at once; the server does it over 4 s)."
+  [w]
+  (if (= "water" (block-name w (update (mapv js/Math.floor (body-pos w)) 1 inc)))
+    w
+    (assoc-in w [:self :oxygen] 20)))
+
 (declare vehicle-of)
 
 (def mount-reach "How far the body mounts from (js/settings.mjs vehicle/mount-reach)." 3)
@@ -855,7 +862,7 @@
                "swim" (act! swim)
                "useOn" (act! use-on/use-on)
                "look" (fn [_ a] (swap! state look-at (args-in a)) #js {:status "ok"})
-               "wait" (fn [_ _] (swap! state animals/tempt-follow) #js {:status "ok"})
+               "wait" (fn [_ _] (swap! state (comp breathe animals/tempt-follow)) #js {:status "ok"})
                "interact" (act! (fn [w a] (animals/interact w (merge {:item nil} a))))
                "trade" (guarded (act! trade/trade))
                "unequip" (act! (fn [w a] (unequip/unequip w (or a {}))))

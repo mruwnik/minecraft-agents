@@ -104,3 +104,18 @@
           (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen oxygen :pitch 0} :blocks shaft :light [0 0]}
                                                {:pos [8 70 8] :range 1 :ways #{:walk :clear-seal}}))]
             (is (true? (:arrived @out)) (str "at oxygen " oxygen ": result " @out " at " (gt/at p)))))))))
+
+;; go-to-air-budget surface-stretch-arrives: two 20 cell dives (10 s each) joined by 14 cells with air over them. The body
+;; starts at the bottom of the west shaft with half its air spent: no way fits, so it swims up and must wait for its air
+;; before it plans the dives again (it has used 7.5 s, a dive of 10 s is over the 12 s the planner allows).
+(def surface-stretch
+  (merge (box 3 60 7 61 67 9 "stone") (box 4 64 8 59 65 8 "water")
+         (box 4 66 8 4 67 8 "air") (box 59 66 8 59 67 8 "air") (box 25 66 8 38 66 8 "air")))
+
+(deftest a-body-short-of-air-waits-for-its-breath-at-the-surface-before-it-plans-the-dives
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen 10 :pitch 0} :blocks surface-stretch :light [15 15]}
+                                             {:pos [59 65 8] :range 1 :ways #{:walk :clear-seal}}))]
+          (is (true? (:arrived @out)) (str "result " @out " at " (gt/at p))))))))
