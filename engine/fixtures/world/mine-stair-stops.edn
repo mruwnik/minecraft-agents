@@ -6,7 +6,7 @@
 ;; Stone mass x 2..30, z 4..28, y 0..9 (surface feet y 10); the body faces east (yaw 270).
 {:defaults
  {:tags [:mine :access :stairs] :time :any
-  :plot {:height 24}
+  :plot {:height 24 :light :lit}
   :blocks [[:fill [2 0 4] [30 9 28] "stone"]]
   :body {:at [16.5 10 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 16]] :effects [["resistance" 900 4]]}
   :limit-s 240}

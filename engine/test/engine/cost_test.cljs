@@ -6,9 +6,9 @@
             [engine.sky-perception :as sky]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
+            [jobs.lib.danger :as danger]
             [jobs.lib.shelter.inside :as sh-inside]
-            [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.survival.retreat :as retreat]))
+            [jobs.lib.shelter.sense :as sh-sense]))
 
 (defn round2 [x] (/ (js/Math.round (* 100 x)) 100))
 
@@ -109,7 +109,7 @@
       "feather falling stretches the same budget"))
 
 (deftest the-fight-reserve-has-one-default
-  (is (= cost/default-reserve (:default (:reserve retreat/args))) "retreat's :reserve default is the cost's"))
+  (is (= cost/default-reserve (danger/fight-reserve)) "the ::fight-reserve setting's default is the cost's"))
 
 ;; ---------------------------------------------------------------- cooking against eating now
 
