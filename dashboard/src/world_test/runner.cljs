@@ -300,9 +300,14 @@
 
 (defn await-since
   "The time an :await counts events from: t0, but a :world.reloaded await after a :cli/:http step (cli-ms, when that step
-  began) counts from the step, so a reload from before the tool wrote (the body's start, an earlier edit) cannot satisfy it."
-  [pattern t0 cli-ms]
-  (if (and cli-ms (= :world.reloaded (:kind pattern))) (max t0 cli-ms) t0))
+  began) counts from the step, so a reload from before the tool wrote (the body's start, an earlier edit) cannot satisfy it;
+  a pattern with :after-previous true counts from just after the event the previous :await found (prev-ms), so a repeated
+  event is awaited once more."
+  [pattern t0 cli-ms & [prev-ms]]
+  (cond
+    (and prev-ms (:after-previous pattern)) (inc prev-ms)
+    (and cli-ms (= :world.reloaded (:kind pattern))) (max t0 cli-ms)
+    :else t0))
 
 (defn await-event
   "Polls the log from offset until an event matching pattern with :time-ms >= since-ms comes; resolves to it or nil
@@ -310,7 +315,7 @@
   [opts offset pattern since-ms limit-ms job-ids]
   (let [until (+ (js/Date.now) limit-ms)
         own? (:of-job pattern)
-        pattern (dissoc pattern :of-job)]
+        pattern (dissoc pattern :of-job :after-previous)]
     (letfn [(poll []
               (let [hit (some #(when (and (>= (:time-ms % 0) since-ms) (x/matches? pattern %) (or (not own?) (x/of-jobs? job-ids %))) %)
                               (read-events-from (events-file opts) offset))]
@@ -1302,7 +1307,8 @@
   (let [box (f/box-selector (f/case-grid c) origin (get-in c [:plot :height]))
         last-job (atom nil)
         event-job (atom nil)
-        cli-ms (atom nil)]
+        cli-ms (atom nil)
+        prev-ms (atom nil)]
    (reduce (fn [p [op a b :as step]]
             (.then p (fn [ids]
                        (case op
@@ -1319,8 +1325,8 @@
                                                              do-set)
                                               (do-set)))
                                           (fn [ok] (if ok ids (throw (js/Error. "a :time-set step needs --allow-time")))))
-                         :await (.then (await-event opts offset a (await-since a t0 @cli-ms) (* 1000 b) ids)
-                                       (fn [ev] (if ev (do (reset! event-job (get-in ev [:context :job-id])) ids) (throw (js/Error. (str ":await " (pr-str a) " timed out after " b " s"))))))
+                         :await (.then (await-event opts offset a (await-since a t0 @cli-ms @prev-ms) (* 1000 b) ids)
+                                       (fn [ev] (if ev (do (reset! event-job (get-in ev [:context :job-id])) (reset! prev-ms (:time-ms ev)) ids) (throw (js/Error. (str ":await " (pr-str a) " timed out after " b " s"))))))
                          :restart-body (.then (restart-body! opts) (constantly ids))
                          :until (.then (until-step! opts a b @last-job @event-job) (constantly ids))
                          :until-seen (.then (until-step! opts (f/seen-check a) b @last-job @event-job) (constantly ids))

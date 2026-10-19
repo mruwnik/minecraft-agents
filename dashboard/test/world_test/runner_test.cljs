@@ -223,7 +223,10 @@
   (is (= 5000 (r/await-since {:kind :world.reloaded} 1000 5000)))
   (is (= 1000 (r/await-since {:kind :world.reloaded} 1000 nil)) "no tool step before it")
   (is (= 1000 (r/await-since {:kind :slept} 1000 5000)) "other events keep the case window")
-  (is (= 9000 (r/await-since {:kind :world.reloaded} 9000 5000))))
+  (is (= 9000 (r/await-since {:kind :world.reloaded} 9000 5000)))
+  (is (= 7001 (r/await-since {:kind :stair.sealed :after-previous true} 1000 nil 7000)) "a repeated event: after the previous await's")
+  (is (= 1000 (r/await-since {:kind :stair.sealed :after-previous true} 1000 nil nil)) "no previous await")
+  (is (= 1000 (r/await-since {:kind :stair.sealed} 1000 nil 7000)) "without the key the case window holds"))
 
 (def boot-error {:status :error :why "the body did not start within 90 s (see out)"})
 

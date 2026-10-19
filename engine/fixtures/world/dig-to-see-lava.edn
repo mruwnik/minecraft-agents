@@ -64,7 +64,7 @@
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]
          [:await {:source :job :kind :stair.sealed :data {:cell #at [12 8 17]}} 90]
          [:rcon "execute positioned $X $Y $Z run setblock ~12 ~8 ~17 lava"]
-         [:await {:source :job :kind :stair.sealed :data {:cell #at [12 8 17]}} 60]
+         [:await {:source :job :kind :stair.sealed :data {:cell #at [12 8 17]} :after-previous true} 60]
          [:rcon "execute positioned $X $Y $Z run setblock ~12 ~8 ~17 lava"]]
    :expect [{:event {:source :job :kind :stair.sealed} :within-s 90 :of-job true}
             {:event {:source :job :kind :stair.stopped :data {:reason :lava-unsealed :backed-off true}} :within-s 110 :of-job true}]}]}
