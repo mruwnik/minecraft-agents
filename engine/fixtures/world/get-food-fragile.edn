@@ -48,10 +48,11 @@
    :blocks [[:set [28 0 16] "furnace[facing=west]"]]
    :memory [{:kind :furnace :data {:pos #xyz [28 0 16]} :policy {:cap 1 :ttl :forever}}]
    :body {:inventory [["beef" 2] ["coal" 2]]}
+   ;; the eaten beef leaves hp 2 hungry, so the body may search on (the creeper is out of sight 22 off): the check is that it never reached the furnace
    ;; the job is submitted below, after the damage: the hungry trigger would fire at food 8, before the damage lands, and call it as a healthy body; the 2 s wait lets the body see the hp 2 and the creeper before the call
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
    :act [[:summon "creeper" [26.5 0 18.5] "{NoAI:1b,Silent:1b}"] [:wait-s 2]
          [:job (jobs.survival.get-food {})]]
    :expect [{:no-event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :for-s 40}]
-   :after [[:item "beef" [:<= 1]] [:body-near [4.5 0 16.5] 6]]}]}
+   :after [[:item "beef" [:<= 1]] [:body-far [28.5 0 16.5] 6]]}]}
