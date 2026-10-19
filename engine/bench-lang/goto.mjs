@@ -3,7 +3,8 @@
 // The go-to bench: go-to's rounds of planning over the planner bench's courses (bench-lang/courses.mjs), the body moved
 // to the end of each walked plan. Per course: the answer (arrived, blocked, or the no-walk reason), the rounds, and each
 // round's planning ms and planner searches. The summary gives max and p95 of the round ms and of the single searches.
-//   cd engine && node bench-lang/goto.mjs [--build out/goto-bench.cjs] [--rounds 3] [--out results.json]
+//   cd engine && node bench-lang/goto.mjs [--build out/goto-bench.cjs] [--rounds 3] [--masked] [--out results.json]
+// --masked plans over what the body has seen only (go-to :unknown): the cells round each step it has walked.
 // --rounds runs every course that many times and keeps each course's fastest run (machine noise only adds time).
 import fs from 'node:fs'
 import path from 'node:path'
@@ -43,12 +44,12 @@ export function summarize (rows) {
 }
 
 // one course: the fastest of `repeat` simulated runs, as a row
-export async function runCourse (build, table, c, repeat) {
+export async function runCourse (build, table, c, repeat, masked = false) {
   const pw = { snapshot: c.snapshot, table, space: build.space }
   const { from, goal } = c.query
   const start = { x: from.x, y: from.y, z: from.z, px: from.px ?? from.x + 0.5, pz: from.pz ?? from.z + 0.5 }
   const runs = []
-  for (let k = 0; k < repeat; k++) runs.push(await build.simulate(pw, start, goal, goal.range ?? 0)) // (a promise or not)
+  for (let k = 0; k < repeat; k++) runs.push(await build.simulate(pw, start, goal, goal.range ?? 0, masked)) // (a promise or not)
   const run = fastest(runs)
   return { id: c.id, answer: run.answer, rounds: run.rounds.map(r => ({ ms: +r.ms.toFixed(2), searches: r.searches.map(s => +s.toFixed(2)), status: r.status })) }
 }
@@ -57,9 +58,10 @@ async function main (argv) {
   const build = require(path.resolve(flagValue(argv, '--build') ?? path.join(HERE, '../out/goto-bench.cjs')))
   const repeat = Number(flagValue(argv, '--rounds') ?? 3)
   const out = flagValue(argv, '--out')
+  const masked = argv.includes('--masked')
   const table = build.defaultStateTable()
   const rows = []
-  for (const c of loadCourses(undefined, build)) rows.push(await runCourse(build, table, c, repeat))
+  for (const c of loadCourses(undefined, build)) rows.push(await runCourse(build, table, c, repeat, masked))
   const summary = summarize(rows)
   console.log(JSON.stringify(summary))
   rows.filter(r => r.rounds.some(x => x.ms > 100)).forEach(r => console.log(JSON.stringify(r)))

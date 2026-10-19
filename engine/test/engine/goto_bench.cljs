@@ -7,8 +7,11 @@
             [engine.path.offsets :as offsets]
             [engine.path.planner-tuned :as planner]
             [jobs.lib.walk :as walk]
+            [engine.path.blocks :as blocks]
             [jobs.lib.walk.plan :as wplan]
-            [jobs.lib.walk.search :as wsearch]))
+            [jobs.lib.walk.search :as wsearch]
+            [jobs.lib.walk.sight :as wsight]
+            [jobs.lib.walk.world :as wworld]))
 
 (def max-rounds 200)
 
@@ -36,6 +39,35 @@
                         p))]
         (f)))))
 
+(def see-radius "Blocks round a position the masked bench body has seen: horizontally, and 3 below to 4 above." 6)
+
+(defn see!
+  "Marks the cells round the step {x y z} as seen in mem (a Map of \"cx,sy,cz\" -> Uint8Array(4096), 1 per seen cell)."
+  [^js mem ^js at]
+  (let [x0 (js/Math.floor (.-x at)) y0 (js/Math.floor (.-y at)) z0 (js/Math.floor (.-z at))]
+    (doseq [x (range (- x0 see-radius) (inc (+ x0 see-radius)))
+            y (range (- y0 3) (+ y0 5))
+            z (range (- z0 see-radius) (inc (+ z0 see-radius)))]
+      (let [k (str (bit-shift-right x 4) "," (bit-shift-right y 4) "," (bit-shift-right z 4))
+            sec (or (.get mem k) (let [a (js/Uint8Array. 4096)] (.set mem k a) a))]
+        (aset sec (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left (bit-and z 15) 4) (bit-and x 15)) 1)))))
+
+(defn masked-world
+  "pw over a snapshot that reads a cell not marked in mem as void_air, carrying go-to's :unknown options (the default prices,
+  daylight everywhere, a body with no torch and near 4)."
+  [^js pw ^js mem unknown]
+  (let [^js snapshot (.-snapshot pw)
+        id (first (blocks/state-ids (.-table pw) "void_air"))
+        view (js/Object.create snapshot)
+        known? (fn [x y z]
+                 (when-let [^js sec (.get mem (str (bit-shift-right x 4) "," (bit-shift-right y 4) "," (bit-shift-right z 4)))]
+                   (pos? (aget sec (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left (bit-and z 15) 4) (bit-and x 15))))))
+        spec (js/Object.assign #js {} unknown #js {:id id :seeDepth (wsight/see-depth 4) :seeLit (fn [_ _ _] 1)
+                                                   :known (fn [cx sy cz] (.get mem (str cx "," sy "," cz)))})]
+    (set! (.-stateAt view) (fn [x y z] (let [s (.stateAt snapshot x y z)] (if (or (== s 0xFFFF) (known? x y z)) s id))))
+    (set! (.-unknown view) spec)
+    (js/Object.assign #js {} pw #js {:snapshot view})))
+
 (defn ^:async plan-round
   "One go-to round's plan from at, as go-to's round makes it (door policy, :one-way :open, :frontier, round-budget): [the
   plan, its ms]."
@@ -50,10 +82,14 @@
   "The rounds of go-to over pw from {x y z px pz} to the goal cell {x y z} within range: each round plans; a plan that is
   walked moves the body to its last step, one still searching walks nowhere and the next round goes on with it. Ends
   arrived, on a plan not walked (its no-walk status and reason), after 3 walked rounds that get no nearer, or after
-  max-rounds. A JS object {answer rounds: [{ms searches status}]}: one search a round, searches its ms."
-  [^js pw ^js from ^js goal range]
+  max-rounds. A JS object {answer rounds: [{ms searches status}]}: one search a round, searches its ms. masked: the body
+  plans over what it has seen only (see!: round every step it has walked), as go-to :unknown does."
+  [^js pw0 ^js from ^js goal range masked]
   (reset! wsearch/searches {})
-  (let [to [(.-x goal) (.-y goal) (.-z goal)]
+  (let [mem (js/Map.)
+        unknown (wworld/unknown-spec)
+        pw-at (fn [] (if masked (masked-world pw0 mem unknown) pw0))
+        to [(.-x goal) (.-y goal) (.-z goal)]
         goal-cell {:x (.-x goal) :y (.-y goal) :z (.-z goal)}
         done (fn [answer rounds] #js {:answer answer :rounds (clj->js rounds)})]
     (loop [at from rounds [] best (u/dist {:x (.-x from) :y (.-y from) :z (.-z from)} goal-cell) blocked 0]
@@ -62,7 +98,8 @@
           (u/within? cell goal-cell range) (done "arrived" rounds)
           (or (>= (count rounds) max-rounds) (>= blocked 3)) (done "blocked" rounds)
           :else
-          (let [[plan ms] (await (traced #(plan-round pw at to range)))
+          (let [_ (when masked (see! mem at))
+                [plan ms] (await (traced #(plan-round (pw-at) at to range)))
                 no (wplan/no-walk plan 0 executor/door-policy)
                 rounds (conj rounds {:ms ms :searches [ms] :status (str (or (:status no) (:status plan)))})]
             (cond
@@ -70,6 +107,7 @@
               no (done (str "no-walk:" (name (or (:reason no) (:status no)))) rounds)
               :else
               (let [end (peek (:steps plan))
+                    _ (when masked (doseq [step (:steps plan)] (see! mem #js {:x (:x step) :y (:y step) :z (:z step)})))
                     next-at #js {:x (:x end) :y (:y end) :z (:z end) :px (:px end) :pz (:pz end)}
                     left (u/dist {:x (:x end) :y (:y end) :z (:z end)} goal-cell)]
                 (recur next-at rounds (min best left) (if (< left (dec best)) 0 (inc blocked)))))))))))

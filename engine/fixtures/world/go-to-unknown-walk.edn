@@ -1,0 +1,42 @@
+;; jobs.movement.go-to :unknown true over land the body has never visited (c51cd6c2 S4): the walk plans over what it has seen,
+;; checks each unseen floor by eye before it steps on it, and replans as it sees; it must still arrive, without a gate breach.
+;; Plot 90 long, stone floor at y -1, the body at x 2.5.
+;; Should-succeed: a 66-block flat walk; a walk over a hill and a valley; a walk past a 3-deep pit across a platform via the lane
+;; left open; a walk through a roofed, unlit tunnel with a bend (a dark floor each step, felt at the edge).
+{:defaults
+ {:tags [:movement :go-to :unknown]
+  :time :day
+  :plot {:height 16 :length 90 :width 32}
+  :body {:at [2.5 0 16.5] :settle-s 2}
+  :limit-s 150}
+ :cases
+ [{:name "long-unvisited-flat-walk-arrives"
+   :act [[:job (jobs.movement.go-to {:pos #at [68 16] :range 0 :unknown true})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 120 :of-job true}
+            {:no-event {:kind :gate-breach} :for-s 120 :until {:source :job :kind :result}}]
+   :after [[:body-near [68.5 0 16.5] 2]]}
+  {:name "hill-and-valley-are-walked-over-unseen"
+   :blocks [[:fill [20 0 0] [20 0 31] "stone"] [:fill [21 0 0] [21 1 31] "stone"] [:fill [22 0 0] [22 2 31] "stone"]
+            [:fill [23 0 0] [23 3 31] "stone"] [:fill [24 0 0] [26 4 31] "stone"] [:fill [27 0 0] [27 3 31] "stone"]
+            [:fill [28 0 0] [28 2 31] "stone"] [:fill [29 0 0] [29 1 31] "stone"] [:fill [30 0 0] [30 0 31] "stone"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [60 16] :range 0 :unknown true})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 120 :of-job true}
+            {:no-event {:kind :gate-breach} :for-s 120 :until {:source :job :kind :result}}]
+   :after [[:body-near [60.5 0 16.5] 2]]}
+  {:name "pit-across-the-platform-is-passed-by-the-open-lane"
+   :blocks [[:fill [10 0 14] [70 3 18] "stone"]
+            [:fill [40 1 14] [41 3 17] "air"]]
+   :body {:at [11.5 4 16.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [68 4 16] :range 0 :unknown true})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 120 :of-job true}
+            {:no-event {:kind :gate-breach} :for-s 120 :until {:source :job :kind :result}}]
+   :after [[:body-near [68.5 4 16.5] 2]]}
+  {:name "unlit-roofed-tunnel-with-a-bend-is-walked"
+   :blocks [[:fill [8 0 12] [50 4 30] "stone"]
+            [:fill [9 0 16] [40 1 16] "air"]
+            [:fill [40 0 17] [40 1 28] "air"]]
+   :body {:at [9.5 0 16.5] :yaw 270}
+   :act [[:job (jobs.movement.go-to {:pos #at [40 0 28] :range 0 :unknown true :ways #{:walk}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 120 :of-job true}
+            {:no-event {:kind :gate-breach} :for-s 120 :until {:source :job :kind :result}}]
+   :after [[:body-near [40.5 0 28.5] 2]]}]}
