@@ -346,6 +346,11 @@
   (is (found? (run drown-tunnel drown-start (near 20 66 1 2) {:goalFlood 0 :costs {:airUsed 2}})))
   (is (not (found? (run drown-tunnel drown-start (near 20 66 1 2) {:goalFlood 0 :costs {:airUsed 13}})))))
 
+(deftest a-goal-under-water-is-air-only-when-its-head-cell-breathes
+  (doseq [[head ok] [["stone" false] ["lava" false] ["water" false] ["air" true]]]
+    (let [w (world [[10 64 -2 23 68 4 "stone"] [11 64 1 20 65 1 "water"] [20 66 1 20 66 1 head]])]
+      (is (= ok (found? (run w drown-start (near 20 65 1 0) {:goalFlood 0 :costs {:airUsed 13}}))) head))))
+
 (deftest a-goal-whose-head-cell-is-not-seen-is-not-air
   (is (not (found? (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed 13} :airSeen (fn [_ _ _] false)}))))
   (is (found? (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed 13} :airSeen (fn [_ _ _] true)}))))
