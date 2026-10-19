@@ -305,7 +305,7 @@
         self (u/self-pos c)
         here {:x (js/Math.floor (:x self)) :y (js/Math.floor (:y self)) :z (js/Math.floor (:z self))}]
     (when (true? (some-> (u/sensed (:primitives c) (update here :y + 2)) .-unknown))
-      (await (ctx/act c :look (clj->js {:pos {:x (+ 0.1 (:x self)) :y (+ 6 (:y self)) :z (:z self)}})))
+      (await (ctx/act c :look (clj->js {:pos {:x (+ 0.6 (:x here)) :y (+ 2.5 (:y here)) :z (+ 0.5 (:z here))}})))
       (look/see! c))
     (if (and (escape/passable? (block-at (update here :y inc))) (escape/solid? (block-at (update here :y + 2))))
       (await (hold! c :roof "under a roof, out of the enderman's reach"))

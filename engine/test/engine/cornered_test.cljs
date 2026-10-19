@@ -964,13 +964,13 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :entities [(enderman 2.5 64 0.5)]})
               sensed (.-sensedAt p)
-              looked? #(pos? (count (calls p "look")))]
+              looked? #(some (fn [l] (let [at (.. l -args -pos)] (and (== 66 (js/Math.floor (.-y at))) (== 0 (js/Math.floor (.-x at)))))) (calls p "look"))]
           (aset p "sensedAt" (fn [pos] (if (and (>= (.-y pos) 66) (not (looked?))) #js {:unknown true} (sensed pos))))
           (.override (.-world p) "place"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
           (core/submit! eng retreat {})
           (await (core/tick! eng))
-          (is (looked?) "the cells overhead are looked at, not read as rock")
+          (is (looked?) "the cell over the head itself is looked at (a look at a cell far above glances only that one), not read as rock")
           (is (pos? (count (calls p "place"))) "open sky is no roof: it walls itself in"))))))
 
 (deftest nearest-first-orders-the-sides-by-the-melee-chaser-and-keeps-support-before-roof
