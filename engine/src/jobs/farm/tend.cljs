@@ -59,7 +59,7 @@
   condition-failed :nothing-to-do when no step ran. A child that ends in any failure, a limit of its own too, is booked
   with what it did and the run goes on; tend's own time spend is the only limit it ends on.
   :field is counted live at the end. Summaries: harvest {:cut :replanted :bare :gave-up}, till {:tilled n}, plant {:planted
-  :reason :skipped}, fertilize {:used}, compost {:fed :bone-meal :reason}, deposit {:gave-up :reason}.
+  :skipped :refused :short}, fertilize {:used}, compost {:fed :bone-meal}, deposit {:gave-up}.
   Limits: harvest and fertilize work in a sphere around the box centre, so crops just outside the box may be
   touched. A dirt lane inside the box counts as a bed unless :till is false. A ripe crop that cannot be reached
   keeps the check passing on every run (harvest gives up on it and the run still ends).
@@ -477,12 +477,12 @@
   [m step call-args e]
   (let [declined? (or (refused? e) (= :impossible (:kind e)))
         r (:data e)]
-    (cond-> (if (= :till step)
-              (after-till m call-args (if declined? 0 (:tilled r 0)) declined?)
-              (-> m
-                  (update :todo rest)
-                  (dissoc :call-args)
-                  (assoc-in [:report step] (if declined? {:skipped :declined} (summary step r))))))))
+    (if (= :till step)
+      (after-till m call-args (if declined? 0 (:tilled r 0)) declined?)
+      (-> m
+          (update :todo rest)
+          (dissoc :call-args)
+          (assoc-in [:report step] (if declined? {:skipped :declined} (summary step r)))))))
 
 (defn with-zone-opt-out
   "The args of the child of step, with :ignore-zones? true when the tend job has it (the children that change blocks)."

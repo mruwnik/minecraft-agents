@@ -129,22 +129,31 @@
 
 (defn comb-wait-s [] (settings/get settings ::comb-wait-s))
 
+(defn ^:async wait-for-comb!
+  "The one comb-wait-s pause; :continue while it is cut, then the second look (:again)."
+  [c]
+  (if (= :continue (await (child/pause! c (comb-wait-s) :comb)))
+    :continue
+    (do (ctx/update-mem! c assoc :comb-wait :waited) :again)))
+
 (defn ^:async collect!
   "Pick up the honeycomb lying about, then go back to the hives. :continue while the pick-up waits; when no comb shows
   yet (the spawn may not have reached the body) one comb-wait-s pause, then a second look; any other end of it closes
   the phase."
   [c]
-  (let [e (await (ctx/call c :collect 'jobs.items.collect-drops {:radius 8 :items ["honeycomb"]}))
-        done? (= :done (:kind e))
-        got (if done? (get-in e [:data :collected] 0) 0)]
-    (when done?
-      (ctx/update-mem! c update :collected (fnil + 0) got))
-    (cond
-      (= :continue e) :continue
-      (and done? (zero? got) (not (:comb-waited (ctx/mem c))))
-      (do (ctx/update-mem! c assoc :comb-waited true)
-          (if (= :continue (await (child/pause! c (comb-wait-s) :comb))) :continue :again))
-      :else (do (ctx/update-mem! c #(-> % (dissoc :phase) (dissoc :comb-waited))) :again))))
+  (if (= :pausing (:comb-wait (ctx/mem c)))
+    (await (wait-for-comb! c))
+    (let [e (await (ctx/call c :collect 'jobs.items.collect-drops {:radius 8 :items ["honeycomb"]}))
+          done? (= :done (:kind e))
+          got (if done? (get-in e [:data :collected] 0) 0)]
+      (when done?
+        (ctx/update-mem! c update :collected (fnil + 0) got))
+      (cond
+        (= :continue e) :continue
+        (and done? (zero? got) (not (:comb-wait (ctx/mem c))))
+        (do (ctx/update-mem! c assoc :comb-wait :pausing)
+            (await (wait-for-comb! c)))
+        :else (do (ctx/update-mem! c #(-> % (dissoc :phase) (dissoc :comb-wait))) :again)))))
 
 (defn book-harvest!
   "Count the hive at pos as taken when it is no longer ripe; the comb is then collected after shears."

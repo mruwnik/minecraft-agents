@@ -66,8 +66,8 @@
   - :tie-failed: the post did not take the animal.
   - :no-fence: condition-failed, the post turned out not to be a fence on arrival.
   - :no-lead: no lead carried and obtain could not get one (the :text says why; the fetch's ending is the :because).
-  - The reason of jobs.animals.leash (:no-lead, :none, :unreachable, :all-leashed) when no animal got on the lead, or
-    of jobs.animals.unleash (:unreachable, :none) when the lead would not come off; :refused and :no-zones are
+  - The reason of jobs.animals.leash (:no-lead, :none, :unreachable, :failed, :all-leashed) when no animal got on the lead, or
+    of jobs.animals.unleash (:unreachable, :failed, :none) when the lead would not come off; :refused and :no-zones are
     condition-failed.
   - the engine's limit (default :spend :job-time ::timeout-s): :limit-reached with {:animal :still-led} (done?'s :data).
   All but done and condition-failed end nothing-possible with the reason as the cause.

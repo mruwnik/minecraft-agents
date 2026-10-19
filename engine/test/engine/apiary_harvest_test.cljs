@@ -7,6 +7,7 @@
             [engine.events :as events]
             [engine.test-util :as tu :refer [child-outcome]]
             [engine.triggers :as triggers]
+            [jobs.lib.child :as child]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]
             [jobs.apiary.harvest :as harvest]))
@@ -79,6 +80,22 @@
           (is (= 1 (:harvested result)))
           (is (= 3 (:collected result)))
           (is (= 3 (carried p "honeycomb"))))))))
+
+(deftest a-cut-comb-pause-is-resumed-not-skipped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (world {:inventory (inv "shears" 1)}))
+              pauses (atom 0)
+              orig child/pause!]
+          (delay-items! p 3)
+          (with-redefs [child/pause! (fn ^:async pause [c s why]
+                                       (if (= 1 (swap! pauses inc))
+                                         :continue
+                                         (await (orig c s why))))]
+            (let [result (await (child-outcome eng job {} 60))]
+              (is (= 2 @pauses) "the round after a cut pause goes back to the pause, not to a fresh look")
+              (is (= 3 (:collected result))))))))))
 
 (deftest a-glass-bottle-takes-the-honey-into-a-honey-bottle
   (async done
