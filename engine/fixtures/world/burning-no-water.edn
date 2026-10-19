@@ -41,5 +41,6 @@
    :limit-s 30}
   {:name "water-within-6-walks-into-it"
    :blocks [[:set [14 -2 16] "stone"] [:set [14 -1 16] "water"]]
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :burning}} :within-s 20}]
    :after [[:body-near [14.5 -1 16.5] 1.5]]
    :limit-s 30}]}
