@@ -1,7 +1,7 @@
 ;; jobs.gather.mine :stay-level east (S3.9): a cut that opens into a cave pocket beside the tunnel is sealed from the line cell
 ;; (a :cut-only stair child, then a seal) before the body steps into it; the run ends :breach-sealed, the pocket stays closed.
 ;; Stone mass x 2..30, z 8..24, y -6..6; body in a 1x2 cell at [16 0 16] facing east with cobblestone; a 1x2 pocket at
-;; Card d7009e75: the sealed breach records what lay behind it (:behind {:names :cells} on mine.tunnel-end); lava behind the cut is seen and the cut not entered.
+;; Card d7009e75: the sealed breach records what lay behind it (:behind {:names :cells} on mine.tunnel-end); lava beside the cut is no breach: the stair seals it and the run goes on.
 ;; [18 0..1 17] touches the tunnel's second cell [18 0..1 16] from the south.
 {:defaults
  {:tags [:mine :jobs] :time :any
@@ -19,8 +19,9 @@
   {:name "breach-records-what-was-behind"
    :expect [{:event {:source :job :kind :mine.tunnel-end :data {:reason :breach-sealed :behind {:names [:any] :cells [:any]}}} :within-s 90 :of-job true}]
    :after [[:block [18 0 16] "cobblestone"] [:body-near [16.5 0 16.5] 2]]}
-  {:name "lava-behind-the-cut-is-not-entered"
+  {:name "lava-beside-the-cut-is-sealed-not-a-breach"
+   ;; lava is no air, so no breach: the cut goes on and the stair seals the lava it lays open (:on-lava :seal)
    :blocks [[:fill [18 0 17] [18 1 17] "lava"]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :mine.tunnel-end :data {:reason :breach-sealed}} :for-s 20}]
-   :after [[:block [18 0 17] "lava"] [:body-near [16.5 0 16.5] 3.5]]}]}
+   :after [[:block [18 0 17] "cobblestone"] [:block [18 1 17] "cobblestone"] [:body-near [16.5 0 16.5] 3.5]]}]}
