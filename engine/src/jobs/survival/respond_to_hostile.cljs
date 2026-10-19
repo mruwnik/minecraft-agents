@@ -33,7 +33,7 @@
   a mob the body cannot outrun (jobs.lib.cost/outruns?: a spider at any food).
   If the fight ends other than :done (its memory put back) or the retreat ends :condition-failed, the other one runs; but a fight that declines because every danger near is only heard
   (none in sight to hit), with the body not hurt in the last ::hit-window-s (5), runs no retreat: heard mobs are muted (jobs.lib.body/heard-muted?), a
-  hostile.heard-only event names the mob, and the job is done, so the job it cut goes on. A mob that comes into sight
+  the ending names the mob (:mob, :text), and the job is done, so the job it cut goes on. A mob that comes into sight
   fires the reflex through the mute.
   Only ranged mobs with a line of fire near and the body under a roof, carrying building blocks and a tool that digs
   stone (a block in the doorway must not shut it in): it stops the arrows instead (jobs.survival.block-arrow-gap, no
@@ -199,17 +199,16 @@
        (empty? (ctx/since c :hurt (- (ctx/now c) (hit-window-ms))))))
 
 (defn leave-heard!
-  "Mutes heard mobs (mute-heard!) and says which one was left, so the job the reflex cut goes on; :left-heard."
+  "Mutes heard mobs (mute-heard!) and returns {:left-heard ending-data} saying which one was left, so the job the reflex cut goes on."
   [c hs]
-  (let [mute-ms (body/next-mute-ms (ctx/view c))
-        entry (assoc (threats/place-of (:primitives c) (first hs)) :mob (.-name (first hs)))]
+  (let [mute-s (/ (body/next-mute-ms (ctx/view c)) 1000)
+        entry (threats/place-of (:primitives c) (first hs))
+        mob (.-name (first hs))]
     (mute-heard! c hs)
-    (ctx/emit! c :hostile.heard-only :info
-               (assoc (dissoc entry :from) :mute-s (/ mute-ms 1000)
-                      :text (str "the " (:mob entry) " heard " (name (:band entry)) ", " (name (:direction entry))
-                                 " is not in sight and the body can afford the fight: no flight; heard mobs are left alone for "
-                                 (/ mute-ms 1000) " s, one that comes into sight is fought")))
-    :left-heard))
+    {:left-heard {:mob mob :mute-s mute-s
+                  :text (str "the " mob " heard " (name (:band entry)) ", " (name (:direction entry))
+                             " is not in sight and the body can afford the fight: no flight; heard mobs are left alone for "
+                             mute-s " s, one that comes into sight is fought")}}))
 
 (defn begun-fight?
   "Pure: whether the :hostile entry e (decision, mob, time t) is a fight against one of the mobs now near (names) that
@@ -363,7 +362,7 @@
         (do (mute-heard! c hs)
             (ctx/end c (:kind outcome) (:cause outcome) (some->> (:text (:data outcome)) (hash-map :text))))
         (cond
-          (= :left-heard outcome) (ctx/end c :done nil)
+          (:left-heard outcome) (ctx/end c :done nil (:left-heard outcome))
           (and (empty? after) (not (hiding? c)) (not (and (not looked?) (fight-unsettled? c outcome)))) (ctx/end c :done nil)
           (and (empty? after) (not (hiding? c))) (do (await (pace/pace!)) (recur unchanged true))
           :else

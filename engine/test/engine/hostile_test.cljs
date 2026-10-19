@@ -317,6 +317,15 @@
           (is (every? #(<= % 15) (map #(.-timeoutS (.-args %)) (calls p "steer"))) "a short walk: it aims again at the mob")
           (is (pos? (count (calls p "attack")))))))))
 
+(deftest fight-back-does-not-walk-down-a-ten-deep-hole-after-a-mob-in-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pit-mob {:id 7 :name "zombie" :kind "hostile" :pos {:x 5.5 :y 54 :z 0.5}}
+              {:keys [eng]} (await (first-round-ms '(jobs.survival.fight-back {:range 16}) {:inventory sword :blocks {"5,53,0" "stone"} :entities [pit-mob]} 20))]
+          (is (every? #(< 60 (:y %)) (tu/walked-to eng))
+              "no walk was aimed at the pit's floor"))))))
+
 (deftest fight-back-with-hold-waits-for-a-mob-beyond-reach-and-hits-it-when-it-comes
   (async done
     (tu/run-async done
@@ -1285,6 +1294,7 @@
 (defn heard-skeleton [id x z] {:id id :name "skeleton" :kind "hostile" :visible false :pos {:x x :y 64 :z z}})
 
 (defn heard-only-events [seen] (filterv #(= :hostile.heard-only (:kind %)) @seen))
+(defn left-heard-endings [seen] (filterv :mute-s @seen))
 
 (deftest full-iron-and-a-sword-afford-two-skeletons-heard-near
   (let [near {:name "skeleton" :distance 4}
@@ -1304,7 +1314,8 @@
             (is (= [] (tu/walked-to eng)) "no flight from a sound")
             (is (= 1 (count (mutes eng))) "heard mobs are muted: the walk it cut goes on")
             (is (= [] (:list (core/state eng))) "done, not held")
-            (is (= ["skeleton"] (mapv :mob (heard-only-events seen))) "it says which mob it heard and left"))
+            (is (= ["skeleton"] (mapv :mob (left-heard-endings seen))) "its ending says which mob it heard and left")
+            (is (= [] (heard-only-events seen)) "and no event restates it"))
           (let [{:keys [eng seen] :as s} (setup-flight kit)]
             (mem/write! (:store eng) :hurt {:amount 3})
             (core/submit! eng respond {})

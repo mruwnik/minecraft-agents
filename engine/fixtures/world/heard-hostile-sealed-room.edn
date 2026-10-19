@@ -1,5 +1,5 @@
 ;; A skeleton only heard (behind a wall, no line of sight) must not hold the body or loop the reflex: respond-to-hostile
-;; leaves it (hostile.heard-only), is done, and the job it cut goes on. Cards 2704c570 (sealed body held for a heard
+;; leaves it (its ending names the mob), is done, and the job it cut goes on. Cards 2704c570 (sealed body held for a heard
 ;; skeleton), 93958a46 (reflex refires ~170 times on a heard skeleton), 63d75136 (roofed body flees out for a heard zombie). Closed stone room x 12..20, z 12..20, roof y 3;
 ;; the NoAI helmeted skeleton stands 4 east of the east wall.
 {:defaults

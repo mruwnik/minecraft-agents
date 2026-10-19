@@ -68,7 +68,7 @@
          [:rcon "item replace entity $BODY armor.feet with minecraft:iron_boots"]
          [:summon "skeleton" [23.5 0 15.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:summon "skeleton" [23.5 0 17.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :job :kind :hostile.heard-only} :within-s 50}
+   :expect [{:event {:source :reflex :kind :ended :data {:outcome :done}} :within-s 50}
             {:no-event {:source :job :kind #{:retreat.target :hostile.fled}} :for-s 50}]
    :after [[:body-near [16.5 0 16.5] 3]]
    :limit-s 60}]}
