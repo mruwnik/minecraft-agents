@@ -188,7 +188,7 @@
   round, since cells may be unseen."
   [c]
   (if-let [cause (problem c)]
-    (checks/cause-status (if (and (= :nothing-to-do (:reason cause)) (not (:plan (:args c))) (not (look/surveyed? c :cell))) :look :later)
+    (checks/cause-status (if (and (= :nothing-to-do (:reason cause)) (not (look/surveyed? c :cell))) :look :later)
                          cause)
     (contract/ok :work "a field to sow")))
 
@@ -219,7 +219,7 @@
                   (:trouble field) :plan-trouble
                   (pos? bare) :planting
                   (and box (seq (untilled-cells (:primitives c) box))) :untilled
-                  (and box (not (:started m)) (not (look/surveyed? c :cell))) :looking
+                  (and (not (:started m)) (not (look/surveyed? c :cell))) :looking
                   (and (pos? sown) (not (common/enough? c sown sown))) :short)]
     (if waiting
       (contract/later waiting (str "plant: " sown " sown, " bare " bare") :units :cells :done sown :left bare :result (result-of c nil))
@@ -402,8 +402,8 @@
 (defn ^:async step [c]
   (let [field (planned c)
         m (ctx/mem c)
-        unseen? (and (nil? field) (not (:started m)) (not (look/surveyed? c :cell))
-                     (empty? (bare-cells (:primitives c) (:box (:args c)) (:skipped m))))
+        unseen? (and (not (:trouble field)) (not (:started m)) (not (look/surveyed? c :cell))
+                     (empty? (unsown c)))
         fetched (when-not unseen? (await (fetch-seed! c)))]
     (cond
       unseen? (await (look/survey! c :cell))

@@ -31,10 +31,10 @@
 
 (defn start-on
   "start over an existing primitives object p."
-  [p]
+  [p & [shared]]
   (let [[seen sink] (tu/legacy-capture-sink)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
-                          :world (ew/of-data {} {} [])
+                          :world (or shared (ew/of-data {} {} []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
 
@@ -439,6 +439,18 @@
           (is (seq (calls p "look")))
           (is (= {:planted 9 :skipped []} (dissoc result :text)))
           (is (empty? (events-of seen :waiting))))))))
+
+(deftest a-plan-not-yet-seen-is-looked-at-before-nothing-to-do
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake (field-world (inv "wheat_seeds" 6) {:blocks (farmland (range 2 4) [2])}))
+              _ (look-then-see p)
+              {:keys [eng seen]} (start-on p (ew/of-data (shared-plans []) {} []))]
+          (core/submit! eng (list job {:plan "mix"}) {})
+          (await (run-until-empty eng 40))
+          (is (seq (calls p "look")))
+          (is (= 2 (count (ce/ends seen :placed)))))))))
 
 (def dried-world
   "The field with two cells dried back to dirt."
