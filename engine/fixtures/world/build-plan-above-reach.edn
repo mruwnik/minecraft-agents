@@ -1,7 +1,7 @@
 ;; Card 7616f6fc: jobs.build.from-plan raises a temporary pillar (jobs.access.pillar, ledgered) to place wall rows no ground stand
 ;; reaches, with its base outside every footprint, and jobs.access.cleanup takes it back.
 ;; tall-wall-from-a-pillar: a 3 x 9 stone wall (y 0..8 at z 20; ground reaches y 5) is built complete and the pillar's dirt is back in the bag.
-;; every-base-refused: another body's plan footprint rings the wall to radius 5, so no pillar base is allowed: the rows in reach are
+;; every-base-refused: another body's plan footprint (above the grass: its floor stays a stand) rings the wall to radius 5, so no pillar base is allowed: the rows in reach are
 ;; built, the rest is refused (build.refused) and nothing is placed outside the wall.
 ;; wall-on-an-island-from-a-bridge-row: a 3 cell wall on a stone island (roofed, so no stand beside it) in a ravine 20 deep; the bank is 5 away,
 ;; out of reach, and no ground is in pillar range, so from-plan lays a bridge row from the bank, builds the wall and takes the row back.
@@ -22,10 +22,10 @@
    :plans [{:id "wall" :metadata {:by "$body"}
             :parts [{:id "w" :box [#at [15 0 20] #at [17 8 20]] :want "stone"}]}
            {:id "ring" :metadata {:by "SomeoneElse"}
-            :parts [{:id "n" :box [#at [10 -1 15] #at [22 1 19]] :want "dirt"}
-                    {:id "s" :box [#at [10 -1 21] #at [22 1 25]] :want "dirt"}
-                    {:id "w" :box [#at [10 -1 20] #at [14 1 20]] :want "dirt"}
-                    {:id "e" :box [#at [18 -1 20] #at [22 1 20]] :want "dirt"}]}]
+            :parts [{:id "n" :box [#at [10 0 15] #at [22 1 19]] :want "dirt"}
+                    {:id "s" :box [#at [10 0 21] #at [22 1 25]] :want "dirt"}
+                    {:id "w" :box [#at [10 0 20] #at [14 1 20]] :want "dirt"}
+                    {:id "e" :box [#at [18 0 20] #at [22 1 20]] :want "dirt"}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:wall"})]]
    :expect [{:event {:source :job :kind :build.refused} :within-s 120 :of-job true}]
    :after [[:block [16 5 20] "stone"] [:not-block [16 8 20] "stone"] [:item "dirt" 8]]
