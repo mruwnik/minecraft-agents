@@ -9,7 +9,7 @@
   (a/pred "{:x :y :z} or [x y z]" #(or (map? %) (vector? %))))
 
 (def errands
-  "The comfort errands' jobs (the trigger defaults at :comfort): their walks are not where the body was bound."
+  "The comfort errands' jobs (the :comfort entries of triggers/defaults.edn): their walks are not where the body was bound. Listed here because a job library does not read the trigger defaults (engine); keep in step with them."
   #{"jobs.access.cleanup" "jobs.maintenance.shut-doors" "jobs.storage.make-room" "jobs.survival.restore-broken"
     "jobs.animals.shut-gate" "jobs.items.pick-up-loose" "jobs.movement.leave-vehicle"})
 
