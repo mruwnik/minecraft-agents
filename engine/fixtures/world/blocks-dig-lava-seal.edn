@@ -1,6 +1,6 @@
 ;; Card 41419fb6: in a 1-wide tunnel (case 5) there are fewer than 3 step-off cells; the body still steps away from the lava (escalated walk) and the job says so.
 ;; Cards ba557bb5, abf946bb (seal block fetched from a seen chest): blocks.dig of the cell under the feet that lays hidden lava open seals it from the rim (:on-lava :seal, the
-;; default) and goes on. Should fail: no block carried and :seal-fetch false stops :lava-unsealed, and the body steps clear of the
+;; default) and goes on. Should fail: no block carried and  the seal-fetch setting off stops :lava-unsealed, and the body steps clear of the
 ;; lava column (a cell outside the 3x3 columns around the dug cell: at least 1.5 from its centre). Stone mass x 8..24, z 8..24, y 0..9; lava under the dug cell (16 9 16).
 {:defaults
  {:tags [:blocks :mining :lava :survival]
@@ -26,7 +26,7 @@
    :after [[:not-block [16 8 16] "lava"] [:block [16 9 16] "air"]]}
   ;; should fail: nothing to seal with, nothing fetched
   {:name "no-block-no-fetch-stops-lava-unsealed-and-steps-clear"
-   :act [[:job (jobs.blocks.dig {:pos #at [16 9 16] :seal-fetch false})]]
+   :act [[:job (jobs.blocks.dig {:pos #at [16 9 16] :settings {:jobs.lib.blocks/seal-fetch false}})]]
    :expect [{:event {:source :job :kind :stopped :data {:dug true :reason :lava-unsealed}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :blocks.dig.sealed} :for-s 60 :until {:source :job :kind #{:completed :stopped} :data {:dug [:any]}}}]
    :after [[:block [16 8 16] "lava"] [:body-far [16.5 10 16.5] 1.5]]}
@@ -42,6 +42,6 @@
   {:name "tunnel-no-seal-block-steps-away-from-the-lava"
    :blocks [[:fill [10 0 16] [22 1 16] "air"] [:set [16 0 16] "stone"] [:set [16 0 17] "lava"]]
    :body {:at [13.5 0 16.5] :inventory [["iron_pickaxe" 1]]}
-   :act [[:job (jobs.blocks.dig {:pos #at [16 0 16] :seal-fetch false})]]
+   :act [[:job (jobs.blocks.dig {:pos #at [16 0 16] :settings {:jobs.lib.blocks/seal-fetch false}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :lava-unsealed :stepped-away true}} :within-s 100 :of-job true}]
    :after [[:body-far [16.5 0 17.5] 3]]}]}

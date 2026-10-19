@@ -399,6 +399,8 @@
           (is (= true (:placed result)))
           (is (zero? (gate-clicks p)) "the gates stay shut, the walk went round"))))))
 
+(def pens-open {:jobs.lib.blocks/enter-pens true})
+
 (deftest a-place-inside-a-pen-from-outside-declines-naming-the-pen-and-enter-pens-allows-it
   (async done
     (tu/run-async done
@@ -409,7 +411,7 @@
           (is (zero? (gate-clicks p)))
           (is (some #(and (= :blocks.pen-kept-out (:kind %)) (re-find #"\[5 64 0\]" (:text %))) @seen)))
         (let [{:keys [eng]} (pen-env)
-              allowed (await (tu/child-outcome eng job {:pos [9 64 0] :item "dirt" :enter-pens true} 40))]
+              allowed (await (settings/with-settings pens-open #(tu/child-outcome eng job {:pos [9 64 0] :item "dirt"} 40)))]
           (is (= true (:placed allowed))))))))
 
 (def use-on 'jobs.blocks.use-on)
@@ -435,7 +437,7 @@
           (is (zero? (gate-clicks p)))
           (is (some #(and (= :blocks.pen-kept-out (:kind %)) (re-find #"\[5 64 0\]" (:text %))) @seen)))
         (let [{:keys [eng]} (pen-env)
-              allowed (await (tu/child-outcome eng use-on {:pos [10 63 0] :enter-pens true} 40))]
+              allowed (await (settings/with-settings pens-open #(tu/child-outcome eng use-on {:pos [10 63 0]} 40)))]
           (is (not= :unreachable (:reason allowed))))))))
 
 (deftest a-use-on-ends-by-its-click-status
@@ -486,6 +488,21 @@
           (let [scooped (await (tu/child-outcome (:eng env) use-on {:pos at :item "bucket"} 40))]
             (is (= [true "water_bucket"] [(:used scooped) (some #(when (= "water_bucket" (:name %)) (:name %)) (u/inventory (:p env)))]))
             (is (not= "water" (.-name (.blockAt (:p env) (clj->js at)))))))))))
+
+(deftest a-use-on-bucket-in-anothers-zone-waits-not-allowed-but-a-plain-click-does-not
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:self body :inventory [{:name "water_bucket" :count 1}] :zones [bd/farm-zone]})]
+          (is (= {:reason :not-allowed :pos at :by :zone :zone "farm" :owner "Miles"}
+                 (bd/wait-cause (await (bd/waiting-after env (list use-on {:pos at :item "water_bucket"}) 3)))))
+          (is (empty? (bd/calls (:p env) "place"))))
+        (let [env (bd/setup {:self body :inventory [{:name "water_bucket" :count 1}] :zones [bd/farm-zone]})
+              result (await (tu/child-outcome (:eng env) use-on {:pos at :item "water_bucket" :ignore-zones? true} 40))]
+          (is (= true (:used result))))
+        (let [env (bd/setup {:self body :zones [bd/farm-zone]})
+              result (await (tu/child-outcome (:eng env) use-on {:pos at} 40))]
+          (is (not= :not-allowed (:reason result))))))))
 
 (deftest a-use-on-with-a-bucket-ends-by-the-place-status
   (async done

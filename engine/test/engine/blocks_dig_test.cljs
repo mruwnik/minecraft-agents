@@ -10,6 +10,7 @@
             [engine.memory :as mem]
             [engine.perception :as perception]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.scenario :as scenario]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
@@ -526,6 +527,7 @@
                                      (impl token a))))))
 
 (def under-feet {:x 0 :y 63 :z 0})
+(def seal-fetch-off {:jobs.lib.blocks/seal-fetch false})
 
 (deftest a-dug-cell-the-body-has-not-seen-since-is-not-told-as-a-block
   (async done
@@ -853,7 +855,7 @@
         (let [{:keys [eng p]} (setup {:self body :blocks {"0,63,0" "dirt" "0,62,0" "lava" "-2,64,3" "chest"}
                                       :containers {"-2,64,3" [{:name "cobblestone" :count 5}]}})]
           (hiding p #(= [0 62 0] %))
-          (let [result (await (tu/child-outcome eng job {:pos under-feet :seal-fetch false} 60))]
+          (let [result (await (settings/with-settings seal-fetch-off #(tu/child-outcome eng job {:pos under-feet} 60)))]
             (is (= {:reason :lava-unsealed :place :need} (select-keys result [:reason :place])))
             (is (= "lava" (block-at p lava-under)))))))))
 
@@ -871,7 +873,7 @@
                               (await (round c))))
               env (assoc-in env [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round first-fails))]
           (hiding (:p env) #(= [0 62 0] %))
-          (let [result (await (tu/child-outcome (:eng env) job {:pos under-feet :seal-fetch false} 40))]
+          (let [result (await (settings/with-settings seal-fetch-off #(tu/child-outcome (:eng env) job {:pos under-feet} 40)))]
             (is (= {:reason :lava-unsealed :stepped-away true} (select-keys result [:reason :stepped-away])))
             (is (= 2 @walks) "the first walk after the dig failed, the next cell was walked to")))))))
 
@@ -891,7 +893,7 @@
                                    (await (round c))))
               env (assoc-in env [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round moves-then-fails))]
           (hiding (:p env) #(= [0 62 0] %))
-          (let [result (await (tu/child-outcome (:eng env) job {:pos under-feet :seal-fetch false} 40))]
+          (let [result (await (settings/with-settings seal-fetch-off #(tu/child-outcome (:eng env) job {:pos under-feet} 40)))]
             (is (= {:reason :lava-unsealed :stepped-away true} (select-keys result [:reason :stepped-away])))
             (is (= 1 @walks) "the body stands clear after the first walk: no second walk")))))))
 
@@ -958,7 +960,7 @@
         env (failing-step-offs (setup (cond-> {:self body :blocks {"0,63,0" "dirt" "0,62,0" "lava"}} floor (assoc :floor floor)))
                                escalations)]
     (hiding (:p env) #(= [0 62 0] %))
-    (let [result (await (tu/child-outcome (:eng env) job {:pos under-feet :seal-fetch false} 60))]
+    (let [result (await (settings/with-settings seal-fetch-off #(tu/child-outcome (:eng env) job {:pos under-feet} 60)))]
       [@escalations result])))
 
 (deftest with-one-cell-to-step-off-to-its-walk-escalates-and-the-failure-is-kept

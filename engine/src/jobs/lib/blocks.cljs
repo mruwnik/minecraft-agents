@@ -5,11 +5,14 @@
   (:require ["minecraft-data" :as minecraft-data]
             [clojure.set :as set]
             [clojure.string :as str]
+            [engine.args :as a]
+            [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.aim :as aim]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.need :as need]
             [jobs.lib.access :as access]
             [jobs.lib.game-facts :as facts]
             [jobs.lib.pen-entry :as pen-entry]
@@ -162,7 +165,11 @@
 (defn kept-out-text [pens]
   (str "the walk failed while keeping out of the gate of a pen holding animals: "
        (str/join "; " (map (fn [{:keys [gates animals]}] (str animals " animals, gate " (str/join " " (map (fn [{:keys [x y z]}] [x y z]) gates)))) pens))
-       "; :enter-pens true allows the walk through"))
+       "; the setting jobs.lib.blocks/enter-pens allows the walk through"))
+
+(a/defargs settings
+  {::enter-pens {:default false :doc "true: the walk of blocks.dig, place and use-on may go through the gate of a pen holding animals; false: it keeps out of those gates and, with no other way, declines (a :blocks.pen-kept-out warn names the pen)." :spec boolean?}
+   ::seal-fetch {:default true :doc "How blocks.dig gets a building block to seal lava with when none is carried, whatever its :fetch says: true, a set of kinds or a map of limits (jobs.lib.need); false seals only with a carried block." :spec need/option?}})
 
 (def low-floor-radius 4)
 
@@ -177,10 +184,10 @@
            cell))))
 
 (defn ^:async walk-request
-  "[pens go-to-args] of the walk to pos: range (default 3), no escalation, and (unless the job's :enter-pens) keeping out of the
+  "[pens go-to-args] of the walk to pos: range (default 3), no escalation, and (unless the :enter-pens setting) keeping out of the
   gates of the pens holding animals, after a look at the cells of those not yet seen."
   [c pos see? & [range]]
-  (let [pens (when-not (:enter-pens (:args c)) (await (pen-entry/pens! c)))
+  (let [pens (when-not (settings/get settings ::enter-pens) (await (pen-entry/pens! c)))
         keep-out (mapv #(assoc % :factor ##Inf) (into (vec (mapcat :gates pens)) (when (:for-plan (:args c)) (low-floor-cells c pos))))]
     [pens (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))}
             (seq keep-out) (assoc :tolls keep-out))]))
@@ -240,7 +247,7 @@
 (defn ^:async dig-cell!
   "Dig the one block at pos with a jobs.blocks.dig child in slot :dig (args merged over: no drops collected, no tool
   needed, no fetch; the caller picks drops up) and say what came of it (dig-outcome). :fetch false does not stop
-  the lava seal's fetch (:seal-fetch, default true); the jobs digging through here do not expose :seal-fetch."
+  the lava seal's fetch (the seal-fetch setting, default true)."
   [c pos args]
   (let [args (merge {:collect false :need-drop false :fetch false} args {:pos pos})
         e (await (ctx/call c :dig 'jobs.blocks.dig args))]

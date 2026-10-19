@@ -3,7 +3,7 @@
 ;; The pen is big enough that its middle is out of reach (4.5 cells) from every cell outside the fence.
 ;; Should-succeed: go-to out of the pen with wheat in the bag (put away before the gate click) or without: gate shut behind, both cows stay;
 ;; go-to away from an open stocked gate warns go-to.pen-gate-open; blocks.place deep in the pen declines with blocks.pen-kept-out,
-;; places with :enter-pens true (gate shut behind the body); use-on at the gate from outside clicks it without entering.
+;; places with the enter-pens setting (gate shut behind the body); use-on at the gate from outside clicks it without entering.
 ;; Should-fail (no warn / declined): a goal beside the open gate; use-on deep in the pen (blocks.pen-kept-out, the lever unpowered).
 {:defaults
  {:tags [:animals :pen-gate :movement]
@@ -47,7 +47,7 @@
    :after [[:not-block [22 0 16] "cobblestone"] [:block [18 0 16] "oak_fence_gate[open=false]"]
            [:entities "type=cow,tag=wt" [[19 0 12] [25 1 20]] 2]]}
   {:name "place-deep-in-the-pen-with-enter-pens-walks-in"
-   :act [[:job (jobs.blocks.place {:pos #at [22 0 16] :item "cobblestone" :enter-pens true})]]
+   :act [[:job (jobs.blocks.place {:pos #at [22 0 16] :item "cobblestone" :settings {:jobs.lib.blocks/enter-pens true}})]]
    :expect [{:event {:source :job :kind :completed :data {:placed true}} :within-s 100 :of-job true}]
    :after [[:block [22 0 16] "cobblestone"] [:block [18 0 16] "oak_fence_gate[open=false]"]
            [:entities "type=cow,tag=wt" [[19 0 12] [25 1 20]] 2]]}

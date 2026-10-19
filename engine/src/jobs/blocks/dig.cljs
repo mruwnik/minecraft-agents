@@ -48,7 +48,7 @@
   the block came out leaves the seal and the pickup to the cleanup.
   With :on-lava :seal (default), seen lava beside the dug cell is filled with a building block from the rim
   (jobs.lib.lava, a jobs.blocks.place child, event blocks.dig.sealed); the dug cell stays dug. When it cannot be (no block
-  carried or fetched (:seal-fetch), or two places fail) the body steps off the cells beside the lava and the job ends
+  carried or fetched (the seal-fetch setting of jobs.lib.blocks), or two places fail) the body steps off the cells beside the lava and the job ends
   nothing-possible :lava-unsealed with :cell, :place (:need: no block) and :stepped-away.
 
   Returns an ending whose data is {:dug true|false :pos :block :collected n}, plus :ids (the drops' entity ids, when it picks none up), :now (the block seen at the cell after a dig, absent when not seen since; the text says it), :left
@@ -69,8 +69,6 @@
    :on-fluid {:doc ":wait: a block beside a fluid that :accept does not take waits :hazard; :fail: the job ends at once, reason :fluid-adjacent, with a :hint" :spec #{:wait :fail} :default :wait}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
    :ignore-zones? :shared
-   :enter-pens {:doc "true: the walk to the cell may go through the gate of a pen holding animals; false: it keeps out of those gates and, with no other way, declines (a :blocks.pen-kept-out warn names the pen)" :spec boolean? :default false}
-   :seal-fetch {:doc "get a building block to seal lava with when none is carried, whatever :fetch says: true, a set of kinds or a map of limits, false to seal only with a carried block" :spec need/option? :default true}
    :fetch {:doc "get a missing tool instead of ending :no-tool (jobs.lib.need): true, a set of kinds or a map of limits" :spec need/option? :default true}})
 
 (a/defargs settings
@@ -304,7 +302,7 @@
       :else
       (when-let [lavas (seq (do (await (lava/look-round! c cell)) (lava/exposed (:primitives c) cell)))]
         (let [r (await (lava/seal! c :blocks.dig.sealed #(u/seen-name (:primitives c) (zipmap [:x :y :z] %)) (first lavas)
-                                   {:fetch (:seal-fetch (:args c)) :ignore-zones? (:ignore-zones? (:args c))}))]
+                                   {:fetch (settings/get b/settings ::b/seal-fetch) :ignore-zones? (:ignore-zones? (:args c))}))]
           (if (map? r)
             (do (ctx/update-mem! c assoc-in [:dug :unsealed] (assoc r :lavas (vec lavas))) :again)
             r))))))

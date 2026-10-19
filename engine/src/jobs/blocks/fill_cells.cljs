@@ -1,5 +1,6 @@
 (ns jobs.blocks.fill-cells
   (:require [engine.args :as a]
+            [engine.settings :as settings]
             [jobs.lib.ready :as ready]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
@@ -13,7 +14,7 @@
 (def doc
   "Fill cells that are air, cave_air or water with the first carried block of the call's :use {:blocks} (default: the
   carried building blocks, in that order). The caller has judged the cells (zones, claims); the job does not ask the rules
-  again. Per step: the lowest cell that is not the body's feet or head (then the nearest) is walked to within :reach (one
+  again. Per step: the lowest cell that is not the body's feet or head (then the nearest) is walked to within the reach setting (one
   go-near child) and placed by a jobs.blocks.place child (:fetch false, :ignore-zones? true); when only the feet or head
   cell is left, the body jump-places. Cells that no longer read air or water are done. It yields :continue only
   when a child waits on the world.
@@ -23,17 +24,17 @@
 
   Ends with data {:mended n :left [cells still unfilled]}. Done: every cell filled (also at once, with 0 mended, when none
   was owed), or :mended >= the call's :least (default :all: a partial fill is not done). Short of that:
-  condition-failed :need when no block is carried any more; nothing-possible :failed after :max-failures failed steps in a
+  condition-failed :need when no block is carried any more; nothing-possible :failed after the max-failures setting of failed steps in a
   row (a refused place, a walk that is blocked and a refused jump-place each count one, and only a place clears the
   count).")
 
 (a/defargs args
-  {:cells {:doc "the cells to fill, each [x y z] or {:x :y :z}" :spec (a/coll-of a/position?) :default nil}
-   :reach {:doc "walk within this many blocks of a cell before placing" :spec (a/int-in 0 nil) :default 4}
-   :max-failures {:doc "failed steps in a row before the job ends nothing-possible" :spec (a/int-in 1 nil) :default 6}})
+  {:cells {:doc "the cells to fill, each [x y z] or {:x :y :z}" :spec (a/coll-of a/position?) :default nil}})
 
 (a/defargs settings
-  {::job-time-s {:default 600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
+  {::reach {:default 4 :doc "Walk within this many blocks of a cell before placing." :spec (a/int-in 0 nil)}
+   ::max-failures {:default 6 :doc "Failed steps in a row before the job ends nothing-possible." :spec (a/int-in 1 nil)}
+   ::job-time-s {:default 600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (def safe? (ready/safe-at-by-night (fn [c] (a/cell (first (:cells (:args c)))))))
 
@@ -76,8 +77,8 @@
 (defn ^:async place!
   "One cell: resolves to :placed, :failed, or :partial (the walk waits on the world)."
   [c pos item]
-  (let [walked (if (> (u/dist (u/self-pos c) pos) (:reach (:args c)))
-                 (await (near/go-near! c pos (:reach (:args c)) {}))
+  (let [walked (if (> (u/dist (u/self-pos c) pos) (settings/get settings ::reach))
+                 (await (near/go-near! c pos (settings/get settings ::reach) {}))
                  :there)]
     (cond
       (= :partial walked) :partial
@@ -145,7 +146,7 @@
         pos (next-cell c cells)]
     (cond
       (empty? cells) (finish! c nil nil)
-      (>= (or failures 0) (:max-failures (:args c))) (finish! c :nothing-possible {:reason :failed})
+      (>= (or failures 0) (settings/get settings ::max-failures)) (finish! c :nothing-possible {:reason :failed})
       (nil? item) (finish! c :condition-failed {:reason :need :any-of names})
       :else
       (let [r (if pos (await (place! c pos item)) (await (raise! c item)))]

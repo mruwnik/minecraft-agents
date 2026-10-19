@@ -23,8 +23,8 @@
   carried building blocks, jobs.lib.choose :build). One call is the whole attempt: fetch a missing item (:fetch), clear
   the cell, walk into reach (one jobs.movement.go-to call), place. It yields :continue only when a child waits on the world.
 
-  Needs: the item carried (or fetchable, :fetch). Conditions, which keep the job listed and waiting (ctx/wait; job.waiting
-  and observe show the cause) and place nothing when:
+  Needs: the item carried (or fetchable, :fetch). Conditions (can-start? and can-run?: a listed call waits on them, a called one ends condition-failed with the cause)
+  and place nothing when:
   - {:reason :need :item name :pos} or {:reason :need :any-of [names] :pos}: not carried and :fetch is off.
   - {:reason :not-allowed :pos :by :zone|:claim|:footprint|:no-zones ...}: zones, claims or another plan's
     footprint refuse the place. :for-plan's own footprint does not. :ignore-zones? skips the rule.
@@ -53,7 +53,6 @@
    :item {:doc "the block item to place; nil: the first carried of the call's :use {:blocks}" :spec a/item? :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse, and the walk keeps off seen beds and bottom slabs near the cell; nil: every plan's footprint does" :spec a/name? :default nil}
    :ignore-zones? :shared
-   :enter-pens {:doc "true: the walk to the cell may go through the gate of a pen holding animals; false: it keeps out of those gates and, with no other way, declines (a :blocks.pen-kept-out warn names the pen)" :spec boolean? :default false}
    :clear {:doc "dig a plant, flower or snow layer out of the cell first; false places into what a placement overwrites" :spec boolean? :default true}
    :click {:doc "how to place it ({:against [x y z] :cursor [x y z] :yaw :pitch :sneak}, jobs.lib.placement/click); nil: plainly" :spec map? :default nil}
    :facing {:doc "north, south, east or west: the way a facing block (bed head, gate, door, stairs) is oriented; the body looks that way as it places (jobs.lib.placement); not with :click; nil: as the body stands" :spec (a/pred "north, south, east or west" #{"north" "south" "east" "west"}) :default nil}
@@ -103,7 +102,7 @@
 (defn clear-args
   "The jobs.blocks.dig args for clearing the plant at pos."
   [c pos]
-  (merge (select-keys (:args c) [:for-plan :ignore-zones? :enter-pens])
+  (merge (select-keys (:args c) [:for-plan :ignore-zones?])
          {:pos pos :collect false :need-drop false :accept #{:fluid-adjacent :falling-block}}))
 
 (defn clears?
@@ -136,8 +135,8 @@
   (boolean (and (seq items) (every? #(re-find #"_(boat|raft)$" %) items))))
 
 (defn problem
-  "Why the job cannot run now: a cause map (see doc), or nil. Bad args and a cell already holding the block
-  pass: the round ends them. A missing item is no problem while it is fetched."
+  "Why the job cannot run now: a cause map (see doc), or nil. Bad args, a cell already holding the block
+  and a block that fills the cell pass: the round ends them. A missing item is no problem while it is fetched."
   [c]
   (let [{:keys [pos items error]} (parse c)]
     (when-not error
@@ -161,6 +160,7 @@
     (contract/ok :args "a cell and a block to place")))
 
 (def can-start? (cond/and bad-args (checks/refusing :placeable "the cell takes the block" problem)))
+(def can-run? (checks/refusing :placeable "the cell still takes the block" #(let [w (problem %)] (when (contains? b/cell-reasons (:reason w)) w))))
 
 (defn done?
   "Ok when the cell already holds one of the wanted blocks; else later."
@@ -271,13 +271,6 @@
           (= :done (:kind e)) :done
           :else e)))
 
-(defn refusal
-  "The ending when the cell turned unfit during the call (a zone, a hazard, the body in it), else nil."
-  [c]
-  (let [w (problem c)]
-    (when (contains? b/cell-reasons (:reason w))
-      (ctx/end c :condition-failed w))))
-
 (defn ^:async see-target!
   "b/see-target!, and a look once more at a cell whose floor or walls were last sensed long ago, so no-support is judged on
   what is there now."
@@ -315,11 +308,10 @@
       lacking? (finish! c :condition-failed (assoc (needs c items) :reason :need :pos pos)
                         {:placed false :pos pos :item (first items) :reason :need})
       :else
-      (or (refusal c)
-          (let [d (await (place! c pos items))]
-            (if (= :unreachable d)
-              (unreachable c pos items :out-of-reach nil)
-              d))))))
+      (let [d (await (place! c pos items))]
+        (if (= :unreachable d)
+          (unreachable c pos items :out-of-reach nil)
+          d)))))
 
 (defn ^:async round [c]
   (let [{:keys [pos items]} (parse c)]

@@ -14,13 +14,7 @@
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::mend-reach {:default 4 :doc "Reach while mending a cut, in blocks." :spec (a/int-in 0 nil)}
-   ::max-mend-failures {:default 6 :doc "Failed mends before the job gives up." :spec (a/int-in 1 nil)}
-   ::max-resumes {:default 2 :doc "Resumes of a cut before the job gives up." :spec (a/int-in 0 nil)}})
-
-(defn mend-reach [] (settings/get settings ::mend-reach))
-
-(defn max-mend-failures [] (settings/get settings ::max-mend-failures))
+  {::max-resumes {:default 2 :doc "Resumes of a cut before the job gives up." :spec (a/int-in 0 nil)}})
 
 (defn owed
   "The ground entries whose cell is now air, cave_air or water (unloaded cells are not owed). After a descent the
@@ -84,8 +78,7 @@
   (let [cells (mend-permitted c (owed c))]
     (if (empty? cells)
       (await (mended! c))
-      (let [e (await (ctx/call c :fill 'jobs.blocks.fill-cells {:cells (mapv :pos cells) :use {:blocks (fillers c)}
-                                                              :reach (mend-reach) :max-failures (max-mend-failures)}))
+      (let [e (await (ctx/call c :fill 'jobs.blocks.fill-cells {:cells (mapv :pos cells) :use {:blocks (fillers c)}}))
             {:keys [mended left]} (when (map? e) (:data e))
             left (or left (map :pos cells))]
         (when (map? e)
