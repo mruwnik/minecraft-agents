@@ -121,11 +121,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup pit-world [(zone "Miles" [1 64 -1] [1 66 1])])]
-          (core/submit! eng '(jobs.survival.dig-in) {})
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (await (run-until-empty eng 10))
           (is (= [{:x 0 :y 63 :z 0} {:x 0 :y 62 :z 0} {:x 0 :y 61 :z 0}] (mapv arg-pos (calls p "dig"))) "the pit, not the walls")
           (is (= [{:x 0 :y 63 :z 0}] (mapv arg-pos (calls p "place"))))
-          (is (= [] (trespass seen :dig-in.trespass-last-resort))))))))
+          (is (= [] (trespass seen :shut-in.trespass-last-resort))))))))
 
 (deftest dig-in-trespasses-only-when-every-way-is-foreign
   (async done
@@ -135,10 +135,10 @@
                                       [[(whole-zone "Fake")] 10 []]
                                       [nil 10 []]]]
           (let [{:keys [eng p seen]} (setup night-world zones)]
-            (core/submit! eng '(jobs.survival.dig-in) {})
+            (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
             (await (run-until-empty eng 10))
             (is (= places (count (calls p "place"))) (pr-str zones))
-            (is (= warns (mapv :zones (trespass seen :dig-in.trespass-last-resort))) (pr-str zones))))))))
+            (is (= warns (mapv :zones (trespass seen :shut-in.trespass-last-resort))) (pr-str zones))))))))
 
 (deftest shelter-through-dig-in-follows-the-same-rule
   (async done
@@ -149,7 +149,7 @@
           (core/submit! eng '(jobs.survival.night) {})
           (await (run-until-empty eng 12))
           (is (= 10 (count (calls p "place"))))
-          (is (= 1 (count (trespass seen :dig-in.trespass-last-resort)))))))))
+          (is (= 1 (count (trespass seen :shut-in.trespass-last-resort)))))))))
 
 (def wide-ground
   "Dirt (no tool needed) from y 60 to 63 over x and z -12..12."
@@ -165,7 +165,7 @@
           (await (run-until-empty eng 40))
           (is (every? #(or (< 3 (js/Math.abs (:x %))) (< 3 (js/Math.abs (:z %)))) (mapv arg-pos (calls p "dig"))) "every cell dug lies outside the zone")
           (is (seq (calls p "dig")) "it dug in")
-          (is (= [] (trespass seen :dig-in.trespass-last-resort))))))))
+          (is (= [] (trespass seen :shut-in.trespass-last-resort))))))))
 
 (defn dug [p] (mapv arg-pos (calls p "dig")))
 
@@ -184,10 +184,10 @@
             (let [{:keys [eng p seen]} (if plan
                                          (setup-with-plan world (cond-> plan (nil? (:metadata plan)) (shape/with-author "Fake")))
                                          (setup world zones))]
-              (core/submit! eng '(jobs.survival.dig-in) {})
+              (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
               (await (run-until-empty eng 10))
               (is (= digs? (boolean (seq (dug p)))) label)
-              (is (= (not digs?) (boolean (seq (filterv #(= :dig_in_failed (:kind %)) @seen)))) label))))))))
+              (is (= (not digs?) (boolean (seq (filterv #(= :shut-in.failed (:kind %)) @seen)))) label))))))))
 
 ;; ------------------------------------------------------------------ get-food
 
@@ -224,11 +224,11 @@
           (await (run-until-empty (:eng pour) 4))
           (is (= [{:x 0 :y 64 :z 0}] (take 1 (mapv arg-pos (calls (:p pour) "place")))) "pours at once, no walk to the pool")
           (is (= [] (calls (:p pour) "moveTo")))
-          (core/submit! (:eng dig) '(jobs.survival.dig-in {:ignore-zones? true}) {})
+          (core/submit! (:eng dig) '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night :ignore-zones? true}) {})
           (await (run-until-empty (:eng dig) 10))
           (is (< 1 (count (calls (:p dig) "place"))) "the walls are placed, not the pit")
           (is (= [] (filterv #(< (:y %) 64) (mapv arg-pos (calls (:p dig) "dig")))) "no pit")
-          (is (= [] (trespass (:seen dig) :dig-in.trespass-last-resort)))
+          (is (= [] (trespass (:seen dig) :shut-in.trespass-last-resort)))
           (core/submit! (:eng unwedge) '(jobs.survival.unwedge {:ignore-zones? true}) {})
           (await (run-until-empty (:eng unwedge) 6))
           (is (= 1 (count (calls (:p unwedge) "dig"))) "unwedge digs the feet block")

@@ -1,5 +1,5 @@
 (ns jobs.lib.shelter
-  "What the night jobs (night, sleep, log-out, dig-in) and the night trigger share: the night's look pass, open doors, the
+  "What the night jobs (night, sleep, log-out, shut-in) and the night trigger share: the night's look pass, open doors, the
   night trigger's test. The rest lives in jobs.lib.shelter.*."
   (:require [engine.args :as a]
             [engine.memory :as mem]

@@ -64,8 +64,8 @@
   :reason (:why, :no-path when it has none), the :kind of step that cannot be walked, and what its reason carries (:door-stuck's
   :cells, :one-way's :near and :one-way); a walk that got stuck says :stuck, the :move it was stuck on as :kind and the
   executor's :why text as :detail; one that left its plan says :off-plan; a failed steer says :steer-failed with its reason
-  as :detail; a walk that ended with the body no nearer says :no-progress. A body sealed in its own dig-in shelter adds
-  :inside-own-shelter (its cell) and a :hint (the shelter job lets it out by day, or run dig-in leave). A failed waypoint
+  as :detail; a walk that ended with the body no nearer says :no-progress. A body sealed in its own shelter adds
+  :inside-own-shelter (its cell) and a :hint (the shelter job lets it out by day). A failed waypoint
   walk of the call (go-to's mem :waypoint-why) rides along as :waypoint-why."
   [{:keys [status reason kind move step] :as result}]
   (merge

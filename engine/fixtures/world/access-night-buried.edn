@@ -74,23 +74,23 @@
    :blocks [[:fill [2 0 16] [10 5 16] "air"]]
    :body {:at [7.5 0 16.5] :inventory [["cobblestone" 16]]}
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night}} :within-s 20}]}
-  {:name "dig-in-walls-run-out-falls-back-to-pit"
+  {:name "shut-in-walls-run-out-falls-back-to-pit"
    :register []
    ;; on the open mass top the walls need 10 blocks (4 sides x 2, the roof support, the roof): fewer and the pit is chosen at once
    :body {:inventory [["cobblestone" 12] ["stone_pickaxe" 1]]}
-   :act [[:job (jobs.survival.dig-in {:max-places 2})]
+   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night :max-places 2})]
          [:await {:source :action :kind :done :data {:name "place"}} 30]
          [:rcon "clear $BODY cobblestone"]]
-   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :dig_in_failed} :for-s 90 :until {:source :job :kind :dig-in.sealed}}]
+   :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :shut-in.failed} :for-s 90 :until {:source :job :kind :shut-in.sealed}}]
    :limit-s 120}
   ;; A trapped cell is remembered 5 minutes (:shelter-trapped, one try per cell): rerun this case after that, the plot
   ;; cell is the same every run.
   {:name "trapped-pit-by-day-no-pickaxe-fails-once"
    :register []
    :body {:inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.survival.dig-in {})]
-         [:await {:source :job :kind :dig-in.sealed} 90]
+   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]
+         [:await {:source :job :kind :shut-in.sealed} 90]
          [:rcon "clear $BODY"]
          [:time-set 1000]
          [:job (jobs.survival.night {})]]

@@ -156,13 +156,6 @@
                      (stop :no-roof-support "nothing solid beside the roof cell to place against; not digging a pit"))
       :else (or (shape-stop c blocks shape) (stop :no-floor "no pit fits here")))))
 
-(defn quote-fits?
-  "Whether a pit may fit at feet, for a quote (no looks): a plan, or only a floor not yet seen rules it out (plan-of! looks
-  and digs to see it)."
-  [c feet]
-  (let [blocks (flight/blocks c)]
-    (boolean (or (pit-plan c feet blocks) (:unseen (stop-of c blocks feet))))))
-
 (defn ^:async plan-of!
   "The pit that fits at the feet (pit-plan with blocks, default the call's, after a look at the roof's surroundings and at the
   side columns it has not sensed), else the stop of why none does (stop-of; it has :stop)."
@@ -192,7 +185,7 @@
       plan
       (let [in (access/rules-input c)
             digs (concat (:prep plan) (mapcat :dig (:steps plan)))]
-        (access/trespass! c "retreat" (or (some #(access/trespass-refusal in :dig %) digs)
+        (access/trespass! c "shut-in" (or (some #(access/trespass-refusal in :dig %) digs)
                                           (some #(access/trespass-refusal (assoc in :feet nil) :place %) (conj (:plugs plan) (:roof plan)))))
         (ctx/update-mem! c dissoc :pit-drops)
         (assoc plan :kind :pit :anchor (sh-sense/feet (:primitives c)) :cells (plan-cells plan))))))
@@ -290,7 +283,7 @@
         stop! (fn [reason text] (ctx/update-mem! c assoc :stop {:reason reason :text text}) nil)]
     (when-let [cells (pocket-site c feet)]
       (let [in (access/rules-input c)]
-        (access/trespass! c "retreat" (some #(access/trespass-refusal in :dig %) cells)))
+        (access/trespass! c "shut-in" (some #(access/trespass-refusal in :dig %) cells)))
       (loop [[cell & more] cells]
         (if (nil? cell)
           (do ;; raw moveTo kept: a step into the body's own pocket, as the pit's drop; the planner has no standable goal there.

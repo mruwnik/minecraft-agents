@@ -85,4 +85,4 @@
   (when-let [{{:keys [x y z]} :pos :as entry} (sheltered-in c)]
     {:inside-own-shelter (:pos entry)
      :hint (str "the body is sealed in its own shelter at [" x " " y " " z "]: the shelter job lets it out by day "
-                "(jobs.survival.night), or run jobs.survival.dig-in leave")}))
+                "(jobs.survival.night)")}))

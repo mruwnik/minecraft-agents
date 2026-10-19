@@ -1,4 +1,4 @@
-(ns engine.dig-in-support-test
+(ns engine.shut-in-night-support-test
   "dig-in's walls place bottom-up: a wall cell with no block beside, above or below it gets a block under it first."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
@@ -31,7 +31,7 @@
 (defn ^:async run-walls! [world]
   (let [{:keys [eng p seen]} (st/setup (assoc world :time st/night))
         _ (needs-support! p)]
-    (core/submit! eng '(jobs.survival.dig-in {:enclose true}) {})
+    (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
     (await (run-until-empty eng 30))
     {:p p :seen seen}))
 
@@ -40,8 +40,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen]} (await (run-walls! {:inventory [{:name "dirt" :count 40}] :blocks pillar :floor [0 0 0 0]}))]
-          (is (empty? (st/emitted seen :dig_in_failed)) (pr-str (map :text (st/emitted seen :dig_in_failed))))
-          (is (= 1 (count (st/emitted seen :dig-in.sealed)))))))))
+          (is (empty? (st/emitted seen :shut-in.failed)) (pr-str (map :text (st/emitted seen :shut-in.failed))))
+          (is (= 1 (count (st/emitted seen :shut-in.sealed)))))))))
 
 (deftest a-support-block-in-another-zone-is-not-placed
   (async done
@@ -53,7 +53,7 @@
                                 :world (world-files/of-data {} {} [{:name "keep-out" :min [-1 62 -1] :max [1 63 1]}])
                                 :events (events/make {:body "Fake" :sinks [(second (tu/legacy-capture-sink))] :now #(deref clock)})})
               _ (needs-support! p)]
-          (core/submit! eng '(jobs.survival.dig-in {:enclose true}) {})
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
           (await (run-until-empty eng 30))
           (is (every? #(contains? #{nil "air"} (some-> (.blockAt p (clj->js %)) .-name)) [{:x 1 :y 63 :z 0} {:x 1 :y 62 :z 0} {:x 0 :y 63 :z 1} {:x -1 :y 63 :z 0}])
               "nothing is placed under the wall cells inside the zone"))))))
@@ -63,8 +63,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen]} (await (run-walls! {:inventory [{:name "dirt" :count 40}] :blocks (assoc pillar "0,66,0" "oak_leaves") :floor [0 0 0 0]}))]
-          (is (empty? (st/emitted seen :dig-in.unsealed)) "leaves stop a mob: the roof the wall cells already count")
-          (is (= 1 (count (st/emitted seen :dig-in.sealed)))))))))
+          (is (empty? (st/emitted seen :shut-in.unsealed)) "leaves stop a mob: the roof the wall cells already count")
+          (is (= 1 (count (st/emitted seen :shut-in.sealed)))))))))
 
 (defn refuses-under-the-body!
   "Make place fail for a cell the body's 0.62 wide, 1.8 high box overlaps, as the server does."
@@ -83,10 +83,10 @@
         (let [{:keys [eng p seen]} (st/setup {:inventory [{:name "dirt" :count 40}] :blocks pillar :floor [0 0 0 0] :time st/night})
               _ (swap! (fake/state p) assoc-in [:self :pos] [0.15 64 0.5])
               _ (refuses-under-the-body! p)]
-          (core/submit! eng '(jobs.survival.dig-in {:enclose true}) {})
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
           (await (run-until-empty eng 30))
-          (is (empty? (st/emitted seen :dig-in.unsealed)))
-          (is (= 1 (count (st/emitted seen :dig-in.sealed)))))))))
+          (is (empty? (st/emitted seen :shut-in.unsealed)))
+          (is (= 1 (count (st/emitted seen :shut-in.sealed)))))))))
 
 (def cell {:x 0 :y 64 :z 0})
 (def avoid #{{:x 0 :y 63 :z 0} {:x 0 :y 64 :z 0}})

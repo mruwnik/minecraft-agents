@@ -29,7 +29,8 @@
   fits). Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.")
 
 (a/defargs args
-  {:for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}
+  {:ignore-zones? :shared
+   :for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}
    :fetch {:doc "get a missing tool (jobs.lib.need): true, a set of kinds or a map of limits; false leaves a wall no carried tool harvests without a site" :spec need/option? :default false}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
    :radius {:doc "melee hostiles within this many blocks decide which side is walled first and stand in the way of a cell" :spec (a/num-in 0 nil) :default 8}

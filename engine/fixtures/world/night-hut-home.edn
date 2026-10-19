@@ -26,8 +26,8 @@
    :body {:at [12.5 0 19.5] :inventory [["red_bed" 1] ["cobblestone" 16]]}
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [12 0 12]}) [:now]]
          [:job (jobs.survival.night)]]
-   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :place.set :data {:name :bed}} :for-s 120 :until {:source :job :kind :dig-in.sealed}}]
+   :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :place.set :data {:name :bed}} :for-s 120 :until {:source :job :kind :shut-in.sealed}}]
    :after [[:item "red_bed" 1]]
    :limit-s 130}
   ;; 724f7976: a 2-high hole in the east wall and a fresh :bed-open entry in the room: the room_open warn, then walled in under the roof

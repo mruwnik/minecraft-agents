@@ -22,7 +22,7 @@
             [:set [16 1 17] "oak_door[facing=south,half=upper,open=true]"]
             [:set [4 0 4] "torch"] [:set [28 0 28] "torch"]]
    :body {:inventory [["cobblestone" 16]]}
-   :act [[:job (jobs.survival.dig-in {})]]
-   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60 :of-job true}]
+   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
+   :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60 :of-job true}]
    :after [[:block [16 0 17] "oak_door[half=lower,open=false]"] [:not-block [16 0 16] "cobblestone"]]
    :limit-s 70}]}

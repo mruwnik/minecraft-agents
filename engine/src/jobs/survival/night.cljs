@@ -72,7 +72,7 @@
     within :walk-radius whose column is not seen open (a roof cell unseen after a look counts as roof), and whose route (go-to's quote, dark cells priced in) costs at most
     sites/dig-in-seconds (8) seconds (quoted again after a look round): walk there (go-to :place). A walk
     that does not arrive is not tried again tonight, and the night digs in; arrived, the next pass is roofed.
-  - else a safe place: jobs.survival.dig-in here, unless a site tonight failed within 8 blocks. A dig-in that does not
+  - else a safe place: jobs.survival.shut-in (:for :night, the ways room, walls, pit) here, unless a site tonight failed within 8 blocks. A shut-in that does not
     roof the body (any other ending) writes a :night-site {:pos :reason} entry, and the body walks (go-to) to the
     nearest cell within 16 blocks, 9+ from every failed site, that looks dry and solid from the surface (shelter.relocated info; dig-in finds out the
     rest), to dig in there. After max-sites failed sites, or with no such cell, it cuts a niche (jobs.survival.shut-in with the pocket way, once, :niche;
@@ -85,7 +85,7 @@
   place with a seen roof, a seen cave or overhang cell (a seen solid floor and roof, two free dry cells, within about 16
   blocks: only those seen, and only while the carried blocks (dig-in's) cover every wall cell still open; none whose
   wall a zone refuses), or seen natural ground (never sand or gravel) the carried tools dig, 9+ from every failed
-  site, with standing room (pit-site?). While that search goes on the night holds its pass. Arrived at a cave cell it walls itself in (dig-in :enclose, walls only, never a
+  site, with standing room (pit-site?). While that search goes on the night holds its pass. Arrived at a cave cell it walls itself in (shut-in with the walls way only, never a
   pit): sealed, it holds :dug-in until morning; a refusal marks the site failed and the roofed body ends the night :roofed. shelter.fled info on arrival, shelter.flee_failed when not arrived; a walk cut by a
   reflex resumes the same target. Arrived: the next pass sleeps, is roofed, or digs in there (a niche is tried again).
   Done {:night how :fled n} (nothing-possible :exposed {:fled n}) when it fled.
@@ -249,7 +249,7 @@
 
 (defn ^:async niche!
   "No pit site is left: out of the failed pit first (dig-in-leave/climb!, a stair), then jobs.survival.shut-in digs a pocket
-  into a hillside or wall within niche-reach; the blocks that plug it are the :shelter entry's door. Whatever it ends in, it is tried once (:niche :tried); the next pass holds exposed if it
+  into a hillside or wall within niche-reach; the blocks that plug it are the :shelter entry's door (written by shut-in). Whatever it ends in, it is tried once (:niche :tried); the next pass holds exposed if it
   did not shut the body in."
   [c pit]
   (hold/busy! c)
@@ -262,22 +262,25 @@
       (let [d (await (ctx/call c :niche 'jobs.survival.shut-in {:ways #{:pocket} :for :night :settings {:jobs.survival.dig-pocket/walk-radius niche-reach}}))]
         (when-not (= :continue d)
           (ctx/update-mem! c assoc :niche :tried)
-          (spent/absorb! c (:data d))
-          (when (= :done (:kind d))
-            (ctx/remember! c :shelter {:pos (sh-sense/feet (:primitives c)) :state :built
-                                       :door (mapv (fn [{[x y z] :cell}] {:x x :y y :z z}) (:placed (:data d)))}
-                           sh/shelter-policy)))
+          (spent/absorb! c (:data d)))
         :again))))
 
 ;; ------------------------------------------------------------------ somewhere safer
 
 (defn site-reason
-  "Why a dig-in ending d left the site unsheltered: its cause, :unsealed when it ended done."
+  "Why a shut-in ending d left the site unsheltered: :unsealed when it ended done, else why the first way it tried failed
+  (:walls-server-refused, :walls-failed, or the stop of the pit), else the stop of a way dropped, else its cause."
   [d]
-  (if (= :done (:kind d)) :unsealed (contract/cause-key d)))
+  (let [{:keys [statuses stops tried]} (:data d)
+        why (fn [way] (cond (and (= :walls way) (= "failed" (:walls statuses))) :walls-server-refused
+                            (get-in stops [way :reason]) (get-in stops [way :reason])
+                            (= :walls way) :walls-failed))]
+    (if (= :done (:kind d))
+      :unsealed
+      (or (some why (concat tried (keys stops))) (contract/cause-key d)))))
 
 (defn ^:async enclose!
-  "At a cave target (:enclose is its feet cell): wall in with dig-in :enclose, one call. Sealed in: :dug-in, held until
+  "At a cave target (:enclose is its feet cell): wall in with shut-in's walls way, one call. Sealed in: :dug-in, held until
   morning (dig-in-leave/leave! opens the door). Stopped or declined: the site is marked failed with dig-in's reason, and the
   roofed body ends the night :roofed. A body that is no longer at the cell forgets the target."
   [c]
@@ -287,7 +290,7 @@
     (if (not= pos (sh-sense/feet p))
       (do (ctx/update-mem! c dissoc :enclose) :again)
       (let [_ (hold/busy! c)
-            d (await (ctx/call c :enclose 'jobs.survival.dig-in {:roof-height roof-height :enclose true :wall-value (:wall-value (:args c))}))]
+            d (await (ctx/call c :enclose 'jobs.survival.shut-in {:ways #{:walls} :for :night :roof-height roof-height :wall-value (:wall-value (:args c))}))]
         (if (= :continue d)
           :again
           (do (ctx/update-mem! c dissoc :enclose)
@@ -362,9 +365,9 @@
    :unseen-roof (sh/unseen-roof-cell p)})
 
 (defn ^:async shelter!
-  "No bed, nobody asleep, not roofed: dig in here (jobs.survival.dig-in, one call), unless a site failed here tonight.
+  "No bed, nobody asleep, not roofed: dig in here (jobs.survival.shut-in, one call), unless a site failed here tonight.
   The site is written :interrupted before the call (a firing after a cut mid-pit does not dig it deeper; a listed night
-  resumes its dig-in child instead), then forgotten when the body is roofed, else marked with dig-in's stop or wait
+  resumes its dig-in child instead), then forgotten when the body is roofed, else marked with shut-in's stop or wait
   reason."
   [c]
   (let [resume (:digging (ctx/mem c))
@@ -387,7 +390,7 @@
                 (ctx/emit! c :night.dig-in-why :info (dig-in-inputs p))
                 (ctx/update-mem! c assoc :digging start)
                 (sites/site-failed! c start :interrupted))
-            d (await (ctx/call c :dig-in 'jobs.survival.dig-in {:roof-height (dig-in-roof-height c) :wall-value (:wall-value (:args c))}))]
+            d (await (ctx/call c :shut-in 'jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night :roof-height (dig-in-roof-height c) :wall-value (:wall-value (:args c))}))]
         (if (= :continue d)
           :again
           (do (ctx/update-mem! c dissoc :digging)

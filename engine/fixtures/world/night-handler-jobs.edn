@@ -53,6 +53,6 @@
          [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 90]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}
             {:no-event {:source :job :kind :night.bed-too-far} :for-s 90 :until {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}}
-            {:no-event {:source :job :kind :dig-in.sealed} :for-s 90 :until {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}}]
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 90 :until {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}}]
    :after [[:body-near [10.5 0 12.5] 4]]
    :limit-s 110}]}

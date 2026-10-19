@@ -219,13 +219,14 @@
 (def dark-world (assoc lit-world :light-default [15 0]))
 
 (defn flee-home-night
-  "night-at-home in the dark with a home at x 10 beyond :walk-radius 5, no placing, nothing but the home to see: the
-  dig-in fails everywhere, so the night has to flee to the roof. {:eng :p}."
+  "night-at-home in the dark with a home at x 10 beyond :walk-radius 5, no placing or digging, nothing but the home to see: the
+  shut-in fails everywhere, so the night has to flee to the roof. {:eng :p}."
   [world args]
   (js/Promise.resolve
    (.then (night-at-home world {:x 10 :y 64 :z 0} (merge {:walk-radius 5} args))
           (fn [{:keys [p] :as r}]
             (st/refuse-placing! p)
+            (.override (.-world p) "dig" (fn ^:async f [_ _ _] #js {:status "failed"}))
             (aset p "seenBlocks" (fn [_] #js []))
             r))))
 

@@ -1,16 +1,41 @@
 (ns jobs.survival.plug-way
   "What the plug ways share (jobs.survival.wall-in, dig-pit, dig-pocket; picked between by jobs.survival.shut-in):
   the enclosed test, the goal, the quote and the stepping round."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
+            [engine.settings :as settings]
+            [jobs.lib.access :as access]
             [jobs.lib.checks :as checks]
             [jobs.lib.pace :as pace]
+            [jobs.lib.reach :as reach]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spent :as spent]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.retreat-seal :as seal]))
 
-(defn enclosed? [c]
-  (dig-cells/sealed-in? (:primitives c) :walls (:roof-height (:args c))))
+(a/defargs settings
+  {::trespass-s {:default 1000 :doc "Seconds a way's quote adds when a cell it digs or fills is another's (zone, claim or plan): a last resort, after every way that keeps off." :spec (a/num-in 0 nil)}})
+
+(defn zone-penalty
+  "Seconds to add to a way's quote for the cells in {:dig :place :plug} that the zone rules refuse (a plug is placed from a
+  cell the body is not at), 0 when none."
+  [c {:keys [dig place plug]}]
+  (let [in (access/rules-input c)]
+    (if (or (some #(access/trespass-refusal in :dig %) dig)
+            (some #(access/trespass-refusal in :place %) place)
+            (some #(access/trespass-refusal (assoc in :feet nil) :place %) plug))
+      (settings/get settings ::trespass-s)
+      0)))
+
+(defn enclosed?
+  "Whether the world shows the body shut in: a roof within :roof-height over no open cell round the feet, or, with the call's
+  :room way, a roof over a closed room."
+  [c]
+  (let [p (:primitives c)
+        roof-height (:roof-height (:args c))]
+    (boolean (and (not (sh-sense/head-in-block? p))
+                  (or (dig-cells/sealed-in? p :walls roof-height)
+                      (and (ctx/way? c :room) (sh-sense/roofed? p roof-height) (reach/closed-room? p (sh-sense/feet p))))))))
 
 (defn placed
   "The spent summary and the blocks placed so far ({:cell [x y z] :item name}), for an ending's data."

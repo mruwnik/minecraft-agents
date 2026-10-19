@@ -13,9 +13,9 @@
  [{:name "dig-in-walls-sealed"
    :time :night
    :body {:inventory [["cobblestone" 16]]}
-   :act [[:job (jobs.survival.dig-in {})]]
-   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :dig-in.unsealed} :for-s 60 :until {:source :job :kind :dig-in.sealed}}]
+   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
+   :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :shut-in.unsealed} :for-s 60 :until {:source :job :kind :shut-in.sealed}}]
    :after [[:not-block [17 0 16] "air"] [:not-block [15 0 16] "air"] [:not-block [16 0 17] "air"] [:not-block [16 0 15] "air"]
            [:not-block [17 1 16] "air"] [:not-block [15 1 16] "air"] [:not-block [16 1 17] "air"] [:not-block [16 1 15] "air"]
            [:not-block [16 2 16] "air"]]}

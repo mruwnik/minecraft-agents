@@ -38,7 +38,7 @@
   cells are under rock and left. One cell per round, the lowest first, then the farthest from the body. Each
   asks may-place? right before. A refusal (:zone :footprint :own-body) books the cell open with its reason and
   is never forced. The cell must be within :reach of the eye (:out-of-reach). It is filled with the dug block's
-  drop if carried (unless a :spare item), else the first carried building block (jobs.survival.dig-in) that is
+  drop if carried (unless a :spare item), else the first carried building block (jobs.survival.shut-in) that is
   not :spare, else a :spare item that can be placed. Nothing to place: :no-blocks. A place that leaves the cell
   open: :place-failed.
 

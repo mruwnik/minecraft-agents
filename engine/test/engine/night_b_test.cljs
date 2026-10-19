@@ -132,7 +132,7 @@
           (is (= [[:roof-failed]] (mapv #(mapv :reason (:sites %)) (st/emitted seen :shelter.relocated)))
               "moved once, after the failed site, with dig-in's stop reason")
           (is (= [] (st/entries eng :night-site)) "tonight's failed sites are forgotten at morning")
-          (is (= [] (st/entries eng :dig-in-futile)) "dig-in's failed sites too: the next night digs there again")
+          (is (= [] (st/entries eng :shut-in-failed)) "dig-in's failed sites too: the next night digs there again")
           (is (empty? (st/emitted seen :shelter.exposed))))))))
 
 (deftest a-relocation-site-is-not-by-a-known-zombie
@@ -217,16 +217,16 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time night :inventory st/dirt-stack :blocks st/floor})]
-          (core/submit! eng '(jobs.survival.dig-in) {})
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (await (core/tick! eng))
           (is (= 10 (count (st/calls p "place"))) "walled and roofed in one call")
           (is (= [] (:list (core/state eng)))))
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks (merge st/ground st/floor)})]
           (st/refuse-placing! p)
-          (core/submit! eng '(jobs.survival.dig-in) {})
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (await (core/tick! eng))
           (is (= 3 (count (st/calls p "dig"))))
-          (is (= [:roof-failed] (mapv :reason (st/emitted seen :stopped))))
+          (is (= [:no-way] (mapv :reason (st/emitted seen :stopped))))
           (is (= [] (:list (core/state eng)))))))))
 
 ;; ------------------------------------------------------------------ review follow-ups
@@ -258,7 +258,7 @@
                              (when (= 2 n)
                                (reset! seen-sites (mapv :reason (st/entries eng :night-site)))
                                (.setTime (.-world p) st/noon))
-                             (if (= :dig-in k) :continue (await (call c k sym a))))))
+                             (if (= :shut-in k) :continue (await (call c k sym a))))))
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
           (set! ctx/call call)
@@ -274,7 +274,7 @@
           (st/refuse-placing! p)
           (st/on-wait! p (fn [n] (if (< n 10) (swap! clock + 660000) (.setTime (.-world p) st/noon))))
           (set! ctx/call (fn ^:async f [c k sym a]
-                           (when (= :dig-in k) (swap! tries inc))
+                           (when (= :shut-in k) (swap! tries inc))
                            (await (call c k sym a))))
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))

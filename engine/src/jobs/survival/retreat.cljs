@@ -109,7 +109,7 @@
   Needs nothing to start (no conditions); with no real danger near and no flight under way it is done at once. Ends done {:fled [ids] :ended :gone|:far|:lost|:closed|:hidden|:keeps-off|:none},
   nothing-possible :cannot-escape {:fled [ids]}, or limit-reached. Quote: time (0, ::mean-s, ##Inf).
   Memory: one :threat entry per mob fled (jobs.lib.threats); the third from one mob within 5 min warns hostile.chased.
-  A cell in another's zone is used only as a last resort (retreat.trespass-last-resort warning).")
+  A cell in another's zone is used only as a last resort (shut-in.trespass-last-resort warning).")
 
 (a/defargs args
   {:radius {:doc "hostiles within this many blocks start a flight" :spec (a/num-in 0 nil) :default 8}

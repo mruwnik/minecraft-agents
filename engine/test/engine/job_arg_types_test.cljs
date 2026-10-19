@@ -18,7 +18,7 @@
                 '(jobs.storage.deposit {:keep [1 2]})
                 '(jobs.storage.withdraw {:items true})
                 '(jobs.storage.withdraw {:items ["a"]})
-                '(jobs.survival.dig-in {:use {:blocks false}})
+                '(jobs.survival.shut-in {:use {:blocks false}})
                 '(jobs.survival.retreat {:use {:tools true}})
                 '(jobs.survival.retreat {:use {:blocks {:x "a"}}})]]
     (is (string? (expr/problem registry/jobs form)) (pr-str form))))
@@ -44,8 +44,8 @@
                 '(jobs.items.obtain {:item "stick" :count 0})
                 '(jobs.storage.deposit {:free "text"})
                 '(jobs.storage.deposit {:ignore-zones? 3})
-                '(jobs.survival.dig-in {:max-places 0})
-                '(jobs.survival.dig-in {:enclose "text"})
+                '(jobs.survival.shut-in {:max-places 0})
+                '(jobs.survival.shut-in {:wall-value "text"})
                 '(jobs.survival.retreat {:radius "text"})
                 '(jobs.survival.retreat {:max-places -7})]]
     (is (string? (expr/problem registry/jobs form)) (pr-str form)))
@@ -55,7 +55,7 @@
                 '(jobs.items.obtain {:item "stick" :count 64})
                 '(jobs.items.obtain {:item "stick" :count 100})
                 '(jobs.storage.deposit {:free 2})
-                '(jobs.survival.dig-in {:max-places 4 :enclose true})
+                '(jobs.survival.shut-in {:max-places 4 :for :night :ways #{:walls}})
                 '(jobs.survival.retreat {:radius 8 :max-places 6})]]
     (is (nil? (expr/problem registry/jobs form)) (pr-str form))))
 

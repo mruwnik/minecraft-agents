@@ -168,7 +168,7 @@
       (nil? (lb/pick c blocks)) (do (forget!) :failed)
       :else
       (do (when (seal/off-centre? p) (await (seal/centre! c)))
-          (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
+          (access/trespass! c "shut-in" (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
           (case (await (place-seal! c (take max-places (remove #(and (not (some #{%} cells)) (access/trespass-refusal c :place %))
                                                                  (dig-cells/bottom-up p cells (sh-sense/feet p))))))
             :failed :failed

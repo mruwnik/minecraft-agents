@@ -86,7 +86,7 @@
   (and (air? p [x y z]) (air? p [x (inc y) z]) (not (air? p [x (dec y) z]))))
 
 (defn ^:async dig-in! [{:keys [eng] :as s}]
-  (core/submit! eng '(jobs.survival.dig-in) {})
+  (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
   (await (run-until-empty s 20)))
 
 (defn ^:async leave-at-dawn!
@@ -205,12 +205,12 @@
       (fn ^:async t []
         (let [{:keys [eng p seen out] :as s} (setup)]
           (await (dig-in! s))
-          (is (= [[false nil]] (mapv (juxt :resealed :attention) (emitted seen :dig-in.sealed))) "the first seal is reported")
+          (is (= [[false nil]] (mapv (juxt :resealed :attention) (emitted seen :shut-in.sealed))) "the first seal is reported")
           (fake/remove-block! p [0 63 0])
           (await (dig-in! s))
           (is (not (air? p [0 63 0])) "the roof is back")
-          (is (= [[false nil] [true :notice]] (mapv (juxt :resealed :attention) (emitted seen :dig-in.sealed))))
-          (is (re-find #"again" (:text (last (emitted seen :dig-in.sealed)))))
+          (is (= [[false nil] [true :notice]] (mapv (juxt :resealed :attention) (emitted seen :shut-in.sealed))))
+          (is (re-find #"again" (:text (last (emitted seen :shut-in.sealed)))))
           (is (= {:x 0 :y 64 :z 0} (:start (last (entries eng :shelter)))) "the new entry keeps the pit's start")
           (await (leave-at-dawn! s))
           (is (= :out (:reason @out)))
@@ -344,7 +344,7 @@
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (setup {:inventory [{:name "iron_pickaxe" :count 1} {:name "oak_log" :count 20}]
                                             :blocks (assoc (ground) "0,66,0" "stone")})]
-          (core/submit! eng '(jobs.survival.dig-in {:enclose true}) {})
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
           (await (run-until-empty s 40))
           (let [entry (last (entries eng :shelter))
                 placed (frequencies (map #(.-item (.-args %)) (calls p "place")))]
@@ -361,7 +361,7 @@
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (setup {:inventory [{:name "iron_pickaxe" :count 1} {:name "cobblestone" :count 20}]
                                             :blocks (assoc (ground) "0,66,0" "stone")})]
-          (core/submit! eng '(jobs.survival.dig-in {:enclose true}) {})
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
           (await (run-until-empty s 40))
           (let [entry (last (entries eng :shelter))]
             (is (seq (:take-back entry)) "cobblestone walls are listed for take-back")
@@ -376,7 +376,7 @@
       (fn ^:async t []
         (let [{:keys [eng] :as s} (setup {:inventory [{:name "iron_pickaxe" :count 1} {:name "dirt" :count 20}]
                                           :blocks (assoc (ground) "0,66,0" "stone")})]
-          (core/submit! eng '(jobs.survival.dig-in {:enclose true}) {})
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
           (await (run-until-empty s 40))
           (is (nil? (:take-back (last (entries eng :shelter))))))))))
 
@@ -389,7 +389,7 @@
               {:keys [eng p] :as s} (setup {:inventory [{:name "iron_pickaxe" :count 1} {:name "dirt" :count 20}]
                                             :blocks (assoc (ground) "0,66,0" "stone")
                                             :zones [] :plans {"pen" pen}})]
-          (core/submit! eng '(jobs.survival.dig-in {:enclose true}) {})
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
           (await (run-until-empty s 40))
           (let [take-back (:take-back (last (entries eng :shelter)))
                 near-gate? (fn [{:keys [x y z]}] (<= (js/Math.hypot (- x 2) (- y 64) (- z 0)) 2))]
@@ -405,7 +405,7 @@
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (setup {:inventory [{:name "iron_pickaxe" :count 1} {:name "dirt" :count 20}]
                                             :blocks (assoc (ground) "0,66,0" "stone") :zones []})]
-          (core/submit! eng '(jobs.survival.dig-in {:enclose true}) {})
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
           (await (run-until-empty s 40))
           (let [view (mem/view (:store eng))
                 l (ledger/open-entries view)

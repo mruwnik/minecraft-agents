@@ -13,9 +13,9 @@
  :cases
  [{:name "dug-in-ends-the-night-in-one-round"
    :act [[:job (jobs.survival.night)]
-         [:await {:source :job :kind :dig-in.sealed} 60]
+         [:await {:source :job :kind :shut-in.sealed} 60]
          [:wait-s 10]] ; deliberate hold: the sealed body must sit through it with no hold/idle/re-dig before dawn
-   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60}
+   :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60}
             {:no-event {:source :job :kind :holding :data {:reason :sheltered}} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}
             {:no-event {:source :job :kind :idle} :for-s 120 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 120 :of-job true}]
@@ -23,10 +23,10 @@
   {:name "wet-site-is-left-for-another-pit-site"
    :blocks [[:fill [0 -6 0] [31 -1 31] "dirt"] [:set [17 -1 16] "water"]]
    :act [[:job (jobs.survival.night)]]
-   :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "; not "]} :within-s 30}
+   :expect [{:event {:source :job :kind :shut-in.failed :message [:contains "; not "]} :within-s 30}
             {:event {:source :job :kind :shelter.relocated} :within-s 60}
-            {:event {:source :job :kind :dig-in.sealed} :within-s 120}
-            {:no-event {:source :job :kind :shelter.exposed} :for-s 120 :until {:source :job :kind :dig-in.sealed}}]
+            {:event {:source :job :kind :shut-in.sealed} :within-s 120}
+            {:no-event {:source :job :kind :shelter.exposed} :for-s 120 :until {:source :job :kind :shut-in.sealed}}]
    :after [[:block [16 -1 16] "dirt"]]
    :limit-s 140}
   {:name "no-site-holds-exposed-then-stops-at-day"
@@ -46,7 +46,7 @@
    :time :night-exclusive
    :blocks [[:fill [0 -6 0] [31 -1 31] "dirt"] [:set [17 -1 16] "water"]]
    :act [[:job (jobs.survival.night)]
-         [:await {:source :job :kind :dig-in.sealed} 150]
+         [:await {:source :job :kind :shut-in.sealed} 150]
          [:await {:source :job :kind :completed :data {:name "jobs.survival.night"}} 120]
          [:rcon "execute positioned $X $Y $Z run setblock ~17 ~-1 ~16 minecraft:dirt"]
          ;; integer execute coordinates are block centres, so ~16 ~ ~16 is the start cell's centre (~16.5 lands on [17 0 17])
@@ -67,10 +67,10 @@
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.survival.night)]
-         [:await {:source :job :kind :dig-in.sealed} 120]]
+         [:await {:source :job :kind :shut-in.sealed} 120]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 30}
             {:event {:source :reflex :kind :ended :context {:reflex-id :hostile-near}} :within-s 90}
-            {:event {:source :job :kind :dig-in.sealed} :within-s 120}
+            {:event {:source :job :kind :shut-in.sealed} :within-s 120}
             {:no-event {:source :job :kind :shelter.exposed} :for-s 120}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 200 :of-job true}]
    :limit-s 230}
@@ -86,9 +86,9 @@
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.survival.night)]
-         [:await {:source :job :kind :dig-in.sealed} 120]]
+         [:await {:source :job :kind :shut-in.sealed} 120]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 30}
-            {:event {:source :job :kind :dig-in.sealed} :within-s 120}
+            {:event {:source :job :kind :shut-in.sealed} :within-s 120}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 200 :of-job true}]
    :limit-s 230}
   ;; Card 62278915 (fix b0462852): pit-site? needs ground the carried tools dig. A stone pad and no pickaxe: dig-in refuses at once
@@ -102,7 +102,7 @@
          [:wait-s 10] ; deliberate hold: exposed with no pickaxe, a pit must not start before dawn
          [:time-set 1000]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 90}
-            {:no-event {:source :job :kind :dig-in.sealed} :for-s 90 :until {:source :job :kind :stopped :data {:reason :exposed}}}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 90 :until {:source :job :kind :stopped :data {:reason :exposed}}}
             {:event {:source :job :kind :stopped :data {:reason :exposed}} :within-s 150 :of-job true}]
    :after [[:block [16 -1 16] "stone"]]
    :limit-s 170}
@@ -110,7 +110,7 @@
    :blocks [[:fill [8 -6 8] [24 -1 24] "stone"]]
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.survival.night)]]
-   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 90}
-            {:no-event {:source :job :kind :shelter.exposed} :for-s 90 :until {:source :job :kind :dig-in.sealed}}]
+   :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 90}
+            {:no-event {:source :job :kind :shelter.exposed} :for-s 90 :until {:source :job :kind :shut-in.sealed}}]
    :limit-s 100}
 ]}

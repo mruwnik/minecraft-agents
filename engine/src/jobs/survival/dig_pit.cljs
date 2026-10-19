@@ -2,9 +2,15 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.access :as access]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.solid :as solid]
+            [jobs.lib.tools :as tools]
+            [jobs.lib.util :as u]
+            [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.plug-way :as way]
+            [jobs.survival.retreat-flight :as flight]
             [jobs.survival.retreat-pit :as pit]))
 
 (def doc
@@ -17,10 +23,11 @@
   laid a cave or fluid open). The pit is never dug into what the body sees as fluid, a hazard or open air, and it is planned again
   when the body has left its column. Lava a dig lays open is filled first (:on-lava :seal). Every plug goes to the scaffold ledger
   with :for (default :danger, ledger :retreat-plug, taken back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote:
-  time (##Inf when no pit fits). Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.")
+  time (##Inf when no pit fits, or with :for :night when the pit would cut into a plan the body made, :spared; a cell another's zone refuses adds plug-way's ::trespass-s). Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.")
 
 (a/defargs args
-  {:for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}
+  {:ignore-zones? :shared
+   :for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
    :radius {:doc "melee hostiles within this many blocks stand in the way of a cell" :spec (a/num-in 0 nil) :default pit/default-radius}
    :hand-clear-ms {:doc "a block the carried tools cannot harvest is dug by hand, once a block to roof with is in hand, when the hand breaks it within this many ms; default jobs.lib.tools quick-clear-ms" :spec (a/int-in 0 nil)}
@@ -28,7 +35,7 @@
 
 (a/defargs settings
   {::job-time-s {:default 90 :doc "Seconds a pit attempt may take." :spec (a/num-in 0 nil)}
-   ::pit-s {:default 12 :doc "Seconds a pit is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
+   ::pit-s {:default 12 :doc "Seconds a pit is guessed to take, for the quote, while a floor under it is not yet seen (with :for :night a pit that fits is priced by its digging)." :spec (a/num-in 0 nil)}})
 
 (def target [])
 
@@ -36,9 +43,65 @@
 
 (defn done? [c] (way/done? c :pit))
 
+(defn spared
+  "With :for :night, the verdict ({:zone :plan :cell}) of the first cell the pit plan digs that lies in a plan the body made (access/own-keep): not dug."
+  [c plan]
+  (when (= :night (:for (:args c)))
+    (let [in (access/rules-input c {:spare-own? true})]
+      (some #(access/own-keep in %) (concat (:prep plan) (mapcat :dig (:steps plan)))))))
+
+(defn spared-stop
+  "The stop of a pit plan the body's own zone or plan forbids, nil when none."
+  [c plan]
+  (when-let [{:keys [zone plan cell]} (spared c plan)]
+    {:stop :spared
+     :text (str "the pit would cut into the body's own " (if zone (str "zone " zone) (str "plan " plan)) " at " (pr-str cell) "; not digging")}))
+
+(defn assess
+  "{:plan p} for a pit that fits (p is nil while only a floor not yet seen rules it out: the pit looks first; not so for :night,
+  which looks before it asks), else {:stop stop} (retreat-pit/stop-of, or :spared)."
+  [c]
+  (let [feet (sh-sense/feet (:primitives c))
+        blocks (flight/blocks c)
+        plan (pit/pit-plan c feet blocks)
+        stop (if plan (spared-stop c plan) (pit/stop-of c blocks feet))]
+    (cond
+      (and (not plan) (:unseen stop) (not= :night (:for (:args c)))) {:plan nil}
+      stop {:stop stop}
+      :else {:plan plan})))
+
+(defn why-not
+  "The stop (retreat-pit/stop-of's {:stop reason :text}) that rules a pit out here, nil when one may fit."
+  [c]
+  (:stop (assess c)))
+
+(defn ^:async look!
+  "A look at the roof's surroundings and the side columns the body has not sensed (retreat-pit/plan-of!), so the quote reads what a pit would."
+  [c]
+  (await (pit/plan-of! c (flight/blocks c)))
+  nil)
+
+(defn priced-name
+  "The block name a dig of cell is priced by: what is seen there, else the nearest seen solid block above it (the ground the pit is
+  dug into: dirt stays dirt below the surface), else the rock guess."
+  [p cell]
+  (or (u/seen-name p cell)
+      (->> (range 1 (inc (dig-cells/rock-depth))) (keep #(u/seen-name p (update cell :y + %))) (filter solid/solid?) first)
+      (dig-cells/rock-name p cell)))
+
+(defn dig-seconds
+  "Seconds the plan's cells take to dig with the best carried tool or the hand."
+  [c plan]
+  (let [p (:primitives c)]
+    (/ (reduce + (map #(tools/clear-ms p (priced-name p %)) (concat (:prep plan) (mapcat :dig (:steps plan))))) 1000)))
+
 (defn quote-of [c]
-  (way/quote-of c (if (pit/quote-fits? c (sh-sense/feet (:primitives c))) (settings/get settings ::pit-s) ##Inf)
-                (settings/get settings ::job-time-s)))
+  (let [{:keys [plan stop]} (assess c)]
+    (way/quote-of c (if stop
+                      ##Inf
+                      (+ (if (and plan (= :night (:for (:args c)))) (dig-seconds c plan) (settings/get settings ::pit-s))
+                         (if plan (way/zone-penalty c {:dig (concat (:prep plan) (mapcat :dig (:steps plan))) :plug (conj (:plugs plan) (:roof plan))}) 0)))
+                  (settings/get settings ::job-time-s))))
 
 (defn ^:async step!
   "One step of the pit: its plan is made once and kept in job memory, made again when the body has left its column. :done,
@@ -46,8 +109,8 @@
   [c]
   (let [kept (:pit (ctx/mem c))
         plan (if (and kept (pit/pit-index kept (sh-sense/feet (:primitives c)))) kept (await (pit/plan! c)))]
-    (if (:stop plan)
-      (way/stop! c plan)
+    (if-let [stop (or (:stop plan) (when-not kept (spared-stop c plan)))]
+      (way/stop! c stop)
       (do (ctx/update-mem! c assoc :pit plan)
           (let [r (await (pit/pit-round! c plan))]
             (if (:stop r)

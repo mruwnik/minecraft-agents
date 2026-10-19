@@ -1,9 +1,9 @@
-(ns engine.dig-in-followups-test
+(ns engine.shut-in-pit-followups-test
   "dig-in's zigzag pit: up-front fluid checks, the straight column only for a bad cell it refuses, a glance at unseen
   side columns, no side column with a hostile, and a bounded roof placement."
   (:require [cljs.test :refer [deftest is async]]
             [engine.test-util :as tu]
-            [engine.dig-in-seen-test :as seen]
+            [engine.shut-in-pit-seen-test :as seen]
             [jobs.survival.retreat-pit :as pit]))
 
 (def tunnel
@@ -21,7 +21,7 @@
 (defn ^:async run-seeing! [spec cells & [args]]
   (let [p (seen/sensing spec)]
     (await (see-cells! p cells))
-    (await (seen/tick-out! (seen/setup (seen/hover-over-digs! p) 'jobs.survival.dig-in (or args {}))))))
+    (await (seen/tick-out! (seen/setup (seen/hover-over-digs! p) 'jobs.survival.shut-in (seen/night (or args {})))))))
 
 (def surface (for [x (range -3 4) z (range -3 4) y [64 65]] [x y z]))
 
@@ -57,7 +57,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as s} (await (run-seeing! {:blocks tunnel} [[0 65 0]]))]
+        (let [{:keys [p] :as s} (await (run-seeing! {:blocks tunnel} [[0 65 0]] {:ways #{:pit}}))]
           (is (empty? (seen/failed s)))
           (is (seq (seen/digs p)) "the side column was glanced at, so the zigzag was dug"))))))
 
@@ -75,7 +75,7 @@
         (let [p (seen/hover-over-digs! (await (seen/see-surface! (seen/sensing {:blocks seen/ground}))))
               n (atom 0)
               _ (.override (.-world p) "place" (fn ^:async f [_ _ _] (swap! n inc) #js {:status "occupied"}))
-              s (await (seen/tick-out! (seen/setup p 'jobs.survival.dig-in {})))]
+              s (await (seen/tick-out! (seen/setup p 'jobs.survival.shut-in (seen/night {}))))]
           (is (<= @n 5) "bounded")
           (is (re-find #"does not seal" (str (:text (first (seen/failed s)))))))))))
 
@@ -86,4 +86,4 @@
         (let [s (await (seen/run-pit! {:blocks seen/ground :inventory [{:name "iron_pickaxe" :count 1}]
                                        :drops {"stone" "coal"}}))]
           (is (some #(re-find #"nothing to roof the pit with" (str (:text %))) (seen/failed s)))
-          (is (= [:stopped :no-blocks] ((juxt :status :reason) @(:out s))) "the call reports the stop, not success"))))))
+          (is (= [:stopped :no-way] ((juxt :status :reason) @(:out s))) "the call reports the stop, not success"))))))

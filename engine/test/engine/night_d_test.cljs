@@ -113,10 +113,9 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (cave-night [{:name "dirt" :count 8}])
               log (await (with-child-log #(tu/run-until-empty eng 160)))
-              enclose (first (filter #(and (= 'jobs.survival.dig-in (second %)) (contains? (nth % 2) :enclose)) log))]
+              enclose (first (filter #(and (= 'jobs.survival.shut-in (second %)) (= #{:walls} (:ways (nth % 2)))) log))]
           (is (= [:cave] (mapv :target (st/emitted seen :shelter.fled))))
-          (is (= true (:enclose (nth enclose 2))))
-          (is (= 1 (count (st/emitted seen :dig-in.sealed))))
+          (is (= 1 (count (st/emitted seen :shut-in.sealed))))
           (is (some? enclose) "walls it in, never a pit")
           (is (every? #(<= 21 (:x (st/arg-pos %))) (st/calls p "place")) "placed only at the cave"))))))
 
@@ -135,7 +134,7 @@
         (let [{:keys [eng seen]} (cave-night [{:name "oak_log" :count 20}])
               log (await (with-child-log #(tu/run-until-empty eng 160)))]
           (is (empty? (st/emitted seen :shelter.fled)))
-          (is (seq (filter #(and (= 'jobs.survival.dig-in (second %)) (not (:enclose (nth % 2)))) log))
+          (is (seq (filter #(and (= 'jobs.survival.shut-in (second %)) (not= #{:walls} (:ways (nth % 2)))) log))
               "dug in where it stood, not walled in at the cave"))))))
 
 (deftest the-night-hands-its-wall-value-to-dig-in
@@ -144,7 +143,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (cave-night [{:name "dirt" :count 8}] {:wall-value 5})
               log (await (with-child-log #(tu/run-until-empty eng 160)))
-              dig-ins (filter #(= 'jobs.survival.dig-in (second %)) log)]
+              dig-ins (filter #(and (= 'jobs.survival.shut-in (second %)) (contains? (:ways (nth % 2)) :walls)) log)]
           (is (seq dig-ins))
           (is (every? #(= 5 (:wall-value (nth % 2))) dig-ins) (pr-str (map #(nth % 2) dig-ins))))))))
 

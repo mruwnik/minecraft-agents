@@ -2,7 +2,7 @@
 ;; it stops "nothing to roof the pit with". The zigzag pit lays a log in the roof cell (y -2) and one in the side plug. Coal pad y -6..-1 under the body (the plot floor is over void).
 ;; Night: --allow-time --time-log <shared log>.
 {:defaults
- {:tags [:night :survival :dig-in]
+ {:tags [:night :survival :shut-in]
   :time :night
   :blocks [[:fill [8 -6 8] [24 -1 24] "coal_ore"]
            [:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
@@ -11,24 +11,24 @@
  :cases
  [{:name "carried-logs-roof-the-pit"
    :body {:inventory [["iron_pickaxe" 1] ["oak_log" 5]]}
-   :act [[:job (jobs.survival.dig-in {})]]
-   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :dig_in_failed} :for-s 60 :until {:source :job :kind :dig-in.sealed}}]
+   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
+   :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :shut-in.failed} :for-s 60 :until {:source :job :kind :shut-in.sealed}}]
    :after [[:block [16 -2 16] "oak_log"] [:item "oak_log" 3]]
    :limit-s 70}
   ;; The trigger's night ends with reflex/ended, not job/completed (a submitted job's end).
   {:name "night-trigger-roofs-with-carried-logs"
    :register [{:trigger :night}]
    :body {:inventory [["iron_pickaxe" 1] ["oak_log" 5]]}
-   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 60}
+   :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60}
             {:event {:source :reflex :kind :ended :context {:reflex-id :night} :data {:outcome :done}} :within-s 70}
             {:no-event {:source :job :kind :holding :data {:reason :sheltered}} :for-s 70 :until {:source :reflex :kind :ended :context {:reflex-id :night}}}]
    :after [[:block [16 -2 16] "oak_log"]]
    :limit-s 80}
   {:name "no-logs-nothing-to-roof"
    :body {:inventory [["iron_pickaxe" 1]]}
-   :act [[:job (jobs.survival.dig-in {})]]
-   :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "nothing to roof the pit with"]} :within-s 40 :of-job true}
-            {:event {:source :job :kind :stopped :data {:reason :no-blocks}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :dig-in.sealed} :for-s 40 :until {:source :job :kind :dig_in_failed :message [:contains "nothing to roof the pit with"]}}]
+   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
+   :expect [{:event {:source :job :kind :shut-in.failed :message [:contains "nothing to roof the pit with"]} :within-s 40 :of-job true}
+            {:event {:source :job :kind :stopped :data {:reason :no-way}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 40 :until {:source :job :kind :shut-in.failed :message [:contains "nothing to roof the pit with"]}}]
    :limit-s 50}]}

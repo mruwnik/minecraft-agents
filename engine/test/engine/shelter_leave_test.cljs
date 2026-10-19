@@ -23,7 +23,7 @@
   "A body dug in at night by dig-in submitted directly (no shelter job), then the time set to day; the setup map."
   [world]
   (let [s (st/setup (merge {:time st/night :inventory st/dirt-stack :blocks st/floor} world))]
-    (core/submit! (:eng s) '(jobs.survival.dig-in) {})
+    (core/submit! (:eng s) '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
     (await (st/tick-n (:eng s) 25))
     (is (= [:built] (mapv :state (st/entries (:eng s) :shelter))) "dug in")
     (.setTime (.-world (:p s)) st/noon)

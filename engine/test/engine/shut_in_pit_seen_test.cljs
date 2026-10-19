@@ -1,4 +1,4 @@
-(ns engine.dig-in-seen-test
+(ns engine.shut-in-pit-seen-test
   "dig-in's pit reads through perception (Q98): a cell inside rock is unknown until the body looks; it looks at what each
   dig laid open and refuses a floor, fluid or air it sees before it steps into the hole. The primitives are wrapped."
   (:require [cljs.test :refer [deftest is async]]
@@ -23,6 +23,11 @@
   (let [p (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory kit :time 14000} spec))
         per (perception/create (fake-raw/create p) {:now (constantly 1000000)})]
     (perception/wrap p per)))
+
+(defn night
+  "The args of a night shut-in (jobs.survival.shut-in): the room, walls and pit ways, or with :enclose only the walls."
+  [args]
+  (merge {:ways (if (:enclose args) #{:walls} #{:room :walls :pit}) :for :night} (dissoc args :enclose)))
 
 (defn setup [p job args]
   (let [clock (atom 1000000)
@@ -57,13 +62,13 @@
   p)
 
 (defn ^:async run-pit! [spec]
-  (await (tick-out! (setup (await (see-surface! (sensing spec))) 'jobs.survival.dig-in {}))))
+  (await (tick-out! (setup (await (see-surface! (sensing spec))) 'jobs.survival.shut-in (night {})))))
 
 (defn calls [p kind] (mapv #(js->clj (.-args %) :keywordize-keys true)
                            (filter #(= kind (.-name %)) (.-calls (.-world p)))))
 (defn digs [p] (mapv (juxt :x :y :z) (map :pos (calls p "dig"))))
 (defn feet-y [p] (js/Math.floor (.-y (.-pos (.self p)))))
-(defn failed [{:keys [seen]}] (filter #(= :dig_in_failed (:kind %)) @seen))
+(defn failed [{:keys [seen]}] (filter #(= :shut-in.failed (:kind %)) @seen))
 
 (deftest a-pit-over-clean-rock-is-dug-and-roofed-on-what-the-body-saw-of-the-surface
   (async done
@@ -72,7 +77,7 @@
         (let [{:keys [p seen]} (await (run-pit! {:blocks ground}))]
           (is (= [[1 64 0] [0 64 0] [0 63 0] [1 63 0] [1 62 0]] (digs p)) "zigzag: no dig under the feet")
           (is (= 62 (feet-y p)))
-          (is (empty? (filter #(= :dig_in_failed (:kind %)) @seen))))))))
+          (is (empty? (filter #(= :shut-in.failed (:kind %)) @seen))))))))
 
 (defn hover-over-digs!
   "A dig leaves the body where it stands for the moment (the fall into the hole takes ticks on a server): the job decides
@@ -88,13 +93,13 @@
   p)
 
 (defn ^:async run-hover! [spec & [args]]
-  (await (tick-out! (setup (hover-over-digs! (await (see-surface! (sensing spec)))) 'jobs.survival.dig-in (or args {})))))
+  (await (tick-out! (setup (hover-over-digs! (await (see-surface! (sensing spec)))) 'jobs.survival.shut-in (night (or args {}))))))
 
 (deftest lava-seen-under-the-hole-is-not-stepped-into-when-it-is-left-unsealed
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as s} (await (run-hover! {:blocks (assoc ground "0,62,0" "lava")} {:on-lava :stop}))]
+        (let [{:keys [p] :as s} (await (run-hover! {:blocks (assoc ground "0,62,0" "lava")} {:on-lava :stop :ways #{:pit}}))]
           (is (= [[1 64 0] [0 64 0] [0 63 0]] (digs p)) "the body drops no further than the side column")
           (is (= 64 (feet-y p)))
           (is (= 1 (count (failed s))))
@@ -104,7 +109,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as s} (await (run-hover! {:blocks (assoc ground "0,62,0" "air")}))]
+        (let [{:keys [p] :as s} (await (run-hover! {:blocks (assoc ground "0,62,0" "air")} {:ways #{:pit}}))]
           (is (= 64 (feet-y p)))
           (is (re-find #"air.*laid open" (str (:text (first (failed s)))))))))))
 
@@ -130,7 +135,7 @@
                                (fake/swap-self! p assoc :pos at)
                                (when (= 63 (.-y (.-pos a))) (fake/set-block! p [0 63 0] "water"))
                                r)))
-              s (await (tick-out! (setup p 'jobs.survival.dig-in {})))]
+              s (await (tick-out! (setup p 'jobs.survival.shut-in (night {:ways #{:pit}}))))]
           (is (= 64 (feet-y p)) "the body stays over the flooded hole")
           (is (re-find #"water" (str (:text (first (failed s)))))))))))
 
@@ -147,7 +152,7 @@
                            (reset! flowed true)
                            (fake/set-block! p [0 63 0] "lava"))
                          r)))
-        s (await (tick-out! (setup p 'jobs.survival.dig-in args)))]
+        s (await (tick-out! (setup p 'jobs.survival.shut-in (night args))))]
     (assoc s :p p)))
 
 (deftest lava-laid-open-in-the-hole-is-sealed-with-a-carried-block-and-the-pit-goes-on
@@ -163,7 +168,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as s} (await (run-lava-in-hole! {:on-lava :stop}))]
+        (let [{:keys [p] :as s} (await (run-lava-in-hole! {:on-lava :stop :ways #{:pit}}))]
           (is (not-any? #{{:x 0 :y 63 :z 0}} (map :pos (calls p "place"))) "nothing placed into the lava")
           (is (= 64 (feet-y p)))
           (is (re-find #"lava" (str (:text (first (failed s)))))))))))
@@ -176,7 +181,7 @@
         _ (add-watch (fake/state raw) ::stood
                      (fn [_ _ _ w] (swap! stood conj (fake/block-name w (mapv js/Math.floor (fake/body-pos w))))))
         p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000)}))
-        s (await (tick-out! (setup (await (see-surface! p)) 'jobs.survival.dig-in args)))]
+        s (await (tick-out! (setup (await (see-surface! p)) 'jobs.survival.shut-in (night args))))]
     (assoc s :stood @stood)))
 
 (deftest a-pit-never-drops-the-body-onto-lava-it-has-not-seen
@@ -200,7 +205,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as s} (await (tick-out! (setup (sensing {:blocks ground}) 'jobs.survival.dig-in {})))]
+        (let [{:keys [p] :as s} (await (tick-out! (setup (sensing {:blocks ground}) 'jobs.survival.shut-in (night {}))))]
           (is (empty? (failed s)) "no :no-roof-support from ground the body never looked at")
           (is (= 62 (feet-y p)) "three down: nothing beside the start cell, the roof goes in the ground layer")
           (is (seq (calls p "place")) "roofed"))))))

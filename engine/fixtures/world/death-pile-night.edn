@@ -13,7 +13,7 @@
  :cases
  [{:name "night-respawn-fetches-the-pile-before-sealing-in"
    :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 200}
-            {:no-event {:source :job :kind :dig-in.sealed} :for-s 200 :until {:source :job :kind :recover-drops.decided}}]
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 200 :until {:source :job :kind :recover-drops.decided}}]
    :after [[:item "raw_iron" 24]]}
   {:name "far-pile-in-the-open-waits-for-day-and-shelters"
    ;; card 18d5778f: respawn late at night 136 blocks from the pile with no bed under the open sky: the pile lasts until morning, so

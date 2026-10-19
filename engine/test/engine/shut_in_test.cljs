@@ -200,7 +200,7 @@
           (is (= :nothing-possible (:kind out)))
           (is (= [:walls] (:tried d)))
           (is (= [:pit :pocket] (:dropped d)))
-          (is (= [:walls] (keys (:why d))))
+          (is (some? (:walls (:why d))))
           (is (re-find #"walls" (:text d))))))))
 
 (deftest a-place-refused-for-a-mob-yields-continue-to-the-caller

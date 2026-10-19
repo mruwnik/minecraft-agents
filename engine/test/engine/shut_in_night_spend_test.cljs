@@ -1,8 +1,9 @@
-(ns engine.dig-in-spend-test
+(ns engine.shut-in-night-spend-test
   "dig-in keeps valuable blocks (logs, planks: jobs.lib.cost item-value) for tools: it digs a pit instead of walling with
   them, walls with them only when no pit can be dug, and says which blocks it spent."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.shut-in-pit-seen-test :as seen]
             [engine.shelter-support :as st]
             [engine.test-util :as tu :refer [run-until-empty]]))
 
@@ -15,7 +16,7 @@
 
 (defn ^:async run-dig! [world & [args]]
   (let [{:keys [eng p seen]} (st/setup (assoc world :time st/night))]
-    (core/submit! eng (list 'jobs.survival.dig-in (or args {})) {})
+    (core/submit! eng (list 'jobs.survival.shut-in (seen/night (or args {}))) {})
     (await (run-until-empty eng 20))
     {:p p :seen seen}))
 
@@ -39,7 +40,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen]} (await (run-dig! {:inventory [{:name "dirt" :count 12} logs] :blocks st/floor}))
-              ev (first (st/emitted seen :dig-in.sealed))]
+              ev (first (st/emitted seen :shut-in.sealed))]
           (is (nil? (get (placed p) "oak_log")))
           (is (= {"dirt" 10} (:spent ev)))
           (is (re-find #"10 dirt" (:text ev))))))))
@@ -49,7 +50,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen]} (await (run-dig! {:inventory [{:name "oak_log" :count 20}] :blocks roofed} {:enclose true}))
-              ev (first (st/emitted seen :dig-in.sealed))]
+              ev (first (st/emitted seen :shut-in.sealed))]
           (is (pos? (get (placed p) "oak_log" 0)))
           (is (= {"oak_log" (get (placed p) "oak_log")} (:spent ev)))
           (is (re-find #"oak_log" (:text ev))))))))
@@ -77,8 +78,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time st/night :inventory [logs] :blocks dirt-floor})]
-          (tu/seeing-within p 1.5)
-          (core/submit! eng '(jobs.survival.dig-in) {})
+          (tu/seeing-within p 3.5)
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (await (run-until-empty eng 20))
           (is (seq (st/calls p "dig")))
           (is (<= (get (placed p) "oak_log" 0) 1) (pr-str (placed p))))))))

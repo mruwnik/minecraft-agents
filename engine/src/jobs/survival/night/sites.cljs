@@ -12,7 +12,7 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
-            [jobs.survival.dig-in :as dig-in]
+            [jobs.survival.shut-in-night :as shut-night]
             [jobs.survival.dig-in-cells :as dig-cells]
             [clojure.string :as str]))
 
@@ -24,7 +24,7 @@
   {:jobs.survival.night.sites/home-radius {:default 12 :doc "A remembered roofed place (:roofed-places) this close is walked into, whatever the light, before a bed is used or put down; a carried bed is never put down in the open while one is." :spec (a/num-in 0 nil)}
    :jobs.survival.night.sites/max-sites {:default 4 :doc "Failed sites a night tries before holding exposed." :spec (a/int-in 0 nil)}
    :jobs.survival.night.sites/relocate-reach {:default 16 :doc "How far (blocks) a night looks for a spot to dig in." :spec (a/int-in 0 nil)}
-   :jobs.survival.night.sites/retry-after-ms {:default 660000 :doc "How long a body holds exposed before it tries to dig in again (past dig-in's own 10-minute give-up)." :spec (a/int-in 0 nil)}
+   :jobs.survival.night.sites/retry-after-ms {:default 660000 :doc "How long a body holds exposed before it tries to dig in again (past shut-in's own 10-minute give-up)." :spec (a/int-in 0 nil)}
    :jobs.survival.night.sites/max-retries {:default 2 :doc "Dig-in retries after a night went exposed." :spec (a/int-in 0 nil)}
    :jobs.survival.night.sites/max-flees {:default 3 :doc "Walks to somewhere safer a night tries." :spec (a/int-in 0 nil)}
    :jobs.survival.night.sites/ground-candidates {:default 16 :doc "Seen ground cells costed per flee: the nearest ones." :spec (a/int-in 0 nil)}
@@ -48,21 +48,21 @@
   (ctx/remember! c :night-site {:pos pos :reason reason} site-policy))
 
 (defn forget-failed!
-  "The night is over: forget tonight's failed sites and dig-in's own (:dig-in-futile), so the next night tries them again."
+  "The night is over: forget tonight's failed sites and shut-in's own (:shut-in-failed), so the next night tries them again."
   [c]
   (ctx/forget-where! c :night-site (constantly true))
-  (ctx/forget-where! c :dig-in-futile (constantly true)))
+  (ctx/forget-where! c :shut-in-failed (constantly true)))
 
 (defn failed-here?
-  "Whether a site that failed tonight lies within dig-in's futile radius of the feet."
+  "Whether a site that failed tonight lies within shut-in's futile radius of the feet."
   [c]
   (let [here (sh-sense/feet (:primitives c))]
-    (boolean (some #(<= (u/dist here %) (dig-in/futile-radius))
+    (boolean (some #(<= (u/dist here %) (shut-night/futile-radius))
                    (map :pos (failed-sites c))))))
 
 (defn pit-site?
   "Whether feet cell f looks like a place a pit can be dug, by what a player sees from the surface: standing room, dry
-  ground the carried tools dig, no fluid beside it. How deep the ground goes is left to dig-in, which stops a bad site."
+  ground the carried tools dig, no fluid beside it. How deep the ground goes is left to shut-in, which stops a bad site."
   [p {:keys [x y z] :as f}]
   (let [at (fn [dy] (u/seen-name p {:x x :y (+ y dy) :z z}))
         below {:x x :y (dec y) :z z}]
@@ -72,10 +72,10 @@
          (not (dig-cells/lateral-fluid p below)))))
 
 (defn clear-of-failed?
-  "Whether feet cell f is at least futile-radius+1 from every failed site (tonight's and dig-in's :dig-in-futile entries)."
+  "Whether feet cell f is at least futile-radius+1 from every failed site (tonight's and shut-in's :shut-in-failed entries)."
   [c f]
-  (let [failed (concat (map :pos (failed-sites c)) (map (comp :pos :data) (ctx/entries c :dig-in-futile)))]
-    (every? #(>= (u/dist % f) (inc (dig-in/futile-radius))) failed)))
+  (let [failed (concat (map :pos (failed-sites c)) (map (comp :pos :data) (ctx/entries c :shut-in-failed)))]
+    (every? #(>= (u/dist % f) (inc (shut-night/futile-radius))) failed)))
 
 (defn zone-refused?
   "Whether another's zone, claim or plan refuses the pit under feet cell f (three cells down) or the block at f."
@@ -86,13 +86,13 @@
 
 (defn relocation-site
   "The nearest feet cell within relocate-reach of the failed site the body is at (its feet when none: a body in its
-  pit looks from the surface), at least futile-radius+1 from every failed site (tonight's and dig-in's
-  :dig-in-futile entries), where a pit can be dug (pit-site?), outside the full-cost radius of every known mob the body would flee (threats/danger-near-fn: a
+  pit looks from the surface), at least futile-radius+1 from every failed site (tonight's and shut-in's
+  :shut-in-failed entries), where a pit can be dug (pit-site?), outside the full-cost radius of every known mob the body would flee (threats/danger-near-fn: a
   site by a zombie only walks the body back into it), or nil. With :free?, only cells no zone, claim or plan refuses."
   [c & [{:keys [free?]}]]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
-        here (first (filter #(<= (u/dist feet %) (dig-in/futile-radius)) (map :pos (failed-sites c))))
+        here (first (filter #(<= (u/dist feet %) (shut-night/futile-radius)) (map :pos (failed-sites c))))
         danger-near (threats/danger-near-fn c)
         {:keys [x y z]} (or here feet)
         offsets (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz)))
@@ -182,7 +182,7 @@
   "The failed site tonight whose pit the body stands in (below it, within the futile radius), or nil."
   [c]
   (let [feet (sh-sense/feet (:primitives c))]
-    (first (filter #(and (< (:y feet) (:y %)) (<= (u/dist feet %) (dig-in/futile-radius))) (map :pos (failed-sites c))))))
+    (first (filter #(and (< (:y feet) (:y %)) (<= (u/dist feet %) (shut-night/futile-radius))) (map :pos (failed-sites c))))))
 
 (defn retry-after-ms [] (settings/get settings :jobs.survival.night.sites/retry-after-ms))
 
@@ -194,7 +194,7 @@
   [c]
   (let [{:keys [pos at retries]} (:exposed (ctx/mem c))]
     (and pos (< (or retries 0) (max-retries))
-         (or (>= (u/dist (sh-sense/feet (:primitives c)) pos) (inc (dig-in/futile-radius)))
+         (or (>= (u/dist (sh-sense/feet (:primitives c)) pos) (inc (shut-night/futile-radius)))
              (>= (- (ctx/now c) at) (retry-after-ms))))))
 
 (defn max-flees [] (settings/get settings :jobs.survival.night.sites/max-flees))

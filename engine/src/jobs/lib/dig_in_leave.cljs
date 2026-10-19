@@ -1,5 +1,5 @@
 (ns jobs.lib.dig-in-leave
-  "Leaving the shelter jobs.survival.dig-in built (leave!): jobs.survival.night calls it by day."
+  "Leaving the shelter jobs.survival.shut-in built for the night (leave!): jobs.survival.night calls it by day."
   (:require [jobs.lib.access :as access]
             [jobs.lib.tidy :as tidy]
             [engine.contract :as contract]
@@ -206,7 +206,7 @@
                     :continue))))))
 
 (defn ^:async leave!
-  "One round of getting the body out of the shelter dig-in built. The shelter job calls it by day.
+  "One round of getting the body out of the shelter shut-in built. The shelter job calls it by day.
   Progress is in the caller's job memory under :dig-out. The stair is its child :dig-out-<i>.
   Resolves to :continue while working, else {:status :done|:stopped :reason :out|:unsafe|:no-way-out :at [x y z]}
   plus :why (:unsafe), :heading (the stair that got it out) or :tries ({:heading :reason :cell} per stopped stair).

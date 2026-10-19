@@ -1,7 +1,7 @@
-;; Card 193c7aa0 (138d763b, a289a411): night dig-in with the body inside a pen it made (plan by "$body") does not cut the pen's floor or
-;; fence: the cell is spared (dig_in_failed warn naming it), the floor under the body and the ring stand. Dirt mass x 8..24, z 8..24, y 0..9;
+;; Card 193c7aa0 (138d763b, a289a411): night shut-in with the body inside a pen it made (plan by "$body") does not cut the pen's floor or
+;; fence: the cell is spared (shut-in.failed warn naming it), the floor under the body and the ring stand. Dirt mass x 8..24, z 8..24, y 0..9;
 ;; fence ring x 13..19, z 13..19 on the surface (y 10), floor y 9 inside; body inside at [16.5 10 16.5].
-;; Should-fail (dug): the same body on the same dirt with no plan digs its pit (dig-in.sealed).
+;; Should-fail (dug): the same body on the same dirt with no plan digs its pit (shut-in.sealed).
 ;; Night: run with --allow-time --time-log <the shared time log>.
 {:defaults
  {:tags [:night :survival :animals]
@@ -11,19 +11,19 @@
   :blocks [[:fill [8 0 8] [24 9 24] "dirt"] [:fill [13 10 13] [19 10 19] "oak_fence" :hollow]]
   :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1]]}}
  :cases
- [{:name "dig-in-inside-own-planned-pen-is-spared"
+ [{:name "shut-in-inside-own-planned-pen-is-spared"
    :plans [{:id "pen" :metadata {:by "$body"}
             :parts [{:id "n" :box [#at [13 10 13] #at [19 10 13]] :want "oak_fence"}
                     {:id "s" :box [#at [13 10 19] #at [19 10 19]] :want "oak_fence"}
                     {:id "w" :box [#at [13 10 14] #at [13 10 18]] :want "oak_fence"}
                     {:id "e" :box [#at [19 10 14] #at [19 10 18]] :want "oak_fence"}
                     {:id "floor" :box [#at [14 9 14] #at [18 9 18]] :want [:any "dirt"]}]}]
-   :act [[:job (jobs.survival.dig-in {})]]
-   :expect [{:event {:source :job :kind :dig_in_failed :level :warn} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :dig-in.sealed} :for-s 60 :until {:source :job :kind :dig_in_failed}}]
+   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
+   :expect [{:event {:source :job :kind :shut-in.failed :level :warn} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 60 :until {:source :job :kind :shut-in.failed}}]
    :after [[:block [16 9 16] "dirt"] [:block [13 10 16] "oak_fence"] [:block [19 10 16] "oak_fence"]]
    :limit-s 90}
-  {:name "dig-in-without-a-plan-digs-the-pit"
-   :act [[:job (jobs.survival.dig-in {})]]
-   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 90 :of-job true}]
+  {:name "shut-in-without-a-plan-digs-the-pit"
+   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
+   :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 90 :of-job true}]
    :limit-s 120}]}

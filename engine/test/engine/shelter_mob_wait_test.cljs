@@ -30,14 +30,14 @@
 (defn ^:async run-timed!
   "Submit the job; the clock moves 500 ms a tick."
   [{:keys [eng clock]} job]
-  (core/submit! eng (list job) {})
+  (core/submit! eng job {})
   (loop [i 0]
     (when (and (< i 600) (seq (:list (core/state eng))))
       (swap! clock + 500)
       (await (core/tick! eng))
       (recur (inc i)))))
 
-(defn failed [seen] (some #(when (= :dig_in_failed (:kind %)) %) @seen))
+(defn failed [seen] (some #(when (= :shut-in.failed (:kind %)) %) @seen))
 
 (deftest dig-in-walls-wait-out-a-mob-in-a-wall-cell
   (async done
@@ -45,7 +45,7 @@
       (fn ^:async t []
         (let [{:keys [p seen clock] :as s} (setup {:inventory [{:name "dirt" :count 12}] :blocks floor})]
           (.override (.-world p) "place" (mob-in-cell-until clock (+ @clock 3000)))
-          (await (run-timed! s 'jobs.survival.dig-in))
+          (await (run-timed! s '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})))
           (is (nil? (failed seen)))
           (is (= "dirt" (.-name (.blockAt p (tu/pos 0 66 0)))) "the roof went on once the mob left")
           (is (= "dirt" (.-name (.blockAt p (tu/pos 1 65 0))))))))))
@@ -56,7 +56,7 @@
       (fn ^:async t []
         (let [{:keys [p seen clock] :as s} (setup {:inventory [{:name "dirt" :count 12}] :blocks floor})]
           (.override (.-world p) "place" (mob-in-cell-until clock (+ @clock 600000)))
-          (await (run-timed! s 'jobs.survival.dig-in))
+          (await (run-timed! s '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})))
           (is (some? (failed seen)))
           (is (re-find #"sheep" (:text (failed seen)))))))))
 
@@ -80,7 +80,7 @@
       (fn ^:async t []
         (let [{:keys [p seen clock] :as s} (setup {:inventory [{:name "dirt" :count 12}] :blocks floor})]
           (.override (.-world p) "place" (mob-occupied-mob clock))
-          (await (run-timed! s 'jobs.survival.dig-in))
+          (await (run-timed! s '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})))
           (is (nil? (failed seen)) "a later mob gets the full wait, not the stale first-refusal time"))))))
 
 ;; ------------------------------------------------------------------ the retreat's seal

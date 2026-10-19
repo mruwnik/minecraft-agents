@@ -14,7 +14,6 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
             [jobs.lib.seal :as seal]
-            [jobs.survival.dig-in :as dig-in]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.dig-pocket :as dig-pocket]
             [jobs.survival.retreat-pit :as pit]))

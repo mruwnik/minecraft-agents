@@ -115,7 +115,7 @@
                                          :states {"1,64,0" {:open true :half "lower" :facing "east"}
                                                   "1,65,0" {:open true :half "upper" :facing "east"}}
                                          :inventory [{:name "cobblestone" :count 20}]})]
-          (core/submit! eng '(jobs.survival.dig-in) {})
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (dotimes [_ 4] (await (core/tick! eng)))
           (is (false? (:open (get-in @(fake/state p) [:states [1 64 0]]))) "the door is shut")
           (is (= "oak_door" (.-name (.blockAt p (tu/pos 1 64 0)))) "not dug")
