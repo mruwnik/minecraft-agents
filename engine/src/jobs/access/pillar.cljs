@@ -338,7 +338,7 @@
     (finish! c l (give-up :mob-in-cell :at cell :mob (:name mob)))))
 
 (defn ^:async place!
-  "Write the intent, jump-place one block, confirm it when the cell shows it. Three failed jumps in a row give up;
+  "Write the intent, jump-place one block, confirm it when the jump reports it (the sensed cell may lag). Three failed jumps in a row give up;
   a failure with the body shoved off or airborne is a knockback and does not count towards the three, nor does one
   with a mob in the cell (until mob-waits of such waits)."
   [c l {:keys [cell item]}]
@@ -347,7 +347,7 @@
         _ (ledger/remember! c l)
         r (await (ctx/act c :jumpPlace #js {:item item :count 1}))]
     (if (pos? (or (.-placed r) 0))
-      (do (when (= item (block-at cell)) (ledger/remember! c (ledger/confirm l cell)))
+      (do (ledger/remember! c (ledger/confirm l cell))
           (ctx/update-mem! c #(-> % (assoc :failures 0) (dissoc :mob-waits)))
           :again)
       (let [shoved? (displaced? c (:base (ctx/mem c)) (:home (ctx/mem c)))

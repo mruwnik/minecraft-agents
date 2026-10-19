@@ -282,6 +282,22 @@
             (is (= (mapv (fn [c] [c :placed]) (column base 6)) (mapv (juxt :cell :state) (the-ledger again))))
             (is (= (column base 6) (:cells (first (of-kind seen :pillar.done)))))))))))
 
+(deftest a-block-the-jump-reports-placed-stays-in-the-ledger-while-the-sensed-cell-lags
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (setup {})
+              cell (first (column base 1))]
+          (.override (.-world p) "jumpPlace"
+                     (fn [token args impl]
+                       (let [r (impl token args)]
+                         (swap! (fake/state p) update :blocks dissoc cell)
+                         r)))
+          (core/submit! eng (list job {:height 1}) {})
+          (await (ticks s eng 6))
+          (is (finished? eng))
+          (is (= [[cell :placed]] (mapv (juxt :cell :state) (the-ledger eng)))))))))
+
 (deftest a-restart-after-the-block-went-in-but-before-it-was-confirmed-counts-it-once
   (async done
     (tu/run-async done

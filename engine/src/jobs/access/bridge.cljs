@@ -217,14 +217,14 @@
     {:uses (cond-> {:job-time [(* 0.3 n) n (max n (time-s))]} item (assoc :items {item [0 n n]}))}))
 
 (defn ^:async place!
-  "Write the intent, place one block, confirm it when the cell shows it. Three failed places in a row give up."
+  "Write the intent, place one block, confirm it when the place reports it (the sensed cell may lag). Three failed places in a row give up."
   [c l block-at {:keys [cell item]}]
   (let [l (ledger/intend l {:cell cell :item item :before (block-at cell) :job (:id c) :purpose purpose})
         _ (ledger/remember! c l)
         [x y z] cell
         r (await (ctx/act c :place #js {:pos #js {:x x :y y :z z} :item item}))]
     (if (= "placed" (.-status r))
-      (do (when (= item (block-at cell)) (ledger/remember! c (ledger/confirm l cell)))
+      (do (ledger/remember! c (ledger/confirm l cell))
           (ctx/update-mem! c assoc :failures 0)
           :again)
       (let [failures (inc (:failures (ctx/mem c) 0))
