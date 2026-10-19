@@ -185,4 +185,10 @@
       (doseq [[file content] contents]
         (when (or (not (file-exists? file)) update-tools) (.writeFileSync fs file content #js {:mode 493}))
         (.chmodSync fs file 493))
+      (when update-tools
+        (doseq [name (array-seq (.readdirSync fs bin))
+                :let [file (.join path bin name)]
+                :when (and (not (contains? contents file)) (file-exists? file)
+                           (str/starts-with? (.readFileSync fs file "utf8") (str "#!/usr/bin/env node\n" wrapper-marker)))]
+          (.unlinkSync fs file)))
       (clj->js {:ok true :directory dir :body body :world world :updated-tools (boolean update-tools) :adopted-existing (boolean adopt-existing)}))))

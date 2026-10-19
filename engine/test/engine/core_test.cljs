@@ -1621,6 +1621,17 @@
       (is (= [:hurt] (mapv :id (:register (core/state again)))))
       (is (some #(and (= :system (:source %)) (= :dropped (:kind %))) @seen)))))
 
+(deftest a-saved-hold-form-is-dropped-on-restore-and-the-rest-of-the-register-starts
+  (let [dir (tu/tmp-dir)
+        {:keys [eng]} (setup {} dir)]
+    (core/register-reflex! eng {:trigger :hurt})
+    (core/register-reflex! eng {:trigger :never :job '(count)})
+    (swap! (:state eng) update :register
+           (fn [r] (mapv #(if (= :never (:id %)) (assoc % :job '(hold (count))) %) r)))
+    (let [[again seen] (restore-with dir registry triggers)]
+      (is (= [:hurt] (mapv :id (:register (core/state again)))))
+      (is (some #(and (= :system (:source %)) (= :dropped (:kind %))) @seen)))))
+
 (def stale-registry
   "The registry after a job dropped its :old arg."
   (assoc registry 'walk (assoc (tu/job walk-round) :args {:pos nil})))
