@@ -65,18 +65,21 @@
    :after [[:not-block [24 0 24] "dirt"]]
    :limit-s 180}
   {:name "dead-end-seal-is-taken-back-once-the-skeleton-is-gone"
+   :time :day
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}
-              {:trigger :scaffold-left :args {} :job (jobs.access.cleanup {:within 32})}]
+              {:trigger :scaffold-left :args {} :job (jobs.access.cleanup {:within 32 :checks {:fit? (always)}})}]
    :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [5 0 16] [29 1 16] "air"]
             [:set [8 1 16] "torch"] [:set [14 1 16] "torch"]]
    :body {:at [5.5 0 16.5] :inventory [["cobblestone" 20]]}
    :act [[:summon "skeleton" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :job :kind :retreat_sealed} 40]
          [:wait-s 5]
-         [:rcon "kill @e[type=skeleton,tag=wt,$BOX]"]]
+         [:rcon "kill @e[type=skeleton,tag=wt,$BOX]"]
+         [:rcon "give $BODY iron_pickaxe 1"]]
    :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
-            {:event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :within-s 150}]
+            {:event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :within-s 150}
+            {:event {:source :job :kind :cleanup.done :data {:removed 2}} :within-s 150}]
    :after [[:not-block [6 0 16] "cobblestone"] [:not-block [6 1 16] "cobblestone"]]
    :limit-s 170}
   {:name "zombie-diagonal-to-a-stair-hole-body-survives"

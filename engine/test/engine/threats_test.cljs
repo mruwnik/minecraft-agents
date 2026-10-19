@@ -88,13 +88,15 @@
     (reset! now 1000)
     (mem/view s)))
 
-(deftest a-flight-counts-for-the-fled-memory-window-only
-  (let [v (fled-view 0 {:mob "skeleton" :pos {:x 10 :y 64 :z 0}})]
-    (is (true? (threats/fled-recently? v)))
-    (is (false? (settings/with-settings {::threats/fled-memory-ms 500} #(threats/fled-recently? v))))
-    (is (false? (threats/fled-recently? (fled-view))))))
-
 (def skeleton-9 {:id 9 :name "skeleton" :kind "hostile" :pos {:x 10 :y 64 :z 0}})
+
+(deftest a-flight-counts-for-the-fled-memory-window-only
+  (let [v (fled-view 0 {:mob "skeleton" :id 9 :pos {:x 10 :y 64 :z 0}})
+        p (tu/fake-on-floor {:entities [skeleton-9]})]
+    (is (true? (threats/fled-recently? p v)))
+    (is (false? (settings/with-settings {::threats/fled-memory-ms 500} #(threats/fled-recently? p v))))
+    (is (false? (threats/fled-recently? p (fled-view))))
+    (is (false? (threats/fled-recently? (tu/fake-on-floor {}) v)) "the fled mob was killed: no danger to keep away from")))
 
 (deftest a-fled-mob-is-near-a-spot-within-the-radius-of-where-it-was-last-known
   (let [v (fled-view 0 {:mob "skeleton" :id 9 :pos {:x 10 :y 64 :z 0}})

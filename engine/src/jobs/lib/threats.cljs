@@ -43,17 +43,17 @@
   [view]
   (filterv #(< (- (:now view) (:t %)) (fled-memory-ms)) (mem/entries view :threat)))
 
-(defn fled-recently?
-  "Whether a flight left a :threat entry within ::fled-memory-ms."
-  [view]
-  (boolean (seq (fresh-threats view))))
-
 (defn listed-threats
   "The :threat entries among entries whose mob the client still tracks by id (a mob that blew up or died is gone; a
   hidden one is still listed): a filter only, so a spot is never read for a mob that is not there."
   [p entries]
   (let [listed (set (map #(.-id %) (array-seq (.entities p #js {:radius 1000 :kind "hostile" :max 1000}))))]
     (filterv #(contains? listed (:id (:data %))) entries)))
+
+(defn fled-recently?
+  "Whether a flight left a :threat entry within ::fled-memory-ms for a mob the client still lists (a killed one is no danger)."
+  [p view]
+  (boolean (seq (listed-threats p (fresh-threats view)))))
 
 (defn fled-near?
   "Whether a listed mob fled from in the last ::fled-memory-ms was last known within ::fled-radius of spot {:x :y :z}."

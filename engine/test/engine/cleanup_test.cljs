@@ -229,12 +229,14 @@
     (is (false? (fires? (doto (at 1000) (fake/add-entity! {:id 9 :name "zombie" :kind "hostile" :pos {:x 30 :y 64 :z 0} :health 20})) dirt []))
         "a hostile within the dawn radius, past the 16 the old check looked at")))
 
-(deftest the-trigger-holds-off-after-a-flight
-  (let [p (tu/fake {:blocks {"0,64,0" "dirt"}})
+(deftest the-trigger-holds-off-after-a-flight-from-a-mob-that-is-still-there
+  (let [mob {:id 9 :name "skeleton" :kind "hostile" :pos {:x 80 :y 64 :z 0} :health 20}
+        p (doto (tu/fake {:blocks {"0,64,0" "dirt"}}) (fake/add-entity! mob))
         fled (doto (trigger-store [(entry [0 64 0])] [])
-               (mem/write! :threat {:mob "skeleton" :pos {:x 8 :y 64 :z 0}} threats/threat-policy))]
+               (mem/write! :threat {:mob "skeleton" :id 9 :pos {:x 8 :y 64 :z 0}} threats/threat-policy))]
     (is (false? (fires? p fled [])) "a skeleton fled from a moment ago is out of sight, not gone")
-    (is (true? (settings/with-settings {::threats/fled-memory-ms 0} #(fires? p fled []))))))
+    (is (true? (settings/with-settings {::threats/fled-memory-ms 0} #(fires? p fled []))))
+    (is (true? (fires? (tu/fake {:blocks {"0,64,0" "dirt"}}) fled [])) "the skeleton was killed: its flight holds nothing off")))
 
 (deftest cleanup-within-narrows-to-the-body-and-near-wins
   (let [c {:primitives (tu/fake {:blocks {"0,64,0" "dirt"}})}]

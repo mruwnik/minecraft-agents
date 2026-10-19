@@ -42,7 +42,7 @@
                 (some? (world/zones kn))
                 (or (settings/get settings ::at-night) (not (sh-sense/night? p)))
                 (or (settings/get settings ::with-hostile)
-                    (and (dawn/calm? p) (not (threats/fled-recently? memory))))
+                    (and (dawn/calm? p) (not (threats/fled-recently? p memory))))
                 (some (complement #(too-deep? p %))
                       (ledger/offered memory (block-at-of p) nil
                                       (ledger/near-of-args {:primitives p} args))))))
