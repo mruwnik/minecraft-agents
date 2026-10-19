@@ -149,7 +149,7 @@
 (defn commit-tree!
   "Commit the column, species and base of the tree t to fell."
   [c t]
-  (ctx/update-mem! c #(-> % (merge (select-keys t [:column :species :base])) (assoc :partials 0) (dissoc :logs-seen)))
+  (ctx/update-mem! c #(-> % (merge (select-keys t [:column :species :base])) (assoc :partials 0) (dissoc :logs-seen :relooked)))
   t)
 
 (defn mark-all-unreachable!
@@ -298,6 +298,14 @@
 (defn tree-result [c]
   {:base (:base (ctx/mem c)) :logs (:dug (ctx/mem c) 0) :axe (axe-status c)})
 
+(defn relook-cells
+  "The cells of logs last seen of the tree that are unknown now (the body moved, e.g. to collect a drop), once per tree:
+  they are looked at before the tree counts as down."
+  [c]
+  (let [m (ctx/mem c)]
+    (when-not (:relooked m)
+      (filterv #(sense/unknown? (:primitives c) %) (map (fn [{:keys [x y z]}] [x y z]) (:logs-seen m))))))
+
 (defn ^:async ground-step
   "One piece of the tree from the ground: the axe, the next log dug (walking in reach first), the tree ended when no log
   is left. :again, :continue or the ending."
@@ -305,11 +313,15 @@
   (let [logs (await (sense/decide! c ::logs #(tree-logs c radius) {:retry? empty?}))]
     (cond
       (empty? logs)
-      (if (= :continue (await (come-down! c)))
-        :continue
-        (if (zero? (:dug (ctx/mem c) 0))
-          (ctx/end c :condition-failed {:reason :gone :base (:base (ctx/mem c))} nil)
-          (ctx/end c :done nil (tree-result c))))
+      (if-let [unseen (not-empty (relook-cells c))]
+        (do (ctx/update-mem! c assoc :relooked true)
+            (await (sense/look-at-unknown! c unseen (sense/max-looks)))
+            :again)
+        (if (= :continue (await (come-down! c)))
+          :continue
+          (if (zero? (:dug (ctx/mem c) 0))
+            (ctx/end c :condition-failed {:reason :gone :base (:base (ctx/mem c))} nil)
+            (ctx/end c :done nil (tree-result c)))))
 
       :else
       (do
