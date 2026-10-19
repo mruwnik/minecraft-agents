@@ -49,8 +49,8 @@
    :act [[:summon "cow" [10.5 0 18.5] "{NoAI:1b}"]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    ;; a cow that stays put is given up as :jammed after the trip over (herd.lure-lost is for an animal that follows, then stops)
-   :expect [{:event {:source :job :kind :herd.gave-up :data {:reason :short}} :within-s 200 :of-job true}
-            {:no-event {:source :job :kind :completed :data {:reason :brought}} :for-s 200 :until {:source :job :kind :herd.gave-up}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :short}} :within-s 200 :of-job true}
+            {:no-event {:source :job :kind :completed :data {:reason :brought}} :for-s 200 :until {:source :job :kind :stopped}}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 0]]
    :limit-s 260}
   ;; the pen is planned and pen-gate is registered: the reflex must not fight the open gate, and the run must end (no toggle loop)
@@ -63,8 +63,7 @@
    :act [[:summon "cow" [3.5 0 20.5]]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}
-            {:no-event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :for-s 240 :until {:source :job :kind :completed}}
-            {:count-event {:source :job :kind :gate.opened} :for-s 240 :at-least 1 :at-most 12}]
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :for-s 240 :until {:source :job :kind :completed}}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:block [18 0 16] "oak_fence_gate[open=false]"]]}
   ;; the cow stands behind the start (seen on the first look round); the run walks to the pen first, so the cow is out of sight when leashing begins: the herd walks back to where it stood and looks (79d7a22f)
@@ -81,5 +80,5 @@
    :act [[:summon "cow" [10.5 1 18.5]]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}
-            {:no-event {:source :job :kind :herd.gave-up :data {:reason :no-gate}} :for-s 240 :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind :stopped :data {:reason :no-gate}} :for-s 240 :until {:source :job :kind :completed}}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]]}]}

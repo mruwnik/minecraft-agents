@@ -13,7 +13,9 @@
             [jobs.animals.escort :as escort]
             [jobs.lib.watch :as watch]
             [jobs.animals.herd-run :as hr :refer [adults after-shut! pen-box pen-count-text cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now out-1 pause! read-pen release-step! set-phase! settle-out-ms shut-failed! shut-look-ms transient-keys]]
-            [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! go-then! let-go-cell look-wait! max-leaves min-depth on-gate? pen-refusal set-gate! settle-at! shut-side! shut-when-clear! survey! wait-clear! waited-ms]]
+            [jobs.lib.pace :as pace]
+            [jobs.animals.herd-survey :refer [pen-refusal survey!]]
+            [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! go-then! let-go-cell look-wait! max-leaves min-depth on-gate? set-gate! settle-at! shut-side! shut-when-clear! wait-clear! waited-ms]]
             [jobs.animals.herd-trip :refer [food-first! leash-next! pinned! remember-start! prune-led! regather! regather-or-lose! released! step-position!]]))
 
 (def doc
@@ -80,20 +82,26 @@
   (jobs.items.collect-drops) and leashing starts again once, with the :lead-broke animals forgiven. A second time ends :lost. An end with an animal on the lead lets it go where the body
   stands and shuts the gate from the body's side; a cut by the engine's limit or a cancel does the same in the job's cleanup.
 
-  One call is the whole run: it ends with the run, never yields. Waits for an animal to settle or a cell to clear are
+  Phases, in order (the run's memory :phase): survey (read the pen, pick the gate; a lure run gets its food first) ->
+  leash (lead or lure the next animal; none left or the pen full -> finish) -> approach -> clear-out -> line-up ->
+  open -> step -> shut-behind -> deep (let go, brought) -> exit -> clear-in -> exit-dash (open, pass, shut) -> census
+  -> back to leash. A pinned animal goes to retry-back/retry-shut/retry-out and line-up again, then give-up (:jammed).
+  A run that ends (end!) lets a led animal go (let-go), shuts the gate (shut-gate, going out first when the body is
+  inside) and finishes. The goal and can-run? are asked between steps (jobs.lib.pace/steps!).
+
+  One call is the whole run. Waits for an animal to settle or a cell to clear are
   jobs.time.noop pauses. A cut can leave the body unsafe (animal led, gate
   open, body in the pen); the next call restarts from what it sees: led with the body in the pen
   steps on from the nearest axis cell, led with the body outside goes back and lines up again, nobody led
   with the body in the pen goes out, nobody led with the gate open shuts it.
 
   Ends with result {:reason :inside n :target :brought [keys] :given-up {key reason}
-  :gate pos :escaped n :animals [{:kind :id :pos}] (the livestock on the pen cells)}. :inside is counted on the pen's cells at the end. Every reason but :brought and
-  :full also gives one warn herd.gave-up. An animal is booked brought once, however often it is led. Reasons:
+  :gate pos :escaped n :animals [{:kind :id :pos}] (the livestock on the pen cells)}. :inside is counted on the pen's cells at the end. An animal is booked brought once, however often it is led. Reasons:
   :brought (pen holds :target), :short (fewer than :target in the pen: some came, or none came and no other
   reason), :full,
   :no-pen, :leaky, :no-gate, :too-shallow, :unreachable (a walk was blocked), :gate-stuck, :lost,
   :no-food (a lure run found no food), :no-hold (the food would not stay in hand),
-  or the leash reason when nobody could be led. The body ends outside with the gate shut. Endings: done when the pen
+  :none (nobody left to fetch), or :no-leash with the leash child's ending as the :because. The body ends outside with the gate shut. Endings: done when the pen
   holds :target (:brought, :full) or the call's :least (default 1) animals were brought; else condition-failed for
   :no-pen, :leaky, :no-gate, :refused, :no-zones, :too-shallow, :no-food (the cause names the cell), nothing-possible
   with the reason for the rest; the data is the result, its :text naming the animals given up and why (or that none other was in reach). The count
@@ -167,8 +175,8 @@
   (cond/and bad-args pen-refusal))
 
 (defn done?
-  "Ok when the box holds :target adults before the run touched the gate (once it has, the run ends itself, outside
-  with the gate shut); the animals brought, and those still missing."
+  "Ok when the box holds :target adults before the run touched the gate, or once the run has wrapped up (in between, the
+  run ends itself, outside with the gate shut); the animals brought, and those still missing."
   [c]
   (let [box (pen-box c)
         target (:target (:args c))
@@ -176,7 +184,7 @@
         inside (count (filter #(animals/in-box? box (u/pos-of (.-pos %))) (adults c)))
         data [:units :animals :done (count (:brought m)) :left (max 0 (- target inside))
               :result {:reason :brought :inside inside :target target}]]
-    (if (and (nil? (:gate m)) (empty? (:led m)) (>= inside target))
+    (if (and (or (:finished m) (and (nil? (:gate m)) (empty? (:led m)))) (>= inside target))
       (apply contract/ok :brought (str "herd done: " (pen-count-text inside target)) data)
       (apply contract/later :herding (pen-count-text inside target) data))))
 
@@ -337,21 +345,20 @@
       :else (set-phase! c :shut-gate))))
 
 (defn ^:async round
-  "The whole run: steps until it ends. A round that starts unsafe restarts first (restart!). A step that changed no
-  memory and took under pace-ms is followed by a pause, so a step that keeps answering at once never spins."
+  "The whole run: steps until it ends (pace/steps!: the goal and can-run? are asked between steps). A round that starts
+  unsafe restarts first (restart!). A step that changed no memory and took under pace-ms is followed by a pause, so a
+  step that keeps answering at once never spins."
   [c]
   (animals/reserve-bait! c (:mob (:args c)))
   (ctx/update-mem! c update :origin #(or % (u/self-pos c)))
   (when-not (free-to-leave? c) (restart! c))
-  (loop []
-    (let [before (ctx/mem c)
-          from (ctx/now c)
-          r (await (step-once! c))]
-      (if (not= :continue r)
-        r
-        (do (when (and (= before (ctx/mem c)) (< (- (ctx/now c) from) (pace-ms)))
-              (await (pause! c :herd-step-waits)))
-            (recur))))))
+  (await (pace/steps! c (fn ^:async herd-step []
+                          (let [before (ctx/mem c)
+                                from (ctx/now c)
+                                r (await (step-once! c))]
+                            (when (and (= :continue r) (= before (ctx/mem c)) (< (- (ctx/now c) from) (pace-ms)))
+                              (await (pause! c :herd-step-waits)))
+                            (if (= :continue r) :again r))))))
 
 (defn ^:async cleanup
   "A run that ended by itself is left as it is. Cut by the limit, a cancel or a parent's end: an animal still on this body's lead is let go and an open gate

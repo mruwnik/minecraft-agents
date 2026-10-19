@@ -68,7 +68,12 @@
     (cond
       (= :continue e) :continue
       (= :leashed (get-in e [:data :reason])) (start-trip! c (get-in e [:data :animal]))
-      (and (empty? (:brought m)) (empty? (:given-up m))) (finish! c (or (get-in e [:data :reason]) (contract/cause-key e)))
+      (and (empty? (:brought m)) (empty? (:given-up m)))
+      (let [why (or (get-in e [:data :reason]) (contract/cause-key e))]
+        (cond
+          (#{:none :all-leashed} why) (finish! c :none)
+          (#{:refused :no-zones} why) (finish! c why)
+          :else (finish! c :no-leash {:because (select-keys e [:kind :cause])})))
       :else (finish! c nil))))
 
 (defn lead-possible?

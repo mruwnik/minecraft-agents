@@ -9,7 +9,7 @@
             [engine.hostile-test :as h]
             [engine.perception :as perception]
             [engine.test-util :as tu]
-            [jobs.animals.herd-pen :as hp]
+            [jobs.animals.herd-survey :as hs]
             [jobs.animals.herd-run :as hr]))
 
 (defn coarse-world
@@ -167,7 +167,7 @@
   ([unknown-cells looked why]
   (let [p #js {:sensedAt (fn [pos] (if (contains? unknown-cells [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} #js {}))}]
     (with-redefs [ctx/mem (constantly {:looked-pen looked})]
-      (hp/unseen-approach {:primitives p} {:why why :cell [5 64 5]})))))
+      (hs/unseen-approach {:primitives p} {:why why :cell [5 64 5]})))))
 
 (deftest an-approach-cell-never-seen-is-looked-at-first-and-a-looked-at-one-is-not-again
   (is (= [5 63 5] (unseen-approach-with #{[5 63 5] [5 65 5]} [])) "floor first")
@@ -178,4 +178,4 @@
 
 (deftest only-a-no-approach-refusal-looks-at-an-approach-cell
   (with-redefs [ctx/mem (constantly {})]
-    (is (nil? (hp/unseen-approach {:primitives #js {:sensedAt (fn [_] #js {:unknown true})}} {:why :other :cell [5 64 5]})))))
+    (is (nil? (hs/unseen-approach {:primitives #js {:sensedAt (fn [_] #js {:unknown true})}} {:why :other :cell [5 64 5]})))))

@@ -230,8 +230,6 @@
                       extra)]
     (ctx/update-mem! c assoc :finished true)
     (when (:gate m) (drop-gate! c))
-    (when-not (#{:brought :full} reason)
-      (ctx/emit! c :herd.gave-up :warn {:reason reason :text (str "herding stopped: " (name reason))}))
     (ctx/end c kind (when-not (= :done kind) (if (seq extra) (assoc extra :reason reason) reason)) (assoc result :text text))))
 
 (defn end!

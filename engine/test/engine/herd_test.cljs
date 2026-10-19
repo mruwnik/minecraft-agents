@@ -174,8 +174,7 @@
           (is (not (gate-open? s)) "the gate is shut")
           (is (< (self-x s) 10) "the body ends outside the pen")
           (is (= 2 (count-of s "lead")) "both leads are back")
-          (is (= 4 (count-of s "wheat")) "no food is used")
-          (is (empty? (events-of s :herd.gave-up))))))))
+          (is (= 4 (count-of s "wheat")) "no food is used"))))))
 
 (deftest one-cow-off-the-axis-six-out-is-led-through-the-gate-in-steps
   (async done
@@ -191,8 +190,7 @@
           (is (< (self-x s) 10) "the body ends outside")
           (is (= 1 (count-of s "lead")) "the lead is back")
           (is (= [false true false true] (mapv :was-open @log)) "open, shut behind the cow, open, shut from outside")
-          (is (= [0 0] (mapv :overlapping (filter :was-open @log))) "never a shut while the cow stood in the gate cell")
-          (is (empty? (events-of s :herd.gave-up))))))))
+          (is (= [0 0] (mapv :overlapping (filter :was-open @log))) "never a shut while the cow stood in the gate cell"))))))
 
 (deftest the-gate-is-held-before-every-open-and-gone-after-every-shut
   (async done
@@ -299,8 +297,7 @@
           (is (empty? (on-lead s)) "the cow is let go")
           (is (< (first (:pos (cow-of s 1))) 10) "outside")
           (is (not (gate-open? s)))
-          (is (every? zero? (map :overlapping (filter :was-open @log))))
-          (is (= 1 (count (events-of s :herd.gave-up)))))))))
+          (is (every? zero? (map :overlapping (filter :was-open @log)))))))))
 
 (defn ^:async run-until
   "Tick until pred holds on s, at most n ticks."
@@ -397,8 +394,7 @@
           (is (= :unreachable (:reason (done-event s))))
           (is (empty? (on-lead s)) "never left tethered to the body")
           (is (= 2 (count-of s "lead")))
-          (is (empty? (calls-of s "useOn")))
-          (is (= 1 (count (events-of s :herd.gave-up)))))))))
+          (is (empty? (calls-of s "useOn"))))))))
 
 (deftest a-pen-with-animals-keeps-them-in-while-the-gate-stands-open
   (async done
@@ -666,8 +662,7 @@
           (is (= :short (:reason e)))
           (is (= 1 (:inside e)))
           (is (= ["u1"] (:brought e)))
-          (is (not (gate-open? s)))
-          (is (= 1 (count (events-of s :herd.gave-up)))))))))
+          (is (not (gate-open? s))))))))
 
 (deftest no-food-carried-still-brings-the-animal
   (async done
@@ -681,17 +676,16 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[label w reason gave-up]
-                [["no lead or food" {:inventory [] :entities [(cow 1 4 3)]} :no-food 1]
-                 ["no cow outside" {:entities [(cow 9 13 3)]} :none 1]
-                 ["a gap in the fence: a start condition" {:entities [(cow 1 4 3)] :blocks {"16,64,3" "air"}} :leaky 0]
-                 ["no gate: a start condition" {:entities [(cow 1 4 3)] :blocks {gate-key "oak_fence"}} :no-gate 0]
-                 ["only a corner gate: a start condition" {:entities [(cow 1 4 3)] :blocks {gate-key "oak_fence" "10,64,0" "oak_fence_gate"}} :no-gate 0]]]
+        (doseq [[label w reason]
+                [["no lead or food" {:inventory [] :entities [(cow 1 4 3)]} :no-food]
+                 ["no cow outside" {:entities [(cow 9 13 3)]} :none]
+                 ["a gap in the fence: a start condition" {:entities [(cow 1 4 3)] :blocks {"16,64,3" "air"}} :leaky]
+                 ["no gate: a start condition" {:entities [(cow 1 4 3)] :blocks {gate-key "oak_fence"}} :no-gate]
+                 ["only a corner gate: a start condition" {:entities [(cow 1 4 3)] :blocks {gate-key "oak_fence" "10,64,0" "oak_fence_gate"}} :no-gate]]]
           (let [s (await (scenario {:target 2} w 20))]
             (is (= reason (:reason (refusal s))) label)
             (is (empty? (calls-of s "useOn")) label)
-            (is (empty? (on-lead s)) label)
-            (is (= gave-up (count (events-of s :herd.gave-up))) label)))))))
+            (is (empty? (on-lead s)) label)))))))
 
 ;; ------------------------------------------------------------------ the contract
 
@@ -794,8 +788,7 @@
           (is (= :gate-stuck (:reason (done-event s))))
           (is (empty? (on-lead s)))
           (is (not (gate-open? s)))
-          (is (empty? (held-entries s)))
-          (is (= 1 (count (events-of s :herd.gave-up)))))))))
+          (is (empty? (held-entries s))))))))
 
 (defn ignore-clicks-while-open!
   "Every gate click is counted in clicks and changes nothing while the gate is open."
@@ -919,8 +912,7 @@
           (is (= :lost (:reason e)))
           (is (= {"u1" :lead-broke} (:given-up e)))
           (is (= 2 (count (filter #(= "lead" (.. % -args -item)) (calls-of s "interact")))) "leashed twice, not more")
-          (is (empty? (calls-of s "useOn")) "the gate is never opened")
-          (is (= 1 (count (events-of s :herd.gave-up)))))))))
+          (is (empty? (calls-of s "useOn")) "the gate is never opened"))))))
 
 (deftest bringing-none-fails-the-job-with-the-reason-and-the-pen-state
   (async done
@@ -1362,7 +1354,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:target 1 :method :lead} {:entities [(cow 1 4 3)] :inventory [wheat]} 200))]
-          (is (= :no-lead (:reason (done-event s))))
+          (is (= :no-leash (:reason (done-event s))))
+          (is (some? (:because (done-event s))) "the leash child's ending is carried")
           (is (= #{} (cows-in-pen s))))))))
 
 (deftest a-lead-in-hand-is-preferred-by-auto
