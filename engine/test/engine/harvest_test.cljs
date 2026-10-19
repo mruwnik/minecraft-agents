@@ -347,12 +347,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [status ["failed" "no-item" "unreachable"]]
+        (doseq [[status calls-per-try] [["failed" 2] ["no-item" 1] ["unreachable" 1]]]
           (let [{:keys [eng p]} (start {:world one-cell})]
             (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status status}))
             (let [result (await (child-outcome eng job {} 100))]
               (is (= {:cut 1 :replanted 0 :bare [{:x 3 :y 64 :z 0}] :lost [] :gave-up false} (dissoc result :text :spent :spent-at)) status)
-              (is (= 3 (count (place-calls-at p 3))) status)
+              (is (= (* 3 calls-per-try) (count (place-calls-at p 3))) status)
               (is (= [] (:list (core/state eng))) status))))))))
 
 (def far-cell

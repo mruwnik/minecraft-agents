@@ -225,7 +225,8 @@
                          (await (impl token args)))))
           (let [result (await (child-outcome eng job {:box field-box} 100))]
             (is (= {:planted 8 :skipped [refused]} result))
-            (is (= 3 (count (filter #(= 3 (.-x (.-pos (.-args %)))) (filter #(= 3 (.-z (.-pos (.-args %)))) (calls p "place"))))))
+            (is (= 6 (count (filter #(= 3 (.-x (.-pos (.-args %)))) (filter #(= 3 (.-z (.-pos (.-args %)))) (calls p "place")))))
+                "three tries, each a refused place plus blocks.place's one retry")
             (is (= 1 (count (events-of seen :plant.gave-up))))
             (is (= 1 (count (events-of seen :plant.done))))))))))
 
