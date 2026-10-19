@@ -11,6 +11,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
+            [jobs.lib.reach :as reach]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.strip :as strip]
             [jobs.lib.tool-kind :as kind]
@@ -191,6 +192,14 @@
     [[0 1] [0 -1] [1 1] [1 -1] [-1 1] [-1 -1]]
     [[1 0] [-1 0] [1 1] [-1 1] [1 -1] [-1 -1]]))
 
+(defn walk-stop
+  "The coordinate to walk to from here toward far: the farthest stand? cell within hop, else the cell hop away. go-to refuses a
+  goal whose floor was never seen, and the rail cells of a dark corridor show before their floor does."
+  [stand? here far]
+  (let [dir (if (> far here) 1 -1)
+        reach-to (if (> (js/Math.abs (- far here)) hop) (+ here (* hop dir)) far)]
+    (or (first (filter stand? (range reach-to here (- dir)))) reach-to)))
+
 (defn ^:async look-end!
   "Walk to the segment's far end from the entry, hop cells at a time (each stop is a step: it sees and lights what stands
   there), and look round there once: :again, :continue or a stop."
@@ -201,7 +210,7 @@
         far (if (and ea (< (js/Math.abs (- ea from)) (js/Math.abs (- ea to)))) to from)
         [fx _ fz] (b/feet-cell c)
         here (if (= axis :x) fx fz)
-        stop-at (if (> (js/Math.abs (- far here)) hop) (+ here (* hop (if (> far here) 1 -1))) far)
+        stop-at (walk-stop #(let [[x cy z] (strip/at axis y line %)] (reach/seen-standable? (:primitives c) {:x x :y cy :z z})) here far)
         cell (strip/at axis y line stop-at)
         w (await (near/go-near! c cell 1))]
     (case w

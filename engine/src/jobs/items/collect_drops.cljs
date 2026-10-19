@@ -223,12 +223,6 @@
                        (cond-> {:reason :unseen :ids ids}
                          (seq lasts) (assoc :last lasts))))))
 
-(defn seen-standable?
-  "Whether cell is standable (jobs.lib.reach/standable-cell?) by the blocks the body has seen: its feet, head and floor cells all seen."
-  [p {:keys [x y z] :as cell}]
-  (and (every? #(u/seen-block p {:x x :y % :z z}) [(dec y) y (inc y)])
-       (reach/standable-cell? p cell (fn [x y z] (reach/kind-of (u/seen-block p {:x x :y y :z z}))))))
-
 (defn unseen-open?
   "Whether cell may be stood on though some of its feet, head or floor are unseen: every seen one is as a standable cell needs
   it, at least one is unseen. Walking there is how the body gets to look."
@@ -251,7 +245,7 @@
         cells (for [d dists dx [-1 0 1] dz [-1 0 1] :when (not (and (zero? dx) (zero? dz)))
                     dy [0 1 -1]
                     :let [cell {:x (+ ax (* d dx)) :y (+ ay dy) :z (+ az (* d dz))}]
-                    :when (seen-standable? p cell)]
+                    :when (reach/seen-standable? p cell)]
                 cell)
         seen-columns (set (map (juxt :x :z) cells))
         unseen (for [d dists dx [-1 0 1] dz [-1 0 1] :when (not (and (zero? dx) (zero? dz)))
@@ -279,7 +273,7 @@
   (let [queue (or (:search-queue (ctx/mem c))
                   (let [q (vec (search-cells c anchor))] (ctx/update-mem! c assoc :search-queue q) q))]
     (when-let [cell (first queue)]
-      (let [r (await (child/run!* c :search 'jobs.movement.go-to (walk-args c {:pos (u/cell-vec cell) :range (if (seen-standable? (:primitives c) cell) 0 1) :ways #{:walk :clear-seal}})))]
+      (let [r (await (child/run!* c :search 'jobs.movement.go-to (walk-args c {:pos (u/cell-vec cell) :range (if (reach/seen-standable? (:primitives c) cell) 0 1) :ways #{:walk :clear-seal}})))]
         (if (= :continue r)
           (if (>= (:search-waited (ctx/mem c) 0) (search-waits))
             :waited

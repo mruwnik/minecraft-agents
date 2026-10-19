@@ -127,6 +127,12 @@
               (boolean (and below (not (hazard-blocks (.-name below))))))))))
 
 
+(defn seen-standable?
+  "Whether cell is standable (jobs.lib.reach/standable-cell?) by the blocks the body has seen: its feet, head and floor cells all seen."
+  [p {:keys [x y z] :as cell}]
+  (and (every? #(u/seen-block p {:x x :y % :z z}) [(dec y) y (inc y)])
+       (standable-cell? p cell (fn [x y z] (kind-of (u/seen-block p {:x x :y y :z z}))))))
+
 (defn exits
   "How many of the four side columns of the body at feet [x y z] it can step into: a standable cell there one up, level
   or one down. open: a cell [x y z] taken as air (what if it were dug)."

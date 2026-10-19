@@ -4,7 +4,8 @@
             [engine.blocks-dig-test :as bd]
             [engine.fake :as fake]
             [engine.test-util :as tu]
-            [jobs.lib.strip :as strip]))
+            [jobs.lib.strip :as strip]
+            [jobs.strip.corridor :as corridor]))
 
 (def job 'jobs.strip.corridor)
 (def seg {:y 64 :axis :x :line 0 :from 0 :to 12 :open-ends #{}})
@@ -300,3 +301,11 @@
           (is (= [:impossible :no-tool] (await (ends (world :inventory (vec (take 2 kit))) args))))
           (is (= [:condition-failed :refused]
                  (await (ends (world :zones [{:name "farm" :min [0 60 -3] :max [12 70 3] :owner "Miles"}]) args)))))))))
+
+(deftest the-walk-stops-at-the-farthest-cell-whose-floor-is-seen
+  (is (= [3 3 -9 7 -3]
+         [(corridor/walk-stop #{1 2 3} 0 20)
+          (corridor/walk-stop #{1 2 3 11} 0 20)
+          (corridor/walk-stop #{-1 -9} -3 -20)
+          (corridor/walk-stop #{} 0 7)
+          (corridor/walk-stop #{} 0 -3)])))
