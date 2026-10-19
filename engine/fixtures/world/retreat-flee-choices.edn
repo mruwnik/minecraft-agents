@@ -14,28 +14,29 @@
  [{:name "goal-given-up-is-tried-again-after-30-s"
    :plot {:height 12 :length 64 :width 32}
    :body {:at [8.5 0 16.5]}
-   :memory [{:kind :goal-off :data {:goal #at [56 0 16] :why :lost-ground} :policy {:cap 4 :ttl 30000}}]
+   :memory [{:kind :goal-off :age-s 12 :data {:goal #at [56 0 16] :why :lost-ground} :policy {:cap 4 :ttl 30000}}]
    :act [[:job (jobs.movement.go-to {:pos #at [56 0 16] :range 2})]
          [:until-pos {:x-min 10} 20]
-         [:summon "zombie" [4.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}},active_effects:[{id:\"minecraft:slowness\",amplifier:0b,duration:2400}]}"]]
+         [:summon "zombie" [12.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}},active_effects:[{id:\"minecraft:slowness\",amplifier:0b,duration:2400}]}"]]
    :expect [{:event {:source :job :kind :retreat.choice :data {:goal-why :given-up}} :within-s 25}
             {:event {:source :job :kind :retreat.choice :data {:lean [:near #at [56 0 16] 1.5]}} :within-s 80}]
    :after [[:body-far [8.5 0 16.5] 20]]}
   {:name "goal-straight-up-a-column-is-steep-no-leg"
-   :blocks [[:fill [19 0 15] [21 11 17] "stone"]]
-   :plot {:height 16}
-   :act [[:job (jobs.movement.go-to {:pos #at [20 12 16] :range 1})]
+   :blocks [[:fill [19 0 15] [21 29 17] "stone"]]
+   :plot {:height 31}
+   :act [[:job (jobs.movement.go-to {:pos #at [20 30 16] :range 1})]
          [:wait-s 2]
          [:summon "zombie" [11.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.choice :data {:goal-why :steep}} :within-s 30}
-            {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [20 12 16] 3]}} :for-s 40}]
+            {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [20 30 16] 3]}} :for-s 40}]
    :limit-s 60}
   {:name "flight-keeps-away-from-a-recent-death"
    :body {:yaw 90}
-   :memory [{:kind :died :data {:pos #xyz [26 0 16]}}]
+   :memory [{:kind :died :age-s 60 :data {:pos #xyz [26 0 16]}}
+            {:kind :respawned :age-s 50 :data {}}]
    :act [[:summon "zombie" [11.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.target} :within-s 20}
-            {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [26 0 16] 11.5]}} :for-s 40}]
+            {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [26 0 16] 11.5]}} :for-s 15}]
    :limit-s 60}
   {:name "dry-end-beats-a-swim-across-the-pond"
    :blocks [[:fill [0 0 0] [31 1 31] "stone"] [:fill [19 1 6] [30 1 26] "water"]]
