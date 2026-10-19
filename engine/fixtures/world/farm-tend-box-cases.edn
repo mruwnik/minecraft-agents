@@ -41,8 +41,8 @@
             {:no-event {:source :job :kind #{:completed :stopped}} :for-s 30}]
    :after [[:block [10 0 16] "wheat[age=1]"]]}
   {:name "harvest-from-a-two-deep-hole-walks-out-and-cuts-every-crop"
-   ;; hole at x 6, z 15 (floor layer and one below), stone bottom; field x 10..12, z 15..17 with water at z 18
-   :blocks [[:set [6 -1 15] "air"] [:set [6 -2 15] "air"] [:set [6 -3 15] "stone"]
+   ;; hole at x 6, z 15 (floor layer and one below), stone bottom, dirt round the lower cell (the plot has air under its floor); field x 10..12, z 15..17 with water at z 18
+   :blocks [[:fill [5 -2 14] [7 -2 16] "dirt"] [:set [6 -1 15] "air"] [:set [6 -2 15] "air"] [:set [6 -3 15] "stone"]
             [:fill [10 -1 15] [12 -1 17] "farmland[moisture=7]"] [:fill [10 -2 18] [12 -2 18] "stone"] [:fill [10 -1 18] [12 -1 18] "water"]
             [:fill [10 0 15] [12 0 17] "wheat[age=7]"]]
    :body {:at [6.5 -2 15.5]}
