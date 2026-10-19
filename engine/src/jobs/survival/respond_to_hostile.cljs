@@ -103,11 +103,11 @@
 (def child-jobs {:fight 'jobs.combat.attack :flee 'jobs.survival.retreat})
 
 (defn hold?
-  "Whether the fight stays where it is: at night, with more than one hostile known (the ones in view are not all there are),
+  "Whether the fight stays where it is: in the dark, with more than one hostile known (the ones in view are not all there are),
   or with any when the body is shut in a closed room or its own shelter and :stay-inside is on."
   [c]
   (let [p (:primitives c)]
-    (boolean (and (sh-sense/night? p)
+    (boolean (and (sh-sense/dark-here? p)
                   (or (> (count (danger-q/known-hostiles p (hold-radius) {})) 1)
                       (and (:stay-inside (:args c)) (or (sh-sense/shut-in-room? p) (sh-inside/sheltered-in c))))))))
 

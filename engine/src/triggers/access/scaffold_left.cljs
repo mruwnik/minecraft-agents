@@ -6,7 +6,7 @@
     no cleanup held in the last 10 minutes
     within :within (32) blocks of the body (cleanup's :within), so a far scaffold never drags the body back to it
     not deeper below the feet than jobs.lib.ledger/max-below: cleanup would only hold it again
-  It holds only by day, past the dawn grace and with no known hostile near (jobs.lib.dawn/calm?), and not within
+  It holds only in the light, past the dawn grace and with no known hostile near (jobs.lib.dawn/calm?), and not within
   jobs.lib.threats/fled-memory-ms of a flight, unless ::at-night / ::with-hostile are set: the night's seal is scaffold
   too, and the body is inside it.
   Runs jobs.access.cleanup, which takes exactly those entries.
@@ -24,7 +24,7 @@
             [jobs.lib.world-files :as world]))
 
 (a/defargs settings
-  {::at-night {:default false :doc "Whether the trigger may fire at night." :spec boolean?}
+  {::at-night {:default false :doc "Whether the trigger may fire in the dark." :spec boolean?}
    ::with-hostile {:default false :doc "Whether the trigger may fire in the first light, while a known hostile is near, or just after a flight." :spec boolean?}})
 
 (def defaults {:within 32})
@@ -40,7 +40,7 @@
   [p memory args kn]
   (boolean (and (not (body/recovery-pending? memory :scaffold-left))
                 (some? (world/zones kn))
-                (or (settings/get settings ::at-night) (not (sh-sense/night? p)))
+                (or (settings/get settings ::at-night) (not (sh-sense/dark-here? p)))
                 (or (settings/get settings ::with-hostile)
                     (and (dawn/calm? p) (not (threats/fled-recently? p memory))))
                 (some (complement #(too-deep? p %))

@@ -1,5 +1,5 @@
 (ns engine.needs-weapon-test
-  "The :needs-weapon trigger: a body with no weapon gets a sword by day."
+  "The :needs-weapon trigger: a body with no weapon gets a sword."
   (:require [cljs.test :refer [deftest is are]]
             [engine.death-test :refer [memory-with]]
             [engine.memory :as mem]
@@ -14,13 +14,13 @@
                                        time (assoc :time time)))
                    (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)})) {}))
 
-(deftest an-unarmed-body-needs-a-sword-by-day-only
+(deftest an-unarmed-body-needs-a-sword-at-any-hour-the-dawn-grace-allows
   (are [world expected] (= expected (holds? world))
     {} true
     {:inv [{:name "iron_pickaxe" :count 1}]} true
     {:inv [{:name "wooden_sword" :count 1}]} false
     {:inv [{:name "iron_axe" :count 1}]} false
-    {:night true} false))
+    {:night true} true))
 
 (def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 0}})
 

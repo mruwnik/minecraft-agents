@@ -117,6 +117,8 @@
 
 (defn night? [p] (not (.-isDay (.self p))))
 
+(def dark-here? look/dark-here?)
+
 (defn sleeping? [p] (boolean (.-isSleeping (.self p))))
 
 (def default-roof-height 4)

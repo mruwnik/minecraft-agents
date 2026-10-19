@@ -20,9 +20,9 @@
 (deftest go-home-start-facts
   (are [world entries expected] (= expected (start-of 'jobs.survival.go-home world {:limit 100} entries))
     {:time st/noon} [] [:later :no-home]
-    {:time st/night} [[:home home mem/place-policy]] [:later :night]
     {:time st/noon} [[:home far-home mem/place-policy]] [:later :too-far]
-    {:time st/noon} [[:home home mem/place-policy]] [:ok :daytime]))
+    {:time st/noon} [[:home home mem/place-policy]] [:ok :home]
+    {:time st/night} [[:home home mem/place-policy]] [:ok :home]))
 
 (deftest set-spawn-start-facts
   (are [world args expected] (= expected (start-of 'jobs.survival.set-spawn world args))

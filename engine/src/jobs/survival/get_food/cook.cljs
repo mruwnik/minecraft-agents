@@ -118,10 +118,10 @@
 
 (defn can-cook?
   "Mid-cook, or raw food carried and no failed cook in this job, with a furnace known or cooking worth a furnace of its
-  own (worth-cooking?); never at night, while the night handler holds or when rushed? (a cook under way is dropped then)."
+  own (worth-cooking?); never in the dark, while the night handler holds or when rushed? (a cook under way is dropped then)."
   [c]
   (boolean
-   (and (not (sh-sense/night? (:primitives c)))
+   (and (not (sh-sense/dark-here? (:primitives c)))
         (not (night-holds? c))
         (not (rushed? c))
         (or (:cooking (ctx/mem c))

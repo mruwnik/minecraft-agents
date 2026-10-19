@@ -51,13 +51,7 @@
 
 (defn perception-of [c] (aget (:primitives c) "perception"))
 
-(defn dark-here? [c]
-  (let [per (perception-of c)
-        raw (:raw per)
-        ^js pos (.-pos (.self (:primitives c)))]
-    (and raw
-         (< (look/effective-light raw (js/Math.floor (.-x pos)) (js/Math.floor (.-y pos)) (js/Math.floor (.-z pos)))
-            (look/dark-light)))))
+(defn dark-here? [c] (look/dark-here? (:primitives c)))
 
 (defn known-mobs [c]
   (when-let [f (aget (:primitives c) "knownMobs")]

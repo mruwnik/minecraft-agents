@@ -1,5 +1,5 @@
 (ns engine.needs-bed-test
-  "The :needs-bed trigger: a body overdue for sleep with no bed gets one by day."
+  "The :needs-bed trigger: a body overdue for sleep with no bed gets one."
   (:require [cljs.test :refer [deftest is]]
             [engine.memory :as mem]
             [engine.test-util :as tu]
@@ -43,11 +43,10 @@
   (is (false? (holds? {:entries slept-long-ago :time 400})))
   (is (false? (holds? {:entries slept-long-ago :entities [zombie]}))))
 
-(deftest a-carried-or-remembered-bed-or-the-night-needs-no-errand
+(deftest a-carried-or-remembered-bed-needs-no-errand
   (is (false? (holds? {:entries slept-long-ago :inv [{:name "red_bed" :count 1}]})))
   (is (false? (holds? {:entries (conj slept-long-ago [:bed {:pos {:x 5 :y 64 :z 0}} 2]) :blocks {"5,64,0" "red_bed"}})))
-  (is (true? (holds? {:entries (conj slept-long-ago [:bed {:pos {:x 5 :y 64 :z 0}} 2]) :blocks {"5,64,0" "air"}})) "a remembered bed seen gone is no bed")
-  (is (false? (holds? {:entries slept-long-ago :night true}))))
+  (is (true? (holds? {:entries (conj slept-long-ago [:bed {:pos {:x 5 :y 64 :z 0}} 2]) :blocks {"5,64,0" "air"}})) "a remembered bed seen gone is no bed"))
 
 (def rested [[:slept {:pos {:x 0 :y 64 :z 0}} 1]])
 (def spawn-bed-at-5 [:spawn-bed {:pos {:x 5 :y 64 :z 0}} 0.5])

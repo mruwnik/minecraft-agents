@@ -342,8 +342,8 @@
           (is (empty? (tu/walked-to eng)) "it does not advance on the mob")
           (is (empty? (calls p "attack")) "and does not swing at one it cannot reach"))))))
 
-(deftest the-fight-holds-position-at-night-with-more-than-one-hostile-known
-  (are [world held?] (= held? (respond-to-hostile/hold? {:primitives (tu/fake world) :view (fn [] {:data {} :now 0}) :args {:stay-inside true}}))
+(deftest the-fight-holds-position-in-the-dark-with-more-than-one-hostile-known
+  (are [world held?] (= held? (respond-to-hostile/hold? {:primitives (tu/with-light-data (tu/fake world)) :view (fn [] {:data {} :now 0}) :args {:stay-inside true}}))
     {:time 14000 :entities [(zombie 7 5 0) (zombie 8 6 3)]} true
     {:time 14000 :entities [(zombie 7 5 0)]} false
     {:time 1000 :entities [(zombie 7 5 0) (zombie 8 6 3)]} false))
@@ -355,8 +355,8 @@
                  :when (or wall? (= y 63) (= y 70))]
              [(str x "," y "," z) "stone"])))
 
-(deftest a-body-shut-in-a-room-at-night-holds-against-one-hostile-unless-stay-inside-is-off
-  (are [world args held?] (= held? (respond-to-hostile/hold? {:primitives (tu/fake world) :view (fn [] {:data {} :now 0}) :args args}))
+(deftest a-body-shut-in-a-room-in-the-dark-holds-against-one-hostile-unless-stay-inside-is-off
+  (are [world args held?] (= held? (respond-to-hostile/hold? {:primitives (tu/with-light-data (tu/fake world)) :view (fn [] {:data {} :now 0}) :args args}))
     {:time 14000 :blocks closed-room :entities [(zombie 7 5 0)]} {:stay-inside true} true
     {:time 14000 :blocks closed-room :entities [(zombie 7 5 0)]} {:stay-inside false} false
     {:time 1000 :blocks closed-room :entities [(zombie 7 5 0)]} {:stay-inside true} false

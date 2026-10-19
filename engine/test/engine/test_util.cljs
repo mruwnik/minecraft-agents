@@ -10,6 +10,7 @@
             [engine.ctx :as ctx]
             [engine.fake :as fake-world]
             [engine.fake.node :as node]
+            [engine.fake.raw-world :as fake-raw]
             [engine.fast-pace]
             [engine.fsutil :as fsu]
             [engine.memory :as mem]
@@ -98,6 +99,12 @@
      (let [p (fake-world/create spec)]
        (aset p "sensedAt" (sensed-by p))
        p))))
+
+(defn with-light-data
+  "p with the light data of its world (perception's raw) but no sight: jobs.lib.shelter.sense/dark-here? reads the sky's darkening at the world's time."
+  [p]
+  (aset p "perception" {:raw (fake-raw/create p) :st #js {:mobSource p} :opts {:now (constantly 0)}})
+  p)
 
 (def walk-floor
   "The :floor rectangle most go-to callers' tests use: every spot they walk between."

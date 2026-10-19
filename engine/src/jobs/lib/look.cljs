@@ -325,6 +325,15 @@
          (zero? (bit-shift-right (.lightAt raw x y z) 4))
          (zero? (bit-shift-right (.lightAt raw x (inc y) z) 4)))))
 
+(defn dark-here?
+  "Whether the light at the body's feet (block or sky less the sky's darkening now) is under look/dark-light: hostiles spawn and walk in from it, at any hour. False without light data."
+  [p]
+  (let [raw (:raw (aget p "perception"))
+        ^js pos (.-pos (.self p))]
+    (boolean (and raw
+                  (< (effective-light raw (js/Math.floor (.-x pos)) (js/Math.floor (.-y pos)) (js/Math.floor (.-z pos)))
+                     (dark-light))))))
+
 (defn dark-fn
   "The planner's test of a feet cell (options.dark.at), {:at (fn [x y z] 1 dark, 0 lit) :night? whether the sky is dark},
   for the body of primitives p; nil without a perception. A cell the body has seen is lit by block light of 1 or more

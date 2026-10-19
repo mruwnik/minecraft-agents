@@ -6,7 +6,6 @@
             [engine.contract :as contract]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
-            [jobs.lib.cond :as cond]
             [jobs.lib.places :as places]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -15,7 +14,7 @@
 (def doc
   "Walk home before night: to the remembered :home, else the remembered :bed (a go-to child, :range 2, walking on
   through the night).
-  Conditions (at the start only): not night, else condition-failed :night; a :home or :bed remembered, else :no-home.
+  Conditions (at the start only): a :home or :bed remembered, else :no-home.
   Done {:home pos} on arrival (also records :home there unless a live one exists), or at once when already within 2 of it.
   A place farther than :limit blocks is a condition: the call waits (:too-far {:pos :distance :text}) while the night job digs in or sleeps. A walk that did not arrive is
   nothing-possible {:reason :walk-failed :walk go-to's cause} with {:text}. The :dusk-home trigger starts it when the day left
@@ -45,7 +44,7 @@
         (contract/ok :home "home within reach" :pos pos)))
     (contract/later :no-home "no home or bed remembered")))
 
-(def can-start? (cond/and (checks/day :night) home-status))
+(def can-start? home-status)
 
 (def target [])
 

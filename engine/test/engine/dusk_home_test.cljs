@@ -45,7 +45,7 @@
 (deftest a-body-under-a-lone-overhead-block-still-goes-home
   (is (true? (holds? 11000 [[:home 100 0]] {:floor [-20 -20 20 20] :blocks {"0,67,0" "stone"}}))))
 
-(deftest go-home-walks-to-the-home-by-day-and-waits-at-night-or-with-none
+(deftest go-home-walks-to-the-home-and-waits-with-none
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -57,7 +57,6 @@
                             (core/tick! eng)
                             (:reason (:waiting (job-api/summary eng id))))))]
           (is (= :no-home (waiting {:time st/noon} false)))
-          (is (= :night (waiting {:time st/night} true)))
           (mem/write! (:store eng) :home {:pos {:x 12 :y 64 :z 0}} mem/place-policy)
           (core/submit! eng '(jobs.survival.go-home) {})
           (await (tu/run-until-empty eng 30))

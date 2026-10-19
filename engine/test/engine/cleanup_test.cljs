@@ -209,12 +209,12 @@
     (is (false? (fires? p (trigger-store [(entry [0 54 0])] []) [])) "ten below: cleanup holds it :far-below each time the hold runs out")
     (is (true? (fires? p (trigger-store [(entry [0 54 0]) (entry [0 62 0])] []) [])) "another, in reach, still fires")))
 
-(deftest the-trigger-waits-for-day-and-for-no-hostile-near
+(deftest the-trigger-waits-for-light-and-for-no-hostile-near
   (let [dirt (trigger-store [(entry [0 64 0])] [])
-        night #(tu/fake {:blocks {"0,64,0" "dirt"} :time 14000})
+        night #(tu/with-light-data (tu/fake {:blocks {"0,64,0" "dirt"} :time 14000}))
         hostile (fn [] (doto (tu/fake {:blocks {"0,64,0" "dirt"}})
                          (fake/add-entity! {:id 9 :name "zombie" :kind "hostile" :pos {:x 4 :y 64 :z 0} :health 20})))]
-    (is (false? (fires? (night) dirt [])) "night")
+    (is (false? (fires? (night) dirt [])) "dark")
     (is (false? (fires? (hostile) dirt [])) "a hostile near")
     (settings/with-settings {:triggers.access.scaffold-left/at-night true :triggers.access.scaffold-left/with-hostile true}
       (fn []

@@ -60,8 +60,8 @@
   "Holds when hungry? says so, top-up? does (a hurt body below 18 food carrying common food), or eat-now? does.
   Holds at :urgent when eat-now? does (low health) or food is at most ::urgent-food (2), else at its :comfort level.
   Args: :food, :health, :rest-s.
-  At night it holds only with food carried to eat: a search in the dark walks into mobs, and starvation stops at half a heart.
-  A fragile body (foods/fragile?) with no food carried holds only on a calm day (jobs.lib.dawn/calm?): it waits sheltered.
+  In the dark it holds only with food carried to eat: a search in the dark walks into mobs, and starvation stops at half a heart.
+  A fragile body (foods/fragile?) with no food carried holds only in the light and calm (jobs.lib.dawn/calm?): it waits sheltered.
   It rests (resting?) for :rest-s (600; at most foods/::starving-rest-ms, 60 s, when starving) after get-food found nothing, so a body with nothing at hand is not sent
   searching again every cooldown. The rest ends when food is carried, wheat to bake is, or a food source is learned."
   [world memory args]
@@ -74,5 +74,5 @@
              (foods/eat-now? self args reserved))
          (not (resting? self memory args))
          (or (foods/carries-food? self reserved)
-             (and (not (sh-sense/night? world)) (or (not (foods/fragile? self)) (dawn/calm? world))))
+             (and (not (sh-sense/dark-here? world)) (or (not (foods/fragile? self)) (dawn/calm? world))))
          (if urgent? :urgent true))))
