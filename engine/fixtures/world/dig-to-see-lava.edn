@@ -16,6 +16,14 @@
    :expect [{:event {:source :job :kind :stair.sealed :data {:cell #at [13 8 16]}} :within-s 90 :of-job true}
             {:event {:source :job :kind :stair.done :data {:steps 3}} :within-s 110 :of-job true}]
    :after [[:not-block [13 8 16] "lava"]]}
+  {:name "stair-up-digs-to-lava-behind-stone-seals-it-and-goes-on"
+   ;; a stair UP from a trench at y 2: step 3 cuts (13 5..7 16), lava sits beside it at (13 6 17); with cobblestone carried the seal holds and the stair ends done
+   :blocks [[:fill [8 2 15] [10 4 17] "air"] [:set [13 6 17] "lava"]]
+   :body {:at [10.5 2 16.5]}
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 3})]]
+   :expect [{:event {:source :job :kind :stair.sealed :data {:cell #at [13 6 17]}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :stair.done :data {:steps 3}} :within-s 110 :of-job true}]
+   :after [[:not-block [13 6 17] "lava"]]}
   {:name "stair-on-lava-stop-stops-lava-exposed"
    :blocks [[:set [13 8 16] "lava"]]
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3 :on-lava :stop})]]
