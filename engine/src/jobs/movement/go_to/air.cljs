@@ -136,6 +136,7 @@
     (loop [n 0]
       (let [oxygen (.-oxygen (.self p))]
         (when (and (< n max-breath-waits) (number? oxygen) (< oxygen 20) (not (breath/head-under? p)))
+          (when (zero? n) (ctx/emit! c :go-to.breathing :info {:oxygen oxygen :text "head out: waiting for its air to come back"}))
           (await (ctx/act c :wait #js {:ms breath-wait-ms :why "getting its breath back"}))
           (recur (inc n)))))))
 
@@ -147,7 +148,7 @@
   (let [n (:surfacings (ctx/mem c) 0)]
     (when (and (< n max-surfacings) (breath/head-under? (:primitives c)))
       (let [swam (await (swim-to-air! c walk-opts goal "short of air" #(ctx/update-mem! c assoc :surfacings (inc n))))]
-        (when swam (await (breathe-back! c)))
+        (await (breathe-back! c))
         swam))))
 
 (defn ^:async surface-while-searching!
