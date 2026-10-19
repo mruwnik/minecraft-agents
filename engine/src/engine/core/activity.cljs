@@ -109,7 +109,7 @@
       nil)))
 
 (defn idle-ok-node?
-  "Whether every job of spec node declares (def idle-ok true): content to sit doing nothing (look-around, waits)."
+  "Whether every job of spec node declares (def idle-ok true): content to sit doing nothing (waits)."
   [jobs {:keys [op job child children]}]
   (case op
     :leaf (true? (:idle-ok (get jobs job)))
