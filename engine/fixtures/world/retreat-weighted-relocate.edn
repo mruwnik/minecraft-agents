@@ -5,6 +5,7 @@
 ;; Every flight and relocation must stay on the plot grid: a plot can sit at the grid's edge, past which there is no floor.
 ;; east-west: the zombies stand 2 north of the body, so the flight goes south (into the grid), never north off it.
 ;; hollow-floor: the hollow starts at x 10, so the first relocation (9 west, x 7) is solid ground inside the plot.
+;; hollow-floor-2: from x 20 the relocations go x 11 (hollow, fails) then x 2: solid and one block in from the plot edge (the cell past the edge is air, which a pit with no blocks cannot wall).
 {:defaults
  {:tags [:night :survival :retreat] :time :night
   :plot {:height 12}
@@ -43,7 +44,7 @@
    :limit-s 150}
   {:name "hollow-floor-relocates-and-digs-in-2"
    :blocks [[:fill [0 -8 0] [31 -1 31] "stone"] [:fill [8 -3 4] [28 -2 28] "air"]]
-   :body {:at [18.5 0 14.5] :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+   :body {:at [20.5 0 14.5] :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
    :act [[:job (jobs.survival.night {})]]
    :expect [{:event {:source :job :kind :shelter.relocated} :within-s 60 :of-job true}
             {:event {:source :job :kind :shut-in.sealed} :within-s 120 :of-job true}]
