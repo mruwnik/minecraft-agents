@@ -39,12 +39,10 @@
     :else :none))
 
 (defn with-body-food
-  "c with the :food arg the caller gave, else the body's own food now (a felt fact): the walk counts on it."
+  "c with the body's own food now (a felt fact) as its :food arg: the walk counts on it."
   [c]
-  (if (number? (:food (:args c)))
-    c
-    (let [food (.-food (.self (:primitives c)))]
-      (cond-> c (number? food) (assoc-in [:args :food] food)))))
+  (let [food (.-food (.self (:primitives c)))]
+    (cond-> c (number? food) (assoc-in [:args :food] food))))
 
 (defn body-of
   "The body's {:health :food :effects :on-fire :carried-food}: the food is the job's (wworld/food-of), the rest from its primitives."

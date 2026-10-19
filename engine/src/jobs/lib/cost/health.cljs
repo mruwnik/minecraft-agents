@@ -17,9 +17,13 @@
 (a/defargs settings
   {::default-min-health {:default 12 :doc "Health a walk does not spend below." :spec (a/int-in 0 nil)}
    ::margin {:default 1 :doc "hp left over the floor." :spec (a/int-in 0 nil)}
+   ::hp-seconds {:default 10 :doc "Seconds one hp costs at full health when the planner weighs a drop, a plant's prick or a danger against a longer way (more at low health)." :spec a/pos-num?}
    ::max-scale {:default 4 :doc "The most the price of an hp rises near zero health." :spec (a/int-in 1 nil)}})
 
 (def hp-seconds "Seconds one hp costs at full health." 10)
+
+(defn walk-hp-seconds "Seconds an hp costs a walk at full health: the setting ::hp-seconds." []
+  (settings/get settings ::hp-seconds))
 
 (defn default-min-health [] (settings/get settings ::default-min-health))
 

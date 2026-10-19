@@ -189,14 +189,15 @@
     (is (< (tour 100 1) (tour 100 4)) "the more walks it took")))
 
 (deftest a-goal-is-worth-a-trip-and-more-the-farther-it-lies
-  (is (= (cost/trip) (cost/tour-worth 0 {:tour-floor-blocks 0})))
+  (is (= (cost/trip) (settings/with-settings {:jobs.lib.cost.value/tour-floor-blocks 0} #(cost/tour-worth 0))))
   (is (< (cost/tour-worth 40) (cost/tour-worth 80))))
 
-(deftest a-near-goal-is-worth-a-tour-floor-and-the-prices-are-options
+(deftest a-near-goal-is-worth-a-tour-floor-and-the-prices-are-settings
   (is (= (cost/tour-worth 32) (cost/tour-worth 2)) "under the floor, the floor's worth")
-  (is (< (cost/tour-worth 2 {:tour-floor-blocks 0}) (cost/tour-worth 2)))
-  (is (= (+ (cost/trip) (:cost (cost/walk-cost {:distance 10}))) (cost/tour-worth 10 {:tour-floor-blocks 0 :tour-ratio 1})))
-  (is (= 7 (:cost (cost/tour-cost {:explored 0 :walks 7} {:per-frontier-walk 1})))))
+  (is (< (settings/with-settings {:jobs.lib.cost.value/tour-floor-blocks 0} #(cost/tour-worth 2)) (cost/tour-worth 2)))
+  (is (= (+ (cost/trip) (:cost (cost/walk-cost {:distance 10})))
+         (settings/with-settings {:jobs.lib.cost.value/tour-floor-blocks 0 :jobs.lib.cost.value/tour-ratio 1} #(cost/tour-worth 10))))
+  (is (= 7 (:cost (settings/with-settings {:jobs.lib.cost.value/per-frontier-walk 1} #(cost/tour-cost {:explored 0 :walks 7}))))))
 
 (deftest dig-cost-is-the-item-base-s-dig-term
   (is (< (cost/dig-cost "dirt") (cost/dig-cost "stone") (cost/dig-cost "obsidian")))

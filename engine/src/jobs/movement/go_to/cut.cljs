@@ -45,11 +45,11 @@
 
 (defn tour-spent?
   "Whether the tour so far (tour) costs more than its goal is worth: the call's :tour-worth, else cost/tour-worth of the
-  goal's straight blocks at the call's start; :tour-ratio, :tour-floor-blocks and :per-frontier-walk price it."
+  goal's straight blocks at the call's start; the settings of jobs.lib.cost.value price it."
   [c]
   (let [args (:args c)]
-    (> (:cost (cost/tour-cost (tour c) args))
-       (or (:tour-worth args) (cost/tour-worth (:detour-from (ctx/mem c) 0) args)))))
+    (> (:cost (cost/tour-cost (tour c)))
+       (or (:tour-worth args) (cost/tour-worth (:detour-from (ctx/mem c) 0))))))
 
 (defn ^:async start-attempt!
   "Begin a call from the world, with memory as a hint: the counters of an earlier call (cut, or ended :continue) start

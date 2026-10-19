@@ -10,6 +10,7 @@
             [engine.path.blocks :as blocks]
             [engine.path.planner.base :as base]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.walk-sight-test :as wst]
             [jobs.lib.cost :as cost]
@@ -52,10 +53,6 @@
         base (wworld/torch-base)
         on? (fn [n] (aget base (first (blocks/state-ids t n))))]
     (is (= [1 1 1 0 0 0] (mapv on? ["stone" "oak_fence" "glass" "air" "oak_slab" "water"])))))
-
-(deftest the-unknown-arg-takes-a-light-cost
-  (is (nil? (wworld/unknown-problem {:light-cost 3})))
-  (is (some? (wworld/unknown-problem {:light-cost -1}))))
 
 ;; ---------------------------------------------------------------- go-to down a dark ledge
 
@@ -292,12 +289,13 @@
                               :view (fn [] {:now 1000000 :data {:entries {gtorch/fetch-failed-kind [{:t 1000000 :data {}}]}
                                                                  :policies {gtorch/fetch-failed-kind {:cap 1 :ttl gtorch/fetch-failed-ttl-ms}}}})))))))
 
-(deftest a-callers-light-cost-prices-the-torch
+(deftest the-torch-setting-prices-the-torch
   (let [{:keys [p]} (gs/sensed-only shielded)
         round (fn [args] (.-lightCost (gtorch/round-unknown (assoc (stub-ctx p (atom {}) (atom []) (merge {:place-torches true :ignore-zones? true} args))
-                                                                  :unknown (wworld/unknown-spec nil)))))]
-    (is (= 7 (round {:unknown {:light-cost 7}})))
-    (is (= (:cost (cost/light-cost {:carried 4})) (round {:unknown true})))))
+                                                                  :unknown (wworld/unknown-spec)))))]
+    (is (= (:cost (cost/light-cost {:carried 4})) (round {:unknown true})))
+    (is (= (+ 7.5 (:cost (cost/light-cost {:carried 4})))
+           (settings/with-settings {:jobs.lib.cost.value/torch-place-s 9} #(round {:unknown true}))))))
 
 (deftest go-to-with-no-torch-fetches-torches-from-a-seen-chest-lights-the-drop-and-arrives
   (async done

@@ -35,7 +35,7 @@
   column whose ground is not made out is looked at after a fruitless walk (at most 3 a call); with no stand in reach of its guess it walks to seen stands toward it (column/waypoint, off the line past a cliff), until ::max-waypoint-misses bring it no nearer. A cell over a short floor (farmland, a path, a bottom slab) stands for that
   block's own cell, where the body's feet are. :place (a name such as :home, set by jobs.memory.set-place) walks to
   that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker).
-  - Refused at submit (or the caller's ctx/call throws): an arg its spec refuses, such as a :tolls entry that is not {:x :y :z :factor} of finite numbers, a :drop-cost that is not a number >= 0 or false, a :costs that is not a map of known price names to numbers >= 0, a :landing that is not a map of block names to numbers, a :gait that is not :auto, :walk or :sneak, a :danger-shape that is not {:sensed|:remembered|:creeper {:close :radius}}.
+  - Refused at submit (or the caller's ctx/call throws): an arg its spec refuses, such as a :tolls entry that is not {:x :y :z :factor} of finite numbers, a :drop-cost that is not a number >= 0 or false, a :costs that is not a map of known price names to numbers >= 0, a :gait that is not :auto, :walk or :sneak.
   - Ends at once, before any walk, after a :refused warn, data {:arrived false :text}: impossible :bad-pos (a :pos
     outside the world), :bad-name (a :place that is not a valid name), :unsupported (a body with no pathWorld sensing)
     or :bad-args (a given :floor :health over 20, a :spend :job-time outside 0.1-120); condition-failed :unknown-place (no
@@ -63,13 +63,12 @@
     the body), a floor it never saw is stepped onto only after the walk stops to look at it (jobs.lib.walk.sight), and
     only where it can see it from the takeoff (a drop deeper than it sees in the dark is refused). An unseen y goal
     behind a seen solid, or one a found plan tours round (jobs.movement.go-to.walk/lookout-check), is first looked at
-    from the nearest seen stand within 4 of it that sees it (info go-to.lookout, at most 3 stands a call). A map overrides the
-    prices of jobs.lib.cost/unknown-prices. When a dark drop was the better way it gives up :why :unseen-floor-dark; in the
+    from the nearest seen stand within 4 of it that sees it (info go-to.lookout, at most 3 stands a call). The prices are the settings of jobs.lib.cost.planner (::unknown-prices). When a dark drop was the better way it gives up :why :unseen-floor-dark; in the
     dark with a torch carried and the off hand empty it first holds the torch in the off hand (info go-to.off-hand-torch,
     once a call: it sees deeper) and plans again; it puts the torch back into the inventory before an escalation child runs and when the call ends (full: it
     stays, info go-to.off-hand-kept); one a cut call left in the hand goes back at the next call's start.
   - :place-torches true (with :unknown; default false) may light such a dark floor instead: the planner prices a torch
-    (jobs.lib.cost/light-cost, or :unknown's :light-cost) where it can stand on the takeoff, in no other owner's zone or
+    (jobs.lib.cost/light-cost) where it can stand on the takeoff, in no other owner's zone or
     claim; the walk stops there, places one (an off-hand stack goes back to the inventory first; info walk.torch-placed) and
     walks on once it sees the floor. With none carried it fetches torches once a call (:fetch, default true; a jobs.lib.need child);
     with none and no fetch it gives up :unseen-floor-dark saying so. A torch that cannot go there is not tried there again.
@@ -140,10 +139,10 @@
       (:why :way-dives); when no stair can be cut it walks the plan after all. Likewise, once at the end of its own
       way (memory :own-way-top), a plan that goes more than ::climb/cave-dip below it back down a stair of its own.
     An explicit :y-margin switches all of this off.
-  - :detour (default true): a body under ground (jobs.lib.shelter.sense/buried?) whose goal is under ::climb-rise above it
+  - A body under ground (jobs.lib.shelter.sense/buried?) whose goal is under ::climb-rise above it
     walks no found way longer than ::detour/ratio times the distance to its goal at the call's start (at least
     ::detour/floor blocks) when half or more of its cells were never seen: it gives up :why :detour with :route,
-    :straight and :allowed (blocks) before it sets out. :detour false walks it. See jobs.movement.go-to.detour.
+    :straight and :allowed (blocks) before it sets out. See jobs.movement.go-to.detour.
   - Its quote (./bin/quote) is a dry run: one plan from where the body stands with the call's args, nothing walked,
     opened or dug. :uses :job-time [s s 3s] from the planner's seconds (partial or no route: no most; none and no way that
     changes the world: ##Inf), :health the planned damage, :moves-to the goal cell, and :route {:found :length :seconds
@@ -165,21 +164,14 @@
    :doors {:doc "what to do at shut doors, gates and trapdoors: :shut (open, pass, shut again what the walk opened), :leave-open (open and pass), :never (walls)"
            :spec #{:shut :leave-open :never} :default :shut}
    :dangers {:doc "false: plan straight past known dangers (a walk up to the hostile being fought); true: keep away from them" :spec boolean? :default true}
-   :unknown {:doc "true: plan over what the body has seen or felt only, unseen floors checked by eye before they are stepped on; a map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth overrides their prices and depths (jobs.lib.cost/unknown-prices), :light-cost the seconds of a torch :place-torches places; false: plan over the world as it is" :spec (a/valid-by "true, false or a map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth :light-cost to numbers >= 0" wworld/unknown-problem) :default false}
-   :place-torches {:doc "with :unknown: light a dark floor it cannot see with a torch from the inventory, placed at the takeoff (priced by jobs.lib.cost/light-cost, or :unknown's :light-cost), fetching torches when none is carried (:fetch); false: never place one" :spec boolean? :default false}
+   :unknown {:doc "true: plan over what the body has seen or felt only, unseen floors checked by eye before they are stepped on; false: plan over the world as it is" :spec boolean? :default false}
+   :place-torches {:doc "with :unknown: light a dark floor it cannot see with a torch from the inventory, placed at the takeoff (priced by jobs.lib.cost/light-cost), fetching torches when none is carried (:fetch); false: never place one" :spec boolean? :default false}
    :fetch {:doc "get torches for :place-torches when none is carried (a jobs.lib.need child): true, a set of kinds or a map of limits; false: give up instead" :spec need/option? :default true}
    :dark {:doc "false: plan dark cells like lit ones; true: a dark cell (seen dark, or unseen at night) costs twice a lit one" :spec boolean? :default true}
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more (jobs.lib.cost farm-tolls, zone-tolls)" :spec (a/valid-by "a list of {:x :y :z :factor} of finite numbers, :factor >= 0" wworld/tolls-problem) :default nil}
-   :food {:doc "the food level (0-20) the walk counts on for its damage budget, its sprinting and whether it can heal by waiting (18 or more regenerates); default the body's own" :spec (a/num-in 0 20) :default nil}
-   :flee-factor {:doc "danger price: a known mob the body would flee costs this times its hp a second (jobs.lib.cost.danger)" :spec (a/num-in 0 nil) :default (:flee cost/danger-stances)}
-   :fight-factor {:doc "danger price: a known mob the body would fight costs this times its hp a second" :spec (a/num-in 0 nil) :default (:fight cost/danger-stances)}
-   :danger-max-rate {:doc "danger price: hp a second one known danger costs at most; above the default it also raises the total of all dangers a second (planner dangerCap)" :spec a/pos-num? :default cost/danger-max-rate}
-   :danger-shape {:doc (str "danger price: {:sensed|:remembered|:creeper {:close :radius}} blocks, full within :close, none past :radius; only the terms given replace the default (" (str/join ", " (map (fn [[k {:keys [close radius]}]] (str (name k) " " close " " radius)) cost/danger-default-shape)) ")") :spec (a/valid-by "a map of :sensed, :remembered or :creeper to {:close :radius} numbers >= 0, :close under :radius" cost/danger-shape-problem) :default nil}
-   :hp-seconds {:doc "seconds an hp costs at full health when the planner weighs a drop or a plant's prick against a longer way (more at low health)" :spec a/pos-num? :default cost/hp-seconds}
    :drop-cost {:doc "number: scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back" :spec (a/or-of (a/num-in 0 nil) false?) :default 1}
    :y-margin {:doc "blocks the walk's search may reach above the higher and below the lower of body and goal (default 96): a route dipping deeper, such as through deep caves, is not planned; nil: as default" :spec (a/int-in 0 nil) :default nil}
    :costs {:doc (str "map of price name to seconds, overriding the planner's price of a move (jobs.lib.cost.planner: " (str/join " " (map name (keys cost/planner-names))) "); a price left out keeps the planner's default; :lethal-air is no price: 1 lets a plan drown the body when no other way exists, else such a plan is refused (:why :air-lethal)" ) :spec (a/valid-by "a map of planner price name to a number of seconds >= 0" cost/planner-costs-problem) :default nil}
-   :landing {:doc "map of block name to the share of a fall's damage a landing on it takes (0.2: 80% off), negative: a bounce, no damage but settle time (only onto a pad in view, bouncing blocks or a wall all round, not under :gait :sneak; else the full fall); entries override the defaults hay_block 0.2, honey_block 0.2 and slime_block -1" :spec (a/valid-by "a map of block name to a number" cost/landing-problem) :default nil}
    :gait {:doc "how the body walks: :auto (sprints on long straight runs and over gaps, as the walker does), :walk (never sprints: no gap jump over 2 or more), :sneak (slow, never sprints; holds sneak on level steps so it never walks off an edge, lets go for a planned drop, gap, climb or water); nil: the body's setting jobs.lib.walk.world/gait (:auto)" :spec #{:auto :walk :sneak} :default nil}
    :goal-danger {:doc "when the goal lies within the full-cost radius of a known mob the body would flee: :wait (walk on; an info goal-in-danger says so once), :end (give up at once, :why :goal-dangerous with the mob)" :spec #{:wait :end "wait" "end"} :default :wait}
    :keep-out {:doc "cells the walk treats as solid, [{:x :y :z}]: no way through them is planned (jobs.lib.pen-entry gives a block job the gates of pens holding animals)" :spec (a/valid-by "a list of {:x :y :z} of whole numbers" (fn [cells] (when-not (and (sequential? cells) (every? #(and (map? %) (every? integer? (map % [:x :y :z]))) cells)) "keep-out is a list of {:x :y :z} of whole numbers"))) :default nil}
@@ -187,11 +179,7 @@
    :leg-alert-within {:doc "with :leg-alert-s and a :spend :job-time leg: blocks within which a hostile that attacks at close range (not a ranged mob or an enderman; a creeper counts), or a loss of health since the call began, shortens a leg's search to :leg-alert-s seconds from its start" :spec (a/num-in 0 nil) :default nil}
    :leg-alert-s {:doc "seconds a search may last once the :leg-alert-within alert is on (0.1 to 120)" :spec (a/num-in 0.1 120) :default nil}
    :one-way {:doc "arg, not the :one-way key of a give-up result: :closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back, and walks to no frontier of loaded land (a walk to something visible); :open (default) takes one when the land past it runs on into unloaded land (under :unknown also land the body has not seen)" :spec #{:open :closed} :default :open}
-   :detour {:doc "false: under ground, walk a found way however long; true: one over mostly unseen cells and longer than the bound of jobs.movement.go-to.detour for a goal that near is not walked (:why :detour)" :spec boolean? :default true}
    :tour-worth {:doc "seconds a tour of frontiers (walks to the edge of loaded land without coming nearer its goal) may cost (jobs.lib.cost/tour-cost), then it gives up :why :explore-spent; nil: jobs.lib.cost/tour-worth of the goal's straight blocks" :spec (a/num-in 0 nil) :default nil}
-   :tour-ratio {:doc "times the walk of its straight blocks (at least :tour-floor-blocks) a goal is worth of a tour, on top of a trip; nil: the setting jobs.lib.cost.value/tour-ratio" :spec (a/num-in 0 nil) :default nil}
-   :tour-floor-blocks {:doc "straight blocks a goal counts as at least when worth a tour, so a near goal behind a ravine is still toured to; nil: the setting jobs.lib.cost.value/tour-floor-blocks" :spec (a/num-in 0 nil) :default nil}
-   :per-frontier-walk {:doc "seconds each frontier walk of a tour costs on top of its blocks; nil: the setting jobs.lib.cost.value/per-frontier-walk" :spec (a/num-in 0 nil) :default nil}
    :retry {:doc "false: a walk that got no nearer gives up at once instead of walking again (up to 3 times), for a caller that re-aims itself" :spec boolean? :default true}
    :look-round {:doc "false: no look round on arrival, for a caller that keeps moving" :spec boolean? :default true}
    :warn {:doc "false: a give-up or refusal is an info event, not a warn, for a caller that reports the failure itself"
@@ -307,7 +295,7 @@
   (wworld/unknown-spec: one missed Set for all its plans) rides on c as :unknown."
   [c0]
   (let [u (:unknown (:args c0))
-        c (cond-> c0 u (assoc :unknown (wworld/unknown-spec (when (map? u) u))))
+        c (cond-> c0 u (assoc :unknown (wworld/unknown-spec)))
         refusal (args-refusal c)
         goal (when-not refusal (:pos (aim/target c)))
         pos (goal-pos c goal)]

@@ -7,6 +7,7 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.path.blocks :as blocks]
             [engine.perception :as perception]
+            [engine.settings :as settings]
             [engine.test-util :as tu :refer [box]]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
@@ -43,14 +44,14 @@
 
 (deftest with-a-spec-unseen-cells-read-void-air-and-seen-ones-live
   (let [{:keys [w]} (sensed wall-world)
-        pw (wworld/path-world w (wworld/unknown-spec nil))]
+        pw (wworld/path-world w (wworld/unknown-spec))]
     (is (= @stone (state pw 2 64 0)) "the wall face, seen")
     (is (= @void (state pw 3 64 0)) "behind the wall, never seen")
     (is (= @stone (state pw 1 63 0)) "the floor ahead, seen")))
 
 (deftest the-spec-rides-on-the-snapshot-through-every-decoration
   (let [{:keys [w]} (sensed wall-world)
-        spec (wworld/unknown-spec nil)
+        spec (wworld/unknown-spec)
         pw (wworld/path-world w spec)
         missed (.-missed (wworld/unknown-of pw))]
     (is (identical? (.-missed spec) missed) "one missed Set per spec: every pathWorld of a go-to attempt shares it")
@@ -63,7 +64,7 @@
 
 (deftest the-spec-holds-the-prices-the-mask-id-and-sight
   (let [{:keys [w]} (sensed wall-world)
-        u (wworld/unknown-of (wworld/path-world w (wworld/unknown-spec {:peek-s 2})))]
+        u (wworld/unknown-of (wworld/path-world w (settings/with-settings {:jobs.lib.cost.planner/unknown-prices {:peek-s 2}} wworld/unknown-spec)))]
     (is (= [@void 2 (:aim-s cost/unknown-prices) (:cell cost/unknown-prices) (:floor cost/unknown-prices)]
            [(.-id u) (.-peekS u) (.-aimS u) (.-cell u) (.-floor u)]))
     (is (= 1 (.-seeDepth u)) "no torch in hand: near 4")
@@ -71,11 +72,11 @@
 
 (deftest a-torch-in-the-off-hand-sees-deeper
   (let [{:keys [w]} (sensed (assoc wall-world :equipment {"offHand" {:name "torch" :count 1}}))]
-    (is (= 4 (.-seeDepth (wworld/unknown-of (wworld/path-world w (wworld/unknown-spec nil))))))))
+    (is (= 4 (.-seeDepth (wworld/unknown-of (wworld/path-world w (wworld/unknown-spec))))))))
 
 (deftest the-key-changes-with-each-missed-floor
   (let [{:keys [w]} (sensed wall-world)
-        pw (wworld/path-world w (wworld/unknown-spec nil))
+        pw (wworld/path-world w (wworld/unknown-spec))
         before (wworld/unknown-key pw)]
     (.add (.-missed (wworld/unknown-of pw)) "x")
     (is (some? before))

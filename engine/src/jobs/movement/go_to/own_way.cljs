@@ -80,12 +80,12 @@
 (defn plan-check
   "near/walk-round!'s :stair-check of a walk round: stair-check's why (may be nil: none), else the detour bound's
   (detour/refusal, a map) for a whole plan to pos, straight blocks from it at the call's start, of a body that senses
-  and stands under ground, unless :detour is false or pos lies ::climb-rise or more above it (the climb's)."
+  and stands under ground, unless pos lies ::climb-rise or more above it (the climb's)."
   [c pos stair-check straight]
   (let [p (:primitives c)
         kind-at (column/seen-kind-at p)
         unseen? #(keyword-identical? :unknown (kind-at %1 %2 %3))
-        bound? (and (not (false? (:detour (:args c)))) (some? (.-sensedAt p)) (< (- (:y pos) (:y (u/self-pos c))) (climb-rise)))]
+        bound? (and (some? (.-sensedAt p)) (< (- (:y pos) (:y (u/self-pos c))) (climb-rise)))]
     (fn [{:keys [status steps] :as plan} first?]
       (or (when stair-check (stair-check plan first?))
           (when (and bound? (= "found" status) (sh-sense/buried? p)) (detour/refusal steps straight unseen?))))))

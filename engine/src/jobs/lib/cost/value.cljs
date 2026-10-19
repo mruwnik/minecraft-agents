@@ -463,22 +463,16 @@
 
 (defn tour-cost
   "{:cost :parts {:walk :walks}} of a tour of frontiers (walks to the edge of loaded land): the blocks `explored` since
-  the body last came nearer its goal at the walk price, and per-frontier-walk for each of the `walks` since then.
-  opts :per-frontier-walk overrides the setting."
-  ([tour] (tour-cost tour {}))
-  ([{:keys [explored walks]} opts]
-   (let [per-walk (or (:per-frontier-walk opts) (settings/get settings ::per-frontier-walk))
-         parts {:walk (:cost (walk-cost {:distance explored})) :walks (* per-walk walks)}]
-     {:cost (reduce + (vals parts)) :parts parts})))
+  the body last came nearer its goal at the walk price, and per-frontier-walk for each of the `walks` since then."
+  [{:keys [explored walks]}]
+  (let [parts {:walk (:cost (walk-cost {:distance explored})) :walks (* (settings/get settings ::per-frontier-walk) walks)}]
+    {:cost (reduce + (vals parts)) :parts parts}))
 
 (defn tour-worth
   "Seconds of tour a goal `straight` blocks off is worth: a trip, and tour-ratio times the walk of its straight blocks,
-  at least tour-floor-blocks. opts :tour-ratio and :tour-floor-blocks override the settings."
-  ([straight] (tour-worth straight {}))
-  ([straight opts]
-   (let [ratio (or (:tour-ratio opts) (settings/get settings ::tour-ratio))
-         floor (or (:tour-floor-blocks opts) (settings/get settings ::tour-floor-blocks))]
-     (+ (trip) (* ratio (:cost (walk-cost {:distance (max straight floor)})))))))
+  at least tour-floor-blocks."
+  [straight]
+  (+ (trip) (* (settings/get settings ::tour-ratio) (:cost (walk-cost {:distance (max straight (settings/get settings ::tour-floor-blocks))})))))
 
 (defn per-climb [] (settings/get settings ::per-climb))
 

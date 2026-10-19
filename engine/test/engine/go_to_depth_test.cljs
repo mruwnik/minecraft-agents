@@ -413,7 +413,7 @@
         (let [{:keys [out p]} (await (gt/go! in-loop {:pos across}))]
           (is (= {:arrived false :why :detour :route 84 :straight 6 :allowed 48}
                  (select-keys @out [:arrived :why :route :straight :allowed])))
-          (is (re-find #"84 blocks.*6 blocks away.*:detour false" (str (:text @out))))
+          (is (re-find #"84 blocks.*6 blocks away.*detour/floor" (str (:text @out))))
           (is (= [0.5 64 0.5] (gt/at p)) "it did not set out"))))))
 
 ;; The loop with stone between its corridors (x 0..39, z 1..5): 5 blocks of rock part the body from its goal.
@@ -454,7 +454,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (true? (:arrived @(:out (await (gt/go! in-loop {:pos across :detour false}))))))
+        (is (true? (:arrived @(:out (await (settings/with-settings {:jobs.movement.go-to.detour/floor 1000} #(gt/go! in-loop {:pos across})))))))
         (is (true? (:arrived @(:out (await (gt/go! (assoc in-loop :light [15 0]) {:pos across}))))) "sky light on the body")
         (is (true? (:arrived @(:out (await (settings/with-settings {:jobs.movement.go-to.detour/floor 100}
                                              #(gt/go! in-loop {:pos across}))))))

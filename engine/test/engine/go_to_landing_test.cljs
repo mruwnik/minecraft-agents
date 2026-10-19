@@ -1,10 +1,10 @@
 (ns engine.go-to-landing-test
-  "go-to's :landing (block name -> share of a fall's damage), seen through its quote (the fake world does not walk deep drops):
-  a hay landing is planned where a stone one is not, a caller's entries win, bad ones are refused."
+  "The walk setting jobs.lib.cost.planner/landing (block name -> share of a fall's damage), seen through go-to's quote (the fake
+  world does not walk deep drops): a hay landing is planned where a stone one is not, the setting's entries win, bad ones are refused."
   (:require [cljs.test :refer [deftest is async]]
-            [engine.expr :as expr]
+            [engine.args :as a]
             [engine.go-to-quote-test :as pt]
-            [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.test-util :as tu :refer [floor box]]))
 
 ;; a plateau (feet 64) ending at x 10, an 11-block drop to a floor with feet 53: a stone one beyond x 13, `block` at x 11..13
@@ -12,8 +12,8 @@
 
 (def args {:pos [40 53 0]})
 
-(defn ^:async found? [block extra]
-  (let [{:keys [out]} (await (pt/preview (cliff block) (merge args extra)))]
+(defn ^:async found? [block landing]
+  (let [{:keys [out]} (await (settings/with-settings (if landing {:jobs.lib.cost.planner/landing landing} {}) #(pt/preview (cliff block) args)))]
     (:found out)))
 
 (deftest a-hay-landing-is-planned-where-a-stone-one-is-not
@@ -23,16 +23,13 @@
         (is (false? (await (found? "stone" nil))) "an 11-block fall onto stone (8 hp) is over the default budget (7 hp)")
         (is (true? (await (found? "hay_block" nil))))))))
 
-(deftest a-callers-landing-overrides-the-default
+(deftest the-landing-setting-overrides-the-default
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (false? (await (found? "hay_block" {:landing {"hay_block" 1}}))) "hay priced as a full fall")
-        (is (true? (await (found? "stone" {:landing {"stone" 0}}))) "stone priced as a soft landing")))))
+        (is (false? (await (found? "hay_block" {"hay_block" 1}))) "hay priced as a full fall")
+        (is (true? (await (found? "stone" {"stone" 0}))) "stone priced as a soft landing")))))
 
-(deftest a-bad-landing-is-refused-at-submit
-  (doseq [job ['jobs.movement.go-to]
-          bad [{"no_such_block" 0.2} {"hay_block" "soft"} [1]]]
-    (is (re-find #":landing must be a map of block name to a number"
-                 (expr/problem registry/jobs (list job (assoc args :landing bad))))
-        (str job " " (pr-str bad)))))
+(deftest a-bad-landing-setting-is-refused
+  (doseq [bad [{"no_such_block" 0.2} {"hay_block" "soft"} [1]]]
+    (is (string? (a/setting-problem :jobs.lib.cost.planner/landing bad)) (pr-str bad))))

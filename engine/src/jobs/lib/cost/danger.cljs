@@ -9,7 +9,7 @@
   the route or a ranged mob has a line of fire to it. Overrides {mob-name number-or-{:times n}}: threat before armour.
 
   danger-rate: mob-hurt over 1 s x stance factor (:flee x4, :fight x0.1), at most max-rate: hp a second (the factors, the cap and
-  danger-shape are go-to options, danger-opts), which the planner prices at go-to's hp price (:hp-seconds x health-scale) like a drop's damage."
+  shape are settings, danger-opts), which the planner prices at go-to's hp price (:hp-seconds x health-scale) like a drop's damage."
   (:require [engine.args :as a]
             [engine.constants :as constants]
             [engine.settings :as settings]
@@ -19,6 +19,8 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
 
+(declare danger-shape-problem)
+
 (a/defargs settings
   {::max-fire-checks {:default 8 :doc "Route cells a ranged mob's line of fire is tried to, nearest first." :spec (a/int-in 1 nil)}
    ::default-radius {:default 16 :doc "Blocks out to which a sensed or remembered mob costs a route." :spec (a/int-in 1 nil)}
@@ -27,6 +29,11 @@
    ::snap-span {:default 4 :doc "How far up or down a straight route looks for ground in each column." :spec (a/int-in 0 nil)}
    ::sprint-speed {:default 5.6 :doc "Blocks a second a sprinting body covers (reach-first?)." :spec (a/num-in 0.1 nil)}
    ::walk-speed {:default 4.3 :doc "Blocks a second a walking body covers, one too hungry to sprint (reach-first?)." :spec (a/num-in 0.1 nil)}
+   ::flee-factor {:default 4 :doc "Danger price: a known mob the body would flee costs this times its hp a second." :spec (a/num-in 0 nil)}
+   ::fight-factor {:default 0.1 :doc "Danger price: a known mob the body would fight costs this times its hp a second." :spec (a/num-in 0 nil)}
+   ::max-rate {:default 4 :doc "Danger price: hp a second one known danger costs at most; above 4 it also raises the total of all dangers a second (the planner's dangerCap)." :spec a/pos-num?}
+   ::shape {:default false :doc "Danger price: {:sensed|:remembered|:creeper {:close :radius}} blocks, full within :close, none past :radius; only the terms given replace the defaults (sensed 3 12, remembered 3 16, creeper 4 8). false: the defaults."
+            :spec (a/or-of false? (a/valid-by "a map of :sensed, :remembered or :creeper to {:close :radius} numbers >= 0, :close under :radius" #(danger-shape-problem %)))}
    ::sprint-food {:default 6 :doc "Food at or under which a body cannot sprint (reach-first?)." :spec (a/int-in 0 20)}
    ::chase-speed {:default 3 :doc "Blocks a second a chasing melee mob covers, a little over a zombie's (reach-first?)." :spec (a/num-in 0.1 nil)}
    ::baby-chase-speed {:default 5.1 :doc "Blocks a second a baby zombie covers chasing (chase-speed of mob-kind \"baby\")." :spec (a/num-in 0.1 nil)}
@@ -153,30 +160,29 @@
   {:sensed {:close 3 :radius 12} :remembered {:close 3 :radius 16} :creeper {:close 4 :radius 8}})
 (def stances "Rate factor: :flee from a mob costs the body far more than one it would :fight." {:flee 4 :fight 0.1})
 (def max-rate "hp a second one danger costs at most." 4)
-(def danger-cap "hp a second all known dangers together cost at most (the planner's dangerCap); a larger :danger-max-rate raises it." 4)
+(def danger-cap "hp a second all known dangers together cost at most (the planner's dangerCap); a larger ::max-rate raises it." 4)
 
 (defn danger-opts
-  "The danger options of go-to's args {:flee-factor :fight-factor :danger-max-rate :danger-shape}, as the {:stances :max-rate
-  :shape} that danger-rate and danger-list take; only the ones given (the rest are the defaults above)."
-  [{:keys [flee-factor fight-factor danger-max-rate danger-shape]}]
-  (let [stances (cond-> {} (some? flee-factor) (assoc :flee flee-factor) (some? fight-factor) (assoc :fight fight-factor))]
-    (cond-> {}
-      (seq stances) (assoc :stances stances)
-      (some? danger-max-rate) (assoc :max-rate danger-max-rate)
-      (some? danger-shape) (assoc :shape danger-shape))))
+  "The danger options as the {:stances :max-rate :shape} that danger-rate and danger-list take, from the settings
+  ::flee-factor, ::fight-factor, ::max-rate and ::shape."
+  []
+  (let [shape (settings/get settings ::shape)]
+    (cond-> {:stances {:flee (settings/get settings ::flee-factor) :fight (settings/get settings ::fight-factor)}
+             :max-rate (settings/get settings ::max-rate)}
+      shape (assoc :shape shape))))
 
 (defn danger-shape-problem
-  "Why shape (go-to's :danger-shape) is not usable, else nil: a map of :sensed, :remembered or :creeper to {:close :radius}
+  "Why shape (the setting ::shape) is not usable, else nil: a map of :sensed, :remembered or :creeper to {:close :radius}
   numbers >= 0, close under radius (against what the default has for the term not given)."
   [shape]
   (when (some? shape)
-    (or (when-not (map? shape) (str ":danger-shape must be a map, got " (pr-str shape)))
+    (or (when-not (map? shape) (str "the danger shape must be a map, got " (pr-str shape)))
         (some (fn [[k v]]
                 (let [m (merge (get danger-shape k) v)
                       ok? #(and (number? %) (js/isFinite %) (>= % 0))]
-                  (cond (not (contains? danger-shape k)) (str ":danger-shape has no " (pr-str k) ", only :sensed :remembered :creeper")
+                  (cond (not (contains? danger-shape k)) (str "the danger shape has no " (pr-str k) ", only :sensed :remembered :creeper")
                         (not (and (map? v) (every? #{:close :radius} (keys v)) (ok? (:close m)) (ok? (:radius m)) (< (:close m) (:radius m))))
-                        (str ":danger-shape " (pr-str k) " must be {:close :radius} numbers >= 0 with :close under :radius, got " (pr-str v)))))
+                        (str "the danger shape " (pr-str k) " must be {:close :radius} numbers >= 0 with :close under :radius, got " (pr-str v)))))
               shape))))
 
 (defn stance

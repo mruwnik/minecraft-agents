@@ -127,7 +127,7 @@
   "The planner's options.dangers for the body of c (JS array, nil for none): known-dangers with the :threat spots its
   flights left."
   [c]
-  (let [ds (known-dangers (:primitives c) (remembered-spots c) (cost/danger-opts (:args c)))]
+  (let [ds (known-dangers (:primitives c) (remembered-spots c) (cost/danger-opts))]
     (when (seq ds) (clj->js ds))))
 
 (defn danger-near-fn
@@ -136,7 +136,7 @@
   [c]
   (let [p (:primitives c)
         body (body-of p)
-        ds (known-dangers p (remembered-spots c) (cost/danger-opts (:args c)))]
+        ds (known-dangers p (remembered-spots c) (cost/danger-opts))]
     (fn [pos]
       (->> ds
            (keep (fn [{:keys [mob close] :as d}]

@@ -93,13 +93,12 @@
 
 (defn round-unknown
   "The mask spec of this round (c's :unknown): with :place-torches and a torch carried or a fetch still open, torches on
-  (wworld/with-light), priced by :unknown's :light-cost or jobs.lib.cost/light-cost."
+  (wworld/with-light), priced by jobs.lib.cost/light-cost."
   [c]
   (let [u (:unknown c)
-        n (ltorch/torches-held (:primitives c))
-        arg (:unknown (:args c))]
+        n (ltorch/torches-held (:primitives c))]
     (if (and u (:place-torches (:args c)) (or (pos? n) (torch-fetch-open? c)))
-      (wworld/with-light u (or (when (map? arg) (:light-cost arg)) (:cost (cost/light-cost {:carried n}))) (light-ok c))
+      (wworld/with-light u (:cost (cost/light-cost {:carried n})) (light-ok c))
       u)))
 
 (defn ^:async fetch-torches!

@@ -99,7 +99,7 @@
                      (not= :never doors) (update :moves conj :open)
                      (some? drop-cost) (assoc :drop-cost drop-cost)
                      (some? costs) (assoc :costs costs))
-            spec (when unknown (wworld/unknown-spec (when (map? unknown) unknown)))
+            spec (when unknown (wworld/unknown-spec))
             plan (try (await (near/plan! (with-deadline c) [(:x pos) (:y pos) (:z pos)] (or range 1) doors policy [] false
                                          (when-not (= :closed one-way) :open) nil true
                                          (not (false? dangers)) nil (not (false? dark)) tolls spec))

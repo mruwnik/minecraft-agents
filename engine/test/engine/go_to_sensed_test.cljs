@@ -652,7 +652,7 @@
 (def probe-masked
   "A job that probes the way to the pit floor under go-to's :unknown mask (the spec go-to puts on its context)."
   {:round (fn ^:async probe-round [c]
-            (let [c (assoc c :unknown (wworld/unknown-spec nil))]
+            (let [c (assoc c :unknown (wworld/unknown-spec))]
               (ctx/end c :done {:cost (await (gth/probe-plan! c {:x -6.5 :y 60 :z 0.5} 0))})))})
 
 (deftest the-damage-probe-plans-over-the-mask-of-the-walk

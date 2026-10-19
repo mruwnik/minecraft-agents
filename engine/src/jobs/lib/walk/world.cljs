@@ -27,22 +27,12 @@
 
 (defn unknown-spec
   "go-to's :unknown as the mask spec of one go-to call (the planner's options.unknown less what path-world adds): the prices
-  (jobs.lib.cost/unknown-prices, each overridden by prices, a map of the same keys; nil: the defaults) and one missed Set,
-  shared by every pathWorld made with this spec (the floors the walk looked for and could not see)."
-  [prices]
-  (let [{:keys [cell floor peek-s aim-s see-lit-depth light-depth]} (merge cost/unknown-prices prices)]
+  (jobs.lib.cost/walk-unknown-prices) and one missed Set, shared by every pathWorld made with this spec (the floors the
+  walk looked for and could not see)."
+  []
+  (let [{:keys [cell floor peek-s aim-s see-lit-depth light-depth]} (cost/walk-unknown-prices)]
     #js {:cell cell :floor floor :peekS peek-s :aimS aim-s :seeLitDepth see-lit-depth :lightDepth light-depth :missed (js/Set.)
          :noLight (js/Set.)}))
-
-(defn unknown-problem
-  "Why u is not a usable go-to :unknown (a boolean, or a map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth
-  :light-cost to numbers >= 0), else nil."
-  [u]
-  (cond
-    (boolean? u) nil
-    (not (map? u)) (str ":unknown is true, false or a map of prices; got " (pr-str u))
-    :else (when-let [[k v] (first (remove (fn [[k v]] (and (or (contains? cost/unknown-prices k) (= :light-cost k)) (number? v) (>= v 0))) u))]
-            (str ":unknown prices are :cell :floor :peek-s :aim-s :see-lit-depth :light-depth :light-cost, numbers >= 0; got " (pr-str k) " " (pr-str v)))))
 
 (def torch-base*
   (delay (let [^js t (blocks/default-state-table)
@@ -247,7 +237,7 @@
 (defn default-food [] (settings/get settings ::default-food))
 
 (defn food-of
-  "The food level (0-20) the walk counts on: the job's :food arg (a number), else default-food. go-to fills the arg with the body's own food (jobs.movement.go-to/step!); the walk does not read the body."
+  "The food level (0-20) the walk counts on: the :food of the job's args (a number), else default-food. go-to fills it with the body's own food (jobs.movement.go-to/step!); the walk does not read the body."
   [c]
   (let [food (:food (:args c))]
     (if (number? food) food (default-food))))
@@ -318,13 +308,15 @@
                    (cost/air-profile (.-equipment self) (array-seq (.-effects self)))
                    (cost/swim-profile (.-equipment self))
                    {:damage-budget (damage-budget c)
-                    :damage-weight (* (or (:hp-seconds (:args c)) cost/hp-seconds) (cost/health-scale (.-health self)))
-                    :danger-cap (max cost/danger-cap (or (:danger-max-rate (:args c)) 0))}
-                   (when-some [landing (:landing (:args c))] {:landing landing})
+                    :damage-weight (* (cost/walk-hp-seconds) (cost/health-scale (.-health self)))
+                    :danger-cap (max cost/danger-cap (:max-rate (cost/danger-opts)))}
+                   (when-some [landing (cost/walk-landing)] {:landing landing})
+                   {:drop-cost (cost/walk-drop-cost)}
+                   (when-some [costs (cost/walk-costs)] {:costs costs})
                    (when-some [m (:y-margin (:args c))] {:y-margin m})
                    (when-some [f (:dive-floor c)] {:y-below (max 0 (- (js/Math.floor (.-y (.-pos self))) f))}))
       (or under? (and (.-inWater self) (number? (.-oxygen self)) (< (.-oxygen self) 20))) (-> (cond-> under? (-> (dissoc :air-grace) (merge (cost/air-profile nil (array-seq (.-effects self)))))) (assoc :air-used (cost/air-used (.-oxygen self)))
-                                               (merge (drowning self (or (:hp-seconds (:args c)) cost/hp-seconds)))
+                                               (merge (drowning self (cost/walk-hp-seconds)))
                                                (merge (some->> (known-fn (:primitives c)) (hash-map :air-seen))))
       (and (number? food) (<= food 6)) (assoc :sprint false)
       (= :walk (gait c)) (assoc :sprint false :gait :walk)

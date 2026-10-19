@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.lib.near :as near]
             [jobs.lib.threats :as threats]
@@ -19,17 +20,22 @@
   [steps]
   (apply min (map (fn [{:keys [px pz]}] (js/Math.hypot (- px 20.5) (- pz 0.5))) steps)))
 
+(declare plan-steps)
+
 (defn ^:async plan-past
   "near/plan! from [0 64 0] to [40 64 0] for a body with world spec (merged) and :threat entries remembered first, with
-  dangers on or off: the plan's steps."
-  [world remembered dangers & [args]]
+  dangers on or off, with the settings overrides: the plan's steps."
+  [world remembered dangers & [overrides]]
+  (await (settings/with-settings (or overrides {}) (fn ^:async plan [] (await (plan-steps world remembered dangers))))))
+
+(defn ^:async plan-steps [world remembered dangers]
   (let [clock (atom 1000000)
         [_ sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor (merge {:floor [-5 -20 45 20]} world))
         out (atom nil)
         parent {:round (fn ^:async planning-round [c]
                          (doseq [t remembered] (threats/remember! c t))
-                         (reset! out (await (near/plan! (assoc c :args (or args {})) [40 64 0] 0 :never (wworld/body-policy c) [] false nil nil true dangers)))
+                         (reset! out (await (near/plan! (assoc c :args {}) [40 64 0] 0 :never (wworld/body-policy c) [] false nil nil true dangers)))
                          (ctx/end c :done nil))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'planning-parent parent)
                           :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
@@ -51,10 +57,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [plain (await (plan-past {:entities [zombie]} [] true))
-              default (await (plan-past {:entities [zombie]} [] true {:flee-factor 4 :fight-factor 0.1 :danger-max-rate 4}))
-              cheap-flee (await (plan-past {:entities [zombie]} [] true {:flee-factor 0.1}))
-              capped (await (plan-past {:entities [zombie]} [] true {:danger-max-rate 0.2}))
-              narrow (await (plan-past {:entities [zombie]} [] true {:danger-shape {:sensed {:close 1 :radius 3}}}))]
+              default (await (plan-past {:entities [zombie]} [] true {:jobs.lib.cost.danger/flee-factor 4 :jobs.lib.cost.danger/fight-factor 0.1 :jobs.lib.cost.danger/max-rate 4}))
+              cheap-flee (await (plan-past {:entities [zombie]} [] true {:jobs.lib.cost.danger/flee-factor 0.1}))
+              capped (await (plan-past {:entities [zombie]} [] true {:jobs.lib.cost.danger/max-rate 0.2}))
+              narrow (await (plan-past {:entities [zombie]} [] true {:jobs.lib.cost.danger/shape {:sensed {:close 1 :radius 3}}}))]
           (is (= (mapv (juxt :x :z) plain) (mapv (juxt :x :z) default)) "today's values as options: the same plan")
           (is (< (nearest cheap-flee) (nearest plain)) "a cheaper flee passes nearer")
           (is (< (nearest capped) (nearest plain)) "a lower cap passes nearer")

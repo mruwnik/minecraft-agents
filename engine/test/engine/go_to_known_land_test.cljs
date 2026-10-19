@@ -337,7 +337,7 @@
           (is (< walked 700) (str "walked " walked ": " (mapv (juxt :status :to) (moved eng)))))))))
 
 ;; a ravine: the goal 6 blocks north across a 4-wide gap in the strip, the only way a ring road out past the loaded edge at
-;; both ends of the strip (about 400 blocks round). The goal is near, yet worth a long tour: the floor of :tour-floor-blocks
+;; both ends of the strip (about 400 blocks round). The goal is near, yet worth a long tour: the floor of the tour-floor-blocks setting
 (def ravine
   (merge (box 0 63 2 15 63 100 "stone") (box 0 63 -100 15 63 -3 "stone")
          (box -20 63 -100 -18 63 100 "stone")
@@ -357,5 +357,5 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (go! {:blocks ravine :self {:pos {:x 10.5 :y 64 :z 3.5}} :viewChunks 1}
-                                        {:pos [10 64 -3] :range 1 :ways #{:walk :clear-seal} :tour-floor-blocks 0}))]
+                                        {:pos [10 64 -3] :range 1 :ways #{:walk :clear-seal} :settings {:jobs.lib.cost.value/tour-floor-blocks 0}}))]
           (is (= :explore-spent (:why @out)) (str "result " @out)))))))

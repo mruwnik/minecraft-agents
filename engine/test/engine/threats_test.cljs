@@ -70,10 +70,12 @@
     (is (= {:close 5 :radius 20 :rate 4} (shape {:shape {:sensed {:close 5 :radius 20}}})) "the shape is an option")
     (is (= {:close 3 :radius 7 :rate 4} (shape {:shape {:sensed {:radius 7}}})) "a partial shape keeps the other term")))
 
-(deftest go-to-args-name-the-danger-options
+(deftest the-danger-settings-name-the-danger-options
   (is (= {:stances {:flee 2 :fight 0.5} :max-rate 3 :shape {:sensed {:radius 9}}}
-         (cost/danger-opts {:flee-factor 2 :fight-factor 0.5 :danger-max-rate 3 :danger-shape {:sensed {:radius 9}}})))
-  (is (= {} (cost/danger-opts {})) "absent args: defaults apply downstream"))
+         (settings/with-settings {:jobs.lib.cost.danger/flee-factor 2 :jobs.lib.cost.danger/fight-factor 0.5 :jobs.lib.cost.danger/max-rate 3
+                                  :jobs.lib.cost.danger/shape {:sensed {:radius 9}}}
+           cost/danger-opts)))
+  (is (= {:stances {:flee 4 :fight 0.1} :max-rate 4} (cost/danger-opts)) "the defaults"))
 
 (defn fled-view
   "A memory view at t 1000 whose :threat entries were written at the given ms with the given data."

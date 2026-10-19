@@ -78,6 +78,7 @@
 (def mob-kind danger/mob-kind)
 
 (def hp-seconds health/hp-seconds)
+(def walk-hp-seconds health/walk-hp-seconds)
 (def health-scale health/health-scale)
 (def drown-prices health/drown-prices)
 (def damage-budget health/damage-budget)
@@ -94,6 +95,10 @@
 (def planner-names planner/planner-names)
 (def landing-problem planner/landing-problem)
 (def planner-landing planner/planner-landing)
+(def walk-costs planner/walk-costs)
+(def walk-landing planner/walk-landing)
+(def walk-drop-cost planner/walk-drop-cost)
+(def walk-unknown-prices planner/walk-unknown-prices)
 (def gaits planner/gaits)
 (def gait-problem planner/gait-problem)
 (def gait-costs planner/gait-costs)

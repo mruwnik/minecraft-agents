@@ -1,6 +1,7 @@
 (ns engine.cost-health-test
   "jobs.lib.cost.health: what an hp costs and how many a walk may spend, and how the walk policy and go-to pass them on."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.health :as health]
@@ -76,19 +77,17 @@
     {:health 1 :food 20} {} 0
     {:health nil :food 20} {} 0))
 
-(deftest the-walk-policys-hp-price-is-the-callers-seconds-an-hp
-  (let [policy (fn [args] (wworld/body-policy {:primitives (tu/fake {:self {:health 20 :food 20}}) :args args}))]
-    (is (= 10 (:damage-weight (policy {}))) "default")
-    (is (= 25 (:damage-weight (policy {:hp-seconds 25}))))
-    (is (= 25 (:damage-weight (wworld/body-policy {:primitives (tu/fake {:self {:health 10 :food 20}}) :args {:hp-seconds 12.5}})))
-        "the price still rises with low health")))
+(deftest the-walk-policys-hp-price-is-the-settings-seconds-an-hp
+  (let [policy (fn [overrides health] (settings/with-settings overrides #(wworld/body-policy {:primitives (tu/fake {:self {:health health :food 20}}) :args {}})))]
+    (is (= 10 (:damage-weight (policy {} 20))) "default")
+    (is (= 25 (:damage-weight (policy {:jobs.lib.cost.health/hp-seconds 25} 20))))
+    (is (= 25 (:damage-weight (policy {:jobs.lib.cost.health/hp-seconds 12.5} 10))) "the price still rises with low health")))
 
-(deftest a-danger-max-rate-above-the-default-raises-the-planners-total-cap
-  (let [policy (fn [args] (wworld/body-policy {:primitives (tu/fake {:self {:health 20 :food 20}}) :args args}))
-        cap (fn [args] (.-dangerCap (wplan/with-drops #js {} (policy args))))]
+(deftest a-max-rate-above-the-default-raises-the-planners-total-cap
+  (let [cap (fn [overrides] (settings/with-settings overrides #(.-dangerCap (wplan/with-drops #js {} (wworld/body-policy {:primitives (tu/fake {:self {:health 20 :food 20}}) :args {}})))))]
     (is (= 4 (cap {})) "default")
-    (is (= 4 (cap {:danger-max-rate 2})) "a lower rate leaves the total cap")
-    (is (= 8 (cap {:danger-max-rate 8})))))
+    (is (= 4 (cap {:jobs.lib.cost.danger/max-rate 2})) "a lower rate leaves the total cap")
+    (is (= 8 (cap {:jobs.lib.cost.danger/max-rate 8})))))
 
 (deftest the-walk-policy-uses-the-survivable-budget-once-the-call-chose-to-go-over
   (let [policy (fn [mem args] (wworld/body-policy {:primitives (tu/fake {:self {:health 14 :food 20}}) :args args :over-budget mem}))]

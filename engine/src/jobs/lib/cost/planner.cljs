@@ -2,7 +2,10 @@
   "The prices go-to's :costs may override, in seconds: the planner's per-move costs (engine.path.planner.base/DEFAULT-COSTS
   holds the defaults, which apply to every price left out). A drop's price is go-to's :drop-cost, a hurt hp's :hp-seconds.
   :lethal-air is no price: 1 lets a swim to air drown the body to death when no other way exists (breathe's), 0 refuses it (:air-lethal); :drown-slack is the seconds of margin in its count of 2 hp hits (ceil(seconds + slack)). Left out: airSupply, airLimit and airUsed (the body's breath, a fact, not a price), airDrain and airGrace (its helmet, see air-profile) and dropFactor (:drop-cost)."
-  (:require [engine.path.blocks :as blocks]
+  (:require [engine.args :as a]
+            [engine.path.blocks :as blocks]
+            [engine.settings :as settings]
+            [clojure.string :as str]
             [jobs.lib.cost.armour :as armour]
             [engine.path.planner.base :as base]))
 
@@ -160,3 +163,23 @@
   look), :aim-s a level or up step onto one (a look down at the takeoff); and the depths, in blocks: :see-lit-depth the deepest
   drop a lit landing is seen over from the walk's worst peek stop, :light-depth the deepest a torch at the takeoff lights."
   {:cell 0.1 :floor 0.3 :peek-s 0.7 :aim-s 0.1 :see-lit-depth 5 :light-depth 5})
+
+(a/defargs settings
+  {::drop-cost {:default 1 :doc "Scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back." :spec (a/or-of (a/num-in 0 nil) false?)}
+   ::costs {:default false :doc (str "Map of price name to seconds, overriding the planner's price of a move (" (str/join " " (map name (keys planner-names))) "); a price left out keeps the planner's default. false: none.")
+            :spec (a/or-of false? (a/valid-by "a map of planner price name to a number of seconds >= 0" #(planner-costs-problem %)))}
+   ::lethal-air {:default false :doc "true lets a plan drown the body when no other way to air exists (breathe's); false: such a plan is refused (:why :air-lethal)." :spec boolean?}
+   ::landing {:default false :doc "Map of block name to the share of a fall's damage a landing on it takes (0.2: 80% off), negative: a bounce, no damage but settle time (only onto a pad in view, bouncing blocks or a wall all round, not under :gait :sneak); entries override the defaults hay_block 0.2, honey_block 0.2 and slime_block -1."
+              :spec (a/or-of false? (a/valid-by "a map of block name to a number" #(landing-problem %)))}
+   ::unknown-prices {:default false :doc "Map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth to numbers overriding the prices of cells a walk over :unknown has not seen (unknown-prices); a go-to :unknown map wins over it." :spec (a/or-of false? (a/valid-by "a map of unknown-price name to a number >= 0" (fn [m] (when-not (or (nil? m) (and (map? m) (every? #(and (contains? unknown-prices (key %)) (number? (val %)) (>= (val %) 0)) m))) "not a map of unknown-price names to numbers >= 0"))))}})
+
+(defn walk-costs
+  "The planner price overrides every walk keeps: the setting ::costs, with :lethal-air 1 when ::lethal-air."
+  []
+  (let [m (settings/get settings ::costs)]
+    (cond-> (or m nil) (settings/get settings ::lethal-air) (assoc :lethal-air 1))))
+
+(defn walk-landing "The setting ::landing, nil when none." [] (or (settings/get settings ::landing) nil))
+(defn walk-drop-cost "The setting ::drop-cost." [] (settings/get settings ::drop-cost))
+(defn walk-unknown-prices "The unknown-prices as set: the defaults over the setting ::unknown-prices." []
+  (merge unknown-prices (or (settings/get settings ::unknown-prices) nil)))
