@@ -27,7 +27,7 @@
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.build.plan :as plan :refer [retry-distance max-retries facing-of facing-ok? body-cells count-fail stands-for plan-trouble owed need-of shortage hazards decide rules-input refuse permitted judged no-zones planned how placeable misplaced missing digging unseen buildable problem]]
             [jobs.lib.build.scaffold :as scaffold]
-            [jobs.lib.build.text :refer [summary announce! stopped-text assoc-fetch-failed]]))
+            [jobs.lib.build.text :refer [summary stopped-text assoc-fetch-failed]]))
 
 (def doc
   "Build what a plan wants (:plan, optionally only its :part) from what the body carries.
@@ -57,8 +57,7 @@
   cannot be reached, :give-up times is given up (:refused, :occupied, :no-item, :unreachable or :unloaded).
   Zones: every place is checked against zones and the footprints of the other active plans, when the cell is
   chosen and again before the place. A cell in a zone that does not allow :place, or in another plan's footprint,
-  is refused for good (not counted as given up). It is listed in :refused [{:pos :reason :zone|:claim|:footprint|:hazard}], with one
-  build.refused warn per reason.
+  is refused for good (not counted as given up). It is listed in :refused [{:pos :reason :zone|:claim|:footprint|:hazard}].
   Water beside a cell is no obstacle by default. :accept names the fluid hazards taken (:fluid-adjacent,
   :lava-adjacent). A cell with an untaken one is refused as :hazard.
   Plan properties: :surface true puts each column of the plan on the ground the body has seen there (the column's lowest
@@ -71,7 +70,7 @@
   the call's :least (default :all); else with :text naming the missing count and what it left: nothing-possible
   :incomplete when cells were given up, condition-failed {:reason :no-items :needs} when items are short, condition-failed
   :refused when the rules refuse the rest, nothing-possible :shut-in. For a block placed in the wrong state, :found names the state it came out in.
-  Events: build.short, build.gave-up, build.refused, build.wrong, build.gap (a fence or wall placed over air; warns) and build.way-in (cells the body stood in, above the plan's floor, filled with no door there; warns). Event texts name
+  Events: build.gap (a fence or wall placed over air; warns) and build.way-in (cells the body stood in, above the plan's floor, filled with no door there; warns). Event texts name
   the count and the first few cells. The whole list is in :cells of the event and in the result.
   Start facts (one build.declined warn naming the plan and the reason): no zone list read (unless :ignore-zones?) is a
   failed condition {:reason :no-zones}; a plan that is missing, unreadable or has no cells to
@@ -170,7 +169,7 @@
 (declare result-data)
 
 (defn done?
-  "Done when the plan has nothing owed, no block came out wrong (the round ends it with its build.wrong warn); the cells placed this call, the cells still owed and the result so far. A check (no token)
+  "Done when the plan has nothing owed, no block came out wrong (the round ends it :wrong-blocks); the cells placed this call, the cells still owed and the result so far. A check (no token)
   reads the plan judged once per check-cache window, a round afresh."
   [c]
   (let [{:keys [cells trouble]} (plan-now c)
@@ -487,9 +486,7 @@
       :else (ctx/end c :nothing-possible :incomplete data))))
 
 (defn finish! [c cells]
-  (let [result (result-data c cells)]
-    (announce! c result)
-    (ending-of c result)))
+  (ending-of c (result-data c cells)))
 
 (defn ^:async reach-cell!
   "Walk to a stand for the buildable cell; where no ground stand within :reach of it exists, raise a temporary one (jobs.lib.build.scaffold)."
@@ -587,13 +584,11 @@
               (if (= before (ctx/mem c)) (finish! c cells) :again)))))
 
 (defn book-failed!
-  "Book the failed fetch for wait w (not asked again in this call) and warn fetch.failed."
+  "Book the failed fetch for wait w (not asked again in this call); the ending names it in :fetch-failed."
   [c w e]
   (let [cause (:cause e)
         failed (if (map? cause) (or (:why cause) (:reason cause)) (contract/cause-key e))]
-    (ctx/update-mem! c #(-> (dissoc % :fetching) (assoc-in [:fetch-failed (plan/fetch-key w)] {:failed failed})))
-    (ctx/emit! c :fetch.failed :warn {:for (:reason w) :failed failed
-                                      :text (str "could not fetch " (or (:item w) (str "a tool for " (:block w))) ": " (name failed))})))
+    (ctx/update-mem! c #(-> (dissoc % :fetching) (assoc-in [:fetch-failed (plan/fetch-key w)] {:failed failed})))))
 
 (defn ^:async fetch-step!
   "Fetch what the plan lacks (jobs.lib.need) when a fetch is due: :continue while the child waits on the world, :again

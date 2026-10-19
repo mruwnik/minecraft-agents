@@ -29,7 +29,7 @@
    :plans [{:id "hole" :metadata {:by "$body"} :parts [{:id "cell" :cells [#at [16 2 16]] :want :clear}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:hole"})]]
    :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :build.refused} :for-s 80 :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind :stopped} :for-s 80 :until {:source :job :kind :completed}}]
    :after [[:block [16 2 16] "air"] [:body-near [16.5 3 16.5] 2.5]]}
   {:name "accept-under-feet-digs-from-on-top"
    :blocks [[:fill [12 0 12] [20 2 20] "stone"]]

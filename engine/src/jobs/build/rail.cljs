@@ -227,7 +227,6 @@
   "End the build with its result as the ending's data."
   [c cells]
   (let [result (text/summary c cells (ctx/mem c) true)]
-    (text/announce! c result)
     (ctx/update-mem! c assoc :built result)
     (ctx/end c :done nil result)))
 

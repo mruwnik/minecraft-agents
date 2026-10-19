@@ -1,7 +1,7 @@
 ;; Card 5de16da7 (part 2): jobs.build.from-plan fetches a tool for a cell it must dig. A plan wants dirt where stone stands
 ;; ([20 0 16]); the body carries dirt but no pickaxe, a seen chest at [14 0 19] holds one (yaw turned by RCON so the first sight
 ;; sees it). Should-succeed: fetch.started, fetch.done, the stone is dug and dirt put there (job.completed :done).
-;; Should-fail: :fetch false gives the cell up :no-tool (build.gave-up), the stone stays and the chest is untouched.
+;; Should-fail: :fetch false gives the cell up :no-tool (the ending is :incomplete), the stone stays and the chest is untouched.
 {:defaults
  {:tags [:build :fetch] :time :any
   :plot {:height 8}
@@ -17,11 +17,11 @@
    :expect [{:event {:source :job :kind :fetch.started} :within-s 30 :of-job true}
             {:event {:source :job :kind :fetch.done} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:kind :done}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :build.gave-up} :for-s 80 :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind :stopped} :for-s 80 :until {:source :job :kind :completed}}]
    :after [[:block [20 0 16] "dirt"] [:item "stone_pickaxe" 1]]}
   {:name "fetch-false-gives-the-cell-up-no-tool"
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 45 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.build.from-plan {:plan "$plan:wall" :fetch false})]]
-   :expect [{:event {:source :job :kind :build.gave-up} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :fetch.started} :for-s 40 :until {:source :job :kind :build.gave-up}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :incomplete}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :fetch.started} :for-s 40 :until {:source :job :kind :stopped}}]
    :after [[:block [20 0 16] "stone"] [:item "stone_pickaxe" 0]]}]}

@@ -79,8 +79,7 @@
           (is (< (.indexOf order [2 64 2]) (.indexOf order [2 65 2])))
           (is (= {:placed 9 :missing [] :short {} :given-up {} :wrong [] :refused [] :text "build of pen done: placed 9"}
                  result))
-          (is (empty? (h/events-of seen :build.done)) "the ending tells it")
-          (is (empty? (h/events-of seen :build.short))))))))
+          (is (empty? (h/events-of seen :build.done)) "the ending tells it"))))))
 
 (deftest a-facing-no-click-gives-is-placed-from-the-side-it-faces-away-from
   (async done
@@ -122,8 +121,7 @@
               result (await (child-outcome eng job {:plan "pen"} 200))]
           (is (= 4 (count (filter #(= "oak_fence" (block p %)) ring))))
           (is (= {"oak_fence" 3} (:short result)))
-          (is (= 3 (count (filter (set ring) (:missing result)))))
-          (is (= [{"oak_fence" 3}] (mapv :short (h/events-of seen :build.short)))))))))
+          (is (= 3 (count (filter (set ring) (:missing result))))))))))
 
 (deftest a-removed-block-is-put-back-and-nothing-else-is-touched
   (async done
@@ -149,8 +147,7 @@
           (let [result (await (child-outcome eng job {:plan "pen"} 200))]
             (is (= 3 (count (filter #(= [4 64 3] (first %)) (places p)))))
             (is (= {[4 64 3] :no-support} (:given-up result)))
-            (is (= 8 (:placed result)))
-            (is (= 1 (count (h/events-of seen :build.gave-up))))))))))
+            (is (= 8 (:placed result)))))))))
 
 (deftest the-give-up-setting-sets-how-often-a-refused-cell-is-tried
   (async done
@@ -498,8 +495,7 @@
                                             ground [{:name "oak_log" :count 2}]))]
           (is (= [[[4 64 4] "oak_log"]] (places p)))
           (is (= {[2 64 2] :no-support} (:given-up result)))
-          (is (= [[2 64 2]] (:missing result)))
-          (is (= 1 (count (h/events-of seen :build.gave-up)))))))))
+          (is (= [[2 64 2]] (:missing result))))))))
 
 (deftest a-block-that-comes-out-another-way-is-reported-wrong-never-dug-or-retried
   (async done
@@ -516,8 +512,7 @@
             (is (= 1 (count (places p))))
             (is (empty? (h/calls p "dig")))
             (is (= [{:pos [3 64 3] :found "oak_stairs[facing=north]" :want "oak_stairs[facing=east]" :placed true}] (:wrong result)))
-            (is (= [:stopped :wrong-blocks] ((juxt :status :reason) result)) "done? says not done, so the build does not end :done")
-            (is (= 1 (count (h/events-of seen :build.wrong))))))))))
+            (is (= [:stopped :wrong-blocks] ((juxt :status :reason) result)) "done? says not done, so the build does not end :done")))))))
 
 (deftest the-opt-out-needs-no-zone-list
   (async done
@@ -634,7 +629,6 @@
           (is (= 2 (count (h/calls p "dig"))))
           (is (= ["lower" "upper"] (mapv #(:half (state-at p %)) [[2 64 2] [2 65 2]])))
           (is (= {:placed 1 :missing [] :wrong [] :given-up {}} (select-keys result [:placed :missing :wrong :given-up])))
-          (is (empty? (h/events-of seen :build.gave-up)))
           (is (= [[[2 64 2] "oak_door"]] (places q)))
           (is (empty? (h/calls q "dig")))
           (is (= {:placed 1 :wrong [] :given-up {}} (select-keys litter [:placed :wrong :given-up]))))))))
@@ -645,15 +639,13 @@
       (fn ^:async t []
         (let [[result p seen] (await (fence-run {"4,64,3" "dirt"}
                                                 [{:name "oak_fence_gate" :count 1} {:name "torch" :count 1}]
-                                                {} {}))
-              wrong (first (h/events-of seen :build.wrong))]
+                                                {} {}))]
           (is (= "dirt" (block p [4 64 3])))
           (is (= {"oak_fence" 7} (:short result)) "the dirt cell counts with the empty ones")
           (is (some #{[4 64 3]} (:missing result)))
-          (is (= [{:pos [4 64 3] :found "dirt" :want "oak_fence" :short true}] (:wrong result)))
-          (is (re-find #"oak_fence \(short\)" (:text wrong))))))))
+          (is (= [{:pos [4 64 3] :found "dirt" :want "oak_fence" :short true}] (:wrong result))))))))
 
-(deftest every-wrong-cell-is-listed-and-the-event-text-is-never-clipped
+(deftest every-wrong-cell-is-listed-in-the-result
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -663,13 +655,8 @@
               {:keys [eng seen]} (start {:blocks (into {} (map (fn [[x y z]] [(h/cell-key x y z) "dirt"])) cells)
                                          :inventory [{:name "oak_planks" :count 64}]}
                                         (merge wall guard))
-              result (await (child-outcome eng job {:plan "wall"} 300))
-              wrong (first (h/events-of seen :build.wrong))]
-          (is (= 30 (count (:wrong result))))
-          (is (= 30 (count (:cells wrong))))
-          (is (re-find #"30 wrong" (:text wrong)))
-          (is (not (re-find #"…|\.\.\." (:text wrong))))
-          (is (< (count (:text wrong)) 240)))))))
+              result (await (child-outcome eng job {:plan "wall"} 300))]
+          (is (= 30 (count (:wrong result)))))))))
 
 (def wide-ground (into {} (for [x (range -4 12) z (range -4 12)] [(h/cell-key x 63 z) "stone"])))
 
@@ -786,8 +773,7 @@
             (is (= :stopped (:status result)))
             (is (= :incomplete (:reason result)))
             (is (re-find #"still missing 1" (:text result)))
-            (is (re-find #"no-support" (:text result)))
-            (is (= 1 (count (h/events-of seen :build.gave-up))))))))))
+            (is (re-find #"no-support" (:text result)))))))))
 
 (deftest a-build-that-leaves-cells-ends-stopped-and-a-complete-one-does-not
   (async done

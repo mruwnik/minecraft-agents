@@ -192,7 +192,7 @@
           (is (= [] (:declined r)))
           (is (pos? (:places r))))))))
 
-;; ---------------------------------------------------------------- build.wrong
+;; ---------------------------------------------------------------- wrong blocks
 
 (deftest sturdy-natural-ground-under-the-line-is-no-wrong-block-of-the-builder
   (async done
@@ -200,18 +200,15 @@
       (fn ^:async t []
         (let [world (assoc (ground "grass_block" 63) (h/cell-key 5 63 0) "farmland")
               [result seen] (await (build! {:inventory (kit {}) :blocks world :self {:pos {:x 0 :y 64 :z 3}}}
-                                           {"line" (line-plan {})} {}))
-              [wrong] (h/events-of seen :build.wrong)]
-          (is (= [[5 63 0]] (mapv :pos (:cells wrong))) "only the bed cell that is not sturdy is wrong")
-          (is (= 1 (count (h/events-of seen :build.wrong))))
-          (is (= [[5 63 0]] (mapv :pos (get-in result [:built :wrong])))))))))
+                                           {"line" (line-plan {})} {}))]
+          (is (= [[5 63 0]] (mapv :pos (get-in result [:built :wrong]))) "only the bed cell that is not sturdy is wrong"))))))
 
-(deftest ground-that-is-sturdy-everywhere-gives-no-build-wrong-notice
+(deftest ground-that-is-sturdy-everywhere-leaves-no-wrong-block
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[_ seen] (await (build! (spec "grass_block" 63 (kit {})) {"line" (line-plan {})} {}))]
-          (is (empty? (h/events-of seen :build.wrong))))))))
+        (let [[result] (await (build! (spec "grass_block" 63 (kit {})) {"line" (line-plan {})} {}))]
+          (is (empty? (get-in result [:built :wrong]))))))))
 
 ;; ---------------------------------------------------------------- cells nobody has seen
 

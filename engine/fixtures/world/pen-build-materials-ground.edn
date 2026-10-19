@@ -47,6 +47,6 @@
             [:fill [24 0 24] [24 4 24] "oak_log"] [:fill [23 4 23] [25 5 25] "oak_leaves[persistent=true]"] [:set [24 4 24] "oak_log"]]
    :act [[:job (jobs.build.pen {:plan "$plan:ring"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 340 :of-job true}
-            {:no-event {:source :job :kind :fetch.failed :data {:reason :no-source}} :for-s 340 :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind :stopped} :for-s 340 :until {:source :job :kind :completed}}]
    :after [[:block [10 0 10] "oak_fence"] [:block [17 0 14] "oak_fence"]]
    :limit-s 380}]}

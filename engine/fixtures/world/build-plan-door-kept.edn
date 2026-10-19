@@ -1,6 +1,6 @@
 ;; Card a6f4ef04: re-running jobs.build.from-plan on an outline that covers a door cell leaves the door alone (listed :wrong), never digs it.
 ;; A built hut front: the plan wants dirt across [10 0 10]-[13 1 10] while an oak_door stands at [11 0 10]/[11 1 10]; dirt is carried, so the
-;; old code dug the door. Should-succeed: the rest of the wall is placed, the door stays, build.wrong names it.
+;; old code dug the door. Should-succeed: the rest of the wall is placed, the door stays, the ending is :wrong-blocks.
 ;; Should-fail (control): a wrong stone in the same place is still dug and replaced (pickaxe carried).
 {:defaults
  {:tags [:build] :time :any
@@ -12,12 +12,11 @@
  [{:name "door-in-the-outline-is-not-dug"
    :blocks [[:set [11 0 10] "oak_door[half=lower,facing=south]"] [:set [11 1 10] "oak_door[half=upper,facing=south]"]]
    :act [[:job (jobs.build.from-plan {:plan "$plan:front"})]]
-   :expect [{:event {:source :job :kind :build.wrong :message [:contains "oak_door"]} :within-s 100 :of-job true}
-            {:event {:source :job :kind :stopped :data {:reason :wrong-blocks}} :within-s 100 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :wrong-blocks} :message [:contains "wrong"]} :within-s 100 :of-job true}]
    :after [[:block [11 0 10] "oak_door"] [:block [10 0 10] "dirt"] [:block [13 1 10] "dirt"] [:item "oak_door" 0]]}
   {:name "wrong-stone-in-the-outline-is-dug-and-replaced"
    :blocks [[:set [11 0 10] "stone"]]
    :act [[:job (jobs.build.from-plan {:plan "$plan:front"})]]
    :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :build.wrong} :for-s 100 :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind :stopped} :for-s 100 :until {:source :job :kind :completed}}]
    :after [[:block [11 0 10] "dirt"] [:block [10 0 10] "dirt"] [:block [13 1 10] "dirt"]]}]}

@@ -16,7 +16,7 @@
    :body {:inventory [["rail" 25] ["powered_rail" 12] ["redstone_torch" 6] ["cobblestone" 70]]}
    :act [[:job (jobs.build.rail-line {:plan "$plan:line"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 400 :of-job true}
-            {:no-event {:source :job :kind #{:rail-build.broken :rail-build.declined :build.gave-up}} :for-s 400 :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind #{:rail-build.broken :rail-build.declined :stopped}} :for-s 400 :until {:source :job :kind :completed}}]
    :after [[:block [10 0 16] "rail[shape=east_west]"] [:block [30 8 16] "rail[shape=east_west]"]
            [:block [17 1 16] "rail[shape=ascending_east]"] [:block [21 5 16] "rail[shape=ascending_east]"]
            [:block [22 6 16] "powered_rail[shape=ascending_east]"]]}

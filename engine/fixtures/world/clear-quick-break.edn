@@ -13,14 +13,14 @@
             :parts [{:id "clear" :cells [#at [11 0 11] #at [12 0 11] #at [13 0 11] #at [14 0 11]] :want :clear}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:row"})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :build.gave-up} :for-s 100 :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind :stopped} :for-s 100 :until {:source :job :kind :completed}}]
    :after [[:block [11 0 11] "air"] [:block [12 0 11] "air"] [:block [13 0 11] "air"] [:block [14 0 11] "air"]]}
   {:name "from-plan-gives-up-cobweb-and-stone-with-no-tool"
    :blocks [[:set [11 0 11] "cobweb"] [:set [12 0 11] "stone"]]
    :plans [{:id "row" :metadata {:by "$body"}
             :parts [{:id "clear" :cells [#at [11 0 11] #at [12 0 11]] :want :clear}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:row" :fetch false})]]
-   :expect [{:event {:source :job :kind :build.gave-up} :within-s 100 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :incomplete}} :within-s 100 :of-job true}]
    :after [[:block [11 0 11] "cobweb"] [:block [12 0 11] "stone"]]}
   {:name "from-plan-gives-up-iron-ore-under-a-wooden-pickaxe"
    :blocks [[:set [11 0 11] "iron_ore"]]
@@ -28,7 +28,7 @@
    :plans [{:id "row" :metadata {:by "$body"}
             :parts [{:id "clear" :cells [#at [11 0 11]] :want :clear}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:row" :fetch false})]]
-   :expect [{:event {:source :job :kind :build.gave-up} :within-s 100 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :incomplete}} :within-s 100 :of-job true}]
    :after [[:block [11 0 11] "iron_ore"]]}
   {:name "from-plan-gives-up-obsidian-under-an-iron-pickaxe"
    :blocks [[:set [12 0 11] "obsidian"]]
@@ -36,7 +36,7 @@
    :plans [{:id "obs" :metadata {:by "$body"}
             :parts [{:id "clear" :cells [#at [12 0 11]] :want :clear}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:obs" :fetch false})]]
-   :expect [{:event {:source :job :kind :build.gave-up} :within-s 100 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :incomplete}} :within-s 100 :of-job true}]
    :after [[:block [12 0 11] "obsidian"]]}
   {:name "stair-through-snow-blocks-by-hand"
    ;; a mass of snow_block (hardness 0.2) x 8..24, y 0..9, the body on top with nothing in hand: dug, no :no-tool stop, no fetch

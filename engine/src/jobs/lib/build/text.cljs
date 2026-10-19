@@ -24,37 +24,6 @@
              :given-up given-up :wrong wrong :refused refused}
       wood (assoc :wood wood))))
 
-(def listed 8)
-
-(defn cells-text
-  "The count of items and the first few, as text for an event; the whole list goes in the event's data. Never clipped
-  with an ellipsis: it says how many more there are."
-  [items show]
-  (let [shown (take listed items)
-        more (- (count items) (count shown))]
-    (str (str/join ", " (map show shown)) (when (pos? more) (str ", and " more " more (all in :cells)")))))
-
-(defn announce!
-  "Emit the build warns of a summary: build.short, build.gave-up, build.refused and build.wrong."
-  [c {:keys [short given-up refused wrong]}]
-  (let [plan (:plan (:args c))]
-    (when (seq short)
-      (ctx/emit! c :build.short :warn {:plan plan :short short
-                                       :text (str "build of " plan " is short of " (shortage-text short))}))
-    (when (seq given-up)
-      (ctx/emit! c :build.gave-up :warn {:plan plan :cells given-up
-                                         :text (str "build of " plan " gave up " (count given-up) " cells: "
-                                                    (cells-text (sort-by key given-up) (fn [[pos why]] (str (pr-str pos) " " (name why)))))}))
-    (doseq [[reason group] (group-by :reason refused)]
-      (ctx/emit! c :build.refused :warn {:plan plan :reason reason :cells group
-                                         :text (str "build of " plan " refused " (count group) " cells (" (name reason) "): "
-                                                    (cells-text group #(str (pr-str (:pos %)) " " (or (:zone %) (:plan %) (str/join "," (map name (:hazards %)))))))}))
-    (when (seq wrong)
-      (ctx/emit! c :build.wrong :warn {:plan plan :cells wrong
-                                       :text (str "build of " plan " left " (count wrong) " wrong blocks: "
-                                                  (cells-text wrong #(str (pr-str (:pos %)) " " (:found %)
-                                                                          (when (:short %) (str ", needs " (:want %) " (short)")))))}))))
-
 (defn fetch-failed-text
   "The booked failed fetches of the short items, in words: 'could not fetch birch_log: no-source (why)'."
   [fails]
