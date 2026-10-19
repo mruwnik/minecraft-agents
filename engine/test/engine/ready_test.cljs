@@ -71,6 +71,8 @@
   (let [check (ready/safe-at (constantly outside))
         status (fn [patience] (settings/with-settings {:jobs.lib.ready/light-patience-s patience} #(lit 0 15 (fn [] (check (ctx-of open-night))))))]
     (is (= :later (first (status 100000))))
+    (is (= :never (first (lit 0 15 #(check (assoc (ctx-of open-night) :def {:defaults {:light-patience ::own-patience} :settings {::own-patience {:default 10}}})))))
+        "a job naming its own patience setting is held to it, not to the shared one")
     (is (= :never (first (status 10))) "light further off than the patience is not waited for")
     (is (re-find #"s away" (second (status 10))))))
 

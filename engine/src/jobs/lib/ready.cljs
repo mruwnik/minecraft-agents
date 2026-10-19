@@ -21,7 +21,7 @@
   {::risk-limit {:default 0.001 :spec (a/num-in 0 nil)
                  :doc "Spawn chance per second (jobs.lib.cost/exposure) above which a place or the walk to it is exposed: a single dark cell is 0.005, a lit or sunlit one 0."}
    ::light-patience-s {:default 1200 :spec (a/num-in 0 nil)
-                       :doc "Seconds a job's readiness waits for light (jobs.lib.shelter.sense/light-in) before it calls the darkness unfixable; 1200 is a whole day, so a full night is waited for."}})
+                       :doc "Seconds readiness waits for light (jobs.lib.shelter.sense/light-in) before it calls the darkness unfixable, for a job whose :defaults name no :light-patience setting; 1200 is a whole day, so a full night is waited for."}})
 
 (defn unforced
   "The :checks forms a child would be forced with, minus the keys c's own frame runs under a form for: a call key beats
@@ -31,14 +31,21 @@
 
 (defn place-text [{:keys [x y z]}] (str x " " y " " z))
 
+(defn light-patience
+  "Seconds c's job waits for light: the setting its :defaults name as :light-patience, else ::light-patience-s."
+  [c]
+  (if-let [k (get-in c [:def :defaults :light-patience])]
+    (settings/get (get-in c [:def :settings]) k)
+    (settings/get settings ::light-patience-s)))
+
 (defn at-status
   "The status of the exposure of the walk of c's body to `to`: ok while sheltered or the chance is within ::risk-limit,
-  else by what lowers it; light further off than ::light-patience-s is not waited for."
+  else by what lowers it; light further off than (light-patience c) is not waited for."
   [c to]
   (let [p (:primitives c)
         shelter (:data (ctx/latest c :shelter))
         {:keys [chance lowered-by look-at light-in]} (cost/exposure p to shelter)
-        patience (settings/get settings ::light-patience-s)
+        patience (light-patience c)
         where (place-text to)]
     (cond
       (and (sh-sense/dark-outside? p) (sh-inside/safe-from-night? p) (not (sh-inside/walk-leaves-shelter? p shelter to 1)))

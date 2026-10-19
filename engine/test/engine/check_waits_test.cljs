@@ -17,7 +17,7 @@
   [spec world-spec & [ticks]]
   (let [clock (atom 1000000)
         [_ sink] (tu/legacy-capture-sink)
-        p (tu/fake (merge {:blocks ground} (dissoc world-spec :zones)))
+        p (cond-> (tu/fake (merge {:blocks ground} (dissoc world-spec :zones :light-data))) (:light-data world-spec) tu/with-light-data)
         w (world/of-data {} {} (get world-spec :zones []))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world w
@@ -45,7 +45,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [day (await (waiting-after '(jobs.time.wait-for-light) {:time 15000}))]
+        (let [day (await (waiting-after '(jobs.time.wait-for-light) {:time 15000 :light-data true}))]
           (is (= :dark (:reason (:waiting day))))
           (is (= "dark" (:text (:observed day)))))))))
 
