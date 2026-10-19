@@ -194,8 +194,8 @@
   "The two cells [feet head] of a side pocket dug from feet towards [dx dz], or nil: both natural, unprotected, not falling
   and harvestable with what is carried (any, once the job is cutting by hand), with no hazard in or beside them (the way in
   may be wet: a drowning body digs from the water), solid all round them except the way in (floor, roof, and the three far
-  sides; a cell never sensed counts as stone, the dig looks at it), the roof not a falling block, and a dug block that can seal the way in (carried or dropped). by-hand? (default
-  the job's :by-hand memory) ignores whether a carried tool harvests."
+  sides; a cell never sensed counts as stone, the dig looks at it), the roof not a falling block, and a dug block that can seal the way in (carried or dropped).
+  by-hand? (default the job's :by-hand memory) ignores whether a carried tool harvests."
   ([c feet side] (pocket-cells c feet side (:by-hand (ctx/mem c))))
   ([c feet [dx dz] by-hand?]
   (let [p (:primitives c)
@@ -207,15 +207,7 @@
                         (assoc c :x (+ (:x c) sx) :z (+ (:z c) sz))))
         unknown? #(some-> (u/sensed p %) .-unknown)
         entry #{feet (update feet :y inc)}
-        ;; a dug cell the body has never sensed reads stone when no seen neighbour but the way in is open (rock-name's guess)
-        dug-name (fn [cell]
-                   (or (dig-cells/rock-name p cell)
-                       (when (and (unknown? cell)
-                                  (every? #(let [n (dig-cells/shift cell %)] (or (entry n) (not (some-> (u/seen-name p n) (as-> nm (not (solid/solid? nm)))))))
-                                          dig-cells/neighbours)
-                                  (some (fn [d] (some solid/solid? (take 1 (remove nil? (map #(u/seen-name p (dig-cells/shift cell (mapv (partial * %) d))) (range 1 (inc (dig-cells/rock-depth))))))))
-                                        dig-cells/neighbours))
-                         "stone")))
+        dug-name #(dig-cells/rock-name p % entry)
         ;; a far cell never sensed reads stone: the dig looks at it and stops if it lays open a gap
         wall-name #(or (dig-cells/rock-name p %) (when (unknown? %) "stone"))
         names (map dug-name [lo hi])]

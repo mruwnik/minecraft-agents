@@ -419,16 +419,18 @@
 (defn rock-name
   "The block name at cell as a player reads rock: what the body sees or remembers, else \"stone\" for a loaded cell it has
   not sensed when a seen solid block lies behind it within rock-depth cells along some axis and no neighbour is seen
-  open (an open neighbour would have shown it). nil when it is not loaded or no seen face is near. The shelter plans
-  (pit, pocket, niche) read the rock they dig through this way, then dig to see (jobs.lib.dig-look)."
-  [p cell]
+  open (an open neighbour would have shown it; cells in except, the way in, are not counted). nil when it is not loaded
+  or no seen face is near. The shelter plans (pit, pocket, niche) read the rock they dig through this way, then dig to
+  see (jobs.lib.dig-look)."
+  ([p cell] (rock-name p cell #{}))
+  ([p cell except]
   (or (u/seen-name p cell)
       (when (some-> (u/sensed p cell) .-unknown)
         (let [name-at (fn [d k] (u/seen-name p (shift cell (mapv #(* k %) d))))]
-          (when (and (every? #(or (nil? %) (solid/solid? %)) (map #(name-at % 1) neighbours))
+          (when (and (every? #(or (nil? %) (solid/solid? %)) (map #(when-not (except (shift cell %)) (name-at % 1)) neighbours))
                      (some (fn [d] (some solid/solid? (take 1 (remove nil? (map #(name-at d %) (range 1 (inc (rock-depth))))))))
                            neighbours))
-            "stone")))))
+            "stone"))))))
 
 (defn rock-solid?
   "Whether cell is solid rock as the body reads it (rock-name)."

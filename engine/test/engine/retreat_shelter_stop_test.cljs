@@ -127,6 +127,7 @@
   (let [face {[1 0 0] "stone"}]
     (is (= "stone" (dig-cells/rock-name (sensing-stub face) (cell 0 0 0))) "a seen solid face behind it")
     (is (nil? (dig-cells/rock-name (sensing-stub (assoc face [0 1 0] "air")) (cell 0 0 0))) "a seen open neighbour would have shown it")
+    (is (= "stone" (dig-cells/rock-name (sensing-stub (assoc face [0 1 0] "air")) (cell 0 0 0) #{(cell 0 1 0)})) "except: the way in is open")
     (is (nil? (dig-cells/rock-name (sensing-stub {}) (cell 0 0 0))) "nothing seen near")))
 
 ;; ------------------------------------------------------------------ the pit's first dig
