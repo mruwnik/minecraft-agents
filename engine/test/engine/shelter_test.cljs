@@ -1138,7 +1138,7 @@
             (dawn-after! p 7 (fn [n] (case n 2 (reset! at2 @tries)
                                            4 (do (reset! at4 @tries) (swap! clock + (:ttl sh-beds/sleep-failed-policy)))
                                            nil)))
-            (core/submit! eng '(jobs.survival.night {:max-days-awake 0}) {})
+            (core/submit! eng '(jobs.survival.night {:settings {:jobs.lib.shelter.beds/max-days-awake 0}}) {})
             (await (tick-nights eng clock 2))
             (is (pos? @at2))
             (is (= @at2 @at4) "the failed entry holds it off")

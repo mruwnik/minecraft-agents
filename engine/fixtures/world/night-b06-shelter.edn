@@ -117,7 +117,7 @@
   ;; f6fef9d5: the hold names the failed sites' reasons
   {:name "exposed-hold-names-the-failed-sites"
    :blocks [[:fill [12 -1 12] [20 -1 20] "stone"]]
-   :act [[:job (jobs.survival.night {:ways #{:bed :shelter} :flee-radius 0})]]
+   :act [[:job (jobs.survival.night {:ways #{:bed :shelter} :settings {:jobs.survival.night.sites/flee-radius 0}})]]
    :expect [{:event {:source :job :kind :shelter.exposed :message [:not [:contains "no site tried"]]} :within-s 90}]
    :limit-s 100}
   ;; 1fbd292f: a wide dark natural cave is no shelter: the body digs in where it stands

@@ -31,7 +31,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (await (flee-home-night (update dark-world :blocks merge {"10,66,0" "stone"}) {:flee-radius 0}))]
+        (let [{:keys [eng p seen]} (await (flee-home-night (update dark-world :blocks merge {"10,66,0" "stone"}) {:settings {:jobs.survival.night.sites/flee-radius 0}}))]
           (st/dawn-after! p 4)
           (await (tu/run-until-empty eng 80))
           (is (empty? (st/emitted seen :shelter.fled)))
@@ -142,7 +142,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (cave-night [{:name "dirt" :count 8}] {:wall-value 5})
+        (let [{:keys [eng]} (cave-night [{:name "dirt" :count 8}] {:settings {:jobs.survival.night.sites/wall-value 5}})
               log (await (with-child-log #(tu/run-until-empty eng 160)))
               dig-ins (filter #(and (= 'jobs.survival.shut-in (second %)) (contains? (:ways (nth % 2)) :walls)) log)]
           (is (seq dig-ins))

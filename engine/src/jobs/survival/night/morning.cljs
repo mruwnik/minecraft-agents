@@ -119,7 +119,7 @@
     (sh-beds/doorway-to-open (:primitives c) (ctx/view c))
     (await (open-doorway! c (sh-beds/doorway-to-open (:primitives c) (ctx/view c))))
     (or (#{:dug-in :exposed} (:sheltered (ctx/mem c))) (:dig-out (ctx/mem c)) (dig-leave/sheltered-in c))
-    (let [r (await (dig-leave/leave! c {:take-back? (:take-back? (:args c))}))]
+    (let [r (await (dig-leave/leave! c))]
       (cond
         (= :continue r) :again
         (= :out (:reason r)) (do (ctx/update-mem! c dissoc :dig-out)

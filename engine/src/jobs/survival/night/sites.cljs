@@ -11,6 +11,9 @@
 
 (a/defargs settings
   {:jobs.survival.night.sites/home-radius {:default 12 :doc "A remembered roofed place (:roofed-places) this close is walked into, whatever the light, before a bed is used or put down; a carried bed is never put down in the open while one is." :spec (a/num-in 0 nil)}
+   :jobs.survival.night.sites/walk-radius {:default 32 :doc "A roofed place (:roofed-places) farther than this is not walked to." :spec (a/num-in 0 nil)}
+   :jobs.survival.night.sites/flee-radius {:default 64 :doc "When no shelter can be dug here, how far the night looks for somewhere safer (a known bed or roofed place, a seen cave or overhang to wall in, or seen ground the carried tools dig); 0 never flees." :spec (a/num-in 0 nil)}
+   :jobs.survival.night.sites/wall-value {:default 3 :doc "A block worth more than this each (jobs.lib.cost/item-value) is not counted as a wall block when a cave is walled in, and shut-in digs it again at dawn." :spec (a/num-in 0 nil)}
    :jobs.survival.night.sites/max-sites {:default 4 :doc "Shut-in calls a night makes (each a failed site) before it cuts a niche or holds exposed." :spec (a/int-in 0 nil)}
    :jobs.survival.night.sites/retry-after-ms {:default 660000 :doc "How long a body holds exposed before it tries to dig in again (past shut-in's own 10-minute give-up)." :spec (a/int-in 0 nil)}
    :jobs.survival.night.sites/max-retries {:default 2 :doc "Dig-in retries after a night went exposed." :spec (a/int-in 0 nil)}
@@ -19,6 +22,9 @@
    :jobs.survival.night.sites/cave-candidates {:default 16 :doc "Seen cave cells costed per flee: the nearest ones." :spec (a/int-in 0 nil)}
    :jobs.survival.night.sites/cave-scan {:default 2048 :doc "Solid blocks one cave search reads: nearest first, so it reaches about 16 blocks around the body." :spec (a/int-in 0 nil)}})
 (defn home-radius [] (settings/get settings :jobs.survival.night.sites/home-radius))
+(defn walk-radius [] (settings/get settings :jobs.survival.night.sites/walk-radius))
+(defn flee-radius [] (settings/get settings :jobs.survival.night.sites/flee-radius))
+(defn wall-value [] (settings/get settings :jobs.survival.night.sites/wall-value))
 (defn max-sites [] (settings/get settings :jobs.survival.night.sites/max-sites))
 
 (defn forget-failed!

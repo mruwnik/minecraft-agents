@@ -50,7 +50,7 @@
   - a roof over a room with a hole (shelter.room_open warn): walled in under the roof (:enclose).
   - roofed, buried or shut in a closed room: done {:night :roofed}.
   - else jobs.survival.shut-in {:for :night} (walls, pit, room by quote; its pit walks to other ground after a failed site, jobs.survival.dig-pit-site; called again while another site may be left, at most max-sites), then a niche (pocket way, once), then a flee, then hold exposed (one shelter.exposed warn), still taking a bed or log-out that turns up, and digging in again after moving or retry-after-ms (max-retries).
-  Fleeing (:flee-radius, 0 never; at most max-flees walks): to the not-yet-tried candidate go-to reaches soonest (jobs.lib.targets/nearest!): a known bed, a :roofed-places place, a seen cave or overhang cell (walled in on arrival), or seen natural ground the carried tools dig. shelter.fled on arrival, shelter.flee_failed otherwise.
+  Fleeing (the night.sites ::flee-radius setting, 0 never; at most max-flees walks): to the not-yet-tried candidate go-to reaches soonest (jobs.lib.targets/nearest!): a known bed, a :roofed-places place, a seen cave or overhang cell (walled in on arrival), or seen natural ground the carried tools dig. shelter.fled on arrival, shelter.flee_failed otherwise.
   Every hold is declared (ctx/hold-still!), waits hold-ms, and (night.hold) cooks, eats or runs get-food first.
   An overdue body warns needs_bed once a day; a respawn bed seen gone is written :spawn-lost (warn spawn_lost once).
   Memory: job memory :enclose, :sheltered, :log-out-failed, :no-site, :shut-ins, :digging, :bed-down, :pit-trapped, :roof-walk-failed; body memory :doorway-tried and shut-in's :shut-in-failed (forgotten when the night ends, at most ten minutes).
@@ -58,14 +58,7 @@
 
 (a/defargs args
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
-   :bed-radius {:doc "a remembered bed farther than this is not used (nil: the jobs.lib.shelter.beds/default-bed-radius setting)" :spec (a/num-in 0 nil) :default nil}
-   :urgent-bed-radius {:doc "the bed radius once the body is overdue for sleep (nil: the jobs.lib.shelter.beds/urgent-bed-radius setting)" :spec (a/num-in 0 nil) :default nil}
-   :roofed-places {:doc "place names walked to at night, when close and the route is lit, before digging in" :spec (a/coll-of (a/or-of keyword? string?)) :default [:home]}
-   :walk-radius {:doc "a roofed place farther than this is not walked to" :spec (a/num-in 0 nil) :default 32}
-   :max-days-awake {:doc "in-game days without sleep before finding a bed becomes urgent" :spec (a/num-in 0 nil) :default sh-beds/max-days-awake}
-   :wall-value {:doc "a block worth more than this each (jobs.lib.cost/item-value) is not counted as a wall block when a cave is walled in (dig-in's :wall-value)" :spec (a/num-in 0 nil) :default 3}
-   :take-back? {:doc "by day, dig the blocks (above dirt) dig-in placed in the shelter again and collect them" :spec boolean? :default true}
-   :flee-radius {:doc "when no shelter can be dug here, how far the night looks for somewhere safer (a known bed or roofed place, a seen cave or overhang to wall in, or seen ground the carried tools dig); 0 never flees" :spec (a/num-in 0 nil) :default 64}})
+   :roofed-places {:doc "place names walked to at night, when close and the route is lit, before digging in" :spec (a/coll-of (a/or-of keyword? string?)) :default [:home]}})
 
 (a/defargs settings
   {::job-time-s {:default 2400 :doc "Seconds the night may take, the morning included: a bound against a runaway night (the night itself ends it in about 10 minutes)." :spec (a/num-in 0 nil)}
@@ -155,7 +148,7 @@
   [c bed]
   (hold/busy! c)
   (let [d (await (ctx/call c :bed-down 'jobs.survival.bed-down
-                                 (cond-> (select-keys (:args c) [:roof-height :bed-radius :urgent-bed-radius :max-days-awake])
+                                 (cond-> (select-keys (:args c) [:roof-height])
                                    bed (assoc :bed bed)
                                    (room-lib/closed-home? (:primitives c)) (assoc :roofed-only true))))]
     (if (= :continue d)
@@ -242,7 +235,7 @@
     (if (not= pos (sh-sense/feet p))
       (do (ctx/update-mem! c dissoc :enclose) :again)
       (let [_ (hold/busy! c)
-            d (await (ctx/call c :enclose 'jobs.survival.shut-in {:ways #{:walls} :for :night :roof-height roof-height :wall-value (:wall-value (:args c))}))]
+            d (await (ctx/call c :enclose 'jobs.survival.shut-in {:ways #{:walls} :for :night :roof-height roof-height :wall-value (sites/wall-value)}))]
         (if (= :continue d)
           :again
           (do (ctx/update-mem! c dissoc :enclose)
@@ -309,13 +302,13 @@
         _ (when-not resume
             (ctx/emit! c :night.dig-in-why :info (dig-in-inputs p))
             (ctx/update-mem! c assoc :digging (sh-sense/feet p)))
-        place (:name (first (await (sense/decide! c ::roofed-place #(seq (room-lib/roofed-places-in c (:args c) (:walk-radius (:args c)))) {:verify-guesses true}))))
+        place (:name (first (await (sense/decide! c ::roofed-place #(seq (room-lib/roofed-places-in c (:args c) (sites/walk-radius))) {:verify-guesses true}))))
         _ (when (and place (not= (sh-sense/feet p) (:route-looked (ctx/mem c))))
             (ctx/update-mem! c assoc :route-looked (sh-sense/feet p))
             (await (sense/look-round! c [])))
         d (await (ctx/call c :shut-in 'jobs.survival.shut-in
                            (cond-> {:ways (cond-> #{:walls :pit} (or place (sh-sense/roofed? p (sh-sense/room-roof-height)) (dig-cells/room-plug p (sh-sense/feet p) (dig-in-roof-height c))) (conj :room))
-                                    :for :night :roof-height (dig-in-roof-height c) :wall-value (:wall-value (:args c))}
+                                    :for :night :roof-height (dig-in-roof-height c) :wall-value (sites/wall-value)}
                              place (assoc :place place))))]
     (when-not (= :continue d)
       (ctx/update-mem! c #(-> % (dissoc :digging) (update :shut-ins (fnil inc 0))))

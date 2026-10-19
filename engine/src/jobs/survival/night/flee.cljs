@@ -46,7 +46,7 @@
         solid? (into #{} (map (comp key-of :pos)) solids)
         seen-free? (fn [cell] (and (not (solid? (key-of cell)))
                                    (not (:unknown (look/seen-block p cell)))))
-        have (reduce + (map :count (lb/carried c (choose/cheap-blocks (choose/fillers :shelter) (:wall-value (:args c))))))
+        have (reduce + (map :count (lb/carried c (choose/cheap-blocks (choose/fillers :shelter) (sites/wall-value)))))
         up (fn [{:keys [x y z]} dy] {:x x :y (+ y dy) :z z})
         sealed? (fn [cell] (and (solid? (key-of cell)) (dig-cells/sealed? p cell)))]
     (->> solids
@@ -67,12 +67,12 @@
 (defn ^:async flee-target
   "The place not yet tried tonight, somewhere safer than here (see the doc), that go-to reaches soonest (jobs.lib.targets/
   nearest!: one planner search over the candidates, costed as go-to plans: known dangers and darkness), as the candidate
-  with its :distance and :cost; :searching while that search goes on; nil when there is none (none with :flee-radius 0
+  with its :distance and :cost; :searching while that search goes on; nil when there is none (none with the flee-radius setting 0
   or after sites/max-flees). Candidates: the bed, :roofed-places, caves, ground, the nearest max-targets of them."
   [c]
   (let [m (ctx/mem c)
         p (:primitives c)
-        flee-radius (:flee-radius (:args c))
+        flee-radius (sites/flee-radius)
         tried (set (:flee-failed m))]
     (when (and (pos? flee-radius) (< (or (:flees m) 0) (sites/max-flees)))
       (let [here (sh-sense/feet p)

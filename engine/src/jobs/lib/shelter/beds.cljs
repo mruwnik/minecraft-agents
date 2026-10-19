@@ -21,6 +21,8 @@
                          :doc "Blocks within which a remembered bed may be used, when the job or trigger names no :bed-radius."}
    ::urgent-bed-radius {:default 128 :spec (a/num-in 0 nil)
                         :doc "The bed radius once the body is overdue for sleep or displaced, when none is named."}
+   ::max-days-awake {:default 3 :spec (a/num-in 0 nil)
+                     :doc "In-game days without sleep before finding a bed becomes urgent: a bed in the open is slept in and the urgent radius applies."}
    ::courtesy-radius {:default 32 :spec (a/num-in 0 nil)
                       :doc "Blocks a body underground may walk to a bed to sleep beside another sleeping player."}})
 
@@ -96,7 +98,7 @@
   one, five minutes, so the night trigger does not refire on the same bed every cooldown."
   {:cap 1 :ttl 300000})
 
-(def max-days-awake 3)
+(defn max-days-awake [] (settings/get settings ::max-days-awake))
 
 (defn rest-since
   "When the body's time since rest began, in engine-clock ms, or nil on an empty memory: the latest of its :slept
@@ -119,9 +121,9 @@
 (defn bed-radius
   "How far a remembered bed may be: :bed-radius, or :urgent-bed-radius once the latest :slept entry is :max-days-awake
   in-game days old (phantoms come), or while a :displaced entry stands (a far flight drove the body off its bed)."
-  [view {:keys [bed-radius max-days-awake] :or {max-days-awake max-days-awake} :as args}]
+  [view {:keys [bed-radius] :as args}]
   (let [days (days-awake-in view)]
-    (if (or (and days (>= days max-days-awake)) (seq (mem/entries view :displaced)))
+    (if (or (and days (>= days (max-days-awake))) (seq (mem/entries view :displaced)))
       (or (:urgent-bed-radius args) (urgent-bed-radius))
       (or bed-radius (default-bed-radius)))))
 
@@ -153,7 +155,7 @@
              (zero? (mem/count-in view :slept sh-clock/slept-tonight-ms))
              (empty? (mem/entries view :sleep-failed)))
     (let [shelter (:data (mem/latest view :shelter))
-          overdue? (>= (or (days-awake-in view) 0) max-days-awake)
+          overdue? (>= (or (days-awake-in view) 0) (max-days-awake))
           ok? (fn [pos] (and (permit? pos) (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-unreachable))
                              (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-open))
                              (or overdue? (not (kept-shelters (sh-inside/walk-leaves-shelter? p shelter pos 1))) (courtesy-walk? p view pos))))]

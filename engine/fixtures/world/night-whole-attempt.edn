@@ -96,7 +96,7 @@
   {:name "stone-pad-no-pickaxe-starts-no-pit"
    :time :night-exclusive
    :blocks [[:fill [8 -6 8] [24 -1 24] "stone"]]
-   :act [[:job (jobs.survival.night {:flee-radius 0})]
+   :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0}})]
          [:await {:source :job :kind :shelter.exposed} 90]
          [:await {:source :job :kind :holding :data {:reason [:contains "exposed: "]}} 30]
          [:wait-s 10] ; deliberate hold: exposed with no pickaxe, a pit must not start before dawn

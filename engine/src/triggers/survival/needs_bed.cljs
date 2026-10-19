@@ -17,7 +17,7 @@
   (if-let [pos (sh-spawn/spawn-lost-pos p view)]
     {:why :spawn-lost :pos pos}
     (let [days (or (sh-beds/days-awake-in view) 0)]
-      (when (and (>= days sh-beds/max-days-awake)
+      (when (and (>= days (sh-beds/max-days-awake))
                  (nil? (sh-spawn/standing-bed p view (sh-beds/urgent-bed-radius))))
         {:why :unslept :days days}))))
 
