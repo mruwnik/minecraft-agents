@@ -154,6 +154,12 @@
   (let [seen (.-sensedAt p)]
     (doto p (aset "sensedAt" (fn [a] (if (> (.-y a) 66) #js {:unknown true} (.call seen p a)))))))
 
+(deftest a-body-shut-in-a-hut-stays-in-for-a-near-bed-while-another-player-sleeps
+  (let [{:keys [eng p]} (setup (hut-night-world {"20,64,0" "red_bed"} {}))]
+    (st/looked-round! eng p)
+    (mem/write! (:store eng) :sleep-status {:sleeping 1 :needed 2} nil)
+    (is (nil? (sh-beds/bed-to-use p (mem/view (:store eng)) 64 (constantly true))))))
+
 (deftest a-body-buried-in-a-closed-hut-places-its-carried-bed
   (let [{:keys [eng p]} (setup (hut-night-world {} {:inventory [{:name "red_bed" :count 1}]}))
         _ (blind-above p)]

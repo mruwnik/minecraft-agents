@@ -22,7 +22,7 @@
    ::urgent-bed-radius {:default 128 :spec (a/num-in 0 nil)
                         :doc "The bed radius once the body is overdue for sleep or displaced, when none is named."}
    ::courtesy-radius {:default 32 :spec (a/num-in 0 nil)
-                      :doc "Blocks a body safe in a shelter may walk to a bed to sleep beside another sleeping player."}})
+                      :doc "Blocks a body underground may walk to a bed to sleep beside another sleeping player."}})
 
 (defn seen-bed-radius [] (settings/get settings ::seen-bed-radius))
 
@@ -130,10 +130,12 @@
   #{:underground :dug-in :room})
 
 (defn courtesy-walk?
-  "Whether a safe body walks to the bed at pos only to sleep as a courtesy: another player sleeps (others-asleep?) and
-  the bed is within courtesy-radius of the feet."
+  "Whether a body walks to the bed at pos only to sleep as a courtesy: another player sleeps (others-asleep?), the bed
+  is within courtesy-radius of the feet, and the body is not shut in a dug-in or room shelter (mobs may wait outside it)."
   [p view pos]
-  (and (<= (u/dist (u/self-pos {:primitives p}) pos) (courtesy-radius)) (sh-sleepers/others-asleep? p view)))
+  (and (<= (u/dist (u/self-pos {:primitives p}) pos) (courtesy-radius))
+       (sh-sleepers/others-asleep? p view)
+       (not (#{:dug-in :room} (sh-inside/walk-leaves-shelter? p (:data (mem/latest view :shelter)) pos 1)))))
 
 (def bed-open-policy
   "Policy of the :bed-open entries the night job writes for a bed it found open and dug in beside instead: half a day."
