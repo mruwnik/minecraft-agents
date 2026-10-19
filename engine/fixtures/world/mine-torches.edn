@@ -67,4 +67,14 @@
             {:event {:source :job :kind #{:completed :stopped}} :within-s 195 :of-job true}
             {:no-event {:source :job :kind :torch.no-stock} :for-s 190 :of-job true :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:block [2 1 16] "wall_torch"] [:block [12 1 16] "wall_torch"]]
-   :limit-s 210}]}
+   :limit-s 210}
+  ;; Card c5237564, e5710f3a: the stocking trip to a torch chest in a short carved corridor, inside the near-sight range (the plot is unlit past it) ends back at the start cell, where the
+  ;; tunnel is cut (south of the start), not at the chest.
+  {:name "torch-chest-trip-returns-to-the-start-before-the-tunnel"
+   :blocks [[:fill [3 0 16] [5 1 16] "air"] [:set [6 0 16] "chest[facing=west]{Items:[{Slot:0b,id:\"minecraft:torch\",count:8}]}"]]
+   :body {:yaw -90 :inventory [["stone_pickaxe" 1] ["cobblestone" 16]]}
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :south :tunnel-length 4 :radius 3})]]
+   :expect [{:event {:source :job :kind :torch.stocked} :within-s 90 :of-job true}
+            {:event {:source :job :kind #{:completed :stopped}} :within-s 190 :of-job true}]
+   :after [[:not-block [2 0 18] "stone"] [:block [6 0 17] "stone"]]
+   :limit-s 200}]}
