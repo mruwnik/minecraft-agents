@@ -34,8 +34,8 @@
     feed/done? {:count 2} {:fed 2} [:ok :fed]
     feed/done? {:count 2} {:fed 2 :cleanup {:item "bread"}} [:later :feeding]
     feed/done? {:count 2} {:fed 1} [:later :feeding]
-    roll/done? {:item "lectern" :want "enchanted_book" :tries 3} {:offer {:index 0}} [:ok :found]
-    roll/done? {:item "lectern" :want "enchanted_book" :tries 3} {:rolls 1} [:later :rolling]))
+    roll/done? {:item "lectern" :want "enchanted_book"} {:offer {:index 0}} [:ok :found]
+    roll/done? {:item "lectern" :want "enchanted_book"} {:rolls 1} [:later :rolling]))
 
 (def bread [{:name "bread" :count 5}])
 

@@ -16,7 +16,7 @@
     huts and beds are the housing, so this is the house step too. Skipped :no-plan without a :plan.
   - :breed (jobs.village.breed, :target and :radius): villagers (babies count) are below :target and 2 adults are
     near. Skipped :no-target, :at-target, :too-few-adults.
-  - :roll-N (jobs.village.roll, one per entry of :roles, with its :profession, :trade, :pos and :radius): no adult villager
+  - :roll-N (jobs.village.roll, one per entry of :roles, with its :profession, :want, :pos and :radius): no adult villager
     near holds the role's profession, so one is rolled to it (the lock). :pos is the workstation cell. Skipped
     :filled when a villager holds the profession, :no-villager when none is near, :no-pos without one (the pass
     ends stopped, the role cannot be rolled). A roll
@@ -94,7 +94,7 @@
           (empty? villagers) {:skip :no-villager}
           (some #(= profession (:profession %)) adults) {:skip :filled}
           (nil? pos) {:skip :no-pos}
-          :else {:call (cond-> {:profession profession :pos pos :radius radius} trade (assoc :trade trade))})))))
+          :else {:call (cond-> {:profession profession :pos pos :radius radius} trade (assoc :want trade))})))))
 
 (defn plan
   "Walk todo, booking the steps that decide skips in report; {:todo :report :call}, :call nil when none is left."

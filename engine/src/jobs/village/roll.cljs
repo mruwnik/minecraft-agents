@@ -2,7 +2,7 @@
   (:require [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.settings :as settings]
-            [engine.args :as a] [jobs.lib.need :as need]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
@@ -14,30 +14,20 @@
             [jobs.village.trade :as trade]))
 
 (def doc
-  "Re-roll the offers of the untraded villager with uuid :villager (nil: the nearest adult, not a nitwit, within :radius)
-  until one gives :want (:trade is the same). The villager works at the workstation :item (nil: that of :profession)
-  standing at :pos (a block the body may break and place there). One call is the whole search: read the
-  offers (walking within 2 of the villager with go-to legs of 15 s); when none gives :want, break the workstation
-  (jobs.blocks.dig child, the drop collected), wait until the villager has lost its profession, place it again
-  (jobs.blocks.place child) and wait until the villager claims it, then read the offers again. It yields (:continue) while
-  it waits for the villager or a child waits on the world: a villager that keeps its job or takes none is waited for in
-  pauses (:villager-keeps-job, :villager-takes-no-job) until the call's :wall-time (::wall-time-s, 3600) ends it limit-reached.
-  An offer matches when it gives :want, is not sold out and its price (the adjusted count of the first cost stack) is at
-  most :max-price (nil: no limit). Offers do not name the enchantment of a book: :want is an item name only.
-  Ends with the data {:found true|false :rolls n :item workstation :offer {:index :cost :gives ..}}: :done (info
-  done?) when an offer matches, else with the cause:
-  - condition-failed: :gone (not seen within :radius), :baby (takes no job yet), :locked (an offer was already used:
-    breaking the workstation changes nothing), :occupied (another block stands at :pos). :baby, :occupied and a named
-    :villager's :gone are checked at the start and then wait (a skipped job); a nitwit takes no job ever: impossible,
-    :nitwit, also checked at the start and found mid-run (impossible).
-  - nothing-possible: :no-match (:tries rolls without a match), :unreachable, :window (offers could not be read
-    three times), :dig-failed, :place-failed (a child stopped, with its reason).
-  A workstation item, wanted item or cell that is missing or bad is impossible (:bad-args). A cell the body has not seen
-  asks for a look at the start; the round then walks to it (go-to child) and ends condition-failed :cell-unseen when it
-  still cannot be seen there.
-  Every step re-reads the world and the saved count: a restart that finds the workstation missing places it first. The
-  cleanup export places a workstation the call broke however it ends, a cut included, so the workstation stands at :pos
-  when the job ends, except after :place-failed (a child stopped; the cleanup's failure is its :cleanup).")
+  "Re-roll the offers of an untraded villager (:villager uuid; nil: the nearest adult, not a nitwit, within :radius)
+  until one gives :want, by breaking and placing again the workstation :item (nil: that of :profession) at :pos.
+  Needs: a workstation item, a wanted item and a cell the body may break and place at (else impossible, :bad-args); a
+  cell not yet seen is looked at, then walked to. An offer matches when it gives :want, is not sold out and costs at
+  most :max-price (nil: no limit); offers do not name a book's enchantment. Waits (:continue) for the villager to lose
+  and take its job until the call's :wall-time. Re-reads the world every step, so a restart finds a missing
+  workstation and places it first; the cleanup places one the call broke however it ends.
+  Returns {:found true|false :rolls n :item workstation :offer {:index :cost :gives ..}}: done when an offer
+  matches, else
+  - condition-failed: :gone, :baby, :locked (an offer was already used), :occupied (another block at :pos),
+    :cell-unseen.
+  - impossible: :nitwit.
+  - nothing-possible: :no-match (::max-rolls, 20, rolls without a match), :unreachable, :window (offers could not be
+    read three times), :place-failed (no room to step off the cell), or the ending of the dig or place child.")
 
 (a/defargs args
   {:villager {:doc "the villager's entity uuid" :spec string? :default nil}
@@ -45,11 +35,8 @@
    :item {:doc "the workstation block item name, e.g. lectern; nil: the one of :profession" :spec a/item? :default nil}
    :profession {:doc "villager profession whose workstation :item defaults to" :spec string? :default nil}
    :want {:doc "item name an offer is to give" :spec a/item? :default nil}
-   :trade {:doc "item name an offer is to give (alias of :want)" :spec a/item? :default nil}
    :radius {:doc "how far to look for a villager" :spec (a/int-in 1 96) :default 48}
-   :max-price {:doc "highest price (first cost stack); nil for no limit" :spec (a/int-in 0 nil) :default nil}
-   :tries {:doc "rolls (breaks) before giving up" :spec (a/int-in 1 200) :default 20}
-   :fetch {:doc "get the workstation item or a tool when missing (jobs.lib.need)" :spec need/option? :default true}})
+   :max-price {:doc "highest price (first cost stack); nil for no limit" :spec (a/int-in 0 nil) :default nil}})
 
 (def workstations
   {"librarian" "lectern" "farmer" "composter" "cleric" "brewing_stand" "armorer" "blast_furnace" "butcher" "smoker"
@@ -57,11 +44,13 @@
    "mason" "stonecutter" "shepherd" "loom" "toolsmith" "smithing_table" "weaponsmith" "grindstone"})
 
 (a/defargs settings
-  {::poll-s {:default 2 :doc "Seconds between looks while waiting for the villager to lose or take its job." :spec (a/int-in 1 60)}
+  {::max-rolls {:default 20 :doc "Rolls (breaks of the workstation) without a match before the call gives up (:no-match)." :spec (a/int-in 1 200)}
+   ::poll-s {:default 2 :doc "Seconds between looks while waiting for the villager to lose or take its job." :spec (a/int-in 1 60)}
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the waits for the villager's job included (:limit-reached)." :spec (a/int-in 1 nil)}
    ::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::leg-s {:default 15 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 1800 :doc "Seconds one search may take." :spec (a/int-in 1 nil)}})
+(defn max-rolls [] (settings/get settings ::max-rolls))
 (defn poll-s [] (settings/get settings ::poll-s))
 (defn reach [] (settings/get settings ::reach))
 (defn leg-s [] (settings/get settings ::leg-s))
@@ -71,7 +60,7 @@
   [args]
   (or (:item args) (workstations (:profession args))))
 
-(defn want-of [args] (or (:want args) (:trade args)))
+(defn want-of [args] (:want args))
 
 (def target [:villager :pos])
 
@@ -139,7 +128,7 @@
       (apply contract/later :rolling (str (rolls c) " rolls without " (want-of (:args c))) data))))
 
 (defn quote-of [c]
-  {:uses {:job-time [0 (* 30 (:tries (:args c) 1)) ##Inf]}})
+  {:uses {:job-time [0 (* 30 (max-rolls)) ##Inf]}})
 
 (def failed-conditions "Causes that end condition-failed: the villager or the cell is not right now. The rest are nothing-possible."
   #{:gone :baby :locked :occupied :cell-unseen})
@@ -228,20 +217,20 @@
 
 (defn ^:async child!
   "Run a dig or place child in a slot of its own per roll; its result when done, :continue, or a stop."
-  [c slot job cargs failed]
+  [c slot job cargs]
   (let [r (await (ctx/call c slot job cargs))]
     (cond
       (= :continue r) :continue
       (= :done (:kind r)) (:data r)
-      :else (stop! c failed))))
+      :else (ctx/end c (:kind r) (:cause r) (data-of c nil)))))
 
 (defn ^:async dig!
   "Break the workstation; the break is booked before the dig child runs, so a cut leaves it for the cleanup."
   [c]
-  (let [{:keys [pos fetch]} (:args c)
+  (let [{:keys [pos]} (:args c)
         slot (keyword (str "dig-" (rolls c)))
         _ (ctx/update-mem! c assoc :broken true)
-        r (await (child! c slot 'jobs.blocks.dig {:pos pos :collect true :fetch fetch} :dig-failed))]
+        r (await (child! c slot 'jobs.blocks.dig {:pos pos :collect true}))]
     (if-not (ending-or-wait? r)
       (do (ctx/update-mem! c #(-> % (update :rolls (fnil inc 0))))
           :again)
@@ -265,10 +254,10 @@
 (defn ^:async place!
   "Place the workstation again, and the book of the break closed."
   [c]
-  (let [{:keys [pos fetch]} (:args c)
+  (let [{:keys [pos]} (:args c)
         item (item-of (:args c))
         slot (keyword (str "place-" (rolls c)))
-        r (await (child! c slot 'jobs.blocks.place {:pos pos :item item :fetch fetch} :place-failed))]
+        r (await (child! c slot 'jobs.blocks.place {:pos pos :item item}))]
     (if-not (ending-or-wait? r)
       (do (ctx/update-mem! c #(-> % (dissoc :broken)))
           :again)
@@ -277,14 +266,14 @@
 (defn ^:async step!
   "One piece of the search, from what the world and the saved count say now. :again, :continue or :done."
   [c]
-  (let [{:keys [tries pos]} (:args c)
+  (let [{:keys [pos]} (:args c)
         item (item-of (:args c))
         p (:primitives c)
         villager (pick! c)
         e (when villager (trade/find-villager p villager))
         block (u/seen-name p pos)
         profession (when e (.-profession e))
-        out-of-tries? (>= (rolls c) tries)]
+        out-of-tries? (>= (rolls c) (max-rolls))]
     (cond
       (nil? block) (await (approach! c pos))
       (b/air block)

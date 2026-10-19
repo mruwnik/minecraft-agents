@@ -1,7 +1,7 @@
 ;; jobs.village.roll (card 5aff1cbf): re-roll an untraded villager's offers by breaking and placing its workstation (lectern at
 ;; 16 0 16). Live-only facts: whether an AI librarian claims the lectern placed again (day only), loses the profession when it
 ;; is broken, and whether the trade primitive reads fresh offers each time. Offers do not name an enchantment, so :want is
-;; "enchanted_book" (a first-tier librarian may or may not offer one: the roll ends found or no-match after :tries).
+;; "enchanted_book" (a first-tier librarian may or may not offer one: the roll ends found or no-match after ::max-rolls).
 ;; Should-succeed: roll-librarian (day, AI villager beside the lectern; needs a pickaxe/axe-free dig: a lectern breaks by hand).
 ;; Should-fail: nitwit, absent villager, a villager of another block cell, a cell that stays unseen (ends :cell-unseen, no endless wait).
 ;; Unseen-cell cases: the body at [8.5 0 16.5] faces west (yaw 90), the lectern is 7 blocks behind it, so it starts unseen; the roll
@@ -16,7 +16,7 @@
  :cases
  [{:name "roll-librarian"
    :act [[:summon "villager" [16.5 1 17.5] "{UUID:[I;20260,7,5,1],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
-         [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000001" :pos #at [16 0 16] :item "lectern" :want "enchanted_book" :tries 12})]]
+         [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000001" :pos #at [16 0 16] :item "lectern" :want "enchanted_book" :settings {:jobs.village.roll/max-rolls 12}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 220 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}
   {:name "nitwit-cannot-be-rolled"
@@ -37,7 +37,7 @@
    :body {:at [8.5 0 16.5] :yaw 90}
    :act [[:summon "villager" [16.5 1 17.5] "{UUID:[I;20260,7,5,5],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 3]
-         [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000005" :pos #at [16 0 16] :item "lectern" :want "enchanted_book" :tries 12})]]
+         [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000005" :pos #at [16 0 16] :item "lectern" :want "enchanted_book" :settings {:jobs.village.roll/max-rolls 12}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 220 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :cell-unseen}} :for-s 220 :until {:source :job :kind :completed}}]
    :after [[:block [16 0 16] "lectern"]]}

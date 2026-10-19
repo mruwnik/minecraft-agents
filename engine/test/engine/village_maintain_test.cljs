@@ -111,7 +111,7 @@
               s (await (scenario {:roles roles}
                                  (world (villager 1 3 {:profession "farmer"}) (villager 2 5 {:profession "none"}))
                                  {'jobs.village.roll {:rolled 1}}))]
-          (is (= [['jobs.village.roll {:profession "librarian" :trade "mending" :pos [4 64 4] :radius 48}]]
+          (is (= [['jobs.village.roll {:profession "librarian" :want "mending" :pos [4 64 4] :radius 48}]]
                  (ran s 'jobs.village.roll)))
           (is (= {:skipped :filled} (step s :roll-1)))
           (is (= 1 (:rolled (step s :roll-0))))
