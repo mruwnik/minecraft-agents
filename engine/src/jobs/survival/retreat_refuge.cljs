@@ -23,7 +23,9 @@
    ::quiet-s {:default 30 :doc "Seconds a hidden body keeps its refuge after the last danger." :spec (a/num-in 0 nil)}
    ::hide-s {:default 60 :doc "Seconds in its refuge after which a hidden body hands back, though a danger it keeps off stays, once no real danger is on it as it stands." :spec (a/num-in 0 nil)}
    ::hide-max-s {:default 300 :doc "Seconds after which a hidden body hands back though a melee hostile still waits at its foot." :spec (a/num-in 0 nil)}
-   ::breaker-reach {:default 6 :doc "Blocks within which a creeper or a climber counts as breaching a hidden body's refuge." :spec (a/num-in 0 nil)}})
+   ::breaker-reach {:default 6 :doc "Blocks within which a creeper or a climber counts as breaching a hidden body's refuge." :spec (a/num-in 0 nil)}
+   ::reach-radius {:default 3 :doc "Blocks within which a hostile counts as the one that hurt a hidden body." :spec (a/num-in 0 nil)}})
+(defn reach-radius [] (settings/get settings ::reach-radius))
 (defn leave-for-breakers? [] (settings/get settings ::leave-for-breakers))
 (defn breaker-reach [] (settings/get settings ::breaker-reach))
 (defn quiet-s [] (settings/get settings ::quiet-s))
@@ -134,10 +136,6 @@
         r (foot-reach)]
     (boolean (some #(not (combat/ranged? %)) (flight/near-known p (set (flight/dead-ids c)) r r)))))
 
-(def reach-radius
-  "Blocks within which a hostile counts as the one that hurt a hidden body."
-  3)
-
 (defn breaker-of
   "The known hostile that would breach the refuge: a creeper (its blast breaks any refuge) or, against a pillar, a climber,
   within breaker-reach; nil when none or leave-for-breakers is off."
@@ -174,7 +172,7 @@
                       (or (>= held-ms (* 1000 (hide-max-s))) (not (waiting-at-foot? c)))
                       (not (danger-q/danger-near? (:primitives c) radius ranged-radius)))]
       (cond
-        hurt? (let [ids (map (fn [e] (.-id e)) (flight/near-known (:primitives c) #{} reach-radius reach-radius))]
+        hurt? (let [ids (map (fn [e] (.-id e)) (flight/near-known (:primitives c) #{} (reach-radius) (reach-radius)))]
                 (ctx/update-mem! c #(-> % (dissoc :quiet-from :hidden-since :hold-health) (update :reached (fnil into #{}) ids)))
                 (ctx/emit! c :retreat.hide-hurt :warn {:text "hurt while hidden: the refuge does not keep the hostile off" :pos (sh-sense/feet (:primitives c))
                                                        :hostiles (hostiles-known c)})

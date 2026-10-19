@@ -19,21 +19,17 @@
    ::buried-rise {:default 8 :doc "Blocks of height between a body under ground and its goal above which the flight does not go there: under rock it knows no way." :spec (a/num-in 0 nil)}
    ::hostile-gap {:default 8 :doc "Blocks from the goal within which a known hostile, or the last known place of a mob fled within jobs.lib.threats/fled-memory-ms, makes it no goal of a flight." :spec (a/num-in 0 nil)}
    ::same-place {:default 8 :doc "Blocks from a safe home within which the goal counts as that home; a goal farther off gives way to the home." :spec (a/num-in 0 nil)}
-   ::retry-s {:default 30 :doc "Seconds after a walk to the goal was given up (it lost ground on the hostiles, did not near the goal or left its height) before a flight, this one or the next, may walk to that goal again." :spec (a/num-in 0 nil)}})
+   ::retry-s {:default 30 :doc "Seconds after a walk to the goal was given up (it lost ground on the hostiles, did not near the goal or left its height) before a flight, this one or the next, may walk to that goal again." :spec (a/num-in 0 nil)}
+   ::near {:default 3 :doc "Blocks from the goal at which the flight no longer walks to it." :spec (a/num-in 0 nil)}
+   ::leg-margin {:default 16 :doc "Blocks past body and goal, up and down, a leg to the goal may plan in the open." :spec (a/num-in 0 nil)}})
+(defn near [] (settings/get settings ::near))
+(defn leg-margin [] (settings/get settings ::leg-margin))
 (defn drift [] (settings/get settings ::drift))
 (defn steep-rise [] (settings/get settings ::steep-rise))
 (defn buried-rise [] (settings/get settings ::buried-rise))
 (defn hostile-gap [] (settings/get settings ::hostile-gap))
 (defn same-place [] (settings/get settings ::same-place))
 (defn retry-s [] (settings/get settings ::retry-s))
-
-(def near
-  "Blocks from the goal at which the flight no longer walks to it."
-  3)
-
-(def leg-margin
-  "Blocks past body and goal, up and down, a leg to the goal may plan in the open."
-  16)
 
 (defn goal-pos
   "The :goal arg ({:x :y :z} or [x y z]) as a position map, nil when none."
@@ -130,7 +126,7 @@
   "The :y-margin of a leg to the goal: under ground no deeper than walk/max-descent past body and goal, so the plan
   cannot dive through the caves below."
   [c]
-  (if (sh-sense/buried? (:primitives c)) (walk/max-descent) leg-margin))
+  (if (sh-sense/buried? (:primitives c)) (walk/max-descent) (leg-margin)))
 
 (defn off!
   "Give the walk to goal up for retry-s (body memory :goal-off) and say why (:lost-ground or :height) in a
@@ -155,7 +151,7 @@
   (let [goal (usable judged)]
     (cond
       (nil? goal) nil
-      (<= (u/dist (u/self-pos c) goal) near) (do (ctx/update-mem! c assoc :goal-reached true) nil)
+      (<= (u/dist (u/self-pos c) goal) (near)) (do (ctx/update-mem! c assoc :goal-reached true) nil)
       (under-floor? c goal) nil
       (cost/outruns-at? (room-lib/food (:primitives c)) (walk/flank-turn)) goal)))
 

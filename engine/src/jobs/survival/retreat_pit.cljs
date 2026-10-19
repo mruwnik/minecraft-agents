@@ -1,6 +1,8 @@
 (ns jobs.survival.retreat-pit
   "A cornered body's pit and side pocket (jobs.survival.retreat): where one fits, digging it and plugging it."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as lb]
@@ -16,6 +18,12 @@
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.retreat-flight :as flight]))
+
+(a/defargs settings
+  {::max-refills {:default 3 :doc "Times a dug cell may fill again (sand, gravel, a sealed lava cell) before the pit is given up." :spec (a/int-in 0 nil)}
+   ::max-occupied {:default 2 :doc "Times a plug cell may answer occupied by a block that does not seal before the pit is given up." :spec (a/int-in 0 nil)}})
+(defn max-refills [] (settings/get settings ::max-refills))
+(defn max-occupied [] (settings/get settings ::max-occupied))
 
 (def drop-of
   "The block a dug block drops, where it is another (an unlisted one drops itself)."
@@ -310,14 +318,6 @@
   [c reason text]
   (if (u/count-fail! c) (stop reason text) :again))
 
-(def max-refills
-  "Times a dug cell may fill again (sand, gravel, a sealed lava cell) before the pit is given up."
-  3)
-
-(def max-occupied
-  "Times a plug cell may answer occupied by a block that does not seal before the pit is given up."
-  2)
-
 (defn ^:async plug!
   "Place a carried block at the pit's first open plug cell (the side beside the head, then the roof over it), ledgered
   as flight/plug-purpose: :again, :hidden once all are sealed, else a stop (no block carried, a cell occupied by a block that does not
@@ -340,7 +340,7 @@
           (and (= "occupied" (.-status r)) (dig-cells/sealed? p cell)) :again
           (and (= "occupied" (.-status r)) (not= cell roof))
           (do (ctx/update-mem! c update :plug-occupied (fnil inc 0))
-              (if (< (:plug-occupied (ctx/mem c)) max-occupied)
+              (if (< (:plug-occupied (ctx/mem c)) (max-occupied))
                 :again
                 (stop :roof-failed (str "cannot seal the pit: the plug cell is occupied by " (or (u/seen-name p cell) "a block") " that does not seal"))))
           (dig-cells/keep-waiting! c :seal-mob-since r) :again
@@ -371,7 +371,7 @@
               opened (let [n (open-shell p cell keep)] (stop opened (str (u/seen-name p n) " at " (pr-str (lb/cell n)) " laid open by the dig; not going on")))
               (not (dig-cells/open-cell? p cell))
               (do (ctx/update-mem! c update :refills (fnil inc 0))
-                  (if (< (:refills (ctx/mem c)) max-refills)
+                  (if (< (:refills (ctx/mem c)) (max-refills))
                     :again
                     (stop :dig-failed "the dug cell fills again")))
               :else :again))))))

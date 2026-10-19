@@ -18,16 +18,6 @@
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.retreat-flight :as flight]))
 
-(def max-refusals
-  "Times the place primitive may refuse one cell before it is given up on."
-  2)
-
-(defn occupied?
-  "Whether the seal leaves cell alone: a block it cannot clear stands in it, or the server refused it max-refusals times."
-  [c cell]
-  (let [m (ctx/mem c)]
-    (or (contains? (:seal-occupied m) cell) (>= (get-in m [:seal-refused cell] 0) max-refusals))))
-
 (defn melee-spots
   "Where the seen melee hostiles within the flight's :radius stand."
   [c]
@@ -37,7 +27,15 @@
          (mapv #(danger-q/mob-pos p %)))))
 
 (a/defargs settings
-  {::hit-reach {:default 3 :doc "Blocks within which a melee mob that hurt the body during a seal step ends the step (the fight is decided anew)." :spec (a/num-in 0 nil)}})
+  {::hit-reach {:default 3 :doc "Blocks within which a melee mob that hurt the body during a seal step ends the step (the fight is decided anew)." :spec (a/num-in 0 nil)}
+   ::max-refusals {:default 2 :doc "Times the place primitive may refuse one cell before it is given up on." :spec (a/int-in 0 nil)}})
+(defn max-refusals [] (settings/get settings ::max-refusals))
+
+(defn occupied?
+  "Whether the seal leaves cell alone: a block it cannot clear stands in it, or the server refused it max-refusals times."
+  [c cell]
+  (let [m (ctx/mem c)]
+    (or (contains? (:seal-occupied m) cell) (>= (get-in m [:seal-refused cell] 0) (max-refusals)))))
 
 (defn hit-reach [] (settings/get settings ::hit-reach))
 

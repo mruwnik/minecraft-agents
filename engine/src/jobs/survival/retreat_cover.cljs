@@ -1,6 +1,8 @@
 (ns jobs.survival.retreat-cover
   "Where a flight goes and how it covers itself (jobs.survival.retreat): the home, the glance round, the target away from the hostiles, a seal or side pocket where the body stands."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
@@ -18,7 +20,11 @@
             [jobs.survival.retreat-walk :as walk]
             [jobs.survival.retreat-cornered :as cornered]))
 
-(def home-range 64)
+(a/defargs settings
+  {::home-range {:default 64 :doc "Blocks within which the latest :bed or :home entry is a home a flight runs or leans to." :spec (a/num-in 0 nil)}
+   ::way-reach {:default 14 :doc "Blocks within which the stairs the body cut are a way out of a flight." :spec (a/num-in 0 nil)}})
+(defn home-range [] (settings/get settings ::home-range))
+(defn way-reach [] (settings/get settings ::way-reach))
 
 (defn home-pos
   "The position of the latest :bed or :home entry within home-range blocks of the body, or nil."
@@ -29,7 +35,7 @@
                  first
                  :data
                  :pos)]
-    (when (and pos (<= (u/dist pos (u/self-pos c)) home-range)) pos)))
+    (when (and pos (<= (u/dist pos (u/self-pos c)) (home-range))) pos)))
 
 (defn refuges
   "The closed rooms to flee to: the latest :home or :bed (home-pos) and those behind the doors the body has seen
@@ -109,17 +115,13 @@
          (mapcat (fn [d] (when-let [pos (or (:pos d) (danger-q/rough-pos d))]
                            (repeat (if (= "creeper" (:mob d)) 3 1) pos)))))))
 
-(def way-reach
-  "Blocks within which the stairs the body cut are a way out of a flight."
-  14)
-
 (defn way-up
   "Underground, the feet cell on a stair this body cut (ledger/ways-of) that leads up and away from threats
   (walk/way-target), else nil."
   [c threats]
   (let [p (:primitives c)]
     (when (and (seq threats) (sh-sense/buried? p))
-      (walk/way-target (u/self-pos c) (mapv #(danger-q/mob-pos p %) threats) (ledger/ways-of c) way-reach))))
+      (walk/way-target (u/self-pos c) (mapv #(danger-q/mob-pos p %) threats) (ledger/ways-of c) (way-reach)))))
 
 (defn ^:async flight-target!
   "The walk target away from threats (walk/choose-target over what the body sees, after glance-away!; cover from the

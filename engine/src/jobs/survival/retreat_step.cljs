@@ -1,6 +1,8 @@
 (ns jobs.survival.retreat-step
   "What a flight step does once retreat-choose has picked an option: the early refuge, the walk away, and what the step says."
-  (:require [clojure.set :as set]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
+            [clojure.set :as set]
             [clojure.string :as str]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -17,13 +19,15 @@
             [jobs.survival.retreat-refuge :as refuge]
             [jobs.survival.retreat-walk :as walk]))
 
-(def low-leg-s
-  "Bound of a flight step while exposed low in a ranged chaser's line of fire: a search that stands still must not last."
-  1.5)
-
-(def slow-step-cap "Flee steps in a row that ran out of their seconds before the body moved (a slow start, nothing in the way) tried again before the way counts as blocked." 2)
-
-(def stall-blocks "A low step that moved the body less than this stood still: cover where it stands comes next." 1)
+(a/defargs settings
+  {::eat-gap {:default 12 :doc "Blocks to the nearest hostile at which a bite is eaten per flee step." :spec (a/num-in 0 nil)}
+   ::low-leg-s {:default 1.5 :doc "Seconds bounding a flight step while exposed low in a ranged chaser's line of fire: a search that stands still must not last." :spec (a/num-in 0 nil)}
+   ::slow-step-cap {:default 2 :doc "Flee steps in a row that ran out of their seconds before the body moved (a slow start, nothing in the way) tried again before the way counts as blocked." :spec (a/int-in 0 nil)}
+   ::stall-blocks {:default 1 :doc "A low step that moved the body less than this many blocks stood still: cover where it stands comes next." :spec (a/num-in 0 nil)}})
+(defn eat-gap [] (settings/get settings ::eat-gap))
+(defn low-leg-s [] (settings/get settings ::low-leg-s))
+(defn slow-step-cap [] (settings/get settings ::slow-step-cap))
+(defn stall-blocks [] (settings/get settings ::stall-blocks))
 
 (defn close-hitters
   "Of the hostiles near, those that attack at close range (creepers included, not ranged mobs or endermen) within close-radius."
@@ -33,16 +37,12 @@
            (cornered/near-hostiles c)))
 
 
-(def eat-gap
-  "Blocks to the nearest hostile at which a bite is eaten per flee step."
-  12)
-
 (defn ^:async eat-on-the-run!
   "One bite a flee step, with the nearest hostile at least eat-gap away; none for the rest of the flight once
   nothing is left to eat or a bite fails."
   [c threat]
   (when (and (not (:ate (ctx/mem c)))
-             (>= (danger-q/mob-distance (:primitives c) threat) eat-gap))
+             (>= (danger-q/mob-distance (:primitives c) threat) (eat-gap)))
     (let [r (await (ctx/call c :eat 'jobs.survival.eat {:until 20 :max-bites 1}))]
       (when (and (contract/ending? r) (not= :done (:kind r)))
         (ctx/update-mem! c assoc :ate true)))))
@@ -139,10 +139,10 @@
             from (u/self-pos c)
             moved (await (cornered/leg-step! c :step target 1
                                     (cond (or (seq (close-hitters c)) (cornered/recently-hurt? c)) (cornered/close-leg-s)
-                                          low? low-leg-s
-                                          :else cornered/flight-timeout-s)
-                                    (if leg (retreat-goal/margin c) retreat-goal/leg-margin)))]
-        (ctx/update-mem! c #(if (and low? (< (u/dist from (u/self-pos c)) stall-blocks))
+                                          low? (low-leg-s)
+                                          :else (cornered/flight-timeout-s))
+                                    (if leg (retreat-goal/margin c) (retreat-goal/leg-margin))))]
+        (ctx/update-mem! c #(if (and low? (< (u/dist from (u/self-pos c)) (stall-blocks)))
                               (update % :stalled (fnil inc 0))
                               (dissoc % :stalled)))
         (cond
@@ -151,7 +151,7 @@
                              (< (u/dist (u/self-pos c) leg) (- goal-gap0 0.5)))))
           (do (retreat-goal/off! c leg :lost-ground) :again)
           (and leg (retreat-goal/drifted? c leg)) (do (retreat-goal/off! c leg :height) :again)
-          (and (not moved) (:leg-timed-out (ctx/mem c)) (< (:slow-steps (ctx/mem c) 0) slow-step-cap))
+          (and (not moved) (:leg-timed-out (ctx/mem c)) (< (:slow-steps (ctx/mem c) 0) (slow-step-cap)))
           (do (ctx/update-mem! c update :slow-steps (fnil inc 0)) :again)
           (not moved) (await (stuck "the way away from the hostile is blocked"))
           :else

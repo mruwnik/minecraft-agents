@@ -12,7 +12,11 @@
    ::keep-away {:default 4 :doc "Blocks a flee step's end keeps from every known hostile (a creeper's blast reaches about 3); a step that ends nearer is not taken, and a body with no other is cornered." :spec (a/num-in 0 nil)}
    ::hazard-clearance {:default 2.5 :doc "Distance in blocks kept from a hazard on a flight path." :spec (a/num-in 0 nil)}
    ::flank-turn {:default 45 :doc "Degrees a flight turns from straight away toward a refuge that lies behind the chasers, to go round them, when it still gains on them so (jobs.lib.cost/outruns-at?)." :spec (a/num-in 0 90)}
-   ::max-descent {:default 3 :doc "Blocks lower than where a flight began that it may end a step under rock (a cave, not a hillside); a step further down is not taken while another is open, else the body is cornered." :spec (a/num-in 0 nil)}})
+   ::max-descent {:default 3 :doc "Blocks lower than where a flight began that it may end a step under rock (a cave, not a hillside); a step further down is not taken while another is open, else the body is cornered." :spec (a/num-in 0 nil)}
+   ::min-open {:default 2 :doc "Fewest clear cells a direction needs to be worth walking." :spec (a/int-in 0 nil)}
+   ::roof-reach {:default 8 :doc "Blocks above the head searched for rock over a cell." :spec (a/int-in 0 nil)}})
+(defn min-open [] (settings/get settings ::min-open))
+(defn roof-reach [] (settings/get settings ::roof-reach))
 (defn keep-away [] (settings/get settings ::keep-away))
 (defn hazard-clearance [] (settings/get settings ::hazard-clearance))
 (defn flank-turn [] (settings/get settings ::flank-turn))
@@ -22,10 +26,6 @@
 (def turns
   "Angles to try, in degrees from the preferred direction, best first."
   [0 30 -30 60 -60 90 -90 120 -120])
-
-(def min-open
-  "Fewest clear cells a direction needs to be worth walking."
-  2)
 
 (def passable-names
   #{"air" "cave_air" "void_air" "short_grass" "tall_grass" "grass" "fern" "large_fern" "dead_bush" "snow"
@@ -173,11 +173,11 @@
   short side step in a dead end is neither, so a body that only has those
   left is cornered."
   [from threats {:keys [open end]}]
-  (and (>= open min-open)
+  (and (>= open (min-open))
        (let [now (apply min (map #(u/dist from %) threats))
              then (apply min (map #(u/dist end %) threats))]
          (and (>= then now)
-              (or (> open min-open) (>= (- then now) 2))))))
+              (or (> open (min-open)) (>= (- then now) 2))))))
 
 (defn wet?
   "Whether a walker in feet cell swims there: water (or kelp, seagrass, a bubble column: breath/swimmable) at its feet,
@@ -206,12 +206,10 @@
   [arrow-at mob-positions {:keys [x y z]}]
   (not-any? #(reach/line-of-fire? arrow-at % {:x (+ x 0.5) :y y :z (+ z 0.5)}) mob-positions))
 
-(def roof-reach "Blocks above the head searched for rock over a cell." 8)
-
 (defn roofed?
   "Whether a block that is not passable lies within roof-reach above the head of feet cell end."
   [block-at {:keys [x y z]}]
-  (some #(not (passable? (block-at {:x x :y (+ y 2 %) :z z}))) (range roof-reach)))
+  (some #(not (passable? (block-at {:x x :y (+ y 2 %) :z z}))) (range (roof-reach))))
 
 (defn too-close?
   "Whether pos lies within keep-away of any of threats (positions)."

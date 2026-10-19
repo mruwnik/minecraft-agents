@@ -27,7 +27,9 @@
    ::no-gain-steps {:default 20 :doc "Flight steps without a new best gap to the nearest chaser before the cornered options are tried." :spec (a/int-in 1 nil)}
    ::shot-reach {:default 12 :doc "Blocks out along the way a shot came from that stand for the place of a shooter the body has not seen (cover, seal sides and back-off turn on it)." :spec (a/num-in 1 nil)}
    ::shot-window-s {:default 5 :doc "Seconds a shot's direction stands for an unseen shooter (flight/fire-spots)." :spec (a/num-in 0 nil)}
-   ::prefer-lit? {:default true :doc "By night or under ground a flee step ends on lit ground rather than dark (jobs.lib.look/dark-fn) while a lit end is open." :spec boolean?}})
+   ::prefer-lit? {:default true :doc "By night or under ground a flee step ends on lit ground rather than dark (jobs.lib.look/dark-fn) while a lit end is open." :spec boolean?}
+   ::lost-s {:default 4 :doc "Seconds out of line of sight after which a mob has stopped chasing." :spec (a/num-in 0 nil)}})
+(defn lost-s [] (settings/get settings ::lost-s))
 
 (def displaced-policy
   "One :displaced entry, half an hour: the night job may then walk back to a bed up to :urgent-bed-radius away."
@@ -224,10 +226,6 @@
   [p e now]
   (merge {:id (.-id e) :uuid (.-uuid e) :mob (.-name e) :seen-t now} (threats/place-of p e)))
 
-(def lost-s
-  "Seconds out of line of sight after which a mob has stopped chasing."
-  4)
-
 (defn look!
   "Update the flight's chasers (job memory :chasers, by id): the real dangers within :radius (ranged :ranged-radius)
   join or are seen afresh; one that stopped chasing (stopped-chasing) moves to :fled with :ended why. The chasers
@@ -250,7 +248,7 @@
                            seen-t (if (and e (true? (.-visible e))) now (:seen-t ch))
                            ch (cond-> (assoc ch :seen-t seen-t) e (-> (dissoc :pos :direction :band :from) (merge (threats/place-of p e))))
                            m (when e (seen-now p e low?))
-                           why (stopped-chasing (cond-> m (and m (contains? reached id)) (assoc :way? true)) seen-t now (* 1000 lost-s))]]
+                           why (stopped-chasing (cond-> m (and m (contains? reached id)) (assoc :way? true)) seen-t now (* 1000 (lost-s)))]]
                  {:id id :ch ch :e e :why why
                   :look-back? (and (unsensed-loss? e why) (not (looked id)) (not (dead id)))})
         on (filter #(nil? (:why %)) judged)

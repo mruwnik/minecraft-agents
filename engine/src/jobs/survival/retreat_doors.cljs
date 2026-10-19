@@ -1,6 +1,8 @@
 (ns jobs.survival.retreat-doors
   "Shutting a door, gate or trapdoor on the threat in a flight (retreat, night)."
-  (:require [jobs.lib.click :as click]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
+            [jobs.lib.click :as click]
             [engine.ctx :as ctx]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
@@ -8,9 +10,9 @@
             [jobs.survival.retreat-cornered :as cornered]
             [jobs.lib.rooms :as room-lib]))
 
-(def door-reach
-  "Farthest (blocks, feet to the cell's middle) an open door may be for the flight to shut it: within a hand's reach."
-  4)
+(a/defargs settings
+  {::door-reach {:default 4 :doc "Farthest (blocks, feet to the cell's middle) an open door may be for the flight to shut it: within a hand's reach." :spec (a/num-in 0 nil)}})
+(defn door-reach [] (settings/get settings ::door-reach))
 
 (defn door-key [{:keys [x y z]}] [x y z])
 
@@ -27,7 +29,7 @@
   (let [p (:primitives c)
         self (u/self-pos c)
         {fx :x fy :y fz :z} (sh-sense/feet p)
-        r (js/Math.ceil door-reach)
+        r (js/Math.ceil (door-reach))
         clicked (:doors-clicked (ctx/mem c) #{})
         mid room-lib/mid]
     (->> (for [x (range (- fx r) (+ fx r 1)) y (range (dec fy) (+ fy 3)) z (range (- fz r) (+ fz r 1))]
@@ -40,7 +42,7 @@
          distinct
          (remove #(clicked (door-key (:cell %))))
          (remove #(click/standing-in? self (:cell %) (:half %)))
-         (filter #(<= (u/dist self (mid (:cell %))) door-reach))
+         (filter #(<= (u/dist self (mid (:cell %))) (door-reach)))
          (filter #(< (u/dist threat-pos (mid (:cell %))) (u/dist threat-pos self)))
          (sort-by #(u/dist self (mid (:cell %))))
          first)))
@@ -74,7 +76,7 @@
   [c {:keys [cell inside]}]
   (let [b (dig-cells/open-openable (:primitives c) cell)
         in-door? (click/standing-in? (u/self-pos c) cell (:half (click/props-of b)))]
-    (if (and (not in-door?) (<= (u/dist (u/self-pos c) (room-lib/mid cell)) door-reach))
+    (if (and (not in-door?) (<= (u/dist (u/self-pos c) (room-lib/mid cell)) (door-reach)))
       (await (shut-door! c {:cell cell :name (.-name b)}))
       (do (when-not (await (cornered/step! c :home inside 0))
             (ctx/update-mem! c update :doors-clicked (fnil conj #{}) (door-key cell)))

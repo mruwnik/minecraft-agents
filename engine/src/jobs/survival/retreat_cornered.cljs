@@ -28,10 +28,6 @@
   ["_pickaxe" "_shovel" "_hoe"])
 
 
-(def flight-timeout-s
-  "Bound of one step of the flight: the mob moves, so the next step aims again."
-  5)
-
 
 (defn block-at-fn
   "pos -> the block name the body sees or remembers there. A cell it has not seen reads as rock (behind the body or a
@@ -60,7 +56,17 @@
    :jobs.survival.retreat-cornered/beaten-hits {:default 2 :doc "Hits by a melee mob near (the damage names one within close-radius; not a creeper or an enderman) within hurt-window-s that show the flight is failing: the body fights it first, armed or not. 0: never." :spec (a/int-in 0 nil)}
    :jobs.survival.retreat-cornered/press-gap {:default 2 :doc "Blocks within which a melee mob (not a creeper or an enderman) makes a cornered armed body fight before it builds a seal or pillar, hit or not: the mob strikes before a block is placed and stands in the cells to fill." :spec (a/num-in 0 nil)}
    :jobs.survival.retreat-cornered/hold-cap {:default 60 :doc "Holds (one wait-ms each) a flight makes in water or under a roof against an angry enderman before it tries the next option (seal, pit, pocket, fight); 0: none." :spec (a/int-in 0 nil)}
-   :jobs.survival.retreat-cornered/refuge-gap {:default 10 :doc "Blocks within which a lone melee hostile the body cannot outfight is pillared against (else sealed against) before any flee step, when blocks are carried; 0 never." :spec (a/num-in 0 nil)}})
+   :jobs.survival.retreat-cornered/refuge-gap {:default 10 :doc "Blocks within which a lone melee hostile the body cannot outfight is pillared against (else sealed against) before any flee step, when blocks are carried; 0 never." :spec (a/num-in 0 nil)}
+   ::flight-timeout-s {:default 5 :doc "Seconds bounding one step of the flight: the mob moves, so the next step aims again." :spec (a/num-in 0 nil)}
+   ::enderman-close {:default 3 :doc "Blocks within which an enderman counts as angry though it has not hurt the body yet (a calm one does not come this near)." :spec (a/num-in 0 nil)}
+   ::water-reach {:default 6 :doc "Blocks within which a body hunted by an enderman looks for water to stand in." :spec (a/num-in 0 nil)}
+   ::roof-reach {:default 8 :doc "Blocks within which a body hunted by an enderman looks for a 2-high gap under a roof." :spec (a/num-in 0 nil)}
+   ::swim-reach {:default 16 :doc "Blocks within which a body in water looks for dry land to swim out to." :spec (a/num-in 0 nil)}})
+(defn flight-timeout-s [] (settings/get settings ::flight-timeout-s))
+(defn enderman-close [] (settings/get settings ::enderman-close))
+(defn water-reach [] (settings/get settings ::water-reach))
+(defn roof-reach [] (settings/get settings ::roof-reach))
+(defn swim-reach [] (settings/get settings ::swim-reach))
 
 (defn fist-sweeps [] (settings/get settings :jobs.survival.retreat-cornered/fist-sweeps))
 (defn hit-reach [] (settings/get settings :jobs.survival.retreat-cornered/hit-reach))
@@ -128,17 +134,13 @@
   (let [{:keys [radius ranged-radius]} (:args c)]
     (flight/near-known (:primitives c) (set (flight/dead-ids c)) radius ranged-radius)))
 
-(def enderman-close
-  "Blocks within which an enderman counts as angry though it has not hurt the body yet (a calm one does not come this near)."
-  3)
-
 (defn angry-enderman?
   "Whether one of hostiles is an enderman that is angry (the client's flag), hurt the body this flight (its health is under the flight's start) or
   stands within enderman-close: a calm one is walked away from like any mob, never sealed against."
   [c hostiles]
   (let [p (:primitives c)
         hurt? (< (.-health (.self p)) (:flight-health (ctx/mem c) 0))]
-    (boolean (some #(and (combat/enderman? %) (or hurt? (true? (.-angry %)) (<= (danger-q/mob-distance p %) enderman-close))) hostiles))))
+    (boolean (some #(and (combat/enderman? %) (or hurt? (true? (.-angry %)) (<= (danger-q/mob-distance p %) (enderman-close)))) hostiles))))
 
 (defn hitters
   "Of hostiles, the melee ones (not a creeper or an enderman) within hit-reach."
@@ -203,7 +205,7 @@
 (defn ^:async leg-step!
   "One flee step to target as a go-to child of legs of at most leg-s seconds (a flee never digs or pillars: :ways #{:walk :clear-seal}, and plans no route deeper or higher than y-margin (16) blocks past body and target;
   known dangers stay costed): true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined (mem :leg-timed-out: it ran out of the leg's seconds unhurt)."
-  ([c slot target range leg-s] (await (leg-step! c slot target range leg-s retreat-goal/leg-margin)))
+  ([c slot target range leg-s] (await (leg-step! c slot target range leg-s (retreat-goal/leg-margin))))
   ([c slot target range leg-s y-margin]
   (let [from (u/self-pos c)
         t0 (ctx/now c)
@@ -222,7 +224,7 @@
                                              :bps (when (pos? s) (/ (js/Math.round (* 10 (/ d s))) 10))})
     (boolean (or (:arrived res) (:leg res))))))
 
-(defn step! [c slot target range] (leg-step! c slot target range flight-timeout-s))
+(defn step! [c slot target range] (leg-step! c slot target range (flight-timeout-s)))
 
 (defn ^:async back-off!
   "Step back from the place from (back-off-target): :again, nil when there is no such cell or the walk is blocked."
@@ -242,10 +244,6 @@
     (do (ctx/update-mem! c update :holds (fnil inc 0))
         (await (child/pause! c (/ (flight/wait-ms) 1000) why))
         :again)))
-
-(def water-reach
-  "Blocks within which a body hunted by an enderman looks for water to stand in."
-  6)
 
 (defn water-cell
   "The nearest cell within reach (blocks, horizontally and up to 2 vertically) of from that block-at reads as water, or nil."
@@ -267,14 +265,10 @@
         self (u/self-pos c)]
     (if (= "water" (block-at {:x (js/Math.floor (:x self)) :y (js/Math.floor (:y self)) :z (js/Math.floor (:z self))}))
       (await (hold! c :water "in water, away from the enderman"))
-      (when-let [cell (water-cell block-at self water-reach)]
+      (when-let [cell (water-cell block-at self (water-reach))]
         (if (await (step! c :water {:x (+ 0.5 (:x cell)) :y (:y cell) :z (+ 0.5 (:z cell))} 0))
           :again
           (do (flight/tried! c :water) nil))))))
-
-(def roof-reach
-  "Blocks within which a body hunted by an enderman looks for a 2-high gap under a roof."
-  8)
 
 (defn roof-cell
   "The nearest cell within reach (blocks, horizontally and 1 vertically) of from that block-at reads as a 2-high gap
@@ -309,14 +303,10 @@
       (look/see! c))
     (if (and (escape/passable? (block-at (update here :y inc))) (escape/solid? (block-at (update here :y + 2))))
       (await (hold! c :roof "under a roof, out of the enderman's reach"))
-      (when-let [cell (roof-cell block-at self roof-reach)]
+      (when-let [cell (roof-cell block-at self (roof-reach))]
         (if (await (step! c :roof {:x (+ 0.5 (:x cell)) :y (:y cell) :z (+ 0.5 (:z cell))} 0))
           :again
           (do (flight/tried! c :roof) nil))))))
-
-(def swim-reach
-  "Blocks within which a body in water looks for dry land to swim out to."
-  16)
 
 (defn in-water?
   "Whether the body's feet cell reads as water."
@@ -333,7 +323,7 @@
         feet (u/self-pos c)
         dry? (fn [{:keys [x y z]}] (and (not= "water" (block-at {:x x :y y :z z})) (not= "water" (block-at {:x x :y (inc y) :z z}))))
         to (first (step-off/candidates p {:x (js/Math.floor (:x feet)) :y (js/Math.floor (:y feet)) :z (js/Math.floor (:z feet))}
-                                       {:reach swim-reach :ok? dry?}))]
+                                       {:reach (swim-reach) :ok? dry?}))]
     (when to
       (if (await (step! c :swim-out {:x (+ 0.5 (:x to)) :y (:y to) :z (+ 0.5 (:z to))} 0))
         :again
