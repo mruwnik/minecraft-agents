@@ -355,3 +355,25 @@
           (core/register-reflex! eng {:trigger :low})
           (dotimes [_ 4] (await (core/tick! eng)))
           (is (= 1 (count (filter #(and (= [:reflex :fired] [(:source %) (:kind %)]) (= :low (-> % :context :reflex-id))) @seen)))))))))
+
+(def spender
+  {:defaults {:spend {:wall-time 5}}
+   :round (fn [_] (swap! clock + 6000) :continue)
+   :cleanup (fn ^:async cleanup [c _]
+              (await (look! c))
+              (ctx/end c :done nil))})
+
+(deftest a-child-that-hits-its-limit-mid-run-reaches-its-parent-limit-reached-after-a-cleanup-that-acts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'spender spender 'parent (assoc parent :round
+                                                                    (fn ^:async parent [c]
+                                                                      (let [e (await (ctx/call c :kid 'spender {}))]
+                                                                        (if (= :continue e)
+                                                                          :continue
+                                                                          (do (swap! world assoc :kid e) (ctx/end c :done nil))))))})]
+          (core/submit! eng '(parent) {})
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (is (= {:kind :limit-reached :cause {:line :wall-time :spend 5}}
+                 (select-keys (:kid @world) [:kind :cause]))))))))

@@ -211,8 +211,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[_ p seen] (await (roll {:entities [(librarian [(offer "paper")])] :keeps-job? true} {:spend {:wall-time 30}}))]
+        (let [[result p seen] (await (roll {:entities [(librarian [(offer "paper")])] :keeps-job? true} {:spend {:wall-time 30}}))]
           (is (= [:wall-time] (mapv (comp :line :cause) (filter #(= :limit_reached (:kind %)) @seen))))
+          (is (= {:found false :rolls 1 :status :stopped :reason :wall-time} (select-keys result [:found :rolls :status :reason]))
+              "one roll done is not the goal: the limit ends the call limit-reached, not done")
           (is (= 1 (digs p)))
           (is (= "lectern" (workstation p))))))))
 

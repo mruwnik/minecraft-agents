@@ -133,7 +133,7 @@
 (defn done?
   "Ok once an offer matched (found! books it), with the offer as its result; later while the rolls go on."
   [c]
-  (let [data [:units :rolls :done (rolls c) :left (max 0 (- (:tries (:args c)) (rolls c))) :result (data-of c nil)]]
+  (let [data [:units :offers :done (if (:offer (ctx/mem c)) 1 0) :left (if (:offer (ctx/mem c)) 0 1) :result (data-of c nil)]]
     (if (:offer (ctx/mem c))
       (apply contract/ok :found (str "found " (want-of (:args c)) " after " (rolls c) " rolls") data)
       (apply contract/later :rolling (str (rolls c) " rolls without " (want-of (:args c))) data))))
