@@ -1342,7 +1342,7 @@
         (let [plan {:id "slab" :parts [{:id "floor" :cells (vec (for [x (range 2 12)] [x 64 6])) :want "stone"}
                                        {:id "wall" :cells (vec (for [x [2 3 4]] [x 65 6])) :want "stone"}]}
               {:keys [eng p]} (start {:inventory [{:name "stone" :count 20}] :self {:pos {:x 3.5 :y 64 :z 2.5}}} {"slab" plan} [])
-              result (await (child-outcome eng job {:plan "slab" :reach 3} 600))
+              result (await (child-outcome eng job {:plan "slab" :settings {:jobs.lib.build.plan/reach 3}} 600))
               ys (map (comp second first) (places p))]
           (is (= 13 (:placed result)))
           (is (= ys (sort ys)) "no cell of a higher layer is placed while a lower one is open"))))))
@@ -1355,7 +1355,7 @@
                                        {:id "wall" :cells (vec (for [x [2 3 4]] [x 65 6])) :want "stone"}]}
               dirt (into {} (map (fn [x] [(h/cell-key x 64 6) "dirt"])) (range 2 12))
               {:keys [eng p]} (start {:blocks dirt :inventory [{:name "stone" :count 20}] :self {:pos {:x 3.5 :y 64 :z 2.5}}} {"slab" plan} [])
-              result (await (child-outcome eng job {:plan "slab" :reach 3} 600))
+              result (await (child-outcome eng job {:plan "slab" :settings {:jobs.lib.build.plan/reach 3}} 600))
               ys (map (comp second first) (places p))]
           (is (= 13 (:placed result)))
           (is (= ys (sort ys)) "no wall cell is placed while a floor cell is still dirt"))))))
@@ -1365,7 +1365,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (tall-wall-start [{:name "stone" :count 15} {:name "dirt" :count 10}] [])
-              result (await (child-outcome eng job {:plan "wall" :reach 3} 600))]
+              result (await (child-outcome eng job {:plan "wall" :settings {:jobs.lib.build.plan/reach 3}} 600))]
           (is (= 15 (:placed result)))
           (is (tall-wall-built p))
           (is (seq (h/calls p "jumpPlace")) "a pillar was raised")
@@ -1382,7 +1382,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:inventory [{:name "stone" :count 70} {:name "dirt" :count 40}] :self {:pos {:x 3.5 :y 64 :z 2.5}}}
                                      {"wall" long-wall-plan} [])
-              result (await (child-outcome eng job {:plan "wall" :reach 3} 900))]
+              result (await (child-outcome eng job {:plan "wall" :settings {:jobs.lib.build.plan/reach 3}} 900))]
           (is (= 70 (:placed result)))
           (is (every? #(= "stone" (block p %)) (for [x (range 2 16) y (range 64 69)] [x y 6])))
           (is (seq (filter (comp #{"dirt"} second) (places p))) "a bridge row was laid beside the pillar")
@@ -1400,7 +1400,7 @@
               {:keys [eng p]} (start {:blocks (merge moat island) :inventory [{:name "stone" :count 6} {:name "dirt" :count 10}]
                                       :self {:pos {:x 3.5 :y 64 :z 2.5}}}
                                      {"wall" plan} [])
-              result (await (child-outcome eng job {:plan "wall" :reach 3} 600))]
+              result (await (child-outcome eng job {:plan "wall" :settings {:jobs.lib.build.plan/reach 3}} 600))]
           (is (= 3 (:placed result)))
           (is (every? #(= "stone" (block p %)) cells))
           (is (seq (filter (comp #{"dirt"} second) (places p))) "a bridge row was laid from the bank")
@@ -1414,7 +1414,7 @@
       (fn ^:async t []
         (let [zones [{:name "keep-out" :min [-30 60 -10] :max [40 80 10]}]
               {:keys [eng p]} (tall-wall-start [{:name "stone" :count 15} {:name "dirt" :count 10}] zones)
-              result (await (child-outcome eng job {:plan "wall" :reach 3} 600))]
+              result (await (child-outcome eng job {:plan "wall" :settings {:jobs.lib.build.plan/reach 3}} 600))]
           (is (= :refused (:reason result)))
           (is (seq (:refused result)))
           (is (empty? (h/calls p "jumpPlace")))
@@ -1425,7 +1425,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (tall-wall-start [{:name "stone" :count 15}] [])
-              result (await (child-outcome eng job {:plan "wall" :reach 3 :fetch false} 600))]
+              result (await (child-outcome eng job {:plan "wall" :fetch false :settings {:jobs.lib.build.plan/reach 3}} 600))]
           (is (= :needs (:reason result)))
           (is (empty? (h/calls p "jumpPlace"))))))))
 

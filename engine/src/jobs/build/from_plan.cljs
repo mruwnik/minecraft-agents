@@ -43,27 +43,15 @@
   needed). Crops and trees are not this job's.
   Its walks never dig through the build, except from a hole the body stands in (2 or more levels walled): they may climb out.
   One call works until the plan is built or nothing more applies (it yields only while a walk or fetch waits). Every
-  step re-reads the plan and the world, then takes the first step that applies:
-  0. A buildable cell under the body's feet or head makes it walk out of the footprint first (once per cell) when it
-     stands on ground the plan did not build, so that cell is placed from outside before the walls close round the body;
-     standing on a built cell of the plan, it does so only when nothing else is left to place.
-     A place that would shut the body in (it has room and would be left under half of it) is held back; the body first walks
-     out of the plan's footprint (go-to child), then places from outside. Held back :give-up times, a cell is given
-     up as :unreachable.
-  1. Place every buildable cell within :reach of the eye, lowest first. A cell is buildable when its block is
-     carried, the cell below it is not itself still owed, and it is not the body's own feet or head cell.
-     jobs.lib.placement picks the click (neighbour, face, cursor, look, sneak) that gives the wanted state. A
-     :facing want that is placed plainly waits until the body looks the right way, from the far side.
-  2. Dig the wrong blocks within reach.
-  3. Walk to a stand cell one to three blocks beside the nearest buildable (or diggable) cell, on the ground there
-     (the body's feet height, or one up or down on a slope).
-  3b. A cell no ground stand reaches (above reach) gets a temporary pillar (jobs.lib.build.scaffold: jobs.access.pillar
-     from a base outside every footprint, this plan's too; every block in the scaffold ledger). The cells in reach of it
-     are placed; a bridge row (jobs.access.bridge, from the pillar's top or from the ground where no base exists, at most approach/::max-row blocks) then brings the next cell in reach before a new pillar; jobs.access.cleanup takes it all back, however the call ends. A zone or footprint that refuses every base
-     refuses the cell (:refused :zone); too few pillar blocks (dirt, cobblestone) are fetched, else the call ends
-     condition-failed {:reason :needs :needs :scaffold-item}.
-  4. Walk toward the nearest unloaded cell. Unseen cells are never taken as built.
-  5. Finish.
+  step re-reads the plan and the world and takes the first that applies: walk out of a footprint cell the body stands in
+  (once per cell; a place that would shut the body in is held back the same way), place what is buildable within the
+  setting ::reach (jobs.lib.build.plan) of the eye, lowest layer first (buildable: its block is carried, the cell below is
+  not still owed, it is not the body's feet or head cell; jobs.lib.placement picks the click), dig wrong blocks in reach,
+  walk to a stand beside the nearest buildable or diggable cell, raise a temporary pillar and bridge row for a cell no
+  ground stand reaches (jobs.lib.build.scaffold; jobs.access.cleanup takes it back however the call ends; a zone or
+  footprint that refuses every base refuses the cell :zone; too few pillar blocks are fetched, else condition-failed
+  {:reason :needs :needs :scaffold-item}), walk toward the nearest unloaded cell (unseen cells are never taken as
+  built), else finish.
   A cell whose state no neighbour gives, or with no block to click beside it yet, waits for one. If still missing at
   the end it is given up with jobs.lib.placement's reason (:no-support, after a look at any floor or neighbour never seen; :no-room, :opened, :double-slab). A cell whose place is refused, or whose stand cell
   cannot be reached, :give-up times is given up (:refused, :occupied, :no-item, :unreachable or :unloaded).
@@ -101,7 +89,6 @@
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
-   :reach {:doc "cells whose centre is this close to the eye are placed without walking, in blocks" :spec (a/num-in 0 nil) :default u/eye-reach}
    :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
    :fetch {:doc "get the blocks and tools the plan lacks (jobs.lib.need): true, a set of kinds or a map of limits; false builds with what is carried" :spec need/option? :default {:explore true}}
    :ignore-zones? :shared})
@@ -114,6 +101,9 @@
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one build may take." :spec (a/int-in 1 nil)}
    ::give-up {:default 3 :doc "Refused places or failed walks after which a cell is given up." :spec (a/int-in 1 nil)}
+   ::off-bed-tries {:default 3 :doc "Walks off a bed or bottom slab the body stands on, before the roof cells over it are given up." :spec (a/int-in 1 nil)}
+   ::hole-depth {:default 2 :doc "Levels of walls round the body from its feet up that make it a body in a hole, whose walks may climb out." :spec (a/int-in 1 nil)}
+   ::hole-walks {:default 2 :doc "Walks in a row that fail from a hole after which the build stops :shut-in." :spec (a/int-in 1 nil)}
    ::cell-s {:default 3 :doc "Seconds one cell of the plan is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
 
 (defn give-up [] (settings/get settings ::give-up))
@@ -332,7 +322,7 @@
   (let [body (u/self-pos c)
         mine (body-cells body)]
     (->> todo
-         (filter #(and (<= (u/eye-dist body (:pos %)) (:reach (:args c)))
+         (filter #(and (<= (u/eye-dist body (:pos %)) (plan/reach))
                        (not (mine (:pos %)))
                        (or (:click %) (facing-ok? (facing-of (:want %)) (:pos %) body))))
          (sort-by (juxt #(get (:pos %) 1) #(u/eye-dist body (:pos %)))))))
@@ -343,7 +333,7 @@
   (let [body (u/self-pos c)
         mine (body-cells body)]
     (->> cells
-         (filter #(and (<= (u/eye-dist body (:pos %)) (:reach (:args c))) (not (mine (:pos %)))))
+         (filter #(and (<= (u/eye-dist body (:pos %)) (plan/reach)) (not (mine (:pos %)))))
          (sort-by (juxt #(get (:pos %) 1) #(u/eye-dist body (:pos %)))))))
 
 ;; ------------------------------------------------------------------ keeping a way out
@@ -393,8 +383,6 @@
       (ctx/update-mem! c dissoc :leave :leave-range))
     (if (= :continue r) :continue :again)))
 
-(def off-bed-tries 3)
-
 (defn off-low-floor
   "The nearest cell within 2 that the body can stand in on a full-height floor, when it stands on a seen bed or bottom slab (half
   a block high, its head inside the next cell up: the roof cells over it are refused, and the walks keep out of its cell, so
@@ -424,25 +412,17 @@
               (and n (not (shape/air? n)) (not (#{"water" "lava"} n)))))
           [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))
 
-(def hole-depth
-  "Levels of walls round the body from its feet up that make it a body in a hole (its own dig): its walks may then climb out."
-  2)
-
 (defn in-hole?
-  "Whether the body stands in a hole at least hole-depth deep (escape/pit-depth)."
+  "Whether the body stands in a hole at least ::hole-depth deep (escape/pit-depth)."
   [c]
   (let [{:keys [x y z]} (u/self-pos c)]
-    (<= hole-depth (escape/pit-depth (escape/block-at-of (:primitives c)) [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))))
-
-(def hole-walks
-  "Walks in a row that fail from a hole (even climbing out) after which the build stops :shut-in."
-  2)
+    (<= (settings/get settings ::hole-depth) (escape/pit-depth (escape/block-at-of (:primitives c)) [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))))
 
 (defn hole-blocked!
-  "Count a failed walk from a hole; at hole-walks of them in a row end the build :shut-in, else :again."
+  "Count a failed walk from a hole; at ::hole-walks of them in a row end the build :shut-in, else :again."
   [c]
   (ctx/update-mem! c update :hole-blocked (fnil inc 0))
-  (if (< (:hole-blocked (ctx/mem c)) hole-walks)
+  (if (< (:hole-blocked (ctx/mem c)) (settings/get settings ::hole-walks))
     :again
     (ctx/end c :nothing-possible :shut-in
              {:placed (:placed (ctx/mem c) 0)
@@ -452,7 +432,7 @@
   "The stands from which the body reaches cell pos wherever it stands in the stand cell (its eye within :reach, less the
   half diagonal of a cell, from the cell's centre)."
   [c stands pos]
-  (filter (fn [[x y z]] (<= (u/eye-dist {:x (+ x 0.5) :y y :z (+ z 0.5)} pos) (- (:reach (:args c)) 0.71))) stands))
+  (filter (fn [[x y z]] (<= (u/eye-dist {:x (+ x 0.5) :y y :z (+ z 0.5)} pos) (- (plan/reach) 0.71))) stands))
 
 (defn ^:async walk-to!
   "Walk to a stand cell beside cell (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as
@@ -534,7 +514,7 @@
   "Look at the unseen floor of the nearest refused cell: from where the body stands when the cell is in reach, else walk to it first."
   [c cells looks]
   (let [[cell n] (first (sort-by #(u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos (first %)))) looks))]
-    (if (<= (u/eye-dist (u/self-pos c) (:pos cell)) (:reach (:args c)))
+    (if (<= (u/eye-dist (u/self-pos c) (:pos cell)) (plan/reach))
       (do (ctx/update-mem! c update :support-looked (fnil conj []) n)
           (await (dig-look/look-at! c n))
           :again)
@@ -572,7 +552,7 @@
       (scaffold/working? c) (await (scaffold/step! c (give-up)))
       (scaffold/stale? c) (do (scaffold/begin-clean! c) :again)
       (:leave (ctx/mem c)) (await (leave! c))
-      (and (< (:off-bed (ctx/mem c) 0) off-bed-tries) (off-low-floor c))
+      (and (< (:off-bed (ctx/mem c) 0) (settings/get settings ::off-bed-tries)) (off-low-floor c))
       (do (ctx/update-mem! c #(-> % (assoc :leave (off-low-floor c) :leave-range 0) (update :off-bed (fnil inc 0)))) :again)
       (and underfoot (not= (:pos underfoot) (:stepped-off (ctx/mem c))))
       (do (ctx/update-mem! c assoc :leave (exit-point cells (u/self-pos c)) :stepped-off (:pos underfoot))
@@ -617,7 +597,7 @@
 
 (defn ^:async fetch-step!
   "Fetch what the plan lacks (jobs.lib.need) when a fetch is due: :continue while the child waits on the world, :again
-  once it ended (a failed one is booked, a limit ends the build), nil when nothing is due."
+  once it ended (a failed one, a limit too, is booked), nil when nothing is due."
   [c]
   (when-let [w (plan/problem c)]
     (let [o (assoc (select-keys (need/opts c plan/fetch-job) [:how :explore]) :for-plan (:plan (:args c)))
@@ -635,7 +615,6 @@
         (= :done (:kind e)) (do (ctx/update-mem! c dissoc :fetching)
                                 (ctx/emit! c :fetch.done :info {:for (:reason w) :text (str "fetched " what)})
                                 :again)
-        (#{:limit-reached :cut-off} (:kind e)) (ctx/end c (:kind e) (:cause e) (result-data c (:cells (planned c))))
         :else (do (book-failed! c w e) :again)))))
 
 (defn ^:async step [c]

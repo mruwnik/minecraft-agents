@@ -32,7 +32,7 @@
      it, so every rail takes the shape its neighbours give it. The body stands on the rail behind the cell it
      places. A rail that settled in the wrong shape is dug and placed again up to :fix times, then given up as
      :shape. Placing, zones, other plans' footprints, refusals, give-ups and the build.* events are
-     jobs.build.from-plan's (its args :reach :accept apply).
+     jobs.build.from-plan's (its arg :accept applies).
      With nothing left to build the builder is skipped and the line goes straight to the proof.
   2. :switch turns on every planned lever that is off (jobs.access.toggle as a child, once per lever).
   3. :check runs plan.rail/judge-line over the world. A powered rail found unlit (or lit) only in the body's memory is
@@ -59,7 +59,6 @@
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
-   :reach {:doc "as jobs.build.from-plan" :spec (a/num-in 0 nil) :default u/eye-reach}
    :accept {:doc "as jobs.build.from-plan" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
    :all-carried {:doc "start only while every item still to place is carried (false: build what is carried)" :spec boolean? :default true}
    :fetch {:doc "get the items still to place with jobs.lib.need before the build: true, a set of kinds or a map of limits; false (or without :item) waits :short" :spec need/option? :default true}
@@ -234,11 +233,11 @@
                   :result (when proof (assoc proof :built (:built (ctx/mem c))))})))
 
 (defn ^:async quote-of [c]
-  (select-keys (await (ctx/quote c 'jobs.build.from-plan (select-keys (:args c) [:plan :part :reach :accept :ignore-zones?]))) [:uses :yields]))
+  (select-keys (await (ctx/quote c 'jobs.build.from-plan (select-keys (:args c) [:plan :part :accept :ignore-zones?]))) [:uses :yields]))
 
 ;; ------------------------------------------------------------------ rounds
 
-(def builder-args [:plan :part :reach :accept :fix :ignore-zones?])
+(def builder-args [:plan :part :accept :fix :ignore-zones?])
 
 (defn ^:async build-step!
   "One round of the head-first builder (jobs.build.rail child); its result is kept when it ends and the phase moves on. A

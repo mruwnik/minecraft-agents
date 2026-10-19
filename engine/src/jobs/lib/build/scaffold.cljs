@@ -31,7 +31,7 @@
 (defn approach-input
   "The input of jobs.lib.access.approach for placing pos, with the plan's own footprint refusing a base."
   [c cells pos]
-  (assoc (access/rules-input c) :targets #{pos} :reach (:reach (:args c)) :avoid (avoid-cells c cells)))
+  (assoc (access/rules-input c) :targets #{pos} :reach (plan/reach) :avoid (avoid-cells c cells)))
 
 (defn plan-for
   "The approach plan (jobs.lib.access.approach/plan) for placing pos."

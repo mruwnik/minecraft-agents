@@ -28,7 +28,7 @@
   A plan with :surface true is put on the ground the body has seen (a pen on a slope follows it).
   Phase 0 clears the trees (logs and leaves) inside the box up to the fence tops with a jobs.build.clear-box child
   (:only), so no leaf staircase leads over the fence; trees not seen yet are left to the check.
-  Phase 1 runs jobs.build.from-plan on the plan. Its args :reach :accept pass through, and its rules
+  Phase 1 runs jobs.build.from-plan on the plan. Its arg :accept passes through, and its rules
   (zones, other plans' footprints, materials, cuts) apply. Phase 2: a body still inside the box walks out through the
   gate (a jobs.movement.go-to child to the cell outside it) and jobs.animals.shut-gate shuts it. Phase 3 checks the pen
   over that box with jobs.lib.pen (see jobs.animals.pen-check): a step out of the box is a leak.
@@ -56,7 +56,6 @@
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
-   :reach {:doc "as jobs.build.from-plan" :spec (a/num-in 0 nil) :default u/eye-reach}
    :accept {:doc "as jobs.build.from-plan" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
    :fetch {:doc "as jobs.build.from-plan: get the blocks the plan lacks; false builds with what is carried" :spec need/option? :default {:explore true}}
    :uneven? {:doc "build although the ring steps more than 1 between neighbouring fences or the inside drops more than 1 at the gate" :spec boolean? :default false}
@@ -130,7 +129,7 @@
   (pen-read/read (:primitives c) (pen-opts c cells)))
 
 (defn build-args [c]
-  (select-keys (:args c) [:plan :part :reach :accept :fetch :ignore-zones?]))
+  (select-keys (:args c) [:plan :part :accept :fetch :ignore-zones?]))
 
 ;; ------------------------------------------------------------------ conditions
 
