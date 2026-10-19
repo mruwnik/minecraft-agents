@@ -246,6 +246,13 @@
     (is (not= :floor-unseen (:reason (sc/stop-of (assoc in :block-at (constantly "stone")) cells #{})))
         "judged once the cut is open: it is dug to see first")))
 
+(deftest stop-of-names-the-plug-when-water-also-fills-a-cut-cell
+  (let [cut [[1 65 0] [1 64 0]]
+        blocks {[1 65 0] "cobblestone" [1 64 0] "water"}
+        in {:ignore-zones? true :plugs #{[1 65 0]} :block-at #(get blocks % "stone")}
+        stop (sc/stop-of in {:cut cut :floor [1 63 0] :under [1 62 0]} #{})]
+    (is (= [:plugged [1 65 0]] [(:reason stop) (:cell stop)]))))
+
 (defn floor-seen-after-cut!
   "p whose cell floor reads unknown until the second look at it: the first glance missed."
   [p floor]

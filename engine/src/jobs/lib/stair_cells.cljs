@@ -98,10 +98,11 @@
     (cond
       (some #(nil? (block-at %)) (conj cut floor under))
       {:reason :not-loaded :cell (first (filter #(nil? (block-at %)) (conj cut floor under)))}
-      fluid-cell {:reason :fluid-in-cut :cell fluid-cell :fluid (block-at fluid-cell)}
-      crop-cell {:reason :crop :cell crop-cell :block (block-at crop-cell)}
+      ;; before fluid: the water that forced a plug may already stand in the cut cell below it
       plug-cell {:reason :plugged :cell plug-cell :block (block-at plug-cell)
                  :why "the cell was filled against water by this body; the water is behind it (the dig-plugs? setting digs it)"}
+      fluid-cell {:reason :fluid-in-cut :cell fluid-cell :fluid (block-at fluid-cell)}
+      crop-cell {:reason :crop :cell crop-cell :block (block-at crop-cell)}
       floor-cell {:reason :undercuts-way :cell floor-cell :block (block-at floor-cell)
                   :why "the cell is the floor of a stair this body cut earlier; cutting it breaks the way"}
       over-stand {:reason :undercuts-way :cell over-stand :block (block-at over-stand)
