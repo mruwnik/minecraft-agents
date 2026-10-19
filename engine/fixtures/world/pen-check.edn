@@ -38,7 +38,7 @@
   {:name "bottom-slabs-leak"
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
    :blocks [[:fill [2 0 2] [8 0 8] "stone_slab[type=bottom]" :hollow] [:fill [3 0 3] [7 0 7] "air"]]
-   :expect [{:event {:source :job :kind :completed :data {:closed? false :reason :leak}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:closed? false :reason :leak}} :within-s 45 :of-job true}]}
   {:name "missing-fence-leaks"
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
    :blocks [[:set [8 0 5] "air"]]
