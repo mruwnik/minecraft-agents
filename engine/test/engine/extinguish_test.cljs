@@ -484,6 +484,23 @@
           (await (core/tick! eng))
           (is (= [{:pos {:x 1 :y 64 :z 0} :item "cobblestone"}] (mapv call-args (calls p "place")))))))))
 
+(deftest lava-beside-the-feet-that-no-glance-showed-is-looked-at-then-covered
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w {:self {:onFire true} :inventory [{:name "cobblestone" :count 8}]
+                 :blocks (merge (floor 8) {"1,64,0" "lava" "1,65,0" "stone"})}
+              {:keys [eng p]} (setup w)
+              looked (atom false)
+              all-seen (.-seenBlocks p)]
+          (aset p "seenBlocks" (fn [q] (let [r (all-seen q)] (if @looked r (.filter r #(not= "lava" (.-name %)))))))
+          (aset p "sensedAt" (fn [a] (let [b (.blockAt p a)]
+                                       (if (or @looked (not= "lava" (.-name b))) b #js {:unknown true :name (.-name b)}))))
+          (.override (.-world p) "look" (fn [_ a _] (when (= 1.5 (.. a -pos -x)) (reset! looked true)) #js {:status "ok"}))
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (is (= [{:pos {:x 1 :y 64 :z 0} :item "cobblestone"}] (mapv call-args (calls p "place")))))))))
+
 ;; ------------------------------------------------------------------- one run, cuts
 
 (deftest a-cut-while-waiting-on-a-pour-leaves-the-pour-in-body-memory-and-the-next-run-scoops-it

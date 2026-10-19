@@ -10,6 +10,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
@@ -406,6 +407,9 @@
             pos (floor-cell (u/pos-of (.-pos me)))
             lava? (boolean (.-inLava me))
             _ (await (look/survey! c :cell))
+            ;; lava beside the feet under an overhang shows to no glance of the survey: turn to each side cell not yet sensed
+            _ (await (dig-look/look-unknown! c (for [[dx dy dz] [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 -1 0]]]
+                                                 [(+ (:x pos) dx) (+ (:y pos) dy) (+ (:z pos) dz)])))
             scanned (feel-feet p pos (scan p (scan-radius) hazards 128))
             water (when-not lava? (first (scan p water-radius water-like 1)))
             pour? (and (not lava?) (has-bucket? p))
