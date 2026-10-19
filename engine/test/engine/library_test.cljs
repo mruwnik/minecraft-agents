@@ -414,6 +414,19 @@
           (is (= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z 0}))))
           (is (= [] (debts eng)) "debt cleared"))))))
 
+(deftest plant-sapling-without-a-spot-plants-every-debt-in-one-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:inventory [{:name "oak_sapling" :count 2}]})]
+          (doseq [x [5 6]]
+            (mem/write! (:store eng) :forestry/replant {:pos {:x x :y 64 :z 5} :species "oak"} {:cap 50 :ttl :forever}))
+          (core/submit! eng (list 'jobs.forestry.plant-sapling {:species "oak"}) {})
+          (await (run-until-empty eng 8))
+          (is (= ["oak_sapling" "oak_sapling"] (mapv #(.-name (.blockAt p #js {:x % :y 64 :z 5})) [5 6])))
+          (is (= [] (debts eng)) "both debts cleared")
+          (is (= {:kind :completed} (end-of seen))))))))
+
 (deftest plant-sapling-at-a-position-and-not-yet-without-a-sapling
   (async done
     (tu/run-async done

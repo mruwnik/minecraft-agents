@@ -16,7 +16,7 @@
             [jobs.lib.sense :as sense]))
 
 (def doc
-  "Plant a sapling at :at, or at the oldest replant debt, and clear that debt. With :bone-meal n it then uses up to
+  "Plant a sapling at :at, or at the oldest replant debt (then at the next, until none is owed), and clear that debt. With :bone-meal n it then uses up to
   n bone meal on it.
   With :near and :within only the debts within :within blocks of :near count; the others stay owed.
   A missing sapling is got with jobs.lib.need (a seen chest, or the leaves of its tree broken for the drop) unless :fetch
@@ -195,7 +195,9 @@
         (forget!)
         (if (and (pos? n) (has-meal? (:primitives c)))
           (do (ctx/update-mem! c assoc :meal {:pos (:pos t) :left n}) :again)
-          (ctx/end c :done nil {:pos (:pos t)})))
+          (if (and (nil? (:at (:args c))) (current-target c))
+            :again
+            (ctx/end c :done nil {:pos (:pos t)}))))
       (and (= "occupied" (.-status r)) (= sapling (u/seen-name (:primitives c) (:pos t))))
       (do (forget!) (ctx/end c :done nil {:pos (:pos t)}))
       :else (blocked c (str "cannot plant: " (.-status r))))))
