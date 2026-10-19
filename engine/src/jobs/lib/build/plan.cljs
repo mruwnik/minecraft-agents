@@ -275,13 +275,13 @@
 
 (defn loosened
   "Cells (as judged) with a replaceable block read as the placement sees it: a wrong cell holding one is :missing
-  (placed into directly), a :clear cell holding one is :match."
+  (placed into directly), a :clear cell holding one is :match unless it is a fluid (a clear cell is meant dry)."
   [cells]
   (mapv (fn [{:keys [answer found] :as cell}]
           (cond
             (not (rules/replaceable found)) cell
             (= :wrong answer) (assoc cell :answer :missing)
-            (= :extra answer) (assoc cell :answer :match)
+            (and (= :extra answer) (not (rules/fluids found))) (assoc cell :answer :match)
             :else cell))
         cells))
 

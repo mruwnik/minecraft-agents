@@ -555,6 +555,10 @@
           (is (= "oak_fence" (block p [4 64 3])))
           (is (= {:placed 9 :wrong [] :missing []} (select-keys result [:placed :wrong :missing]))))))))
 
+(deftest a-clear-cell-holding-a-fluid-stays-extra-but-a-wanted-cell-holding-one-is-missing
+  (is (= [:extra :missing :match]
+         (mapv :answer (plan/loosened [{:answer :extra :found "water"} {:answer :wrong :found "lava"} {:answer :extra :found "fern"}])))))
+
 (deftest a-wrong-solid-block-is-dug-by-hand-when-no-tool-is-needed-then-placed
   (async done
     (tu/run-async done
