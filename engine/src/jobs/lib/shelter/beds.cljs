@@ -129,7 +129,7 @@
 
 (def kept-shelters
   "The shelters (walk-leaves-shelter?) a body does not leave at night for a bed: a bare roof is not one of them."
-  #{:underground :dug-in :room})
+  #{:dug-in :room})
 
 (defn courtesy-walk?
   "Whether a body walks to the bed at pos only to sleep as a courtesy: another player sleeps (others-asleep?), the bed

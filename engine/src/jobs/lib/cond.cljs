@@ -12,6 +12,7 @@
             [jobs.lib.body :as body]
             [jobs.lib.breath :as breath]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
@@ -187,7 +188,7 @@
 
 (defn night-unsafe []
   (flag :night-unsafe [:night-unsafe "night in the open"] [:night-safe "safe for the night"]
-        (online (fn [c _] (sh-sense/unsafe-night? (world c) sh-sense/default-roof-height)))))
+        (online (fn [c _] (let [p (world c)] (cljs.core/and (sh-sense/dark-outside? p) (cljs.core/not (sh-sense/sleeping? p)) (cljs.core/not (sh-inside/safe-from-night? p))))))))
 
 ;; ------------------------------------------------------------------ operators
 
@@ -274,7 +275,7 @@
    'burning {:args [] :type :status :doc "on fire or in lava without fire resistance (the burning trigger)" :fn burning}
    'suffocating {:args [] :type :status :doc "drowning or enclosed (the suffocating trigger, default oxygen)"
                  :fn suffocating}
-   'night-unsafe {:args [] :type :status :doc "night, awake, nothing overhead and not buried" :fn night-unsafe}
+   'night-unsafe {:args [] :type :status :doc "night, awake, not shut in a lit or tiny closed room" :fn night-unsafe}
    'and {:fn and}
    'or {:fn or}
    'not {:fn not}

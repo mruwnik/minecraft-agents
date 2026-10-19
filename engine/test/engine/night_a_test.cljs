@@ -13,6 +13,7 @@
             [engine.hut-shelter-test :as hut]
             [engine.fake.raw-world :as fake-raw]
             [engine.memory :as mem]
+            [jobs.lib.shelter.beds :as sh-beds]
             [engine.perception :as perception]
             [engine.settings :as settings]
             [engine.registry :as registry]
@@ -27,29 +28,43 @@
             [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early night-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-with-raw-beef furnace-ops held-starving cow zombie]]))
 
 ;; ------------------------------------------------------------------ trigger
-(deftest night-holds-for-a-remembered-bed-within-the-radius-under-any-roof
-  (let [world {:time night :floor tu/walk-floor :blocks {"0,67,0" "stone" "20,64,0" "red_bed" "60,64,0" "red_bed"}}] ; roofed, not shut in: a floor, nothing seen right over the head
-    (is (true? (holds? world #(st/know-bed! % {:x 20 :y 64 :z 0}))) "20 blocks away, roofed")
-    (is (false? (holds? world #(st/know-bed! % {:x 60 :y 64 :z 0}))) "beyond 48")
-    (is (false? (holds? (assoc world :states {"20,64,0" {:occupied true}}) #(st/know-bed! % {:x 20 :y 64 :z 0})))
-        "an occupied bed is not one to sleep in")
-    (is (false? (holds? world (fn [eng] (st/know-bed! eng {:x 20 :y 64 :z 0})
-                                (write! eng :bed-unreachable {:pos {:x 20 :y 64 :z 0}}))))
-        "given up on")
-    (is (false? (holds? {:time night :blocks roof} (fn [_]))) "roofed, no bed, nobody asleep")))
+(defn bed-for
+  "Whether the body in world has a bed to use (sh-beds/bed-to-use over its bed radius) after seed! wrote its memory."
+  [world seed!]
+  (let [{:keys [eng]} (st/setup {})
+        p (tu/fake world)]
+    (st/looked-round! eng p)
+    (seed! eng)
+    (let [view (mem/view (:store eng))]
+      (boolean (sh-beds/bed-to-use p view (sh-beds/bed-radius view {}) (sh-beds/bed-permit p nil))))))
 
-(deftest night-holds-for-the-live-spawn-bed-when-the-remembered-bed-is-far
-  (let [world {:time night :floor tu/walk-floor :blocks {"0,67,0" "stone" "20,64,0" "red_bed"}}
+(deftest a-remembered-bed-within-the-radius-is-one-to-use
+  (let [world {:time night :floor tu/walk-floor :blocks {"20,64,0" "red_bed" "60,64,0" "red_bed"}}]
+    (is (true? (bed-for world #(st/know-bed! % {:x 20 :y 64 :z 0}))) "20 blocks away")
+    (is (false? (bed-for world #(st/know-bed! % {:x 60 :y 64 :z 0}))) "beyond 48")
+    (is (false? (bed-for (assoc world :states {"20,64,0" {:occupied true}}) #(st/know-bed! % {:x 20 :y 64 :z 0})))
+        "an occupied bed is not one to sleep in")
+    (is (false? (bed-for world (fn [eng] (st/know-bed! eng {:x 20 :y 64 :z 0})
+                                 (write! eng :bed-unreachable {:pos {:x 20 :y 64 :z 0}}))))
+        "given up on")))
+
+(deftest the-live-spawn-bed-is-used-when-the-remembered-bed-is-far
+  (let [world {:time night :floor tu/walk-floor :blocks {"20,64,0" "red_bed"}}
         far {:x 500 :y 64 :z 500}
         seed (fn [spawn] (fn [eng] (st/know-bed! eng far)
                            (mem/write! (:store eng) :spawn-bed {:pos spawn} {:cap 1 :ttl :forever})))]
-    (is (true? (holds? world (seed {:x 20 :y 64 :z 0}))) "the respawn bed is the one within reach")
-    (is (false? (holds? (assoc-in world [:blocks "20,64,0"] "air") (seed {:x 20 :y 64 :z 0})))
+    (is (true? (bed-for world (seed {:x 20 :y 64 :z 0}))) "the respawn bed is the one within reach")
+    (is (false? (bed-for (assoc-in world [:blocks "20,64,0"] "air") (seed {:x 20 :y 64 :z 0})))
         "seen not to be a bed")))
 
+(def lit-hut
+  "Torch and sky light in every cell of closed-hut's room."
+  (into {} (for [x (range -1 2) z (range -1 2) y (range 64 70)] [[x y z] [15 14]])))
+
 (deftest a-body-already-safe-at-night-does-not-hold
-  (is (false? (holds? {:time night :blocks closed-hut} (fn [_]))) "shut in a high closed room")
-  (is (true? (holds? {:time night :blocks (dissoc closed-hut "0,70,0")} (fn [_]))) "a hole in the roof: not shut in")
+  (is (false? (holds? {:time night :blocks closed-hut :light lit-hut} (fn [_]))) "shut in a high lit closed room")
+  (is (true? (holds? {:time night :blocks closed-hut} (fn [_]))) "the same room dark: a mob may spawn in it")
+  (is (true? (holds? {:time night :blocks (dissoc closed-hut "0,70,0") :light lit-hut} (fn [_]))) "a hole in the roof: not shut in")
   (is (true? (holds? {:time night :blocks {}} (fn [_]))) "outside"))
 
 (deftest night-holds-for-a-sleeper-the-action-bar-counts-tonight

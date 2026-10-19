@@ -100,16 +100,6 @@
 
 (defn room-roof-height [] (settings/get settings ::room-roof-height))
 
-(def cave-radius 3)
-
-(def cave-width
-  "Standable cells under a ceiling within cave-radius of the feet from which the body counts as in an open cave, not a tunnel it dug."
-  16)
-
-(def cave-ceiling 8)
-
-(def lit-level "Block light at the feet from which a cell is lit enough that the body counts it a lit pocket." 8)
-
 (defn block-light-at
   "Block light (0-15) of the cell, or nil when no light data is loaded there."
   [p {:keys [x y z]}]
@@ -139,20 +129,6 @@
     (look/lit-light? (block-light-at p cell) (or (sky-light-at p cell) 0) (sky-subtract-now p))
     (not (look/dark-guess? p))))
 
-(defn cave-cells
-  "How many standable cells (feet, head and the cell over it free, a solid floor, a seen solid within cave-ceiling over them) lie
-  within cave-radius of the feet, a block up or down: a cave is wide and high, what the body digs is 2 high (a tunnel, a mine's room)."
-  [p]
-  (let [{:keys [x y z]} (feet p)
-        solid? (fn [cx cy cz] (solid-at? p {:x cx :y cy :z cz}))]
-    (count (for [dx (range (- cave-radius) (inc cave-radius))
-                 dz (range (- cave-radius) (inc cave-radius))
-                 dy [-1 0 1]
-                 :let [cx (+ x dx) cy (+ y dy) cz (+ z dz)]
-                 :when (and (solid? cx (dec cy) cz) (not (solid? cx cy cz)) (not (solid? cx (inc cy) cz)) (not (solid? cx (+ cy 2) cz))
-                            (some #(solid? cx (+ cy %) cz) (range 2 (inc cave-ceiling))))]
-             1))))
-
 (defn wide-room?
   "Whether the room has a 2x2 floor patch: a hut, not a one-wide tunnel the body dug."
   [{:keys [cells]}]
@@ -170,14 +146,6 @@
   "shut-in-room? and wide: a hut, not a one-wide tunnel the body dug."
   [p]
   (and (shut-in-room? p) (wide-room? (reach/room p (feet p)))))
-
-(defn open-cave?
-  "Buried in a dark, wide natural cave: no sky light, not shut in a closed room, under lit-level block light at the
-  feet (no light data counts as dark) and cave-cells wide. Mobs spawn there whatever the hour."
-  [p]
-  (boolean (and (buried? p) (not (shut-in-room? p))
-                (< (or (block-light-at p (feet p)) 0) lit-level)
-                (>= (cave-cells p) cave-width))))
 
 (defn sky-in
   "Seconds until the open sky is bright enough (light-in-s of full sky light now): 0 by day, the time left of the night
@@ -239,16 +207,6 @@
                      :else (when-let [lvl (and sky (sky-light-at p c))] (light-in-s lvl (:t sky) (:rain sky) (:thunder sky)))))
         ts (map wait cells)]
     (when (every? some? ts) (apply max 0 ts))))
-
-(defn unsafe-night?
-  "Awake, not under a roof and not buried, with darkness at the feet that waiting lifts (light-in is above 0). A cell
-  no sky light reaches (a cave) is dark whatever the hour: waiting is no cure. Without light data at the feet, the clock."
-  [p roof-height]
-  (and (not (sleeping? p))
-       (not (roofed? p roof-height)) (not (buried? p))
-       (if (sky-light-at p (feet p))
-         (pos? (or (light-in p (feet p)) 0))
-         (night? p))))
 
 (defn walkable-at?
   "Whether the cell at pos is one a body stands or walks in: not solid, or a bed."

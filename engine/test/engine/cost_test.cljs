@@ -230,8 +230,13 @@
 
 (def open-night-chance (cost/spawn-chance [0 0 0]))
 
+(def pit
+  "A 1x1 pit with a roof: dirt round the feet and head cells, a roof over the head."
+  (merge (into {} (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] y [64 65]] [(str dx "," y "," dz) "dirt"]))
+         {"0,66,0" "dirt"}))
+
 (deftest exposure-of-a-walk-out-of-shelter-is-the-open-sky-night-figure-lowered-by-dawn
-  (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone" "15,67,0" "stone"}}))]
+  (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks pit}))]
     (let [e (cost/exposure p {:x 15 :y 64 :z 0})]
       (is (= {:chance open-night-chance :lowered-by #{:light}} (dissoc e :light-in)))
       (is (pos? (:light-in e)) "and the seconds till light"))))

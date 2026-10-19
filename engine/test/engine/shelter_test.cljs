@@ -26,18 +26,13 @@
     (is (false? (sh-sense/dark-outside? bare)) "the clock is no sky: nothing is known, nothing is dark")
     (is (true? (sh-sense/dark-outside? (tu/fake {:time night}))))))
 
-(deftest night-holds-at-night-in-the-open
-  (are [world args held] (= held (fires? world args))
-    {:time night} {} true
-    {:time noon} {} false
-    {:time night :blocks {"0,66,0" "stone"}} {} false
-    {:time night :blocks {"0,68,0" "stone"}} {} false
-    {:time night :blocks {"0,69,0" "stone"}} {:roof-height 5} false
-    {:time night :blocks {"0,69,0" "stone"}} {} true
-    {:time night :blocks {"0,66,0" "oak_leaves"}} {} true
-    {:time night :blocks {"0,66,0" "stone"} :self {:pos {:x 1 :y 64 :z 0}}} {} true
-    {:time night :blocks {"0,65,0" "dirt" "0,66,0" "stone"}} {} true
-    {:time night :self {:isSleeping true}} {} false))
+(deftest night-holds-at-night-in-the-open-or-under-a-roof-with-open-sides
+  (are [world held] (= held (fires? world {}))
+    {:time night} true
+    {:time noon} false
+    {:time night :blocks {"0,66,0" "stone"}} true
+    {:time night :blocks {"0,66,0" "oak_leaves"}} true
+    {:time night :self {:isSleeping true}} false))
 
 (def stone-above
   "A column of stone from y+n for k blocks over the body at y 64."
@@ -49,31 +44,6 @@
   "The go-to children that gave up (child_ended with the cause :unreachable)."
   [seen]
   (filterv #(= :unreachable (get-in % [:ending :cause :reason])) (emitted seen :child_ended)))
-
-(defn fires-with-light?
-  "The trigger over a fake wrapped in the perception, so the raw world's light is read."
-  [world]
-  (let [raw-p (tu/fake (dissoc world :light-default :light))
-        _ (swap! (fake/state raw-p) merge (select-keys world [:light-default :light]))
-        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})]
-    (boolean ((:when (get triggers/all :night)) (perception/wrap raw-p per) {} {}))))
-
-(deftest night-is-silent-when-sealed-from-the-sky
-  (are [world held] (= held (fires-with-light? (merge {:time night} world)))
-    ;; sky light 0 at feet and head: buried, whatever the column looks like
-    (merge dark {:blocks (stone-above 10 5)}) false
-    (merge dark {:blocks (stone-above 40 5)}) false
-    ;; a diagonal stair open overhead, light faded to 0 here
-    (merge dark {:blocks (stone-above 10 1)}) false
-    ;; a shaft or ravine: sky light comes straight down to the body
-    {:blocks (stone-above 10 5) :light {[0 64 0] [15 0] [0 65 0] [15 0]}} true
-    ;; a cave mouth under a thin ceiling: dim sky light the sun lifts to enough, or never
-    {:blocks (stone-above 6 5) :light {[0 64 0] [9 0] [0 65 0] [9 0]}} true
-    {:blocks (stone-above 6 5) :light {[0 64 0] [3 0] [0 65 0] [3 0]}} false
-    ;; no sky light at the feet, so no dawn lifts it
-    (merge dark {:light {[0 65 0] [1 0]}}) false
-    ;; torchlight is not sky light
-    (merge dark {:light {[0 64 0] [0 14]}}) false))
 
 (defn seen-fake
   "A fake body looking up, wrapped in perception after one sight pass: it knows only what it has seen."
@@ -88,11 +58,6 @@
   "A stone floor at y 63 and ceiling at y 70 over x, z -20..20 (1681 standable cells: more than a closed room holds), open at the sides."
   (into {} (for [x (range -20 21) z (range -20 21) y [63 70]] [(str x "," y "," z) "stone"])))
 
-(def tunnel-blocks
-  "A 1-wide, 2-high tunnel along x from -3 to 40 at the body's level."
-  (into {} (concat (for [x (range -3 41) y [63 66]] [(str x "," y ",0") "stone"])
-                   (for [x (range -3 41) y [64 65] z [-1 1]] [(str x "," y "," z) "stone"]))))
-
 (defn seen-dark
   "A fake body with light data (as the night trigger reads it) that has seen every block."
   [blocks & [light extra]]
@@ -101,13 +66,29 @@
         per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})]
     (tu/seeing-all (perception/wrap raw-p per))))
 
-(deftest a-body-buried-in-a-wide-dark-cave-is-no-night-to-wait-out
-  (is (>= (sh-sense/cave-cells (seen-dark cave-blocks)) 16))
-  (is (< (sh-sense/cave-cells (seen-dark tunnel-blocks)) 16) "its own 1-wide tunnel")
-  (is (true? (sh-sense/open-cave? (seen-dark cave-blocks))))
-  (is (false? (sh-sense/open-cave? (seen-dark tunnel-blocks))))
-  (is (false? (sh-sense/unsafe-night? (seen-dark cave-blocks) sh-sense/default-roof-height)) "no sky light: waiting never lights it")
-  (is (false? (sh-sense/unsafe-night? (seen-dark tunnel-blocks) sh-sense/default-roof-height))))
+(defn box
+  "Stone walls, floor (y 63) and roof (y 66) round a w by d room of cells x 0..w-1, z 0..d-1 at y 64-65; open-sides? leaves the walls out."
+  [w d open-sides?]
+  (into (if open-sides? (into {} (for [x (range -20 (+ w 20)) z (range -20 (+ d 20))] [(str x ",63," z) "stone"])) {})
+        (for [x (range -1 (inc w)) z (range -1 (inc d)) y [63 64 65 66]
+                 :let [inside? (and (<= 0 x (dec w)) (<= 0 z (dec d)))]
+                 :when (cond inside? (#{63 66} y) open-sides? (= y 66) :else true)]
+             [(str x "," y "," z) "stone"])))
+
+(defn seen-box [blocks light-default]
+  (let [raw-p (tu/fake {:time night :blocks blocks})
+        _ (swap! (fake/state raw-p) assoc :light-default light-default)
+        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})]
+    (tu/seeing-all (perception/wrap raw-p per))))
+
+(deftest a-closed-room-is-shelter-when-lit-or-tiny-never-dark-and-big
+  (are [w d open-sides? light safe?] (= safe? (sh-inside/safe-from-night? (seen-box (box w d open-sides?) light)))
+    5 5 false [0 14] true
+    5 5 false [0 0] false
+    1 2 false [0 0] true
+    1 1 false [0 0] true
+    1 3 false [0 0] false
+    5 5 true [0 14] false))
 
 (deftest light-in-s-is-the-wait-until-the-sky-light-is-enough
   (is (nil? (sh-sense/light-in-s 0 18000 0 0)) "no sky light reaches it")
@@ -137,53 +118,6 @@
     (is (= [0 64 0] (:cell (sh-sense/light-view lit {}))) "the feet by default")
     (is (= {:seen? false :light nil :lit? nil} (select-keys (sh-sense/light-view (tu/with-light-data (tu/fake {:time night :blocks cave-blocks :unloaded ["40,64,0"]})) {:cell {:x 40 :y 64 :z 0}}) [:seen? :light :lit?])) "no light data: unknown, not a guess")
     (is (= {:cells 27 :radius 1 :darkest 0} (select-keys (sh-sense/light-view lit {:cell {:x 0 :y 64 :z 0} :radius 1}) [:cells :radius :darkest])))))
-
-(def dug-room-blocks
-  "A mine's room the body dug: 5x4 cells, 2 high (ceiling at y 66), light 7."
-  (merge (into {} (for [x (range -2 3) z (range -2 2) y [63 66]] [(str x "," y "," z) "stone"]))
-         (into {} (for [x (range -3 4) z (range -3 3) y [64 65] :when (not (and (<= -2 x 2) (<= -2 z 1)))] [(str x "," y "," z) "stone"]))))
-
-(deftest a-room-the-body-dug-is-not-a-cave
-  (let [p (seen-dark dug-room-blocks {[0 64 0] [0 7] [0 65 0] [0 7]})]
-    (is (< (sh-sense/cave-cells p) 16))
-    (is (false? (sh-sense/open-cave? p)))
-    (is (false? (sh-sense/unsafe-night? p sh-sense/default-roof-height)))))
-
-(deftest a-lit-cave-is-not-unsafe
-  (is (false? (sh-sense/open-cave? (seen-dark cave-blocks {[0 64 0] [0 14] [0 65 0] [0 14]})))))
-
-(defn ^:async places-at-night
-  "How many blocks the night job places in three ticks for a body that has seen blocks, in the dark."
-  [blocks]
-  (let [p (seen-dark blocks nil {:inventory dirt-stack})
-        [_ sink] (tu/legacy-capture-sink)
-        clock (atom 1000000)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
-                          :now #(deref clock)
-                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng '(jobs.survival.night) {})
-    (await (tick-n eng 3))
-    (count (calls p "place"))))
-
-(deftest the-night-trigger-leaves-a-wide-dark-cave-and-its-own-tunnel-alone
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (is (zero? (await (places-at-night cave-blocks))) "an open cave: no sky light, waiting for day is no cure")
-        (is (zero? (await (places-at-night tunnel-blocks))) "its own tunnel: nothing to do")))))
-
-(deftest a-dig-at-the-end-of-its-own-closed-tunnel-is-done-at-night
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [blocks (merge tunnel-blocks {"-3,64,0" "stone" "-3,65,0" "stone" "10,64,0" "stone" "10,65,0" "stone"})
-              {:keys [eng p seen]} (setup {:time night :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]})]
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
-          (core/submit! eng '(jobs.blocks.dig {:pos {:x 10 :y 64 :z 0}}) {})
-          (await (run-until-empty eng 200))
-          (is (= "air" (.-name (.blockAt p #js {:x 10 :y 64 :z 0}))) "dug")
-          (is (= [] (calls p "place")) "no dig-in")
-          (is (empty? (emitted seen :go-to.night-sheltered))))))))
 
 (deftest night-without-light-data-falls-back-to-the-seen-roof
   (is (sh-sense/buried-by-column? (seen-fake {:time night :blocks (stone-above 2 1)})) "one seen block over the head, air above it")
@@ -941,11 +875,11 @@
             (is (= {:asleep true :notified 0} @mid) "asleep in the bed, the night not skipped; the queued job does not wake it"))
           (is (= 1 (notified seen))))))))
 
-(deftest shelter-ends-without-acting-when-already-roofed
+(deftest shelter-ends-without-acting-when-already-shut-in
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :blocks {"0,66,0" "stone"}})
+        (let [{:keys [eng p seen]} (setup {:time night :blocks (merge {"0,66,0" "stone"} (into {} (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] y [64 65]] [(str dx "," y "," dz) "stone"])))})
               eng (update eng :triggers assoc :always-shelter always-shelter)]
           (core/register-reflex! eng {:trigger :always-shelter})
           (await (core/tick! eng))

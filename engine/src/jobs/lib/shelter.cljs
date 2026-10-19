@@ -135,7 +135,7 @@
                          (unlooked-for-bed? p view)
                          (and (not buried) (sh-beds/bed-place-wanted? p view (sh-beds/bed-radius view args) permit?))
                          (and (or (not buried) (sh-inside/in-own-shelter p shelter)) (sh-sleepers/log-out-for-sleepers? p view))))
-                (not (sh-inside/safe-from-night? p (:roof-height args sh-sense/default-roof-height)))
+                (not (sh-inside/safe-from-night? p))
                 (breached-home? p view)
                 (seq (open-doors p view))))
        (or (sh-inside/shut-in-by-day? p shelter (:data (mem/latest view :shelter-trapped)))

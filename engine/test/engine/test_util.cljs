@@ -94,9 +94,11 @@
   (aset p "rawWorld" (doto (fake-raw/create p) (aset "lightAt" (fn [_ _ _] -1))))
   p)
 
+(declare seeing-all)
+
 (defn fake
   "A fake primitives object (engine.fake/create) built from a cljs spec map, with an omniscient sensedAt (a fully informed
-  body; blind removes it, perception/wrap replaces it; a spec with :time also gets with-sky-only). The spec's :floor, [x0 z0 x1 z1], is stone at
+  body; blind removes it, perception/wrap replaces it; a spec with :time also gets with-sky-only, or with :light the light of its cells and every block seen). The spec's :floor, [x0 z0 x1 z1], is stone at
   y 63 over that rectangle (floor) added under the spec's :blocks, for walks over the path planner."
   ([] (fake {}))
   ([spec]
@@ -105,7 +107,9 @@
                 spec)]
      (let [p (fake-world/create spec)]
        (aset p "sensedAt" (sensed-by p))
-       (cond-> p (contains? spec :time) with-sky-only)))))
+       (cond (not (contains? spec :time)) p
+             (:light spec) (do (swap! (fake-world/state p) assoc :light (:light spec)) (aset p "rawWorld" (fake-raw/create p)) (seeing-all p))
+             :else (with-sky-only p))))))
 
 (defn with-light-data
   "p with the light data of its world (perception's raw) but no sight: the sky's darkening at the world's time and the light of its cells."

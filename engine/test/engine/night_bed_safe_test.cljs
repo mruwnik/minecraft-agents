@@ -25,15 +25,15 @@
 (def far-bed {:x 40 :y 64 :z 0})
 
 (def buried-light
-  "Sky light 0 at the feet and head cells along the tunnel (x 0..20): sealed from the sky."
-  (into {} (for [x (range 0 21) y [64 65]] [[x y 0] [0 0]])))
+  "Torch light and no sky light along the tunnel (x 0..20): sealed from the sky and lit."
+  (into {} (for [x (range 0 21) y [64 65]] [[x y 0] [0 14]])))
 
 (defn tunnel-world
-  "A miner at x 5 in the one-wide stone tunnel (x 0..20, open at both ends onto the field), at night, with a bed block
+  "A miner at x 5 in the one-wide stone tunnel (x 0..20, plugged at both ends), at night, with a bed block
   at far-bed in the open."
   [light]
-  {:floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 0}} :time st/night :offlineScale 0.0001
-   :blocks (merge hut/tunnel {"40,64,0" "red_bed"}) :light light})
+  {:floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 0}} :time st/night :offlineScale 0.0001 :sees-all true
+   :blocks (merge hut/tunnel {"-1,64,0" "stone" "-1,65,0" "stone" "21,64,0" "stone" "21,65,0" "stone" "40,64,0" "red_bed"}) :light light})
 
 (defn lit-fake
   "{:raw :p}: a fake body and its perception wrap, so the raw world's sky light is read (sh-sense/buried?). :sees-all in the
@@ -43,7 +43,7 @@
         _ (swap! (fake/state raw-p) assoc :light (:light world {}))
         per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})]
     {:raw raw-p :p (if (:sees-all world)
-                     (doto (js/Object.assign #js {} raw-p) (aset "perception" per))
+                     (doto (js/Object.assign #js {} (tu/seeing-all raw-p)) (aset "perception" per))
                      (perception/wrap raw-p per))}))
 
 (defn setup [world]
@@ -98,18 +98,6 @@
 (deftest a-buried-body-overdue-for-sleep-walks-to-its-bed
   (is (= far-bed (bed-to-use-after-days (tunnel-world buried-light) 3))))
 
-(defn bed-to-use-with-sleeper
-  "bed-to-use for a body at x (in the tunnel) while the action bar counts one other player asleep."
-  [x]
-  (let [world (assoc-in (tunnel-world buried-light) [:self :pos :x] x)
-        {:keys [eng p]} (setup world)]
-    (mem/write! (:store eng) :sleep-status {:sleeping 1 :needed 2} nil)
-    (sh-beds/bed-to-use p (mem/view (:store eng)) 64 (constantly true))))
-
-(deftest a-buried-body-walks-to-a-near-bed-as-a-courtesy-while-another-player-sleeps
-  (is (= far-bed (bed-to-use-with-sleeper 12)) "28 blocks away, within the courtesy radius")
-  (is (nil? (bed-to-use-with-sleeper 5)) "35 blocks away is a walk too far for a courtesy"))
-
 (deftest a-buried-body-not-yet-overdue-stays-in-the-tunnel
   (is (nil? (bed-to-use-after-days (tunnel-world buried-light) 2))))
 
@@ -149,8 +137,8 @@
             (finally (set! js/Math.random random))))))))
 
 (def hut-light
-  "A closed hut: sky light 0 at the body's feet and head cells."
-  {[4 64 -1] [0 0] [4 65 -1] [0 0]})
+  "A closed hut: torch light and no sky light in every cell of its room."
+  (into {} (for [x (range 4 7) y [64 65] z (range -1 2)] [[x y z] [0 14]])))
 
 (defn hut-night-world [blocks extra]
   (merge (hut/hut-world {:x 4 :y 64 :z -1} blocks) {:time st/night :light hut-light :sees-all true} extra))
@@ -226,7 +214,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p raw]} (setup (assoc (tunnel-world buried-light) :inventory [{:name "red_bed" :count 1}]))
+        (let [{:keys [eng p raw]} (setup (assoc (dissoc (tunnel-world buried-light) :sees-all) :inventory [{:name "red_bed" :count 1}]))
               holds #(sh/night-holds? p (mem/view (:store eng)) {} (constantly true))]
           (core/submit! eng '(jobs.survival.night) {})
           (await (st/tick-n eng 12))

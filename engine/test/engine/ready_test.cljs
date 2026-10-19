@@ -42,7 +42,7 @@
 (defn ctx-of
   "A job's ctx over a fake body built from world (a fresh job id: the check cache is per job)."
   [world]
-  (let [p (sky/with-sky (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world))))]
+  (let [p (cond-> (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world))) (not (:light world)) sky/with-sky)]
     {:id (str (random-uuid)) :slots [] :engine {:warned (atom #{})} :primitives p :view (fn [] {:now 0 :data {}})}))
 
 (def inside {:x 5 :y 64 :z 0})
@@ -50,7 +50,13 @@
 (def barn-roof (tu/box 14 67 -2 16 67 2 "oak_planks"))
 (def night-hut (merge (hut/hut-world inside {}) {:time st/night}))
 (def open-night {:time st/night :self {:pos {:x 0 :y 64 :z 0}}})
-(def tunnel {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks (tu/box 0 66 -1 6 66 1 "stone")})
+(def tunnel
+  "A torch-lit 1x2 tunnel x 0..6 sealed at both ends, the body at its west end."
+  {:time st/night :self {:pos {:x 0 :y 64 :z 0}}
+   :blocks (merge (into {} (remove (fn [[k _]] (let [[x y z] (map js/Number (.split k ","))] (and (<= 0 x 6) (<= 64 y 65) (= z 0)))))
+                        (tu/box 0 63 -1 6 66 1 "stone"))
+                  {"-1,64,0" "stone" "-1,65,0" "stone" "7,64,0" "stone" "7,65,0" "stone"})
+   :light (into {} (for [x (range 0 7) y [64 65]] [[x y 0] [0 14]]))})
 
 (defn lit
   "(f) with every cell's light read as block and sky (the fake world has no light data)."
@@ -99,9 +105,9 @@
 (deftest safe-here-by-night-outside-at-night-is-later
   (is (= :later (lit 0 15 #(kind ready/safe-here-by-night open-night)))))
 
-(deftest safe-if-lit-waits-at-night-above-ground-even-from-a-hut
+(deftest safe-if-lit-waits-at-night-above-ground
   (are [world expected] (= expected (kind ready/safe-if-lit world))
-    night-hut :later
+    open-night :later
     tunnel :ok
     (assoc open-night :time st/noon) :ok))
 
@@ -257,16 +263,7 @@
                                      (kind (ready/safe-at-by-night (constantly goal)) tunnel)))
     {:x 40 :y 64 :z 0} :ok
     {:x 40 :y 50 :z 0} :ok
-    {:x 40 :y 70 :z 0} :later))
-
-(deftest safe-at-by-night-takes-a-goal-the-sky-never-reaches-as-underground
-  (are [sky expected] (= expected (with-redefs [sh-sense/seen-cell? (constantly false) sh-sense/sky-light-at (constantly sky)]
-                                    (kind (ready/safe-at-by-night (constantly {:x 40 :y 70 :z 0})) tunnel)))
-    0 :ok
-    15 :later))
-
-(deftest safe-at-by-night-judges-a-column-goal-at-its-surface
-  (is (= :later (lit 0 15 #(kind (ready/safe-at-by-night (constantly {:x 4 :z 0})) tunnel)))))
+    {:x 40 :y 70 :z 0} :look))
 
 (deftest explore-search-underground-at-night-is-ok
   (is (= :ok (bound search/safe? tunnel {}))))

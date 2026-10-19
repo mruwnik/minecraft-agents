@@ -35,11 +35,16 @@
             (let [r (await (ctx/call c :walk 'jobs.movement.go-to {:pos [15 64 0]}))]
               (if (= :continue r) r (ctx/end c :done nil))))})
 
+(defn with-sky-and-light
+  "p with the fake sky, unless its world has light of its own (tu/fake then reads the sky and the cells' light)."
+  [p world]
+  (if (:light world) p (sky/with-sky p)))
+
 (defn setup
-  "st/setup with the body's perception over the fake sky."
+  "st/setup with the body's perception over the fake sky (a world with light of its own has it already)."
   [world]
   (let [r (st/setup world)]
-    (sky/with-sky (:p r))
+    (with-sky-and-light (:p r) world)
     r))
 
 (defn hut-with
@@ -47,7 +52,7 @@
   [extra]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (sky/with-sky (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} (night-hut {}))))
+        p (with-sky-and-light (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} (night-hut {}))) (night-hut {}))
         eng (core/create {:primitives p :jobs (merge registry/jobs extra) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -76,31 +81,7 @@
     {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks pit} nil {:x 0 :y 64 :z 1} 1 nil
     {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks pit} {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0}} outside 1 :dug-in
     {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks (merge pit {"15,66,0" "stone"})} {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0}} outside 1 :dug-in
-    {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone"}} nil outside 1 :roofed
-    {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone" "15,67,0" "stone"}} nil outside 1 :roofed))
-
-(deftest a-walk-deeper-underground-does-not-leave-the-shelter-a-walk-up-does
-  (let [p (tu/seeing-all (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,66,0" "stone"}}))]
-    (is (= :underground (sh-inside/walk-leaves-shelter? p nil outside 1)))))
-
-(deftest a-walk-down-to-open-air-leaves-the-roofed-shelter
-  (let [world {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 66 :z 0}}}
-        in-open (tu/seeing-all (tu/fake (assoc world :blocks {"0,68,0" "stone"})))
-        covered (tu/seeing-all (tu/fake (assoc world :blocks {"0,68,0" "stone" "15,67,0" "stone"})))
-        goal {:x 15 :y 64 :z 0}]
-    (is (= :underground (sh-inside/walk-leaves-shelter? in-open nil goal 1)) "the table down a hillside is outdoors")
-    (is (nil? (sh-inside/walk-leaves-shelter? covered nil goal 1)))))
-
-(deftest a-solid-goal-with-nothing-seen-over-it-is-a-wall-in-the-rock-not-the-open
-  (let [world {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,66,0" "stone" "15,64,0" "stone"}}
-        goal {:x 15 :y 64 :z 0}
-        p (tu/seeing-all (tu/fake world))
-        sensed-at (aget p "sensedAt")
-        hide-over-goal (fn [pos] (if (and (= 15 (.-x pos)) (> (.-y pos) 64)) #js {:unknown true} (sensed-at pos)))]
-    (is (= :underground (sh-inside/walk-leaves-shelter? p nil goal 1)) "air seen over the goal: the open")
-    (aset p "sensedAt" hide-over-goal)
-    (is (nil? (sh-inside/walk-leaves-shelter? p nil goal 1)) "nothing seen over it: rock")
-    (is (= :underground (sh-inside/walk-leaves-shelter? p nil (assoc goal :y 66) 1)) "an air goal keeps the old rule")))
+    {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone"}} nil outside 1 nil))
 
 ;; ------------------------------------------------------------------ a listed go-to
 

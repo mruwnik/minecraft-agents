@@ -26,7 +26,7 @@
 (defn kind [check world args] (first (check (ctx world args))))
 
 (deftest roaming-jobs-wait-at-night-above-ground
-  (are [check] (= [:later :ok] [(kind check rt/night-hut {}) (kind check rt/tunnel {})])
+  (are [check] (= [:later :ok] [(kind check rt/open-night {}) (kind check rt/tunnel {})])
     get-seeds/safe? make-obsidian/safe? mine/safe? harvest-wood/safe? tidy/safe? collect-drops/safe?))
 
 (deftest jobs-going-to-a-place-judge-that-place
@@ -39,7 +39,7 @@
     site/safe? :at))
 
 (deftest fell-tree-and-loot-cart-without-a-place-roam
-  (are [check] (= :later (kind check rt/night-hut {}))
+  (are [check] (= :later (kind check rt/open-night {}))
     fell-tree/safe? loot-cart/safe?))
 
 (def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}})

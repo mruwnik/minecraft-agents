@@ -37,6 +37,7 @@
   "The hut on the walk floor with the body at pos; extra blocks merged over it (\"air\" removes one)."
   [pos extra]
   {:floor tu/walk-floor :self {:pos pos} :states door-states
+   :light (into {} (for [x (range 4 7) y [64 65] z (range -1 2)] [[x y z] [15 14]]))
    :blocks (into {} (remove (comp #{"air"} val)) (merge hut extra))})
 
 (defn block-at [p [x y z]] (.-name (.blockAt p (tu/pos x y z))))
