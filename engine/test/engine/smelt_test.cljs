@@ -15,7 +15,8 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.items.smelt :as smelt]
-            [jobs.items.smelt.plan :as smelt-plan]))
+            [jobs.items.smelt.plan :as smelt-plan]
+            [jobs.lib.fuel :as fuel]))
 
 ;; ------------------------------------------------------------------ tables
 
@@ -36,7 +37,7 @@
     "furnace" "coal" false))
 
 (deftest fuel-values-in-items-per-fuel-item
-  (are [item per] (= per (smelt-plan/fuel-per-unit "furnace" item))
+  (are [item per] (= per (fuel/fuel-per-unit "furnace" item))
     "coal" 8
     "charcoal" 8
     "oak_planks" 1.5

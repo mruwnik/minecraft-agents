@@ -9,6 +9,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.util :as u]
             [jobs.lib.need :as need]
+            [jobs.lib.spot :as free-spot]
             [jobs.lib.waits :as waits]
             [jobs.lib.world :as known]))
 
@@ -91,7 +92,7 @@
       (tried! c :craft :no-plan)
 
       (= :place (:op step))
-      (let [spot (or (:spot mem) (await (craft/spot! c)))]
+      (let [spot (or (:spot mem) (await (free-spot/spot! c)))]
         (cond
           (= :continue spot) :continue
           (not spot) (fruitless! c :no-table-spot)

@@ -2,11 +2,11 @@
   "The night's holds: hold still on purpose, eating or cooking first, and the bookkeeping of what the night did."
   (:require [engine.ctx :as ctx]
             [engine.memory :as mem]
-            [jobs.items.smelt.fetch :as sf]
-            [jobs.items.smelt.plan :as sp]
             [jobs.lib.child :as child]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.foods :as foods]
+            [jobs.lib.fuel :as fuel]
+            [jobs.lib.furnace :as furnace]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.shelter.inside :as inside]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -25,7 +25,7 @@
   (let [p (:primitives c)
         names (map :name (u/inventory p))]
     (boolean (and (some #{"furnace"} names)
-                  (some #(sp/fuel-per-unit "furnace" %) names)
+                  (some #(fuel/fuel-per-unit "furnace" %) names)
                   (nil? (tools/harvest-need names (js->clj (.harvestTools p "furnace"))))))))
 
 (defn ^:async pick-up-furnace!
@@ -50,7 +50,7 @@
   (let [raw? (and (seq (cook/raw-carried c)) (not (:no-cook (ctx/mem c))))
         seen (when raw? (cook/seen-cooker c (cook/shelter-cook-reach)))
         placed (when (and raw? (not seen) (not (:placed-furnace (ctx/mem c))) (can-place-furnace? c) (inside/safe-from-night? (:primitives c)) (not (cook/rushed? c)))
-                 (await (sf/place-furnace! c)))
+                 (await (furnace/place-furnace! c)))
         _ (when (= :again placed) (ctx/update-mem! c assoc :placed-furnace (:furnace (ctx/mem c))))
         cooker (or seen (:placed-furnace (ctx/mem c)))]
     (cond

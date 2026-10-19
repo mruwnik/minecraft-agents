@@ -1,6 +1,7 @@
 (ns jobs.items.smelt.plan
   "What a furnace cooks and burns, and what to load into it: pure functions over a furnace read and the carried items."
-  (:require [jobs.lib.game-facts :as facts]
+  (:require [jobs.lib.fuel :as fuel]
+            [jobs.lib.game-facts :as facts]
             [jobs.lib.storage :as storage]))
 
 (def cook-ticks {"furnace" 200 "blast_furnace" 100 "smoker" 100})
@@ -54,28 +55,11 @@
   [item]
   (boolean (some #(smelts? % item) (keys cook-ticks))))
 
-(defn wood-fuel?
-  "Overworld planks, logs and wood burn; the nether ones (crimson, warped) do not."
-  [name]
-  (boolean (and (re-find #"_(planks|log|wood)$" name) (not (re-find #"^(crimson|warped)_" name)))))
-
-(defn fuel-per-unit
-  "How many items one fuel item smelts (the same in every kind: the quick ones cook and burn twice as fast), or nil
-  when it is no fuel this job knows."
-  [_kind name]
-  (cond
-    (#{"coal" "charcoal"} name) 8
-    (= "coal_block" name) 80
-    (= "blaze_rod" name) 12
-    (= "dried_kelp_block" name) 20
-    (wood-fuel? name) 1.5
-    (= "stick" name) 0.5))
-
 (defn fuel-rank
   "Lower burns first: coal and charcoal, then wood, then sticks, then the rest."
   [name]
   (cond (#{"coal" "charcoal"} name) 0
-        (wood-fuel? name) 1
+        (fuel/wood-fuel? name) 1
         (= "stick" name) 2
         :else 3))
 
@@ -85,7 +69,7 @@
   [kind state]
   (let [slot (:fuel state)]
     (+ (js/Math.floor (/ (get-in state [:burn :left] 0) (cook-ticks kind)))
-       (if slot (js/Math.floor (* (or (fuel-per-unit kind (:name slot)) 0) (:count slot))) 0))))
+       (if slot (js/Math.floor (* (or (fuel/fuel-per-unit kind (:name slot)) 0) (:count slot))) 0))))
 
 (defn spare
   "How many of name the carried list has beyond what m's :held ({name n}, the register's) keeps back."
@@ -96,10 +80,10 @@
   "The fuel item to load: the given one, else the one already in the slot when carried, else the best carried.
   Never the item being smelted. {:give-up reason} when there is none."
   [{:keys [kind carried item fuel state] :as m}]
-  (let [usable (fn [name] (and (not= name item) (fuel-per-unit kind name) (pos? (spare m name))))
+  (let [usable (fn [name] (and (not= name item) (fuel/fuel-per-unit kind name) (pos? (spare m name))))
         slot-name (:name (:fuel state))]
     (cond
-      fuel (cond (nil? (fuel-per-unit kind fuel)) {:give-up "unknown-fuel"}
+      fuel (cond (nil? (fuel/fuel-per-unit kind fuel)) {:give-up "unknown-fuel"}
                  (usable fuel) {:fuel fuel}
                  :else {:give-up "no-fuel"})
       (and slot-name (usable slot-name)) {:fuel slot-name}
@@ -122,7 +106,7 @@
           (and (:give-up picked) (> existing e)) {:count (min n (- existing e)) :fuel nil}
           (:give-up picked) picked
           (and slot (not= (:name slot) name)) {:give-up "fuel-busy"}
-          :else (let [per (fuel-per-unit kind name)
+          :else (let [per (fuel/fuel-per-unit kind name)
                       units (min (js/Math.ceil (/ deficit per)) (spare m name) (- facts/slot-max (:count slot 0)))
                       covered (- (js/Math.floor (+ existing (* units per))) e)
                       n' (max 0 (min n covered))]

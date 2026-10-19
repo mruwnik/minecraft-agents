@@ -14,6 +14,7 @@
             [jobs.items.craft :as craft]
             [jobs.lib.child :as child]
             [jobs.lib.crafting-table :as crafting-table]
+            [jobs.lib.spot :as spot]
             [jobs.lib.world-files :as world]))
 
 (defn setup [world]
@@ -538,7 +539,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [around (vec (for [y [64 65] [dx dz] craft/table-offsets] [dx y dz]))
+        (let [around (vec (for [y [64 65] [dx dz] spot/table-offsets] [dx y dz]))
               [result] (await (craft {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}] :blocks table-block :unreachable ["10,64,0"]}
                                      {:item "bread" :avoid around}))]
           (is (= :unreachable (:reason result)))
