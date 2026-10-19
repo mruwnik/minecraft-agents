@@ -366,14 +366,36 @@
          first)))
 
 (defn ^:async leave!
-  "One go-to call (child :leave) out of the plan's footprint to the :leave cell; dropped once the walk ends (arrived
+  "One go-to call (child :leave) out of the plan's footprint to the :leave cell (within :leave-range, default 1); dropped once the walk ends (arrived
   or not: the next step judges where the body stands). :continue while the walk waits, else :again."
   [c]
   (let [[x y z] (:leave (ctx/mem c))
-        r (await (child/call-walk* c :leave {:pos {:x x :y y :z z} :range 1 :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+        r (await (child/call-walk* c :leave {:pos {:x x :y y :z z} :range (:leave-range (ctx/mem c) 1) :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (when-not (= :continue r)
-      (ctx/update-mem! c dissoc :leave))
+      (ctx/update-mem! c dissoc :leave :leave-range))
     (if (= :continue r) :continue :again)))
+
+(def off-bed-tries 3)
+
+(defn off-low-floor
+  "The nearest cell within 2 that the body can stand in on a full-height floor, when it stands on a seen bed or bottom slab (half
+  a block high, its head inside the next cell up: the roof cells over it are refused, and the walks keep out of its cell, so
+  none leaves it); nil elsewhere."
+  [c]
+  (let [p (:primitives c)
+        {:keys [x y z]} (u/self-pos c)
+        [fx fy fz] [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]
+        low? #(u/low-floor? (u/seen-block p {:x %1 :y %2 :z %3}))]
+    (when (low? fx fy fz)
+      (->> (for [dx (range -2 3) dz (range -2 3)
+                 :let [cell [(+ fx dx) fy (+ fz dz)]]
+                 :when (and (not= [dx dz] [0 0])
+                            (reach/standable-cell? p (zipmap [:x :y :z] cell))
+                            (not (low? (first cell) fy (peek cell)))
+                            (not (low? (first cell) (dec fy) (peek cell))))]
+             cell)
+           (sort-by (fn [[cx _ cz]] (+ (js/Math.abs (- cx fx)) (js/Math.abs (- cz fz)))))
+           first))))
 
 (defn buried?
   "Whether every neighbour of cell [x y z] is a seen solid block: the cell is inside the ground, so it is never seen
@@ -532,6 +554,8 @@
       (scaffold/working? c) (await (scaffold/step! c (give-up)))
       (scaffold/stale? c) (do (scaffold/begin-clean! c) :again)
       (:leave (ctx/mem c)) (await (leave! c))
+      (and (< (:off-bed (ctx/mem c) 0) off-bed-tries) (off-low-floor c))
+      (do (ctx/update-mem! c #(-> % (assoc :leave (off-low-floor c) :leave-range 0) (update :off-bed (fnil inc 0)))) :again)
       (and underfoot (not= (:pos underfoot) (:stepped-off (ctx/mem c))))
       (do (ctx/update-mem! c assoc :leave (exit-point cells (u/self-pos c)) :stepped-off (:pos underfoot))
           :again)

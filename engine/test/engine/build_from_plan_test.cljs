@@ -432,6 +432,18 @@
           (is (= ["upper" "head"] [(:half (state-at p [2 65 2])) (:part (state-at p [4 64 4]))]))
           (is (= {:placed 2 :missing [] :wrong [] :given-up {}} (select-keys result [:placed :missing :wrong :given-up]))))))))
 
+(deftest a-body-standing-on-a-bed-steps-off-it-before-it-builds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:blocks (assoc ground "2,64,2" "white_bed") :self {:pos {:x 2.5 :y 64 :z 2.5}}
+                                      :inventory [{:name "stone" :count 4}]}
+                                     {"house" {:id "house" :parts [{:id "wall" :cells [[3 64 3]] :want "stone"}]}})
+              result (await (child-outcome eng job {:plan "house"} 200))
+              {:keys [x z]} (core/self-pos p)]
+          (is (= [] (:missing result)))
+          (is (not= [2 2] [(js/Math.floor x) (js/Math.floor z)]) "the body ended off the bed"))))))
+
 (def bed-parts [{:id "bed-head" :cells [[4 64 4]] :want {:block "white_bed" :facing :south :part :head}}
                 {:id "bed-foot" :cells [[4 64 3]] :want {:block "white_bed" :facing :south :part :foot}}])
 
