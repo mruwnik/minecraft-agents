@@ -77,7 +77,7 @@
              :places (worlds/readable-places (read-json (.join path dir "places.json") []))
              :zones (:zones overlays)
              :map-errors (:errors overlays)
-             :clock (time/clock {:world n :world-dir dir} (js/Date.now))}))
+             :clock (time/clock {:world n :world-dir dir} (js/Date.now) nil)}))
         (world-names)))
 
 ;; the name only ever comes out of the directory listing, never from the query

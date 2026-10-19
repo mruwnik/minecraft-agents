@@ -66,6 +66,11 @@ check "flock-wrapped message" "$(grep -c "takes the lock itself" <<<"$out")" 1
 out=$(timeout 10 flock -o "$MC_COMPILE_LOCK" bash -c "bash -c '\"$C\" engine test; exit \$?'" 2>&1); rc=$?
 check "ancestor-holder exit" "$rc" 2
 
+# an intermediate process whose comm has a space ("npm start") must not break the parent walk
+ln -s "$(command -v bash)" "$T/sp ace"
+out=$(timeout 10 flock -o "$MC_COMPILE_LOCK" "$T/sp ace" -c "\"$C\" engine test; exit \$?" 2>&1); rc=$?
+check "ancestor-holder through spaced comm exit" "$rc" 2
+
 # another unrelated holder is waited for, not refused
 ( flock "$MC_COMPILE_LOCK" sleep 1 ) & sleep 0.3
 timeout 20 "$C" engine test >/dev/null 2>&1; check "waits for unrelated holder" "$?" 0

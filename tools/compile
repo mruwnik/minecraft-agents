@@ -81,7 +81,7 @@ if [ -e "$lock" ]; then
       echo "tools/compile: process $a already holds $lock. tools/compile takes the lock itself; don't wrap it in flock (or run it from a lock holder)." >&2
       exit 2
     done
-    a=$(awk '{print $4}' "/proc/$a/stat" 2>/dev/null)
+    a=$(sed 's/.*) //' "/proc/$a/stat" 2>/dev/null | awk '{print $2}')
   done
 fi
 
