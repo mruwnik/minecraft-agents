@@ -1,5 +1,5 @@
 ;; Card 40ac095a: jobs.movement.cross-water crosses a lake by boat (boat-launch, boat-drive, boat-land) and takes the boat back.
-;; Should-succeed: a given far-shore land cell (boat.landed, boat recovered); an auto-chosen far shore; :recover false leaves the boat afloat.
+;; Should-succeed: a given far-shore land cell (completed, boat recovered); an auto-chosen far shore; :recover false leaves the boat afloat.
 ;; Also a boat fetched from a seen chest, then the crossing. Should-fail: no boat anywhere (:no-boat); a given cell that is no shore (:no-far-shore: not made out at the start so the call begins, the first look finds no shore, a condition lost midway stops); no shore :min-cross away (:no-far-shore: false from the start, a listed call waits); no water within :radius of the body (:not-water).
 ;; The lake is x 12..22, z 4..28 (11 wide); the body starts on the west bank.
 {:defaults
@@ -11,13 +11,13 @@
  :cases
  [{:name "cross-to-the-given-far-shore-and-recover"
    :act [[:job (jobs.movement.cross-water {:pos #at [23 0 16]})]]
-   :expect [{:event {:source :job :kind :boat.landed :data {:recovered true}} :within-s 150 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:recovered true}} :within-s 150 :of-job true}]}
   {:name "cross-to-an-auto-chosen-far-shore"
    :act [[:job (jobs.movement.cross-water {})]]
-   :expect [{:event {:source :job :kind :boat.landed :data {:recovered true}} :within-s 150 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:recovered true}} :within-s 150 :of-job true}]}
   {:name "cross-without-taking-the-boat-back"
    :act [[:job (jobs.movement.cross-water {:pos #at [23 0 16] :recover false})]]
-   :expect [{:event {:source :job :kind :boat.landed :data {:recovered false}} :within-s 150 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:recovered false}} :within-s 150 :of-job true}]}
   {:name "given-cell-is-no-shore"
    ;; the cell is not made out at the start, so the call starts; the first look finds it no shore: lost midway, stopped (end-statuses rule 1)
    :act [[:job (jobs.movement.cross-water {:pos #at [17 0 16]})]]
@@ -33,7 +33,7 @@
    :blocks [[:set [10 0 14] "chest{Items:[{Slot:0b,id:\"minecraft:oak_boat\",count:1}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 20"] [:wait-s 2]
          [:job (jobs.movement.cross-water {:pos #at [23 0 16] :recover false})]]
-   :expect [{:event {:source :job :kind :boat.landed :data {:recovered false}} :within-s 150 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:recovered false}} :within-s 150 :of-job true}]}
   {:name "no-boat-anywhere"
    :body {:inventory []}
    :act [[:job (jobs.movement.cross-water {:pos #at [23 0 16]})]]

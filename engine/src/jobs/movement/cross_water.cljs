@@ -23,7 +23,7 @@
   A given :pos is looked at first; one the body still cannot make out is crossed toward all the same (boat-land drives nearer to it).
   Impossible: :bad-args (:pos names no cell, :item is no boat). Conditions, asked before every round (a listed call waits on them; the engine looks round once first): :no-far-shore (:pos is no shore,
   or none far enough is in sight), :not-water (no water in sight to launch on, unless already aboard). A crossing under way skips them.
-  Ends done (data {:land {:x :y :z} :boat id :recovered bool}), info boat.landed (from boat-land), or the failed child's kind with its ending as the :because:
+  Ends done (data {:land {:x :y :z} :boat id :recovered bool}), or the failed child's kind with its ending as the :because:
   condition-failed :no-boat (none carried and none could be fetched), :boat-not-seen (the placed boat is not in sight), the launch's other causes (:refused, :no-support,
   :unreachable, :occupied, :board-failed, :failed) and the landing's (:blocked, :drive-failed, :not-landed, :recover-failed, :no-shore); or nothing-possible :not-landed (on foot after the launch, not on the far shore).
   Done (:already before the start) when the body stands on the far shore with no recovery owed.

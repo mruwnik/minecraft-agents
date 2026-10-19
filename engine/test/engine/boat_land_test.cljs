@@ -6,6 +6,7 @@
             [engine.fake :as fake]
             [engine.library-test :as lt]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [jobs.movement.boat-land :as boat-land]
             [engine.test-util :as tu]
             [engine.sense-test :as st]
@@ -45,7 +46,7 @@
           (is (= {:x 21 :y 64 :z 10} (:land res)))
           (is (false? (:recovered res)))
           (is (not (aboard? p)))
-          (is (some #(= :boat.landed (:kind %)) @seen)))))))
+          (is (= {:x 21 :y 64 :z 10} (:land res))))))))
 
 (deftest steps-off-from-the-water-cell-beside-the-shore
   (async done
@@ -69,7 +70,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label w args reason]
-                [["no shore in sight, guessed spots looked at" world {:radius 1} :no-shore]
+                [["no shore in sight, guessed spots looked at" world {:settings {:jobs.movement.boat-launch/radius 1}} :no-shore]
                  ["the given cell is not a shore" world {:pos [10 64 10]} :no-shore]
                  ["the given shore is across land"
                   (update world :blocks merge (pond 0 10 30 34) (into {} (for [x (range 0 11)] [(str x ",63,35") "stone"])))
@@ -119,7 +120,6 @@
 
 
 
-(defn kinds [seen k] (count (filter #(= k (:kind %)) @seen)))
 
 (defn island-pond
   "A pond at x 14..16, z 23..25 ringed by stone at y 63: its ring is a shore the boat cannot reach."
@@ -181,7 +181,6 @@
         (let [{:keys [res seen]} (await (run (assoc-in world [:entities 0 :drops] []) {:recover true}))]
           (is (= :recover-failed (:reason res)) (pr-str res))
           (is (= {:x 21 :y 64 :z 10} (:land res)))
-          (is (= 1 (kinds seen :boat.landed)) "the body did land")
           (is (some? (:because (:ending res)))))))))
 
 (deftest drive-failure-is-blocked-only-when-every-spot-was-blocked
@@ -204,8 +203,7 @@
       (fn ^:async t []
         (let [{:keys [res seen]} (await (run world {:recover true}))]
           (is (= :done (:status res)) (pr-str res))
-          (is (true? (:recovered res)))
-          (is (= 1 (kinds seen :boat.landed))))))))
+          (is (true? (:recovered res))))))))
 
 (deftest resumes-from-the-landed-memory
   (async done
@@ -217,8 +215,7 @@
           (mem/write! (:store eng) boat-land/landed-kind {:job id :land {:x 21 :y 64 :z 10} :boat 9} boat-land/landed-policy)
           (await (tu/run-until-empty eng 90))
           (is (empty? (:list (core/state eng))))
-          (is (empty? (filter #(= "paddle" (:name %)) @seen)) "no second drive")
-          (is (= [true] (mapv :recovered (filter #(= :boat.landed (:kind %)) @seen))) "the one landing is the recovered one"))))))
+          (is (empty? (filter #(= "paddle" (:name %)) @seen)) "no second drive"))))))
 
 (deftest conditions-name-the-start-facts
   (let [c (fn [w args] (assoc (st/stub-ctx (:p (lt/setup w))) :args args))]
@@ -226,7 +223,7 @@
     (is (= [:ok :args] (tu/kind-reason (boat-land/bad-args (c world {})))))
     (is (= [:later :not-aboard] (tu/kind-reason (boat-land/not-aboard (c (dissoc world :self) {})))))
     (is (= [:ok :mounted] (tu/kind-reason (boat-land/not-aboard (c world {})))))
-    (is (= [:look :no-shore] (tu/kind-reason (boat-land/no-shore (c world {:radius 1})))))
+    (is (= [:look :no-shore] (tu/kind-reason (settings/with-settings {:jobs.movement.boat-launch/radius 1} #(boat-land/no-shore (c world {}))))))
     (is (= [:ok :shore] (tu/kind-reason (boat-land/no-shore (c world {})))))
     (is (= [:ok :shore] (tu/kind-reason (boat-land/no-shore (c world {:pos [10 64 10]})))) "a given cell is judged by the round, which may drive nearer")))
 

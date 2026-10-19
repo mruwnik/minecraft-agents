@@ -24,6 +24,9 @@
         res (await (tu/child-outcome eng 'jobs.movement.cross-water args 200))]
     {:res res :p p :seen seen :eng eng}))
 
+(defn child-ended? [seen slot]
+  (boolean (some #(and (= :child_ended (:kind %)) (= slot (or (:slot %) (get-in % [:data :slot])))) @seen)))
+
 (defn aboard? [p] (some? (:vehicle (js->clj (.self p) :keywordize-keys true))))
 
 (def aboard-world
@@ -43,8 +46,8 @@
           (is (true? (:recovered res)))
           (is (not (aboard? p)))
           (is (= 1 (get (lt/inv p) "oak_boat")) "the boat came along")
-          (is (not-any? #(= :boat.launched (:kind %)) @seen))
-          (is (some #(= :boat.landed (:kind %)) @seen)))))))
+          (is (not (child-ended? seen :launch)))
+          (is (child-ended? seen :land)))))))
 
 (deftest recover-false-leaves-the-boat
   (async done
@@ -54,7 +57,7 @@
           (is (= :done (:status res)) (pr-str res))
           (is (false? (:recovered res)))
           (is (= far (:land res)))
-          (is (some #(= :boat.launched (:kind %)) @seen))
+          (is (child-ended? seen :launch))
           (is (nil? (get (lt/inv p) "oak_boat"))))))))
 
 (deftest picks-a-far-shore-when-none-is-given
@@ -97,7 +100,7 @@
           (core/submit! eng '(jobs.movement.cross-water {:pos [7 64 0]}) {})
           (await (tu/run-until-empty eng 60))
           (is (empty? (filterv #(= :waiting (:kind %)) @seen)))
-          (is (some #(= :boat.launched (:kind %)) @seen))
+          (is (child-ended? seen :launch))
           (is (= :no-shore (:reason (last (filterv #(and (= :stopped (:kind %)) (= ["j1"] (:chain %))) @seen))))
               (pr-str (mapv #(select-keys % [:kind :reason :chain]) (filterv #(= :stopped (:kind %)) @seen)))))))))
 
@@ -163,8 +166,8 @@
         (let [{:keys [res seen]} (await (run world {:pos [7 64 0]}))]
           (is (= :done (:status res)) (pr-str res))
           (is (true? (:recovered res)))
-          (is (some #(= :boat.launched (:kind %)) @seen))
-          (is (some #(= :boat.landed (:kind %)) @seen)))))))
+          (is (child-ended? seen :launch))
+          (is (child-ended? seen :land)))))))
 
 (deftest lands-and-reports-a-failed-recover
   ;; the boat drops nothing, so the pick-up fails: the crossing still lands, then says why the boat stayed
@@ -174,7 +177,7 @@
         (let [{:keys [res seen]} (await (run (assoc-in aboard-world [:entities 0 :drops] []) {:pos [7 64 0]}))]
           (is (= {:status :stopped :reason :recover-failed} (select-keys res [:status :reason])) (pr-str res))
           (is (= :not-collected (contract/cause-key (:because (:because (:ending res))))) (pr-str res))
-          (is (some #(= :boat.landed (:kind %)) @seen)))))))
+          (is (child-ended? seen :land)))))))
 
 (deftest no-boat-carries-the-launch-cause
   (async done
@@ -195,7 +198,7 @@
                                                         :zones [{:name "home" :min [-6 60 -6] :max [12 70 6] :owner "Fake"}]))
                                              {:pos [7 64 0] :recover false}))]
           (is (= :done (:status res)) (pr-str res))
-          (is (some #(= :boat.launched (:kind %)) @seen)))))))
+          (is (child-ended? seen :launch)))))))
 
 (deftest it-looks-around-before-it-says-no-far-shore
   (async done
@@ -216,7 +219,7 @@
           (is (= far (:land res)))
           (is (false? (:recovered res)))
           (is (not (aboard? p)))
-          (is (not-any? #(= :boat.launched (:kind %)) @seen)))))))
+          (is (not (child-ended? seen :launch))))))))
 
 (deftest a-failed-child-keeps-its-data-and-renamed-cause
   (let [r {:kind :nothing-possible :cause :blocked :data {:spots 2 :drive :blocked}}]

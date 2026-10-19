@@ -1,5 +1,5 @@
 ;; Card b6f9629c: jobs.movement.boat-land brings the boat the body is in to a shore it has seen and steps off.
-;; Should-succeed: launch, land on the nearest shore (boat.landed); land and take the boat back (:recover true, boat.landed :recovered true).
+;; Should-succeed: launch, land on the nearest shore (completed); land and take the boat back (:recover true, completed :recovered true).
 ;; Should-fail: on foot (waits :not-aboard); no shore within :radius (waits :no-shore); a given land cell that is no shore (:no-shore); a given shore across land (:blocked).
 ;; The dismount exit is chosen by the server from the faced cell: a body left in water would stop :not-landed.
 {:defaults
@@ -13,7 +13,7 @@
    :act [[:job (jobs.movement.boat-launch {})]
          [:job (jobs.movement.boat-drive {:pos #at [18 -1 16]})]
          [:job (jobs.movement.boat-land {})]]
-   :expect [{:event {:source :job :kind :boat.landed} :within-s 120 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]}
   ;; card 9a842ea8: a bank covered with short grass and flowers is a shore; the land cell's feet are a passable plant
   {:name "grass-and-flower-covered-bank-is-a-shore"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]
@@ -21,12 +21,12 @@
    :act [[:job (jobs.movement.boat-launch {})]
          [:job (jobs.movement.boat-drive {:pos #at [18 -1 16]})]
          [:job (jobs.movement.boat-land {})]]
-   :expect [{:event {:source :job :kind :boat.landed} :within-s 120 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]}
   {:name "land-and-recover-the-boat"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]
          [:job (jobs.movement.boat-land {:recover true})]]
-   :expect [{:event {:source :job :kind :boat.landed :data {:recovered true}} :within-s 120 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:recovered true}} :within-s 120 :of-job true}]}
   {:name "on-foot-is-not-aboard"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-land {})]]
@@ -35,7 +35,7 @@
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]
          [:job (jobs.movement.boat-drive {:pos #at [18 -1 16]})]
-         [:job (jobs.movement.boat-land {:radius 1})]]
+         [:job (jobs.movement.boat-land {:settings {:jobs.movement.boat-launch/radius 1}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-shore}} :within-s 100 :of-job true}]}
   {:name "given-cell-is-not-a-shore"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]

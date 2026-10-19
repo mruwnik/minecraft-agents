@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.movement.boat-launch :as launch]
             [jobs.lib.blocks :as b]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
@@ -15,22 +16,21 @@
 (def doc
   "Bring the boat the body is in to a shore and get off onto land.
   The shore is a land cell the body has seen (feet and head air over a solid block, no hazard) with seen water beside it at the level of that block:
-  :pos names the land cell, else the nearest within :radius of the boat. jobs.movement.boat-drive steers to the water cell beside it
+  :pos names the land cell, else the nearest within the boat jobs' radius setting of the boat. jobs.movement.boat-drive steers to the water cell beside it
   (a spot the boat cannot reach is dropped for the next, up to the max-spots setting, 3), then jobs.movement.leave-vehicle steps off facing the land cell.
   With :recover the boat is then taken back (jobs.movement.boat-recover; it needs the boat in sight).
   A given :pos the body cannot make out after a look is driven nearer once (boat-drive to the water cell on the boat's side of it), then decided again.
   Impossible: :bad-args (:pos names no cell). Conditions (the not-aboard one before every round too): :not-aboard (on foot, with no landing of this call remembered: jobs.movement.boat-launch
   puts the body in a boat), :no-shore (no :pos given and no shore in sight; the engine looks round once first). A listed call waits on them.
-  Ends done (data {:land {:x :y :z} :boat id :recovered bool}), info boat.landed, or
+  Ends done (data {:land {:x :y :z} :boat id :recovered bool}), or
   condition-failed :no-shore (a given :pos is no shore, or could not be made out even from near), :not-aboard (got out on the way), or
   nothing-possible: :blocked (every spot tried could not be reached), :drive-failed (the drive failed otherwise), :not-landed (the dismount failed or left the body in water),
-  :recover-failed (landed and boat.landed emitted, the boat not taken back). The failed child's ending is the :because.
+  :recover-failed (landed, the boat not taken back). The failed child's ending is the :because.
 
   Never :continue except when a child waits on the world.")
 
 (a/defargs args
   {:pos {:doc "the land cell to step onto, [x y z] or {:x :y :z}; nil: the nearest shore in sight" :spec ::a/pos :default nil}
-   :radius {:doc "how far from the boat to look for a shore" :spec (a/num-in 1 nil) :default 12}
    :recover {:doc "take the boat back after landing" :spec boolean? :default false}})
 
 (def target [:pos])
@@ -41,11 +41,10 @@
 (defn given-pos [c] (when (:pos (:args c)) (:pos (b/parse (:args c)))))
 
 (defn candidates [c]
-  (let [p (:primitives c)
-        {:keys [radius]} (:args c)]
+  (let [p (:primitives c)]
     (if-let [cell (given-pos c)]
       (some-> (shore/spot-at p cell) vector)
-      (shore/spots p (u/self-pos c) {:radius radius}))))
+      (shore/spots p (u/self-pos c) {:radius (launch/radius)}))))
 
 (defn landed-boat
   "The boat id remembered by this job's landing, or nil."
@@ -146,10 +145,8 @@
       :continue
       (do (ctx/forget-where! c landed-kind #(= (:root c) (:job %)))
           (if (= :done (:kind e))
-            (do (ctx/emit! c :boat.landed :info {:land land :boat boat-id :recovered true :text "landed and took the boat back"})
-                (ctx/end c :done nil {:land land :boat boat-id :recovered true}))
-            (do (ctx/emit! c :boat.landed :info {:land land :boat boat-id :recovered false :text "landed, the boat was not taken back"})
-                (ctx/end c :nothing-possible :recover-failed {:land land :boat boat-id})))))))
+            (ctx/end c :done nil {:land land :boat boat-id :recovered true})
+            (ctx/end c :nothing-possible :recover-failed {:land land :boat boat-id}))))))
 
 (defn drive-failure
   "[reason failed-drive-ending] for spots that all failed to drive to: :blocked only when every one was blocked
@@ -169,9 +166,7 @@
       (:recover (:args c))
       (do (ctx/remember! c landed-kind {:job (:root c) :land land :boat boat-id} landed-policy)
           (await (recover! c land boat-id)))
-      :else
-      (do (ctx/emit! c :boat.landed :info {:land land :boat boat-id :recovered false :text "got off the boat onto the shore"})
-          (ctx/end c :done nil {:land land :boat boat-id :recovered false})))))
+      :else (ctx/end c :done nil {:land land :boat boat-id :recovered false}))))
 
 (defn ^:async try-spots!
   "Drive to each spot's water cell in turn and land on the first that works; ends :nothing-possible when none does."
