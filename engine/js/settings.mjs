@@ -10,6 +10,7 @@ export const SPECS = {
   'prim/half-bed-wait-ms': { default: 2000, spec: ['int-in', 0, null], doc: "How long sleep retries while a bed's head half has not arrived yet, in ms." },
   'prim/damage-fresh-ms': { default: 1000, spec: ['int-in', 0, null], doc: "A damage packet older than this is not the cause of a health loss, in ms." },
   'prim/hurt-wait-ms': { default: 300, spec: ['int-in', 0, null], doc: "Attack waits this long for the server's entityHurt on the target, in ms." },
+  'prim/death-wait-ms': { default: 150, spec: ['int-in', 0, null], doc: "After a hurt target, attack waits this long for its death status, in ms: a lethal hit's hurt and death can arrive apart." },
   'prim/settle-quiet-ms': { default: 150, spec: ['int-in', 0, null], doc: "A container transfer closes its window only after this long without a slot update, in ms." },
   'prim/settle-cap-ms': { default: 1500, spec: ['int-in', 0, null], doc: "A container transfer closes its window after this long at most, in ms." },
   'prim/offline-default-ms': { default: 300000, spec: ['int-in', 0, null], doc: "How long offline waits for the body to come back when not told, in ms." },

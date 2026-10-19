@@ -292,6 +292,15 @@ for (const [label, onSwing, expected] of hurtCases) {
   })
 }
 
+test('attack reports killed when the death status follows the hurt one a moment later', async () => {
+  const { bot, p } = rig(ownWorld())
+  bot.attack = async () => {
+    bot.emit('entityHurt', bot.entities[8])
+    setTimeout(() => bot.emit('entityDead', bot.entities[8]), 20 * SCALE)
+  }
+  assert.equal((await p.attack('t1', { id: 8 })).status, 'killed')
+})
+
 test('attack resolves early when entityHurt arrives after a delay', async () => {
   const { bot, p } = rig(ownWorld())
   bot.attack = async () => { setTimeout(() => bot.emit('entityHurt', bot.entities[8]), 20 * SCALE) }

@@ -224,6 +224,12 @@ export function createMove (env) {
           await sleepMs(setting('prim/poll-ms') * timeScale)
           ctx.alive()
         }
+        // a lethal hit's hurt and death statuses can arrive in separate reads: give the death one poll
+        const deathDeadline = Date.now() + setting('prim/death-wait-ms') * timeScale
+        while (hurtSeen && !deadSeen && env.bot.entities[a.id] && Date.now() < deathDeadline) {
+          await sleepMs(setting('prim/poll-ms') * timeScale)
+          ctx.alive()
+        }
       } finally {
         env.bot.removeListener('entityHurt', onHurt)
         env.bot.removeListener('entityDead', onDead)
