@@ -1,5 +1,6 @@
 (ns jobs.forestry.fell-from-pillar
-  (:require [jobs.lib.ready :as ready]
+  (:require [clojure.string :as str]
+            [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -7,6 +8,7 @@
             [jobs.forestry.fell-tree.log :as log]
             [jobs.lib.access :as access]
             [jobs.lib.access.approach :as approach]
+            [jobs.lib.aim :as aim]
             [jobs.lib.blocks :as b]
             [jobs.lib.child :as child]
             [jobs.lib.choose :as choose]
@@ -244,16 +246,34 @@
       (= :done (:kind e)) (do (ctx/update-mem! c assoc-in [:pillar :phase] :dig) :again)
       :else (pillar-failed! c :build))))
 
+(defn blocking-leaf
+  "The leaf cell nearest the eye on the line to the highest log in dig reach that the eye does not see, nil when there is
+  none or something else than leaves is in the way."
+  [c]
+  (let [log (->> (tree-logs c) (filter #(<= (u/eye-dist (u/self-pos c) (:pos %)) dig-reach)) (sort-by #(- (:y (:pos %)))) first)
+        at (some->> log :pos u/cell-vec (aim/first-blocker (aim/seen-kind-at (:primitives c)) (aim/body-eye c)))]
+    (when (some-> at u/cell-pos (->> (u/seen-name (:primitives c))) (str/ends-with? "_leaves"))
+      (u/cell-pos at))))
+
 (defn ^:async pillar-dig!
   "Centre on the stand cell the plan counted reach from, then dig the highest log in reach that the eye sees (blocks.dig
-  digs only what it sees; a stand inside the trunk sees only the log above its head); none: take the pillar back."
+  digs only what it sees; a stand inside the trunk sees only the log above its head); none: dig the leaf that hides the
+  highest log in reach, else take the pillar back."
   [c {:keys [plan]}]
   (let [[sx _ sz] (:stand plan)
         _ (await (walk/centre! c (+ sx 0.5) (+ sz 0.5)))
         in-reach (filter #(b/in-reach? c (:pos %) true) (tree-logs c))
-        l (first (sort-by #(- (:y (:pos %))) in-reach))]
-    (if-not l
+        l (first (sort-by #(- (:y (:pos %))) in-reach))
+        leaf (when-not l (blocking-leaf c))]
+    (cond
+      leaf
+      (let [e (await (ctx/call c :dig 'jobs.blocks.dig (log/log-dig-args c leaf)))]
+        (if (or (= :continue e) (= :done (:kind e)))
+          :again
+          (pillar-failed! c :dig)))
+      (not l)
       (do (ctx/update-mem! c update :pillar #(cond-> (assoc % :phase :clean) (not (:dug %)) (assoc :failed :no-log-in-reach))) :again)
+      :else
       (let [r (await (log/dig-log! c l {:base (base c) :species (:species (:args c))}))]
         (if (= :ok r)
           (do (ctx/update-mem! c assoc-in [:pillar :dug] true) (u/progress! c) :again)

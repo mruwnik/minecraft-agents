@@ -32,6 +32,16 @@
   (boolean (some (fn [[x y z]] (sight/line-clear ex ey ez x y z (fn [cx cy cz] (keyword-identical? :solid (kind-at cx cy cz)))))
                  (sight-points cell))))
 
+(defn first-blocker
+  "The first cell [x y z] a straight line from the eye [x y z] to the centre of the block at cell crosses that kind-at
+  gives :solid (the nearest to the eye), nil when the line is clear."
+  [kind-at [ex ey ez] [x y z]]
+  (let [hit (volatile! nil)
+        [tx ty tz] (first (sight-points [x y z]))]
+    (sight/line-clear ex ey ez tx ty tz
+                      (fn [cx cy cz] (when (keyword-identical? :solid (kind-at cx cy cz)) (vreset! hit [cx cy cz]) true)))
+    @hit))
+
 (defn stand-sees-fn
   "(fn [x y z]) -> whether a body standing in the feet cell x y z (at its middle) sees the block at cell, over what the
   body of primitives p has seen: the planner's goalSeen for go-to's :see."
@@ -39,10 +49,14 @@
   (let [kind-at (seen-kind-at p)]
     (fn [x y z] (sees-cell? kind-at (eye-at {:x (+ x 0.5) :y y :z (+ z 0.5)}) cell))))
 
-(defn body-sees?
-  "Whether the job's body, where it stands now, sees the block at cell [x y z]. A whole x or z is a cell, and a body
-  stands at the middle of its cell (the same convention as go-to's stand-sees-fn)."
-  [c cell]
+(defn body-eye
+  "The eye of the job's body where it stands now (a whole x or z is a cell: the body stands at its middle)."
+  [c]
   (let [{:keys [x z] :as pos} (u/self-pos c)
         mid #(if (= % (js/Math.floor %)) (+ % 0.5) %)]
-    (sees-cell? (seen-kind-at (:primitives c)) (eye-at (assoc pos :x (mid x) :z (mid z))) cell)))
+    (eye-at (assoc pos :x (mid x) :z (mid z)))))
+
+(defn body-sees?
+  "Whether the job's body, where it stands now, sees the block at cell [x y z]."
+  [c cell]
+  (sees-cell? (seen-kind-at (:primitives c)) (body-eye c) cell))

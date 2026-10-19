@@ -70,3 +70,9 @@
                                              {:pos [5 62 0] :range 3 :see true :ways #{:walk :clear-seal}}))]
           (is (= :out-of-sight (:why @out)) (pr-str @out))
           (is (< (first (gt/at p)) 11) (str "did not walk out to the loaded edge: " (gt/at p))))))))
+
+(deftest the-first-blocker-is-the-solid-cell-nearest-the-eye
+  (let [solid #{[2 5 0] [3 5 0]}
+        kind-at (fn [x y z] (if (solid [x y z]) :solid :open))]
+    (is (= [2 5 0] (aim/first-blocker kind-at [0.5 5.5 0.5] [5 5 0])))
+    (is (nil? (aim/first-blocker kind-at [0.5 7.5 0.5] [5 7 0])) "a clear line has no blocker")))
