@@ -5,7 +5,6 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
-            [jobs.lib.cond :as cond]
             [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]))
 
@@ -14,7 +13,7 @@
   A player in range is looked at (the head) and waited on for 500 ms, then the job yields (:continue): it is an
   ongoing watch. One farther off is walked to in one round (jobs.movement.go-to calls, re-aimed at where the
   player is, doors :shut) until in range. A player out of sight is walked to where they were last seen, then
-  waited for there. A player never seen is a wait (can-start? and can-run? :later :gone, bounded by the call's limits).
+  waited for there. A player never seen is waited for beside the body (a started call, so :wall-time and :job-time bound it).
   Ends with a result {:reason ...}:
   - \"unreachable\": a walk go-to gave up on (it retries itself).
   - \"out-of-range\": three walks in a row that arrived or got closer but left the body out of range.
@@ -58,22 +57,7 @@
            .-pos
            u/pos-of))
 
-(defn in-sight
-  "Later :gone while the player is not seen within the radius setting."
-  [c]
-  (let [player (:player (:args c))]
-    (if (find-player (:primitives c) player (radius))
-      (contract/ok :in-sight (str player " is in sight"))
-      (contract/later :gone (str player " is not in sight")))))
-
-(def can-start? (cond/and bad-args in-sight))
-
-(defn can-run?
-  "In sight, or seen before (then the trail is walked); else later :gone."
-  [c]
-  (if (:last-seen (ctx/mem c))
-    (contract/ok :trail "the player was seen before")
-    (in-sight c)))
+(def can-start? bad-args)
 
 (defn ^:async idle!
   "A noop pause, then :continue."
@@ -152,7 +136,7 @@
   "The player is out of sight, seen last at last-seen: walk there, then wait."
   [c]
   (let [{:keys [last-seen]} (ctx/mem c)]
-    (if (u/within? (u/self-pos c) last-seen last-seen-reach)
+    (if (or (nil? last-seen) (u/within? (u/self-pos c) last-seen last-seen-reach))
       (await (idle! c))
       (await (walk! c last-seen 1)))))
 

@@ -109,35 +109,14 @@
           (is (= :not-done @out) "no lost clock: the call's limits end it")
           (is (every? #{{:x 10 :y 64 :z 0}} (move-targets eng)) "only the last-seen cell is walked to"))))))
 
-(defn check-ctx
-  "A ctx for the checks: the world's primitives and a job memory of mem."
-  [p mem]
-  {:primitives p :root "j1" :args {:player "Steve"}
-   :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data mem}]}}})})
-
-(deftest a-player-never-seen-is-a-wait-not-an-ending
+(deftest a-player-never-seen-is-waited-for-until-the-wall-time
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (follow {} {:player "Steve"} 10 500))
-              c (check-ctx p {})]
-          (is (= [:condition-failed :gone] [(:kind (:ending @out)) (:reason @out)]) "a called child that would wait ends")
-          (is (= [:later :gone] (tu/kind-reason (follow/can-start? c))))
-          (is (= [:later :gone] (tu/kind-reason (follow/can-run? c)))))))))
-
-(deftest a-player-gone-since-was-seen-is-walked-to-not-waited-for
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (setup {} {:player "Steve"})]
-          (is (= [:ok :trail] (tu/kind-reason (follow/can-run? (check-ctx (:p s) {:last-seen {:x 10 :y 64 :z 0}}))))))))))
-
-(deftest a-player-in-sight-lets-it-start
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (setup {:entities [(steve 2)]} {:player "Steve"})]
-          (is (= [:ok :in-sight] (tu/kind-reason (follow/in-sight (check-ctx (:p s) {}))))))))))
+        (let [{:keys [out p] :as s} (await (follow {} {:player "Steve" :spend {:wall-time 3}} 10 1000))]
+          (is (has-event? s :limit_reached) "a started call, so its wall time ends it")
+          (is (= 0 (count (move-targets (:eng s)))) "nothing to walk to")
+          (is (<= (Math/abs (self-x p)) 1)))))))
 
 (deftest one-blocked-go-to-is-unreachable
   (async done
