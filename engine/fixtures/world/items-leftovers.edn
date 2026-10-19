@@ -1,5 +1,5 @@
 ;; Card 0663315e: the items leftovers. kitchen (wheat chest to stocked bread through the table) and the reasoned endings of enchant and
-;; get-tool: enchant without a table gives up (stopped :no-table), without lapis it stops condition-failed :need, get-tool with an unknown block
+;; get-tool: enchant without a table stops :no-table at its start check (after one look round), without lapis it stops condition-failed :need, get-tool with an unknown block
 ;; name is refused :bad-args (it was read as a block the hand harvests). The "declined child" ending needs a child whose check
 ;; fails three rounds and the enchant unknown-status ending a window answer the server never gives: unit tests only.
 ;; Should-succeed: kitchen turns 9 chest wheat into 3 bread in the chest, crafting the table from carried planks when none stands. Should-fail: :fetch false with planks waits nothing-to-do, both steps skipped :no-table. Should-fail: kitchen without a table or wood stops :no-table with the chest wheat put back, enchant with no table, enchant with no lapis, get-tool unknown block.
@@ -36,7 +36,7 @@
   {:name "enchant-without-a-table-gives-up-no-table"
    :body {:inventory [["diamond_pickaxe" 1] ["lapis_lazuli" 3]]}
    :act [[:job (jobs.items.enchant {:item "diamond_pickaxe"})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :no-table :text "enchant gave up: no-table"}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-table}} :within-s 40 :of-job true}]
    :after [[:item "diamond_pickaxe" 1]]}
   {:name "enchant-without-lapis-stops-need-lapis"
    :blocks [[:set [19 0 16] "enchanting_table"]]

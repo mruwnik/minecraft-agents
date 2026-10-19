@@ -25,9 +25,9 @@
   :level}] :xp-level :hint {:enchant :level}|nil}, measured from what is carried and the body's level after the
   window closed, and a :text.
   A give-up ends with the :text and {:enchanted false :item :levels-spent n :lapis-spent n}.
-  Impossible: :bad-args (no item name). Conditions (a listed root job waits): :no-item and :no-lapis (not carried, :fetch false), :too-few-levels
+  Impossible: :bad-args (no item name). Conditions (a listed root job waits): :no-table (none given or in sight, after one look round), :no-item and :no-lapis (not carried, :fetch false), :too-few-levels
   (no level at all). A failed fetch ends as {:reason :need} with its ending as the :because. Condition-failed in the
-  round: :no-table, :not-a-table, :no-item, :already-enchanted (every copy carried is enchanted), :not-enchantable,
+  round: :no-table (the table is gone at the visit), :not-a-table, :no-item, :already-enchanted (every copy carried is enchanted), :not-enchantable,
   :no-lapis, :too-few-levels (the offers cost more), :no-offer (the :slot has none), :no-offer-within-cost,
   :inventory-full. Nothing-possible: :enchant-failed (an answer not understood after the call), :window (did not open,
   three times), :window-stalled, :not-confirmed (the item came back unenchanted), :offer-changed (three times),
@@ -98,8 +98,22 @@
     (when (zero? (or (some-> (.self (:primitives c)) .-experience .-level) 0))
       {:reason :too-few-levels :need 1})))
 
+(defn find-table
+  "The position of the nearest enchanting table the body has seen within radius, or nil."
+  [p radius]
+  (:pos (first (look/seen-blocks p {:names ["enchanting_table"] :radius radius :max 8 :live? true}))))
+
+(defn no-table
+  "Look :no-table while no table is given or seen within the table radius and no look round has run (a table behind the body is not seen until it looks), later after it."
+  [c]
+  (cond
+    (or (:table (:args c)) (find-table (:primitives c) (table-radius))) (contract/ok :table "an enchanting table is known")
+    (look/surveyed? c) (contract/later :no-table "no enchanting table in sight")
+    :else (contract/look :no-table "no enchanting table in sight")))
+
 (defn can-start? [c]
-  (contract/all [(checks/cause-status :never (problem c)) (checks/cause-status :later (lacking c)) (checks/cause-status :later (unaffordable c))]))
+  (contract/all [(checks/cause-status :never (problem c)) (checks/cause-status :later (lacking c)) (checks/cause-status :later (unaffordable c))
+                 (no-table c)]))
 
 (defn done?
   "Ok once the offer is bought (the round ends the call with the data)."
@@ -155,7 +169,7 @@
   (ctx/end c kind cause (merge {:enchanted false :item (:item (:args c)) :levels-spent 0 :lapis-spent 0} extra)))
 
 (defn give-up!
-  "Warn and end with a reason (and what was spent, when anything was)."
+  "End with a reason (and what was spent, when anything was)."
   [c reason extra]
   (let [reason (keyword reason)]
     (finish! c (if (condition-reasons reason) :condition-failed :nothing-possible) reason
@@ -167,11 +181,6 @@
   (if (u/count-fail! c)
     (give-up! c reason {})
     :again))
-
-(defn find-table
-  "The position of the nearest enchanting table the body has seen within radius, or nil."
-  [p radius]
-  (:pos (first (look/seen-blocks p {:names ["enchanting_table"] :radius radius :max 8 :live? true}))))
 
 (defn ^:async visit!
   "One table visit through act, as a cljs map."
@@ -251,9 +260,7 @@
   (let [table (:table (:args c))
         pos (or table (find-table (:primitives c) (table-radius)))]
     (if-not pos
-      (if (look/surveyed? c)
-        (give-up! c "no-table" {})
-        (do (await (look/survey! c)) :again)) ; a table behind the body is not seen until it looks
+      (give-up! c "no-table" {})
       (let [r (if (u/within? (u/self-pos c) pos (reach))
                 :done
                 (await (child/call-walk* c :walk {:pos pos :range (reach) :ways #{:walk :clear-seal} :spend {:tries 1}})))]

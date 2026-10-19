@@ -148,8 +148,7 @@
           (is (empty? (ops p))))))))
 
 (def give-up-rows
-  [["no table within reach" {:blocks {"40,64,0" "enchanting_table"}} {} :no-table]
-   ["not a table" {:blocks {spot "chest"}} {:table {:x 1 :y 64 :z 0}} :not-a-table]
+  [["not a table" {:blocks {spot "chest"}} {:table {:x 1 :y 64 :z 0}} :not-a-table]
    ["the table block is gone" {:blocks {}} {:table {:x 1 :y 64 :z 0}} :no-table]
    ["already enchanted" {:inventory [(assoc sword :enchants [{:name "sharpness" :level 1}]) (lapis 9)]} {} :already-enchanted]
    ["not enchantable" {:inventory [{:name "dirt" :count 1} (lapis 9)]} {:item "dirt"} :not-enchantable]
