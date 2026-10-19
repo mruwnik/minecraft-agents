@@ -84,24 +84,20 @@
                    distinct vec)]
     (if (seq seeds) (connected-logs p seeds skip (flood-allowed? c)) seeds)))
 
-(defn trunk-cells
-  "The cells of the 2x2 trunk of species that has base as a corner (all four hold its log at base's height), else [base]."
-  [c base species]
-  (let [p (:primitives c)
-        log (str species "_log")
-        square (fn [dx dz] (mapv (fn [[ax az]] (assoc base :x (+ (:x base) ax) :z (+ (:z base) az)))
-                                 [[0 0] [dx 0] [0 dz] [dx dz]]))
-        full? (fn [cells] (every? #(= log (u/seen-name p %)) cells))]
-    (or (first (filter full? (for [dx [1 -1] dz [1 -1]] (square dx dz)))) [base])))
-
 (defn record-debt!
-  "Write the replant debts for the tree of base and species, once each: one per cell of a 2x2 trunk, else the base's.
-  True when it wrote the base's."
-  [c base species]
-  (let [owed (set (map :pos (debts c)))]
-    (doseq [pos (trunk-cells c base species) :when (not (owed pos))]
-      (ctx/remember! c replant-kind {:pos pos :species species} {:cap 50 :ttl :forever}))
-    (not (owed base))))
+  "Write the replant debt for the log cell pos of the tree of species, once. True when it wrote one."
+  [c pos species]
+  (when-not (some #(= pos (:pos %)) (debts c))
+    (ctx/remember! c replant-kind {:pos pos :species species} {:cap 50 :ttl :forever})
+    true))
+
+(defn trunk-cell?
+  "Whether pos is the base or lies beside it at its height: a cell of a 2x2 trunk (its far columns are hidden from the
+  first sight, so each is recorded as it is dug)."
+  [base pos]
+  (and (= (:y pos) (:y base))
+       (<= (Math/abs (- (:x pos) (:x base))) 1)
+       (<= (Math/abs (- (:z pos) (:z base))) 1)))
 
 (defn open-scaffold?
   "Whether this job's scaffold ledger entries (its own or a child's) are still open: a pillar left by a cut or a restart."
@@ -159,8 +155,8 @@
         :else (keyword (name k))))))
 
 (defn ^:async dig-log!
-  "Dig the log l of the tree at base (one blocks.dig child round), walking in reach first. Commits the replant debt
-  before the base log is dug (write-ahead; withdrawn when the log is still standing after the round). Resolves to :ok,
+  "Dig the log l of the tree at base (one blocks.dig child round), walking in reach first. Commits the replant debt of a trunk log at the base's height
+  before it is dug (write-ahead; withdrawn when the log is still standing after the round). Resolves to :ok,
   :partial (the walk made progress but is not in reach yet; call again), :high (the log is out of reach from the ground
   and a pillar is allowed) or a non-ok outcome for the round to count as a failure (:unreachable, :cannot, :refused and
   :out-of-reach mean the tree cannot be dug from here)."
@@ -174,7 +170,7 @@
         (not (log-allowed? c pos)) :refused
         (and (:pillar? (:args c)) (> (u/eye-dist (u/self-pos c) pos) dig-reach)) :high
         :else
-        (let [wrote? (and (= pos base) (record-debt! c base species))
+        (let [wrote? (and (trunk-cell? base pos) (record-debt! c pos species))
               e (await (ctx/call c :dig 'jobs.blocks.dig (log-dig-args c pos)))]
           (when (:dug (:data e))
             (ctx/update-mem! c #(-> % (update :dug (fnil inc 0)) (update :drop-ids (fnil into []) (:ids (:data e))))))
