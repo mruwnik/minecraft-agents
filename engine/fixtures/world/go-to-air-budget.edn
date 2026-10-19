@@ -25,6 +25,17 @@
    :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 150 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 150 :until {:source :job :kind :result}}]
    :after [[:body-near [59.5 1 8.5] 3]]}
+  ;; night, open sky: the dark wait must not be taken under water; the body swims up first and walks (no drowning)
+  {:name "submerged-at-night-surfaces-and-walks"
+   :time :night
+   :plot {:height 10 :length 40 :width 16}
+   :blocks [[:fill [3 0 7] [30 3 9] "stone"]
+            [:fill [4 0 8] [4 3 8] "water"]]
+   :body {:at [4.5 0 8.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [12 4 8] :range 1})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 90 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 90 :until {:source :job :kind :result}}]
+   :after [[:body-near [12.5 4 8.5] 3]]}
   ;; should fail: two 10 s dives joined by one cell with air over it: the touch gives back about 2 s
   {:name "shaft-joined-dives-refused"
    :blocks [[:fill [3 0 7] [48 4 9] "stone"]

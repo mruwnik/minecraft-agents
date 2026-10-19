@@ -119,3 +119,16 @@
         (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen 10 :pitch 0} :blocks surface-stretch :light [15 15]}
                                              {:pos [59 65 8] :range 1 :ways #{:walk :clear-seal}}))]
           (is (true? (:arrived @out)) (str "result " @out " at " (gt/at p))))))))
+
+;; open water 4 deep, a land floor at feet 64 round it, the body on its bottom at night in the dark: its safe? would
+;; wait for dawn (exposed), and the wait under water drowns it. go-to must swim up and walk first.
+(def night-pool
+  (merge gt/flat (box 3 59 -2 8 59 2 "stone") (box 3 60 -2 8 63 2 "water")))
+
+(deftest a-submerged-body-at-night-swims-up-and-walks-instead-of-waiting-for-dawn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (gt/go! {:self {:pos [5.5 60 0.5] :inWater true :oxygen 20} :blocks night-pool :light [0 0] :time 18000}
+                                             {:pos [14 64 0] :range 1}))]
+          (is (true? (:arrived @out)) (pr-str @out)))))))
