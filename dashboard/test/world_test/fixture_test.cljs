@@ -266,6 +266,8 @@
     (is (= "setblock 20001 150 20002 oak_fence_gate[facing=east]" (f/block-command origin [:set [1 0 2] "oak_fence_gate[facing=east]"])))
     (is (= ["gamemode spectator ProbeFixture"] (f/park-commands "ProbeFixture"))
         "the body is parked as a spectator while the plot is built: stone filled over where it stands must not suffocate it")
+    (is (= ["gamemode spectator ProbeFixture" "tp ProbeFixture 18000 160 20000"] (f/leave-commands "ProbeFixture"))
+        "a body stopped between cases waits far from every plot, so its next login does not memorise the cleared plot as air")
     (let [body (f/body-commands origin "ProbeFixture" glass)]
       (is (some #{"tp ProbeFixture 20016.5 150 20016.5 0 0"} body))
       (is (some #{"give ProbeFixture bread 3"} body))

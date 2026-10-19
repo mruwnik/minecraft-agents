@@ -516,6 +516,16 @@
                        (.kill child "SIGTERM")))))
     (js/Promise.resolve nil)))
 
+(defn leave-and-stop!
+  "Moves the body away from the plot grid (f/leave-commands; best effort, an offline body just gets an empty reply), then stops it."
+  [opts]
+  (if (get @bodies (:body opts))
+    (-> (rcon! (f/leave-commands (:body opts)))
+        (.then #(sleep 700))
+        (.catch (fn [_] nil))
+        (.then #(stop-body! opts)))
+    (stop-body! opts)))
+
 ;; ------------------------------------------------------------------ time
 
 (defn daytime [reply]
@@ -2037,7 +2047,7 @@
                                                                     (f/memory-seed (f/resolve-tags (f/memory-entries c) (f/plot-origin (f/case-grid c) i)) (js/Date.now)))]
                                                        (-> (with-goal! (body-dir opts) (case-goal c run (or (:retry opts) 0)) (case-wait c)
                                                              #(run-case! opts c i run (when-not (= :keep plan) register)
-                                                                         (fn [] (if (= :keep plan) (js/Promise.resolve nil) (stop-body! opts)))
+                                                                         (fn [] (if (= :keep plan) (js/Promise.resolve nil) (leave-and-stop! opts)))
                                                                          (fn [] (if (= :keep plan)
                                                                                   (js/Promise.resolve nil)
                                                                                   (-> (if (= :restart-keep plan) (js/Promise.resolve nil) (reset-last-plot! opts))

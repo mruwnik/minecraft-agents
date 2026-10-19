@@ -733,6 +733,14 @@
   [body]
   [(str "gamemode spectator " body)])
 
+(defn leave-commands
+  "Before the body stops between cases: a spectator far west of the plot grid, so its next login sees no plot. A body that
+  logs in inside the cleared plot remembers every cell as air, and a cell the case later hides behind a wall keeps that
+  memory."
+  [body]
+  (let [{:keys [x0 z0 y]} default-grid]
+    (into (park-commands body) [(str "tp " body " " (- x0 2000) " " (+ y 10) " " z0)])))
+
 (def worn-slots
   "Slots /clear is not trusted with: a helmet left by an earlier case changes go-to's air plan."
   ["armor.head" "armor.chest" "armor.legs" "armor.feet" "weapon.offhand"])
