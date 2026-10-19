@@ -192,7 +192,8 @@
     (is (false? (fires? p (trigger-store [] []) [])) "nothing open")
     (is (false? (fires? p (trigger-store [(entry [0 64 0])] []) nil)) "no zone list")
     (is (false? (fires? p (trigger-store [(entry [50 64 0])] []) [])) "the cell is not loaded")
-    (is (false? (fires? p (doto (trigger-store [(entry [0 64 0])] []) (ledger/hold! [[0 64 0]])) [])) "held")))
+    (is (false? (fires? p (doto (trigger-store [(entry [0 64 0])] []) (ledger/hold! [[0 64 0]])) [])) "held")
+    (is (true? (fires? (tu/seeing-after-look p) (trigger-store [(entry [0 64 0])] []) [])) "a loaded cell not yet seen still counts: the run looks at it")))
 
 (deftest the-trigger-leaves-scaffold-beyond-its-radius-for-an-explicit-cleanup
   (let [p (tu/fake {:blocks {"0,64,0" "dirt" "50,64,0" "dirt"}})

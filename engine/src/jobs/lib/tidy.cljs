@@ -35,6 +35,11 @@
 
 (defn block-now [p cell] (u/block-name p (zipmap [:x :y :z] cell)))
 
+(defn unseen?
+  "Whether the cell is loaded but not yet made out: its block is unknown, not changed."
+  [p cell]
+  (true? (some-> (u/sensed p (zipmap [:x :y :z] cell)) .-unknown)))
+
 
 (defn body-cells
   "The cells [x y z] the body's hitbox (0.6 wide, 1.8 tall, at pos {:x :y :z} its feet) intersects."
@@ -65,7 +70,7 @@
   ([p e] (why-not p e (delay (reach/enclosed? p))))
   ([p {:keys [cell now action escalation] :as e} enclosed]
    (cond
-     (not= now (block-now p cell)) :changed
+     (and (not= now (block-now p cell)) (not (unseen? p cell))) :changed
      (and (= :dig action) (nil? (place-item p e))) :not-carried
      (and (= :dig action) escalation @enclosed) :shut-in
      (and (= :dig action) (in-body? p cell) (not (crops/seed-of (:was e)))) :occupied))) ; a sown crop has no hitbox

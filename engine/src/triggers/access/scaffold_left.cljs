@@ -18,9 +18,9 @@
             [jobs.lib.dawn :as dawn]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.reach :as reach]
+            [jobs.lib.access :as access]
             [jobs.lib.look :as look]
             [jobs.lib.threats :as threats]
-            [jobs.lib.util :as u]
             [jobs.lib.world-files :as world]))
 
 (a/defargs settings
@@ -29,7 +29,10 @@
 
 (def defaults {:within 32})
 
-(defn block-at-of [p] (fn [[x y z]] (u/block-name p {:x x :y y :z z})))
+(defn block-at-of
+  "Names only loaded cells: an unseen one is offered too (the run looks at it)."
+  [p]
+  (access/sensed-at p access/hidden-guess))
 
 (defn too-deep?
   "Whether the entry lies deeper below the feet than cleanup walks to."

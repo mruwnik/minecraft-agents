@@ -58,7 +58,7 @@
        (filter tidy/tidy-work?)
        (remove #(contains? live (:job %)))
        (filter #(near? here (:cell %)))
-       (filterv #(some? (tidy/block-now p (:cell %))))))
+       (filterv #(some? (u/block-at p (zipmap [:x :y :z] (:cell %)))))))
 
 (defn holds?
   "The pending entries worth a run now (see the ns doc). enclosed: a delay of the body's enclosure, flooded at most

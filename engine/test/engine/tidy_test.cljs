@@ -369,6 +369,16 @@
            [(assoc with-stone :unloaded ["0,65,0"]) [[:tidy dug]] false "cell not loaded"]]]
     (is (= expected (holds? world memory)) why)))
 
+(deftest the-trigger-holds-for-a-loaded-cell-not-yet-seen
+  (let [s (mem/open (tu/tmp-dir) {:now (constantly 1000)})]
+    (mem/write! s :tidy dug tidy/tidy-policy)
+    (is (true? (tidy-pending/tidy-pending (tu/seeing-after-look (tu/fake with-stone)) (mem/view s) tidy-pending/defaults nil #{})))))
+
+(deftest an-unseen-cell-is-not-a-changed-one
+  (let [p (tu/seeing-after-look (tu/fake with-stone))]
+    (is (nil? (tidy/why-not p dug)) "not made out yet: the restore walks up and sees it")
+    (is (= :changed (tidy/why-not (tu/fake (assoc with-stone :blocks {"0,65,0" "dirt"})) dug)) "seen and different")))
+
 (deftest the-trigger-does-not-hold-while-airborne
   (is (false? (holds? (assoc-in with-stone [:self :onGround] false) [[:tidy dug]])) "mid-jump")
   (is (true? (holds? (assoc-in with-stone [:self :onGround] true) [[:tidy dug]])) "landed"))
