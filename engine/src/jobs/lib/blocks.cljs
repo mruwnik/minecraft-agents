@@ -164,12 +164,24 @@
        (str/join "; " (map (fn [{:keys [gates animals]}] (str animals " animals, gate " (str/join " " (map (fn [{:keys [x y z]}] [x y z]) gates)))) pens))
        "; :enter-pens true allows the walk through"))
 
+(def low-floor-radius 4)
+
+(defn low-floor-cells
+  "The seen beds and bottom slabs round pos ({:x :y :z}), as keep-out cells: a build's walk stands half a block high on
+  one, its head inside the roof cell the build still has to fill."
+  [c pos]
+  (let [p (:primitives c) r low-floor-radius]
+    (vec (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy (range -2 3)
+               :let [cell {:x (+ (js/Math.floor (:x pos)) dx) :y (+ (js/Math.floor (:y pos)) dy) :z (+ (js/Math.floor (:z pos)) dz)}]
+               :when (u/low-floor? (u/seen-block p cell))]
+           cell))))
+
 (defn ^:async walk-request
   "[pens go-to-args] of the walk to pos: range (default 3), no escalation, and (unless the job's :enter-pens) keeping out of the
   gates of the pens holding animals, after a look at the cells of those not yet seen."
   [c pos see? & [range]]
   (let [pens (when-not (:enter-pens (:args c)) (await (pen-entry/pens! c)))
-        keep-out (vec (mapcat :gates pens))]
+        keep-out (into (vec (mapcat :gates pens)) (when (:for-plan (:args c)) (low-floor-cells c pos)))]
     [pens (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))}
             (seq keep-out) (assoc :keep-out keep-out))]))
 

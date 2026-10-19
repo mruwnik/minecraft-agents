@@ -91,6 +91,13 @@
   (let [b (sensed p pos)]
     (when-not (or (nil? b) (true? (.-unknown b))) b)))
 
+(defn low-floor?
+  "Whether block b is lower than a full block to stand on: a bed or a bottom slab (top and double slabs are full-height floors)."
+  [b]
+  (let [n (some-> b .-name)]
+    (boolean (and n (or (re-find #"_bed$" n)
+                        (and (re-find #"_slab$" n) (= "bottom" (some-> b .-properties (aget "type")))))))))
+
 (defn seen-name
   "The block name at a cell in view or remembered, or nil when unloaded or unknown (see seen-block)."
   [p pos]

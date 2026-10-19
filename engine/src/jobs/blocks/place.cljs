@@ -51,7 +51,7 @@
 (a/defargs args
   {:pos {:doc "the cell to fill, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
    :item {:doc "the block item to place; nil: the first carried of the call's :use {:blocks}" :spec a/item? :default nil}
-   :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
+   :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse, and the walk keeps off seen beds and bottom slabs near the cell; nil: every plan's footprint does" :spec a/name? :default nil}
    :ignore-zones? :shared
    :enter-pens {:doc "true: the walk to the cell may go through the gate of a pen holding animals; false: it keeps out of those gates and, with no other way, declines (a :blocks.pen-kept-out warn names the pen)" :spec boolean? :default false}
    :clear {:doc "dig a plant, flower or snow layer out of the cell first; false places into what a placement overwrites" :spec boolean? :default true}

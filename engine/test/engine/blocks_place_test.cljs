@@ -11,6 +11,7 @@
             [engine.memory :as mem]
             [engine.test-util :as tu :refer [box]]
             [jobs.blocks.place :as place]
+            [jobs.lib.blocks :as b]
             [jobs.lib.util :as u]
             [plan.shape :as shape]))
 
@@ -380,6 +381,12 @@
              :states {"5,64,0" {:open false :facing "east"} "13,64,0" {:open false :facing "east"}}
              :entities [{:id 7 :name "cow" :kind "passive" :pos {:x 8.5 :y 64 :z 0.5}}
                         {:id 8 :name "sheep" :kind "passive" :pos {:x 10.5 :y 64 :z 1.5}}]}))
+
+(deftest a-plans-place-keeps-off-the-beds-and-bottom-slabs-round-the-cell
+  (let [p (tu/seeing-all (tu/fake-on-floor {:blocks {"13,64,8" "white_bed" "14,64,8" "oak_slab" "15,64,8" "oak_slab" "16,64,8" "stone"}
+                                                    :states {"14,64,8" {:type "bottom"} "15,64,8" {:type "top"}}
+                                                    :self {:pos {:x 12.5 :y 64 :z 14.5}}}))]
+    (is (= [{:x 13 :y 64 :z 8} {:x 14 :y 64 :z 8}] (b/low-floor-cells {:primitives p} {:x 14 :y 66 :z 8})))))
 
 (defn gate-clicks [p] (count (filterv #(= "useOn" (.-name %)) (.-calls (.-world p)))))
 
