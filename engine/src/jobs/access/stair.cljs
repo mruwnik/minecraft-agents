@@ -99,7 +99,7 @@
   refusals, :fluid-in-cut :crop :base-block :undercuts-way :unbreakable :no-tool :inventory-full :hazard :lava-exposed :plugged :floor-unseen
   :no-floor :cave-below :off-stair :no-way-back :tool-spent :y-not-beyond-feet), :impossible for :bad-args, :nothing-possible for the attempts that
   failed (:refills :dig-failed :step-failed :no-support-floor :lava-unsealed :water-unplugged). Data {:steps n :at [x y z] :dug [{:cell :block}] :ores [{:cell :block :got}]} plus detail (:cell
-  :hazards :zone :walk ...), also as a stair.done info or stair.stopped warn event.
+  :hazards :zone ...; the walk child's ending is the :because of :step-failed), also as a stair.done info or stair.stopped warn event.
 
   :spent-ok (default false): a dig whose every carried tool is down to 3 uses (jobs.lib.trip/spent-tool?) stops {:reason :tool-spent :tool <kind>}
   before the last tool breaks deep down, after a spare was tried once (jobs.lib.trip/tool-ready!); true digs on.
@@ -322,9 +322,7 @@
           :again)
       (let [block-at (:block-at (judge/rules-in c (reach/standing-vec (:primitives c))))]
         (some #(when-let [b (block-at %)] (not (rules/air b))) cut)) :again
-      :else {:reason :step-failed :cell next-feet
-             :walk (merge (select-keys (:data r) [:why :arrived])
-                          {:status (if (= :done (:kind r)) :done :stopped) :reason (contract/cause-key r)})})))
+      :else {:reason :step-failed :cell next-feet})))
 
 (defn ^:async return!
   "The body is off the stair's line (a reflex walked it away): a go-to child (slot :return) back to the stair's cell of

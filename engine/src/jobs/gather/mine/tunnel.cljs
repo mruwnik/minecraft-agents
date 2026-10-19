@@ -183,7 +183,7 @@
     (cond
       (= :continue r) :continue
       (not= :done (:status res)) (let [{:keys [reason at]} (step-stop res)]
-                                   (end! c reason at next (some->> (:walk res) (walk-of c next))))
+                                   (end! c reason at next (when (= :step-failed reason) (some->> (:because r) result-of (walk-of c next)))))
       :else
       (let [own (ledger/own-cells c)
             open (when (:stay-level args) (seq (stay/breaches name-at from cut own)))]

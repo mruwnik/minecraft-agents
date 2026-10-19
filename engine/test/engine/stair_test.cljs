@@ -1021,7 +1021,8 @@
                                       r)))))
               {:keys [out]} (await (stair! {:blocks (dissoc ground "1,64,1")} east prep))]
           (is (= :step-failed (:reason @out)))
-          (is (= [1 64 0] (:cell @out))))))))
+          (is (= [1 64 0] (:cell @out)))
+          (is (nil? (:walk @out)) "the walk child's ending is the :because, not copied"))))))
 
 (deftest a-falling-block-hazard-names-the-block
   (let [stop (stop {[1 67 0] "gravel" [1 66 0] "stone"} #{:fluid-adjacent} :zones [])]
