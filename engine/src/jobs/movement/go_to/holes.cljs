@@ -10,13 +10,12 @@
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
             [jobs.lib.world :as known]
-            [jobs.movement.go-to.result :as end]
-            [jobs.movement.go-to.tuning :as tuning]))
+            [jobs.movement.go-to.result :as end]))
 
 (defn spare-own?
-  "Whether go-to keeps off the plans this body made (the setting jobs.movement.go-to.tuning/spare-own-builds, default true)."
-  [_c]
-  (tuning/spare-own-builds))
+  "Whether go-to keeps off the plans this body made (the :spare-own-builds arg, default true)."
+  [c]
+  (not (false? (:spare-own-builds (:args c)))))
 
 (defn own-plan-fn
   "(own-plan cell): the id of the plan this body made that covers cell, else nil."

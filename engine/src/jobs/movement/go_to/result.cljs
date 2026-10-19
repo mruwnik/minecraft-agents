@@ -95,8 +95,8 @@
 
 (def escalation-reason-words
   {:no-tool "no pickaxe" :no-dig "nothing it may dig" :no-headroom "no room above the head"
-   :own-build "the only way out cuts a plan this body made (set the go-to.tuning/spare-own-builds setting false or ask)"
-   :own-pen "the only way out cuts the wall of a pen of its own with animals in it (set the go-to.tuning/spare-own-builds setting false or ask)"
+   :own-build "the only way out cuts a plan this body made (pass :spare-own-builds false or ask)"
+   :own-pen "the only way out cuts the wall of a pen of its own with animals in it (pass :spare-own-builds false or ask)"
    :zone "a stair or dig is refused by another's zone, claim or plan (pass :ignore-zones? or ask)"})
 
 (defn escalation-words
