@@ -79,6 +79,14 @@
     (is (every? #(<= % 32768) (fill-sizes (concat lit dark))))
     (is (not-any? #(re-find #"dx=1[0-9][0-9]" %) lit))))
 
+(deftest a-fill-over-the-light-layer-is-lit-again-after-the-blocks
+  (let [g (f/case-grid lit-case)
+        origin (f/plot-origin g 465)
+        cmds (f/relight-commands g origin lit-case)]
+    (is (= ["-38" "-24"] (distinct (map #(second (re-find #"fill \d+ (-?\d+) " %)) cmds))) "the standing layer and the top layer")
+    (is (every? #(re-find #"light replace air$" %) cmds))
+    (is (empty? (f/relight-commands (f/case-grid dark-case) origin dark-case)))))
+
 (deftest an-underground-cell-is-refilled-solid-after-the-case
   (let [g (f/case-grid dark-case)
         origin (f/plot-origin g 465)

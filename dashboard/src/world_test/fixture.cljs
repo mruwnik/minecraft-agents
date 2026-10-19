@@ -722,19 +722,31 @@
   (let [[sx sz] (dims grid)]
     (fill-commands [ox (dec oy) oz (+ ox (dec sx)) (+ oy height) (+ oz (dec sz))] "stone" "")))
 
+(defn light-commands
+  "A lit cell's invisible light blocks (level 15) in the air of two layers: the standing space (light-y) and the top of the
+  carved height, so a fill that covers one layer still leaves the other."
+  [grid [ox oy oz] height]
+  (let [[sx sz] (dims grid)]
+    (vec (mapcat (fn [y] (fill-commands [ox y oz (+ ox (dec sx)) y (+ oz (dec sz))] "light" " replace air"))
+                 (distinct [(+ oy (min height (:light-y underground))) (+ oy height)])))))
+
+(defn relight-commands
+  "The light layers laid again once the case's :blocks are placed (they may have filled or cleared them); none unless a lit cell."
+  [grid origin c]
+  (if (and (:underground? grid) (= :lit (:light grid)))
+    (light-commands grid origin (get-in c [:plot :height]))
+    []))
+
 (defn underground-setup-commands
   "Forceload the cell, kill every non-player entity in it, wall it in bedrock (1 block all round), carve it to air up to
-  :height, lay the floor and, for :lit, a layer of invisible light blocks (level 15) over the standing space."
-  [grid [ox oy oz :as origin] c]
-  (let [{:keys [height floor]} (:plot c)
-        [sx sz] (dims grid)]
+  :height, lay the floor and, for :lit, the light layers."
+  [grid origin c]
+  (let [{:keys [height floor]} (:plot c)]
     (-> (vec (forceload-commands "add" grid origin))
         (conj (kill-command grid origin height))
         (into (fill-commands (shell-box grid origin height) "bedrock" ""))
         (into (clear-commands grid origin height floor))
-        (cond-> (= :lit (:light grid))
-          (into (let [y (+ oy (min height (:light-y underground)))]
-                  (fill-commands [ox y oz (+ ox (dec sx)) y (+ oz (dec sz))] "light" " replace air")))))))
+        (cond-> (= :lit (:light grid)) (into (light-commands grid origin height))))))
 
 (defn setup-commands
   "Forceload the plot, kill every non-player entity in it, clear it to air and lay the floor (a large plot first drops

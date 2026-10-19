@@ -1634,7 +1634,7 @@
   [{:keys [send sleep]} grid origin c]
   (letfn [(attempt [retries]
             (-> (send (f/setup-commands grid origin c))
-                (.then (fn [setup] (.then (send (f/block-commands origin c)) #(into setup %))))
+                (.then (fn [setup] (.then (send (into (f/block-commands origin c) (f/relight-commands grid origin c))) #(into setup %))))
                 (.then (fn [replies]
                          (let [bad (f/build-failure replies)]
                            (cond

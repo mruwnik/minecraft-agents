@@ -8,8 +8,7 @@
   :time :any
   :plot {:height 16 :length 52}
   :blocks [[:fill [0 0 0] [51 12 0] "stone"] [:fill [0 0 31] [51 12 31] "stone"] [:fill [0 0 0] [0 12 31] "stone"] [:fill [51 0 0] [51 12 31] "stone"]
-           [:fill [1 0 1] [40 9 30] "stone"]
-           [:fill [0 15 0] [51 15 31] "light"]]
+           [:fill [1 0 1] [40 9 30] "stone"]]
   :body {:at [3.5 10 16.5]}
   :limit-s 200}
  :cases
