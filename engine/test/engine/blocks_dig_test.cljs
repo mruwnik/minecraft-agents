@@ -55,7 +55,7 @@
   (empty? (:list (core/state eng))))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
-(defn block-at [p pos] (.-name (.blockAt p (clj->js pos))))
+(defn block-at [p pos] (some-> (.blockAt (tu/oracle p) (clj->js pos)) .-name))
 (defn carried [p item] (reduce + 0 (keep #(when (= item (.-name %)) (.-count %)) (array-seq (.-inventory (.self p))))))
 
 (def job 'jobs.blocks.dig)
