@@ -129,12 +129,16 @@
   "The #xyz tag: a plot-relative position written [x y z] (or a column [x z]), resolved to an absolute {:x :y :z} map."
   [v] {::rel (vec v) ::as :map})
 
+(defn rel-y
+  "The #y tag: a plot-relative height, resolved to an absolute y number."
+  [v] {::rel [0 v 0] ::as :y})
+
 (defn seg
   "The #seg tag: a strip segment {:axis :y :line :from :to [:open-ends]} with plot-relative y, line and from/to (x or z along
   the axis), resolved to the absolute segment map jobs.lib.strip reads, with its :id."
   [m] {::seg m})
 
-(def readers {'at rel 'xyz rel-map 'seg seg})
+(def readers {'at rel 'xyz rel-map 'y rel-y 'seg seg})
 
 (defn read-edn [text]
   (reader/read-string {:readers readers} text))
@@ -566,7 +570,7 @@
                              [ox _ oz] origin]
                          (if (= :map (::as v)) {:x (+ ox x) :z (+ oz z)} [(+ ox x) (+ oz z)]))
                        (let [[x y z] (abs-pos origin (::rel v))]
-                         (if (= :map (::as v)) {:x x :y y :z z} [x y z])))
+                         (case (::as v) :map {:x x :y y :z z} :y y [x y z])))
                      :else v))
                  form))
 

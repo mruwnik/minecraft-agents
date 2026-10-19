@@ -34,7 +34,7 @@ key by key; `:blocks :act :expect :after :plans` append; the rest replace. The c
 
 Positions in `:blocks`, `:body`, `:act` summons and `:after` are plot-relative `[x y z]` (origin = the plot's
 north-west corner at body level; the floor is y -1; the middle is `[16.5 0 16.5]`). Inside job specs, plans and event
-patterns write `#at [x y z]` (absolute `[x y z]`) or `#xyz [x y z]` (absolute `{:x :y :z}`). A two-element `#at [x z]` / `#xyz [x z]` is a column (`[X Z]` / `{:x :z}`) for go-to's column goals. `#seg {:axis :x :y 0 :line 16 :from 6 :to 26}` is a strip segment with plot-relative y, line and from/to (x or z along the axis), made absolute with its `:id`.
+patterns write `#at [x y z]` (absolute `[x y z]`) or `#xyz [x y z]` (absolute `{:x :y :z}`). A two-element `#at [x z]` / `#xyz [x z]` is a column (`[X Z]` / `{:x :z}`) for go-to's column goals. `#y -4` is a plot-relative height as an absolute y number (a plan stair's `:to-y`). `#seg {:axis :x :y 0 :line 16 :from 6 :to 26}` is a strip segment with plot-relative y, line and from/to (x or z along the axis), made absolute with its `:id`.
 
 | key | meaning | default |
 |---|---|---|

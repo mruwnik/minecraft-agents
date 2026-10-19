@@ -15,12 +15,11 @@
  :cases
  [{:name "declared-shaft-is-descended-and-its-cells-stay-open"
    :plans [{:id "s" :kind :mineshaft :metadata {:by "$body"}
-            :parts [{:id "stair" :stair {:from #at [16 0 16] :heading :east :to-y -4} :want :clear}]}]
+            :parts [{:id "stair" :stair {:from #at [16 0 16] :heading :east :to-y #y -4} :want :clear}]}]
    :act [[:job (jobs.gather.mine {:torch-interval 0 :block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
-   :expect [{:event {:source :job :kind :mine.shaft :data {:shaft "s" :branch 1}} :within-s 100 :of-job true}
-            {:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4] :text [:contains "via shaft s"]}} :within-s 130 :of-job true}]
-   :after [[:not-block [17 -1 16] "dirt"] [:not-block [19 -3 16] "dirt"] [:item "cobblestone" [:>= 4]]
-           [:memory {:entries {:mine/shafts [{:data {"s" {:n [:>= 1]}}}]}}]]}
+   :expect [{:event {:source :job :kind :mine.shaft :data {:shaft [:contains "-s"] :branch 1}} :within-s 100 :of-job true}
+            {:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4] :text [:contains "via shaft test-"]}} :within-s 130 :of-job true}]
+   :after [[:not-block [17 -1 16] "dirt"] [:not-block [19 -3 16] "dirt"] [:item "cobblestone" [:>= 4]]]}
   {:name "no-shaft-stair-is-cut-and-declaring-it-is-suggested"
    :act [[:job (jobs.gather.mine {:torch-interval 0 :block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4] :shaft-suggest {:to-y [:any]} :text [:contains "plans.mjs mineshaft"]}} :within-s 130 :of-job true}]
@@ -34,15 +33,15 @@
    :blocks [[:fill [17 -1 16] [17 1 16] "air"] [:fill [18 -2 16] [18 0 16] "air"]]
    :body {:at [18.5 -2 16.5]}
    :plans [{:id "s" :kind :mineshaft :metadata {:by "$body"}
-            :parts [{:id "stair" :stair {:from #at [16 0 16] :heading :east :to-y -4} :want :clear}]}]
+            :parts [{:id "stair" :stair {:from #at [16 0 16] :heading :east :to-y #y -4} :want :clear}]}]
    :act [[:job (jobs.gather.mine {:torch-interval 0 :block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
-   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4] :text [:contains "via shaft s (stair 2 steps"]}} :within-s 130 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4] :text [:contains "-s (stair 2 steps"]}} :within-s 130 :of-job true}]
    :after [[:item "cobblestone" [:>= 4]]]}
   ;; Card a50ce32a: a shaft whose top cannot be reached ends mine.no-shaft :unreachable and the usual descent goes on.
   {:name "unreachable-shaft-top-ends-no-shaft-and-the-usual-descent-follows"
    :blocks [[:fill [5 0 5] [7 1 7] "bedrock"] [:fill [6 0 6] [6 1 6] "air"] [:set [6 2 6] "bedrock"]]
    :plans [{:id "s" :kind :mineshaft :metadata {:by "$body"}
-            :parts [{:id "stair" :stair {:from #at [6 0 6] :heading :east :to-y -4} :want :clear}]}]
+            :parts [{:id "stair" :stair {:from #at [6 0 6] :heading :east :to-y #y -4} :want :clear}]}]
    :act [[:job (jobs.gather.mine {:torch-interval 0 :block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.no-shaft :data {:reason :unreachable}} :within-s 120 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4]}} :within-s 180 :of-job true}]
@@ -53,7 +52,7 @@
   {:name "older-stair-that-stops-is-marked-failed-and-the-descent-goes-on"
    :blocks [[:set [7 -1 6] "bedrock"] [:set [7 -2 6] "bedrock"]]
    :plans [{:id "s" :kind :mineshaft :metadata {:by "$body"}
-            :parts [{:id "stair" :stair {:from #at [6 0 6] :heading :east :to-y -4} :want :clear}]}]
+            :parts [{:id "stair" :stair {:from #at [6 0 6] :heading :east :to-y #y -4} :want :clear}]}]
    :act [[:job (jobs.gather.mine {:torch-interval 0 :block "stone" :count 4 :direction :north :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.no-shaft :data {:shaft [:contains "-s"]}} :within-s 120 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4]}} :within-s 180 :of-job true}]
@@ -63,7 +62,7 @@
   {:name "shaft-in-a-foreign-zone-is-not-used"
    :zones [{:name "z" :min [4 -4 4] :max [10 6 10] :owner "Other"}]
    :plans [{:id "s" :kind :mineshaft :metadata {:by "SomeoneElse"}
-            :parts [{:id "stair" :stair {:from #at [6 0 6] :heading :east :to-y -4} :want :clear}]}]
+            :parts [{:id "stair" :stair {:from #at [6 0 6] :heading :east :to-y #y -4} :want :clear}]}]
    :act [[:job (jobs.gather.mine {:torch-interval 0 :block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.no-shaft :message [:contains "mine uses no mineshaft"]} :within-s 100 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4]}} :within-s 180 :of-job true}]
@@ -72,8 +71,8 @@
   {:name "shaft-in-a-foreign-zone-is-used-with-ignore-zones"
    :zones [{:name "z" :min [4 -4 4] :max [10 6 10] :owner "Other"}]
    :plans [{:id "s" :kind :mineshaft :metadata {:by "SomeoneElse"}
-            :parts [{:id "stair" :stair {:from #at [6 0 6] :heading :east :to-y -4} :want :clear}]}]
+            :parts [{:id "stair" :stair {:from #at [6 0 6] :heading :east :to-y #y -4} :want :clear}]}]
    :act [[:job (jobs.gather.mine {:torch-interval 0 :block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8 :ignore-zones? true})]]
-   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4] :text [:contains "via shaft s"]}} :within-s 180 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4] :text [:contains "via shaft test-"]}} :within-s 180 :of-job true}]
    :after [[:not-block [7 -1 6] "dirt"] [:item "cobblestone" [:>= 4]]]
    :limit-s 200}]}

@@ -311,6 +311,9 @@
   (let [r (f/resolve-tags (f/read-edn "[#at [3 7] #xyz [3 7] #at [1 2 3]]") [100 150 200])]
     (is (= [[103 207] {:x 103 :z 207} [101 152 203]] r))))
 
+(deftest a-y-tag-is-a-plot-relative-height
+  (is (= [146 {:to-y 150}] (f/resolve-tags (f/read-edn "[#y -4 {:to-y #y 0}]") [100 150 200]))))
+
 (deftest a-seg-tag-is-a-plot-relative-strip-segment
   (let [r (f/resolve-tags (f/read-edn "[#seg {:axis :x :y 0 :line 16 :from 6 :to 26} #seg {:axis :z :y -2 :line 5 :from 1 :to 9 :open-ends #{:to}}]")
                           [100 150 200])]
