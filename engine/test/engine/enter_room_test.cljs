@@ -59,6 +59,18 @@
           (is (< (:z (st/pos-of p)) 2) "inside the hut")
           (is (false? (door-open? p)) "the door is shut"))))))
 
+(deftest a-listed-enter-room-waits-while-go-to-says-later
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (st/setup (assoc (hut-world {:x 5 :y 64 :z 6} {}) :time st/night
+                                                  :entities [{:id 8 :name "zombie" :kind "hostile" :pos {:x 5 :y 64 :z 8} :health 20}]))]
+          (mem/write! (:store eng) :home {:pos {:x 5 :y 64 :z 0}} mem/place-policy)
+          (core/submit! eng '(jobs.survival.enter-room {}) {})
+          (await (tu/run-until-empty eng 5))
+          (is (= [:hostile-near] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
+          (is (empty? (filter #(= :stopped (:kind %)) @seen)) "it waits, it does not end no-walk"))))))
+
 (def stones st/dirt-stack)
 
 (def day {:time st/noon})

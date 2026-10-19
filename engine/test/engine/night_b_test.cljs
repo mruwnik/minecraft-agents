@@ -148,6 +148,18 @@
             (is (> (count roofs) 1) "a second pit was roofed")
             (is (pos? (:x (last roofs))) "on the side away from the zombie, though the near side is as close")))))))
 
+(deftest a-listed-dig-pit-waits-while-go-to-says-later-on-its-walk-to-a-site
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (st/setup {:time night :blocks wide-ground :inventory st/dirt-stack
+                                            :entities [(assoc zombie :pos {:x 3.5 :y 64 :z 0.5})]})]
+          (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
+          (core/submit! eng '(jobs.survival.dig-pit {:for :night}) {})
+          (await (tu/run-until-empty eng 5))
+          (is (= [:hostile-near] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
+          (is (empty? (filter #(= :stopped (:kind %)) @seen)) "it waits, it does not end walk-failed"))))))
+
 (deftest a-failed-site-is-not-dug-again-after-a-cut-however-long-the-night
   (async done
     (tu/run-async done
@@ -186,7 +198,7 @@
             (is (empty? more))
             (is (= :exposed (:reason s)) "a night with no shelter is no success")
             (is (= [:roof-failed] (take 1 (mapv :reason (:sites s)))) "the first site's reason is dig-in's")
-          (is (< 1 (count (distinct (map :pos (:sites s))))) "more than one site tried, then exposed"))
+          (is (= (inc (sites/max-sites)) (count (:sites s))) "max-sites sites tried, then exposed"))
           (is (= [] (:list (core/state eng)))))))))
 
 (deftest exposed-why-names-the-site-reasons

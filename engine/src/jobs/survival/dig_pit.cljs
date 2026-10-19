@@ -11,6 +11,7 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
+            [jobs.lib.waits :as waits]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.dig-pit-site :as site]
             [jobs.survival.plug-way :as way]
@@ -157,7 +158,7 @@
   (if-let [start (site/pit-start c)]
     (let [r (await (dig-leave/climb! c {:start start} cell))]
       (if (map? r) (fail! c :trapped "could not climb out of the failed pit") :continue))
-    (let [e (await (ctx/call c :walk 'jobs.movement.go-to {:pos cell :range 0}))]
+    (let [e (waits/waiting-out c (await (ctx/call c :walk 'jobs.movement.go-to {:pos cell :range 0})))]
       (cond (= :continue e) :continue
             (not (:arrived (:data e))) (fail! c :walk-failed "could not walk to ground for a pit")
             :else (do (ctx/update-mem! c dissoc :walk-to)

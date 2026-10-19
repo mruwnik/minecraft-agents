@@ -17,6 +17,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spent :as spent]
             [jobs.lib.util :as u]
+            [jobs.lib.waits :as waits]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.retreat-doors :as retreat-doors]))
 
@@ -155,7 +156,7 @@
 (defn ^:async walk!
   "A go-to child to the target (key :roof-walk); :again once it arrived, :continue while it goes on, else the call ends :no-walk."
   [c t]
-  (let [w (await (ctx/call c :roof-walk 'jobs.movement.go-to (walk-args t)))]
+  (let [w (waits/waiting-out c (await (ctx/call c :roof-walk 'jobs.movement.go-to (walk-args t))))]
     (cond
       (= :continue w) :continue
       (:arrived (:data w)) :again

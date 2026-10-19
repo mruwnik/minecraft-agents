@@ -1,0 +1,25 @@
+;; Card 815bc47b: a listed enter-room or dig-pit at night waits when its go-to says :later (a hostile near), it does not end no-walk /
+;; walk-failed (owner Q330: a root job waits, a called child reports). Under night/shut-in the calls pass :checks (always) and never wait.
+;; Case 1: home = a stone slab over 3x3 cells 15 east of the body, a NoAI zombie 3 behind it: waiting :hostile-near, no ending.
+;; Case 2: dig-pit :for :night standing on thick open stone completes its pit (the standalone night path).
+;; Needs night: run with --allow-time --time-log <the shared time log>.
+{:defaults
+ {:tags [:night :survival]
+  :time :night
+  :mobs :keep
+  :plot {:height 10 :length 64 :width 32}
+  :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["cobblestone" 16] ["stone_pickaxe" 1]] :settle-s 4}}
+ :cases
+ [{:name "enter-room-waits-while-a-hostile-is-near"
+   :blocks [[:fill [18 2 15] [20 2 17] "stone"]]
+   :act [[:summon "zombie" [1.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.memory.set-place {:name :home :pos #at [19 0 16]}) [:now]]
+         [:job (jobs.survival.enter-room {})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :hostile-near}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:kind :nothing-possible}} :for-s 15 :until {:source :job :kind :waiting :data {:reason :hostile-near}} :of-job true}]
+   :limit-s 50}
+  {:name "dig-pit-for-night-completes-on-open-stone"
+   :blocks [[:fill [0 -6 0] [63 -1 31] "stone"]]
+   :act [[:job (jobs.survival.dig-pit {:for :night})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :limit-s 80}]}

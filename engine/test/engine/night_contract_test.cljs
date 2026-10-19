@@ -12,7 +12,8 @@
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [jobs.lib.shelter :as sh]
-            [jobs.lib.shelter.clock :as sh-clock]))
+            [jobs.lib.shelter.clock :as sh-clock]
+            [jobs.survival.night.sites :as sites]))
 
 (def night-job 'jobs.survival.night)
 
@@ -55,7 +56,7 @@
           (st/dawn-after! p 4)
           (let [e (await (ending-of eng {:ways #{:bed :shelter}}))]
             (is (= {:kind :nothing-possible :cause :exposed} (select-keys e [:kind :cause])) (pr-str e))
-            (is (< 1 (count (distinct (map :pos (get-in e [:data :sites]))))) "more than one site tried, then exposed")
+            (is (= (inc (sites/max-sites)) (count (get-in e [:data :sites]))) "max-sites sites tried, then exposed")
             (is (empty? (st/emitted seen :shelter.fled)))
             (is (= 1 (count (st/emitted seen :shelter.exposed))))))))))
 
