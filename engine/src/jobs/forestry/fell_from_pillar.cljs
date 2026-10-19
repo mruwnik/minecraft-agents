@@ -30,8 +30,7 @@
   The pillar is built of dirt, cobblestone and the logs cut so far; with too few of those carried it gets the height in
   blocks with jobs.lib.need unless :fetch is false.
   The build and dig, and the cleanup's take-back, are urgent sections (ctx/atomic): reflexes at or below that level wait for them, up to their caps.
-  Zones: a pillar a zone, claim or footprint refuses warns fell-tree.declined (:reason :refused, :why :pillar), as does
-  one the planner finds no way for (its :reason).
+  Zones: a pillar a zone, claim or footprint refuses ends :condition-failed :refused.
   Done? is ok once a log was dug from a pillar, the ledger is closed and no log is left in dig reach of its stand.
   Ends :done with {:logs n} when a log was dug (a pillar the cleanup could not take back is its :cleanup-open).
   A scaffold of an earlier call still open when the call starts is taken back first.
@@ -43,12 +42,9 @@
 (a/defargs args
   {:base {:doc "{:x :y :z} of the tree's lowest log" :spec ::a/pos :default nil}
    :species {:doc "log species of the tree" :spec a/name? :default nil}
-   :at {:doc "{:x :y :z} of a base log when the caller was given one: the logs are read up from it" :spec ::a/pos :default nil}
-   :radius {:doc "search radius in blocks for the tree's logs" :spec (a/num-in 0 nil) :default default-radius}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :lava-adjacent :falling-block" :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
    :fetch {:doc "get the pillar's blocks with jobs.lib.need: true, a set of kinds or a map of limits; false ends :need" :spec need/option? :default true}
-   :pillar? {:doc "dig a log out of reach of the ground from the pillar; false: the pillar is not built" :spec boolean? :default true}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -57,6 +53,7 @@
    ::settle-ms {:default 400 :doc "Milliseconds between two looks at the cut logs still falling when the top collect starts." :spec (a/int-in 1 nil)}
    ::settle-min {:default 5 :doc "Fewest looks at the cut logs before the top collect goes on: a drop may be seen a moment after it lands." :spec (a/int-in 0 nil)}
    ::settle-looks {:default 8 :doc "Most looks at the falling logs before the top collect goes on." :spec (a/int-in 0 nil)}
+   ::max-walk-fails {:default 3 :doc "Stands or bases the walk may fail to reach before the call ends :walk." :spec (a/int-in 1 nil)}
    ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 (defn max-steps [] (settings/get settings ::max-steps))
@@ -65,7 +62,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def safe? (ready/safe-at-by-night (fn [c] (a/cell (or (:at (:args c)) (:base (:args c)))))))
+(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:base (:args c))))))
 
 (def fit? ready/fit?)
 
@@ -78,9 +75,9 @@
 
 (defn tree [c]
   (let [{:keys [x z]} (base c)]
-    {:column {:x x :z z} :species (:species (:args c))}))
+    {:column {:x x :z z} :species (:species (:args c)) :at (base c)}))
 
-(defn tree-logs [c] (log/tree-logs c (:radius (:args c)) (tree c)))
+(defn tree-logs [c] (log/tree-logs c default-radius (tree c)))
 
 (defn bad-args [c]
   (if (base c)
@@ -113,8 +110,6 @@
 
 (defn result [c] {:logs (:dug (ctx/mem c) 0)})
 
-(def max-walk-fails 3)
-
 (defn set-pillar! [c m] (ctx/update-mem! c assoc :pillar m))
 
 (defn pillar-failed!
@@ -125,10 +120,10 @@
 
 (defn walk-failed!
   "The walk to the planned stand or base failed: avoid that cell and plan again; the call ends :walk after
-  max-walk-fails."
+  ::max-walk-fails."
   [c plan]
   (ctx/update-mem! c update :avoid (fnil conj #{}) (or (:base plan) (:stand plan)))
-  (if (< (count (:avoid (ctx/mem c))) max-walk-fails)
+  (if (< (count (:avoid (ctx/mem c))) (settings/get settings ::max-walk-fails))
     (do (ctx/update-mem! c dissoc :pillar) :again)
     (pillar-failed! c :walk)))
 
@@ -199,13 +194,9 @@
       (:stand r) (do (set-pillar! c {:phase :collect :plan {:stand (first (:stand r))}}) :again)
       (:pillar r) (do (set-pillar! c {:phase :collect :plan (:pillar r)}) :again)
       (= :zone (:reason r))
-      (do (ctx/warn-once! c [:pillar-refused] :fell-tree.declined
-                          {:reason :refused :why :pillar :text "a zone or plan refuses a pillar by the tree"})
-          (ctx/end c :condition-failed :refused (result c)))
+      (ctx/end c :condition-failed :refused (result c))
       :else
-      (do (ctx/warn-once! c [:pillar-refused] :fell-tree.declined
-                          {:reason (:reason r) :why :pillar :text (str "no way to reach the high logs: " (name (:reason r)))})
-          (ctx/end c :nothing-possible (:reason r) (result c))))))
+      (ctx/end c :nothing-possible (:reason r) (result c)))))
 
 (defn own-log-drop-entities
   "The logs lying within r of the centre that jobs.lib.loose lets the body take (not another player's throw, not in a
@@ -414,3 +405,5 @@
   [c]
   (let [n (atom 0)]
     (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue)))))
+
+(def meta {:category :phase :part-of '[jobs.forestry.fell-tree]})

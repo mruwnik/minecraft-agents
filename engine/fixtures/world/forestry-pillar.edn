@@ -1,6 +1,6 @@
 ;; Cards b72b070d, e87d918f: jobs.forestry.fell-tree felling a 10-log trunk (x 16, z 16, the top logs out of reach from the ground)
 ;; from a pillar. b72b070d: the pillar is taken back (the ledger ends empty) and the job completes, with no round repeating;
-;; a pillar refused by a plan's footprint warns fell-tree.declined and the top log stays. e87d918f: too few blocks carried
+;; a pillar refused by a plan's footprint ends :tree-unreachable and the top log stays. e87d918f: too few blocks carried
 ;; fetches the height in dirt or cobblestone from a seen chest (fetch.started, fetch.done) and felling goes on; :fetch false, or
 ;; no chest, stops :need.
 ;; The need cases use a 20-log trunk: the pillar is built of dirt, cobblestone and the logs cut from the ground (2b670ae6), so a 10-log
@@ -59,7 +59,7 @@
                     {:id "w" :box [#at [11 -1 16] #at [15 1 16]] :want "dirt"}
                     {:id "e" :box [#at [17 -1 16] #at [21 1 16]] :want "dirt"}]}]
    :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
-   :expect [{:event {:source :job :kind :fell-tree.declined :data {:reason :refused :why :pillar}} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :fell-tree.declined}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :tree-unreachable}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :stopped}}]
    :after [[:block [16 9 16] "oak_log"] [:item "dirt" 16]]
    :limit-s 120}]}

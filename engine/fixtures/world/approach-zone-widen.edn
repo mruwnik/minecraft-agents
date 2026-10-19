@@ -2,7 +2,7 @@
 ;; stopped at 3 on :zone). Seen through jobs.forestry.fell-tree on a 10-log trunk at x 16, z 16 (the top logs are out of
 ;; reach from the ground, so the body pillars from a ground base). Another body's plan footprint rings the trunk, leaving
 ;; the trunk column itself free (a tree whose base log is refused is no candidate): ring out to radius 3 leaves bases at
-;; radius 4-5, ring out to radius 5 leaves none (fell-tree.declined :refused :why :pillar, the top log stays).
+;; radius 4-5, ring out to radius 5 leaves none (fell-tree ends :tree-unreachable, the top log stays).
 {:defaults
  {:tags [:forestry :access :zones]
   :time :any
@@ -31,6 +31,6 @@
                     {:id "w" :box [#at [11 -1 16] #at [15 1 16]] :want "dirt"}
                     {:id "e" :box [#at [17 -1 16] #at [21 1 16]] :want "dirt"}]}]
    :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
-   :expect [{:event {:source :job :kind :fell-tree.declined :data {:reason :refused :why :pillar}} :within-s 90 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :tree-unreachable}} :within-s 90 :of-job true}]
    :after [[:block [16 9 16] "oak_log"]]
    :limit-s 120}]}

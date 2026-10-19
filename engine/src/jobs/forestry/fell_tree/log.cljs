@@ -71,13 +71,13 @@
                  (into (pop queue) next)))))))
 
 (defn tree-logs
-  "The logs of the tree {:column :species}: the logs of its column, read from :at up when the call has one, else those in
+  "The logs of the tree {:column :species}: the logs of its column, read from :at (the tree's, else the call's) up when there is one, else those in
   radius, and the ones still standing of those it had (:logs-seen), and every log joined to them (connected-logs). Lowest
   first. The column alone would lose the branches once its own logs are dug."
   [c radius {:keys [species logs-seen] :as tree}]
   (let [p (:primitives c)
         item (str species "_log")
-        column (if-let [at (:at (:args c))]
+        column (if-let [at (or (:at tree) (:at (:args c)))]
                  (logs-at p at species)
                  (column-logs p radius tree))
         skip (set (map vec (ledger/cells (ledger/open-entries (ctx/view c)))))

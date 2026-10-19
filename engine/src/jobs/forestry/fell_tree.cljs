@@ -181,7 +181,7 @@
 (defn pillar-args
   "The args of the fell-from-pillar child for the chosen tree."
   [c]
-  (merge (select-keys (:args c) [:at :radius :for-plan :accept :fetch :ignore-zones? :pillar?])
+  (merge (select-keys (:args c) [:for-plan :accept :fetch :ignore-zones?])
          {:base (:base (ctx/mem c)) :species (:species (ctx/mem c))}))
 
 (defn blocked!

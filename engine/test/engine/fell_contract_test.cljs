@@ -35,7 +35,7 @@
       (fn ^:async t []
         (let [s (fm/start ft/tall {})
               args {'jobs.forestry.fell-tree {:radius 10}
-                    'jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak" :radius 10}}]
+                    'jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak"}}]
           (doseq [sym jobs
                   :let [job (get registry/jobs sym)]]
             (is (vector? (:target job)) (str sym " has a target"))
@@ -141,7 +141,7 @@
           (is (pos? (get-in end [:data :logs])))
           (is (= [] (ledger/open-entries (mem/view (:store eng)))) "the pillar is taken back"))
         (let [zones [{:name "grove" :min [-6 64 -9] :max [16 80 9] :allow #{:dig}}]
-              {:keys [end]} (await (fm/with-zones zones #(fell-ending ft/tall 'jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak" :radius 10} 120)))]
+              {:keys [end]} (await (fm/with-zones zones #(fell-ending ft/tall 'jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak"} 120)))]
           (is (= {:kind :condition-failed :cause :refused} (kc end))))
         (let [{:keys [end]} (await (fell-ending ft/tall 'jobs.forestry.fell-from-pillar {} 20))]
           (is (= {:kind :impossible :cause :bad-args} (kc end))))))))
@@ -170,7 +170,7 @@
                                          (reset! dug (seq (open)))
                                          (core/cancel! eng (first (:list (core/state eng)))))
                                        (await (apply dig! args)))]
-            (core/submit! eng '(jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak" :radius 10}) {})
+            (core/submit! eng '(jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak"}) {})
             (await (tu/run-until-empty eng 200)))
           (is (seq @dug) "the cut came while the pillar stood")
           (is (= [] (open)) "the cleanup took the pillar back"))))))
@@ -192,7 +192,7 @@
                                    (when (= :tcollect0 k)
                                      (swap! open-at-collect conj (boolean (seq (ledger/open-entries (mem/view (:store eng)))))))
                                    (apply call! c k job more))]
-            (core/submit! eng '(jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak" :radius 10}) {})
+            (core/submit! eng '(jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak"}) {})
             (await (tu/run-until-empty eng 200)))
           (is (= [true] @open-at-collect) "one collect, made while the pillar still stood"))))))
 
@@ -212,7 +212,7 @@
                                    (if (= :tcollect0 k)
                                      {:kind :nothing-possible :data {:left [{:pos {:x 8 :y 71 :z 2} :reason :unreachable}]}}
                                      (apply call! c k job more)))]
-            (core/submit! eng '(jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak" :radius 10}) {})
+            (core/submit! eng '(jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak"}) {})
             (await (tu/run-until-empty eng 200)))
           (is (= [{:x 8 :y 70 :z 2}] (distinct @lowered)) "the leaf under the drop was dug"))))))
 
@@ -235,7 +235,7 @@
                                    (when (= 'jobs.access.cleanup job)
                                      (swap! levels conj (activity/section-level eng (:token c))))
                                    (apply call! c k job more))]
-            (core/submit! eng '(jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak" :radius 10}) {})
+            (core/submit! eng '(jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak"}) {})
             (await (tu/run-until-empty eng 200)))
           (is (= [:cut :urgent] (take 2 @levels))))))))
 

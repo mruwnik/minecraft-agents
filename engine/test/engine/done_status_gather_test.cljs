@@ -36,7 +36,7 @@
    'jobs.farm.tend {:plan "p"}
    'jobs.items.collect-drops {}
    'jobs.forestry.fell-tree {}
-   'jobs.forestry.fell-from-pillar {:at [0 64 0]}
+   'jobs.forestry.fell-from-pillar {:base {:x 0 :y 64 :z 0}}
    'jobs.forestry.harvest-wood {}
    'jobs.forestry.maintain {:plan "p"}
    'jobs.forestry.prepare {:plan "p"}
