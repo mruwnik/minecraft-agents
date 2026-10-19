@@ -200,6 +200,12 @@
         reach-to (if (> (js/Math.abs (- far here)) hop) (+ here (* hop dir)) far)]
     (or (first (filter stand? (range reach-to here (- dir)))) reach-to)))
 
+(defn walk-range
+  "How near the walk to stop-at must get: exactly there at a hop stop, else a seen cell next to the body counts as arrived and
+  the glances there repeat for ever."
+  [stop-at far]
+  (if (= stop-at far) 1 0))
+
 (defn ^:async look-end!
   "Walk to the segment's far end from the entry, hop cells at a time (each stop is a step: it sees and lights what stands
   there), and look round there once: :again, :continue or a stop."
@@ -212,7 +218,7 @@
         here (if (= axis :x) fx fz)
         stop-at (walk-stop #(let [[x cy z] (strip/at axis y line %)] (reach/seen-standable? (:primitives c) {:x x :y cy :z z})) here far)
         cell (strip/at axis y line stop-at)
-        w (await (near/go-near! c cell 1))]
+        w (await (near/go-near! c cell (walk-range stop-at far)))]
     (case w
       :partial :continue
       :blocked (stop! c :unreachable {:cell cell})

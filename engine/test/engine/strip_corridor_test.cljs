@@ -309,3 +309,6 @@
           (corridor/walk-stop #{-1 -9} -3 -20)
           (corridor/walk-stop #{} 0 7)
           (corridor/walk-stop #{} 0 -3)])))
+
+(deftest a-hop-stop-is-walked-to-exactly-the-end-within-one
+  (is (= [0 1] [(corridor/walk-range 5 12) (corridor/walk-range 12 12)])))

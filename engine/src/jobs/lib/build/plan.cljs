@@ -89,13 +89,20 @@
   [body-y cell-y]
   (if (<= (js/Math.abs (- body-y cell-y)) (stand-level)) (distinct [cell-y body-y]) [cell-y]))
 
+(defn low-floor?
+  "Whether block b is lower than a full block to stand on: a bed or a bottom slab (top and double slabs are full-height floors)."
+  [b]
+  (let [n (some-> b .-name)]
+    (boolean (and n (or (re-find #"_bed$" n)
+                        (and (re-find #"_slab$" n) (= "bottom" (some-> b .-properties (aget "type")))))))))
+
 (defn grounded
   "The cands put on the ground (see ground-stands); empty when none can be stood on."
   [p cands]
   (let [fit (fn [[x y z]]
               ;; a low block (bed, slab) is no floor to a stand cell above it: the body stands inside its cell, under any roof there
               (some (fn [dy] (when (and (reach/standable-cell? p {:x x :y (+ y dy) :z z})
-                                        (not (some->> (u/seen-block p {:x x :y (+ y dy -1) :z z}) .-name (re-find #"_bed$|_slab$"))))
+                                        (not (low-floor? (u/seen-block p {:x x :y (+ y dy -1) :z z}))))
                                [x (+ y dy) z]))
                     [0 1 -1 -2]))]
     (keep fit cands)))
