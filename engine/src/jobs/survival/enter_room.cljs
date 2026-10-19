@@ -26,10 +26,10 @@
   open door or gate of the room is shut (retreat-doors/shut-home-door!; a door still open once clicked writes
   :night-door-failed and warns shelter.door-failed, which ends the job nothing-possible :door-open), a doorway gap in its walls is
   filled (jobs.blocks.fill-cells: a carried wooden door, else the call's :use :blocks; the filled cells are remembered as
-  :doorway-filled, which night.morning digs again by day; a doorway tried once is not tried again tonight, :doorway-tried) and a hole in
+  :doorway-filled, which night.morning digs again by day; a doorway tried once, or left open for want of blocks, is not tried again tonight, :doorway-tried) and a hole in
   the roof over the body is filled with one block (the cell is in :placed and the scaffold ledger as :shelter). Needs the
   blocks for a gap or a hole carried (none fetched), nothing for a walk or a door.
-  Done {:pos :placed :roof} when the body is in a closed room (sh-sense/shut-in-room?) with no open door, at once when it is.
+  Done {:pos :placed :roof} when the body is in a closed room (sh-sense/shut-in-room?) with no open door and no doorway gap, at once when it is.
   Nothing-possible: :no-room (no place known and the body not roofed), :no-walk (go-to did not arrive), :door-open, :no-blocks (a gap or hole
   and none carried), :failed (a fill that did not hold), :open (the room cannot be closed).
   Quote: go-to's route seconds (dark cells priced in; ##Inf with no route), or once in the room ::door-s for a door and ::fill-s for each fill; ##Inf when
@@ -91,11 +91,6 @@
                   (or (sh-sense/shut-in-room? p)
                       (and (sh-sense/roofed? p (:roof-height (:args c))) (not (sh/breached-home? p (ctx/view c)))))))))
 
-(defn fillable-gap
-  "The doorway gap cells (jobs.lib.rooms/gap) when blocks are carried to fill them, else nil."
-  [c]
-  (when (have-blocks? c) (room-lib/gap c)))
-
 (defn judge
   "What the world asks next: {:walk target} {:door d} {:gap cells} {:plug cell} {:done true} or {:stop cause :text}."
   [c]
@@ -112,14 +107,14 @@
           door {:door door}
           (and gap blocks?) {:gap gap}
           (and plug blocks?) {:plug plug}
-          (shut? c) {:done true}
           (or gap plug) {:stop :no-blocks :text "no block carried to close the room with"}
+          (shut? c) {:done true}
           (seq (sh/open-room-doors p)) {:stop :door-open :text "an open door of the room would not shut"}
           :else {:stop :open :text "the room cannot be closed here"})))))
 
 (defn done? [c]
   (let [p (:primitives c)
-        done (and (here? c (target-of c)) (shut? c) (nil? (fillable-gap c)))]
+        done (and (here? c (target-of c)) (shut? c) (nil? (room-lib/gap c)))]
     (checks/goal done [:in-room "the body is in a closed room with its doors shut"] [:open "the room is not closed"]
                  {:units :rooms :done (if done 1 0) :left (if done 0 1)
                   :result (cond-> (merge {:pos (sh-sense/feet p) :placed (:placed (ctx/mem c) [])} (spent/summary (spent/log c)))
@@ -145,7 +140,7 @@
         job-time (settings/get settings ::job-time-s)
         priced (fn [mean] {:uses {:job-time [0 mean (if (infinite? mean) mean (max (* 3 mean) job-time))]} :done [0 1 1]})]
     (cond
-      (and (shut? c) (nil? (fillable-gap c))) (priced 0)
+      (and (shut? c) (nil? (room-lib/gap c))) (priced 0)
       (not (here? c t))
       (if (or (nil? t) (race-lost? c t))
         (priced ##Inf)
@@ -247,6 +242,8 @@
       (:plug j) (await (mend! c (:plug j)))
       (:done j) (ctx/end c :done nil (cond-> (merge {:pos (sh-sense/feet (:primitives c)) :placed (:placed (ctx/mem c) [])} (spent/summary (spent/log c)))
                                          (:roof (ctx/mem c)) (assoc :roof (:roof (ctx/mem c)))))
-      :else (ctx/end c :nothing-possible (:stop j) (merge {:text (:text j) :placed (:placed (ctx/mem c) [])} (spent/summary (spent/log c)))))))
+      :else (do (when-let [g (and (= :no-blocks (:stop j)) (room-lib/gap c))]
+                  (ctx/remember! c :doorway-tried (first g) room-lib/doorway-tried-policy))
+                (ctx/end c :nothing-possible (:stop j) (merge {:text (:text j) :placed (:placed (ctx/mem c) [])} (spent/summary (spent/log c))))))))
 
 (defn ^:async round [c] (await (pace/steps! c (fn ^:async enter-step [] (await (step! c))))))
