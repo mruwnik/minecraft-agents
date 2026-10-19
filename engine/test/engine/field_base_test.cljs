@@ -63,7 +63,7 @@
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref h/clock)})
                                 :world (world/of-data {"base" plan} {"field-base" blueprint} [])})
               result (await (tu/child-outcome eng 'jobs.build.from-plan {:plan "base"} 1500))]
-          (is (every? #(<= 66 (second %)) (:missing result)) "only wall tops and roof cells the fake body cannot reach are left")
+          (is (= [] (:missing result)) "every cell, the roof too, is built")
           (is (empty? (:wrong result)) "the server joins the chests, so their type is no claim")
           (is (every? #(not (:sneak %)) (clicks p "chest")) "no sneak, so a chest joins its neighbour")
           (is (every? #(= "chest" (name-at p (spot %))) ["chest-1" "chest-2" "chest-3" "chest-4"]))

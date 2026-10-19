@@ -93,7 +93,11 @@
   "The cands put on the ground (see ground-stands); empty when none can be stood on."
   [p cands]
   (let [fit (fn [[x y z]]
-              (some (fn [dy] (when (reach/standable-cell? p {:x x :y (+ y dy) :z z}) [x (+ y dy) z])) [0 1 -1 -2]))]
+              ;; a low block (bed, slab) is no floor to a stand cell above it: the body stands inside its cell, under any roof there
+              (some (fn [dy] (when (and (reach/standable-cell? p {:x x :y (+ y dy) :z z})
+                                        (not (some->> (u/seen-block p {:x x :y (+ y dy -1) :z z}) .-name (re-find #"_bed$|_slab$"))))
+                               [x (+ y dy) z]))
+                    [0 1 -1 -2]))]
     (keep fit cands)))
 
 (defn ground-stands
