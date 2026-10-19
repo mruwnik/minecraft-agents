@@ -9,9 +9,8 @@
 (def doc
   "Drop entries from the body's reserve register, in one round: the entry named :id, or every entry of :item.
   Entries of other jobs are dropped too; they write them again if they still need them.
-  Refused (warn reserve.refused; ends :condition-failed with cause {:reason :text}): :bad-args (neither or both of
-  :id and :item).
-  Success: info reserve.cleared with :removed; ends :done with data {:removed n}. Nothing to drop is already done.")
+  Neither or both of :id and :item is refused before any round: ends :impossible {:reason :bad-args :text}.
+  Success: ends :done with data {:removed n}; the memory layer emits info reserve.cleared with :removed. Nothing to drop is already done.")
 
 (a/defargs args
   {:id {:doc "the entry's name" :spec (a/or-of keyword? string?) :default nil}
@@ -47,11 +46,7 @@
 (def fit? ready/ok)
 
 (defn round [c]
-  (if-let [cause (bad-args (:args c))]
-    (do (ctx/emit! c :reserve.refused :warn cause)
-        (ctx/end c :condition-failed cause))
-    (let [{:keys [id item]} (:args c)
-          n (count (matching c))]
-      (ctx/forget-where! c reserve/kind #(if id (= (name id) (:id %)) (= item (:item %))))
-      (ctx/emit! c :reserve.cleared :info {:id id :item item :removed n :text (str n " reserved entries dropped")})
-      (ctx/end c :done nil {:removed n}))))
+  (let [{:keys [id item]} (:args c)
+        n (count (matching c))]
+    (ctx/forget-where! c reserve/kind #(if id (= (name id) (:id %)) (= item (:item %))))
+    (ctx/end c :done nil {:removed n})))

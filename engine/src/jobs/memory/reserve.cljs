@@ -13,9 +13,8 @@
   the units reserved (default :all of what is carried). :strength 0..1 (default 1 = never used; 0.5 = used when it is
   worth twice the item; 0 = no reservation). :ttl-s ends the entry after that many seconds (default: kept until
   unreserved). :id names the entry (default \"agent-<item or tag>\"); writing an id again replaces its entry.
-  Refused (warn reserve.refused; ends :condition-failed with cause {:reason :text}): :bad-args (neither or both of
-  :item and :tag).
-  Success: info reserve.set with the entry; ends :done with data {:id}. Entries stay until unreserved or expired; see
+  Neither or both of :item and :tag is refused before any round: ends :impossible {:reason :bad-args :text}.
+  Success: ends :done with data {:id}; the memory layer emits info reserve.set with the entry. Entries stay until unreserved or expired; see
   `observe inventory` for the register.")
 
 (a/defargs args
@@ -67,11 +66,7 @@
 (def fit? ready/ok)
 
 (defn round [c]
-  (if-let [cause (bad-args (:args c))]
-    (do (ctx/emit! c :reserve.refused :warn cause)
-        (ctx/end c :condition-failed cause))
-    (let [e (entry-of (:args c) (:now (ctx/view c)))]
-      (ctx/forget-where! c reserve/kind #(= (:id e) (:id %)))
-      (ctx/remember! c reserve/kind e reserve/policy)
-      (ctx/emit! c :reserve.set :info (assoc e :text (str (:id e) " reserved")))
-      (ctx/end c :done nil {:id (:id e)}))))
+  (let [e (entry-of (:args c) (:now (ctx/view c)))]
+    (ctx/forget-where! c reserve/kind #(= (:id e) (:id %)))
+    (ctx/remember! c reserve/kind e reserve/policy)
+    (ctx/end c :done nil {:id (:id e)})))

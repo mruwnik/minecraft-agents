@@ -163,7 +163,7 @@
 
 (defn offer!
   "A job found a place of kind at pos (anything parse-pos reads) by itself. Record it when none is recorded or the
-  recorded one is gone (its block is loaded and not of that kind); one place.set event. A different live recorded
+  recorded one is gone (its block is loaded and not of that kind); the memory layer emits one place.set (:auto true). A different live recorded
   place is kept, and one place.kept event says which and why. The same place changes nothing."
   [c kind pos]
   (let [offered (:pos (parse-pos pos))
@@ -172,9 +172,7 @@
       (nil? offered) nil
       (= offered recorded) nil
       (or (nil? recorded) (gone? kind (u/block-name (:primitives c) recorded)))
-      (do (ctx/remember! c kind {:pos offered} mem/place-policy)
-          (ctx/emit! c :place.set :info {:name kind :pos offered :was recorded :auto true
-                                         :text (str (name kind) " recorded at " (pr-str offered))}))
+      (ctx/remember! c kind {:pos offered} mem/place-policy)
       :else
       (ctx/emit! c :place.kept :info {:name kind :kept recorded :offered offered
                                       :text (str "the recorded " (name kind) " stays at " (pr-str recorded) "; " (pr-str offered)

@@ -9,6 +9,7 @@
             [engine.core.cleanup :as cleanup]
             [engine.core.ending :as ending]
             [engine.core.limits :as limits]
+            [engine.core.notices :as notices]
             [engine.core.quote :as quote]
             [engine.core.tally :as tally]
             [engine.contract :as contract]
@@ -93,7 +94,17 @@
         id (mem/path->id root slots)
         check! #(own! eng base)
         wrote! (fn [kind] (emit! eng {:source :job :kind :memory_written :level :debug :job id
-                                      :chain chain :round round :reflex reflex :memory kind}))]
+                                      :chain chain :round round :reflex reflex :memory kind}))
+        notice! (fn [[kind fields]]
+                  (when kind
+                    (emit! eng (merge fields {:source :job :kind kind :level :info :job id
+                                              :chain chain :round round :reflex reflex}))))
+        remember! (fn [kind data policy asked?]
+                    (check!)
+                    (let [was (:data (mem/latest (mem/view store) kind))]
+                      (mem/write! store kind data policy)
+                      (wrote! kind)
+                      (notice! (notices/written (mem/view store) kind data policy was asked?))))]
     {:engine eng :primitives (:primitives eng) :token token :args args :id id
      :root root :slots slots :chain chain :round round :reflex reflex :wait (:wait base) :t0s (:t0s base) :child-wait child-wait
      :quote-deadline (:quote-deadline base)
@@ -112,14 +123,15 @@
                             more)
                      (cut-off-dropped! eng root slots before (mem/job-mem (mem/view store) root slots) :abandoned))
                    (wrote! (mem/job-kind root)))
-     :remember (fn [kind data policy]
-                 (check!)
-                 (mem/write! store kind data policy)
-                 (wrote! kind))
+     :remember #(remember! %1 %2 %3 false)
+     :remember-asked #(remember! %1 %2 %3 true)
      :forget (fn [kind pred]
                (check!)
-               (mem/forget-where! store kind pred)
-               (wrote! kind))
+               (let [dropped (filterv #(pred (:data %)) (mem/entries (mem/view store) kind))
+                     view (mem/view store)]
+                 (mem/forget-where! store kind pred)
+                 (wrote! kind)
+                 (notice! (notices/forgotten view kind (mapv :data dropped)))))
      :forget-until (fn [kind t]
                      (check!)
                      (mem/forget-until! store kind t)

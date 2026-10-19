@@ -8,8 +8,8 @@
 
 (def doc
   "Forget a named place in body memory, in one round. The place (or the retraction of a gone one) is removed.
-  Emits info place.forgotten with :was; ends :done with data {:name :was}.
-  A refusal gives warn place.refused and ends :condition-failed with cause {:reason :text}. :reason is
+  Ends :done with data {:name :was}; the memory layer emits info place.forgotten with :was.
+  A refusal ends :condition-failed with cause {:reason :text}. :reason is
   :bad-name, :reserved-name or :not-a-place (the name holds other memory, which is left alone).
   A name no place can have is refused before any round: ends :impossible {:reason :bad-args :why :bad-name|:reserved-name :text}.
   Needs nothing; uses no time to speak of. A name with no place recorded is already done.")
@@ -57,10 +57,6 @@
 (defn round [c]
   (let [r (places/resolve-forget (ctx/view c) (:name (:args c)))]
     (if (:reason r)
-      (let [text (:message r)]
-        (ctx/emit! c :place.refused :warn (-> r (dissoc :message) (assoc :text text)))
-        (ctx/end c :condition-failed {:reason (:reason r) :text text}))
+      (ctx/end c :condition-failed {:reason (:reason r) :text (:message r)})
       (do (ctx/forget-where! c (:name r) (constantly true))
-          (ctx/emit! c :place.forgotten :info {:name (:name r) :was (:was r)
-                                               :text (str (name (:name r)) " forgotten")})
           (ctx/end c :done nil {:name (:name r) :was (:was r)})))))

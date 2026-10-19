@@ -109,6 +109,11 @@
 
 (defn stopped-reasons [seen] (mapv #(or (:reason %) (get-in % [:data :reason])) (events-of seen :stopped)))
 
+(defn refusal-causes
+  "The :reason of the condition-failed cause of each ended job."
+  [seen]
+  (mapv #(get-in % [:cause :reason]) (filterv :cause (events-of seen :stopped))))
+
 (defn place [eng kind] (mem/place (mem/view (:store eng)) kind))
 
 (defn entries [eng kind] (mapv :data (mem/entries (mem/view (:store eng)) kind)))
@@ -130,7 +135,8 @@
     (await (run-job eng (list set-place {:name :home :pos [3 64 5]})))
     (is (= {:x 3 :y 64 :z 5} (place eng :home)))
     (is (= [{:name :home :pos {:x 3 :y 64 :z 5}}]
-           (mapv #(select-keys % [:name :pos]) (events-of seen :place.set))))
+           (mapv #(select-keys % [:name :pos :auto]) (events-of seen :place.set)))
+        "asked for by name: no :auto")
     (is (= {:cap 1 :ttl :forever} (mem/policy (mem/view (:store eng)) :home)))))))
 
 (deftest set-place-takes-a-map-position-and-a-string-name
@@ -162,7 +168,8 @@
     (is (= {:x 5 :y 64 :z 5} (place eng :bed)))
     (await (run-job eng (list set-place {:name :chest :pos [10 64 9] :block "chest"})))
     (is (= {:x 9 :y 64 :z 9} (place eng :chest)) "one off the given position")
-    (is (= ["white_bed" "chest"] (mapv :block (events-of seen :place.set))) "the event names the block found")))))
+    (is (= [{:name :bed :pos {:x 5 :y 64 :z 5}} {:name :chest :pos {:x 9 :y 64 :z 9}}]
+           (mapv #(select-keys % [:name :pos]) (events-of seen :place.set))))))))
 
 (deftest set-place-with-the-bed-shorthand-takes-any-colour
   (async done (run-world done {:blocks {"5,64,5" "red_bed"}} (fn ^:async t [{:keys [eng]}]
@@ -174,20 +181,20 @@
     (know-place! eng :bed {:x 1 :y 64 :z 1})
     (await (run-job eng (list set-place {:name :bed :pos [8 64 8] :block "white_bed"})))
     (is (= {:x 1 :y 64 :z 1} (place eng :bed)) "the old place stays")
-    (is (= [:no-such-block] (mapv :reason (events-of seen :place.refused))))
+    (is (= [:no-such-block] (refusal-causes seen)))
     (is (empty? (events-of seen :place.set)))))))
 
 (deftest set-place-with-two-candidates-asks-for-an-exact-position
   (async done (run-world done {:blocks {"9,64,9" "chest" "9,64,11" "chest"}} (fn ^:async t [{:keys [eng seen]}]
     (await (run-job eng (list set-place {:name :chest :pos [9 64 10] :block "chest"})))
     (is (nil? (place eng :chest)))
-    (is (= [:ambiguous] (mapv :reason (events-of seen :place.refused))))))))
+    (is (= [:ambiguous] (refusal-causes seen)))))))
 
 (deftest set-place-with-a-block-in-an-unloaded-chunk-gives-up
   (async done (run-world done {:unloaded ["9,64,9"]} (fn ^:async t [{:keys [eng seen]}]
     (await (run-job eng (list set-place {:name :chest :pos [9 64 9] :block "chest"})))
     (is (nil? (place eng :chest)))
-    (is (= [:not-loaded] (mapv :reason (events-of seen :place.refused))))))))
+    (is (= [:not-loaded] (refusal-causes seen)))))))
 
 (defn ^:async try-job
   "Run job with args in a fresh world after (prepare! eng): {:eng :seen :reasons [refusal reasons]}."
@@ -195,7 +202,7 @@
   (let [{:keys [eng seen]} (setup {})]
     (prepare! eng)
     (await (run-job eng (list job args)))
-    {:eng eng :seen seen :reasons (-> (into (mapv :reason (events-of seen :place.refused)) (mapv :reason (events-of seen :waiting)))
+    {:eng eng :seen seen :reasons (-> (into (refusal-causes seen) (mapv :reason (events-of seen :waiting)))
                                  (into (stopped-reasons seen)) distinct vec)}))
 
 (deftest set-place-refuses-bad-arguments-as-data-and-writes-nothing

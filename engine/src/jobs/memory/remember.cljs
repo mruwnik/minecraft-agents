@@ -17,11 +17,11 @@
   policy keeps it). After the hour the entry is gone and (since :kind) is unknown again. A job that wants \"every
   3 days\" passes :ttl-s 259200. :ttl-s is in seconds and must be positive, or :forever. :cap is the number of newest entries
   kept, a positive whole number.
-  Refused (warn memory.refused with :reason and :text; ends :condition-failed with cause {:reason :text}):
+  Refused (ends :condition-failed with cause {:reason :text}):
   :bad-kind (not a keyword, or namespaced), :reserved-kind (a kind the engine or another job writes, such as
   :hurt, :slept, :scaffold, or the name of a recorded place).
   A bad :kind or a kind other jobs write is refused before any round: ends :impossible {:reason :bad-args :why :bad-kind|:reserved-kind :text}.
-  Success: info memory.remembered with :memory-kind, :entry and :policy; ends :done with data {:kind}.")
+  Success: ends :done with data {:kind}; the memory layer emits info memory.remembered with :memory-kind, :entry and :policy.")
 
 (a/defargs args
   {:kind {:doc "the memory kind to write: an unnamespaced keyword no engine job writes, e.g. :bred-cows" :spec keyword? :default nil}
@@ -84,10 +84,7 @@
 (defn round [c]
   (let [r (resolve-args (ctx/view c) (:args c))]
     (if (:reason r)
-      (do (ctx/emit! c :memory.refused :warn r)
-          (ctx/end c :condition-failed r))
+      (ctx/end c :condition-failed r)
       (let [{:keys [kind data policy]} r]
-        (ctx/remember! c kind data policy)
-        (ctx/emit! c :memory.remembered :info {:memory-kind kind :entry data :policy policy
-                                               :text (str (name kind) " remembered")})
+        (ctx/remember-asked! c kind data policy)
         (ctx/end c :done nil {:kind kind})))))

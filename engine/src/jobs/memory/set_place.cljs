@@ -15,12 +15,12 @@
   at the position or within 1 of it. The place is recorded at the block's own cell.
   A place already recorded under that name is moved. Places are this body's own memory. Readers (sleep, deposit,
   the (place :name) condition fact) find them by name.
-  Refused (warn place.refused; ends :condition-failed with cause {:reason :text}): :bad-name, :reserved-name (a
+  Refused (ends :condition-failed with cause {:reason :text}): :bad-name, :reserved-name (a
   memory kind the engine uses), :not-a-place (the name holds other memory), :bad-pos, :bad-block,
   :no-such-block, :ambiguous (two such blocks lie within 1 and neither at the position: give the exact one),
   :not-loaded.
   A name, :pos or :block wrong whatever the world holds is refused before any round: ends :impossible {:reason :bad-args :why <that reason> :text}.
-  Success: info place.set; ends :done with data {:name :pos}.
+  Success: ends :done with data {:name :pos}; the memory layer emits info place.set (with :was).
   To run it on a body that is running: {:op :submit :next? true :spec (jobs.memory.set-place {...})}. The
   outcome is in the event stream.")
 
@@ -79,12 +79,7 @@
   (let [p (:primitives c)
         r (places/resolve-set (ctx/view c) #(u/block-name p %) (standing c) (:args c))]
     (if (:reason r)
-      (let [text (:message r)]
-        (ctx/emit! c :place.refused :warn (-> r (dissoc :message) (assoc :text text)))
-        (ctx/end c :condition-failed {:reason (:reason r) :text text}))
-      (let [{place-name :name :keys [pos block]} r
-            was (mem/place (ctx/view c) place-name)]
-        (ctx/remember! c place-name {:pos pos} mem/place-policy)
-        (ctx/emit! c :place.set :info {:name place-name :pos pos :block block :was was
-                                       :text (str (name place-name) " recorded at " (pr-str pos))})
+      (ctx/end c :condition-failed {:reason (:reason r) :text (:message r)})
+      (let [{place-name :name :keys [pos]} r]
+        (ctx/remember-asked! c place-name {:pos pos} mem/place-policy)
         (ctx/end c :done nil {:name place-name :pos pos})))))

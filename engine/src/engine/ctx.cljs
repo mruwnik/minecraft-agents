@@ -86,9 +86,16 @@
 
 (defn remember!
   "Append an entry with data to kind, under policy {:cap n :ttl ms-or-:forever}
-  (optional; see engine.memory)."
+  (optional; see engine.memory). A place or reservation write earns its info notice (engine.core.notices).
+  remember-asked! is for a write the agent asked for by name: its place.set has no :auto, and any other kind
+  earns memory.remembered."
   ([ctx kind data] (remember! ctx kind data nil))
   ([ctx kind data policy] ((:remember ctx) kind data policy)))
+
+(defn remember-asked!
+  "remember! for a write the agent asked for by name."
+  [ctx kind data policy]
+  ((:remember-asked ctx) kind data policy))
 
 (defn forget-where!
   "Drop the entries of kind whose data matches pred."
