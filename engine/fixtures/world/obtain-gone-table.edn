@@ -3,7 +3,7 @@
 ;; is removed (memory follows only what is in view), then jobs.items.get-tool wooden_pickaxe runs. Without the wall the job's
 ;; first look around sees the empty cell, forgets the table and waits :no-source (3 planks make no table): not this case. The craft finds no table, marks it, and plans with its own table.
 ;; Should-succeed: 7 planks + 4 sticks make a new table and the pickaxe. Should-fail: 3 planks + 2 sticks cannot make a table too:
-;; the job stops :table-unreachable without a pickaxe, not an endless walk to the dead table.
+;; the job stops :no-source without a pickaxe, not an endless walk to the dead table (:explore false: with it the body would search for logs).
 {:defaults
  {:tags [:fetch :crafting] :time :any
   :plot {:height 8}
@@ -13,15 +13,15 @@
         [:rcon "execute positioned $X $Y $Z run fill ~16 ~ ~12 ~16 ~3 ~20 stone"]
         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"] [:until-rcon "data get entity $BODY Rotation[0]" "data: 90\\b" 10]
         [:rcon "execute positioned $X $Y $Z run setblock ~19 ~ ~16 air"]
-        [:job (jobs.items.get-tool {:item "wooden_pickaxe"})]]
+        [:job (jobs.items.get-tool {:item "wooden_pickaxe" :explore false})]]
   :limit-s 90}
  :cases
  [{:name "planks-a-new-table-replaces-the-gone-one"
    :body {:inventory [["oak_planks" 7] ["stick" 4]]}
    :expect [{:event {:source :job :kind :completed} :within-s 70 :of-job true}]
    :after [[:item "wooden_pickaxe" 1]]}
-  {:name "planks-for-the-pickaxe-only-stops-unreachable"
+  {:name "planks-for-the-pickaxe-only-stops-no-source"
    :body {:inventory [["oak_planks" 3] ["stick" 2]]}
-   :expect [{:event {:source :job :data {:reason :table-unreachable}} :within-s 70 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 70 :until {:source :job :data {:reason :table-unreachable}}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 70 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped}}]
    :after [[:item "wooden_pickaxe" 0] [:item "oak_planks" 3] [:item "stick" 2]]}]}
