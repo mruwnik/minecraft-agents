@@ -150,6 +150,22 @@
               e (await (ending-of env {:pos at :item "cobblestone"} 3))]
           (is (= {:kind :condition-failed :cause {:reason :occupied :block "stone"}} e)))))))
 
+(deftest a-place-the-server-refused-once-is-tried-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (bd/setup {:self body :inventory cobble})
+              calls (atom 0)]
+          (.override (.-world p) "place"
+                     (fn ^:async f [token a real]
+                       (if (= 1 (swap! calls inc))
+                         #js {:status "failed" :reason "Server refused to place cobblestone: the block is still air"}
+                         (await (real token a)))))
+          (let [result (await (tu/child-outcome eng job {:pos at :item "cobblestone"} 5))]
+            (is (= :done (:status result)))
+            (is (= 2 @calls))
+            (is (= "cobblestone" (bd/block-at p at)))))))))
+
 (deftest a-failed-place-is-nothing-possible-and-a-held-block-is-done
   (async done
     (tu/run-async done

@@ -42,7 +42,7 @@
   done). condition-failed: :occupied (another block fills the cell), :need (the item is missing after the fetch; the fetch's ending is its :because), or a cell reason that appeared during the
   call (the conditions' causes). Impossible: :bad-args (from can-start?). nothing-possible :unreachable (the walk
   failed twice or the place is out of reach, :why).
-  nothing-possible: :clear-failed (the plant could not be dug) or :failed (the primitive refused: :primitive its status,
+  nothing-possible: :clear-failed (the plant could not be dug) or :failed (the primitive refused twice in one call: :primitive its status,
   :why its reason text, else one from its status). The caller decides whether to try again.
 
   :fetch (default true; jobs.lib.need limits): a missing item is fetched with jobs.items.obtain (one of it); false
@@ -245,6 +245,9 @@
                                           (.-placed r) (assoc :block {:name (.-name (.-placed r))
                                                                       :state (js->clj (.-properties (.-placed r)) :keywordize-keys true)})))
           "unreachable" :unreachable
+          "failed" (if (:retried (ctx/mem c))
+                     (stop! c :nothing-possible {:placed false :pos pos :item item :reason :failed :primitive (.-status r) :why (refusal-why r)})
+                     (do (ctx/update-mem! c assoc :retried true) :again))
           (stop! c :nothing-possible {:placed false :pos pos :item item :reason :failed :primitive (.-status r) :why (refusal-why r)}))))))
 
 (a/defargs settings

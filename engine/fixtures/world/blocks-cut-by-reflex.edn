@@ -1,6 +1,7 @@
 ;; Card a5ca4ed3: a reflex (hostile-near) cuts jobs.blocks.dig and jobs.blocks.place while they walk to a far cell; the
 ;; reflex runs, the zombie is killed, the job restarts, re-reads the world and finishes (dig: block gone and collected;
 ;; place: block there, item spent once). Body starts 24 blocks from the target.
+;; The place cases carry an iron sword: an unarmed body retreats from the zombie and the retreat spends carried blocks (plug, pillar), so the item count would not be the call's alone.
 ;; :time :day and the runner's default clearing of natural hostiles: skeletons left on the plot cut the job again and again.
 {:defaults
  {:tags [:blocks :hostile]
@@ -36,7 +37,7 @@
             {:event {:source :job :kind :completed :data {:reason :dug}} :within-s 140 :of-job true}]
    :after [[:block [27 0 18] "air"] [:item "cobblestone" [:>= 1]]]}
   {:name "place-cut-then-finishes-a"
-   :body {:inventory [["cobblestone" 4]]}
+   :body {:inventory [["cobblestone" 4] ["iron_sword" 1]]}
    :act [[:job (jobs.blocks.place {:pos #at [27 0 16] :item "cobblestone"})]
          [:wait-s 3]
          [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
@@ -47,7 +48,7 @@
             {:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 140 :of-job true}]
    :after [[:block [27 0 16] "cobblestone"] [:item "cobblestone" 3]]}
   {:name "place-cut-then-finishes-b"
-   :body {:inventory [["cobblestone" 4]]}
+   :body {:inventory [["cobblestone" 4] ["iron_sword" 1]]}
    :act [[:job (jobs.blocks.place {:pos #at [27 0 18] :item "cobblestone"})]
          [:wait-s 3]
          [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]

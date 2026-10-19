@@ -14,5 +14,5 @@
    :after [[:block [16 0 16] "white_bed[facing=east,part=foot]"] [:block [17 0 16] "white_bed[part=head]"]]}
   {:name "a-bed-facing-a-wall-is-refused-naming-no-room"
    :act [[:job (jobs.blocks.place {:pos #at [16 0 16] :item "white_bed" :facing "west"})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :failed}} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :failed :why [:any]}} :within-s 30 :of-job true}]
    :after [[:not-block [16 0 16] "white_bed"] [:item "white_bed" 1]]}]}
