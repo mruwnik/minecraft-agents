@@ -24,6 +24,14 @@
    :expect [{:event {:source :job :kind :stair.sealed :data {:cell #at [13 6 17]}} :within-s 90 :of-job true}
             {:event {:source :job :kind :stair.done :data {:steps 3}} :within-s 110 :of-job true}]
    :after [[:not-block [13 6 17] "lava"]]}
+  {:name "stair-up-seals-lava-in-the-line-beyond-the-cut-and-goes-on"
+   ;; lava one block past step 3's head cell (13 6 16), in the stair's own line: from step 2 the uncut foot cell hides it, so the stair digs that cell and then seals
+   :blocks [[:fill [8 2 15] [10 4 17] "air"] [:set [14 6 16] "lava"]]
+   :body {:at [10.5 2 16.5]}
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 3})]]
+   :expect [{:event {:source :job :kind :stair.sealed :data {:cell #at [14 6 16]}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :stair.done :data {:steps 3}} :within-s 110 :of-job true}]
+   :after [[:not-block [14 6 16] "lava"]]}
   {:name "stair-on-lava-stop-stops-lava-exposed"
    :blocks [[:set [13 8 16] "lava"]]
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3 :on-lava :stop})]]

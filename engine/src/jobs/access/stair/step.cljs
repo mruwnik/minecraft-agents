@@ -9,6 +9,7 @@
             [jobs.access.stair.limits :as sset]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.aim :as aim]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.bridge :as bridge]
             [jobs.lib.choose :as choose]
@@ -95,6 +96,15 @@
     (if (= :stop (:on-lava (:args c)))
       {:reason :lava-exposed :cell cell :fluid "lava"}
       (await (lava/seal! c kind block-at cell {:fetch (:fetch (:args c)) :ignore-zones? (:ignore-zones? (:args c))})))))
+
+(defn blind-cell
+  "The first cut cell still solid when the body does not see the first exposed lava cell and the cell does not touch it:
+  digging it first gives the seal a line, before the lava flows (nil when the lava is in sight or no such cell)."
+  [c block-at feet cut]
+  (when-let [lava (first (cells/exposed-lava block-at feet cut))]
+    (when-not (aim/body-sees? c lava)
+      (let [near? (set (map #(shape/add lava %) rules/neighbour-deltas))]
+        (first (remove #(or (near? %) (rules/air (block-at %)) (rules/fluids (block-at %))) cut))))))
 
 (defn ^:async water-step!
   "Water a dig laid open: a cell the stair dug that now touches seen water is filled with a building block at once

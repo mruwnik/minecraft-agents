@@ -1411,3 +1411,29 @@
           (is (= :done (:status @(:out s))))
           (is (seq (digs (:p s))) "dug bare-handed")
           (is (empty? (mem/entries (mem/view (:store (:eng s))) :stair-tool-failed)) "the failure lives in the call, not in body memory"))))))
+
+(def hill
+  "Stone over x 1..12, y 65..75 beside the ground of ground: a hill for a stair up east from [0 65 0]."
+  (merge ground (stone 1 12 65 75)))
+
+(deftest lava-in-the-line-beyond-the-cut-is-sealed-after-the-rest-of-the-cut-is-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [lava [4 69 0]
+              inv (conj pick {:name "cobblestone" :count 10})
+              ;; unseen (taken for stone) until the cell beside it is dug, as lava buried in the rock is
+              hidden (fn [p]
+                       (let [open? #(= "air" (block-at p [3 69 0]))
+                             hide (fn [f] (fn [pos]
+                                            (let [r (f pos)]
+                                              (if (and (= lava [(.-x pos) (.-y pos) (.-z pos)]) (not (open?)))
+                                                (doto (js/Object.assign #js {} r) (aset "name" "stone"))
+                                                r))))]
+                         (doseq [f ["sensedAt" "seenBlockAt"] :when (aget p f)]
+                           (aset p f (hide (aget p f))))))
+              {:keys [out p] :as s} (await (stair! {:blocks (assoc hill "4,69,0" "lava") :inventory inv}
+                                                   (assoc up-east :steps 3) hidden))]
+          (is (= :done (:status @out)))
+          (is (= "cobblestone" (block-at p lava)))
+          (is (= 1 (count (events-of s :stair.sealed)))))))))
