@@ -44,6 +44,8 @@
 
 (def top [88 60 0])
 
+(def unlit-walk "These dives are walked in the dark by design: the planner's dark pricing of cells never seen (buried body) is not what they test." {:jobs.lib.walk.world/dark false})
+
 (def buried {:blocks dive :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0]})
 
 (deftest a-buried-body-does-not-dive-to-reach-a-goal-far-above
@@ -61,11 +63,11 @@
     (tu/run-async done
       (fn ^:async t []
         (is (true? (:arrived @(:out (await (gt/go! (assoc buried :light [15 0]) {:pos top}))))) "sky light on the body")
-        (is (true? (:arrived @(:out (await (gt/go! buried {:pos top :settings {:jobs.lib.walk.world/y-margin 96}}))))))
+        (is (true? (:arrived @(:out (await (gt/go! buried {:pos top :settings (assoc unlit-walk :jobs.lib.walk.world/y-margin 96)}))))))
         (is (true? (:arrived @(:out (await (settings/with-settings {:jobs.movement.go-to.tuning/climb-dip 30}
                                              #(gt/go! buried {:pos top}))))))
             "setting ::climb-dip")
-        (is (true? (:arrived @(:out (await (settings/with-settings {:jobs.movement.go-to.tuning/climb-rise 50}
+        (is (true? (:arrived @(:out (await (settings/with-settings (assoc unlit-walk :jobs.movement.go-to.tuning/climb-rise 50)
                                              #(gt/go! buried {:pos top}))))))
             "setting ::climb-rise")))))
 

@@ -141,8 +141,8 @@
   [p]
   (aset p "seenBlocks" (fn [q] (.blocks (oracle p) q)))
   (aset p "seenBlockAt" (fn [pos] (let [b ((sensed-by p) pos)]
-                                    (if (true? (.-unknown b))
-                                      b
+                                    (if (or (nil? b) (true? (.-unknown b)))
+                                      (or b #js {:unknown true :pos pos})
                                       #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0}))))
   (set-sensed! p (sensed-by p))
   p)

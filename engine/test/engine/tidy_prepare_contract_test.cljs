@@ -139,7 +139,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [spec (fp/world {"3,64,0" "cobblestone"} (fm/item "iron_pickaxe" 1) (fm/item "oak_sapling" 1))
-              p (tu/fake-on-floor spec)
+              p (tu/seeing-all (tu/fake-on-floor spec))
               {:keys [eng]} (fm/start spec {"forest" fp/one-cell} (tu/tmp-dir) p)
               looked-up? #(some (fn [c] (and (= "look" (.-name c)) (= 65 (js/Math.floor (.-y (.-pos (.-args c))))))) (.-calls (.-world p)))
               hidden? #(and (= 65 (.-y %)) (not (looked-up?)))
