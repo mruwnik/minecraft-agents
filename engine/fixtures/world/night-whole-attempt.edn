@@ -6,9 +6,7 @@
 {:defaults
  {:tags [:night :survival :dig-in]
   :time :night
-  :blocks [[:fill [8 -6 8] [24 -1 24] "dirt"]
-           [:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
-           [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
+  :blocks [[:fill [8 -6 8] [24 -1 24] "dirt"]]
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 3}}
  :cases
  [{:name "dug-in-ends-the-night-in-one-round"

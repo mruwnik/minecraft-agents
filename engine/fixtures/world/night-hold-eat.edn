@@ -9,7 +9,7 @@
   :time :night
   :plot {:height 6}
   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
-           [:set [9 1 9] "torch"] [:set [15 1 15] "torch"] [:fill [8 3 8] [16 3 16] "air"]]
+           [:fill [8 3 8] [16 3 16] "air"]]
   :body {:at [12.5 0 12.5] :settle-s 2}
   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
         [:rcon "damage $BODY 5 minecraft:generic"]

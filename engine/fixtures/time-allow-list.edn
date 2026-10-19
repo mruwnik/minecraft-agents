@@ -137,5 +137,4 @@
  "sleep-spawn-bed-durable/durable-spawn-bed-stays-silent-after-the-spawn-set-expired"
  "sleep-spawn-bed-durable/expired-spawn-set-alone-warns"
  "sleep-spawn-bed-durable/newer-spawn-reset-invalidates-the-durable-bed"
- "stair-falling-block-accept/gravel-in-the-line-with-accept-is-dug-through-at-night"
 ]

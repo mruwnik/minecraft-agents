@@ -6,9 +6,7 @@
  {:tags [:night :survival :sleep]
   :time :night-exclusive
   :register [{:trigger :night}]
-  :blocks [[:set [8 0 8] "torch"] [:set [24 0 8] "torch"] [:set [8 0 24] "torch"] [:set [24 0 24] "torch"]
-           [:set [16 0 8] "torch"] [:set [16 0 24] "torch"] [:set [8 0 16] "torch"] [:set [24 0 16] "torch"]
-           [:set [13 0 16] "red_bed[facing=east,part=foot,occupied=true]"] [:set [14 0 16] "red_bed[facing=east,part=head,occupied=true]"]]
+  :blocks [[:set [13 0 16] "red_bed[facing=east,part=foot,occupied=true]"] [:set [14 0 16] "red_bed[facing=east,part=head,occupied=true]"]]
   :body {:at [16.5 0 16.5] :yaw 90 :effects [["resistance" 600 4]] :settle-s 3}}
  :cases
  [{:name "occupied-bed-skipped-in-the-open"

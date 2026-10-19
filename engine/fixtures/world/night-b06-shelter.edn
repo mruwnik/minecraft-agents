@@ -2,12 +2,10 @@
 ;; 8c5974f7 8e4c3127 629bc2ee fadf9dd7 ba754e77 7cc76257 f6fef9d5 2383463a 87aee1d1): materials taken back at dawn, logs kept out of the walls,
 ;; supported wall cells, doors shut or given up, the dawn hostile hold, caves and tunnels, a walled home with a carried bed, the
 ;; dusk walk home, a far bed, the escalation out of a shaft. Needs night/time: --allow-time --time-log <the shared time log>.
-;; Resistance 5 (amplifier 4) cancels RCON damage: the two hungry cases drop it so their damage lands. Torches keep the plot lit; the plot floor is one block over void, so a dirt pad y -6..-1 lets a pit be dug.
+;; Resistance 5 (amplifier 4) cancels RCON damage: the two hungry cases drop it so their damage lands. The plot floor is one block over void, so a dirt pad y -6..-1 lets a pit be dug.
 {:defaults
  {:tags [:night :survival :dig-in]
   :time :night
-  :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
-           [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 3}}
  :cases
  [;; a8fe9e86: every shelter block dearer than dirt is dug back by day, not just the valuable ones

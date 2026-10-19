@@ -21,9 +21,8 @@
   {:name "shut-in-at-night-with-a-tree-seen-waits-for-dawn"
    :time :night
    :register []
-   :blocks [[:fill [13 0 13] [19 2 19] "stone"] [:fill [14 0 14] [18 1 18] "air"] [:set [14 0 14] "torch"] [:fill [19 0 16] [19 1 16] "glass"]
-            [:fill [26 0 16] [26 4 16] "oak_log"] [:fill [25 4 15] [27 5 17] "oak_leaves[persistent=true]"] [:set [26 4 16] "oak_log"]
-            [:set [25 0 16] "torch"]]
+   :blocks [[:fill [13 0 13] [19 2 19] "stone"] [:fill [14 0 14] [18 1 18] "air"] [:fill [19 0 16] [19 1 16] "glass"]
+            [:fill [26 0 16] [26 4 16] "oak_log"] [:fill [25 4 15] [27 5 17] "oak_leaves[persistent=true]"] [:set [26 4 16] "oak_log"]]
    :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :explore false})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 40}]

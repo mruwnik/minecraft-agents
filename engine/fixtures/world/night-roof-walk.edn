@@ -1,9 +1,9 @@
 ;; Cards dcedd0f5, a9ae340d: at night a body without a bed walks to a close remembered roofed place (:roofed-places [:home], walk-radius setting 32)
 ;; when go-to's planned route (a cell seen dark or unseen at night costs twice a lit one) is no dearer than the walls' quote plus shut-in's ::room-credit-s (9.5) (the :room way of survival.shut-in, survival.enter-room),
 ;; else it digs in where it stands (dig-in.sealed; cobblestone carried). Open ground (64x32 plot,
-;; body at x 4.5, z 16.5); home = a stone slab at y 2 over 3x3 cells (roofed within the default roof height 4), torches beside the line at z 15.
+;; body at x 4.5, z 16.5); home = a stone slab at y 2 over 3x3 cells (roofed within the default roof height 4), torches beside the line at z 15, the first 13+ cells from the body: a torch lights 13 cells, and a body in light is safe from the night.
 ;; The walk's success is the completed night job with the body at home and no dig-in; failure is dig-in.sealed with the body near its start.
-;; The wall case: a 1-thick stone wall at x 9, a gap at z 0..2, torches behind it light cells the body never saw: the short route round
+;; The wall case: a 1-thick stone wall at x 9, a gap at z 0..9, torches behind it light cells the body never saw: the short route round
 ;; through the gap costs under the dig-in and is walked. The failed-walk fallback (home behind a wall: walk fails,
 ;; :roof-walk-failed, no second walk) is a unit test only (night-test): a walk that cannot arrive is not a stable fixture (go-to escalates).
 ;; Needs night: run with --allow-time --time-log <the shared time log>.
@@ -14,7 +14,7 @@
   :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["cobblestone" 16]] :settle-s 4}}
  :cases
  [  {:name "lit-route-15-blocks-walks-home"
-   :blocks [[:fill [18 2 15] [20 2 17] "stone"] [:set [8 0 15] "torch"] [:set [13 0 15] "torch"] [:set [18 0 15] "torch"]]
+   :blocks [[:fill [18 2 15] [20 2 17] "stone"] [:set [17 0 15] "torch"]]
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [19 0 16]}) [:now]]
          [:job (jobs.survival.night)]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 100 :of-job true}
@@ -22,7 +22,7 @@
    :after [[:body-near [19.5 0 16.5] 2.5]]
    :limit-s 110}
   {:name "lit-route-25-blocks-torches-every-6-walks-home"
-   :blocks [[:fill [28 2 15] [30 2 17] "stone"] [:set [8 0 15] "torch"] [:set [14 0 15] "torch"] [:set [20 0 15] "torch"] [:set [26 0 15] "torch"]]
+   :blocks [[:fill [28 2 15] [30 2 17] "stone"] [:set [17 0 15] "torch"] [:set [23 0 15] "torch"] [:set [29 0 15] "torch"]]
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [29 0 16]}) [:now]]
          [:job (jobs.survival.night)]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 100 :of-job true}
@@ -37,14 +37,14 @@
    :after [[:body-near [4.5 0 16.5] 3] [:body-far [34.5 0 16.5] 8]]
    :limit-s 100}
   {:name "home-beyond-walk-radius-digs-in"
-   :blocks [[:fill [49 2 15] [51 2 17] "stone"] [:set [8 0 15] "torch"] [:set [14 0 15] "torch"] [:set [20 0 15] "torch"] [:set [26 0 15] "torch"] [:set [32 0 15] "torch"] [:set [38 0 15] "torch"] [:set [44 0 15] "torch"] [:set [50 0 15] "torch"]]
+   :blocks [[:fill [49 2 15] [51 2 17] "stone"] [:set [17 0 15] "torch"] [:set [23 0 15] "torch"] [:set [29 0 15] "torch"] [:set [35 0 15] "torch"] [:set [41 0 15] "torch"] [:set [47 0 15] "torch"]]
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [50 0 16]}) [:now]]
          [:job (jobs.survival.night)]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 90 :of-job true}]
    :after [[:body-near [4.5 0 16.5] 3] [:body-far [50.5 0 16.5] 8]]
    :limit-s 100}
   {:name "short-route-behind-a-wall-never-seen-is-walked"
-   :blocks [[:fill [9 0 3] [9 5 31] "stone"] [:fill [18 2 15] [20 2 17] "stone"] [:set [6 0 15] "torch"] [:set [12 0 15] "torch"] [:set [18 0 15] "torch"]]
+   :blocks [[:fill [9 0 10] [9 5 31] "stone"] [:fill [18 2 15] [20 2 17] "stone"] [:set [12 0 15] "torch"] [:set [18 0 15] "torch"]]
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [19 0 16]}) [:now]]
          [:job (jobs.survival.night)]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 100 :of-job true}

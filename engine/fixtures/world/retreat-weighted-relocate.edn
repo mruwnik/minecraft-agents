@@ -9,13 +9,13 @@
 {:defaults
  {:tags [:night :survival :retreat] :time :night
   :plot {:height 12}
-  :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
-           [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
   :body {:at [16.5 0 16.5] :settle-s 3}}
  :cases
  [{:name "flee-two-zombies-east-west"
    :time :any
    :plot {:width 64 :light :dark}
+   :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
+           [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
    :memory [{:kind :home :data {:pos #xyz [21000 150 20016]}}]
@@ -28,6 +28,8 @@
    :limit-s 50}
   {:name "flee-two-zombies-north-south-east-ahead"
    :time :any
+   :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
+           [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
    :memory [{:kind :home :data {:pos #xyz [21000 150 20016]}}]

@@ -2,13 +2,12 @@
 ;; inside; a walled home keeps the bed in the bag; a hut with a hole in its wall is no shelter (room_open, walled in) while an intact
 ;; one with a stale :bed-open entry still ends :roofed; the night sleeps in the hut's live respawn bed whatever stale :bed place is
 ;; remembered far off, and ignores a respawn bed that is gone.
-;; Hut: stone x 8..16, z 8..16, y 0..3, room 9..15 (torches inside, one outside); a case that sleeps is :night-exclusive.
+;; Hut: stone x 8..16, z 8..16, y 0..3, room 9..15 a case that sleeps is :night-exclusive.
 ;; Needs night: run with --allow-time --time-log <the shared time log>.
 {:defaults
  {:tags [:night :survival :sleep]
   :time :night
-  :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
-           [:set [9 1 9] "torch"] [:set [15 1 15] "torch"] [:set [12 0 18] "torch"]]
+  :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]]
   :body {:at [13.5 0 13.5] :effects [["resistance" 600 4]] :settle-s 2}}
  :cases
  [;; aedc6ef7: the doorway at [12 0..1 16]; body 3.5 outside it, :home inside
@@ -69,6 +68,7 @@
    :limit-s 100}
   ;; 9570fa13: the respawn bed block is gone: it is not slept in, spawn_lost says so
   {:name "gone-spawn-bed-is-not-used"
+   :blocks [[:set [9 1 9] "torch"] [:set [15 1 15] "torch"] [:set [12 0 18] "torch"]]
    :memory [{:kind :spawn-bed :data {:pos #xyz [10 0 12]} :policy {:cap 1 :ttl :forever}}]
    :body {:spawnpoint [11 0 12]}
    :act [[:job (jobs.survival.night)]]

@@ -1,6 +1,6 @@
 ;; Cards c1d4d2b2 (harvest-wood waits for day while the body is shut in for the night, no :no-tree ending), 5b9f0652 (a body shut in
 ;; by its own fences ends with a reason, not a bare "no reachable tree"). An oak at x 26, z 16 (5 logs, persistent leaves).
-;; Night case: a stone room x 14..18, z 14..18, roof at y 2, a torch inside; the body is in it, above ground at night.
+;; Night case: a stone room x 14..18, z 14..18, roof at y 2, unlit (a lit room is not waited out); the body is in it, above ground at night.
 ;; A glass east wall puts the tree in sight (else its own :no-tree wait comes before the safe? reason). Should-succeed: harvest-wood in the room parks with waiting :dark (its safe? is safe-if-lit). Should-fail: it never ends :no-tree/:tree-blocked.
 ;; Pen case (day): oak_fence ring x 12..20, z 12..20; fell-tree ends (or walks out and fells); its ending carries the :why.
 ;; Unsure (65%): whether go-to digs the fences with the carried axe; if so the body walks out and fells the tree.
@@ -14,7 +14,7 @@
  [{:name "shut-in-room-at-night-waits-for-day"
    :time :night
    :register []
-   :blocks [[:fill [14 0 14] [18 2 18] "stone"] [:fill [15 0 15] [17 1 17] "air"] [:set [15 0 15] "torch"] [:fill [18 0 15] [18 1 17] "glass"]]
+   :blocks [[:fill [14 0 14] [18 2 18] "stone"] [:fill [15 0 15] [17 1 17] "air"] [:fill [18 0 15] [18 1 17] "glass"]]
    :act [[:job (jobs.forestry.harvest-wood {:radius 24})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 40}]

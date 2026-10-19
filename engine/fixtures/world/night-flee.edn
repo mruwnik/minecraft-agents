@@ -9,9 +9,7 @@
 {:defaults
  {:tags [:night :survival :flee]
   :time :night
-  :blocks [[:fill [0 -6 0] [31 -1 31] "stone"]
-           [:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
-           [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
+  :blocks [[:fill [0 -6 0] [31 -1 31] "stone"]]
   :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 3}}
  :cases
  [{:name "flees-to-a-roofed-home"

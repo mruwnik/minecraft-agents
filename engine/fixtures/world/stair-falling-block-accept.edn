@@ -14,9 +14,9 @@
   {:name "gravel-in-the-line-without-accept-stops-naming-the-hazard"
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :hazard}} :within-s 120 :of-job true}]}
-  ;; at night the stair's own step walks must not wait for the night (job.waiting :exposed) or sit silent: run with --allow-time
-  {:name "gravel-in-the-line-with-accept-is-dug-through-at-night"
-   :time :night
+  ;; in the dark the stair's own step walks must not wait for light (job.waiting :exposed) or sit silent
+  {:name "gravel-in-the-line-with-accept-is-dug-through-in-the-dark"
+   :plot {:light :dark}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8 :accept #{:falling-block}})]]
    :expect [{:event {:source :job :kind :completed :data {:steps 8}} :within-s 190 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 150 :until {:source :job :kind :completed} :of-job true}]
