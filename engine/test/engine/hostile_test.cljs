@@ -78,7 +78,7 @@
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 
-(defn hostile-entries [eng] (mapv :data (mem/entries (mem/view (:store eng)) :hostile)))
+(defn hostile-entries [eng] (mapv #(dissoc (:data %) :health) (mem/entries (mem/view (:store eng)) :hostile)))
 
 (defn zombie
   ([x z] (zombie 7 x z))
@@ -270,6 +270,14 @@
               "a heard-only mob: what the sound tells, never its place"))))))
 
 ;; ------------------------------------------------------------- hostile attack
+
+(deftest a-flee-after-a-fight-for-the-same-mob-says-what-changed
+  (let [prev {:mob "zombie" :decision :fight :health 20}
+        now {:mob "zombie" :decision :flee :health 6}]
+    (is (= "; earlier fight at 20 hp, now 6 hp" (respond-to-hostile/changed-text prev now)))
+    (is (nil? (respond-to-hostile/changed-text prev (assoc now :decision :fight))) "same decision: nothing changed")
+    (is (nil? (respond-to-hostile/changed-text prev (assoc now :mob "spider"))) "another mob")
+    (is (nil? (respond-to-hostile/changed-text nil now)))))
 
 (defn waited-between-swings
   "The first ms waited (act :wait) after each swing but the last: what is left of the gap (the fake clock moves with calls,

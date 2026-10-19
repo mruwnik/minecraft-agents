@@ -141,17 +141,26 @@
       (= :condition-failed (:kind e)) :declined
       :else e)))
 
-(defn encounter-text [{:keys [mob decision pos direction band]}]
+(defn changed-text
+  "Pure: what changed since the earlier encounter entry prev with the same mob when the decision differs (else nil)."
+  [prev {:keys [mob decision health]}]
+  (when (and prev (= mob (:mob prev)) (not= decision (:decision prev)))
+    (str "; earlier " (name (:decision prev)) " at " (:health prev) " hp, now " health " hp")))
+
+(defn encounter-text [{:keys [mob decision pos direction band] :as entry} prev]
   (str (name decision) ": " mob
        (if pos
          (str " seen at " (pr-str (mapv #(js/Math.floor (% pos)) [:x :y :z])))
-         (str " heard " (name band) ", " (name direction)))))
+         (str " heard " (name band) ", " (name direction)))
+       (changed-text prev entry)))
 
 (defn log-encounter! [c threat decision]
   (when-not (:logged (ctx/mem c))
-    (let [entry (assoc (threats/place-of (:primitives c) threat) :mob (.-name threat) :decision decision)]
+    (let [prev (:data (mem/latest (ctx/view c) :hostile))
+          entry (assoc (threats/place-of (:primitives c) threat) :mob (.-name threat) :decision decision
+                       :health (js/Math.round (.-health (.self (:primitives c)))))]
       (ctx/remember! c :hostile entry hostile-policy)
-      (ctx/emit! c :hostile.decided :info (assoc (dissoc entry :from) :text (encounter-text entry))))
+      (ctx/emit! c :hostile.decided :info (assoc (dissoc entry :from) :text (encounter-text entry prev))))
     (ctx/update-mem! c assoc :logged true)))
 
 (defn mob-of
