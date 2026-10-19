@@ -34,7 +34,7 @@
   [{:id "c1" :column "live" :title "one" :commits ["aaa"] :description "unit tests: a, b\nLive plan: fixture b (all) and a/x"}
    {:id "c2" :column "live" :title "two" :commits ["aaa"] :description "x" :plan-notes ["Live plan: c/new should succeed"]}
    {:id "c3" :column "live" :title "three" :commits ["aaa"] :description "no cases named"}
-   {:id "c4" :column "needs_fixture" :title "four" :commits ["bbb"] :description "live: b/w"}
+   {:id "c4" :column "live" :title "four" :commits ["bbb"] :description "live: b/w"}
    {:id "c5" :column "live" :title "five" :commits ["aaa"] :description "live: b/w, b/g"}
    {:id "c6" :column "live" :title "six" :commits ["aaa"] :description "live: a/z"}])
 
@@ -128,14 +128,12 @@
 (deftest unskip-ids-are-the-known-failures-named-by-cards-past-coding-whose-commits-are-in
   (let [cards [{:id "c1" :column "live" :title "one" :commits ["aaa"] :description "live: a/x, a/z"}
                {:id "c2" :column "live" :title "two" :commits ["bbb"] :description "live: b/w"}
-               {:id "c3" :column "needs_fixture" :title "three" :commits ["aaa"] :description "live: a/y"}
                {:id "c4" :column "pending" :title "four" :commits ["aaa"] :description "live: b/e"}
                {:id "c5" :column "testing" :title "five" :commits ["aaa"] :plan-notes ["Live plan (cases):\nb/w"]}
-               {:id "c6" :column "in_review" :title "six" :commits ["aaa"] :plan-notes ["Live plan (cases):\nb/e"]}
-               {:id "c7" :column "needs_fixture" :title "seven" :commits ["bbb"] :plan-notes ["Live plan (cases):\na/y"]}]
+               {:id "c6" :column "in_review" :title "six" :commits ["aaa"] :plan-notes ["Live plan (cases):\nb/e"]}]
         ids #(sort (t/unskip-ids (merge {:previous [prev] :cards cards} %)))]
     (is (= ["a/x" "b/e" "b/w"] (ids {:ancestor? #(not= % "bbb")})))
-    (is (= ["a/x" "a/y" "b/e" "b/w"] (ids {:ancestor? (constantly true)})))))
+    (is (= ["a/x" "b/e" "b/w"] (ids {:ancestor? (constantly true)})))))
 
 (deftest known-failures-of-changed-fixture-files-are-unskipped
   (is (= ["b/e" "b/w"] (t/unskip-ids {:previous [prev] :cards [] :ancestor? (constantly true) :changed-files #{"b"}}))))

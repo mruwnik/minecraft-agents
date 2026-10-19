@@ -1,6 +1,6 @@
 (ns world-test.triage
   "tools/sweep-triage.mjs: reads a sweep's pool results and the board (read-only sqlite) and reports what the sweep agent acts on:
-  each non-passing case as known (the previous sweep failed the same check), new, flaky or inconclusive; each live / needs_fixture card
+  each non-passing case as known (the previous sweep failed the same check), new, flaky or inconclusive; each live card
   with the cases its live plan names; the cards to tick, to send to pending, to hold and the new failures that need a bug card.
   Pure parts: classify, card-plan-text, triage, summary."
   (:require ["child_process" :as cp]
@@ -10,7 +10,7 @@
 
 (def usage
   (str "usage: node tools/sweep-triage.mjs --dir DIR [--previous RESULTS.edn ...] [--rev R] [--repo PATH] [--plans PLANS.edn] [--db FILE] [--board ID | --board-file BOARD.edn] [--out report.edn]\n"
-       "       node tools/sweep-triage.mjs --unskip-list --previous RESULTS.edn ... [--repo PATH] [--rev R] [--prev-rev P] [--db FILE] [--board ID] --out FILE: the known failures named by the live plans of testing, live and in_review cards (needs_fixture with a case plan) whose commits are in the revision, and all known failures of fixture files changed since P, one id per line, for world-sweep --unskip-ids.\n"
+       "       node tools/sweep-triage.mjs --unskip-list --previous RESULTS.edn ... [--repo PATH] [--rev R] [--prev-rev P] [--db FILE] [--board ID] --out FILE: the known failures named by the live plans of testing, live and in_review cards whose commits are in the revision, and all known failures of fixture files changed since P, one id per line, for world-sweep --unskip-ids.\n"
        "DIR holds sweep-<pass>.edn (day, night, night-exclusive, any sweep-*.edn except sweep-summary.edn). --previous: the earlier sweep's result files, as the pool's --durations.\n"
        "--plans: EDN map of card id prefix -> text naming fixtures/cases, for a card whose own plan names none. "
        "--rev (default HEAD) and --repo (default .): a card is covered when its commits are ancestors of the revision. Prints a text summary; --out writes the full EDN report."))
@@ -136,13 +136,12 @@
   (into #{} (keep #(second (re-matches #"engine/fixtures/world/(?:.*/)?([^/]+)\.edn" %))) (str/split-lines diff-out)))
 
 (defn unskip-ids
-  "{:previous [vector ...] :cards :ancestor? :changed-files} -> sorted ids of the known failures to run again: those that the live plans of testing, live and in_review cards name (and of needs_fixture cards with a 'Live plan (cases):' note), for the cards whose commits are all in the revision, and all of those in a changed fixture file (a set of file names)."
+  "{:previous [vector ...] :cards :ancestor? :changed-files} -> sorted ids of the known failures to run again: those that the live plans of testing, live and in_review cards name, for the cards whose commits are all in the revision, and all of those in a changed fixture file (a set of file names)."
   [{:keys [previous cards ancestor? changed-files]}]
   (let [failing (set (keys (last-results previous)))
         cases (into [] (comp (map :id) (distinct) (filter failing) (map (fn [id] {:id id :file (first (str/split id #"/"))})))
                     (apply concat previous))
-        waiting (filter #(and (or (unskip-columns (:column %))
-                                  (and (= "needs_fixture" (:column %)) (seq (case-plan-lines (:plan-notes %)))))
+        waiting (filter #(and (unskip-columns (:column %))
                               (every? ancestor? (:commits %)))
                         cards)]
     (vec (sort (distinct (concat (mapcat #(map :id (named-cases (card-plan-text %) cases)) waiting)
@@ -207,7 +206,7 @@
     (if (str/blank? (.-stdout r)) [] (js->clj (js/JSON.parse (.-stdout r)) :keywordize-keys true))))
 
 (defn read-board [db board & [columns]]
-  (let [cols (str "(" (str/join "," (map #(str "'" % "'") (or columns ["live" "needs_fixture"]))) ")")
+  (let [cols (str "(" (str/join "," (map #(str "'" % "'") (or columns ["live"]))) ")")
         q (fn [s] (sql-json db (-> s (str/replace "BOARD" (str "'" board "'")) (str/replace "COLS" cols))))
         tasks (q "select id, title, description, status as column from tasks where board_id=BOARD and status in COLS")
         notes (group-by :task_id (q "select task_id, content from task_notes where task_id in (select id from tasks where board_id=BOARD and status in COLS) and lower(content) like '%live plan%' order by created_at"))
@@ -271,7 +270,7 @@
       (let [ids (unskip-ids (merge {:previous (mapv read-results (:previous o))
                                     :ancestor? (ancestor-fn (:repo o) (:rev o))}
                                    {:changed-files (when-let [pr (:prev-rev o)] (changed-fixtures (:repo o) pr (:rev o)))}
-                                   (read-board (:db o) (:board o) ["testing" "live" "in_review" "needs_fixture"])))]
+                                   (read-board (:db o) (:board o) ["testing" "live" "in_review"])))]
         (fs/writeFileSync (:out o) (apply str (map #(str % "\n") ids)))
         (js/console.log (str (count ids) " ids -> " (:out o)))
         0)
