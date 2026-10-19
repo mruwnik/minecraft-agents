@@ -15,8 +15,8 @@
 (def fish-items "Raw fish: caught with a rod (jobs.food.fish), never crafted." #{"cod" "salmon"})
 
 (def mob-drops
-  "The items a farm animal drops, and the animal: gathered by hunting it (a kept pair and penned animals are spared)."
-  {"leather" "cow" "feather" "chicken"})
+  "The items a mob drops, and the mob: gathered by hunting it (a kept pair and penned animals are spared; a hostile kind is hunted armed)."
+  {"leather" "cow" "feather" "chicken" "string" "spider" "bone" "skeleton"})
 
 (defn source-opts
   "The recipes/plan options of the gather and smelt sources: ore drops count as gathered, and every furnace product

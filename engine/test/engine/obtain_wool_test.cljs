@@ -159,6 +159,15 @@
                                  {:inventory h/sword :entities [(cow 1 3) (cow 2 6) (cow 3 8)]} 40))]
           (is (seq (attacked s)) "a cow was attacked"))))))
 
+(deftest string-and-bone-are-hunted-from-a-seen-spider-and-skeleton
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[item mob] [["string" "spider"] ["bone" "skeleton"]]]
+          (let [s (await (scenario {:item item :count 1}
+                                   {:inventory h/sword :entities [{:id 1 :name mob :kind "hostile" :pos {:x 20 :y 64 :z 0} :drops [{:name item :count 1}]}]} 40))]
+            (is (seq (attacked s)) item)))))))
+
 (deftest a-hunt-that-spared-animals-says-which-rule-spared-them
   (is (= "left alone: 3 pen" (gather/spared-why {:spared-by {:pen 3}})))
   (is (nil? (gather/spared-why {:killed 0}))))
