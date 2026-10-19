@@ -123,10 +123,10 @@
       (do (ctx/update-mem! c update :misses (fnil inc 0)) :again))))
 
 (defn ^:async get-rod!
-  "A rod through jobs.lib.need (its time is not fishing time): :again once it is done, :continue while it waits, else the ending."
+  "A rod through jobs.lib.need (its time counts in the call's :spend like any child): :again once it is done, :continue while it waits, else the ending."
   [c]
   (let [limits (select-keys (need/parse-arg (:fetch (:args c))) [:how :explore])
-        e (await (u/untimed! c #(need/item! c "fishing_rod" 1 limits)))]
+        e (await (need/item! c "fishing_rod" 1 limits))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) :again
