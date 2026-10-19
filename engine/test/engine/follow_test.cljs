@@ -138,7 +138,7 @@
       (fn ^:async t []
         (let [{:keys [out p] :as s} (await (follow {:entities [(steve 10)] :unreachable ["10,64,0"]} {:player "Steve"} 10 500))]
           (is (= {:reason :unreachable} (ended @out)))
-          (is (= gts/max-blocked (count (tu/walked-to (:eng s)))) "one go-to call (its own tries), then give up"))))))
+          (is (= (gts/max-blocked) (count (tu/walked-to (:eng s)))) "one go-to call (its own tries), then give up"))))))
 
 (deftest one-blocked-go-to-ends-it-in-one-tick
   (async done
@@ -146,7 +146,7 @@
       (fn ^:async t []
         (let [{:keys [out] :as s} (await (follow {:entities [(steve 10)] :unreachable ["10,64,0"]} {:player "Steve"} 1 500))]
           (is (= {:reason :unreachable} (ended @out)))
-          (is (= gts/max-blocked (count (tu/walked-to (:eng s)))) "one go-to call (its own tries), then give up"))))))
+          (is (= (gts/max-blocked) (count (tu/walked-to (:eng s)))) "one go-to call (its own tries), then give up"))))))
 
 (deftest a-far-player-is-walked-to-within-the-round
   (async done

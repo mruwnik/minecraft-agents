@@ -95,7 +95,7 @@
           (ctx/emit! c :go-to.lookout :info {:goal (zipmap [:x :y :z] cell) :stand to :seen seen
                                              :text (str "looked at the goal " cell " from " stand (if seen "" ", still unseen"))}))
         (pre-aim! c pos pos))
-      (ctx/update-mem! c #(if (< walks max-blocked)
+      (ctx/update-mem! c #(if (< walks (max-blocked))
                             (assoc % :lookout-walks walks)
                             (-> % (update :lookouts (fnil conj []) stand) (dissoc :lookout-walks :lookout-due)))))
     :again))
@@ -273,7 +273,7 @@
   [c result tries]
   (let [reason (or (:why result) (:reason result) :no-path)]
     (ctx/emit! c :go-to.retrying :info {:reason reason :try tries
-                                        :text (str "no way found (" (name reason) "), planning again (try " tries " of " max-blocked ")")})))
+                                        :text (str "no way found (" (name reason) "), planning again (try " tries " of " (max-blocked) ")")})))
 
 (defn ^:async walk! [c0 pos range doors]
   (let [way (own-way c0 pos (dive-floor! c0 pos))
@@ -389,7 +389,7 @@
           (= "searching" status)
           (let [n (cond-> (:searching (ctx/mem c) 0) (:fresh walked) inc)]
             (ctx/update-mem! c assoc :searching n)
-            (if (< n max-searching)
+            (if (< n (max-searching))
               :again
               (end/give-up! c pos (:blocked (ctx/mem c) 0) :searching {:status :no-path :reason :moved-while-searching})))
 
@@ -408,7 +408,7 @@
                              :target-best (cond-> tbests target (assoc target (min tdist (get tbests target js/Infinity)))))
             (when (and progress? (:restore-pending (ctx/mem c))) (restore/restore-next! c))
             (if (or unstuck?
-                    (and (or progress? (and (< tries max-blocked) (< tries (ctx/own-tries c)) (pos? (ctx/tries-left c)))) (not (#{:goal-enclosed :goal-cut-off :goal-on-magma} (:reason result)))))
+                    (and (or progress? (and (< tries (max-blocked)) (< tries (ctx/own-tries c)) (pos? (ctx/tries-left c)))) (not (#{:goal-enclosed :goal-cut-off :goal-on-magma} (:reason result)))))
               (do (when (and (pos? tries) (not unstuck?)) (retrying! c result tries))
                   :again)
               (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))

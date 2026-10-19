@@ -69,7 +69,7 @@
         n (cond-> (:searching (ctx/mem c) 0) (and (= "searching" status) (:fresh result)) inc)
         nearer? (< (u/dist to cell) (dec (u/dist from cell)))]
     (ctx/update-mem! c assoc :own-way-on true :searching n)
-    (when-not (or (= "arrived" status) (and (= "searching" status) (< n max-searching)) nearer? (esc/own-recut! c))
+    (when-not (or (= "arrived" status) (and (= "searching" status) (< n (max-searching))) nearer? (esc/own-recut! c))
       (ctx/update-mem! c assoc :own-way-done true))
     :again))
 

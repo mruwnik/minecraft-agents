@@ -191,10 +191,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (with-redefs [jobs.movement.go-to.tuning/max-searching 2
-                      wsearch/round-budget 1000]
+        (with-redefs [wsearch/round-budget 1000]
           (let [{:keys [out]} (await (go! {:blocks high-deck-floor :self {:pos {:x 20.5 :y 64 :z 20.5}}}
-                                          {:pos [20 71 20] :range 1 :ways #{:walk :clear-seal} :spend {:health 0}}))]
+                                          {:pos [20 71 20] :range 1 :ways #{:walk :clear-seal} :spend {:health 0}
+                                           :settings {:jobs.movement.go-to.tuning/max-searching 2}}))]
             (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (select-keys @out [:arrived :reason :why]))
                 (str "result " @out))))))))
 

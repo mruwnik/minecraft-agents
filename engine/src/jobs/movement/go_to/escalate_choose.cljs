@@ -240,7 +240,7 @@
            (dive? c result)
            (goal-walled? c result)
            (let [doors (some-> (:doors (:args c)) keyword)]
-             (and (or (and (walker-fault? result) (>= tries max-blocked))
+             (and (or (and (walker-fault? result) (>= tries (max-blocked)))
                       (and (escalate-reason? result doors) (escape/enclosed? (:primitives c) doors)))
                   (not (escape/door-beside? (:primitives c) (end/feet-cell c) doors)))))))
 

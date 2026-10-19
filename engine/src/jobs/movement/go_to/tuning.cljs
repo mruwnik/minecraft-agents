@@ -3,16 +3,11 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]))
 
-(def max-blocked 3)
-
-(def max-searching
-  "Search slices in a row whose search is still going on and began afresh (wsearch/round-budget expansions each) before
-  go-to gives up: a search that goes on from the same cell always ends after the planner's maxNodes; only a body moved
-  off its search's start every slice (pushed, drifting) starts afresh each time."
-  100)
-
 (a/defargs settings
-  {:jobs.movement.go-to.tuning/y-slack {:default 4 :doc "Blocks a go-to :pos y with no standable cell within :range may be re-aimed up or down its column to the ground; 0: never." :spec (a/int-in 0 nil)}
+  {:jobs.movement.go-to.tuning/max-blocked {:default 3 :doc "Fruitless walks of a go-to call in a row before it gives up (or escalates)." :spec (a/int-in 1 nil)}
+   :jobs.movement.go-to.tuning/max-searching {:default 100 :doc "Search slices in a row whose search is still going on and began afresh (a body pushed or drifting off its search's start every slice) before a go-to gives up; a search that goes on from the same cell always ends after the planner's maxNodes." :spec (a/int-in 1 nil)}
+   :jobs.movement.go-to.tuning/max-escalations {:default 3 :doc "Ways out in a row, none starting nearer the goal than one before, that a go-to tries before it gives up." :spec (a/int-in 1 nil)}
+   :jobs.movement.go-to.tuning/y-slack {:default 4 :doc "Blocks a go-to :pos y with no standable cell within :range may be re-aimed up or down its column to the ground; 0: never." :spec (a/int-in 0 nil)}
    :jobs.movement.go-to.tuning/goal-danger {:default :wait :doc "When a go-to's goal lies within the full-cost radius of a known mob the body would flee: :wait (walk on; an info goal-in-danger says so once), :end (give up at once, :why :goal-dangerous with the mob)." :spec #{:wait :end}}
    :jobs.movement.go-to.tuning/look-round {:default true :doc "Whether a go-to looks round once on arrival; false for a caller that keeps moving." :spec boolean?}
    :jobs.movement.go-to.tuning/max-cut-restarts {:default 3 :doc "Cuts in a row, each sending the body back, before a go-to call gives up :cut-again." :spec (a/int-in 1 nil)}
@@ -38,6 +33,9 @@
    :jobs.movement.go-to.tuning/max-route-replans {:default 8 :doc "Times a go-to's :dig-route escalation plans its route again, as looks show cells it guessed were rock otherwise, before it fails :no-route." :spec (a/int-in 0 nil)}
    :jobs.movement.go-to.tuning/way-looks {:default [[6 1] [3 4]] :doc "The looks taken in turn before each waypoint walk: [blocks ahead toward the goal, blocks under the feet] (ahead and a little down: a slope up; close and steeply down: a slope or drop below an edge)." :spec (a/coll-of (a/pred "a pair [ahead down] of numbers >= 0" #(and (sequential? %) (= 2 (count %)) (every? (fn [n] (and (number? n) (>= n 0))) %))))}})
 
+(defn max-blocked [] (settings/get settings :jobs.movement.go-to.tuning/max-blocked))
+(defn max-searching [] (settings/get settings :jobs.movement.go-to.tuning/max-searching))
+(defn max-escalations [] (settings/get settings :jobs.movement.go-to.tuning/max-escalations))
 (defn y-slack [] (settings/get settings :jobs.movement.go-to.tuning/y-slack))
 (defn goal-danger [] (settings/get settings :jobs.movement.go-to.tuning/goal-danger))
 (defn look-round [] (settings/get settings :jobs.movement.go-to.tuning/look-round))

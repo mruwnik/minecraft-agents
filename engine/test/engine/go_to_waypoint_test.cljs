@@ -59,7 +59,7 @@
           (is (< ticks 30) "the call ends")
           (is (<= 18 (:x (end-pos moved)) 20) "the waypoints led to the gap's edge")
           ;; from the walk to the edge on: it, a walk per way-look, the re-aim, the column looks, the blocked tries
-          (is (<= at-edge (+ 1 (count (gts/way-looks)) 1 gaim/max-column-looks gts/max-blocked))
+          (is (<= at-edge (+ 1 (count (gts/way-looks)) 1 gaim/max-column-looks (gts/max-blocked)))
               (pr-str (map (juxt (comp :x :to) :status) moved))))))))
 
 (defn ^:async waypoint-walk!

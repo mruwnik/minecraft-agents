@@ -22,8 +22,6 @@
             [jobs.movement.go-to.tuning :as tuning]
             [jobs.movement.go-to.way-steps :as ways]))
 
-(def max-escalations 3)
-
 (defn escalation-job
   "[job args] of the child that carries out escalation e (jobs.lib.escape/choose); tag marks the holes it digs;
   by-hand? digs what no carried tool clears bare-handed;
@@ -120,7 +118,7 @@
                                                 (- (:y pos) (second feet))
                                                 (u/dist (zipmap [:x :y :z] feet) pos)))
         n (:fruitless counted)
-        _ (when (<= n max-escalations) (await (look-round! c feet)))
+        _ (when (<= n (tuning/max-escalations)) (await (look-round! c feet)))
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
         opts {:own? (own-placed-fn c) :skip (skips c) :pillar-item (escape/pillar-item c)}
         into? (goal-walled? c result)
@@ -141,11 +139,11 @@
             (choosable? (constantly true)) {:step :none :why :zone}
             :else e)]
     (cond
-      (and (:cave-climb (ctx/mem c)) (or (> n max-escalations) (= :none (:step e))))
+      (and (:cave-climb (ctx/mem c)) (or (> n (tuning/max-escalations)) (= :none (:step e))))
       (do (ctx/update-mem! c #(-> % (dissoc :cave-climb :dive-climb :give-up) (assoc :cave-ok true)))
           :again)
       (and failed (= :detour status)) (end/give-up! c pos tries status result (merge (select-keys result [:route :straight :allowed]) {:escalation failed}))
-      (> n max-escalations) (end/give-up! c pos tries status result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) {:step :spent :n max-escalations}) into? (assoc :into true))}))
+      (> n (tuning/max-escalations)) (end/give-up! c pos tries status result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) {:step :spent :n (tuning/max-escalations)}) into? (assoc :into true))}))
       (= :none (:step e)) (end/give-up! c pos tries status result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed e) into? (assoc :into true))}))
       :else
       (do (ctx/emit! c :go-to.escalated :info {:step (:step e) :why (if (:own e) :own-way-blocked (:why (end/give-up-fields result))) :n n :at feet
