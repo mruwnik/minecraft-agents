@@ -38,6 +38,22 @@
   [ctx]
   ((:left ctx)))
 
+(defn book-try!
+  "Book a try of this job's own (job sym, why keyword) on every frame above its own: their :tries spend line, for a job
+  that retries by itself (its own frame holds only its children's endings, so its own :tries line is the job's to read). Throws a cut error if this round was cut; a check cannot book."
+  [ctx job reason]
+  ((:book-try ctx) job reason))
+
+(defn tries-left
+  "How many more tries the :tries spend lines of the call's callers and its children's endings allow (least over the chain), ##Inf when none is set."
+  [ctx]
+  (get-in (left ctx) [:spend :tries] ##Inf))
+
+(defn own-tries
+  "The :tries spend line this call itself sets, ##Inf when none."
+  [ctx]
+  (get-in (frozen-call ctx) [:spend :tries] ##Inf))
+
 (defn way?
   "Whether the call allows way k."
   [ctx k]

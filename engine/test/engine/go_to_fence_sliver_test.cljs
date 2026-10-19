@@ -35,8 +35,8 @@
       (fn ^:async t []
         (doseq [hitbox [false true]]
           (let [{:keys [outs s]} (await (two-walks! (merge (ht/world {}) {:self {:pos {:x 13 :y 64 :z 9}} :bodyHitbox hitbox})
-                                                    {:pos [13 64 6] :range 0 :doors :never :ways #{:walk :clear-seal} :retry false}
-                                                    {:pos [4 64 3] :range 1 :doors :never :ways #{:walk :clear-seal} :retry false}))
+                                                    {:pos [13 64 6] :range 0 :doors :never :ways #{:walk :clear-seal} :spend {:tries 1}}
+                                                    {:pos [4 64 3] :range 1 :doors :never :ways #{:walk :clear-seal} :spend {:tries 1}}))
                 [x _ z] (gd/at (:p s))]
             (is (= 2 (count outs)) (str "hitbox " hitbox ": both walks end: " (pr-str outs)))
             (is (empty? (walker-faults s)) (str "hitbox " hitbox ": " (pr-str (walker-faults s))))

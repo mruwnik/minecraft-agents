@@ -116,7 +116,7 @@
   "Walk to within range of pos with a go-to child: :there, :continue (it waits on the world, or a leg that got nearer) or
   :blocked (it gave up)."
   [c pos range]
-  (let [e (await (child/call-walk* c :walk {:pos pos :range range :one-way :closed :retry false
+  (let [e (await (child/call-walk* c :walk {:pos pos :range range :one-way :closed :spend {:tries 1}
                                             :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (cond
       (= :continue e) :continue

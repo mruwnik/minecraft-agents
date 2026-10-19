@@ -156,8 +156,8 @@
   body not u/within? reach counts in :out-of-range (reset when within), the third in a row ends as out-of-range.
   :again, :continue (go-to waits) or :done."
   [c pos]
-  (let [r (await (child/call-walk* c :walk {:pos pos :range (reach) :doors :shut :spend {:job-time (walk-leg-s)}
-                                                               :ways #{:walk :clear-seal} :retry false}))
+  (let [r (await (child/call-walk* c :walk {:pos pos :range (reach) :doors :shut :spend {:job-time (walk-leg-s) :tries 1}
+                                                               :ways #{:walk :clear-seal}}))
         res (when-not (= :continue r) (:data r))]
     (if (= :continue r)
       :continue

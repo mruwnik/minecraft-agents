@@ -1,5 +1,5 @@
 (ns jobs.lib.pen-entry
-  "The gates of the pens that hold animals near the body: a walk made for a block job keeps out of them (go-to :keep-out),
+  "The gates of the pens that hold animals near the body: a walk made for a block job keeps out of them (a go-to toll of ##Inf),
   because a gate opened for a body lets the crowd out. A pen is the closed enclosure (jobs.lib.pen/check) round a passive
   animal in sight, or a pen an open gate leaks from; its gates are all of the pen's."
   (:require [engine.args :as a]

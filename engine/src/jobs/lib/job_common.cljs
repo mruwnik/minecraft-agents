@@ -51,7 +51,7 @@
       (nil? cell) :blocked
       (u/within? (u/self-pos c) cell range) :there
       :else (let [e (await (child/call-walk* c :walk {:pos cell :range range :doors :shut :tolls tolls
-                                                      :one-way :closed :retry false
+                                                      :one-way :closed :spend {:tries 1}
                                                       :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
               (cond (= :continue e) :continue
                     (and (= :done (:kind e)) (:arrived (:data e))) :there

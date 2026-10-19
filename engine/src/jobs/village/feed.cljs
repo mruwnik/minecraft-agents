@@ -190,8 +190,8 @@
   "One go-to leg to within range of pos. A leg or arrival resets the blocked count, anything else counts (the third in a
   row ends unreachable); the legs since the last toss are bounded by max-walks. :again, :continue or :done."
   [c pos range]
-  (let [r (await (child/call-walk* c :walk {:pos pos :range range :spend {:job-time (leg-s)} :doors :shut
-                                            :ways #{:walk :clear-seal} :retry false}))]
+  (let [r (await (child/call-walk* c :walk {:pos pos :range range :spend {:job-time (leg-s) :tries 1} :doors :shut
+                                            :ways #{:walk :clear-seal}}))]
     (if (= :continue r)
       :continue
       (let [res (:data r)

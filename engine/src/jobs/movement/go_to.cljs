@@ -35,7 +35,7 @@
   column whose ground is not made out is looked at after a fruitless walk (at most 3 a call); with no stand in reach of its guess it walks to seen stands toward it (column/waypoint, off the line past a cliff), until ::max-waypoint-misses bring it no nearer. A cell over a short floor (farmland, a path, a bottom slab) stands for that
   block's own cell, where the body's feet are. :place (a name such as :home, set by jobs.memory.set-place) walks to
   that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker).
-  - Refused at submit (or the caller's ctx/call throws): an arg its spec refuses, such as a :tolls entry that is not {:x :y :z :factor} of finite numbers, a :gait that is not :auto, :walk or :sneak.
+  - Refused at submit (or the caller's ctx/call throws): an arg its spec refuses, such as a :tolls entry that is not {:x :y :z :factor} (finite cell, factor 0 or more), a :gait that is not :auto, :walk or :sneak.
   - Ends at once, before any walk, after a :refused warn, data {:arrived false :text}: impossible :bad-pos (a :pos
     outside the world), :bad-name (a :place that is not a valid name), :unsupported (a body with no pathWorld sensing)
     or :bad-args (a given :floor :health over 20, a :spend :job-time outside 0.1-120); condition-failed :unknown-place (no
@@ -51,7 +51,8 @@
     most 60 s each) until it arrives or gives up. A search that needs more slices walks on toward where it has got
     to, or not at all while it goes on; every iteration awaits a pace-ms timer. A goal in unloaded land is walked
     toward walk by walk, and to the edge of loaded land when that is the only way on. It returns :continue only while
-    an escalation or put-back child, or healing, is waiting on the world. Each fruitless round that plans again says so (info go-to.retrying: reason, try).
+    an escalation or put-back child, or healing, is waiting on the world. Each fruitless round that plans again says so (info go-to.retrying: reason, try); each books a try, and a call whose :spend :tries (its own, or a caller's least) is used up
+    gives up instead (a caller that re-aims itself passes {:tries 1}).
   - A drop or plant that costs hp is planned only within a damage budget (jobs.lib.cost/damage-budget: the health over
     the call's :floor :health, default 12, less 1, at most its :spend :health; a caller's floor counts only above 12
     unless this call gives one, walk-limits). When that budget is why no way was found, the body that can heal waits
@@ -164,13 +165,11 @@
            :spec #{:shut :leave-open :never} :default :shut}
    :unknown {:doc "true: plan over what the body has seen or felt only, unseen floors checked by eye before they are stepped on; false: plan over the world as it is" :spec boolean? :default false}
    :torches {:doc "with :unknown, how a dark floor the body cannot see is lit: :never (no torch is placed), :carried (a torch from the inventory, placed at the takeoff, priced by jobs.lib.cost/light-cost), :fetch (the same, fetching torches first when none is carried: a jobs.lib.need child)" :spec #{:never :carried :fetch} :default :never}
-   :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more (jobs.lib.cost farm-tolls, zone-tolls)" :spec (a/valid-by "a list of {:x :y :z :factor} of finite numbers, :factor >= 0" wworld/tolls-problem) :default nil}
+   :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more; ##Inf: no way through it is planned (jobs.lib.cost farm-tolls, zone-tolls; jobs.lib.pen-entry gives a block job the gates of pens holding animals)" :spec (a/valid-by "a list of {:x :y :z :factor}, x y z finite numbers, :factor >= 0 (##Inf allowed)" wworld/tolls-problem) :default nil}
    :gait {:doc "how the body walks: :auto (sprints on long straight runs and over gaps, as the walker does), :walk (never sprints: no gap jump over 2 or more), :sneak (slow, never sprints; holds sneak on level steps so it never walks off an edge, lets go for a planned drop, gap, climb or water); nil: the body's setting jobs.lib.walk.world/gait (:auto)" :spec #{:auto :walk :sneak} :default nil}
-   :keep-out {:doc "cells the walk treats as solid, [{:x :y :z}]: no way through them is planned (jobs.lib.pen-entry gives a block job the gates of pens holding animals)" :spec (a/valid-by "a list of {:x :y :z} of whole numbers" (fn [cells] (when-not (and (sequential? cells) (every? #(and (map? %) (every? integer? (map % [:x :y :z]))) cells)) "keep-out is a list of {:x :y :z} of whole numbers"))) :default nil}
    :leg-alert-within {:doc "with :leg-alert-s and a :spend :job-time leg: blocks within which a hostile that attacks at close range (not a ranged mob or an enderman; a creeper counts), or a loss of health since the call began, shortens a leg's search to :leg-alert-s seconds from its start" :spec (a/num-in 0 nil) :default nil}
    :leg-alert-s {:doc "seconds a search may last once the :leg-alert-within alert is on (0.1 to 120)" :spec (a/num-in 0.1 120) :default nil}
    :one-way {:doc "arg, not the :one-way key of a give-up result: :closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back, and walks to no frontier of loaded land (a walk to something visible); :open (default) takes one when the land past it runs on into unloaded land (under :unknown also land the body has not seen)" :spec #{:open :closed} :default :open}
-   :retry {:doc "false: a walk that got no nearer gives up at once instead of walking again (up to 3 times), for a caller that re-aims itself" :spec boolean? :default true}
    :ignore-zones? :shared})
 
 (defn ^:async step!
@@ -196,6 +195,8 @@
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one go-to call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds one go-to call may last from its start, the waits on its checks included (:limit-reached)." :spec (a/num-in 0 nil)}})
+
+(def meta {:own-tries? true})
 
 (def defaults {:least :all :spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 

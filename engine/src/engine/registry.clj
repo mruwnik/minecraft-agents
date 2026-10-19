@@ -114,14 +114,15 @@
   (if (= "debug" (second (str/split (str ns-sym) #"\."))) :debug :goal))
 
 (defn job-meta
-  "{:category :goal|:phase|:reflex|:debug :part-of [job-sym ...] :tags [kw ...] :position-bound? bool} of job ns-sym from the (def meta {...}) in forms:
-  what it declares over the default category, :part-of and :tags [] when absent, :position-bound? false."
+  "{:category :goal|:phase|:reflex|:debug :part-of [job-sym ...] :tags [kw ...] :position-bound? bool :own-tries? bool} of job ns-sym from the (def meta {...}) in forms:
+  what it declares over the default category, :part-of and :tags [] when absent, :position-bound? and :own-tries? false."
   [ns-sym forms]
   (let [declared (some-> (def-value "meta" forms) unquote-form)]
     {:category (or (:category declared) (default-category ns-sym))
      :part-of (vec (:part-of declared))
      :tags (vec (:tags declared))
-     :position-bound? (boolean (:position-bound? declared))}))
+     :position-bound? (boolean (:position-bound? declared))
+     :own-tries? (boolean (:own-tries? declared))}))
 
 (defn ns-doc
   "The docstring of the ns form (the first form), or nil."

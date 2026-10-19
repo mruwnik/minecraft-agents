@@ -53,7 +53,7 @@
                 (ctx/update-mem! c (fn [m] (-> m (update :done-chests (fnil conj #{}) cell) (update :inspected (fnil inc 0))
                                                (assoc-in [:blocked-chests pos] why)))))
         w (when-not (u/within? (u/self-pos c) pos 3)
-            (await (child/call-walk* c :walk {:pos pos :range 3 :ways #{:walk :clear-seal} :retry false})))]
+            (await (child/call-walk* c :walk {:pos pos :range 3 :ways #{:walk :clear-seal} :spend {:tries 1}})))]
     (cond
       (= :continue w) :continue
       (and w (not (:arrived (:data w)))) (do (mark! "unreachable") :again)

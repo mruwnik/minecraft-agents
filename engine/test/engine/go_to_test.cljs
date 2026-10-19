@@ -431,11 +431,11 @@
                                                 #(override-steer! % (fn ^:async f [_ _ _] #js {:status "done"}))))]
           (is (= {:arrived false :reason :unreachable :why :no-progress :escalation {:step :none :why :no-wall}} (dissoc @out :at :near :text :status))))))))
 
-(deftest go-to-retry-false-ends-a-walk-that-got-no-nearer-at-once
+(deftest go-to-spend-one-try-ends-a-walk-that-got-no-nearer-at-once
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[args want] [[{} 3] [{:retry false} 1]]]
+        (doseq [[args want] [[{} 3] [{:spend {:tries 2}} 2] [{:spend {:tries 1}} 1]]]
           (let [steers (atom 0)
                 {:keys [out]} (await (go-prepped! {:blocks flat} (merge {:pos [10 64 0] :range 0 :ways #{:walk :clear-seal}} args)
                                                   #(override-steer! % (fn ^:async f [_ _ _] (swap! steers inc) #js {:status "done"}))))]

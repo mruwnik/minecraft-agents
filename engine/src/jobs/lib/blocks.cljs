@@ -167,7 +167,7 @@
 (def low-floor-radius 4)
 
 (defn low-floor-cells
-  "The seen beds and bottom slabs round pos ({:x :y :z}), as keep-out cells: a build's walk stands half a block high on
+  "The seen beds and bottom slabs round pos ({:x :y :z}), as cells a walk never enters (a go-to ##Inf toll): a build's walk stands half a block high on
   one, its head inside the roof cell the build still has to fill."
   [c pos]
   (let [p (:primitives c) r low-floor-radius]
@@ -181,9 +181,9 @@
   gates of the pens holding animals, after a look at the cells of those not yet seen."
   [c pos see? & [range]]
   (let [pens (when-not (:enter-pens (:args c)) (await (pen-entry/pens! c)))
-        keep-out (into (vec (mapcat :gates pens)) (when (:for-plan (:args c)) (low-floor-cells c pos)))]
+        keep-out (mapv #(assoc % :factor ##Inf) (into (vec (mapcat :gates pens)) (when (:for-plan (:args c)) (low-floor-cells c pos))))]
     [pens (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))}
-            (seq keep-out) (assoc :keep-out keep-out))]))
+            (seq keep-out) (assoc :tolls keep-out))]))
 
 (defn warn-kept-out! [c pens]
   (when (seq pens)

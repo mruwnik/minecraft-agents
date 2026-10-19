@@ -350,7 +350,7 @@
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= [:clear-path] (mapv :step (events-of seen :go-to.escalated))) "three stuck walks round the wall, then a door through it"))))))
 
-(deftest one-stuck-walk-under-retry-false-gives-up-without-digging
+(deftest one-stuck-walk-under-one-try-gives-up-without-digging
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -359,7 +359,7 @@
               steers (atom 0)
               stuck (gt/steer-through (fn [_] (gt/pose 2.5 0.5)))
               out (atom :not-done)
-              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [8 64 0] :range 0 :retry false})))]
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [8 64 0] :range 0 :spend {:tries 1}})))]
           (gt/override-steer! p (fn [token a impl] (if (<= (swap! steers inc) 1) (stuck token a impl) (impl token a))))
           (core/submit! eng '(recording-parent) {})
           (await (tick-out! eng 1000))

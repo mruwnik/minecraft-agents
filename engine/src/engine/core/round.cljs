@@ -100,6 +100,7 @@
      :left #(let [t (now eng)]
               (contract/least-left (for [[s state] (limits/frames eng root slots)]
                                      (contract/left state t (- t (nth (:t0s base) (count s) t))))))
+     :book-try (fn [job reason] (check!) (when (seq slots) (tally/count-try! eng root (pop slots) job reason)))
      :section-depth (:section-depth base) :held (:held base) :section-closed #(limits/section-closed! eng base)
      :view #(mem/view store)
      :update-mem (fn [f more]

@@ -101,7 +101,7 @@
               go-to (assoc stranded :round (fn ^:async w [c] (reset! args (:args c)) (ctx/end c :nothing-possible :unreachable)))]
           (with-redefs [pen-entry/pens! (fn ^:async p [_] [{:gates [gate] :animals 2}])]
             (is (= :nothing-possible (:kind (await (in-parent go-to (fn ^:async g [c] (await (b/walk!* c [9 64 0]))) seen))))))
-          (is (= [gate] (:keep-out @args)))
+          (is (= [(assoc gate :factor ##Inf)] (:tolls @args)))
           (is (some #(= :blocks.pen-kept-out (:kind %)) @seen)))))))
 
 (deftest walk-into!*-asks-go-to-for-the-slots-walk

@@ -8,6 +8,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.tolls :as tolls]
             [jobs.lib.near :as near]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.walk.plan :as wplan]))
@@ -45,6 +46,14 @@
           (is (seq bent))
           (is (not (on-wall? bent)) "tolls: round them"))))))
 
+(deftest a-toll-of-infinity-is-a-cell-no-plan-enters
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shut (await (plan-with (tolls/tolls (for [y [64 65 66] [x _ z] wall] [x y z]) ##Inf)))]
+          (is (seq shut))
+          (is (not (on-wall? shut)) "round the column, as if solid stone (a one-high wall could be climbed)"))))))
+
 (deftest tolls-reach-the-planner-and-the-search-key-and-survive-walls
   (let [pw #js {:snapshot nil :table nil :space nil}
         tolled (wworld/with-tolls pw (cost/zone-tolls [[5 64 0] [6 64 1]]))
@@ -60,6 +69,7 @@
   (is (nil? (wworld/tolls-problem nil)))
   (is (nil? (wworld/tolls-problem [])))
   (is (nil? (wworld/tolls-problem [{:x 1 :y 64 :z 2 :factor 3}])))
+  (is (nil? (wworld/tolls-problem [{:x 1 :y 64 :z 2 :factor ##Inf}])))
   (doseq [bad [{:x 1 :y 64 :z 2} {:x 1 :y 64 :z 2 :factor nil} {:x 1 :y 64 :z 2 :factor "3"}
                {:x 1 :y 64 :z 2 :factor js/NaN} {:x 1 :y 64 :z 2 :factor -1} {:x 1 :y 64 :factor 3}
                {:x 1 :y 64 :z js/Infinity :factor 3} [1 64 2] nil]]

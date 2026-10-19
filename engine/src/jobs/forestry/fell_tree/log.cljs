@@ -82,7 +82,7 @@
       (nil? cell) :blocked
       (u/within? (u/self-pos c) cell range) :there
       :else (let [e (await (child/call-walk* c :walk {:pos cell :range range :doors :shut
-                                                      :one-way :closed :see false :retry false
+                                                      :one-way :closed :see false :spend {:tries 1}
                                                       :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
               (cond
                 (= :continue e) :partial

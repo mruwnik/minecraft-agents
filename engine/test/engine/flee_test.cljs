@@ -132,7 +132,7 @@
           (is (pos? (count @args)) "every flight step is a go-to call")
           (is (every? #(not-any? #{:pillar :stair :clear-path :dig-out} (:ways %)) @args) "a flee never digs or pillars")
           (is (every? #(= 16 (get-in % [:settings :jobs.lib.walk.world/y-margin])) @args) "a flee plans no route far below or above itself and its goal")
-          (is (every? #(and (false? (:retry %)) (false? (get-in % [:settings :jobs.movement.go-to.tuning/look-round]))) @args)
+          (is (every? #(and (= 1 (get-in % [:spend :tries])) (false? (get-in % [:settings :jobs.movement.go-to.tuning/look-round]))) @args)
               "a step that gains nothing ends at once and never looks round")
           (is (> (fake/dist (body-pos p) (mob-pos p 7)) 35)))))))
 

@@ -127,7 +127,6 @@
      :avoid (set (:fault-cells (ctx/mem c)))
      :tolls (:tolls (:args c))
      :zone-tolls (wworld/zone-tolls?)
-     :keep-out (:keep-out (:args c))
      :unknown (round-unknown c)}))
 
 (defn ^:async walk-dry!
@@ -402,13 +401,14 @@
                 unstuck? (await (unstick/swim-out! c pos walked))
                 progress? (or (< left (dec best)) explored? nearer?)
                 tries (if progress? 0 (inc (:blocked (ctx/mem c) 0)))]
+            (when-not progress? (ctx/book-try! c 'jobs.movement.go-to (or (:reason result) :no-progress)))
             (ctx/update-mem! c assoc :blocked tries :searching 0 :wet-fresh 0 :best (if (< left (dec best)) left best)
                              :closest (min left (:closest (ctx/mem c) left)) :last-dist left
                              :frontier-best (cond-> fbests frontier (assoc frontier (min fbest (u/dist to fcell))))
                              :target-best (cond-> tbests target (assoc target (min tdist (get tbests target js/Infinity)))))
             (when (and progress? (:restore-pending (ctx/mem c))) (restore/restore-next! c))
             (if (or unstuck?
-                    (and (if (false? (:retry (:args c))) progress? (< tries max-blocked)) (not (#{:goal-enclosed :goal-cut-off :goal-on-magma} (:reason result)))))
+                    (and (or progress? (and (< tries max-blocked) (< tries (ctx/own-tries c)) (pos? (ctx/tries-left c)))) (not (#{:goal-enclosed :goal-cut-off :goal-on-magma} (:reason result)))))
               (do (when (and (pos? tries) (not unstuck?)) (retrying! c result tries))
                   :again)
               (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))

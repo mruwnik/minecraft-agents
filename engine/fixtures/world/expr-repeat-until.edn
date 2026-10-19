@@ -25,21 +25,21 @@
   {:name "seq-stops-at-a-failed-child"
    :time :day
    :blocks [[:fill [27 0 27] [29 2 29] "bedrock"] [:set [28 0 28] "air"]]
-   :act [[:job (seq (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :retry false :ways #{:walk :clear-seal}}) (jobs.movement.look-around {:every-ms 500}))]]
+   :act [[:job (seq (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :clear-seal}}) (jobs.movement.look-around {:every-ms 500}))]]
    :expect [{:event {:source :job :kind :stopped} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :c1}} :for-s 80 :until {:source :job :kind :stopped}}]
    :limit-s 100}
   {:name "repeat-stops-at-a-failed-child"
    :time :day
    :blocks [[:fill [27 0 27] [29 2 29] "bedrock"] [:set [28 0 28] "air"]]
-   :act [[:job (repeat (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :retry false :ways #{:walk :clear-seal}}))]]
+   :act [[:job (repeat (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :clear-seal}}))]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :resting}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
    :limit-s 100}
   {:name "until-stops-at-a-failed-child"
    :time :day
    :blocks [[:fill [27 0 27] [29 2 29] "bedrock"] [:set [28 0 28] "air"]]
-   :act [[:job (until (jobs.time.wait-for-dusk) (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :retry false :ways #{:walk :clear-seal}}))]]
+   :act [[:job (until (jobs.time.wait-for-dusk) (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :clear-seal}}))]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :resting}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
    :limit-s 100}]}

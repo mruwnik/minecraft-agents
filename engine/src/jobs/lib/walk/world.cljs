@@ -177,15 +177,16 @@
                        :cells (js/Set. (clj->js (mapv (fn [[x y z]] (planner/cell-key x y z)) sorted)))}})))
 
 (defn tolls-problem
-  "Why tolls is not a usable go-to :tolls (nil or a sequence of {:x :y :z :factor}, finite numbers, factor not negative), else nil."
+  "Why tolls is not a usable go-to :tolls (nil or a sequence of {:x :y :z :factor}, x y z finite, factor not negative and
+  not NaN: ##Inf is a cell no plan enters), else nil."
   [tolls]
   (let [finite? #(and (number? %) (js/isFinite %))
-        ok? #(and (map? %) (every? (comp finite? %) [:x :y :z :factor]) (>= (:factor %) 0))]
+        ok? #(and (map? %) (every? (comp finite? %) [:x :y :z]) (number? (:factor %)) (>= (:factor %) 0))]
     (cond
       (nil? tolls) nil
       (not (sequential? tolls)) (str "tolls is a list of {:x :y :z :factor}; got " (pr-str tolls))
       :else (when-let [[bad] (seq (remove ok? tolls))]
-              (str "a toll is {:x :y :z :factor} of finite numbers, factor 0 or more; got " (pr-str bad))))))
+              (str "a toll is {:x :y :z :factor}: x y z finite numbers, factor 0 or more (##Inf: never entered); got " (pr-str bad))))))
 
 (defn with-tolls
   "pw whose plans cost the cells of tolls ([{:x :y :z :factor}], jobs.lib.cost farm-tolls and zone-tolls) factor times their

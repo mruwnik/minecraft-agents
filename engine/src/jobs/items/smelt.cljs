@@ -313,7 +313,7 @@
                       :blocked)
       (u/within? (u/self-pos c) cell 3) :there
       :else (let [r (await (child/call-walk* c :walk {:pos cell :range 3 :doors :shut
-                                                      :one-way :closed :retry false
+                                                      :one-way :closed :spend {:tries 1}
                                                       :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
                   res (:data r)]
               (cond

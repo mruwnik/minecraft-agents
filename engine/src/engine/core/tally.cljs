@@ -38,10 +38,12 @@
 
 (defn count-try!
   "Book a child ending (reason of job) as a try on every frame from root down to slots (the :tries spend line), the
-  last one kept for the cause."
+  last one kept for the cause; a frame of a job that counts its own tries (meta :own-tries?) is left out."
   [eng root slots job reason]
   (update-frames! eng root (frame-paths slots)
-                  #(-> % (update-in [:tally :uses :tries] (fnil inc 0)) (assoc :last-try {:job job :reason reason}))))
+                  #(if (get-in eng [:jobs (:job %) :own-tries?])
+                     %
+                     (-> % (update-in [:tally :uses :tries] (fnil inc 0)) (assoc :last-try {:job job :reason reason})))))
 
 (defn add-time!
   "Book ms of round time on the frame at slots only: a parent's round already holds its children's."
