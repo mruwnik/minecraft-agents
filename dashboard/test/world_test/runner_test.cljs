@@ -1655,3 +1655,29 @@
                  (is (= "a stranger" res))
                  (is (= 4 calls))
                  (done))))))
+
+(defn clock-send [ticks] (fn [_] (js/Promise.resolve [(str "The time is at " ticks " ticks")])))
+
+(deftest confirm-phase-rejects-when-the-world-stays-in-the-other-phase
+  (async done
+    (-> (r/confirm-phase! :night (clock-send 1000) (fn [_] (js/Promise.resolve nil)))
+        (.then (fn [_] (is false "must reject")))
+        (.catch (fn [e] (is (re-find #"not in the night phase" (.-message e)))))
+        (.then #(r/confirm-phase! :night (clock-send 14000) (fn [_] (js/Promise.resolve nil))))
+        (.then (fn [ok] (is (true? ok))))
+        (.finally done))))
+
+(deftest a-batch-case-reads-the-clock-instead-of-trusting-the-marker
+  (async done
+    (-> (js/Promise.all #js [(r/clock-at-night? (clock-send 1000)) (r/clock-at-night? (clock-send 14000))])
+        (.then (fn [[day night]] (is (false? day)) (is (true? night))))
+        (.finally done))))
+
+(deftest a-night-batch-keeps-its-place-in-the-time-lock-queue-after-the-first-case
+  (async done
+    (let [files (atom {7 {:phase :day :state :want :seq 100}})
+          told (atom [])
+          env (assoc (share-env files #(js/Promise.resolve :day) told) :batch "n1")]
+      (-> (r/acquire-shared! (assoc env :batch-start 50) :night-x "case")
+          (.then (fn [res] (is (= {:first? true} res) "an older batch start passes the day waiter")))
+          (.finally done)))))

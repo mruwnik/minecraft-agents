@@ -772,6 +772,13 @@
   [batch & [dir]]
   (fs/existsSync (path/join (or dir night-batch-marker-dir) batch)))
 
+(defn night-batch-start
+  "When the batch's first case started (ms), from its marker; nil without one."
+  [batch & [dir]]
+  (let [f (path/join (or dir night-batch-marker-dir) batch)]
+    (when (fs/existsSync f)
+      (try (:at (reader/read-string (str (fs/readFileSync f "utf8")))) (catch :default _ nil)))))
+
 (declare local-now)
 
 (def sleep-rule "players_sleeping_percentage")
@@ -923,9 +930,9 @@
   "Resolves to {:first? bool} when this process holds the time lock for phase (:day, :night or :any), logging who it waits
   for (once per holder set). Holders of the same phase share it; :any joins the phase that holds, else the world's.
   env: {:ops lock dir ops, :read-phase (-> promise of :day or :night), :sleep, :log}."
-  [{:keys [ops read-phase sleep log batch]} phase what]
+  [{:keys [ops read-phase sleep log batch batch-start]} phase what]
   (let [pid (.-pid js/process)
-        seq (js/Date.now)]
+        seq (or batch-start (js/Date.now))]
     (letfn [(attempt [told]
               (.then (if (= :any phase) (read-phase) (js/Promise.resolve :day))
                      (fn [wp]
@@ -940,6 +947,7 @@
 (defn acquire-time-lock!
   [phase what & [batch]]
   (acquire-shared! {:ops (time-lock-dir-ops) :batch batch
+                    :batch-start (when batch (night-batch-start batch))
                     :read-phase #(.then (rcon! ["time query day"]) (fn [[reply]] (if (night? (daytime (or reply ""))) :night :day)))
                     :sleep sleep :log log!}
                    phase what))
@@ -951,15 +959,23 @@
          (fn [_] (.finally (thunk) release-time-lock!))))
 
 (defn confirm-phase!
-  "Resolves once the world reports phase (:day or :night), polling `time query` a few times."
-  [phase]
+  "Resolves once the world reports phase (:day or :night), polling `time query` a few times; rejects when it never does."
+  ([phase] (confirm-phase! phase rcon! sleep))
+  ([phase send pause]
   (letfn [(poll [n]
-            (.then (rcon! ["time query day"])
+            (.then (send ["time query day"])
                    (fn [[reply]]
-                     (if (or (zero? n) (= phase (if (night? (daytime (or reply ""))) :night :day)))
-                       true
-                       (.then (sleep 300) #(poll (dec n)))))))]
-    (poll 10)))
+                     (cond
+                       (= phase (if (night? (daytime (or reply ""))) :night :day)) true
+                       (zero? n) (throw (js/Error. (str "the world is not in the " (name phase) " phase after the time was set")))
+                       :else (.then (pause 300) #(poll (dec n)))))))]
+    (poll 10))))
+
+(defn clock-at-night?
+  "Promise of whether the world clock reads night now: a batch marker only says an earlier case set the night, not that
+  an outside holder left it alone."
+  [send]
+  (.then (send ["time query day"]) (fn [[reply]] (boolean (night? (daytime (or reply "")))))))
 
 (defn mark-phase-set!
   "Called by the first holder once its phase is in place; joiners wait for it."
@@ -1708,7 +1724,11 @@
                                 (js/Promise.resolve nil))
                               (.then (fn [_] (cond
                                 (= :any phase) true
-                                (and batch (night-batch-set? batch)) (js/Promise.resolve true)
+                                (and batch (night-batch-set? batch))
+                                (.then (clock-at-night? rcon!)
+                                       (fn [night]
+                                         (or night
+                                             (set-time! opts (batch-start-ticks rc) (str (:id c) " re-sets night batch " batch " (an outside holder changed the time)")))))
                                 batch (.then (set-time! opts (batch-start-ticks rc) (str (:id c) " starts night batch " batch))
                                              (fn [ok] (if ok
                                                         (.then (start-sleep-rule! rcon! opts rc batch nil (str (:id c) " starts night batch " batch)) (constantly ok))
