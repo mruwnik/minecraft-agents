@@ -28,7 +28,7 @@
   {:reason :need :item \"bone_meal\"} (none carried, targets left, :fetch false).
   Ends when :max uses are spent, the bone meal runs out or no unripe crop is left, with data {:used n}: done when it used
   some (at least :least, uses) or when no unripe crop was there; condition-failed :refused when crops were there and under :least
-  took bone meal (zones, unreachable, the crop refused). done? counts the uses and the targets left.")
+  took bone meal (zones, unreachable, the crop refused), :need when the bone meal ran out under :least. done? counts the uses and the targets left.")
 
 (a/defargs args
   {:at {:doc "one crop position to fertilize; the crops around the body when nil" :spec ::a/pos :default nil}
@@ -147,7 +147,7 @@
       (and (pos? used) (common/enough? c used (min (:max (:args c)) (+ used left)))) (ctx/end c :done nil done)
       (pos? used) (if (farm/has-meal? (:primitives c))
                     (ctx/end c :condition-failed :refused data)
-                    (ctx/end c :nothing-possible :need data))
+                    (ctx/end c :condition-failed {:reason :need :item "bone_meal" :count 1} data))
       (pos? left) (ctx/end c :condition-failed :refused data)
       :else (ctx/end c :done nil done))))
 

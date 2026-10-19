@@ -137,7 +137,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world (assoc ft/two-wheat :inventory [{:name "bone_meal" :count 1}])]
-          (doseq [[least kind cause] [[1 :done nil] [2 :nothing-possible :need] [:all :nothing-possible :need]]]
+          (doseq [[least kind cause] [[1 :done nil] [2 :condition-failed {:reason :need :item "bone_meal" :count 1}] [:all :condition-failed {:reason :need :item "bone_meal" :count 1}]]]
             (let [e (await (ending-of (ft/setup world) fertilize {:least least :fetch false} 30))]
               (is (= {:kind kind :cause cause} (kc e)) (str ":least " least))
               (is (= 1 (get-in e [:data :used]))))))))))
