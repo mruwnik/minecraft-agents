@@ -66,11 +66,11 @@
    {:x (+ (:x eye) (* (glance-near) dx)) :y (- (:y eye) game/body-height) :z (+ (:z eye) (* (glance-near) dz))}])
 
 (defn up-cells
-  "The cells along the ray from eye up (about 60 degrees) along [dx dz], as far as the level look takes in."
+  "The cells along the ray from eye up (about 60 degrees) along [dx dz], twice as far as the level look takes in: what stands high beside the body is up there."
   [eye [dx dz]]
-  (let [n (* 2 (glance-ahead))]
+  (let [n (* 4 (glance-ahead))]
     (distinct (for [i (range 1 (inc n))
-                    :let [t (/ (* i (glance-ahead)) n)]]
+                    :let [t (/ (* i 2 (glance-ahead)) n)]]
                 (cell-of {:x (+ (:x eye) (* t 0.5 dx)) :y (+ (:y eye) (* t 0.87)) :z (+ (:z eye) (* t 0.5 dz))})))))
 
 (defn up-unseen?

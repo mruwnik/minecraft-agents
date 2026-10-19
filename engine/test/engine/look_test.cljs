@@ -102,6 +102,9 @@
           (await (look/look-around! c))
           (is (= 8 (- (count (.-calls (.-world p))) n))))))))
 
+(deftest the-look-up-ray-reaches-a-stone-three-off-and-five-up
+  (is (some #{{:x 3 :y 6 :z 0}} (look/up-cells {:x 0.5 :y 1.6 :z 0.5} [1 0])) "a stone on a pillar is under the ray, so an unseen cell there makes the body look up"))
+
 (deftest seen-blocks-rejects-a-query-that-is-not-names-or-match
   (let [p (seeing {:blocks {"0,64,2" "iron_ore"}})]
     (is (thrown? js/Error (look/seen-blocks p {:names (fn [n] (= n "iron_ore"))})) "names must be a coll")
