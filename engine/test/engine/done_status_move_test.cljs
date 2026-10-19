@@ -26,6 +26,7 @@
    ['jobs.access.cleanup {:job "j"} :ok {}]
    ['jobs.access.toggle {:pos [3 64 0] :state :open} :later {}]
    ['jobs.access.pillar {:height 3} :later {}]
+   ['jobs.access.record-stair {} :later {}]
    ['jobs.access.bridge {:heading :east :length 3} :later {}]
    ['jobs.access.tunnel {:to [5 60 0]} :later {}]
    ['jobs.access.stair {:direction :down :steps 3} :later {}]

@@ -19,15 +19,22 @@
   [c cell]
   (ctx/remember! c :stair-plug {:dim (.-dimension (.self (:primitives c))) :cell cell} plug-policy))
 
-(defn record-way!
-  "Remember the steps walked (memory :stair-way, one entry a connected way: joined-way), so a climb cut in many runs
-  does not push the body's other stairs out of the memory."
-  [c origin dir heading steps]
+(defn remember-way!
+  "Remember floors as one connected way (memory :stair-way) with every earlier way that holds ground or one of the floors:
+  those are taken in, so a climb cut in many runs does not push the body's other stairs out of the memory. Returns the
+  joined floors."
+  [c ground floors]
   (let [dim (.-dimension (.self (:primitives c)))
         olds (keep #(when (= dim (:dim (:data %))) (:floors (:data %))) (ctx/entries c :stair-way))
-        {:keys [floors gone]} (cells/joined-way olds (shape/add origin [0 -1 0]) (cells/way-floors origin dir heading steps))]
+        {:keys [floors gone]} (cells/joined-way olds ground floors)]
     (when (seq gone) (ctx/forget-where! c :stair-way #(and (= dim (:dim %)) (contains? gone (:floors %)))))
-    (ctx/remember! c :stair-way {:dim dim :floors floors} way-policy)))
+    (ctx/remember! c :stair-way {:dim dim :floors floors} way-policy)
+    floors))
+
+(defn record-way!
+  "Remember the steps walked (memory :stair-way, one entry a connected way: remember-way!)."
+  [c origin dir heading steps]
+  (remember-way! c (shape/add origin [0 -1 0]) (cells/way-floors origin dir heading steps)))
 
 (defn tool-failed?
   "Whether a fetch of a tool for block failed in this call (job memory), so it is dug bare-handed and not asked for again."

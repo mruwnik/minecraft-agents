@@ -31,7 +31,7 @@
      jobs.combat.hunt jobs.gather.get-seeds jobs.gather.make-obsidian jobs.gather.mine
      jobs.movement.go-to jobs.movement.look-around jobs.movement.follow jobs.movement.leave-vehicle jobs.movement.mount jobs.movement.boat-launch jobs.movement.boat-recover jobs.movement.boat-drive jobs.movement.boat-land jobs.movement.cross-water jobs.movement.linger-near jobs.survival.block-arrow-gap
      jobs.time.wait-for-day jobs.time.wait-for-dusk jobs.time.noop jobs.debug.notify jobs.debug.ready-probe
-     jobs.access.stair jobs.access.tunnel jobs.access.toggle jobs.farm.tidy
+     jobs.access.stair jobs.access.record-stair jobs.access.tunnel jobs.access.toggle jobs.farm.tidy
      jobs.access.cleanup jobs.access.leave-tunnel jobs.access.clear-path jobs.strip.seal jobs.strip.corridor jobs.strip.site
      jobs.blocks.dig jobs.blocks.fill-cells jobs.blocks.place jobs.blocks.use-on jobs.items.interact
      jobs.memory.set-place jobs.memory.forget-place jobs.memory.remember jobs.memory.reserve jobs.memory.unreserve})
