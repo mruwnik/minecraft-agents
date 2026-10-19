@@ -70,13 +70,12 @@
             (str/split #"[^a-z0-9_/-]+"))))
 
 (defn case-plan-lines
-  "The lines under each note's 'Live plan (cases):' heading, up to the next blank line; empty when no note has one."
+  "The lines under the newest note's 'Live plan (cases):' heading, up to the next blank line (plan-notes are oldest first; older plans may name cases that are gone); empty when no note has one."
   [plan-notes]
-  (vec (mapcat (fn [n]
-                 (when-let [i (str/index-of (str/lower-case n) "live plan (cases):")]
-                   (->> (str/split-lines (subs n (+ i (count "live plan (cases):"))))
-                        (map str/trim) (drop-while str/blank?) (take-while (complement str/blank?)))))
-               plan-notes)))
+  (let [marker "live plan (cases):"]
+    (when-let [n (last (filter #(str/includes? (str/lower-case %) marker) plan-notes))]
+      (->> (str/split-lines (subs n (+ (str/index-of (str/lower-case n) marker) (count marker))))
+           (map str/trim) (drop-while str/blank?) (take-while (complement str/blank?)) vec))))
 
 (defn description-case-lines
   "A bug card's description lists its failing cases as '- fixture/case (...)' lines; those are cases the card owes, whatever its plan note names."

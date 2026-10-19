@@ -155,6 +155,14 @@
     (is (= ["c1" "c3"] (:no-plan r)))
     (is (= ["a/gone"] (:missing (first (:cards r)))))))
 
+(deftest only-the-newest-live-plan-note-counts
+  (let [r (t/triage {:results [(ok "a/x")] :previous []
+                     :cards [{:id "c1" :column "live" :title "one" :commits []
+                              :plan-notes ["Live plan (cases):\na/gone" "Live plan (cases):\na/x"]}]
+                     :bugs [] :ancestor? (constantly true)})]
+    (is (= ["c1"] (:tick r)))
+    (is (= [] (:missing (first (:cards r)))))))
+
 (deftest a-shortened-case-name-under-the-heading-is-not-missing
   (let [r (t/triage {:results [(ok "a/long-case-name")] :previous []
                      :cards [{:id "c1" :column "live" :title "one" :commits [] :plan-notes ["Live plan (cases):\na/long-case"]}]
