@@ -280,7 +280,7 @@
         (let [s (setup {:entities [(zombie 7 5 {})]})
               {:keys [p]} s
               searches (atom 0)]
-          (mem/write! (:store (:eng s)) :hurt {:amount 2 :health 10 :causes ["spider"]} {:cap 50 :ttl 60000})
+          (mem/write! (:store (:eng s)) :hurt {:amount 2 :health 10 :attacker {:name "spider"}} {:cap 50 :ttl 60000})
           (with-redefs [near/walk-round! (fn [c _ _ _]
                                            (swap! searches inc)
                                            (swap! (fake/state p) assoc :entities [])

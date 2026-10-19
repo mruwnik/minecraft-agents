@@ -1058,7 +1058,7 @@
                                 (let [[x y z] (:pos (fake/self p))]
                                   (swap! (fake/state p) #(-> % (update-in [:self :health] - 0.5) (assoc :entities [])))
                                   (fake/add-entity! p (zombie (+ x 4) y z))
-                                  (mem/write! (:store eng) :hurt {:amount 0.5 :causes ["zombie"]} {:cap 50 :ttl 60000})
+                                  (mem/write! (:store eng) :hurt {:amount 0.5 :attacker {:name "zombie"}} {:cap 50 :ttl 60000})
                                   r))
               leave! (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r))))]
           (.override (.-world p) "steer" (fn [token a impl] (-> (impl token a) (.then follow-and-hit!))))
@@ -1081,7 +1081,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks closed-box :entities [(zombie 1 64 0)]})
               leave! (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r))))]
-          (mem/write! (:store eng) :hurt {:amount 0.5 :causes ["zombie"]} {:cap 50 :ttl 60000})
+          (mem/write! (:store eng) :hurt {:amount 0.5 :attacker {:name "zombie"}} {:cap 50 :ttl 60000})
           (.override (.-world p) "attack" leave!)
           (core/submit! eng retreat {})
           (await (core/tick! eng))
@@ -1109,7 +1109,7 @@
   (swap! (fake/state p) #(-> % (update-in [:self :health] - 2) (assoc :entities [])))
   (fake/add-entity! p (zombie 2.5 64 0))
   (fake/add-entity! p (assoc (zombie 0 64 2.5) :id 8))
-  (mem/write! (:store eng) :hurt {:amount 2 :health 6 :causes ["zombie"]} {:cap 50 :ttl 60000}))
+  (mem/write! (:store eng) :hurt {:amount 2 :health 6 :attacker {:name "zombie"}} {:cap 50 :ttl 60000}))
 
 ;; the hit lands during a flee step, so the step's own hit-on-the-run check (at its start) missed it
 (deftest an-armed-body-hit-during-a-step-that-got-nowhere-fights-before-it-builds
@@ -1119,6 +1119,26 @@
         (let [{:keys [p]} (await (beset-round [(zombie 6 64 0) (assoc (zombie 0 64 6) :id 8)] hit-and-closed-on!))]
           (is (zero? (count (calls p "place"))) "no seal beside the mobs that just hit it")
           (is (= 1 (count (calls p "attack")))))))))
+
+(deftest a-hit-that-is-healed-before-the-next-step-still-corners-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :entities [(zombie 4.5 64 0)]})
+              steers (atom 0)]
+          (.override (.-world p) "steer"
+                     (fn [_ _ _]
+                       (when (= 1 (swap! steers inc))
+                         (swap! (fake/state p) assoc :entities [])
+                         (fake/add-entity! p (zombie 2.5 64 0))
+                         (mem/write! (:store eng) :hurt {:amount 0.5 :health 20 :attacker {:name "zombie"}} {:cap 50 :ttl 60000}))
+                       (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
+          (.override (.-world p) "place"
+                     (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (is (pos? (count (calls p "place"))) "walled in after one healed hit, not walked on")
+          (is (= 1 @steers) "no second flee step"))))))
 
 (deftest an-armed-body-with-a-melee-mob-at-its-side-fights-before-it-builds
   (async done
@@ -1232,7 +1252,7 @@
                      (fn [token args impl]
                        (when (compare-and-set! hit-once false true)
                          (swap! (fake/state p) update-in [:self :health] - 2)
-                         (mem/write! (:store eng) :hurt {:amount 2 :health 18 :hits 1 :causes ["zombie"]} {:cap 50 :ttl 60000}))
+                         (mem/write! (:store eng) :hurt {:amount 2 :health 18 :hits 1 :attacker {:name "zombie"}} {:cap 50 :ttl 60000}))
                        (impl token args)))
           (core/submit! eng '(jobs.survival.retreat {}) {})
           (await (core/tick! eng))

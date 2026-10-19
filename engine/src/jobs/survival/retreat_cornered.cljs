@@ -6,6 +6,7 @@
             [jobs.lib.blocks :as lb]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.hurt :as hurt]
             [jobs.lib.child :as child]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
@@ -151,14 +152,31 @@
                  (<= (danger-q/mob-distance (:primitives c) %) (hit-reach)))
            hostiles))
 
+(defn close-radius [] (settings/get settings :jobs.survival.retreat-cornered/close-radius))
+
+(defn hurt-by
+  "The causes of a :hurt memory entry (the raw body event: its attacker's name, else the damage's cause)."
+  [e]
+  (hurt/causes-of (:data e)))
+
 (defn hit-on-the-run!
-  "Whether the body lost health since the previous flight step with a hitter near: a chaser that hits it cannot be
-  outrun. Noted in job memory (:hit-on-the-run), with the health, for the cornered options' odds."
+  "Whether a melee chaser hit the body since the previous flight step: health lost with a hitter near, or a hurt entry
+  naming a melee hostile within close-radius (a fed body heals the hit within a second, so health alone misses it). A chaser
+  that hits it cannot be outrun. Noted in job memory (:hit-on-the-run), with the health, for the cornered options' odds."
   [c]
-  (let [health (.-health (.self (:primitives c)))
-        prev (:step-health (ctx/mem c))
-        hit? (boolean (and prev (< health prev) (seq (hitters c (near-hostiles c)))))]
-    (ctx/update-mem! c assoc :step-health health :hit-on-the-run hit?)
+  (let [p (:primitives c)
+        health (.-health (.self p))
+        {:keys [step-health step-at]} (ctx/mem c)
+        now (ctx/now c)
+        near (near-hostiles c)
+        names (->> near
+                   (filter #(and (not (combat/ranged? %)) (not (combat/creeper? %)) (not (combat/enderman? %))
+                                 (<= (danger-q/mob-distance p %) (close-radius))))
+                   (map #(.-name %))
+                   set)
+        named? (and step-at (some #(some names (hurt-by %)) (ctx/since c :hurt step-at)))
+        hit? (boolean (or (and step-health (< health step-health) (seq (hitters c near))) named?))]
+    (ctx/update-mem! c assoc :step-health health :step-at now :hit-on-the-run hit?)
     hit?))
 
 (defn fight-wins?
@@ -199,8 +217,6 @@
 (defn press-gap [] (settings/get settings :jobs.survival.retreat-cornered/press-gap))
 
 (defn close-leg-s [] (settings/get settings :jobs.survival.retreat-cornered/close-leg-s))
-
-(defn close-radius [] (settings/get settings :jobs.survival.retreat-cornered/close-radius))
 
 (defn lost-memory-ms [] (settings/get settings :jobs.survival.retreat-cornered/lost-memory-ms))
 
@@ -394,7 +410,7 @@
     (and (pos? n)
          (seq names)
          (<= n (->> (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s))))
-                    (filter #(some names (:causes (:data %))))
+                    (filter #(some names (hurt-by %)))
                     (map #(:hits (:data %) 1))
                     (reduce + 0))))))
 
