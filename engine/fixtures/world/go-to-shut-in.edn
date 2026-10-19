@@ -1,7 +1,7 @@
 ;; jobs.movement.go-to when the way is shut: sealed by a hand-diggable block, a soft seal over an own stair mouth, a 1-wide dirt tunnel,
 ;; a goal walled in while the body is free, bare hands. Bedrock is never dug and ends with a reason. Escalation is the default.
 ;; Should-succeed: moss room + pickaxe; dirt-sealed stair; open and plugged 1-wide dirt tunnel; stone room with bare hands; free body, goal in a stone room + pickaxe.
-;; Should-fail: bedrock room (with and without a pickaxe), goal in a bedrock room: :arrived false, nothing dug.
+;; Should-fail: bedrock room (with and without a pickaxe), goal in a bedrock room: :arrived false, no bedrock dug (the unseen floor reads as rock, so a stone of the ground may be tried).
 {:defaults
  {:tags [:movement :access :go-to]
   :time :any
@@ -73,6 +73,6 @@
    :blocks [[:fill [22 -1 14] [26 2 18] "bedrock" :hollow]]
    :body {:at [4.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 0})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 120 :of-job true}
-            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 120 :until {:source :job :kind :result :data {:arrived false}}}]
-   :after [[:block [22 1 16] "bedrock"]]}]}
+   ;; the floor under the goal is unseen from outside and reads as rock, so one stone of the ground may be dug to look; the room stays whole
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 120 :of-job true}]
+   :after [[:block [22 1 16] "bedrock"] [:block [26 1 16] "bedrock"] [:block [24 -1 16] "bedrock"] [:block [24 2 16] "bedrock"]]}]}
