@@ -1375,6 +1375,25 @@
           (is (empty? (scaffold-left p)) "no scaffold block stands afterwards")
           (is (empty? (ledger/open-entries (mem/view (:store eng))))))))))
 
+(deftest a-wall-on-an-island-is-built-along-a-bridge-row-from-the-bank-and-the-row-is-taken-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells [[2 64 10] [3 64 10] [4 64 10]]
+              moat (into {} (for [x (range -3 10) z (range 6 16)] [(h/cell-key x 63 z) "air"]))
+              island (into {} (for [x [2 3 4] y [63 65]] [(h/cell-key x y 10) "stone"]))
+              plan {:id "wall" :parts [{:id "w" :cells cells :want "stone"}]}
+              {:keys [eng p]} (start {:blocks (merge moat island) :inventory [{:name "stone" :count 6} {:name "dirt" :count 10}]
+                                      :self {:pos {:x 3.5 :y 64 :z 2.5}}}
+                                     {"wall" plan} [])
+              result (await (child-outcome eng job {:plan "wall" :reach 3} 600))]
+          (is (= 3 (:placed result)))
+          (is (every? #(= "stone" (block p %)) cells))
+          (is (seq (filter (comp #{"dirt"} second) (places p))) "a bridge row was laid from the bank")
+          (is (empty? (h/calls p "jumpPlace")) "no pillar was raised")
+          (is (not-any? #(= "dirt" (block p [3 63 %])) (range 6 10)) "the row is taken back")
+          (is (empty? (ledger/open-entries (mem/view (:store eng))))))))))
+
 (deftest a-zone-over-every-pillar-base-refuses-the-cells-above-reach
   (async done
     (tu/run-async done

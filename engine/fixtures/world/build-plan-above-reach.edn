@@ -3,6 +3,8 @@
 ;; tall-wall-from-a-pillar: a 3 x 9 stone wall (y 0..8 at z 20; ground reaches y 5) is built complete and the pillar's dirt is back in the bag.
 ;; every-base-refused: another body's plan footprint rings the wall to radius 5, so no pillar base is allowed: the rows in reach are
 ;; built, the rest is refused (build.refused) and nothing is placed outside the wall.
+;; wall-on-an-island-from-a-bridge-row: a 3 cell wall on a stone island (roofed, so no stand beside it) in a ravine 20 deep; the bank is 5 away,
+;; out of reach, and no ground is in pillar range, so from-plan lays a bridge row from the bank, builds the wall and takes the row back.
 {:defaults
  {:tags [:build :access :zones]
   :time :day
@@ -35,4 +37,16 @@
    :act [[:job (jobs.build.from-plan {:plan "$plan:wall"})]]
    :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 420 :of-job true}]
    :after [[:block [10 8 20] "stone"] [:block [21 8 20] "stone"] [:block [15 8 20] "stone"] [:item "dirt" [:>= 10]]]
-   :limit-s 450}]}
+   :limit-s 450}
+  {:name "wall-on-an-island-from-a-bridge-row"
+   :plans [{:id "wall" :metadata {:by "$body"}
+            :parts [{:id "w" :box [#at [15 0 20] #at [17 0 20]] :want "stone"}]}]
+   :blocks [[:fill [8 -20 16] [24 -1 25] "air"]
+            [:fill [15 -1 20] [17 -1 20] "stone"]
+            [:fill [15 1 20] [17 1 20] "stone"]]
+   :body {:at [16.5 0 12.5] :inventory [["stone" 6] ["dirt" 10]]}
+   :act [[:job (jobs.build.from-plan {:plan "$plan:wall"})]]
+   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 240 :of-job true}]
+   :after [[:block [15 0 20] "stone"] [:block [16 0 20] "stone"] [:block [17 0 20] "stone"]
+           [:not-block [16 -1 16] "dirt"] [:not-block [16 -1 17] "dirt"] [:item "dirt" [:>= 6]]]
+   :limit-s 270}]}

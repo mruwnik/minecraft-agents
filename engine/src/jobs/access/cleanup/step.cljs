@@ -25,24 +25,30 @@
                       (open? block-at (rules/offset side 0 1 0)) (open? block-at (rules/offset side 0 2 0))))))
          [[1 0] [-1 0] [0 1] [0 -1]])))
 
-(defn row-exit
-  "The stand cell of firm ground beside the ledger row the body's floor belongs to, or nil: the floor cell under feet
-  must be a ledger cell, the row is the ledger cells joined at that height (the cell without ignored), the ground a
-  neighbour that is no ledger cell and solid floor."
+(defn row-way
+  "The cells from the floor under the feet along the ledger row to firm ground, the ground last, or nil: the floor cell
+  under feet must be a ledger cell, the row is the ledger cells joined at that height (the cell without ignored), the
+  ground a neighbour that is no ledger cell, solid floor and open above it (a body can step on)."
   [{:keys [feet block-at ledger]} without]
   (let [[fx fy fz] feet
         floor [fx (dec fy) fz]
         in-row? #(and (contains? ledger %) (not= % without))
-        around (fn [[x y z]] (map (fn [[dx dz]] [(+ x dx) y (+ z dz)]) [[1 0] [-1 0] [0 1] [0 -1]]))]
+        around (fn [[x y z]] (map (fn [[dx dz]] [(+ x dx) y (+ z dz)]) [[1 0] [-1 0] [0 1] [0 -1]]))
+        ground? #(and (not (contains? ledger %)) (rules/solid-floor? block-at %)
+                      (open? block-at (rules/offset % 0 1 0)) (open? block-at (rules/offset % 0 2 0)))]
     (when (contains? ledger floor)
-      (loop [todo [floor] seen #{floor}]
+      (loop [todo [floor] came {floor nil}]
         (when-let [cell (first todo)]
-          (let [ns (around cell)
-                ground (first (filter #(and (not (contains? ledger %)) (rules/solid-floor? block-at %)) ns))
-                fresh (remove seen (filter in-row? ns))]
-            (if ground
-              (update ground 1 inc)
-              (recur (into (rest todo) fresh) (into seen fresh)))))))))
+          (let [ns (around cell)]
+            (if-let [ground (first (filter ground? ns))]
+              (conj (vec (reverse (take-while some? (iterate came cell)))) ground)
+              (let [fresh (remove #(contains? came %) (filter in-row? ns))]
+                (recur (into (vec (rest todo)) fresh) (into came (map (fn [n] [n cell])) fresh))))))))))
+
+(defn row-exit
+  "The stand cell of firm ground at the end of row-way, or nil."
+  [in without]
+  (some-> (row-way in without) last (update 1 inc)))
 
 (defn stranding?
   "True when digging cell would cut the body off from firm ground it can reach over its row now."
@@ -63,9 +69,9 @@
 
 (defn blocker
   "Why entry e cannot be dug now, as {:reason ...detail}, or nil. in: {:feet :block-at :zones :footprints :ledger
-  :accept :can-clear? (block name -> whether the body can clear it now, by hand or a carried tool; absent: always)
+  :accept :floor-at (block-at over what was seen, no guess: the cell under the body's floor must be seen solid) :can-clear? (block name -> whether the body can clear it now, by hand or a carried tool; absent: always)
   :hostile-near? (a known hostile near) :night?: a shelter's blocks stay}."
-  [{:keys [feet block-at accept can-clear? hostile-near? night? keep-at-night?] :as in} {:keys [cell purpose]}]
+  [{:keys [feet block-at floor-at accept can-clear? hostile-near? night? keep-at-night?] :as in} {:keys [cell purpose]}]
   (let [[fx fy fz] feet
         [x y z] cell
         below (rules/offset cell 0 -1 0)]
@@ -75,7 +81,7 @@
       (and night? (not (false? keep-at-night?)) (shelter-purposes purpose)) {:reason :night}
       (and can-clear? (not (can-clear? (block-at cell)))) {:reason :no-tool :block (block-at cell)}
       (and (= [x z] [fx fz]) (< y (dec fy))) {:reason :under-body}
-      (and (= cell [fx (dec fy) fz]) (not (rules/solid-floor? block-at below)))
+      (and (= cell [fx (dec fy) fz]) (not (rules/solid-floor? (or floor-at block-at) below)))
       {:reason :no-floor-below :block (block-at below)}
       (and (= cell [fx (dec fy) fz]) (not (exit-after-dig? block-at cell)))
       {:reason :no-exit}
@@ -88,6 +94,17 @@
         (cond
           (not (:ok v)) (select-keys v [:reason :zone :claim :plan :block])
           (not-every? accept hazards) {:reason :hazard :hazards hazards})))))
+
+(defn step-back
+  "The stand cell on the row cell (or ground) next toward the ground, when the body's floor cell is a ledger cell it cannot dig from
+  under its feet (no floor below it, no way on): from there the floor cell is dug and the row is taken back end first."
+  [{:keys [feet] :as in} entries]
+  (let [[fx fy fz] feet
+        floor [fx (dec fy) fz]
+        way (row-way in nil)]
+    (when (and (some? way)
+               (some (fn [e] (and (= floor (:cell e)) (#{:no-floor-below :no-exit} (:reason (blocker in e))))) entries))
+      (update (second way) 1 inc))))
 
 (defn roofed?
   "Whether a solid block that is not a ledger cell lies within roof-height above cell."
@@ -121,6 +138,7 @@
       (seq near) (let [e (first (sort-by (juxt #(- (get (:cell %) 1)) d) near))]
                    {:step :dig :cell (:cell e) :item (:item e)})
       (seq far) {:step :walk :cell (:cell (first (sort-by d far)))}
+      (and (< (or retreats 0) 16) (step-back in entries)) {:step :retreat :to (step-back in entries)}
       (and (< (or retreats 0) 3) (some (comp #{:stranding} :reason second) judged) (row-exit in nil))
       {:step :retreat :to (row-exit in nil)}
       :else {:step :finish :open (mapv (fn [[e why]] (merge {:cell (:cell e) :item (:item e)} why)) judged)})))

@@ -288,7 +288,21 @@
   (let [s (step :feet [2 64 0] :entries (row-entries [1 2 3]) :block-at (row-world [1 2 3]))]
     (is (= {:step :dig :cell [1 63 0]} (select-keys s [:step :cell])) "one side may go while the other holds")
     (let [s (step :feet [2 64 0] :entries (row-entries [2 3]) :block-at (row-world [2 3]))]
-      (is (= {:step :retreat :to [4 64 0]} s) "x 3 is the way back: not dug, the body goes to the ground first"))))
+      (is (= {:step :retreat :to [3 64 0]} s) "x 3 is the way back: not dug, the body steps back onto it so x 2 can be dug"))))
+
+(deftest the-last-bridge-cell-over-a-drop-is-dug-from-the-ground-beside-it
+  (let [s (step :feet [3 64 0] :entries (row-entries [3]) :block-at (row-world [3]))]
+    (is (= {:step :retreat :to [4 64 0]} s) "the floor under the feet has no floor below: the body steps off first")))
+
+(deftest a-floor-cell-over-an-unseen-cell-is-not-dug-from-on-top
+  (let [guess (fn [[x y z]] (if (= [2 63 0] [x y z]) "dirt" (if (< y 64) "stone" "air")))
+        s (step :feet [2 64 0] :entries [(entry [2 63 0] :purpose :bridge)] :block-at guess :floor-at (constantly nil))]
+    (is (not= :dig (:step s)) (pr-str s))))
+
+(deftest ground-walled-at-head-height-is-no-way-off-the-row
+  (let [walled (fn [[x y z :as c]] (if (= [4 64 0] c) "stone" ((row-world [2 3]) c)))
+        s (step :feet [3 64 0] :entries (row-entries [2 3]) :block-at walled)]
+    (is (not= :retreat (:step s)))))
 
 (deftest a-pillar-top-is-no-bridge
   (let [cells (pillar-cells [0 64 0] 3)]

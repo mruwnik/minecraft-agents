@@ -58,7 +58,8 @@
 
   A body standing on a ledger row (a bridge) never digs the last way back to firm ground: that cell is :stranding.
   With nothing else to dig it walks to the ground at the row's end (go-to, range 0, 3 tries) and digs the rest from
-  there.
+  there. Standing on a row cell it cannot dig (a drop below), it steps one cell back toward the ground and digs that
+  cell: a row over a drop is taken back end first. Ground with no head room beside the row is no way off it.
 
   The body's own column is dug only from on top: the block under the feet when the cell below is solid floor
   (the body falls one block and lands). Deeper cells wait for the descent (:under-body). Over a hole it stops
@@ -168,7 +169,7 @@
   [c l entries zones]
   (let [{:keys [accept]} (:args c)]
     (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
-           {:feet (reach/standing-vec (:primitives c)) :eye (eye-of c) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :entries entries
+           {:feet (reach/standing-vec (:primitives c)) :eye (eye-of c) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :floor-at (access/seen-at (:primitives c)) :entries entries
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
             :hostile-near? (hostile-near? (:primitives c)) :night? (sh-sense/night? (:primitives c)) :keep-at-night? (:keep-at-night? (:args c))
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach (dig-reach)
