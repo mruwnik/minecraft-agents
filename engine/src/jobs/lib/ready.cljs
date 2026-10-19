@@ -1,7 +1,7 @@
 (ns jobs.lib.ready
   "The readiness checkers a job binds as its safe? and fit? exports: fns of the ctx giving a status (engine.contract).
   safe-at, safe-at-by-night and safe-if-lit are :later while the place is exposed (the estimate of jobs.lib.cost/exposure is
-  above ::risk-limit; :look while the light there is unseen and the body has not looked round, then :later; :never when nothing lowers it) or a danger is near
+  above ::risk-limit; :look while the light there is unseen and the body has not looked round, then :later; :never when light is further off than the job waits; darkness no sky light reaches is no exposure) or a danger is near
   (threatened); fit? is :later below the risky health or while poisoned (fit-armed also while unarmed); ok never refuses."
   (:require [engine.args :as a]
             [engine.contract :as contract]
@@ -40,7 +40,7 @@
 
 (defn at-status
   "The status of the exposure of the walk of c's body to `to`: ok while sheltered or the chance is within ::risk-limit,
-  else by what lowers it; light further off than (light-patience c) is not waited for."
+  else by what lowers it; darkness no sky light reaches (a cave: dawn never lifts it) is no exposure, only threats count; light further off than (light-patience c) is not waited for."
   [c to]
   (let [p (:primitives c)
         shelter (:data (ctx/latest c :shelter))
@@ -56,7 +56,7 @@
       (contract/later :exposed (str "dark at " where " until light") :lowered-by lowered-by :chance chance)
       (contains? lowered-by :light)
       (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits") :chance chance)
-      :else (contract/never :exposed (str "exposed at " where ", nothing lowers it") :chance chance))))
+      :else (contract/ok :sealed (str "dark at " where ", no sky light reaches it: waiting never lights it, only threats count")))))
 
 (defn exposed
   "The status of the exposure of c's body at `to` ({:x :y :z}, nil: where it stands), cached."

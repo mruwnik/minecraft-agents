@@ -38,7 +38,7 @@
   ([inventory] (dark-world inventory corridor (range -5 16)))
   ([inventory blocks xs]
    (let [env (bd/setup-seeing {:self {:pos {:x -3 :y 64 :z 0}} :blocks blocks :drops drops :inventory inventory})]
-     (swap! (.. (:p env) -world -state) merge {:light (into {} (for [x xs z [-1 0 1]] [[x 64 z] [0 0]]))})
+     (swap! (.. (:p env) -world -state) merge {:light (into {} (for [x xs y [64 65] z [-1 0 1]] [[x y z] [0 0]]))})
      env)))
 
 (def spawner-cell [10 65 2])

@@ -193,11 +193,11 @@
 (deftest ok-is-always-ok
   (is (= :ok (kind ready/ok open-night))))
 
-(deftest an-exposure-over-the-limit-is-judged-by-what-lowers-it
+(deftest an-exposure-over-the-limit-is-judged-by-what-lowers-it-and-cave-darkness-is-none
   (are [block sky world expected] (= expected (lit block sky #(kind (ready/safe-at (constantly outside)) world)))
     8 15 open-night :ok
     0 15 open-night :later
-    0 0 (assoc open-night :time st/noon) :never))
+    0 0 (assoc open-night :time st/noon) :ok))
 
 
 (deftest an-unseen-cell-asks-for-a-look-at-it
@@ -259,7 +259,7 @@
     {:x 40 :y 70 :z 0} :later))
 
 (deftest safe-at-by-night-judges-a-column-goal-at-its-surface
-  (is (= :never (with-redefs [sh-sense/block-light-at (constantly 0)] (kind (ready/safe-at-by-night (constantly {:x 4 :z 0})) tunnel)))))
+  (is (= :later (lit 0 15 #(kind (ready/safe-at-by-night (constantly {:x 4 :z 0})) tunnel)))))
 
 (deftest explore-search-underground-at-night-is-ok
   (is (= :ok (bound search/safe? tunnel {}))))
