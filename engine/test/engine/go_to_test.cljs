@@ -38,13 +38,13 @@
   ([world shared]
   (let [clock (or (:clock world) (atom 1000000))
         [seen sink] (tu/legacy-capture-sink)
-        raw (tu/fake (merge {:self {:pos start}} (dissoc world :light :jitter :clock :ray-deg)))
+        raw (tu/fake (merge {:self {:pos start}} (dissoc world :light :jitter :clock :ray-deg :jobs)))
         _ (when-let [l (:light world)] (swap! (fake/state raw) assoc :light-default l))
         p (if (:light world)
             (perception/wrap raw (perception/create (fake-raw/create raw) {:radius 16 :ray-deg (:ray-deg world 2) :now #(deref clock)
                                                                       :rand (constantly (:jitter world 0.5))}))
             raw)
-        eng (core/create (cond-> {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+        eng (core/create (cond-> {:primitives p :jobs (merge registry/jobs (:jobs world)) :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
                            shared (assoc :world shared)))]
     {:eng eng :p p :seen seen})))
@@ -442,6 +442,21 @@
             (is (= want @steers) (str "walks for " args))
             (is (= {:arrived false :reason :unreachable :why :no-progress} (dissoc @out :at :near :text :status :tries))
                 (str "same give-up for " args))))))))
+
+(deftest go-to-gives-up-when-a-callers-tries-line-is-used-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [n [1 2]]
+          (let [steers (atom 0)
+                out (atom :not-done)
+                parent (assoc (recording-parent out {:pos [10 64 0] :range 0 :ways #{:walk :clear-seal}}) :defaults {:spend {:tries n}})
+                {:keys [eng p]} (setup {:blocks flat :jobs {'recording-parent parent}})]
+            (override-steer! p (fn ^:async f [_ _ _] (swap! steers inc) #js {:status "done"}))
+            (core/submit! eng '(recording-parent) {})
+            (await (tick-out! eng 30))
+            (is (= n @steers) (str "the caller's {:tries " n "} caps the walks"))
+            (is (= :not-done @out) "go-to is cut off with its caller, which has no tries left")))))))
 
 (deftest go-to-look-round-false-skips-the-arrival-look
   (async done
