@@ -32,7 +32,7 @@ older information than another; the world reader merges valid observations by
 world and key, preferring the newest observed timestamp.
 
 The read-only endpoint is `GET /entities` on each body's existing HTTP control
-Unix socket. It needs no manual-control lease and returns `application/edn`:
+Unix socket. It returns `application/edn`:
 
 ```clojure
 {:ok true :world "claude" :body "Probe" :now 1000

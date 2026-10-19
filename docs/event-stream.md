@@ -244,7 +244,7 @@ event.
 ## Local API
 
 The engine serves HTTP over `engine/events.sock` with owner-only permissions,
-separately from the manual-control socket. Bodies and responses use
+separately from the entity socket. Bodies and responses use
 `application/edn`:
 
 - `GET /snapshot` returns engine state, outstanding requests, and stream cursor.

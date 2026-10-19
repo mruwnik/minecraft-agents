@@ -4,7 +4,7 @@ The body (`out/body.cjs`) dumps what mineflayer knows about the world to disk so
 body sees. The body does no rendering and no per-block work. It copies mineflayer's packed chunk data, deflates it off
 the main thread and writes files. Writer: `engine/js/view.mjs`. Reader helper: `decodeColumnFile` in the same module.
 
-Disable everything with `BODY_VIEW=0` (no directories are created). Enabled by default.
+Turn the dump off with `BODY_VIEW=0` (no directories are created). The light overlay perception reads stays on, since the server sends no light update after a block change. Enabled by default.
 
 ## Files
 
@@ -121,34 +121,3 @@ written once: the last full pose (position, eye, yaw, pitch, entities as they we
 - `BODY_VIEW_POSE_HZ` (read once at start) sets the pose write rate. The default `0` is a write attempt on every physics tick (about 20 a second), only if the pose changed and at least every 2 s; a value above 0 switches to a timer at that rate.
 - `view.stats` (info, once a minute): `{columns, bytes, ms, poses, poseMs, poseBytes, huds}` since the last stats event. `poseMs` is main-thread time building, change-checking and stringifying poses, apart from `ms`; `poseBytes` is pose JSON bytes written. `ms` is main-thread
   time in `dump()` plus JSON building (`performance.now()`), `bytes` is compressed column bytes written.
-
-## Driving
-
-The page can take over a body and drive it by hand (movement only). The "take over (G)" button and the keys:
-
-- G takes over or releases. W/A/S/D forward/left/back/right, Space jump, Shift sneak, R sprint (not Ctrl: Ctrl+W closes the tab).
-- Arrow keys turn 15 degrees and tilt 10 degrees. Click the canvas for pointer-lock mouse look.
-- F (free camera) is ignored while driving.
-
-While this page holds the body the view also has a red border (`#drive-border`, shown only under `body.driving`). The moment it no longer holds the body, for any reason (own release, lease timed out, forced release, body offline, engine restarted, failed request), every marker of control is cleared, keys and mouse stop, and pointer lock is exited; the poll also runs when a hidden tab returns.
-
-A red banner, shown to every viewer while anyone drives, names who. Leave rule: losing pointer lock while driving
-(after having had it, so a single Esc) sends stop, then releases; a hidden tab or window blur sends stop and keeps the
-takeover; pagehide/beforeunload sends stop (fetch keepalive) but not release, so the body's 15 s idle timeout gives the
-body back if the page does not return (an embedding dashboard releases when its popup closes). The page pings every 500 ms (the body releases untimed controls after 1 s of
-silence). Requests are serialised, so a key-up never overtakes its key-down. Every POST times out after 1500 ms, so a
-hung request cannot hold the queue (a queued stop must not sit behind it); the body's 1 s dead-man covers the gap.
-
-- `?who=<name>` sets the driver name (default `view`; must match `[A-Za-z0-9:_-]{1,40}`, else `view`).
-- Esc while driving without pointer lock releases; with lock, the Esc exits the lock, which itself releases (see the leave rule).
-- `?embed=1` (the dashboard embeds the page same-origin in an iframe): a click on the canvas takes over when this page is
-  not driving and nobody else holds the body; while driving, a click requests pointer lock as usual.
-- When framed, every render posts `{type: 'drive', driving, manual, expiresAt}` to the parent (`manual` is the lease view
-  or null, `expiresAt` epoch ms or null), target origin `location.origin`. `window.__drive` offers `take()`, `release()`
-  and `state()`.
-
-Server route `GET|POST /drive/<world>/<name>` relays to the body's control socket (`engine/README.md`, Manual takeover); `who`
-defaults to `view`. It is the first write route of the view server. The server stays bound to 127.0.0.1 and answers 403 to
-a Host that is not 127.0.0.1, localhost or [::1], to an Origin that is not `http://<Host>`, and to a POST whose
-Content-Type is not `application/json` (this blocks cross-site form posts and DNS rebinding). It answers 503 `no-body`
-when the body is not running.
