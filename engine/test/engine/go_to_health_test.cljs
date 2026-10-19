@@ -1,5 +1,5 @@
 (ns engine.go-to-health-test
-  "go-to when the damage budget refuses the only way: heal or wait, then the over-budget drop down to the floor, against the fake world."
+  "go-to when the damage budget refuses the only way: no heal or wait: needs-health, or the over-budget drop down to the floor, against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.args :as a]
             [engine.core :as core]
@@ -51,33 +51,21 @@
 
 (def args {:pos [40 60 0] :ways #{:walk :clear-seal} :floor {:health 1}})
 
-(deftest a-hurt-body-with-food-waits-to-heal-and-then-drops
+(deftest a-hurt-fed-body-neither-waits-nor-eats-it-gives-up-needs-health
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; health 13: the budget is 0, the cliff costs 1
-        (let [{:keys [p out seen] :as r} (await (go-heal! (world {:health 13 :food 20}) args true))]
-          (is (seq (g/events-of r :go-to.waiting-health)) "it said it waits for health")
-          (is (empty? (g/events-of r :go-to.over-budget)) "it did not go over the budget")
-          (is (= 60 (y-of p)) "down the cliff")
-          (is (>= (:health (:self @(fake/state p))) 14) "healed to a budget of 1 hp before it dropped"))))))
+        (let [{:keys [p out] :as r} (await (go-heal! (world {:health 13 :food 20} {:inventory [{:name "bread" :count 3}]}) (dissoc args :floor) true))]
+          (is (= {:why :needs-health :heal :regen :health 13} (select-keys @out [:why :heal :health])))
+          (is (= 64 (y-of p)) "still on the plateau")
+          (is (= 3 (transduce (comp (filter #(= "bread" (.-name %))) (map #(.-count %))) + (.-inventory (.self p)))) "it ate nothing"))))))
 
 (deftest a-hurt-body-with-nothing-to-heal-with-drops-over-its-budget
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out] :as r} (await (go-heal! (world {:health 13 :food 10}) args false))]
-          (is (empty? (g/events-of r :go-to.waiting-health)))
           (is (= 1 (count (g/events-of r :go-to.over-budget))) "it told it went over the budget")
-          (is (= 60 (y-of p)) "down the cliff")
-          (is (= {:arrived true} @out)))))))
-
-(deftest a-hurt-body-with-bread-eats-before-it-waits
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [p out] :as r} (await (go-heal! (world {:health 13 :food 10} {:inventory [{:name "bread" :count 3}]}) args true))]
-          (is (< (count (filter #(= "bread" (:name %)) (.-inventory (.self p)))) 3) "it ate")
           (is (= 60 (y-of p)) "down the cliff")
           (is (= {:arrived true} @out)))))))
 
@@ -118,7 +106,6 @@
       (fn ^:async t []
         (let [{:keys [p out] :as r} (await (go-heal! (world {:health 13 :food 20}) (assoc args :spend {:health 0}) true))]
           (is (= 64 (y-of p)))
-          (is (empty? (g/events-of r :go-to.waiting-health)))
           (is (empty? (g/events-of r :go-to.over-budget)))
           (is (= :unreachable (:reason @out))))))))
 
@@ -135,35 +122,16 @@
           (is (= 64 (y-of (:p floor))) "a floor of 12 is never crossed")
           (is (= {:why :needs-health :kind :limit-reached} {:why (:why @(:out floor)) :kind (:kind (:ending (meta @(:out floor))))}))
           (is (= 64 (y-of (:p capped))) ":spend :health 0 takes no drop")
-          (is (empty? (g/events-of capped :go-to.waiting-health))))))))
+          (is (empty? (g/events-of capped :go-to.over-budget))))))))
 
 (deftest the-walk-counts-on-the-bodys-own-food
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [starving (await (go-heal! (world {:health 13 :food 3}) args false))
-              fed (await (go-heal! (world {:health 13 :food 20}) args true))]
-          (is (empty? (g/events-of starving :go-to.waiting-health)) "food 3: nothing to regenerate with")
+              fed (await (go-heal! (world {:health 13 :food 20}) (dissoc args :floor) true))]
           (is (= 1 (count (g/events-of starving :go-to.over-budget))))
-          (is (seq (g/events-of fed :go-to.waiting-health)) "food 20: counted as fed"))))))
-
-(defn ^:async probes-while-waiting
-  "How many probe plans (a survivable budget over 0) a body that never heals asks for while go-to waits for it."
-  []
-  (let [probes (atom 0)
-        orig wplan/plan-within!]
-    (set! wplan/plan-within! (fn [c pw to range weight policy]
-                               (when (pos? (:damage-budget policy 0)) (swap! probes inc))
-                               (orig c pw to range weight policy)))
-    (try (await (go-heal! (world {:health 13}) args false))
-         (finally (set! wplan/plan-within! orig)))
-    @probes))
-
-(deftest a-heal-wait-probes-once-while-health-and-place-stay
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (is (= 1 (await (probes-while-waiting))))))))
+          (is (= :regen (:heal @(:out fed))) "food 20: counted as fed"))))))
 
 (deftest a-full-health-body-takes-the-drop-with-no-wait
   (async done
@@ -171,7 +139,7 @@
       (fn ^:async t []
         (let [{:keys [p] :as r} (await (go-heal! (world {:health 20 :food 20}) args false))]
           (is (= 60 (y-of p)))
-          (is (empty? (g/events-of r :go-to.waiting-health))))))))
+          (is (empty? (g/events-of r :go-to.over-budget))))))))
 
 (deftest the-walk-price-settings-refuse-bad-values
   (doseq [[k bad] [[:jobs.lib.cost.health/hp-seconds [0 -1 "x" js/Infinity]]
@@ -181,29 +149,6 @@
                    [:jobs.lib.cost.danger/shape ["x" {:sensed {:radius -1}} {:sensed {:close 5 :radius 2}} {:bogus {}}]]]
           v bad]
     (is (string? (a/setting-problem k v)) (pr-str k v))))
-
-(deftest a-heal-wait-ends-at-its-health-or-when-its-time-is-up
-  (let [now 1000000
-        st {:to 14 :until (+ now 8000)}]
-    (is (gth/waiting? st (+ now 7999)))
-    (is (not (gth/waiting? st (+ now 8000))))
-    (is (not (gth/stalled? st 13 (+ now 7999))))
-    (is (gth/stalled? st 13 (+ now 8000)))
-    (is (not (gth/stalled? st 14 (+ now 9000))) "reached the health: not stalled")
-    (is (nil? (gth/heal-state {:heal st} 14)) "a wait that reached its health is over")
-    (is (= st (gth/heal-state {:heal st} 13)))))
-
-(deftest go-to-can-run-says-later-healing-only-while-a-fed-body-below-its-health-is-within-the-wait
-  (let [now 1000000
-        st {:to 14 :until (+ now 8000)}]
-    (are [self at mem kind] (= kind
-                               (with-redefs [ctx/mem (constantly mem) ctx/now (constantly at)]
-                                 (first (go-to/can-run? {:primitives (tu/fake-on-floor {:floor [-5 -5 20 5] :self self}) :args {}}))))
-      {:health 13 :food 20} now {:heal st} :later
-      {:health 14 :food 20} now {:heal st} :ok
-      {:health 13 :food 20} (+ now 8000) {:heal st} :ok
-      {:health 13 :food 3} now {:heal st} :ok
-      {:health 13 :food 20} now {} :ok)))
 
 (deftest a-probe-that-found-no-way-is-not-kept-a-changed-world-may-have-one
   (async done

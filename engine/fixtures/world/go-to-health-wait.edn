@@ -1,5 +1,5 @@
 ;; Card 2909cf46 S4: go-to when the damage budget refuses the only way. The same block as go-to-health-stop: a drop of 10 (7 hp of
-;; budget needed, full health only). A hurt body with food waits to heal, then drops; a hungry one (food drained to 11 or less) drops over
+;; budget needed, full health only). A hurt body with food does not wait or eat: it gives up :needs-health; a hungry one (food drained to 11 or less) drops over
 ;; its budget; a caller's :min-health is never crossed (gives up :needs-health) and a :spend {:health 0} never drops. Options at full health, no waits.
 {:defaults
  {:tags [:movement]
@@ -15,9 +15,9 @@
    :body {:at [38.5 10 16.5]}
    :act [[:rcon "effect give $BODY minecraft:instant_damage 1 1 true"]
          [:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :go-to.waiting-health} :within-s 20 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived true}} :within-s 150 :of-job true}]
-   :after [[:body-near [46.5 0 16.5] 2]]}
+   :expect [{:event {:source :job :kind :result :data {:arrived false :why :needs-health :heal :regen}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :go-to.over-budget} :for-s 2}]
+   :after [[:body-far [46.5 0 16.5] 4]]}
   {:name "hungry-body-goes-over-its-budget"
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY foodLevel" "data: ([0-9]|1[01])$" 20]
          [:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 1}})]]

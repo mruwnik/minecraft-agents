@@ -1,6 +1,6 @@
 ;; Card 6a1a0fc3: how far a go-to drops follows the body's fall enchantments and health (jobs.lib.cost/fall-profile).
 ;; A platform N high fills x 1..15 of the plot, the body on top at x 8.5, the goal on the floor east of its edge, walls all round.
-;; The cases cap the walk's :max-damage (default budget at full health is 7 hp, which pays for a 6 drop): 1.5 hp for feather falling IV, which takes a 4 or 5 block drop, not 6 (1.56 hp); 0.5 hp for plain boots, which take 3 at most; at health 2 go-to heals or goes over its budget, then takes the 4 drop.
+;; The cases cap the walk's :max-damage (default budget at full health is 7 hp, which pays for a 6 drop): 1.5 hp for feather falling IV, which takes a 4 or 5 block drop, not 6 (1.56 hp); 0.5 hp for plain boots, which take 3 at most; at health 2 go-to goes over its budget (given floor 1), then takes the 4 drop.
 ;; The ramp cases have steps down at z 28..30 (x 13..15), so a body that will not drop walks round.
 {:defaults
  {:tags [:movement] :time :any
@@ -45,11 +45,11 @@
             {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 80 :until {:source :job :kind :result}}]
    :after [[:body-near [22.5 0 16.5] 2]]}
   {:name "feather-falling-iv-low-health-still-arrives-over-the-4-drop"
-   ;; one 18 hp magic damage (no armour or invulnerability-frame discount, unlike two instant_damage effects) leaves 2 hp, under the walk's floor: the planner refuses the drop, go-to heals or goes over its budget
+   ;; one 18 hp magic damage (no armour or invulnerability-frame discount, unlike two instant_damage effects) leaves 2 hp, under the walk's floor: the planner refuses the drop, so with a given :floor {:health 1} go-to goes over its budget
    ;; (all but 1 hp, go-to.health), and a 4 drop with feather falling IV costs 0.5 hp, so it arrives
    :blocks [[:fill [1 0 1] [15 3 30] "stone"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"]
          [:rcon "damage $BODY 18 minecraft:magic"] [:until-rcon "data get entity $BODY Health" "data: [0-3]\\." 5]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 1}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]}]}
