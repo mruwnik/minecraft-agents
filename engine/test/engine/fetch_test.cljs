@@ -385,7 +385,7 @@
                              (do (swap! n inc) (js/Promise.resolve (contract/ending :done nil nil)))
                              (orig c slot job args))))
           (try
-            (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :fetch true :stock-torches false}) {})
+            (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :fetch true}) {})
             (await (run-ticks s 6))
             (finally (set! ctx/call orig)))
           (is (< @n 5) (str "tool fetches asked " @n))

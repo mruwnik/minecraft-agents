@@ -90,7 +90,9 @@
     (is (re-find #":doors" msg)))
   (is (re-find #"jobs.time.wait-for-dusk has no arg :bogus; it takes no args"
                (expr/problem registry/jobs '(jobs.time.wait-for-dusk {:bogus 1}))))
-  (is (nil? (expr/problem registry/jobs '(jobs.movement.go-to {:pos [50 40 3]})))))
+  (is (nil? (expr/problem registry/jobs '(jobs.movement.go-to {:pos [50 40 3]}))))
+  (is (re-find #"jobs.access.stair has no arg :stock-torches"
+               (expr/problem registry/jobs '(jobs.access.stair {:dir :down :stock-torches false})))))
 
 (deftest the-trigger-registry-holds-the-default-trigger-set
   (is (= #{:suffocating :burning :wedged :hostile-near :poisoned :hungry :needs-bed :needs-weapon :night :dusk-home :died :pen-gate :door-left

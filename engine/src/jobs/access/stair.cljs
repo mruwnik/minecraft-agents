@@ -24,7 +24,6 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.tools :as tools]
-            [jobs.access.stock :as stock]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]
@@ -32,7 +31,6 @@
 
 (def doc
   "Dig a 1-wide stair :down or :up (or a flat run, :level) along :heading (nil: the way the body faces) from where the body stands, :steps steps or to feet height :y.
-  A stair down first stocks torches when under 8 are carried (jobs.access.stock/torches!; :stock-torches false skips it, as does :fetch off).
 
   A step cuts three cells, top first, so the body can walk one block forward and one down (or up) with full
   headroom; a :level step cuts two (head, then feet) and its floors are no stair way (:stair-way below). Then the body walks into the step (a go-to child). Before cutting the next step it plans the
@@ -121,7 +119,6 @@
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :spec #{:seal :stop} :default :seal}
    :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool" :spec boolean? :default true}
    :spent-ok {:doc "dig on with tools down to jobs.lib.trip's ::spent-uses (3) uses instead of stopping :tool-spent before the last breaks; true for a way out" :spec boolean? :default false}
-   :stock-torches {:doc "a stair down first gets torches when few are carried (jobs.access.stock/torches!, needs :fetch); false for a stair a job runs as its own child" :spec boolean? :default true}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
    :make-room {:doc "a pack with no room for the next drop is made room in (a jobs.storage.make-room child that tosses junk blocks; it keeps building blocks) instead of waiting :no-free-slot" :spec boolean? :default true}
    :spare-own-builds {:doc "a cell of a plan this body made is never dug (stops :footprint naming the plan); false: it may be" :spec boolean? :default true}
@@ -422,8 +419,7 @@
       (do
         ;; the spare's fetch may walk the body off: the stair starts where it was asked, not where the fetch ended
         (ctx/update-mem! c assoc :start feet)
-        (if (= :continue (or (await (when (and (= :down (:dir (:args c))) (:stock-torches (:args c))) (stock/torches! c)))
-                             (await (trip/tool-ready! c "stone" (* 3 target)))))
+        (if (= :continue (await (trip/tool-ready! c "stone" (* 3 target))))
           :continue
           (if (and (not= feet (reach/standing-vec (:primitives c))) (= :continue (await (child/walk-into!* c :start feet))))
             :continue

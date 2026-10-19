@@ -165,7 +165,7 @@
                  (u/within? (u/self-pos c) (cell-of (xyz top)) 1) (do (ctx/update-mem! c assoc-in [:shaft :state] :down) :again)
                  :else (shaft-none! c :unreachable)))
       :down (let [r (await (ctx/call c :shaft-stair 'jobs.access.stair
-                                           {:dir :down :heading heading :y to-y :fetch true :stock-torches false :through id
+                                           {:dir :down :heading heading :y to-y :fetch true :through id
                                             :ignore-zones? (:ignore-zones? (:args c))}))
                   res (result-of r)]
               (cond
@@ -254,7 +254,7 @@
   (let [_ (when-not (get-in (ctx/mem c) [:descent :top])
             (ctx/update-mem! c update :descent assoc :top (access/cell (cell-of (u/self-pos c))) :top-heading (keyword (:heading (ctx/mem c)))))
         r (await (ctx/call c :stair 'jobs.access.stair
-                                 {:dir :down :heading (keyword (:heading (ctx/mem c))) :steps 1 :stock-torches false :fetch (if level? (:fetch (:args c)) true)
+                                 {:dir :down :heading (keyword (:heading (ctx/mem c))) :steps 1 :fetch (if level? (:fetch (:args c)) true)
                                   :accept (filterv #{:falling-block} (:accept (:args c)))
                                   :ignore-zones? (:ignore-zones? (:args c))
                                   :pick-up-ores (:pick-up-ores (:args c))}))

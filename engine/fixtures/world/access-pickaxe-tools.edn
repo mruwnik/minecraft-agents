@@ -67,7 +67,7 @@
   {:name "pickaxe-wears-out-next-one-is-crafted"
    :body {:at [8.5 10 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 12] ["stick" 4] ["crafting_table" 1]]}
    :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=117]"]
-         [:job (jobs.access.stair {:dir :down :heading :east :steps 10 :stock-torches false})]]
+         [:job (jobs.access.stair {:dir :down :heading :east :steps 10})]]
    :expect [{:event {:source :job :kind :tool.spare} :within-s 120 :of-job true}
             {:event {:source :job :kind :stair.done :data {:steps 10}} :within-s 220 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :tool-spent}} :for-s 220 :until {:source :job :kind :stair.done}}]

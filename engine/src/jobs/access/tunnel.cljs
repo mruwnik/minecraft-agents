@@ -316,7 +316,7 @@
   [c {:keys [heading dir] :as plan} k]
   (let [cells (ln/line-cells plan)
         e (await (ctx/call c :stair 'jobs.access.stair
-                           {:dir dir :heading heading :fetch (stair-fetch (:fetch (:args c))) :need-drop (empty? (:tool-failed (ctx/mem c))) :stock-torches false :y ((cells (segment-end plan k)) 1) :on-lava (:on-lava (:args c) :seal)
+                           {:dir dir :heading heading :fetch (stair-fetch (:fetch (:args c))) :need-drop (empty? (:tool-failed (ctx/mem c))) :y ((cells (segment-end plan k)) 1) :on-lava (:on-lava (:args c) :seal)
                             :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c))) :spent-ok (boolean (:spent-ok (:args c))) :spare-own-builds (:spare-own-builds (:args c))
                             :pick-up-ores (:pick-up-ores (:args c))}))]
     (if (= :continue e)

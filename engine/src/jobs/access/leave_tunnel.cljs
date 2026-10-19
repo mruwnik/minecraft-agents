@@ -277,7 +277,7 @@
       (finish! c :stopped :walk-failed {:cell cell :walk walk :escape results})
       (let [slot (keyword (str "escape-" i))
             sargs (assoc (escape-stair (:line tunnel) entry-y)
-                         :heading (:heading attempt) :fetch false :need-drop (not (:by-hand (ctx/mem c))) :spent-ok true :stock-torches false :ignore-zones? (:ignore-zones? attempt))
+                         :heading (:heading attempt) :fetch false :need-drop (not (:by-hand (ctx/mem c))) :spent-ok true :ignore-zones? (:ignore-zones? attempt))
             e (await (ctx/call c slot 'jobs.access.stair sargs))
             why (when (map? e) (contract/cause-key e))
             next-heading! #(do (ctx/update-mem! c update :escape (fn [m] (-> m (assoc :i (inc i)) (update :results conj %)))) :again)]

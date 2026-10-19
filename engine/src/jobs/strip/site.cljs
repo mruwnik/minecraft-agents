@@ -255,7 +255,7 @@
       (= :continue w) :continue
       (not= :done (:kind w)) (stop! c (if (= :nothing-possible (:kind w)) :unreachable :child-failed)
                                     {:cell cell :child "jobs.movement.go-to" :because (contract/cause-key w) :child-kind (:kind w)})
-      above? (let [f (await (run-all! c [[:stair 'jobs.access.stair {:dir :down :heading heading :y to-y :through id :stock-torches false
+      above? (let [f (await (run-all! c [[:stair 'jobs.access.stair {:dir :down :heading heading :y to-y :through id
                                                                        :ignore-zones? (:ignore-zones? (:args c))}]]))]
                (cond (= :continue f) :continue f (child-stop! c f) :else :again))
       :else :again)))
