@@ -139,6 +139,7 @@
                          (flight/walk-step) {:swim-factor (swim-factor c) :covered? covered? :flank? flank?
                           :avoid (flight/avoid-ends c)
                           :refused (:refused (ctx/mem c))
+                          :waterlogged? #(:waterlogged? (u/seen-facts p %))
                           :floor (flight/floor c)
                           :known (ledger/ways-of c)})))))
 

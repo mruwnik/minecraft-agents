@@ -18,8 +18,9 @@
 (def threat {:x -5 :y 64 :z 0.5})
 
 (deftest a-flight-takes-a-full-step-on-dry-ground-over-a-swim-straight-away
-  (is (= {:x 0 :y 64 :z 6} (walk/choose-target pond-world from [threat] nil [] 6 {:swim-factor 2.2}))
-      "sideways on dry ground beats swimming the pond")
+  (let [end (walk/choose-target pond-world from [threat] nil [] 6 {:swim-factor 2.2})]
+    (is (not (walk/wet? pond-world end)) "dry ground beats swimming the pond")
+    (is (< 2 (js/Math.abs (:z end))) "round the band, not through it"))
   (is (= {:x 6 :y 63 :z 0} (walk/choose-target pond-world from [threat] nil [] 6 {:swim-factor 1}))
       "with water as fast as ground the way straight away is kept"))
 
@@ -51,6 +52,22 @@
   (is (walk/wet? pond-world {:x 3 :y 63 :z 0}) "feet in water")
   (is (walk/wet? pond-world {:x 3 :y 64 :z 0}) "on water: the body sinks into it")
   (is (not (walk/wet? pond-world {:x 0 :y 64 :z 5}))))
+
+(def flat-stone (fn [{:keys [y]}] (if (<= y 63) "stone" "air")))
+(def logged-band (fn [{:keys [x y z]}] (and (= y 63) (>= x 1) (<= (js/Math.abs z) 2))))
+
+(deftest a-waterlogged-block-is-wet-and-a-flight-swims-round-it
+  (is (walk/wet? flat-stone logged-band {:x 3 :y 64 :z 0}) "on a waterlogged floor")
+  (is (not (walk/wet? flat-stone logged-band {:x 3 :y 64 :z 5})))
+  (let [end (walk/choose-target flat-stone from [threat] nil [] 6 {:swim-factor 2.2 :waterlogged? logged-band})]
+    (is (< 2 (js/Math.abs (:z end))) "round the waterlogged band, as round a pond"))
+  (is (= {:x 6 :y 64 :z 0} (walk/choose-target flat-stone from [threat] nil [] 6 {:swim-factor 2.2}))
+      "unread, the band is dry"))
+
+(deftest a-walk-is-priced-by-the-distance-it-gains
+  (is (= 5.5 (/ (js/Math.round (* 10 (walk/gain from [threat] {:x 6 :y 64 :z 0}))) 10)) "straight away")
+  (is (= 1 (walk/gain from [threat] {:x 0 :y 64 :z 1})) "a side step gains next to nothing: one")
+  (is (= 1 (walk/gain from [threat] nil))))
 
 (deftest water-plants-and-a-bubble-column-are-wet
   (doseq [plant ["kelp" "kelp_plant" "seagrass" "tall_seagrass" "bubble_column"]]
