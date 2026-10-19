@@ -10,12 +10,12 @@
  [{:name "stair-down-with-pickaxe"
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
-   :expect [{:event {:source :job :kind :stair.done} :within-s 90 :of-job true}]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
    :after [[:body-near [19.5 7 16.5] 1.5] [:block [17 9 16] "air"] [:block [19 7 16] "air"]]}
   {:name "stair-down-no-pickaxe-waits"
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3 :fetch false})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :stair.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :no-tool}}}]
+            {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :waiting :data {:reason :no-tool}}}]
    :after [[:not-block [17 9 16] "air"] [:not-block [17 8 16] "air"]]}
   {:name "tunnel-with-pickaxe"
    :body {:inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]]}
@@ -32,18 +32,18 @@
    :blocks [[:set [17 9 16] "farmland[moisture=7]"] [:set [17 10 16] "wheat[age=7]"]]
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
-   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :crop}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :crop}} :within-s 40 :of-job true}]
    :after [[:block [17 10 16] "wheat"] [:block [17 9 16] "farmland"]]}
   {:name "stair-heading-away-digs"
    :blocks [[:set [17 9 16] "farmland[moisture=7]"] [:set [17 10 16] "wheat[age=7]"]]
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :west :steps 2})]]
-   :expect [{:event {:source :job :kind :stair.done} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:block [17 10 16] "wheat"]]}
   {:name "iron-and-stone-holds-stone"
    :body {:inventory [["iron_pickaxe" 1] ["stone_pickaxe" 1]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 2})]
-         [:await {:source :job :kind :stair.done} 60]]
-   :expect [{:event {:source :job :kind :stair.done} :within-s 60 :of-job true}
+         [:await {:source :job :kind :completed} 60]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
             {:event {:source :action :kind :started :data {:args {"item" "stone_pickaxe"}}} :within-s 60}
-            {:no-event {:source :action :kind :started :data {:args {"item" "iron_pickaxe"}}} :for-s 60 :until {:source :job :kind :stair.done}}]}]}
+            {:no-event {:source :action :kind :started :data {:args {"item" "iron_pickaxe"}}} :for-s 60 :until {:source :job :kind :completed}}]}]}

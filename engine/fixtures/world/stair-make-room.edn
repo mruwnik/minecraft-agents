@@ -1,6 +1,6 @@
 ;; Cards 275c66b0 (and 8397ad3f in access-pickaxe-tools.edn): a stair that digs with a full pack supplies its own room. A pack of 35 stacks
 ;; of junk (tuff, dirt) and the pickaxe: the stair calls make-room (make-room.tossed) and goes on to its 6 steps. Should-fail: a
-;; pack of diamonds only has nothing to toss and waits :no-free-slot (does not end); with :make-room false the junk pack waits too, nothing is tossed.
+;; pack of diamonds only has nothing to toss and waits :no-free-slot (does not end); with the make-room? setting false the junk pack waits too, nothing is tossed.
 ;; Rock x 10..30, z 12..20, y 0..10 (deepslate); the body in a 1x3 cell at [16 0 16] with a stone pickaxe, an open tunnel running west from it (make-room throws nothing walled in).
 {:defaults
  {:tags [:access :storage :jobs] :time :any
@@ -25,7 +25,7 @@
    :limit-s 130}
   {:name "make-room-false-junk-pack-waits-nothing-tossed"
    :body {:inventory [["stone_pickaxe" 1] ["tuff" 64] ["tuff" 64] ["tuff" 64] ["tuff" 64] ["tuff" 64] ["tuff" 64] ["tuff" 64] ["tuff" 64] ["tuff" 64] ["tuff" 64] ["tuff" 64] ["tuff" 64] ["tuff" 64] ["tuff" 64] ["tuff" 64] ["tuff" 64] ["tuff" 64] ["dirt" 64] ["dirt" 64] ["dirt" 64] ["dirt" 64] ["dirt" 64] ["dirt" 64] ["dirt" 64] ["dirt" 64] ["dirt" 64] ["dirt" 64] ["dirt" 64] ["dirt" 64] ["dirt" 64] ["dirt" 64] ["dirt" 64] ["dirt" 64] ["dirt" 64] ["dirt" 64]]}
-   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 6 :make-room false})]]
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 6 :settings {:jobs.access.stair.limits/make-room? false}})]]
    :expect [{:no-event {:source :job :kind :stopped} :for-s 100 :of-job true}
             {:no-event {:source :job :kind :make-room.tossed} :for-s 100}]
    :after [[:item "tuff" 1088]]

@@ -9,15 +9,15 @@
  :cases
  [{:name "gravel-in-the-line-with-accept-is-dug-through"
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8 :accept #{:falling-block}})]]
-   :expect [{:event {:source :job :kind :stair.done :data {:steps 8}} :within-s 190 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:steps 8}} :within-s 190 :of-job true}]
    :after [[:not-block [13 7 16] "gravel"] [:not-block [14 6 16] "gravel"]]}
   {:name "gravel-in-the-line-without-accept-stops-naming-the-hazard"
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8})]]
-   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :hazard}} :within-s 120 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :hazard}} :within-s 120 :of-job true}]}
   ;; at night the stair's own step walks must not wait for the night (job.waiting :exposed) or sit silent: run with --allow-time
   {:name "gravel-in-the-line-with-accept-is-dug-through-at-night"
    :time :night
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8 :accept #{:falling-block}})]]
-   :expect [{:event {:source :job :kind :stair.done :data {:steps 8}} :within-s 190 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 150 :until {:source :job :kind :stair.done} :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:steps 8}} :within-s 190 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 150 :until {:source :job :kind :completed} :of-job true}]
    :after [[:not-block [13 7 16] "gravel"] [:not-block [14 6 16] "gravel"]]}]}

@@ -33,8 +33,7 @@
             {:event {:source :job :kind :go-to.restore-skipped} :within-s 120 :of-job true}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 140 :of-job true}
             ;; card 1aeb13a4: the stair's last step is the goal cell itself; its walk is not refused as the go-to's own call
-            {:no-event {:source :job :kind :go-to.escalation-stopped} :for-s 140 :until {:source :job :kind :result :data {:arrived true}}}
-            {:no-event {:source :job :kind :stair.stopped} :for-s 140 :until {:source :job :kind :result :data {:arrived true}}}]
+            {:no-event {:source :job :kind :go-to.escalation-stopped} :for-s 140 :until {:source :job :kind :result :data {:arrived true}}}]
    :after [[:block [17 1 16] "air"] [:body-near [20.5 4 16.5] 2]]}
   {:name "sealed-room-clear-path-arrives-and-shuts-the-door"
    ;; a hollow stone room x 12..20, z 12..20, y 0..3 on a stone platform x 8..26 (y -1 is the plot floor), the

@@ -11,15 +11,15 @@
  :cases
  [{:name "stair-without-heading-digs-the-way-the-body-faces"
    :act [[:job (jobs.access.stair {:dir :down :steps 4})]]
-   :expect [{:event {:source :job :kind :stair.done :data {:steps 4}} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :result :data {:reason :bad-args}} :for-s 120 :until {:source :job :kind :stair.done}}]
+   :expect [{:event {:source :job :kind :completed :data {:steps 4}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :result :data {:reason :bad-args}} :for-s 120 :until {:source :job :kind :completed}}]
    :after [[:body-near [14.5 6 16.5] 2.5]]}
   {:name "level-run-bridges-a-floor-gap"
    :blocks [[:fill [10 8 16] [20 9 16] "air"] [:set [14 7 16] "air"]]
    :body {:at [10.5 8 16.5]}
    :act [[:job (jobs.access.stair {:dir :level :heading :east :steps 8})]]
-   :expect [{:event {:source :job :kind :stair.done :data {:steps 8}} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :stair.stopped} :for-s 120 :until {:source :job :kind :stair.done}}]
+   :expect [{:event {:source :job :kind :completed :data {:steps 8}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 120 :until {:source :job :kind :completed}}]
    :after [[:not-block [14 7 16] "air"] [:body-near [18.5 8 16.5] 2.5]]}
   ;; should-fail (card 4567b3f9): a cave (x 10..14, y 4..8) opens straight under the first step; the floor [11 8 16] and the cell under it have no
   ;; neighbour the body can see (the underside of the cut cell is refused with the eye above it, the cave cells further back are hidden), so the
@@ -28,15 +28,15 @@
    :blocks [[:fill [10 4 15] [14 8 17] "air"]]
    :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 4})]]
-   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :no-support-floor :steps 0}} :within-s 120 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-support-floor :steps 0}} :within-s 120 :of-job true}]
    :after [[:block [11 8 16] "air"] [:not-block [11 9 16] "air"]]}
   ;; a cave (x 10..14, y 4..8, z 16..17) with its side wall at z 15 in sight of every floor: the stair places each missing floor against that wall and goes on
   {:name "stair-down-over-a-cave-bridges-the-floor-against-a-seen-side-wall"
    :blocks [[:fill [10 4 16] [14 8 17] "air"]]
    :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 4})]]
-   :expect [{:event {:source :job :kind :stair.done :data {:steps 4}} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :stair.stopped} :for-s 120 :until {:source :job :kind :stair.done}}]
+   :expect [{:event {:source :job :kind :completed :data {:steps 4}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 120 :until {:source :job :kind :completed}}]
    :after [[:not-block [11 8 16] "air"] [:body-near [14.5 5 16.5] 2.5]]}
   ;; should-fail (card 94cba87f): the cave (x 12..30, y 0..6) opens under the floor of step 3 (x 13) and runs on east, so no stone shows at
   ;; its end; its only solid cell in line, [11 6 16], lies under the stone floor of step 2 and cannot be seen from the shaft, so no cell can be aimed at:
@@ -45,14 +45,14 @@
    :blocks [[:fill [12 0 12] [30 6 20] "air"]]
    :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 4})]]
-   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :no-support-floor :steps 2}} :within-s 120 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-support-floor :steps 2}} :within-s 120 :of-job true}]
    :after [[:block [13 6 16] "air"] [:not-block [13 7 16] "air"]]}
   ;; should-fail: a cave under the very first floor and no block carried: the stair stops :no-floor, :filler :none
   {:name "stair-down-over-a-cave-with-no-block-stops-no-floor"
    :blocks [[:fill [11 0 12] [20 8 20] "air"]]
    :body {:inventory [["iron_pickaxe" 1]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 4})]]
-   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :no-floor :filler :none}} :within-s 90 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-floor :filler :none}} :within-s 90 :of-job true}]
    :after [[:block [11 8 16] "air"]]}
   ;; a stair up whose second floor [12 6 16] is air with air under it (a cave pocket x 12, y 5..6, side walls in sight): with :fetch false and
   ;; cobblestone and dirt carried it places a carried block against the wall and climbs on, not :no-support-floor "nothing to place"
@@ -60,8 +60,8 @@
    :blocks [[:fill [10 5 16] [10 6 16] "air"] [:fill [12 5 16] [12 6 16] "air"]]
    :body {:at [10.5 5 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 16] ["dirt" 8]]}
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4 :fetch false})]]
-   :expect [{:event {:source :job :kind :stair.done :data {:steps 4}} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :stair.stopped} :for-s 120 :until {:source :job :kind :stair.done}}]
+   :expect [{:event {:source :job :kind :completed :data {:steps 4}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 120 :until {:source :job :kind :completed}}]
    :after [[:not-block [12 6 16] "air"] [:body-near [14.5 9 16.5] 2.5]]}
   ;; a stair up into open air (x 12..16, y 5..12, z 13..19 all air): the only solid cell near the second floor [12 6 16] is the first floor
   ;; [11 5 16], diagonal to it; with :fetch false the stair places the cell under the floor against that one, then the floor on it, and climbs on
@@ -69,13 +69,13 @@
    :blocks [[:fill [10 5 16] [10 6 16] "air"] [:fill [12 5 13] [16 12 19] "air"]]
    :body {:at [10.5 5 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4 :fetch false})]]
-   :expect [{:event {:source :job :kind :stair.done :data {:steps 4}} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :stair.stopped} :for-s 120 :until {:source :job :kind :stair.done}}]
+   :expect [{:event {:source :job :kind :completed :data {:steps 4}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 120 :until {:source :job :kind :completed}}]
    :after [[:not-block [12 6 16] "air"] [:not-block [13 7 16] "air"] [:not-block [14 8 16] "air"] [:body-near [14.5 9 16.5] 2.5]]}
   ;; a stair up from the stone top over open air: each floor is placed at the body's own height beside it, so the body steps to the middle
   ;; of its cell first (its box at x .77 reached into the floor cell and the server refused the block)
   {:name "stair-up-in-open-air-centres-before-placing-the-floor"
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 3})]]
-   :expect [{:event {:source :job :kind :stair.done :data {:steps 3}} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :stair.stopped} :for-s 120 :until {:source :job :kind :stair.done}}]
+   :expect [{:event {:source :job :kind :completed :data {:steps 3}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 120 :until {:source :job :kind :completed}}]
    :after [[:not-block [11 10 16] "air"] [:not-block [12 11 16] "air"]]}]}

@@ -112,4 +112,4 @@
       (fn ^:async t []
         (let [s (await (st/stair! {:blocks st/ground :inventory [worn {:name "cobblestone" :count 12} {:name "stick" :count 4} {:name "crafting_table" :count 1}]}
                                   east tu/seeing-all))]
-          (is (= :done (:status @(:out s))) (pr-str (st/events-of s :stair.stopped))))))))
+          (is (= :done (:status @(:out s))) (pr-str @(:out s))))))))

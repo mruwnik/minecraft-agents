@@ -15,15 +15,15 @@
          [:job (jobs.access.stair {:dir :down :heading :east :steps 10 :fetch false})]]
    :expect [{:event {:source :job :kind :tool.low} :within-s 40}
             {:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :tool-spent}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :stair.done} :for-s 40 :until {:source :job :kind :stopped}}]}
+            {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :stopped}}]}
   {:name "stair-through-dirt-goes-on-with-only-a-worn-shovel"
    ;; card fa053a5a: dirt needs no tool, so a 3-use shovel beside a fresh pickaxe must not stop the stair :tool-spent
    :blocks [[:fill [8 0 8] [24 9 24] "dirt"]]
    :body {:at [8.5 10 16.5] :inventory [["stone_pickaxe" 1] ["stone_shovel" 1]]}
    :act [[:rcon "item replace entity $BODY container.1 with minecraft:stone_shovel[minecraft:damage=128]"]
          [:job (jobs.access.stair {:dir :down :heading :east :steps 4 :fetch false})]]
-   :expect [{:event {:source :job :kind :stair.done} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :stopped :data {:reason :tool-spent}} :for-s 60 :until {:source :job :kind :stair.done}}]}
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :tool-spent}} :for-s 60 :until {:source :job :kind :completed}}]}
   {:name "pickaxe-already-low-at-first-hold"
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=125]"]
@@ -61,7 +61,7 @@
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]
          [:await {:source :job :kind :stair.step} 30]
          [:rcon "execute at $BODY run tp $BODY ~-5 ~1 ~-3"]]
-   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :off-stair :origin [:any] :offset [:any]}} :within-s 40 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :off-stair :origin [:any] :offset [:any]}} :within-s 40 :of-job true}]}
   ;; card 8397ad3f: the same worn pickaxe (14 uses left) with cobblestone, sticks and a table carried: the next pickaxe is crafted
   ;; (tool.spare) and the stair goes on to its 10 steps instead of stopping :tool-spent
   {:name "pickaxe-wears-out-next-one-is-crafted"
@@ -69,6 +69,6 @@
    :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=117]"]
          [:job (jobs.access.stair {:dir :down :heading :east :steps 10})]]
    :expect [{:event {:source :job :kind :tool.spare} :within-s 120 :of-job true}
-            {:event {:source :job :kind :stair.done :data {:steps 10}} :within-s 220 :of-job true}
-            {:no-event {:source :job :kind :stopped :data {:reason :tool-spent}} :for-s 220 :until {:source :job :kind :stair.done}}]
+            {:event {:source :job :kind :completed :data {:steps 10}} :within-s 220 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :tool-spent}} :for-s 220 :until {:source :job :kind :completed}}]
    :limit-s 240}]}

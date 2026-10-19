@@ -10,12 +10,12 @@
  :cases
  [{:name "no-pickaxe-stair-up-digs-stone-by-hand-to-the-surface"
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]]
-   :expect [{:event {:source :job :kind :stair.done} :within-s 210 :of-job true}
-            {:no-event {:source :job :kind :stair.stopped :data {:reason :no-tool}} :for-s 200 :until {:source :job :kind :stair.done}}]
+   :expect [{:event {:source :job :kind :completed} :within-s 210 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-tool}} :for-s 200 :until {:source :job :kind :completed}}]
    :after [[:body-near [14.5 10 16.5] 3]]}
   {:name "bedrock-in-the-line-stops-with-a-reason-and-digs-nothing"
    :blocks [[:fill [11 6 16] [14 9 16] "bedrock"]]
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]]
-   :expect [{:event {:source :job :kind :stair.stopped} :within-s 210 :of-job true}
-            {:no-event {:source :job :kind :stair.done} :for-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped} :within-s 210 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 30 :of-job true}]
    :after [[:block [11 6 16] "bedrock"] [:body-near [10.5 6 16.5] 2]]}]}

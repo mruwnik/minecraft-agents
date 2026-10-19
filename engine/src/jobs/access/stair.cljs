@@ -32,79 +32,44 @@
 (def doc
   "Dig a 1-wide stair :down or :up (or a flat run, :level) along :heading (nil: the way the body faces) from where the body stands, :steps steps or to feet height :y.
 
-  A step cuts three cells, top first, so the body can walk one block forward and one down (or up) with full
-  headroom; a :level step cuts two (head, then feet) and its floors are no stair way (:stair-way below). Then the body walks into the step (a go-to child). Before cutting the next step it plans the
-  way back to the stair's first cell on a fresh pathWorld. The way must be whole and walkable by the executor
-  (no gap, door or swim), else the stair stops :no-way-back.
+  A step cuts three cells, top first (a :level step two), then the body walks into it (a go-to child). Before the next
+  step it plans the way back to the stair's first cell on a fresh pathWorld; a way that is not whole stops :no-way-back.
+  A cell the body has not seen is taken for stone and looked at before it is judged and after it is dug. Each step is
+  judged when chosen and each cell again right before its dig. A stair at its last step is done without the way-back check.
 
-  Cells are read as the body senses them (felt, seen, remembered). A cell it has not seen is taken for stone (dig to
-  see): the stair looks at each step before judging it and at each cell it dug, and the stops below fire on what is
-  then seen.
+  Floors: a step's floor must be solid. A floor of air gets a carried building block (jobs.lib.choose/fillers :build) after the rules'
+  may-place?, against a neighbour or from the cell under it (jobs.lib.bridge/bridge-plans); a stair down also bridges back along
+  its line up to setting bridge-depth cells. No block: :no-floor; no face to place against: :no-support-floor (the cut cell over the
+  gap is shut with a carried block, :sealed, else :open-to). A lava or water floor is never bridged. A go-to stair (:note) writes its
+  floors to the scaffold ledger for jobs.access.cleanup (setting take-back-floors?).
 
-  A step's floor must be solid, and for a stair down the cell under it not a fluid, nor air when no building block is carried (:cave-below), and everything loaded.
-  A floor of air gets a carried building block (jobs.lib.choose/fillers :build, never an ore or valuable) after the
-  rules' may-place?, against a neighbour, or from the cell under it first when only that has a face (jobs.lib.bridge/bridge-plans; a plan whose face was unseen air gives way to the next); a stair down also bridges back along its line, up to setting bridge-depth cells, from a seen solid cell, looking at unseen ones first (a cave under its last floor); a cave floor with nothing within that stops :no-support-floor (the underside of the block over it cannot be aimed at).
-  The cell under a placed floor is not judged. With no such block: :no-floor with :filler :none; with no face to place
-  against at any of them (a void pocket): :no-support-floor with :cell, :tried and :why. A stair down that stops so shuts the cut cell over the missing floor with a carried block (:sealed [cell]), else the stop names it (:open-to [cell]). A lava or water floor is never bridged. A go-to stair (:note) writes its placed floors to the scaffold ledger
-  (purpose :stair-floor) for jobs.access.cleanup to take back once go-to's job ended (setting take-back-floors?).
+  Hazards: exposed lava is filled with a building block (a jobs.blocks.place child, fetched when :fetch allows; :on-lava :stop stops
+  :lava-exposed instead); a failed seal, or lava flowing back after a reseal, backs the body off and stops :lava-unsealed. A cut that
+  now touches seen water is plugged the same way (stops :hazard with :plugged; :water-unplugged if it cannot). :accept
+  (#{:fluid-adjacent :lava-adjacent :falling-block}, default #{}) takes those hazards. A falling block over the body's own column is
+  never taken. The stair never digs the block it stands on, a cell it plugged (memory :stair-plug; setting dig-plugs? digs it),
+  a crop, or a base block.
 
-  Needs a pickaxe for the blocks it cuts and room for the drops. A call starts only when the first step is not refused by a zone, claim or plan, the args give a length (:steps or :y), the next dig lacks nothing this call cannot get (conditions :refused, :no-tool, :no-free-slot; start only). Quote: steps x cells of the step x the time of a cell, ending at the last step.
-  - A pack without room is made room in (jobs.storage.make-room child, once per pack content; :make-room), else it waits :no-free-slot until the pack changes (a call that starts so ends condition-failed).
-  - A missing pickaxe is got with jobs.items.get-tool (:fetch, jobs.lib.need), then the body walks back to the cell it stood on and goes on; a fetch that fails, or that changes nothing, is remembered for the call and the block is dug bare-handed. With :fetch off it ends :no-tool.
+  Needs a pickaxe and room for the drops. A call starts only when the first step is not refused, the args give a length and the next
+  dig lacks nothing this call cannot get (:refused, :no-tool, :no-free-slot). Quote: steps x cells of the step x the time of a cell.
+  - A pack without room is made room in (jobs.storage.make-room, once per pack content; setting make-room?), else it waits :no-free-slot until the pack changes.
+  - A missing pickaxe is got with jobs.items.get-tool (:fetch), then the body walks back and goes on; a fetch that fails is remembered and the block dug bare-handed. :fetch off ends :no-tool.
+  - Before each step the exposed ores within reach are dug (:pick-up-ores, jobs.lib.ore-pick).
 
-  Each step is judged when chosen and each cell again right before its dig. Stops:
-  - Access refusals with their reason: :zone :claim :footprint :not-loaded :no-zones. :ignore-zones? skips all
-    but :not-loaded. A cell of a plan this body made refuses :footprint too unless the spare-own-builds setting is false.
-  - :fluid-in-cut: a cut cell holds a fluid.
-  - :crop: a crop, stem or farmland in a cut cell (never dug, zone or not).
-  - :base-block: a chest, bed, furnace, table, door or other base block in a cut cell, or the block a door stands on (never dug, anyone's).
-  - :undercuts-way: a cut cell is the floor of a stair this body cut earlier, or a step's floor is air at a step of such a stair (a level run back over it; flooring it would block the stair) (memory :stair-way, written at every
-    end with the floors of the steps walked, joined to the earlier stair it goes on from).
-  - :unbreakable: bedrock, barrier, portal frames, command blocks.
-  - :no-tool: a pickaxe block with no pickaxe carried.
-  - :inventory-full: the drop has no room.
-  - :refills: a cell refilled 3 times (with a :why when the block does not fall: something put it back).
-  - :hazard: a hazard not in :accept (below).
-  - :off-stair: the body is off the stair line and max-returns walks back onto it (go-to children) are used up.
-  - :lava-exposed: lava beside an open cell of the step (or in one) with :on-lava :stop.
-  - :floor-unseen: the floor of the step is still unseen once its cut is open, looked at once more and again after a lean toward it.
-  - :lava-unsealed: that lava could not be filled (:on-lava :seal, the default): the place child's outcome in :place,
-    or still lava after max-seals places (a seal, then one reseal when lava flows back). The body first steps back to the stair's cell before (:backed-off) and
-    digs no more.
-  - :plugged: a cut cell was plugged against water by this body (this stair or an earlier job; memory :stair-plug, the fluid may be out of view); :dig-plugs true digs it.
-  - :water-unplugged: a cell the stair dug turned out to touch seen water (:fluid-adjacent not in :accept) and could not be filled.
+  One call cuts the whole stair; it yields :continue while a fetch or walk child waits on the world, or after max-steps pieces. The
+  body's cell is the progress: a resumed call finds its step from where the body stands on the stair line. Dug cells are left and recorded.
 
-  Water a dig lays open (a cell the stair dug now touches seen water, :fluid-adjacent not in :accept) is plugged at once: the cell
-  is filled with a building block (same child and fetch as the lava seal, event stair.plugged), and the stair stops :hazard
-  with :plugged <cell>.
+  Ends :done, or {:reason r ...detail}. :condition-failed for facts that bar the next cell (:refused :zone :claim :footprint :not-loaded :no-zones
+  :fluid-in-cut :crop :base-block :undercuts-way :unbreakable :no-tool :no-free-slot :inventory-full :hazard :lava-exposed :plugged
+  :floor-unseen :no-floor :cave-below :off-stair :no-way-back :tool-spent :y-not-beyond-feet), :impossible for :bad-args, :nothing-possible for
+  failed attempts (:refills :dig-failed :step-failed :no-support-floor :lava-unsealed :water-unplugged). :ignore-zones? skips all access
+  refusals but :not-loaded; a cell of a plan this body made refuses :footprint unless the spare-own-builds setting is false.
+  :undercuts-way: a cut cell is the floor of an earlier stair of this body (memory :stair-way, written at every end), or a step floor of air at a step of one.
+  :off-stair: off the line with max-returns walks back used up. :floor-unseen: the floor still unseen once the cut is open, looked at again after a lean.
+  Data {:steps n :at [x y z] :dug [{:cell :block}] :ores [{:cell :block :got}]} plus detail (:cell :hazards :zone :why ...; the walk child's ending is the :because of :step-failed).
 
-  Exposed lava (beside the feet, the head or an open cut cell, or in one) is filled with a building block
-  (jobs.lib.choose/fillers :build, a jobs.blocks.place child; it fetches one when :fetch allows), sources behind first, one
-  stair.sealed info each; then the stair goes on. After the top cut cell is dug it leans toward it and looks at the cell over it when that is unseen, so lava over the cut is capped before it pours in. Before it steps into an open cut with an unseen cell beside it, it
-  waits a lava flow delay since the last dig and looks at the cut once more. Lava seen beside a cell not yet dug is a hazard as below.
-
-  Hazards are the rules' (one per fluid beside) plus a falling block over the top cut of the next column.
-  :accept is a set of :fluid-adjacent :lava-adjacent :falling-block, default #{}; a falling block over the body's own column is never taken. Water beside the cut is not taken
-  by default (it can flow into the cut and onto the body's cell, which the walker cannot leave). Lava never is
-  in practice, and a falling block would land on the body or refill the cut. The stair never digs the block it
-  stands on.
-
-  One call cuts the whole stair; it yields :continue only while a fetch or walk child waits on the world, or after
-  max-steps digs, steps and fetch rounds. The body's cell is the progress: a resumed call finds its step from where
-  the body stands on the stair line. Dug cells are left and recorded.
-
-  Before each step it digs the exposed ores within reach (:pick-up-ores, jobs.lib.ore-pick) and returns to its place.
-
-  Ends :done, or with a cause {:reason r ...detail}: :condition-failed for the facts that bar the next cell (the access
-  refusals, :fluid-in-cut :crop :base-block :undercuts-way :unbreakable :no-tool :inventory-full :hazard :lava-exposed :plugged :floor-unseen
-  :no-floor :cave-below :off-stair :no-way-back :tool-spent :y-not-beyond-feet), :impossible for :bad-args, :nothing-possible for the attempts that
-  failed (:refills :dig-failed :step-failed :no-support-floor :lava-unsealed :water-unplugged). Data {:steps n :at [x y z] :dug [{:cell :block}] :ores [{:cell :block :got}]} plus detail (:cell
-  :hazards :zone ...; the walk child's ending is the :because of :step-failed), also as a stair.done info or stair.stopped warn event.
-
-  :spent-ok (default false): a dig whose every carried tool is down to 3 uses (jobs.lib.trip/spent-tool?) stops {:reason :tool-spent :tool <kind>}
-  before the last tool breaks deep down, after a spare was tried once (jobs.lib.trip/tool-ready!); true digs on.
-  :need-drop (default true): false digs a block no carried tool clears bare-handed anyway (slow, its drop lost): go-to's
-  last resort when it has no pickaxe. Also done once the fetch of a tool for that block failed.")
+  :spent-ok (default false): a dig whose every carried tool is down to 3 uses (jobs.lib.trip/spent-tool?) stops :tool-spent before the last tool
+  breaks, after a spare was tried once; true digs on. :need-drop false digs a block no carried tool clears bare-handed (go-to's last resort).")
 
 (a/defargs args
   {:dir {:doc ":down, :up or :level (a flat run, :steps only)" :spec #{:down :up :level} :default :down}
@@ -120,8 +85,6 @@
    :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool" :spec boolean? :default true}
    :spent-ok {:doc "dig on with tools down to jobs.lib.trip's ::spent-uses (3) uses instead of stopping :tool-spent before the last breaks; true for a way out" :spec boolean? :default false}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
-   :make-room {:doc "a pack with no room for the next drop is made room in (a jobs.storage.make-room child that tosses junk blocks; it keeps building blocks) instead of waiting :no-free-slot" :spec boolean? :default true}
-   :dig-plugs {:doc "true: a cell this body plugged against water may be dug (stops :plugged otherwise)" :spec boolean? :default false}
    :through {:doc "the id of a mineshaft plan the stair runs down: its footprint is no obstacle (jobs.lib.shafts)" :spec string? :default nil}})
 
 (a/defargs settings
@@ -227,14 +190,13 @@
       (contract/later :cutting "the stair is being cut" :units :steps :done n :left (max 0 (- (or (:target m) n) n))))))
 
 (defn ^:async cleanup
-  "After a stair that ended :done: the way cut is remembered (:stair-way) and stair.done told."
+  "After a stair that ended :done: the way cut is remembered (:stair-way)."
   [c ending]
   (when (= :done (:kind ending))
-    (let [{:keys [steps]} (:data ending)
+    (let [steps (:steps (:data ending))
           {:keys [dir heading]} (:args (with-heading c))]
       (when (and (pos? steps) (not= :level dir))
-        (smem/record-way! c (:origin (ctx/mem c)) dir heading steps))
-      (ctx/emit! c :stair.done :info (assoc (:data ending) :status :done :reason :done :text (str "stair " (name dir) " done, " steps " steps")))))
+        (smem/record-way! c (:origin (ctx/mem c)) dir heading steps))))
   (ctx/end c :done nil {}))
 
 (defn quote-of [c]
@@ -253,9 +215,8 @@
     :no-tool :tool-spent :no-free-slot :inventory-full :hazard :lava-exposed :plugged :floor-unseen :no-floor :cave-below :off-stair :no-way-back :y-not-beyond-feet})
 
 (defn finish!
-  "End the stair: a stop tells its event and remembers its way, and ends by reason a kind (facts, the rest nothing
-  possible) with the detail in the cause and, with what the stair did, in the data. :done ends with the data; its event
-  and way are cleanup's."
+  "End the stair: a stop remembers its way, and ends by reason a kind (facts, the rest nothing possible) with the
+  detail and a :text in the cause and, with what the stair did, in the data. :done ends with the data; its way is cleanup's."
   [c reason detail]
   (let [data (result-of c detail)
         steps (:steps data)
@@ -264,12 +225,13 @@
       (ctx/end c :done nil data)
       (do (when (and (pos? steps) (not= :level dir))
             (smem/record-way! c (:origin (ctx/mem c)) dir heading steps))
-          (ctx/emit! c :stair.stopped :warn
-                     (assoc data :status :stopped :reason reason
-                            :text (str "stair stopped after " steps " steps: " (name reason)
-                                       (some->> (:cell detail) pr-str (str " at "))
-                                       (some->> (:why detail) (str ": ")))))
-          (ctx/end c (cond (= :bad-args reason) :impossible (facts reason) :condition-failed :else :nothing-possible) (assoc detail :reason reason) data)))))
+          (ctx/end c (cond (= :bad-args reason) :impossible (facts reason) :condition-failed :else :nothing-possible)
+                   (assoc detail :reason reason
+                          :text (or (:text detail)
+                                    (str "stair stopped after " steps " steps: " (name reason)
+                                         (some->> (:cell detail) pr-str (str " at "))
+                                         (some->> (:why detail) (str ": ")))))
+                   data)))))
 
 (defn ^:async make-room!
   "Run make-room as child :room (no walk away: the stair is one tunnel wide). :continue while it waits, else :again; a

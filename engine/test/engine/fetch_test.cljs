@@ -293,7 +293,7 @@
           (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (core/waiting (:eng s) id)))
           (is (= "air" (block-at s 0 64 1)))
           (is (= 1 (count (filter #(= :need (:slot %)) (events-of s :child_started)))))
-          (is (empty? (events-of s :stair.stopped)) "the stair went on from where it began")
+          (is (empty? (events-of s :stopped)) "the stair went on from where it began")
           (is (empty? (listed s)))
           (let [me (:pos (fake/self (:p s)))]
             (is (= [0 0] [(js/Math.floor (:x me)) (js/Math.floor (:z me))]) "back on the stair line at its origin")))))))
@@ -321,7 +321,7 @@
               id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 2}) {})]
           (await (run-ticks s 80))
           (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (core/waiting (:eng s) id)))
-          (is (empty? (events-of s :stair.stopped)) "no stop for the lost pickaxe")
+          (is (empty? (events-of s :stopped)) "no stop for the lost pickaxe")
           (is (= 1 (count (filter #(= :need (:slot %)) (events-of s :child_started))))))))))
 
 (defn ^:async with-waiting-fetch-child

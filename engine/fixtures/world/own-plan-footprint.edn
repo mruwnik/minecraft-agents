@@ -56,7 +56,7 @@
    :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1 :settings {:jobs.lib.access/spare-own-builds false}})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
             {:event {:source :job :kind :go-to.dug-own-build} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :stair.stopped :data {:reason :footprint}} :for-s 180 :until {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}}}
+            {:no-event {:source :job :kind :child_ended :data {:ending {:cause {:reason :footprint}}}} :for-s 180 :until {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}}}
             {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
    :after [[:body-near [20.5 4 16.5] 2]]
    :limit-s 200}
@@ -71,7 +71,7 @@
    :act [[:job (jobs.movement.go-to {:pos #at [12 4 16] :range 1 :settings {:jobs.lib.access/spare-own-builds false}})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
             {:event {:source :job :kind :go-to.dug-own-build} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :stair.stopped :data {:reason :footprint}} :for-s 180 :until {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}}}
+            {:no-event {:source :job :kind :child_ended :data {:ending {:cause {:reason :footprint}}}} :for-s 180 :until {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}}}
             {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
    :after [[:body-near [12.5 4 16.5] 2]]
    :limit-s 200}
@@ -95,7 +95,7 @@
             :parts [{:id "wall" :cells [#at [17 0 16] #at [17 1 16] #at [17 2 16] #at [17 3 16]] :want [:any "stone"]}]}]
    :blocks [[:fill [10 0 10] [22 3 22] "stone"] [:fill [16 0 16] [16 3 16] "air"]]
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 1 :settings {:jobs.lib.access/spare-own-builds false}})]]
-   :expect [{:event {:source :job :kind :stair.done} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:block [17 1 16] "air"]]
    :limit-s 90}
   {:name "stair-through-own-plan-wall-is-spared-by-default"
@@ -104,7 +104,7 @@
    :blocks [[:fill [10 0 10] [22 3 22] "stone"] [:fill [16 0 16] [16 3 16] "air"]]
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 1})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :stair.done} :for-s 20}]
+            {:no-event {:source :job :kind :completed} :for-s 20}]
    :after [[:block [17 1 16] "stone"]]
    :limit-s 90}
   {:name "stair-through-other-plan-wall-refused"
@@ -113,7 +113,7 @@
    :blocks [[:fill [10 0 10] [22 3 22] "stone"] [:fill [16 0 16] [16 3 16] "air"]]
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 1})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :stair.done} :for-s 20}]
+            {:no-event {:source :job :kind :completed} :for-s 20}]
    :after [[:block [17 1 16] "stone"]]
    :limit-s 90}
   ;; step 2 from (17 1 16) cuts (17 3 16) (18 3 16) (18 2 16); (18 1 16) is the kept floor, never cut
@@ -123,7 +123,7 @@
    :blocks [[:fill [10 0 10] [22 3 22] "stone"] [:fill [16 0 16] [16 3 16] "air"]]
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 3})]]
    :expect [{:event {:source :job :kind :stair.step} :within-s 60 :of-job true}
-            {:event {:source :job :kind :stair.stopped :data {:reason :footprint}} :within-s 90 :of-job true}]
+            {:event {:source :job :kind :stopped :data {:reason :footprint}} :within-s 90 :of-job true}]
    :after [[:block [17 1 16] "air"] [:block [18 2 16] "stone"]]
    :limit-s 120}
   {:name "mine-spares-own-plan-cells-by-default-a"

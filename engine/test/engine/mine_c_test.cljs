@@ -149,7 +149,7 @@
       (fn ^:async t []
         (let [s (start {:world (deep-rock {"9,58,1" "iron_ore" "0,64,1" "air" "0,65,1" "air" "0,64,2" "air" "0,65,2" "air"})})]
           (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :level 58 :mend false}) {})
-          (await (run-until s 400 #(<= 2 (count (events-of % :stair.done)))))
+          (await (run-until s 400 #(<= 2 (count (filter (fn [e] (= :stair (:slot e))) (events-of % :child_ended))))))
           (swap! (.. (:p s) -world -state) assoc-in [:self :pos] [0.5 64 2.5])
           (await (run-ticks s 400))
           (is (= :count (:reason (done-event s))))

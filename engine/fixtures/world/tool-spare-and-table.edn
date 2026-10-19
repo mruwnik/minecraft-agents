@@ -15,7 +15,7 @@
    :body {:inventory [["stone_pickaxe[damage=125]" 1] ["oak_log" 4] ["torch" 8] ["cobblestone" 8]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8})]]
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
-            {:event {:source :job :kind :stair.done :data {:steps 8}} :within-s 240 :of-job true}
+            {:event {:source :job :kind :completed :data {:steps 8}} :within-s 240 :of-job true}
             {:count-event {:source :job :kind :tool.low} :for-s 240 :at-most 1}]
    :after [[:item "stone_pickaxe" [:>= 1]]]
    :limit-s 260}
@@ -60,8 +60,8 @@
    :body {:inventory [["stone_pickaxe[damage=125]" 1] ["oak_log" 4] ["torch" 8] ["cobblestone" 8]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]]
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
-            {:event {:source :job :kind :stair.done :data {:steps 6}} :within-s 190 :of-job true}
-            {:no-event {:source :job :kind :stair.stopped} :for-s 190 :of-job true :until {:source :job :kind :stair.done}}]
+            {:event {:source :job :kind :completed :data {:steps 6}} :within-s 190 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 190 :of-job true :until {:source :job :kind :completed}}]
    :after [[:body-near [16.5 4 16.5] 3]]}
   ;; card 54df7baf: mine's worn last pickaxe is replaced from a chest 18 blocks off; the walk there and back does not move the mine's
   ;; start, so the dig is the ore at the start, not wherever the fetch ended (two digs against one use left: a spare is wanted)

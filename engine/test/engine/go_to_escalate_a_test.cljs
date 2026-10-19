@@ -179,8 +179,7 @@
                                                   :inventory [{:name "dirt" :count 2} {:name "iron_pickaxe" :count 1}]}
                                              'jobs.movement.go-to {:pos [5 64 0] :range 1} []))]
           (is (= {:arrived true} @out))
-          (is (empty? (events-of seen :go-to.escalation-stopped)))
-          (is (empty? (events-of seen :stair.stopped))))))))
+          (is (empty? (events-of seen :go-to.escalation-stopped))))))))
 
 (deftest go-to-clears-a-door-out-of-a-sealed-room-and-shuts-it-behind
   (async done

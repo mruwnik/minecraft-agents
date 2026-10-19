@@ -7,6 +7,7 @@
             [jobs.lib.stair-cells :as geo]
             [jobs.lib.stair-memory :as smem]
             [jobs.access.stair.step :as sstep]
+            [jobs.access.stair.limits :as limits]
             [jobs.lib.dig-look :refer [unknown?]]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.need :as need]
@@ -27,7 +28,7 @@
   [c feet]
   (merge {:floor-at (access/seen-at (:primitives c)) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :column-at (access/sensed-at (:primitives c) "air")
           :feet feet :ledger #{} :ways (ledger/ways-of c) :keep-base? true
-          :plugs (if (:dig-plugs (:args c)) #{} (smem/plugs-of c))}
+          :plugs (if (limits/dig-plugs?) #{} (smem/plugs-of c))}
          (access-world c)))
 
 (defn fetch-limits
@@ -37,11 +38,11 @@
     (when (and o (contains? (:what o) :tool)) o)))
 
 (defn room-due?
-  "Whether lack (from need) is a full pack that a make-room child may cure: :make-room is on and the pack has not
+  "Whether lack (from need) is a full pack that a make-room child may cure: the make-room? setting is on and the pack has not
   changed since make-room last stopped short."
   [c lack]
   (and (= :no-free-slot (:reason lack))
-       (:make-room (:args c))
+       (limits/make-room?)
        (not= (u/inventory (:primitives c)) (:room-failed (ctx/mem c)))))
 
 (defn fetchable?

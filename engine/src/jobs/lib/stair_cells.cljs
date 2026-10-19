@@ -101,7 +101,7 @@
       fluid-cell {:reason :fluid-in-cut :cell fluid-cell :fluid (block-at fluid-cell)}
       crop-cell {:reason :crop :cell crop-cell :block (block-at crop-cell)}
       plug-cell {:reason :plugged :cell plug-cell :block (block-at plug-cell)
-                 :why "the cell was filled against water by this body; the water is behind it (:dig-plugs true digs it)"}
+                 :why "the cell was filled against water by this body; the water is behind it (the dig-plugs? setting digs it)"}
       floor-cell {:reason :undercuts-way :cell floor-cell :block (block-at floor-cell)
                   :why "the cell is the floor of a stair this body cut earlier; cutting it breaks the way"}
       over-stand {:reason :undercuts-way :cell over-stand :block (block-at over-stand)

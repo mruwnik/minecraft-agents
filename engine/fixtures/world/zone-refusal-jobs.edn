@@ -16,14 +16,14 @@
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [10 2 10] #at [22 11 22]] :want "stone"}]}]
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :stair.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :refused}}}]
+            {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :waiting :data {:reason :refused}}}]
    :after [[:block [17 9 16] "stone"]]}
   {:name "stair-free-outside-the-plan"
    :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
    :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1]]}
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [8 0 8] #at [9 1 9]] :want "stone"}]}]
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
-   :expect [{:event {:source :job :kind :stair.done} :within-s 80 :of-job true}]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:block [17 9 16] "air"]]}
   {:name "tunnel-refused"
    :blocks [[:fill [8 0 8] [24 9 24] "stone"]]

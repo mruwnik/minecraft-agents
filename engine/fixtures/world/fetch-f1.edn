@@ -62,7 +62,7 @@
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.access.stair {:dir :down :heading :east :steps 6 :fetch true})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 90 :of-job true}
-            {:event {:source :job :kind :stair.done :data {:steps 6}} :within-s 150 :of-job true}]
+            {:event {:source :job :kind :completed :data {:steps 6}} :within-s 150 :of-job true}]
    :limit-s 160
    :after [[:item "wooden_pickaxe" 1] [:body-near [16.5 4 16.5] 2.5]]}
   {:name "place-fetches-block-from-seen-chest"

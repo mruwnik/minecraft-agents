@@ -29,8 +29,8 @@
          [:await {:source :job :kind :stair.step :data {:at #at [12 8 16]}} 100]
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~10 ~10 ~20"]]
    :expect [{:event {:source :job :kind :stair.return} :within-s 120 :of-job true}
-            {:event {:source :job :kind :stair.done :data {:steps 8}} :within-s 190 :of-job true}
-            {:no-event {:source :job :kind :stair.stopped :data {:reason :off-stair}} :for-s 190 :until {:source :job :kind :stair.done}}]}
+            {:event {:source :job :kind :completed :data {:steps 8}} :within-s 190 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :off-stair}} :for-s 190 :until {:source :job :kind :completed}}]}
   {:name "rerun-along-an-old-corridor-digs-new-rock"
    :blocks [[:fill [3 0 16] [14 1 16] "air"] [:set [8 0 16] "torch"] [:set [18 0 16] "iron_ore"]]
    :body {:at [3.5 0 16.5]}

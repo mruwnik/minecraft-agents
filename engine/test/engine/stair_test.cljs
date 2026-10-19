@@ -421,7 +421,7 @@
                  (:dug @out)))
           (is (= "stone" (block-at p [3 61 0])) "the floor is never dug")
           (is (= 3 (count (events-of s :stair.step))))
-          (is (= 1 (count (events-of s :stair.done)))))))))
+          (is (empty? (events-of s :stair.done)) "the ending is job.ended's, no event restates it"))))))
 
 (deftest every-cell-is-dug-through-the-dig-job
   (async done
@@ -551,7 +551,7 @@
           (is (= "lava" (block-at p [3 63 0])))
           (is (not-any? #(= {:x 2 :y 63 :z 0} %) (digs p)) "the cell beside the lava is not dug")
           (is (= "lava" (:fluid (first (:hazards @out)))))
-          (is (= 1 (count (events-of s :stair.stopped)))))))))
+          (is (empty? (events-of s :stair.stopped)) "the ending is job.ended's, no event restates it"))))))
 
 (deftest water-beside-stops-by-default-and-is-taken-only-when-named
   (async done
@@ -599,7 +599,7 @@
               out2 (atom :not-done)
               id (core/submit! eng '(jobs.access.stair {:dir :down :heading :east :steps 3 :here true}) {})
               _ (await (tick-out! (assoc first-run :out out2 :id id)))
-              stopped (last (events-of first-run :stair.stopped))]
+              stopped (last (events-of first-run :stopped))]
           (is (= "cobblestone" (block-at p [1 64 0])) "the plug stays shut")
           (is (= digs-before (count (digs p))) "nothing was dug")
           (is (= [1 64 0] (:cell stopped)))
@@ -1378,7 +1378,7 @@
           (is (= [:impossible :bad-args] (await (run {:blocks ground} {:dir :down} (fn [_])))))
           (is (= [:condition-failed :no-tool] (await (run {:blocks ground :inventory []} (assoc east :fetch false) (fn [_])))))
           (is (= [:condition-failed :no-free-slot]
-                 (await (run {:blocks ground :inventory (into pick (repeat 35 {:name "dirt" :count 64}))} (assoc east :make-room false) (fn [_])))))
+                 (await (run {:blocks ground :inventory (into pick (repeat 35 {:name "dirt" :count 64}))} (assoc east :settings {:jobs.access.stair.limits/make-room? false}) (fn [_])))))
           (is (= [:condition-failed :refused]
                  (await (run {:blocks ground :zones [{:name "garden" :min [1 50 -2] :max [6 70 2]}]} east (fn [_])))))
           (is (= [:condition-failed :moved-since-submit]

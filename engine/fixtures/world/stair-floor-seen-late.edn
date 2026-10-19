@@ -15,11 +15,11 @@
  [{:name "stair-through-open-pocket-goes-on"
    :blocks [[:fill [14 6 16] [14 8 16] "air"]]
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]]
-   :expect [{:event {:source :job :kind :stair.done :data {:steps 6}} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :stair.stopped :data {:reason :floor-unseen}} :for-s 140 :until {:source :job :kind :stair.done}}]}
+   :expect [{:event {:source :job :kind :completed :data {:steps 6}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :floor-unseen}} :for-s 140 :until {:source :job :kind :completed}}]}
   {:name "pocket-opens-while-the-stair-is-under-way"
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]
          [:await {:source :job :kind :stair.step :data {:at #at [12 8 16]}} 100]
          [:rcon "execute positioned $X $Y $Z run fill ~14 ~6 ~16 ~14 ~8 ~16 air"]]
-   :expect [{:event {:source :job :kind :stair.done :data {:steps 6}} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :stair.stopped :data {:reason :floor-unseen}} :for-s 140 :until {:source :job :kind :stair.done}}]}]}
+   :expect [{:event {:source :job :kind :completed :data {:steps 6}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :floor-unseen}} :for-s 140 :until {:source :job :kind :completed}}]}]}

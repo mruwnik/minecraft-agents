@@ -14,7 +14,7 @@
    :blocks [[:set [13 8 16] "lava"]]
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
    :expect [{:event {:source :job :kind :stair.sealed :data {:cell #at [13 8 16]}} :within-s 90 :of-job true}
-            {:event {:source :job :kind :stair.done :data {:steps 3}} :within-s 110 :of-job true}]
+            {:event {:source :job :kind :completed :data {:steps 3}} :within-s 110 :of-job true}]
    :after [[:not-block [13 8 16] "lava"]]}
   {:name "stair-up-digs-to-lava-behind-stone-seals-it-and-goes-on"
    ;; a stair UP from a trench at y 2: step 3 cuts (13 5..7 16), lava sits beside it at (13 6 17); with cobblestone carried the seal holds and the stair ends done
@@ -22,7 +22,7 @@
    :body {:at [10.5 2 16.5]}
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 3})]]
    :expect [{:event {:source :job :kind :stair.sealed :data {:cell #at [13 6 17]}} :within-s 90 :of-job true}
-            {:event {:source :job :kind :stair.done :data {:steps 3}} :within-s 110 :of-job true}]
+            {:event {:source :job :kind :completed :data {:steps 3}} :within-s 110 :of-job true}]
    :after [[:not-block [13 6 17] "lava"]]}
   {:name "stair-up-seals-lava-in-the-line-beyond-the-cut-and-goes-on"
    ;; lava one block past step 3's head cell (13 6 16), in the stair's own line: from step 2 the uncut foot cell hides it, so the stair digs that cell and then seals
@@ -30,24 +30,24 @@
    :body {:at [10.5 2 16.5]}
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 3})]]
    :expect [{:event {:source :job :kind :stair.sealed :data {:cell #at [14 6 16]}} :within-s 90 :of-job true}
-            {:event {:source :job :kind :stair.done :data {:steps 3}} :within-s 110 :of-job true}]
+            {:event {:source :job :kind :completed :data {:steps 3}} :within-s 110 :of-job true}]
    :after [[:not-block [14 6 16] "lava"]]}
   {:name "stair-on-lava-stop-stops-lava-exposed"
    :blocks [[:set [13 8 16] "lava"]]
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3 :on-lava :stop})]]
-   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :lava-exposed}} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :stair.sealed} :for-s 90 :until {:source :job :kind :stair.stopped}}]}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :lava-exposed}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :stair.sealed} :for-s 90 :until {:source :job :kind :stopped}}]}
   {:name "stair-seal-without-a-block-backs-off-and-digs-no-more"
    ;; the cut is clay (drops clay balls, no building block), the body carries no block and may not fetch one
    :blocks [[:fill [11 6 15] [14 10 17] "clay"] [:set [13 8 16] "lava"]]
    :body {:inventory [["iron_pickaxe" 1]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3 :fetch false})]]
-   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :lava-unsealed :backed-off true}} :within-s 100 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :lava-unsealed :backed-off true}} :within-s 100 :of-job true}]
    :after [[:block [13 7 16] "clay"]]}
   {:name "stair-water-behind-stone-stops-fluid-in-cut"
    :blocks [[:set [12 8 16] "water"]]
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
-   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :hazard :hazards [:has {:fluid "water"}]}} :within-s 90 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :hazard :hazards [:has {:fluid "water"}]}} :within-s 90 :of-job true}]}
   {:name "tunnel-seals-lava-over-its-target-and-reaches-the-stand"
    ;; a trench x 8..13, y 6..9 to stand in; the target (15 6 16) has lava over it, hidden behind (14 7 16)
    :blocks [[:fill [8 6 14] [13 9 18] "air"] [:set [15 6 16] "iron_ore"] [:set [15 7 16] "lava"]]
@@ -67,4 +67,4 @@
          [:await {:source :job :kind :stair.sealed :data {:cell #at [12 8 17]} :after-previous true} 60]
          [:rcon "execute positioned $X $Y $Z run setblock ~12 ~8 ~17 lava"]]
    :expect [{:event {:source :job :kind :stair.sealed} :within-s 90 :of-job true}
-            {:event {:source :job :kind :stair.stopped :data {:reason :lava-unsealed :backed-off true}} :within-s 110 :of-job true}]}]}
+            {:event {:source :job :kind :stopped :data {:reason :lava-unsealed :backed-off true}} :within-s 110 :of-job true}]}]}
