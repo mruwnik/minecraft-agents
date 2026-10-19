@@ -314,15 +314,16 @@
 
 (defn ^:async settle-drops!
   "Wait until the logs lying in dig reach are seen and stop moving (a drop in the air is given up as unreachable, one
-  not yet seen is not tried): at least ::settle-min looks, at most ::settle-looks."
+  not yet seen is not tried): at least ::settle-min looks, at most ::settle-looks. :continue when a pause was cut."
   [c]
   (let [spots #(into {} (map (juxt (fn [e] (.-id e)) (fn [e] (u/pos-of (.-pos e))))) (own-log-drop-entities c (u/self-pos c) dig-reach))]
     (loop [before (spots) n 0]
       (when (< n (settings/get settings ::settle-looks))
-        (await (js/Promise. (fn [resolve] (js/setTimeout resolve (settings/get settings ::settle-ms)))))
-        (let [after (spots)]
-          (when (or (not= before after) (< n (settings/get settings ::settle-min)))
-            (recur after (inc n))))))))
+        (if (= :continue (await (child/pause! c (/ (settings/get settings ::settle-ms) 1000) :settling-drops)))
+          :continue
+          (let [after (spots)]
+            (when (or (not= before after) (< n (settings/get settings ::settle-min)))
+              (recur after (inc n)))))))))
 
 (defn ^:async top-collect!
   "Before the pillar comes down: pick up the logs lying within dig reach of the pillar top (they rest on the canopy and
@@ -331,20 +332,19 @@
   while a child waits."
   [c]
   (when-not (:topped (:pillar (ctx/mem c)))
-    (when-not (:settled (:pillar (ctx/mem c)))
-      (await (settle-drops! c))
-      (ctx/update-mem! c assoc-in [:pillar :settled] true))
-    (let [n (:lowered (:pillar (ctx/mem c)) 0)
+    (let [settle (when-not (:settled (:pillar (ctx/mem c))) (await (settle-drops! c)))
+          _ (when-not (= :continue settle) (ctx/update-mem! c assoc-in [:pillar :settled] true))
+          n (:lowered (:pillar (ctx/mem c)) 0)
           ents (own-log-drop-entities c (u/self-pos c) dig-reach)
           ids (mapv #(.-id %) ents)
-          e (if (seq ids)
+          e (if (and (seq ids) (not= :continue settle))
               (await (child/run!* c (keyword (str "tcollect" n)) 'jobs.items.collect-drops
                                   {:radius dig-reach :ids ids :near (u/self-pos c) :search 0}))
               :done)
           at (into {} (map (juxt #(u/cell-vec (u/pos-of (.-pos %))) #(u/pos-of (.-pos %)))) ents)
           cell (when (and (map? e) (< n max-lowered)) (some #(drop-support c % (at %)) (left-cells e)))]
       (cond
-        (= :continue e) :continue
+        (or (= :continue settle) (= :continue e)) :continue
         (not cell) (do (ctx/update-mem! c assoc-in [:pillar :topped] true) nil)
         :else
         (let [d (await (ctx/call c (keyword (str "lower" n)) 'jobs.blocks.dig (log/log-dig-args c (u/cell-pos cell))))]

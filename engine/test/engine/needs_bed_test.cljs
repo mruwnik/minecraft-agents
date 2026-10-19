@@ -39,6 +39,9 @@
   (is (false? (holds? {:entries [[:slept {:pos {:x 0 :y 64 :z 0}} 1] [:looked {} 4]]})))
   (is (false? (holds? {}))))
 
+(deftest at-night-the-night-job-sleeps-so-no-errand
+  (is (false? (holds? {:entries slept-long-ago :night true}))))
+
 (deftest first-light-or-a-known-hostile-hold-the-errand
   (is (false? (holds? {:entries slept-long-ago :time 400})))
   (is (false? (holds? {:entries slept-long-ago :entities [zombie]}))))
