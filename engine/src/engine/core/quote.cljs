@@ -1,7 +1,7 @@
 (ns engine.core.quote
   "Quotes (engine.contract) as the engine asks them. ctx/quote runs a job's quote-of under a quote ctx: a token-less
   ctx of the would-be call (its call keys, clamped as ctx/call would, and ctx/left of them), with a wall-clock quote
-  deadline handed down; asked or answered past it, time is ##Inf. A call equal to a caller's or a quoting ancestor's
+  deadline handed down; asked past it, time is ##Inf (a finished answer is kept: load stalls must not turn it into ##Inf). A call equal to a caller's or a quoting ancestor's
   is refused as ctx/call refuses it. A job with no quote-of quotes the mean time of its :job-report entries. ctx/next-way
   picks a contract job's next way and books the ways that failed."
   (:require [engine.contract :as contract]
@@ -41,8 +41,7 @@
         (cond
           (> (now eng) qd) contract/too-expensive
           (nil? (:quote-of def)) (default-quote eng def)
-          :else (let [q (await ((:quote-of def) (make-ctx qd)))]
-                  (if (> (now eng) qd) contract/too-expensive (checked def q)))))))
+          :else (checked def (await ((:quote-of def) (make-ctx qd))))))))
 
 (defn ^:async next-way
   "{:way k :dropped {way why}}: the first of c's job ways (in its ways order) the call allows, that has not failed on

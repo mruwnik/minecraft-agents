@@ -93,7 +93,7 @@
                (swap! world assoc :after (await (ctx/quote c 'slow {})))
                {:uses {:job-time [1 2 3]}})})
 
-(deftest past-the-quote-deadline-time-is-infinite
+(deftest a-quote-asked-past-the-deadline-is-infinite-but-an-answer-past-it-is-kept
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -103,10 +103,10 @@
           (core/submit! eng '(asker) {})
           (await (core/tick! eng))
           (is (= 1001000 (:handed @world)) "handed down")
-          (is (= inf (:inner @world)) "ran past it")
-          (is (= inf (:after @world)))
+          (is (= {:uses {:job-time [1 1 1]}} (:inner @world)) "ran past it, answered")
+          (is (= inf (:after @world)) "asked past it")
           (is (= 1 (:slow-quotes @world)) "a quote asked past the deadline does not run")
-          (is (= inf (:got @world)) "the outer quote ended past it too"))))))
+          (is (= {:uses {:job-time [1 2 3]}} (:got @world)) "the outer quote ended past it, answered"))))))
 
 ;; ---------------------------------------------------------------- duplicates
 

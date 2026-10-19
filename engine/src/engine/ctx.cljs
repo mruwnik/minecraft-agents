@@ -131,7 +131,7 @@
   :done fig :moves-to [x y z]} (:done in the job's done? units), ##Inf allowed; or the condition-failed :duplicate-call
   ending when the call would be refused. Runs its quote-of export under a quote ctx (no acts, calls or writes), else
   time (0, the mean of its :job-report times or ::contract/default-time-s, ##Inf). quote-deadline: wall-clock ms,
-  never past this ctx's :quote-deadline (default ::contract/quote-s from now); asked or answered past it, time is ##Inf."
+  never past this ctx's :quote-deadline (default ::contract/quote-s from now); asked past it, time is ##Inf."
   ([ctx job args] (engine.ctx/quote ctx job args nil))
   ([ctx job args quote-deadline]
    (let [[def args] (child-job ctx job args)]
