@@ -112,6 +112,20 @@
       {:held true :first? (empty? holders)}
       {:waiting-on (vec (sort (map first blockers)))})))
 
+(defn sweep-file
+  "The file a running world sweep keeps its PID in."
+  [shared-dir]
+  (str shared-dir "/mc-world-sweep.pid"))
+
+(defn sweep-block
+  "Why a run may not take the time lock for phase, or nil. While a sweep lives (marker-pid alive), only its own
+  children (sweep-env-pid = marker-pid) take a night, night-exclusive or weather lock: day and time-independent runs stay free."
+  [phase marker-pid sweep-env-pid alive?]
+  (when (and (number? marker-pid) (alive? marker-pid)
+             (not (contains? #{:day :any} phase))
+             (not= marker-pid sweep-env-pid))
+    (str "a world sweep is running (pid " marker-pid "); time-locked cases (" (name phase) ") wait for the lead")))
+
 (defn try-share
   "One attempt at the time lock shared by phase: any number of processes may hold the same phase together; the other
   phase waits for all of them, and once it waits, new holders of the current phase queue behind it. A joiner also waits

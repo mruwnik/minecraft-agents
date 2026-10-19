@@ -35,7 +35,7 @@
        "A job case (no :register, no :wait-full true, only :event expectations pending) ends :idle-grace-s (default 3) s after every job it submitted has ended, failed or parked (\"no job active: ...\", :ended-early-s and :idle-grace-s in the result).\n"
        "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
-       "such a case is skipped, and a case with no :time still gets day (logged to a default file in the temp dir). A case that depends on the time of day (with --allow-time, every case) holds a time lock shared by phase (day cases together,\n"
+       "such a case is skipped, and a case with no :time still gets day (logged to a default file in the temp dir). While a world sweep runs, a run outside it fails a night, night-exclusive or weather case at once (day cases stay free). A case that depends on the time of day (with --allow-time, every case) holds a time lock shared by phase (day cases together,\n"
        "night cases together; the other phase waits; the first holder sets the time) for its whole run; a manual `time set` takes it too: node tools/time-set.mjs <ticks|day|noon|night|midnight>. A failed case whose day time jumped meanwhile (a foreign `time set`) is INCONCLUSIVE. "
        "Exit code 0 when every run passed, 1 when one failed, 2 on a usage or setup error."))
 
@@ -944,13 +944,22 @@
                                (.then (sleep 2000) #(attempt (:waiting-on r)))))))))]
       (attempt nil))))
 
+(defn sweep-block
+  "Why this process may not take the time lock for phase while a world sweep runs, or nil."
+  [phase]
+  (lease/sweep-block phase (read-pid-file (lease/sweep-file shared-dir))
+                     (some-> (.. js/process -env -WORLD_SWEEP_PID) (js/parseInt 10))
+                     pid-alive?))
+
 (defn acquire-time-lock!
   [phase what & [batch]]
-  (acquire-shared! {:ops (time-lock-dir-ops) :batch batch
-                    :batch-start (when batch (night-batch-start batch))
-                    :read-phase #(.then (rcon! ["time query day"]) (fn [[reply]] (if (night? (daytime (or reply ""))) :night :day)))
-                    :sleep sleep :log log!}
-                   phase what))
+  (if-let [why (sweep-block phase)]
+    (js/Promise.reject (js/Error. why))
+    (acquire-shared! {:ops (time-lock-dir-ops) :batch batch
+                      :batch-start (when batch (night-batch-start batch))
+                      :read-phase #(.then (rcon! ["time query day"]) (fn [[reply]] (if (night? (daytime (or reply ""))) :night :day)))
+                      :sleep sleep :log log!}
+                     phase what)))
 
 (defn with-time-lock!
   "Runs thunk (a promise-returning fn) holding the time lock for phase; always releases it."

@@ -8,7 +8,8 @@
             ["path" :as path]
             [cljs.reader :as reader]
             [clojure.string :as str]
-            [engine.test-events :as ev]))
+            [engine.test-events :as ev]
+            [world-test.lease :as lease]))
 
 (def usage
   (str "usage: node tools/world-sweep.mjs [--dir DIR] [--bodies 16] [--min-bodies 8] [--no-night-batches] [--durations RESULTS.edn ...] [--match-ids FILE] [--run-known] [--unskip-ids FILE] [--unskip-id ID] [--retry-failed 1] [fixture paths ...]\n"
@@ -177,7 +178,7 @@
   [script args current pass]
   (js/Promise.
    (fn [resolve _]
-     (let [env (js/Object.assign #js {} js/process.env)
+     (let [env (js/Object.assign #js {} js/process.env #js {:WORLD_SWEEP_PID (str (.-pid js/process))})
            _ (when-not pass (js-delete env "TEST_EVENTS"))
            child (cp/spawn js/process.execPath (clj->js (into [(path/join (repo) "tools" script)] args))
                            #js {:stdio (if pass #js ["inherit" "pipe" "inherit"] "inherit") :env env})]
@@ -202,9 +203,11 @@
             emit! (fn [m] (when ev/enabled? (ev/emit! m)))
             current (atom nil)
             interrupted (atom nil)
-            _ (forward-signals! js/process current interrupted 60000)]
+            _ (forward-signals! js/process current interrupted 60000)
+            marker (lease/sweep-file (or js/process.env.WORLD_TEST_SHARED_DIR "/tmp"))
+            _ (fs/writeFileSync marker (str (.-pid js/process)))]
         (js/console.error (str "world-sweep: results in " dir))
-        (.then (run-sweep ps {:run-pass! (fn [p]
+        (-> (run-sweep ps {:run-pass! (fn [p]
                                            (js/console.error (str "world-sweep: pass " (name (:name p))))
                                            (.then (spawn-node! "world-test.mjs" (:argv p) current (:name p))
                                                   (fn [code] {:code code :results (read-results (:results p))})))
@@ -212,10 +215,11 @@
                               :interrupted #(deref interrupted)
                               :now #(js/Date.now)
                               :emit! emit!})
-               (fn [r]
+               (.then (fn [r]
                  (let [file (str dir "/sweep-summary.edn")]
                    (fs/writeFileSync file (pr-str (assoc r :dir dir)))
                    (js/console.error (str "world-sweep: " (when (:stopped r) (str (:stopped r) "; "))
                                           (str/join ", " (map #(str (name (:name %)) " " (pr-str (:counts %)) " " (.toFixed (:wall-min %) 1) " min") (:passes r)))
                                           "; time-set day " (:time-set r) "; summary " file))
-                   (:exit r))))))))
+                   (:exit r))))
+            (.finally #(fs/rmSync marker #js {:force true})))))))
