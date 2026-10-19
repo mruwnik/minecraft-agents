@@ -15,6 +15,7 @@
             [jobs.lib.access.approach :as approach]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
+            [jobs.lib.trees :as trees]
             [jobs.forestry.fell-tree :as fell-tree]
             [jobs.forestry.fell-tree.log :as log]
             [jobs.forestry.fell-from-pillar :as pillar]
@@ -172,6 +173,24 @@
             (await (tu/run-until-empty eng 200)))
           (is (seq @dug) "the cut came while the pillar stood")
           (is (= [] (open)) "the cleanup took the pillar back"))))))
+
+(deftest logs-in-reach-of-the-pillar-top-are-collected-before-the-pillar-comes-down
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (fm/start ft/tall {})
+              eng (:eng s)
+              open-at-collect (atom [])
+              call! ctx/call]
+          (ft/eye-reach! (:p s) (:lose-logs? ft/tall))
+          (with-redefs [pillar/own-log-drops (fn [_ _ r] (if (= r trees/dig-reach) [99] []))
+                        ctx/call (fn [c k job & more]
+                                   (when (= :tcollect k)
+                                     (swap! open-at-collect conj (boolean (seq (ledger/open-entries (mem/view (:store eng)))))))
+                                   (apply call! c k job more))]
+            (core/submit! eng '(jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak" :radius 10}) {})
+            (await (tu/run-until-empty eng 200)))
+          (is (= [true] @open-at-collect) "one collect, made while the pillar still stood"))))))
 
 (deftest the-pillar-take-back-runs-in-an-urgent-section
   (async done

@@ -26,7 +26,7 @@
    :blocks [[:fill [17 4 16] [18 4 16] "oak_log"]]
    :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
-   :after [[:not-block [16 0 16] "oak_log"] [:not-block [17 4 16] "oak_log"] [:not-block [18 4 16] "oak_log"] [:item "oak_log" [:>= 8]]]}
+   :after [[:not-block [16 0 16] "oak_log"] [:not-block [17 4 16] "oak_log"] [:not-block [18 4 16] "oak_log"] [:item "oak_log" [:>= 12]]]}
   {:name "log-wall-touching-the-tree-in-another-zone-is-left-standing"
    :blocks [[:fill [17 1 16] [18 3 16] "oak_log"]]
    :zones [{:name "yard" :min [17 0 15] :max [19 4 17] :owner "Other" :allow #{}}]

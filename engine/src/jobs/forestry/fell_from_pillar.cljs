@@ -24,7 +24,7 @@
 (def doc
   "Fell the logs of the tree at :base that are out of reach from the ground, standing on a pillar that is taken back.
   jobs.lib.access.approach/plan picks the stand or the pillar base for the highest logs (the logs cut so far are
-  collected first, jobs.items.collect-drops), the body walks there (go-to), builds the pillar (jobs.access.pillar,
+  collected first, jobs.items.collect-drops, and so are the ones lying within dig reach of the pillar top before it comes down), the body walks there (go-to), builds the pillar (jobs.access.pillar,
   every block in the scaffold ledger), digs the logs in reach top-down (jobs.blocks.dig) and the cleanup export
   (jobs.access.cleanup) takes the pillar back however the call ends, a cut included (and when the call starts with
   this job's scaffold still open).
@@ -207,19 +207,18 @@
           (ctx/end c :nothing-possible (:reason r) (result c))))))
 
 (defn own-log-drops
-  "The ids of the logs lying within :drop-radius of the base that jobs.lib.loose lets the body take (not another
-  player's throw, not in a zone that refuses taking)."
-  [c base]
-  (let [r (settings/get settings ::drop-radius)]
-    (->> (loose/candidates (:primitives c) (ctx/view c) (:world (:engine c)) {:radius (+ r (u/dist base (u/self-pos c))) :always log-names} (:root c))
-         (filter #(and (log-name? (some-> (.-item %) .-name)) (<= (u/dist base (u/pos-of (.-pos %))) r)))
-         (mapv #(.-id %)))))
+  "The ids of the logs lying within r of the centre that jobs.lib.loose lets the body take (not another player's
+  throw, not in a zone that refuses taking)."
+  [c centre r]
+  (->> (loose/candidates (:primitives c) (ctx/view c) (:world (:engine c)) {:radius (+ r (u/dist centre (u/self-pos c))) :always log-names} (:root c))
+       (filter #(and (log-name? (some-> (.-item %) .-name)) (<= (u/dist centre (u/pos-of (.-pos %))) r)))
+       (mapv #(.-id %))))
 
 (defn ^:async pillar-collect!
   "Pick up the logs cut so far (they are the pillar's blocks when no dirt is carried): a collect-drops child for the
   ones lying round the base that the body may take. Finding none is no failure."
   [c]
-  (let [ids (own-log-drops c (base c))
+  (let [ids (own-log-drops c (base c) (settings/get settings ::drop-radius))
         e (if (seq ids)
             (await (child/run!* c :pcollect 'jobs.items.collect-drops
                                 {:radius (settings/get settings ::drop-radius) :ids ids :near (base c) :search 0}))
@@ -279,13 +278,28 @@
           (do (ctx/update-mem! c assoc-in [:pillar :dug] true) (u/progress! c) :again)
           (pillar-failed! c (if (#{:unreachable :cannot :refused :blocked} r) :dig r)))))))
 
+(defn ^:async top-collect!
+  "Once, before the pillar comes down: pick up the logs lying within dig reach of the pillar top (they rest on the
+  canopy and cannot be reached from the ground). nil when done or none lie there, :continue while the child waits."
+  [c]
+  (when-not (:topped (:pillar (ctx/mem c)))
+    (let [ids (own-log-drops c (u/self-pos c) dig-reach)
+          e (if (seq ids)
+              (await (child/run!* c :tcollect 'jobs.items.collect-drops
+                                  {:radius dig-reach :ids ids :near (u/self-pos c) :search 0}))
+              :done)]
+      (if (= :continue e)
+        :continue
+        (do (ctx/update-mem! c assoc-in [:pillar :topped] true) nil)))))
+
 (defn ^:async pillar-clean!
   "The call ends: done when a log was dug and the pillar did not fail, else nothing-possible with the failure. The
-  pillar comes down in cleanup."
+  logs lying in reach of the top are collected first; the pillar comes down in cleanup."
   [c {:keys [failed]}]
   (if failed
     (ctx/end c :nothing-possible failed (result c))
-    (ctx/end c :done nil (result c))))
+    (or (await (top-collect! c))
+        (ctx/end c :done nil (result c)))))
 
 (defn ^:async take-back!
   "Take the pillar back (jobs.access.cleanup child for this job's blocks) when its scaffold is open: nil once the
