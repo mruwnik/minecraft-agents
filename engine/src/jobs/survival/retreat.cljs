@@ -122,7 +122,7 @@
    :hide-health {:doc "at or under this health, in a ranged chaser's line of fire with no covered step, take cover where it stands before walking on" :spec (a/num-in 0 20) :default 12}})
 
 (a/defargs settings
-  {::job-time-s {:default 420 :doc "Seconds of a flight's time spend (its pauses not counted): past it the flight ends limit-reached and the hostile trigger fires again while the danger stays." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 420 :doc "Seconds of a flight's time spend (its pauses included): past it the flight ends limit-reached and the hostile trigger fires again while the danger stays." :spec (a/num-in 0 nil)}
    ::mean-s {:default 20 :doc "Seconds a flight is guessed to take, the mean of its quote." :spec (a/num-in 0 nil)}})
 
 (def target [])

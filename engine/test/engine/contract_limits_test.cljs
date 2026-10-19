@@ -88,7 +88,7 @@
                              (swap! world update :rounds (fnil inc 0))
                              :continue)))
 
-(deftest a-held-wait-spends-no-job-time-but-a-plain-wait-does
+(deftest a-held-wait-spends-job-time-like-a-plain-one
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -96,11 +96,8 @@
           (slow-wait! p 60000)
           (core/submit! eng '(sheltering) {})
           (await (core/tick! eng))
-          (is (= 1 (:rounds @world)) "the held wait is not refused for the 3 s it quotes, nor counted for the 60 s it took")
-          (is (empty? (job-ev seen :limit_reached)))
-          (await (core/tick! eng))
-          (is (= {:kind :limit-reached :cause {:line :job-time :spend 5}} (stopped seen)) "only the 4 s of its own work add up: the second round crosses 5")
-          (is (= 8 (get-in (first (job-ev seen :limit_reached)) [:data :report :uses :job-time]))))))))
+          (is (nil? (:rounds @world)) "the held wait quotes 3 s against the 1 s left of the :job-time 5")
+          (is (= {:line :job-time :spend 5 :act :wait} (:cause (stopped seen)))))))))
 
 (deftest a-plain-wait-spends-job-time
   (async done

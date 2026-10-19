@@ -49,7 +49,7 @@
   :failed [{:pos :reason}] :skipped :farthest} :why :text} and the ending:
   - :done: :count found.
   - :nothing-possible :distance (no leg left), :legs (:max-legs walked) or :stuck (three failed walks in a row).
-  - :limit-reached :job-time (the call's :spend :job-time, default ::job-time-s, pauses not counted) or :wall-time (default ::wall-time-s); the engine ends it, with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
+  - :limit-reached :job-time (the call's :spend :job-time, default ::job-time-s) or :wall-time (default ::wall-time-s); the engine ends it, with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
   - A call with no :target never runs (:bad-args).
 
   Memory: :origin :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :blocked (the ways legs
@@ -81,7 +81,7 @@
    ::entity-ttl-s {:default 600 :doc "Seconds a note of an entity seen lasts." :spec (a/num-in 0 nil)}
    ::searched-ttl-s {:default 86400 :doc "Seconds a note of searched ground lasts." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds from the first round before a search gives up." :spec (a/num-in 0 nil)}
-   ::wall-time-s {:default 3600 :doc "Seconds from the first round before a search gives up, waits included (a pause is no job time)." :spec (a/num-in 0 nil)}
+   ::wall-time-s {:default 3600 :doc "Seconds from the first round before a search gives up, waits included." :spec (a/num-in 0 nil)}
    ::max-failed-in-row {:default 3 :doc "Failed attempts in a row before the search gives up." :spec (a/int-in 0 nil)}
    ::wait-ms {:default 2000 :doc "How long the search waits for the world to settle, in ms." :spec (a/int-in 0 nil)}
    ::descent {:default 40 :doc "How far below its feet a leg's ground is looked for, in blocks (go-to does the descent)." :spec (a/int-in 0 nil)}

@@ -51,13 +51,6 @@
   (when (pos? ms)
     (update-frames! eng root [(mem/slot-path slots)] #(update % :ran-ms (fnil + 0) ms))))
 
-(defn sub-time!
-  "Take ms of paused time off the :job-time of every frame from root down to slots: its rounds still hold it, and a
-  pause is wall time only."
-  [eng root slots ms]
-  (when (pos? ms)
-    (update-frames! eng root (frame-paths slots) #(update % :ran-ms (fnil - 0) ms))))
-
 (defn report [eng root slots]
   (contract/report (:contract (mem/job-mem (mem/view (:store eng)) root slots)) ((:now eng))))
 

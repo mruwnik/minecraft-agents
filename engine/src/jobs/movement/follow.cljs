@@ -38,7 +38,7 @@
 (a/defargs settings
   {::max-out-walks {:default 3 :doc "Walks in a row that arrived or got closer but left the body out of range before the call gives up (:out-of-range)." :spec (a/num-in 1 nil)}
    ::radius {:default 64 :doc "How far the player may be and still be seen, in blocks." :spec (a/num-in 0 nil)}
-   ::job-time-s {:default 3600 :doc "Seconds one call may take before it gives up (:limit-reached), pauses not counted." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 3600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the idle pauses beside the player included (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (defn radius [] (settings/get settings ::radius))

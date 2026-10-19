@@ -1,5 +1,5 @@
 (ns engine.pause-bounds-test
-  "A pause is wall time, not job time: a job that loops on pauses until the world changes needs a :wall-time default."
+  "A pause counts as job time and wall time: a job that loops on pauses until the world changes needs a :wall-time default."
   (:require [cljs.test :refer [deftest is]]
             [jobs.animals.herd :as herd]
             [jobs.movement.follow :as follow]))

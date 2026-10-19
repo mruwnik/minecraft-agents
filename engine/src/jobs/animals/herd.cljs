@@ -122,7 +122,7 @@
 
 (a/defargs settings
   {::pace-ms {:default 100 :doc "A step that changed nothing and took less than this is followed by a pause of settle-ms." :spec (a/int-in 0 nil)}
-   ::job-time-s {:default 900 :doc "Seconds a herd run may take, pauses not counted." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 900 :doc "Seconds a herd run may take, its pauses included." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 1800 :doc "Seconds a herd run may last from its start, its pauses included." :spec (a/num-in 0 nil)}})
 
 (defn pace-ms [] (settings/get settings ::pace-ms))

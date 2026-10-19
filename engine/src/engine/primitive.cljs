@@ -142,9 +142,9 @@
    :dismount (fixed [:yaw :pitch] [] #{"dismounted"} (fails #{"not-mounted"} #{}) 2)
    :paddle (fixed [:ticks :turn :forward] [] #{"ok"} (fails #{"not-mounted" "not-a-boat"} #{"blocked"}) 4)
    :wait (entry [:ms] [] #{"ok"} (fails #{} #{})
-                (fn [_ {:keys [ms why]}]
+                (fn [_ {:keys [ms]}]
                   (let [s (/ (min (max (if (number? ms) ms 0) 0) (js-setting "prim/wait-max-ms" 10000)) 1000)]
-                    (if why {:uses {:job-time [0 0 0] :wall-time [s s s]}} {:uses {:job-time [s s s]}}))))
+                    {:uses {:job-time [s s s]}})))
    :offline (entry [:ms :why] [] #{"ok"} (fails #{} #{})
                    (fn [_ {:keys [ms]}]
                      (let [s (/ (min (or ms (js-setting "prim/offline-default-ms" 300000))

@@ -47,7 +47,7 @@
           (is (= [:testing] (distinct (map #(:reason %) (of-kind seen :holding)))) "holding with its reason")
           (let [completed (first (of-kind seen :completed))]
             (is (= :done (:pause completed)))
-            (is (= {:job-time 0 :wall-time 25} (select-keys (get-in completed [:report :uses]) [:job-time :wall-time])) "the pause is the caller's wall time, not its job time")))))))
+            (is (= {:job-time 25 :wall-time 25} (select-keys (get-in completed [:report :uses]) [:job-time :wall-time])) "the pause counts as both job time and wall time")))))))
 
 (deftest a-cut-pause-waits-only-what-is-left
   (async done

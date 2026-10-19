@@ -10,7 +10,7 @@
 (def doc
   "An intentional pause: hold the body still (holding :why) for :seconds, in :wait acts of at most prim/wait-max-ms
   inside one round. A job pauses by calling it as a child (jobs.lib.child/pause!): reflexes still cut in, and the time
-  counts on the caller's wall time, not its job time. A pause writes its deadline once (job memory :until), so a cut pause waits only
+  counts against both the caller's job time and its wall time. A pause writes its deadline once (job memory :until), so a cut pause waits only
   what is left and a long one adds no events per step. Needs nothing.
   Its hold stays until the caller's round ends or clears it. Done {:waited-s s}. Quote: :seconds.")
 
