@@ -170,7 +170,8 @@
       (fn ^:async t []
         (let [s (await (scenario {} {:entities [(tied 1 4)]} 5))]
           (is (finished? s))
-          (is (= :refused (:reason (done-event s))))
+          (is (= :failed (:reason (done-event s))))
+          (is (empty? (events-of s :unleash.gave-up)))
           (is (empty? (calls-of s "interact"))))))))
 
 (deftest an-animal-freed-a-moment-after-the-click-counts

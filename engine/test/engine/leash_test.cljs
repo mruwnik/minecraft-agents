@@ -104,7 +104,7 @@
             (is (finished? s) label)
             (is (= reason (:reason (done-event s))) label)
             (is (empty? (calls-of s "interact")) label)
-            (is (= [:leash.gave-up] (mapv :kind (events-of s :leash.gave-up))) label)))))))
+            (is (empty? (events-of s :leash.gave-up)) label)))))))
 
 (deftest gives-up-on-an-unreachable-cow
   (async done
@@ -122,7 +122,8 @@
       (fn ^:async t []
         (let [s (await (scenario {} {:inventory lead :entities [(cow 1 2 {:accepts false})]} 5))]
           (is (finished? s))
-          (is (= :refused (:reason (done-event s))))
+          (is (= :failed (:reason (done-event s))))
+          (is (= :failed (:cause (done-event s))))
           (is (= 2 (count-of s "lead")))
           (is (empty? (on-lead s))))))))
 

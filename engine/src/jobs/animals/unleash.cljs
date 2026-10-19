@@ -30,12 +30,12 @@
   Unless :collect is false the job then waits 0.8 s for the drops and runs jobs.items.collect-drops for the
   leads in :radius.
 
-  Ends with a warn unleash.gave-up unless the reason is :unleashed. The data {:reason :freed
+  The data {:reason :freed
   [keys] :given-up {key reason} :collected n :leads n} (:collected is the leads gained since the call began, :leads
   the leads carried at the end) and the ending by the reason:
   - :done :unleashed: some animal was freed; :already when none within :radius was on a lead at the start, after one look around.
-  - :condition-failed :refused (with nothing freed, others given up) or :no-zones (no zone list was read).
-  - :nothing-possible with nothing freed: :unreachable if one was given up as unreachable, else :none (0 freed is
+  - :condition-failed :refused or :no-zones (no zone list was read).
+  - :nothing-possible with nothing freed: :unreachable if one was given up as unreachable, :failed if others were given up, else :none (0 freed is
     never done; a run that began with an animal on a lead). It also ends after three fruitless animals in a row.
 
   Zones: an animal standing in another owner's zone or claim, or in a plan's footprint, is left on its lead (warn
@@ -101,8 +101,6 @@
                 :collected (max 0 (- leads (:leads-at-start m leads)))
                 :leads leads
                 :text (str "unleash done: " (name reason) ", freed " (count (:freed m)))}]
-    (when (not= :unleashed reason)
-      (ctx/emit! c :unleash.gave-up :warn {:reason reason :text (str "unleashing stopped: " (name reason))}))
     (let [[kind ending-cause] (get ending-of reason [:nothing-possible reason])]
       (ctx/end c kind (or cause ending-cause) result)))))
 
@@ -158,7 +156,7 @@
     (cond
       (seq (:freed (ctx/mem c))) :unleashed
       (some #{:unreachable} given-up) :unreachable
-      (seq given-up) :refused
+      (seq given-up) :failed
       :else :none)))
 
 (defn now-of [c k]

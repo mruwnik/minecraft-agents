@@ -22,11 +22,11 @@
   happened (:no-effect), it vanished (:gone), the server said it cannot (:cannot), the use failed (:failed) or
   the lead did not show afterwards (:unconfirmed).
 
-  Ends with a warn leash.gave-up unless the reason is :leashed. The data {:reason :animal key
+  The data {:reason :animal key
   :id entity-id :given-up {key reason}} and the ending by the reason:
   - :done :leashed: an animal is on the lead (:already when one within :radius, not in :skip, was on it before the call).
   - :condition-failed :no-lead (no lead carried and none fetched; a listed call with :fetch false waits for one; or the server found none; after a failed fetch the job ends with the fetch's own ending, reason :need, its cause naming the lead),
-    :refused (others given up, or the zone rules refused the animals) or :no-zones (no zone list was read).
+    :refused (the zone rules refused the animals) or :no-zones (no zone list was read).
   - :nothing-possible when no candidate is left: :unreachable if one was given up as unreachable, else :all-leashed
     (animals present but all led) or :none. The same after three fruitless animals in a row.
 
@@ -102,8 +102,6 @@
                 :id (some-> animal .-id)
                 :given-up (:given-up (ctx/mem c) {})
                 :text (str "leash done: " (name reason))}]
-    (when (not= :leashed reason)
-      (ctx/emit! c :leash.gave-up :warn {:reason reason :text (str "leashing stopped: " (name reason))}))
     (when (= :leashed reason) (ctx/update-mem! c assoc :leashed {:animal (:animal result) :id (:id result)}))
     (if ending
       (assoc ending :data result)
@@ -135,7 +133,7 @@
   (let [given-up (vals (:given-up (ctx/mem c)))]
     (cond
       (some #{:unreachable} given-up) :unreachable
-      (seq given-up) :refused
+      (seq given-up) :failed
       (animals/refusal c) (animals/refusal c)
       (some animals/leashed? (herd c)) :all-leashed
       :else :none)))

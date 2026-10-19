@@ -845,7 +845,7 @@
           (let [e (done-event s)]
             (is (= [] (:brought e)) "still on the lead: not brought")
             (is (= :short (:reason e)) "a cow dragged into the pen on its lead is no pen cow")
-            (is (= {"u1" :refused} (:given-up e)) "the unleash child's reason")))))))
+            (is (= {"u1" :failed} (:given-up e)) "the unleash child's reason")))))))
 
 (defn ^:async ticks-watching
   "Tick n times, calling (f job-memory) after each tick."
