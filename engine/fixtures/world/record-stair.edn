@@ -1,13 +1,14 @@
 ;; Card 74d31d66: jobs.access.record-stair remembers a stair the body did not cut as one :stair-way, so gather.mine
 ;; :stay-level beside it leaves the steps alone.
 ;; Rock x 2..30, z 6..26, y 0..9; a hand-carved stair up east from [16 0 16] to the top stand [20 4 16] (3 cells a stand),
-;; the body at the top. Nothing in its memory knows the stair.
+;; glowstone in the wall beside it (a body sees only lit cells), the body at the top. Nothing in its memory knows the stair.
 {:defaults
  {:tags [:mine :jobs] :time :any
   :plot {:height 14}
   :blocks [[:fill [2 0 6] [30 9 26] "stone"]
            [:fill [16 0 16] [16 2 16] "air"] [:fill [17 1 16] [17 3 16] "air"] [:fill [18 2 16] [18 4 16] "air"]
-           [:fill [19 3 16] [19 5 16] "air"] [:fill [20 4 16] [20 6 16] "air"]]
+           [:fill [19 3 16] [19 5 16] "air"] [:fill [20 4 16] [20 6 16] "air"]
+           [:set [16 1 15] "glowstone"] [:set [17 2 15] "glowstone"] [:set [18 3 15] "glowstone"] [:set [19 4 15] "glowstone"] [:set [20 5 15] "glowstone"]]
   :body {:at [20.5 4 16.5] :inventory [["stone_pickaxe" 2] ["cobblestone" 16]] :effects [["resistance" 600 4]]}
   :limit-s 200}
  :cases
