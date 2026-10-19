@@ -381,6 +381,11 @@
                       (recently-hurt? c)
                       (some #(<= (danger-q/mob-distance p %) (press-gap)) near))))))
 
+(defn plug-continues?
+  "Whether a plug begun here goes on (refuge/plugging-here?): not while an armed body is pressed, the fight comes first."
+  [c]
+  (and (refuge/plugging-here? c) (not (pressed? c (near-hostiles c)))))
+
 (defn beaten-hits [] (settings/get settings :jobs.survival.retreat-cornered/beaten-hits))
 
 (defn beaten?

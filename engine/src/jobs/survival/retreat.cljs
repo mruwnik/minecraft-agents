@@ -209,7 +209,7 @@
                         :outruns? (or (nil? threat) (cornered/outrun? c near))})]
     (case option
       :end (or (await (flight/look-back! c))
-               (when (refuge/plugging-here? c) (await (refuge/plug-on! c)))
+               (when (cornered/plug-continues? c) (await (refuge/plug-on! c)))
                (flight/end-flight! c nil))
       :early early
       :stuck (do (when (and reset-gain? (seq (cornered/near-hostiles c))) (ctx/update-mem! c assoc :since-gain 0))

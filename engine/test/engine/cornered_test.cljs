@@ -1193,6 +1193,25 @@
           (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen))) "sealed first")
           (is (pos? (count (calls p "attack"))) "hit while sealed: it stops hiding and hits back"))))))
 
+(deftest a-seal-step-ends-after-the-block-a-melee-mob-hit-the-body-through
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks dead-end :inventory [{:name "iron_sword" :count 1} {:name "cobblestone" :count 20}]
+                                      :entities [(assoc (zombie 2.6 64 0) :visible true) (assoc (zombie 5 64 0) :id 8 :visible true) (assoc (zombie 7 64 0) :id 10 :visible true)]})
+              hit-once (atom false)]
+          (.override (.-world p) "place"
+                     (fn [token args impl]
+                       (when (compare-and-set! hit-once false true)
+                         (swap! (fake/state p) update-in [:self :health] - 2)
+                         (mem/write! (:store eng) :hurt {:amount 2 :health 18 :hits 1 :causes ["zombie"]} {:cap 50 :ttl 60000}))
+                       (impl token args)))
+          (core/submit! eng '(jobs.survival.retreat {:max-places 4}) {})
+          (await (core/tick! eng))
+          (is (= [[1 64 0]] (take 1 (placed-cells p))))
+          (is (= 1 (count (take-while #(not= "attack" (.-name %)) (filter #(#{"place" "attack"} (.-name %)) (.-calls (.-world p))))))
+              "the second block waits until the fight is decided again"))))))
+
 (deftest a-pillar-beside-a-slope-the-mob-can-climb-does-not-fit
   (let [floor (fn [pos] (if (= 63 (second pos)) "stone" "air"))
         with (fn [cells] (fn [pos] (if (contains? cells pos) "stone" (floor pos))))

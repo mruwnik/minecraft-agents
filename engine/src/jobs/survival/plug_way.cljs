@@ -63,11 +63,12 @@
     {:uses {:job-time [0 mean (if (infinite? mean) mean (max (* 3 mean) job-time-s))]} :done [0 1 1]}))
 
 (defn ^:async walls-step!
-  "One step of the walls (retreat-seal/seal!): :done once enclosed, :again, or nil when they cannot be placed."
+  "One step of the walls (retreat-seal/seal!): :done once enclosed, :again, :hit (a melee mob hit the body: run! yields), or nil when they cannot be placed."
   [c]
   (case (await (seal/seal! c))
     :sealed :done
     :again :again
+    :hit :hit
     nil))
 
 (defn stop!
@@ -83,6 +84,7 @@
   (await (pace/steps! c (fn ^:async way-step []
                           (case (await (step! c))
                             :done (ctx/end c :done nil (merge {:pos (sh-sense/feet (:primitives c)) :way way} (result c)))
+                            :hit :continue
                             :again (if (:seal-mob-since (ctx/mem c)) :continue :again)
                             (let [{:keys [reason text needs]} (:stop (ctx/mem c))]
                                      (ctx/end c :nothing-possible :failed

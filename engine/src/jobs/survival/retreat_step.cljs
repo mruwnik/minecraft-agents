@@ -125,7 +125,7 @@
         cover (cond
                 grown? (do (ctx/update-mem! c update :regrown (fnil inc 0)) :again)
                 (and low?
-                     (or (refuge/plugging-here? c) (not (and target (covered? target))) (pos? (:stalled (ctx/mem c) 0)))
+                     (or (cornered/plug-continues? c) (not (and target (covered? target))) (pos? (:stalled (ctx/mem c) 0)))
                      (not (cover/close-danger? p threats)))
                 (await (cover/take-cover! c))
                 (and target (not stair) (sh-sense/buried? p) (not (cover/close-danger? p threats)))

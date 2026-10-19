@@ -153,7 +153,7 @@
   [c]
   (let [{:keys [pocket-tried]} (ctx/mem c)]
     (cond
-      (refuge/plugging-here? c) (await (refuge/plug-on! c))
+      (cornered/plug-continues? c) (await (refuge/plug-on! c))
       pocket-tried nil
       :else (do (ctx/update-mem! c assoc :pocket-tried true)
                 (await (refuge/plug! c :pocket #{:pocket}))))))

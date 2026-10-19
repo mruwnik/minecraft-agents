@@ -26,19 +26,40 @@
   (let [m (ctx/mem c)]
     (or (contains? (:seal-occupied m) cell) (>= (get-in m [:seal-refused cell] 0) max-refusals))))
 
+(defn melee-spots
+  "Where the seen melee hostiles within the flight's :radius stand."
+  [c]
+  (let [p (:primitives c)]
+    (->> (danger-q/known-hostiles p (:radius (:args c)) {})
+         (filter #(and (not (combat/ranged? %)) (danger-q/seen-only? %)))
+         (mapv #(danger-q/mob-pos p %)))))
+
+(def hit-reach
+  "Blocks within which a melee mob that hurt the body during a seal step ends the step (the fight is decided anew)."
+  3)
+
+(defn hit-while-placing?
+  "Whether the body lost health since health0 with a seen melee hostile within hit-reach: more blocks beside it only cost more hits."
+  [c health0]
+  (let [p (:primitives c)]
+    (boolean (and (< (.-health (.self p)) health0)
+                  (some #(<= (u/dist (u/self-pos c) %) hit-reach) (melee-spots c))))))
+
 (defn ^:async place-seal!
-  "Place carried blocks at cells in order, each ledgered (flight/plug-purpose) for the cleanup. :ok, :wait while a mob stands in a cell (the place is refused and tried again
+  "Place carried blocks at cells in order, each ledgered (flight/plug-purpose) for the cleanup. :hit once a melee mob hit the body during the step (hit-while-placing?: no more blocks beside it), :ok, :wait while a mob stands in a cell (the place is refused and tried again
   for dig-cells/mob-wait-ms), or :failed with nothing left to place. A cell with nothing to place against yet, or one the
   server refused, goes to the end of the order (its neighbours may be placed first); :failed once every cell left has none, a mob
   that stays past the wait, or a refused one max-refusals times. A door, gate or trapdoor standing open is shut instead (dig-cells/shut-open!). A cell
   the place answers occupied by a block a mob walks through (a torch, a sapling) is dug once and placed again; one that
   stays (a full block, a bed, an iron door left open, a dig that fails) is remembered in :seal-occupied and never tried again this flight."
   [c cells]
+  (let [health0 (.-health (.self (:primitives c)))]
   (loop [cells cells skipped 0]
     (let [item (lb/pick c (flight/blocks c))
           cell (first cells)]
       (cond
         (empty? cells) :ok
+        (hit-while-placing? c health0) :hit
         (dig-cells/sealed? (:primitives c) cell) (recur (rest cells) 0)
         (nil? item) :failed
         :else (let [door (await (dig-cells/shut-open! c cell))
@@ -72,7 +93,7 @@
                           (cond
                             (or support? (dig-cells/refusing-mobs r)) :failed
                             (occupied? c cell) (recur (rest cells) 0)
-                            :else (recur (concat (rest cells) [cell]) 0)))))))))
+                            :else (recur (concat (rest cells) [cell]) 0))))))))))
 
 (defn shooters
   "Where the seen ranged hostiles within the flight's :ranged-radius stand."
@@ -109,14 +130,6 @@
           gap (fn [{:keys [x y z]}]
                 (apply min (map #(u/dist {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)} %) threats)))]
       (concat (sort-by gap (filter side? cells)) (remove side? cells)))))
-
-(defn melee-spots
-  "Where the seen melee hostiles within the flight's :radius stand."
-  [c]
-  (let [p (:primitives c)]
-    (->> (danger-q/known-hostiles p (:radius (:args c)) {})
-         (filter #(and (not (combat/ranged? %)) (danger-q/seen-only? %)))
-         (mapv #(danger-q/mob-pos p %)))))
 
 (defn stuck-door?
   "Whether cell holds a door a hand cannot shut (iron) standing open: no wall, and nothing can be placed into it."
@@ -173,6 +186,7 @@
                                                                  (dig-cells/bottom-up p cells (sh-sense/feet p))))))
             :failed :failed
             :wait :again
+            :hit :hit
             (let [left (dig-cells/open-cells p (sh-sense/feet p) threats)]
               (cond
                 (empty? left) (do (forget!) :sealed)
@@ -183,7 +197,7 @@
   "Fill the open cells around the body (dig-in's 1x1: sides at feet and head
   height, a roof support, the roof) with carried :blocks, at most
   :max-places this step. :sealed when none is left open, :again while
-  more are owed, :failed when a hostile stands in one (not with :for :night: the place is tried and a mob in its cell waited out), none is carried, a
+  more are owed, :hit when a melee mob hit the body during the step (the caller decides anew), :failed when a hostile stands in one (not with :for :night: the place is tried and a mob in its cell waited out), none is carried, a
   placement is refused, or only cells it cannot fill are left open (place-seal!'s :seal-occupied: a torch, chest or bed
   in a side cell, which the seal leaves alone).
   A door standing open in a side cell is no wall (dig-cells/sealed?): it is shut. Cells it has not sensed (a ceiling
