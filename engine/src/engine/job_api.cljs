@@ -106,8 +106,10 @@
       (and (= op :cancel-all) (contains? request :id)) (fail :bad-field ":cancel-all takes no :id; it clears the whole list")
       (and (= op :exclusive) (some request [:next? :survive-death?]))
       (fail :bad-field "an exclusive run takes no :next? or :survive-death?: it runs alone, once, now")
-      (and (= op :exclusive) (or (core/offline? eng) (core/settling? eng)))
-      (fail :offline "The body is offline or settling: an exclusive run needs it online.")
+      (and (= op :exclusive) (core/offline? eng))
+      (fail :offline "The body is offline: an exclusive run needs it online.")
+      (and (= op :exclusive) (core/settling? eng))
+      (fail :settling "The body is settling after a start or respawn; retry in a moment.")
       (and (= op :exclusive) (core/exclusive-job eng))
       (fail :exclusive-running (str "An exclusive run is in flight (" (core/exclusive-job eng) "); wait for it to end."))
       :else

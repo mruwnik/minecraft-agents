@@ -196,6 +196,9 @@
     (core/cancel! eng "j1" "claude")
     (swap! state assoc :offline true)
     (is (= :offline (:reason (exclusive eng '(spin)))))
+    (swap! state assoc :offline false)
+    (with-redefs [core/settling? (constantly true)]
+      (is (= :settling (:reason (exclusive eng '(spin)))) "a settling body answers the reason the tools retry on"))
     (is (empty? (:list (core/state eng))))))
 
 (deftest a-run-takes-no-queue-position-or-survive-death
