@@ -27,3 +27,12 @@
               :ok (do (await (pace!)) (recur))
               :never (ctx/end c :impossible (contract/status-cause s))
               (if (ctx/returns-on-later? c) (ctx/end c :condition-failed (contract/status-cause s)) :continue))))))))
+
+(defn ^:async timed-steps!
+  "steps!, but a round that has run round-s seconds by the call's clock gives the body back with :continue after the step in
+  hand, so the call's :checks are asked again; every step resumes from the body's cell."
+  [c round-s step]
+  (let [deadline (+ (ctx/now c) (* 1000 round-s))]
+    (steps! c (fn ^:async timed []
+                (let [r (await (step))]
+                  (if (and (= :again r) (>= (ctx/now c) deadline)) :continue r))))))

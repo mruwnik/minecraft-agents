@@ -455,11 +455,11 @@
           (is (= :done (:status @out)) "one round is the whole stair")
           (is (= [3 62 0] (:at @out))))))))
 
-(deftest a-stair-of-more-than-max-steps-gives-the-round-back-and-resumes
+(deftest a-stair-past-its-round-time-gives-the-round-back-and-resumes
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (with-redefs [stair/max-steps (fn [] 2)]
+        (with-redefs [stair/round-s (fn [] 0)]
           (let [{:keys [eng clock out p] :as s} (setup {:blocks ground} east (fn [_]))]
             (swap! clock + 500)
             (await (core/tick! eng))

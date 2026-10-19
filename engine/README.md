@@ -277,7 +277,7 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(ctx/book-try! ctx job reason)`, `(ctx/tries-left ctx)`, `(ctx/own-tries ctx)` | a job that retries by itself books each fruitless try on the frames above its own (their `:tries` spend line); `tries-left` is the remainder over the chain (callers' lines and children's endings), `own-tries` the call's own line; ##Inf when none |
 | `(await (ctx/quote ctx job args quote-deadline?))` | what a call would use and yield (Quotes), or the `:duplicate-call` ending |
 | `(await (ctx/next-way ctx quote-of-way thing?))` | `{:way k :dropped {way why}}`, the next way to try (Quotes) |
-| `(ctx/check-status ctx def)`, `(ctx/child-status ctx slot job args)` | the status def (the child in slot) would start with now; `jobs.lib.pace/steps!` also asks `(ctx/can-run ctx)` between steps |
+| `(ctx/check-status ctx def)`, `(ctx/child-status ctx slot job args)` | the status def (the child in slot) would start with now; `jobs.lib.pace/steps!` also asks `(ctx/can-run ctx)` between steps; `pace/timed-steps!` also gives the round back (`:continue`) after `round-s` seconds, so the call's `:checks` are asked again (stair, tunnel, leave-tunnel: setting `jobs.access.stair/round-s`, 20) |
 | `(ctx/wait ctx reason)` | in a check: false, noting why the job waits |
 | `(ctx/submit! ctx spec opts)` | put a peer job at the end of the list; returns its id |
 | `(ctx/emit! ctx kind level fields)` | an event, `:level` kept in the log (the dashboard hides `:debug` unless ticked; dropped once the round is cut); `:warn`/`:error` without `:attention` stores `:notice`. Warn only for a give-up |

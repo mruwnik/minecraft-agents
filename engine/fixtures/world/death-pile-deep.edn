@@ -1,13 +1,14 @@
 ;; Card 55c62ff3: a pile far below the surface. A dirt mass 20 high (the surface at y 19), a sealed chamber at [24 0 24]..[28 2 28]
-;; where the body dies with 24 raw_iron; it respawns on the surface at [20 20 20], 20 down and about 7 aside.
-;; Should-succeed: legs that get no nearer count as blocked, a stair is dug down by hand through the dirt and the pile collected.
+;; where the body dies with 24 raw_iron; it respawns on the surface at [2 20 26], 20 down and 24 aside (the plot has a bedrock roof, so the stair starts in the body's own cell: a line needs 21 blocks of run-up).
+;; Should-succeed: legs that get no nearer count as blocked, a stair is dug down through the dirt with a pickaxe given after the respawn (the trip never digs by hand) and the pile collected.
 ;; Should-fail: the same chamber in bedrock: no way down, the trip ends :abandoned instead of bouncing till the pile despawns.
+;; A glowstone in the chamber corner keeps natural mobs from spawning in the dark pile chamber.
 ;; Cards a4a4ddab, d54a4e3b: a stone mass and no pickaxe (nothing to fetch it with): abandoned at once; a zombie that appears at the body
 ;; once the stair is under way is weighed before the next step: the run declines (:danger) instead of digging on.
 {:defaults
  {:tags [:survival :death :jobs]
   :plot {:height 24}
-  :body {:at [26.5 0 26.5] :spawnpoint [20 20 20] :effects [["resistance" 600 4]]
+  :body {:at [26.5 0 26.5] :spawnpoint [2 20 26] :effects [["resistance" 600 4]]
          :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
   :act [[:wait-s 1]
         [:kill-body]
@@ -17,21 +18,22 @@
   :limit-s 330}
  :cases
  [{:name "deep-pile-stair-down-collects"
-   :blocks [[:fill [0 0 0] [31 19 31] "dirt"] [:fill [24 0 24] [28 2 28] "air"]]
+   :blocks [[:fill [0 0 0] [31 19 31] "dirt"] [:fill [24 0 24] [28 2 28] "air"] [:fill [24 2 24] [24 2 24] "glowstone"]]
+   :act [[:rcon "give $BODY minecraft:iron_pickaxe 1"]]
    :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 300 :of-job true}]
    :after [[:item "raw_iron" 24]]}
   {:name "sealed-bedrock-pile-ends-abandoned"
-   :blocks [[:fill [0 0 0] [31 19 31] "bedrock"] [:fill [24 0 24] [28 2 28] "air"]]
+   :blocks [[:fill [0 0 0] [31 19 31] "bedrock"] [:fill [24 0 24] [28 2 28] "air"] [:fill [24 2 24] [24 2 24] "glowstone"]]
    :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :abandoned}} :within-s 300 :of-job true}]
    :after [[:item "raw_iron" 0]]}
   {:name "no-pickaxe-in-stone-ends-abandoned"
-   :blocks [[:fill [0 0 0] [31 19 31] "stone"] [:fill [24 0 24] [28 2 28] "air"]]
+   :blocks [[:fill [0 0 0] [31 19 31] "stone"] [:fill [24 0 24] [28 2 28] "air"] [:fill [24 2 24] [24 2 24] "glowstone"]]
    :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :abandoned}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :stair.step} :for-s 60}]
    :after [[:item "raw_iron" 0]]
    :limit-s 150}
   {:name "zombie-in-the-stair-declines-for-danger"
-   :blocks [[:fill [0 0 0] [31 19 31] "dirt"] [:fill [24 0 24] [28 2 28] "air"]]
+   :blocks [[:fill [0 0 0] [31 19 31] "dirt"] [:fill [24 0 24] [28 2 28] "air"] [:fill [24 2 24] [24 2 24] "glowstone"]]
    :act [[:await {:source :job :kind :stair.step} 120]
          [:rcon "execute as $BODY at @s run summon zombie ~ ~ ~ {NoAI:1b,Tags:[\"wt\"],equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :danger}} :within-s 150 :of-job true}]

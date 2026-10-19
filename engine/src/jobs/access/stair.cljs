@@ -56,7 +56,7 @@
   - A missing pickaxe is got with jobs.items.get-tool (:fetch), then the body walks back and goes on; a fetch that fails is remembered and the block dug bare-handed. :fetch off ends :no-tool.
   - Before each step the exposed ores within reach are dug (:pick-up-ores, jobs.lib.ore-pick).
 
-  One call cuts the whole stair; it yields :continue while a fetch or walk child waits on the world, or after max-steps pieces. The
+  One call cuts the whole stair; it yields :continue while a fetch or walk child waits on the world, or after round-s seconds. The
   body's cell is the progress: a resumed call finds its step from where the body stands on the stair line. Dug cells are left and recorded.
 
   Ends :done, or {:reason r ...detail}. :condition-failed for facts that bar the next cell (:refused :zone :claim :footprint :not-loaded :no-zones
@@ -90,10 +90,10 @@
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the waits on checks and the jobs that run between its rounds included (:limit-reached)." :spec (a/num-in 0 nil)}
-   ::max-steps {:default 400 :doc "Digs, steps, bridges and fetch rounds of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
+   ::round-s {:default 20 :doc "Seconds one call runs before it gives the round back with :continue, so the call's :checks are asked again (stair, tunnel, leave-tunnel)." :spec (a/int-in 0 nil)}
    ::max-returns {:default 3 :doc "Walks back onto the stair's line (after a reflex moved the body off it) one call makes before it stops :off-stair." :spec (a/int-in 0 nil)}
    ::cell-s {:default 1.2 :doc "Mean seconds one cut cell of a step takes (look, dig, walk), for the quote." :spec (a/num-in 0 nil)}})
-(defn max-steps [] (settings/get settings ::max-steps))
+(defn round-s [] (settings/get settings ::round-s))
 (defn max-returns [] (settings/get settings ::max-returns))
 
 (def safe? ready/safe-at-from)
@@ -414,11 +414,10 @@
           :else (finish! c (:reason r) (dissoc r :reason)))))))
 
 (defn ^:async round
-  "The whole stair: next! until it ends, a pace between pieces; :continue after max-steps of them."
+  "The whole stair: next! until it ends, a pace between pieces; :continue after round-s seconds."
   [c0]
-  (let [c (with-heading c0)
-        n (atom 0)]
+  (let [c (with-heading c0)]
     (when-not (:heading (:args c0)) (ctx/update-mem! c assoc :heading (name (:heading (:args c)))))
-    (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (next! c) :continue)))))
+    (await (pace/timed-steps! c (round-s) #(next! c)))))
 
 (def meta {:tags [:mine :dig] :position-bound? true})

@@ -71,7 +71,7 @@
                          (let [pos (.-pos (.self p))]
                            (fake/add-entity! p
                                   {:id 7 :name "zombie" :kind "hostile" :pos {:x (- (js/Math.floor (.-x pos)) 0.5) :y (inc (js/Math.floor (.-y pos))) :z (+ 0.5 (js/Math.floor (.-z pos)))}})))))
-          (await (settings/scoped {:jobs.access.stair/max-steps 3} #(run-until-empty eng 200)))
+          (await (settings/scoped {:jobs.access.stair/round-s 0} #(run-until-empty eng 200)))
           (is (some :retry (filter #(= :recover-drops.decided (:kind %)) @seen)) "the zombie is weighed and the trip backs off")
           (is (> (feet-y p) 50) "the stair was not carried on to the pile"))))))
 

@@ -487,11 +487,10 @@
       :else (await (work-round c)))))
 
 (defn ^:async round
-  "The whole tunnel, in and (a dead end) out: step! until it ends, a pace between; :continue after (stair/max-steps) of
+  "The whole tunnel, in and (a dead end) out: step! until it ends, a pace between; :continue after (stair/round-s) seconds of
   them or while a child waits on the world."
   [c]
   (or (await (stock/torches! c))
-      (let [n (atom 0)]
-        (await (pace/steps! c #(if (< (swap! n inc) (stair/max-steps)) (step! c) :continue))))))
+      (await (pace/timed-steps! c (stair/round-s) #(step! c)))))
 
 (def meta {:tags [:mine :dig :light]})
