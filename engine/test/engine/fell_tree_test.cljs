@@ -694,3 +694,31 @@
           (let [{:keys [p]} (await (fell-far-unseen {:at {:x 30 :y 64 :z 0}} 300 within))]
             (is (seq (filter #(= 30 (first %)) (fm/digs p)))
                 (str "the column unseen beyond " within " was walked to and dug"))))))))
+
+(deftest a-log-the-dig-cannot-see-has-the-leaf-in-the-way-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (fm/start {:blocks (lt/tree 6 0 "oak" 3) :self {:pos {:x 40 :y 64 :z 0}}} {})
+              asked (atom [])
+              call! ctx/call]
+          (with-redefs [ctx/call (fn [c k job & [args :as more]]
+                                   (when (and (= :dig k) (= 'jobs.blocks.dig job)) (swap! asked conj (:pos args)))
+                                   (if (and (= :dig k) (= 66 (:y (:pos args))) (= 6 (:x (:pos args))))
+                                     {:kind :condition-failed :cause {:reason :unreachable} :data {}}
+                                     (apply call! c k job more)))]
+            (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 10 :at {:x 6 :y 64 :z 0}} 60)))
+          (is (some #{{:x 7 :y 66 :z 0}} @asked) "the leaf beside the top log was dug after the log could not be"))))))
+
+(deftest the-final-pick-up-of-the-logs-is-held-back-by-a-threat-only
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (fm/start {:blocks (lt/tree 6 0 "oak" 3)} {})
+              checks (atom [])
+              call! ctx/call]
+          (with-redefs [ctx/call (fn [c k job & [args :as more]]
+                                   (when (= 'jobs.items.collect-drops job) (swap! checks conj (:checks args)))
+                                   (apply call! c k job more))]
+            (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 10 :at {:x 6 :y 64 :z 0}} 60)))
+          (is (= [{:safe? '(not (threatened))}] (distinct @checks)) "no dark-sky wait for drops lying at the tree"))))))

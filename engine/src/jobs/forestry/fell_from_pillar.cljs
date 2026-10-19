@@ -8,7 +8,6 @@
             [jobs.forestry.fell-tree.log :as log]
             [jobs.lib.access :as access]
             [jobs.lib.access.approach :as approach]
-            [jobs.lib.aim :as aim]
             [jobs.lib.blocks :as b]
             [jobs.lib.child :as child]
             [jobs.lib.choose :as choose]
@@ -227,7 +226,7 @@
   (let [ids (own-log-drops c (base c) (settings/get settings ::drop-radius))
         e (if (seq ids)
             (await (child/run!* c :pcollect 'jobs.items.collect-drops
-                                {:radius (settings/get settings ::drop-radius) :ids ids :near (base c) :search 0}))
+                                (log/collect-args c {:radius (settings/get settings ::drop-radius) :ids ids :near (base c) :search 0})))
             :done)]
     (if (= :continue e)
       :continue
@@ -255,10 +254,8 @@
   "The leaf cell nearest the eye on the line to the highest log in dig reach that the eye does not see, nil when there is
   none or something else than leaves is in the way."
   [c]
-  (let [log (->> (tree-logs c) (filter #(<= (u/eye-dist (u/self-pos c) (:pos %)) dig-reach)) (sort-by #(- (:y (:pos %)))) first)
-        at (some->> log :pos u/cell-vec (aim/first-blocker (aim/seen-kind-at (:primitives c)) (aim/body-eye c)))]
-    (when (some-> at u/cell-pos (->> (u/seen-name (:primitives c))) (str/ends-with? "_leaves"))
-      (u/cell-pos at))))
+  (let [log (->> (tree-logs c) (filter #(<= (u/eye-dist (u/self-pos c) (:pos %)) dig-reach)) (sort-by #(- (:y (:pos %)))) first)]
+    (some->> log :pos (log/blocking-leaf c))))
 
 (defn ^:async pillar-dig!
   "Centre on the stand cell the plan counted reach from, then dig the highest log in reach that the eye sees (blocks.dig
@@ -339,7 +336,7 @@
           ids (mapv #(.-id %) ents)
           e (if (and (seq ids) (not= :continue settle))
               (await (child/run!* c (keyword (str "tcollect" n)) 'jobs.items.collect-drops
-                                  {:radius dig-reach :ids ids :near (u/self-pos c) :search 0}))
+                                  (log/collect-args c {:radius dig-reach :ids ids :near (u/self-pos c) :search 0})))
               :done)
           at (into {} (map (juxt #(u/cell-vec (u/pos-of (.-pos %))) #(u/pos-of (.-pos %)))) ents)
           cell (when (and (map? e) (< n max-lowered)) (some #(drop-support c % (at %)) (left-cells e)))]
@@ -366,7 +363,7 @@
   ledger is closed, :continue while the child waits, else the nothing-possible :cleanup-open ending."
   [c]
   (when (log/open-scaffold? c)
-    (let [e (await (ctx/atomic c :urgent :pillar #(ctx/call c :cleanup 'jobs.access.cleanup {:job (:id c) :checks {:fit? '(always)}})))]
+    (let [e (await (ctx/atomic c :urgent :pillar #(ctx/call c :cleanup 'jobs.access.cleanup {:job (:id c) :checks {:fit? '(always) :safe? '(not (threatened))}})))]
       (cond
         (= :continue e) :continue
         (log/open-scaffold? c) (ctx/end c :nothing-possible :cleanup-open (result c))))))

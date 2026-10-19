@@ -48,7 +48,7 @@
   Before the first log, a carried axe that is the last of its kind and worn gets a spare (jobs.lib.trip/tool-ready!,
   unless :fetch is false or lacks :tool).
   Each log is dug by a jobs.blocks.dig child. That child holds the best carried axe and leaves the drop on the
-  ground; when the tree is down a jobs.items.collect-drops child picks up the drops of the logs it dug from the ground
+  ground; a log leaves hide from the eye (no sight to walk to) has the leaf in the way dug first; the pick-up is held back by a threat only, not by dark sky; when the tree is down a jobs.items.collect-drops child picks up the drops of the logs it dug from the ground
   (by id: another player's logs are left); a pillar's logs are collected by jobs.forestry.fell-from-pillar.
   Zones: a tree whose base log is in another owner's zone or claim, or in a plan's footprint (but :for-plan's
   own), is not a candidate. A later log that turns out refused makes the tree count as unreachable. The job warns
@@ -330,7 +330,7 @@
   (let [{:keys [base drop-ids collected]} (ctx/mem c)]
     (when (and (seq drop-ids) (not collected))
       (let [e (await (ctx/call c :collect 'jobs.items.collect-drops
-                               {:radius collect-radius :ids drop-ids :near base :search collect-search :least (count drop-ids)}))]
+                               (log/collect-args c {:radius collect-radius :ids drop-ids :near base :search collect-search :least (count drop-ids)})))]
         (when-not (= :continue e)
           (ctx/update-mem! c assoc :collected (get-in e [:data :collected] 0))
           nil)))))

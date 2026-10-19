@@ -1,15 +1,18 @@
 (ns jobs.forestry.fell-tree.log
   "What fell-tree and fell-from-pillar share: the zone rule for a log, the logs of the chosen column, the walk within
   reach of a log and one dig round of it."
-  (:require [engine.args :as a]
+  (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
+            [jobs.lib.aim :as aim]
             [jobs.lib.child :as child]
             [jobs.lib.gate :as gate]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.places :as places]
+            [jobs.lib.ready :as ready]
             [jobs.lib.trees :refer [scan-logs logs-at debts replant-kind dig-reach log-name?]]
             [jobs.lib.util :as u]))
 
@@ -154,12 +157,27 @@
         (= :condition-failed (:kind e)) :unreachable
         :else (keyword (name k))))))
 
+(defn collect-args
+  "args for a collect-drops child of the felling: the drops lie round the tree the body just worked at, so only a threat
+  holds the pick-up back, not the dark sky over the roaming a plain collect guards against."
+  [c args]
+  (assoc args :checks (ready/unforced c {:safe? '(not (threatened))})))
+
+(defn blocking-leaf
+  "The leaf cell nearest the eye on the line to the log at pos when the eye does not see the log, nil when it sees it or
+  something else than leaves is in the way."
+  [c pos]
+  (let [at (some->> pos u/cell-vec (aim/first-blocker (aim/seen-kind-at (:primitives c)) (aim/body-eye c)))]
+    (when (some-> at u/cell-pos (->> (u/seen-name (:primitives c))) (str/ends-with? "_leaves"))
+      (u/cell-pos at))))
+
 (defn ^:async dig-log!
   "Dig the log l of the tree at base (one blocks.dig child round), walking in reach first. Commits the replant debt of a trunk log at the base's height
   before it is dug (write-ahead; withdrawn when the log is still standing after the round). Resolves to :ok,
   :partial (the walk made progress but is not in reach yet; call again), :high (the log is out of reach from the ground
   and a pillar is allowed) or a non-ok outcome for the round to count as a failure (:unreachable, :cannot, :refused and
-  :out-of-reach mean the tree cannot be dug from here)."
+  :out-of-reach mean the tree cannot be dug from here). A log the dig cannot walk to a sight of
+  because leaves hide it from the eye has the leaf in the way dug instead: :ok, the log is met again next round."
   [c l {:keys [base species]}]
   (let [pos (:pos l)
         w (await (approach! c pos (:y base)))]
@@ -176,4 +194,8 @@
             (ctx/update-mem! c #(-> % (update :dug (fnil inc 0)) (update :drop-ids (fnil into []) (:ids (:data e))))))
           (when (and wrote? (some-> (u/seen-name (:primitives c) pos) log-name?))
             (ctx/forget-where! c replant-kind #(= pos (:pos %))))
-          (outcome e))))))
+          (let [r (outcome e)
+                leaf (when (= :unreachable r) (blocking-leaf c pos))]
+            (if (and leaf (log-allowed? c leaf))
+              (outcome (await (ctx/call c :dig 'jobs.blocks.dig (log-dig-args c leaf))))
+              r)))))))
