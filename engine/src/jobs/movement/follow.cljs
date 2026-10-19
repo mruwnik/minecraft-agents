@@ -27,22 +27,24 @@
 
 (def target [:player])
 
-(def idle-ms 500)
 (def max-blocked "One go-to give-up ends the job: go-to already retries." 1)
-(def last-seen-reach 1)
 
 (def bad-args
   "Never :bad-args unless a player name is given."
   (checks/args-fit "no player name" #(string? (:player (:args %)))))
 
 (a/defargs settings
-  {::max-out-walks {:default 3 :doc "Walks in a row that arrived or got closer but left the body out of range before the call gives up (:out-of-range)." :spec (a/num-in 1 nil)}
+  {::idle-ms {:default 500 :doc "Milliseconds the body looks at a player in range before the round yields." :spec (a/num-in 1 nil)}
+   ::last-seen-reach {:default 1 :doc "How close, in blocks, the body walks to where a vanished player was last seen." :spec (a/num-in 0 nil)}
+   ::max-out-walks {:default 3 :doc "Walks in a row that arrived or got closer but left the body out of range before the call gives up (:out-of-range)." :spec (a/num-in 1 nil)}
    ::radius {:default 64 :doc "How far the player may be and still be seen, in blocks." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 3600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the idle pauses beside the player included (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (defn radius [] (settings/get settings ::radius))
 (defn max-out [] (settings/get settings ::max-out-walks))
+(defn idle-ms [] (settings/get settings ::idle-ms))
+(defn last-seen-reach [] (settings/get settings ::last-seen-reach))
 
 (def safe? ready/safe-if-lit)
 (def fit? ready/fit?)
@@ -63,7 +65,7 @@
 (defn ^:async idle!
   "A noop pause held for why, then :continue."
   [c why]
-  (await (child/pause! c (/ idle-ms 1000) why))
+  (await (child/pause! c (/ (idle-ms) 1000) why))
   :continue)
 
 (defn ^:async look-at-head!
@@ -137,9 +139,9 @@
   "The player is out of sight, seen last at last-seen: walk there, then wait."
   [c]
   (let [{:keys [last-seen]} (ctx/mem c)]
-    (if (or (nil? last-seen) (u/within? (u/self-pos c) last-seen last-seen-reach))
+    (if (or (nil? last-seen) (u/within? (u/self-pos c) last-seen (last-seen-reach)))
       (await (idle! c (if last-seen :player-out-of-sight :player-unseen)))
-      (await (walk! c last-seen 1)))))
+      (await (walk! c last-seen (last-seen-reach))))))
 
 (defn ^:async round
   "One bounded step: follow the player seen or the trail."

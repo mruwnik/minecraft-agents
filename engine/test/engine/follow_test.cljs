@@ -189,6 +189,18 @@
           (is (= [{:seconds 0.5 :why :following}] (distinct @pauses)))
           (is (empty? (calls (:p s) "wait")) "no bare wait act"))))))
 
-(deftest the-out-of-range-give-up-is-a-setting
-  (is (= 3 (follow/max-out)))
-  (is (= 3 (get-in follow/settings [:jobs.movement.follow/max-out-walks :default]))))
+(deftest the-out-of-range-give-up-comes-after-the-set-number-of-walks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:entities [(steve 20)] :floor [-30 -10 400 10]}
+                       {:player "Steve" :range 3
+                        :settings {:jobs.movement.follow/max-out-walks 2 :jobs.movement.follow/radius 10000}})
+              p (:p s)
+              away (fn [token a impl]
+                     (swap! (fake/state p) update-in [:entities 0 :pos 0] + 40)
+                     (impl token a))
+              _ (doseq [n ["moveTo" "steer"]] (.override (.-world p) n away))
+              _ (await (run-ticks s 6 500))]
+          (is (= {:reason :out-of-range} (ended @(:out s))))
+          (is (= 2 (count (move-targets (:eng s))))))))))
