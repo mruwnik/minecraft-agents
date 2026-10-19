@@ -11,6 +11,7 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.registry :as registry]
             [engine.shelter-support :as st]
+            [engine.sky-perception :as sky]
             [engine.events :as events]
             [engine.triggers :as triggers]
             [engine.test-util :as tu]
@@ -41,6 +42,7 @@
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
   [args world n]
   (let [s (h/setup world 20)]
+    (sky/with-sky (:p s))
     (core/submit! (:eng s) (spec args) {})
     (await (run-ticks s n 700))
     s))

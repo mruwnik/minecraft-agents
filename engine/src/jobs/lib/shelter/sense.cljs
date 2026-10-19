@@ -141,6 +141,23 @@
   (when-let [block (block-light-at p cell)]
     (max block (sky-light-at p cell))))
 
+(defn cell-light
+  "Effective light (0-15) of the cell: the brighter of its block light and its sky light less the sky's darkening now; nil
+  for a cell the body has not seen (its own cell is always known) or without light data there."
+  [p {:keys [x y z] :as cell}]
+  (let [own (feet p)]
+    (when (or (= [x y z] [(:x own) (:y own) (:z own)]) (seen-cell? p cell))
+      (when-let [block (block-light-at p cell)]
+        (max block (- (or (sky-light-at p cell) 0) (look/sky-darkening p)))))))
+
+(defn dark-at?
+  "Whether the cell is dark (effective light below look/dark-light): by its light when the body knows it, else by the
+  guess for unseen ground (look/dark-guess?)."
+  [p cell]
+  (if-let [light (cell-light p cell)]
+    (< light (look/dark-light))
+    (look/dark-guess? p)))
+
 (defn cave-cells
   "How many standable cells (feet, head and the cell over it free, a solid floor, a seen solid within cave-ceiling over them) lie
   within cave-radius of the feet, a block up or down: a cave is wide and high, what the body digs is 2 high (a tunnel, a mine's room)."

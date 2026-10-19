@@ -192,9 +192,10 @@
     (swap! (fake/state p) assoc :light {[0 64 0] [0 0] [0 65 0] [0 0]})
     (is (= 1 ((:at (look/dark-fn p)) 6 64 0)))))
 
-(deftest sky-dark-follows-the-sky-light-not-the-clock-alone
-  (is (true? (look/sky-dark? (seeing {:time midnight}))))
-  (is (false? (look/sky-dark? (seeing {:time day})))))
+(deftest dark-guess-is-open-sky-less-its-darkening
+  (is (true? (look/dark-guess? (seeing {:time midnight}))))
+  (is (false? (look/dark-guess? (seeing {:time day}))))
+  (is (false? (look/dark-guess? (tu/fake {}))) "no perception, no guess"))
 
 (deftest a-seen-cell-is-lit-by-block-light-or-by-day-sky
   (is (= 0 (dark-of midnight [0 64 5] [0 1])) "a torch's light 1 at night")

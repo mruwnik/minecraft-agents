@@ -10,6 +10,7 @@
             [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]
             [engine.shelter-support :as st]
+            [engine.sky-perception :as sky]
             [jobs.survival.recover-drops.estimate :as estimate]
             [jobs.survival.recover-drops :as recover-drops]
             [engine.test-util :as tu :refer [run-until-empty]]
@@ -328,7 +329,8 @@
      (let [pile dt/death-pile-of-the-field-report
            at {:x far-x :y 64 :z 0}
            drops (map #(assoc % :pos at) (pile-drops pile))
-           {:keys [eng seen p]} (setup (merge {:floor [-30 -10 (+ far-x 20) 10] :entities (vec drops)} world))]
+           {:keys [eng seen p]} (setup (merge {:floor [-30 -10 (+ far-x 20) 10] :entities (vec drops)} world))
+           _ (sky/with-sky p)]
        (die! eng {:pos at :inventory pile})
        (let [id (core/submit! eng job-form {})]
          (await (run-until-empty eng 20))

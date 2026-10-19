@@ -5,6 +5,7 @@
             [engine.core.ending :as ending]
             [engine.registry :as registry]
             [engine.shelter-support :as st]
+            [engine.sky-perception :as sky]
             [engine.test-util :as tu]
             [jobs.explore.look :as look]
             [jobs.explore.search :as search]
@@ -39,7 +40,7 @@
 (defn ctx-of
   "A job's ctx over a fake body built from world (a fresh job id: the check cache is per job)."
   [world]
-  (let [p (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world)))]
+  (let [p (sky/with-sky (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world))))]
     {:id (str (random-uuid)) :slots [] :engine {:warned (atom #{})} :primitives p :view (fn [] {:now 0 :data {}})}))
 
 (def inside {:x 5 :y 64 :z 0})
@@ -82,6 +83,13 @@
 
 (deftest safe-at-open-ground-by-day-is-ok-where-the-light-is-seen
   (is (= :ok (lit 0 15 #(kind (ready/safe-at (constantly outside)) (assoc open-night :time st/noon))))))
+
+(deftest dark-at-reads-the-light-of-the-cell-not-the-clock
+  (are [block sky world dark?] (= dark? (lit block sky #(sh-sense/dark-at? (:primitives (ctx-of world)) (sh-sense/feet (:primitives (ctx-of world))))))
+    0 15 open-night true
+    8 15 open-night false
+    0 0 (assoc open-night :time st/noon) true
+    0 15 (assoc open-night :time st/noon) false))
 
 (deftest safe-here-by-night-is-ok-in-the-hut
   (is (= :ok (kind ready/safe-here-by-night night-hut))))

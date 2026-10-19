@@ -10,6 +10,7 @@
             [engine.hostile-test :as h]
             [engine.settings :as settings]
             [engine.shelter-support :as st]
+            [engine.sky-perception :as sky]
             [engine.test-util :as tu]
             [jobs.combat.hunt :as hunt]
             [jobs.lib.hunting :as hunting]
@@ -34,6 +35,7 @@
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
   [args world n]
   (let [s (h/setup world 20)]
+    (sky/with-sky (:p s))
     (core/submit! (:eng s) (spec args) {})
     (await (run-ticks s n 700))
     s))

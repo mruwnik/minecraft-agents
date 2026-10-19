@@ -306,16 +306,16 @@
   (let [packed (.lightAt raw x y z)]
     (max (bit-and packed 15) (- (bit-shift-right packed 4) (sky-subtract raw)))))
 
-(defn sky-dark?
-  "Whether the sky's light now, less its darkening (time of day, rain, thunder), is below dark-light: open ground is dark.
-  Read from the live sky when the body has a perception, else from its self's timeOfDay."
+(defn sky-darkening
+  "What the live sky's light is reduced by now (0 without a perception): the one place the time of day, rain and thunder
+  enter a light read."
   [p]
-  (let [subtract (if-let [raw (some-> (aget p "perception") :raw)]
-                   (sky-subtract raw)
-                   (let [s (.self p)
-                         darken (perception/sky-darken (.-timeOfDay s) (if (.-raining s) 1 0) (if (.-thundering s) 1 0))]
-                     (js/Math.round (* 11 (/ (- 1 darken) 0.8)))))]
-    (< (- 15 subtract) (dark-light))))
+  (if-let [raw (some-> (aget p "perception") :raw)] (sky-subtract raw) 0))
+
+(defn dark-guess?
+  "The guess for a cell the body has not seen: whether open sky, less its darkening, is below dark-light. False without a perception."
+  [p]
+  (boolean (some-> (aget p "perception") :raw sky-subtract (->> (- 15)) (< (dark-light)))))
 
 (defn buried-feet?
   "Whether the sky light at the feet cell and the cell over it is 0 (underground), read from raw; false without light data there."

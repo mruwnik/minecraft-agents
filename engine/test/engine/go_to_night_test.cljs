@@ -10,6 +10,7 @@
             [engine.events :as events]
             [engine.hut-shelter-test :as hut]
             [engine.registry :as registry]
+            [engine.sky-perception :as sky]
             [engine.scenario :as scenario]
             [engine.settings :as settings]
             [engine.shelter-support :as st]
@@ -34,12 +35,19 @@
             (let [r (await (ctx/call c :walk 'jobs.movement.go-to {:pos [15 64 0]}))]
               (if (= :continue r) r (ctx/end c :done nil))))})
 
+(defn setup
+  "st/setup with the body's perception over the fake sky."
+  [world]
+  (let [r (st/setup world)]
+    (sky/with-sky (:p r))
+    r))
+
 (defn hut-with
   "{:eng :p :seen} for the night hut with extra jobs registered."
   [extra]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} (night-hut {})))
+        p (sky/with-sky (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} (night-hut {}))))
         eng (core/create {:primitives p :jobs (merge registry/jobs extra) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -100,7 +108,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup (night-hut {}))
+        (let [{:keys [eng p]} (setup (night-hut {}))
               id (core/submit! eng (list 'jobs.movement.go-to {:pos [15 64 0]}) {})]
           (await (ticks eng 6))
           (is (= inside (st/pos-of p)) "the body stays in")
@@ -115,7 +123,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup (night-hut {}))]
+        (let [{:keys [eng p]} (setup (night-hut {}))]
           (core/submit! eng '(jobs.movement.go-to {:pos [6 64 -1] :range 0}) {})
           (await (tu/run-until-empty eng 20))
           (is (empty? (:list (core/state eng))))
@@ -126,7 +134,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [safe ['(not (threatened)) '(always)]]
-          (let [{:keys [eng p]} (st/setup (night-hut {}))]
+          (let [{:keys [eng p]} (setup (night-hut {}))]
             (core/submit! eng (list 'jobs.movement.go-to {:pos [15 64 0] :checks {:safe? safe}}) {})
             (await (tu/run-until-empty eng 40))
             (is (empty? (:list (core/state eng))))
@@ -146,7 +154,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[args walks?] [[{:pos [15 64 0]} false] [{:pos [15 64 0] :checks {:safe? '(not (threatened))}} true]]]
-          (let [{:keys [eng p seen]} (st/setup (night-hut {}))
+          (let [{:keys [eng p seen]} (setup (night-hut {}))
                 id (core/exclusive-run! eng (list 'jobs.movement.go-to args))]
             (await (ticks eng 40))
             (is (nil? (waiting-of eng id)) "the exclusive go-to is not held until day")
@@ -161,7 +169,7 @@
       (fn ^:async t []
         (let [clock (atom 1000000)
               [seen sink] (tu/legacy-capture-sink)
-              p (tu/fake-on-floor (night-hut {}))
+              p (sky/with-sky (tu/fake-on-floor (night-hut {})))
               rounds (atom [])
               parent {:round (fn ^:async walker [c]
                                (let [r (await (ctx/call c :walk 'jobs.movement.go-to {:pos [15 64 0]}))]
@@ -183,7 +191,7 @@
       (fn ^:async t []
         (let [clock (atom 1000000)
               [seen sink] (tu/legacy-capture-sink)
-              p (tu/fake-on-floor (night-hut {}))
+              p (sky/with-sky (tu/fake-on-floor (night-hut {})))
               parent {:round (fn ^:async walker [c]
                                (await (child/walk-into!* c :walk [15 64 0])))}
               eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker parent) :triggers triggers/all
@@ -200,9 +208,9 @@
       (fn ^:async t []
         (let [clock (atom 1000000)
               [seen sink] (tu/legacy-capture-sink)
-              p (tu/seeing-all (tu/fake-on-floor (-> (night-hut {})
+              p (sky/with-sky (tu/seeing-all (tu/fake-on-floor (-> (night-hut {})
                                                         (update :blocks merge {"10,64,0" "short_grass" "11,64,0" "short_grass"})
-                                                        (assoc :drops {"short_grass" "wheat_seeds"}))))
+                                                        (assoc :drops {"short_grass" "wheat_seeds"})))))
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all
                                 :dir (tu/tmp-dir) :now #(deref clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -217,7 +225,7 @@
       (fn ^:async t []
         (let [clock (atom 1000000)
               [seen sink] (tu/legacy-capture-sink)
-              p (tu/fake-on-floor (night-hut {}))
+              p (sky/with-sky (tu/fake-on-floor (night-hut {})))
               parent {:round (fn ^:async walker [c]
                                (await (child/run!* c :walk 'jobs.movement.go-to {:pos [15 64 0]})))}
               eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker parent) :triggers triggers/all
@@ -235,7 +243,7 @@
 (defn ^:async fell-tree-world! [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/seeing-all (tu/fake-on-floor world))
+        p (sky/with-sky (tu/seeing-all (tu/fake-on-floor world)))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -257,7 +265,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup (merge (night-hut {"5,67,0" "air"}) {:inventory st/dirt-stack}))]
+        (let [{:keys [eng p]} (setup (merge (night-hut {"5,67,0" "air"}) {:inventory st/dirt-stack}))]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (core/submit! eng '(jobs.movement.go-to {:pos [15 64 0]}) {})
           (await (ticks eng 20))
@@ -274,7 +282,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup (-> (night-hut {})
+        (let [{:keys [eng p]} (setup (-> (night-hut {})
                                             (assoc-in [:self :food] 2)
                                             (assoc :inventory [{:name "bread" :count 4}])))]
           (core/submit! eng '(jobs.survival.get-food) {})
@@ -289,7 +297,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[bed expect-wait?] [[{:x 150 :y 64 :z 0} true] [outside false]]]
-          (let [{:keys [eng seen]} (st/setup (night-hut {}))]
+          (let [{:keys [eng seen]} (setup (night-hut {}))]
             (core/submit! eng (list 'jobs.survival.sleep {:bed bed}) {})
             (await (ticks eng 4))
             (is (= expect-wait? (some? (some #{:night-sheltered} (map :reason (st/emitted seen :holding))))) (pr-str bed))))))))
@@ -298,7 +306,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup (-> (night-hut {}) (update :blocks assoc "10,64,0" "crafting_table")
+        (let [{:keys [eng p]} (setup (-> (night-hut {}) (update :blocks assoc "10,64,0" "crafting_table")
                                             (assoc :inventory [{:name "wheat" :count 3}])))]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (core/submit! eng '(jobs.items.craft {:item "bread" :table {:x 10 :y 64 :z 0}}) {})
@@ -312,7 +320,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup (night-hut {}))
+        (let [{:keys [eng p]} (setup (night-hut {}))
               id (core/submit! eng '(jobs.blocks.use-on {:pos [15 64 0]}) {})]
           (await (ticks eng 6))
           (is (= inside (st/pos-of p)))

@@ -130,16 +130,19 @@
   ([p to shelter]
    (let [to (update-vals (assoc to :y (or (:y to) (:y (sh-sense/feet p)))) js/Math.floor)
          cell [(:x to) (if (sh-sense/solid-at? p to) (inc (:y to)) (:y to)) (:z to)]
-         seen (fn [c] (let [[x y z] c
-                            at {:x x :y y :z z}]
-                        (when-let [block (and (sh-sense/seen-cell? p at) (sh-sense/block-light-at p at))] {:block block :sky (or (sh-sense/sky-light-at p at) 0)})))
+         dark (look/dark-light)
+         raw-light (fn [c] (let [[x y z] c
+                                 at {:x x :y y :z z}]
+                             (when-let [block (and (sh-sense/seen-cell? p at) (sh-sense/block-light-at p at))] {:block block :sky (or (sh-sense/sky-light-at p at) 0)})))
          open-sky (fn [_] {:block 0 :sky 15})
+         lit-by (fn [raw darkening] (fn [c] (when-let [{:keys [block sky]} (raw c)] {:block block :sky (if (< (- sky darkening) dark) 0 15)})))
          leaves? (sh-inside/walk-leaves-shelter? p shelter to 1)
-         [light night?] (if leaves? [open-sky true] [seen (look/sky-dark? p)])
-         chance (spawn-chance cell {:light light :night? night?})]
-     (if (and (not leaves?) (nil? (seen cell)))
+         raw (if leaves? open-sky raw-light)
+         darkening (look/sky-darkening p)
+         chance (spawn-chance cell {:light (lit-by raw darkening)})]
+     (if (and (not leaves?) (nil? (raw cell)))
        {:chance chance :lowered-by #{:look} :look-at [cell]}
-       (let [wait (when (and night? (> chance (spawn-chance cell {:light light :night? false})))
+       (let [wait (when (> chance (spawn-chance cell {:light (lit-by raw 0)}))
                     (if leaves? (sh-sense/sky-in p) (sh-sense/light-in p {:x (nth cell 0) :y (nth cell 1) :z (nth cell 2)})))]
          (if (and wait (pos? wait))
            {:chance chance :lowered-by #{:light} :light-in wait}

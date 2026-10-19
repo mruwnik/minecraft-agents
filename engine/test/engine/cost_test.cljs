@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is are]]
             [engine.settings :as settings]
             [engine.shelter-support :as st]
+            [engine.sky-perception :as sky]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -218,8 +219,8 @@
     (is (pos? dark))
     (is (= dark (cost/spawn-chance [0 0 0])) "a cell the body has not seen counts as dark")
     (is (= 0 (cost/spawn-chance [0 0 0] {:light (lit 7 0)})) "a torch's light keeps mobs off")
-    (is (= 0 (cost/spawn-chance [0 0 0] {:light (lit 0 15)})) "open sky by day")
-    (is (= dark (cost/spawn-chance [0 0 0] {:light (lit 0 15) :night? true})) "open sky by night")))
+    (is (= 0 (cost/spawn-chance [0 0 0] {:light (lit 0 15)})) "open sky lit")
+    (is (= dark (cost/spawn-chance [0 0 0] {:light (lit 0 0)})) "sky light darkened away")))
 
 (deftest spawn-chance-of-an-area-is-the-mean-of-its-cells
   (let [light (fn [[x]] (if (= x 0) {:block 0 :sky 0} {:block 14 :sky 0}))
@@ -227,17 +228,17 @@
     (is (= (/ one 2) (cost/spawn-chance #{[0 0 0] [1 0 0]} {:light light})))
     (is (= (/ one 2) (cost/spawn-chance {:min [0 0 0] :max [1 0 0]} {:light light})))))
 
-(def open-night-chance (cost/spawn-chance [0 0 0] {:light (fn [_] {:block 0 :sky 15}) :night? true}))
+(def open-night-chance (cost/spawn-chance [0 0 0]))
 
 (deftest exposure-of-a-walk-out-of-shelter-is-the-open-sky-night-figure-lowered-by-dawn
-  (let [p (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone" "15,67,0" "stone"}})]
+  (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone" "15,67,0" "stone"}}))]
     (let [e (cost/exposure p {:x 15 :y 64 :z 0})]
       (is (= {:chance open-night-chance :lowered-by #{:light}} (dissoc e :light-in)))
       (is (pos? (:light-in e)) "and the seconds till light"))))
 
 (deftest exposure-of-a-walk-in-the-open-is-the-spawn-chance-at-its-end
-  (let [night (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}}})
-        day (tu/fake {:floor tu/walk-floor :time st/noon :self {:pos {:x 0 :y 64 :z 0}}})
+  (let [night (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}}}))
+        day (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/noon :self {:pos {:x 0 :y 64 :z 0}}}))
         seen (fn [p block sky] (with-redefs [sh-sense/seen-cell? (constantly true) sh-sense/block-light-at (constantly block) sh-sense/sky-light-at (constantly sky) sh-inside/walk-leaves-shelter? (constantly nil)]
                                  (cost/exposure p {:x 15 :y 64 :z 0})))]
     (is (= {:chance (cost/spawn-chance [15 64 0]) :lowered-by #{:look} :look-at [[15 64 0]]}
@@ -247,18 +248,18 @@
     (is (= #{} (:lowered-by (seen day 0 0))) "a seen dark cave cell by day: nothing foreseeable lowers it")))
 
 (deftest exposure-takes-the-shelter-entry-of-the-body
-  (let [p (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone"}})]
+  (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone"}}))]
     (with-redefs [sh-inside/walk-leaves-shelter? (fn [_ shelter _ _] (when (= :entry shelter) :dug-in))]
       (is (= #{:light} (:lowered-by (cost/exposure p {:x 15 :y 64 :z 0} :entry))))
       (is (= #{:look} (:lowered-by (cost/exposure p {:x 15 :y 64 :z 0})))))))
 
 (deftest exposure-floors-the-goal-and-takes-a-column-at-the-feet-height
-  (let [p (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}}})]
+  (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}}}))]
     (is (= {:chance (cost/spawn-chance [15 64 0]) :lowered-by #{:look} :look-at [[15 64 0]]}
            (cost/exposure p {:x 15.5 :z 0.2})))))
 
 (deftest exposure-of-a-solid-seen-goal-is-judged-by-the-air-over-it
-  (let [p (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"15,64,0" "grass_block"}})
+  (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"15,64,0" "grass_block"}}))
         sky (fn [_ at] (if (= 64 (:y at)) 0 15))]
     (with-redefs [sh-sense/seen-cell? (constantly true) sh-sense/block-light-at (constantly 0)
                   sh-sense/sky-light-at sky sh-inside/walk-leaves-shelter? (constantly nil)]

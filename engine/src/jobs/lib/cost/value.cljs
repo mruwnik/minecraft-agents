@@ -429,13 +429,13 @@
 
 (defn spawn-chance
   "The chance per second a mob spawns at place (a cell, a set of cells or a {:min :max} box: the mean over its cells).
-  :light (cell -> {:block :sky} as the body saw it, nil or missing: unseen, dark) and :night?. A cell spawns only at block
-  light 0 and, by day, with no sky light."
+  :light (cell -> {:block :sky} as the body saw it, the sky light already less the sky's darkening and 0 where it no
+  longer lights; nil or missing: unseen, dark). A cell spawns only at block light 0 and sky light 0."
   ([place] (spawn-chance place nil))
-  ([place {:keys [light night?]}]
+  ([place {:keys [light]}]
    (let [cells (cells-of place)
          spawns? (fn [cell] (let [{:keys [block sky] :or {block 0 sky 0}} (when light (light cell))]
-                              (and (zero? block) (or night? (zero? sky)))))]
+                              (and (zero? block) (zero? sky))))]
      (* (settings/get settings ::spawn-chance-per-s)
         (/ (count (filter spawns? cells)) (max 1 (count cells)))))))
 

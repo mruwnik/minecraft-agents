@@ -4,6 +4,7 @@
             [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [engine.shelter-support :as st]
+            [engine.sky-perception :as sky]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -22,7 +23,7 @@
   "An engine over primitives made from world, over the shared world (no zones by default)."
   [world & [shared]]
   (let [[seen sink] (tu/legacy-capture-sink)
-        p (tu/fake world)
+        p (sky/with-sky (tu/fake world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world (or shared (ew/of-data {} {} []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]

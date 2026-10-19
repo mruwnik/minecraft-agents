@@ -2,6 +2,7 @@
   "jobs.access.stair: step geometry, the stop rules, and whole stairs against the fake world."
   (:require [engine.child-ends :as ce]
             [engine.constants :as constants]
+            [engine.sky-perception :as sky]
             [jobs.lib.shelter.sense :as sh-sense]
             [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
@@ -1264,7 +1265,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p] :as s} (await (stair! {:blocks ground :time 18000} east (fn [p] (tu/seeing-all p) (swap! (fake/state p) assoc :light-default [0 0]))))]
+        (let [{:keys [out p] :as s} (await (stair! {:blocks ground :time 18000} east (fn [p] (tu/seeing-all p) (sky/with-sky p) (swap! (fake/state p) assoc :light-default [0 0]))))]
           (is (= [:stopped :exposed] ((juxt :status :reason) @out)) "a called stair ends at once with the reason")
           (is (empty? (digs p))))))))
 
