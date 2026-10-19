@@ -1251,11 +1251,12 @@
 
 ;; ------------------------------------------------------- a mob that hurts the body is not given up on
 
-(deftest attack-gives-up-on-a-blocked-mob-only-while-it-does-not-hurt-the-body
+(deftest attack-gives-up-on-a-blocked-mob-only-while-it-does-not-hurt-the-body-in-a-hostiles-fight
   (let [mem {:fails {7 2} :fail-health {7 12}}]
-    (is (= 3 (attack/fail-count mem 7 12)) "blocked again, body unhurt since: the count goes on")
-    (is (= 1 (attack/fail-count mem 7 9)) "the body lost health since: the count starts over")
-    (is (= 1 (attack/fail-count {} 7 20)))))
+    (is (= 3 (attack/fail-count mem 7 12 true)) "blocked again, body unhurt since: the count goes on")
+    (is (= 1 (attack/fail-count mem 7 9 true)) "the body lost health since: the count starts over")
+    (is (= 3 (attack/fail-count mem 7 9 false)) "a plain attack counts on however hurt the body is")
+    (is (= 1 (attack/fail-count {} 7 20 true)))))
 
 (deftest respond-never-fights-an-enderman-however-good-the-sword
   (async done

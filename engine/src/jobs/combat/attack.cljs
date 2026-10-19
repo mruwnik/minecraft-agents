@@ -61,7 +61,7 @@
    :radius {:doc "targets within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :ranged-radius {:doc "with :hostiles, ranged hostiles (skeletons and the like) within this many blocks count; nil: :radius" :spec (a/num-in 0 nil) :default nil}
    :leash {:doc "with :hostiles, hostiles farther than this from where the fight began are not chased; nil: the setting" :spec (a/num-in 0 nil) :default nil}
-   :hold {:doc "with :hostiles, true: never walk toward a melee mob; strike one that comes within reach" :spec boolean? :default false}
+   :hold {:doc "true: never walk toward a melee mob; strike one that comes within reach" :spec boolean? :default false}
    :skip {:doc "with :hostiles, entity ids already dead: not fought" :spec (a/coll-of number?) :default []}
    :attack-gap-ms {:doc "least time between swings; nil: the held weapon's cooldown" :spec (a/num-in 0 nil) :default nil}
    :no-damage-hits {:doc "swings in a row that do no damage before a target is given up on" :spec (a/int-in 1 nil) :default 4}
@@ -194,10 +194,10 @@
   (ctx/update-mem! c #(-> % (assoc-in [:given-up (.-id target)] reason) (assoc-in [:names (.-id target)] (display-name target)))))
 
 (defn fail-count
-  "mem's failure count for target id after one more failure with the body at health: it starts over when the body lost
-  health since the last failure (a mob that keeps hurting it is not given up on)."
-  [mem id health]
-  (if (< health (get-in mem [:fail-health id] ##-Inf))
+  "mem's failure count for target id after one more failure with the body at health. With restart? it starts over when
+  the body lost health since the last failure (a :hostiles fight: a mob that keeps hurting it is not given up on)."
+  [mem id health restart?]
+  (if (and restart? (< health (get-in mem [:fail-health id] ##-Inf)))
     1
     (inc (get-in mem [:fails id] 0))))
 
@@ -206,7 +206,7 @@
   [c target]
   (let [id (.-id target)
         health (.-health (.self (:primitives c)))
-        n (fail-count (ctx/mem c) id health)]
+        n (fail-count (ctx/mem c) id health (hostile/hostiles? c))]
     (ctx/update-mem! c #(-> % (assoc-in [:fails id] n) (assoc-in [:fail-health id] health)))
     (when (>= n (u/max-failures)) (give-up! c target :unreachable))))
 
