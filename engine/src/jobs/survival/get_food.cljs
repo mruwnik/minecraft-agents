@@ -302,7 +302,7 @@
         (when (way? c :pen) (await (pen! c)))
         (when (way? c :field) (await (field! c))))))
 
-(defn night-blocks-search?
+(defn search-waits?
   "Whether the search would wait: the search child's own safe-if-lit under the children's default (ready/or-starving) is not ok, or the night handler holds and the body is not starving with no
   danger near. Asked here so a child's :later does not end this job."
   [c]
@@ -323,7 +323,7 @@
 
 (defn ^:async explore!
   "Once per job, with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore),
-  not at night (a body sheltered for the night stays in) nor while the night handler holds, unless starving with no
+  not in a dark sky (a body sheltered for the night stays in) nor while the night handler holds, unless starving with no
   danger near (jobs.lib.danger/danger-near?), nor underground (sh-sense/buried?) unless starving and not fragile, nor when risk refuses it. :again when the search found something to hunt or dig, else nil with what it
   covered remembered."
   [c]
@@ -332,8 +332,8 @@
       (or (not e) (explore-done? (ctx/mem c) (starving? c) (ctx/now c) (foods/starving-rest-ms))) nil
       (risk/refused? c nil)
       (do (ctx/update-mem! c assoc :explored (str "not searched: " (:too-dangerous (ctx/mem c)))) nil)
-      (night-blocks-search? c)
-      (do (ctx/update-mem! c assoc :explored "not searched at night or while the night handler holds") nil)
+      (search-waits? c)
+      (do (ctx/update-mem! c assoc :explored "not searched: dark sky, danger near or the night handler holds") nil)
       (and (sh-sense/buried? (:primitives c)) (or (not (starving? c)) (foods/fragile? (.self (:primitives c)))))
       (do (ctx/update-mem! c assoc :explored "not searched underground: the caves are dark and full of mobs; surface or eat first") nil)
       :else
@@ -358,10 +358,10 @@
 
 (defn ^:async fish!
   "With nothing else to do, a rod carried and a bank in sight: jobs.food.fish for two fish, once per job (:fished), not at
-  night unless starving with no danger near. :again when it caught any (they are eaten or cooked next), :continue while
+  a dark sky unless starving with no danger near. :again when it caught any (they are eaten or cooked next), :continue while
   the child waits on the world, else nil."
   [c]
-  (when (and (not (:fished (ctx/mem c))) (not (night-blocks-search? c)) (rod-carried? c))
+  (when (and (not (:fished (ctx/mem c))) (not (search-waits? c)) (rod-carried? c))
     (let [e (await (child/run!* c :fish 'jobs.food.fish {:count 2 :least 1 :radius (settings/get settings ::fish-radius) :fetch false} {:max-calls 1}))]
       (if (= :continue e)
         :continue
