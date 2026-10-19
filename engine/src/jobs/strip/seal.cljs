@@ -32,7 +32,7 @@
   keeps its view. A container in the section is never dug (:blocked). Zones, claims and plans are the place rules'.
 
   done? is :ok when the section is shut, its drops picked up and no child under way: ends :done {:placed n} (0 =
-  already shut). Else strip.seal.stopped (warn) with data {:placed n
+  already shut). Else it ends with data {:placed n
   :cell [x y z] :short n :why}: impossible :bad-args; condition-failed :refused (zones, claims, plans), :blocked (a container in
   the section); nothing-possible :no-blocks (:short names the cells still open), :unreachable, :wrong-side. Spends
   :time (default ::job-time-s).")
@@ -108,8 +108,6 @@
         text (str "seal " (name (or reason :sealed)) ": placed " (:placed result)
                   (when (:short result) (str ", " (:short result) " cells short"))
                   (when (:cell result) (str " at " (pr-str (:cell result)))))]
-    (when-not (= :done kind)
-      (ctx/emit! c :strip.seal.stopped :warn (assoc result :kind kind :cause reason :text text)))
     (ctx/end c kind reason (assoc result :text text))))
 
 (defn stop! [c reason detail] (finish! c (kinds reason) reason detail))

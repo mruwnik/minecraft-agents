@@ -20,12 +20,12 @@
    :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [6 0 15] [26 2 17] "air"] [:set [16 0 16] "rail"]]
    :body {:inventory []}
    :act [[:job (jobs.strip.seal {:at #at [16 0 16] :axis :x :side :from :fetch false})]]
-   :expect [{:event {:source :job :kind :strip.seal.stopped :data {:short [:>= 1]}} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :data {:short [:>= 1]}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]}
   {:name "container-in-the-section-is-never-dug"
    :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [6 0 15] [26 2 17] "air"] [:set [16 1 17] "chest"]]
    :act [[:job (jobs.strip.seal {:at #at [16 0 16] :axis :x :side :from})]]
-   :expect [{:event {:source :job :kind :strip.seal.stopped} :within-s 80 :of-job true}
+   :expect [{:event {:source :job :kind :stopped} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
    :after [[:block [16 1 17] "chest"]]}
   {:name "haul-empties-two-source-chests-into-the-main-chest"
