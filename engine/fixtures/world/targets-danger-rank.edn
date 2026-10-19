@@ -1,5 +1,5 @@
 ;; Card 9ce04add: jobs.lib.targets ranks candidates with go-to's own prices (damage weight, health scale): fell-tree with two trees picks the one
-;; whose walk is not past a hostile. Tree A is nearer (6 east) with a zombie (NoAI, helmeted) at its foot; tree B is farther (9 west), clear.
+;; whose walk is not past a hostile. Tree A is nearer (9.5 east) with a zombie (NoAI, helmeted) at its foot; tree B is farther (10.5 west), clear. The body stands 9 off the zombie, outside the hostile-near radius, else fell-tree waits.
 ;; Should-succeed: tree B is felled first (its base log gone), tree A stands. The live risk is the margin between the prices.
 {:defaults
  {:tags [:forestry :fell-tree :planner]
@@ -7,8 +7,8 @@
   :mobs :keep
   :plot {:height 10}
   :blocks [[:fill [22 0 16] [22 4 16] "oak_log"] [:fill [20 4 14] [24 6 18] "oak_leaves[persistent=true]"] [:fill [22 4 16] [22 5 16] "oak_log"]
-           [:fill [7 0 16] [7 4 16] "oak_log"] [:fill [5 4 14] [9 6 18] "oak_leaves[persistent=true]"] [:fill [7 4 16] [7 5 16] "oak_log"]]
-  :body {:at [16.5 0 16.5] :settle-s 2 :inventory [["iron_axe" 1]] :effects [["resistance" 600 4]]}
+           [:fill [2 0 16] [2 4 16] "oak_log"] [:fill [0 4 14] [4 6 18] "oak_leaves[persistent=true]"] [:fill [2 4 16] [2 5 16] "oak_log"]]
+  :body {:at [12.5 0 16.5] :settle-s 2 :inventory [["iron_axe" 1]] :effects [["resistance" 600 4]]}
   :limit-s 120}
  :cases
  [{:name "tree-past-a-zombie-is-felled-after-the-clear-one"
@@ -16,4 +16,4 @@
    :act [[:summon "zombie" [21.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.forestry.fell-tree {:radius 20})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
-   :after [[:not-block [7 0 16] "oak_log"] [:block [22 0 16] "oak_log"]]}]}
+   :after [[:not-block [2 0 16] "oak_log"] [:block [22 0 16] "oak_log"]]}]}
