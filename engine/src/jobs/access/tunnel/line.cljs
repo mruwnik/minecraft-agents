@@ -132,6 +132,11 @@
   [plan feet]
   (> (dist2 feet (:entry plan)) (* walk-in-max walk-in-max)))
 
+(defn level-from?
+  "Whether plan is a level run from the body's own cell: a body at the target's height on its line digs level, not a stair from the surface."
+  [plan feet]
+  (and (zero? (:steps plan)) (= (:entry plan) feet)))
+
 (defn best-on-heading
   "{:plan p} for the shortest valid line along heading, else {:stop s} (the shortest fitting line's stop, or
   :too-far when none fits)."
@@ -139,7 +144,8 @@
   (let [fitting (mapcat #(fits (or (:column-at in) (:block-at in)) (:floor-at in) target heading % max-length feet) (range 1 (inc max-length)))
         judged (map (fn [p] [p (line-stop in p accept)]) fitting)]
     (if-let [[p] (first (filter (comp nil? second) judged))]
-      {:plan p :near (some (fn [[q stop]] (when (and (nil? stop) (not (far-entry? q feet))) q)) judged)}
+      {:plan p :near (some (fn [[q stop]] (when (and (nil? stop) (not (far-entry? q feet))) q)) judged)
+       :level (some (fn [[q stop]] (when (and (nil? stop) (level-from? q feet)) q)) judged)}
       {:stop (or (second (first judged)) {:reason :too-far})})))
 
 (defn cuts-floor?
@@ -158,9 +164,9 @@
   (if (and (nil? (:zones in)) (not (:ignore-zones? in)))
     {:reason :no-zones}
     (let [per (into {} (map (fn [h] [h (best-on-heading in target h max-length accept feet)])) (if only [only] heading-order))
-          plans (distinct (mapcat (fn [h] (keep identity [(:plan (per h)) (:near (per h))])) (keys per)))]
+          plans (distinct (mapcat (fn [h] (keep identity [(:plan (per h)) (:near (per h)) (:level (per h))])) (keys per)))]
       (if (seq plans)
-        (first (sort-by (juxt #(far-entry? % feet) :length #(cuts-floor? % feet) #(dist2 feet (:entry %))) plans))
+        (first (sort-by (juxt #(not (level-from? % feet)) #(far-entry? % feet) :length #(cuts-floor? % feet) #(dist2 feet (:entry %))) plans))
         (let [stops (into {} (map (fn [[h r]] [h (:stop r)])) per)
               real (remove #(= :too-far (:reason %)) (vals stops))
               reasons (set (map :reason real))]

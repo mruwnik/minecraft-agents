@@ -13,7 +13,7 @@
          [:await {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} 40]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :round_started :round [:> 6]} :for-s 20 :of-job true}
-            {:no-event {:source :job :kind :tunnel.done} :for-s 20 :of-job true}]
+            {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
    :limit-s 70}
   ;; leave-tunnel inside a tunnel whose stair is filled: the walk to the entry fails, the way out is its own stair up
   ;; (the escape), which declines without a pickaxe (:no-tool; :fetch false, as a failed fetch digs by hand); the job (run as the manual root) stops condition-failed :no-tool.

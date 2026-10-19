@@ -24,9 +24,9 @@
                                                          {:cell #at [15 6 20] :block "stone"}]
                                                    :torches []}})]]
    :expect [{:event {:source :job :kind :leave-tunnel.escape :level :info :data {:ignore-zones? false}} :within-s 120 :of-job true}
-            {:event {:source :job :kind #{:leave-tunnel.done :leave-tunnel.open}} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :leave-tunnel.escape :level :warn} :for-s 140 :until {:source :job :kind #{:leave-tunnel.done :leave-tunnel.open :leave-tunnel.stopped}} :of-job true}
-            {:no-event {:source :job :kind :leave-tunnel.stopped} :for-s 140 :until {:source :job :kind #{:leave-tunnel.done :leave-tunnel.open}} :of-job true}]}
+            {:event {:source :job :kind #{:completed :stopped}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :leave-tunnel.escape :level :warn} :for-s 140 :until {:source :job :kind #{:completed :stopped}} :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :walk-failed}} :for-s 140 :until {:source :job :kind #{:completed :stopped}} :of-job true}]}
   {:name "no-pickaxe-digs-own-way-out-by-hand"
    :body {:inventory [["cobblestone" 4]]}
    :act [[:job (jobs.access.leave-tunnel {:tunnel {:line {:entry #at [11 10 20] :heading :east :dir :down :steps 4 :run 0
@@ -37,8 +37,8 @@
                                                          {:cell #at [15 8 20] :block "stone"} {:cell #at [15 7 20] :block "stone"}
                                                          {:cell #at [15 6 20] :block "stone"}]
                                                    :torches []}})]]
-   :expect [{:event {:source :job :kind #{:leave-tunnel.done :leave-tunnel.open}} :within-s 280 :of-job true}
-            {:no-event {:source :job :kind :leave-tunnel.stopped} :for-s 280 :until {:source :job :kind #{:leave-tunnel.done :leave-tunnel.open}} :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 280 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :walk-failed}} :for-s 280 :until {:source :job :kind #{:completed :stopped}} :of-job true}]
    :limit-s 300}
   {:name "blown-torch-is-not-taken"
    :act [[:job (jobs.access.leave-tunnel {:tunnel {:line {:entry #at [11 10 20] :heading :east :dir :down :steps 4 :run 0
@@ -49,5 +49,5 @@
                                                          {:cell #at [15 8 20] :block "stone"} {:cell #at [15 7 20] :block "stone"}
                                                          {:cell #at [15 6 20] :block "stone"}]
                                                    :torches [{:cell #at [14 8 20] :site 3 :block "torch"}]}})]]
-   :expect [{:event {:source :job :kind #{:leave-tunnel.done :leave-tunnel.open} :data {:taken []}} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :leave-tunnel.stopped} :for-s 140 :until {:source :job :kind #{:leave-tunnel.done :leave-tunnel.open}} :of-job true}]}]}
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:taken []}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :walk-failed}} :for-s 140 :until {:source :job :kind #{:completed :stopped}} :of-job true}]}]}

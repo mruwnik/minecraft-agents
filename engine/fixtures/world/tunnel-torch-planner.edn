@@ -11,7 +11,7 @@
  :cases
  [ {:name "forty-long-tunnel-takes-two-torches-and-no-cell-stays-dark"
    :act [[:job (jobs.access.tunnel {:heading :east :length 40 :max-length 64 :keep true})]
-         [:await {:source :job :kind :tunnel.done} 200]
+         [:await {:source :job :kind :completed} 200]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [3 0 16]] {:ok true :light {:lit? true}}]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [7 0 16]] {:ok true :light {:lit? true}}]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [11 0 16]] {:ok true :light {:lit? true}}]
@@ -23,16 +23,16 @@
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [35 0 16]] {:ok true :light {:lit? true}}]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [39 0 16]] {:ok true :light {:lit? true}}]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [43 0 16]] {:ok true :light {:lit? true}}]]
-   :expect [{:event {:source :job :kind :tunnel.done :data {:torches [:any :any]}} :within-s 200 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:torches [:any :any]}} :within-s 200 :of-job true}]
    :limit-s 260}
  {:name "twenty-long-tunnel-takes-one-torch-and-no-cell-stays-dark"
    :act [[:job (jobs.access.tunnel {:heading :east :length 20 :max-length 64 :keep true})]
-         [:await {:source :job :kind :tunnel.done} 200]
+         [:await {:source :job :kind :completed} 200]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [3 0 16]] {:ok true :light {:lit? true}}]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [7 0 16]] {:ok true :light {:lit? true}}]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [11 0 16]] {:ok true :light {:lit? true}}]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [15 0 16]] {:ok true :light {:lit? true}}]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [19 0 16]] {:ok true :light {:lit? true}}]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [23 0 16]] {:ok true :light {:lit? true}}]]
-   :expect [{:event {:source :job :kind :tunnel.done :data {:torches [:any]}} :within-s 200 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:torches [:any]}} :within-s 200 :of-job true}]
    :limit-s 260}]}

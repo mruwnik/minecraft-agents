@@ -1,6 +1,7 @@
 (ns engine.leave-tunnel-test
   "jobs.access.leave-tunnel: the mouth as a pure function, then whole ways out after a real tunnel in the fake world."
   (:require [engine.child-ends :as ce]
+            [clojure.string :as str]
             [cljs.test :refer [deftest is are async]]
             [jobs.lib.ledger :as ledger]
             [engine.core :as core]
@@ -177,8 +178,7 @@
           (is (= 7 (carried p "cobblestone")))
           (is (empty? (:left res)))
           (is (empty? (:open res)))
-          (is (= [] (the-ledger eng)))
-          (is (= 1 (count (events-of s :leave-tunnel.done)))))))))
+          (is (= [] (the-ledger eng))))))))
 
 (deftest each-torch-is-dug-through-the-dig-job
   (async done
@@ -209,7 +209,7 @@
           (is (empty? (:filled res)))
           (is (= 8 (carried p "torch")))
           (is (= entry (feet p)))
-          (is (= 1 (count (events-of s :leave-tunnel.open)))))))))
+          (is (str/starts-with? (:text res) "leave-tunnel open:")))))))
 
 (defn obtain-stub
   "jobs.items.obtain giving 10 cobblestone to the body in the atom; calls are recorded."
@@ -334,7 +334,6 @@
           (is (= 1 (count (events-of s :leave-tunnel.escape))))
           (is (= :sealed (:reason res)))
           (is (>= (second (feet p)) 65) "the body stands at the entry's height or above")
-          (is (= 0 (count (events-of s :leave-tunnel.stopped))))
           (is (= [] (the-ledger (:eng s))) "every torch was taken or destroyed: no entry is left"))))))
 
 (defn creeper!

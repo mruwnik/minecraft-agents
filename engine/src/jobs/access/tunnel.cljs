@@ -110,7 +110,7 @@
   [x y z] :dug [{:cell :block}] :ores :inside bool :keep bool :line {:entry :heading :dir :steps :run :stand :target}
   :torches [{:cell :site :block}] :unlit [{:cell :site :reason}]} plus detail (:out true once it walked out, :leave
   the way-out's data). :torches are those standing now, read from the world. :inside is true when the body is off
-  the entry, on the way in. Also a tunnel.done info or tunnel.stopped warn event.
+  the entry, on the way in. 
 
   :spent-ok (default false): every carried pickaxe down to 3 uses stops the tunnel {:reason :tool-spent} before the last breaks (jobs.access.stair).
   :fetch (default true; false ends :no-tool; jobs.lib.need): a missing pickaxe (the stair's :no-tool ending, or a :no-tool stop of
@@ -205,9 +205,8 @@
     (if (= :reached reason)
       (ctx/end c :done nil result)
       (do (record-run! c)
-          (ctx/emit! c :tunnel.stopped :warn
-                     (assoc result :status :stopped :text (str "tunnel stopped: " (name reason) (some->> (:cell detail) pr-str (str " at ")))))
-          (ctx/end c (cond (= :bad-args reason) :impossible (facts reason) :condition-failed :else :nothing-possible) cause result)))))
+          (ctx/end c (cond (= :bad-args reason) :impossible (facts reason) :condition-failed :else :nothing-possible) cause
+                   (assoc result :text (str "tunnel stopped: " (name reason) (some->> (:cell detail) pr-str (str " at ")))))))))
 
 (defn ^:async dig-cell!
   "jobs.access.stair.step/dig! with :again for a dug cell (more to do), else a stop map."
@@ -287,11 +286,10 @@
       (contract/later :digging "the tunnel is being dug" :units :steps :done k :left (max 0 (- n k))))))
 
 (defn ^:async cleanup
-  "After a tunnel that reached its stand: the level run walked is remembered (:tunnel-way) and tunnel.done told."
+  "After a tunnel that reached its stand: the level run walked is remembered (:tunnel-way)."
   [c ending]
   (when (= :done (:kind ending))
-    (record-run! c)
-    (ctx/emit! c :tunnel.done :info (assoc (:data ending) :status :done :text (str "tunnel reached " (pr-str (:stand (:data ending)))))))
+    (record-run! c))
   (ctx/end c :done nil {}))
 
 (defn segment-end

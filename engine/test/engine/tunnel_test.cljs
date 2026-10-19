@@ -71,6 +71,12 @@
         a (approach far-room [0 20 0] :feet [-60 20 0] :max-length 64)]
     (is (= {:entry [-60 20 0] :heading :east :dir :down :steps 0 :run 59 :length 60 :stand [-1 20 0] :target [0 20 0]} a))))
 
+(deftest a-body-at-the-targets-height-on-its-line-digs-level-rather-than-a-stair-from-the-surface
+  (let [room (into {} (for [x [-1 0 1] y [50 51] z [-1 0 1]] [[x y z] "air"]))
+        a (approach room [0 50 20] :feet [0 50 0] :max-length 64)]
+    (is (= {:entry [0 50 0] :heading :south :dir :down :steps 0 :run 19 :length 20 :stand [0 50 19] :target [0 50 20]} a)
+        "the surface stair is 16 long, shorter than the level run")))
+
 (deftest a-body-that-cannot-stand-where-it-is-is-no-entry
   (is (not= [0 60 0] (:entry (approach {} [4 57 0] :feet [0 60 0])))))
 
@@ -222,8 +228,7 @@
           (is (= [-3 65 0] (:entry @out)))
           (is (= "iron_ore" (block-at p [6 57 0])) "the tunnel leaves the target to its caller")
           (is (= "air" (block-at p [6 58 0])) "and opens the cell over it, so the target's cell can be walked into")
-          (is (= 22 (count (:dug @out))) "8 steps of 3 cells, less the air over the ground, and the cell over the target")
-          (is (= 1 (count (events-of s :tunnel.done)))))))))
+          (is (= 22 (count (:dug @out))) "8 steps of 3 cells, less the air over the ground, and the cell over the target"))))))
 
 (def beside-target
   (-> ground
@@ -302,7 +307,7 @@
           (is (= [-3 65 0] (feet p)) "back at the entry")
           (is (true? (:out @out)))
           (is (not-any? #(= {:x 3 :y 61 :z 0} %) (digs p)))
-          (is (= 1 (count (events-of s :tunnel.stopped)))))))))
+          (is (str/starts-with? (:text @out) "tunnel stopped: hazard")))))))
 
 (deftest a-declined-approach-digs-nothing-and-does-not-walk
   (async done
@@ -465,7 +470,7 @@
                                       (when (= 2 (swap! n inc))
                                         (doseq [z (range -3 4) y [61 62]] (set-block! p (str "-2," y "," z) "stone")))
                                       r)))))
-              {:keys [out p]} (await (tunnel! {:blocks trench :self {:pos {:x -5 :y 61 :z 0}}} {:target [0 61 0]} prep))]
+              {:keys [out p]} (await (tunnel! {:blocks trench :self {:pos {:x -5 :y 61 :z 1}}} {:target [0 61 0]} prep))]
           (is (= :no-way-back (:reason @out)))
           (is (= [-1 61 0] (feet p))))))))
 
@@ -661,7 +666,7 @@
           (is (empty? (:torches res)) "none stands now")
           (is (every? #(= "cobblestone" (block-at p %)) [[-2 64 0] [-1 64 0] [0 64 0]]) "the mouth is closed")
           (is (= [] (ledger/open-entries (mem/view (:store eng)))))
-          (is (= 1 (count (events-of s :tunnel.stopped)))))))))
+          (is (str/starts-with? (:text res) "tunnel stopped: hazard")))))))
 
 (deftest a-stop-in-a-kept-tunnel-walks-out-and-leaves-the-torches
   (async done

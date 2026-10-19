@@ -55,7 +55,7 @@
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"] [:until-seen {:block "stone"} 10]
          [:job (jobs.access.tunnel {:target #at [15 6 16] :max-length 6 :keep true})]]
    :expect [{:event {:source :job :kind :tunnel.sealed} :within-s 90 :of-job true}
-            {:event {:source :job :kind :tunnel.done} :within-s 110 :of-job true}]
+            {:event {:source :job :kind :completed} :within-s 110 :of-job true}]
    :after [[:not-block [15 7 16] "lava"] [:block [15 6 16] "iron_ore"]]}
   {:name "stair-lava-beside-a-cut-flows-in-after-the-dig-is-sealed-and-the-stair-backs-off"
    ;; the lava is a block beside the cut cell (12 8 16), buried under the surface layer so unseen until the dig; a sealed cell stays sealed in vanilla, so the runner puts lava back into it (as a flow would) right after each of the two seals it makes (each pour waits for the stair's sealed event): the second seal fails the same way, the stair backs off

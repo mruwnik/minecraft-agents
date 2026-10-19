@@ -28,8 +28,8 @@
                                                           :stand #at [21 0 20] :target #at [22 0 20]}
                                                    :dug [{:cell #at [13 0 20] :block "stone"} {:cell #at [14 0 20] :block "stone"} {:cell #at [15 0 20] :block "stone"} {:cell #at [13 1 20] :block "stone"} {:cell #at [14 1 20] :block "stone"} {:cell #at [15 1 20] :block "stone"}]
                                                    :torches []}})]]
-   :expect [{:event {:source :job :kind :leave-tunnel.done :data {:reason :sealed}} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :leave-tunnel.open} :for-s 140 :until {:source :job :kind :leave-tunnel.done} :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:reason :sealed}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :open}} :for-s 140 :until {:source :job :kind :completed} :of-job true}]}
   {:name "leave-tunnel-fetch-false-leaves-the-mouth-open"
    :tags [:access :mining]
    :time :any
@@ -41,8 +41,8 @@
                                                           :stand #at [21 0 20] :target #at [22 0 20]}
                                                    :dug [{:cell #at [13 0 20] :block "stone"} {:cell #at [14 0 20] :block "stone"} {:cell #at [15 0 20] :block "stone"} {:cell #at [13 1 20] :block "stone"} {:cell #at [14 1 20] :block "stone"} {:cell #at [15 1 20] :block "stone"}]
                                                    :torches []}})]]
-   :expect [{:event {:source :job :kind :leave-tunnel.open} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :leave-tunnel.done} :for-s 140 :until {:source :job :kind :leave-tunnel.open} :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :open}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 140 :until {:source :job :kind :stopped :data {:reason :open}} :of-job true}]}
   {:name "apiary-maintain-fetches-shears-and-harvests"
    :tags [:apiary]
    :plot {:floor "stone" :height 8}

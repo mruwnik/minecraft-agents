@@ -56,8 +56,7 @@
   :open with the same data; :escaped true: the entry itself was unreachable.
   Impossible :bad-args (no :line in the tunnel). Or condition-failed with the cause :no-tool (the escape stair has no pickaxe and
   :fetch is off; a failed fetch digs the stair bare-handed), or nothing-possible with :walk-failed (every escape failed; data
-  :escape holds the stair endings). Events: leave-tunnel.done (info, :sealed), leave-tunnel.open (warn, mouth open),
-  leave-tunnel.stopped (warn, any stop).
+  :escape holds the stair endings). Event: leave-tunnel.escape.
 
   :fetch (default true; false ends :no-tool): the escape stair's missing pickaxe is got with jobs.items.get-tool (jobs.lib.need), then
   the body walks back to the cell it stood on and goes on. With nothing to fill the mouth with, building blocks are
@@ -158,14 +157,12 @@
   "The result of the way out now: {:reason :at :taken :left :filled :open} plus detail; on a stop the torches still
   standing are left too."
   [c reason detail still]
-  (let [m (ctx/mem c)]
-    (merge {:reason reason :at (reach/standing-vec (:primitives c)) :taken (:taken m []) :left (into (:left m []) still)
-            :filled (:filled m []) :open (:open m [])}
-           detail)))
-
-(defn result-text [reason result]
-  (str "leave-tunnel " (name reason) ": took " (count (:taken result)) " torches, filled "
-       (count (:filled result)) ", left " (count (:left result)) " torches and " (count (:open result)) " cells"))
+  (let [m (ctx/mem c)
+        result (merge {:reason reason :at (reach/standing-vec (:primitives c)) :taken (:taken m []) :left (into (:left m []) still)
+                       :filled (:filled m []) :open (:open m [])}
+                      detail)]
+    (assoc result :text (str "leave-tunnel " (name reason) ": took " (count (:taken result)) " torches, filled "
+                             (count (:filled result)) ", left " (count (:left result)) " torches and " (count (:open result)) " cells"))))
 
 (defn reached
   "Whether the way out is complete (:sealed), or nil: every torch of the tunnel is taken, left or seen gone, the
@@ -189,13 +186,10 @@
       (contract/later :sealing "the mouth is to be sealed" :units :torches :done (count (:taken m))))))
 
 (defn ^:async cleanup
-  "After a way out that ended :done: the ledger entries of torches the stair or the fill destroyed are dropped, and
-  its event is told."
+  "After a way out that ended :done: the ledger entries of torches the stair or the fill destroyed are dropped."
   [c ending]
   (when (= :done (:kind ending))
-    (forget-gone! c (:tunnel (:args c)) (access/sensed-at (:primitives c) nil))
-    (let [result (:data ending)]
-      (ctx/emit! c :leave-tunnel.done :info (assoc result :status :done :text (result-text (:reason result) result)))))
+    (forget-gone! c (:tunnel (:args c)) (access/sensed-at (:primitives c) nil)))
   (ctx/end c :done nil {}))
 
 (defn finish!
@@ -211,7 +205,6 @@
         result (result-of c reason detail still)]
     (if stopped?
       (do (forget-gone! c tunnel block-at)
-          (ctx/emit! c :leave-tunnel.stopped :warn (assoc result :status status :text (result-text reason result)))
           (ctx/end c (cond (= :bad-args reason) :impossible (condition-reasons reason) :condition-failed :else :nothing-possible) cause result))
       (ctx/end c :done nil result))))
 
@@ -221,7 +214,6 @@
   [c detail]
   (let [result (result-of c :open detail nil)]
     (forget-gone! c (:tunnel (:args c)) (access/sensed-at (:primitives c) nil))
-    (ctx/emit! c :leave-tunnel.open :warn (assoc result :status :nothing-possible :text (result-text :open result)))
     (ctx/end c :nothing-possible :open result)))
 
 (defn ^:async walk-to!
