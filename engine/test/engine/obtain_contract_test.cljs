@@ -10,6 +10,7 @@
             [engine.obtain-iron-test :as oi]
             [engine.registry :as registry]
             [jobs.items.obtain :as obtain]
+            [jobs.items.obtain.table :as table]
             [jobs.lib.look :as look]
             [engine.test-util :as tu]))
 
@@ -178,6 +179,22 @@
               e (await (ending-of s 'jobs.items.obtain {:item "sugar_cane" :explore false} 60))]
           (is (= :done (:kind e)))
           (is (= {:got 1 :item "sugar_cane"} (select-keys (:data e) [:got :item]))))))))
+
+(deftest sand-and-gravel-are-dug-by-hand-from-a-seen-bed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [item ["sand" "gravel"]]
+          (let [bed (into {} (for [x [2 3] z [0 1]] [(str x ",64," z) item]))
+                s (f/start (update (f/bare []) :blocks merge bed) [])
+                e (await (ending-of s 'jobs.items.obtain {:item item :explore false} 80))]
+            (is (= :done (:kind e)) item)))))))
+
+(deftest clay-and-flint-are-dug-from-the-block-that-drops-them
+  (is (= [["clay" "clay_ball"] ["gravel" "flint"]]
+         (for [item ["clay_ball" "flint"]
+               :let [need (first (table/gather-needs {item 1}))]]
+           [(get-in need [:args :block]) (get-in need [:args :item])]))))
 
 (def walled-in
   "Bedrock round the body (a hollow box, one glass window) and a stone mass beyond: stone is seen but cannot be got to."

@@ -4,7 +4,7 @@
 ;; Should-succeed: the stone pickaxe is carried. Should-fail: without stone in view the obtain ends :no-source and the text names the
 ;; raw need not seen (cobblestone from stone), not the log that is seen; andesite/diorite/granite are no cobblestone source
 ;; (only stone drops cobblestone); with nothing in view the text names both needs; :how without :gather has no gather text.
-;; An empty bucket carried and a pond in view (a water source at [18 -1 20]) is filled there; with no pond in view the obtain waits :no-source naming water.
+;; An empty bucket carried and a pond in view (a water source at [18 -1 20]) is filled there; with no pond in view the obtain waits :no-source naming water. Sand in view is dug by hand.
 {:defaults
  {:tags [:fetch :gather :mining] :time :day
   :plot {:height 12 :floor "grass_block" :isolate true}
@@ -45,6 +45,11 @@
    :act [[:job (jobs.items.obtain {:item "water_bucket" :explore false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "water_bucket" 1] [:item "bucket" 0]]}
+  {:name "sand-seen-on-the-ground-is-dug-by-hand"
+   :blocks [[:fill [18 0 20] [19 0 21] "sand"]]
+   :act [[:job (jobs.items.obtain {:item "sand" :count 3 :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "sand" 3]]}
   {:name "an-empty-bucket-with-no-pond-in-view-waits-naming-water"
    :body {:inventory [["bucket" 1]]}
    :act [[:job (jobs.items.obtain {:item "water_bucket" :explore false})]]

@@ -51,6 +51,10 @@
   "The seen blocks digging which by hand gives dirt (grass drops it)."
   #{"dirt" "grass_block"})
 
+(def hand-dug
+  "The items dug from the ground by hand (a shovel is faster): the seen blocks that drop one. Flint is the rare drop of gravel."
+  {"dirt" dirt-blocks "sand" #{"sand"} "gravel" #{"gravel"} "clay_ball" #{"clay"} "flint" #{"gravel"}})
+
 (defn animal?
   "Whether a gather need is hunted (wool from sheep, leather from cows ..), not mined or felled."
   [need]
@@ -116,9 +120,9 @@
           (when-let [n (get gather "obsidian")]
             [{:key "obsidian" :count n :job 'jobs.gather.mine :seen #{"obsidian" "lava"}
               :args {:block "obsidian" :item "obsidian" :count n :mend false :fetch mine-fetch :radius (seen-radius)}}])
-          (when-let [n (get gather "dirt")]
-            [{:key "dirt" :count n :job 'jobs.gather.mine :seen dirt-blocks
-              :args {:block "dirt" :item "dirt" :count n :fetch mine-fetch :radius (seen-radius)}}])
+          (for [[k n] gather :let [blocks (hand-dug k)] :when blocks]
+            {:key k :count n :job 'jobs.gather.mine :seen blocks
+             :args {:block (if (= "dirt" k) "dirt" (first (sort blocks))) :item k :count n :fetch mine-fetch :radius (seen-radius)}})
           (for [[k n] gather :when (ore-blocks k)]
             (let [blocks (ore-blocks k)]
               {:key k :count n :job 'jobs.gather.mine :seen blocks :ore? true :tunnel? (not= "coal" k)
