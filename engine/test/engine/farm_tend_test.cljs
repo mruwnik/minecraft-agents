@@ -551,10 +551,10 @@
           :ages (into {} (map (fn [[x z]] [(k (+ x 200) 64 z) 7])) all-cells)}))
 
 (defn ^:async far-run
-  "Ripe wheat 200 blocks off; wait-for-dusk (listed, check false by day) first when listed?."
+  "Ripe wheat 200 blocks off; wait-for-light (listed, dark at night) first when listed?."
   [listed?]
-  (let [s (setup far-ripe)]
-    (when listed? (core/submit! (:eng s) '(jobs.time.wait-for-dusk) {}))
+  (let [s (setup (assoc far-ripe :time 15000))]
+    (when listed? (core/submit! (:eng s) '(jobs.time.wait-for-light) {}))
     (core/submit! (:eng s) (list 'jobs.farm.tend {:box far-box}) {})
     (await (tu/run-ticks (:eng s) (:clock s) 3 700))
     s))

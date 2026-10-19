@@ -1,5 +1,5 @@
 ;; Card fe086540: the (repeat n e) and (until g e) job expressions. Should-succeed: (repeat 2 pause) completes after both runs;
-;; (until wait-for-dusk pause) at night (guard already met) ends without looping. Should-fail: by day the same until keeps
+;; (until wait-for-light pause) by day (guard already met) ends without looping. Should-fail: at night the same until keeps
 ;; looping, so it has not completed 25 s in (the runner cancels it). Refusal of (repeat 0 e) / one-arg until at submit is unit-tested (expr_test).
 {:defaults
  {:tags [:scheduler]
@@ -11,13 +11,13 @@
    :time :any
    :act [[:job (repeat 2 (jobs.time.noop {:seconds 0.5 :why :idle}))]]
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 40 :of-job true}]}
-  {:name "until-dusk-at-night-ends"
-   :time :night
-   :act [[:job (until (jobs.time.wait-for-dusk) (jobs.time.noop {:seconds 0.5 :why :idle}))]]
-   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]}
-  {:name "until-dusk-by-day-keeps-looping"
+  {:name "until-light-by-day-ends"
    :time :day
-   :act [[:job (until (jobs.time.wait-for-dusk) (jobs.time.noop {:seconds 0.5 :why :idle}))]]
+   :act [[:job (until (jobs.time.wait-for-light) (jobs.time.noop {:seconds 0.5 :why :idle}))]]
+   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]}
+  {:name "until-light-at-night-keeps-looping"
+   :time :night
+   :act [[:job (until (jobs.time.wait-for-light) (jobs.time.noop {:seconds 0.5 :why :idle}))]]
    :expect [{:no-event {:source :job :kind :completed} :for-s 25 :of-job true}]
    :after [[:body-near [16.5 0 16.5] 3]]}
   ;; card 33c9ae94: a child that ends refused/failed (go-to to a goal sealed in bedrock, no retry) stops seq with its cause and makes repeat and until
@@ -37,9 +37,9 @@
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
    :limit-s 100}
   {:name "until-stops-at-a-failed-child"
-   :time :day
+   :time :night
    :blocks [[:fill [27 0 27] [29 2 29] "bedrock"] [:set [28 0 28] "air"]]
-   :act [[:job (until (jobs.time.wait-for-dusk) (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :clear-seal}}))]]
+   :act [[:job (until (jobs.time.wait-for-light) (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :clear-seal}}))]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :resting}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
    :limit-s 100}]}

@@ -121,7 +121,7 @@
 
 (defn exposure
   "{:chance :lowered-by} of the walk of p to `to` ({:x :y :z}, a column {:x :z} at the feet's height; floored): the mob spawn chance per second it meets and
-  what lowers it, data the readiness checks read (empty: nothing foreseeable does, so never). A walk that leaves shelter
+  what lowers it (with :light-in, the seconds until light, when :light does), data the readiness checks read (empty: nothing foreseeable does, so never). A walk that leaves shelter
   (sh-inside/walk-leaves-shelter?, with the body's latest :shelter entry data when given) meets the open-sky night figure, any
   other the spawn-chance at `to` from the light p has seen; :light lowers a chance that darkness alone puts there and light-in says waiting lifts. A cell p
   has no light data of is guessed dark and lowered by #{:look}, with :look-at [[x y z]]. A solid seen `to` is judged by the air cell over it (a solid cell has no light that night changes). Lava and the like are not spawn
@@ -139,8 +139,11 @@
          chance (spawn-chance cell {:light light :night? night?})]
      (if (and (not leaves?) (nil? (seen cell)))
        {:chance chance :lowered-by #{:look} :look-at [cell]}
-       {:chance chance
-        :lowered-by (if (and night? (> chance (spawn-chance cell {:light light :night? false})) (if leaves? (sh-sense/sky-in p) (sh-sense/light-in p {:x (nth cell 0) :y (nth cell 1) :z (nth cell 2)}))) #{:light} #{})}))))
+       (let [wait (when (and night? (> chance (spawn-chance cell {:light light :night? false})))
+                    (if leaves? (sh-sense/sky-in p) (sh-sense/light-in p {:x (nth cell 0) :y (nth cell 1) :z (nth cell 2)})))]
+         (if (and wait (pos? wait))
+           {:chance chance :lowered-by #{:light} :light-in wait}
+           {:chance chance :lowered-by #{}}))))))
 (defn per-dark [] (value/per-dark))
 (defn dark-factor ([] (value/dark-factor)) ([kit] (value/dark-factor kit)))
 

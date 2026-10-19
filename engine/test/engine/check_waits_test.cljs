@@ -45,17 +45,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [day (await (waiting-after '(jobs.time.wait-for-light) {:time 15000}))
-              dusk (await (waiting-after '(jobs.time.wait-for-dusk) {:time 6000}))]
+        (let [day (await (waiting-after '(jobs.time.wait-for-light) {:time 15000}))]
           (is (= :dark (:reason (:waiting day))))
-          (is (= "dark" (:text (:observed day))))
-          (is (= :dusk-not-come (:reason (:waiting dusk))))
-          (is (= "time-of-day 6000 < 12000" (:text (:observed dusk)))))))))
+          (is (= "dark" (:text (:observed day)))))))))
 
 (deftest the-time-jobs-wait-in-can-run-and-start-anywhere
   (are [sym] (and (fn? (get-in registry/jobs [sym :can-run?])) (not= :later (first ((get-in registry/jobs [sym :can-start?]) {}))))
-    'jobs.time.wait-for-light
-    'jobs.time.wait-for-dusk)
+    'jobs.time.wait-for-light)
   (are [sym] (fn? (get-in registry/jobs [sym :can-start?]))
     'jobs.survival.sleep
     'jobs.movement.boat-drive

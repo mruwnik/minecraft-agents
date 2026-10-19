@@ -34,8 +34,7 @@
             [jobs.survival.set-spawn :as set-spawn]
             [jobs.survival.restore-broken :as restore-broken]
             [jobs.time.noop :as noop]
-            [jobs.time.wait-for-light :as wait-for-light]
-            [jobs.time.wait-for-dusk :as wait-for-dusk]))
+            [jobs.time.wait-for-light :as wait-for-light]))
 
 (defn ctx-of
   "A job's ctx over a fake body built from world (a fresh job id: the check cache is per job)."
@@ -65,6 +64,13 @@
     (is (= #{:light} (:lowered-by (nth s 2))))
     (is (re-find #"15 64 0" (second s)) "names the place")
     (is (re-find #"until light" (second s)) "and what helps")))
+
+(deftest safe-at-waits-for-light-only-within-the-job-time-budget
+  (let [check (ready/safe-at (constantly outside))
+        status (fn [job-time] (lit 0 15 #(check (assoc (ctx-of open-night) :quote-call {:spend {:job-time job-time}}))))]
+    (is (= :later (first (status 100000))))
+    (is (= :never (first (status 10))) "light further off than the budget is not waited for")
+    (is (re-find #"s away" (second (status 10))))))
 
 (deftest safe-at-a-sheltered-place-is-ok-and-a-walk-out-of-the-hut-is-not
   (are [world to expected] (= expected (kind (ready/safe-at (constantly to)) world))
@@ -264,7 +270,7 @@
 (deftest jobs-with-nothing-to-check-are-ok-at-night-with-a-hostile-and-hurt
   (let [world (assoc open-night :entities [zombie] :self {:pos {:x 0 :y 64 :z 0} :health 5})]
     (doseq [check [log-out/safe? log-out/fit? eat/safe? eat/fit? noop/safe? noop/fit? wait-for-light/safe? wait-for-light/fit?
-                   wait-for-dusk/safe? wait-for-dusk/fit? shut-doors/fit?]]
+                   shut-doors/fit?]]
       (is (= :ok (kind check world))))))
 
 (deftest the-work-jobs-bind-their-place-by-night

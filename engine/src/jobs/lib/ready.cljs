@@ -32,18 +32,22 @@
 
 (defn at-status
   "The status of the exposure of the walk of c's body to `to`: ok while sheltered or the chance is within ::risk-limit,
-  else by what lowers it."
+  else by what lowers it; light further off than the job's :spend :job-time is not waited for."
   [c to]
   (let [p (:primitives c)
         shelter (:data (ctx/latest c :shelter))
-        {:keys [chance lowered-by look-at]} (cost/exposure p to shelter)
+        {:keys [chance lowered-by look-at light-in]} (cost/exposure p to shelter)
+        budget (get-in (ctx/frozen-call c) [:spend :job-time] ##Inf)
         where (place-text to)]
     (cond
       (and (sh-sense/dark-outside? p) (sh-inside/safe-from-night? p) (not (sh-inside/walk-leaves-shelter? p shelter to 1)))
       (contract/ok :sheltered (str "sheltered at " where))
       (<= chance (settings/get settings ::risk-limit)) (contract/ok :unexposed (str "no spawn risk at " where))
       (contains? lowered-by :look) (contract/look :exposed (str "light at " where " not seen") :look-at look-at)
-      (contains? lowered-by :light) (contract/later :exposed (str "dark at " where " until light") :lowered-by lowered-by :chance chance)
+      (and (contains? lowered-by :light) (<= light-in budget))
+      (contract/later :exposed (str "dark at " where " until light") :lowered-by lowered-by :chance chance)
+      (contains? lowered-by :light)
+      (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round budget) " s it would wait") :chance chance)
       :else (contract/never :exposed (str "exposed at " where ", nothing lowers it") :chance chance))))
 
 (defn exposed

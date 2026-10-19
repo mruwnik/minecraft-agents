@@ -231,7 +231,9 @@
 
 (deftest exposure-of-a-walk-out-of-shelter-is-the-open-sky-night-figure-lowered-by-dawn
   (let [p (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone" "15,67,0" "stone"}})]
-    (is (= {:chance open-night-chance :lowered-by #{:light}} (cost/exposure p {:x 15 :y 64 :z 0})))))
+    (let [e (cost/exposure p {:x 15 :y 64 :z 0})]
+      (is (= {:chance open-night-chance :lowered-by #{:light}} (dissoc e :light-in)))
+      (is (pos? (:light-in e)) "and the seconds till light"))))
 
 (deftest exposure-of-a-walk-in-the-open-is-the-spawn-chance-at-its-end
   (let [night (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}}})

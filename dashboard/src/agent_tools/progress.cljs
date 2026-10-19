@@ -26,7 +26,7 @@
 (def routine-reasons
   "Wait reasons that clear by themselves (time, healing, a furnace, the night handler) or mean nothing is wrong: no
   needs-you while a job waits for one of these."
-  #{:night :night-safe :night-sheltered :not-night :day :dark :dusk-not-come :cooking :low-health :needs-health
+  #{:night :night-safe :night-sheltered :not-night :day :dark :cooking :low-health :needs-health
     :chunks-loading :not-loaded :goal-unloaded :receding :walk-waiting :falling-block :not-ready :not-hungry
     :not-burning :not-underwater :not-wedged :not-mounted :no-hostile :no-ranged-danger :nothing-to-do
     :nothing-to-restore :enough-room :already-sealed :already-sound :at-target})

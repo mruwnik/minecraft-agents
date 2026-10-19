@@ -30,7 +30,7 @@
      jobs.explore.search jobs.explore.look
      jobs.combat.hunt jobs.gather.get-seeds jobs.gather.make-obsidian jobs.gather.mine
      jobs.movement.go-to jobs.movement.look-around jobs.movement.follow jobs.movement.leave-vehicle jobs.movement.mount jobs.movement.boat-launch jobs.movement.boat-recover jobs.movement.boat-drive jobs.movement.boat-land jobs.movement.cross-water jobs.movement.linger-near jobs.survival.block-arrow-gap
-     jobs.time.wait-for-light jobs.time.wait-for-dusk jobs.time.noop jobs.debug.notify jobs.debug.ready-probe
+     jobs.time.wait-for-light jobs.time.noop jobs.debug.notify jobs.debug.ready-probe
      jobs.access.stair jobs.access.record-stair jobs.access.tunnel jobs.access.toggle jobs.farm.tidy
      jobs.access.cleanup jobs.access.leave-tunnel jobs.access.clear-path jobs.strip.seal jobs.strip.corridor jobs.strip.site
      jobs.blocks.dig jobs.blocks.fill-cells jobs.blocks.place jobs.blocks.use-on jobs.items.interact
@@ -88,8 +88,8 @@
     (is (re-find #"jobs.movement.go-to has no arg :target; its args are " msg))
     (is (re-find #":pos" msg))
     (is (re-find #":doors" msg)))
-  (is (re-find #"jobs.time.wait-for-dusk has no arg :bogus; it takes no args"
-               (expr/problem registry/jobs '(jobs.time.wait-for-dusk {:bogus 1}))))
+  (is (re-find #"jobs.time.wait-for-light has no arg :bogus; it takes no args"
+               (expr/problem registry/jobs '(jobs.time.wait-for-light {:bogus 1}))))
   (is (nil? (expr/problem registry/jobs '(jobs.movement.go-to {:pos [50 40 3]}))))
   (is (re-find #"jobs.access.stair has no arg :stock-torches"
                (expr/problem registry/jobs '(jobs.access.stair {:dir :down :stock-torches false})))))

@@ -222,10 +222,10 @@
       :take :deposit)))
 
 (defn ^:async run-beside
-  "Submit the job wait-for-dusk (listed, check false by day), then form, over the world; tick 3 times."
+  "Submit the job wait-for-light (listed, dark at night), then form, over the world; tick 3 times."
   [form world]
-  (let [{:keys [eng] :as s} (setup world)]
-    (core/submit! eng '(jobs.time.wait-for-dusk) {})
+  (let [{:keys [eng] :as s} (setup (assoc world :time 15000))]
+    (core/submit! eng '(jobs.time.wait-for-light) {})
     (core/submit! eng form {})
     (dotimes [_ 3] (await (core/tick! eng)))
     s))

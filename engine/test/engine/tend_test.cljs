@@ -395,10 +395,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [world {:inventory [(wheat 4)] :entities [(cow 1 202) (cow 2 203)]}
+        (let [world {:inventory [(wheat 4)] :entities [(cow 1 202) (cow 2 203)] :time 15000}
               listed (h/setup world 50)
               alone (h/setup world 50)]
-          (core/submit! (:eng listed) '(jobs.time.wait-for-dusk) {})
+          (core/submit! (:eng listed) '(jobs.time.wait-for-light) {})
           (core/submit! (:eng listed) (spec {:box far-box}) {})
           (core/submit! (:eng alone) (spec {:box far-box}) {})
           (await (tu/run-ticks (:eng listed) (:clock listed) 3 700))

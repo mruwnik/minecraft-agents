@@ -10,7 +10,7 @@
 
 (def leaves
   '[jobs.memory.forget-place jobs.memory.remember jobs.memory.set-place jobs.memory.reserve jobs.memory.unreserve jobs.time.wait-for-light
-    jobs.time.wait-for-dusk jobs.time.noop jobs.debug.notify jobs.explore.look jobs.movement.look-around])
+    jobs.time.noop jobs.debug.notify jobs.explore.look jobs.movement.look-around])
 
 (deftest every-leaf-exports-the-contract-and-quotes-validly
   (let [p (tu/fake {:time 18000})]
