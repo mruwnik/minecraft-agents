@@ -4,7 +4,6 @@
 ;; hostile-near takes the body away, the zombie is killed, and the died trigger brings the body back for the pile.
 {:defaults
  {:tags [:survival :death :jobs :hostile]
-  :time :day
   :register [{:trigger :died :job (jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}})}
              {:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]

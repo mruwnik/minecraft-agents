@@ -2,7 +2,7 @@
 ;; It must not crash or walk there: it fells the near oak, plants the near spot, leaves the far debt owed and warns
 ;; harvest-wood.debts-owed. Without a sapling it ends with the debt owed and no :failed.
 {:defaults
- {:tags [:forestry :harvest-wood :memory-seed] :time :day
+ {:tags [:forestry :harvest-wood :memory-seed]
   :plot {:height 10 :floor "grass_block" :length 64 :width 32}
   :blocks [[:fill [16 0 16] [16 3 16] "oak_log"]
            [:fill [14 3 14] [18 4 18] "oak_leaves[persistent=true]"]

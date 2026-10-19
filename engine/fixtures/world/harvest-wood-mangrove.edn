@@ -3,7 +3,7 @@
 ;; Should-succeed: harvest-wood on a mangrove log column replants the propagule. Should-fail: no propagule carried leaves the
 ;; replant owed (harvest-wood.replant-owed :no-sapling) and plants nothing.
 {:defaults
- {:tags [:forestry :harvest-wood :mangrove] :time :day
+ {:tags [:forestry :harvest-wood :mangrove]
   :plot {:height 10 :floor "grass_block"}
   :blocks [[:fill [16 0 16] [16 3 16] "mangrove_log"]
            [:fill [14 3 14] [18 4 18] "mangrove_leaves[persistent=true]"]

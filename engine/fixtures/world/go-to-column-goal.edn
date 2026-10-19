@@ -5,7 +5,7 @@
 ;; :unknown block goal with :range 1 (stands beside it). Should-fail: a column behind a bottomless gap ends :arrived false, bounded.
 {:defaults
  {:tags [:movement :go-to :column]
-  :time :day
+  :time :any
   :plot {:height 16 :length 90 :width 32}
   :body {:at [2.5 0 16.5] :settle-s 2}
   :limit-s 150}

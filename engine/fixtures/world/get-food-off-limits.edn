@@ -5,7 +5,6 @@
 ;; Should-fail: with cows off limits none is killed (the :no-food ending), all three stay.
 {:defaults
  {:tags [:survival :get-food :animals]
-  :time :day
   :plot {:height 6}
   :body {:at [4.5 0 16.5] :inventory [["iron_sword" 1]] :settle-s 2}
   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]

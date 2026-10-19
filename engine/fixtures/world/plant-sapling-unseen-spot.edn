@@ -3,7 +3,6 @@
 ;; Grass plot, body at [16.5 0 20.5] looking south (yaw 0), carrying an oak sapling; the spot [16 0 12] is behind it.
 {:defaults
  {:tags [:forestry :plant-sapling :sensing :jobs]
-  :time :day
   :plot {:height 10 :floor "grass_block"}
   :body {:at [16.5 0 20.5] :yaw 0 :inventory [["oak_sapling" 2]] :effects [["resistance" 600 4]] :settle-s 2}
   :limit-s 80}

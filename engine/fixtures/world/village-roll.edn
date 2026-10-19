@@ -8,7 +8,7 @@
 ;; looks first (roll-cell-behind-the-body-is-looked-at); a lectern sealed in obsidian stays unseen (roll-cell-sealed-away-ends-cell-unseen).
 {:defaults
  {:tags [:village :jobs]
-  :time :day
+  :time :day :time-why :villager-schedule
   :plot {:floor "grass_block"}
   :blocks [[:fill [16 0 16] [16 0 16] "lectern"]]
   :body {:at [14.5 0 16.5] :yaw 270}

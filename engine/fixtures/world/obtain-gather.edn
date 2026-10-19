@@ -6,7 +6,7 @@
 ;; (only stone drops cobblestone); with nothing in view the text names both needs; :how without :gather has no gather text.
 ;; An empty bucket carried and a pond in view (a water source at [18 -1 20]) is filled there; with no pond in view the obtain waits :no-source naming water. Sand in view is dug by hand.
 {:defaults
- {:tags [:fetch :gather :mining] :time :day
+ {:tags [:fetch :gather :mining]
   :plot {:height 12 :floor "grass_block" :isolate true}
   :blocks [[:set [16 0 18] "crafting_table"]]
   :body {:at [16.5 0 12.5] :settle-s 2 :effects [["resistance" 600 4]]}

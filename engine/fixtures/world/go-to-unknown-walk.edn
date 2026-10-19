@@ -5,7 +5,6 @@
 ;; left open; a walk through a roofed, unlit tunnel with a bend (a dark floor each step, felt at the edge).
 {:defaults
  {:tags [:movement :go-to :unknown]
-  :time :day
   :plot {:height 16 :length 90 :width 32}
   :body {:at [2.5 0 16.5] :settle-s 2}
   :limit-s 150}

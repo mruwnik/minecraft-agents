@@ -19,7 +19,6 @@
   ;; card abf946bb: nothing carried to seal with, a cobblestone chest in view: the seal block is fetched, then the lava is covered.
   ;; :day because the walks to the chest and back wait for dawn on a dark stand (a night run sealed in 7 s, then waited 100 s)
   {:name "dig-under-feet-fetches-seal-block-from-seen-chest"
-   :time :day
    :blocks [[:set [18 10 16] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:8}]}"]]
    :act [[:job (jobs.blocks.dig {:pos #at [16 9 16]})]]
    :expect [{:event {:source :job :kind :blocks.dig.sealed} :within-s 100 :of-job true}

@@ -2,7 +2,7 @@
 ;; Flat grass plot 64 x 32, body at [8.5 0 16.5] facing east (yaw 270). The look cases put a crafting table 3 east and a furnace 5 south-east
 ;; in view: :useful? lists the table first (nearest) and refuses :block-names together with :useful?.
 {:defaults
- {:tags [:explore :sensing :jobs] :time :day
+ {:tags [:explore :sensing :jobs]
   :plot {:height 8 :floor "grass_block" :length 64 :width 32}
   :body {:at [8.5 0 16.5] :yaw 270 :settle-s 3 :effects [["resistance" 600 4]]}
   :limit-s 90}

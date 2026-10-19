@@ -1,7 +1,7 @@
 ;; Card 3a806993: a fixture with no :register runs a quiet body (the runner defaults it to []). Hungry (food drained by a
 ;; hunger effect (10 s amp 255 takes food to 0, so starvation hurts; 5 s only leaves food 8 and no health loss, which is no :hurt), bread carried) fires no reflex and starts no job; the contrast, a :hungry entry, fires in hungry-fold.edn.
 {:name "hungry-no-register-stays-quiet"
- :tags [:survival :register] :time :day
+ :tags [:survival :register]
  :plot {:height 6}
  :body {:at [16.5 0 16.5] :settle-s 2 :inventory [["bread" 6]]}
  :act [[:rcon "effect give $BODY minecraft:hunger 10 255 true"] [:until-effect-gone "hunger" 30]]

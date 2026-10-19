@@ -3,7 +3,6 @@
 ;; (wait :refused, nothing dug or tilled); each has a control with the zone moved off the work area.
 {:defaults
  {:tags [:access :zones]
-  :time :day
   :plot {:height 20 :floor "grass_block"}
   :body {:at [10.5 0 10.5] :effects [["resistance" 600 4]]}
   :limit-s 90}

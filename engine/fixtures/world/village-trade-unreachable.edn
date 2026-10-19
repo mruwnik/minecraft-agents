@@ -5,7 +5,7 @@
 ;; One-off (not here): jobs.movement.follow of a player sealed in a box ends stopped :unreachable after one go-to give-up, and a
 ;; player walking away still ends out-of-range after 3 legs; both need a player.
 {:defaults
- {:tags [:village :trade :jobs] :time :day
+ {:tags [:village :trade :jobs]
   :plot {:floor "grass_block" :height 8}
   :body {:at [10.5 0 16.5] :yaw 270 :settle-s 2 :inventory [["emerald" 8]] :effects [["resistance" 600 4]]}
   :limit-s 90}

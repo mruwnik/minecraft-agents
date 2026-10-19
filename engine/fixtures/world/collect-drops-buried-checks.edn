@@ -2,7 +2,7 @@
 ;; danger) instead of forcing (not (threatened)), so a hostile standing near the way does not make the walk wait :hostile-near.
 ;; A sealed 2-high tunnel x 12..24, z 16 in stone (buried: no sky light); a helmeted NoAI zombie in an alcove beside it; the drop lies past it.
 {:defaults
- {:tags [:forestry :collect-drops :survival :jobs] :time :day
+ {:tags [:forestry :collect-drops :survival :jobs]
   :plot {:height 12}
   :blocks [[:fill [8 0 8] [30 6 24] "stone"] [:fill [12 0 16] [24 1 16] "air"] [:fill [20 0 17] [20 1 17] "air"]]
   :body {:at [12.5 0 16.5] :effects [["resistance" 600 4]]}

@@ -3,7 +3,7 @@
 ;; Night cases: run with --allow-time --time-log <the shared time log>.
 {:defaults
  {:tags [:survival :conditions :jobs]
-  :time :day
+  :time :day :time-why :sleep
   :plot {:height 8}
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 2}
   :limit-s 60}

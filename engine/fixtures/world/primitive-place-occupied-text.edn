@@ -1,6 +1,6 @@
 ;; A failed place primitive ends with a :text naming the block that holds the cell ("place: occupied by white_bed"), so a player building blind can tell stone from a bed (card 05b5e28e).
 {:defaults
- {:tags [:primitives :jobs] :time :day
+ {:tags [:primitives :jobs]
   :body {:at [16.5 0 16.5] :inventory [["cobblestone" 8]]}
   :limit-s 40}
  :cases

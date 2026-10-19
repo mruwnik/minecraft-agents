@@ -17,7 +17,7 @@
             {:no-event {:source :job :kind :completed} :for-s 15 :of-job true}]
    :after [[:body-near [2.5 0 12.5] 2]]}
   {:name "tend-by-day-walks-to-the-pen-and-counts"
-   :time :day
+   :time :day :time-why :dawn-decision
    :act [[:summon "cow" [21.5 0 11.5]]
          [:summon "cow" [23.5 0 13.5]]
          [:job (jobs.animals.tend {:mob "cow" :target 2 :box {:min #xyz [20 0 10] :max #xyz [24 0 14]}})]]

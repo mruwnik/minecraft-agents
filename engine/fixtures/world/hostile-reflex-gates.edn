@@ -23,7 +23,7 @@
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :burning}} :for-s 40 :until {:source :reflex :kind :ended :context {:reflex-id :hostile-near}}}]
    :limit-s 50}
   {:name "needs-weapon-waits-the-dawn-grace"
-   :time :day
+   :time :day :time-why :dawn-decision
    :register []
    :act [[:time-set 23500]
          [:cli "triggers" ["$body" "--world" "$world" "put" "needs-weapon" "--trigger" "needs-weapon" "--persistence" "cooldown" "--cooldown-s" "600" "--job" "(jobs.items.obtain {:any-of [\"stone_sword\" \"wooden_sword\"] :count 1 :explore true})" "--by" "world-test"]]]
@@ -31,7 +31,7 @@
             {:event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :within-s 120}]
    :limit-s 130}
   {:name "needs-weapon-holds-while-a-zombie-is-known"
-   :time :day
+   :time :day :time-why :dawn-decision
    :register []
    :act [[:summon "zombie" [26.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:time-set 23500]

@@ -8,7 +8,6 @@
 ;; hungry body keeps all of them.
 {:defaults
  {:tags [:survival :get-food :cook]
-  :time :day
   :plot {:height 6}
   :body {:at [4.5 0 16.5] :settle-s 2}
   :limit-s 100}

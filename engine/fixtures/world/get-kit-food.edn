@@ -5,7 +5,6 @@
 ;; Should-fail: a starving body (food 0) with no food anywhere ends the kit condition-failed :needs-food; :food false does too.
 {:defaults
  {:tags [:items :get-kit :food]
-  :time :day
   :plot {:height 6}
   :body {:at [4.5 0 16.5] :inventory [["iron_sword" 1]] :settle-s 2}
   :limit-s 120}

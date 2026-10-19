@@ -3,7 +3,6 @@
 ;; Should-succeed: the fresh pile is collected, 7 raw_iron back, no abandoned window-closed. Control: a lone expired pile ends abandoned window-closed.
 {:defaults
  {:tags [:survival :death :jobs]
-  :time :day
   :memory [{:kind :died :age-s 400
             :data {:pos #xyz [8 0 8] :dimension "overworld" :inventory [{:name "dirt" :count 40 :slot 36}] :experience {:level 0 :points 0}}}]
   :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :effects [["resistance" 600 4]]}

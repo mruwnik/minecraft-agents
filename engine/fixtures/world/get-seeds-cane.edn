@@ -3,7 +3,7 @@
 ;; and the drop collected.
 ;; Should-succeed: 3-high cane cut (job.completed, cane carried, base stays). Should-fail: height-1 cane declines, stays.
 {:defaults
- {:tags [:gather :get-seeds :cane] :time :day
+ {:tags [:gather :get-seeds :cane]
   :plot {:height 8 :floor "grass_block"}
   :body {:at [16.5 0 16.5] :yaw 270 :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 60}

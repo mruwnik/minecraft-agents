@@ -5,7 +5,6 @@
 ;; Should-fail: without a rod no fish is caught; it ends :no-food.
 {:defaults
  {:tags [:survival :get-food :fish]
-  :time :day
   :plot {:height 8}
   :blocks [[:fill [0 0 0] [31 2 31] "stone"] [:fill [13 1 13] [18 2 18] "water"]]
   :body {:at [10.5 3 15.5] :settle-s 2}

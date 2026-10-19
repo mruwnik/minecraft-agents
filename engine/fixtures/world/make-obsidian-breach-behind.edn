@@ -3,7 +3,6 @@
 ;; Wall x 25 (seal [25 0 16]) shuts a stone block with a cavity x 26-29; lava [27 -1 16] sunk in the floor, the breach is 2 high (y 1 open, the seal at y 0).
 {:defaults
  {:tags [:gather :obsidian :jobs]
-  :time :day
   :plot {:height 12 :floor "grass_block"}
   :body {:at [16.5 0 16.5] :yaw 270 :settle-s 2 :inventory [["diamond_pickaxe" 1] ["water_bucket" 1]]
          :effects [["resistance" 600 4] ["fire_resistance" 600 0]]}

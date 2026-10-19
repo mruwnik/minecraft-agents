@@ -4,7 +4,7 @@
 ;; The night case needs night: --allow-time --time-log <the shared time log>.
 {:defaults
  {:tags [:survival :sleep]
-  :time :day
+  :time :day :time-why :sleep
   :blocks [[:set [20 0 16] "red_bed[facing=east,part=foot]"] [:set [21 0 16] "red_bed[facing=east,part=head]"]]
   :body {:at [8.5 0 16.5] :spawnpoint [2 0 2] :effects [["resistance" 600 4]] :settle-s 2}}
  :cases

@@ -58,7 +58,7 @@
    :limit-s 60}
   ;; L4: a seen zombie (NoAI, helmeted: no sun burn, no fight) that can reach the body, no hostile reflex registered
   {:name "l4-waits-on-the-hostile-and-starts-once-it-is-gone"
-   :time :day
+   :time :any
    :tags [:readiness :survival :hostile]
    :body {:at [16.5 0 16.5] :settle-s 2}
    :blocks [[:fill [8 0 8] [16 3 16] "air"]]
@@ -68,7 +68,7 @@
          [:rcon "kill @e[type=zombie,$BOX]"]]
    :expect [{:event {:source :job :kind :job.ready-probe} :within-s 60 :of-job true}]}
   {:name "l4-keeps-waiting-while-the-hostile-stays"
-   :time :day
+   :time :any
    :tags [:readiness :survival :hostile]
    :body {:at [16.5 0 16.5] :settle-s 2}
    :blocks [[:fill [8 0 8] [16 3 16] "air"]]

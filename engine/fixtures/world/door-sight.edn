@@ -4,7 +4,6 @@
 ;; seen memory (saved every second here) holds the face, the gold cell is judged (plans.mjs check on the body's seen memory).
 {:defaults
  {:tags [:sensing :door :tool]
-  :time :day
   :plot {:height 8}
   :blocks [[:fill [14 0 8] [14 3 24] "stone"] [:set [20 1 16] "gold_block"]]
   :body {:at [8.5 0 16.5] :yaw -90 :settle-s 2}

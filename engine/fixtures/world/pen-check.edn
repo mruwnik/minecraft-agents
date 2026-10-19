@@ -7,7 +7,6 @@
 ;; only looks (never walks), so a pen it cannot see ends :unloaded.
 {:defaults
  {:tags [:animals :pen-check]
-  :time :day
   :plot {:floor "stone"}
   :body {:at [5.5 0 5.5] :yaw 0}
   :blocks [[:fill [2 0 2] [8 0 8] "oak_fence"]

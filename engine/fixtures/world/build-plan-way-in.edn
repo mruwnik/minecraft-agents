@@ -1,7 +1,6 @@
 ;; jobs.build.from-plan warns (build.way-in) when it fills cells above the plan's floor that the body stood in and the plan has no door there.
-;; :time :day: from-plan declines an exposed open-sky place by night.
 {:defaults
- {:tags [:build] :time :day
+ {:tags [:build]
   :plot {:height 8}
   :body {:at [16.5 0 16.5] :settle-s 2 :inventory [["cobblestone" 4]]}
   :limit-s 90}

@@ -5,7 +5,6 @@
 ;; Should-fail: the zone is someone else's: no wheat is cut (the :no-food ending), the row stays ripe.
 {:defaults
  {:tags [:survival :get-food :farm :zones]
-  :time :day
   :plot {:height 6 :floor "grass_block"}
   :blocks [[:fill [22 -1 22] [29 -1 22] "farmland[moisture=7]"] [:fill [22 -2 23] [29 -2 23] "stone"] [:fill [22 -1 23] [29 -1 23] "water"]
            [:fill [22 0 22] [29 0 22] "wheat[age=7]"] [:set [16 0 20] "crafting_table"]]

@@ -1,6 +1,6 @@
 ;; Card c8476d30: a poisoned body below 10 hp that carries milk drinks it (the poisoned reflex, survival.cure) and the effect is gone.
 {:defaults
- {:tags [:survival :poisoned] :time :day
+ {:tags [:survival :poisoned]
   :plot {:height 8}
   :body {:at [16.5 1 16.5] :settle-s 2}
   :limit-s 60}

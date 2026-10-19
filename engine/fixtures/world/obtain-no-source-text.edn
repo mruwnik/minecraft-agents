@@ -5,7 +5,6 @@
 ;; Should-succeed: the free tree is felled while the zone tree stands. Should-fail: only the zone tree seen, nothing in sight for fences / wool.
 {:defaults
  {:tags [:items :obtain :zones :jobs]
-  :time :day
   :plot {:height 12 :floor "grass_block"}
   :body {:at [16.5 0 12.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 90}

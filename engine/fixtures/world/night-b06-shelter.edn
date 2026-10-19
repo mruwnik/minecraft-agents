@@ -215,7 +215,7 @@
    :limit-s 170}
   ;; 8c5974f7: by day the night reflex does not fire, however often the body stops
   {:name "midday-night-reflex-stays-quiet"
-   :time :day
+   :time :day :time-why :dawn-decision
    :register [{:trigger :night}]
    :act [[:job (jobs.movement.go-to {:pos #xyz [24 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 40 :of-job true}
@@ -256,7 +256,7 @@
    :limit-s 80}
   ;; ba754e77: a body shut in at the bottom of a 1x1 shaft cuts its own stair up to a goal on the surface
   {:name "shaft-bottom-escalates-up-to-the-surface-goal"
-   :time :day
+   :time :day :time-why :dawn-decision
    :blocks [[:fill [8 0 8] [24 16 24] "stone"] [:set [16 1 16] "air"] [:set [16 0 16] "air"]]
    :plot {:height 22}
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
@@ -266,7 +266,7 @@
    :after [[:body-near [16.5 17 20.5] 3]]
    :limit-s 250}
   {:name "shaft-walled-in-bedrock-gives-up-at-once"
-   :time :day
+   :time :day :time-why :dawn-decision
    :blocks [[:fill [8 0 8] [24 16 24] "bedrock"] [:set [16 1 16] "air"] [:set [16 0 16] "air"]]
    :plot {:height 22}
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
@@ -277,7 +277,7 @@
    :limit-s 70}
   ;; 629bc2ee: dusk, a home 66 blocks off: the dusk-home reflex fires and the body walks there
   {:name "dusk-walks-home"
-   :time :day
+   :time :day :time-why :dawn-decision
    :plot {:length 100 :width 32}
    :register [{:trigger :dusk-home}]
    :blocks [[:set [70 0 16] "torch"]]

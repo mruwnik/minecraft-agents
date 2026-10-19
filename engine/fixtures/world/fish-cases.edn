@@ -3,7 +3,6 @@
 ;; (water y -2..-1, flush with the floor), the body on the bank at x 8.5. Bites are random: the catching case allows 170 s for one fish.
 {:defaults
  {:tags [:food :fish :jobs]
-  :time :day
   :plot {:height 6}
   :blocks [[:fill [10 -4 8] [22 -1 24] "stone"] [:fill [12 -2 10] [20 -1 22] "water"]]
   :body {:at [8.5 0 16.5] :yaw 270 :effects [["resistance" 600 4]] :settle-s 2}

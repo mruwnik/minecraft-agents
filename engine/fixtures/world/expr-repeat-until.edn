@@ -25,14 +25,12 @@
   ;; card 33c9ae94: a child that ends refused/failed (go-to to a goal sealed in bedrock, no retry) stops seq with its cause and makes repeat and until
   ;; rest 30 s (waiting :resting) before they call it again; none reads it as done and goes on.
   {:name "seq-stops-at-a-failed-child"
-   :time :day
    :blocks [[:fill [27 0 27] [29 2 29] "bedrock"] [:set [28 0 28] "air"]]
    :act [[:job (seq (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :clear-seal}}) (jobs.time.noop {:seconds 0.5 :why :idle}))]]
    :expect [{:event {:source :job :kind :stopped} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :c1}} :for-s 80 :until {:source :job :kind :stopped}}]
    :limit-s 100}
   {:name "repeat-stops-at-a-failed-child"
-   :time :day
    :blocks [[:fill [27 0 27] [29 2 29] "bedrock"] [:set [28 0 28] "air"]]
    :act [[:job (repeat (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :clear-seal}}))]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :resting}} :within-s 80 :of-job true}

@@ -3,7 +3,7 @@
 ;; Should-succeed: a 5 s pause completes with the waited seconds; a hungry reflex fires mid-pause and the pause still completes.
 ;; Should-fail: a 30 s pause under :spend {:wall-time 5} ends limit_reached :wall-time (a pause accrues no job-time).
 {:defaults
- {:tags [:scheduler :time :noop] :time :day
+ {:tags [:scheduler :time :noop]
   :plot {:height 6}
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 60}

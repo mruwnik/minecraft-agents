@@ -9,7 +9,6 @@
 ;; Should-fail: iron first in the list with no iron seen stops no-source at once and makes no stone tool.
 {:defaults
  {:tags [:items :get-kit :jobs]
-  :time :day
   :plot {:height 12 :floor "grass_block"}
   :blocks [[:set [16 0 18] "crafting_table"]]
   :body {:at [16.5 0 12.5] :settle-s 2 :effects [["resistance" 600 4]]}

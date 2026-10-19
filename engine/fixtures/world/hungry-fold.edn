@@ -5,7 +5,7 @@
 ;; Rules: look for food when food < min(18, 6 + missing hp); eat at once when hp < 7, food < 20 and food is carried;
 ;; a hurt body never goes to bed or stands still to heal, it keeps working (a bed is known in every case).
 {:defaults
- {:tags [:survival :hungry] :time :day
+ {:tags [:survival :hungry]
   :plot {:height 6}
   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}]
   :blocks [[:set [8 0 16] "red_bed[facing=east,part=foot]"] [:set [9 0 16] "red_bed[facing=east,part=head]"]]

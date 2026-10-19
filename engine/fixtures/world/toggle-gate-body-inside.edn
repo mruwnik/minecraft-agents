@@ -1,7 +1,7 @@
 ;; Card c5ecef73: access.toggle :closed on an open fence gate the body stands in steps to a free cell beside it, then shuts it
 ;; (no waiting "standing-in"). Gate in a fence line x 10..22 at z 12; the body starts in the gate cell.
 {:defaults
- {:tags [:access :toggle :gate] :time :day
+ {:tags [:access :toggle :gate]
   :plot {:floor "grass_block"}
   :blocks [[:fill [10 0 12] [22 0 12] "oak_fence"]
            [:set [16 0 12] "oak_fence_gate[facing=south,open=true]"]]

@@ -3,7 +3,6 @@
 ;; Should-succeed: the two dirt cells behind the body are dug (air) and the job completes.
 {:defaults
  {:tags [:build :sensing]
-  :time :day
   :plot {:height 8 :floor "grass_block"}
   :body {:at [16.5 0 16.5] :yaw 0 :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]] :settle-s 2}
   :limit-s 120}

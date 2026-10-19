@@ -4,7 +4,7 @@
 ;; collected in one harvest call; nothing ripe -> maintain does not act.
 ;; Should-fail: an unsmoked ripe hive waits :not-smoked (untouched); with :fetch false, no shears or bottle waits :no-tool, hive untouched.
 {:defaults
- {:tags [:apiary :rounds] :time :day
+ {:tags [:apiary :rounds]
   :plot {:height 8}
   :body {:at [6.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 120}

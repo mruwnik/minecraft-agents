@@ -5,7 +5,6 @@
 ;; cobblestone stray in the planned oak cell. Torches keep hostiles away.  Run: node tools/world-test.mjs <file> --match <name> --first-plot N
 {:defaults
  {:tags [:tool-wear :cleanup :prepare]
-  :time :day
   :blocks [[:set [2 0 2] "torch"] [:set [2 0 30] "torch"] [:set [30 0 2] "torch"] [:set [30 0 30] "torch"]
            [:set [10 0 10] "torch"] [:set [22 0 22] "torch"] [:set [10 0 22] "torch"] [:set [22 0 10] "torch"]]
   :limit-s 90}

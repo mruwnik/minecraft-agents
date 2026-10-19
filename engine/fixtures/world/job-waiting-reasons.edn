@@ -4,7 +4,7 @@
 ;; before the submit and expect a round.
 {:defaults
  {:tags [:jobs :survival]
-  :time :day
+  :time :any
   :plot {:height 16}
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 2}
   :limit-s 40}
@@ -30,6 +30,7 @@
    :act [[:job (jobs.survival.get-food {})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}]}
   {:name "night-waits-not-night"
+   :time :day :time-why :dawn-decision
    :act [[:job (jobs.survival.night {})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-night}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :not-ready}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :not-night}} :of-job true}

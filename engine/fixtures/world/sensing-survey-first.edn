@@ -4,7 +4,7 @@
 ;; Survey cases: body at the middle facing north (yaw 180), the work 4 south of it, behind the view: it must look round first, not end with
 ;; "nothing here" or put down a second table. Day, open grass plot, resistance on.
 {:defaults
- {:tags [:sensing :jobs :survey] :time :day
+ {:tags [:sensing :jobs :survey] :time :any
   :plot {:height 8 :floor "grass_block"}
   :body {:at [16.5 0 16.5] :yaw 180 :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 90}

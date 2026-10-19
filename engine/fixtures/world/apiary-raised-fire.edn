@@ -3,7 +3,7 @@
 ;; campfire [14 0 22] (raised: the floor is y -1), carpet [14 1 22], hive [14 2 22]; the open case has no carpet: air at [14 1 22], the hive at [14 2 22] (a hive straight on the fire covers it).
 ;; Should-succeed: harvest and maintain take the hive over the carpeted raised fire. Should-fail: an open raised fire declines (:open-fire), untouched.
 {:defaults
- {:tags [:apiary :jobs] :time :day
+ {:tags [:apiary :jobs]
   :plot {:height 8}
   :body {:at [6.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 120}

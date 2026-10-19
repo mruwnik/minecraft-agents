@@ -4,7 +4,6 @@
 ;; Should-fail: the reserved raw_iron never goes into the chest.
 {:defaults
  {:tags [:transport :reserve :hunt :jobs]
-  :time :day
   :plot {:height 6}
   :body {:at [10.5 0 14.5] :settle-s 2}
   :limit-s 100}

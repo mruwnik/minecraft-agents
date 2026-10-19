@@ -2,7 +2,7 @@
 ;; Should-succeed: a stair job waiting for a pickaxe; a tunnel submit is held back as :job-clash naming the stair; the same submit with --alongside is posted.
 ;; Should-fail (held): the first tunnel submit; the stair keeps running with no tunnel event.
 {:defaults
- {:tags [:access :tool] :time :day
+ {:tags [:access :tool]
   :plot {:height 20}
   :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
   :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]]}

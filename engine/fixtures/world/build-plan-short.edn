@@ -1,6 +1,5 @@
 ;; Cards 4df74238, 922e408e, 618c0e16: jobs.build.from-plan fetches what the plan lacks, names what it is short of, and fetches a tool
 ;; even while another item's fetch has failed.
-;; :time :day: from-plan declines an exposed open-sky place by night (safe-at-by-night), so these cases need daylight.
 ;; tool-fetched-while-a-short-item-has-no-source: the plan wants dirt where stone stands ([20 0 16]; dirt carried, no pickaxe, a seen chest
 ;; holds one) and a gold_block nobody has; the gold fetch fails (:explore false) and the pickaxe is still fetched, the stone replaced.
 ;; default-fetch-gathers-logs-and-crafts-planks: oak_planks wanted, none carried, a log column in sight; the default :fetch obtains them.
@@ -13,7 +12,7 @@
 ;; any-want-uses-what-is-carried (93b3dba5): a part wanting [:any cobblestone granite dirt] is built from granite carried, never fetching cobblestone;
 ;; with none of them carried the first listed is fetched. in-a-pit-walks-out-and-places (8a7774d1, cd5a0d81): a body 3 deep in a pit (as after a dirt dig) escalates out of it to reach its stands, instead of idling.
 {:defaults
- {:tags [:build :fetch] :time :day
+ {:tags [:build :fetch]
   :plot {:height 8}
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 150}

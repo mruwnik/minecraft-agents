@@ -8,7 +8,7 @@
 ;; condition-failed) with the body staying put; a creeper by the furnace makes it eat the raw beef instead of cooking (no cooking).
 {:defaults
  {:tags [:survival :hungry :get-food :fragile]
-  :time :day
+  :time :day :time-why :dawn-decision
   :plot {:height 6}
   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}

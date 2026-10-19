@@ -5,7 +5,7 @@
 ;; Pen case (day): oak_fence ring x 12..20, z 12..20; fell-tree ends (or walks out and fells); a tree_blocked it warns carries :why.
 ;; Unsure (65%): whether go-to digs the fences with the carried axe; if so the body walks out and fells the tree.
 {:defaults
- {:tags [:forestry :fell-tree :harvest-wood :night] :time :day
+ {:tags [:forestry :fell-tree :harvest-wood :night] :time :day :time-why :dawn-decision
   :plot {:height 8 :floor "grass_block"}
   :blocks [[:fill [26 0 16] [26 4 16] "oak_log"] [:fill [25 4 15] [27 5 17] "oak_leaves[persistent=true]"] [:set [26 4 16] "oak_log"]]
   :body {:at [16.5 0 16.5] :settle-s 2 :inventory [["iron_axe" 1]] :effects [["resistance" 600 4]]}

@@ -4,7 +4,7 @@
 ;; Should-succeed: the shelter is left (dig-in.left once) and the go-to to a surface goal arrives. Should-fail: the night reflex fires again, or a second dig-in.left.
 {:defaults
  {:tags [:night :survival :dig-in]
-  :time :day
+  :time :day :time-why :dawn-decision
   :register [{:trigger :night}]
   :plot {:height 8}
   :blocks [[:fill [8 -6 8] [24 -1 24] "dirt"] [:fill [16 -2 16] [16 -1 16] "air"] [:fill [17 -2 16] [17 -1 16] "air"]]

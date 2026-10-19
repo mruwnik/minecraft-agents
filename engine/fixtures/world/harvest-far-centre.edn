@@ -3,7 +3,6 @@
 ;; Should-succeed: harvest {:center :radius 6} cuts 3 and the wheat is in the bag. Should-fail (control): a far centre with no crop still ends :no-crop-seen.
 {:defaults
  {:tags [:farm :harvest :jobs]
-  :time :day
   :plot {:floor "grass_block" :length 100 :width 32 :height 8}
   :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]]}
   :limit-s 150}

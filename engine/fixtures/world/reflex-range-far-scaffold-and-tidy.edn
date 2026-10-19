@@ -4,7 +4,7 @@
 ;; spec (cleanup with no args), which the :within 32 default for :job nil must still bound.
 ;; Should-succeed: the near body is fetched back (reflex fired; scaffold removed / cell restored). Should-fail: the far body is left alone for 40 s.
 {:defaults
- {:tags [:cleanup :tidy :access :survival] :time :day
+ {:tags [:cleanup :tidy :access :survival]
   :plot {:length 120 :width 16 :height 12}
   :limit-s 90}
  :cases

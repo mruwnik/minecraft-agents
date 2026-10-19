@@ -19,7 +19,7 @@
           {:ok true :hint [:contains "queued behind reflex"]}]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night}} :within-s 30}]}
   {:name "now-submit-by-day-has-no-reflex-hint"
-   :time :day
+   :time :day :time-why :weather
    :act [[:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.set-place {:name :wt-a :pos [6 150 6]})" "--now"]
           {:ok true :hint [:not [:contains "reflex"]]}]]
    :expect [{:event {:source :job :kind :completed} :within-s 30}]}

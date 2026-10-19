@@ -5,7 +5,7 @@
 ;; Should-succeed: :count 2 with a reachable tree ends :completed with logs. Should-fail: only the island tree -> :tree-unreachable, no debt
 ;; event; a felled tree plus the island one -> :tree-unreachable with the replant-owed warning.
 {:defaults
- {:tags [:forestry :harvest-wood :count] :time :day
+ {:tags [:forestry :harvest-wood :count]
   :plot {:height 10 :floor "grass_block"}
   :body {:at [3.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 130}

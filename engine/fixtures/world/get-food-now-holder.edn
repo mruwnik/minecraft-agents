@@ -2,7 +2,6 @@
 ;; Hunger by RCON (food 8, hp 15). Should-succeed: the go-to submitted after it arrives. Should-fail: none.
 {:defaults
  {:tags [:survival :get-food :scheduler]
-  :time :day
   :plot {:height 6}
   :body {:at [4.5 0 16.5] :settle-s 2}
   :limit-s 90}

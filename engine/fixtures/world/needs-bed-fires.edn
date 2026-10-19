@@ -4,7 +4,7 @@
 ;; Should-succeed: the reflex fires, obtain does not stop bad-args, the body ends with a bed. Should-fail: a body that still sees its
 ;; remembered spawn bed does not fire it.
 {:defaults
- {:tags [:survival :triggers :items] :time :day
+ {:tags [:survival :triggers :items]
   :plot {:height 6}
   :register [{:trigger :needs-bed :persistence :cooldown :cooldown-s 600}]
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}

@@ -26,7 +26,7 @@
    :after [[:body-near [10.5 0 12.5] 3]]
    :limit-s 100}
   {:name "day-shelter-does-nothing"
-   :time :day
+   :time :day :time-why :dawn-decision
    :act [[:job (jobs.survival.night {})]]
    :expect [{:event {:source :job :kind #{:completed :declined :waiting}} :within-s 20 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 20 :until {:source :job :kind #{:completed :declined :waiting}}}]

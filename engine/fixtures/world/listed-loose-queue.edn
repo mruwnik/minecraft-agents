@@ -1,7 +1,7 @@
 ;; Card 809bb638: a listed pick-up-loose with nothing worth it waits (:nothing-worth-it) and must not hold back the job listed after it.
 ;; Should-succeed: the waiting event, then the mine behind it runs and ends. Should-fail: the mine never gets a round.
 {:defaults
- {:tags [:scheduler :items :loose-items] :time :day
+ {:tags [:scheduler :items :loose-items]
   :plot {:height 6}
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["iron_pickaxe" 1]]}}
  :cases

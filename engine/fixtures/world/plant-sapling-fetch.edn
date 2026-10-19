@@ -2,7 +2,7 @@
 ;; seen oak leaves are broken for the drop (obtain :gather via gather.get-seeds; the drop is chance and the dig bound is 20 leaves,
 ;; so that case checks the bounded outcome: fetch.done (a sapling came) or fetch.failed (20 dry digs)); with no source the job waits :no-sapling; harvest-wood :fetch false passes down and leaves the debt owed.
 {:defaults
- {:tags [:forestry :plant-sapling :fetch] :time :day
+ {:tags [:forestry :plant-sapling :fetch]
   :plot {:height 10 :floor "grass_block" :length 64 :width 32}
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 90}

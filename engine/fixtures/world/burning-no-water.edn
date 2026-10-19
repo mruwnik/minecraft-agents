@@ -22,7 +22,7 @@
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}]
    :after [[:body-near [26.5 0 22.5] 2]]}
   {:name "burning-in-rain-is-still-handled"
-   :weather :rain :time :day
+   :weather :rain :time :day :time-why :weather
    :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 1})]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :burning}} :within-s 20}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}]

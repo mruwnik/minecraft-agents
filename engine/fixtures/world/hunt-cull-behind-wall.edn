@@ -5,7 +5,6 @@
 ;; Should-fail (nothing is killed): cull with the cow behind stone. Should-succeed: hunt and cull with the cow behind glass.
 {:defaults
  {:tags [:animals :hunt :cull :sensing]
-  :time :day
   :plot {:height 8 :floor "grass_block"}
   :body {:at [6.5 0 16.5] :yaw 270 :inventory [["iron_sword" 1]] :settle-s 2}
   :limit-s 60}

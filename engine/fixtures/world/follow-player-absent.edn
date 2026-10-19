@@ -3,7 +3,7 @@
 ;; walking player; a player out of sight is walked to where last seen and waited for) are hand-run with a real player.
 ;; Should-succeed: following a player nobody sees leaves the body where it is, fails nothing, and the call ends limit_reached at its wall time.
 {:defaults
- {:tags [:movement :follow :jobs] :time :day
+ {:tags [:movement :follow :jobs]
   :plot {:height 6}
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 60}

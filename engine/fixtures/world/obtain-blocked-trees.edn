@@ -6,7 +6,7 @@
 ;; Should-fail: both end without logs; the first stopped no-source naming "ended :none-seen (", the second only waits.
 {:defaults
  {:tags [:items :obtain :fell-tree :jobs]
-  :time :day
+  :time :day :time-why :dawn-decision
   :plot {:height 18 :floor "grass_block"}
   :body {:at [16.5 0 16.5] :yaw 270 :settle-s 2 :inventory [["iron_axe" 1]] :effects [["resistance" 600 4]]}
   :limit-s 90}

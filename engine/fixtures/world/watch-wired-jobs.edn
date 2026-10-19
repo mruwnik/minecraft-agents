@@ -14,13 +14,11 @@
    :expect [{:event {:source :job :kind :memory_written :data {:memory :watched}} :within-s 20 :of-job true}]
    :after [[:body-near [20.5 0 20.5] 1.5]]}
   {:name "go-to-lit-arrival-quiet"
-   :time :day
    :blocks [[:fill [9 -1 9] [23 -1 23] "sea_lantern"]]
    :act [[:job (jobs.movement.go-to {:pos #xyz [20 0 20] :range 0})]]
    :expect [{:no-event {:kind :memory_written :data {:memory :watched}} :for-s 12}]
    :after [[:body-near [20.5 0 20.5] 1.5]]}
   {:name "attack-cow-lit-no-scan"
-   :time :day
    :blocks [[:fill [9 -1 9] [23 -1 23] "sea_lantern"]]
    :act [[:summon "cow" [12.5 0 17.5] "{NoAI:1b}"]
          [:job (jobs.combat.attack {:targets "cow" :radius 16})]]

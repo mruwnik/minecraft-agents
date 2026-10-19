@@ -3,7 +3,7 @@
 ;; Should-succeed: carried bread eaten in one run; a seeded far chest (memory + block) walked to and emptied of food; a cow hunted.
 ;; Should-fail: nothing anywhere -> stopped :no-food with the :no-food ending, then the hungry trigger rests (no 2nd run); a cut while walking to a chest (hostile-near fires) with the chest emptied meanwhile -> :no-food afterwards.
 {:defaults
- {:tags [:survival :hungry :get-food :rounds] :time :day
+ {:tags [:survival :hungry :get-food :rounds]
   :plot {:height 6}
   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}

@@ -4,7 +4,7 @@
 ;; wait-for-light in a sealed dark cell waits :dark; smelt of an item no furnace cooks stops impossible :not-smeltable at once.
 ;; Should-fail: none of the waiting jobs completes or stops; the smelt never loads the furnace.
 {:defaults
- {:tags [:scheduler :conditions :jobs] :time :day
+ {:tags [:scheduler :conditions :jobs]
   :plot {:height 8 :floor "stone"}
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 40}

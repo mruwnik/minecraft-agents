@@ -7,7 +7,6 @@
 ;; out of reach, and no ground is in pillar range, so from-plan lays a bridge row from the bank, builds the wall and takes the row back.
 {:defaults
  {:tags [:build :access :zones]
-  :time :day
   :plot {:height 24 :floor "grass_block"}
   :plans [{:id "wall" :metadata {:by "$body"}
            :parts [{:id "w" :box [#at [15 0 20] #at [17 8 20]] :want "stone"}]}]

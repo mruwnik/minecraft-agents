@@ -65,7 +65,6 @@
    :after [[:not-block [24 0 24] "dirt"]]
    :limit-s 180}
   {:name "dead-end-seal-is-taken-back-once-the-skeleton-is-gone"
-   :time :day
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}
               {:trigger :scaffold-left :args {} :job (jobs.access.cleanup {:within 32 :checks {:fit? (always)}})}]

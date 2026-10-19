@@ -5,7 +5,6 @@
 ;; :mobs :keep: the runner does not clear hostile mobs near the plot before :act.
 {:defaults
  {:tags [:tidy :tidy-pending :hostile]
-  :time :day
   :mobs :keep
   :register [{:trigger :tidy-pending :persistence :cooldown :cooldown-s 10}]
   :plot {:height 12}

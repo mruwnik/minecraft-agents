@@ -3,7 +3,7 @@
 ;; the body starts at [36.5 0 16.5], 11 east of its top, and wants iron ore at [8 -10 16] (level -10, direction west).
 ;; Should-succeed: the ore is mined; the lawn cells beside the body stay stone (no new stair from there).
 {:defaults
- {:tags [:mine :jobs :stairs] :time :day
+ {:tags [:mine :jobs :stairs]
   :plot {:length 48 :height 12}
   :blocks [[:fill [4 -16 12] [40 -1 20] "stone"] [:fill [25 -1 16] [25 1 16] "air"] [:fill [24 -2 16] [24 0 16] "air"] [:fill [23 -3 16] [23 -1 16] "air"] [:fill [22 -4 16] [22 -2 16] "air"] [:fill [21 -5 16] [21 -3 16] "air"] [:fill [20 -6 16] [20 -4 16] "air"]]
   :memory [{:kind :stair-way :data {:dim "overworld" :floors [#at [25 -2 16] #at [24 -3 16] #at [23 -4 16] #at [22 -5 16] #at [21 -6 16] #at [20 -7 16]]}}]

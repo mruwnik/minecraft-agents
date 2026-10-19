@@ -3,7 +3,7 @@
 ;; or lava at x+2 (case 2): the old hop ran into the wall or the lava.
 ;; Should-succeed (case 1): the fire is sunk and carpeted (:guarded) and the body ends beside it, never on the lava cell.
 {:defaults
- {:tags [:apiary :step-off] :time :day
+ {:tags [:apiary :step-off]
   :plot {:height 8}
   :blocks [[:set [14 0 16] "campfire[lit=true]"]]
   :body {:at [14.5 0 16.5] :settle-s 2

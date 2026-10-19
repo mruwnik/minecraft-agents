@@ -3,7 +3,7 @@
 ;; "not searched underground" and takes no walk. low-health: food 8 (no regeneration) and hp 3: gather.mine waits :low-health and digs
 ;; nothing; instant health lets it mine.
 {:defaults
- {:tags [:survival :hungry] :time :day
+ {:tags [:survival :hungry]
   :plot {:height 8}
   :body {:at [16.5 1 16.5] :settle-s 2}
   :limit-s 90}

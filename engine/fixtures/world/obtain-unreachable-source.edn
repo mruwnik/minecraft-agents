@@ -5,7 +5,6 @@
 ;; Cage x 14..18, z 14..18 (bedrock shell, body inside at the middle, glass at [18 1 16]); stone mass x 19..30, z 8..24, y 0..4.
 {:defaults
  {:tags [:items :obtain :gather]
-  :time :day
   :plot {:height 14}
   :body {:at [16.5 0 16.5] :yaw 270 :effects [["resistance" 600 4]] :settle-s 2}
   :limit-s 120}

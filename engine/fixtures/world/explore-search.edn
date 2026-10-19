@@ -4,7 +4,7 @@
 ;; Should-succeed: spacing 8 and the tightest spacing 4 both end search.done :found within the limit, no error and no :runaway.
 ;; (A :spacing below 4 is refused when the job is submitted: typed arg, no log event, unit-covered.)
 {:defaults
- {:tags [:explore :search] :time :day
+ {:tags [:explore :search]
   :plot {:height 8 :floor "grass_block" :length 64 :width 32}
   :blocks [[:set [40 0 16] "emerald_block"]]
   :body {:at [8.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}

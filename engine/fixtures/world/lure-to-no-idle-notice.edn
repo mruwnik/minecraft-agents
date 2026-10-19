@@ -2,7 +2,6 @@
 ;; the job ends :arrived. Grass plot 192 long, scattered tree-less; the cow starts beside the body, wheat in hand, the goal at x 170.
 {:defaults
  {:tags [:lure-to :animals :jobs :large]
-  :time :day
   :plot {:floor "grass_block" :length 192 :width 32}
   :body {:at [4.5 0 16.5] :yaw 270 :inventory [["wheat" 8]] :effects [["resistance" 900 4]] :settle-s 3}
   :limit-s 400}

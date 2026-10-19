@@ -3,7 +3,6 @@
 ;; Cows NoAI (the ambient moo is what the body hears). Sword in hand.
 {:defaults
  {:tags [:animals :hunt :sensing :heard]
-  :time :day
   :plot {:height 8}
   :blocks [[:fill [8 -8 8] [24 -1 26] "dirt"] [:fill [16 -5 20] [18 -1 22] "air"]]
   :body {:at [17.5 0 16.5] :yaw 0 :inventory [["iron_sword" 1]] :effects [["resistance" 600 4]] :settle-s 3}

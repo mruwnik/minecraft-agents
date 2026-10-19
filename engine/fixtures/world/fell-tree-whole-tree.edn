@@ -8,7 +8,7 @@
 ;; Should-succeed: whole tree felled with nothing carried but an axe; harvest-wood replants on the ground; the axe comes from a chest;
 ;; the own plan's birch is spared and the oak felled; tidy fells a part-cut trunk. Should-fail: tidy leaves a leafless log wall.
 {:defaults
- {:tags [:forestry :fell-tree :harvest-wood :tidy :pillar] :time :day
+ {:tags [:forestry :fell-tree :harvest-wood :tidy :pillar]
   :plot {:height 24 :floor "grass_block"}
   :blocks [[:fill [16 0 16] [16 9 16] "oak_log"]
            [:fill [14 8 14] [18 10 18] "oak_leaves[persistent=true]"]

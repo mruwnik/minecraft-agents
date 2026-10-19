@@ -6,7 +6,6 @@
 ;; Should-fail: {:explore false} with no ore in sight waits no-source naming raw_iron; a nearly broken pick ends mine :no-tool.
 {:defaults
  {:tags [:items :obtain :jobs]
-  :time :day
   :plot {:height 12 :floor "grass_block"}
   :body {:at [16.5 0 16.5] :yaw 270 :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 120}

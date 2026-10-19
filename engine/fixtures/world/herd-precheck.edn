@@ -4,7 +4,6 @@
 ;; Should-succeed: none (the pen case gives up). Should-fail the walk: leaky pen (waiting :leaky) and no wheat (:stopped) both leave the body still at x 30.
 {:defaults
  {:tags [:herd :animals :jobs]
-  :time :day
   :plot {:length 100 :floor "grass_block"}
   :blocks [[:fill [80 0 13] [86 0 19] "oak_fence" :outline] [:fill [81 0 14] [85 0 18] "air"]
            [:set [80 0 16] "oak_fence_gate[facing=east,open=false]"]]

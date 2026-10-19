@@ -5,7 +5,7 @@
 ;; instead of running east past the box (keeps-clear-of-a-creeper-boxed-in-after-it-was-seen); its twin never saw the creeper and runs east.
 ;; Anchor: every flee step logs retreat.target.
 {:defaults
- {:tags [:survival :retreat] :time :day
+ {:tags [:survival :retreat]
   :plot {:height 12}
   :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
            [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]

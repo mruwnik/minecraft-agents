@@ -4,7 +4,7 @@
 ;; Time: run with --allow-time --time-log <the shared time log> (time set 11500 = 25 s of day left).
 {:defaults
  {:tags [:night :survival :dusk-home]
-  :time :day
+  :time :day :time-why :dawn-decision
   :plot {:length 340 :width 32 :height 8}
   :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]]}
   :limit-s 150}

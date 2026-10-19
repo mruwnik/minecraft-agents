@@ -4,7 +4,6 @@
 ;; Should-fail (control): leave-tunnel with :fetch false leaves the mouth open.
 {:defaults
  {:tags [:fetch :jobs]
-  :time :day
   :plot {:floor "grass_block" :height 12}
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 150}

@@ -4,7 +4,6 @@
 ;; Should-succeed: obtain.exploring within 60 s. Should-fail: the :explore false wait waits no-source naming cobblestone.
 {:defaults
  {:tags [:items :get-tool :explore :jobs]
-  :time :day
   :plot {:height 8 :floor "grass_block"}
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 70}

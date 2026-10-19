@@ -2,7 +2,7 @@
 ;; felled, the ripe hive is harvested (real perception must give honey_level as a number). Behind a thick wall: the
 ;; tree stays standing, the hive is untouched, the job ends with a clear reason.
 {:defaults
- {:tags [:forestry :apiary :sensing] :time :day
+ {:tags [:forestry :apiary :sensing]
   :plot {:height 16 :floor "grass_block"}
   :body {:at [6.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 90}

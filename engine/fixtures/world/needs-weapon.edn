@@ -2,7 +2,6 @@
 ;; Body with 4 cobblestone, 2 sticks and a table in the bag. Should-succeed: no sword -> a stone sword. Should-fail: an iron sword carried -> nothing made.
 {:defaults
  {:tags [:survival :needs-weapon :items]
-  :time :day
   :plot {:height 8}
   :register [{:trigger :needs-weapon}]
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
