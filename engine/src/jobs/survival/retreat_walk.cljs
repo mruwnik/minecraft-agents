@@ -194,9 +194,9 @@
   (reduce + 0 (map #(if (wet? block-at waterlogged? %) swim-factor 1) cells)))
 
 (defn gain
-  "Blocks farther from the threats at the end of a walk (at least 1; 1 for a walk with no end) the walk puts between the body and them: what its time buys."
+  "Blocks farther from the threats at the end of a walk (at least 1; 1 for a walk with no end or no threat) the walk puts between the body and them: what its time buys."
   [from threats end]
-  (if end
+  (if (and end (seq threats))
     (max 1 (- (apply min (map #(u/dist end %) threats)) (apply min (map #(u/dist from %) threats))))
     1))
 

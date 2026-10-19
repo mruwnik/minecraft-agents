@@ -67,7 +67,8 @@
 (deftest a-walk-is-priced-by-the-distance-it-gains
   (is (= 5.5 (/ (js/Math.round (* 10 (walk/gain from [threat] {:x 6 :y 64 :z 0}))) 10)) "straight away")
   (is (= 1 (walk/gain from [threat] {:x 0 :y 64 :z 1})) "a side step gains next to nothing: one")
-  (is (= 1 (walk/gain from [threat] nil))))
+  (is (= 1 (walk/gain from [threat] nil)))
+  (is (= 1 (walk/gain from [] {:x 6 :y 64 :z 0})) "no threat: nothing to gain on"))
 
 (deftest water-plants-and-a-bubble-column-are-wet
   (doseq [plant ["kelp" "kelp_plant" "seagrass" "tall_seagrass" "bubble_column"]]
