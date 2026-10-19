@@ -266,14 +266,15 @@
       (is (= #{:light} (:lowered-by (cost/exposure p {:x 15 :y 64 :z 0}))) "the grass cell is dark by day too; the air over it lowers at dawn")
       (is (= (cost/exposure p {:x 15 :y 65 :z 0}) (cost/exposure p {:x 15 :y 64 :z 0}))))))
 
-(deftest exposure-of-a-dark-cell-is-lowered-by-dawn-only-under-the-open-sky
-  (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}}}))
-        at (fn [sky] (with-redefs [sh-sense/seen-cell? (constantly true) sh-sense/block-light-at (constantly 0)
-                                   sh-sense/sky-light-at (constantly sky) sh-inside/walk-leaves-shelter? (constantly nil)]
-                       (:lowered-by (cost/exposure p {:x 15 :y 64 :z 0}))))]
-    (is (= #{:light} (at 15)) "open sky: the night is lifted at dawn")
-    (is (= #{} (at 12)) "a stair cell the sky reaches only round a corner: dawn is no cure, only threats count")
-    (is (= #{} (at 0)))))
+(deftest exposure-of-a-dark-cell-is-lowered-by-dawn-where-the-sky-reaches-down-its-column
+  (let [at (fn [sky blocks] (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks blocks}))]
+                              (with-redefs [sh-sense/seen-cell? (constantly true) sh-sense/block-light-at (constantly 0)
+                                            sh-sense/sky-light-at (constantly sky) sh-inside/walk-leaves-shelter? (constantly nil)]
+                                (:lowered-by (cost/exposure p {:x 15 :y 64 :z 0})))))]
+    (is (= #{:light} (at 15 {})) "open sky: the night is lifted at dawn")
+    (is (= #{:light} (at 13 {"15,70,0" "oak_leaves"})) "under a canopy the sky is dimmed but dawn still lights the floor")
+    (is (= #{} (at 12 {"15,67,0" "stone"})) "a stair cell the sky reaches only round a corner: dawn is no cure, only threats count")
+    (is (= #{} (at 0 {})))))
 
 (def far {:x 100 :y 64 :z 0})
 

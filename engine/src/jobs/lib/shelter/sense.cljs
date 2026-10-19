@@ -273,3 +273,9 @@
   "Whether some cell within default-roof-height over goal is seen and not solid: rock shows no cell beyond its face."
   [p goal]
   (boolean (some #(some-> (u/seen-name p (update goal :y + %)) solid/solid? not) (range 1 (inc default-roof-height)))))
+
+(defn sky-reaches-from-above?
+  "Whether sky light reaches the cell straight down its own column: some sky light there and no solid block seen over it within 32 cells (leaves let it through dimmed; a stair step lit round a corner has stone over it)."
+  [p cell]
+  (and (pos? (or (sky-light-at p cell) 0))
+       (not-any? #(solid-at? p (update cell :y + %)) (range 1 33))))

@@ -11,6 +11,7 @@
             [jobs.explore.search :as search]
             [jobs.movement.look-around :as look-around]
             [jobs.access.stair :as stair]
+            [jobs.build.light-area :as light-area]
             [jobs.blocks.fill-cells :as fill-cells]
             [jobs.blocks.place :as place]
             [jobs.lib.ready :as ready]
@@ -288,6 +289,8 @@
   (are [world job args expected] (= expected (lit 0 15 #(first ((:safe? job) (assoc (ctx-of world) :args args)))))
     open-night {:safe? place/safe?} {:pos [15 64 0]} :later
     night-hut {:safe? place/safe?} {:pos [6 64 0]} :ok
+    open-night {:safe? light-area/safe?} {:cells [[15 64 0]]} :later
+    night-hut {:safe? light-area/safe?} {:cells [[6 64 0]]} :ok
     open-night {:safe? fill-cells/safe?} {:cells [[15 64 0]]} :later
     night-hut {:safe? fill-cells/safe?} {:cells [[6 64 0]]} :ok
     open-night {:safe? stair/safe?} {:submitted-at {:x 0 :y 64 :z 0}} :later
@@ -341,7 +344,7 @@
       'jobs.food.fish {:pos [6 64 0]} night-hut :ok)))
 
 (deftest farm-and-build-jobs-bind-the-place-of-their-args
-  (doseq [job work-jobs]
+  (doseq [job (remove '#{jobs.build.light-area} work-jobs)]
     (are [args world expected] (= expected (lit 0 15 #(bound (safe-of job) world args)))
       {:at [15 64 0]} night-hut :later
       {:at [6 64 0]} night-hut :ok)))
