@@ -160,19 +160,22 @@
       [state {:done {:status :replan :why :pushed :cells [cell] :at at :step before}
               :warn {:cell cell :step before :at at}}]
       (let [{:keys [k gstate done]} (wsight/sense gate steps (:gate state) i pose)
-            pre (prefix (:steps exec) steps k)
-            exec (cond-> (assoc exec :steps pre) (>= (:i exec) (count pre)) (assoc :i (dec (count pre))))
-            {exec' :state edone :done :keys [controls yaw pitch]} (executor/tick policy exec pose)
-            held? (and k (= (:i exec') (dec k)))
-            on? (and k (wsight/on-takeoff? (nth steps (dec k)) held? gstate pose))
-            edone (when-not (or (and held? (= :arrived (:status edone))) (and on? (= :stuck (:status edone)))) edone)
-            done (or done edone (when watch-stop (watch-stop i exec' pose)))
-            base {:controls (gait-controls policy exec' pose controls) :yaw yaw :pitch pitch}]
-        (cond
-          done [(assoc state :exec exec' :gate gstate) {:done done}]
-          (nil? k) [(assoc state :exec exec' :gate gstate) base]
-          :else (let [{:keys [out done] gstate' :gstate} (wsight/control gate steps k (:i exec') gstate pose base)]
-                  [(assoc state :exec exec' :gate gstate') (if done {:done done} out)]))))))
+            settling? (and done (< (:settled gstate 0) wsight/settle-ticks) (wsight/moving? pose))]
+        (if settling?
+          [(assoc state :gate (update gstate :settled (fnil inc 0))) (wsight/settle gate steps k pose)]
+          (let [pre (prefix (:steps exec) steps k)
+                exec (cond-> (assoc exec :steps pre) (>= (:i exec) (count pre)) (assoc :i (dec (count pre))))
+                {exec' :state edone :done :keys [controls yaw pitch]} (executor/tick policy exec pose)
+                held? (and k (= (:i exec') (dec k)))
+                on? (and k (wsight/on-takeoff? (nth steps (dec k)) held? gstate pose))
+                edone (when-not (or (and held? (= :arrived (:status edone))) (and on? (= :stuck (:status edone)))) edone)
+                done (or done edone (when watch-stop (watch-stop i exec' pose)))
+                base {:controls (gait-controls policy exec' pose controls) :yaw yaw :pitch pitch}]
+            (cond
+              done [(assoc state :exec exec' :gate gstate) {:done done}]
+              (nil? k) [(assoc state :exec exec' :gate gstate) base]
+              :else (let [{:keys [out done] gstate' :gstate} (wsight/control gate steps k (:i exec') gstate pose base)]
+                      [(assoc state :exec exec' :gate gstate') (if done {:done done} out)]))))))))
 
 (defn standing-pose
   "pose with :on-climbable off for a body on the ground in scaffolding: it stands on the scaffolding under it, so the

@@ -186,6 +186,17 @@
     (let [[s' out] (walk/decide-tick e s pose)]
       (if (or (:done out) (>= t n)) [t out] (recur s' (inc t))))))
 
+(deftest a-floor-seen-changed-while-the-body-still-moves-brakes-first-then-ends-the-walk
+  ;; releasing the keys at once slides a walking body 0.3 blocks on, off the end of its takeoff
+  (let [e (env (constantly "lava"))
+        s0 (assoc-in (walk/start-state (:steps e) {:x 3.5 :z 0.5}) [:exec :i] 2)
+        moving (assoc still :x 3.8 :vx 0.2)
+        [s1 out1] (walk/decide-tick e s0 moving)
+        [_ out2] (walk/decide-tick e s1 (assoc still :x 3.9))]
+    (is (nil? (:done out1)) "moving: the walk is not ended yet")
+    (is (not (:forward (:controls out1))) (pr-str out1))
+    (is (= :changed (:why (:done out2))) "still: the walk ends")))
+
 (deftest a-walk-that-starts-on-a-takeoff-is-held-there
   (let [steps (ws/mark-steps (subvec road 2) (fn [x y z] (= [4 61 0] [x y z])))
         e (assoc (env (constantly nil)) :steps steps)

@@ -241,6 +241,23 @@
 
 (defn floor-name [floors cell] (when floors (floors cell)))
 
+(def settle-ticks "Most ticks a body brakes at a gate that ended the walk before the walk lets go of the keys." 20)
+
+(defn moving?
+  "A body on the ground that still has speed: released keys would slide it on."
+  [{:keys [on-ground vx vz]}]
+  (and on-ground (pos? (js/Math.hypot (zeroed (or vx 0)) (zeroed (or vz 0))))))
+
+(defn settle
+  "The controls for one tick that stop a body at pose before the walk ends at gate step k: the stop controller's brake
+  inside the takeoff's safe box, looking at the floor. Letting go of the keys instead slides the body past the peek point."
+  [{:keys [floors opts]} steps k pose]
+  (let [tk (nth steps (dec k)) g (nth steps k)
+        box (safe-box (when (>= k 2) (nth steps (- k 2))) tk g opts)
+        [yaw pitch] (look-at pose (floor-cell g))
+        model (if (:on-ground pose) (floor-model (floor-name floors (support-cell pose))) (air))]
+    {:controls (:controls (hold box [(:x pose) (:z pose)] model yaw pose)) :yaw yaw :pitch pitch}))
+
 (defn models-ahead
   "The models a stop on the way to the takeoff may brake under: the floor under the body, the takeoff's floor, and the air
   when the body is in the air or a step up to the takeoff leaves the ground (a drop or jump)."

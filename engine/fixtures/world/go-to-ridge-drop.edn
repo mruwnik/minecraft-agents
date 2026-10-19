@@ -1,0 +1,29 @@
+;; jobs.movement.go-to :unknown from a ridge: the straight way to the goal column is off a 12-high cliff (a fall costing hp the body may
+;; not spend), the safe way is the ramp at the plateau's far end. Should-succeed: arrives by the ramp and takes no fall damage.
+;; Second case: a plateau whose east edge steps down 1 a column and ends in a 12 cliff (more than the walk may spend hp on), no way down: the walk gives up and the body stays unhurt.
+;; Plateau x 0..45, z 8..24, top y 11 (feet 12); ramp x 46..57 one lower per step; goal column beside the cliff foot at (30, 4).
+{:defaults
+ {:tags [:movement :go-to :unknown]
+  :time :any
+  :plot {:height 16 :length 90 :width 32}
+  :body {:at [2.5 12 16.5] :settle-s 2}
+  :limit-s 200}
+ :cases
+ [{:name "unknown-column-goal-below-a-cliff-walks-the-ramp-unhurt"
+   :blocks [[:fill [0 0 8] [45 11 24] "stone"]
+            [:fill [46 0 8] [46 10 24] "stone"] [:fill [47 0 8] [47 9 24] "stone"] [:fill [48 0 8] [48 8 24] "stone"]
+            [:fill [49 0 8] [49 7 24] "stone"] [:fill [50 0 8] [50 6 24] "stone"] [:fill [51 0 8] [51 5 24] "stone"]
+            [:fill [52 0 8] [52 4 24] "stone"] [:fill [53 0 8] [53 3 24] "stone"] [:fill [54 0 8] [54 2 24] "stone"]
+            [:fill [55 0 8] [55 1 24] "stone"] [:fill [56 0 8] [56 0 24] "stone"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [30 4] :range 0 :unknown true})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 180 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 180 :until {:source :job :kind :result}}]
+   :after [[:body-near [30.5 0 4.5] 2]]}
+  {:name "unknown-column-goal-past-a-stepped-cliff-end-gives-up-unhurt"
+   :body {:at [2.5 15 16.5]}
+   :blocks [[:fill [0 0 8] [30 14 24] "stone"]
+            [:fill [31 0 8] [31 13 24] "stone"] [:fill [32 0 8] [32 12 24] "stone"] [:fill [33 0 8] [33 11 24] "stone"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [60 16] :range 0 :unknown true})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 180 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 180 :until {:source :job :kind :result}}]
+   :after [[:body-far [34.5 0 16.5] 8]]}]}
