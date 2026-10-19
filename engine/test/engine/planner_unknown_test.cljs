@@ -2,7 +2,7 @@
   "options.unknown: a cell the body has not seen reads as void_air (air for the body); a stand on an unseen floor is a
   phantom floor, allowed only where the walk can check it first (gate-checkable) and see it (seeDepth, seeLit, or a torch
   at a lightable takeoff), and priced. No proof rests on an unseen cell. Off (nil): plans as before."
-  (:require [cljs.test :refer [deftest is testing]]
+  (:require [cljs.test :refer [are deftest is testing]]
             [engine.path.blocks :as blocks]
             [engine.path.fixture :as fx]
             [engine.path.planner-tuned :as planner]
@@ -346,3 +346,13 @@
 (deftest light-depth-is-an-option
   (is (found? (run drop-2 (pf/near 1 62 2) (lights {:lightDepth 2}))))
   (is (not (found? (run drop-2 (pf/near 1 62 2) (lights {:lightDepth 1}))))))
+
+(deftest a-goal-with-no-y-is-refused-at-once
+  (let [^js w (line [0 63 "stone"] [1 63 "stone"] [2 63 "stone"])
+        void (first (blocks/state-ids @pf/table "void_air"))
+        ;; (a masked snapshot, as the go-to bench's: every cell the body has not seen reads void_air)
+        masked (doto (js/Object.create w) (set! -stateAt (fn [x y z] (if (js/Number.isFinite y) (.stateAt w x y z) void))))]
+    (are [world options] (= "goal-not-standable" (:reason (run world (dissoc (pf/near 2 64 2 2) :y) options)))
+      w {}
+      masked {}
+      masked (unk {:id void :seeDepth 4 :seeLit (fn [_ _ _] 1) :known (fn [_ _ _] nil)}))))

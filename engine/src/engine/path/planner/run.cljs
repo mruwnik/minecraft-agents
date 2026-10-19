@@ -77,7 +77,12 @@
   (begin [s]
     (set! (.-started s) true)
     (set! (.-t0 s) (js/performance.now))
-    (let [problem (if (neg? (.-start-h s)) "start-not-standable" (.goalStandProblem s))]
+    (let [problem (cond
+                    (neg? (.-start-h s)) "start-not-standable"
+                    ;; a near goal with a NaN coordinate has no standable cell, but a masked snapshot's nodeH spins on it
+                    (and ^boolean (.-near s) (not ^boolean (js/Number.isFinite (+ (.-goal-x s) (.-goal-y s) (.-goal-z s)))))
+                    "goal-not-standable"
+                    :else (.goalStandProblem s))]
      (if (some? problem)
       (.finish s problem)
       (do
