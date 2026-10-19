@@ -4,8 +4,10 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.hostile-fight :as hostile]
             [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
             [jobs.lib.vantage :as vantage]
             [jobs.lib.cost.weapon :as weapon]
@@ -24,7 +26,7 @@
   reach (jobs.lib.near/go-near!, doors :shut, each leg bounded by :walk-timeout-s) and swings, again and again until
   it ends. Swings at most once per :attack-gap-ms (nil: the held weapon's cooldown); the rest of the gap is spent looking
   round and waiting.
-  It does not swing when the entity's `hittable` sensing is false (no clear line to its hitbox, for example glass).
+  It does not swing when the entity's `hittable` sensing is false (no clear line to its hitbox, for example glass), except in a :hostiles fight.
   It walks closer instead, and counts that as a blocked walk.
   A target is given up on, with a :reason:
   - :unreachable: three blocked walks or out-of-reach swings in a row. A landed hit resets the count.
@@ -42,11 +44,25 @@
   - :condition-failed :absent: no target was present after a look round and, for a target heard but not seen, up to four steps toward the sound (jobs.lib.vantage).
   :absent :done (the default) lets the job start and end with :absent, so {:targets [123 \"zombie\"]} is a one-shot order.
   :absent :wait makes the call wait (can-start? :no-target) until a target is present, so {:targets \"zombie\" :absent :wait} repeated is a standing guard.
-  Creepers get no special handling. The job does not guard the body's health: the survival register sits above it and cuts it.")
+  Creepers get no special handling. The job does not guard the body's health: the survival register sits above it and cuts it.
+  {:targets :hostiles} is the reflex fight (respond-to-hostile, retreat-cornered): the dangers near are the targets, hostiles within :radius
+  (ranged ones within :ranged-radius, default :radius), except the ids in :skip. Only a hostile the body has seen is fought: one only heard is judged
+  by its direction and band (jobs.lib.danger), never walked to or hit, and the job does not start with only heard ones in range (:no-target);
+  one that goes unseen mid-fight is turned toward and the job ends :nothing-possible :heard-only. A hostile more than :leash (default 20, setting
+  hostile-fight/::leash) blocks from where the fight began is not chased (with none other in range: not started; one that falls past it mid-fight: :given-up).
+  With :hold the body stays where it is: a melee hostile beyond reach is waited for, until hostile-fight/::hold-s (15) seconds pass with no swing
+  (:nothing-possible :hold-timeout); a ranged one is still walked up to. A ranged hostile farther than hostile-fight/::ranged-chase (6) is not
+  walked to while another is in range (:nothing-possible :too-far). Done (:cleared, even before the start) when no hostile is in range. When the body
+  lost health since the call began the job yields (:continue) so the parent decides again. A walk that is blocked counts again from 1 when the body lost
+  health since the last one. Every ending but :done is a decline whose data also carry :struck {id {:name :hits :health}} and the job :memory.")
 
 (a/defargs args
-  {:targets {:doc "entity ids, player usernames and mob types to kill; a single one may be given bare" :spec (a/or-of number? string? (a/coll-of (a/or-of number? string?))) :default []}
+  {:targets {:doc "entity ids, player usernames and mob types to kill; a single one may be given bare" :spec (a/or-of number? string? #{:hostiles} (a/coll-of (a/or-of number? string?))) :default []}
    :radius {:doc "targets within this many blocks count" :spec (a/num-in 0 nil) :default 16}
+   :ranged-radius {:doc "with :hostiles, ranged hostiles (skeletons and the like) within this many blocks count; nil: :radius" :spec (a/num-in 0 nil) :default nil}
+   :leash {:doc "with :hostiles, hostiles farther than this from where the fight began are not chased; nil: the setting" :spec (a/num-in 0 nil) :default nil}
+   :hold {:doc "with :hostiles, true: never walk toward a melee mob; strike one that comes within reach" :spec boolean? :default false}
+   :skip {:doc "with :hostiles, entity ids already dead: not fought" :spec (a/coll-of number?) :default []}
    :attack-gap-ms {:doc "least time between swings; nil: the held weapon's cooldown" :spec (a/num-in 0 nil) :default nil}
    :no-damage-hits {:doc "swings in a row that do no damage before a target is given up on" :spec (a/int-in 1 nil) :default 4}
    :walk-timeout-s {:doc "bound of one walk towards a target" :spec (a/num-in 0 nil) :default 5}
@@ -112,8 +128,10 @@
 (defn candidates
   "The present targets not given up on."
   [c]
-  (let [given-up (:given-up (ctx/mem c) {})]
-    (into [] (remove #(contains? given-up (.-id %))) (present c))))
+  (if (hostile/hostiles? c)
+    (hostile/targets c)
+    (let [given-up (:given-up (ctx/mem c) {})]
+      (into [] (remove #(contains? given-up (.-id %))) (present c)))))
 
 (defn heard
   "The unseen animals the body hears within :radius that :targets name (an id or a mob type)."
@@ -123,11 +141,11 @@
     (filterv #(or (wanted (:id %)) (wanted (:name %))) (vantage/heard c nil radius))))
 
 (def no-target
-  "With :absent :wait: later :no-target while no target is present."
+  "With :absent :wait, or :targets :hostiles: later :no-target while no target is present (for :hostiles, one the body has seen)."
   (checks/refusing
    :target "a target is present"
    (fn [c]
-     (when (and (= :wait (:absent (:args c))) (empty? (candidates c)))
+     (when (and (or (hostile/hostiles? c) (= :wait (:absent (:args c)))) (empty? (candidates c)))
        {:reason :no-target}))))
 
 (def can-start? no-target)
@@ -148,7 +166,9 @@
   (let [{:keys [killed seen]} (ctx/mem c)
         dead? (set killed)
         data [:units :targets :done (count killed) :left (count (remove dead? seen))]
-        cleared? (and (seq seen) (every? dead? seen) (empty? (present c)))]
+        cleared? (if (hostile/hostiles? c)
+                   (empty? (hostile/in-range c))
+                   (and (seq seen) (every? dead? seen) (empty? (present c))))]
     (if cleared?
       (apply contract/ok :cleared "every target is killed" (conj data :result (fight-data c :cleared)))
       (apply contract/later :fighting "the fight is on" (conj data :result (fight-data c :limit-reached))))))
@@ -173,11 +193,21 @@
   [c target reason]
   (ctx/update-mem! c #(-> % (assoc-in [:given-up (.-id target)] reason) (assoc-in [:names (.-id target)] (display-name target)))))
 
+(defn fail-count
+  "mem's failure count for target id after one more failure with the body at health: it starts over when the body lost
+  health since the last failure (a mob that keeps hurting it is not given up on)."
+  [mem id health]
+  (if (< health (get-in mem [:fail-health id] ##-Inf))
+    1
+    (inc (get-in mem [:fails id] 0))))
+
 (defn fail!
   "Count a blocked walk or out-of-reach swing at target; give up at u/max-failures."
   [c target]
-  (let [n (inc (get-in (ctx/mem c) [:fails (.-id target)] 0))]
-    (ctx/update-mem! c assoc-in [:fails (.-id target)] n)
+  (let [id (.-id target)
+        health (.-health (.self (:primitives c)))
+        n (fail-count (ctx/mem c) id health)]
+    (ctx/update-mem! c #(-> % (assoc-in [:fails id] n) (assoc-in [:fail-health id] health)))
     (when (>= n (u/max-failures)) (give-up! c target :unreachable))))
 
 (defn reset-fails!
@@ -207,6 +237,7 @@
     (ctx/update-mem! c (fn [m]
                          (cond-> (-> m
                                      (update-in [:hits id] (fnil inc 0))
+                                     (assoc-in [:names id] (display-name target))
                                      (assoc-in [:quiet id] (if quiet? (inc (get-in m [:quiet id] 0)) 0)))
                            (number? h) (assoc-in [:health id] h))))
     (let [{:keys [hits quiet]} (ctx/mem c)
@@ -215,14 +246,27 @@
         (>= (get quiet id 0) no-damage-hits) (give-up! c target :no-damage)
         (>= (get hits id 0) (max-hits)) (give-up! c target :too-many-hits)))))
 
+(defn walk-opts
+  "The options of one walk towards a target: a :hostiles fight leaves doors as they are and aims again every ::chase-timeout-s, the mob moves."
+  [c]
+  (merge {:dangers false :ways #{:walk :clear-seal} :look-round false}
+         (if (hostile/hostiles? c)
+           {:spend {:job-time (hostile/chase-timeout-s)}}
+           {:doors :shut :spend {:job-time (:walk-timeout-s (:args c))}})))
+
+(def chase-gap-ms "How long a held body waits for a mob to come before it looks again." 200)
+
 (defn ^:async walk!
   "Walk within reach of target when further than reach (near/go-near! range 2, doors :shut, each leg bounded by
   :walk-timeout-s). Resolves to :there (no walk needed), :arrived (the walk got within range), :partial or :blocked."
   [c target]
   (let [tpos (u/pos-of (.-pos target))]
-    (if (<= (u/dist (u/self-pos c) tpos) (reach))
-      :there
-      (case (await (near/go-near! c tpos 2 {:doors :shut :spend {:job-time (:walk-timeout-s (:args c))} :dangers false :ways #{:walk :clear-seal} :look-round false}))
+    (cond
+      (<= (u/dist (u/self-pos c) tpos) (reach)) :there
+      (and (:hold (:args c)) (not (combat/ranged? target))) (do (await (combat/wait-gap! c (ctx/now c) chase-gap-ms))
+                                                                 :held)
+      :else
+      (case (await (near/go-near! c tpos 2 (walk-opts c)))
         :there :arrived
         :partial :partial
         :blocked))))
@@ -246,13 +290,14 @@
 (defn ^:async close-in!
   "Walk right up to a target that cannot be hit from here, and count a failure."
   [c target]
-  (await (near/go-near! c (u/pos-of (.-pos target)) 1 {:doors :shut :spend {:job-time (:walk-timeout-s (:args c))} :dangers false :ways #{:walk :clear-seal} :look-round false}))
+  (await (near/go-near! c (u/pos-of (.-pos target)) 1 (walk-opts c)))
   (fail! c target))
 
 (defn ^:async swing-or-close-in!
-  "Swing at target unless it reports hittable false (a block in the way): then close in."
+  "Swing at target unless it reports hittable false (a block in the way): then close in. A :hostiles fight swings regardless:
+  a mob hitting the body through a gap the sensing does not show must still be struck back."
   [c target walked?]
-  (if (false? (.-hittable target))
+  (if (and (false? (.-hittable target)) (not (hostile/hostiles? c)))
     (await (close-in! c target))
     (await (swing! c target walked?))))
 
@@ -291,7 +336,7 @@
   (case (await (walk! c target))
     :there (await (swing-or-close-in! c target false))
     :arrived (await (swing-or-close-in! c target true))
-    :partial nil
+    (:partial :held) nil
     (fail! c target))
   :again)
 
@@ -309,6 +354,37 @@
     (await (combat/wait-gap! c (:last-attack (ctx/mem c)) (combat/gap-ms c)))
     (let [left (- (+ (:last-attack (ctx/mem c)) (swing-gap-ms c target)) (ctx/now c))]
       (when (pos? left) (await (ctx/act c :wait #js {:ms left}))))))
+
+(defn declined
+  "The ending of a :hostiles fight that stops with hostiles left, for the retreat to take over: cause, the fight's data,
+  the hits that landed (:struck) and the job :memory."
+  [c cause]
+  (let [m (dissoc (ctx/mem c) :contract)]
+    (ctx/end c :nothing-possible cause (assoc (fight-data c cause) :struck (hostile/struck m) :memory m))))
+
+(defn ^:async hostile-step
+  "One step of a :hostiles fight: decline (hold ran out, ranged mob too far, only heard, all given up), yield when the body was hurt,
+  look at a heard mob, wait out the swing gap, or swing once. :again, :continue or an ending."
+  [c]
+  (let [p (:primitives c)
+        target (first (hostile/targets c))
+        last-attack (:last-attack (ctx/mem c))]
+    (when-not (:start (ctx/mem c)) (ctx/update-mem! c assoc :start (u/self-pos c) :started-at (ctx/now c)))
+    (cond
+      (and target (hostile/held-idle? c)) (declined c :hold-timeout)
+      (and target (hostile/too-far-to-chase? c target)) (declined c :too-far)
+      (and last-attack (< (.-health (.self p)) (:health0 (ctx/mem c)))) :continue
+      (nil? target) (if-let [heard (hostile/heard c)]
+                      (do (await (ctx/act c :look (let [{:keys [x y z]} (danger-q/mob-pos p heard)] #js {:pos #js {:x x :y (+ 1 y) :z z}})))
+                          (declined c :heard-only))
+                      (if (seq (hostile/in-range c)) (declined c :given-up) (finish! c :cleared)))
+      (combat/within-gap? c (swing-gap-ms c target)) (do (await (wait-swing-gap! c target)) :again)
+      :else (do (ctx/update-mem! c update :seen (fnil conj #{}) (.-id target))
+                (await (engage! c target))
+                (cond
+                  (empty? (hostile/in-range c)) (finish! c :cleared)
+                  (empty? (hostile/targets c)) (declined c :given-up)
+                  :else :again)))))
 
 (defn ^:async step
   "One step of the fight: end, look for a lost target, wait out the swing gap, or walk and swing once. :again or the ending."
@@ -331,6 +407,9 @@
 (defn ^:async round
   "The whole fight: steps until the job finishes (cleared, gave up, lost, absent) or the engine's limit ends it."
   [c]
-  (await (pace/steps! c #(step c))))
+  (if (hostile/hostiles? c)
+    (do (ctx/update-mem! c assoc :health0 (.-health (.self (:primitives c))))
+        (await (pace/steps! c #(hostile-step c))))
+    (await (pace/steps! c #(step c)))))
 
 (def meta {:tags [:fight]})

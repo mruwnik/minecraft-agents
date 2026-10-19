@@ -1,5 +1,5 @@
 (ns engine.reflex-contract-test
-  "survival.fight-back, block-arrow-gap and extinguish as contract jobs: they export the contract, quote validly, and
+  "combat.attack (:hostiles), block-arrow-gap and extinguish as contract jobs: they export the contract, quote validly, and
   end with a kind and a cause."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.block-arrow-gap-test :as gt]
@@ -12,14 +12,14 @@
             [engine.test-util :as tu]
             [jobs.survival.block-arrow-gap :as gap]
             [jobs.survival.extinguish :as extinguish]
-            [jobs.survival.fight-back :as fight-back]
+            [jobs.lib.hostile-fight :as hostile]
             [engine.settings :as settings]
             [jobs.survival.respond-to-hostile :as respond]))
 
 (defn job [sym] (get registry/jobs sym))
 
 (deftest each-job-exports-the-contract-and-quotes-validly
-  (doseq [sym ['jobs.survival.fight-back 'jobs.survival.block-arrow-gap 'jobs.survival.extinguish 'jobs.survival.respond-to-hostile]]
+  (doseq [sym ['jobs.combat.attack 'jobs.survival.block-arrow-gap 'jobs.survival.extinguish 'jobs.survival.respond-to-hostile]]
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
     (is (nil? (contract/quote-problem ((:quote-of (job sym)) {:primitives (tu/fake {}) :args {} :quote-call {}}))) (str sym))))
@@ -37,7 +37,7 @@
    :view (fn [] {:now 100000000 :data {:entries {:job/j1 [{:t 0 :data mem}]} :policies {:job/j1 {:cap 1 :ttl :forever}}}})})
 
 (deftest a-held-fight-waits-hold-s-from-its-last-swing-not-from-its-start
-  (are [args mem idle?] (= idle? (boolean (fight-back/held-idle? (hold-ctx args mem))))
+  (are [args mem idle?] (= idle? (boolean (hostile/held-idle? (hold-ctx args mem))))
     {:hold true} {:started-at 0} true
     {:hold true} {:started-at 0 :last-attack 99999000} false
     {:hold true} {:started-at 99999000} false
@@ -45,7 +45,7 @@
     {} {:started-at 0} false))
 
 (defn ^:async fight [args world]
-  (await (sc/ending-of #(tu/fake-on-floor (merge {:floor h/flight-floor} world)) (list 'jobs.survival.fight-back args))))
+  (await (sc/ending-of #(tu/fake-on-floor (merge {:floor h/flight-floor} world)) (list 'jobs.combat.attack (merge {:radius 4 :ranged-radius 16} args {:targets :hostiles})))))
 
 (deftest a-cleared-fight-is-done
   (async done

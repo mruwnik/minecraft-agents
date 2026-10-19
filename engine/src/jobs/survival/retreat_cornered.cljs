@@ -75,9 +75,9 @@
         radius (if reach-only? (min radius (hit-reach)) radius)
         ranged-radius (if reach-only? radius ranged-radius)]
     (ctx/update-mem! c assoc :cornered true)
-    (let [r (await (ctx/call c :cornered 'jobs.survival.fight-back
-                             {:range radius :ranged-range ranged-radius :use {:tools (mapv name weapons)}
-                              :skip (flight/dead-ids c)}))
+    (let [r (await (ctx/call c :cornered 'jobs.combat.attack
+                             {:targets :hostiles :radius radius :ranged-radius ranged-radius :use {:tools (mapv name weapons)}
+                              :skip (flight/dead-ids c) :checks {:safe? '(always) :fit? '(always)}}))
           ended (when (contract/ending? r) r)]
       (ctx/update-mem! c update :dead #(into (vec %) (concat (get-in (ctx/mem c) [:children :cornered :killed])
                                                              (:killed (:data ended)))))

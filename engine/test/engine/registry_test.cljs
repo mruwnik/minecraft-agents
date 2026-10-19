@@ -11,7 +11,7 @@
 
 (def migrated
   '#{jobs.survival.breathe jobs.survival.unwedge jobs.survival.extinguish
-     jobs.survival.cure jobs.survival.respond-to-hostile jobs.survival.fight-back jobs.survival.retreat
+     jobs.survival.cure jobs.survival.respond-to-hostile jobs.survival.retreat
      jobs.food.fish jobs.survival.eat jobs.survival.get-food jobs.survival.go-home
      jobs.survival.sleep jobs.survival.set-spawn jobs.survival.night jobs.survival.bed-down jobs.survival.shut-in jobs.survival.wall-in jobs.survival.dig-pit jobs.survival.dig-pocket jobs.survival.log-out
      jobs.combat.attack jobs.animals.breed jobs.animals.shear jobs.animals.cull jobs.animals.tend jobs.animals.pen-check jobs.animals.shut-gate jobs.animals.leash jobs.animals.unleash jobs.animals.lead-to jobs.animals.lure-to jobs.survival.recover-drops jobs.survival.restore-broken jobs.maintenance.shut-doors jobs.storage.make-room

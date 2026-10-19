@@ -1,5 +1,5 @@
-;; fight-back counts a hit only when the attack did damage (card a655e658, commit 4c84db24): a killable mob dies in a few
-;; swings; an Invulnerable zombie is given up on after 3 no-damage swings (fight-back ends :given-up) and not swung at again.
+;; a :hostiles attack counts a hit only when the attack did damage (card a655e658, commit 4c84db24): a killable mob dies in a few
+;; swings; an Invulnerable zombie is given up on after 4 no-damage swings (the attack ends :given-up) and not swung at again.
 ;; Mobs are NoAI and helmeted (they never hurt, no sun burn).
 {:defaults
  {:tags [:hostile :combat] :time :any

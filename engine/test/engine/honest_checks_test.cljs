@@ -106,7 +106,7 @@
     'jobs.movement.leave-vehicle
     'jobs.survival.breathe
     'jobs.survival.extinguish
-    'jobs.survival.fight-back
+    'jobs.combat.attack
     'jobs.survival.unwedge))
 
 (deftest a-blank-or-non-string-item-is-refused-at-submit

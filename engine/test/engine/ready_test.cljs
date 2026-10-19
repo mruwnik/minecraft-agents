@@ -189,7 +189,7 @@
     (is (= [[15 64 0]] (:look-at (nth s 2))))))
 
 (def escapes
-  '[respond-to-hostile fight-back block-arrow-gap unwedge breathe extinguish night dig-pocket retreat shut-in])
+  '[respond-to-hostile block-arrow-gap unwedge breathe extinguish night dig-pocket retreat shut-in])
 
 (def healers '[bed-down sleep go-home])
 

@@ -41,9 +41,9 @@
   (let [p (tu/fake-on-floor {:floor h/flight-floor :inventory h/sword :entities [(h/zombie 7 3 0)]})]
     (.override (.-world p) "attack" (fn [token a impl] (-> (impl token a) (.then (fn [r] (fake/swap-self! p assoc :health 15) r)))))
     p))
-(def slow-fight '(jobs.survival.fight-back))
+(def slow-fight '(jobs.combat.attack {:targets :hostiles :radius 4 :ranged-radius 16}))
 
-(deftest a-running-fight-back-is-done-when-its-last-target-died
+(deftest a-running-hostile-attack-is-done-when-its-last-target-died
   (async done
     (tu/run-async done
       (fn ^:async t []

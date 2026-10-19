@@ -8,6 +8,7 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.settings :as settings]
+            [jobs.lib.hostile-fight :as hostile]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.pace :as pace]
@@ -21,7 +22,7 @@
             [jobs.lib.util :as u]))
 
 (def doc
-  "A hostile is near: fight it (jobs.survival.fight-back, best weapon equipped) when the odds are fair,
+  "A hostile is near: fight it (jobs.combat.attack, best weapon equipped) when the odds are fair,
   else retreat (jobs.survival.retreat).
   One whole attempt per round: decides afresh before each call of the child, while a danger is near.
   Under a roof at night, with every danger only heard or a flyer, it stays in (hostile.sealed-hold) and fights only what comes within reach.
@@ -99,7 +100,7 @@
 
 (def other {:fight :flee :flee :fight})
 
-(def child-jobs {:fight 'jobs.survival.fight-back :flee 'jobs.survival.retreat})
+(def child-jobs {:fight 'jobs.combat.attack :flee 'jobs.survival.retreat})
 
 (defn hold?
   "Whether the fight stays where it is: at night, with more than one hostile known (the ones in view are not all there are),
@@ -112,7 +113,7 @@
 
 (defn stay-under-roof?
   "Whether the body keeps its roof: :stay-inside on, night, a roof over the feet, and every danger near either only heard
-  or a flyer (a phantom cannot get under a roof), none a creeper or an enderman. Fight-back then holds and the retreat does not run."
+  or a flyer (a phantom cannot get under a roof), none a creeper or an enderman. The fight then holds and the retreat does not run."
   [c hs]
   (let [p (:primitives c)]
     (boolean (and (:stay-inside (:args c))
@@ -127,8 +128,8 @@
   or a retreat that ended :condition-failed: the other child may run), or the ending of a retreat that ended otherwise."
   [c decision {:keys [radius ranged-radius reserve]} hold]
   (let [child-args (case decision
-                     :fight {:range radius :ranged-range ranged-radius :use {:tools (weapons c)}
-                             :hold (or hold (hold? c))}
+                     :fight {:targets :hostiles :radius radius :ranged-radius ranged-radius :use {:tools (weapons c)}
+                             :hold (or hold (hold? c)) :checks {:safe? '(always) :fit? '(always)}}
                      :flee {:radius radius :ranged-radius ranged-radius :use {:tools (weapons c)} :reserve reserve
                             :goal (:goal (ctx/mem c))})
         e (await (ctx/call c decision (child-jobs decision) child-args))]
@@ -155,7 +156,7 @@
 
 (defn mob-of
   "What fight-damage needs of hostile e: its name, distance (jobs.lib.danger/mob-distance: a heard one by its band) and
-  the hits fight-back has landed on it (struck, its :struck entry, or nil)."
+  the hits the attack has landed on it (struck, its :struck entry, or nil)."
   [p struck e]
   (cond-> {:name (.-name e) :distance (danger-q/mob-distance p e) :hits (:hits struck 0)}
     (number? (:health struck)) (assoc :health (:health struck))))
@@ -163,13 +164,13 @@
 (defn struck-of
   "The :struck entry of mob id: the fight child's own, else the one an earlier round left in memory (:struck-hits)."
   [c id]
-  (or (get-in (ctx/mem c) [:children :fight :struck id])
+  (or (get (hostile/struck (get-in (ctx/mem c) [:children :fight])) id)
       (get-in (mem/latest (ctx/view c) :struck-hits) [:data id])))
 
 (defn keep-struck!
   "Writes the fight child's :struck map to memory, so a refire after a lost round keeps the hits."
   [c]
-  (when-let [struck (seq (get-in (ctx/mem c) [:children :fight :struck]))]
+  (when-let [struck (seq (hostile/struck (get-in (ctx/mem c) [:children :fight])))]
     (ctx/remember! c :struck-hits (into {} struck) (struck-policy))))
 
 (defn note-hits

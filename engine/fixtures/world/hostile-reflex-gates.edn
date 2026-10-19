@@ -1,6 +1,6 @@
 ;; Which reflex or fight takes a body with a hostile about. Cards 8e7ff6d6 (on fire from a fire-aspect zombie's hit: the
 ;; burning reflex yields to hostile-near, no extinguish standing still), 4bfba733 (needs-weapon waits 1500 ticks after dawn
-;; and while a hostile is known within 40; put after the time set, else it fires in the settle), 55a1871b (fight-back's :leash: a hostile beyond it is not chased), 57f49df1
+;; and while a hostile is known within 40; put after the time set, else it fires in the settle), 55a1871b (the :hostiles attack's :leash: a hostile beyond it is not chased), 57f49df1
 ;; b74a043c ebac9484 (a provoked enderman, hit by the body through /damage: water first, else a roofed 2-high gap, else a
 ;; seal; never a fight), e6ba3d48 (a phantom near: seal in, no flight; NoAI, fire resistance for daylight). Mobs helmeted.
 {:defaults
@@ -46,7 +46,7 @@
    :body {:inventory [["iron_sword" 1]] :effects [["resistance" 600 4]] :yaw 270}
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "zombie"} 10]
-         [:job (jobs.survival.fight-back {:range 8 :leash 3})]]
+         [:job (jobs.combat.attack {:targets :hostiles :radius 8 :leash 3})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-target}} :within-s 20 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "attack"}} :for-s 20}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 6 31]] 1] [:body-near [16.5 0 16.5] 3]]
@@ -56,7 +56,7 @@
    :body {:inventory [["iron_sword" 1]] :effects [["resistance" 600 4]]}
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "zombie"} 10]
-         [:job (jobs.survival.fight-back {:range 8})]]
+         [:job (jobs.combat.attack {:targets :hostiles :radius 8})]]
    :expect [{:event {:source :action :kind :done :data {:name "attack" :status "hit"}} :within-s 20}
             {:event {:source :action :kind :done :data {:name "attack" :status "killed"}} :within-s 20}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 6 31]] 0]]

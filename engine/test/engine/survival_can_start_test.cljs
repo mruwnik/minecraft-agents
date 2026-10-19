@@ -30,8 +30,8 @@
     {:time st/noon} {} [:look :no-bed]
     {:time st/noon} {:bed {:x 3 :y 64 :z 0}} [:ok :daytime]))
 
-(deftest fight-back-needs-a-hostile-in-range
-  (are [world expected] (= expected (start-of 'jobs.survival.fight-back world {:range 4 :ranged-range 16 :leash 20 :skip []}))
+(deftest hostile-attack-needs-a-hostile-in-range
+  (are [world expected] (= expected (start-of 'jobs.combat.attack world {:targets :hostiles :radius 4 :ranged-radius 16 :leash 20 :skip []}))
     {} [:later :no-target]
     {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} [:ok :target]
     {:self {:health 2} :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} [:ok :target]))

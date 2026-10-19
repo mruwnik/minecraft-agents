@@ -1,5 +1,5 @@
 (ns engine.hostile-test
-  "respond-to-hostile, fight-back, retreat and the hostile-near trigger
+  "respond-to-hostile, retreat and the hostile-near trigger
   against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
@@ -9,7 +9,7 @@
             [jobs.lib.body :as body]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
-            [jobs.survival.fight-back :as fight-back]
+            [jobs.combat.attack :as attack]
             [jobs.lib.util :as u]
             [jobs.survival.recover-drops :as recover-drops]
             [jobs.survival.recover-drops.danger :as recover-drops-danger]
@@ -269,7 +269,7 @@
           (is (= [{:mob "zombie" :decision :fight :direction :north :band :near}] (decided seen))
               "a heard-only mob: what the sound tells, never its place"))))))
 
-;; ------------------------------------------------------------- fight-back
+;; ------------------------------------------------------------- hostile attack
 
 (defn waited-between-swings
   "The first ms waited (act :wait) after each swing but the last: what is left of the gap (the fake clock moves with calls,
@@ -280,9 +280,9 @@
     (mapv (fn [a b] (some #(when (= "wait" (.-name %)) (.. % -args -ms)) (subvec calls a b)))
           idx (rest idx))))
 
-(def fight '(jobs.survival.fight-back))
+(def fight '(jobs.combat.attack {:targets :hostiles :radius 4 :ranged-radius 16}))
 
-(deftest fight-back-equips-attacks-and-finishes-when-the-mob-is-gone
+(deftest hostile-attack-equips-attacks-and-finishes-when-the-mob-is-gone
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -293,7 +293,7 @@
           (is (= [7 7 7 7] (mapv #(.-id (.-args %)) (calls p "attack"))) "four hits kill the 20 health zombie")
           (is (= [] (:list (core/state eng))) "done in one call"))))))
 
-(deftest fight-back-waits-out-the-held-weapons-cooldown
+(deftest hostile-attack-waits-out-the-held-weapons-cooldown
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -301,36 +301,36 @@
           (is (seq (waited-between-swings p)))
           (is (every? #(<= 1072 % 1112) (waited-between-swings p)) "the iron axe's 1112 ms, so every hit lands at full strength"))))))
 
-(deftest fight-back-looks-round-while-the-cooldown-runs
+(deftest hostile-attack-looks-round-while-the-cooldown-runs
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (await (first-round-seeing '(jobs.survival.fight-back {:attack-gap-ms 3000}) {:inventory sword :entities [(zombie 7 3 0)]} 20))]
+        (let [{:keys [eng]} (await (first-round-seeing '(jobs.combat.attack {:targets :hostiles :radius 4 :ranged-radius 16 :attack-gap-ms 3000}) {:inventory sword :entities [(zombie 7 3 0)]} 20))]
           (is (seq (mem/entries (mem/view (:store eng)) :watched)) "the call waits out the gap and looks round"))))))
 
-(deftest fight-back-walks-up-to-a-mob-beyond-reach
+(deftest hostile-attack-walks-up-to-a-mob-beyond-reach
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p eng]} (await (first-round-ms '(jobs.survival.fight-back {:range 6}) {:inventory sword :entities [(zombie 5 0)]} 20))]
+        (let [{:keys [p eng]} (await (first-round-ms '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 6}) {:inventory sword :entities [(zombie 5 0)]} 20))]
           (is (pos? (count (tu/walked-to eng))))
           (is (every? #(<= % 15) (map #(.-timeoutS (.-args %)) (calls p "steer"))) "a short walk: it aims again at the mob")
           (is (pos? (count (calls p "attack")))))))))
 
-(deftest fight-back-does-not-walk-down-a-ten-deep-hole-after-a-mob-in-it
+(deftest hostile-attack-does-not-walk-down-a-ten-deep-hole-after-a-mob-in-it
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [pit-mob {:id 7 :name "zombie" :kind "hostile" :pos {:x 5.5 :y 54 :z 0.5}}
-              {:keys [eng]} (await (first-round-ms '(jobs.survival.fight-back {:range 16}) {:inventory sword :blocks {"5,53,0" "stone"} :entities [pit-mob]} 20))]
+              {:keys [eng]} (await (first-round-ms '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 16}) {:inventory sword :blocks {"5,53,0" "stone"} :entities [pit-mob]} 20))]
           (is (every? #(< 60 (:y %)) (tu/walked-to eng))
               "no walk was aimed at the pit's floor"))))))
 
-(deftest fight-back-with-hold-waits-for-a-mob-beyond-reach-and-hits-it-when-it-comes
+(deftest hostile-attack-with-hold-waits-for-a-mob-beyond-reach-and-hits-it-when-it-comes
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p eng]} (await (first-round-ms '(jobs.survival.fight-back {:range 6 :hold true}) {:inventory sword :entities [(zombie 5 0)]} 20))]
+        (let [{:keys [p eng]} (await (first-round-ms '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 6 :hold true}) {:inventory sword :entities [(zombie 5 0)]} 20))]
           (is (empty? (tu/walked-to eng)) "it does not advance on the mob")
           (is (empty? (calls p "attack")) "and does not swing at one it cannot reach"))))))
 
@@ -405,18 +405,18 @@
     {:id 9 :name "phantom" :kind "hostile" :visible true :pos {:x 4 :y 72 :z 0}} true
     (assoc (zombie 4 0) :visible true) false))
 
-(deftest fight-back-chases-in-legs-that-never-escalate
+(deftest hostile-attack-chases-in-legs-that-never-escalate
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [calls* (atom [])
-              _ (await (tu/with-near-spy calls* (fn ^:async b [] (await (first-round-ms '(jobs.survival.fight-back {:range 6}) {:inventory sword :entities [(zombie 5 0)]} 20)))))
+              _ (await (tu/with-near-spy calls* (fn ^:async b [] (await (first-round-ms '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 6}) {:inventory sword :entities [(zombie 5 0)]} 20)))))
               opts (map #(nth % 2) @calls*)]
           (is (seq opts))
           (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (= 10 (get-in % [:spend :job-time])) (false? (:look-round %)) (false? (:dangers %))) opts)
               "a moving mob is chased in legs, never dug or pillared toward"))))))
 
-(deftest fight-back-is-already-done-when-nothing-is-near
+(deftest hostile-attack-is-already-done-when-nothing-is-near
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -426,18 +426,18 @@
           (is (= [] (:list (core/state eng))) "6 blocks is beyond range 4: already done")
           (is (empty? (concat (calls p "attack") (calls p "equip"))) "no swing, nothing equipped"))))))
 
-(deftest fight-back-leaves-a-mob-beyond-its-leash-from-the-start
+(deftest hostile-attack-leaves-a-mob-beyond-its-leash-from-the-start
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory sword :entities [(zombie 8 0)]})]
-          (core/submit! eng '(jobs.survival.fight-back {:range 12 :leash 5}) {})
+          (core/submit! eng '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 12 :leash 5}) {})
           (is (nil? (core/tick! eng)) "8 blocks from the start is past the leash of 5: not chased, the job declines")
           (is (zero? (count (calls p "attack")))))
-        (let [{:keys [p]} (await (first-round-ms '(jobs.survival.fight-back {:range 12 :leash 10}) {:inventory sword :entities [(zombie 8 0)]} 20))]
+        (let [{:keys [p]} (await (first-round-ms '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 12 :leash 10}) {:inventory sword :entities [(zombie 8 0)]} 20))]
           (is (pos? (count (calls p "attack"))) "inside the leash it is fought"))))))
 
-(deftest fight-back-keeps-its-leash-anchor-when-resumed-after-a-hurt-yield
+(deftest hostile-attack-keeps-its-leash-anchor-when-resumed-after-a-hurt-yield
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -449,7 +449,7 @@
                          (reset! hurt true)
                          (swap! (fake/state p) update-in [:self :health] - 1))
                        (impl token a)))
-          (core/submit! eng '(jobs.survival.fight-back {:range 8 :leash 5}) {})
+          (core/submit! eng '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 8 :leash 5}) {})
           (await (core/tick! eng))
           (swap! (fake/state p) assoc-in [:self :pos] [30.5 64 0])
           (set-entities! p [(zombie 33 0)])
@@ -458,40 +458,40 @@
             (await (core/tick! eng)))
           (is (= 1 (count (calls p "attack"))) "the resumed fight still measures its leash from the first round's start: a mob 30 blocks on is not chased"))))))
 
-(deftest fight-back-is-already-done-for-a-hidden-ranged-mob
+(deftest hostile-attack-is-already-done-for-a-hidden-ranged-mob
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory sword :entities [{:id 7 :name "skeleton" :kind "hostile" :visible false :pos {:x 10 :y 64 :z 0}}]})]
-          (core/submit! eng '(jobs.survival.fight-back {:ranged-range 16}) {})
+          (core/submit! eng '(jobs.combat.attack {:targets :hostiles :radius 4 :ranged-radius 16}) {})
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))) "no line of fire: not a target, nothing in range")
           (is (empty? (concat (calls p "attack") (calls p "equip"))) "no swing, nothing equipped"))))))
 
 (defn invulnerable-zombie [] (assoc (zombie 7 3 0) :invulnerable true))
 
-(deftest fight-back-counts-no-hit-without-damage
+(deftest hostile-attack-counts-no-hit-without-damage
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng clock]} (await (first-round-ms fight {:inventory sword :entities [(invulnerable-zombie)]} 20))]
           (is (nil? (:struck (core/job-memory eng "j1"))) "no damage seen: no hit recorded"))))))
 
-(deftest fight-back-gives-up-on-a-mob-it-cannot-damage
+(deftest hostile-attack-gives-up-on-a-mob-it-cannot-damage
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen]} (await (first-round-ms fight {:inventory sword :entities [(invulnerable-zombie)]} 20))]
-          (is (= 3 (count (calls p "attack"))) "three swings without damage, then no more")
+          (is (= 4 (count (calls p "attack"))) "four swings without damage, then no more")
           (is (empty? (filter #(= "fight_no_damage" (name (:kind %))) @seen)) "the ending carries the reason")
-          (is (re-find #"do no damage" (str (:text (first (filter #(= :stopped (:kind %)) @seen)))))))))))
+          (is (re-find #"no-damage" (str (:text (first (filter #(= :stopped (:kind %)) @seen)))))))))))
 
 (deftest respond-flees-from-a-mob-that-takes-no-damage
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (await (flight-round respond {:inventory sword :entities [(invulnerable-zombie)]}))]
-          (is (= 3 (count (calls p "attack"))) "the fight stops after three useless swings")
+          (is (= 4 (count (calls p "attack"))) "the fight stops after four useless swings")
           (is (pos? (count (tu/walked-to eng))) "and the body retreats"))))))
 
 (deftest respond-does-not-stop-no-response-while-the-fight-costs-health
@@ -505,7 +505,7 @@
                                 (fake/swap-self! p update :health dec)
                                 (when (= 6 @hits) (swap! (fake/state p) assoc :entities []))
                                 :continue)}
-              eng (assoc-in eng [:jobs 'jobs.survival.fight-back] hurting)]
+              eng (assoc-in eng [:jobs 'jobs.combat.attack] hurting)]
           (core/submit! eng respond {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (<= 6 @hits) "the fight went on past three hurt-yields")
@@ -522,7 +522,7 @@
                                 (ctx/update-mem! c update-in [:struck 7 :hits] (fnil inc 0))
                                 (when (= 6 @hits) (swap! (fake/state p) assoc :entities []))
                                 :continue)}
-              eng (assoc-in eng [:jobs 'jobs.survival.fight-back] pausing)]
+              eng (assoc-in eng [:jobs 'jobs.combat.attack] pausing)]
           (core/submit! eng respond {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (<= 6 @hits) "the fight went on past three pauses that each landed a hit")
@@ -540,7 +540,7 @@
                                 (swap! (fake/state p) assoc :entities [])
                                 (when (= 1 n) (js/setImmediate #(swap! (fake/state p) assoc :entities es)))
                                 (if (= 1 n) :continue (ctx/end c :done nil))))}
-              eng (assoc-in eng [:jobs 'jobs.survival.fight-back] blink)]
+              eng (assoc-in eng [:jobs 'jobs.combat.attack] blink)]
           (core/submit! eng respond {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (<= 2 @calls) "one empty check after a :continue does not end the round"))))))
@@ -556,7 +556,7 @@
                                (ctx/update-mem! c assoc-in [:struck 7] {:hits 3 :health 2})
                                (swap! (fake/state p) assoc :entities [])
                                :continue)}
-              eng (assoc-in eng [:jobs 'jobs.survival.fight-back] hitter)]
+              eng (assoc-in eng [:jobs 'jobs.combat.attack] hitter)]
           (core/submit! eng respond {})
           (dotimes [_ 2] (await (core/tick! eng)))
           (is (= 1 @fights))
@@ -572,7 +572,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:health 20} :inventory sword :entities [(zombie 7 3 0)]})
               fights (atom 0)
-              eng (assoc-in eng [:jobs 'jobs.survival.fight-back] {:round (fn ^:async f [_c] (swap! fights inc) (swap! (fake/state p) assoc :entities []) :continue)})]
+              eng (assoc-in eng [:jobs 'jobs.combat.attack] {:round (fn ^:async f [_c] (swap! fights inc) (swap! (fake/state p) assoc :entities []) :continue)})]
           (core/submit! eng respond {})
           (dotimes [_ 2] (await (core/tick! eng)))
           (fake/swap-self! p assoc :health 10)
@@ -799,7 +799,7 @@
            ["behind a wall of shut trapdoors" (arrow-wall "oak_trapdoor" [64 65 66]) false]]]
     (is (= fires? (skeleton-fires? blocks)) label)))
 
-(deftest fight-back-and-hostile-near-agree-on-a-ranged-mob-behind-a-torch-wall
+(deftest hostile-attack-and-hostile-near-agree-on-a-ranged-mob-behind-a-torch-wall
   (let [torches (arrow-wall "torch" [64 65 66])
         sk (assoc (skeleton 7 6 0) :visible false :seen true)]
     (is (holds? {:entities [sk] :blocks torches} {:radius 8 :ranged-radius 16}) "the trigger sees a line of fire through torches")
@@ -807,8 +807,8 @@
       (tu/run-async done
         (fn ^:async t []
           (let [{:keys [eng]} (setup {:inventory sword :blocks torches :entities [sk]})]
-            (core/submit! eng '(jobs.survival.fight-back {:ranged-range 16}) {})
-            (is (some? (core/tick! eng)) "fight-back keeps the skeleton as a target: same line of fire as the trigger")))))))
+            (core/submit! eng '(jobs.combat.attack {:targets :hostiles :radius 4 :ranged-radius 16}) {})
+            (is (some? (core/tick! eng)) "the hostile attack keeps the skeleton as a target: same line of fire as the trigger")))))))
 
 (deftest combat-hostiles-takes-a-ranged-radius
   (let [p (tu/fake-on-floor {:entities [(zombie 1 13 0) (skeleton 2 12 0) (zombie 3 5 0)]})
@@ -823,11 +823,11 @@
         (let [s (await (flight-round respond {:inventory sword :entities [(skeleton 7 13 0)]}))]
           (is (pos? (walks-to s {:x 13 :z 0})) "armed and healthy: it closes in on the skeleton"))))))
 
-(deftest fight-back-does-not-close-in-on-a-far-skeleton-with-other-hostiles-about
+(deftest hostile-attack-does-not-close-in-on-a-far-skeleton-with-other-hostiles-about
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (flight-round '(jobs.survival.fight-back {:ranged-range 16})
+        (let [s (await (flight-round '(jobs.combat.attack {:targets :hostiles :radius 4 :ranged-radius 16})
                                      {:inventory sword :entities [(skeleton 7 13 0) (skeleton 8 15 4)]}))]
           (is (zero? (walks-to s {:x 13 :z 0})) "a lone skeleton is walked up to; with another about it is not")
           (is (zero? (count (calls (:p s) "attack"))) "nothing in reach to swing at"))))))
@@ -891,11 +891,11 @@
           (is (empty? (:list (core/state eng))) "only a zombie behind the wall: nothing to respond to, done")
           (is (zero? (count (tu/walked-to eng)))))))))
 
-(deftest fight-back-goes-for-a-visible-hostile-first
+(deftest hostile-attack-goes-for-a-visible-hostile-first
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (first-round-ms '(jobs.survival.fight-back {:range 8})
+        (let [{:keys [p]} (await (first-round-ms '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 8})
                                                  {:inventory sword :blocks wall :entities [(zombie 1 5 0) (zombie 2 0 6)]} 20))]
           (is (= 2 (first (mapv #(.-id (.-args %)) (calls p "attack"))))
               "the nearer zombie is behind the wall; the visible one is fought"))))))
@@ -1194,7 +1194,7 @@
   []
   (zombie 7 3 0))
 
-(deftest fight-back-never-swings-at-or-walks-to-a-heard-mob
+(deftest hostile-attack-never-swings-at-or-walks-to-a-heard-mob
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1217,23 +1217,23 @@
     (is (= "zombie" (:mob f)))
     (is (= (+ bx 4) (:x (:mob-pos f))) "the rough spot 4 east, not the exact 3")))
 
-(deftest fight-back-looks-toward-the-heard-mob-not-a-seen-one-past-the-leash
+(deftest hostile-attack-looks-toward-the-heard-mob-not-a-seen-one-past-the-leash
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory sword
                                       :entities [(zombie 7 -10 0) (assoc (zombie 8 3 0) :visible false)]})
               looks (atom [])
-              args {:range 12 :ranged-range 16 :leash 0 :min-health 8 :skip [] :attack-gap-ms 600}
+              args {:targets :hostiles :radius 12 :ranged-radius 16 :leash 0 :skip [] :attack-gap-ms 600}
               c {:primitives p :args args :view #(mem/view (:store eng)) :root nil :slots []
                  :now (constantly 0) :update-mem (fn [_ _] nil)
                  :act (fn [k a] (when (= :look k) (swap! looks conj a)) (js/Promise.resolve nil))}
-              r (await (fight-back/step c))]
+              r (await (attack/hostile-step c))]
           (is (= [:nothing-possible :heard-only] ((juxt :kind :cause) r)) "the seen zombie is past the leash, the heard one is never fought")
           (is (= 1 (count @looks)))
           (is (pos? (.-x (.-pos (first @looks)))) "the look points east at the heard mob, not west at the seen one"))))))
 
-(deftest fight-back-one-call-fights-until-the-mob-is-dead
+(deftest hostile-attack-one-call-fights-until-the-mob-is-dead
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1243,14 +1243,11 @@
 
 ;; ------------------------------------------------------- a mob that hurts the body is not given up on
 
-(deftest fight-back-gives-up-on-a-blocked-mob-only-while-it-does-not-hurt-the-body
-  (let [n (u/max-failures)
-        mem {:blocked {7 2} :blocked-health {7 12}}]
-    (is (= 3 (fight-back/blocked-count mem 7 12)) "blocked again, body unhurt since: the count goes on")
-    (is (= 1 (fight-back/blocked-count mem 7 9)) "the body lost health since: the count starts over")
-    (is (= 1 (fight-back/blocked-count {} 7 20)))
-    (is (fight-back/given-up-in? {:blocked {7 n}} 7 n))
-    (is (fight-back/given-up-in? {:no-damage {7 n}} 7 n) "no-damage swings still give up")))
+(deftest attack-gives-up-on-a-blocked-mob-only-while-it-does-not-hurt-the-body
+  (let [mem {:fails {7 2} :fail-health {7 12}}]
+    (is (= 3 (attack/fail-count mem 7 12)) "blocked again, body unhurt since: the count goes on")
+    (is (= 1 (attack/fail-count mem 7 9)) "the body lost health since: the count starts over")
+    (is (= 1 (attack/fail-count {} 7 20)))))
 
 (deftest respond-never-fights-an-enderman-however-good-the-sword
   (async done
