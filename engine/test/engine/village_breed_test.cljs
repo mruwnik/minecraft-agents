@@ -7,6 +7,7 @@
             [engine.fake :as fake]
             [engine.hostile-test :as h]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.test-util :as tu]))
 
 (def job 'jobs.village.breed)
@@ -52,11 +53,13 @@
 (defn ^:async run!
   "Tick the engine at most n times, while its list holds a job and stop? (when given) is false."
   [{:keys [eng clock]} n & [stop?]]
-  (loop [i 0]
-    (when (and (< i n) (seq (:list (core/state eng))) (not (and stop? (stop?))))
-      (swap! clock + 700)
-      (await (core/tick! eng))
-      (recur (inc i)))))
+  (await (settings/with-settings {:jobs.village.breed/wait-s 3}
+           (fn ^:async t []
+             (loop [i 0]
+               (when (and (< i n) (seq (:list (core/state eng))) (not (and stop? (stop?))))
+                 (swap! clock + 700)
+                 (await (core/tick! eng))
+                 (recur (inc i))))))))
 
 (defn ^:async breed
   "Run the job until it ends (at most n ticks); its result is in :out."
@@ -71,7 +74,7 @@
 (defn tosses [p] (h/calls p "toss"))
 (defn gave? [{:keys [seen]} kind] (some #(= kind (:kind %)) @seen))
 (def pair [(villager 1 3) (villager 2 5)])
-(def args {:target 3 :wait-s 3})
+(def args {:target 3})
 
 (deftest a-met-target-is-done-without-feeding
   (async done
@@ -121,7 +124,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (breed {:entities pair :inventory bread} {:target 4 :wait-s 3} 80
+        (let [{:keys [out]} (await (breed {:entities pair :inventory bread} {:target 4} 80
                                           #(feeding % 2 :entity (villager 9 6))))]
           (is (= 0 (:births @out)))
           (is (= :no-births (:reason @out))))))))
@@ -131,7 +134,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out]} (await (breed {:entities (mapv #(villager % (+ 2 %)) (range 1 7)) :inventory [{:name "bread" :count 40}]}
-                                            {:target 9 :wait-s 3} 400 #(feeding % 0 :taken false)))]
+                                            {:target 9} 400 #(feeding % 0 :taken false)))]
           (is (= :no-births (:reason @out)))
           (is (= 0 (:births @out)))
           (is (pos? (count (tosses p)))))))))
@@ -149,7 +152,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (breed {:entities (mapv #(villager % (+ 2 %)) (range 1 9)) :inventory [{:name "bread" :count 40}]}
-                                               {:target 12 :wait-s 1} 600 #(feeding % 0)))]
+                                               {:target 12} 600 #(feeding % 0)))]
           (is (= :no-births (:reason @out))))))))
 
 (deftest a-restart-mid-wait-keeps-the-baby-baseline

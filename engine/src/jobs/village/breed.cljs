@@ -14,13 +14,13 @@
   "Grow the villagers seen within :radius to :target (adults and babies count). One call is the whole attempt. Each
   attempt takes the two nearest adults not yet tried in this call, feeds each enough to be willing (jobs.village.feed
   child, fetched unless :fetch is off: 3 bread, else 12 of carrot, potato or beetroot), then stays near them for
-  :wait-s seconds (jobs.movement.linger-near child) and counts again. A rise in the baby villagers in sight is a birth
+  the ::wait-s setting (jobs.movement.linger-near child) and counts again. A rise in the baby villagers in sight is a birth
   (an adult walking into view is not).
   Needs adult villagers in sight and beds the villagers can claim (the body cannot see which are free): it only counts
   what it sees, so a villager out of sight is not counted. Zones are the walks' (go-to tolls), never claimed here.
   Conditions at the start (a listed call waits on them): :no-pair (below :target, fewer than two adult villagers in
   sight; the engine looks round once first), :no-food (the food is not carried and a fetch is off or failed lately). A :target under 2 is impossible
-  (:bad-args). Quote: time from :wait-s and the births still missing.
+  (:bad-args). Quote: time from the wait and the births still missing.
   Ends with the data {:population n :target t :births b}: done when the target is met (done? holds; an already
   met target is done with 0 births), else with the cause:
   - condition-failed :no-food: a feed child ended without food.
@@ -29,18 +29,17 @@
   birth. What was tried, the birth baseline and the wait are kept in job memory, so a cut and restart re-checks the
   count and goes on. It yields :continue while a feed, walk or the wait is under way.")
 
-(def default-wait-s 45)
-
 (a/defargs args
   {:target {:doc "villagers wanted in sight (adults and babies)" :spec (a/int-in 2 64) :default nil}
    :radius {:doc "how far to look for villagers" :spec (a/int-in 1 96) :default 48}
-   :wait-s {:doc "seconds to stay near a fed pair for a birth" :spec (a/int-in 1 600) :default default-wait-s}
    :fetch {:doc "get food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}})
 
 (a/defargs settings
-  {::wait-range {:default 6 :doc "Blocks within which the body waits for a pair to breed." :spec (a/int-in 0 nil)}
+  {::wait-s {:default 45 :doc "Seconds to stay near a fed pair for a birth, before the attempt counts as fruitless." :spec (a/int-in 1 600)}
+   ::wait-range {:default 6 :doc "Blocks within which the body waits for a pair to breed." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 3600 :doc "Seconds one breeding may take." :spec (a/int-in 1 nil)}
    ::feed-s {:default 30 :doc "Seconds one pair's feeding takes, for the quote." :spec (a/num-in 0 nil)}})
+(defn wait-s [] (settings/get settings ::wait-s))
 (defn wait-range [] (settings/get settings ::wait-range))
 (defn feed-s [] (settings/get settings ::feed-s))
 (def job 'jobs.village.breed)
@@ -131,7 +130,7 @@
 
 (defn quote-of [c]
   (let [left (max 0 (- (:target (:args c)) (:pop (sight (villagers (:primitives c) (:radius (:args c)))))))
-        w (:wait-s (:args c) default-wait-s)]
+        w (wait-s)]
     {:uses {:job-time [(if (pos? left) w 0) (* left (+ w (feed-s))) ##Inf]}}))
 
 (defn born
@@ -198,7 +197,7 @@
   "Stay near the fed pair; when the wait ends (however it ends) count the births. :again or :continue."
   [c seen]
   (let [m (ctx/mem c)
-        r (await (ctx/call c :wait 'jobs.movement.linger-near {:pos (:at m) :range (wait-range) :wait-s (:wait-s (:args c))}))]
+        r (await (ctx/call c :wait 'jobs.movement.linger-near {:pos (:at m) :range (wait-range) :wait-s (wait-s)}))]
     (if (= :continue r)
       :continue
       (let [born (born c seen)]
