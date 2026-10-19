@@ -1,5 +1,5 @@
 (ns engine.sky-perception
-  "A fake body's perception with the fake world's live sky but no light data of any cell: what look/sky-darkening reads."
+  "A fake body's perception with the fake world's live sky but no light data of any cell: what sh-sense/sky-subtract-now reads."
   (:require [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]))
 

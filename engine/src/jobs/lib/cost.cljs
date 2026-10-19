@@ -138,7 +138,7 @@
          lit-by (fn [raw darkening] (fn [c] (when-let [{:keys [block sky]} (raw c)] {:block block :sky (if (< (- sky darkening) dark) 0 15)})))
          leaves? (sh-inside/walk-leaves-shelter? p shelter to 1)
          raw (if leaves? open-sky raw-light)
-         darkening (look/sky-darkening p)
+         darkening (sh-sense/sky-subtract-now p)
          chance (spawn-chance cell {:light (lit-by raw darkening)})]
      (if (and (not leaves?) (nil? (raw cell)))
        {:chance chance :lowered-by #{:look} :look-at [cell]}

@@ -66,14 +66,14 @@
 
 (defn lit-here?
   "Whether the cell is lit enough that monsters cannot spawn: block light of 1 or more, or sky light less the sky
-  darkening at dark-light, from any source (dawn, a torch). Without light data there, the sky decides (look/sky-dark?)."
+  darkening at dark-light, from any source (dawn, a torch). Without light data there, the sky decides (look/dark-guess?)."
   [p cell]
   (let [raw (some-> (aget p "perception") :raw)
         {:keys [x y z]} cell]
     (if (and raw (<= 0 (.stateAt ^js raw x y z)))
       (let [packed (.lightAt ^js raw x y z)]
         (or (pos? (bit-and packed 15)) (>= (- (bit-shift-right packed 4) (sky-subtract-now p)) (look/dark-light))))
-      (not (look/sky-dark? p)))))
+      (not (look/dark-guess? p)))))
 
 (defn buried-by-column?
   "Fallback without light data: the cell two over the feet cell is a block the body has seen (only that one shows from inside)."
@@ -148,7 +148,7 @@
   (let [own (feet p)]
     (when (or (= [x y z] [(:x own) (:y own) (:z own)]) (seen-cell? p cell))
       (when-let [block (block-light-at p cell)]
-        (max block (- (or (sky-light-at p cell) 0) (look/sky-darkening p)))))))
+        (max block (- (or (sky-light-at p cell) 0) (sky-subtract-now p)))))))
 
 (defn dark-at?
   "Whether the cell is dark (effective light below look/dark-light): by its light when the body knows it, else by the

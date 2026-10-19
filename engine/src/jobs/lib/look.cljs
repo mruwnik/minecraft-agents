@@ -306,12 +306,6 @@
   (let [packed (.lightAt raw x y z)]
     (max (bit-and packed 15) (- (bit-shift-right packed 4) (sky-subtract raw)))))
 
-(defn sky-darkening
-  "What the live sky's light is reduced by now (0 without a perception): the one place the time of day, rain and thunder
-  enter a light read."
-  [p]
-  (if-let [raw (some-> (aget p "perception") :raw)] (sky-subtract raw) 0))
-
 (defn dark-guess?
   "The guess for a cell the body has not seen: whether open sky, less its darkening, is below dark-light. False without a perception."
   [p]
