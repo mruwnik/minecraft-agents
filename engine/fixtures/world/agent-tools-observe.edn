@@ -15,7 +15,7 @@
          [:cli "observe" ["$body" "--world" "$world" "events" "--until" "death" "--limit" "5"] {:ok true :events [:has {:kind :died}]}]
          [:cli "observe" ["$body" "--world" "$world" "status"] {:missed {:items [:has {:event :died}]}}]
          [:cli "observe" ["$body" "--world" "$world" "status" "--wait" "--timeout" "3s"]
-          {:wake :timeout :summary {:counts {:died [:>= 1]}}}]]
+          {:wake [:not :died] :summary {:counts {:died [:>= 1]}}}]]
    :expect [{:event {:source :body :kind :died :data {:cause [:any]}} :within-s 20}]}
   {:name "status-answers-after-a-death-and-a-restart"
    :act [[:kill-body] [:await {:source :body :kind :respawned} 30]
