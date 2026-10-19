@@ -1,5 +1,5 @@
 ;; Card fec59488: a cut the stair dug that now touches seen water is plugged with a building block at once (stair.plugged, stop :hazard),
-;; and mine stops digging with its head in water (mine.flooded, ends :flooded) instead of digging on.
+;; and mine stops digging with its head in water (ends :flooded) instead of digging on.
 ;; Stone mass x 8..24, z 8..24, y 0..9; the stair goes down east from (10 10 16): step k lands on feet (10+k, 10-k) and cuts feet..feet+2.
 ;; Should-succeed: water in a sealed pocket beside step 3's cut ((13 7 17)) is met: stair.plugged, the cut cell is not left open;
 ;; mine, put in a water-filled shaft beside coal, ends :flooded and digs nothing.
@@ -26,9 +26,8 @@
    :blocks [[:fill [16 0 16] [16 2 16] "water"] [:set [17 0 16] "coal_ore"] [:set [17 1 16] "coal_ore"]]
    :body {:at [16.5 0 16.5] :yaw 270 :inventory [["iron_pickaxe" 1]]}
    :act [[:job (jobs.gather.mine {:block "coal_ore" :count 1 :fetch false})]]
-   :expect [{:event {:source :job :kind :mine.flooded} :within-s 60 :of-job true}
-            {:event {:source :job :kind :stopped :data {:reason :flooded}} :within-s 90 :of-job true}
-            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 60 :until {:source :job :kind :mine.flooded}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :flooded}} :within-s 90 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 60 :until {:source :job :kind :stopped}}]
    :after [[:block [17 0 16] "coal_ore"] [:block [17 1 16] "coal_ore"]]}
   ;; card 3d2cac21: a second stair run along the cut never digs the plug the first one placed against the water
   {:name "second-run-does-not-dig-the-plug"

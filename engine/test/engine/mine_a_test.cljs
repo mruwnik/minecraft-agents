@@ -202,7 +202,6 @@
           (await (run-ticks s 30))
           (is (= :none (:reason (done-event s))))
           (is (zero? (:failures (job-mem s) 0)))
-          (is (empty? (events-of s :mine.gave-up)))
           (is (= 6 (dig-count s)) "each cell once")
           (is (finished? s)))))))
 
@@ -214,7 +213,6 @@
         (let [sand (cells "sand" [6] [64] [-1 0 1 2])
               s (await (scenario {:block "sand" :count 4}
                                  {:blocks (merge floor sand) :unreachable (vec (keys sand))} 30))]
-          (is (empty? (events-of s :mine.gave-up)))
           (is (= 4 (count (events-of s :mine.unreachable))))
           (is (zero? (dig-count s)))
           (is (finished? s)))))))
@@ -375,12 +373,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:block "stone" :count 4}
-                                 {:blocks (merge floor (cells "stone" [4 5 6 7 8 9] [64] [0])) :drops {"stone" nil} :inventory [{:name "iron_pickaxe" :count 1}]} 60))
-              warns (events-of s :mine.gave-up)]
+                                 {:blocks (merge floor (cells "stone" [4 5 6 7 8 9] [64] [0])) :drops {"stone" nil} :inventory [{:name "iron_pickaxe" :count 1}]} 60))]
           (is (= 3 (dig-count s)))
           (is (= :no-drops (:reason (done-event s))))
-          (is (= [:no-drops] (mapv :reason warns)))
-          (is (= :warn (:level (first warns))))
           (is (= [[4 64 0] [5 64 0] [6 64 0]] (mapv :cell (events-of s :mine.drop-lost))) "each dig that brought nothing is told")
           (is (= [[4 64 0] [5 64 0] [6 64 0]] (:lost (done-event s))))
           (is (= "dirt" (block-at s 0 63 0)) "the ground is intact")
@@ -404,7 +399,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "stone" :count 4 :dry-digs 2}
+        (let [s (await (scenario {:block "stone" :count 4 :settings {:jobs.gather.mine/dry-digs 2}}
                                  {:blocks (cells "stone" [4 5 6 7 8 9] [64] [0]) :drops {"stone" nil} :inventory [{:name "iron_pickaxe" :count 1}]} 60))]
           (is (= 2 (dig-count s)))
           (is (= :no-drops (:reason (done-event s)))))))))
@@ -413,23 +408,21 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "stone" :count 6 :dry-digs 1}
+        (let [s (await (scenario {:block "stone" :count 6 :settings {:jobs.gather.mine/dry-digs 1}}
                                  {:blocks (merge (cells "stone" [4 5 6 7 8 9] [64] [0]) (cells floor-block [4 5 6 7 8 9] [63] [0])) :drops {"stone" "cobblestone"} :inventory [{:name "iron_pickaxe" :count 1}]} 80))]
-          (is (= :count (:reason (done-event s))))
-          (is (empty? (events-of s :mine.gave-up))))))))
+          (is (= :count (:reason (done-event s)))))))))
 
 (deftest nearer-intact-block-is-dug-first
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [r [0 0.5 0.999]]
-          (let [s (await (scenario {:block "stone" :count 6 :dry-digs 1}
+          (let [s (await (scenario {:block "stone" :count 6 :settings {:jobs.gather.mine/dry-digs 1}}
                                    {:blocks (merge (cells "stone" [4 5 6 7 8 9] [64] [0]) (cells floor-block [4 5 6 7 8 9] [63] [0])) :drops {"stone" "cobblestone"} :inventory [{:name "iron_pickaxe" :count 1}]} 80
                                    (constantly r)))
                 order (mapv first (dug-cells s))]
             (is (= [4 5] (take 2 order)) (str "random " r))
-            (is (= :count (:reason (done-event s))) (str "random " r))
-            (is (empty? (events-of s :mine.gave-up)))))))))
+            (is (= :count (:reason (done-event s))) (str "random " r))))))))
 
 (deftest drop-in-line-is-blocked-by-an-intact-block-between
   (let [p (tu/fake-on-floor {:blocks (cells "stone" [4 5] [64] [0]) :floor-block floor-block})

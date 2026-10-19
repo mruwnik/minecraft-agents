@@ -32,15 +32,13 @@
             [plan.shape :as shape]
             [engine.mine-support :refer [spec as-child floor-block sight-opts seeing start run-ticks scenario events-of done-events done-event finished? inv job-mem calls moved dig-count dug-cells block-at cells floor wide-floor sand-patch set-pos! bare-pickaxe pickaxe cobble stone-floor stone-hill ground-cell? dug-ground farm-zone pad-plan two-in-two-out zoned their-claim rock rock-world feet tunnel-ends open-line east start-x corridor bridge-run no-floor-end? deep-rock far-cave side-cave facing-west-run stay-run side-ore-run shutdown-at-cell! run-until! below-ore-run run-until shaft-plan shafted via-shaft ore-east drop-away! hide-drop-until-beside! walled-ore watched dark-ore-dug long-rock torch-world torch-xs torches8 side-room side-torch-cells branch-torches soil-over-stone soil-all-round descent-run stair-down-east classify-in walk-options spy-go-to home-go-tos home-zone no-shaft-args deep-ore home-walk-run]]))
 
-(deftest no-tool-warns-and-never-digs
+(deftest no-tool-never-digs
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "stone" :count 2} {:blocks (cells "stone" [3 4] [64] [0]) :inventory [{:name "iron_shovel" :count 1}]} 10))
-              warns (events-of s :mine.no-tool)]
+        (let [s (await (scenario {:block "stone" :count 2} {:blocks (cells "stone" [3 4] [64] [0]) :inventory [{:name "iron_shovel" :count 1}]} 10))]
           (is (zero? (dig-count s)))
-          (is (= 1 (count warns)))
-          (is (= ["pickaxe"] (mapv :tool warns)))
+          (is (= "pickaxe" (:tool (done-event s))))
           (is (= :no-tool (:reason (done-event s))))
           (is (nil? (:ground (job-mem s))) "nothing was written")
           (is (finished? s)))))))
@@ -66,7 +64,6 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:block "oak_sapling" :count 2} {:blocks (cells "oak_sapling" [3 4] [64] [0]) :inventory [{:name "iron_shovel" :count 1}]} 40))]
-          (is (empty? (events-of s :mine.no-tool)))
           (is (= 2 (dig-count s)))
           (is (= :count (:reason (done-event s)))))))))
 
@@ -75,7 +72,6 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:block "sand" :count 2} {:blocks (cells "sand" [3 4] [64] [0])} 40))]
-          (is (empty? (events-of s :mine.no-tool)))
           (is (= 2 (dig-count s)))
           (is (= :count (:reason (done-event s)))))))))
 

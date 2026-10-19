@@ -75,7 +75,7 @@
       (fn ^:async t []
         (let [s (await (scenario {:block "cobweb" :count 2} {:blocks (cells "cobweb" [3 4] [64] [0]) :inventory []} 10))]
           (is (zero? (dig-count s)))
-          (is (= ["sword"] (mapv :tool (events-of s :mine.no-tool)))))))))
+          (is (= "sword" (:tool (done-event s)))))))))
 
 (deftest never-digs-the-cell-under-the-feet-onto-an-unseen-floor
   (async done
@@ -275,7 +275,6 @@
                 s (start {:world {:blocks (cells "sand" [15] [64] [-1 0 1 2])} :jobs (assoc registry/jobs 'jobs.movement.go-to stub)})]
             (core/submit! (:eng s) (spec {:block "sand" :count 4 :tunnel-length 0 :mend false}) {})
             (await (run-ticks s 60))
-            (is (empty? (events-of s :mine.gave-up)) (str why))
             (is (= 4 (count (events-of s :mine.unreachable))) (str why))))))))
 
 ;; Juniper j754: the walk to an ore waited for day for ever (go-to at night); mine gave the round back for 12 minutes.

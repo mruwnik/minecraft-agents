@@ -36,151 +36,40 @@
             [jobs.lib.world :as known]))
 
 (def doc
-  "Mine like a player: carry at least :count of one block kind (the item it drops) (:block) that the body has seen, strip-tunnelling
-  to find more (for an ore at its ore level, :level), then mend the pit under where it started and walk back to the start cell.
-  An ore's stone and deepslate kinds both count (:variants): {:block \"iron_ore\" :count 8} gets 8 raw_iron from iron_ore and
-  deepslate_iron_ore.
+  "Mine like a player: carry at least :count of the item of one block kind (:block) that the body has seen, strip-tunnelling to find
+  more, then mend the pit under where it started and walk back to the start cell. An ore's stone and deepslate kinds both count
+  (:variants). The run's own area is :center / :radius (waits :outside-area while the body is farther; jobs.lib.area).
 
-  :center (default: where the body stands) with :radius is the area: the call waits (:outside-area, jobs.lib.area) while the body stands farther than :radius from the centre; the caller walks there first.
+  Needs: a pickaxe when the block wants one (fetched with jobs.items.get-tool through jobs.lib.need unless :fetch is false; a shovel or
+  axe block drops by hand), torches (stocked before a descent or tunnel; under 8 carried), health (can-run? waits :low-health), and a read zone
+  list (:no-zones unless :ignore-zones?). Impossible: :no-block. :stay-level declines :on-surface in the open. Targets come only from
+  perception (seenBlocks, never x-ray): a seen block within :radius with a seen air face, not beside seen lava (or water unless :wet),
+  that the zone rules, claims and plans let it dig (:refused when all are barred).
 
-  Targets come only from perception (the primitives' seenBlocks, never x-ray). A target is a remembered :block
-  within :radius that is still there and has at least one of its 6 face neighbours seen as air or cave_air. It is
-  skipped when a seen neighbour is lava, or water unless :wet; lava on top counts as seen (it drips); a face never seen is no hazard. Without perception the body sees nothing and only
-  tunnels.
+  One call, in this order each step, until it ends:
+  1. Collecting the drop of a dig (mine.targets, mine.drops): collect-drops within the collect-radius setting, one walk or cut to the dug cell, a
+     drop still lying is mine.left-behind, a dig that brought nothing and shows no drop is mine.drop-lost. The count is the inventory's.
+  2. Carrying the goal ends :count; max-failures digs failed in a row end :gave-up; :dry-digs (setting) digs that raised no count end :no-drops.
+  3. Dig the nearest target (the floor under the start last; a walk within reach first; mine.targets).
+  4. No target: look round once per cell, then by a mineshaft (:shaft, mine.descent) or a stair down (:descend-limit, to the ore's :level) to
+     find stone or the tunnel level; a stair that finds no stone ends :no-stone-found.
+  5. Else the strip tunnel (mine.tunnel): 1-wide 2-high at the start level along :heading / :direction, :tunnel-length blocks, torches every
+     :torch-interval; any stop ends the dig phase :tunnel-stopped with one warn mine.tunnel-end {:reason :at :next :walk}.
+  :stay-level (jobs.gather.mine-stay, mine.side) keeps the start height and seals a cut that opens into air; seen ore out of reach is
+  :unreached in the result.
 
-  Impossible: :no-block. Conditions: :moved-since-submit, :no-zones (no zone list and not :ignore-zones?: one warn mine.declined; also
-  mid-run, which ends the run), :low-health (can-run?, asked between digs too: the run waits :low-health until it heals)
-  and :refused (every seen target refused by zones, claims or plans: one warn mine.declined {:reason :refused :zones :plans}).
+  Ore beside the way is picked up by jobs.lib.ore-pick (:pick-up-ores). A head in water before a dig, hunger with no food found
+  (trip/food-short?) and a spent or missing tool end the dig phase (:flooded, :hungry, :no-tool).
 
-  Ends early:
-  - The head in water (jobs.lib.breath/head-under?) before a dig: no more digging, warn mine.flooded; before the first dig the job ends
-    {:got 0 :reason :flooded}, later the dig phase ends :flooded and the body walks home.
-  - Every carried tool that digs the block down to 3 uses (jobs.lib.trip/spent-tool?, no spare was had) ends the same way, :reason :no-tool,
-    before the last one breaks deep down.
-  - A pickaxe block (jobs.lib.tool-kind/tool-kind) with no *_pickaxe carried, at the start or later (the pick broke),
-    gets one with jobs.items.get-tool through jobs.lib.need first (unless :fetch is false). Nothing got: before any dig it ends at once, warn mine.no-tool,
-    {:got 0 :reason :no-tool :tool <kind needed: pickaxe, sword, shears>} (:why the fetch's cause); in the dig phase the mend and walk home follow with
-    :reason :no-tool. Shovel and axe blocks drop by hand. Soil or wood dug with only a pickaxe held empties the
-    hand first (no wear on the pickaxe).
+  Every ending, however reached, mends the pit under the start (mine.mend, mine.end) and walks back to the start cell; the walk is the
+  cleanup too, for a run cut by the limit or a cancel. Not arriving ends :not-home (warn mine.not-home), a mend with nothing to fill
+  with or six failed fills warn mine.mend-short / mine.mend-failed.
 
-  Before a descent or strip tunnel it stocks torches when under 8 are carried (jobs.lib.trip/torches-ready!: obtain, charcoal from logs; warn torch.no-stock, then it digs dark).
-  Before the first round it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!).
-
-  The first round writes to job memory before any dig: the goal (:count) and the count carried (:had), the start cell, the
-  tunnel heading (:heading, else :direction, else the way the body faces) and the ground (the solid cells of the 5x5 under the
-  start at y-1 and y-2; empty when :mend is false). So a cut or restart still mends.
-
-  One call runs these steps in order, again and again until the job ends (it yields with :continue only while a child or
-  a walk waits on the world, and after 400 steps):
-  1. Collecting: after a dig the body glances at the dug cell, the cell under it and unsensed cells further down (once per cell), then the collect-drops child gathers the item within :collect-radius; when none came in, the body walks within 1 of the dug cell once (floors toward it never seen are looked at first; a dug cell no walk gets beside, dug from a distance over a wall, is first cut to: at most ::drop-cut-max cells, jobs.lib.dig-route; not with :stay-level; beside a dug cell with no seen floor it leans to the edge of its own cell once, so the rim does not hide a drop at the foot of the wall), looks and collects again. The count is the
-     inventory's, never the dig's report. Drops of the item still lying afterwards (out of reach) are reported
-     once each, info mine.left-behind {:items [{:pos :count}]}. A dig after which nothing came in and no drop is in
-     sight is told once, info mine.drop-lost {:cell}, and listed in the result's :lost. The result's :left is re-checked after the walk
-     home and keeps only drops still lying then.
-  2. Carrying the goal ends :count.
-  3. The max-failures setting (3) failures end :gave-up (warn mine.gave-up). :dry-digs digs in a row after which the carried
-     count did not rise end :no-drops (warn mine.gave-up).
-  4. Dig the nearest target by walking (one bounded search, jobs.lib.targets, going on in the next step; a seen
-     block out of every stand's reach is passed over; when the search finds none reachable, the nearest in a straight
-     line is tried; targets over the ground snapshot come last, so the floor
-     under the start is dug last, and so is any block below the feet (not soil or ore: its hole loses the drop) when one level with them or higher is seen, the block under the feet after all others; a block under the feet whose floor
-     is unseen is dug from a cell beside it (the jobs.blocks.dig child), never from above, and skipped when there is
-     none (info mine.refused, no failure); targets whose drop lies in a clear line from the eye come first, and a body
-     whose line is blocked walks to within 1 when it can). Walk within 3: blocked skips the target and counts a failure, partial tries
-     again and the third partial in a row skips it. The best carried tool is equipped. Dug resets the failures
-     and starts collecting. Missing does nothing. Cannot (bedrock) skips without a failure. Anything else skips
-     and counts one.
-  5. With no target the body looks around from where it stands (each heading, level and down at the floor
-     ahead), once per cell and after each dig, so a vein's next block comes into view. It also looks around
-     once before the first target.
-  6. Still none, the block stone-type (stone, cobblestone, deepslate, andesite, granite, diorite, tuff) and the
-     tunnel not begun: a stair down (jobs.access.stair child, one step at a time, :fetch) along the heading, at most
-     :descend-limit steps, soil dug by hand; each step looks round, so stone that comes into view is a target.
-     The limit used up, or the stair stopping, ends :no-stone-found (warn mine.no-stone-found, result
-     :descent {:steps :stop}); the mend and the walk home follow.
-  6b. Still none, a tunnel level set (:level, else the ore's mine.descent/ore-levels entry, e.g. iron_ore 16; :level false: none) and the
-     body above it: a stair down the same way until the feet are at the level; the stair stopping ends the descent there
-     (info mine.descent-stopped {:steps :stop :y :level}) and the tunnel runs at that height; more than mine.descent/level-slack (12) above the level
-     (warn, same event) the dig phase ends :descent-stopped instead.
-  6c. Before the first step of 6 or 6b, a stair this body cut earlier (memory :stair-way) with its top within mine.descent/own-stair-reach and level with
-     the body, its foot 3+ below and not below the tunnel level, is walked down (a go-to child) and the new steps go on from its foot.
-  7. Else the strip tunnel, at the level then stood on.
-
-  A descent (6, 6b) goes by a mineshaft instead when one is usable (:shaft, jobs.lib.shafts): the body walks to the shaft's top (not when it stands on a step of the shaft: it goes on from there), a
-  jobs.access.stair child runs its stair down to the plan's depth, and the strip tunnel is the shaft's next branch
-  (shafts/next-for; remembered when the run ends). A shaft in another's zone or claim is not used (:ignore-zones? uses it); one in the
-  body's own zone is, without walking out of the zone first. No usable shaft or a stair that stops: the descent above. The text says
-  \"via shaft s (stair 54 steps to y 16), branch 2 north 32 blocks\".
-
-  Strip tunnel: a 1-wide 2-high straight run at the level the body stood on at the start, along :heading or :direction
-  (north, south, east, west or n/s/e/w; give :heading to choose it, else the way the body faces), at most :tunnel-length blocks per job; it starts past open cells of the line the body cut itself (info
-  mine.tunnel-skipped, also down a stair to a floor) and never digs a torch. 0 means no tunnel: then no
-  target ends :wet when a seen block was rejected only for water, else :none. Each step walks back onto the last
-  cell of the run (a go-to child; failing: :walk-failed) and cuts the next by a jobs.access.stair child of one :level
-  step (:cut-only with :stay-level, which then walks in itself): its stops and its handling of exposed lava (sealed), laid-open water (the dug cell itself is filled, which closes the line, so a stop; lava is filled beside the line and the cut goes on), a missing floor
-  (bridged) and refilled cells (:refills) are the stair's. Water beside the cut is taken with :wet, a falling block
-  when :accept has it, lava never. A cut of :block is collected like a target. Ore that comes into view is dug before the next step.
-
-  The run used up ends the dig phase :tunnel-length, any stop ends it :tunnel-stopped. Either way one warn
-  mine.tunnel-end {:y (the tunnel's feet height) :reason :heading :length :at :next :walk}: the reason is
-  :tunnel-length, :own-zone, :walk-failed, :breach-sealed, :breach-open, :refused (the stair declined), a hazard by
-  its key (:lava-adjacent :fluid-adjacent :falling-block, :at the hazard's cell) or the stair's stop. :at is the offending cell, :next the line cell it stopped before, :walk (walk-failed, step-failed) the go-to's status, reason and the names seen at the cell and its floor.
-
-  :stay-level true is the cave-safe mode: the tunnel runs at the start height (no stair down, no :level, no descent through soil), only
-  seen ore within one column of the body counts, and a cut that opens into air beyond the tunnel is refilled with a carried building
-  block from the line cell before the body steps in, ending the tunnel :breach-sealed (:breach-open when it cannot seal). Seen ore 2 to :ore-reach blocks straight out from the body
-  (feet or head height, through rock seen solid) is taken by a child mine run: a stay-level side cut that digs it and walks back, its
-  mouth then shut with a carried block (info mine.side); the ore is skipped afterwards. Seen ore one column round the feet from one cell below to one over the head is dug from the stand; the hole it leaves is
-  shut with a carried block once the drop is collected (the body steps back to the tunnel line first; warn mine.hole-open and
-  :holes-open in the result when it cannot). Seen ore it did not take (stay-level, or no way to stand beside it) is listed in the result as :unreached (up to 10).
-
-  Torches: a dig of seen ore that takes the body 4+ blocks off the tunnel line hangs one torch there the same way
-  (none within 4 of an earlier branch torch). The strip tunnel hangs a torch (jobs.access.tunnel/torch-at: a wall torch in the head cell, else a floor
-  torch) behind the body at its first step, then every :torch-interval steps, and at the cut's end when none hangs
-  within 4 blocks of it; 0 hangs none. Torches are the body's own and stay: nothing takes them back. Under 2
-  carried with a coal or charcoal and a stick or logs or planks (sticks are crafted; :fetch is passed on), the torch craft is run as a child (4 torches). With no torch and
-  nothing to craft from, one info mine.no-torches (per tunnel and per branch) and the dig goes on dark (it tries again at the next torch
-  step, after more coal or sticks are picked up). A place the rules refuse, or that fails, or a branch dig straight above or below the line (:no-site), is an info
-  mine.torch-left-out {:cell :reason}.
-
-  Mend: fills every ground cell that is now air, cave_air or water with the first carried of dig-in's building
-  blocks other than the item (the item last, when it is a building block), lowest first, then nearest, never the
-  body's feet or head cell. When only those are owed it jumpPlaces one block. Nothing to fill with warns
-  mine.mend-short. Six failed fills warn mine.mend-failed. Both end the job. A mend with no cell left to fill (also when every owed cell is refused)
-  ends as nothing owed. The item is :item, else the
-  drop-item table, else the block name. The mend asks the zone rules too: an owed cell in a zone or claim of
-  another owner that does not let others place is not filled (one warn mine.declined {:reason :refused}).
-
-  When nothing is owed and the mend left fewer than the goal carried (it spent what the dig brought), the body
-  looks around once. The job goes back to the dig phase (ground kept, :resumes + 1, at most 2) while a seen
-  target off the ground remains in :radius. Otherwise it ends :spent-on-mend, keeping the earlier reason in
-  :dig-reason.
-
-  Every job ends, after the mend, by a go-to walk back to the cell it started on, or onto a seen standable cell beside it when its
-  floor is open or unseen (warn mine.not-home when the walk does not arrive; the job then ends :not-home, the ore kept, :dig-reason the earlier reason).
-  With the start fewer than mine.end/home-dip blocks above the body the walk plans nothing deeper than that under it (no way round through caves).
-
-  Zones and plans (jobs.lib.access.rules, through jobs.lib.access): a target must be a dig the rules permit,
-  with only :accept hazards, when chosen and again right before the dig. A cell in a zone that bars :dig, or in
-  an active plan's footprint, is never a target. One refused right before the dig is skipped without a failure
-  (info mine.refused), as is one with a hazard not accepted. When all seen blocks are refused after the start, the
-  tunnel goes on (with :tunnel-length 0 the dig phase ends :refused).
-
-  Ends :done when :got meets :count (or the call's :least; default :all) and the body got home. Else the cause is
-  {:reason r} (:tool, :why): condition-failed for the facts :none :wet :refused :own-zone :no-shaft :flooded
-  :no-tool (also a worn last tool), limit-reached {:line :food} for :hungry, nothing-possible for the tries that failed (:no-drops
-  :gave-up :tunnel-length :tunnel-stopped :no-stone-found :descent-stopped :spent-on-mend :not-home :not-back :zone-exit). 0 of :count
-  is never done. Quote: about ::item-s s an item, open-ended; yields up to :count of the item.
-
-  Data {:got n :reason r} (text: mine got n of m: reason) plus
-  :dig-reason, :resumes, :tunnel and :left when set, and
-  :mended, the cells filled; its text (and the result's text when :got is 0) names the stair's steps and the tunnel's length,
-  heading and height (\"; stair down 48 steps; tunnel 32 blocks east at y 16\"); :descent {:steps :stop} is in the result after any descent. With reason :wet (also when a tunnel dug nothing and seen blocks were skipped for water), :wet-skipped counts the seen blocks left for water beside them. Every ending's text says the reason, :got and :mended, and for a tunnel its length, heading, end cell
-  and whether the body walked back. :got is how many more are carried than at the start, at least 0. :tunnel is
-  {:origin :heading :steps :stop :end :back-at :walked-back?}, :end the cell it ended on before the walk back.
-  :stay-level with no :heading or :direction goes on after a sealed breach or a fluid stop: it turns to a heading not yet tried from the
-  cell it stands in (not back along its tunnel), the :tunnel-length shared by all legs; :legs lists them [{:heading :length :stop}].
-  A breach's tunnel-end event and leg carry :behind {:names :cells}, the seen air and fluid cells beside the cut (read before the seal), also kept in body memory :breach-behind.")
+  Ends :done when :got meets :count (or the call's :least) and the body is home; else condition-failed for the facts :none :wet :refused
+  :own-zone :no-shaft :flooded :no-tool, limit-reached {:line :food} for :hungry, nothing-possible for failed tries (:no-drops :gave-up
+  :tunnel-length :tunnel-stopped :no-stone-found :descent-stopped :spent-on-mend :not-home :not-back :zone-exit). 0 of :count is never done.
+  Data {:got n :reason r} plus :dig-reason, :mended, :tunnel, :descent, :left, :lost, :ores, :unreached; text says reason, :got, :mended, the
+  stair and the tunnel. Quote: about ::item-s s an item, open-ended.")
 
 (a/defargs args
   {:block {:doc "name of the block to mine (required)" :spec a/name? :default nil}
@@ -193,8 +82,6 @@
    :fetch {:doc "get a pickaxe when none is carried (jobs.items.get-tool through jobs.lib.need): true, a set of kinds or a map of which only :how and :explore apply; false ends :no-tool" :spec need/option? :default true}
    :ignore-zones? :shared
    :mend {:doc "fill the ground under the start again afterwards" :spec boolean? :default true}
-   :collect-radius {:doc "how far around to collect drops after a dig" :spec (a/num-in 0 nil) :default 6}
-   :dry-digs {:doc "digs in a row after which the carried count of the item did not rise before giving up (:no-drops)" :spec (a/int-in 1 nil) :default 3}
    :heading {:doc "the strip tunnel's heading, over :direction: north, south, east or west (n/s/e/w), or a cell [x y z] (the dominant axis from the start toward it); nil: :direction" :spec (a/pred "a heading name or a cell [x y z]" #(or (and (or (string? %) (keyword? %)) (heading-name %)) (and (sequential? %) (= 3 (count %)) (every? number? %)))) :default nil}
    :direction {:doc "the strip tunnel's heading: north, south, east or west (n/s/e/w); nil: the way the body faces when the job starts" :spec (a/pred "north, south, east or west (n/s/e/w), a string or keyword" #(and (or (string? %) (keyword? %)) (heading-name %))) :default nil}
    :tunnel-length {:doc "the most blocks the strip tunnel runs in this job, at the body's level; 0: no tunnel, seen blocks only" :spec (a/int-in 0 nil) :default 32}
@@ -211,7 +98,8 @@
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}})
 
 (a/defargs settings
-  {::max-failures {:default 3 :doc "Dig failures in a row before giving up." :spec (a/int-in 1 nil)}
+  {::dry-digs {:default 3 :doc "Digs in a row after which the carried count of the item did not rise before giving up (:no-drops)." :spec (a/int-in 1 nil)}
+   ::max-failures {:default 3 :doc "Dig failures in a row before giving up." :spec (a/int-in 1 nil)}
    ::job-time-s {:default 1800 :doc "Seconds a mine call may take by default (its :spend :job-time)." :spec (a/num-in 0 nil)}
    ::stay-margin {:default 8 :doc "Blocks over the higher or under the lower of body and ore that a :stay-level walk to ore may plan through (go-to :y-margin): a body a reflex took far off does not climb a hill to get back." :spec (a/num-in 0 nil)}
    ::item-s {:default 6 :doc "Mean seconds one item takes (walk, dig, collect), for the quote." :spec (a/num-in 0 nil)}})
@@ -394,17 +282,16 @@
 
 (defn ^:async dig-round-1! [c]
   (let [{:keys [goal failures dry looked]} (ctx/mem c)
-        {:keys [wet dry-digs tunnel-length]} (:args c)
+        {:keys [wet tunnel-length]} (:args c)
+        dry-digs (settings/get settings ::dry-digs)
         {:keys [targets refused wet? wet-n side far]} (scan c)
         ready? (and (< (carried c) goal) (< (or dry 0) dry-digs) (< failures (settings/get settings ::max-failures)) (some? looked))
         pos (when ready? (await (next-target! c targets)))]
     (when (seq far) (ctx/update-mem! c update :unreached #(into (vec %) (remove (set %)) far)))
     (cond
       (>= (carried c) goal) (to-mend! c :count)
-      (>= (or dry 0) dry-digs) (do (ctx/emit! c :mine.gave-up :warn {:reason :no-drops :dry dry :text (str "mine gave up: " dry " digs brought nothing")})
-                                   (to-mend! c :no-drops))
-      (>= failures (settings/get settings ::max-failures)) (do (ctx/emit! c :mine.gave-up :warn {:failures failures :text (str "mine gave up after " failures " failures")})
-                                     (to-mend! c :gave-up))
+      (>= (or dry 0) dry-digs) (to-mend! c :no-drops)
+      (>= failures (settings/get settings ::max-failures)) (to-mend! c :gave-up)
       (nil? looked) (do (await (look-around! c)) :again)
       (= :searching pos) :again
       (shaft-under-way? c) (await (shaft-round! c))
@@ -449,7 +336,6 @@
   cause when one failed."
   [c & [why]]
   (let [kind (tools/needed-kind (:primitives c) (:block (:args c)))]
-    (ctx/emit! c :mine.no-tool :warn {:tool kind :text (str "mine has no " kind " for " (:block (:args c)))})
     (end-run c (cond-> {:got 0 :reason :no-tool :tool kind :mended 0 :text "mine done: no-tool, got 0, mended 0"} why (assoc :why why)))))
 
 (defn fetch-limits
@@ -472,7 +358,6 @@
       (tools/can-harvest? (:primitives c) block) :again
       (nil? (:phase (ctx/mem c))) (no-tool! c why)
       :else (let [kind (tools/needed-kind (:primitives c) block)]
-              (ctx/emit! c :mine.no-tool :warn {:tool kind :text (str "mine has no " kind " for " block " and could not get one")})
               (ctx/update-mem! c assoc :end-cause (cond-> {:tool kind} why (assoc :why why)))
               (to-mend! c :no-tool)))))
 
@@ -510,7 +395,6 @@
   "The head is in water: no more digging (the cut may be what let it in). Warn; before the first dig end at once
   {:got 0 :reason :flooded}, later end the dig phase :flooded and walk home."
   [c]
-  (ctx/emit! c :mine.flooded :warn {:text "mine stopped digging: the head is in water"})
   (if (:phase (ctx/mem c))
     (do (ctx/update-mem! c assoc :reason :flooded)
         (wrap-up! c))
@@ -520,7 +404,6 @@
   "Food is short and get-food found none (trip/food-short?; not for soil, dug at the surface near home): before the first dig end at once {:got 0
   :reason :hungry}, later end the dig phase :hungry and walk home."
   [c]
-  (ctx/emit! c :mine.hungry :warn {:text "mine stopped digging: hungry, no food carried and get-food found none"})
   (if (:phase (ctx/mem c))
     (do (ctx/update-mem! c assoc :reason :hungry)
         (wrap-up! c))

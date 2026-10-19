@@ -1,7 +1,7 @@
 ;; gather.mine stops :hungry when the body is hungry, carries no food and get-food gave up lately (card a1366037; jobs.lib.trip/food-short?).
 ;; A stone mass x 2..30, z 8..30 with a 1x2 tunnel cell at the body (as mine-branch-torch); iron ore at the east end of the line.
 ;; Food drained by RCON to near 0 (polled on foodLevel: the active_effects poll let the job start before the drain); a fresh :hungry entry is the give-up.
-;; Should-succeed: no food carried: mine.hungry is logged and no ore is dug. Should-fail: bread carried: the mine goes on and ends done.
+;; Should-succeed: no food carried: the job stops :hungry and no ore is dug. Should-fail: bread carried: the mine goes on and ends done.
 {:defaults
  {:tags [:mine :hungry :jobs] :time :any
   :plot {:height 12}
@@ -13,15 +13,13 @@
  [{:name "hungry-with-no-food-stops-before-digging"
    :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-rcon "data get entity $BODY foodLevel" "data: [0-3]$" 30]
          [:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
-   :expect [{:event {:source :job :kind :mine.hungry :level :warn} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind #{:completed :stopped}} :of-job true :for-s 40 :until {:source :job :kind :mine.hungry}}]
+   :expect [{:event {:source :job :kind :stopped :data {:got 0 :reason :hungry}} :within-s 60 :of-job true}]
    :after [[:item "raw_iron" 0]]}
   {:name "bread-carried-the-mine-goes-on"
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8] ["bread" 4]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-rcon "data get entity $BODY foodLevel" "data: [0-3]$" 30]
          [:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
-   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :mine.hungry} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 100 :of-job true}]
    :after [[:item "raw_iron" 1]]}
   ;; 177832d8: hungry is a limit on the food line; a worn last tool is a missing tool (condition-failed), neither is the other's ending
   {:name "hungry-ends-limit-reached-not-condition-failed"

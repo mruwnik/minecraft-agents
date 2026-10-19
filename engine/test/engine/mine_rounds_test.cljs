@@ -168,7 +168,7 @@
         (let [s (m/start {:world {:blocks (m/cells "stone" [4 5 6 7 8 9] [64] [0]) :drops {"stone" "cobblestone"}
                                   :inventory m/pickaxe :unreachable ["5,64,2"]}})]
           (m/drop-away! (:p s) [5 64 2])
-          (core/submit! (:eng s) (m/spec {:block "stone" :count 4 :dry-digs 2 :mend false}) {})
+          (core/submit! (:eng s) (m/spec {:block "stone" :count 4 :settings {:jobs.gather.mine/dry-digs 2} :mend false}) {})
           (await (m/run-ticks s 60))
           (is (m/finished? s))
           (is (= :no-drops (:reason (m/done-event s))) "nothing came in, so the digs ran dry")

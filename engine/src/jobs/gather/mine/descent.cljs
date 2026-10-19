@@ -73,13 +73,9 @@
            (and (nil? (shaft-state c)) (descent-wanted? c)))))
 
 (defn no-stone!
-  "The stair down found no stone: one warn mine.no-stone-found, then the mend and the walk home with :reason :no-stone-found."
+  "The stair down found no stone: the mend and the walk home with :reason :no-stone-found."
   [c]
-  (let [stop (:stop (:descent (ctx/mem c)))
-        steps (:steps (:descent (ctx/mem c)) 0)]
-    (ctx/emit! c :mine.no-stone-found :warn {:steps steps :stop stop :text (str "mine dug down " steps " blocks through soil, found no stone"
-                                                                               (when stop (str "; the stair stopped: " (name stop))))})
-    (to-mend! c :no-stone-found)))
+  (to-mend! c :no-stone-found))
 
 (defn stair-stopped!
   "The stair down to the tunnel level stopped above it: one mine.descent-stopped, then the tunnel runs where the body stands,

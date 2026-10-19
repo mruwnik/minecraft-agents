@@ -39,16 +39,14 @@
    :blocks [[:fill [2 0 8] [30 6 24] "air"] [:fill [4 0 16] [9 0 16] "granite"]]
    :body {:at [3.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.gather.mine {:block "granite" :count 6 :direction :east :tunnel-length 8 :radius 8 :mend false})]]
-   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 6 :reason :count}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :mine.gave-up} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 6 :reason :count}} :within-s 100 :of-job true}]
    :after [[:item "granite" 6] [:not-block [4 0 16] "granite"] [:not-block [9 0 16] "granite"]]
    :limit-s 120}
   {:name "stone-row-mined-to-the-count-west"
    :blocks [[:fill [2 0 8] [30 6 24] "air"] [:fill [4 0 16] [9 0 16] "granite"]]
    :body {:at [10.5 0 16.5] :yaw 90 :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.gather.mine {:block "granite" :count 6 :direction :west :tunnel-length 8 :radius 8 :mend false})]]
-   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 6 :reason :count}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :mine.gave-up} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 6 :reason :count}} :within-s 100 :of-job true}]
    :after [[:item "granite" 6] [:not-block [4 0 16] "granite"] [:not-block [9 0 16] "granite"]]
    :limit-s 120}
   ;; Card a8447323: :stay-level mines ore seen within :ore-reach (2) off the tunnel, not only in the line: a side cut, the mouth shut with a carried block

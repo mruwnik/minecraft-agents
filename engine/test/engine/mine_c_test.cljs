@@ -398,8 +398,7 @@
           (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0}) {})
           (await (run-ticks s 30))
           (is (= 1 (get (inv s) "raw_iron")) "the body walked beside the dug cell and picked the drop up")
-          (is (= :count (:reason (done-event s))))
-          (is (empty? (events-of s :mine.gave-up))))))))
+          (is (= :count (:reason (done-event s)))))))))
 
 (deftest a-drop-hidden-by-the-rim-is-seen-from-the-edge-of-the-bodys-cell
   (async done
@@ -554,7 +553,7 @@
       (fn ^:async t []
         (let [s (start {:world {:blocks {"5,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})]
           (drop-away! (:p s) [8 64 0])
-          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0 :collect-radius 3}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0 :settings {:jobs.gather.mine.targets/collect-radius 3}}) {})
           (await (run-ticks s 30))
           (is (= 1 (get (inv s) "raw_iron")))
           (is (empty? (events-of s :mine.left-behind))))))))
@@ -566,7 +565,7 @@
         (let [s (start {:world {:blocks {"5,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270
                                 :unreachable ["8,62,0"]}})]
           (drop-away! (:p s) [8 62 0])
-          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0 :collect-radius 3}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0 :settings {:jobs.gather.mine.targets/collect-radius 3}}) {})
           (await (run-ticks s 30))
           (is (nil? (get (inv s) "raw_iron")))
           (is (= [{:pos [8 62 0] :count 1}] (:left (done-event s)))))))))

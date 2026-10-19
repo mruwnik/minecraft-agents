@@ -21,6 +21,7 @@
 
 (a/defargs settings
   {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+   ::collect-radius {:default 6 :doc "How far around the last dug cell to collect drops after a dig, in blocks." :spec (a/num-in 0 nil)}
    ::stall-rounds {:default 5 :doc "Rounds in a row a walk to one target waits without the body getting nearer before the target is skipped as a failure." :spec (a/int-in 1 nil)}
    ::zone-margin {:default 8 :doc "Before it digs, the body walks to a start cell this many blocks outside any zone it owns; its stair and tunnel stop at such a zone." :spec (a/int-in 0 nil)}})
 
@@ -206,10 +207,10 @@
 (defn skip! [c pos] (ctx/update-mem! c update :skipped (fnil conj []) pos))
 
 (defn drop-radius
-  "The entity search radius that covers :collect-radius around the last dug cell, seen from the body: the body
+  "The entity search radius that covers the collect-radius setting around the last dug cell, seen from the body: the body
   stands up to its reach from the cell and the drop may have fallen further."
   [c]
-  (let [r (:collect-radius (:args c))
+  (let [r (settings/get settings ::collect-radius)
         dug (:dug-at (ctx/mem c))
         here (u/pos-of (.-pos (.self (:primitives c))))]
     (if dug
@@ -217,7 +218,7 @@
       r)))
 
 (defn left-behind
-  "Drops of the item lying within radius (default: :collect-radius around the last dug cell) of the body, as
+  "Drops of the item lying within radius (default: the collect-radius setting around the last dug cell) of the body, as
   {[x y z] count}."
   ([c] (left-behind c (drop-radius c)))
   ([c radius]
