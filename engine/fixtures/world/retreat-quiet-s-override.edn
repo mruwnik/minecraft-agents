@@ -19,7 +19,7 @@
    :limit-s 90}
   {:name "quiet-s-120-holds-past-a-minute"
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16 :settings {:jobs.survival.retreat-refuge/quiet-s 120}})}]
+               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16 :settings {:jobs.survival.retreat-refuge/quiet-s 120 :jobs.survival.retreat-refuge/hide-s 200}})}]
    :expect [{:no-event {:source :reflex :kind :ended} :from-event {:source :job :kind :retreat_sealed} :for-s 70}]
    :limit-s 120}
   {:name "default-holds-about-30s"

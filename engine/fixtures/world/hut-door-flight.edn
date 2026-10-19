@@ -1,5 +1,6 @@
 ;; Hut door in a flight from a hostile (card b335a1e4, fix ebba1382): retreat shuts an open door nearer the danger than
 ;; the body (retreat.door-shut, one click), never one behind the body, never a shut one, never an iron door (no hand).
+;; door-behind-the-body: stone outside the north door, or the body would leave by it and shut it behind it (a door then nearer the hostile).
 ;; Hut: stone walls x 12..20, z 12..20, roof y 3, interior 7x7. Body mid-room, skeleton (NoAI) 10 south of the south wall.
 {:defaults
  {:tags [:hostile :survival :door]
@@ -35,6 +36,7 @@
   {:name "door-behind-the-body-is-not-clicked"
    :blocks [[:set [16 0 12] "oak_door[facing=north,half=lower,open=true]"]
             [:set [16 1 12] "oak_door[facing=north,half=upper,open=true]"]
+            [:set [16 0 11] "stone"] [:set [16 1 11] "stone"]
             [:set [16 0 20] "air"] [:set [16 1 20] "air"]]
    :act [[:summon "skeleton" [16.5 0 26.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :job :kind :retreat.door-shut} :for-s 25}]
