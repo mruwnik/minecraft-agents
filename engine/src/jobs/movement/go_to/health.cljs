@@ -124,12 +124,24 @@
                                              #js {:done true}
                                              #js {:controls #js {:forward true :sneak true} :yaw (js/Math.atan2 (- dx) (- dz))})))))))
 
+(defn settled?
+  "Whether looking at drop would change nothing about its price: its landing is water, or its floor is in fresh view and no bouncing block (a plain fall; a pad is judged by what the body sees)."
+  [p {:keys [floor]} [lx ly lz]]
+  (let [seen (wworld/landing-seen p)
+        name-at (fn [x y z] (some-> (u/seen-block p {:x x :y y :z z}) .-name))
+        [fx fy fz] floor]
+    (boolean (and seen
+                  (or (= "water" (name-at lx ly lz))
+                      (and (seen fx fy fz false) (not (some #{(name-at fx fy fz)} wworld/bounce-blocks))))))))
+
 (defn drops
-  "The drops of look-drop-min blocks or more in steps (a planner path's JS steps), as {:from cell :floor the cell under the landing}."
-  [steps]
+  "The drops of look-drop-min blocks or more in steps (a planner path's JS steps) that a look can still decide, as {:from cell :floor the cell under the landing}: not a landing in water, nor a floor in view that does not bounce."
+  [p steps]
   (vec (for [[a b] (partition 2 1 (some-> steps array-seq))
-             :when (>= (- (.-y a) (.-y b)) look-drop-min)]
-         {:from [(.-x a) (.-y a) (.-z a)] :floor [(.-x b) (dec (.-y b)) (.-z b)]})))
+             :when (>= (- (.-y a) (.-y b)) look-drop-min)
+             :let [drop {:from [(.-x a) (.-y a) (.-z a)] :floor [(.-x b) (dec (.-y b)) (.-z b)]}]
+             :when (not (settled? p drop [(.-x b) (.-y b) (.-z b)]))]
+         drop)))
 
 (defn lip-unsafe?
   "Whether looking over the edge of drop is held back: a hostile the body knows of near the lip, or lava seen in the drop's column or beside it."
@@ -181,7 +193,7 @@
         within (await (wplan/plan-within! c (wworld/path-world (:primitives c) (:unknown c)) [(:x pos) (:y pos) (:z pos)] range (walk/default-weight) policy))
         ^js r (:r within)]
     (when (= "found" (.-status r))
-      (ctx/update-mem! c assoc :probe-drops (drops (some-> r .-path .-steps)))
+      (ctx/update-mem! c assoc :probe-drops (drops (:primitives c) (some-> r .-path .-steps)))
       (or (some-> r .-path .-cost .-damage) 0))))
 
 (def probe-keep-ms "How long a probe is kept while the body waits." 10000)

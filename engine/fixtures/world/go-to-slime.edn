@@ -3,6 +3,7 @@
 ;; (about 0.63 x the fall, rounded up), else as the full fall. :floor {:health 14} leaves a budget of 5 hp (18: 2 hp), so only a free landing may be taken.
 ;; Should-succeed: a 10 drop onto a 3x3 pad then a walk on (no hurt, no walker-fault: the bounce is on plan, also when it drifts over the pad); a 10 drop into a 1x1 shaft walled 10 high at floor 14;
 ;; a 6 drop into a shaft walled 6 high at floor 18. These two shafts are walled with glass in the stone top (3x3 of glass round the shaft cell): the body sees stone walls of a 1x1 shaft only on three sides, never the one under its feet, and prices no bounce on a wall it has not seen. Should-fail: a 10 drop into a shaft walled only 2 or only 4 high at floor 18 (2 hp: the 8 and 6 hops to the wall tops cost 5 and 3 hp, so the walls are no stepping stones).
+;; A 6 drop onto a 3x3 pad at the foot of the cliff: the pad's ring needs walls on the cliff side, and the face under the takeoff cell is never in the body's view, so it is refused (stone face) unless the face is glass (the body sees through it).
 ;; Live risk: whether a body that bounces on a 1x1 pad stays in the shaft (the walls hold it); the result of the walled cases is judged by arrival at the shaft floor, not by the bounce.
 {:defaults
  {:tags [:movement :planner]
@@ -43,4 +44,16 @@
    :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 0 :ways #{:walk :clear-seal} :floor {:health 18}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind :result}}]
-   :after [[:body-far [16.5 0 16.5] 4]]}]}
+   :after [[:body-far [16.5 0 16.5] 4]]}
+  {:name "cliff-foot-pad-6-drop-stone-face-is-refused-at-floor-18"
+   :blocks [[:fill [16 0 1] [30 3 30] "stone"] [:fill [16 3 15] [18 3 17] "slime_block"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 4 16] :range 0 :ways #{:walk :clear-seal} :floor {:health 18}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind :result}}]
+   :after [[:body-far [16.5 4 16.5] 4]]}
+  {:name "cliff-foot-pad-6-drop-glass-face-is-free-at-floor-18"
+   :blocks [[:fill [16 0 1] [30 3 30] "stone"] [:fill [16 3 15] [18 3 17] "slime_block"] [:fill [15 4 1] [15 9 30] "glass"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 4 16] :range 0 :ways #{:walk :clear-seal} :floor {:health 18}})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :result}}]
+   :after [[:body-near [16.5 4 16.5] 2.5]]}]}

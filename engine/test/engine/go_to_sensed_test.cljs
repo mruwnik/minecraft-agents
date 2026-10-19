@@ -771,3 +771,52 @@
                                                :blocks (slime-pit {})}
                                               {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
           (is (= [:needs-health :unreachable] ((juxt :why :reason) out)) (pr-str out)))))))
+
+(def probed (atom nil))
+
+(def probe-drops-job
+  "A job that leans over the lip to the pit floor under the landing [0 55 0], then probes the way to the pit and keeps the drops left to look at in probed."
+  {:round (fn ^:async probe-drops-round [c]
+            (ctx/update-mem! c assoc :probe-drops [{:from [-1 60 0] :floor [0 55 0]}])
+            (await (gth/look-at-drops! c))
+            (await (gth/probe-plan! c {:x 1 :y 56 :z 0} 0))
+            (reset! probed (:probe-drops (ctx/mem c)))
+            (ctx/end c :done nil))})
+
+(defn ^:async probed-drops [pad]
+  (await (run-job probe-drops-job {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks (slime-pit pad)} {}))
+  @probed)
+
+(deftest a-drop-onto-a-floor-in-view-that-does-not-bounce-is-not-looked-at
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= [] (await (probed-drops {}))))))))
+
+(deftest a-drop-onto-a-seen-slime-floor-is-still-looked-at
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= 1 (count (await (probed-drops slime-floor)))))))))
+
+(defn cliff-foot
+  "Stone x -12..-1 to y 59 (the body on it, feet y 60), then open ground x 0..8 at y 53 (a 6 drop at the cliff face), a 3x3 slime pad at x 0..2 laid in that ground. face: the block of the cliff's last column x -1."
+  [face]
+  (-> (merge (box -12 50 -4 -2 59 4 "stone") (box -1 50 -4 -1 59 4 face) (box 0 50 -4 8 53 4 "stone"))
+      (into (for [x (range 0 3) z (range -1 2)] [(str x ",53," z) "slime_block"]))))
+
+(deftest go-to-refuses-a-slime-pad-at-a-cliff-foot-whose-face-it-cannot-see
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks (cliff-foot "stone")}
+                                              {:pos [1 54 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
+          (is (= [:needs-health :unreachable] ((juxt :why :reason) out)) (pr-str out)))))))
+
+(deftest go-to-takes-a-slime-pad-drop-at-a-cliff-foot-whose-face-is-glass
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks (cliff-foot "glass")}
+                                                   {:pos [1 54 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
+          (is (= {:arrived true} out) (pr-str (last seen))))))))
