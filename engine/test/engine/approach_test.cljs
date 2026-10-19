@@ -128,3 +128,14 @@
                 :block-at (apply world {} (mapcat identity (concat wall (for [y (range 64 74)] [[0 y 0] "oak_log"])))))]
     (is (nil? (:stand r)))
     (is (not-any? #{[1 67 0] [2 67 0]} [(:base (:pillar r))]))))
+
+(deftest natural-ground-in-a-foreign-zone-is-still-a-stand
+  (let [r (plan :targets #{[0 66 0]} :zones [foreign-zone])]
+    (is (= [3 64 0] (first (:stand r))))))
+
+(deftest no-zone-list-does-not-refuse-stands
+  (is (seq (:stand (plan :targets #{[0 66 0]} :zones nil)))))
+
+(deftest a-plan-footprint-floor-is-no-stand-even-when-natural
+  (let [r (plan :targets #{[0 66 0]} :footprints #{[3 63 0]})]
+    (is (not-any? #{[3 64 0]} (:stand r)))))

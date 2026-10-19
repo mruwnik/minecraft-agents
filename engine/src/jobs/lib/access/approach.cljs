@@ -22,7 +22,7 @@
     {:reason :zone}       every base up to max-radius is refused by zones, claims or footprints
     {:reason :no-stand}   ground and permission exist but no column gives a stand (headroom, too tall)
 
-  A :stand cell is not zone-checked: walking there is go-to's business. A stand or base on a floor cell the rules
+  A :stand cell is not zone-checked: walking there is go-to's business. A stand or base on a built floor cell the rules
   refuse to dig (a spared wall) is never planned; a base so refused counts as a zone refusal.
 
   Ranking: walking a block costs 1, placing a block pillar-cost. A stand needs no placement, so any stand wins over a
@@ -31,6 +31,7 @@
             [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.escape :as escape]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -66,10 +67,15 @@
        (not (str/ends-with? (str (floor-at [x (dec y) z])) "_leaves"))))
 
 (defn floor-refused?
-  "Whether the floor under a stand or base is a cell the rules refuse to dig (a zone's wall, a plan's block): a body
-  does not climb onto what it must leave standing, and go-to finds no way up to a stand on top of one."
+  "Whether the floor under a stand or base is someone's build the rules refuse to dig (a spared wall, a plan's block):
+  a body does not climb onto what it must leave standing, and go-to finds no way up to a stand on top of one. Natural
+  ground in a zone is walked on, not dug, so it stays a floor; so does any floor when no zone list was read."
   [in [x y z]]
-  (not (:ok (rules/may-dig? (-> in (dissoc :body-cols) (assoc :cell [x (dec y) z]))))))
+  (let [floor [x (dec y) z]
+        v (rules/may-dig? (-> in (dissoc :body-cols) (assoc :cell floor)))]
+    (and (not (:ok v))
+         (not= :no-zones (:reason v))
+         (or (= :footprint (:reason v)) (not (escape/natural? ((:block-at in) floor)))))))
 
 (defn in-reach?
   "Every target within reach of the eye of a body standing at the middle of the feet cell."
