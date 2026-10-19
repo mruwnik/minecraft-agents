@@ -85,6 +85,7 @@
             [:set [11 0 16] "torch"] [:set [17 0 16] "torch"] [:set [23 0 16] "torch"] [:set [28 0 16] "torch"]]
    :body {:at [20.5 0 16.5] :yaw 90 :settle-s 5}
    :act [[:summon "zombie" [23.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}},active_effects:[{id:\"minecraft:slowness\",amplifier:1b,duration:2400}]}"]]
+   ;; the west end is open: the flight leaves the tunnel after ~5 s and looks at the unseen ground there, so only the first 4 s count
    :expect [{:count-event {:source :job :kind :retreat.target} :for-s 15 :at-least 2}
-            {:count-event {:source :action :kind :started :data {:name "look"} :context {:reflex-id :hostile-near}} :for-s 15 :at-most 3}]
+            {:count-event {:source :action :kind :started :data {:name "look"} :context {:reflex-id :hostile-near}} :for-s 4 :at-most 3}]
    :limit-s 40}]}
