@@ -86,7 +86,7 @@
   (is (= :ok (lit 0 15 #(kind (ready/safe-at (constantly outside)) (assoc open-night :time st/noon))))))
 
 (deftest dark-at-reads-the-light-of-the-cell-not-the-clock
-  (are [block sky world dark?] (= dark? (lit block sky #(sh-sense/dark-at? (:primitives (ctx-of world)) (sh-sense/feet (:primitives (ctx-of world))))))
+  (are [block sky world dark?] (= dark? (lit block sky #((complement sh-sense/lit-here?) (:primitives (ctx-of world)) (sh-sense/feet (:primitives (ctx-of world))))))
     0 15 open-night true
     8 15 open-night false
     0 0 (assoc open-night :time st/noon) true

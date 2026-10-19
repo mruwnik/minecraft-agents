@@ -60,17 +60,6 @@
   [p]
   (if-let [{:keys [t rain thunder]} (sky-state p)] (look/sky-subtract-at t rain thunder) 0))
 
-(defn lit-here?
-  "Whether the cell is lit enough that monsters cannot spawn: block light of 1 or more, or sky light less the sky
-  darkening at dark-light, from any source (dawn, a torch). Without light data there, the sky decides (look/dark-guess?)."
-  [p cell]
-  (let [raw (look/raw-of p)
-        {:keys [x y z]} cell]
-    (if (and raw (look/light-known? raw x y z))
-      (let [packed (.lightAt ^js raw x y z)]
-        (or (pos? (bit-and packed 15)) (>= (- (bit-shift-right packed 4) (sky-subtract-now p)) (look/dark-light))))
-      (not (look/dark-guess? p)))))
-
 (defn buried-by-column?
   "Fallback without light data: the cell two over the feet cell is a block the body has seen (only that one shows from inside)."
   ([p] (buried-by-column? p (feet p)))
@@ -142,13 +131,13 @@
     (when (or (= [x y z] [(:x own) (:y own) (:z own)]) (seen-cell? p cell))
       (light-at p cell))))
 
-(defn dark-at?
-  "Whether the cell is dark (effective light below look/dark-light): by its light when the body knows it, else by the
-  guess for unseen ground (look/dark-guess?)."
+(defn lit-here?
+  "Whether the cell is lit enough that monsters cannot spawn (look/lit-light?: any source, dawn or a torch) as the body knows
+  it; a cell it has not seen is guessed by the open sky (look/dark-guess?)."
   [p cell]
-  (if-let [light (cell-light p cell)]
-    (< light (look/dark-light))
-    (look/dark-guess? p)))
+  (if (cell-light p cell)
+    (look/lit-light? (block-light-at p cell) (or (sky-light-at p cell) 0) (sky-subtract-now p))
+    (not (look/dark-guess? p))))
 
 (defn cave-cells
   "How many standable cells (feet, head and the cell over it free, a solid floor, a seen solid within cave-ceiling over them) lie
@@ -211,17 +200,15 @@
 (defn spawnable-cells [p cells] (filter #(spawnable? p %) cells))
 
 (defn light-read
-  "How dark the cells are, as the body knows them: {:dark-fraction share of the cells dark now, :darkest the lowest
-  light (block or sky less the darkening), :unseen cells with no light data (guessed dark, counted in the fraction)}.
-  One dark corner is the risk, so no median. A point is the one-cell case."
+  "How dark the cells are, as the body knows them: {:dark-fraction share of the cells not lit-here? (an unseen cell by the
+  guess), :darkest the lowest light of the cells with light data, :unseen cells with none}. One dark corner is the risk,
+  so no median. A point is the one-cell case."
   [p cells]
-  (let [light #(light-at p %)
-        lights (map light cells)
-        unseen (count (filter nil? lights))
+  (let [lights (map #(light-at p %) cells)
         seen (remove nil? lights)]
-    {:dark-fraction (if (seq cells) (/ (count (remove #(and (light %) (lit-here? p %)) cells)) (count cells)) 0)
+    {:dark-fraction (if (seq cells) (/ (count (remove #(lit-here? p %) cells)) (count cells)) 0)
      :darkest (when (seq seen) (apply min seen))
-     :unseen unseen}))
+     :unseen (- (count lights) (count seen))}))
 
 (defn light-view
   "Read-only light the body perceives, for observe light. A cell {:x :y :z} gives {:cell :seen? :block :sky :sky-subtract

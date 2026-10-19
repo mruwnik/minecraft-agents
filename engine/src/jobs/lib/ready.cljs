@@ -90,7 +90,7 @@
                           at (f c)
                           to (cond (nil? at) feet
                                    (:y at) (update-vals at js/Math.floor))]
-                      (and (sh-sense/dark-at? p (if (and to (sh-sense/solid-at? p to)) (update to :y inc) (or to feet)))
+                      (and (not (sh-sense/lit-here? p (if (and to (sh-sense/solid-at? p to)) (update to :y inc) (or to feet))))
                            (not (and to (sh-sense/buried? p)
                                      (or (sh-sense/buried-at? p to)
                                          (and (not (sh-sense/seen-cell? p to)) (<= (:y to) (:y feet)))))))))]
@@ -108,10 +108,10 @@
   (safe-at-by-night (fn [c] (let [args (:args c)] (when-not (:here args) (a/cell (:submitted-at args)))))))
 
 (defn dark-sky
-  "Later :dark while the light at the feet is dark above ground (sh-sense/dark-at?)."
+  "Later :dark while the light at the feet is dark above ground (not sh-sense/lit-here?)."
   [c]
   (let [p (:primitives c)]
-    (if (and (sh-sense/dark-at? p (sh-sense/feet p)) (not (sh-sense/buried? p)))
+    (if (and (not (sh-sense/lit-here? p (sh-sense/feet p))) (not (sh-sense/buried? p)))
       (contract/later :dark "dark sky above ground, waits for light")
       (contract/ok :lit "lit or underground"))))
 

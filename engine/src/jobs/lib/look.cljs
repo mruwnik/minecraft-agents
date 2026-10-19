@@ -314,11 +314,11 @@
   (let [s (.sky raw)]
     (sky-subtract-at (.-timeOfDay s) (.-rain s) (.-thunder s))))
 
-(defn effective-light
-  "Light at cell x y z of raw: the brighter of block light and sky light less the sky darkening."
-  [raw x y z]
-  (let [packed (.lightAt raw x y z)]
-    (max (bit-and packed 15) (- (bit-shift-right packed 4) (sky-subtract raw)))))
+(defn lit-light?
+  "Whether a cell with this block and sky light is lit enough that monsters cannot spawn: block light of 1 or more, or sky
+  light less the sky darkening subtract at dark-light."
+  [block sky subtract]
+  (or (pos? block) (>= (- sky subtract) (dark-light))))
 
 (defn dark-guess?
   "The guess for a cell the body has not seen: whether open sky, less its darkening, is below dark-light. False without a perception."
@@ -334,13 +334,12 @@
          (zero? (bit-shift-right (.lightAt raw x (inc y) z) 4)))))
 
 (defn dark-here?
-  "Whether the light at the body's feet (block or sky less the sky's darkening now) is under look/dark-light: hostiles spawn and walk in from it, at any hour. False without light data."
+  "Whether the light at the body's feet is not lit-light? (hostiles spawn and walk in from it, at any hour). False without light data."
   [p]
   (let [raw (raw-of p)
-        ^js pos (.-pos (.self p))]
-    (boolean (and raw
-                  (< (effective-light raw (js/Math.floor (.-x pos)) (js/Math.floor (.-y pos)) (js/Math.floor (.-z pos)))
-                     (dark-light))))))
+        ^js pos (.-pos (.self p))
+        x (js/Math.floor (.-x pos)) y (js/Math.floor (.-y pos)) z (js/Math.floor (.-z pos))]
+    (boolean (and raw (light-known? raw x y z) (not (lit-light? (bit-and (.lightAt raw x y z) 15) (bit-shift-right (.lightAt raw x y z) 4) (sky-subtract raw)))))))
 
 (defn dark-fn
   "The planner's test of a feet cell (options.dark.at), {:at (fn [x y z] 1 dark, 0 lit) :night? whether the sky is dark},
@@ -354,8 +353,7 @@
      (when-let [raw (:raw per)]
        (let [^js st (:st per)
              subtract (sky-subtract raw)
-             dark (dark-light)
-             night? (< (- 15 subtract) dark)
+             night? (< (- 15 subtract) (dark-light))
              unseen (if (and (or night? (buried-feet? raw (.-pos (.self p)))) (not (false? unseen-dark?))) 1 0)
              ^js sections (store/store-of st (.-dim st))]
          {:night? night?
@@ -364,7 +362,7 @@
                   (if (or (nil? sec) (zero? (aget (.-ids sec) (store/cell-index x y z))))
                     unseen
                     (let [packed (.lightAt ^js raw x y z)]
-                      (if (or (pos? (bit-and packed 15)) (>= (- (bit-shift-right packed 4) subtract) dark)) 0 1)))))})))))
+                      (if (lit-light? (bit-and packed 15) (bit-shift-right packed 4) subtract) 0 1)))))})))))
 
 (defn see-lit-fn
   "The planner's options.unknown.seeLit for the body of primitives p: (fn [x y z]) 1 when the cell's live light makes it
