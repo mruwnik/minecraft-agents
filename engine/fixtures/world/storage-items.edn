@@ -114,6 +114,21 @@
             {:no-event {:source :job :kind #{:place.set :place.kept}} :for-s 60 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "dirt" 0]]
    :limit-s 80}
+  ;; cards 229673d8, fa92a876: a chest in another owner's zone that bars :take makes withdraw wait :refused (can-start?), nothing is taken; a zone that allows :take lets it through
+  {:name "withdraw-waits-refused-at-a-chest-in-another-owners-zone"
+   :blocks [[:set [20 0 16] "chest[facing=west]{Items:[{Slot:0b,id:\"minecraft:bread\",count:5}]}"]]
+   :zones [{:name "other-chest" :min [19 -1 15] :max [21 2 17] :owner "Other" :allow #{}}]
+   :act [[:job (jobs.storage.withdraw {:chest #xyz [20 0 16] :items {"bread" 3}})]]
+   :expect [{:no-event {:source :job :kind #{:completed :place.set}} :for-s 30 :of-job true}]
+   :after [[:item "bread" 0]]
+   :limit-s 50}
+  {:name "withdraw-from-a-chest-in-a-zone-that-allows-take-succeeds"
+   :blocks [[:set [20 0 16] "chest[facing=west]{Items:[{Slot:0b,id:\"minecraft:bread\",count:5}]}"]]
+   :zones [{:name "other-chest" :min [19 -1 15] :max [21 2 17] :owner "Other" :allow #{:take}}]
+   :act [[:job (jobs.storage.withdraw {:chest #xyz [20 0 16] :items {"bread" 3}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "bread" 3]]
+   :limit-s 80}
   {:name "deposit-into-an-unzoned-chest-records-it-as-mine"
    :blocks [[:set [20 0 16] "chest[facing=west]"]]
    :body {:inventory [["dirt" 20]]}
