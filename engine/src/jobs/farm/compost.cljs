@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.job-common :as common]
@@ -70,7 +71,11 @@
                    (when (pos? spare) [n spare])))))))
 
 (a/defargs settings
-  {::job-time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+   ::max-strikes {:default 3 :doc "Failures in a row before the job gives up." :spec (a/int-in 1 nil)}
+   ::max-waits {:default 6 :doc "Yields on a level-7 composter that count as one failure." :spec (a/int-in 1 nil)}
+   ::meal-look {:default 20 :doc "Bone meal on the ground is looked for this far from the body, in blocks." :spec (a/num-in 0 nil)}
+   ::meal-reach {:default 3 :doc "Bone meal this close to the composter counts as its own, in blocks." :spec (a/num-in 0 nil)}})
 
 (def target [:at])
 
@@ -122,11 +127,11 @@
     (when (and block (= "composter" (.-name block))) pos)))
 
 (defn meal-near
-  "The nearest bone_meal item entity within 3 blocks of the composter, or nil."
+  "The nearest bone_meal item entity within ::meal-reach blocks of the composter, or nil."
   [c at]
-  (->> (look/seen-items (:primitives c) {:radius 20})
+  (->> (look/seen-items (:primitives c) {:radius (settings/get settings ::meal-look)})
        (filter #(= "bone_meal" (some-> (.-item %) .-name)))
-       (filter #(<= (u/dist at (u/pos-of (.-pos %))) 3))
+       (filter #(<= (u/dist at (u/pos-of (.-pos %))) (settings/get settings ::meal-reach)))
        first))
 
 (defn problem
@@ -163,14 +168,13 @@
       :else (ctx/end c (if (= :gave-up reason) :nothing-possible :condition-failed) reason data))))
 
 (defn strike!
-  "Count a failure; :again until the third in a row, then warn and end :gave-up."
+  "Count a failure; :again until the ::max-strikes-th in a row, then end :gave-up."
   [c level]
   (let [strikes (inc (:strikes (ctx/mem c) 0))]
     (ctx/update-mem! c assoc :strikes strikes)
-    (if (< strikes 3)
+    (if (< strikes (settings/get settings ::max-strikes))
       :again
-      (do (ctx/emit! c :compost.gave-up :warn {:text "the composter keeps refusing, giving up"})
-          (finish! c {:level level :reason :gave-up})))))
+      (finish! c {:level level :reason :gave-up}))))
 
 (defn ^:async step
   "One step: collect bone meal lying by the composter, finish when enough
@@ -187,8 +191,7 @@
       (do (await (look/survey! c)) :again) ; a composter behind the body is not seen until it looks
 
       (nil? pos)
-      (do (ctx/emit! c :compost.no-composter :warn {:text "no composter to feed"})
-          (finish! c {:reason :no-composter}))
+      (finish! c {:reason :no-composter})
 
       :else
       (do
@@ -213,8 +216,7 @@
                 :blocked (strike! c level)
                 (cond
                   (not (composter-allowed? c pos))
-                  (do (ctx/emit! c :compost.no-composter :warn {:text "no composter to feed"})
-                      (finish! c {:reason :no-composter}))
+                  (finish! c {:reason :no-composter})
 
                   (= 8 level)
                   (let [r (await (ctx/act c :useOn #js {:pos (clj->js pos) :face "up"}))]
@@ -225,7 +227,7 @@
 
                   (= 7 level)
                   (let [waits (inc (:waits mem 0))]
-                    (if (>= waits 6)
+                    (if (>= waits (settings/get settings ::max-waits))
                       (do (ctx/update-mem! c assoc :waits 0)
                           (strike! c level))
                       (do (ctx/update-mem! c assoc :waits waits)

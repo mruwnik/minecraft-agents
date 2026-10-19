@@ -137,17 +137,16 @@
           (is (= :nothing-to-feed (:reason result)))
           (is (empty? (calls p "useOn"))))))))
 
-(deftest compost-gives-up-after-three-refusals
+(deftest compost-gives-up-after-the-max-strikes-setting-of-refusals
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:inventory (inv "oak_leaves" 4) :blocks comp-block})]
+        (let [{:keys [eng p]} (setup {:inventory (inv "oak_leaves" 4) :blocks comp-block})]
           (.override (.-world p) "useOn" (fn ^:async f [_ _ _] #js {:status "unchanged" :before #js {:name "composter"} :after #js {:name "composter"} :consumed 0}))
-          (let [result (await (child-outcome eng job {:at at} 20))]
+          (let [result (await (child-outcome eng job {:at at :settings {::compost/max-strikes 2}} 20))]
             (is (= :gave-up (:reason result)))
             (is (nil? (:text result)) "a failed ending carries no success text")
-            (is (= 3 (count (calls p "useOn"))))
-            (is (= 1 (count (kinds seen :compost.gave-up))))))))))
+            (is (= 2 (count (calls p "useOn"))))))))))
 
 ;; ------------------------------------------------------------------ zones and claims
 
