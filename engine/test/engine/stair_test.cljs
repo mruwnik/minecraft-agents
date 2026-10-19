@@ -22,7 +22,7 @@
             [jobs.lib.ledger :as ledger]
             [engine.settings :as settings]
             [engine.contract :as contract]
-            [jobs.access.stair.cells :as sc]
+            [jobs.lib.stair-cells :as sc]
             [jobs.access.stair.limits :as sset]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.plan :as wplan]

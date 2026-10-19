@@ -3,7 +3,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.access.stair.memory :as smem]
+            [jobs.lib.stair-memory :as smem]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.dig-look :as dig-look]

@@ -80,7 +80,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [far-a [[200 9 9]] far-b [[300 9 9]] near [[9 9 9]]
-              run! (fn [extra] (settings/with-settings {:jobs.access.stair.memory/max-ways 3 :jobs.access.stair.memory/home-keep 20}
+              run! (fn [extra] (settings/with-settings {:jobs.lib.stair-memory/max-ways 3 :jobs.lib.stair-memory/home-keep 20}
                                  #(record! [2.5 63 0.5] {} [near far-a far-b] extra)))
               taken (fn [r] (set (map first (ways r))))]
           (is (= #{[9 9 9] [300 9 9] [0 64 0]} (taken (await (run! [[:home {:pos {:x 9 :y 9 :z 9}}]]))))

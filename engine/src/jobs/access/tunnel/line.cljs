@@ -1,6 +1,6 @@
 (ns jobs.access.tunnel.line
   "The geometry of a tunnel line: choosing it (approach), its cells and its torch sites. Reads no settings, memory or ctx."
-  (:require [jobs.access.stair.cells :as geo]
+  (:require [jobs.lib.stair-cells :as geo]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.pillar :as pillar]
             [plan.shape :as shape]))
@@ -74,7 +74,7 @@
           (if (and (dark? sites) nxt) (recur (conj sites nxt)) sites))))))
 
 (defn step-stop
-  "jobs.access.stair.cells/stop-of for a step of the line. With a building block carried (in :filler?) air under or in the floor is no stop:
+  "jobs.lib.stair-cells/stop-of for a step of the line. With a building block carried (in :filler?) air under or in the floor is no stop:
   the walk bridges it."
   [in feet cells accept]
   (let [filler? (:filler? in)

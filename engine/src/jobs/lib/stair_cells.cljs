@@ -1,4 +1,4 @@
-(ns jobs.access.stair.cells
+(ns jobs.lib.stair-cells
   "The geometry and the stop rules of a stair step, pure: where its cells are, which of them may be cut, what a dig
   laid open. Shared by jobs.access.stair and jobs.access.tunnel."
   (:require [clojure.string :as str]

@@ -2,7 +2,7 @@
   "go-to's walk up a body's own stairs when its goal lies far above it under ground, the dive floor that bounds its plans, and
   the detour bound on a whole plan."
   (:require [engine.ctx :as ctx]
-            [jobs.access.stair.memory :as stair-mem]
+            [jobs.lib.stair-memory :as stair-mem]
             [jobs.lib.near :as near]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]

@@ -1,9 +1,9 @@
-(ns jobs.access.stair.memory
+(ns jobs.lib.stair-memory
   "What a stair remembers on the body: the floors of the ways it walked and the cells it plugged against water."
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.access.stair.cells :as cells]
+            [jobs.lib.stair-cells :as cells]
             [jobs.lib.util :as u]
             [plan.shape :as shape]))
 
