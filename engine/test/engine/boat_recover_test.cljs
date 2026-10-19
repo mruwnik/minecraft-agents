@@ -66,7 +66,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [res p]} (await (run {:blocks pond :entities [(boat-at 9 9.5)] :radius 20} {:radius 20}))]
+        (let [{:keys [res p]} (await (run {:blocks pond :entities [(boat-at 9 9.5)]} {:settings {:jobs.movement.boat-launch/radius 20}}))]
           (is (= :done (:status res)) (pr-str res))
           (is (= 1 (get (lt/inv p) "oak_boat"))))))))
 
@@ -99,7 +99,7 @@
              :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data mem}]}}})}))
 
 (deftest done-is-ok-once-the-boat-is-gone-and-its-item-carried
-  (are [world mem kind] (= kind (first (done-of world {:id 9 :radius 12} mem)))
+  (are [world mem kind] (= kind (first (done-of world {:id 9} mem)))
     {:blocks pond :entities [(boat-at 9 1.5)]} {} :later
     {:blocks pond :entities [(boat-at 9 1.5)] :inventory [{:name "oak_boat" :count 1}]} {:target {:id 9 :item "oak_boat" :before 0}} :later
     {:blocks pond} {:target {:id 9 :item "oak_boat" :before 0}} :later

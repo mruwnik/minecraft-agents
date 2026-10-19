@@ -1,5 +1,5 @@
 ;; Card 72d4e6a8: jobs.movement.boat-recover breaks a boat and takes the item back (split from boat-launch, card 84100d49).
-;; Should-succeed: recover a boat afloat (boat.recovered, item back in the inventory); while aboard (gets off first); a boat 4 cells out.
+;; Should-succeed: recover a boat afloat (completed, item back in the inventory); while aboard (gets off first); a boat 4 cells out.
 ;; Should-fail: no boat in sight (waits :no-boat); an :id of no boat in sight (waits :no-boat).
 {:defaults
  {:tags [:boats :movement :boat-recover] :time :any
@@ -11,13 +11,13 @@
    :blocks [[:fill [14 -2 14] [20 -2 18] "stone"] [:fill [14 -1 14] [20 -1 18] "water"]]
    :act [[:summon "oak_boat" [15.5 -1 16.5] "{}"]
          [:job (jobs.movement.boat-recover {})]]
-   :expect [{:event {:source :job :kind :boat.recovered :data {:item "oak_boat"}} :within-s 60 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:item "oak_boat"}} :within-s 60 :of-job true}]}
   {:name "recover-while-aboard"
    :blocks [[:fill [12 -2 14] [20 -2 18] "stone"] [:fill [12 -1 14] [20 -1 18] "water"]]
    :act [[:summon "oak_boat" [15.5 -1 16.5] "{}"]
          [:job (jobs.movement.mount {:name "oak_boat"})]
          [:job (jobs.movement.boat-recover {})]]
-   :expect [{:event {:source :job :kind :boat.recovered} :within-s 60 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]}
   {:name "no-boat-to-recover-waits"
    :act [[:job (jobs.movement.boat-recover {})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-boat}} :within-s 20 :of-job true}]}
@@ -25,7 +25,7 @@
    :blocks [[:fill [14 -2 14] [20 -2 18] "stone"] [:fill [14 -1 14] [20 -1 18] "water"]]
    :act [[:summon "oak_boat" [18.5 -1 16.5] "{}"]
          [:job (jobs.movement.boat-recover {})]]
-   :expect [{:event {:source :job :kind :boat.recovered} :within-s 60 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]}
   {:name "recover-by-id-of-nothing-waits"
    :blocks [[:fill [14 -2 14] [20 -2 18] "stone"] [:fill [14 -1 14] [20 -1 18] "water"]]
    :act [[:summon "oak_boat" [15.5 -1 16.5] "{}"]
