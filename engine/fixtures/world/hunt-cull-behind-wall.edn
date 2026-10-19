@@ -1,0 +1,31 @@
+;; Hunt and cull decide only on what the body sees (jobs.lib.look/seen-objs, card 8a976e90): a NoAI cow behind a stone wall is not
+;; a cull target; the same cow behind glass is a cull and hunt target. Hunt of a stone-walled cow is no case: it steps toward a
+;; cow it hears (hunt-heard-below-lip) and then sees it. The wall spans the plot (x 12, z 0..29) with a gap at z 30..31, so the
+;; glass cases can walk round; the body at z 16 looks straight through the glass or at the stone.
+;; Should-fail (nothing is killed): cull with the cow behind stone. Should-succeed: hunt and cull with the cow behind glass.
+{:defaults
+ {:tags [:animals :hunt :cull :sensing]
+  :time :day
+  :plot {:height 8 :floor "grass_block"}
+  :body {:at [6.5 0 16.5] :yaw 270 :inventory [["iron_sword" 1]] :settle-s 2}
+  :limit-s 60}
+ :cases
+ [{:name "cull-cow-behind-stone-is-left-alone"
+   :blocks [[:fill [12 0 0] [12 4 29] "stone"]]
+   :act [[:summon "cow" [20.5 0 16.5] "{NoAI:1b}"]
+         [:job (jobs.animals.cull {:mob "cow" :keep 0 :count 1 :radius 24})]]
+   :expect [{:no-event {:source :job :kind :animal.killed} :for-s 40}]
+   :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 1]]
+   :limit-s 50}
+  {:name "hunt-cow-behind-glass-is-hunted"
+   :blocks [[:fill [12 0 0] [12 4 29] "glass"]]
+   :act [[:summon "cow" [20.5 0 16.5] "{NoAI:1b}"]
+         [:job (jobs.combat.hunt {:mob "cow" :keep 0 :radius 24})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 55 :of-job true}]
+   :after [[:item "beef" [:>= 1]]]}
+  {:name "cull-cow-behind-glass-is-culled"
+   :blocks [[:fill [12 0 0] [12 4 29] "glass"]]
+   :act [[:summon "cow" [20.5 0 16.5] "{NoAI:1b}"]
+         [:job (jobs.animals.cull {:mob "cow" :keep 0 :count 1 :radius 24})]]
+   :expect [{:event {:source :job :kind :animal.killed :data {:rule :cull}} :within-s 55}]
+   :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 0]]}]}
