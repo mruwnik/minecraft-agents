@@ -146,6 +146,11 @@
   (let [n (count (filter inside remembered))]
     {:unseen-cells n :animals-complete? (zero? n)}))
 
+(defn needs-look?
+  "Whether a read still needs looking: the pen is not closed, or inside cells are known from memory only (animals there go unlisted)."
+  [checked]
+  (or (not (:closed? checked)) (pos? (:unseen-cells (animal-coverage checked)))))
+
 (defn start-near
   "[x y z] the unloaded leaks are listed nearest to: the pen's spot, else the body."
   [c]
@@ -156,7 +161,7 @@
         box (:box (pen-box c))
         near (or (:near (ctx/mem c)) (start-near c))
         _ (ctx/update-mem! c assoc :near near)
-        checked (await (pen-read/read! c {:at at :box box :max-cells max-cells :near near}))
+        checked (await (pen-read/read! c {:at at :box box :max-cells max-cells :near near} needs-look?))
         final (when (= :unloaded (:reason checked))
                 (pen-read/read (:primitives c) {:at at :box box :max-cells max-cells :final? true}))
         unseen (when-not (seen-leak? (:primitives c) final at) (unseen-leak checked))
