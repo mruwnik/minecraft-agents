@@ -44,13 +44,13 @@
          [:rcon "damage $BODY 5 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 40}]
    :limit-s 60}
-  ;; 5b02f58c: get-food cooks only where the cell is lit
-  {:name "no-cooking-in-a-dark-cell"
+  ;; c3cc24ab: darkness without a reachable threat is no exposure (Q279), so get-food cooks in a sealed dark room
+  {:name "cooks-in-a-sealed-dark-room"
    :body {:inventory [["furnace" 1] ["porkchop" 2] ["coal" 2]] :effects []}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
-   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :child_ended :data {:slot :cook}} :for-s 60 :until {:source :job :kind #{:completed :stopped}} :of-job true}]
-   :after [[:item "furnace" 1]]
-   :limit-s 80}]}
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :cook}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 150 :of-job true}]
+   :after [[:item "porkchop" 0]]
+   :limit-s 170}]}
