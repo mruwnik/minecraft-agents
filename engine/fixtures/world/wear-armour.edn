@@ -1,0 +1,22 @@
+;; jobs.items.wear puts armour on; a named piece not carried is fetched (jobs.lib.need) unless :fetch is false, which waits :no-item.
+;; Should-succeed: a carried helmet is worn; a helmet in the chest beside the body is fetched and worn.
+;; Should-fail: :fetch false with the piece not carried waits :no-item and wears nothing.
+{:defaults
+ {:tags [:items :wear]
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :settle-s 2}
+  :limit-s 60}
+ :cases
+ [{:name "wears-a-carried-helmet"
+   :body {:inventory [["iron_helmet" 1]]}
+   :act [[:job (jobs.items.wear {:item "iron_helmet"})]]
+   :expect [{:event {:source :job :kind :completed :data {:worn [{:item "iron_helmet" :slot "head"}]}} :within-s 20 :of-job true}]}
+  {:name "fetches-a-helmet-from-the-chest-and-wears-it"
+   :blocks [[:set [18 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:iron_helmet\",count:1}]}"]]
+   :act [[:job (jobs.items.wear {:item "iron_helmet"})]]
+   :expect [{:event {:source :job :kind :completed :data {:worn [{:item "iron_helmet" :slot "head"}]}} :within-s 50 :of-job true}]}
+  {:name "fetch-false-waits-no-item"
+   :blocks [[:set [18 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:iron_helmet\",count:1}]}"]]
+   :act [[:job (jobs.items.wear {:item "iron_helmet" :fetch false})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-item}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 10}]}]}
