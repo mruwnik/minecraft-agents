@@ -128,7 +128,7 @@
    :heading {:doc "with no :target, dig this way from the body's cell at its height, :length blocks; with a :target, take only a line along it" :spec #{:north :east :south :west} :default nil}
    :length {:doc "with :heading and no :target, blocks to dig (default :max-length less one)" :spec (a/int-in 1 96) :default nil}
    :max-length {:doc "longest line, in blocks along the heading from the entry to the target, 1 to 96" :spec (a/int-in 1 96) :default 24}
-   :accept {:doc "hazards taken: #{:water :lava :falling-block}" :spec (a/coll-of #{:water :lava :falling-block}) :default #{}}
+   :accept {:doc "dig hazards taken (jobs.lib.access.rules): #{:fluid-adjacent :lava-adjacent :falling-block}" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{}}
    :ignore-zones? :shared
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop (jobs.access.stair)" :spec #{:seal :stop} :default :seal}
    :keep {:doc "a tunnel that stays: torches left and the tunnel left open; false (a dead end): torches go into the scaffold ledger for jobs.access.leave-tunnel to take back" :spec boolean? :default false}

@@ -124,7 +124,7 @@
   The run used up ends the dig phase :tunnel-length, any stop ends it :tunnel-stopped. Either way one warn
   mine.tunnel-end {:y (the tunnel's feet height) :reason :heading :length :at :next :walk}: the reason is
   :tunnel-length, :own-zone, :walk-failed, :breach-sealed, :breach-open, :refused (the stair declined), a hazard by
-  its key (:lava :water :falling-block, :at the hazard's cell) or the stair's stop. :at is the offending cell, :next the line cell it stopped before, :walk (walk-failed, step-failed) the go-to's status, reason and the names seen at the cell and its floor.
+  its key (:lava-adjacent :fluid-adjacent :falling-block, :at the hazard's cell) or the stair's stop. :at is the offending cell, :next the line cell it stopped before, :walk (walk-failed, step-failed) the go-to's status, reason and the names seen at the cell and its floor.
 
   :stay-level true is the cave-safe mode: the tunnel runs at the start height (no stair down, no :level, no descent through soil), only
   seen ore within one column of the body counts, and a cut that opens into air beyond the tunnel is refilled with a carried building

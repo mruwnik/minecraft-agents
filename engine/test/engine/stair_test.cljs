@@ -119,22 +119,22 @@
 
 (deftest the-stop-rules-of-one-step
   (are [named accept zones reason] (= reason (:reason (stop named accept :zones zones)))
-    {} #{:water} [] nil
-    {[2 64 0] "lava"} #{:water} [] :hazard
-    {[2 64 0] "lava"} #{:water :lava} [] nil
-    {[1 64 1] "water"} #{:water} [] nil
+    {} #{:fluid-adjacent} [] nil
+    {[2 64 0] "lava"} #{:fluid-adjacent} [] :hazard
+    {[2 64 0] "lava"} #{:fluid-adjacent :lava-adjacent} [] nil
+    {[1 64 1] "water"} #{:fluid-adjacent} [] nil
     {[1 64 1] "water"} #{} [] :hazard
-    {[1 64 1] "water" [1 64 -1] "lava"} #{:water} [] :hazard
-    {[1 63 0] "air"} #{:water} [] :no-floor
-    {[1 63 0] "lava"} #{:water} [] :no-floor
-    {[1 62 0] "cave_air"} #{:water} [] :cave-below
-    {[1 62 0] "water"} #{:water} [] :cave-below
-    {[1 62 0] :unloaded} #{:water} [] :not-loaded
-    {[1 65 0] "water"} #{:water} [] :fluid-in-cut
-    {} #{:water} nil :no-zones
-    {} #{:water} [{:name "keep" :min [1 60 -1] :max [3 70 1]}] :zone
-    {} #{:water} [{:name "dig ok" :min [1 60 -1] :max [3 70 1] :allow #{:dig}}] nil
-    {[1 67 0] "gravel" [1 66 0] "stone"} #{:water} [] :hazard
+    {[1 64 1] "water" [1 64 -1] "lava"} #{:fluid-adjacent} [] :hazard
+    {[1 63 0] "air"} #{:fluid-adjacent} [] :no-floor
+    {[1 63 0] "lava"} #{:fluid-adjacent} [] :no-floor
+    {[1 62 0] "cave_air"} #{:fluid-adjacent} [] :cave-below
+    {[1 62 0] "water"} #{:fluid-adjacent} [] :cave-below
+    {[1 62 0] :unloaded} #{:fluid-adjacent} [] :not-loaded
+    {[1 65 0] "water"} #{:fluid-adjacent} [] :fluid-in-cut
+    {} #{:fluid-adjacent} nil :no-zones
+    {} #{:fluid-adjacent} [{:name "keep" :min [1 60 -1] :max [3 70 1]}] :zone
+    {} #{:fluid-adjacent} [{:name "dig ok" :min [1 60 -1] :max [3 70 1] :allow #{:dig}}] nil
+    {[1 67 0] "gravel" [1 66 0] "stone"} #{:fluid-adjacent} [] :hazard
     {[1 67 0] "gravel" [1 66 0] "stone"} #{:falling-block} [] nil))
 
 (deftest a-cut-cell-that-is-the-floor-of-an-earlier-stair-is-refused
@@ -246,15 +246,15 @@
     {[1 65 0] "attached_pumpkin_stem"} [1 65 0] "attached_pumpkin_stem"))
 
 (deftest a-stop-names-the-cell-and-the-hazards
-  (let [s (stop {[2 64 0] "lava"} #{:water})]
+  (let [s (stop {[2 64 0] "lava"} #{:fluid-adjacent})]
     (is (= [1 64 0] (:cell s)))
     (is (= [{:reason :fluid-adjacent :fluid "lava" :at [2 64 0]}] (:hazards s))))
   (is (= {:reason :zone :zone "keep" :cell [1 64 0]}
-         (stop {} #{:water} :zones [{:name "keep" :min [1 60 0] :max [1 64 0]}]))))
+         (stop {} #{:fluid-adjacent} :zones [{:name "keep" :min [1 60 0] :max [1 64 0]}]))))
 
 (deftest gravel-over-the-head-going-up-is-a-hazard-no-accept-takes
   (let [named {[0 67 0] "stone" [0 68 0] "gravel" [1 65 0] "stone"}]
-    (is (= :hazard (:reason (stop named #{:water} :dir :up))))
+    (is (= :hazard (:reason (stop named #{:fluid-adjacent} :dir :up))))
     (is (= [:on-body] (map access/stair-hazard-key (:hazards (stop named #{:falling-block} :dir :up)))) "it would land on the body")
     (is (nil? (stop (assoc named [0 68 0] "stone" [1 68 0] "gravel" [1 67 0] "stone") #{:falling-block} :dir :up))
         "gravel over the next column falls into the cut")))
@@ -558,7 +558,7 @@
       (fn ^:async t []
         (let [wet (assoc ground "2,63,1" "water")
               refused (await (stair! {:blocks wet} east (fn [_])))
-              taken (:out (await (stair! {:blocks wet} (assoc east :accept #{:water}) (fn [_]))))]
+              taken (:out (await (stair! {:blocks wet} (assoc east :accept #{:fluid-adjacent}) (fn [_]))))]
           (is (= :hazard (:reason @(:out refused))))
           (is (= [2 63 0] (:cell @(:out refused))))
           (is (not-any? #(= {:x 2 :y 63 :z 0} %) (digs (:p refused))) "the cell beside the water is not opened")
@@ -632,7 +632,7 @@
                                           {:keys [x y z]} (js->clj (.-pos a) :keywordize-keys true)]
                                       (swap! (.. world -state) assoc-in [:blocks [x y z]] "water")
                                       r)))))
-              {:keys [out]} (await (stair! {:blocks ground} (assoc east :accept #{:water}) prep))]
+              {:keys [out]} (await (stair! {:blocks ground} (assoc east :accept #{:fluid-adjacent}) prep))]
           (is (= :fluid-in-cut (:reason @out)))
           (is (= [1 64 0] (:cell @out))))))))
 
@@ -647,8 +647,8 @@
           (is (= "stone" (block-at p [2 64 0])) "nothing of the step is cut"))))))
 
 (deftest air-under-the-next-floor-is-bridged-when-filler-is-carried
-  (is (nil? (:reason (stop {[1 62 0] "cave_air"} #{:water} :filler? true))))
-  (is (= :cave-below (:reason (stop {[1 62 0] "water"} #{:water} :filler? true))) "a fluid under it still stops"))
+  (is (nil? (:reason (stop {[1 62 0] "cave_air"} #{:fluid-adjacent} :filler? true))))
+  (is (= :cave-below (:reason (stop {[1 62 0] "water"} #{:fluid-adjacent} :filler? true))) "a fluid under it still stops"))
 
 (deftest a-stair-goes-on-down-through-a-cave-with-filler
   (async done
@@ -1024,7 +1024,7 @@
           (is (= [1 64 0] (:cell @out))))))))
 
 (deftest a-falling-block-hazard-names-the-block
-  (let [stop (stop {[1 67 0] "gravel" [1 66 0] "stone"} #{:water} :zones [])]
+  (let [stop (stop {[1 67 0] "gravel" [1 66 0] "stone"} #{:fluid-adjacent} :zones [])]
     (is (re-find #"gravel" (str (:why stop))))))
 
 (deftest a-stair-that-reached-its-last-step-is-done-even-when-the-way-back-is-gone
@@ -1213,11 +1213,11 @@
             (is (= status (:status @out)) (pr-str [owner extra]))))))))
 
 (deftest an-up-stair-ignores-air-under-its-solid-floor
-  (is (nil? (:reason (stop {[1 65 0] "stone" [1 64 0] "cave_air"} #{:water} :dir :up))))
-  (is (= :cave-below (:reason (stop {[1 62 0] "cave_air"} #{:water}))) "going down still refuses"))
+  (is (nil? (:reason (stop {[1 65 0] "stone" [1 64 0] "cave_air"} #{:fluid-adjacent} :dir :up))))
+  (is (= :cave-below (:reason (stop {[1 62 0] "cave_air"} #{:fluid-adjacent}))) "going down still refuses"))
 
 (deftest a-level-step-ignores-what-is-under-its-floor
-  (are [named] (nil? (:reason (stop named #{:water} :dir :level)))
+  (are [named] (nil? (:reason (stop named #{:fluid-adjacent} :dir :level)))
     {[1 63 0] "cave_air"}
     {[1 63 0] "water"}))
 

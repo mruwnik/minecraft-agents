@@ -50,7 +50,7 @@
 
 (def leg-stops
   "Stops after which a stay-level run goes on along another heading from the cell it stands in."
-  (into heading-stops #{:water :lava :falling-block}))
+  (into heading-stops #{:fluid-adjacent :lava-adjacent :falling-block}))
 
 (def opposite {"north" "south" "south" "north" "east" "west" "west" "east"})
 
@@ -121,10 +121,10 @@
     (tunnel-end! c stop at next walk)))
 
 (defn step-accept [{:keys [accept wet]}]
-  (cond-> [] (some #{:falling-block} accept) (conj :falling-block) wet (conj :water)))
+  (cond-> [] (some #{:falling-block} accept) (conj :falling-block) wet (conj :fluid-adjacent)))
 
 (defn step-stop
-  "The tunnel's stop from the stair step's result res (nil: it declined): a hazard is named by its key (:lava :water
+  "The tunnel's stop from the stair step's result res (nil: it declined): a hazard is named by its key (:lava-adjacent :fluid-adjacent
   :falling-block) at the hazard's cell; else the stair's reason (:refused when it declined) at its cell, as a map."
   [res]
   (let [h (first (:hazards res))

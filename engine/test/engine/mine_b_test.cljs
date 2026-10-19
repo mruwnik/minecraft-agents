@@ -319,7 +319,7 @@
                                  (rock-world {"0,66,0" "air" "1,66,0" "air" "2,66,0" "lava"}) 80))]
           (is (every? #(< (first %) 2) (dug-cells s)) "no cut beside the lava the body knew of")
           (is (= :tunnel-stopped (:reason (done-event s))))
-          (is (= [{:reason :lava :at [2 66 0] :next [2 64 0]}] (map #(select-keys % [:reason :at :next]) (tunnel-ends s)))
+          (is (= [{:reason :lava-adjacent :at [2 66 0] :next [2 64 0]}] (map #(select-keys % [:reason :at :next]) (tunnel-ends s)))
               "the stop names the lava")
           (is (= "lava" (block-at s 2 66 0))))))))
 
@@ -327,15 +327,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[fluid world pos] [["water" {"2,64,1" "water" "2,65,1" "water"} [2 65 1]]
-                                   ["lava" {"0,66,0" "air" "1,66,0" "air" "2,66,0" "lava"} [2 66 0]]]]
+        (doseq [[fluid world pos hazard] [["water" {"2,64,1" "water" "2,65,1" "water"} [2 65 1] :fluid-adjacent]
+                                   ["lava" {"0,66,0" "air" "1,66,0" "air" "2,66,0" "lava"} [2 66 0] :lava-adjacent]]]
           (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 10 :mend false}
                                    (rock-world world) 120))
                 found (lk/seen-blocks (:p s) {:names [fluid] :radius 8 :live? true})
                 end (first (tunnel-ends s))]
             (is (some #(= pos (mapv (:pos %) [:x :y :z])) found) (str fluid " in seen memory: " (pr-str found)))
-            (is (= {:reason (keyword fluid) :at pos} (select-keys end [:reason :at])) (pr-str end))
-            (is (re-find (re-pattern (str fluid " at " (apply str (interpose "," pos)))) (:text end)) (:text end))))))))
+            (is (= {:reason hazard :at pos} (select-keys end [:reason :at])) (pr-str end))
+            (is (re-find (re-pattern (str (name hazard) " at " (apply str (interpose "," pos)))) (:text end)) (:text end))))))))
 
 (deftest a-fluid-in-the-cut-is-in-seen-memory-and-named
   (async done

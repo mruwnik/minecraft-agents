@@ -72,9 +72,9 @@
     or still lava after max-seals places (a seal, then one reseal when lava flows back). The body first steps back to the stair's cell before (:backed-off) and
     digs no more.
   - :plugged: a cut cell was plugged against water by this body (this stair or an earlier job; memory :stair-plug, the fluid may be out of view); :dig-plugs true digs it.
-  - :water-unplugged: a cell the stair dug turned out to touch seen water (:water not in :accept) and could not be filled.
+  - :water-unplugged: a cell the stair dug turned out to touch seen water (:fluid-adjacent not in :accept) and could not be filled.
 
-  Water a dig lays open (a cell the stair dug now touches seen water, :water not in :accept) is plugged at once: the cell
+  Water a dig lays open (a cell the stair dug now touches seen water, :fluid-adjacent not in :accept) is plugged at once: the cell
   is filled with a building block (same child and fetch as the lava seal, event stair.plugged), and the stair stops :hazard
   with :plugged <cell>.
 
@@ -84,7 +84,7 @@
   waits a lava flow delay since the last dig and looks at the cut once more. Lava seen beside a cell not yet dug is a hazard as below.
 
   Hazards are the rules' (one per fluid beside) plus a falling block over the top cut of the next column.
-  :accept is a set of :water :lava :falling-block, default #{}; a falling block over the body's own column is never taken. Water beside the cut is not taken
+  :accept is a set of :fluid-adjacent :lava-adjacent :falling-block, default #{}; a falling block over the body's own column is never taken. Water beside the cut is not taken
   by default (it can flow into the cut and onto the body's cell, which the walker cannot leave). Lava never is
   in practice, and a falling block would land on the body or refill the cut. The stair never digs the block it
   stands on.
@@ -112,7 +112,7 @@
    :steps {:doc "steps to cut; or give :y" :spec (a/int-in 1 nil) :default nil}
    :cut-only {:doc "true: end :done (:steps 0) once the first step is cut and settled, without stepping in" :spec boolean? :default false}
    :y {:doc "feet height to end at, instead of :steps" :spec (a/num-in nil nil) :default nil}
-   :accept {:doc "hazards taken: #{:water :lava :falling-block}" :spec (a/coll-of #{:water :lava :falling-block}) :default #{}}
+   :accept {:doc "dig hazards taken (jobs.lib.access.rules): #{:fluid-adjacent :lava-adjacent :falling-block}" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{}}
    :ignore-zones? :shared
    :note {:doc "a map (go-to's escalation): each cell dug in another's zone, claim or plan is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!), each floor placed to the scaffold ledger (take-back-floor?)" :spec map? :default nil}
    :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.need), and a block to seal lava with: true, a set of kinds or a map of limits" :spec need/option? :default true}
