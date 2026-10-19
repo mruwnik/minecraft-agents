@@ -1,0 +1,40 @@
+;; Card ee960f0a (owner Q328): the access jobs bind fit? to ready/fit?, so a hurt body (3 hp, under the risky 6; hunger stops
+;; regeneration) waits :low-health before a queued tunnel or pillar, while go-to's escalation children carry :checks {:fit? (always)}
+;; and still pillar a hurt body out of a pit.
+{:defaults
+ {:tags [:access :readiness]
+  :time :any
+  :plot {:height 20}
+  :limit-s 90}
+ :cases
+ [{:name "hurt-body-tunnel-waits-low-health"
+   :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+   :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]] :effects [["hunger" 120 255]]}
+   :act [[:rcon "damage $BODY 17 minecraft:generic"]
+         [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true :fetch false})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind #{:tunnel.done :stopped}} :of-job true :for-s 25 :until {:source :job :kind :waiting :data {:reason :low-health}}}]
+   :after [[:block [16 9 17] "stone"]]}
+  {:name "healthy-body-tunnel-cuts"
+   :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+   :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]] :effects [["resistance" 600 4]]}
+   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true :fetch false})]]
+   :expect [{:event {:source :job :kind :tunnel.done} :within-s 80 :of-job true}]
+   :after [[:block [15 6 20] "air"]]}
+  {:name "hurt-body-pillar-job-waits-low-health"
+   :blocks [[:fill [12 0 12] [20 0 20] "stone"]]
+   :body {:at [16.5 1 16.5] :inventory [["dirt" 8]] :effects [["hunger" 120 255]]}
+   :act [[:rcon "damage $BODY 17 minecraft:generic"]
+         [:job (jobs.access.pillar {:height 2 :here true})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :pillar.done} :of-job true :for-s 20 :until {:source :job :kind :waiting :data {:reason :low-health}}}]
+   :after [[:block [16 1 16] "air"]]}
+  {:name "hurt-body-go-to-still-pillars-out-of-a-pit"
+   :blocks [[:fill [8 0 8] [24 3 24] "dirt"] [:fill [14 1 14] [18 3 18] "air"]]
+   :zones [{:name "pen" :min [13 0 13] :max [19 4 19] :owner "Other" :allow #{:place}}]
+   :body {:at [16.5 1 16.5] :inventory [["dirt" 8]] :effects [["hunger" 120 255]]}
+   :act [[:rcon "damage $BODY 17 minecraft:generic"]
+         [:job (jobs.movement.go-to {:pos #at [22 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :pillar}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 40 :until {:source :job :kind :go-to.escalated}}]
+   :after [[:body-near [22.5 4 16.5] 2]]}]}
