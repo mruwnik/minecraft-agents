@@ -1,5 +1,5 @@
 (ns world-test.fixture-test
-  (:require [cljs.test :refer [deftest is]]
+  (:require [cljs.test :refer [deftest is are]]
             [world-test.fixture :as f]))
 
 (def grid f/default-grid)
@@ -844,3 +844,11 @@
     (is (= (* 60 20 60) (reduce + (map vol cmds))) "the pieces cover the fill exactly")
     (is (some #(re-find #"cannot be split" %)
               (f/problems {:blocks [[:fill [0 0 0] [59 19 59] "stone" :hollow]]})))))
+
+(deftest a-mutating-tool-argv-gets-a-request-id-and-a-read-does-not
+  (are [argv out] (= out (f/with-request-id argv "wt-1"))
+    ["engine/tools/jobs.mjs" "B" "--world" "w" "cancel" "j1"] ["engine/tools/jobs.mjs" "B" "--world" "w" "cancel" "j1" "--request-id" "wt-1"]
+    ["engine/tools/world.mjs" "B" "--world" "w" "submit" "(place)"] ["engine/tools/world.mjs" "B" "--world" "w" "submit" "(place)" "--request-id" "wt-1"]
+    ["engine/tools/jobs.mjs" "B" "--world" "w" "submit" "(x)" "--request-id" "mine"] ["engine/tools/jobs.mjs" "B" "--world" "w" "submit" "(x)" "--request-id" "mine"]
+    ["engine/tools/jobs.mjs" "B" "--world" "w" "list"] ["engine/tools/jobs.mjs" "B" "--world" "w" "list"]
+    ["engine/tools/observe.mjs" "B" "result" "j1"] ["engine/tools/observe.mjs" "B" "result" "j1"]))

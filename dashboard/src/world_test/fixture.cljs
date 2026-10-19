@@ -1044,6 +1044,17 @@
        (into [(str "engine/tools/" tool ".mjs")] (mapcat texts args))
        (http-argv body world (walk/postwalk fill step))))))
 
+(defn with-request-id
+  "argv with \"--request-id\" id appended when it is a mutating jobs.mjs (submit, cancel, cancel-all, retry) or world.mjs submit call, so a repeat of it is the same request; other argv unchanged."
+  [[script :as argv] id]
+  (let [mutating (case script
+                   "engine/tools/jobs.mjs" #{"submit" "cancel" "cancel-all" "retry"}
+                   "engine/tools/world.mjs" #{"submit"}
+                   #{})]
+    (if (and (some mutating argv) (not (some #{"--request-id"} argv)))
+      (conj argv "--request-id" id)
+      argv)))
+
 (defn argv-gap
   "Why argv cannot run (a placeholder had no value to fill it), nil when it can. With the step and the two ids it names the
   placeholder: \"$event-job\" (no awaited event had a job) or \"$job\" (no job submitted)."

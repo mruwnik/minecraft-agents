@@ -1258,12 +1258,12 @@
 
 (defn tool-step!
   "Runs a :cli or :http step: the tool's answer must pass f/judge-reply or the step throws. Resolves to the tool's output.
-  A step waits (up to 10 s) while the body answers settling or timeout (a mutating tool carries its request id, so the repeat is safe)."
+  A step waits (up to 10 s) while the body answers settling or timeout (a mutating call carries one request id for all repeats, so the repeat is safe)."
   [opts step last-job event-job]
   (let [argv (f/step-argv (:body opts) (:world opts) step last-job event-job)]
     (if-let [why (f/argv-gap argv step last-job event-job)]
       (js/Promise.reject (js/Error. (str (pr-str (vec (take 2 step))) " step: " why)))
-      (.then (exec-settled {} argv)
+      (.then (exec-settled (select-keys opts [:exec :sleep]) (f/with-request-id argv (str "wt-" (random-uuid))))
              (fn [{:keys [code out]}]
                (let [{:keys [pass? evidence]} (f/judge-reply (some-> (f/step-pattern step) (f/fill-pattern last-job event-job)) code out)]
                  (when-not pass? (throw (js/Error. (str (pr-str (vec (take 2 step))) " step: " evidence))))

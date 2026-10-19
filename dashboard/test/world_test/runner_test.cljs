@@ -1681,3 +1681,21 @@
       (-> (r/acquire-shared! (assoc env :batch-start 50) :night-x "case")
           (.then (fn [res] (is (= {:first? true} res) "an older batch start passes the day waiter")))
           (.finally done)))))
+
+(deftest a-mutating-tool-step-repeated-on-timeout-reuses-its-request-id
+  (async done
+    (let [argvs (atom [])
+          answers (atom ["{:ok false :reason :timeout}" "{:ok true}"])]
+      (-> (r/tool-step! {:body "B" :world "w"
+                         :exec (fn [argv]
+                                 (swap! argvs conj argv)
+                                 (let [a (first @answers)]
+                                   (swap! answers rest)
+                                   (js/Promise.resolve {:code 0 :out a})))
+                         :sleep (fn [_] (js/Promise.resolve nil))}
+                        [:cli "jobs" ["$body" "--world" "$world" "cancel" "j1"]] nil nil)
+          (.then (fn [_]
+                   (is (= 2 (count @argvs)))
+                   (is (= (first @argvs) (second @argvs)) "the repeat is the same request")
+                   (is (some #{"--request-id"} (first @argvs)))
+                   (done)))))))
