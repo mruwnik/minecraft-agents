@@ -1,6 +1,7 @@
 (ns engine.follow-test
   "jobs.movement.follow against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.game :as game]
             [engine.contract :as contract]
             [engine.registry :as registry]
             [engine.core :as core]
@@ -90,7 +91,7 @@
           (is (empty? (tu/walk-calls p)))
           (is (= 4 (count (calls p "look"))))
           (is (= 4 (count (calls p "wait"))))
-          (is (= 65.6 (.-y (.-pos (.-args (first (calls p "look"))))))))))))
+          (is (= (+ 64 game/eye-height) (.-y (.-pos (.-args (first (calls p "look"))))))))))))
 
 (deftest follows-again-when-the-player-moves-away
   (async done
@@ -187,3 +188,7 @@
           (await (run-ticks (assoc-in s [:eng :jobs 'jobs.time.noop] stub) 3 500))
           (is (= [{:seconds 0.5 :why :following}] (distinct @pauses)))
           (is (empty? (calls (:p s) "wait")) "no bare wait act"))))))
+
+(deftest the-out-of-range-give-up-is-a-setting
+  (is (= 3 (follow/max-out)))
+  (is (= 3 (get-in follow/settings [:jobs.movement.follow/max-out-walks :default]))))

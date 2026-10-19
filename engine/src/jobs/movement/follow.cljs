@@ -4,6 +4,7 @@
             [engine.settings :as settings]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.game :as game]
             [jobs.lib.child :as child]
             [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]))
@@ -28,8 +29,6 @@
 
 (def idle-ms 500)
 (def max-blocked "One go-to give-up ends the job: go-to already retries." 1)
-(def max-out 3)
-(def head-height 1.6)
 (def last-seen-reach 1)
 
 (def bad-args
@@ -37,11 +36,13 @@
   (checks/args-fit "no player name" #(string? (:player (:args %)))))
 
 (a/defargs settings
-  {::radius {:default 64 :doc "How far the player may be and still be seen, in blocks." :spec (a/num-in 0 nil)}
+  {::max-out-walks {:default 3 :doc "Walks in a row that arrived or got closer but left the body out of range before the call gives up (:out-of-range)." :spec (a/num-in 1 nil)}
+   ::radius {:default 64 :doc "How far the player may be and still be seen, in blocks." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 3600 :doc "Seconds one call may take before it gives up (:limit-reached), pauses not counted." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the idle pauses beside the player included (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (defn radius [] (settings/get settings ::radius))
+(defn max-out [] (settings/get settings ::max-out-walks))
 
 (def safe? ready/safe-if-lit)
 (def fit? ready/fit?)
@@ -68,7 +69,7 @@
 (defn ^:async look-at-head!
   "Look at the head of a player standing at pos."
   [c pos]
-  (await (ctx/act c :look (clj->js {:pos (update pos :y + head-height)}))))
+  (await (ctx/act c :look (clj->js {:pos (update pos :y + game/eye-height)}))))
 
 (defn next-out
   "The out-of-range count after a walk: reset when blocked or when the body is within range of where the target
@@ -114,7 +115,7 @@
            out (next-out out blocked (u/self-pos c) (or now pos) range)]
        (cond
          (= :continue r) :continue
-         (>= out max-out)
+         (>= out (max-out))
          (finish! c :nothing-possible :out-of-range {:text (str "still out of range of " (:player (:args c)))})
 
          (>= blocked max-blocked)
