@@ -269,15 +269,19 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:self {:onFire true}
-                                      :inventory [{:name "water_bucket" :count 1}]
-                                      :blocks (floor 6)})]
+        (let [clock (atom 1000000)
+              [seen sink] (tu/legacy-capture-sink)
+              p (tu/seeing-all (tu/fake {:self {:onFire true} :inventory [{:name "water_bucket" :count 1}] :blocks (floor 6)}))
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
+                                :now #(deref clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
           (on-place! p "water_bucket" (fn [s _] (fake/remove-block! p [0 64 0])))
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (= 1 (count (calls p "place"))))
-          (is (= (extinguish/max-water-waits) (count (calls p "wait"))) "waited the bound for the water block"))))))
+          (is (= (extinguish/max-water-waits) (count (calls p "wait"))) "waited the bound for the water block")
+          (is (= ["unseen"] (mapv :status (:scoop-failed (first (of-kind seen :completed))))) "the ending lists the pour that never showed"))))))
 
 (deftest no-safe-cell-gives-up-after-three-rounds-with-one-warning
   (async done

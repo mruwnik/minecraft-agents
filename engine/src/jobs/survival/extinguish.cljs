@@ -25,9 +25,9 @@
      A cell in another's zone or claim is skipped while another way exists. As a last resort it pours there anyway,
      with one extinguish.trespass-last-resort warning.
   2. Once the fire is out, scoops the water back up with the empty bucket so no source block stays.
-     It waits (a declared :burning-wait hold) up to 10 quarter seconds for the poured cell to read as water, and up to
+     It looks at the poured cell, then waits (a declared :burning-wait hold) up to 10 quarter seconds for it to read as water, and up to
      8 while still burning. A pour left more than 4 blocks away is walked back to (one go-to) when within 16 blocks, else dropped.
-     A scoop that fails, or a pour dropped as too far, is dropped and listed in the ending as :scoop-failed [{:pos :status :text}].
+     A scoop that fails, a pour dropped as too far, or a pour that never shows as water, is dropped and listed in the ending as :scoop-failed [{:pos :status :text}].
   3. With no bucket, on fire and with water within :water-radius, walks into the nearest water.
   4. In lava, or with no water in reach, walks to the best nearby cell within the ::step setting (4) blocks.
      It must be passable, solid underfoot and not fire, lava, magma or a campfire.
@@ -290,10 +290,12 @@
               (await (burning-wait! c (pour-wait-ms)))
               :again)))
 
-      (not= "water" (u/block-name p cell))
+      (not= "water" (do (await (dig-look/look-unknown! c [[(:x cell) (:y cell) (:z cell)]])) (u/block-name p cell)))
       (let [waits (inc (:water-waits (ctx/mem c) 0))]
         (if (> waits (max-water-waits))
-          (do (clear-pour! c) :done)
+          (do (clear-pour! c)
+              (scoop-failed! c cell "unseen" (str "the poured water at " (pr-str cell) " never showed: not scooped"))
+              :done)
           (do (ctx/update-mem! c assoc :water-waits waits)
               (await (burning-wait! c (pour-wait-ms)))
               :again)))
