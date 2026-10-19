@@ -73,6 +73,7 @@
               floors [[0 64 0] [1 63 0] [2 62 0] [3 61 0] [4 60 0]]]
           (is (= :completed (:kind (:end r))))
           (is (= {:steps 4 :top [0 65 0] :bottom [4 61 0] :floors 5} (select-keys (:data (:end r)) [:steps :top :bottom :floors])))
+          (is (re-find #"recorded the stair from \[0 65 0\] to \[4 61 0\], 4 steps" (:text (:data (:end r)))) "the ending tells it, no extra event")
           (is (= #{floors [[9 9 9]]} (set (ways r))) "the single floor is taken in, the unrelated way kept"))))))
 
 (deftest past-max-ways-the-oldest-way-goes-but-never-one-near-home

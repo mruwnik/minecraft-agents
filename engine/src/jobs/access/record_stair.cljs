@@ -130,8 +130,7 @@
             floors (floors-of run)
             all (smem/remember-way! c (first floors) floors)
             data {:steps (dec (count stands)) :top (first stands) :bottom (peek stands) :floors (count all)}]
-        (ctx/emit! c :stair.recorded :info (assoc data :text (str "recorded the stair from " (pr-str (first stands)) " to " (pr-str (peek stands)) ", " (:steps data) " steps")))
-        (ctx/end c :done nil data)))))
+        (ctx/end c :done nil (assoc data :text (str "recorded the stair from " (pr-str (first stands)) " to " (pr-str (peek stands)) ", " (:steps data) " steps")))))))
 
 (defn done?
   "Done once one :stair-way entry holds every floor of the run through the body's cell."
