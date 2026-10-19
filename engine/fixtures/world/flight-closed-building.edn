@@ -2,6 +2,7 @@
 ;; building), 58b2e704 (flee into the hut by day), a6ca17e9 (home ahead of a chaser, race), 31887403 (home is any cell of the room), 096cba8d (no room within blast reach
 ;; of a creeper), 659f5e6d (no run into the hut ahead of a creeper). Hut: stone walls x 12..20, z 12..20, roof y 3, interior 7x7, door gap at [16 0 20]/[16 1 20] facing south.
 ;; The cases that start in the room turn the body through four yaws at two pitches (the sight cone is ~100 x 70 degrees; one look-around glance sees a part of the room only), so the whole room is seen before the body leaves.
+;; The :home cases wait for set-place to finish before the mob appears (else the flight starts with no home). The hut-seen case starts facing the door (yaw 180), within 6 blocks of the door side (retreat-home/door-glance-radius): a flight judges only doors the body has seen.
 ;; Mobs are NoAI and helmeted (they never hurt, no sun burn); the reflex fires on them all the same.
 {:defaults
  {:tags [:hostile :survival :flee]
@@ -27,13 +28,14 @@
   {:name "own-home-ahead-of-a-chaser-beside-the-door"
    :body {:at [16.5 0 17.5] :effects [["resistance" 600 4]]}
    :act [[:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16"] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 0"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 0"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 40"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 40"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 40"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 40"] [:wait-s 2] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~25"] [:until-pos {:x-min 15 :x-max 18 :z-min 24 :z-max 27} 10]
-         [:job (jobs.memory.set-place {:name :home :pos #at [16 0 16]})]
+         [:job (jobs.memory.set-place {:name :home :pos #at [16 0 16]})] [:await {:source :job :kind :completed} 10]
          [:summon "zombie" [22.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.home :data {:own? true}} :within-s 25}
             {:event {:source :job :kind :retreat.door-shut} :within-s 40}]
    :after [[:body-near [16.5 0 16.5] 3.5]]}
   ;; 1b22e0fa: a hut seen only from outside (a cell of the room unseen) is dropped :unseen; the body within a few blocks of its door looks in once, then runs in. No scan: that look is the only way it sees the room
   {:name "hut-seen-only-from-outside-is-looked-into-from-the-door"
+   :body {:at [16.5 0 21.5] :yaw 180 :effects [["resistance" 600 4]]}
    :act [[:summon "zombie" [16.5 0 31.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.home :data {:own? false}} :within-s 25}
             {:event {:source :job :kind :retreat.door-shut} :within-s 40}]
@@ -49,7 +51,7 @@
   {:name "own-home-in-the-far-corner-still-shuts-the-door"
    :body {:at [16.5 0 17.5] :effects [["resistance" 600 4]]}
    :act [[:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16"] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 0"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 0"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 40"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 40"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 40"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 40"] [:wait-s 2] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~25"] [:until-pos {:x-min 15 :x-max 18 :z-min 24 :z-max 27} 10]
-         [:job (jobs.memory.set-place {:name :home :pos #at [13 0 13]})]
+         [:job (jobs.memory.set-place {:name :home :pos #at [13 0 13]})] [:await {:source :job :kind :completed} 10]
          [:summon "zombie" [22.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.home :data {:own? true}} :within-s 25}
             {:event {:source :job :kind :retreat.door-shut} :within-s 40}]
@@ -58,7 +60,7 @@
   {:name "inside-the-room-away-from-the-home-cell-stays-and-shuts-the-door"
    :body {:at [14.5 0 14.5]}
    :act [[:job (jobs.movement.look-around {})] [:await {:source :job :kind :completed} 30]
-         [:job (jobs.memory.set-place {:name :home :pos #at [18 0 18]})]
+         [:job (jobs.memory.set-place {:name :home :pos #at [18 0 18]})] [:await {:source :job :kind :completed} 10]
          [:summon "zombie" [17.5 0 23.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.door-shut} :within-s 40}]
    :after [[:block [16 0 20] "oak_door[half=lower,open=false]"] [:body-near [16.5 0 16.5] 4.5]]}

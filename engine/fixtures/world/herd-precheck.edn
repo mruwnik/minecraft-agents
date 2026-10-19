@@ -1,24 +1,24 @@
-;; Cards 95ebf176 (0be1bab42), 53696726: jobs.animals.herd reads the pen it has seen from memory before it leaves, so a far body ends :stopped
-;; at once on a pen with a leak (and on missing lure food) instead of walking the animal home first.
-;; Plot 100 long, grass floor. Pen x 80..86, z 13..19 (fence outline, gate at [80 0 16]); the body sees it from x 70, then is moved 40 blocks west to x 30.
-;; Should-succeed: none (the pen case gives up). Should-fail the walk: leaky pen and no wheat both end :stopped with the body still at x 30.
+;; Cards 95ebf176 (0be1bab42), 53696726: jobs.animals.herd reads the pen it has seen from memory before it leaves, so a far body waits
+;; at once on a pen with a leak (and ends :stopped on missing lure food) instead of walking the animal home first.
+;; Plot 100 long, grass floor. Pen x 80..86, z 13..19 (fence outline, gate at [80 0 16]); the body faces it (yaw -90) from x 70 and sees it, then is moved 40 blocks west to x 30.
+;; Should-succeed: none (the pen case gives up). Should-fail the walk: leaky pen (waiting :leaky) and no wheat (:stopped) both leave the body still at x 30.
 {:defaults
  {:tags [:herd :animals :jobs]
   :time :day
   :plot {:length 100 :floor "grass_block"}
   :blocks [[:fill [80 0 13] [86 0 19] "oak_fence" :outline] [:fill [81 0 14] [85 0 18] "air"]
            [:set [80 0 16] "oak_fence_gate[facing=east,open=false]"]]
-  :body {:at [70.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["wheat" 8]]}
+  :body {:at [70.5 0 16.5] :yaw -90 :settle-s 2 :effects [["resistance" 600 4]] :inventory [["wheat" 8]]}
   :limit-s 150}
  :cases
  [{:name "leaky-pen-seen-earlier-stops-before-the-walk"
    :blocks [[:set [83 0 13] "air"]]
-   :act [[:summon "cow" [68.5 0 18.5]]
+   :act [[:summon "cow" [74.5 0 16.5]]
          [:until-seen {:entity "cow"} 10]
          [:rcon "execute positioned $X $Y $Z as $BODY run tp @s ~30 ~ ~16"]
          [:rcon "execute positioned $X $Y $Z as @e[type=cow,$BOX] run tp @s ~32 ~ ~18"]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [81 0 14] :max #xyz [85 0 18]} :target 1})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :leaky}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :leaky}} :within-s 60 :of-job true}]
    :after [[:body-near [30.5 0 16.5] 6]]}
   {:name "no-lure-food-stops-before-the-walk"
    :body {:inventory []}

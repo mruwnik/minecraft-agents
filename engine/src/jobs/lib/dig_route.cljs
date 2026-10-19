@@ -46,7 +46,8 @@
   Priced :step-s a step and (:dig-s name) a cell dug (default 0 and 1: the fewest digs); a block :dig-s prices nil is
   not dug; nor is a cell under sand or gravel (it would fall on the body walking in). {:dig [cell ..]} or {:problem :no-route}."
   [block-at from goal {:keys [dig-s step-s] :or {dig-s (constantly 1) step-s 0} :as opts}]
-  (let [max-digs (get opts :max-digs (settings/get settings ::max-digs))
+  (let [block-at (memoize block-at)
+        max-digs (get opts :max-digs (settings/get settings ::max-digs))
         margin (get opts :margin (settings/get settings ::margin))
         max-fall (get opts :max-fall (settings/get settings ::max-fall))
         lo (mapv #(- (min %1 %2) margin) from goal)
@@ -61,10 +62,11 @@
                        prices (map (fn [n d] (if (pos? d) (dig-s n) 0)) names digs)]
                    (when (every? some? (concat digs prices))
                      [(+ step-s (reduce + prices)) (reduce + digs)]))))]
-    (loop [dist {from 0} digs {from 0} prev {} done #{}]
-      (let [[cur d] (->> dist (remove (fn [[k _]] (done k))) (sort-by val) first)]
+    (loop [dist {from 0} queue (sorted-set [0 0 from]) tick 1 digs {from 0} prev {} done #{}]
+      (let [[d _ cur :as top] (first queue)]
         (cond
-          (nil? cur) {:problem :no-route}
+          (nil? top) {:problem :no-route}
+          (done cur) (recur dist (disj queue top) tick digs prev done)
           (= cur goal)
           (let [path (reverse (take-while some? (iterate prev goal)))]
             {:dig (vec (distinct (for [[m n] (map vector path (rest path))
@@ -77,6 +79,8 @@
                         [n (+ d s) (+ (digs cur) k)])
                 better (filter (fn [[n nd]] (< nd (get dist n js/Infinity))) relax)]
             (recur (into dist (map (fn [[n nd _]] [n nd])) better)
+                   (into (disj queue top) (map-indexed (fn [i [n nd _]] [nd (+ tick i) n])) better)
+                   (+ tick (count better))
                    (into digs (map (fn [[n _ k]] [n k])) better)
                    (into prev (map (fn [[n _]] [n cur])) better)
                    (conj done cur))))))))
