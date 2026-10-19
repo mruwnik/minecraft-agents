@@ -66,12 +66,23 @@
   ([x0 z0 x1 z1] (floor 63 x0 z0 x1 z1))
   ([y x0 z0 x1 z1] (box x0 y z0 x1 y z1 "stone")))
 
+(defn oracle
+  "The primitives whose blockAt is the fake world itself: p, or under a perception wrap (whose blockAt is sensedAt) the fake it wraps."
+  [p]
+  (if-let [per (aget p "perception")] (.-mobSource ^js (:st per)) p))
+
+(defn set-sensed!
+  "Make f p's sensedAt, and its blockAt when p is perception-wrapped (there they are the same)."
+  [p f]
+  (aset p "sensedAt" f)
+  (when (aget p "perception") (aset p "blockAt" f)))
+
 (defn sensed-by
   "A sensedAt over p's blockAt that answers {:unknown true} for a position whose coordinates are not finite numbers
   (a malformed pos): perception knows nothing there, while the fake's blockAt would say air."
   [p]
   (fn [pos] (if (every? #(js/Number.isFinite (aget pos %)) ["x" "y" "z"])
-              (.blockAt p pos)
+              (.blockAt (oracle p) pos)
               #js {:unknown true :pos pos})))
 
 (defn fake
@@ -113,12 +124,12 @@
   "p with seenBlocks answering every block in range as seen (stands in for perception's memory); leave it off to
   test a body that has seen nothing."
   [p]
-  (aset p "seenBlocks" (fn [q] (.blocks p q)))
+  (aset p "seenBlocks" (fn [q] (.blocks (oracle p) q)))
   (aset p "seenBlockAt" (fn [pos] (let [b ((sensed-by p) pos)]
                                     (if (true? (.-unknown b))
                                       b
                                       #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0}))))
-  (aset p "sensedAt" (sensed-by p))
+  (set-sensed! p (sensed-by p))
   p)
 
 (defn blind
@@ -134,11 +145,11 @@
   [p]
   (blind p)
   (let [looked? #(some (fn [call] (= "look" (.-name call))) (.-calls (.-world p)))]
-    (aset p "seenBlocks" (fn [q] (if (looked?) (.blocks p q) #js [])))
+    (aset p "seenBlocks" (fn [q] (if (looked?) (.blocks (oracle p) q) #js [])))
     (aset p "seenBlockAt" (fn [pos] (if (looked?)
-                                      (let [b (.blockAt p pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})
+                                      (let [b (.blockAt (oracle p) pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})
                                       #js {:unknown true :pos pos})))
-    (aset p "sensedAt" (fn [pos] (if (looked?) (.blockAt p pos) #js {:unknown true})))
+    (set-sensed! p (fn [pos] (if (looked?) (.blockAt (oracle p) pos) #js {:unknown true})))
     p))
 
 (defn seeing-within
@@ -147,9 +158,9 @@
   [p r]
   (let [near? (fn [pos] (let [s (.-pos (.self p))]
                           (<= (js/Math.hypot (- (.-x pos) (.-x s)) (- (.-y pos) (.-y s)) (- (.-z pos) (.-z s))) r)))]
-    (aset p "sensedAt" (fn [pos] (if (near? pos) (.blockAt p pos) #js {:unknown true})))
+    (set-sensed! p (fn [pos] (if (near? pos) (.blockAt (oracle p) pos) #js {:unknown true})))
     (aset p "seenBlockAt" (fn [pos] (if (near? pos)
-                                      (let [b (.blockAt p pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})
+                                      (let [b (.blockAt (oracle p) pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})
                                       #js {:unknown true :pos pos})))
     p))
 
@@ -175,6 +186,11 @@
   (mapv (comp :target :data) (mem/entries (mem/view (:store eng)) :moved)))
 
 (defn pos [x y z] #js {:x x :y y :z z})
+
+(defn true-block-name
+  "The block name at a cell in the fake world itself (the oracle): a perception-wrapped p's blockAt answers what the body senses."
+  [p x y z]
+  (some-> (.blockAt (oracle p) (pos x y z)) .-name))
 
 (defn ^:async tick-until-idle!
   "Tick eng until its job list is empty, at most max-ticks times."

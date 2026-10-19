@@ -170,7 +170,7 @@
     (await (core/tick! eng))
     {:p p :kinds (set (map :kind @seen)) :stood @stood :feet-y (js/Math.floor (second (:pos (fake/self raw))))}))
 
-(defn block-at [p x y z] (.-name (.blockAt p #js {:x x :y y :z z})))
+(defn block-at [p x y z] (tu/true-block-name p x y z))
 
 (def deep-cells
   "Every cell a 3-deep pit from (-1 64 -1) may dig or drop onto: its own column and the side column (0 _ -1)."

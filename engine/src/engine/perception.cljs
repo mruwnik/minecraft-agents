@@ -270,7 +270,7 @@
                    r))))))
 
 (defn wrap
-  "The primitives object p with every primitive as it is (blocks, blockAt, entities stay raw; dig, place, jumpPlace and useOn also let memory
+  "The primitives object p with every primitive as it is (blocks and entities stay raw; blockAt is sensedAt; dig, place, jumpPlace and useOn also let memory
   take the true state of their cell, see touching; look glances where it turned, see looking), plus
   seenBlockAt({x,y,z}) and seenBlocks({radius, names, max}) over memory, knownMobs() (known-mobs: the hostiles the body
   has seen or heard, sampled from p's entities), sensedAt, feel and glance ({x,y,z}: answer-js of sensed, feel!,
@@ -279,6 +279,7 @@
   (let [out (js/Object.assign #js {} p)
         cell (fn [^js a] (mapv #(js/Math.floor %) [(.-x a) (.-y a) (.-z a)]))]
     (aset out "perception" per)
+    (when-not (.-rawWorld out) (aset out "rawWorld" (:raw per)))
     (set! (.-mobSource ^js (:st per)) p)
     (aset out "knownMobs" (fn [] (mobs/known-mobs per p)))
     (run! #(when-let [f (aget p %)] (aset out % (rays/touching per p f))) touching-primitives)
@@ -287,6 +288,7 @@
                               (let [b (store/seen-block per (cell a))]
                                 (clj->js (-> b (dissoc :state-id) (update :pos pos-js))))))
     (aset out "sensedAt" (fn [a] (answer-js (sensed per (cell a)))))
+    (aset out "blockAt" (aget out "sensedAt"))
     (aset out "feel" (fn [a] (answer-js (feel! per (cell a)))))
     (aset out "glance" (fn [a] (answer-js (glance! per (cell a)))))
     (aset out "seenBlocks" (fn [^js a]

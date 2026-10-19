@@ -11,6 +11,7 @@
             [jobs.lib.cond :as cond]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.places :as places]))
 
 (def doc
@@ -96,12 +97,25 @@
   "Never :bad-args unless :pos and :state parse."
   (checks/args-fit "toggle needs a :pos and a :state" #(nil? (:error (parse (:args %))))))
 
+(defn known-block
+  "The block at pos as the body senses it, or nil when the cell is unloaded or not made out (unknown)."
+  [p pos]
+  (let [b (u/block-at p pos)]
+    (when-not (true? (some-> b .-unknown)) b)))
+
+(defn ^:async look-block!
+  "known-block after a look at pos when it is not made out (a gate in the dark, up close)."
+  [c pos]
+  (let [{:keys [x y z]} pos]
+    (when (dig-look/unknown? (:primitives c) [x y z]) (await (dig-look/look-at! c [x y z])))
+    (known-block (:primitives c) pos)))
+
 (defn block-facts
   "Never :needs-redstone, :not-toggleable or :bad-state when the block at :pos can never be put in :state by hand;
   later :no-block when it is air. A block not loaded says nothing (can-run? waits)."
   [c]
   (let [{:keys [pos state error]} (parse (:args c))
-        b (when-not error (u/block-at (:primitives c) pos))
+        b (when-not error (known-block (:primitives c) pos))
         block (some-> b .-name)
         kind (click/kind-of block)]
     (cond
@@ -124,6 +138,7 @@
       (let [b (u/block-at (:primitives c) pos)]
         (cond
           (nil? b) (contract/later :not-loaded "the block is not loaded" :pos pos)
+          (true? (.-unknown b)) (contract/ok :ready "not made out yet: the walk looks at it")
           (click/air? (.-name b)) (contract/later :no-block (str "no block at " (pr-str pos)) :pos pos)
           :else (contract/ok :ready "nothing to wait for"))))))
 
@@ -134,7 +149,7 @@
   and the block still shows the state that click gave it (else another actor flipped it since)."
   [c]
   (let [{:keys [pos state error]} (parse (:args c))
-        b (when-not error (u/block-at (:primitives c) pos))
+        b (when-not error (known-block (:primitives c) pos))
         reached (boolean (and b (contains? (valid-states (click/kind-of (.-name b))) state) (click/reached? state (click/props-of b))))
         saved (:clicked (ctx/mem c))
         clicked (when (and b (= (:now saved) (click/props-of b))) saved)]
@@ -204,7 +219,7 @@
   "One piece of the run: the step out of the closed door's column, the walk or the click. :again, :continue (a walk waits) or the ending."
   [c]
   (let [{:keys [pos state]} (parse (:args c))
-        b (u/block-at (:primitives c) pos)
+        b (known-block (:primitives c) pos)
         block (some-> b .-name)]
     (cond
       (and (= :openable (click/kind-of block)) (= :closed state)
@@ -217,7 +232,8 @@
                     (<= (u/dist (u/self-pos c) pos) (reach c)))))
       (await (walk! c pos state block))
 
-      :else (await (click! c pos state block)))))
+      :else (let [b (await (look-block! c pos))]
+              (await (click! c pos state (or (some-> b .-name) block)))))))
 
 (defn ^:async round
   "The whole run: next! until it ends, a pace between pieces."

@@ -43,7 +43,8 @@
     r))
 
 (defn block-at
-  "The block at cell pos (a cljs or JS {x y z}) as the JS object, or nil when the chunk is not loaded."
+  "The block at cell pos (a cljs or JS {x y z}) as the body senses it (felt, in view or remembered; an unknown cell has no
+  :name), or nil when the chunk is not loaded. With perception p.blockAt is p.sensedAt: no job reads the world raw."
   [p pos]
   (.blockAt p (clj->js pos)))
 

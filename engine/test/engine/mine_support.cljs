@@ -102,7 +102,7 @@
 
 (defn dug-cells [s] (mapv #(let [p (.-pos (.-args %))] [(.-x p) (.-y p) (.-z p)]) (calls s "dig")))
 
-(defn block-at [{:keys [p]} x y z] (some-> (.blockAt p (tu/pos x y z)) .-name))
+(defn block-at [{:keys [p]} x y z] (tu/true-block-name p x y z))
 
 (defn cells
   "{\"x,y,z\" block} for x in xs, y in ys, z in zs."

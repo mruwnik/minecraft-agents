@@ -170,12 +170,13 @@
     (fake/set-block! p [0 65 3] "iron_block")
     (is (= "iron_block" (.-name (.sensedAt w #js {:x 0 :y 65 :z 3}))))))
 
-(deftest the-wrapper-reads-sensed-feel-and-glance-and-leaves-block-at-raw
+(deftest the-wrapper-reads-sensed-feel-and-glance-and-block-at-is-sensed
   (let [{:keys [p per]} (rig (merge (tu/box -2 63 3 2 67 3 "stone") {"0,65,6" "gold_block" "0,63,0" "dirt"}))
         w (perception/wrap p per)
         at (fn [x y z] #js {:x x :y y :z z})]
-    (is (identical? (.-blockAt p) (.-blockAt w)))
-    (is (= "gold_block" (.-name (.blockAt w (at 0 65 6)))))
+    (is (identical? (.-sensedAt w) (.-blockAt w)))
+    (is (nil? (.-name (.blockAt w (at 0 65 6)))))
+    (is (= "gold_block" (.-name (.blockAt p (at 0 65 6)))))
     (is (.-unknown (.sensedAt w (at 0 65 6))))
     (is (= [true 0] [(.-visible (.sensedAt w (at 0 65 3))) (.-ageMs (.sensedAt w (at 0 65 3)))]))
     (is (.-fullCube (.sensedAt w (at 0 65 3))))

@@ -31,7 +31,7 @@
   "{:cell :column} of the block at cell when it is an openable block standing open now, else nil (shut, gone, unloaded).
   For the job, once it stands beside the block."
   [p cell]
-  (let [b (.blockAt p (clj->js cell))
+  (let [b (u/block-at p cell)
         props (click/props-of b)]
     (when (and b (= :openable (click/kind-of (.-name b))) (click/reached? :open props))
       {:cell cell :column (pass/column-of cell props)})))

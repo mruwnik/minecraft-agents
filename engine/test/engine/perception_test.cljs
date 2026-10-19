@@ -193,8 +193,10 @@
         wrapped (perception/wrap p per)]
     (perception/pass! per)
     (is (every? #(identical? (aget p %) (aget wrapped %))
-                (remove (conj perception/touching-primitives "look") (js/Object.keys p))))
-    (is (= "diamond_ore" (.-name (.blockAt wrapped #js {:x 0 :y 65 :z 8}))))
+                (remove (conj perception/touching-primitives "look" "blockAt") (js/Object.keys p))))
+    (is (identical? (.-sensedAt wrapped) (.-blockAt wrapped)))
+    (is (nil? (.-name (.blockAt wrapped #js {:x 0 :y 65 :z 8}))) "behind the wall: not sensed")
+    (is (= "diamond_ore" (.-name (.blockAt p #js {:x 0 :y 65 :z 8}))))
     (is (.-unknown (.seenBlockAt wrapped #js {:x 0 :y 65 :z 8})))
     (is (= "stone" (.-name (.seenBlockAt wrapped #js {:x 0 :y 65 :z 5}))))))
 
