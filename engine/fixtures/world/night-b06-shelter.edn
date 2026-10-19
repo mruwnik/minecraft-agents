@@ -66,9 +66,12 @@
    :limit-s 100}
   ;; 5a9e8c64: wall cells beside a one-block pillar have nothing to place against until a block goes under them
   {:name "pillar-top-walls-get-support-first"
+   :time :any
+   ;; the walls' quote plans the support chain; on a loaded machine it passes the 2 s default and every way quotes ##Inf
+   :settings {:engine.contract/quote-s 20}
    :blocks [[:set [16 -1 16] "stone"] [:set [16 0 16] "stone"] [:set [16 1 16] "stone"]]
    :body {:at [16.5 2 16.5] :inventory [["dirt" 24]]}
-   :plot {:height 12}
+   :plot {:height 12 :light :dark}
    :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :shut-in.failed} :for-s 90 :until {:source :job :kind :shut-in.sealed}}]

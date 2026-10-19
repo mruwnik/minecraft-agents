@@ -15,6 +15,7 @@
  :cases
  [;; L1: queued at night from the hut to open ground the probe waits :exposed, the body stays in, and starts once the day comes
   {:name "l1-queued-at-night-waits-exposed-then-starts-at-day"
+   :time-why :dawn-decision
    :act [[:job (jobs.debug.ready-probe {:at #at [12 0 20]})]
          [:await {:source :job :kind :waiting :data {:reason :exposed}} 30]
          [:wait-s 10]
@@ -25,6 +26,7 @@
    :limit-s 120}
   ;; sweep C: explore.search binds safe-if-lit: queued at night in the open it waits :dark and starts once the day comes
   {:name "c-explore-search-queued-at-night-waits-dark-then-starts-at-day"
+   :time-why :dawn-decision
    :body {:at [4.5 0 12.5] :settle-s 2}
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :west :spacing 8 :scan-radius 8
                                      :use-notes false :max-distance 16 :settings {:jobs.explore.search/max-legs 2} :spend {:job-time 60}})]
@@ -35,6 +37,7 @@
             {:event {:source :job :kind :round_started} :within-s 90 :of-job true}]
    :limit-s 150}
   {:name "l1-stays-queued-all-night"
+   :time-why :dawn-decision
    :act [[:job (jobs.debug.ready-probe {:at #at [12 0 20]})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :job.ready-probe} :for-s 25}]
@@ -42,11 +45,13 @@
    :limit-s 60}
   ;; L2: a call's :checks {:safe? (not (threatened))} replaces the exposure check: it starts at night
   {:name "l2-override-without-the-exposure-check-starts-at-night"
+   :time-why :night-light
    :act [[:job (jobs.debug.ready-probe {:at #at [12 0 20] :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :job.ready-probe} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 20}]
    :limit-s 60}
   {:name "l2-override-keeping-the-jobs-own-check-still-waits"
+   :time-why :dawn-decision
    :act [[:job (jobs.debug.ready-probe {:at #at [12 0 20] :checks {:safe? (job-safe)}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :job.ready-probe} :for-s 25}]
@@ -74,6 +79,7 @@
    :limit-s 60}
   ;; L5: the night trigger is true for a body in the open; its job (safe-if-lit) holds at night above ground, so the trigger is held, not fired
   {:name "l5-night-trigger-with-a-lit-bound-job-is-held"
+   :time-why :dawn-decision
    :body {:at [4.5 0 12.5] :settle-s 2}
    :register [{:trigger :night :persistence :cooldown :cooldown-s 2 :job (jobs.debug.ready-probe {:lit? true})}]
    :expect [{:event {:source :reflex :kind :held :data {:reason :dark}} :within-s 40}
@@ -81,6 +87,7 @@
             {:no-event {:source :job :kind :job.ready-probe} :for-s 30}]
    :limit-s 60}
   {:name "l5-night-trigger-whose-job-overrides-the-check-fires"
+   :time-why :night-light
    :body {:at [4.5 0 12.5] :settle-s 2}
    :register [{:trigger :night :persistence :cooldown :cooldown-s 2 :job (jobs.debug.ready-probe {:lit? true :checks {:safe? (always)}})}]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night}} :within-s 40}
@@ -89,6 +96,7 @@
    :limit-s 60}
   ;; L6: a queued job's :checks survive a body restart: with the zombie gone the override starts it (without it the walk out stays :exposed)
   {:name "l6-queued-override-is-kept-over-a-restart"
+   :time-why :night-light
    :tags [:readiness :survival :night :hostile]
    :mobs :keep
    :act [[:summon "zombie" [4.5 0 12.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
@@ -101,6 +109,8 @@
             {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 40}]
    :limit-s 120}
   {:name "l6-queued-override-still-waits-after-a-restart-while-the-hostile-stays"
+   :time :any
+   :plot {:height 6 :light :dark}
    :tags [:readiness :survival :night :hostile]
    :mobs :keep
    :act [[:summon "zombie" [4.5 0 12.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]

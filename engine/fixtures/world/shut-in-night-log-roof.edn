@@ -3,9 +3,7 @@
 {:defaults
  {:tags [:night :survival :shut-in]
   :time :any
-  :blocks [[:fill [8 -6 8] [24 -1 24] "coal_ore"]
-           [:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
-           [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
+  :blocks [[:fill [8 -6 8] [24 -1 24] "coal_ore"]]
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
  :cases
  [{:name "carried-logs-roof-the-pit"
