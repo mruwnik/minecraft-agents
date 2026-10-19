@@ -124,6 +124,16 @@
           (is (not= "water" (block-at p {:x 4 :y 63 :z 0})))
           (is (= 1 (count (:poured r)))))))))
 
+(deftest ignore-zones-lets-the-pour-into-anothers-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory bucket :blocks (strip 5)} [{:name "farm" :min [-5 60 -5] :max [10 70 5] :owner "Miles"}])
+              r (await (tu/child-outcome eng job (assoc (args 5) :ignore-zones? true) 40))]
+          (is (= 1 (count (:poured r))))
+          (is (empty? (:holes r)))
+          (is (= "water" (block-at p (first (:poured r))))))))))
+
 (defn fail-places!
   "Make every place of item fail; other places run as the fake does."
   [p item]

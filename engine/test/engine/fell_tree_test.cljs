@@ -739,4 +739,5 @@
                                      (apply call! c k job more)))]
             (let [out (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 10 :at {:x 6 :y 64 :z 0}} 60))]
               (is (= :condition-failed (:kind (:ending out))))
-              (is (= :logs-left (get-in out [:ending :cause :reason]))))))))))
+              (is (= :logs-left (get-in out [:ending :cause :reason])))
+              (is (= 2 (get-in out [:ending :cause :left])) "3 logs dug, 1 collected"))))))))

@@ -320,7 +320,7 @@
           (= :continue e) :continue
           (or (= :done (:kind e)) (and (= :nothing-possible (:kind e)) (= :none-collected (contract/cause-key e))))
           (do (ctx/update-mem! c assoc :collected (get-in e [:data :collected] 0)) nil)
-          :else (ctx/end c :condition-failed {:reason :logs-left :left (count drop-ids)} (tree-result c)))))))
+          :else (ctx/end c :condition-failed {:reason :logs-left :left (max 0 (- (count drop-ids) (get-in e [:data :collected] 0)))} (tree-result c)))))))
 
 (defn ^:async ground-step
   "One piece of the tree from the ground: the axe, the next log dug (walking in reach first), the tree ended when no log

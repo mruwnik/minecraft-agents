@@ -207,7 +207,7 @@
 (defn ^:async restore!
   "Put dirt back in the dug cell; a cell that stays open is booked in :holes. :continue while the child waits."
   [c hole]
-  (let [e (await (ctx/call c :restore 'jobs.blocks.place {:pos hole :item "dirt" :clear false}))]
+  (let [e (await (ctx/call c :restore 'jobs.blocks.place (merge (select-keys (:args c) [:ignore-zones?]) {:pos hole :item "dirt" :clear false})))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (ctx/update-mem! c #(-> (dissoc % :restore) (update :restored (fnil conj #{}) hole))) :again)
@@ -216,7 +216,7 @@
 (defn ^:async pour!
   "Pour the bucket in the dug hole. :again, or :continue while the child waits."
   [c hole]
-  (let [e (await (ctx/call c :pour 'jobs.blocks.use-on {:pos hole :item "water_bucket"}))]
+  (let [e (await (ctx/call c :pour 'jobs.blocks.use-on (merge (select-keys (:args c) [:ignore-zones?]) {:pos hole :item "water_bucket"})))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (ctx/update-mem! c #(-> (dissoc % :hole) (update :poured (fnil conj #{}) hole))) :again)
