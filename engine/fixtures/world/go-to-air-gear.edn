@@ -2,8 +2,8 @@
 ;; vanilla air 15 s), the body starts at its west shaft with its head in air and go-to's the east shaft (head in air). Vanilla: Respiration n lasts about (n+1) x 15 s,
 ;; a turtle helmet gives 10 s of Water Breathing a dive; Water Breathing is covered by go-to-water-breathing-dive.
 ;; The planner plans a dive up to 12 s of unarmoured air (+ the 10 s turtle grace x the drain), so gear that covers the dive arrives (no :hurt), the rest is refused with :why :air.
-;; Should-succeed: turtle + Respiration III 20 s, 50 s; Respiration III helmet 20 s; turtle only 20 s. turtle + Respiration III 65 s (real air to 0 at ~70 s; a dive to air may pass the 58 s limit). Should-fail: bare head 20 s.
-;; Gear is put on with /item replace (armor.head) in the act; the body is cleared before each case. Live risk: the 100 and 130 cell tunnels need the whole water line seen from the west shaft (a refusal for another :why fails the case).
+;; Should-succeed: turtle + Respiration III 20 s, 50 s; Respiration III helmet 20 s; turtle only 20 s. Should-fail: bare head 20 s; turtle + Respiration III 60 s (past the 58 s limit of a dive begun with the head out).
+;; Gear is put on with /item replace (armor.head) in the act; the body is cleared before each case. Live risk: the 100 and 120 cell tunnels need the whole water line seen from the west shaft (a refusal for another :why fails the case).
 {:defaults
  {:tags [:movement :water :air] :time :any
   :plot {:height 8 :length 150 :width 16}
@@ -86,17 +86,17 @@
    :act [[:job (jobs.movement.go-to {:pos #at [45 1 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
    :after [[:body-near [4.5 1 8.5] 3]]}
-  ;; 65 s is past the planner's own limit (58 s) but the dive ends in air, and a way to air may use the whole real breath (70 s: 15 s / 0.25 + the 10 s grace)
-  {:name "turtle-respiration3-dive-65s-arrives"
-   :blocks [[:fill [3 0 7] [136 4 9] "stone"]
-            [:fill [4 0 8] [135 1 8] "water"]
-            [:fill [4 2 8] [4 3 8] "air"] [:fill [135 2 8] [135 3 8] "air"]
-            [:fill [5 2 8] [134 2 8] "glass"]]
+  ;; 60 s is past the planner's 58 s limit; the past-the-limit allowance (to-air) only applies to a replan with the head already under water, so a dive begun head-out is refused
+  {:name "turtle-respiration3-dive-60s-refused"
+   :blocks [[:fill [3 0 7] [126 4 9] "stone"]
+            [:fill [4 0 8] [125 1 8] "water"]
+            [:fill [4 2 8] [4 3 8] "air"] [:fill [125 2 8] [125 3 8] "air"]
+            [:fill [5 2 8] [124 2 8] "glass"]]
+   :body {:at [4.5 1 8.5] :yaw 270 :settle-s 8}
    :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet[enchantments={respiration:3}]"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "turtle_helmet"}}}] 10]
-         [:job (jobs.movement.go-to {:pos #at [135 1 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 180 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 180 :until {:source :job :kind #{:completed :stopped}}}]
-   :after [[:body-near [135.5 1 8.5] 3]]}
+         [:job (jobs.movement.go-to {:pos #at [125 1 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
+   :after [[:body-near [4.5 1 8.5] 3]]}
   ;; card 30c625b6: Depth Strider III swims about twice as fast, so a 30 cell dive (15 s bare, past the planner's 12 s) fits the air; the same dive bare is refused
   {:name "depth-strider-3-dive-30-cells-arrives"
    :blocks [[:fill [3 0 7] [34 4 9] "stone"]
