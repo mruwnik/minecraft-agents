@@ -209,7 +209,12 @@
 (def target [:center :w :h])
 
 (def defaults {:spend {:job-time ::job-time-s}})
-(def safe? ready/safe-if-lit)
+(def safe?
+  "A survey that stays put only needs no danger near; with :walk the walk's own light matters too."
+  (with-meta (fn [c] (if (:walk (:args c)) (ready/safe-if-lit c) (ready/threatened c)))
+    {::ready/exposure (fn [c] (if (:walk (:args c))
+                                ((::ready/exposure (meta ready/safe-if-lit)) c)
+                                (contract/ok :survey "a survey that walks nowhere is no exposure")))}))
 (def fit? ready/fit?)
 
 (defn done?

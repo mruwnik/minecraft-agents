@@ -4,7 +4,7 @@
 ;; sloped ones are listed too; with :max-step 0 no listed spot has a step; a foreign zone over the flattest patch by the body moves the best spot
 ;; out of it; with the body's own zone there the best spot stays by the body (as with no zone).
 {:defaults
- {:tags [:farm :find-spot :jobs :zones] :time :day
+ {:tags [:farm :find-spot :jobs :zones] :time :any
   :plot {:height 31 :floor "grass_block" :length 128 :width 64}
   :body {:at [64.5 0 32.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 60}
