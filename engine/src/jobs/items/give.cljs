@@ -78,8 +78,8 @@
 
 (defn find-player
   "The position {:x :y :z} of player named name within radius, or nil."
-  [p name radius]
-  (some->> (array-seq (.entities p #js {:radius radius :kind "player"}))
+  [p name within]
+  (some->> (array-seq (.entities p #js {:radius within :kind "player"}))
            (filter #(or (= name (.-username %)) (= name (.-name %))))
            first
            .-pos
