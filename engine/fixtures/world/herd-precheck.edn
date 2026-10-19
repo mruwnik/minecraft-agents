@@ -15,8 +15,8 @@
    :blocks [[:set [83 0 13] "air"]]
    :act [[:summon "cow" [68.5 0 18.5]]
          [:until-seen {:entity "cow"} 10]
-         [:rcon "execute positioned $X $Y $Z as $BODY run tp @s ~30.5 ~ ~16.5"]
-         [:rcon "execute positioned $X $Y $Z as @e[type=cow,$BOX] run tp @s ~32.5 ~ ~18.5"]
+         [:rcon "execute positioned $X $Y $Z as $BODY run tp @s ~30 ~ ~16"]
+         [:rcon "execute positioned $X $Y $Z as @e[type=cow,$BOX] run tp @s ~32 ~ ~18"]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [81 0 14] :max #xyz [85 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :leaky}} :within-s 60 :of-job true}]
    :after [[:body-near [30.5 0 16.5] 6]]}
@@ -24,8 +24,8 @@
    :body {:inventory []}
    :act [[:summon "cow" [68.5 0 18.5]]
          [:until-seen {:entity "cow"} 10]
-         [:rcon "execute positioned $X $Y $Z as $BODY run tp @s ~30.5 ~ ~16.5"]
-         [:rcon "execute positioned $X $Y $Z as @e[type=cow,$BOX] run tp @s ~32.5 ~ ~18.5"]
+         [:rcon "execute positioned $X $Y $Z as $BODY run tp @s ~30 ~ ~16"]
+         [:rcon "execute positioned $X $Y $Z as @e[type=cow,$BOX] run tp @s ~32 ~ ~18"]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [81 0 14] :max #xyz [85 0 18]} :target 1 :fetch false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 60 :of-job true}]
    :after [[:body-near [30.5 0 16.5] 6]]}]}

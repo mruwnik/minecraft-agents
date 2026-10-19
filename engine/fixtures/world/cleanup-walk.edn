@@ -17,7 +17,7 @@
    :blocks [[:fill [18 0 0] [18 5 24] "stone"]]
    :act [[:job (jobs.access.pillar {:height 2 :use {:blocks ["cobblestone"]} :ignore-zones? true})]
          [:await {:source :job :kind :pillar.done} 60]
-         [:rcon "execute positioned $X $Y $Z as $BODY run tp @s ~28.5 ~ ~16.5"]
+         [:rcon "execute positioned $X $Y $Z as $BODY run tp @s ~28 ~ ~16"]
          [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :cleanup.done :data {:removed 2 :open 0}} :within-s 140 :of-job true}]
    :after [[:not-block [8 0 16] "cobblestone"] [:not-block [8 1 16] "cobblestone"] [:block [18 0 24] "stone"]]}
@@ -25,7 +25,7 @@
    :blocks [[:fill [18 0 0] [18 5 31] "stone"]]
    :act [[:job (jobs.access.pillar {:height 2 :use {:blocks ["cobblestone"]} :ignore-zones? true})]
          [:await {:source :job :kind :pillar.done} 60]
-         [:rcon "execute positioned $X $Y $Z as $BODY run tp @s ~28.5 ~ ~16.5"]
+         [:rcon "execute positioned $X $Y $Z as $BODY run tp @s ~28 ~ ~16"]
          [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :cleanup.left} :within-s 100 :of-job true}
             {:event {:source :job :kind :cleanup.done :data {:removed 0 :open [:>= 1]}} :within-s 100 :of-job true}]

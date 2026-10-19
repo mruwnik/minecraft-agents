@@ -285,6 +285,15 @@
        (filter #(some (fn [[_ sel]] (not (or (str/includes? (or sel "") "dx=") (str/includes? (or sel "") "$BOX"))))
                       (re-seq #"@e(?:\[([^\]]*)\])?" (str %))))))
 
+(defn centred-offsets
+  "The :rcon commands with `execute positioned` whose relative offset ends in .5: positioned already centres the origin
+  on the block, so ~N.5 lands on a block corner."
+  [c]
+  (->> (:act c)
+       (filter (comp #{:rcon :rcon-until} first))
+       (map second)
+       (filter #(and (re-find #"execute positioned" (str %)) (re-find #"~-?\d+\.5(?!\d)" (str %))))))
+
 (defn coords? [v] (and (vector? v) (= 3 (count v)) (every? number? v)))
 
 (defn bare-plot-positions
@@ -399,6 +408,7 @@
       (seq (out-of-plot-positions c)) (conj (str "position " (first (out-of-plot-positions c)) " is outside the plot: give :plot :length / :width or move it inside"))
       (seq (solid-placements c)) (conj (str "the " (name (ffirst (solid-placements c))) " position " (second (first (solid-placements c))) " is inside a solid :blocks cell"))
       (seq (unsplittable-fills c)) (conj (str "a :hollow / :outline fill over " fill-limit " blocks cannot be split: " (first (unsplittable-fills c))))
+      (seq (centred-offsets c)) (conj "`execute positioned` already centres the origin on the block: write ~N, not ~N.5 (that is a block corner)")
       (seq (unbounded-selectors c)) (conj "an @e selector must be bounded to the plot: use $BOX (x,y,z,dx,dy,dz), not distance")
       (some #(not (and (after-kinds (first %)) (or (not= :file (first %)) (string? (second %))))) (:after c)) (conj (str ":after checks must be one of " (sort after-kinds)))
       (some #(and (map? %) (contains? % ::rel) (= :vec (::as %))) (tree-seq coll? seq (:after c)))

@@ -572,6 +572,12 @@
     (is (empty? (ps [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"]])) "@s is the body")
     (is (empty? (ps [[:rcon "execute if entity @e[type=cow,distance=..5] run say hi"]])))))
 
+(deftest positioned-offsets-are-not-half-blocks
+  (let [ps (fn [act] (f/problems (f/merge-case {} {:name "a" :act act :after [[:block [1 0 1] "stone"]]})))]
+    (is (seq (ps [[:rcon "execute positioned $X $Y $Z run tp $BODY ~16.5 ~ ~16.5"]])))
+    (is (empty? (ps [[:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16"]])))
+    (is (empty? (ps [[:rcon "execute at $BODY run tp @s ~0.5 ~ ~"]])))))
+
 (deftest substitute-fills-the-plot-box
   (is (= "kill @e[type=zombie,x=20000,y=149,z=20000,dx=31,dy=7,dz=31]"
          (f/substitute "kill @e[type=zombie,$BOX]" "B" [20000 150 20000] (f/box-selector f/default-grid [20000 150 20000] 6)))))

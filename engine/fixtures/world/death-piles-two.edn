@@ -8,7 +8,7 @@
         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
         [:until-rcon "data get entity $BODY Health" "data: 20" 20]
         [:rcon "give $BODY minecraft:dirt 3"]
-        [:rcon "execute positioned $X $Y $Z run tp $BODY ~14.5 ~ ~14.5"]
+        [:rcon "execute positioned $X $Y $Z run tp $BODY ~14 ~ ~14"]
         [:wait-s 1]
         [:kill-body]
         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}} {:data {:pos [:any]}}]}}] 15]

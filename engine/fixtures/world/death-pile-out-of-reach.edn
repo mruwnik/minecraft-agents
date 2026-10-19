@@ -25,7 +25,7 @@
    :after [[:item "raw_iron" 24] [:not-block [24 0 26] "dirt"] [:block [4 0 12] "dirt"]]}
   {:name "drops-behind-a-wall-found-by-a-look-from-round-the-pile"
    :blocks [[:fill [25 0 27] [27 2 27] "stone"]]
-   :act [[:rcon "execute positioned $X $Y $Z as @e[type=item,$BOX] run tp @s ~26.5 ~0.1 ~28.5"]
+   :act [[:rcon "execute positioned $X $Y $Z as @e[type=item,$BOX] run tp @s ~26 ~0.1 ~28"]
          [:job (jobs.survival.recover-drops)]]
    :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 200 :of-job true}]
    :after [[:item "raw_iron" 24]]}]}

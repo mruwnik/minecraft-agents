@@ -27,7 +27,7 @@
    :body {:at [10.5 10 16.5] :inventory [["iron_pickaxe" 1]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8})]
          [:await {:source :job :kind :stair.step :data {:at #at [12 8 16]}} 100]
-         [:rcon "execute positioned $X $Y $Z run tp $BODY ~10.5 ~10 ~20.5"]]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~10 ~10 ~20"]]
    :expect [{:event {:source :job :kind :stair.return} :within-s 120 :of-job true}
             {:event {:source :job :kind :stair.done :data {:steps 8}} :within-s 190 :of-job true}
             {:no-event {:source :job :kind :stair.stopped :data {:reason :off-stair}} :for-s 190 :until {:source :job :kind :stair.done}}]}
