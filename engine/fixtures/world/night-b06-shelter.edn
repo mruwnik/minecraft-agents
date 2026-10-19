@@ -99,18 +99,18 @@
   ;; 712a8df7: first light with a hostile known near the shelter: the body stays in, and leaves once the mob is gone
   {:name "dawn-with-a-known-hostile-stays-in-until-it-is-gone"
    :time :night-exclusive
+   :register [{:trigger :night}]
    :sleep-skip true
    :body {:inventory [["cobblestone" 16]]}
    :act [[:summon "zombie" [28.5 0 16.5] "{UUID:[I;2006101,1,1,1],NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.survival.night)]
          [:await {:source :job :kind :shut-in.sealed} 60]
          [:until [:memory {:entries {:shelter [{:data {:state :built}}]}}] 10]
-         [:time-set 1000]
+         [:time-set 23500]
          [:await {:source :job :kind :night.dawn-hold} 60]
          [:wait-s 5]
          [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
    :expect [{:event {:source :job :kind :night.dawn-hold} :within-s 120}
-            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 240 :of-job true}]
+            {:event {:source :job :kind :dig-in.left} :within-s 240}]
    :limit-s 260}
   ;; f6fef9d5: the hold names the failed sites' reasons
   {:name "exposed-hold-names-the-failed-sites"
