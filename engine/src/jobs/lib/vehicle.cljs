@@ -6,13 +6,20 @@
   off. The hold is body memory :vehicle-hold {:job root-id}. It counts only while that root job's memory
   (kind :job/<id>) exists, so a cancelled holder stops holding at once. The :mounted trigger fires on a body aboard
   that nothing holds."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
             [jobs.lib.land :as land]))
 
 (def hold-kind :vehicle-hold)
-(def hold-policy {:cap 8 :ttl (* 24 60 60 1000)})
+
+(a/defargs settings
+  {::hold-cap {:default 8 :doc "Most vehicle-hold entries the body's memory keeps." :spec (a/int-in 1 nil)}
+   ::hold-ttl-ms {:default (* 24 60 60 1000) :doc "How long a vehicle hold stays in memory, in ms." :spec (a/int-in 1 nil)}})
+
+(defn hold-policy [] {:cap (settings/get settings ::hold-cap) :ttl (settings/get settings ::hold-ttl-ms)})
 
 (defn vehicle-of
   "{:id :uuid :name} of what a sensed self (JS, from primitives.self()) rides, or nil (on foot or offline)."
@@ -38,7 +45,7 @@
   "Mark the vehicle as this ctx's root job's to ride; once per job."
   [c]
   (when-not (held-by-root? c)
-    (ctx/remember! c hold-kind {:job (:root c)} hold-policy)))
+    (ctx/remember! c hold-kind {:job (:root c)} (hold-policy))))
 
 (defn release!
   "Drop this ctx's root job's hold."

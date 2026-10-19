@@ -34,7 +34,7 @@
                                    _ (when walked ; a walk: the next call begins a new search from where it got to
                                        (swap! (fake/state p) assoc-in [:self :pos] [(+ x 0.5) 64 (+ z 0.5)])
                                        (reset! wsearch/searches {}))
-                                   plan (await (walk/plan-walk! c (.pathWorld p) [20 71 20] 0 walk/default-weight {:budget 300 :policy (policy-fn (wworld/body-policy c))}))]
+                                   plan (await (walk/plan-walk! c (.pathWorld p) [20 71 20] 0 (walk/default-weight) {:budget 300 :policy (policy-fn (wworld/body-policy c))}))]
                                (if (= "searching" (.-reason (:r plan)))
                                  (recur (inc i) (some? (:steps plan)))
                                  (.-reason (:r plan)))))))))]
@@ -57,7 +57,7 @@
 (deftest forgetting-the-known-land-forgets-the-flood
   (let [p (tu/fake {:blocks high-deck :self {:pos {:x 0.5 :y 64 :z 0.5}}})
         c {:primitives p}]
-    (wsearch/goal-flood! c [20 71 20] 0 walk/default-weight nil nil)
+    (wsearch/goal-flood! c [20 71 20] 0 (walk/default-weight) nil nil)
     (is (some? (get @wsearch/goal-floods p)))
     (wsearch/forget-known! c)
     (is (nil? (get @wsearch/goal-floods p)))))
@@ -65,7 +65,7 @@
 (deftest another-body-of-the-same-name-keeps-nothing-of-the-first
   (let [mk #(tu/fake {:blocks high-deck :self {:pos {:x 0.5 :y 64 :z 0.5}}})
         [p1 p2] [(mk) (mk)]
-        flood #(wsearch/goal-flood! {:primitives %} [20 71 20] 0 walk/default-weight nil nil)
+        flood #(wsearch/goal-flood! {:primitives %} [20 71 20] 0 (walk/default-weight) nil nil)
         first-memo (flood p1)]
     (is (identical? first-memo (flood p1)) "one body keeps its flood")
     (is (not (identical? first-memo (flood p2))) "a new body of the same name starts clean")))
@@ -83,7 +83,7 @@
         (let [p (tu/fake {:blocks room-floor :self {:pos {:x 0.5 :y 64 :z 0.5}}})
               c {:primitives p}
               options wplan/plan-options
-              plan! (fn [budget] (walk/plan-walk! c (.pathWorld p) [17 64 0] 0 walk/default-weight {:budget budget}))]
+              plan! (fn [budget] (walk/plan-walk! c (.pathWorld p) [17 64 0] 0 (walk/default-weight) {:budget budget}))]
           (reset! wsearch/searches {})
           (wsearch/forget-known! c)
           (set! wplan/plan-options (fn [& args] (js/Object.assign (apply options args) #js {:preFlood 0 :floodAfter 20 :goalFlood 100})))
@@ -107,7 +107,7 @@
   (let [p (tu/fake {:blocks high-deck :self {:pos {:x 0.5 :y 64 :z 0.5}}})
         t (atom 1000)
         c {:primitives p :view (fn [] {:now @t})}
-        flood #(wsearch/goal-flood! c [20 71 20] 0 walk/default-weight nil nil)
+        flood #(wsearch/goal-flood! c [20 71 20] 0 (walk/default-weight) nil nil)
         memo (flood)]
     (reset! t (+ 1000 wsearch/search-max-age-ms -1))
     (is (identical? memo (flood)) "just under the age: kept")

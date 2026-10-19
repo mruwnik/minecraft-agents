@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.test-util :as tu]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [jobs.movement.mount :as mount]
             [jobs.lib.vehicle :as vehicle]))
 
@@ -166,3 +167,8 @@
                                              (js/Promise. (fn [res _] (js/setTimeout #(res {:hung true}) 200)))]))]
           (is (nil? (:hung o)) "no endless re-walk")
           (is (= :unreachable (:reason (result-of o)))))))))
+
+(deftest hold-policy-follows-its-settings
+  (is (= {:cap 8 :ttl 86400000} (vehicle/hold-policy)))
+  (is (= {:cap 3 :ttl 5000}
+         (settings/with-settings {:jobs.lib.vehicle/hold-cap 3 :jobs.lib.vehicle/hold-ttl-ms 5000} vehicle/hold-policy))))

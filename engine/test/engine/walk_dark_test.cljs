@@ -23,7 +23,7 @@
   "plan-options over the pathWorld of p's costed-world with opts (no dangers: the ctx has no memory)."
   [p opts]
   (let [pw (wworld/costed-world {:primitives p} (wworld/path-world p) opts)]
-    (wplan/plan-options pw walk/default-weight nil wplan/wide-box)))
+    (wplan/plan-options pw (walk/default-weight) nil wplan/wide-box)))
 
 (deftest plans-carry-the-dark-test
   (let [p (seen-world 18000)

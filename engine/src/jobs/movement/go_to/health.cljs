@@ -178,7 +178,7 @@
   [c pos range]
   (let [{:keys [max-damage]} (wworld/walk-settings c)
         policy (assoc (wworld/body-policy c) :damage-budget (cost/survivable-budget (wworld/damage-body c) {:max-damage max-damage}))
-        within (await (wplan/plan-within! c (wworld/path-world (:primitives c) (:unknown c)) [(:x pos) (:y pos) (:z pos)] range walk/default-weight policy))
+        within (await (wplan/plan-within! c (wworld/path-world (:primitives c) (:unknown c)) [(:x pos) (:y pos) (:z pos)] range (walk/default-weight) policy))
         ^js r (:r within)]
     (when (= "found" (.-status r))
       (ctx/update-mem! c assoc :probe-drops (drops (some-> r .-path .-steps)))

@@ -94,7 +94,7 @@
   ([blocks goal pos]
    (let [p (tu/fake {:blocks blocks :self {:pos pos}})
          c {:primitives p}]
-     (await (wplan/plan-within! c (.pathWorld p) goal 0 walk/default-weight (wworld/body-policy c))))))
+     (await (wplan/plan-within! c (.pathWorld p) goal 0 (walk/default-weight) (wworld/body-policy c))))))
 
 (defn ^:async plan-within-status
   "The planner status and reason of wplan/plan-within! from (0 64 0) to goal over blocks."
@@ -119,9 +119,9 @@
         (let [p (tu/fake {:blocks (walkways true) :self {:pos {:x 0.5 :y 64 :z 0.5}}})
               c {:primitives p}
               order (atom [])
-              whole (await (walk/plan-walk! c (.pathWorld p) [6 64 0] 0 walk/default-weight))]
+              whole (await (walk/plan-walk! c (.pathWorld p) [6 64 0] 0 (walk/default-weight)))]
           (js/setTimeout #(swap! order conj :timer) 0)
-          (let [plan (await (tu/with-expansion-budget 16 #(walk/plan-walk! c (.pathWorld p) [6 64 0] 0 walk/default-weight)))]
+          (let [plan (await (tu/with-expansion-budget 16 #(walk/plan-walk! c (.pathWorld p) [6 64 0] 0 (walk/default-weight))))]
             (swap! order conj :planned)
             (is (= [:timer :planned] @order))
             (is (= "found" (:status plan) (:status whole)))
@@ -229,7 +229,7 @@
   "walk/plan-walk! from the cell pos (feet) to goal over blocks with opts."
   [blocks [x y z] goal opts]
   (let [p (tu/fake {:blocks blocks :self {:pos {:x (+ x 0.5) :y y :z (+ z 0.5)}}})]
-    (await (walk/plan-walk! {:primitives p} (.pathWorld p) goal 0 walk/default-weight opts))))
+    (await (walk/plan-walk! {:primitives p} (.pathWorld p) goal 0 (walk/default-weight) opts))))
 
 ;; a walkway (feet 80) x 18..47 at z 8 over a floor x 0..47, z 0..15; columns from x 48 on are not loaded
 (def walkway-to-unloaded (merge (box 0 63 0 47 63 15 "stone") (box 18 79 8 47 79 8 "stone")))
@@ -310,7 +310,7 @@
     (await (tu/with-expansion-budget 16
              (fn ^:async run []
                (loop [calls 1]
-                 (let [plan (await (walk/plan-walk! c (.pathWorld p) goal 0 walk/default-weight {:budget budget}))]
+                 (let [plan (await (walk/plan-walk! c (.pathWorld p) goal 0 (walk/default-weight) {:budget budget}))]
                    (if (and (= "searching" (:status plan)) (< calls 100))
                      (recur (inc calls))
                      [plan calls]))))))))
@@ -322,7 +322,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (tu/fake {:blocks (walkways true) :self {:pos {:x 0.5 :y 64 :z 0.5}}})
-              whole (await (walk/plan-walk! {:primitives p} (.pathWorld p) [6 64 0] 0 walk/default-weight))
+              whole (await (walk/plan-walk! {:primitives p} (.pathWorld p) [6 64 0] 0 (walk/default-weight)))
               [plan calls] (await (budgeted-calls (walkways true) {:x 0.5 :y 64 :z 0.5} [6 64 0] 32))]
           (is (> calls 3) "several calls")
           (is (= {:status :searching :replans 0} (wplan/no-walk (wsearch/unfinished-plan {:walled nil :limited #js {:progress (fn [] nil)}} 1) 0)))
@@ -347,7 +347,7 @@
   [blocks pos goal budget opts]
   (let [p (tu/fake {:blocks blocks :self {:pos pos}})]
     (reset! wsearch/searches {})
-    (try (await (tu/with-expansion-budget 16 #(walk/plan-walk! {:primitives p} (.pathWorld p) goal 0 walk/default-weight (assoc opts :budget budget))))
+    (try (await (tu/with-expansion-budget 16 #(walk/plan-walk! {:primitives p} (.pathWorld p) goal 0 (walk/default-weight) (assoc opts :budget budget))))
          (finally (reset! wsearch/searches {})))))
 
 ;; a ledge (feet 64, x 0..1, z 0..63) whose first move east is a 3-drop to a floor (feet 61, x 2..47) running on to the

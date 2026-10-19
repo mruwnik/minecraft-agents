@@ -57,7 +57,7 @@
     (let [pw (cond-> (wworld/costed-world c (wworld/path-world (:primitives c) unknown) {:dangers? dangers :dark? (not (false? dark))})
                (seq avoid) (wworld/with-avoid avoid)
                (seq tolls) (wworld/with-tolls tolls))
-          plan (await (walk/plan-walk! c pw to range walk/default-weight
+          plan (await (walk/plan-walk! c pw to range (walk/default-weight)
                                        {:policy policy :walls walls :one-way one-way :frontier explore :budget budget
                                         :progress progress}))
           iron (when-not (= :never doors) (iron-cells c (:steps plan)))]

@@ -414,7 +414,7 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 
 | trigger | holds when | job | cooldown |
 |---|---|---|---|
-| `:suffocating` | drowning (in water, oxygen below `:min-oxygen` 12, head not in air) or head in a suffocating block | `breathe` | 0 |
+| `:suffocating` | drowning (in water, oxygen below `:min-oxygen`, default the `jobs.lib.breath/min-oxygen` setting (12), head not in air) or head in a suffocating block | `breathe` | 0 |
 | `:burning` | on fire, in lava or in a fire block at the feet or head (rain clears the on-fire flag), without `fire_resistance`, or an unscooped `:extinguish-pour` in memory; plain flames and a pour yield while a real danger is near (hostile-near radii; lava and fire blocks never; setting `triggers.survival.burning/with-hostile` lifts it) | `extinguish` | 0 |
 | `:wedged` | a full block fills the cell of the feet and the eye cell is not solid (sand fallen on the body; both solid is `:suffocating`); quiet while a recent `:unwedge-blocked` entry names the cell | `survival.unwedge` | 0 |
 | `:died` | a `:died` under the despawn window (6000 game ticks) old with a newer `:respawned` and no `:recovered`, not while recover-drops remembers declining it for a danger (`jobs.lib.body/danger-hold`) | `recover-drops` | 30 s |

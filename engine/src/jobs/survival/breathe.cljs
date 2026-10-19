@@ -59,8 +59,8 @@
   Memory: one :breathe entry per run; :breathe-pocket per pocket made.")
 
 (a/defargs args
-  {:min-oxygen {:doc "oxygen (of 20) below which being in water with the head submerged is drowning"
-                :spec (a/num-in 0 20) :default breath/default-min-oxygen}
+  {:min-oxygen {:doc "oxygen (of 20) below which being in water with the head submerged is drowning (nil: the jobs.lib.breath/min-oxygen setting)"
+                :spec (a/num-in 0 20) :default nil}
    :pocket {:doc "with no air seen, make a dry pocket: dig into the wall beside the body, step in and plug the opening with a carried block" :spec boolean? :default true}
    :ignore-zones? :shared})
 

@@ -118,10 +118,16 @@
     (is (true? (holds? p {:min-oxygen 16})))
     (is (true? (check? p {:min-oxygen 16})))))
 
+(deftest min-oxygen-setting-is-the-default-threshold
+  (let [p (tu/fake {:self {:inWater true :oxygen 15} :blocks water-column})
+        with #(settings/with-settings {:jobs.lib.breath/min-oxygen %} (fn [] [(holds? p {}) (check? p {})]))]
+    (is (= [false false] (with 12)))
+    (is (= [true true] (with 16)))))
+
 (deftest suffocating-is-registered-with-breathe
   (let [t (get triggers/all :suffocating)]
     (is (= '(jobs.survival.breathe) (:job t)))
-    (is (= 12 (:min-oxygen (:args t))))))
+    (is (= {} (:args t)))))
 
 (defn call-names [p] (mapv #(.-name %) (array-seq (.. p -world -calls))))
 

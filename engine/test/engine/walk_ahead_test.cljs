@@ -525,7 +525,7 @@
       (fn ^:async t []
         (let [p (tu/fake {:blocks (merge (floor -2 -3 10 3) (floor 59 11 -3 47 3)) :self {:pos {:x 0.5 :y 64 :z 0.5}}})
               c {:primitives p}
-              plan (await (walk/plan-walk! c (wworld/path-world p) [14 60 0] 0 walk/default-weight))]
+              plan (await (walk/plan-walk! c (wworld/path-world p) [14 60 0] 0 (walk/default-weight)))]
           (is (= "found" (:status plan)))
           (is (= [1] (vec (keep :damage (:steps plan)))) "a 4-block drop is 1 hp"))))))
 

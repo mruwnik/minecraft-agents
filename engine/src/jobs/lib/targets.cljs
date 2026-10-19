@@ -48,7 +48,7 @@
    :plan (let [policy (wworld/body-policy c)]
            (planner/create-plan (.-snapshot pw) (query c targets range)
                                 (wplan/with-drops
-                                  (wplan/plan-options (wworld/costed-world c pw {:dangers? dangers :dark? dark}) walk/default-weight
+                                  (wplan/plan-options (wworld/costed-world c pw {:dangers? dangers :dark? dark}) (walk/default-weight)
                                                       (executor/planner-limits policy (wworld/solid-fn pw))
                                                       (assoc wplan/wide-box :maxNodes max-nodes))
                                   policy (wworld/landing-seen (:primitives c)))))})

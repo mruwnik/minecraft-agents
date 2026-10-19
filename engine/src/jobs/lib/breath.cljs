@@ -20,7 +20,8 @@
             [jobs.lib.dig-look :as look]
             [jobs.lib.util :as u]))
 
-(def default-min-oxygen 12)
+(declare settings)
+(defn min-oxygen [] (settings/get settings ::min-oxygen))
 
 (defn air? [block-name] (contains? #{"air" "cave_air" "void_air"} block-name))
 
@@ -54,14 +55,12 @@
 
 (defn situation
   "Why the body at p is suffocating, :drowning or :enclosed, or nil."
-  [p min-oxygen]
+  [p min-oxygen-arg]
   (let [self (.self p)]
     (cond
-      (and (< (.-oxygen self) min-oxygen) (head-under? p)) :drowning
+      (and (< (.-oxygen self) (or min-oxygen-arg (min-oxygen))) (head-under? p)) :drowning
       (suffocates-here? p (eye-cell self)) :enclosed
       :else nil)))
-
-(def defaults {:min-oxygen default-min-oxygen})
 
 (def blocked-policy
   "Policy of the :unwedge-blocked entries written by jobs.survival.unwedge: one per cell it could not free."
@@ -218,7 +217,8 @@
            (columns radius)))))
 
 (a/defargs settings
-  {::ticks-per-oxygen {:default 15 :doc "Game ticks a drowning body loses one point of oxygen in (the game's rule)." :spec (a/int-in 1 nil)}
+  {::min-oxygen {:default 12 :doc "Oxygen (of 20) below which a body in water with its head submerged counts as drowning, when the job or trigger names none." :spec (a/num-in 0 20)}
+   ::ticks-per-oxygen {:default 15 :doc "Game ticks a drowning body loses one point of oxygen in (the game's rule)." :spec (a/int-in 1 nil)}
    ::ticks-per-health {:default 10 :doc "Game ticks between the 2 health a drowning body loses once the oxygen is gone (the game's rule)." :spec (a/int-in 1 nil)}
    ::swim-ms {:default 500 :doc "Milliseconds a swimmer takes per block, to price a swim to a pocket of air." :spec (a/num-in 0 nil)}})
 

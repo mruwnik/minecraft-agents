@@ -41,7 +41,7 @@
   plan, its ms]."
   [pw at to range]
   (let [t (js/performance.now)
-        plan (await (walk/plan-walk! (body-at at) pw to range walk/default-weight
+        plan (await (walk/plan-walk! (body-at at) pw to range (walk/default-weight)
                                      {:policy executor/door-policy :one-way :open :frontier true
                                       :budget wsearch/round-budget}))]
     [plan (- (js/performance.now) t)]))

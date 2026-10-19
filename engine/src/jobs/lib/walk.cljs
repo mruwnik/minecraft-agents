@@ -24,11 +24,12 @@
    ::max-settle-waits {:default 20 :doc "Waits for the body to settle after a step before the walk goes on." :spec (a/int-in 0 nil)}
    ::centre-tolerance {:default 0.2 :doc "How near (blocks, each axis) a centring nudge ends to its target." :spec (a/num-in 0 nil)}
    ::centre-max-ticks {:default 30 :doc "Ticks a centring nudge walks before it gives up." :spec (a/int-in 1 nil)}
+   ::default-weight {:default 1.2 :doc "Cost weight of the search heuristic a walk plans with (above 1: faster, less exact)." :spec (a/num-in 1 nil)}
    ::light-wait-ms {:default 1500 :doc "How long a walk that placed a torch looks for the floor it lights before it gives the floor up, in ms." :spec (a/int-in 0 nil)}})
 
 (defn max-timeout-s [] (settings/get settings ::max-timeout-s))
 (defn max-settle-waits [] (settings/get settings ::max-settle-waits))
-(def default-weight 1.2)
+(defn default-weight [] (settings/get settings ::default-weight))
 (def held-in
   "Blocks at the feet that hold a body still enough to plan from: climbables, and water (it swims from there)."
   #{"ladder" "vine" "water"})
@@ -503,7 +504,7 @@
   (let [pw (wworld/path-world (:primitives c))]
     (if (nil? pw)
       {:reason :no-way-back :why :unsupported}
-      (let [{:keys [r steps beyond]} (await (wplan/plan-within! c pw origin 0 default-weight (wworld/body-policy c)))
+      (let [{:keys [r steps beyond]} (await (wplan/plan-within! c pw origin 0 (default-weight) (wworld/body-policy c)))
             status (.-status r)
             stop (fn [refused] {:reason :no-way-back :why :refused :kind (:kind refused) :step (:at refused)})]
         (cond

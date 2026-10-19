@@ -180,7 +180,7 @@
 
 (defn suffocating []
   (flag :suffocating [:suffocating "suffocating"] [:not-suffocating "breathing"]
-        (online (fn [c _] (some? (breath/situation (world c) breath/default-min-oxygen))))))
+        (online (fn [c _] (some? (breath/situation (world c) nil))))))
 
 (defn night-unsafe []
   (flag :night-unsafe [:night-unsafe "night in the open"] [:night-safe "safe for the night"]

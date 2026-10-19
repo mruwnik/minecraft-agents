@@ -5,6 +5,7 @@
             [engine.args :as a]
             [engine.settings :as settings]
             [engine.test-util :as tu]
+            [jobs.lib.walk :as walk]
             [jobs.lib.walk.world :as wworld]))
 
 (defn with-body [setting f]
@@ -46,3 +47,7 @@
   (let [refused #(with-body % (fn [] (gth/refused? (ctx {}) {:damage-refused true})))]
     (is (true? (refused nil)))
     (is (false? (refused {:max-damage 3})))))
+
+(deftest default-weight-follows-its-setting
+  (is (= 1.2 (walk/default-weight)))
+  (is (= 2 (settings/with-settings {:jobs.lib.walk/default-weight 2} walk/default-weight))))

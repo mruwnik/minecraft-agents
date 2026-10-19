@@ -69,7 +69,7 @@
   ([c pw target] (plan-or-nil c pw target nil))
   ([c pw target opts]
   (when-let [{:keys [x y z]} (:pos (places/parse-pos target))]
-    (try (await (walk/plan-walk! c pw [x y z] 1 walk/default-weight
+    (try (await (walk/plan-walk! c pw [x y z] 1 (walk/default-weight)
                                  (assoc opts :policy (update (wworld/body-policy c) :moves conj :open))))
          (catch js/RangeError _ nil)))))
 
