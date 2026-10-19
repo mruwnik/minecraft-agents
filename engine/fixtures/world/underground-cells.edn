@@ -1,0 +1,20 @@
+;; Card 58387436: every case runs in a sealed underground cell; :plot :light picks lit (default) or dark.
+;; Should-succeed: the lit cell reads as lit (wait-for-light is done at once), a corner of it too.
+;; Should-fail: the dark cell is not lit (wait-for-light waits).
+{:defaults
+ {:tags [:world-test :light] :time :any
+  :plot {:height 8}
+  :limit-s 40}
+ :cases
+ [{:name "lit-cell-is-lit-at-the-middle"
+   :act [[:job (jobs.time.wait-for-light {})]]
+   :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 20 :of-job true}]}
+  {:name "lit-cell-is-lit-in-the-far-corner"
+   :body {:at [1.5 0 1.5]}
+   :act [[:job (jobs.time.wait-for-light {})]]
+   :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 20 :of-job true}]}
+  {:name "dark-cell-stays-dark"
+   :plot {:light :dark}
+   :act [[:job (jobs.time.wait-for-light {})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 15 :of-job true}]}]}

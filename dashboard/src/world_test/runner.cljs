@@ -33,7 +33,7 @@
        "--trace-dir DIR writes, for each failed or errored case, DIR/<fixture>__<case>__r<run>-a<attempt>.edn (its body events from the setup on, capped, the tail of body.log, and :steps-tail, the per-tick step trace the body then keeps via MC_STEP_TRACE) and names it under :trace in the result; --trace-attempt N (default 0) numbers the attempt in the file name.\n"
        "--check only loads and validates the fixtures (no body, no server): one result per case, exit 1 on a parse error or problem.\n"
        "A job case (no :register, no :wait-full true, only :event expectations pending) ends :idle-grace-s (default 3) s after every job it submitted has ended, failed or parked (\"no job active: ...\", :ended-early-s and :idle-grace-s in the result).\n"
-       "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
+       "Runs world fixtures (default dir engine/fixtures/world) by default in sealed underground cells (y -40), with :plot :light :sky on the surface plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
        "such a case is skipped, and a case with no :time still gets day (logged to a default file in the temp dir). While a world sweep runs, a run outside it fails every case that needs a time lock at once (only :time :any cases run). A case that depends on the time of day (with --allow-time, every case) holds a time lock shared by phase (day cases together,\n"
        "night cases together; the other phase waits; the first holder sets the time) for its whole run; a manual `time set` takes it too: node tools/time-set.mjs <ticks|day|noon|night|midnight>. A failed case whose day time jumped meanwhile (a foreign `time set`) is INCONCLUSIVE. "
@@ -393,7 +393,7 @@
   "Records the plot (index i) the body is about to be put on, so a later start can clear it first (a run that broke may have left the body there)."
   [opts i origin grid]
   (fs/mkdirSync (path/dirname (last-plot-file opts)) #js {:recursive true})
-  (fs/writeFileSync (last-plot-file opts) (pr-str {:plot i :origin origin :dims (f/dims grid)})))
+  (fs/writeFileSync (last-plot-file opts) (pr-str {:plot i :origin origin :dims (f/dims grid) :underground? (boolean (:underground? grid))})))
 
 (declare acquire-plot! release-plot!)
 
@@ -404,14 +404,14 @@
   ([opts] (reset-last-plot! opts rcon!))
   ([opts send!]
    (let [file (last-plot-file opts)
-         {:keys [plot origin dims]} (when (fs/existsSync file)
+         {:keys [plot origin dims underground?]} (when (fs/existsSync file)
                                       (try (reader/read-string (fs/readFileSync file "utf8"))
                                            (catch :default _ nil)))
          held (when (and (integer? plot) (vector? origin))
                 (try (acquire-plot! plot (inc plot)) (catch :default _ nil)))]
      (if-not held
        (js/Promise.resolve nil)
-       (-> (send! (f/reset-plot-commands (let [[sx sz] dims] (if sx (assoc f/default-grid :size-x sx :size-z sz) f/default-grid)) origin))
+       (-> (send! (f/reset-plot-commands (let [[sx sz] dims] (cond-> (if sx (assoc f/default-grid :size-x sx :size-z sz) f/default-grid) underground? (assoc :underground? true))) origin))
            (.finally #(release-plot! held)))))))
 
 (defn finish-run!
@@ -740,9 +740,12 @@
 
 (defn lock-phase
   "The time-lock phase of case rc: its own when it depends on the time of day; else :day when the run may set the time
-  (it then waits out night, and the first holder sets day), else :any (takes no lock: it runs under whatever time it is)."
+  (it then waits out night, and the first holder sets day), else :any (takes no lock: it runs under whatever time it is).
+  An underground case takes none."
   [opts rc]
-  (or (lease/time-phase rc) (if (:allow-time opts) :day :any)))
+  (cond
+    (lease/underground? rc) :any
+    :else (or (lease/time-phase rc) (if (:allow-time opts) :day :any))))
 
 (defn starts-night?
   "Whether case rc starts in a night (a :night-x case that only sets dusk itself starts at day)."
@@ -1707,7 +1710,7 @@
   "opts for a case with no :time or :time :day (no :time-set, no weather) in a run that may not set the time: it may set day, so
   a one-off run does not depend on the clock of the shared world. Other cases keep opts."
   [opts rc]
-  (if (or (:allow-time opts) (not (contains? #{nil :day} (:time rc))) (not (contains? #{nil :day} (lease/time-phase rc))))
+  (if (or (:allow-time opts) (lease/underground? rc) (not (contains? #{nil :day} (:time rc))) (not (contains? #{nil :day} (lease/time-phase rc))))
     opts
     (assoc opts :allow-time true :time-log (or (:time-log opts) default-time-log))))
 
@@ -1823,10 +1826,10 @@
                    (.then (rcon! ["time query day" "tick query"])
                           (fn [[reply rate-reply]]
                             (-> r
-                                (mark-time-disturbed (time-disturbed? rc (:ticks @t-start) (daytime (or reply ""))
+                                (mark-time-disturbed (and (not (lease/underground? rc)) (time-disturbed? rc (:ticks @t-start) (daytime (or reply ""))
                                                                       (- (js/Date.now) (:ms @t-start))
                                                                       (some-> @pre-register :offset (as-> off (woke? (read-events-from (events-file opts) off))))
-                                                                      (tick-rate-of rate-reply)))
+                                                                      (tick-rate-of rate-reply))))
                                 (mark-night-overran (night-overran? opts rc (daytime (or reply "")))))))
                    r)))
         (.then (fn [r] (write-trace! opts r (or @setup-cursor start-cursor))))

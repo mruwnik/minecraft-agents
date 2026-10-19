@@ -129,6 +129,7 @@
     air-spot [5 64 5] {} {:ok true}
     (world [5 64 5] "cave_air") [5 64 5] {} {:ok true}
     (world [5 64 5] "short_grass") [5 64 5] {} {:ok true}
+    (world [5 64 5] "light") [5 64 5] {} {:ok true}
     plain [5 64 5] {} {:ok false :reason :not-replaceable}
     ;; fluids are placed into like air
     (world [5 64 5] "water") [5 64 5] {} {:ok true}

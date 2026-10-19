@@ -35,6 +35,15 @@
   plot, so no mob walks over and none spawns near."
   32)
 
+(def underground
+  "The underground cells (a case with :plot :light :lit or :dark): 64 apart (four chunks, so no two cells' shells share a
+  chunk), floor at y -41, below the aquifers and mineshafts of the overworld and above its lava lakes (y -54). A cell's
+  1-block bedrock shell is rebuilt for every case, so whatever the rock held there is gone. Large cells lie in lanes like
+  the surface ones. Indexes follow the surface plots."
+  {:y -40 :pitch 64 :cols 12 :rows 10 :light-y 2})
+
+(def underground-cells (* (:cols underground) (:rows underground)))
+
 (defn mob-cols [{:keys [cols]}] (quot (+ cols (dec mob-stride)) mob-stride))
 
 (defn mob-plot-count [grid] (* (quot (+ mob-rows (dec mob-stride)) mob-stride) (mob-cols grid)))
@@ -45,12 +54,17 @@
 
 (defn plot-origin
   "The origin [x y z] of plot i: its north-west corner at body level. Plots n + lanes and up are the mob plots, then
-  the plain plots (rows from mob-rows + 1, every mob-stride-th row and column, like the mob plots)."
+  the plain plots (rows from mob-rows + 1, every mob-stride-th row and column, like the mob plots), then the underground
+  cells and their lanes."
   [{:keys [x0 z0 y size cols rows] :as grid} i]
   (let [n (* cols rows) {lz :z0 :keys [stride count]} large-lanes
         k (- i n count)
-        m (- k (mob-plot-count grid))]
+        m (- k (mob-plot-count grid))
+        u (- m (plain-plot-count grid))
+        {uy :y :keys [pitch] ucols :cols} underground]
     (cond
+      (< -1 u underground-cells) [(+ x0 (* pitch (mod u ucols))) uy (+ z0 (* pitch (quot u ucols)))]
+      (< -1 (- u underground-cells) count) [x0 uy (+ lz (* stride (- u underground-cells)))]
       (< -1 (- i n) count) [x0 y (+ lz (* stride (- i n)))]
       (< -1 k (mob-plot-count grid)) [(+ x0 (* size mob-stride (mod k (mob-cols grid)))) y
                                       (+ z0 (* size mob-stride (quot k (mob-cols grid))))]
@@ -68,22 +82,35 @@
                               (some #{(str/replace (second x) #"^minecraft:" "")} hostile-types)))
                  (tree-seq coll? seq (:act c)))))
 
-(defn case-grid
-  "The grid with the case's plot size: :size-x (length along x) and :size-z (width), 32 by default."
+(defn light-of
+  "The case's :plot :light (:lit, :dark or :sky); a case without one is on the surface."
   [c]
-  (let [{:keys [length width]} (:plot c)]
-    (cond-> (assoc default-grid :size-x (or length (:size default-grid)) :size-z (or width (:size default-grid)))
-      (mob-case? c) (assoc :mob-plots? true :island? true)
-      (get-in c [:plot :isolate]) (assoc :island? true))))
+  (get-in c [:plot :light] :sky))
+
+(defn case-grid
+  "The grid with the case's plot size: :size-x (length along x) and :size-z (width), 32 by default. :light is the
+  case's; an underground one (:lit, :dark) is sealed, so it needs no spacing from other cells."
+  [c]
+  (let [{:keys [length width]} (:plot c)
+        light (light-of c)
+        below? (not= :sky light)]
+    (cond-> (assoc default-grid :size-x (or length (:size default-grid)) :size-z (or width (:size default-grid)) :light light)
+      below? (assoc :underground? true)
+      (and (not below?) (mob-case? c)) (assoc :mob-plots? true :island? true)
+      (and (not below?) (get-in c [:plot :isolate])) (assoc :island? true))))
 
 (defn plot-range
   "[first end) of the plot indexes a case may lease: the plain rows of the 32x32 grid, the mob plots for a case that
   summons a hostile, or the large lanes. Plain plots lie three apart like the mob ones: 64 blocks of air between two,
   beyond the body's sight (about 48) and a chest search (32)."
-  [{:keys [size-x size-z size cols rows mob-plots?] :as grid}]
-  (let [n (* cols rows) lanes (:count large-lanes) mobs (+ n lanes (mob-plot-count grid))]
+  [{:keys [size-x size-z size cols rows mob-plots? underground?] :as grid}]
+  (let [n (* cols rows) lanes (:count large-lanes) mobs (+ n lanes (mob-plot-count grid))
+        ubase (+ mobs (plain-plot-count grid))
+        big? (or (> (or size-x size) 32) (> (or size-z size) 32))]
     (cond
-      (or (> (or size-x size) 32) (> (or size-z size) 32)) [n (+ n lanes)]
+      (and underground? big?) [(+ ubase underground-cells) (+ ubase underground-cells lanes)]
+      underground? [ubase (+ ubase underground-cells)]
+      big? [n (+ n lanes)]
       mob-plots? [(+ n lanes) mobs]
       :else [mobs (+ mobs (plain-plot-count grid))])))
 
@@ -400,6 +427,13 @@
            (into {} (for [id allowed :when (not (offenders id))]
                       [id "is on the time allow-list but no longer offends: remove it from engine/fixtures/time-allow-list.edn"])))))
 
+(defn needs-sky?
+  "Whether the case depends on the real sky: it sets :time other than :any (a :timed case), weather or a :time-set step."
+  [c]
+  (boolean (or (and (:timed c) (not= :any (:time c)))
+               (#{:rain :thunder} (:weather c))
+               (some #(and (vector? %) (= :time-set (first %))) (:act c)))))
+
 (defn problems
   "Why a merged case cannot run, as a vector of strings (empty when it can)."
   [c]
@@ -410,6 +444,8 @@
       (not (or (nil? length) (and (int? length) (<= min-length length max-length)))) (conj (str ":plot :length must be an integer " min-length ".." max-length))
       (not (or (nil? width) (and (int? width) (<= 16 width max-width)))) (conj (str ":plot :width must be an integer 16.." max-width))
       (not (contains? #{nil :keep} (:mobs c))) (conj ":mobs must be :keep (or absent)")
+      (not (contains? #{:lit :dark :sky} (light-of c))) (conj ":plot :light must be :lit, :dark or :sky")
+      (and (not= :sky (light-of c)) (needs-sky? c)) (conj ":time (other than :any), :weather and :time-set need :plot :light :sky: underground cells have no sky")
       (not (string? (:name c))) (conj ":name must be a string")
       (not (#{:day :night :night-exclusive :any} (:time c))) (conj ":time must be :day, :night, :night-exclusive or :any")
       (not (or (nil? (:time-why c)) (contains? time-reasons (:time-why c)))) (conj (str ":time-why must be one of " (sort time-reasons)))
@@ -472,11 +508,12 @@
   (let [form (read-edn text)
         [file-defaults cases] (if (contains? form :cases) [(:defaults form {}) (:cases form)] [{} [form]])]
     (mapv (fn [c]
-            (let [m (merge-case file-defaults c)
+            (let [m0 (assoc (merge-case file-defaults c) :timed (contains? (merge file-defaults c) :time))
+                  m (cond-> m0 (not (get-in m0 [:plot :light])) (assoc-in [:plot :light] (if (needs-sky? m0) :sky :lit)))
                   ps (cond-> (problems m)
                        (and (some job-step? (:act file-defaults)) (some job-step? (:act c)))
                        (conj "a job in :defaults :act runs before this case's own job: put it in the cases that need it"))]
-              (cond-> (assoc m :id (str stem "/" (:name m)) :file stem :timed (contains? (merge file-defaults c) :time))
+              (cond-> (assoc m :id (str stem "/" (:name m)) :file stem)
                 (seq ps) (assoc :problems ps))))
           cases)))
 
@@ -585,12 +622,19 @@
   (let [[sx sz] (dims grid) m mob-margin]
     [(assoc grid :size-x (+ sx m m) :size-z (+ sz m m)) [(- ox m) (- oy 7) (- oz m)] (+ height 7)]))
 
+(defn shell-box
+  "[x0 y0 z0 x1 y1 z1] of an underground cell and its 1-block shell."
+  [grid [ox oy oz] height]
+  (let [[sx sz] (dims grid)]
+    [(dec ox) (- oy 2) (dec oz) (+ ox sx) (+ oy height 1) (+ oz sz)]))
+
 (defn load-box
-  "[grid origin] of the area a plot loads: a large plot its lane's width, a mob plot its island."
-  [grid origin]
-  (if (:island? grid)
-    (take 2 (island grid origin 0))
-    [(lane-grid grid) origin]))
+  "[grid origin] of the area a plot loads: a large plot its lane's width, a mob plot its island, a cell its shell."
+  [grid [ox oy oz :as origin]]
+  (cond
+    (:underground? grid) (let [[sx sz] (dims grid)] [(assoc grid :size-x (+ sx 2) :size-z (+ sz 2)) [(dec ox) oy (dec oz)]])
+    (:island? grid) (take 2 (island grid origin 0))
+    :else [(lane-grid grid) origin]))
 
 (defn forceload-commands
   "One forceload per 128-block slice of the plot's load-box (a command takes at most 256 chunks)."
@@ -642,35 +686,78 @@
 (defn natural-hostiles-commands
   "One kill per natural hostile type in the plot's box widened by natural-margin, never one a runner
   summoned (tag wt): mobs spawned on the dark plots around (or left from dusk) would answer the body's hostile reflex.
-  None with :mobs :keep."
-  [grid [ox oy oz] c]
-  (if (= :keep (:mobs c))
-    []
+  None with :mobs :keep. A sealed cell sees no other plot: a dark one clears its own box, a lit one nothing (light
+  stops spawns)."
+  [grid [ox oy oz :as origin] c]
+  (cond
+    (= :keep (:mobs c)) []
+    (:underground? grid)
+    (let [box (box-selector grid origin (get-in c [:plot :height] 6))]
+      (if (= :lit (:light grid))
+        []
+        (vec (for [t natural-hostile-types] (str "kill @e[type=minecraft:" t ",tag=!wt," box "]")))))
+    :else
     (let [[sx sz] (dims grid)
           m natural-margin
           box (str "x=" (- ox m) ",y=" (- (dec oy) m) ",z=" (- oz m) ",dx=" (+ (dec sx) (* 2 m))
                    ",dy=" (+ (inc (get-in c [:plot :height] 6)) (* 2 m)) ",dz=" (+ (dec sz) (* 2 m)))]
       (vec (for [t natural-hostile-types] (str "kill @e[type=minecraft:" t ",tag=!wt," box "]"))))))
 
+(defn fill-commands
+  "`fill` of block over [x0 y0 z0]..[x1 y1 z1], sliced so that no fill exceeds 32768 blocks; mode is appended to each."
+  [[x0 y0 z0 x1 y1 z1] block mode]
+  (vec (for [[xa xb] (segments x0 (inc (- x1 x0)) 64)
+             :let [layers (max 1 (quot 32768 (* (inc (- xb xa)) (inc (- z1 z0)))))]
+             ya (range y0 (inc y1) layers)]
+         (str "fill " xa " " ya " " z0 " " xb " " (min y1 (+ ya (dec layers))) " " z1 " " block mode))))
+
+(defn solid-commands
+  "An underground cell refilled solid over the whole carved height: nothing is left to spawn in, and the next case's shell
+  and carving start from rock."
+  [grid [ox oy oz] height]
+  (let [[sx sz] (dims grid)]
+    (fill-commands [ox (dec oy) oz (+ ox (dec sx)) (+ oy height) (+ oz (dec sz))] "stone" "")))
+
+(defn underground-setup-commands
+  "Forceload the cell, kill every non-player entity in it, wall it in bedrock (1 block all round), carve it to air up to
+  :height, lay the floor and, for :lit, a layer of invisible light blocks (level 15) over the standing space."
+  [grid [ox oy oz :as origin] c]
+  (let [{:keys [height floor]} (:plot c)
+        [sx sz] (dims grid)]
+    (-> (vec (forceload-commands "add" grid origin))
+        (conj (kill-command grid origin height))
+        (into (fill-commands (shell-box grid origin height) "bedrock" ""))
+        (into (clear-commands grid origin height floor))
+        (cond-> (= :lit (:light grid))
+          (into (let [y (+ oy (min height (:light-y underground)))]
+                  (fill-commands [ox y oz (+ ox (dec sx)) y (+ oz (dec sz))] "light" " replace air")))))))
+
 (defn setup-commands
   "Forceload the plot, kill every non-player entity in it, clear it to air and lay the floor (a large plot first drops
-  the floor of its whole lane width, a mob plot first clears its island)."
+  the floor of its whole lane width, a mob plot first clears its island; an underground cell is walled in and lit)."
   [grid origin c]
-  (let [{:keys [height floor]} (:plot c)
-        lane (lane-grid grid)
-        [ig io ih] (island grid origin (if (:isolate (:plot c)) 31 height))]
-    (-> (vec (forceload-commands "add" grid origin))
-        (cond-> (:island? grid) (-> (conj (kill-command ig io ih)) (into (clear-commands ig io ih "air"))))
-        (conj (kill-command grid origin height))
-        (cond-> (not= lane grid) (into (clear-commands lane origin 0 "air")))
-        (into (clear-commands grid origin height floor)))))
+  (if (:underground? grid)
+    (underground-setup-commands grid origin c)
+    (let [{:keys [height floor]} (:plot c)
+          lane (lane-grid grid)
+          [ig io ih] (island grid origin (if (:isolate (:plot c)) 31 height))]
+      (-> (vec (forceload-commands "add" grid origin))
+          (cond-> (:island? grid) (-> (conj (kill-command ig io ih)) (into (clear-commands ig io ih "air"))))
+          (conj (kill-command grid origin height))
+          (cond-> (not= lane grid) (into (clear-commands lane origin 0 "air")))
+          (into (clear-commands grid origin height floor))))))
 
 (defn reset-plot-commands
   "Clear a plot that may hold a left-over case (its full height), without a body connected: forceload, kill, clear,
   forceload removed. The runner sends it for the plot the body was last left on, before the body starts."
   [grid origin]
   (let [plot {:plot {:height 31 :floor "stone"}}]
-    (into (setup-commands grid origin plot) (forceload-commands "remove" grid origin))))
+    (if (:underground? grid)
+      (-> (vec (forceload-commands "add" grid origin))
+          (conj (kill-command grid origin 31))
+          (into (solid-commands grid origin 31))
+          (into (forceload-commands "remove" grid origin)))
+      (into (setup-commands grid origin plot) (forceload-commands "remove" grid origin)))))
 
 (def clean-start-files
   "The body's files (in its engine dir) a clean start deletes: engine memory and the seen-blocks memory, whose cells
@@ -822,7 +909,7 @@
   [grid origin body c]
   (let [{:keys [height floor]} (:plot c)]
     (-> [(kill-command grid origin height)]
-        (into (clear-commands grid origin height floor))
+        (into (if (:underground? grid) (solid-commands grid origin height) (clear-commands grid origin height floor)))
         (into [(str "clear " body)
                (str "effect clear " body)
                (str "gamemode spectator " body)

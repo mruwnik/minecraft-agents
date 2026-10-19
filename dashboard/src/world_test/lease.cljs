@@ -166,6 +166,11 @@
   [c]
   (boolean (some (fn [[op ticks]] (and (= :time-set op) (>= (mod ticks 24000) 11500))) (:act c))))
 
+(defn underground?
+  "Whether case c runs in a sealed underground cell (:plot :light :lit or :dark): sky light is 0 there whatever the clock says, so it takes no time lock."
+  [c]
+  (contains? #{:lit :dark} (get-in c [:plot :light])))
+
 (defn time-phase
   "The phase (:day, :night, :night-x or :weather-x, a case with its own :weather) whose time lock case c holds: its :time, else the phase of its first :time-set step (a day one with a :time-set to dusk or later, or a :night one with any :time-set: :night-x, solo); nil
   when it does not depend on the time of day."

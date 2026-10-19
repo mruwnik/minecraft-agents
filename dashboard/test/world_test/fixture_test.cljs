@@ -19,7 +19,7 @@
   (is (= [20000 150 20000] (f/plot-origin grid 0)))
   (is (= [20032 150 20000] (f/plot-origin grid 1)))
   (is (= [20000 150 20032] (f/plot-origin grid 20)))
-  (is (thrown? js/Error (f/plot-origin grid 466))))
+  (is (thrown? js/Error (f/plot-origin grid 601))))
 
 (defn rect [grid i]
   (let [[x _ z] (f/plot-origin grid i)] [x z (+ x (:size-x grid) -1) (+ z (:size-z grid) -1)]))
@@ -39,6 +39,75 @@
     (is (not-any? (fn [[a b]] (overlap? a b)) (for [a rects b rects :when (not= a b)] [a b])))
     (is (= [400 416] (f/plot-range big)))
     (is (= [437 465] (f/plot-range small)) "plain cases come after the mob plots")))
+
+(def lit-case {:plot {:light :lit :height 16 :floor "stone"}})
+(def dark-case {:plot {:light :dark :height 16 :floor "stone"}})
+
+(defn shell-rect [g i]
+  (let [[x0 _ z0 x1 _ z1] (f/shell-box g (f/plot-origin g i) 16)] [x0 z0 x1 z1]))
+
+(defn fill-sizes [cmds]
+  (for [cmd cmds :when (re-find #"^fill " cmd)]
+    (let [[x0 y0 z0 x1 y1 z1] (map js/Number (re-seq #"-?\d+" cmd))]
+      (* (inc (- x1 x0)) (inc (- y1 y0)) (inc (- z1 z0))))))
+
+(deftest underground-cells-and-lanes-never-share-a-shell-with-each-other-or-a-surface-plot
+  (let [g (f/case-grid lit-case)
+        big (f/case-grid {:plot {:light :lit :length 1024 :width 64}})
+        [from end] (f/plot-range g)
+        [lfrom lend] (f/plot-range big)
+        rects (map #(shell-rect g %) (range from end))
+        lanes (map #(shell-rect big %) (range lfrom lend))]
+    (is (= [465 585] [from end]) "after the surface plots")
+    (is (= [585 601] [lfrom lend]))
+    (is (= [20000 -40 20000] (f/plot-origin g from)))
+    (is (= [20064 -40 20000] (f/plot-origin g (inc from))))
+    (is (= [20000 -40 20704] (f/plot-origin big lfrom)))
+    (is (not-any? (fn [[a b]] (overlap? a b)) (for [a (concat rects lanes) b (concat rects lanes) :when (not= a b)] [a b])))
+    (is (= (f/plot-range g) (f/plot-range (f/case-grid dark-case))))))
+
+(deftest an-underground-cell-is-walled-carved-and-lit-or-dark
+  (let [g (f/case-grid lit-case)
+        origin (f/plot-origin g 465)
+        lit (f/setup-commands g origin lit-case)
+        dark (f/setup-commands (f/case-grid dark-case) origin dark-case)]
+    (is (= "forceload add 19999 19999 20032 20032" (first lit)) "the shell's chunks are loaded too")
+    (is (some #{"fill 19999 -42 19999 20032 -23 20032 bedrock"} (f/fill-commands (f/shell-box g origin 16) "bedrock" "")) "one block of bedrock all round, 1 below the floor")
+    (is (every? (set lit) (f/clear-commands g origin 16 "stone")))
+    (is (some #(re-find #"light replace air$" %) lit))
+    (is (not-any? #(re-find #"light" %) dark))
+    (is (every? #(<= % 32768) (fill-sizes (concat lit dark))))
+    (is (not-any? #(re-find #"dx=1[0-9][0-9]" %) lit))))
+
+(deftest an-underground-cell-is-refilled-solid-after-the-case
+  (let [g (f/case-grid dark-case)
+        origin (f/plot-origin g 465)
+        cmds (f/cleanup-commands g origin "B" dark-case)]
+    (is (every? (set cmds) (f/solid-commands g origin 16)))
+    (is (some #(re-find #"stone$" %) cmds))
+    (is (not-any? #(re-find #"air$" %) cmds))
+    (is (= (count (filter #(re-find #"^forceload add" %) (f/setup-commands g origin dark-case)))
+           (count (filter #(re-find #"^forceload remove" %) cmds))))))
+
+(deftest a-dark-cell-clears-natural-mobs-in-its-own-box-and-a-lit-one-none
+  (let [dg (f/case-grid dark-case) lg (f/case-grid lit-case) sg (f/case-grid {:plot {}})
+        origin (f/plot-origin dg 465)]
+    (is (empty? (f/natural-hostiles-commands lg origin lit-case)))
+    (is (seq (f/natural-hostiles-commands dg origin dark-case)))
+    (is (every? #(re-find #"dx=31,dy=17,dz=31" %) (f/natural-hostiles-commands dg origin dark-case)))
+    (is (seq (f/natural-hostiles-commands sg (f/plot-origin sg 437) {:plot {:height 16}})))))
+
+(def timed-file "{:defaults {:time :night :time-why :sleep} :cases [{:name \"a\" :expect [{:event {:kind :x} :within-s 5}]} {:name \"b\" :time :any :expect [{:event {:kind :x} :within-s 5}]} {:name \"c\" :plot {:light :lit} :expect [{:event {:kind :x} :within-s 5}]}]}")
+
+(deftest a-case-is-underground-lit-unless-it-needs-the-sky
+  (let [[a b c] (f/file-cases timed-file "t")
+        [u] (f/file-cases "{:name \"u\" :expect [{:event {:kind :x} :within-s 5}]}" "u")
+        [d] (f/file-cases "{:name \"d\" :plot {:light :dark} :expect [{:event {:kind :x} :within-s 5}]}" "d")
+        [w] (f/file-cases "{:name \"w\" :weather :rain :expect [{:event {:kind :x} :within-s 5}]}" "w")]
+    (is (= [:sky :lit :lit] (map #(get-in % [:plot :light]) [a b c])) "a timed case keeps the surface; :time :any does not")
+    (is (= [:lit :dark :sky] (map #(get-in % [:plot :light]) [u d w])))
+    (is (empty? (:problems b)))
+    (is (some #(re-find #"need :plot :light :sky" %) (:problems c)) "a timed case cannot ask for an underground plot")))
 
 (def mob-case {:plot {} :act [[:wait-s 1] [:summon "skeleton" [3.5 0 3.5] "{NoAI:1b}"]]})
 
@@ -65,7 +134,7 @@
     (is (= [20000 150 20000] (f/plot-origin g 416)))
     (is (= [20096 150 20000] (f/plot-origin g 417)))
     (is (= [20000 150 20096] (f/plot-origin g 423)))
-    (is (thrown? js/Error (f/plot-origin g 465)))
+    (is (thrown? js/Error (f/plot-origin g 601)))
     (is (not-any? (fn [[a b]] (overlap? (widen a sight) b)) (for [a rects b (concat others (remove #{a} rects))] [a b]))
         "no other leased plot lies within sight (about 48 blocks) of a mob plot")))
 

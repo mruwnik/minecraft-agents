@@ -67,6 +67,9 @@
     {:height 0} :bad-args
     {:height 200} :bad-args))
 
+(deftest invisible-light-blocks-above-are-no-ceiling
+  (is (= :place (:step (step :block-at (world [0 65 0] "light" [0 66 0] "light"))))))
+
 (deftest a-zone-anywhere-in-the-rest-of-the-column-refuses-before-the-first-block
   (let [s (step :zones [{:name "keep-out" :min [-2 67 -2] :max [2 67 2]}])]
     (is (= :give-up (:step s)))

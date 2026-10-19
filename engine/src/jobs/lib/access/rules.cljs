@@ -49,8 +49,8 @@
 
 (def replaceable
   "Names a placed block takes the place of: air, fluids (plugging a source, bridging water, sealing a leak) and the
-  plants and snow a placement overwrites."
-  (into (into air fluids) #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow" "vine" "glow_lichen" "leaf_litter" "hanging_roots"}))
+  plants, snow and invisible light blocks a placement overwrites."
+  (into (into air fluids) #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow" "vine" "glow_lichen" "leaf_litter" "hanging_roots" "light"}))
 
 (def item-block
   "Items whose placed block is not the block of the same name: seeds and root crops place a crop block, and the
