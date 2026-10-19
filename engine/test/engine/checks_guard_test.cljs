@@ -12,7 +12,6 @@
    ['jobs.survival.get-food 'jobs.combat.attack] "get-food passes its own :checks (job-safe-or-starving) at the attack call, so a starving body still hunts"
    ['jobs.survival.respond-to-hostile 'jobs.combat.attack] "the :hostiles fight call passes :checks (always) itself: a reflex fight is not refused for the danger it answers"
    ['jobs.survival.retreat 'jobs.combat.attack] "the cornered fight passes :checks (always) at the attack call"
-   ['jobs.survival.night 'jobs.combat.attack] "night reaches attack through retreat, whose cornered fight passes :checks (always)"
    ['jobs.survival.night 'jobs.survival.bed-down] "bed-down is only called once night has chosen the bed, and asks (not (threatened))"
    ['jobs.survival.night 'jobs.survival.get-food] "the night hold calls it only when starving with no danger near, so its starving form is the intent"})
 
