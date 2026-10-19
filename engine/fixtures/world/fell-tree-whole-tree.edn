@@ -39,6 +39,15 @@
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
             {:no-event {:source :job :kind #{:stopped :tree_blocked}} :for-s 150 :until {:source :job :kind :completed}}]
    :after [[:block [16 0 16] "oak_sapling"] [:item "oak_log" [:>= 9]] [:item "oak_sapling" 0]]}
+  {:name "harvest-wood-replants-a-2x2-dark-oak-trunk-with-four-saplings"
+   :blocks [[:fill [14 0 14] [18 10 18] "air"]
+            [:fill [16 0 16] [17 3 17] "dark_oak_log"]
+            [:fill [15 4 15] [18 5 18] "dark_oak_leaves[persistent=true]"]]
+   :body {:inventory [["iron_axe" 1] ["dark_oak_sapling" 4]]}
+   :act [[:job (jobs.forestry.harvest-wood {:radius 16})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
+   :after [[:block [16 0 16] "dark_oak_sapling"] [:block [17 0 16] "dark_oak_sapling"]
+           [:block [16 0 17] "dark_oak_sapling"] [:block [17 0 17] "dark_oak_sapling"] [:item "dark_oak_sapling" 0]]}
   {:name "no-axe-carried-one-is-fetched-from-a-seen-chest"
    :blocks [[:set [14 0 20] "chest{Items:[{Slot:0b,id:\"minecraft:iron_axe\",count:1}]}"]
             [:fill [14 8 14] [18 10 18] "air"] [:fill [16 8 16] [16 9 16] "oak_log"]]

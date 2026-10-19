@@ -346,6 +346,18 @@
             (is (= {:base {:x 6 :y 64 :z 0} :logs 3 :axe :skipped-small-tree} (dissoc out :text)) "the stump log is the base")
             (is (= [{:pos {:x 6 :y 64 :z 0} :species "oak"}] (lt/debts (:eng s))) "the replant is on the ground, not on the log above it")))))))
 
+(deftest a-2x2-trunk-owes-one-replant-per-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [trunk (into {} (for [x [6 7] z [0 1] y (range 64 68)] [(str x "," y "," z) "dark_oak_log"]))
+              s (fm/start {:blocks (assoc trunk "6,68,0" "dark_oak_leaves" "7,68,1" "dark_oak_leaves")} {})
+              out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 200))]
+          (is (= 16 (:logs out)) "the whole trunk")
+          (is (= (set (for [x [6 7] z [0 1]] {:pos {:x x :y 64 :z z} :species "dark_oak"}))
+                 (set (lt/debts (:eng s))))
+              "the four cells, once each"))))))
+
 (deftest a-body-left-up-in-the-leaves-after-the-felling-comes-down-to-the-ground
   (async done
     (tu/run-async done

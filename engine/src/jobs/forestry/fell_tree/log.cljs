@@ -84,12 +84,24 @@
                    distinct vec)]
     (if (seq seeds) (connected-logs p seeds skip (flood-allowed? c)) seeds)))
 
-(defn record-debt!
-  "Write the replant debt for the tree of base and species, once. True when it wrote one."
+(defn trunk-cells
+  "The cells of the 2x2 trunk of species that has base as a corner (all four hold its log at base's height), else [base]."
   [c base species]
-  (when-not (some #(= base (:pos %)) (debts c))
-    (ctx/remember! c replant-kind {:pos base :species species} {:cap 50 :ttl :forever})
-    true))
+  (let [p (:primitives c)
+        log (str species "_log")
+        square (fn [dx dz] (mapv (fn [[ax az]] (assoc base :x (+ (:x base) ax) :z (+ (:z base) az)))
+                                 [[0 0] [dx 0] [0 dz] [dx dz]]))
+        full? (fn [cells] (every? #(= log (u/seen-name p %)) cells))]
+    (or (first (filter full? (for [dx [1 -1] dz [1 -1]] (square dx dz)))) [base])))
+
+(defn record-debt!
+  "Write the replant debts for the tree of base and species, once each: one per cell of a 2x2 trunk, else the base's.
+  True when it wrote the base's."
+  [c base species]
+  (let [owed (set (map :pos (debts c)))]
+    (doseq [pos (trunk-cells c base species) :when (not (owed pos))]
+      (ctx/remember! c replant-kind {:pos pos :species species} {:cap 50 :ttl :forever}))
+    (not (owed base))))
 
 (defn open-scaffold?
   "Whether this job's scaffold ledger entries (its own or a child's) are still open: a pillar left by a cut or a restart."

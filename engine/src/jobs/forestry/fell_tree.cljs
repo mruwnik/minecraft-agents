@@ -26,7 +26,7 @@
 (def doc
   "Fell the nearest tree: a log column with leaves near its top. One call fells the whole tree, lowest log first; it
   yields (:continue) only while a child waits on the world.
-  The base log's :forestry/replant debt is written before it is dug.
+  The base log's :forestry/replant debt (the four cells of a 2x2 trunk) is written before it is dug.
   It ends on the ground: from the canopy it walks down (go-to) beside the base, warning fell-tree.stranded when it cannot.
   A lower log of the column seen later becomes the base (and its debt moves down): the sapling goes on the ground.
   With :at it fells that one column instead (:radius and :species are then unused).
