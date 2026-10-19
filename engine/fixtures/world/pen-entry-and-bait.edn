@@ -32,7 +32,7 @@
            [:entities "type=cow,tag=wt" [[19 0 12] [25 1 20]] 2]]}
   {:name "go-to-away-from-an-open-stocked-gate-warns"
    :blocks [[:set [18 0 16] "oak_fence_gate[facing=east,open=true]"]]
-   :body {:at [14.5 0 16.5]}
+   :body {:at [14.5 0 16.5] :yaw 270}
    :act [[:job (jobs.movement.go-to {:pos #at [14 0 4] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.pen-gate-open :level :warn} :within-s 40}]}
   {:name "go-to-beside-an-open-stocked-gate-no-warn"
