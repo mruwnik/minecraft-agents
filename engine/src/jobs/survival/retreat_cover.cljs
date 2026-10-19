@@ -22,7 +22,7 @@
 
 (a/defargs settings
   {::home-range {:default 64 :doc "Blocks within which the latest :bed or :home entry is a home a flight runs or leans to." :spec (a/num-in 0 nil)}
-   ::swim-factor {:default nil :doc "Blocks of walking a block of swimming costs a flight; nil: jobs.lib.cost/swim-factor of the boots." :spec (a/num-in 1 nil)}
+   ::swim-factor {:default 0 :doc "Blocks of walking a block of swimming costs a flight; 0: jobs.lib.cost/swim-factor of the boots." :spec (a/num-in 0 nil)}
    ::way-reach {:default 14 :doc "Blocks within which the stairs the body cut are a way out of a flight." :spec (a/num-in 0 nil)}})
 (defn home-range [] (settings/get settings ::home-range))
 (defn way-reach [] (settings/get settings ::way-reach))
@@ -103,7 +103,8 @@
 (defn swim-factor
   "The flight's price of a swim block: ::swim-factor, else jobs.lib.cost/swim-factor of the boots worn."
   [c]
-  (or (settings/get settings ::swim-factor) (cost/swim-factor (.-equipment (.self (:primitives c))))))
+  (let [f (settings/get settings ::swim-factor)]
+    (if (pos? f) f (cost/swim-factor (.-equipment (.self (:primitives c)))))))
 
 (defn lost-spots
   "The places of the mobs a flight lost within lost-memory-ms (:threat entries, other than the chasers now on), as walk
