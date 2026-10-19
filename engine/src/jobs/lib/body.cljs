@@ -126,6 +126,14 @@
                     (let [ticks (min game/despawn-ticks (settings/ms->ticks (* 1000 (settings/get settings ::recovery-hold-s))))]
                       (some #(< (game/ticks-since % view) ticks) (open-deaths view)))))))
 
+(defn off-mode
+  "The wait reason {:reason :game-mode :mode :text} while the body (primitives p) is a spectator or in creative (no fall damage, flight, digs and
+  placing that do not work as a survival body's), else nil. An unreported mode counts as survival."
+  [p]
+  (when-let [mode (#{"spectator" "creative"} (.-gameMode (.self p)))]
+    {:reason :game-mode :mode mode
+     :text (str "the body is in " mode " mode: its physics and digging are not a survival body's; set it to survival")}))
+
 (defn too-hurt
   "The wait reason {:reason :low-health :health :min-health :text} of a risky job while the body's health (primitives
   p) is below risky-min-health, or {:reason :poisoned :health :text} while it is poisoned or withered, else nil.

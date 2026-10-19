@@ -90,8 +90,15 @@
 (defn day "Day, else :later with reason." [reason] (cond/because reason "night" (cond/daytime)))
 
 (defn low-health
-  "Health at jobs.lib.body/risky-min-health or above and not poisoned, else :later :low-health {:health :min-health} or :poisoned."
+  "Health at jobs.lib.body/risky-min-health or above, not poisoned and not in spectator or creative mode, else :later :low-health {:health :min-health}, :poisoned or :game-mode."
   [c]
-  (if-let [hurt (body/too-hurt (:primitives c))]
+  (if-let [hurt (or (body/off-mode (:primitives c)) (body/too-hurt (:primitives c)))]
     (cause-status :later hurt)
     (contract/ok :healthy "health enough")))
+
+(defn survival-mode
+  "Later :game-mode while the body is a spectator or in creative mode."
+  [c]
+  (if-let [off (body/off-mode (:primitives c))]
+    (cause-status :later off)
+    (contract/ok :survival "survival mode")))
