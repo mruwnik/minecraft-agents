@@ -23,10 +23,12 @@
 (a/defargs settings
   {::door-radius {:default 32 :doc "Blocks from the body within which a seen door or gate may lead into a closed building to flee to." :spec (a/num-in 0 64)}
    ::max-doors {:default 8 :doc "Seen doors and gates, nearest first, whose two sides a flight checks for a closed room." :spec (a/int-in 0 nil)}
+   ::door-looks {:default 4 :doc "Looks a flight takes from a building's doorway at the unseen sides of its room before it drops it as unseen." :spec (a/int-in 0 nil)}
    ::max-rooms {:default 3 :doc "Closed rooms, the home first then the nearest, a flight step races for." :spec (a/int-in 1 nil)}
    ::judge-per-step {:default 2 :doc "Door sides not judged before that a flight step floods for a closed room (an open one reads up to room-cells cells), nearest first; none while a melee chaser is within cover-gap. The home is always judged." :spec (a/int-in 0 nil)}})
 (defn door-radius [] (settings/get settings ::door-radius))
 (defn max-doors [] (settings/get settings ::max-doors))
+(defn door-looks [] (settings/get settings ::door-looks))
 (defn max-rooms [] (settings/get settings ::max-rooms))
 (defn judge-per-step [] (settings/get settings ::judge-per-step))
 
@@ -134,10 +136,19 @@
   "Blocks from a building's door side within which a flight looks in once when the building was dropped :unseen."
   6)
 
+(defn door-cell
+  "The seen door or gate cell beside door side pos {:x :y :z}, nil when none."
+  [p {:keys [x y z]}]
+  (first (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+               :let [cell {:x (+ x dx) :y y :z (+ z dz)}]
+               :when (some-> (u/seen-block p cell) .-name reach/openable?)]
+           cell)))
+
 (defn ^:async glance-in!
   "Once a flight per building: when survey dropped a building only for :unseen cells and the body is within
-  door-glance-radius of its door side, look at the nearest unseen cell beside its room (a sight pass; the look's time
-  is part of the flight). True when it looked: the caller surveys again."
+  door-glance-radius of its door side, step into the doorway (a go-to child; a wall of a 1-wide door shows a wedge from
+  outside) and look at the nearest unseen cell beside its room, again for each still unseen, at most ::door-looks looks
+  (sight passes; the time is part of the flight). True when it looked: the caller surveys again."
   [c survey]
   (let [p (:primitives c)
         me (u/self-pos c)
@@ -145,12 +156,22 @@
         at (first (for [{[x y z] :at why :why} (:dropped survey)
                         :let [k (cell-key {:x x :y y :z z})]
                         :when (and (= :unseen why) (not (glanced k)) (<= (u/dist me {:x x :y y :z z}) door-glance-radius))]
-                    {:k k :pos {:x x :y y :z z}}))
-        target (when at (first (sort-by #(u/dist me {:x (% 0) :y (% 1) :z (% 2)}) (reach/unseen-sides p (:pos at)))))]
-    (when at (ctx/update-mem! c update :door-glanced (fnil conj #{}) (:k at)))
-    (when target
-      (await (sense/look-at! c target))
-      true)))
+                    {:k k :pos {:x x :y y :z z}}))]
+    (when at
+      (ctx/update-mem! c update :door-glanced (fnil conj #{}) (:k at))
+      (when-let [d (door-cell p (:pos at))]
+        (when-not (= (cell-key me) (cell-key d))
+          (await (ctx/call c :door-glance 'jobs.movement.go-to {:pos (mid d) :range 0.7 :ways #{:walk} :spend {:job-time 4 :tries 1}}))))
+      (loop [n 0 looked #{}]
+        (let [me (u/self-pos c)
+              target (->> (reach/unseen-sides p (:pos at))
+                          (remove looked)
+                          (sort-by #(u/dist me {:x (% 0) :y (% 1) :z (% 2)}))
+                          first)]
+          (if (and target (< n (door-looks)))
+            (do (await (sense/look-at! c target))
+                (recur (inc n) (conj looked target)))
+            (pos? n)))))))
 
 (defn rooms
   "The closed rooms to flee to (survey), none a run to failed this flight."

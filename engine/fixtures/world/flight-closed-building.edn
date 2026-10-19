@@ -33,7 +33,7 @@
    :expect [{:event {:source :job :kind :retreat.home :data {:own? true}} :within-s 25}
             {:event {:source :job :kind :retreat.door-shut} :within-s 40}]
    :after [[:body-near [16.5 0 16.5] 3.5]]}
-  ;; 1b22e0fa: a hut seen only from outside (a cell of the room unseen) is dropped :unseen; the body within a few blocks of its door looks in once, then runs in. No scan: that look is the only way it sees the room
+  ;; 1b22e0fa: a hut seen only from outside (a cell of the room unseen) is dropped :unseen; the body within a few blocks of its door steps into the doorway, looks at the unseen sides, then runs in. No scan: that look is the only way it sees the room
   {:name "hut-seen-only-from-outside-is-looked-into-from-the-door"
    :body {:at [16.5 0 21.5] :yaw 180 :effects [["resistance" 600 4]]}
    :act [[:summon "zombie" [16.5 0 31.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
