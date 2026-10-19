@@ -1,7 +1,7 @@
 ;; Cards da616170, db25160e, e6eb9f5d: a condition starts the job (true), skips it this round (it waits, listed) or says it is
 ;; impossible (the job leaves the queue, no round); a condition may look around once first; fact-form conditions give a waiting reason.
 ;; Bare stone plot, no tree in sight. Should-succeed: harvest-wood / fell-tree with no tree look once and wait :no-tree unstarted;
-;; wait-for-light at night waits :dark; smelt of an item no furnace cooks stops impossible :not-smeltable at once.
+;; wait-for-light in a sealed dark cell waits :dark; smelt of an item no furnace cooks stops impossible :not-smeltable at once.
 ;; Should-fail: none of the waiting jobs completes or stops; the smelt never loads the furnace.
 {:defaults
  {:tags [:scheduler :conditions :jobs] :time :day
@@ -20,8 +20,9 @@
    :act [[:job (jobs.forestry.fell-tree {:radius 16})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-tree}} :within-s 25 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 15 :of-job true}]}
-  {:name "wait-for-light-at-night-waits"
-   :time :night
+  {:name "wait-for-light-in-a-dark-cell-waits"
+   :time :any
+   :blocks [[:fill [14 0 14] [18 3 18] "stone"] [:fill [15 0 15] [17 2 17] "air"]]
    :act [[:job (jobs.time.wait-for-light)]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15 :of-job true}]}

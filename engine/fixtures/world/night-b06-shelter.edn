@@ -56,6 +56,7 @@
    :limit-s 280}
   ;; 1b4b51d6, ad2c7c84: logs only, no tool, diggable dirt: a pit by hand, at most one log placed
   {:name "logs-and-no-tool-on-dirt-digs-a-pit-and-keeps-the-logs"
+   :time :any
    :blocks [[:fill [8 -6 8] [24 -1 24] "dirt"]]
    :body {:inventory [["oak_log" 12]]}
    :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
@@ -211,24 +212,6 @@
    :expect [{:no-event {:source :job :kind :night.bed-too-far} :for-s 60 :until {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}}
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 150}]
    :limit-s 170}
-  ;; 2383463a: at night a hungry body with nothing carried to eat does not go searching in the dark; with bread it eats
-  {:name "hungry-at-night-with-nothing-carried-does-not-fire"
-   :body {:effects []}
-   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
-         [:rcon "damage $BODY 5 minecraft:generic"]]
-   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :for-s 30}]
-   :after [[:body-near [16.5 0 16.5] 3] [:item "bread" 0]]
-   :limit-s 45}
-  {:name "hungry-at-night-with-bread-eats"
-   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
-   :body {:inventory [["bread" 4]] :effects []}
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
-         [:rcon "damage $BODY 5 minecraft:generic"]]
-   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 40}
-            {:event {:source :reflex :kind :ended :context {:reflex-id :hungry}} :within-s 40}]
-   :after [[:item "bread" [:<= 3]]]
-   :limit-s 60}
   ;; 8c5974f7: by day the night reflex does not fire, however often the body stops
   {:name "midday-night-reflex-stays-quiet"
    :time :day

@@ -16,7 +16,7 @@
    :after [[:block [16 0 8] "cobblestone"]]
    :limit-s 40}
   {:name "dig-in-shuts-open-door"
-   :time :night
+   :time :any
    :blocks [[:fill [14 0 17] [18 2 17] "stone"]
             [:set [16 0 17] "oak_door[facing=south,half=lower,open=true]"]
             [:set [16 1 17] "oak_door[facing=south,half=upper,open=true]"]

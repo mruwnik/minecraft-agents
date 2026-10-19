@@ -1,9 +1,8 @@
 ;; Cards 2d8e72f2, aed44d73: a pit whose dug block is not placeable (coal_ore drops coal) is roofed with a carried log; with no log
 ;; it stops "nothing to roof the pit with". The zigzag pit lays a log in the roof cell (y -2) and one in the side plug. Coal pad y -6..-1 under the body (the plot floor is over void).
-;; Night: --allow-time --time-log <shared log>.
 {:defaults
  {:tags [:night :survival :shut-in]
-  :time :night
+  :time :any
   :blocks [[:fill [8 -6 8] [24 -1 24] "coal_ore"]
            [:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
            [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
@@ -18,6 +17,7 @@
    :limit-s 70}
   ;; The trigger's night ends with reflex/ended, not job/completed (a submitted job's end).
   {:name "night-trigger-roofs-with-carried-logs"
+   :time :night :time-why :dawn-decision
    :register [{:trigger :night}]
    :body {:inventory [["iron_pickaxe" 1] ["oak_log" 5]]}
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60}

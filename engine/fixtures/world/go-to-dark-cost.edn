@@ -4,10 +4,9 @@
 ;; sight so its cells are seen dark) and a detour along z 24 (about 42 long, torches at x 10..19 only, far enough from
 ;; the rooms that no torch light reaches the direct corridor). The body looks east down the direct corridor. The quote's route
 ;; reports the route's :length in blocks and never walks: with :dark true the detour, with :dark false the direct one.
-;; Card ea376fb0: the same at night (--allow-time): the lit detour wins once the body has walked it, and a route that is dark
-;; all the way (torches removed) is still found, the shorter direct corridor.
-;; Card c1f4e3be: at night a cell never seen counts dark (look/dark-fn; a player cannot know a corridor round a corner is lit), so
-;; the night lit-detour case first walks the detour and back; a detour never seen takes the direct corridor at night.
+;; Cards ea376fb0, c1f4e3be, 53c112a5: the block is roofed, so the body is underground at any hour and a cell never seen counts dark
+;; (look/dark-fn; a player cannot know a corridor round a corner is lit): the lit detour wins once the body has walked it, a detour never
+;; seen takes the direct corridor, and a route dark all the way (torches removed) is still found, the shorter direct corridor.
 {:defaults
  {:tags [:movement :planner :dark]
   :time :any
@@ -20,18 +19,12 @@
   :body {:at [2.5 0 16.5] :yaw 270 :settle-s 4}
   :limit-s 40}
  :cases
- [{:name "dark-direct-corridor-takes-the-lit-detour"
-   :time :day
-   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:> 35]}}}] 30]]
-   :expect [{:no-event {:level :error} :for-s 2}]
-   :after [[:body-near [2.5 0 16.5] 1]]}
-  {:name "dark-false-takes-the-direct-corridor"
+ [{:name "dark-false-takes-the-direct-corridor"
    :settings {:jobs.lib.walk.world/dark false}
    :act [[:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:< 30]}}}]]
    :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:body-near [2.5 0 16.5] 1]]}
-  {:name "night-dark-direct-corridor-takes-the-lit-detour"
-   :time :night
+  {:name "walked-lit-detour-beats-the-dark-direct-corridor"
    :limit-s 120
    :act [[:job (jobs.movement.go-to {:pos #at [19 0 24] :range 0})]
          [:job (jobs.movement.go-to {:pos #at [28 0 20] :range 0}) [:alongside]]
@@ -40,14 +33,12 @@
    :expect [{:count-event {:source :job :kind :result :data {:arrived true}} :for-s 90 :at-least 3 :at-most 3 :of-job true}
             {:no-event {:level :error} :for-s 2}]
    :after [[:body-near [2.5 0 16.5] 1]]}
-  {:name "night-unseen-lit-detour-counts-dark-takes-the-direct-corridor"
-   :time :night
-   :act [[:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:< 30]}}}]]
+  {:name "unseen-lit-detour-counts-dark-takes-the-direct-corridor"
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
    :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:body-near [2.5 0 16.5] 1]]}
-  {:name "night-all-dark-route-is-still-found"
-   :time :night
+  {:name "all-dark-route-is-still-found"
    :blocks [[:set [10 0 24] "air"] [:set [13 0 24] "air"] [:set [16 0 24] "air"] [:set [19 0 24] "air"]]
-   :act [[:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:< 30]}}}]]
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
    :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:body-near [2.5 0 16.5] 1]]}]}

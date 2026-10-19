@@ -11,7 +11,7 @@
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
  :cases
  [{:name "dig-in-walls-sealed"
-   :time :night
+   :time :any
    :body {:inventory [["cobblestone" 16]]}
    :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60 :of-job true}

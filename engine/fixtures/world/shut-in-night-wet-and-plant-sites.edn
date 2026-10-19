@@ -1,9 +1,9 @@
 ;; Cards d3a6426a, 05fc51cf: shut-in (night) site checks. Water-ish blocks beside the descent cell, or water at the body, refuse the pit
 ;; (shut-in.failed, ground intact); a plant beside the start is no roof support, so the pit goes 3 deep and is roofed in the
-;; ground layer. Dirt pad y -6..-1 under the body (the plot floor is over void). Night: --allow-time --time-log <shared log>.
+;; ground layer. Dirt pad y -6..-1 under the body (the plot floor is over void).
 {:defaults
- {:tags [:night :survival :shut-in]
-  :time :night
+ {:tags [:survival :shut-in]
+  :time :any
   :blocks [[:fill [8 -6 8] [24 -1 24] "dirt"]
            [:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
            [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]

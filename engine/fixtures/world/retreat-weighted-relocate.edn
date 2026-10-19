@@ -1,7 +1,7 @@
 ;; Card c98846e6 (commit 986e9a7e): retreat flees from the weighted set of dangers (1/distance), leans to a home only
 ;; within :home-range (64), and night walks to a pit site within 16 blocks when dig-in refused for hollow ground
 ;; (shut-in.relocated, up to its site limit: a one-thick floor looks solid), then holds exposed (shelter.exposed). Mobs are NoAI and helmeted (they never hurt, no sun burn).
-;; Night: run with --allow-time --time-log <the shared time log>. The flee cases seed a :home 1000 blocks east (unloaded).
+;; Night: the relocation cases need --allow-time --time-log <the shared time log>; north-south-east-ahead runs at any hour (east-west flees 25 blocks at night, 15 by day: the flight prefers lit ground at night). The flee cases seed a :home 1000 blocks east (unloaded).
 ;; Every flight and relocation must stay on the plot grid: a plot can sit at the grid's edge, past which there is no floor.
 ;; east-west: the zombies stand 2 north of the body, so the flight goes south (into the grid), never north off it.
 ;; hollow-floor: the hollow starts at x 10, so the first relocation (9 west, x 7) is solid ground inside the plot.
@@ -25,6 +25,7 @@
    :after [[:body-far [16.5 0 16.5] 25]]
    :limit-s 50}
   {:name "flee-two-zombies-north-south-east-ahead"
+   :time :any
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
    :memory [{:kind :home :data {:pos #xyz [21000 150 20016]}}]

@@ -410,7 +410,7 @@
 
 (def time-reasons
   "Why a case may hold the clock; every other case uses light (a dark or lit plot, :time :any)."
-  #{:sleep :bees :villager-schedule :sunlight-burn :dawn-decision :weather})
+  #{:sleep :bees :villager-schedule :sunlight-burn :dawn-decision :night-light :weather})
 
 (defn offends-time-rule?
   "A case that sets :time (its own or its file's) other than :any, with no :time-why. An untimed case is the default day and holds no lock of its own."

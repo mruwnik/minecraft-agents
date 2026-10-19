@@ -3,10 +3,10 @@
 ;; quote says so), and that way is dropped while one lies within 8 blocks). The cases share one plot (plots are leased first-free, so
 ;; run this file alone with --first-plot set high, e.g. 300, to keep positions the same) and run in order: c1 writes a reasoned
 ;; (:no-floor) entry, c2 (a second register group: the body is restarted, its memory seeded with the same entry) drops the pit, c3
-;; elsewhere on the plot (> 8 blocks) is not blocked. The 10 minute expiry is not run. Night: run with --allow-time --time-log <the shared time log>.
+;; elsewhere on the plot (> 8 blocks) is not blocked. The 10 minute expiry is not run.
 {:defaults
- {:tags [:night :survival :shut-in :memory]
-  :time :night
+ {:tags [:survival :shut-in :memory]
+  :time :any
   :keep-memory true
   :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 28] "torch"] [:set [28 0 4] "torch"]
            [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]

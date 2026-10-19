@@ -1,0 +1,56 @@
+;; Owner Q334: darkness is the light of the cell, never the clock. The cases run at any hour in a sealed stone room (dark: no sky light,
+;; no torch) or with a torch in it (lit); the one that names a real night in :time-why checks a lit cell at night.
+;; Room: stone x 12..20, z 12..20, y 0..3, air x/z 13..19, y 0..2; the body at its middle.
+{:defaults
+ {:tags [:light :survival]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:fill [12 0 12] [20 3 20] "stone"] [:fill [13 0 13] [19 2 19] "air"]]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 2}
+  :limit-s 40}
+ :cases
+ [;; 467a000f: wait-for-light waits (:dark) in the dark and ends on any light, a torch included
+  {:name "wait-for-light-ends-when-a-torch-is-placed"
+   :act [[:job (jobs.time.wait-for-light)]
+         [:await {:source :job :kind :waiting :data {:reason :dark}} 20]
+         [:rcon "execute at $BODY run setblock ~1 ~ ~ torch"]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 20 :of-job true}
+            {:event {:source :job :kind :completed :data {:name "jobs.time.wait-for-light"}} :within-s 35 :of-job true}]}
+  ;; 5b02f58c: the hungry trigger searches only where it is not dark; with nothing carried to eat it stays quiet in a dark cell
+  {:name "hungry-in-the-dark-with-nothing-carried-does-not-fire"
+   :body {:effects []}
+   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 5 minecraft:generic"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :for-s 30}]
+   :after [[:body-near [16.5 0 16.5] 3] [:item "bread" 0]]
+   :limit-s 45}
+  {:name "hungry-in-the-dark-with-bread-eats"
+   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :body {:inventory [["bread" 4]] :effects []}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 5 minecraft:generic"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 40}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :hungry}} :within-s 40}]
+   :after [[:item "bread" [:<= 3]]]
+   :limit-s 60}
+  ;; 5b02f58c: the same hungry body in a torch-lit cell at real night is not held by the clock: the trigger fires
+  {:name "hungry-in-a-lit-cell-at-night-fires"
+   :time :night :time-why :night-light
+   :blocks [[:set [16 0 14] "torch"]]
+   :body {:effects []}
+   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 5 minecraft:generic"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 40}]
+   :limit-s 60}
+  ;; 5b02f58c: get-food cooks only where the cell is lit
+  {:name "no-cooking-in-a-dark-cell"
+   :body {:inventory [["furnace" 1] ["porkchop" 2] ["coal" 2]] :effects []}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :child_ended :data {:slot :cook}} :for-s 60 :until {:source :job :kind #{:completed :stopped}} :of-job true}]
+   :after [[:item "furnace" 1]]
+   :limit-s 80}]}

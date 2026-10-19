@@ -1,6 +1,6 @@
 ;; Card fe086540: the (repeat n e) and (until g e) job expressions. Should-succeed: (repeat 2 pause) completes after both runs;
-;; (until wait-for-light pause) by day (guard already met) ends without looping. Should-fail: at night the same until keeps
-;; looping (a stone cell is the dark by day for the failed-child case), so it has not completed 25 s in (the runner cancels it). Refusal of (repeat 0 e) / one-arg until at submit is unit-tested (expr_test).
+;; (until wait-for-light pause) beside a torch (guard already met) ends without looping. Should-fail: in a sealed stone cell (dark at any hour)
+;; the same until keeps looping, so it has not completed 25 s in (the runner cancels it). Refusal of (repeat 0 e) / one-arg until at submit is unit-tested (expr_test).
 {:defaults
  {:tags [:scheduler]
   :plot {:height 8}
@@ -11,12 +11,14 @@
    :time :any
    :act [[:job (repeat 2 (jobs.time.noop {:seconds 0.5 :why :idle}))]]
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 40 :of-job true}]}
-  {:name "until-light-by-day-ends"
-   :time :day
+  {:name "until-light-beside-a-torch-ends"
+   :time :any
+   :blocks [[:set [17 0 16] "torch"]]
    :act [[:job (until (jobs.time.wait-for-light) (jobs.time.noop {:seconds 0.5 :why :idle}))]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]}
-  {:name "until-light-at-night-keeps-looping"
-   :time :night
+  {:name "until-light-in-a-dark-cell-keeps-looping"
+   :time :any
+   :blocks [[:fill [14 0 14] [18 3 18] "stone"] [:fill [15 0 15] [17 2 17] "air"]]
    :act [[:job (until (jobs.time.wait-for-light) (jobs.time.noop {:seconds 0.5 :why :idle}))]]
    :expect [{:no-event {:source :job :kind :completed} :for-s 25 :of-job true}]
    :after [[:body-near [16.5 0 16.5] 3]]}

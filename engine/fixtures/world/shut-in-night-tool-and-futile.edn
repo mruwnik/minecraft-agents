@@ -1,10 +1,10 @@
 ;; jobs.survival.shut-in (night) on open ground without the usual materials (cards 0392fef7, f3e41d66, hand-tested in 0b0a8242):
 ;; a pickaxe carried but not held is equipped before the digs and the pit is roofed with the dug stone; no pickaxe and
 ;; no blocks on stone fails with a reason and digs nothing; a 1-thick floor over a void is not dug through.
-;; Night: run with --allow-time --time-log <the shared time log>. Run directly (not through the shelter job: that logs the body out for the night whenever another player is online).
+;; Run directly (not through the shelter job: that logs the body out for the night whenever another player is online).
 {:defaults
- {:tags [:night :survival :shut-in]
-  :time :night
+ {:tags [:survival :shut-in]
+  :time :any
   :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
            [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
