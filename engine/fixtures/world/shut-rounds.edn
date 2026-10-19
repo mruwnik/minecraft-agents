@@ -1,5 +1,5 @@
 ;; Rounds migration of the door-left and pen-gate reflexes (card 85e1dd07): one run shuts every target; a target the
-;; run could not shut ends it :stopped (shut-doors.stopped), never :done and never :continue. The :opened entries are
+;; run could not shut ends it :stopped (stopped), never :done and never :continue. The :opened entries are
 ;; seeded as a cut walk leaves them (written when the walk opens a block, 10 s old by the time the reflex looks).
 ;; Should-succeed: two gates left open -> one shut-doors run shuts both.
 ;; Should-fail: one of two encased in a block of glass (seen, never reachable) -> the other shut, the run stopped with :left.
@@ -17,12 +17,12 @@
  :cases
  [{:name "two-open-gates-one-run"
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :door-left} :data {:outcome :done}} :within-s 80}
-            {:no-event {:source :job :kind :shut-doors.stopped} :for-s 80 :until {:source :reflex :kind :ended :context {:reflex-id :door-left} :data {:outcome :done}}}]
+            {:no-event {:source :job :kind :stopped} :for-s 80 :until {:source :reflex :kind :ended :context {:reflex-id :door-left} :data {:outcome :done}}}]
    :after [[:block [10 0 16] "oak_fence_gate[open=false]"]
            [:block [16 0 16] "oak_fence_gate[open=false]"]]}
   {:name "one-gate-unreachable-run-stops"
    :blocks [[:fill [5 0 11] [15 5 21] "glass"] [:set [10 0 16] "oak_fence_gate[facing=east,open=true]"]]
    :body {:at [19.5 0 13.5]}
-   :expect [{:event {:source :job :kind :shut-doors.stopped :data {:shut 1}} :within-s 80}]
+   :expect [{:event {:source :job :kind :stopped :data {:shut 1}} :within-s 80}]
    :after [[:block [16 0 16] "oak_fence_gate[open=false]"]
            [:block [10 0 16] "oak_fence_gate[open=true]"]]}]}

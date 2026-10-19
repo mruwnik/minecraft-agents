@@ -13,6 +13,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.pass :as pass]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
             [triggers.maintenance.door-left :as dl]))
@@ -192,7 +193,7 @@
           (await (tick-until s #(empty? (:list (core/state eng))) 10))
           (is (nil? (first (filter #(= :completed (:kind %)) @seen))) "an unseen gate is not already shut")
           (is (= [{:cell [5 64 0] :reason :unseen}]
-                 (:left (first (filter #(= :shut-doors.stopped (:kind %)) @seen)))) "still unseen after the look: left, not done")
+                 (:left (first (filter #(= :stopped (:kind %)) @seen)))) "still unseen after the look: left, not done")
           (is (= [gate-cell] (mapv :cell (opened eng))) "the entry is kept"))))))
 
 (deftest a-gate-the-walker-did-not-open-is-left-alone
@@ -323,7 +324,7 @@
           (is (open? p gate-cell))
           (is (not (open? p gate2-cell)))
           (is (empty? (filter #(= :completed (:kind %)) @seen)) "partial is not done")
-          (let [e (first (filter #(= :shut-doors.stopped (:kind %)) @seen))]
+          (let [e (first (filter #(= :stopped (:kind %)) @seen))]
             (is (= 1 (:shut e)))
             (is (= [[5 64 0]] (mapv :cell (:left e)))))
           (is (= :left (:reason (first (filter #(= :stopped (:kind %)) @seen)))) "nothing-possible :left"))))))
@@ -342,7 +343,7 @@
           (core/submit! eng '(jobs.maintenance.shut-doors) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 3))
           (is (open? p gate-cell))
-          (is (= [[[5 64 0] :standing-in]] (mapv (juxt :cell :reason) (:left (first (filter #(= :shut-doors.stopped (:kind %)) @seen))))))
+          (is (= [[[5 64 0] :standing-in]] (mapv (juxt :cell :reason) (:left (first (filter #(= :stopped (:kind %)) @seen))))))
           (is (= [gate-cell] (mapv :cell (opened eng))) "the entry stays, so a later run shuts it"))))))
 
 (deftest a-walk-that-ends-continue-is-not-read-as-unreachable
@@ -353,7 +354,7 @@
           (remember-opened! s)
           (core/submit! eng '(jobs.maintenance.shut-doors) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 3))
-          (is (= [:walk-interrupted] (mapv :reason (:left (first (filter #(= :shut-doors.stopped (:kind %)) @seen))))))
+          (is (= [:walk-interrupted] (mapv :reason (:left (first (filter #(= :stopped (:kind %)) @seen))))))
           (is (= [gate-cell] (mapv :cell (opened eng))) "the entry stays for a later run")
           (is (empty? (filter #(and (= :warn (:level %)) (= :job (:source %)) (not= :stopped (:kind %))) @seen)) "the job adds no warn of its own for an interrupted walk")
           (is (= [1000000] (mapv (comp :t :data) (mem/entries (mem/view (:store eng)) :opened)))
@@ -379,6 +380,9 @@
   (core/submit! eng (list 'jobs.maintenance.shut-doors args) {})
   (tick-until s #(empty? (:list (core/state eng))) ticks))
 
+(defn run-unrecorded! [s ticks]
+  (settings/with-settings {:jobs.maintenance.shut-doors/unrecorded? true} #(run-shut! s {} ticks)))
+
 (defn hut-setup [home?]
   (let [{:keys [eng] :as s} (setup (assoc (hs/hut-world {:x 5.5 :y 64 :z 1.5} {}) :states hd/open-door-states))]
     (when home? (mem/write! (:store eng) :home {:pos {:x 5 :y 64 :z 1}} mem/place-policy))
@@ -390,7 +394,7 @@
       (fn ^:async t []
         (let [{:keys [p seen] :as s} (hut-setup true)]
           (is (true? (hs/door-open? p)) "open to begin with, no :opened entry")
-          (await (run-shut! s {:unrecorded? true} 20))
+          (await (run-unrecorded! s 20))
           (is (false? (hs/door-open? p)) "shut")
           (is (= 1 (:shut (done-event seen)))))))))
 
@@ -401,7 +405,7 @@
         (let [{:keys [p seen] :as s} (hut-setup false)]
           (await (run-shut! s {} 20))
           (is (true? (hs/door-open? p)) "no record, default: untouched")
-          (await (run-shut! s {:unrecorded? true} 20))
+          (await (run-unrecorded! s 20))
           (is (true? (hs/door-open? p)) "not near home and no plan of the body's: untouched")
           (is (= :already (:cause (done-event seen))) "nothing of its own left open: done before any round"))))))
 
@@ -411,6 +415,6 @@
       (fn ^:async t []
         (let [{:keys [p seen] :as s} (hut-setup true)]
           (.override (.-world p) "useOn" (fn ^:async o [] #js {:status "done"}))
-          (await (run-shut! s {:unrecorded? true} 30))
+          (await (run-unrecorded! s 30))
           (is (true? (hs/door-open? p)))
           (is (nil? (done-event seen)) "not done while the door stands open"))))))

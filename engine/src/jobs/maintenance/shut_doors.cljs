@@ -18,7 +18,7 @@
   "Shut the doors, gates and trapdoors a walk opened and left open (the job of the door-left trigger,
   jobs.lib.doors).
   Blocks with an :opened entry count (written by jobs.lib.pass when a walk opens a block, dropped when it
-  shuts it), whatever their age. With :unrecorded? (default off; the door-left reflex and lead-to never set it) wooden
+  shuts it), whatever their age. With the unrecorded? setting (default off) wooden
   doors (never gates or trapdoors) seen open without an entry count too, but only those of the body's own building:
   inside the footprint of a plan it made, or within the home-radius setting (8) of its :home place. Any other block the walker did not open is never touched. Blocks a :leave-open walk left
   open on purpose are left alone while that walk's job lives (once it is gone, they count).
@@ -31,12 +31,13 @@
   interrupted (:walk-interrupted, info only), is left and keeps its entry the same way. A block an animal stands in
   (:animal-in-the-way, info only) keeps its entry untouched and no failure counts, so the trigger tries again at once.
   Needs nothing. Ends :done with {:shut n :left []} when every block was shut (or none stood
-  open); with any left, nothing-possible :left with warn shut-doors.stopped, data {:shut n :left [{:cell :reason}]}.
-  Spends :time (default ::job-time-s).")
+  open); with any left, nothing-possible :left, data {:shut n :left [{:cell :reason}]}.
+  Spends :job-time (default ::job-time-s).")
 
 (a/defargs settings
-  {::reach {:default 3 :doc "Walk until within this many cells of the block (a click reaches 4.5 from the eye)." :spec (a/num-in 0 nil)}
-   ::home-radius {:default 8 :doc "With :unrecorded?, a door this close to the :home place is the body's own, in blocks." :spec (a/num-in 0 nil)}
+  {::unrecorded? {:default false :doc "Also shut wooden doors of the body's own building seen standing open that no walk recorded opening." :spec boolean?}
+   ::reach {:default 3 :doc "Walk until within this many cells of the block (a click reaches 4.5 from the eye)." :spec (a/num-in 0 nil)}
+   ::home-radius {:default 8 :doc "With ::unrecorded?, a door this close to the :home place is the body's own, in blocks." :spec (a/num-in 0 nil)}
    ::tries {:default 3 :doc "Clicks on one block before the run leaves it." :spec (a/int-in 1 nil)}
    ::attempts {:default 5 :doc "Runs whose clicks failed before a block is dropped for good." :spec (a/int-in 1 nil)}
    ::job-time-s {:default 120 :doc "Seconds a run may take before it ends." :spec (a/num-in 0 nil)}
@@ -59,8 +60,7 @@
 
 
 (a/defargs args
-  {:radius {:doc "how far from the body a left block is looked for, in blocks" :spec (a/num-in 0 nil) :default 16}
-   :unrecorded? {:doc "also shut wooden doors of the body's own building seen standing open that no walk recorded opening" :spec boolean? :default false}})
+  {:radius {:doc "how far from the body a left block is looked for, in blocks" :spec (a/num-in 0 nil) :default 16}})
 
 ;; the blocks given up in this run are skipped; a later run starts afresh from the world and the :opened entries
 (defn cell-key [{:keys [x y z]}] [x y z])
@@ -78,7 +78,7 @@
   (let [given-up (set (map :cell left))]
     (remove #(given-up (cell-key (:cell %)))
             (concat (doors/left-open (:primitives c) (ctx/view c) (:args c) 0 doors/seen-open-block)
-                    (when (:unrecorded? (:args c)) (doors/unrecorded-open (:primitives c) (ctx/view c) (assoc (:args c) :own? #(own-door? c %))))))))
+                    (when (settings/get settings ::unrecorded?) (doors/unrecorded-open (:primitives c) (ctx/view c) (assoc (:args c) :own? #(own-door? c %))))))))
 
 (defn ^:async walk!
   "nil when the body stands within reach, else why not: :walk-interrupted (the walk ended :continue) or :unreachable."
@@ -128,10 +128,8 @@
   (let [result {:shut shut :left left}]
     (if (empty? left)
       (ctx/end c :done nil (assoc result :text (str "shut " shut " left open by a walk")))
-      (let [text (str "shut " shut " left open by a walk, gave up on " (count left))
-            level (if (every? #(= :walk-interrupted (:reason %)) left) :info :warn)]
-        (ctx/emit! c :shut-doors.stopped level (assoc result :text text))
-        (ctx/end c :nothing-possible :left (assoc result :text text))))))
+      (ctx/end c :nothing-possible :left
+               (assoc result :text (str "shut " shut " left open by a walk, gave up on " (count left)))))))
 
 (defn done?
   "Ok when no block seen left open stands within :radius and none was given up on; a :look at the recorded blocks never

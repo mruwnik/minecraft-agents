@@ -1,8 +1,8 @@
 ;; jobs.maintenance.shut-doors on a hut door (cards 4acd8c53, 927dcb2f). Door at [16 0 16] (oak, open), body 4 south looking north.
-;; Should-succeed: :unrecorded? shuts an open door of the body's own plan footprint that no walk recorded; a recorded door held by a cow is
+;; Should-succeed: the unrecorded? setting shuts an open door of the body's own plan footprint that no walk recorded; a recorded door held by a cow is
 ;; not given up: the door-left reflex shuts it on a later run once the cow is gone.
 ;; Should-fail (left open): the default run never touches a door no walk of this body opened; a door outside any own plan stays open even
-;; with :unrecorded?.
+;; with the unrecorded? setting.
 {:defaults
  {:tags [:doors :jobs]
   :time :any
@@ -16,7 +16,7 @@
  [{:name "unrecorded-own-door-shut"
    :plans [{:id "hut" :metadata {:by "$body"} :parts [{:id "wall" :cells [#at [14 0 16] #at [15 0 16] #at [17 0 16] #at [18 0 16]] :want [:any "oak_planks"]}
                                                        {:id "door" :cells [#at [16 0 16]] :want [:any "oak_door"]}]}]
-   :act [[:job (jobs.maintenance.shut-doors {:unrecorded? true})]]
+   :act [[:job (jobs.maintenance.shut-doors {:settings {:jobs.maintenance.shut-doors/unrecorded? true}})]]
    :expect [{:event {:source :job :kind :completed :data {:shut 1 :left []}} :within-s 70 :of-job true}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=false]"]]}
   {:name "default-run-leaves-an-unrecorded-door"
@@ -26,7 +26,7 @@
    :after [[:block [16 0 16] "oak_door[half=lower,open=true]"]]
    :limit-s 60}
   {:name "unrecorded-door-outside-own-plans-left-open"
-   :act [[:job (jobs.maintenance.shut-doors {:unrecorded? true})]]
+   :act [[:job (jobs.maintenance.shut-doors {:settings {:jobs.maintenance.shut-doors/unrecorded? true}})]]
    :expect [{:event {:source :job :kind :completed :data {:shut 0 :left []}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=true]"]]
    :limit-s 60}
@@ -38,9 +38,9 @@
    :body {:at [16.5 0 16.5]}
    :act [[:summon "cow" [16.5 0 16.5] "{NoAI:1b}"]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~4 180 0"]
-         [:await {:source :job :kind :shut-doors.stopped} 60]
+         [:await {:source :job :kind :stopped} 60]
          [:rcon "kill @e[type=cow,tag=wt,$BOX]"]]
-   :expect [{:event {:source :job :kind :shut-doors.stopped} :within-s 60}
+   :expect [{:event {:source :job :kind :stopped} :within-s 60}
             {:event {:source :reflex :kind :ended :context {:reflex-id :door-left} :data {:outcome :done}} :within-s 120}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=false]"]]
    :limit-s 140}
