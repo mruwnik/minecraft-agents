@@ -144,7 +144,7 @@
               s (with-redefs [registry/jobs (assoc registry/jobs 'jobs.access.cleanup cleanup)]
                   (await (fell tall {:radius 10} 200)))]
           (is (not= :not-done (:out s)) "the job ends instead of cleaning for ever")
-          (is (= 1 (count (kinds s :tree_blocked)))))))))
+          (is (= :tree-blocked (:reason (:out s)))))))))
 
 (deftest a-pillar-with-no-log-in-reach-marks-the-tree-unreachable
   (async done
@@ -155,7 +155,7 @@
                   (await (fell tall {:radius 10} 200)))]
           (is (not= :not-done (:out s)))
           (is (<= @calls 2) "the plan is not made again and again")
-          (is (= 1 (count (kinds s :tree_blocked)))))))))
+          (is (= :tree-unreachable (:reason (:out s)))))))))
 
 (deftest a-stand-the-walk-cannot-reach-is-avoided-and-the-pillar-planned-again
   (async done
@@ -203,7 +203,7 @@
       (fn ^:async t []
         (let [{:keys [p] :as s} (await (fell-floor-unseen bare {:radius 10} 300 looked-low?))]
           (is (= [] (kinds s :fell-tree.declined)) "not declined as no way to reach")
-          (is (= 0 (count (kinds s :tree_blocked))) "the tree is not dropped")
+          (is (not= :tree-unreachable (:reason (:out s))) "the tree is not dropped")
           (is (= (set (range 64 72)) (set (dug-ys p))) "every log dug"))))))
 
 (defn ^:async fell-ring-floor-unseen

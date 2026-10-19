@@ -116,7 +116,7 @@
           (is (= [12 12 12] (dig-xs p)) "only the reachable tree is dug")
           (is (= [{:pos {:x 12 :y 64 :z 0} :species "oak"}] (debts eng))
               "no debt for the tree that was never felled")
-          (is (not-any? #(= :tree_blocked (:kind %)) @seen)))))))
+          (is (not-any? #(= :stopped (:kind %)) @seen)))))))
 
 (defn ring
   "A 3-high stone ring round the column x z, 4 out (on a floor of its own): nothing walks in or out."
@@ -148,7 +148,7 @@
           (is (= [] (:list (core/state eng))))
           (is (= [] (calls p "dig")))
           (is (= [] (moved-entries eng)) "the search proved both walled off: no walk")
-          (is (= 1 (count (filter #(= :tree_blocked (:kind %)) @seen)))))))))
+          (is (= 1 (count (filter #(= :stopped (:kind %)) @seen))) "ends nothing-possible"))))))
 
 (deftest fell-tree-warns-and-finishes-when-every-tree-is-blocked
   (async done
@@ -160,7 +160,7 @@
           (is (= [] (:list (core/state eng))))
           (is (= [] (calls p "dig")))
           (is (= [] (debts eng)) "no debt without a felled tree")
-          (is (= 1 (count (filter #(= :tree_blocked (:kind %)) @seen)))))))))
+          (is (= 1 (count (filter #(= :stopped (:kind %)) @seen))) "ends nothing-possible"))))))
 
 (defn ^:async with-partial-walks
   "Run the async f with the first n fell-tree walks (all when n is nil) resolving :partial, as a walk that waits on the world; later ones walk."
@@ -186,7 +186,7 @@
                      (is (empty? (:unreachable (job-mem eng "j1" []))) "two partials are still progress")
                      (await (run-until-empty eng 10)))))
           (is (= [] (calls p "dig")))
-          (is (= 1 (count (filter #(= :tree_blocked (:kind %)) @seen)))))))))
+          (is (= 1 (count (filter #(= :stopped (:kind %)) @seen))) "ends nothing-possible"))))))
 
 (deftest fell-tree-partials-stop-counting-once-a-walk-succeeds
   (async done
@@ -198,7 +198,7 @@
                                (core/submit! eng (list 'jobs.forestry.fell-tree {:radius 30}) {})
                                (await (run-until-empty eng 30)))))))
           (is (= 4 (count (calls p "dig"))) "two partials, then the walk arrives: the high logs are dug from the foot of the column")
-          (is (not-any? #(= :tree_blocked (:kind %)) @seen)))))))
+          (is (not-any? #(= :stopped (:kind %)) @seen)))))))
 
 (defn dig-unreachable-at
   "Make the dig primitive answer unreachable for logs in column x."
@@ -220,7 +220,7 @@
           (is (= [8 12 12 12] (dig-xs p)) "one failed dig on the ledge tree, then the next tree is felled")
           (is (= [{:pos {:x 12 :y 64 :z 0} :species "oak"}] (debts eng))
               "no debt for the tree that was never dug")
-          (is (not-any? #(= :tree_blocked (:kind %)) @seen)))))))
+          (is (not-any? #(= :stopped (:kind %)) @seen)))))))
 
 (deftest fell-tree-warns-and-finishes-when-the-only-tree-cannot-be-dug
   (async done
@@ -233,7 +233,7 @@
           (is (= [] (:list (core/state eng))))
           (is (= [8] (dig-xs p)) "one dig attempt, no retries")
           (is (= [] (debts eng)))
-          (is (= 1 (count (filter #(= :tree_blocked (:kind %)) @seen)))))))))
+          (is (= 1 (count (filter #(= :stopped (:kind %)) @seen))) "ends nothing-possible"))))))
 
 ;; ------------------------------------------------------------ collect-drops
 

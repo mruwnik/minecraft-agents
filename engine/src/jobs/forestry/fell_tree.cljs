@@ -24,48 +24,36 @@
             [jobs.lib.watch :as watch]))
 
 (def doc
-  "Fell the nearest tree: a log column with leaves near its top. One call fells the whole tree, lowest log first; it
-  yields (:continue) only while a child waits on the world.
-  The base log's :forestry/replant debt (the four cells of a 2x2 trunk) is written before it is dug.
-  It ends on the ground: from the canopy it walks down (go-to) beside the base, warning fell-tree.stranded when it cannot.
-  A lower log of the column seen later becomes the base (and its debt moves down): the sapling goes on the ground.
-  With :at it fells that one column instead (:radius and :species are then unused).
-  The tree is chosen by a bounded search over at most 32 candidates, nearest in a line first (jobs.lib.targets).
-  It picks the tree the body walks to soonest, so a walled-off or cliff-top tree is passed over for a reachable
-  one. The search goes on, slice by slice, within the call. If it proves every candidate out of reach, the job
-  warns tree_blocked and ends. If it runs out of nodes, it takes the nearest in a line and the walk decides.
-  A tree whose walk is blocked, or partial three times in a row, is marked unreachable and the next one is chosen.
-  A log still out of reach once the body stands at the foot is felled from a pillar by jobs.forestry.fell-from-pillar
-  (unless :pillar? is false: such a tree is left). A tree whose pillar a zone, claim or footprint refuses (warn
-  fell-tree.declined, :reason :refused; other refusals warn with their :reason), or that has no ground or stand to reach it
-  from, counts as unreachable, and so does one whose pillar digs no log. A pillar whose cleanup leaves the scaffold open is a
-  failed round (tree_blocked after a few). When the pillar's blocks cannot be had the call ends with the fetch's ending.
-  Once a tree is chosen the rest of it is a comfort section (ctx/atomic): reflexes at or below that level wait for it,
-  up to their caps.
+  "Fell the nearest tree: a log column with leaves near its top, lowest log first, the whole of it in one call. It yields
+  (:continue) while a child waits on the world, and after ::max-steps pieces of work.
+  The base log's :forestry/replant debt (one per cell of a 2x2 trunk) is written before it is dug; a lower log of the
+  column seen later becomes the base. It ends on the ground: from the canopy it walks down beside the base (warn
+  fell-tree.stranded when it cannot). With :at it fells that one column instead (:radius and :species are then unused).
+  The tree is the one the body walks to soonest among at most 32 candidates, nearest in a line first (jobs.lib.targets);
+  one whose walk is blocked, or partial three times in a row, is marked unreachable. A log out of reach from the foot
+  is felled from a pillar by jobs.forestry.fell-from-pillar (unless :pillar? is false); a tree that pillar cannot reach
+  or whose pillar digs no log counts as unreachable. Once a tree is chosen the rest of it is a comfort section
+  (ctx/atomic): reflexes at or below that level wait for it, up to their caps.
   Before the third log of a tree big enough for an axe to pay (jobs.lib.trees/axe-worth-fetching?) with none carried it
-  gets one (jobs.lib.need, a seen chest or crafted) unless :fetch is false or lacks :tool; a failed fetch is
-  warned (fetch.failed) and the tree chopped by hand, asking once more (craft only) after two logs are dug.
-  Before the first log, a carried axe that is the last of its kind and worn gets a spare (jobs.lib.trip/tool-ready!,
-  unless :fetch is false or lacks :tool).
-  Each log is dug by a jobs.blocks.dig child. That child holds the best carried axe and leaves the drop on the
-  ground; a log leaves hide from the eye (no sight to walk to) has the leaf in the way dug first; the pick-up is held back by a threat only, not by dark sky; when the tree is down a jobs.items.collect-drops child picks up the drops of the logs it dug from the ground
-  (by id: another player's logs are left); a pillar's logs are collected by jobs.forestry.fell-from-pillar.
-  Zones: a tree whose base log is in another owner's zone or claim, or in a plan's footprint (but :for-plan's
-  own), is not a candidate. A later log that turns out refused makes the tree count as unreachable. The job warns
-  fell-tree.declined once, with :reason :refused (or :no-zones when no zone list was read). :ignore-zones? true
-  skips the check. Logs joined to the tree (branches, the
-  rest of a 2x2 trunk) that the same rule refuses, or that lie more than the fell-tree.log/max-spread setting from the
-  trunk's column, are no part of it and stay standing.
+  gets one (jobs.lib.need) unless :fetch is false or lacks :tool; a failed fetch is warned (fetch.failed) and the tree
+  chopped by hand, asking once more (craft only) after two logs. Before the first log, a carried axe that is the last of
+  its kind and worn gets a spare (jobs.lib.trip/tool-ready!).
+  Each log is dug by a jobs.blocks.dig child that leaves the drop on the ground; a leaf hiding a log from the eye is dug
+  first. When the tree is down a jobs.items.collect-drops child picks up the drops of the logs dug from the ground (by
+  id: another player's logs are left); a pillar's logs are collected by fell-from-pillar.
+  Zones: a tree whose base log is in another owner's zone or claim, or in a plan's footprint (but :for-plan's own), is
+  not a candidate; a later log that turns out refused makes the tree unreachable (warn fell-tree.declined once, :reason
+  :refused). :ignore-zones? true skips the check. Logs joined to the tree that the same rule refuses, or that lie more than
+  the fell-tree.log/max-spread setting from the trunk's column, stay standing.
 
-  Conditions: :food-short (later, between trees: no food carried and get-food gave up lately); :no-tree (none in sight after one look around from where it stands, the condition's look; data :radius,
-  :species; a listed job waits; with :at and no log there it is impossible, data :at).
+  Conditions: :food-short (later, between trees: no food carried and get-food gave up lately); :no-tree (none in sight
+  after one look around; data :radius, :species; with :at and no log there it is impossible, data :at).
   Its safe? is ready/safe-at-by-night :at with :at, else ready/safe-if-lit.
-  Ends :done with {:base pos :logs n :axe why} of the tree it felled: n logs dug; :axe is :carried, :skipped-fetch-off,
-  :skipped-small-tree or :none-found (fetch failed: chopped by hand). Condition-failed :no-tree when the look found none;
-  condition-failed :logs-left (cause {:left n}) when the pick-up stopped short (fewer than all the drops, no sign they are gone);
-  nothing-possible :tree-unreachable when every tree in sight proved out of
-  reach (data {:unreachable n :columns :why}) and :tree-blocked when a log cannot be dug or the pillar not taken back; the
-  pillar's fetch ending when its blocks cannot be had.
+  Ends :done with {:base pos :logs n :axe why}: n logs dug; :axe is :carried, :skipped-fetch-off, :skipped-small-tree or
+  :none-found (fetch failed: chopped by hand). Condition-failed :no-tree, :gone (no log left, none dug) or :logs-left
+  (cause {:left n}: the pick-up stopped short). Nothing-possible :tree-unreachable when every tree in sight proved out of
+  reach (data {:unreachable n :columns :why}) and :tree-blocked when a log cannot be dug or the pillar not taken back
+  three rounds in a row. The pillar's own ending passes up when its blocks cannot be had or a limit is hit.
   Quote: time by the walk to the nearest tree and the logs standing.")
 
 (a/defargs args
@@ -79,15 +67,17 @@
    :avoid {:doc "columns [x z] of trees to leave alone (ones an earlier run found cut off)" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :ignore-zones? :shared})
 
-(def approach-range
-  "Blocks from a tree's base the search for the tree to fell counts as reaching it: approach!'s looser range."
-  3)
-
 (a/defargs settings
-  {::job-time-s {:default 900 :doc "Seconds a felling may take: the search, a fetch, the walk, the digs and a pillar." :spec (a/num-in 0 nil)}
+  {::approach-range {:default 3 :doc "Blocks from a tree's base the search for the tree to fell counts as reaching it." :spec (a/num-in 0 nil)}
+   ::at-range {:default 6 :doc "Blocks from the :at column the body walks to when it has not seen the cell." :spec (a/num-in 0 nil)}
+   ::at-close-range {:default 2 :doc "Blocks from the :at column it walks to when the cell stayed unseen from ::at-range (a wall hides the foot)." :spec (a/num-in 0 nil)}
+   ::collect-radius {:default 8 :doc "Blocks around the base within which the drops of the logs dug are collected." :spec (a/num-in 0 nil)}
+   ::collect-search {:default 4 :doc "Blocks round the base walked to look for drops that are not in sight." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 900 :doc "Seconds a felling may take: the search, a fetch, the walk, the digs and a pillar." :spec (a/num-in 0 nil)}
    ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 (defn max-steps [] (settings/get settings ::max-steps))
+(defn approach-range [] (settings/get settings ::approach-range))
 
 (def job 'jobs.forestry.fell-tree)
 
@@ -168,7 +158,7 @@
   [c radius species]
   (let [ts (vec (take targets/max-targets (candidates c radius species)))]
     (when (seq ts)
-      (let [a (await (targets/nearest! c (mapv :base ts) approach-range {:tag :fell-tree}))]
+      (let [a (await (targets/nearest! c (mapv :base ts) (approach-range) {:tag :fell-tree}))]
         (case (:status a)
           :found (commit-tree! c (nth ts (:index a)))
           :searching :searching
@@ -197,7 +187,7 @@
 (defn blocked!
   "A log that cannot be dug, or a pillar that cannot be taken back: a failed round (:continue), the ending at the third in a row."
   [c text]
-  (if (= :continue (u/fail! c :tree_blocked text))
+  (if-not (u/count-fail! c)
     :continue
     (ctx/end c :nothing-possible :tree-blocked {:text text :logs (:dug (ctx/mem c) 0)})))
 
@@ -286,16 +276,13 @@
     (not (axe-worth-fetching? (:first-logs (ctx/mem c) 0))) :skipped-small-tree
     :else :none-found))
 
-(def at-range "Blocks from the :at column the body walks to when it has not seen the cell." 6)
-(def at-close-range "Blocks it walks to when the cell stayed unseen from at-range (a wall hides the foot)." 2)
-
 (defn ^:async walk-to-at!
   "With :at on a cell the body has not seen, walk to within at-range of it (a go-to child; at-close-range once a look from
   there left it unseen) so the column can be read. :partial while that walk goes on, else nil."
   [c]
   (when-let [at (:at (:args c))]
     (when-not (u/seen-name (:primitives c) at)
-      (let [range (if (:at-looked (ctx/mem c)) at-close-range at-range)]
+      (let [range (settings/get settings (if (:at-looked (ctx/mem c)) ::at-close-range ::at-range))]
         (when (= :partial (await (log/walk-near! c at range))) :partial)))))
 
 (defn no-tree-cause [c]
@@ -320,9 +307,6 @@
     (when-not (:relooked m)
       (filterv #(sense/unknown? (:primitives c) %) (map (fn [{:keys [x y z]}] [x y z]) (:logs-seen m))))))
 
-(def collect-radius 8)
-(def collect-search 4)
-
 (defn ^:async collect-logs!
   "Pick up the drops of the logs dug from the ground (a collect-drops child by their ids, once per tree; it walks round
   the base to look when none is in sight). :continue while it waits on the world, else nil; drops it cannot find are not
@@ -331,7 +315,7 @@
   (let [{:keys [base drop-ids collected]} (ctx/mem c)]
     (when (and (seq drop-ids) (not collected))
       (let [e (await (ctx/call c :collect 'jobs.items.collect-drops
-                               (log/collect-args c {:radius collect-radius :ids drop-ids :near base :search collect-search :least (count drop-ids)})))]
+                               (log/collect-args c {:radius (settings/get settings ::collect-radius) :ids drop-ids :near base :search (settings/get settings ::collect-search) :least (count drop-ids)})))]
         (cond
           (= :continue e) :continue
           (or (= :done (:kind e)) (and (= :nothing-possible (:kind e)) (= :none-collected (contract/cause-key e))))
@@ -397,7 +381,6 @@
       (and (not chosen) (seq (:unreachable (ctx/mem c))))
       (let [why (:unreachable-why (ctx/mem c))
             data (cond-> {:unreachable (count (:unreachable (ctx/mem c))) :columns (vec (:unreachable (ctx/mem c)))} why (assoc :why why))]
-        (ctx/emit! c :tree_blocked :warn (cond-> {:text "no reachable tree"} why (assoc :why why)))
         (ctx/end c :nothing-possible :tree-unreachable data))
 
       (not chosen) (ctx/end c :condition-failed (no-tree-cause c) nil)

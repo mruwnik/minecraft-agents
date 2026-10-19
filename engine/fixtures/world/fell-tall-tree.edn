@@ -15,7 +15,7 @@
  [{:name "twelve-log-tree-felled-from-a-pillar"
    :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 180 :of-job true}
-            {:no-event {:source :job :kind #{:tree_blocked :fell-tree.declined}} :for-s 180 :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind #{:stopped :fell-tree.declined}} :for-s 180 :until {:source :job :kind :completed}}]
    :after [[:not-block [16 11 16] "oak_log"] [:not-block [16 0 16] "oak_log"] [:item "dirt" [:>= 14]]]}
   {:name "maintain-fells-the-tall-tree-by-default"
    :plans [{:id "forest" :metadata {:by "$body"}
