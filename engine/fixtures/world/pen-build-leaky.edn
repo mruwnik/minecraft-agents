@@ -1,5 +1,5 @@
 ;; Card eda1e677 (carded 8e79cb89): jobs.build.pen with a plan whose fence ring has a gap (cell [10 0 12] is not in the plan, and
-;; nothing is placed that the plan does not ask for) ends (with :ways #{:build}, no patch) nothing-possible :leak (data :closed? false), one warn pen-build.leaky naming the leak
+;; nothing is placed that the plan does not ask for) ends (with :ways #{:build}, no patch) nothing-possible :leak (data :closed? false), the stopped event's data names the leak
 ;; (:reason :leak), and no :completed. The ring has a gate at [14 0 12]: the body ends inside it and walks out by the gate (a gateless ring stops :inside). Should-succeed: the full ring closes (:completed, closed). Should-fail: the gap.
 {:defaults
  {:tags [:build :pen] :time :any
@@ -17,7 +17,7 @@
                     {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
    :act [[:job (jobs.build.pen {:plan "$plan:ring" :fetch false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :pen-build.leaky} :for-s 80 :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind :stopped :data {:kind :nothing-possible}} :for-s 80 :until {:source :job :kind :completed}}]
    :after [[:block [10 0 12] "oak_fence"]]}
   {:name "ring-with-a-gap-is-leaky"
    :plans [{:id "ring" :metadata {:by "$body"}
@@ -29,8 +29,8 @@
                     {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
                     {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
    :act [[:job (jobs.build.pen {:plan "$plan:ring" :fetch false :ways #{:build}})]]
-   :expect [{:event {:source :job :kind :pen-build.leaky :data {:reason :leak :leaks [{:why :gap}]}} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 80 :until {:source :job :kind :pen-build.leaky}}]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :leak}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 80 :until {:source :job :kind :stopped}}]
    :after [[:not-block [10 0 12] "oak_fence"] [:item "oak_fence" 2]]}
   ;; Card 3f51b63a: the same ring left to the default ways has the gap patched with a fence of the plan's kind.
   {:name "ring-with-a-gap-is-patched"

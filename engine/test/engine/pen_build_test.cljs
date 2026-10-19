@@ -71,8 +71,7 @@
           (is (= [] (:leaks result)))
           (is (= 8 (get-in result [:built :placed])))
           (is (= "oak_fence_gate" (h/block-at p 3 64 2)))
-          (is (= 1 (count (kinds-of seen :completed))))
-          (is (empty? (kinds-of seen :pen-build.leaky))))))))
+          (is (= 1 (count (kinds-of seen :completed)))))))))
 
 ;; ---------------------------------------------------------------- the contract
 
@@ -122,15 +121,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result seen p] (await (build! (spec kit) {"pen" (ring-plan [[3 64 4]])} {:ways #{:build}}))
-              warns (kinds-of seen :pen-build.leaky)]
+        (let [[result _ p] (await (build! (spec kit) {"pen" (ring-plan [[3 64 4]])} {:ways #{:build}}))]
           (is (= 7 (get-in result [:built :placed])) "everything the plan asks for is placed")
           (is (false? (:closed? result)))
           (is (= :leak (:reason result)))
           (is (= [{:pos {:x 3 :y 64 :z 4} :why :gap}] (:leaks result)))
-          (is (= "air" (h/block-at p 3 64 4)) "nothing is placed that the plan does not ask for")
-          (is (= 1 (count warns)))
-          (is (= (:leaks result) (:leaks (first warns)))))))))
+          (is (= "air" (h/block-at p 3 64 4)) "nothing is placed that the plan does not ask for"))))))
 
 ;; Card 3f51b63a: without :ways #{} the same gap is patched.
 (deftest a-gap-in-the-ring-is-patched-with-a-fence-of-the-plans-kind
@@ -146,10 +142,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world-spec (assoc (spec kit built-pen) :states {"3,64,2" {:open true :facing "north"}})
-              [result seen] (await (build! world-spec {"pen" (ring-plan)} {}))]
+              [result] (await (build! world-spec {"pen" (ring-plan)} {}))]
           (is (= :leak (:reason result)))
-          (is (= [:open-gate] (mapv :why (:leaks result))))
-          (is (= 1 (count (kinds-of seen :pen-build.leaky)))))))))
+          (is (= [:open-gate] (mapv :why (:leaks result)))))))))
 
 ;; ---------------------------------------------------------------- access and materials
 
@@ -159,11 +154,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result seen p] (await (build! (spec kit) {"pen" (ring-plan)} {}
-                                             [(zone "shrine" [4 64 3] [4 64 3] #{})]))]
+        (let [[result _ p] (await (build! (spec kit) {"pen" (ring-plan)} {}
+                                          [(zone "shrine" [4 64 3] [4 64 3] #{})]))]
           (is (= "oak_fence" (h/block-at p 4 64 3)))
-          (is (true? (:closed? result)))
-          (is (empty? (kinds-of seen :pen-build.leaky))))))))
+          (is (true? (:closed? result))))))))
 
 (deftest ignore-zones-builds-without-a-zone-list
   (async done
@@ -178,24 +172,20 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p seen] :as w} (b/start (spec kit) {"pen" (ring-plan) "other" b/other-plan} [])
-              result (:data (await (ending-of w job {:plan "pen"} 300)))
-              [warn] (kinds-of seen :pen-build.leaky)]
+        (let [{:keys [p] :as w} (b/start (spec kit) {"pen" (ring-plan) "other" b/other-plan} [])
+              result (:data (await (ending-of w job {:plan "pen"} 300)))]
           (is (= "air" (h/block-at p 4 64 3)))
           (is (= :leak (:reason result)))
-          (is (= [{:pos [4 64 3] :reason :footprint :plan "other"}] (:refused warn))))))))
+          (is (= [{:pos [4 64 3] :reason :footprint :plan "other"}] (get-in result [:built :refused]))))))))
 
 (deftest too-little-fence-gives-up-naming-what-is-short
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result seen] (await (build! (spec [{:name "oak_fence" :count 4} {:name "oak_fence_gate" :count 1}])
-                                           {"pen" (ring-plan)} {}))
-              [warn] (kinds-of seen :pen-build.leaky)]
+        (let [[result] (await (build! (spec [{:name "oak_fence" :count 4} {:name "oak_fence_gate" :count 1}])
+                                      {"pen" (ring-plan)} {}))]
           (is (= {"oak_fence" 3} (get-in result [:built :short])))
-          (is (= {"oak_fence" 3} (:short warn)))
-          (is (= :leak (:reason result)))
-          (is (= 1 (count (kinds-of seen :pen-build.leaky)))))))))
+          (is (= :leak (:reason result))))))))
 
 ;; ---------------------------------------------------------------- the check
 
@@ -225,11 +215,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (b/start (spec kit (dissoc built-pen "3,64,4")) {"pen" (ring-plan [[3 64 4]])} [])]
-          (core/submit! eng (list job {:plan "pen" :ways #{:build}}) {})
-          (await (tu/run-ticks eng h/clock 6 700))
-          (is (= 1 (count (kinds-of seen :pen-build.leaky))))
-          (is (= [{:pos {:x 3 :y 64 :z 4} :why :gap}] (:leaks (first (kinds-of seen :pen-build.leaky))))))))))
+        (let [w (b/start (spec kit (dissoc built-pen "3,64,4")) {"pen" (ring-plan [[3 64 4]])} [])
+              e (await (ending-of w job {:plan "pen" :ways #{:build}} 300))]
+          (is (= :nothing-possible (:kind e)))
+          (is (= [{:pos {:x 3 :y 64 :z 4} :why :gap}] (get-in e [:data :leaks]))))))))
 
 (deftest a-plan-it-cannot-work-declines-with-one-warn
   (async done

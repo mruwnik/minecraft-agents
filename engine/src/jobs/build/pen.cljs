@@ -1,5 +1,6 @@
 (ns jobs.build.pen
   (:require [engine.args :as a] [jobs.lib.need :as need]
+            [engine.composite :as composite]
             [engine.contract :as contract]
             [clojure.string :as str]
             [engine.ctx :as ctx]
@@ -38,9 +39,8 @@
   :fetch false). Returns, as the data of its ending, {:closed? :reason :cells :leaks :gates :built {:placed :missing
   :short :given-up :wrong :refused}}. :reason is nil when closed, else :leak, :unbounded, :unloaded or :no-start.
   The pen ends with the body outside and the gate shut.
-  Endings: done when the pen holds; nothing-possible with the :reason as cause when it does not
-  (one warn pen-build.leaky naming the leaks {:pos :why} (:gap :open-gate :climb :perch-in :open :unloaded; at most 12) and what
-  the build left (:refused, :given-up, :short)); nothing-possible :inside when the body cannot get out of the finished
+  Endings: done when the pen holds; nothing-possible with the :reason as cause when it does not (the data's :leaks name {:pos :why} (:gap :open-gate :climb :perch-in :open :unloaded; at most 12), and :built what the
+  build left: :refused, :given-up, :short); nothing-possible :inside when the body cannot get out of the finished
   pen. An ending of the builder's can-start? (no data: :no-items, :no-zones) is this job's; a builder that ended
   short or refused after its work (data) goes on to the check, which reports the shortage as leaks with :built. A
   shut-gate child that did not end done is named in the data as :shut.
@@ -214,9 +214,6 @@
 
 ;; ------------------------------------------------------------------ rounds
 
-(defn leak-text [{:keys [pos why]}]
-  (str (name why) " " (pr-str [(:x pos) (:y pos) (:z pos)])))
-
 (def patchable #{:gap :climb})
 
 (defn patch-cells
@@ -237,8 +234,7 @@
   (let [plan (:plan (:args c))
         built (:built (ctx/mem c))
         answer (pen/summary (await (pen-read/read! c (pen-opts c cells))))
-        result (result-of c answer)
-        left (plan/left-text built)]
+        result (result-of c answer)]
     (cond
       (:closed? answer)
       (ctx/end c :done nil (assoc result :text (str "pen of " plan " holds, " (:cells answer) " cells, placed " (:placed built))))
@@ -246,14 +242,7 @@
       (do (ctx/update-mem! c assoc :phase :patch :patched true :patch-queue (patch-cells (:leaks answer)))
           :again)
       :else
-      (do (ctx/emit! c :pen-build.leaky :warn
-                     (merge {:plan plan :reason (:reason answer) :leaks (:leaks answer)
-                             :refused (:refused built) :given-up (:given-up built) :short (:short built)
-                             :text (str "pen of " plan " is not closed (" (name (:reason answer)) "): "
-                                        (str/join ", " (map leak-text (:leaks answer)))
-                                        (when (seq left) (str "; " left)))}
-                            (select-keys answer [:leaks-total])))
-          (ctx/end c :nothing-possible (:reason answer) result)))))
+      (ctx/end c :nothing-possible (:reason answer) result))))
 
 (def tree-endings ["_log" "_wood" "_leaves"])
 
@@ -307,10 +296,10 @@
     (cond
       (or (= :continue r) (= :cut-off (:kind r))) :continue
       (and (= :condition-failed (:kind r)) (= :no-items (get-in r [:cause :reason])) (zero? (get-in r [:data :placed] 0)))
-      (ctx/end c :condition-failed (:cause r) (:data r))
+      (composite/stop c r)
       (or (= :done (:kind r)) (and (:data r) (#{:nothing-possible :condition-failed} (:kind r)))) (do (ctx/update-mem! c assoc :phase :exit :built (:data r))
                                                  :again)
-      :else (ctx/end c (:kind r) (:cause r)))))
+      :else (composite/stop c r))))
 
 (defn exit-cell
   "The cell {:x :y :z} just outside the box beside a gate of cells, or nil without a gate on the box's edge."
