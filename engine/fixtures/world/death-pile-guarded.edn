@@ -1,18 +1,19 @@
 ;; Cards e77e2cf7, 23ce16b8, 6a5f090e, dd69d2c4, 7a063610, 83546641, 51196f7d: an unarmed respawned body weighs a pile a skeleton guards.
-;; The body dies at [26 0 26] (RCON kill), respawns at [4 0 4]; a NoAI skeleton (fire resistant) stands at [22 0 22], in sight of the body, unarmed.
+;; The body dies at [22 0 22] (RCON kill), respawns at [4 0 4]; a NoAI skeleton (fire resistant) stands at [18 0 18], in sight of the body, unarmed.
+;; The pile sits 9 blocks from the island edge: drops roll 6-8 out and a stack that rolls off the edge falls out of the world (card 6a301f4e).
 ;; Danger-only skip is not final: decided :skip :retry, no walk; once the skeleton is gone a :retry run fetches. A known chest with a
 ;; sword and a helmet is emptied first (fetch/stock memory seed) and the trip then goes. A junk pile skips on value alone, no chest trip;
 ;; asked again (card dd69d2c4) the job waits :no-drops naming the skip.
 {:defaults
  {:tags [:survival :death :jobs]
-  :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :effects [["resistance" 600 4]]
+  :body {:at [22.5 0 22.5] :spawnpoint [4 0 4] :effects [["resistance" 600 4]]
          :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
   :mobs :keep
   :act [[:wait-s 1]
         [:kill-body]
         [:await {:source :body :kind :respawned} 30]
         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
-        [:summon "skeleton" [22.5 0 22.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}],ArmorItems:[{},{},{},{id:\"minecraft:iron_helmet\",count:1}]}"]
+        [:summon "skeleton" [18.5 0 18.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}],ArmorItems:[{},{},{},{id:\"minecraft:iron_helmet\",count:1}]}"]
         [:wait-s 2]]
   :limit-s 200}
  :cases
