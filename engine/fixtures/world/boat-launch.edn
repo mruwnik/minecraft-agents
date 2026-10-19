@@ -1,5 +1,5 @@
 ;; Card 84100d49: jobs.movement.boat-launch puts a boat on water and boards it.
-;; Should-succeed: launch with a boat carried (boat.launched, aboard); :board false leaves it on the water.
+;; Should-succeed: launch with a boat carried (completed, aboard); :board false leaves it on the water.
 ;; Should-fail: no water in sight (waits :no-water); a non-boat :item (stopped :bad-args).
 {:defaults
  {:tags [:boats :movement :boat-launch] :time :any
@@ -11,13 +11,13 @@
    :body {:inventory [["oak_boat" 1]]}
    :blocks [[:fill [14 -2 14] [20 -2 18] "stone"] [:fill [14 -1 14] [20 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {})]]
-   :expect [{:event {:source :job :kind :boat.launched :data {:boat "oak_boat"}} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :completed :data {:boat "oak_boat"}} :within-s 60 :of-job true}
             {:event {:source :job :kind :child_ended :data {:slot :mount :ending {:kind :done}}} :within-s 60 :of-job true}]}
   {:name "launch-without-boarding"
    :body {:inventory [["oak_boat" 1]]}
    :blocks [[:fill [14 -2 14] [20 -2 18] "stone"] [:fill [14 -1 14] [20 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-launch {:board false})]]
-   :expect [{:event {:source :job :kind :boat.launched} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :mount}} :for-s 10}]}
   {:name "no-water-waits"
    :body {:inventory [["oak_boat" 1]]}

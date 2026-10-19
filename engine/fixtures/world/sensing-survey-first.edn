@@ -50,8 +50,8 @@
    :blocks [[:fill [12 -2 20] [20 -2 24] "stone"] [:fill [12 -1 20] [20 -1 24] "water"]]
    :body {:inventory [["oak_boat" 1]]}
    :act [[:job (jobs.movement.boat-launch {:board false})]]
-   :expect [{:event {:source :job :kind :boat.launched :data {:boat "oak_boat"}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :no-water}} :for-s 20 :of-job true :until {:source :job :kind :boat.launched}}]}
+   :expect [{:event {:source :job :kind :completed :data {:boat "oak_boat"}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :no-water}} :for-s 20 :of-job true :until {:source :job :kind :completed}}]}
 
   {:name "shear-the-sheep-behind-it"
    :body {:inventory [["shears" 1]]}

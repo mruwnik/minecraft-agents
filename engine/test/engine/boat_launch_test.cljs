@@ -33,8 +33,7 @@
           (is (true? (:boarded res)))
           (is (= 1 (count (boats p))) "one boat in the world")
           (is (nil? (get (lt/inv p) "oak_boat")) "the item is used up")
-          (is (some? (:vehicle (js->clj (.self p) :keywordize-keys true))) "aboard")
-          (is (some #(= :boat.launched (:kind %)) @seen)))))))
+          (is (some? (:vehicle (js->clj (.self p) :keywordize-keys true))) "aboard"))))))
 
 (deftest board-false-leaves-the-boat-on-the-water
   (async done
@@ -161,7 +160,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (st/seeing {:blocks pond})
-              c (assoc (st/stub-ctx p) :args {:radius 12})
+              c (assoc (st/stub-ctx p) :args {})
               cell (await (bl/launch-pos! c))]
           (is (some? cell))
           (is (some #(= :sense.looked (:kind %)) @(:events c)) "it looked at what it had not seen"))))))
@@ -177,7 +176,7 @@
     (is (= [:later :aboard] ((juxt first #(:reason (nth % 2))) (bl/aboard (c {})))))))
 
 (deftest no-water-is-a-condition-that-asks-for-a-look
-  (let [c (fn [world] (assoc (st/stub-ctx (:p (lt/setup world))) :args {:radius 12}))]
+  (let [c (fn [world] (assoc (st/stub-ctx (:p (lt/setup world))) :args {}))]
     (is (= :ok (first (bl/no-water (c {:blocks pond})))))
     (is (= [:look :no-water] ((juxt first #(:reason (nth % 2))) (bl/no-water (c {})))))
     (is (= [:look :no-room] ((juxt first #(:reason (nth % 2))) (bl/no-water (c {:blocks channel})))))))
@@ -190,7 +189,7 @@
 (def placed-boat {:id 9 :name "oak_boat" :uuid "u-9" :kind "other" :pos {:x 5.5 :y 63 :z 0.5}})
 
 (deftest done-is-ok-once-the-boat-is-down-and-boarded
-  (are [world args mem kind] (= kind (first (done-of world (assoc args :radius 12) mem)))
+  (are [world args mem kind] (= kind (first (done-of world args mem)))
     {:blocks pond} {:board true} {} :later
     {:blocks pond :entities [placed-boat]} {:board true} {:placed {:id 9}} :later
     {:blocks pond :entities [placed-boat] :self {:vehicle 9}} {:board true} {:placed {:id 9}} :ok

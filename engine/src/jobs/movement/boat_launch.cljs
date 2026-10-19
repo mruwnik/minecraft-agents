@@ -17,12 +17,12 @@
   "Put a boat on the water and get in it.
 
   The boat item is :item, else the first carried boat or raft; none carried is fetched (jobs.blocks.place :fetch, oak_boat).
-  The water cell is :pos, else the nearest water in sight (:radius) that has air above it and room round it for the boat (no bank block within a cell).
+  The water cell is :pos, else the nearest water in sight (::radius) that has air above it and room round it for the boat (no bank block within a cell).
   jobs.blocks.place puts the boat down (it walks into reach); then, with :board, jobs.movement.mount boards it. The placed boat is
   remembered, so a restart boards it rather than placing another; a remembered boat seen gone is replaced by a new one.
   Impossible: :bad-args (:item is no boat, :pos names no cell). Conditions at the start: :aboard (already on a vehicle), :no-water (none in sight),
   :no-room (water in sight, none with room for a boat); the engine looks round once first. A listed call waits on them.
-  Done once the boat is down and, with :board, the body is aboard it (data {:id :boat name :pos :boarded bool}), info boat.launched, or
+  Done once the boat is down and, with :board, the body is aboard it (data {:id :boat name :pos :boarded bool}), or
   condition-failed: :place-failed with the place's ending as the :because (its :need, :not-allowed, :no-support, :occupied ...) when that was a condition, else
   nothing-possible :place-failed (the because says why, :unreachable too), or
   nothing-possible: :no-boat (the placed boat is not in sight and its place was not seen), :board-failed (mount's ending is the :because), or
@@ -33,8 +33,7 @@
 (a/defargs args
   {:pos {:doc "the water cell to put the boat on, [x y z] or {:x :y :z}; nil: the nearest suitable water in sight" :spec ::a/pos :default nil}
    :item {:doc "the boat item to place; nil: the first carried boat or raft" :spec a/item? :default nil}
-   :board {:doc "get in once it is down" :spec boolean? :default true}
-   :radius {:doc "how far to look for water" :spec (a/num-in 0 nil) :default 12}})
+   :board {:doc "get in once it is down" :spec boolean? :default true}})
 
 (def target [:pos])
 
@@ -44,8 +43,10 @@
 (def defaults {:spend {:job-time ::job-time-s}})
 
 (a/defargs settings
-  {::job-time-s {:default 120 :doc "Seconds a launch may take." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 120 :doc "Seconds a launch may take." :spec (a/num-in 0 nil)}
+   ::radius {:default 12 :doc "How far the boat jobs (launch, land, recover) look for water, a shore or a boat." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
+(defn radius [] (settings/get settings ::radius))
 
 (def default-item "oak_boat")
 (def launch-s "Seconds a launch takes without a walk, for the quote." 4)
@@ -56,11 +57,11 @@
   (some #(when (boat-name? (:name %)) (:name %)) (u/inventory (:primitives c))))
 
 (defn boats-in-sight
-  "The boats and rafts in sight within :radius, nearest first, as entity maps."
+  "The boats and rafts in sight within ::radius, nearest first, as entity maps."
   [c]
   (let [p (:primitives c)
         me (u/self-pos c)]
-    (->> (look/seen-entities p {:radius (:radius (:args c)) :max 64})
+    (->> (look/seen-entities p {:radius (radius) :max 64})
          (filter #(and (boat-name? (:name %)) (:pos %)))
          (sort-by #(u/dist me (:pos %))))))
 
@@ -80,9 +81,9 @@
                  ring)))
 
 (defn water-cells
-  "The water cells in sight within :radius, nearest first."
+  "The water cells in sight within ::radius, nearest first."
   [c]
-  (map :pos (look/seen-blocks (:primitives c) {:names ["water"] :radius (:radius (:args c)) :max 128 :live? true})))
+  (map :pos (look/seen-blocks (:primitives c) {:names ["water"] :radius (radius) :max 128 :live? true})))
 
 (defn find-water
   "The nearest water cell in sight that has room for a boat, or nil. A bank cell not seen yet reads as air (noted as a guess)."
@@ -170,13 +171,12 @@
       (= :continue m) :continue
       (not= :done (:kind m)) (ctx/end c :nothing-possible :board-failed {:id id :pos cell})
       :else
-      (do (ctx/emit! c :boat.launched :info {:id id :boat (:name boat) :pos cell :text (str "launched " (:name boat))})
-          (ctx/end c :done nil {:id id :boat (:name boat) :pos cell :boarded true})))))
+      (ctx/end c :done nil {:id id :boat (:name boat) :pos cell :boarded true}))))
 
 (defn ^:async walk-to-remembered!
-  "The remembered boat is beyond :radius, so its cell was only remembered, not seen: walk close enough to look (one go-to call), then a later round decides."
+  "The remembered boat is beyond ::radius, so its cell was only remembered, not seen: walk close enough to look (one go-to call), then a later round decides."
   [c cell]
-  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos cell :range (max 1 (- (:radius (:args c)) 2)) :ways #{:walk :clear-seal}}))]
+  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos cell :range (max 1 (- (radius) 2)) :ways #{:walk :clear-seal}}))]
     (if (= :continue r)
       :continue
       (if (and (= :done (:kind r)) (:arrived (:data r)))
@@ -189,7 +189,7 @@
         item (or item (carried-boat c) default-item)
         saved (:placed (ctx/mem c))
         unsighted? (and saved (nil? (first (filter #(= (:id saved) (:id %)) (boats-in-sight c)))))
-        near? (and saved (<= (u/dist (u/self-pos c) (:pos saved)) (:radius (:args c))))
+        near? (and saved (<= (u/dist (u/self-pos c) (:pos saved)) (radius)))
         gone? (and unsighted? near? (some? (u/seen-name p (:pos saved))))
         remembered (when-not gone? saved)
         cell (or (:pos remembered) (await (launch-pos! c)))]
@@ -216,8 +216,7 @@
               (do (ctx/update-mem! c assoc :placed {:id (:id boat) :pos cell})
                   (if board
                     (await (board! c boat cell))
-                    (do (ctx/emit! c :boat.launched :info {:id (:id boat) :boat (:name boat) :pos cell :text (str "put " (:name boat) " on the water")})
-                        (ctx/end c :done nil {:id (:id boat) :boat (:name boat) :pos cell :boarded false})))))))))))
+                    (ctx/end c :done nil {:id (:id boat) :boat (:name boat) :pos cell :boarded false}))))))))))
 
 (defn ^:async round [c]
   (await (launch! c)))
