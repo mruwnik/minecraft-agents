@@ -87,6 +87,11 @@
   (let [res (merge {:taken (:taken (ctx/mem c) {})} extra)]
     (ctx/end c (if (failed-conditions reason) :condition-failed :nothing-possible) reason res)))
 
+(def unlit-ok
+  "Call keys for the corridor's own walks and digs: it hangs a torch before it works in the dark (torch-due?), so darkness
+  is no reason to wait and only a threat holds them."
+  {:checks {:safe? '(not (threatened))}})
+
 (defn torch-spot
   "A cell beside the centre line at the feet's height or a step along it, free, whose floor is not seen open: where a torch stands. nil when none."
   [block-at axis [x y z]]
@@ -106,7 +111,7 @@
   (let [p (:primitives c)
         spot (torch-spot (access/seen-at p) (:axis seg) feet)
         o (cond (nil? spot) :no-spot
-                :else (await (b/place-cell! c (zipmap [:x :y :z] spot) "torch" (select-keys (:args c) [:ignore-zones?]))))]
+                :else (await (b/place-cell! c (zipmap [:x :y :z] spot) "torch" (merge unlit-ok (select-keys (:args c) [:ignore-zones?])))))]
     (case o
       :continue :continue
       :no-spot (do (ctx/update-mem! c update :torches (fnil conj []) feet) :again)
@@ -115,7 +120,7 @@
       (stop! c :torch-failed {:child o :cell spot}))))
 
 (defn ^:async loot! [c id]
-  (let [e (await (ctx/call c :cart 'jobs.strip.loot-cart {:id id}))]
+  (let [e (await (ctx/call c :cart 'jobs.strip.loot-cart (assoc unlit-ok :id id)))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) :again
@@ -158,7 +163,7 @@
 
 (defn ^:async dig! [c {:keys [pos class]}]
   (let [cell [(:x pos) (:y pos) (:z pos)]
-        o (await (b/dig-cell! c pos (merge {:collect true :need-drop (not= :spawner class)} (select-keys (:args c) [:ignore-zones?]))))]
+        o (await (b/dig-cell! c pos (merge {:collect true :need-drop (not= :spawner class)} unlit-ok (select-keys (:args c) [:ignore-zones?]))))]
     (case o
       :continue :continue
       (:dug :missing) (do (ctx/update-mem! c #(-> % (update :dug (fnil conj []) cell) (update-in [:taken class] (fnil inc 0)))) :again)
@@ -220,7 +225,7 @@
         seen? #(let [[x cy z] (strip/at axis y line %)] (reach/seen-standable? (:primitives c) {:x x :y cy :z z}))
         stop-at (walk-stop seen? here far)
         cell (strip/at axis y line stop-at)
-        w (await (near/go-near! c cell (walk-range stop-at far)))]
+        w (await (near/go-near! c cell (walk-range stop-at far) {:checks (:checks unlit-ok)}))]
     (case w
       :partial :continue
       ;; no floor beyond was ever seen and go-to will not walk there: what can be seen from here is all there is
