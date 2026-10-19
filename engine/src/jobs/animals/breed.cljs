@@ -8,6 +8,7 @@
             [jobs.lib.animals :as animals]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
+            [jobs.lib.pace :as pace]
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]))
 
@@ -29,7 +30,7 @@
   - Given up: :unreachable (walk blocked, or two feedings out of reach), :gone, :cannot, :failed, or :baby
     (the food was eaten without love; a baby the sensing missed, warn breed.baby).
 
-  Ends with a warn breed.gave-up unless the reason is :fed. The data {:reason :fed [keys]
+  The data {:reason :fed [keys]
   :refused [keys] :given-up {key reason} :food item :adults n :babies n :hand} and the ending by the reason:
   - :done :fed: :count animals were fed. Any stop after at least :least animals were fed (default 2: a pair) is
     done, with the stop as the data reason (warn breed.gave-up); :least :all is :count.
@@ -72,7 +73,7 @@
   {::job-time-s {:default 120 :doc "Seconds of working, fetching included, before breeding gives up." :spec (a/num-in 0 nil)}
    ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::calf-wait-s {:default 4 :doc "Seconds to wait for the calf to be seen after a pair was fed, before the count of babies is reported." :spec (a/num-in 0 nil)}
-   ::max-in-row {:default 3 :doc "Animals handled in a row before the body looks again." :spec (a/int-in 0 nil)}})
+   ::max-in-row {:default 3 :doc "Animals in a row that brought nothing (refused, given up on) before the run ends." :spec (a/int-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn max-in-row [] (settings/get settings ::max-in-row))
 (defn calf-wait-ms [] (* 1000 (settings/get settings ::calf-wait-s)))
@@ -101,7 +102,7 @@
   {:uses {:job-time [0 (* 15 (:count (:args c) 2)) ##Inf]}})
 
 (defn done?
-  "Later with the animals fed against :count: the hand is put back by the run's own ending, so the goal never holds before it."
+  "Later with the animals fed against :count: the goal is the run's own ending, so it never holds before it."
   [c]
   (let [fed (count (:fed (ctx/mem c)))]
     (contract/later :feeding (str fed " animals fed") :units :animals :done fed :left (max 0 (- (:count (:args c) 2) fed)))))
@@ -181,11 +182,8 @@
                 :food (or (animals/food-carried p mob) (:food m))
                 :adults (count (animals/adults p mob radius))
                 :babies (count (animals/babies p mob radius))}
-        seen (str "adults " (:adults result) ", babies " (:babies result))
-        result (assoc result :text (str "breed done: " (name reason) ", fed " (count (:fed m)) ", " seen))]
+        result (assoc result :text (str "breed done: " (name reason) ", fed " (count (:fed m)) ", adults " (:adults result) ", babies " (:babies result)))]
     (mark-bred! c)
-    (when (not= :fed reason)
-      (ctx/emit! c :breed.gave-up :warn {:reason reason :text (str "breeding stopped: " (name reason) " (" seen ")")}))
     (if ending
       (assoc ending :data result)
       (let [[kind cause] (if (>= (count (:fed m)) (least-fed c))
@@ -369,14 +367,12 @@
       :else (await (engage! c (first cands) food)))))
 
 (defn ^:async round
-  "The whole attempt: walk and feed until the job ends."
+  "The whole attempt: steps (a pace between; can-run? is asked between them) until the job ends."
   [c]
   (animals/reserve-bait! c (:mob (:args c)))
   (if-let [r (:ending (ctx/mem c))]
     (await (leave-pen! c r))
-    (let [r (loop []
-              (let [r (await (step c))]
-                (if (= :again r) (recur) r)))]
+    (let [r (await (pace/steps! c #(step c)))]
       (if (contract/ending? r)
         (do (ctx/update-mem! c assoc :ending r)
             (await (leave-pen! c r)))

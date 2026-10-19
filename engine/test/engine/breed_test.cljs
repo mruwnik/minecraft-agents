@@ -105,8 +105,7 @@
           (is (= :fed (:reason (done-event s))))
           (is (= ["u1" "u2"] (:fed (done-event s))))
           (is (= 0 (count-of s "wheat")))
-          (is (= ["wheat" "wheat"] (mapv #(.-item (.-args %)) (interacts s))))
-          (is (empty? (events-of s :breed.gave-up))))))))
+          (is (= ["wheat" "wheat"] (mapv #(.-item (.-args %)) (interacts s)))))))))
 
 (defn bred-entry [{:keys [eng]} mob]
   (mem/latest (mem/view (:store eng)) (keyword "bred" mob)))
@@ -188,21 +187,12 @@
             (is (= :bees-indoors (:reason (first (events-of s :waiting)))) label)
             (is (empty? (interacts s)) label)))))))
 
-(deftest the-done-text-and-warn-name-the-adults-and-babies-seen
+(deftest the-done-text-names-the-adults-and-babies-seen
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3 {:baby true})]} 4))]
-          (is (= "breed done: too-few, fed 0, adults 1, babies 1" (:text (done-event s))))
-          (is (= "breeding stopped: too-few (adults 1, babies 1)" (:text (first (events-of s :breed.gave-up))))))))))
-
-(deftest unfed-reasons-warn
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2)]} 4))]
-          (is (= [:too-few] (mapv :reason (events-of s :breed.gave-up))))
-          (is (= :warn (:level (first (events-of s :breed.gave-up))))))))))
+          (is (= "breed done: too-few, fed 0, adults 1, babies 1" (:text (done-event s)))))))))
 
 (deftest feeds-only-the-ready-animals
   (async done
