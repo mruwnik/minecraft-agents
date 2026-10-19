@@ -199,6 +199,7 @@
 (def defaults {:spend {:job-time ::job-time-s} :least 1 :use {:tools :dig}})
 
 (def can-start? (cond/and bad-args not-loaded refused no-tool-unfetched))
+(def can-run? refused)
 
 (defn done?
   "Ok when the cell is air and no dug block of this call is still to seal or collect (the cleanup does the
@@ -410,7 +411,7 @@
           (not (#{:nothing-possible :condition-failed} (:kind w))) w
           (>= (inc @fails) (max-walks)) (unreachable! c (or (:why (:data w)) (when (map? (:cause w)) (:why (:cause w))) (contract/cause-key w)))
           :else (do (swap! fails inc) :again)))
-      (problem c) (ctx/end c :condition-failed (problem c))
+      (problem c) (if (ctx/returns-on-later? c) (ctx/end c :condition-failed (problem c)) :continue)
       (and (access/under-feet? (access/may-dig? (b/rules-in c) pos)) (not (contains? (set (:accept (:args c))) :under-feet)))
       (let [_ (note-under-feet! c pos :step-aside)
             r (await (step-aside! c pos))]

@@ -234,7 +234,7 @@
           (is (= {} (:given-up result)))
           (is (= 1 (:placed result))))))))
 
-(deftest an-unseen-floor-with-nothing-carried-is-looked-at-then-ends-short-never-waits
+(deftest an-unseen-floor-with-nothing-carried-is-looked-at-then-the-check-says-no-items
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -243,10 +243,10 @@
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref h/clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref h/clock)})
                                 :world (world/of-data {"pen" (pen-plan)} {} [])})
-              result (await (child-outcome eng job {:plan "pen" :fetch false} 200))]
+              result (await (child-outcome eng job {:plan "pen" :fetch false} 60))]
           (is (seq (h/calls p "look")))
-          (is (= {"oak_fence" 7 "oak_fence_gate" 1 "torch" 1} (:short result)))
-          (is (empty? (h/events-of seen :waiting))))))))
+          (is (= :no-items (:reason result)))
+          (is (= 0 (count (h/calls p "place")))))))))
 
 (defn declines
   "Submit the job with args over the world spec and plans, tick a few times: [places, build.declined warns]."

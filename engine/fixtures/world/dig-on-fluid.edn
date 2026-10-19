@@ -13,9 +13,8 @@
    :blocks [[:set [17 0 16] "stone"] [:set [17 1 16] "stone"]]
    :body {:at [17.5 2 16.5]}
    :act [[:job (jobs.blocks.dig {:pos #at [18 0 16]})]]
-   ;; waits when the water was already seen at the start, else the round looks first and ends :stopped on the same hazard
-   :expect [{:event {:source :job :kind #{:waiting :stopped} :data {:reason :hazard}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 30}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :hazard}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind #{:completed :stopped}} :for-s 30 :until {:source :job :kind :waiting :data {:reason :hazard}}}]
    :after [[:block [18 0 16] "stone"]]}
   {:name "fail-ends-at-once-with-hint"
    :blocks [[:set [17 0 16] "stone"] [:set [17 1 16] "stone"]]

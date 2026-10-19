@@ -16,6 +16,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]
+            [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.lib.storage :as storage]
             [jobs.lib.watch :as watch]
@@ -139,22 +140,39 @@
       later? (contract/later :plan-trouble trouble :why trouble)
       :else (contract/never :plan-trouble trouble :why trouble))))
 
+(def look-range "Cells farther than this from the eye are walked to, not looked at: they may be unloaded, which a look cannot tell." 16)
+
+(defn no-items-cause
+  "Why there is nothing to build, dig, fetch or look at: the cells' items are not carried and no fetch is due. While the
+  cells are unseen but all unknown and within look-range, the cause carries :look-at them: the verdict waits for a look."
+  [c]
+  (let [closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
+        cached (judged-plan c)
+        ;; a look just made the cached cells stale, so unseen ones are judged afresh
+        {:keys [cells trouble]} (if (seq (unseen (:cells cached) closed)) (planned c) cached)
+        carried (storage/carried-totals (u/inventory (:primitives c)))
+        hidden (unseen cells closed)
+        cells-of (mapv :pos hidden)]
+    (when-not (or trouble
+                  (empty? (owed cells))
+                  (seq (buildable cells carried {}))
+                  (seq (digging cells)))
+      (let [here (u/self-pos c)
+            near (filter #(and (<= (u/eye-dist here %) look-range) (sense/unknown? (:primitives c) %)) (sense/targets (:primitives c) here cells-of #{}))]
+        (cond
+          (and (seq hidden) (not= (count near) (count cells-of))) nil
+          (and (empty? hidden) (some? (need-of c cells))) nil
+          :else (cond-> {:reason :no-items :plan (:plan (:args c)) :part (:part (:args c))
+                         :needs (into {} (shortage (owed cells) carried))}
+                  (seq hidden) (assoc :look-at (vec near))))))))
+
 (def no-items
   "Later :no-items {:plan :part :needs} when there is nothing to build, dig, fetch or look at: the cells' items are
-  not carried and no fetch is due."
-  (checks/refusing
-   :items "there is something to build"
-   (fn [c]
-     (let [{:keys [cells trouble]} (judged-plan c)
-           carried (storage/carried-totals (u/inventory (:primitives c)))]
-       (when-not (or trouble
-                     (empty? (owed cells))
-                     (seq (buildable cells carried {}))
-                     (seq (digging cells))
-                     (seq (unseen cells (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))))
-                     (some? (need-of c cells)))
-         {:reason :no-items :plan (:plan (:args c)) :part (:part (:args c))
-          :needs (into {} (shortage (owed cells) carried))})))))
+  not carried and no fetch is due; a :look first while unseen cells are all within look-range."
+  (fn [c]
+    (if-let [cause (no-items-cause c)]
+      (checks/cause-status (if (:look-at cause) :look :later) cause)
+      (contract/ok :items "there is something to build"))))
 
 (def can-start? (cond/and plan-problem no-items))
 (def can-run? plan-problem)
