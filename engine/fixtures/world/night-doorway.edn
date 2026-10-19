@@ -41,7 +41,7 @@
    :body {:at [13.5 0 13.5] :inventory [["red_bed" 1] ["oak_door" 1]]}
    :act [[:job (jobs.survival.night)]
          [:await {:source :job :kind :night.bed-placed} 120]]
-   :expect [{:event {:source :job :kind :completed :data {:placed true :item "oak_door" :reason :placed}} :within-s 90}
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :place :ending {:data {:placed true :item "oak_door" :reason :placed}}}} :within-s 90}
             {:event {:source :job :kind :night.bed-placed} :within-s 120 :of-job true}]
    :after [[:item "red_bed" 0] [:item "oak_door" 0]]
    :limit-s 140}

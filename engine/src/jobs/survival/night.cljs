@@ -215,13 +215,15 @@
 (defn ^:async enter-room!
   "jobs.survival.enter-room (into the :place if given: walks, shuts its doors, fills its doorway or roof hole); :again. A
   walk is made once a night: once its call ends, :roof-walk-failed is set whatever came of it (a body that got in is roofed, and
-  no walk is wanted)."
+  no walk is wanted). A doorway gap still open after a call without a place (nothing to fill it with) is :doorway-tried."
   [c place]
   (hold/busy! c)
   (let [w (await (ctx/call c :enter-room 'jobs.survival.enter-room (cond-> {:roof-height (:roof-height (:args c))}
                                                                      place (assoc :place place))))]
     (when (and place (not= :continue w))
       (ctx/update-mem! c assoc :roof-walk-failed true))
+    (when-let [g (and (nil? place) (not= :continue w) (room-lib/gap c))]
+      (ctx/remember! c :doorway-tried (first g) room-lib/doorway-tried-policy))
     :again))
 
 (defn ^:async hold-exposed!
