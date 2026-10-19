@@ -20,3 +20,8 @@
 
 (deftest a-finished-walk-leaves-no-goal
   (is (nil? (goal/interrupted-goal (view-of {"j1" {:children {:go {:goal goal-a}}}}) "j9")) "no :open, no cut walk"))
+
+(deftest an-errands-walk-is-not-the-destination
+  (let [v (view-of {"j1" {:job "jobs.survival.chop" :children {:go {:open 1 :goal goal-a}}}
+                    "j2" {:job "jobs.access.cleanup" :children {:go {:open 2 :goal {:x 0 :y 0 :z 0}}}}})]
+    (is (= goal-a (goal/interrupted-goal v "j9")) "the cleanup walk, though written last, is skipped")))

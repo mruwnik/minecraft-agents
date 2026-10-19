@@ -191,10 +191,10 @@
          written)))))
 
 (defn create-job!
-  "The memory of a newly listed instance: {:args args :children {} :queued-t now}; :queued-t stays when the entry's
-  own time moves on, so a condition can tell what came after the submit."
-  [store id args]
-  (write! store (job-kind id) {:args args :children {} :queued-t (:now (view store))} job-policy))
+  "The memory of a newly listed instance: {:job label :args args :children {} :queued-t now}; :queued-t stays when the entry's
+  own time moves on, so a condition can tell what came after the submit; :job names the spec (jobs.lib.goal reads it)."
+  [store id label args]
+  (write! store (job-kind id) {:job label :args args :children {} :queued-t (:now (view store))} job-policy))
 
 (defn update-job!
   "Apply (f current & args) to the sub-map at slots of job root-id."

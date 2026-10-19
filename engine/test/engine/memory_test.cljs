@@ -123,8 +123,8 @@
 
 (deftest job-memory-is-one-forever-entry-under-job-id
   (let [[s clock] (store)]
-    (mem/create-job! s "j7" {:species :oak})
-    (is (= {:args {:species :oak} :children {} :queued-t @clock} (mem/job-mem (mem/view s) "j7" []))
+    (mem/create-job! s "j7" "jobs.x" {:species :oak})
+    (is (= {:job "jobs.x" :args {:species :oak} :children {} :queued-t @clock} (mem/job-mem (mem/view s) "j7" []))
         "the queue time is kept in the entry")
     (mem/update-job! s "j7" [] assoc :phase :fell)
     (mem/update-job! s "j7" [:fell] assoc :tree-base [12 64 -30])
@@ -141,7 +141,7 @@
 
 (deftest delete-job-takes-the-subtree
   (let [[s] (store)]
-    (mem/create-job! s "j3" {})
+    (mem/create-job! s "j3" "jobs.x" {})
     (mem/update-job! s "j3" [:a] assoc :x 1)
     (mem/delete-job! s "j3")
     (is (nil? (get-in (:data @s) [:entries :job/j3])))
@@ -150,8 +150,8 @@
 (deftest the-sweep-drops-job-kinds-not-on-the-list
   (let [live (atom #{"j1"})
         [s _ dir] (store {:live-jobs #(deref live)})]
-    (mem/create-job! s "j1" {})
-    (mem/create-job! s "j2" {})
+    (mem/create-job! s "j1" "jobs.x" {})
+    (mem/create-job! s "j2" "jobs.x" {})
     (mem/save! s)
     (is (= #{:job/j1} (set (keys (get-in (on-disk dir) [:entries])))))))
 

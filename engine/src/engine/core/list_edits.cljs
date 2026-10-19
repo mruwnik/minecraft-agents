@@ -104,7 +104,7 @@
                              now? (insert-now s id)
                              next? (insert-next s id)
                              :else (update s :list conj id))))
-    (mem/create-job! (:store eng) id args)
+    (mem/create-job! (:store eng) id (expr/label node) args)
     (save-memory! eng)
     (emit! eng (cond-> {:source :job :kind :queued :level :info :job id :chain [id] :name (expr/label node)
                         :spec (pr-str spec) :by by}

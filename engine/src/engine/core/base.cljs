@@ -212,9 +212,9 @@
    (save-file! eng (mem/file (:dir eng)) #(mem/save! (:store eng) force?))))
 
 (defn job-memory
-  "Job id's memory, without the engine's :contract tally and :queued-t."
+  "Job id's memory, without the engine's :contract tally, :queued-t and :job."
   [eng id]
-  (dissoc (mem/job-mem (mem/view (:store eng)) id []) :contract :queued-t))
+  (dissoc (mem/job-mem (mem/view (:store eng)) id []) :contract :queued-t :job))
 
 (defn cut-off!
   "Emit job.child_ended :cut-off for every started contract frame among the children of the frame m (job memory)

@@ -8,13 +8,13 @@
 ;; ------------------------------------------------------------------ job memory
 
 (defn without-tally
-  "m, a job's memory map, without the engine's :contract tally and :queued-t, its children's included."
+  "m, a job's memory map, without the engine's :contract tally, :queued-t and :job (children included)."
   [m]
-  (cond-> (dissoc m :contract :queued-t)
+  (cond-> (dissoc m :contract :queued-t :job)
     (:children m) (update :children update-vals without-tally)))
 
 (defn mem
-  "This job's memory map (its sub-map, for a child), without the engine's :contract tally and :queued-t."
+  "This job's memory map (its sub-map, for a child), without the engine's :contract tally, :queued-t and :job."
   [ctx]
   (without-tally (mem/job-mem ((:view ctx)) (:root ctx) (:slots ctx))))
 

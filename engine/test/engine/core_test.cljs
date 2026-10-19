@@ -156,9 +156,9 @@
 
 (defn listed [eng] (:list (core/state eng)))
 (defn job-mem
-  "A job's memory without the engine's :args, :children, :queued-t and :contract keys."
+  "A job's memory without the engine's :job, :args, :children, :queued-t and :contract keys."
   ([eng id] (job-mem eng id []))
-  ([eng id slots] (dissoc (mem/job-mem (mem/view (:store eng)) id slots) :args :children :queued-t :contract)))
+  ([eng id slots] (dissoc (mem/job-mem (mem/view (:store eng)) id slots) :job :args :children :queued-t :contract)))
 
 (defn memory-on-disk [dir]
   (reader/read-string (fs/readFileSync (path/join dir "memory.edn") "utf8")))

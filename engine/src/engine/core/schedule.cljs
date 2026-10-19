@@ -157,7 +157,7 @@
                           :job id :interrupted (:id h) :text (reflex-text (:id entry) node)})]
     (when h (cut! eng h (:id entry) fired))
     (swap! (:state eng) add-instance id node {:reflex (:id entry)})
-    (mem/create-job! (:store eng) id (second (job-of eng {:spec node})))
+    (mem/create-job! (:store eng) id (expr/label node) (second (job-of eng {:spec node})))
     (start-round! eng id)))
 
 (defn wait-cap-ms
