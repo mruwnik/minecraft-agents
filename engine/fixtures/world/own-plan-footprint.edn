@@ -94,7 +94,7 @@
    :plans [{:id "hut" :metadata {:by "$body"}
             :parts [{:id "wall" :cells [#at [17 0 16] #at [17 1 16] #at [17 2 16] #at [17 3 16]] :want [:any "stone"]}]}]
    :blocks [[:fill [10 0 10] [22 3 22] "stone"] [:fill [16 0 16] [16 3 16] "air"]]
-   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 1 :settings {:jobs.movement.go-to.tuning/spare-own-builds false}})]]
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 1 :spare-own-builds false})]]
    :expect [{:event {:source :job :kind :stair.done} :within-s 60 :of-job true}]
    :after [[:block [17 1 16] "air"]]
    :limit-s 90}
