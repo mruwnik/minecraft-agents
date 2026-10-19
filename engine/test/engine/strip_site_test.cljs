@@ -59,20 +59,18 @@
 
 (defn smelt-stub
   "jobs.items.smelt over a furnaces atom {furnace {:phase :cooking|:ready :item :count}}: the first call loads and yields, the
-  condition fails :cooking until the furnace is :ready, then the next call gives the ingots; :fail makes it stop with that reason."
+  call yields (and is not booked) until the furnace is :ready, then the next call gives the ingots; :fail makes it stop with that reason."
   [p calls furnaces fail]
   (let [key-of (comp pr-str :furnace :args)]
     (assoc (dissoc (get registry/jobs 'jobs.items.smelt) :target :done? :quote-of)
-           :can-run? #(if (= :cooking (:phase (get @furnaces (key-of %))))
-                          (contract/later :cooking "cooking")
-                          (contract/ok :ready "ready"))
            :round (fn ^:async smelt-round [c]
-                    (swap! calls conj ['jobs.items.smelt (:args c)])
+                    (when-not (= :cooking (:phase (get @furnaces (key-of c))))
+                      (swap! calls conj ['jobs.items.smelt (:args c)]))
                     (let [{:keys [furnace item count]} (:args c)
                           state (get @furnaces (key-of c))]
                       (cond
                         fail (ctx/end c :nothing-possible fail)
-                        (= :cooking (:phase state)) (ctx/end c :condition-failed :cooking)
+                        (= :cooking (:phase state)) :continue
                         (nil? state)
  (do (swap! (fake/state p) update :inventory (fn [inv] (mapv #(if (= item (:name %)) (update % :count - count) %) inv)))
                                          (swap! furnaces assoc (key-of c) {:phase :cooking :item item :count count})

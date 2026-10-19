@@ -339,8 +339,8 @@
   "One round of contract job def: an ending, or :continue. A goal that holds ends it :done (:already before the start),
   whatever its checks say but a can-start? :never :bad-args (a done? that throws is told with job.done_failed and counts
   as not done); else a :never ends it impossible. A :later from its can-start? keeps a listed job
-  not started queued, else ends it condition-failed; one from can-run? yields (a reflex ends condition-failed: it runs
-  one round; a called child tells its caller's wait with the status). The round's ctx asks done? and can-run? between
+  not started queued, else ends it condition-failed; one from can-run? yields a listed root job; a reflex and a called child end condition-failed
+  with the status as cause (ctx/returns-on-later?), and the caller decides. The round's ctx asks done? and can-run? between
   steps (ctx/done, ctx/can-run)."
   [def c]
   (let [asked (take-asked! c)
@@ -359,9 +359,7 @@
        done? (done-ending d fresh?)
        (= :never (first s)) (contract/ending :impossible (contract/status-cause s) nil)
        (= :later (first start-s)) (if (stays-listed? c) :continue (failed start-s))
-       (= :later (first run-s)) (cond (:reflex c) (failed run-s)
-                                      (seq (:slots c)) (do (some-> (:child-wait c) (reset! (contract/status-cause run-s))) :continue)
-                                      :else :continue)
+       (= :later (first run-s)) (if (ctx/returns-on-later? c) (failed run-s) :continue)
        :else (if-let [floor (when-not (started? c) (limits/floor-cause c #(first (call-of c def))))]
                (counted (contract/ending :condition-failed floor nil))
                (await (started-round def (assoc c :can-run #(contract/verdict c (select-keys def [:can-run?]))

@@ -155,7 +155,7 @@
 
 ;; ------------------------------------------------------------------ a child go-to
 
-(deftest a-child-go-to-out-of-the-hut-yields-at-night
+(deftest a-child-go-to-out-of-the-hut-ends-condition-failed-at-night
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -174,7 +174,7 @@
           (await (ticks eng 4))
           (is (= inside (st/pos-of p)))
           (is (seq @rounds))
-          (is (every? #{:continue} @rounds) "the child yields")
+          (is (= [:condition-failed :exposed] [(:kind (first @rounds)) (:reason (:cause (first @rounds)))]) "the child ends at once with the reason; the parent decides")
           (is (empty? (st/emitted seen :go-to.night-sheltered)) "go-to says nothing of its own"))))))
 
 (deftest a-parent-walking-with-walk-into-shows-the-night-wait

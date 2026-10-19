@@ -1000,7 +1000,7 @@
           (is (= :stopped (:status r)))
           (is (= 0 (:smelted r))))))))
 
-(deftest a-batch-waits-with-its-active-childs-cooking-reason
+(deftest a-batch-yields-while-its-active-child-cooks
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1018,8 +1018,7 @@
 (deftest smelt-exports-the-contract
   (let [job (get registry/jobs 'jobs.items.smelt)]
     (is (some? (:can-start? job)))
-    (is (some? (:can-run? job)))
-    (is (nil? (:check job)) "no old check: cooking is the can-run? wait")
+    (is (nil? (:check job)) "no old check")
     (is (= [:item] (:target job)))
     (is (some? (:done? job)))))
 

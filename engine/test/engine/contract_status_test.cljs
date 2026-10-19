@@ -231,20 +231,21 @@
           (await (core/tick! eng))
           (is (= 2 (:asks @world)) "a started job's next round"))))))
 
-(deftest a-called-child-waiting-on-can-run-shows-as-its-parents-wait
+(deftest a-called-child-whose-can-run-turns-later-ends-condition-failed-for-its-parent
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'parent {:can-run? ok
                                                   :round (fn ^:async parent [c]
-                                                           (await (ctx/call c :kid gated {}))
+                                                           (swap! world assoc :child (await (ctx/call c :kid gated {})))
                                                            :continue)}})]
           (swap! world assoc :start true :run true)
           (core/submit! eng '(parent) {})
           (await (core/tick! eng))
           (swap! world assoc :run false)
           (await (core/tick! eng))
-          (is (= ["waiting: torches 0 < 4"] (mapv :message (job-ev seen :waiting)))))))))
+          (is (= :condition-failed (:kind (:child @world))))
+          (is (empty? (job-ev seen :waiting))))))))
 
 (deftest a-reflex-calling-a-child-that-waits-on-can-run-gets-the-condition-failed-ending-and-its-tick-ends
   (async done

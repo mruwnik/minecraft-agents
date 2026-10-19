@@ -1,5 +1,6 @@
 (ns jobs.items.smelt
   (:require [jobs.lib.ready :as ready]
+            [jobs.lib.waits :as waits]
             [jobs.lib.checks :as checks]
             [clojure.string :as str]
             [engine.args :as a]
@@ -27,8 +28,8 @@
   (default true; jobs.lib.need) a furnace comes first (a seen one, a carried one put down, else one fetched), then what else is
   missing is fetched by obtain children; the fetch's ending is the :because. :fetch false skips it.
   can-start?: never :not-smeltable for an item no furnace cooks. can-start? and can-run?: later :refused {:zones :claims} while a zone
-  or claim of another bars :put or :take at the furnace (:ignore-zones? skips it); can-run?: later :cooking {:loaded n} while the
-  load cooks (memory, clock and one block only).
+  or claim of another bars :put or :take at the furnace (:ignore-zones? skips it); a cooking job yields until the cook is due,
+  without touching the furnace.
   Quote: the cook time of the count, the input, fuel and product items; open-ended with no furnace given or seen. Default :spend
   :job-time is ::job-time-s plus the cook (10 s an item); :wall-time adds ::away-s for other jobs done while it cooks.
   Ends :done {:smelted n :wanted n}: :wanted is the count this job loaded, :smelted what came of it (input and output already in the
@@ -126,11 +127,10 @@
     (ctx/update-mem! c assoc :ready-at (+ now ms) :unlit-from (+ now (grace-ms)))
     :continue))
 
-(defn cooking?
-  "Whether a load is owed and its cook is not due: the job only waits."
-  [c]
-  (let [m (ctx/mem c)]
-    (and (furnace/loaded? m) (some? (:ready-at m)) (not (due? c m)))))
+(defn cooking-in?
+  "Whether job memory m owes a load whose cook is not due: the job only waits."
+  [c m]
+  (and (furnace/loaded? m) (some? (:ready-at m)) (not (due? c m))))
 
 (defn furnace-positions [c] (keep identity [(furnace-of c)]))
 
@@ -141,13 +141,9 @@
                  ((checks/container-refused every? :take furnace-positions) c)]))
 
 (defn can-run?
-  "Refused while a zone or claim bars the furnace, else later :cooking with the count loaded while the load cooks; the parent reads it as the child's status."
+  "Refused while a zone or claim bars the furnace, else ok."
   [c]
-  (contract/all [(furnace-refused c)
-                 (if (cooking? c)
-                   (let [{:keys [count base] :or {count 0 base 0}} (:owed (ctx/mem c))]
-                     (contract/later :cooking "cooking" :loaded (- count base)))
-                   (checks/holds))]))
+  (furnace-refused c))
 
 (def condition-reasons
   "Give-ups that name a missing or wrong fact; any other ends nothing-possible."
@@ -345,7 +341,8 @@
   furnace, read it, then load (first) or collect. With none in view it looks around once from where it stands (the
   four headings, level and down, a sight pass after each) first; none after that ends no-furnace-seen."
   [c]
-  (or (when-not (or (furnace-of c) (some? (:owed (ctx/mem c))))
+  (or (when (cooking-in? c (ctx/mem c)) :continue)
+      (when-not (or (furnace-of c) (some? (:owed (ctx/mem c))))
         (await (acquire-furnace! c (sp/input-of (:item (:args c)) (carried c)))))
       (await (sf/fetch-stages! c (fetch-fuels) (fetch-wood-fuels)))
       (await (round-with c (furnace-of c)))))
@@ -393,7 +390,7 @@
         item (first (remove #(contains? done %) items))]
     (if-not item
       (finish-batch! c items)
-      (let [e (await (ctx/call c (keyword (str "item-" item)) 'jobs.items.smelt (assoc (:args c) :item item)))]
+      (let [e (waits/waiting-out c (await (ctx/call c (keyword (str "item-" item)) 'jobs.items.smelt (assoc (:args c) :item item))))]
         (if (= :continue e)
           :continue
           (do (ctx/update-mem! c assoc-in [:batch item] (batch-entry e))

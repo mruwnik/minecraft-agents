@@ -6,6 +6,7 @@
             [engine.settings :as settings]
             [jobs.lib.animals :as animals]
             [jobs.lib.look :as look]
+            [jobs.lib.waits :as waits]
             [jobs.lib.util :as u]))
 
 (def raw-meats
@@ -71,9 +72,9 @@
   (let [target (:target (ctx/mem c))
         _ (note-target! c target opts)
         tools (ctx/use c :tools)
-        e (await (ctx/call c :attack 'jobs.combat.attack
-                           (cond-> {:targets [target] :radius radius :absent :done}
-                             tools (assoc :use {:tools tools}))))]
+        e (waits/waiting-out c (await (ctx/call c :attack 'jobs.combat.attack
+                                                (cond-> {:targets [target] :radius radius :absent :done}
+                                                  tools (assoc :use {:tools tools})))))]
     (if (= :continue e)
       :yield
       (do (book-outcome! c target e)
@@ -92,8 +93,8 @@
   or its call is held by a floor)."
   [c waiting]
   (let [{:keys [mob] :as a} (:args c)
-        e (await (ctx/call c :collect 'jobs.items.collect-drops
-                                 {:radius (settings/get settings ::collect-radius) :items (or (:drops a) (get drops mob))}))]
+        e (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops
+                                                {:radius (settings/get settings ::collect-radius) :items (or (:drops a) (get drops mob))})))]
     (if (collect-ended? e)
       (do (ctx/update-mem! c dissoc :collecting) :again)
       waiting)))

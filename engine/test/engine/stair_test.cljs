@@ -903,8 +903,7 @@
       (fn ^:async t []
         (let [full (into pick (repeat 35 {:name "diamond" :count 64}))
               {:keys [out p] :as s} (await (stair! {:blocks ground :inventory full} east (fn [_])))]
-          (is (= :not-done @out) "make-room found nothing to toss and the stair waits, not ends")
-          (is (= :no-free-slot (:reason (waiting s))))
+          (is (= [:stopped :no-free-slot] ((juxt :status :reason) @out)) "make-room found nothing to toss: the stair ends for its caller to decide")
           (is (empty? (digs p))))))))
 
 (deftest a-stack-with-room-is-room
@@ -1266,8 +1265,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p] :as s} (await (stair! {:blocks ground :time 18000} east (fn [p] (tu/seeing-all p) (swap! (fake/state p) assoc :light-default [0 0]))))]
-          (is (= :not-done @out))
-          (is (= :exposed (:reason (waiting s))))
+          (is (= [:stopped :exposed] ((juxt :status :reason) @out)) "a called stair ends at once with the reason")
           (is (empty? (digs p))))))))
 
 (deftest a-pickaxe-less-stair-looks-at-the-unseen-cut-first-and-then-waits-no-tool

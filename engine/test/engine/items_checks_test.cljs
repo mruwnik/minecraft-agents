@@ -5,6 +5,7 @@
             [engine.expr :as expr]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [jobs.items.smelt :as smelt]
             [engine.test-util :as tu]))
 
 (def area
@@ -70,12 +71,12 @@
 (deftest a-known-chest-passes
   (is (= :ok (first (verdict-of :can-start? 'jobs.storage.deposit {} {:chest {:x 3 :y 64 :z 0}})))))
 
-(deftest a-smelt-waits-cooking-with-the-count-it-loaded
+(deftest a-smelt-with-a-load-cooking-only-waits-and-has-no-can-run-wait
   (let [owed {:owed {:count 4 :base 0} :ready-at 999999 :unlit-from 999999}
-        status (verdict-of :can-run? 'jobs.items.smelt {} {:item "beef" :furnace {:x 1 :y 64 :z 0}} owed)]
-    (is (= [:later :cooking] (kind+reason status)))
-    (is (= 4 (:loaded (nth status 2))))
-    (is (= :ok (first (verdict-of :can-run? 'jobs.items.smelt {} {:item "beef" :furnace {:x 1 :y 64 :z 0}} {}))))))
+        c (ctx-of 'jobs.items.smelt {} {:item "beef" :furnace {:x 1 :y 64 :z 0}} owed)]
+    (is (true? (smelt/cooking-in? c owed)))
+    (is (not (smelt/cooking-in? c {})))
+    (is (= :ok (first (verdict-of :can-run? 'jobs.items.smelt {} {:item "beef" :furnace {:x 1 :y 64 :z 0}} owed))))))
 
 (def done-args
   {'jobs.items.craft {:item "oak_planks" :count 4} 'jobs.items.enchant {:item "iron_sword"}

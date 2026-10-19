@@ -13,7 +13,7 @@
 (defn ^:async steps!
   "A whole attempt made of steps: call (step) again, a pace! between, while it resolves to :again, the job's goal does
   not hold (ctx/done) and its can-run? holds (ctx/can-run); then resolve to what it gave. Between steps a goal that
-  holds ends the job :done, a :never impossible, a :later or :look yields (:continue; a reflex ends condition-failed).
+  holds ends the job :done, a :never impossible, a :later or :look yields a listed root job (:continue); a reflex or a called child ends condition-failed.
   A cut round resolves to :continue."
   [c step]
   (loop []
@@ -26,4 +26,4 @@
             (case (first s)
               :ok (do (await (pace!)) (recur))
               :never (ctx/end c :impossible (contract/status-cause s))
-              (if (:reflex c) (ctx/end c :condition-failed (contract/status-cause s)) :continue))))))))
+              (if (ctx/returns-on-later? c) (ctx/end c :condition-failed (contract/status-cause s)) :continue))))))))

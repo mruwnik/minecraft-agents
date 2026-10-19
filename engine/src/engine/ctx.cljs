@@ -175,6 +175,12 @@
   (let [[def args] (child-job ctx job args)]
     (check-status (assoc ctx :slots (conj (:slots ctx) slot) :args args) def)))
 
+(defn returns-on-later?
+  "Whether a :later check ends this job condition-failed for its caller to decide: a reflex (one round) and a called child.
+  Only a listed root job waits."
+  [ctx]
+  (boolean (or (:reflex ctx) (seq (:slots ctx)))))
+
 (defn can-run
   "This job's can-run? status now, asked between steps (jobs.lib.pace/steps!); :ok when it has none."
   [ctx]

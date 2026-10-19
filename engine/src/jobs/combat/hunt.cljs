@@ -17,6 +17,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.ready :as ready]
+            [jobs.lib.waits :as waits]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.vantage :as vantage]))
@@ -351,7 +352,7 @@
           kind (first (remove #(contains? done %) kinds))]
       (if-not kind
         (finish-kinds! c kinds)
-        (let [e (await (ctx/call c (kind-slot kind) 'jobs.combat.hunt (kind-args c kind)))]
+        (let [e (waits/waiting-out c (await (ctx/call c (kind-slot kind) 'jobs.combat.hunt (kind-args c kind))))]
           (if (= :continue e)
             :continue
             (do (ctx/update-mem! c assoc-in [:kinds kind] (child-result e))

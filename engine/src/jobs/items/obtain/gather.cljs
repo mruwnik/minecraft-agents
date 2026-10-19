@@ -9,6 +9,7 @@
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
             [jobs.items.obtain.table :refer [animal? gather-need]]
+            [jobs.lib.waits :as waits]
             [jobs.lib.child :as child]
             [jobs.lib.need :as fetch-need]
             [jobs.lib.reserve :as reserve]))
@@ -98,8 +99,8 @@
                       :attention :notice
                       :for targets :max-distance (:max-distance o) :max-legs (:max-legs o)
                       :from (mapv #(js/Math.floor %) [(.-x here) (.-y here) (.-z here)])})
-        e (await (ctx/call c :explore 'jobs.explore.search
-                           (merge (explore-opts c) {:target targets :count 1 :scan-radius 16 :use-notes false :takeable true :avoid (vec (:cut-off (ctx/mem c)))})))]
+        e (waits/waiting-out c (await (ctx/call c :explore 'jobs.explore.search
+                           (merge (explore-opts c) {:target targets :count 1 :scan-radius 16 :use-notes false :takeable true :avoid (vec (:cut-off (ctx/mem c)))}))))]
     (if (= :continue e)
       :continue
       (let [res (:data e)
@@ -156,7 +157,7 @@
               (ctx/emit! c :obtain.wool-colour :info
                          {:message (str "no " wanted " sheep within " (sheep-radius) " blocks; taking " taking " wool instead")
                           :wanted wanted :taking taking})))
-          (let [e (await (ctx/call c (gather-slot need) (:job need) (:args need)))]
+          (let [e (waits/waiting-out c (await (ctx/call c (gather-slot need) (:job need) (:args need))))]
             (if (= :continue e)
               :continue
               (let [res (merge (when (map? (:cause e)) (:cause e)) (:data e))
@@ -175,7 +176,7 @@
   [c]
   (let [{:keys [key job args]} (get-in (ctx/mem c) [:gather :tree])
         slot (gather-slot {:key key})
-        r (await (ctx/call c slot job args))]
+        r (waits/waiting-out c (await (ctx/call c slot job args)))]
     (if (= :continue r)
       :continue
       (do (ctx/update-mem! c update :gather dissoc :before :item :tree) :again))))

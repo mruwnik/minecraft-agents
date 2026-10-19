@@ -13,6 +13,7 @@
             [engine.fast-pace]
             [engine.fsutil :as fsu]
             [engine.memory :as mem]
+            [jobs.lib.waits :as waits]
             [jobs.lib.near :as near]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]))
@@ -346,11 +347,11 @@
 
 (defn recording-parent
   "A contract job that calls job (a symbol or a definition) with args as its child :kid until it ends, puts (f ending)
-  (default: its outcome) in the atom out and ends done."
+  (default: its outcome) in the atom out and ends done. Like a real parent it waits out a child's world wait (waits/waiting-out)."
   ([job args out] (recording-parent job args out outcome))
   ([job args out f]
    {:round (fn ^:async recording-round [c]
-             (let [r (await (ctx/call c :kid job args))]
+             (let [r (waits/waiting-out c (await (ctx/call c :kid job args)))]
                (if (= :continue r)
                  :continue
                  (do (reset! out (f r)) (ctx/end c :done nil)))))}))

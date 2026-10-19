@@ -4,7 +4,8 @@
             [engine.settings :as settings]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.lib.pace :as pace]))
+            [jobs.lib.pace :as pace]
+            [jobs.lib.waits :as waits]))
 
 (a/defargs settings
   {::max-fruitless {:default 3 :doc "Rounds in a row of one child that bring nothing before its caller gives up." :spec (a/int-in 1 nil)}
@@ -54,7 +55,7 @@
   "A go-to child in slot with args through ctx/call: :continue while the walk goes on (or waits: go-to's safe? says
   later, which makes this round wait with its reason), else go-to's ending."
   [c slot args]
-  (await (ctx/call c slot 'jobs.movement.go-to args)))
+  (waits/waiting-out c (await (ctx/call c slot 'jobs.movement.go-to args))))
 
 (defn ^:async run-with
   "run!* with the child call fn. A child that waits on a check (child-wait) gives the round back at once."
@@ -62,7 +63,7 @@
   (when (not= args (get-in (ctx/mem c) [:child-args slot]))
     (ctx/update-mem! c #(-> % (update :children dissoc slot) (assoc-in [:child-args slot] args))))
   (loop [n 1]
-    (let [r (await (call c slot job args))]
+    (let [r (waits/waiting-out c (await (call c slot job args)))]
       (if (and (= :continue r) (nil? (some-> (:child-wait c) deref)) (< n max-calls) (ctx/alive? c))
         (do (await (pace/pace!)) (recur (inc n)))
         r))))

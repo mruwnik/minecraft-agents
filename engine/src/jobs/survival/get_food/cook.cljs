@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [jobs.lib.animal-spare :as spare]
+            [jobs.lib.furnace :as furnace]
             [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]
             [jobs.lib.cost :as cost]
@@ -133,6 +134,11 @@
   [c]
   (boolean (and (can-cook? c) (or (:cooking (ctx/mem c)) (worth-cooking? c)))))
 
+(defn loaded-in
+  "The count the smelt child in slot has loaded and still owes, else nil (read from its memory)."
+  [c slot]
+  (furnace/loaded-count (mem/job-mem ((:view c)) (:root c) (conj (:slots c) slot))))
+
 (defn ^:async cook!
   "Smelt the raw food carried (the smelt job, fuel as it takes it) in the furnace known (or the given one); the cooking
   wait yields the round (once the furnace holds the load, the world must move on before the next look; the child is not called while it waits, since an ending would wipe its load). :again when it ended, :continue while it goes on, else nil with :no-cook remembered."
@@ -146,9 +152,9 @@
         args (:args cooking)
         _ (ctx/update-mem! c assoc :cooking cooking)]
     (loop [n 1]
-      (let [loaded-before? (some? (:loaded (nth (ctx/child-status c :cook 'jobs.items.smelt args) 2)))
+      (let [loaded-before? (some? (loaded-in c :cook))
             e (if loaded-before? :continue (await (child/run!* c :cook 'jobs.items.smelt args {:max-calls 1})))
-            loaded? (some? (:loaded (nth (ctx/child-status c :cook 'jobs.items.smelt args) 2)))]
+            loaded? (some? (loaded-in c :cook))]
         (cond
           (not (ctx/alive? c)) :continue
           (and (= :continue e) (not loaded?) (< n (child/default-max-calls))) (do (await (pace/pace!)) (recur (inc n)))

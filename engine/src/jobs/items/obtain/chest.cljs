@@ -3,6 +3,7 @@
   (:require [engine.ctx :as ctx]
             [clojure.string]
             [jobs.items.obtain.base :refer [holds names-of]]
+            [jobs.lib.waits :as waits]
             [jobs.lib.child :as child]
             [jobs.lib.solid :as solid]
             [jobs.lib.stock :as stock]
@@ -34,8 +35,8 @@
   (say-chest! c pos (str "taking " (holds items names) " from the"))
   (let [name (holds items names)
         need (- (:target (:start (ctx/mem c))) have)
-        e (await (ctx/call c :take 'jobs.storage.withdraw
-                           {:chest pos :items {name (+ (storage/carried (u/inventory (:primitives c)) name) need)}}))]
+        e (waits/waiting-out c (await (ctx/call c :take 'jobs.storage.withdraw
+                           {:chest pos :items {name (+ (storage/carried (u/inventory (:primitives c)) name) need)}})))]
     (if (= :continue e)
       :continue
       (do (ctx/update-mem! c update :done-chests (fnil conj #{}) (stock/cell-of pos))
@@ -58,7 +59,7 @@
       (= :continue w) :continue
       (and w (not (:arrived (:data w)))) (do (mark! "unreachable") :again)
       (= :clearing (get-in (ctx/mem c) [:lid cell]))
-      (let [e (await (ctx/call c :clear 'jobs.blocks.dig {:pos above}))]
+      (let [e (waits/waiting-out c (await (ctx/call c :clear 'jobs.blocks.dig {:pos above})))]
         (when-not (= :continue e) (ctx/update-mem! c assoc-in [:lid cell] :cleared))
         (if (= :continue e) :continue :again))
       :else

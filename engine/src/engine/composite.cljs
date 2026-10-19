@@ -38,11 +38,11 @@
 
 (defn held
   "What a round returns when it cannot call a child whose status s is not :ok: :never ends it impossible; a reflex job
-  runs one round, so it ends condition-failed with the status as cause; a listed one yields (its can-run? waits)."
+  or a called child ends condition-failed with the status as cause; a listed root yields (its can-run? waits)."
   [c s]
   (cond
     (= :never (first s)) (ctx/end c :impossible (contract/status-cause s))
-    (:reflex c) (ctx/end c :condition-failed (contract/status-cause s))
+    (ctx/returns-on-later? c) (ctx/end c :condition-failed (contract/status-cause s))
     :else :continue))
 
 (defn ^:async call

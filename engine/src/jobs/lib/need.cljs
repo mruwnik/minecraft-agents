@@ -18,7 +18,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
-            [jobs.lib.ready :as ready]
+            [jobs.lib.waits :as waits]
             [jobs.lib.util :as u]))
 
 ;; ------------------------------------------------------------------ the :fetch arg and its limits
@@ -154,13 +154,13 @@
 
 (defn ^:async call!
   "ctx/call of a fetch child, but a child not yet started whose start check says :later for a readiness reason
-  (jobs.lib.ready/wait-reasons: night, exposure, a hostile near, low health) is not called: the caller waits with that
+  (jobs.lib.waits/wait-reasons: night, exposure, a hostile near, low health) is not called: the caller waits with that
   reason (:continue), where the child would end condition-failed and read as a failed fetch."
   [c slot job args]
   (let [s (when (nil? (get-in (ctx/mem c) [:children slot])) (ctx/child-status c slot job args))]
-    (if (and (= :later (first s)) (contains? ready/wait-reasons (:reason (nth s 2))))
+    (if (and (= :later (first s)) (contains? waits/wait-reasons (:reason (nth s 2))))
       (do (some-> (:child-wait c) (reset! (contract/status-cause s))) :continue)
-      (await (ctx/call c slot job args)))))
+      (waits/waiting-out c (await (ctx/call c slot job args))))))
 
 (defn booked-total
   "The count to carry at least for n more of names: n and what is carried now, booked in the caller's memory when the child

@@ -1,6 +1,6 @@
 (ns engine.run-checks-test
   "A job's safe? and fit? exports are asked with can-run?, before a job starts and on every resume: as a checker fn or
-  as a quoted condition form. A wait costs no failure; a child's wait is its parent's, and ends a reflex or exclusive root."
+  as a quoted condition form. A wait costs no failure; a called child whose check says :later ends condition-failed for its parent to decide."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -73,20 +73,35 @@
           (await (core/tick! eng))
           (is (= 1 (:rounds @world))))))))
 
-(deftest a-child-wait-is-its-parents-wait
+(deftest a-child-whose-check-says-later-ends-condition-failed-for-its-parent
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [k [:safe? :fit?]]
-          (let [{:keys [eng]} (setup {'root (parent k)})
-                id (core/submit! eng '(root) {})]
+        (doseq [k [:safe? :fit? :can-run?]]
+          (let [{:keys [eng]} (setup {'root (parent k)})]
+            (core/submit! eng '(root) {})
             (await (core/tick! eng))
-            (is (nil? (:leaf-rounds @world)))
-            (is (= :continue (:after-child @world)))
-            (is (= :dark (:reason (core/waiting eng id))))
-            (swap! world assoc :go true)
-            (await (core/tick! eng))
-            (is (= 1 (:leaf-rounds @world)))))))))
+            (is (nil? (:leaf-rounds @world)) (str k " child not run"))
+            (is (= [:condition-failed :dark] [(:kind (:after-child @world)) (:reason (:cause (:after-child @world)))])
+                (str k " the parent gets the ending with the reason"))))))))
+
+(deftest a-child-check-that-turns-later-mid-run-ends-the-child-at-its-next-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'root (assoc (parent :safe?) :round
+                                                 (fn ^:async parent-round [c]
+                                                   (let [e (await (ctx/call c :leaf (leaf :safe?) {}))]
+                                                     (swap! world assoc :after-child e)
+                                                     :continue)))})]
+          (swap! world assoc :go true)
+          (core/submit! eng '(root) {})
+          (await (core/tick! eng))
+          (is (= :continue (:after-child @world)))
+          (swap! world dissoc :go)
+          (await (core/tick! eng))
+          (is (= 1 (:leaf-rounds @world)))
+          (is (= [:condition-failed :dark] [(:kind (:after-child @world)) (:reason (:cause (:after-child @world)))])))))))
 
 (deftest a-child-wait-under-a-reflex-root-ends-the-reflex
   (async done
@@ -97,20 +112,25 @@
           (core/register-reflex! eng {:trigger :r})
           (await (core/tick! eng))
           (is (nil? (:leaf-rounds @world)))
-          (is (not= :continue (:after-child @world)) "the child's wait ends the call instead of yielding")
+          (is (= :condition-failed (:kind (:after-child @world))))
           (is (= 1 (count (filter #(= [:reflex :ended] [(:source %) (:kind %)]) @seen)))))))))
 
 (deftest a-child-wait-under-an-exclusive-root-ends-the-run-with-its-reason
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {'root (parent :safe?)})]
+        (let [{:keys [eng seen]} (setup {'root (assoc (parent :safe?) :round
+                                                      (fn ^:async parent-round [c]
+                                                        (let [e (await (ctx/call c :leaf (leaf :safe?) {}))]
+                                                          (swap! world assoc :after-child e)
+                                                          :continue)))})]
           (api/mutate! eng {:op :exclusive :spec '(root) :by "claude" :request-id "r1"
                             :generation-id (:generation-id (core/state eng))})
           (await (core/tick! eng))
           (is (nil? (:leaf-rounds @world)))
+          (is (= :condition-failed (:kind (:after-child @world))))
           (is (nil? (core/exclusive-job eng)))
-          (is (= [:dark] (mapv :reason (filter #(= :stopped (:kind %)) @seen)))))))))
+          (is (= [:yielded] (mapv :reason (filter #(= :stopped (:kind %)) @seen)))))))))
 
 (deftest a-trigger-fires-only-when-its-jobs-checks-pass
   (async done
@@ -159,7 +179,7 @@
         (let [{:keys [eng id]} (run-parent {'root (parent :safe?)} {:checks {:fit? '(always)}})]
           (await (core/tick! eng))
           (is (nil? (:leaf-rounds @world)) "the other key leaves the child's :safe? alone")
-          (is (= :dark (:reason (core/waiting eng id)))))))))
+          (is (= :dark (:reason (:cause (:after-child @world))))))))))
 
 (deftest a-restarted-job-keeps-its-checks
   (async done
@@ -188,7 +208,7 @@
               {:keys [eng id]} (run-parent {'root root} {:checks {:safe? '(always)}})]
           (await (core/tick! eng))
           (is (nil? (:leaf-rounds @world)))
-          (is (= :dark (:reason (core/waiting eng id))))
+          (is (= :dark (:reason (:cause (:after-child @world)))))
           (swap! world assoc :go true)
           (await (core/tick! eng))
           (is (= 1 (:leaf-rounds @world))))))))

@@ -9,6 +9,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.util :as u]
             [jobs.lib.need :as need]
+            [jobs.lib.waits :as waits]
             [jobs.lib.world :as known]))
 
 (defn fruitless! [c why]
@@ -42,9 +43,9 @@
   Charcoal burns wood (planks) as fuel: coal or charcoal as its fuel would ask for charcoal again."
   [c step]
   (ctx/update-mem! c assoc-in [:craft :step] step)
-  (let [e (await (ctx/call c :smelt 'jobs.items.smelt
+  (let [e (waits/waiting-out c (await (ctx/call c :smelt 'jobs.items.smelt
                            (cond-> {:item (:item step) :count (:count step) :fetch (smelt-fetch c)}
-                             (= "charcoal" (:item step)) (assoc :fuel (wood-fuel (u/inventory (:primitives c)))))))]
+                             (= "charcoal" (:item step)) (assoc :fuel (wood-fuel (u/inventory (:primitives c))))))))]
     (if (= :continue e)
       :continue
       (do (ctx/update-mem! c update :craft dissoc :step)

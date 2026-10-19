@@ -172,12 +172,12 @@
 
 (defn waiting-reason [seen] (:reason (first (kinds seen :waiting))))
 
-(deftest an-unloaded-cell-waits-not-loaded
+(deftest an-unloaded-cell-ends-condition-failed-not-loaded
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [seen p]} (await (run (assoc (world "oak_door" {:open false}) :unloaded ["3,64,0"]) {:pos at :state :open}))]
-          (is (= :not-loaded (waiting-reason seen)))
+        (let [{:keys [result p]} (await (run (assoc (world "oak_door" {:open false}) :unloaded ["3,64,0"]) {:pos at :state :open}))]
+          (is (= [:stopped :not-loaded] ((juxt :status :reason) result)))
           (is (empty? (calls p "useOn"))))))))
 
 (defn column-free? [p {:keys [x z]}]

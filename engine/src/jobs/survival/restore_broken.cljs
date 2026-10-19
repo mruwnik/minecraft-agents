@@ -210,8 +210,8 @@
                    (child/run!* c :put 'jobs.blocks.place {:pos pos :item (place-item c cell was) :ignore-zones? true :fetch false :clear false :see false})
                    (child/run!* c :put 'jobs.blocks.dig {:pos pos :ignore-zones? true :fetch false :collect false :need-drop false})))]
     (cond
+      (and (= :continue r) (some-> (:child-wait c) deref)) :wait
       (= :continue r) :continue
-      (contains? ready/wait-reasons (-> r :cause :reason)) :wait
       :else (= :done (:kind r)))))
 
 (defn ^:async restore-one!

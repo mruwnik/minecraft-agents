@@ -1,5 +1,6 @@
 (ns jobs.strip.site
   (:require [jobs.lib.ready :as ready]
+            [jobs.lib.waits :as waits]
             [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -124,7 +125,7 @@
   (loop [[[slot args] & more] entries acc {:cooking {} :smelted {} :failed []}]
     (if-not slot
       acc
-      (let [e (await (ctx/call c slot 'jobs.items.smelt args))]
+      (let [e (waits/waiting-out c (await (ctx/call c slot 'jobs.items.smelt args)))]
         (recur more (cond (= :continue e) (assoc-in acc [:cooking slot] args)
                           (not= :done (:kind e)) (update acc :failed conj {:furnace (:furnace args) :reason (reason-of e)})
                           :else (update acc :smelted #(merge-with + % {(:item args) (:smelted (:data e) 0)}))))))))
