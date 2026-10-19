@@ -31,7 +31,6 @@
             [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
-            [jobs.lib.escape :as escape]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -75,7 +74,7 @@
         v (rules/may-dig? (-> in (dissoc :body-cols) (assoc :cell floor)))]
     (and (not (:ok v))
          (not= :no-zones (:reason v))
-         (or (= :footprint (:reason v)) (not (escape/natural? ((:block-at in) floor)))))))
+         (or (= :footprint (:reason v)) (not (rules/natural? ((:block-at in) floor)))))))
 
 (defn in-reach?
   "Every target within reach of the eye of a body standing at the middle of the feet cell."

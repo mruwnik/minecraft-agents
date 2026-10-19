@@ -11,6 +11,7 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [jobs.lib.escape :as escape]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.ledger :as ledger]
             [plan.shape :as shape]
             [jobs.movement.go-to.escalation :as esc]
@@ -394,7 +395,7 @@
       "a goal no higher than the rim: the pit's depth"))
 
 ;; ------------------------------------------------------------------ review fixes (card 30615854, be7e5bb6)
-(deftest escape-natural-is-a-whitelist-of-terrain
+(deftest rules-natural-is-a-whitelist-of-terrain
   (doseq [n ["stone" "dirt" "grass_block" "deepslate" "gravel" "sand" "netherrack" "iron_ore" "deepslate_diamond_ore"
              "red_terracotta" "andesite" "tuff" "oak_leaves" "mangrove_roots" "ice" "packed_ice" "blue_ice" "powder_snow"
              "magma_block" "pointed_dripstone" "amethyst_block" "suspicious_sand" "crimson_nylium" "warped_wart_block"
@@ -402,7 +403,7 @@
              "flowering_azalea" "cave_vines" "cave_vines_plant" "big_dripleaf" "big_dripleaf_stem" "small_dripleaf"
              "spore_blossom" "sculk_vein" "cobweb" "poppy" "brown_mushroom" "brown_mushroom_block" "seagrass" "kelp_plant"
              "sweet_berry_bush" "sugar_cane" "bamboo" "cactus" "pumpkin" "melon" "dripstone_block" "mud" "clay"]]
-    (is (escape/natural? n) n))
+    (is (rules/natural? n) n))
   (doseq [n ["oak_planks" "bricks" "stone_bricks" "glass" "white_wool" "cobblestone" "oak_door" "iron_door" "oak_log" "glowstone" "cobbled_deepslate" "dirt_path"
              "oak_fence" "spruce_fence_gate" "white_glazed_terracotta" "smooth_stone" "polished_andesite" nil]]
-    (is (not (escape/natural? n)) (pr-str n))))
+    (is (not (rules/natural? n)) (pr-str n))))

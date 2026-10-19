@@ -24,7 +24,7 @@
     the reach setting (10) blocks, else step sideways, at the feet's height, to a nearby column that does; else a go-to
     child to the nearest air-reaching surface within the air-radius setting (8), else to the nearest seen air below the feet within the depth setting (24)
     (the way the body came; a failed target is not tried again); else dig up through a cap within 3 blocks over the head
-    when it is natural (jobs.lib.escape/natural?), not protected and not sand or gravel, one cell a pass, at most 3 digs
+    when it is natural (jobs.lib.access.rules/natural?), not protected and not sand or gravel, one cell a pass, at most 3 digs
     (zones respected, trespass only as a last resort), with the best tool, and only when the dig fits jobs.survival.breathe.air/cap-dig-share of the air left.
     With no air seen near (or after a failed try) and :pocket, a dry pocket comes before the swim up an unseen column and
     the cap: standing on solid ground with a carried pillar block, after the go-to to seen air further out, it digs the

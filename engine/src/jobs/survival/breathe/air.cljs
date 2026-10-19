@@ -8,6 +8,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.dig-look :as look]
             [jobs.lib.escape :as escape]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
@@ -120,7 +121,7 @@
           (nil? n) {:why :unseen}
           (breath/passable-water-or-air? n) (recur (inc k))
           (escape/protected? n) {:why :protected}
-          (not (escape/natural? n)) {:why :not-natural}
+          (not (rules/natural? n)) {:why :not-natural}
           (contains? pocket/falling n) {:why :gravity}
           :else {:cells [(cell k)]})))))
 

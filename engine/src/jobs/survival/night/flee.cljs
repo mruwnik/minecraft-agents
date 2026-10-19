@@ -6,7 +6,6 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
             [jobs.lib.access.rules :as rules]
-            [jobs.lib.escape :as escape]
             [jobs.lib.look :as look]
             [jobs.lib.rooms :as room-lib]
             [jobs.lib.seal :as seal]
@@ -26,7 +25,7 @@
   cells ({:kind :ground :pos}) a pit can be dug at (sites/pit-site?), clear of failed sites, the nearest sites/ground-candidates."
   [c radius]
   (let [p (:primitives c)]
-    (->> (look/seen-blocks p {:match #(and (solid/solid? %) (escape/natural? %) (not (rules/falling? %)) (tools/can-harvest? p %))
+    (->> (look/seen-blocks p {:match #(and (solid/solid? %) (rules/natural? %) (not (rules/falling? %)) (tools/can-harvest? p %))
                               :radius (min 64 radius) :max 64})
          (map #(update (:pos %) :y inc))
          (filter #(and (sites/pit-site? p %) (sites/clear-of-failed? c %)))

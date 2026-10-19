@@ -214,7 +214,7 @@
     (when (and (every? #(solid/solid? (dug-name %)) [lo hi])
                (every? #(solid/solid? (wall-name %)) walls)
                (not-any? dig-cells/hazards names)
-               (every? #(and (escape/natural? %) (not (escape/protected? %)) (not (rules/falling? %))) names)
+               (every? #(and (rules/natural? %) (not (escape/protected? %)) (not (rules/falling? %))) names)
                (not (rules/falling? (wall-name (at 2))))
                (or by-hand? (every? #(tools/can-harvest? p %) names))
                (or (lb/pick c blocks) (some (set blocks) (map #(get drop-of % %) names))))

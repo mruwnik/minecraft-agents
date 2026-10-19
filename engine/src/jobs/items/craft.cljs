@@ -14,7 +14,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
-            [jobs.lib.escape :as escape]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.tools :as tools]
             [jobs.lib.ledger :as ledger]
@@ -239,7 +239,7 @@
 
 (defn dig-spot-cells
   "With no free cell beside the body (a shut-in pocket): the cells beside it at its level that would be a table spot
-  once dug, quickest to break first: seen natural terrain (jobs.lib.escape/natural?, never a build) on a solid floor
+  once dug, quickest to break first: seen natural terrain (jobs.lib.rules/natural?, never a build) on a solid floor
   or one not seen yet (rock hides it), not tried yet (memory :spot-dug)."
   [c]
   (let [p (:primitives c)
@@ -249,7 +249,7 @@
          (keep (fn [[pos floor]]
                  (let [n (u/seen-name p pos)
                        f (u/seen-name p floor)]
-                   (when (and (escape/natural? n) (solid? n) (or (nil? f) (solid? f)) (not (tried pos)))
+                   (when (and (rules/natural? n) (solid? n) (or (nil? f) (solid? f)) (not (tried pos)))
                      pos))))
          (sort-by #(tools/clear-ms p (u/seen-name p %))))))
 
