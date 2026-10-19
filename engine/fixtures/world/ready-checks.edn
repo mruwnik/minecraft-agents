@@ -27,7 +27,7 @@
   {:name "c-explore-search-queued-at-night-waits-dark-then-starts-at-day"
    :body {:at [4.5 0 12.5] :settle-s 2}
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :west :spacing 8 :scan-radius 8
-                                     :use-notes false :max-distance 16 :max-legs 2 :spend {:job-time 60}})]
+                                     :use-notes false :max-distance 16 :settings {:jobs.explore.search/max-legs 2} :spend {:job-time 60}})]
          [:await {:source :job :kind :waiting :data {:reason :dark}} 30]
          [:wait-s 10]
          [:time-set 1000]]

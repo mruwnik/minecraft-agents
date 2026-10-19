@@ -107,7 +107,7 @@
    :blocks [[:fill [18 0 0] [19 7 31] "bedrock"] [:set [8 0 2] "emerald_block"]]
    :body {:at [8.5 0 28.5] :yaw 0}
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :spiral :spacing 8 :scan-radius 8 :use-notes false
-                                     :max-distance 32 :max-legs 32 :spend {:job-time 130}})]]
+                                     :max-distance 32 :settings {:jobs.explore.search/max-legs 32} :spend {:job-time 130}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:why :stuck}} :for-s 140 :of-job true :until {:source :job :kind :completed}}]
    :limit-s 150}
@@ -116,7 +116,7 @@
    :blocks [[:fill [18 0 0] [19 7 31] "bedrock"] [:set [26 0 16] "emerald_block"]]
    :body {:at [8.5 0 16.5] :yaw 0}
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :spiral :spacing 8 :scan-radius 6 :use-notes false
-                                     :max-distance 20 :max-legs 32 :spend {:job-time 130}})]]
+                                     :max-distance 20 :settings {:jobs.explore.search/max-legs 32} :spend {:job-time 130}})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 150 :of-job true :until {:source :job :kind :stopped}}]
    :limit-s 160}
@@ -129,20 +129,20 @@
    :plans [{:id "pen" :metadata {:by "$body"} :parts [{:id "pen" :box [#at [4 0 12] #at [12 1 20]] :want "dirt"}]}]
    :body {:at [8.5 0 24.5] :yaw 180}
    :act [[:summon "cow" [8.5 0 16.5] "{NoAI:1b,PersistenceRequired:1b}"] [:wait-s 2]
-         [:job (jobs.explore.search {:target "cow" :max-legs 0 :max-distance 12 :use-notes false})]
+         [:job (jobs.explore.search {:target "cow" :settings {:jobs.explore.search/max-legs 0} :max-distance 12 :use-notes false})]
          [:await {:source :job :kind :completed} 40]
          [:rcon "tp $BODY ~34 ~ ~-8 90 0"] [:wait-s 3]
-         [:job (jobs.explore.search {:target "cow" :max-legs 0 :max-distance 60 :use-notes true})]]
+         [:job (jobs.explore.search {:target "cow" :settings {:jobs.explore.search/max-legs 0} :max-distance 60 :use-notes true})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 70 :of-job true}]
    :limit-s 90}
   {:name "search-notes-count-a-cow-outside-and-say-where"
    :plot {:height 8 :floor "grass_block" :length 64 :width 32}
    :body {:at [8.5 0 24.5] :yaw 180}
    :act [[:summon "cow" [8.5 0 16.5] "{NoAI:1b,PersistenceRequired:1b}"] [:wait-s 2]
-         [:job (jobs.explore.search {:target "cow" :max-legs 0 :max-distance 12 :use-notes false})]
+         [:job (jobs.explore.search {:target "cow" :settings {:jobs.explore.search/max-legs 0} :max-distance 12 :use-notes false})]
          [:await {:source :job :kind :completed} 40]
          [:rcon "execute as $BODY at @s run tp @s ~34 ~ ~-8 90 0"] [:wait-s 3]
-         [:job (jobs.explore.search {:target "cow" :max-legs 0 :max-distance 60 :use-notes true})]]
+         [:job (jobs.explore.search {:target "cow" :settings {:jobs.explore.search/max-legs 0} :max-distance 60 :use-notes true})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found :found [{:noted true}] :text [:contains "found 1 cow at"]}} :within-s 70 :of-job true}]
    :limit-s 90}
 
@@ -156,7 +156,7 @@
             [:set [40 0 12] "emerald_block"]]
    :body {:at [12.5 0 12.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 8 :scan-radius 8
-                                     :use-notes false :max-distance 60 :max-legs 16 :spend {:job-time 45}})]
+                                     :use-notes false :max-distance 60 :settings {:jobs.explore.search/max-legs 16} :spend {:job-time 45}})]
          [:wait-s 70]
          [:time-set 1000]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 60 :of-job true}

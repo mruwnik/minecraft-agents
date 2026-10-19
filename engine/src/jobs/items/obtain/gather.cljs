@@ -100,7 +100,7 @@
                       :for targets :max-distance (:max-distance o) :max-legs (:max-legs o)
                       :from (mapv #(js/Math.floor %) [(.-x here) (.-y here) (.-z here)])})
         e (waits/waiting-out c (await (ctx/call c :explore 'jobs.explore.search
-                           (merge (explore-opts c) {:target targets :count 1 :scan-radius 16 :use-notes false :takeable true :avoid (vec (:cut-off (ctx/mem c)))}))))]
+                           (child/search-args (merge (explore-opts c) {:target targets :count 1 :scan-radius 16 :use-notes false :takeable true :avoid (vec (:cut-off (ctx/mem c)))})))))]
     (if (= :continue e)
       :continue
       (let [res (:data e)

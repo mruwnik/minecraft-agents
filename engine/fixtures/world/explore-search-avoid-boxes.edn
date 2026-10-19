@@ -11,15 +11,15 @@
   :limit-s 70}
  :cases
  [{:name "without-a-box-both-emeralds-count"
-   :act [[:job (jobs.explore.search {:target "emerald_block" :count 2 :scan-radius 16 :max-distance 8 :spacing 8 :max-legs 2 :use-notes false})]]
+   :act [[:job (jobs.explore.search {:target "emerald_block" :count 2 :scan-radius 16 :max-distance 8 :spacing 8 :settings {:jobs.explore.search/max-legs 2} :use-notes false})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 60 :of-job true}]}
   {:name "the-emerald-inside-the-box-does-not-count"
-   :act [[:job (jobs.explore.search {:target "emerald_block" :count 2 :scan-radius 16 :max-distance 8 :spacing 8 :max-legs 2 :use-notes false
+   :act [[:job (jobs.explore.search {:target "emerald_block" :count 2 :scan-radius 16 :max-distance 8 :spacing 8 :settings {:jobs.explore.search/max-legs 2} :use-notes false
                                      :avoid-boxes [[#at [14 14] #at [20 20]]]})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 60 :of-job true :until {:source :job :kind :stopped}}]}
   {:name "a-cow-inside-the-box-is-still-found"
    :act [[:summon "cow" [17.5 0 17.5] "{NoAI:1b}"]
-         [:job (jobs.explore.search {:target "cow" :scan-radius 16 :max-distance 8 :spacing 8 :max-legs 2 :use-notes false
+         [:job (jobs.explore.search {:target "cow" :scan-radius 16 :max-distance 8 :spacing 8 :settings {:jobs.explore.search/max-legs 2} :use-notes false
                                      :avoid-boxes [[#at [14 14] #at [20 20]]]})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 60 :of-job true}]}]}

@@ -84,3 +84,9 @@
   "walk-into! through ctx/call: :continue while it walks, else go-to's ending."
   [c slot cell]
   (await (call-walk* c slot (walk-into-args slot cell))))
+
+(defn search-args
+  "The args of a jobs.explore.search call from caller options: :max-legs is a setting of the search, so it moves into :settings."
+  [opts]
+  (cond-> (dissoc opts :max-legs)
+    (:max-legs opts) (update :settings assoc :jobs.explore.search/max-legs (:max-legs opts))))

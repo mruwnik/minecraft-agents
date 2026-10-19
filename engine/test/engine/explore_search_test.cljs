@@ -234,7 +234,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "diamond_block" :scan-radius 10 :max-distance 30 :max-legs 1} {:blocks diamond :seen-r 64}))]
+        (let [s (await (search! {:target "diamond_block" :scan-radius 10 :max-distance 30 :settings {:jobs.explore.search/max-legs 1}} {:blocks diamond :seen-r 64}))]
           (is (nil? (found-of s)))
           (is (= [] (:found (not-found-of s)))))))))
 
@@ -242,7 +242,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "diamond_block" :scan-radius 10 :max-distance 10 :max-legs 1}
+        (let [s (await (search! {:target "diamond_block" :scan-radius 10 :max-distance 10 :settings {:jobs.explore.search/max-legs 1}}
                                 {:blocks (merge (tu/box 11 64 -4 28 64 4 "diamond_block") {"0,80,0" "diamond_block"}) :seen-r 64}))]
           (is (= [{:what "diamond_block" :pos [0 80 0]}] (:found (found-of s)))))))))
 
@@ -265,7 +265,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [legs (await (search! {:target "diamond_block" :max-legs 2} {}))
+        (let [legs (await (search! {:target "diamond_block" :settings {:jobs.explore.search/max-legs 2}} {}))
               timed (await (search! {:target "diamond_block" :spend {:job-time 2}} {} nil
                                     (fn [{:keys [p clock]}]
                                       (.override (.-world p) "look"
@@ -325,7 +325,7 @@
       (fn ^:async t []
         (let [note (fn [pos] [{:kind :seen :what "cow" :id "u1" :pos pos :by "Other" :t 1 :until 9e15}])
               farm {:name "farm" :owner "Fake" :min [0 60 0] :max [10 70 10]}
-              run! (fn ^:async f [pos] (await (search! {:target "cow" :max-distance 20 :max-legs 0} {:zones [farm]} 20
+              run! (fn ^:async f [pos] (await (search! {:target "cow" :max-distance 20 :settings {:jobs.explore.search/max-legs 0}} {:zones [farm]} 20
                                                        #(write-other! % "Other" (note pos)))))
               penned (await (run! [3 64 3]))
               wild (await (run! [12 64 12]))]
@@ -527,7 +527,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [note [{:kind :seen :what "cow" :id "dead" :pos [3 64 3] :by "Fake" :t 1 :until 9e15}]
-              s (await (search! {:target "cow" :max-distance 20 :max-legs 0} {} 20 #(write-other! % "Other" note)))]
+              s (await (search! {:target "cow" :max-distance 20 :settings {:jobs.explore.search/max-legs 0}} {} 20 #(write-other! % "Other" note)))]
           (is (nil? (found-of s)) (pr-str (:found (ended-of s)))))))))
 
 (deftest ore-the-body-has-not-seen-is-neither-found-nor-noted
@@ -544,7 +544,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "diamond_block" :max-distance 20 :max-legs 0}
+        (let [s (await (search! {:target "diamond_block" :max-distance 20 :settings {:jobs.explore.search/max-legs 0}}
                                 {:blocks {"-4,64,0" "diamond_block"} :cone? true}))
               e (found-of s)]
           (is (= 1 (count (:found e))))
@@ -554,7 +554,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "diamond_block" :max-distance 20 :max-legs 0}
+        (let [s (await (search! {:target "diamond_block" :max-distance 20 :settings {:jobs.explore.search/max-legs 0}}
                                 {:blocks {"0,64,5" "diamond_block"} :cone? true}
                                 400 (fn [{:keys [p]}]
                                       ;; mined once the body saw it, before sense reads memory: the body cannot know
@@ -614,7 +614,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [seen [{:kind :seen :what "diamond_block" :pos [0 64 5] :by "Other" :t 1 :until 9e15}]
-              s (await (search! {:target "diamond_block" :max-distance 20 :max-legs 0} {:cone? true} 60 #(write-other! % "Other" seen)))]
+              s (await (search! {:target "diamond_block" :max-distance 20 :settings {:jobs.explore.search/max-legs 0}} {:cone? true} 60 #(write-other! % "Other" seen)))]
           (is (nil? (found-of s)) "the cell is in view and holds air: the note is out of date")
           (is (= :stopped (:kind (not-found-of s)))))))))
 

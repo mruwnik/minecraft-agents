@@ -142,4 +142,4 @@
         (is (= {:event :stopped :kind :nothing-possible :reason :distance}
                (await (seek {:target "diamond_block" :max-distance 20} {}))))
         (is (= {:event :stopped :kind :nothing-possible :reason :legs}
-               (await (seek {:target "diamond_block" :max-legs 2} {}))))))))
+               (await (seek {:target "diamond_block" :settings {:jobs.explore.search/max-legs 2}} {}))))))))

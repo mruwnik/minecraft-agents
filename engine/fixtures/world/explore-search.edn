@@ -12,13 +12,13 @@
  :cases
  [{:name "legs-walked-until-the-target-is-in-scan-range"
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 8 :scan-radius 8
-                                     :use-notes false :max-distance 60 :max-legs 16 :spend {:job-time 130}})]]
+                                     :use-notes false :max-distance 60 :settings {:jobs.explore.search/max-legs 16} :spend {:job-time 130}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 140 :of-job true :until {:source :job :kind :completed}}
             {:no-event {:source :system :kind :error} :for-s 60 :until {:source :job :kind :completed}}]}
   {:name "tightest-spacing-still-ends-found"
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 4 :scan-radius 8
-                                     :use-notes false :max-distance 60 :max-legs 24 :spend {:job-time 130}})]]
+                                     :use-notes false :max-distance 60 :settings {:jobs.explore.search/max-legs 24} :spend {:job-time 130}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 140 :of-job true :until {:source :job :kind :completed}}
             {:no-event {:source :system :kind :error} :for-s 60 :until {:source :job :kind :completed}}]}
@@ -29,7 +29,7 @@
    :blocks [[:fill [4 20 4] [28 21 28] "oak_leaves[persistent=true]"]]
    :body {:at [16.5 22 16.5]}
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 8 :scan-radius 8
-                                     :use-notes false :max-distance 24 :max-legs 12 :spend {:job-time 130}})]]
+                                     :use-notes false :max-distance 24 :settings {:jobs.explore.search/max-legs 12} :spend {:job-time 130}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :limit_reached} :for-s 100 :of-job true :until {:source :job :kind #{:completed :stopped}}}
             {:no-event {:source :system :kind :error} :for-s 60}]
@@ -39,7 +39,7 @@
   {:name "not-found-text-names-the-look-radius"
    :blocks [[:set [38 0 16] "emerald_block"]]
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 8 :scan-radius 8
-                                     :use-notes false :max-distance 10 :max-legs 2 :spend {:job-time 60}})]]
+                                     :use-notes false :max-distance 10 :settings {:jobs.explore.search/max-legs 2} :spend {:job-time 60}})]]
    :expect [{:event {:source :job :kind :stopped :data {:text [:contains "looks of 8 blocks round"]}} :within-s 70 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 70 :of-job true :until {:source :job :kind :stopped}}]
    :limit-s 80}
@@ -50,7 +50,7 @@
    :body {:yaw 270}
    :act [[:until-seen {:block "emerald_block"} 15]
          [:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 8 :scan-radius 8
-                                     :use-notes false :max-distance 30 :max-legs 1 :spend {:job-time 60}})]]
+                                     :use-notes false :max-distance 30 :settings {:jobs.explore.search/max-legs 1} :spend {:job-time 60}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 70 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 70 :of-job true :until {:source :job :kind :completed}}]
    :limit-s 90}
@@ -60,7 +60,7 @@
    :blocks [[:set [24 0 24] "emerald_block"]]
    :body {:at [8.5 0 8.5]}
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :south-east :spacing 8 :scan-radius 8
-                                     :use-notes false :max-distance 30 :max-legs 6 :spend {:job-time 110}})]]
+                                     :use-notes false :max-distance 30 :settings {:jobs.explore.search/max-legs 6} :spend {:job-time 110}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 120 :of-job true}
             {:no-event {:source :system :kind :error} :for-s 60 :until {:source :job :kind :completed}}]
    :limit-s 130}

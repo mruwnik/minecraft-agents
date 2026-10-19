@@ -33,7 +33,7 @@
   A leg needs a standing cell in its column from 12 above the feet down to :descent (40) below, read top down through leaves. An unloaded,
   wet or standless column is recorded failed (:not-loaded, :wet, :no-surface, :unseen) and the next candidate is tried
   in the same round. A loaded column not yet seen (:unseen) is walked toward in steps of up to 12 blocks (not
-  counted in :max-legs) and looked at again; within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
+  counted in max-legs) and looked at again; within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
   left the round pauses 2 s (jobs.time.noop, holding :chunks-loading) and yields, until they load or the call's time is spent (a body just logged in has no chunks
   yet). A walk go-to gives up on is recorded :unreachable. Three of those in
   a row end the search (:stuck); until a leg arrives, a leg within 60 degrees of the way one failed from where the
@@ -48,7 +48,7 @@
   The ending's data: {:found [{:what :pos :id? :noted? :by?}] :coverage {:legs :scans
   :failed [{:pos :reason}] :skipped :farthest} :why :text} and the ending:
   - :done: :count found.
-  - :nothing-possible :distance (no leg left), :legs (:max-legs walked) or :stuck (three failed walks in a row).
+  - :nothing-possible :distance (no leg left), :legs (::max-legs walked) or :stuck (three failed walks in a row).
   - :limit-reached :job-time (the call's :spend :job-time, default ::job-time-s) or :wall-time (default ::wall-time-s); the engine ends it, with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
   - A call with no :target never runs (:bad-args).
 
@@ -70,14 +70,14 @@
    :heading {:doc "a compass heading (:north, :north-east, :east ...), for :outward (default :north)" :spec (set (keys headings)) :default nil}
    :spacing {:doc "blocks between legs, 4 to 64" :spec (a/int-in 4 64) :default 16}
    :scan-radius {:doc "how far round the body each look reaches" :spec (a/num-in 0 nil) :default 24}
-   :max-legs {:doc "legs walked before it gives up" :spec (a/int-in 0 nil) :default 32}
    :takeable {:doc "leave out blocks a zone, claim or plan footprint bars this body from taking" :spec boolean? :default false}
    :avoid {:doc "columns [x z] whose blocks do not count as found" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :avoid-boxes {:doc "boxes [[x1 z1] [x2 z2]] (corners inclusive, any order) of columns whose blocks do not count as found: a pen is one box, not its columns (a job expression is size-limited)" :spec (a/coll-of (a/pred "two [x z] corners" #(and (vector? %) (= 2 (count %)) (every? vector? %)))) :default nil}
    :use-notes {:doc "targets noted (by any body) within :max-distance count as found" :spec boolean? :default true}})
 
 (a/defargs settings
-  {::seen-ttl-s {:default 259200 :doc "Seconds a note of a block seen lasts." :spec (a/num-in 0 nil)}
+  {::max-legs {:default 32 :doc "Legs walked before the search gives up." :spec (a/int-in 0 nil)}
+   ::seen-ttl-s {:default 259200 :doc "Seconds a note of a block seen lasts." :spec (a/num-in 0 nil)}
    ::entity-ttl-s {:default 600 :doc "Seconds a note of an entity seen lasts." :spec (a/num-in 0 nil)}
    ::searched-ttl-s {:default 86400 :doc "Seconds a note of searched ground lasts." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds from the first round before a search gives up." :spec (a/num-in 0 nil)}
@@ -422,7 +422,8 @@
 (defn ^:async step!
   "Look round; end when enough is found or the legs are used up, else start the next leg."
   [c]
-  (let [{:keys [max-legs use-notes max-distance] want :count} (:args c)
+  (let [{:keys [use-notes max-distance] want :count} (:args c)
+        max-legs (settings/get settings ::max-legs)
         names (targets c)
         resumed (:choosing (ctx/mem c))
         _ (when-not (or resumed (breath/in-water? (:primitives c))) (await (scan! c names)))

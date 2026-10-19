@@ -341,7 +341,7 @@
         (ctx/update-mem! c assoc :explored "started" :explored-at (ctx/now c))
         (let [opts (widen-explore (merge (settings/get settings ::explore) (when (map? e) e)) (widen c))
               e (await (child/run!* c :explore 'jobs.explore.search
-                                    (assoc opts :target (vec (concat (sort animals/food-animals) (keys sources/ripe-age) (keys sources/wild-food))))
+                                    (child/search-args (assoc opts :target (vec (concat (sort animals/food-animals) (keys sources/ripe-age) (keys sources/wild-food)))))
                                     {:max-calls 1}))]
           (if (= :continue e)
             :continue
