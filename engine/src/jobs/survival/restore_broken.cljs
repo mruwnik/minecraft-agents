@@ -152,12 +152,14 @@
           v)))))
 
 (defn seals-body?
-  "Whether putting back the dug block of e would shut the body itself in: it has room to walk now and would not with
-  the cell solid (its doorway, its stair). pr: the pass's probe."
+  "Whether putting back the dug block of e would shut the body itself in: it has room to walk now and would be left
+  fewer than shut-room-cells with the cell solid (its doorway, its stair; not one cell off a room-sized floor).
+  pr: the pass's probe."
   [c {:keys [cell action]} pr]
   (and (= :dig action)
        (let [p (:primitives c)]
-         (and (not @(:enclosed pr)) (reach/enclosed? p #{(vec cell)})))))
+         (and (not @(:enclosed pr))
+              (reach/enclosed? p #{(vec cell)} (reach/lookup p reach/body-kind-of) reach/shut-room-cells)))))
 
 (def target [])
 
@@ -268,17 +270,25 @@
       (do (await (child/call-walk* c :go {:pos target :range 0 :ways #{:walk :clear-seal}}))
           (ctx/update-mem! c assoc :stepped true)))))
 
+(defn farthest-first
+  "waiting by distance from the body, the farthest first: a dead end seals nothing, and a sealing candidate costs a
+  search of the whole room, which the pass's allowance cannot pay for many times."
+  [c waiting]
+  (let [[x y z] (reach/cell-of (u/self-pos c))]
+    (sort-by (fn [{[cx cy cz] :cell}] (- (+ (* (- cx x) (- cx x)) (* (- cy y) (- cy y)) (* (- cz z) (- cz z))))) waiting)))
+
 (defn max-passes [] (settings/get settings ::max-passes))
 
 (defn decide
   "What one pass does with the waiting entries (synchronous, its searches and floods bounded whatever the number
   waiting): [:done], [:skip e why], [:step-clear e] or [:restore e]. An occupied cell comes first, then the first of
-  the first, in order, whose put-back seals no other (checked while the pass's search allowance lasts), else the first."
+  the first, farthest from the body first, whose put-back seals no other (checked while the pass's search allowance
+  lasts), else the first in order."
   [c waiting]
   (let [a (:args c)
         pr (probe c)
         e (or (first (filter #(= :occupied (why-not c % pr)) waiting))
-              (first (remove #(seals-others? c % waiting pr) (take-while (fn [_] (search-left? pr)) waiting)))
+              (first (remove #(seals-others? c % waiting pr) (take-while (fn [_] (search-left? pr)) (farthest-first c waiting))))
               (first waiting))
         why (when e (why-not c e pr))]
     (cond

@@ -198,7 +198,7 @@
           (await (zs/run-until-empty eng 6))
           (is (= [] (zs/calls p "place")))
           (is (= [[{:cell [9 65 0] :was "carrots" :why :not-carried}]] (mapv :cells (not-restored-runs seen))))
-          (is (= [[1 65 0] [2 65 0]] (:cells (first (restored-runs seen)))) "the replanted cells are restored")
+          (is (= #{[1 65 0] [2 65 0]} (set (:cells (first (restored-runs seen))))) "the replanted cells are restored")
           (is (= "1 broken blocks not restored, 2 restored" (:text (first (zs/trespass seen :stopped)))))
           (is (= 1 (count (tidy-entries eng)))))))))
 
@@ -609,6 +609,17 @@
           (is (= [] (zs/calls p "place")) "the doorway is not filled")
           (is (= 1 (count (tidy-entries eng))) "kept for when the body is out")
           (is (= [[{:cell [2 64 0] :was "stone" :why :seals}]] (mapv :cells (not-restored-runs seen)))))))))
+
+(deftest restore-puts-back-a-cell-that-only-trims-a-room-sized-floor
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (assoc-in (assoc with-hitbox :floor [-12 -20 12 20] :blocks {"2,66,0" "stone"}) [:self :pos] [0 64 0])
+              {:keys [eng p]} (restore! world [(zs/whole-zone "Miles")] [(dug-cell [2 65 0])])]
+          (is (not (reach/enclosed? p)) "the floor is room: exactly room-cells walkable cells")
+          (is (reach/enclosed? p #{[2 65 0]}) "one cell less floods as closed at room-cells")
+          (await (zs/run-until-empty eng 30))
+          (is (= [{:x 2 :y 65 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))) "the body keeps the rest of the floor"))))))
 
 (def mid-shaft
   "A one-wide shaft x 0, z 0 walled by stone at y 65 and 66, the body standing at its feet y 65 on a block at y 64; the
