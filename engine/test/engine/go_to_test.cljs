@@ -295,12 +295,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [args [{:floor {:health 21}} {:spend {:job-time 0}} {:spend {:job-time 0.05}} {:spend {:job-time 121}}]]
+        (doseq [args [{:floor {:health 21}} {:spend {:job-time 0}} {:spend {:job-time 0.05}}]]
           (let [{:keys [out p]} (await (go! {:blocks flat} (assoc args :pos [6 64 0])))]
             (is (= {:status :stopped :reason :bad-args} (select-keys @out [:status :reason])) (pr-str args))
             (is (= :impossible (:kind (:ending (meta @out)))) (pr-str args))
             (is (= [0 64 0] (at p)) (pr-str args))))
-        (doseq [args [{:floor {:health 20}} {:spend {:job-time 0.1}} {:spend {:job-time 120}}]]
+        (doseq [args [{:floor {:health 20}} {:spend {:job-time 0.1}} {:spend {:job-time 300}}]]
           (let [{:keys [out]} (await (go! {:blocks flat} (assoc args :pos [6 64 0])))]
             (is (not= :bad-args (:reason @out)) (pr-str args))))))))
 

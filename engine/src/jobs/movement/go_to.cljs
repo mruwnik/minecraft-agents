@@ -39,7 +39,7 @@
   - Refused at submit (or the caller's ctx/call throws): an arg its spec refuses, such as a :tolls entry that is not {:x :y :z :factor} (finite cell, factor 0 or more), a :gait that is not :auto, :walk or :sneak.
   - Ends at once, before any walk, after a :refused warn, data {:arrived false :text}: impossible :bad-pos (a :pos
     outside the world), :bad-name (a :place that is not a valid name), :unsupported (a body with no pathWorld sensing)
-    or :bad-args (a given :floor :health over 20, a :spend :job-time outside 0.1-120); condition-failed :unknown-place (no
+    or :bad-args (a given :floor :health over 20, a :spend :job-time under 0.1); condition-failed :unknown-place (no
     recorded position). A call whose :ways leave out :walk ends nothing-possible :no-way.
   - Ways (:ways, all by default): :walk, and those that change the world: :clear-seal (its own ledger blocks round a
     goal it cannot reach taken back, one jobs.access.cleanup child a call), :pillar (a pillar, a gap filled with a
@@ -205,7 +205,7 @@
   (let [h (:health floor) t (:job-time spend)]
     (cond
       (and h (> h 20)) {:reason :bad-args :message (str ":floor :health must be 0 to 20, got " h)}
-      (and t (not (<= 0.1 t 120))) {:reason :bad-args :message (str ":spend :job-time must be 0.1 to 120 s (one leg), got " t)})))
+      (and t (< t 0.1)) {:reason :bad-args :message (str ":spend :job-time must be at least 0.1 s, got " t)})))
 
 (defn walk-limits
   "The walk's {:min-health :allow-over-budget :max-damage :leg-s} from the call keys given and frozen (with a caller's
