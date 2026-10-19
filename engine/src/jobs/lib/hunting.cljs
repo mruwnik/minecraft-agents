@@ -1,7 +1,9 @@
 (ns jobs.lib.hunting
   "The kill-and-collect steps combat.hunt and animals.cull share: the drops table, the attack child call, the
   drop collection and the search wait. Memory keys: :target, :killed, :skipped, :skips, :collecting, :misses."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.animals :as animals]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]))
@@ -24,13 +26,9 @@
              "rabbit" ["rabbit" "rabbit_hide" "rabbit_foot"]}]
     (update-vals raw (fn [items] (into items (keep raw-meats) items)))))
 
-(def max-skips
-  "Animals skipped in a row before the hunt or cull gives up."
-  3)
-
-(def collect-radius
-  "Blocks around the last kill in which its drops are collected."
-  8)
+(a/defargs settings
+  {::max-skips {:default 3 :doc "Animals skipped in a row before the hunt or cull gives up." :spec (a/int-in 0 nil)}
+   ::collect-radius {:default 8 :doc "Blocks around the last kill in which its drops are collected." :spec (a/num-in 0 nil)}})
 
 (defn note-target!
   "Remember the passive target as last seen (:animal, :entity id, :uuid, :cell, :by job and the rule that allowed the kill, from (rule-fn c entity)),
@@ -79,7 +77,7 @@
     (if (= :continue e)
       :yield
       (do (book-outcome! c target e)
-          (if (>= (:skips (ctx/mem c) 0) max-skips)
+          (if (>= (:skips (ctx/mem c) 0) (settings/get settings ::max-skips))
             (give-up c)
             :again)))))
 
@@ -95,7 +93,7 @@
   [c waiting]
   (let [{:keys [mob] :as a} (:args c)
         e (await (ctx/call c :collect 'jobs.items.collect-drops
-                                 {:radius collect-radius :items (or (:drops a) (get drops mob))}))]
+                                 {:radius (settings/get settings ::collect-radius) :items (or (:drops a) (get drops mob))}))]
     (if (collect-ended? e)
       (do (ctx/update-mem! c dissoc :collecting) :again)
       waiting)))

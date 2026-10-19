@@ -182,7 +182,7 @@
           (is (= #{3 4 5} (set (attacked s))) "the walled cows are never swung at")
           (is (= [3 :unreachable 2] [killed reason remaining]))
           (is (= [1 2] (vec (sort skipped))))
-          (is (= [:unreachable] (mapv :reason (events-of s :cull.gave-up))) "one give-up event, the event stream carries no severity")
+          (is (empty? (events-of s :cull.gave-up)) "the ending carries the give-up")
           (is (finished? s)))))))
 
 (deftest another-mob-is-ignored

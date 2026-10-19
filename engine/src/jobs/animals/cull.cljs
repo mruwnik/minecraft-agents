@@ -22,9 +22,9 @@
 
   One call is the whole run, a loop of these:
   - With a target: the attack child fights it. It is booked killed, or skipped when attack gave up or lost it.
-    jobs.lib.hunting/max-skips (3) skips in a row end the job :gave-up (warn cull.gave-up).
+    The setting jobs.lib.hunting/max-skips (3) skips in a row end the job :gave-up.
   - After a kill: collect-drops picks up :drops (nil: the kind's entry in jobs.lib.hunting/drops, else every
-    item within jobs.lib.hunting/collect-radius (8)).
+    item within the setting jobs.lib.hunting/collect-radius (8)).
   - Otherwise it picks the next candidate: adults in the bound not skipped, those that are not unhittable first
     (an animal behind a wall comes last), then nearest first. The target stays until killed or given up on.
 
@@ -36,8 +36,8 @@
   done. Skipped animals stay alive and still count as adults, so they still breed. Any other reason ends :done when
   the call's :least (default 1) animals were killed; else nothing-possible with r as the cause. It yields (:continue) only while a child waits on the world.
   Other reasons:
-  - :unreachable: no candidate is left, some were skipped (warn cull.gave-up).
-  - :none: no candidate on two looks in a row, with a 1 s wait between (warn cull.gave-up); the data reason is :refused (or
+  - :unreachable: no candidate is left, some were skipped.
+  - :none: no candidate on two looks in a row, with a 1 s wait between; the data reason is :refused (or
     :no-zones) when the zone rules refused the adults.
   - :gave-up: too many skips in a row.
 
@@ -138,25 +138,16 @@
       (ctx/end c :done nil data)
       (ctx/end c :nothing-possible reason data))))
 
-(defn give-up!
-  "Warn about the animals left alive, then end with reason."
-  [c reason]
-  (let [{:keys [killed skipped]} (ctx/mem c)]
-    (ctx/emit! c :cull.gave-up :warn {:reason reason :killed (or killed 0) :skipped (vec skipped)
-                                      :text (str "cull gave up (" (name reason) "): " (count skipped)
-                                                 " animals skipped, killed " (or killed 0))})
-    (finish! c reason)))
-
 (defn attack-opts
   "Options for hunting.attack!: a search around the reach; ends with :gave-up."
   [c]
-  {:radius (+ (reach c) 16) :give-up #(give-up! % :gave-up)
+  {:radius (+ (reach c) 16) :give-up #(finish! % :gave-up)
    :job "jobs.animals.cull" :rule-fn (constantly :cull)})
 
 (defn none!
   "Nothing left to attack: end with the refusal, else :none."
   [c]
-  (give-up! c (or (animals/refusal c) :none)))
+  (finish! c (or (animals/refusal c) :none)))
 
 (defn ^:async step
   "One step: attack the target, collect, or pick the next target (done? ends the cull at its goal). :again, :yield (a
@@ -173,7 +164,7 @@
       :else
       (let [next-target (first (candidates c (:adults (census c))))]
         (cond
-          (and (nil? next-target) (seq skipped)) (give-up! c :unreachable)
+          (and (nil? next-target) (seq skipped)) (finish! c :unreachable)
           (nil? next-target) (await (hunting/search! c none!))
           :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
                     (await (hunting/attack! c (attack-opts c)))))))))

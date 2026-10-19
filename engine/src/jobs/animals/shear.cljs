@@ -24,7 +24,7 @@
   or three sheep in a row were fruitless (no shears are fetched while nothing is left to shear). Unless :collect is false it then runs jobs.items.collect-drops for
   the wool in :radius and ends.
 
-  Ends with a warn shear.gave-up unless the reason is :shorn, the data {:reason :shorn [keys]
+  The data {:reason :shorn [keys]
   :given-up {key reason} :collected n} and the ending by the reason:
   - :done :already (data reason :all-sheared) when adult sheep stand in radius and all are sheared at the start. :done :shorn: the count was reached. Any stop after at least :least sheep were shorn (default 1; :all =
     :count, every sheep in radius when nil) is done, with the stop as the data reason.
@@ -49,7 +49,7 @@
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds of working, fetching included, before shearing gives up." :spec (a/num-in 0 nil)}
    ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
-   ::max-in-row {:default 3 :doc "Animals handled in a row before the body looks again." :spec (a/int-in 0 nil)}})
+   ::max-in-row {:default 3 :doc "Fruitless animals in a row that end the run." :spec (a/int-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn max-in-row [] (settings/get settings ::max-in-row))
 
@@ -103,8 +103,6 @@
                 :given-up (:given-up m {})
                 :collected (:collected m 0)
                 :text (str "shear done: " (name reason) ", shorn " (count (:shorn m)))}]
-    (when (not= :shorn reason)
-      (ctx/emit! c :shear.gave-up :warn {:reason reason :text (str "shearing stopped: " (name reason))}))
     (if ending
       (assoc ending :data result)
       (let [[kind cause] (if (and (pos? (count (:shorn m))) (>= (count (:shorn m)) (least-shorn c)))

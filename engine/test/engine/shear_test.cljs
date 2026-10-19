@@ -161,7 +161,7 @@
           (is (= ["u1"] (:shorn (done-event s))))
           (is (= 1 (count-of s "white_wool")))
           (is (= 1 (:collected (done-event s))))
-          (is (= [:shear.gave-up] (mapv :kind (events-of s :shear.gave-up)))))))))
+          (is (empty? (events-of s :shear.gave-up))))))))
 
 (deftest wool-seen-but-none-taken-ends-the-pickup-with-nothing-collected
   (async done

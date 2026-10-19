@@ -38,9 +38,9 @@
   A hostile kind with no weapon of the call's :use :tools carried gets a sword first (jobs.lib.need, :fetch; a failed fetch ends the job with its cause), else with :fetch off the first round ends :condition-failed :unarmed.
   One call hunts until it ends, in steps; it yields (:continue) only while a child is waiting on the world:
   1. With a :target, the attack child fights it. It is booked killed, or skipped when attack gave up on it or lost it.
-     jobs.lib.hunting/max-skips (3) skips in a row end the job :gave-up.
+     the setting jobs.lib.hunting/max-skips (3) skips in a row end the job :gave-up.
   2. After a target, the collect-drops child picks up :drops (nil: the kind's entry in the drops table,
-     else every item within jobs.lib.hunting/collect-radius (8)).
+     else every item within the setting jobs.lib.hunting/collect-radius (8)).
   3. :killed reaching :count ends :count.
   4. At most :keep adults present ends :keep. Skipped animals still count.
   With a :color only unsheared sheep of that colour count and are hunted (the :keep rule applies to them: the last :keep stay).
