@@ -23,40 +23,20 @@
             [jobs.lib.vantage :as vantage]))
 
 (def doc
-  "Kill :count adult animals of the mob kind :mob within :radius, collecting their drops.
-  :mob may be a list of kinds, or :food-animals (cow, pig, sheep, chicken): one child hunt per kind, in order, each with
-  its own :count and :keep (:color goes to sheep only); the result is {:killed n :kinds {mob result} :reason r}: reason :count
-  when every kind reached its count, else :partial; no kill at all ends stopped with the first kind's reason.
-  Never takes the last :keep adults of the kind, so they can breed. :keep nil means 2 for animals and 0 for hostile mobs
-  (by the kind's name, else a kind any of whose entities in range reports kind hostile). 0 turns the rule off.
-  The weapons are the call's :use :tools (default the best carried).
-  Babies are never targets and never counted. Animals the body spares (jobs.lib.animal-spare: kinds in :off-limits, animals in
-  a zone or plan of its own or a closed enclosure unless :spare-pens is false) are never targets either; when only such animals
-  are left it ends :spared (the data has :spared-by, a count per rule, and the ending's text names them when nothing was killed).
-  A hunt waits (fit?) while the body is too hurt (:low-health, jobs.lib.body/too-hurt), also once begun, and (can-start?) at its start (one kind
-  only) while :no-color (a :color and none of it in range; :seen-colors) or :too-few (:keep or fewer adults within :radius; the
-  cause has :in-range, :radius, :keep and :nearest, the distance of the nearest adult of the kind in sight up to ::sight-radius).
-  A hostile kind with no weapon of the call's :use :tools carried gets a sword first (jobs.lib.need, :fetch; a failed fetch ends the job with its cause), else with :fetch off the first round ends :condition-failed :unarmed.
-  One call hunts until it ends, in steps; it yields (:continue) only while a child is waiting on the world:
-  1. With a :target, the attack child fights it. It is booked killed, or skipped when attack gave up on it or lost it.
-     the setting jobs.lib.hunting/max-skips (3) skips in a row end the job :gave-up.
-  2. After a target, the collect-drops child picks up :drops (nil: the kind's entry in the drops table,
-     else every item within the setting jobs.lib.hunting/collect-radius (8)).
-  3. :killed reaching :count ends :count.
-  4. At most :keep adults present ends :keep. Skipped animals still count.
-  With a :color only unsheared sheep of that colour count and are hunted (the :keep rule applies to them: the last :keep stay).
-  5. No adult of the kind in sight within :radius but some heard (below a lip, behind a bank): before step 4 or the end below
-     the body steps up to four times toward the sound and looks round (jobs.lib.vantage). Nothing heard, no steps.
-     No candidate (present, not skipped) ends :none, on the second such round in a row, after a 1 s wait.
-  6. Otherwise the nearest candidate becomes the :target and is attacked in the same round.
-     The target stays until killed or given up on, even when a nearer animal turns up.
-  :center (default: where the body stands) with :radius is the area: the call waits (:outside-area, jobs.lib.area) while the body stands farther than :radius from the centre; the caller walks there first.
-  Before the first step it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!).
-  Ends with the data {:killed n :reason r :spared s :remaining m}. The ending: :done for :count, and for
-  any other reason when the call's :least (default 1) animals were killed; else :nothing-possible with r as the cause
-  (:keep, :spared, :none, :gave-up). A list of kinds ends :done :count / :partial, else with the first kind's ending.
-  :spared is the kills asked for and not made because of the pair rule (0 unless :keep ended it).
-  :remaining is the adults of the kind in range at the end.")
+  "Kill :count adult animals of the mob kind :mob within :radius of :center (the body's place at the first run; it waits :outside-area
+  while the body is farther), collecting their drops, in one call that yields only while a child waits on the world.
+  :mob may be a list of kinds or :food-animals (cow, pig, sheep, chicken): one child hunt per kind, each with its own :count and :keep.
+  Never takes the last :keep adults of the kind (nil: 2 for animals, 0 for hostile mobs); babies are never targets. Animals the body
+  spares (jobs.lib.animal-spare: kinds in ::off-limits, animals in a zone or plan of its own or a closed enclosure unless ::spare-pens
+  is false) are never targets either. Weapons: the call's :use :tools (default the best carried); a hostile kind with none gets a sword
+  first (jobs.lib.need, :fetch; a failed fetch ends the job with its cause).
+  Needs: fit? (waits :low-health); at its start (one kind only) it waits :unarmed (hostile, no weapon, :fetch off), :no-color or
+  :too-few (:in-range, :radius, :keep, :nearest) unless the kind is heard and not in sight, when it first steps up to four times
+  toward the sound (jobs.lib.vantage).
+  Returns {:killed n :reason r :spared s :remaining m}. :done for :count and, for any other reason, when the call's :least (default 1)
+  were killed; else :nothing-possible with r the cause (:keep, :spared with :spared-by per rule, :none, :gave-up after
+  jobs.lib.hunting/max-skips skipped animals in a row). A list of kinds: reason :count or :partial, data :kinds {mob result}, the
+  first failed kind's ending the :because.")
 
 (a/defargs args
   {:mob {:doc "mob type name of the animals to hunt, a list of them, or :food-animals (cow, pig, sheep, chicken); one hunt per kind, :count and :keep apply to each" :spec (a/or-of a/name? (a/coll-of a/name?) #{:food-animals "food-animals"}) :default "cow"}
@@ -66,8 +46,6 @@
    :center {:doc "the centre of the area the job works, a cell [x y z] or {:x :y :z}; nil: where the body stands when the job first runs (jobs.lib.area)" :spec a/position? :default nil}
    :keep {:doc "never kill the last this many adults of the kind within :radius (babies do not count); nil: 2 for animals, 0 for hostile mobs; 0 turns the rule off" :spec (a/int-in 0 nil) :default nil}
    :drops {:doc "item names to collect after a kill; nil: the kind's entry in the drops table, else every item" :spec (a/coll-of a/item?) :default nil}
-   :off-limits {:doc "animal kinds never hunted; nil: the jobs.lib.animal-spare/off-limits setting" :spec (a/or-of (a/pred "nil" nil?) (a/coll-of a/item?)) :default nil}
-   :spare-pens {:doc "never hunt animals in a zone or plan of the body's own or in a closed enclosure (false: this hunt may take them)" :spec boolean? :default true}
    :fetch {:doc "get a sword when a hostile kind is hunted unarmed, with jobs.lib.need: true, a set of kinds or a map of limits; false (or without :tool) ends :unarmed" :spec need/option? :default true}})
 
 (a/defargs settings
@@ -110,7 +88,7 @@
   the pair rule is :keep's."
   [c]
   (let [pens (atom [])
-        args {:off-limits (:off-limits (:args c)) :spare-pens (:spare-pens (:args c)) :keep-adults -1}]
+        args {:spare-pens (spare/spare-pens?) :keep-adults -1}]
     (into {} (keep #(some->> (spare/why args (.-name %) 0 (spare/penned? c pens %) false) (vector (.-id %)))) (present c))))
 
 (defn candidates
@@ -168,13 +146,6 @@
        (when (pos? keep) (str ", keeping " keep))
        (when nearest (str "; the nearest is " nearest " away"))))
 
-(defn unarmed!
-  "End at once: a hostile kind and no weapon carried (an unarmed body does not fist-fight)."
-  [c]
-  (let [mob (:mob (:args c))
-        out {:killed 0 :reason :unarmed :mob mob :text (str "hunt stopped: no weapon carried for a hostile " mob)}]
-    (ctx/end c :condition-failed :unarmed out)))
-
 (defn fetch-opts
   "The limits {:how :explore :minutes} for fetching a weapon, nil when :fetch does not allow tools."
   [c]
@@ -214,14 +185,21 @@
   (when (and (empty? (present-any c)) (not (vantage/done? c)))
     (seq (vantage/heard c [(:mob (:args c))] (:radius (:args c))))))
 
+(defn unarmed-cause
+  "The cause :unarmed: a hostile kind, no weapon carried and no fetch allowed (an unarmed body does not fist-fight)."
+  [c]
+  (when (and (hostile? c) (not (armed? c)) (not (fetch-opts c)))
+    {:reason :unarmed :killed 0 :mob (:mob (:args c)) :text (str "hunt stopped: no weapon carried for a hostile " (:mob (:args c)))}))
+
 (def start-fact
-  "Later with the cause that bars a hunt's first step: nothing of the :color in range, or :keep or fewer adults.
+  "Later with the cause that bars a hunt's first step: no weapon for a hostile kind (:fetch off), nothing of the :color in range, or :keep or fewer adults.
   Ok while the kind is heard and not in sight: the first steps look for it."
   (checks/refusing
    :quarry "there is something to hunt"
    (fn [c]
      (when-not (or (:started (ctx/mem c)) (kinds c) (heard-kind c))
        (cond
+         (unarmed-cause c) (unarmed-cause c)
          (and (:color (:args c)) (empty? (present c))) (no-color c)
          (<= (count (present c)) (keep-of c)) (too-few-cause c))))))
 
@@ -279,7 +257,7 @@
   "Which animal-spare rule let the hunt take the adult e: :pen-taken, :surplus or :starved."
   [c e]
   (let [adults (count (adults-within c (:radius (:args c))))]
-    (spare/allowed-by {:keep-adults (keep-of c) :spare-pens (:spare-pens (:args c))} adults (spare/penned? c (atom []) e))))
+    (spare/allowed-by {:keep-adults (keep-of c) :spare-pens (spare/spare-pens?)} adults (spare/penned? c (atom []) e))))
 
 (defn attack-opts
   "Options for hunting.attack!: a wide search around the ask; ends the job after too many skips."
@@ -297,8 +275,8 @@
     (let [{:keys [target collecting killed]} (ctx/mem c)
           next-target (first (candidates c))]
       (cond
-        (and (or first? (:fetching (ctx/mem c))) (hostile? c) (not (armed? c)))
-        (if (fetch-opts c) (await (fetch-weapon! c)) (unarmed! c))
+        (and (or first? (:fetching (ctx/mem c))) (fetch-opts c) (hostile? c) (not (armed? c)))
+        (await (fetch-weapon! c))
         target (await (hunting/attack! c (attack-opts c)))
         collecting (await (hunting/collect! c :yield))
         (>= (or killed 0) wanted) (finish! c :count)
@@ -331,18 +309,17 @@
          :reason (if (= :done (:kind e)) (get-in e [:data :reason]) (contract/cause-key e))))
 
 (defn finish-kinds!
-  "End the batch: the sums and each kind's result. No kill ends with the first kind's ending."
+  "End the batch: the sums and each kind's result. Too few kills end :nothing-possible :partial, the first failed kind's ending its :because."
   [c kinds]
   (let [results (into {} (map (fn [k] [k (get-in (ctx/mem c) [:kinds k])])) kinds)
         killed (reduce + (map #(:killed % 0) (vals results)))
         all-count? (every? #(= :count (:reason %)) (vals results))
-        first-kind (get results (first kinds))
-        reason (cond all-count? :count (zero? killed) (:reason first-kind) :else :partial)
+        reason (if all-count? :count :partial)
         out {:killed killed :reason reason :kinds results
              :text (str "hunt done: killed " killed " of " (str/join ", " kinds) ", " (some-> reason name))}]
     (if (or all-count? (>= killed (let [least (:least (ctx/frozen-call c) 1)] (if (= :all least) (* (:count (:args c)) (count kinds)) least))))
       (ctx/end c :done nil out)
-      (ctx/end c (if (= :done (:kind first-kind)) :nothing-possible (:kind first-kind)) reason out))))
+      (contract/with-because (ctx/end c :nothing-possible reason out) (:failed (ctx/mem c))))))
 
 (defn ^:async kinds-round
   "One child hunt after another, one per kind; :continue only while a child waits on the world."
@@ -355,7 +332,8 @@
         (let [e (waits/waiting-out c (await (ctx/call c (kind-slot kind) 'jobs.combat.hunt (kind-args c kind))))]
           (if (= :continue e)
             :continue
-            (do (ctx/update-mem! c assoc-in [:kinds kind] (child-result e))
+            (do (ctx/update-mem! c #(cond-> (assoc-in % [:kinds kind] (child-result e))
+                                      (and (not= :done (:kind e)) (not (:failed %))) (assoc :failed e)))
                 (recur))))))))
 
 (defn ^:async round

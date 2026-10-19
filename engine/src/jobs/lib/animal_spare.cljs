@@ -10,12 +10,15 @@
 
 (a/defargs settings
   {::off-limits {:default #{} :doc "Animal kinds (\"cow\") a hunt for food never takes, wherever they are." :spec (a/set-of a/item?)}
+   ::spare-pens {:default true :doc "Whether a hunt leaves alone animals in a zone or plan of the body's own or in a closed enclosure." :spec boolean?}
    ::pen-max-cells {:default 400 :doc "Most cells searched to tell whether an animal stands in a closed enclosure (then it counts as penned)." :spec (a/int-in 1 nil)}})
 
 (defn off-limits
   "The kinds a hunt never takes: the job's :off-limits arg over the ::off-limits setting."
   [args]
   (set (or (:off-limits args) (settings/get settings ::off-limits))))
+
+(defn spare-pens? "The ::spare-pens setting." [] (settings/get settings ::spare-pens))
 
 (defn why
   "Why a hunt leaves an adult animal alone, or nil: :off-limits, :pen (in a zone or plan of the body's own, unless

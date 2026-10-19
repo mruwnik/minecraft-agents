@@ -103,7 +103,7 @@
         (let [s (await (scenario {:mob ["cow" "pig"] :keep 0} {:inventory h/sword :entities []} 20))
               e (done-event s)]
           (is (= 0 (:killed e)))
-          (is (= :too-few (:reason e)) "the first kind's ending")
+          (is (= :partial (:reason e)))
           (is (seq (events-of s :stopped)) "0 killed ends stopped, not completed")
           (is (finished? s)))))))
 
@@ -570,12 +570,14 @@
               (is (empty? (attacked s)))
               (is (= {:off-limits 4} (:spared-by (done-event s)))))))))))
 
-(deftest an-explicit-hunt-may-lift-the-pen-rule
+(deftest the-spare-pens-setting-off-lifts-the-pen-rule
   (async done
     (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (spared-hunt {:spare-pens false} {:inventory h/sword :entities (four-sheep)} own-pen))]
-          (is (seq (attacked s))))))))
+      (fn []
+        (settings/with-settings {:jobs.lib.animal-spare/spare-pens false}
+          (fn ^:async t []
+            (let [s (await (spared-hunt {} {:inventory h/sword :entities (four-sheep)} own-pen))]
+              (is (seq (attacked s))))))))))
 
 (deftest every-kill-of-a-passive-mob-is-an-event-naming-the-rule-that-allowed-it
   (async done

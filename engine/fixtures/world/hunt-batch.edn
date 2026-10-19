@@ -1,6 +1,6 @@
 ;; combat.hunt with a list of mobs (card f23d925d): one hunt per kind, :count and the keep-2 rule apply to each.
 ;; Cows and pigs are NoAI, 3 of each at x 20..22. Should-succeed: {:mob ["cow" "pig"]} kills one of each. Should-fail: no animal of either kind
-;; in the radius stops :too-few.
+;; in the radius stops :partial (the kind that failed is the :because).
 {:defaults
  {:tags [:animals :hunt]
   :plot {:height 6}
@@ -14,7 +14,7 @@
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 90}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]
            [:entities "type=pig,tag=wt" [[0 0 0] [31 3 31]] 2]]}
-  {:name "hunt-list-with-no-animal-in-range-stops-too-few"
+  {:name "hunt-list-with-no-animal-in-range-stops-partial"
    :act [[:job (jobs.combat.hunt {:mob ["cow" "pig"] :count 1})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :too-few}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :partial}} :within-s 40 :of-job true}]
    :limit-s 60}]}
