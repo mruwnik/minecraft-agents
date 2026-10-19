@@ -245,14 +245,13 @@
     (str "kitchen done: " (if (seq parts) (str/join "; " parts) "nothing"))))
 
 (defn finish!
-  "End the pass: done when it cooked, baked or stored something; else the ending of the first step that stopped (its
-  kind and cause), or nothing-possible when every step was skipped."
+  "End the pass: done when it cooked, baked or stored something; else the first step's stopping ending (as :because), or nothing-possible when every step was skipped."
   [c report]
   (let [failed (:failed (ctx/mem c))
         data {:steps report :text (done-text report)}]
     (cond
       (progressed? report) (ctx/end c :done nil data)
-      failed (ctx/end c (:kind failed) (:cause failed) data)
+      failed (contract/with-because (ctx/end c (:kind failed) (:cause failed) data) failed)
       :else (ctx/end c :nothing-possible {:reason :nothing-to-do} data))))
 
 (defn after-child
@@ -260,7 +259,7 @@
   other steps move on."
   [m step food booked e]
   (-> m
-      (cond-> (and (not= :done (:kind e)) (not (:failed m))) (assoc :failed (select-keys e [:kind :cause])))
+      (cond-> (and (not= :done (:kind e)) (not (:failed m))) (assoc :failed e))
       (dissoc :call-args :food)
       (cond-> (= :smelt step) (-> (update :tried (fnil conj #{}) food) (assoc-in [:report :smelt food] booked))
               (not= :smelt step) (-> (update :todo rest) (assoc-in [:report step] booked)))))

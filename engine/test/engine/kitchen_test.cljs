@@ -276,6 +276,11 @@
           (is (contains? #{:condition-failed :nothing-possible} (:kind e)) (pr-str e))
           (is (contains? (:data e) :steps)))))))
 
+(deftest the-first-stopped-step-is-kept-whole-to-end-with-as-because
+  (let [e {:kind :condition-failed :cause :no-fuel :because {:kind :impossible :cause :x}}
+        m (kitchen/after-child {} :take nil {} e)]
+    (is (= e (:failed (kitchen/after-child m :bake nil {} {:kind :impossible :cause :y}))))))
+
 
 (deftest can-run-between-steps-follows-the-chest-the-body-has-seen
   (let [p (tu/seeing-all (tu/fake-on-floor (merge-with merge kitchen {:blocks {"20,64,0" "stone"}})))
