@@ -540,6 +540,7 @@
           (is (= [[0 65 0]] (mapv :cell (the-ledger eng))))
           (is (= [{:cell [0 65 0] :item "dirt" :reason :zone :zone "keep"}] (:open @out)))
           (is (= 1 (count (of-kind seen :cleanup.left))))
+          (is (empty? (of-kind seen :cleanup.done)) "a left-open ending does not restate itself")
           (is (= #{[0 65 0]} (ledger/held-cells (mem/view (:store eng))))))))))
 
 (deftest only-the-named-instance-and-its-children

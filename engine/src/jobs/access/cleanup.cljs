@@ -75,7 +75,7 @@
   ::roof-height above it while the body is in the open). A walk leg also stops while a mob the body fled from within
   jobs.lib.threats/fled-memory-ms was last known within jobs.lib.threats/fled-radius of the cell or the body (:danger).
 
-  A shelter's block (purpose :shelter or :retreat-plug) stays while a known hostile is near (:hostile-near) and all night (:night; arg :keep-at-night?): it keeps the hostile out of the body's refuge.
+  A shelter's block (purpose :shelter or :retreat-plug) stays while a known hostile is near (:hostile-near) and all night (:night; setting ::keep-at-night?): it keeps the hostile out of the body's refuge.
 
   Every dig asks jobs.lib.access.rules/may-dig? (zones, plan footprints, ledger cells) when chosen and again
   right before the dig. A refusal (:zone :footprint :no-zones :not-loaded) or a hazard :accept does not name
@@ -87,7 +87,7 @@
 
   Ends by collecting the removed items' drops (jobs.items.collect-drops, filtered to the items they drop;
   a wall torch gives the torch). Data {:removed [{:cell :item}] :dropped [{:cell :item :found}] :open [{:cell
-  :item :reason}] :collected n}, info cleanup.done, and warn cleanup.left while :open is not empty. Open cells
+  :item :reason}] :collected n}, info cleanup.done after a :done ending, and warn cleanup.left (with the counts) instead while :open is not empty. Open cells
   are held (:scaffold-held, 10 minutes) so the conditions and the scaffold-left trigger do not offer them again at
   once. Ends :done when nothing is left open, else nothing-possible :left-open (what could be taken back, was);
   :too-many-passes (nothing-possible) after ::max-passes steps.
@@ -101,8 +101,7 @@
    :within {:doc "only the entries within this many blocks of the body, read afresh each time (32 when :job is nil); :near wins" :spec (a/num-in 0 nil) :default nil}
    :accept {:doc "dig hazards accepted: :fluid-adjacent (water beside), :lava-adjacent, :falling-block"
             :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent}}
-   :ignore-zones? :shared
-   :keep-at-night? {:doc "a shelter's block (:shelter, :retreat-plug) stays all night; false takes it back at night too" :spec boolean? :default true}})
+   :ignore-zones? :shared})
 
 
 (a/defargs settings
@@ -113,6 +112,7 @@
    ::max-collect-radius {:default 48 :doc "Blocks around the body in which dropped scaffold is collected, at most." :spec (a/int-in 0 nil)}
    ::roof-height {:default 4 :doc "Blocks above a scaffold block within which a solid block (not scaffold) roofs it; a roofed one is not walked to from the open (:roofed)." :spec (a/int-in 0 nil)}
    ::died-radius {:default 24 :doc "Blocks around a place the body died within which a scaffold is not walked to (:died-near)." :spec (a/num-in 0 nil)}
+   ::keep-at-night? {:default true :doc "A shelter's block (:shelter, :retreat-plug) stays all night; false takes it back at night too." :spec boolean?}
    ::danger-radius {:default 16 :doc "Blocks around a scaffold block within which a known hostile holds it (:danger) instead of a walk." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds a cleanup may take: the digs, the walks, the collecting." :spec (a/num-in 0 nil)}
    ::max-passes {:default 200 :doc "Steps (dig, walk, collect) in one run before it stops." :spec (a/int-in 0 nil)}})
@@ -133,6 +133,8 @@
 (defn leg-s [] (settings/get settings ::leg-s))
 
 (defn give-up [] (settings/get settings ::give-up))
+
+(defn keep-at-night? [] (settings/get settings ::keep-at-night?))
 
 (defn danger-radius [] (settings/get settings ::danger-radius))
 
@@ -170,7 +172,7 @@
     (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
            {:feet (reach/standing-vec (:primitives c)) :eye (eye-of c) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :floor-at (access/seen-at (:primitives c)) :entries entries
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
-            :hostile-near? (hostile-near? (:primitives c)) :night? (sh-sense/dark-outside? (:primitives c)) :keep-at-night? (:keep-at-night? (:args c))
+            :hostile-near? (hostile-near? (:primitives c)) :night? (sh-sense/dark-outside? (:primitives c)) :keep-at-night? (keep-at-night?)
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach (dig-reach)
             :spare-own-builds (access/spare-own-builds)
             :guard-walks? (and (nil? (:job (:args c))) (nil? (:near (:args c))))
@@ -359,10 +361,9 @@
   (let [result (result-of c open)]
     (hold-open! c open)
     (when (seq open)
-      (ctx/emit! c :cleanup.left :warn {:open open
+      (ctx/emit! c :cleanup.left :warn {:open open :removed (count (:removed result)) :dropped (count (:dropped result)) :collected (:collected result)
                                         :text (str "cleanup left " (count open) " blocks: "
-                                                   (apply str (interpose ", " (map cell-text open))))})
-      (done-event! c result))
+                                                   (apply str (interpose ", " (map cell-text open))))}))
     (if (seq open)
       (ctx/end c :nothing-possible :left-open result)
       (ctx/end c :done nil result))))
