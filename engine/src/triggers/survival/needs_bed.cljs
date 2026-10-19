@@ -12,13 +12,13 @@
 
 (defn why
   "Why a body by day needs a bed: {:why :spawn-lost :pos p} (sh-spawn/spawn-lost-pos), {:why :unslept :days d} (sh-beds/max-days-awake
-  passed and sh-spawn/standing-bed finds none within sh-beds/urgent-bed-radius), else nil."
+  passed and sh-spawn/standing-bed finds none within (sh-beds/urgent-bed-radius)), else nil."
   [p view]
   (if-let [pos (sh-spawn/spawn-lost-pos p view)]
     {:why :spawn-lost :pos pos}
     (let [days (or (sh-beds/days-awake-in view) 0)]
       (when (and (>= days sh-beds/max-days-awake)
-                 (nil? (sh-spawn/standing-bed p view sh-beds/urgent-bed-radius)))
+                 (nil? (sh-spawn/standing-bed p view (sh-beds/urgent-bed-radius))))
         {:why :unslept :days days}))))
 
 (defn needs-bed

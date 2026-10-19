@@ -28,8 +28,8 @@
 (a/defargs args
   {:bed {:doc "bed position [x y z] or {:x :y :z} to sleep in; default: the bed to use within the radius" :spec ::a/pos :default nil}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof (where a carried bed is put down)" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
-   :bed-radius {:doc "a remembered bed farther than this is not used" :spec (a/num-in 0 nil) :default sh-beds/default-bed-radius}
-   :urgent-bed-radius {:doc "the bed radius once the body is overdue for sleep" :spec (a/num-in 0 nil) :default sh-beds/urgent-bed-radius}
+   :bed-radius {:doc "a remembered bed farther than this is not used (nil: the jobs.lib.shelter.beds/default-bed-radius setting)" :spec (a/num-in 0 nil) :default nil}
+   :urgent-bed-radius {:doc "the bed radius once the body is overdue for sleep (nil: the jobs.lib.shelter.beds/urgent-bed-radius setting)" :spec (a/num-in 0 nil) :default nil}
    :roofed-only {:doc "put a carried bed down on roofed cells only, never in the open (a body inside a home)" :spec boolean? :default false}
    :fetch {:doc "get a bed when none is to use or carried (jobs.lib.need): true, a set of kinds or a map of limits; false makes :no-bed a start condition" :spec need/option? :default true}
    :max-days-awake {:doc "in-game days without sleep before a bed in the open is slept in and the urgent radius applies" :spec (a/num-in 0 nil) :default sh-beds/max-days-awake}})

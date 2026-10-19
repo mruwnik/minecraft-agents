@@ -43,8 +43,8 @@
   Quote: time by the straight distance to the bed at :speed blocks a second; done 1 sleep.")
 
 (a/defargs args
-  {:bed-radius {:doc "a remembered bed farther than this many blocks from the body is not used"
-                :spec (a/num-in 0 nil) :default sh-beds/default-bed-radius}
+  {:bed-radius {:doc "a remembered bed farther than this many blocks from the body is not used (nil: the jobs.lib.shelter.beds/default-bed-radius setting)"
+                :spec (a/num-in 0 nil) :default nil}
    :open-bed {:doc "false: a bed that is not shut in a closed, roofed room is not lain in (the job ends :stopped :bed-open once the body is beside it)"
               :spec boolean? :default true}
    :bed {:doc "bed position [x y z] or {:x :y :z} to sleep in instead of the remembered :bed (no radius); it is recorded as :bed when that is unset or gone" :spec ::a/pos
@@ -65,8 +65,8 @@
   [c]
   (if-let [given (:bed (:args c))]
     (:pos (places/parse-pos given))
-    (or (sh-beds/bed c (:bed-radius (:args c)))
-        (sh-spawn/standing-bed (:primitives c) (ctx/view c) (:bed-radius (:args c))))))
+    (or (sh-beds/bed c (sh-beds/arg-radius (:args c)))
+        (sh-spawn/standing-bed (:primitives c) (ctx/view c) (sh-beds/arg-radius (:args c))))))
 
 (def leave-shelter-radius
   "A body in a shelter at night walks to a bed only when it is this near (blocks); a farther one is waited for."

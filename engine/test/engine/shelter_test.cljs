@@ -1443,3 +1443,21 @@
         ask #(reads-during p (fn [] ((:when (get triggers/all :night)) p {} {})))
         first-ask (ask)]
     (is (< (ask) (/ first-ask 5)) "the second ask reuses the room")))
+
+(def displaced-view {:now 0 :data {:entries {:displaced [{:t 0 :data {}}]}}})
+
+(deftest bed-radii-follow-settings-unless-the-args-name-one
+  (are [overrides view args radius]
+       (= radius (settings/with-settings overrides #(sh-beds/bed-radius view args)))
+    {} {:now 0} {} 48
+    {:jobs.lib.shelter.beds/default-bed-radius 80} {:now 0} {} 80
+    {:jobs.lib.shelter.beds/default-bed-radius 80} {:now 0} {:bed-radius 20} 20
+    {} displaced-view {} 128
+    {:jobs.lib.shelter.beds/urgent-bed-radius 200} displaced-view {} 200
+    {:jobs.lib.shelter.beds/urgent-bed-radius 200} displaced-view {:urgent-bed-radius 90} 90))
+
+(deftest sleep-takes-a-bed-beyond-the-default-radius-when-the-setting-allows
+  (let [{:keys [eng]} (setup {:time night :blocks {"60,64,0" "red_bed"}})]
+    (know-bed! eng {:x 60 :y 64 :z 0})
+    (core/submit! eng '(jobs.survival.sleep) {})
+    (is (some? (settings/with-settings {:jobs.lib.shelter.beds/default-bed-radius 80} #(core/tick! eng))))))

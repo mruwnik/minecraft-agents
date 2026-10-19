@@ -192,8 +192,8 @@
 (defn walk-fail
   "count-fail for a failed walk or an out-of-reach arrival, which the job's own stand choice caused: a cell it gives up
   is noted with where the body stood (:walk-given), for retry-walks."
-  [m pos reason give-up at]
-  (let [m2 (count-fail m pos reason give-up)]
+  [m pos reason limit at]
+  (let [m2 (count-fail m pos reason limit)]
     (cond-> m2
       (and (contains? (:given-up m2) pos) (not (contains? (:given-up m) pos))) (assoc-in [:walk-given pos] at))))
 
@@ -233,7 +233,7 @@
                                          {:for-plan (:plan (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))
                                           :click (:click h) :clear false}))
             outcome (blocks/place-outcome e)
-            give-up (give-up)]
+            limit (give-up)]
         (case outcome
           :continue :continue
           :placed (let [wrong (misplaced want item (:block (:data e)))]
@@ -241,8 +241,8 @@
                     (ctx/update-mem! c #(cond-> (update (dissoc % :placing) :placed (fnil inc 0))
                                           wrong (assoc-in [:misplaced pos] wrong))))
           :already (ctx/update-mem! c dissoc :placing)
-          (:occupied :need :no-item :no-support :unreachable) (ctx/update-mem! c #(count-fail (dissoc % :placing) pos (if (= :need outcome) :no-item outcome) give-up))
-          (ctx/update-mem! c #(count-fail (dissoc % :placing) pos :refused give-up)))))))
+          (:occupied :need :no-item :no-support :unreachable) (ctx/update-mem! c #(count-fail (dissoc % :placing) pos (if (= :need outcome) :no-item outcome) limit))
+          (ctx/update-mem! c #(count-fail (dissoc % :placing) pos :refused limit)))))))
 
 (defn settle-placing!
   "A place that a cut left unbooked (:placing, set before the act): the world is the answer, so a cell the plan now
@@ -405,22 +405,22 @@
         all (stands-for (:primitives c) (:pos cell) (js/Math.floor (:y body)) facing planned bad)
         stands (or (seq (reaching c all (:pos cell))) all)
         stand (first (sort-by #(u/dist body (zipmap [:x :y :z] %)) stands))
-        give-up (give-up)]
+        limit (give-up)]
     (if-not stand
-      (do (ctx/update-mem! c walk-fail (:pos cell) :unreachable give-up (u/self-pos c))
+      (do (ctx/update-mem! c walk-fail (:pos cell) :unreachable limit (u/self-pos c))
           :again)
       (let [w (await (near/go-near! c (zipmap [:x :y :z] stand) 0 (cond-> {} (not (in-hole? c)) (assoc :ways #{:walk :clear-seal}))))]
         (when (= :blocked w)
-          (ctx/update-mem! c #(-> (walk-fail % (:pos cell) :unreachable give-up (u/self-pos c))
+          (ctx/update-mem! c #(-> (walk-fail % (:pos cell) :unreachable limit (u/self-pos c))
                                   (update :bad-stands (fnil conj []) stand))))
         (when (and (= :there w) (nil? (:found cell)))
           (let [pos (:pos cell)]
             ;; a cell outside the view cone is seen only by turning to it
             (when (dig-look/unknown? (:primitives c) pos) (await (dig-look/look-at! c pos)))
             (when (nil? (u/seen-block (:primitives c) (zipmap [:x :y :z] pos)))
-              (ctx/update-mem! c walk-fail pos (if (buried? (:primitives c) pos) :buried :unloaded) give-up (u/self-pos c)))))
+              (ctx/update-mem! c walk-fail pos (if (buried? (:primitives c) pos) :buried :unloaded) limit (u/self-pos c)))))
         (when (and (= :there w) (:found cell) (empty? (if (:dig? cell) (in-dig-reach c [cell]) (in-reach c [cell]))))
-          (ctx/update-mem! c walk-fail (:pos cell) :unreachable give-up (u/self-pos c)))
+          (ctx/update-mem! c walk-fail (:pos cell) :unreachable limit (u/self-pos c)))
         (if (and (= :blocked w) (in-hole? c))
           (hole-blocked! c)
           (do (ctx/update-mem! c dissoc :hole-blocked)

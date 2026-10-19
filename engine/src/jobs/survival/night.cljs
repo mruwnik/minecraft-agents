@@ -100,8 +100,8 @@
 
 (a/defargs args
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
-   :bed-radius {:doc "a remembered bed farther than this is not used" :spec (a/num-in 0 nil) :default sh-beds/default-bed-radius}
-   :urgent-bed-radius {:doc "the bed radius once the body is overdue for sleep" :spec (a/num-in 0 nil) :default sh-beds/urgent-bed-radius}
+   :bed-radius {:doc "a remembered bed farther than this is not used (nil: the jobs.lib.shelter.beds/default-bed-radius setting)" :spec (a/num-in 0 nil) :default nil}
+   :urgent-bed-radius {:doc "the bed radius once the body is overdue for sleep (nil: the jobs.lib.shelter.beds/urgent-bed-radius setting)" :spec (a/num-in 0 nil) :default nil}
    :roofed-places {:doc "place names walked to at night, when close and the route is lit, before digging in" :spec (a/coll-of (a/or-of keyword? string?)) :default [:home]}
    :walk-radius {:doc "a roofed place farther than this is not walked to" :spec (a/num-in 0 nil) :default 32}
    :max-days-awake {:doc "in-game days without sleep before finding a bed becomes urgent" :spec (a/num-in 0 nil) :default sh-beds/max-days-awake}

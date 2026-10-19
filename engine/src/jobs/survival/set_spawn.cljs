@@ -24,15 +24,15 @@
   Quote: time of one click and walk; done 1 spawn.")
 
 (a/defargs args
-  {:bed-radius {:doc "a remembered bed farther than this many blocks from the body is not used"
-                :spec (a/num-in 0 nil) :default sh-beds/default-bed-radius}
+  {:bed-radius {:doc "a remembered bed farther than this many blocks from the body is not used (nil: the jobs.lib.shelter.beds/default-bed-radius setting)"
+                :spec (a/num-in 0 nil) :default nil}
    :bed {:doc "bed position [x y z] or {:x :y :z} to use instead of the remembered :bed (no radius)" :spec ::a/pos :default nil}})
 
 (defn remembered-gone?
   "Whether the remembered :bed (no :bed arg) is loaded and no longer a bed."
   [c]
   (let [p (:primitives c)
-        pos (when-not (:bed (:args c)) (sh-beds/bed c (:bed-radius (:args c))))]
+        pos (when-not (:bed (:args c)) (sh-beds/bed c (sh-beds/arg-radius (:args c))))]
     (boolean (and pos (places/gone? :bed (u/block-name p pos))))))
 
 (defn bed-of
@@ -40,8 +40,8 @@
   [c]
   (if-let [given (:bed (:args c))]
     (:pos (places/parse-pos given))
-    (or (when-not (remembered-gone? c) (sh-beds/bed c (:bed-radius (:args c))))
-        (sh-beds/seen-bed (:primitives c) (constantly true) (:bed-radius (:args c))))))
+    (or (when-not (remembered-gone? c) (sh-beds/bed c (sh-beds/arg-radius (:args c))))
+        (sh-beds/seen-bed (:primitives c) (constantly true) (sh-beds/arg-radius (:args c))))))
 
 (a/defargs settings
   {::job-time-s {:default 60 :doc "Seconds the walk to the bed and the click may take." :spec (a/num-in 0 nil)}
@@ -74,8 +74,8 @@
 
 (defn ^:async round [c]
   (when (remembered-gone? c)
-    (sh-spawn/lose-spawn! c (sh-beds/bed c (:bed-radius (:args c))) :missing)
-    (places/retract-if-missing! c :bed (sh-beds/bed c (:bed-radius (:args c))) "missing"))
+    (sh-spawn/lose-spawn! c (sh-beds/bed c (sh-beds/arg-radius (:args c))) :missing)
+    (places/retract-if-missing! c :bed (sh-beds/bed c (sh-beds/arg-radius (:args c))) "missing"))
   (let [bed (bed-of c)]
     (cond
       (nil? bed) (ctx/end c :condition-failed :no-bed)

@@ -164,18 +164,18 @@
         bad (set (:bad-stands (ctx/mem c)))
         beside (beside-stand c body (:pos cell) planned bad)
         stand (or (stand-behind c ps from cell) beside)
-        give-up (give-up)]
+        limit (give-up)]
     (if-not stand
-      (do (ctx/update-mem! c plan/count-fail (:pos cell) :unreachable give-up)
+      (do (ctx/update-mem! c plan/count-fail (:pos cell) :unreachable limit)
           :again)
       (let [w (await (near/go-near! c (zipmap [:x :y :z] stand) 0 {:ways #{:walk :clear-seal}}))]
         (when (= :blocked w)
-          (ctx/update-mem! c #(-> (plan/count-fail % (:pos cell) :unreachable give-up)
+          (ctx/update-mem! c #(-> (plan/count-fail % (:pos cell) :unreachable limit)
                                   (update :bad-stands (fnil conj []) stand))))
         (when (and (= :there w) (nil? (:found cell)))
-          (ctx/update-mem! c plan/count-fail (:pos cell) :unloaded give-up))
+          (ctx/update-mem! c plan/count-fail (:pos cell) :unloaded limit))
         (when (and (= :there w) (:found cell) (empty? (build/in-reach c [cell])))
-          (ctx/update-mem! c plan/count-fail (:pos cell) :unreachable give-up))
+          (ctx/update-mem! c plan/count-fail (:pos cell) :unreachable limit))
         (if (= :partial w) :continue :again)))))
 
 (defn ^:async place-run!

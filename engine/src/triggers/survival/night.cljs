@@ -17,7 +17,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.sleepers :as sh-sleepers]))
 
-(def defaults {:roof-height sh-sense/default-roof-height :bed-radius sh-beds/default-bed-radius})
+(def defaults {:roof-height sh-sense/default-roof-height})
 
 (defn night
   [world memory args kn]
