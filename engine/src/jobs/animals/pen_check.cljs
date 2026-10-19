@@ -129,6 +129,13 @@
                      (and (not (#{:unloaded :open-gate} why)) (not= cell start) (not (dig-look/unknown? p cell)))))
                  (:leaks final))))
 
+(defn answered?
+  "Whether the read answer needs no more looks: closed, or a leak at a cell the body has seen (the unseen ground beyond it
+  does not matter)."
+  [p opts answer at]
+  (boolean (or (:closed? answer)
+               (seen-leak? p (if (= :unloaded (:reason answer)) (pen-read/read p (assoc opts :final? true)) answer) at))))
+
 (defn leak-text
   "\": why at [x y z]\" listing the first leaks of result, with how many more."
   [{:keys [leaks leaks-total]}]
@@ -159,10 +166,12 @@
         box (:box (pen-box c))
         near (or (:near (ctx/mem c)) (start-near c))
         _ (ctx/update-mem! c assoc :near near)
-        checked (await (pen-read/read! c {:at at :box box :max-cells max-cells :near near}))
+        p (:primitives c)
+        opts {:at at :box box :max-cells max-cells :near near}
+        checked (await (pen-read/read! c opts #(not (answered? p opts % at))))
         final (when (= :unloaded (:reason checked))
-                (pen-read/read (:primitives c) {:at at :box box :max-cells max-cells :final? true}))
-        unseen (when-not (seen-leak? (:primitives c) final at) (unseen-leak checked at))
+                (pen-read/read p (assoc opts :final? true)))
+        unseen (when-not (seen-leak? p (or final checked) at) (unseen-leak checked at))
         {:keys [walks last-unseen] :or {walks 0}} (ctx/mem c)
         stuck (if (= unseen last-unseen) walks 0)
         walk (when (and unseen (< stuck max-walks))
@@ -171,7 +180,7 @@
       :partial :continue
       :there (do (ctx/update-mem! c assoc :walks (inc stuck) :last-unseen unseen) :continue)
       (let [checked (or final checked)
-            rows (animals/in-pen-rows (:primitives c) checked animal-radius)
+            rows (animals/in-pen-rows p checked animal-radius)
             result (merge (pen/summary checked) (pen-read/listed checked (u/self-pos c)) {:animals rows :animals-in (count rows)} (animal-coverage checked))
             result (assoc result :text (if (:closed? result)
                                          (str "pen closed, " (:cells result) " cells" (gate-drop-text result))

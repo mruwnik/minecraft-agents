@@ -34,9 +34,21 @@
   (let [s (u/sensed p (u/cell-pos cell))]
     (not (or (nil? s) (true? (.-unknown s)) (true? (.-visible s)) (true? (.-felt s))))))
 
+(def looks-per-read
+  "Looks of a look round between two reads: a read fills the whole pen, which costs more than a look in open ground."
+  3)
+
+(defn positive-every
+  "A fn that reads the pen on every looks-per-read'th call and returns the answer when retry? no longer holds, else nil."
+  [p opts retry?]
+  (let [n (volatile! 0)]
+    (fn []
+      (when (zero? (mod (vswap! n inc) looks-per-read))
+        (let [a (read p opts)] (when-not (retry? a) a))))))
+
 (defn ^:async read!
   "read, looking at the remembered cells within sight first (see the ns); while retry? (default: the pen is not
-  closed) holds, after a look round (once per body cell) and at unseen cells as sense/decide! does. A read fills the
+  closed) holds, after a look round (once per body cell, ended at the first look whose read is positive) and at unseen cells as sense/decide! does. A read fills the
   whole pen, so the looks come in batches (usually 3 reads a call). Call it from a round only: it acts."
   ([c opts] (read! c opts #(not (:closed? %))))
   ([c opts retry?]
@@ -45,7 +57,7 @@
          stale (take (sense/max-looks) (sense/targets p (u/self-pos c) (:remembered answer) #{}))]
      (if (and (empty? stale) (not (retry? answer)))
        answer
-       (do (when-not (and (retry? answer) (await (look/survey! c :cell)))
+       (do (when-not (and (retry? answer) (await (look/survey-until! c :cell (positive-every p opts retry?))))
              (loop [[cell & more] stale]
                (when cell
                  (when (remembered? p cell) (await (sense/look-at! c cell)))

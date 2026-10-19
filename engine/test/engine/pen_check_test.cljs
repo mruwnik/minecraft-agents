@@ -345,7 +345,20 @@
               {:keys [event looks fills]} (await (run-counting {:at [2 64 2]} w [2 63 2]))]
           (is (= :leak (:reason event)))
           (is (some #{{:x 2 :y 64 :z -1}} (map :pos (:leaks event))))
-          (is (<= (* 2 fills) looks) (str fills " fills for " looks " looks")))))))
+          (is (<= fills (+ 6 looks)) (str fills " fills for " looks " looks")))))))
+
+(deftest a-leak-in-view-is-answered-without-a-look-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup-seeing (assoc (world {"2,64,-1" "air"}) :yaw 180) nil)]
+          (perception/pass! (aget (:p s) "perception") {:effort 1})
+          (core/submit! (:eng s) (list job {:at [2 64 2]}) {})
+          (dotimes [_ 12]
+            (swap! (:clock s) + 700)
+            (await (core/tick! (:eng s))))
+          (is (= :leak (:reason (ending-event @(:seen s)))))
+          (is (< (count (h/calls (:p s) "look")) 4) "a survey is a dozen looks"))))))
 
 (deftest the-default-time-budget-grows-with-the-pen
   (let [time-of #(get-in (contract/freeze {:defaults (contract/resolve-settings pen-check/defaults (partial settings/get pen-check/settings) %)} % nil)
