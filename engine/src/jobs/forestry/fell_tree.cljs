@@ -48,8 +48,8 @@
   Before the first log, a carried axe that is the last of its kind and worn gets a spare (jobs.lib.trip/tool-ready!,
   unless :fetch is false or lacks :tool).
   Each log is dug by a jobs.blocks.dig child. That child holds the best carried axe and leaves the drop on the
-  ground; a log dug from the ground has its drop collected by that child (jobs.blocks.dig :collect), one dug from a
-  pillar by jobs.forestry.fell-from-pillar.
+  ground; when the tree is down a jobs.items.collect-drops child picks up the drops of the logs it dug from the ground
+  (by id: another player's logs are left); a pillar's logs are collected by jobs.forestry.fell-from-pillar.
   Zones: a tree whose base log is in another owner's zone or claim, or in a plan's footprint (but :for-plan's
   own), is not a candidate. A later log that turns out refused makes the tree count as unreachable. The job warns
   fell-tree.declined once, with :reason :refused (or :no-zones when no zone list was read). :ignore-zones? true
@@ -149,7 +149,7 @@
 (defn commit-tree!
   "Commit the column, species and base of the tree t to fell."
   [c t]
-  (ctx/update-mem! c #(-> % (merge (select-keys t [:column :species :base])) (assoc :partials 0) (dissoc :logs-seen :relooked)))
+  (ctx/update-mem! c #(-> % (merge (select-keys t [:column :species :base])) (assoc :partials 0) (dissoc :logs-seen :relooked :drop-ids :collected)))
   t)
 
 (defn mark-all-unreachable!
@@ -306,6 +306,22 @@
     (when-not (:relooked m)
       (filterv #(sense/unknown? (:primitives c) %) (map (fn [{:keys [x y z]}] [x y z]) (:logs-seen m))))))
 
+(def collect-radius 8)
+(def collect-search 4)
+
+(defn ^:async collect-logs!
+  "Pick up the drops of the logs dug from the ground (a collect-drops child by their ids, once per tree; it walks round
+  the base to look when none is in sight). :continue while it waits on the world, else nil; drops it cannot find are not
+  this job's failure."
+  [c]
+  (let [{:keys [base drop-ids collected]} (ctx/mem c)]
+    (when (and (seq drop-ids) (not collected))
+      (let [e (await (ctx/call c :collect 'jobs.items.collect-drops
+                               {:radius collect-radius :ids drop-ids :near base :search collect-search :least (count drop-ids)}))]
+        (when-not (= :continue e)
+          (ctx/update-mem! c assoc :collected (get-in e [:data :collected] 0))
+          nil)))))
+
 (defn ^:async ground-step
   "One piece of the tree from the ground: the axe, the next log dug (walking in reach first), the tree ended when no log
   is left. :again, :continue or the ending."
@@ -317,7 +333,7 @@
         (do (ctx/update-mem! c assoc :relooked true)
             (await (sense/look-at-unknown! c unseen (sense/max-looks)))
             :again)
-        (if (= :continue (await (come-down! c)))
+        (if (or (= :continue (await (come-down! c))) (= :continue (await (collect-logs! c))))
           :continue
           (if (zero? (:dug (ctx/mem c) 0))
             (ctx/end c :condition-failed {:reason :gone :base (:base (ctx/mem c))} nil)
@@ -334,7 +350,7 @@
             (let [_ (when-let [low (lower-base (ctx/mem c) logs)] (rebase! c low))
                   _ (await (watch/watch! c {:before-dig (:pos (first logs))}))
                   m (ctx/mem c)
-                  r (await (log/dig-log! c (first logs) {:base (:base m) :species (:species m) :collect? true}))]
+                  r (await (log/dig-log! c (first logs) {:base (:base m) :species (:species m)}))]
               (case r
                 :ok (do (ctx/update-mem! c assoc :partials 0)
                         (u/progress! c)
@@ -439,7 +455,8 @@
         data [:units :trees :done (if (pos? dug) 1 0) :left (if (pos? dug) 0 1) :result (tree-result c)]
         gone? (fn [pos] (let [n (u/seen-name (:primitives c) pos)] (and n (not (log-name? n)))))
         down? (and (:column m) (pos? dug) (not (:pillar m))
-                   (every? gone? (:logs-seen m))
+                   (or (empty? (:drop-ids m)) (some? (:collected m)))
+                   (every? gone? (some-> (:logs-seen m) (conj (update (apply max-key :y (:logs-seen m)) :y inc))))
                    (empty? (tree-logs c (:radius (:args c))))
                    (not (on-canopy? c))
                    (not (checks/child-under-way? c)))]

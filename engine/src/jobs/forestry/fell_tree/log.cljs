@@ -110,11 +110,10 @@
 
 (defn log-dig-args
   "The jobs.blocks.dig args for the log at pos: no tool needed (an axe is held when carried), the drop left on the
-  ground unless collect?, the dig hazards of :accept taken."
-  ([c pos] (log-dig-args c pos false))
-  ([c pos collect?]
-   (merge (select-keys (:args c) [:for-plan :ignore-zones? :accept])
-          {:pos pos :collect (boolean collect?) :need-drop false})))
+  ground, the dig hazards of :accept taken."
+  [c pos]
+  (merge (select-keys (:args c) [:for-plan :ignore-zones? :accept])
+         {:pos pos :collect false :need-drop false}))
 
 (defn outcome
   "What one round of the dig child (its return e: :continue or its ending) means for the tree: :ok (dug, gone, or still
@@ -131,11 +130,11 @@
 
 (defn ^:async dig-log!
   "Dig the log l of the tree at base (one blocks.dig child round), walking in reach first. Commits the replant debt
-  before the base log is dug (write-ahead; withdrawn when the log is still standing after the round). With collect? the dig picks up its drop. Resolves to :ok,
+  before the base log is dug (write-ahead; withdrawn when the log is still standing after the round). Resolves to :ok,
   :partial (the walk made progress but is not in reach yet; call again), :high (the log is out of reach from the ground
   and a pillar is allowed) or a non-ok outcome for the round to count as a failure (:unreachable, :cannot, :refused and
   :out-of-reach mean the tree cannot be dug from here)."
-  [c l {:keys [base species collect?]}]
+  [c l {:keys [base species]}]
   (let [pos (:pos l)
         w (await (approach! c pos (:y base)))]
     (case w
@@ -146,8 +145,9 @@
         (and (:pillar? (:args c)) (> (u/eye-dist (u/self-pos c) pos) dig-reach)) :high
         :else
         (let [wrote? (and (= pos base) (record-debt! c base species))
-              e (await (ctx/call c :dig 'jobs.blocks.dig (log-dig-args c pos collect?)))]
-          (when (:dug (:data e)) (ctx/update-mem! c update :dug (fnil inc 0)))
+              e (await (ctx/call c :dig 'jobs.blocks.dig (log-dig-args c pos)))]
+          (when (:dug (:data e))
+            (ctx/update-mem! c #(-> % (update :dug (fnil inc 0)) (update :drop-ids (fnil into []) (:ids (:data e))))))
           (when (and wrote? (some-> (u/seen-name (:primitives c) pos) log-name?))
             (ctx/forget-where! c replant-kind #(= pos (:pos %))))
           (outcome e))))))

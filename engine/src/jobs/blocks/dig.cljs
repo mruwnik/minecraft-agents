@@ -50,7 +50,7 @@
   carried or fetched (:seal-fetch), or two places fail) the body steps off the cells beside the lava and the job ends
   nothing-possible :lava-unsealed with :cell, :place (:need: no block) and :stepped-away.
 
-  Returns an ending whose data is {:dug true|false :pos :block :collected n}, plus :now (the block seen at the cell after a dig, absent when not seen since; the text says it), :left
+  Returns an ending whose data is {:dug true|false :pos :block :collected n}, plus :ids (the drops' entity ids, when it picks none up), :now (the block seen at the cell after a dig, absent when not seen since; the text says it), :left
   (collect-drops' drops it could not take), :stepped-aside [x y z] (the cell it stood on) when it stepped off the column
   first, :stepped-down [x y z] (the cell it stands in) when picking up the drops walked it down into the hole. :done with :reason :dug, or :already-clear (air there, nothing done). Condition-failed: :fluid (a fluid is not dug),
   :fluid-adjacent (:on-fluid :fail, with :hazards and a :hint), :cannot (bedrock and the like), and the conditions above.
@@ -393,7 +393,7 @@
           (= :again s) :again
           s s
           (and (:collect (:args c)) (seq ids)) (await (collect! c pos))
-          :else (finish! c {:dug true :pos pos :block block :reason :dug :collected 0})))
+          :else (finish! c {:dug true :pos pos :block block :reason :dug :collected 0 :ids ids})))
       (b/air block) (finish! c {:dug false :pos pos :block block :reason :already-clear})
       (b/fluids block) (finish! c {:dug false :pos pos :block block :reason :fluid})
       tool (let [r (await (get-tool! c tool))]
