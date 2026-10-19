@@ -20,6 +20,6 @@
    :blocks [[:fill [15 -1 15] [17 3 17] "glass" :hollow]]
    :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20263,7,2,843],VillagerData:{profession:\"minecraft:farmer\",level:2,type:\"minecraft:plains\"},Xp:20,Offers:{Recipes:[{buy:{id:\"minecraft:emerald\",count:1},sell:{id:\"minecraft:bread\",count:6},maxUses:12,xp:1}]}}"]
          [:job (jobs.village.trade {:villager "00004f27-0000-0007-0000-00020000034b" :buy "bread" :count 6})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason "unreachable"}} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 60 :until {:source :job :kind :stopped}}]
    :after [[:item "bread" 0] [:item "emerald" 8]]}]}
