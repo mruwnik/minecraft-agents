@@ -362,7 +362,7 @@ test('worldAge reads the age without the self snapshot', () => {
 test('self reports the body in the contract shape', () => {
   const { p } = rig(world)
   const s = p.self()
-  assert.deepEqual(Object.keys(s).sort(), ['chunkLoaded', 'dimension', 'effects', 'equipment', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isSleeping', 'onFire', 'onGround', 'oxygen', 'players', 'pos', 'rainState', 'settling', 'thunderState', 'timeOfDay', 'username', 'vehicle', 'worldAge'])
+  assert.deepEqual(Object.keys(s).sort(), ['chunkLoaded', 'dimension', 'effects', 'equipment', 'experience', 'food', 'foodSaturation', 'gameMode', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isSleeping', 'onFire', 'onGround', 'oxygen', 'players', 'pos', 'rainState', 'settling', 'thunderState', 'timeOfDay', 'username', 'vehicle', 'worldAge'])
   assert.equal(s.timeOfDay, 15000)
   assert.equal(s.worldAge, 1234)
   assert.deepEqual(s.inventory[0], { name: 'bread', count: 2, slot: 36 })
