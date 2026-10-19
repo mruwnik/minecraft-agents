@@ -1,5 +1,5 @@
 (ns engine.go-to-torches-test
-  "go-to :place-torches (with :unknown): a dark floor the body cannot see from the takeoff is lit by a torch it places
+  "go-to :torches (with :unknown): a dark floor the body cannot see from the takeoff is lit by a torch it places
   there (carried, or fetched once), then walked once seen; the planner prices the torch (jobs.lib.cost/light-cost, a
   caller's :unknown :light-cost overrides). Without the option nothing is placed or fetched."
   (:require [cljs.test :refer [deftest is async]]
@@ -99,7 +99,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out seen p]} (await (gs/run-go-to shielded {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true
-                                                                  :place-torches true :ignore-zones? true}
+                                                                  :torches :fetch :ignore-zones? true}
                                                         dark-with-torch-light))]
           (is (= {:arrived true} (select-keys out [:arrived])) (pr-str out))
           (is (= {"torch" 1} (:spent out)) (str "the torch is reported: " (pr-str out)))
@@ -109,7 +109,7 @@
           (is (= 1 (count (filter #(= :walk.torch-placed (:kind %)) seen))))
           (is (empty? (filter #(= :gate-breach (:kind %)) seen))))))))
 
-(deftest go-to-without-place-torches-places-none
+(deftest go-to-without-torches-places-none
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -125,7 +125,7 @@
       (fn ^:async t []
         (let [{:keys [out seen p]} (await (gs/run-go-to (assoc shielded :inventory [])
                                                         {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true
-                                                         :place-torches true :fetch false :ignore-zones? true}
+                                                         :torches :carried :ignore-zones? true}
                                                         dark-with-torch-light))]
           (is (= :unseen-floor-dark (:why out)) (pr-str out))
           (is (re-find #"no torch" (str (:text out))) (str (:text out)))
@@ -137,14 +137,13 @@
       (fn ^:async t []
         (let [{:keys [out seen]} (await (gs/run-go-to (assoc shielded :inventory [])
                                                       {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true
-                                                       :place-torches true :ignore-zones? true}
+                                                       :torches :fetch :ignore-zones? true}
                                                       dark-with-torch-light))]
           (is (= :unseen-floor-dark (:why out)) (str "nothing to fetch torches from " (pr-str out)))
           (is (re-find #"could not fetch" (str (:text out))) (str (:text out))))))))
 
-(deftest go-to-takes-a-place-torches-arg
-  (is (contains? go-to/args :place-torches))
-  (is (contains? go-to/args :fetch)))
+(deftest go-to-takes-a-torches-arg
+  (is (contains? go-to/args :torches)))
 
 ;; ---------------------------------------------------------------- the off hand
 
@@ -156,7 +155,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out seen p]} (await (gs/run-go-to bare {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true
-                                                              :place-torches true :ignore-zones? true}
+                                                              :torches :fetch :ignore-zones? true}
                                                         dark-with-torch-light))]
           (is (= {:arrived true} (select-keys out [:arrived])) (pr-str out))
           (is (= 1 (count (torch-cells p))) (pr-str (torch-cells p)))
@@ -168,7 +167,7 @@
       (fn ^:async t []
         (let [{:keys [out seen p]} (await (gs/run-go-to (assoc shielded :inventory [] :equipment {"offHand" {:name "torch" :count 4}})
                                                         {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true
-                                                         :place-torches true :fetch false :ignore-zones? true}
+                                                         :torches :carried :ignore-zones? true}
                                                         dark-with-torch-light))]
           (is (= {:arrived true} (select-keys out [:arrived])) (pr-str out))
           (is (= 1 (count (torch-cells p))))
@@ -181,7 +180,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (gs/run-go-to (assoc shielded :zones [{:name "theirs" :min [0 65 0] :max [0 65 0] :owner "Other"}])
-                                                   {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true :place-torches true}
+                                                   {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true :torches :fetch}
                                                    dark-with-torch-light))]
           (is (= {:arrived true} (select-keys out [:arrived])) (pr-str out))
           (is (= [[0 64 0]] (torch-cells p)) "a floor torch at the feet, not a wall torch in the zone"))))))
@@ -191,7 +190,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (gs/run-go-to (assoc shielded :zones [{:name "theirs" :min [0 64 0] :max [0 65 0] :owner "Other"}])
-                                                   {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true :place-torches true}
+                                                   {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true :torches :fetch}
                                                    dark-with-torch-light))]
           (is (= :unseen-floor-dark (:why out)) (pr-str out))
           (is (empty? (torch-cells p))))))))
@@ -205,7 +204,7 @@
                         (dark-with-torch-light world)
                         (aset w "place" (fn [& _] (swap! places inc) (js/Promise.resolve #js {:status "failed" :reason "refused"}))))
               {:keys [out seen p]} (await (gs/run-go-to shielded {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true
-                                                                  :place-torches true :ignore-zones? true}
+                                                                  :torches :fetch :ignore-zones? true}
                                                         refuse!))]
           (is (= :unseen-floor-dark (:why out)) (pr-str out))
           (is (= 1 @places) "the takeoff joins noLight: one try")
@@ -222,7 +221,7 @@
                                             (swap! (fake/state p) assoc-in [:blocks "0,65,0"] "wall_torch")
                                             (js/Promise.resolve #js {:status "occupied" :block "wall_torch"}))))
               {:keys [seen]} (await (gs/run-go-to shielded {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true
-                                                            :place-torches true :ignore-zones? true}
+                                                            :torches :fetch :ignore-zones? true}
                                                   occupied!))]
           (is (empty? (filter #(= :walk.torch-placed (:kind %)) seen)) "not its torch"))))))
 
@@ -231,7 +230,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out seen p]} (await (gs/run-go-to shielded {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true
-                                                                  :place-torches true :ignore-zones? true}
+                                                                  :torches :fetch :ignore-zones? true}
                                                         gs/dark-and-looked))]
           (is (= :unseen-floor-dark (:why out)) (pr-str out))
           (is (= 1 (count (torch-cells p))) "one torch, not one per round")
@@ -258,7 +257,7 @@
         (let [{:keys [p]} (gs/sensed-only (assoc shielded :inventory []))
               mem* (atom {})
               calls (atom [])
-              c (assoc (stub-ctx p mem* (atom []) {:place-torches true :unknown true :fetch true})
+              c (assoc (stub-ctx p mem* (atom []) {:torches :fetch :unknown true})
                        :call (fn [slot def args] (swap! calls conj [slot (:item args) (:count args)]) (js/Promise.resolve :continue)))]
           (is (= :continue (await (gtorch/fetch-torches! c))))
           (is (= [[:need-torch "torch" 4]] @calls))
@@ -271,7 +270,7 @@
         (let [{:keys [p]} (gs/sensed-only (assoc shielded :inventory []))
               mem* (atom {})
               booked (atom [])
-              c (assoc (stub-ctx p mem* (atom []) {:place-torches true :unknown true :fetch true})
+              c (assoc (stub-ctx p mem* (atom []) {:torches :fetch :unknown true})
                        :call (fn [_ _ _] (js/Promise.resolve (contract/ending :condition-failed {:reason :need} nil)))
                        :remember (fn [kind _ policy] (swap! booked conj [kind (:ttl policy)])))]
           (is (= :again (await (gtorch/fetch-torches! c))))
@@ -280,18 +279,18 @@
 
 (deftest a-call-fetches-torches-once-and-not-after-a-recent-failure
   (let [{:keys [p]} (gs/sensed-only (assoc shielded :inventory []))
-        args {:place-torches true :unknown true :fetch true}
+        args {:torches :fetch :unknown true}
         open? #(gtorch/torch-fetch-open? %)]
     (is (false? (open? (stub-ctx p (atom {:torch-fetched true}) (atom []) args))))
     (is (true? (open? (stub-ctx p (atom {}) (atom []) args))))
-    (is (false? (open? (stub-ctx p (atom {}) (atom []) (assoc args :fetch false)))))
+    (is (false? (open? (stub-ctx p (atom {}) (atom []) (assoc args :torches :carried)))))
     (is (false? (open? (assoc (stub-ctx p (atom {}) (atom []) args)
                               :view (fn [] {:now 1000000 :data {:entries {gtorch/fetch-failed-kind [{:t 1000000 :data {}}]}
                                                                  :policies {gtorch/fetch-failed-kind {:cap 1 :ttl gtorch/fetch-failed-ttl-ms}}}})))))))
 
 (deftest the-torch-setting-prices-the-torch
   (let [{:keys [p]} (gs/sensed-only shielded)
-        round (fn [args] (.-lightCost (gtorch/round-unknown (assoc (stub-ctx p (atom {}) (atom []) (merge {:place-torches true :ignore-zones? true} args))
+        round (fn [args] (.-lightCost (gtorch/round-unknown (assoc (stub-ctx p (atom {}) (atom []) (merge {:torches :fetch :ignore-zones? true} args))
                                                                   :unknown (wworld/unknown-spec)))))]
     (is (= (:cost (cost/light-cost {:carried 4})) (round {:unknown true})))
     (is (= (+ 7.5 (:cost (cost/light-cost {:carried 4})))
@@ -305,7 +304,7 @@
                                                                 :blocks (assoc ledge "-2,64,0" "chest")
                                                                 :containers {"-2,64,0" [{:name "torch" :count 8}]})
                                                         {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true
-                                                         :place-torches true :ignore-zones? true}
+                                                         :torches :fetch :ignore-zones? true}
                                                         dark-with-torch-light))]
           (is (= {:arrived true} (select-keys out [:arrived])) (pr-str out))
           (is (= 1 (count (torch-cells p))) "one torch on the takeoff")

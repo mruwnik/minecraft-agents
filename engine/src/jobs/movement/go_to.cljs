@@ -67,11 +67,11 @@
     dark with a torch carried and the off hand empty it first holds the torch in the off hand (info go-to.off-hand-torch,
     once a call: it sees deeper) and plans again; it puts the torch back into the inventory before an escalation child runs and when the call ends (full: it
     stays, info go-to.off-hand-kept); one a cut call left in the hand goes back at the next call's start.
-  - :place-torches true (with :unknown; default false) may light such a dark floor instead: the planner prices a torch
+  - :torches :carried or :fetch (with :unknown; default :never) may light such a dark floor instead: the planner prices a torch
     (jobs.lib.cost/light-cost) where it can stand on the takeoff, in no other owner's zone or
     claim; the walk stops there, places one (an off-hand stack goes back to the inventory first; info walk.torch-placed) and
-    walks on once it sees the floor. With none carried it fetches torches once a call (:fetch, default true; a jobs.lib.need child);
-    with none and no fetch it gives up :unseen-floor-dark saying so. A torch that cannot go there is not tried there again.
+    walks on once it sees the floor. With none carried, :fetch fetches torches once a call (a jobs.lib.need child);
+    with none and :carried it gives up :unseen-floor-dark saying so. A torch that cannot go there is not tried there again.
   - The walk settings (per world, body or call :settings): jobs.lib.walk.world/dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
     longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
   - Setting go-to.tuning/goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
@@ -163,8 +163,7 @@
    :doors {:doc "what to do at shut doors, gates and trapdoors: :shut (open, pass, shut again what the walk opened), :leave-open (open and pass), :never (walls)"
            :spec #{:shut :leave-open :never} :default :shut}
    :unknown {:doc "true: plan over what the body has seen or felt only, unseen floors checked by eye before they are stepped on; false: plan over the world as it is" :spec boolean? :default false}
-   :place-torches {:doc "with :unknown: light a dark floor it cannot see with a torch from the inventory, placed at the takeoff (priced by jobs.lib.cost/light-cost), fetching torches when none is carried (:fetch); false: never place one" :spec boolean? :default false}
-   :fetch {:doc "get torches for :place-torches when none is carried (a jobs.lib.need child): true, a set of kinds or a map of limits; false: give up instead" :spec need/option? :default true}
+   :torches {:doc "with :unknown, how a dark floor the body cannot see is lit: :never (no torch is placed), :carried (a torch from the inventory, placed at the takeoff, priced by jobs.lib.cost/light-cost), :fetch (the same, fetching torches first when none is carried: a jobs.lib.need child)" :spec #{:never :carried :fetch} :default :never}
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more (jobs.lib.cost farm-tolls, zone-tolls)" :spec (a/valid-by "a list of {:x :y :z :factor} of finite numbers, :factor >= 0" wworld/tolls-problem) :default nil}
    :gait {:doc "how the body walks: :auto (sprints on long straight runs and over gaps, as the walker does), :walk (never sprints: no gap jump over 2 or more), :sneak (slow, never sprints; holds sneak on level steps so it never walks off an edge, lets go for a planned drop, gap, climb or water); nil: the body's setting jobs.lib.walk.world/gait (:auto)" :spec #{:auto :walk :sneak} :default nil}
    :keep-out {:doc "cells the walk treats as solid, [{:x :y :z}]: no way through them is planned (jobs.lib.pen-entry gives a block job the gates of pens holding animals)" :spec (a/valid-by "a list of {:x :y :z} of whole numbers" (fn [cells] (when-not (and (sequential? cells) (every? #(and (map? %) (every? integer? (map % [:x :y :z]))) cells)) "keep-out is a list of {:x :y :z} of whole numbers"))) :default nil}

@@ -393,7 +393,7 @@
       (fn ^:async t []
         ;; the goal (10,63,0) is the floor block, seen; the walk ends :no-torch and the torch fetch waits on its child
         (let [p (tu/fake {:self {:pos [0.5 64 0.5]} :blocks flat})
-              c (stub-ctx p (atom {}) {:pos [10 63 0] :range 0 :unknown true :place-torches true})]
+              c (stub-ctx p (atom {}) {:pos [10 63 0] :range 0 :unknown true :torches :fetch})]
           (with-redefs [near/walk-round! (fn [_ _ _ _] (js/Promise.resolve {:result {:status :no-torch} :status "partial"
                                                                              :to {:x 2 :y 64 :z 0}}))
                         gtorch/fetch-torches! (fn [_] (js/Promise.resolve :continue))]

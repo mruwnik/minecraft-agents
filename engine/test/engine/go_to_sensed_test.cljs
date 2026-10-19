@@ -335,7 +335,7 @@
       (fn ^:async t []
         (let [{:keys [out seen p]} (await (run-go-to in-tunnel {:pos [9 61 0] :range 1 :ways #{:walk :clear-seal} :unknown true} dark-and-looked))]
           (is (= [false :unseen-floor-dark] [(:arrived out) (:why out)]) (pr-str out))
-          (is (re-find #":place-torches" (str (:text out))) "the words say what would help")
+          (is (re-find #":torches" (str (:text out))) "the words say what would help")
           (is (= 64 (js/Math.floor (second (:pos (fake/self p))))) "never dropped")
           (is (empty? (filter #(= :go-to.off-hand-torch (:kind %)) seen)) "no torch carried"))))))
 

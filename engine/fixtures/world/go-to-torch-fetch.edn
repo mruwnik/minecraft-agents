@@ -1,4 +1,4 @@
-;; jobs.movement.go-to :unknown with :place-torches: the way goes down a 3-block ledge onto a floor the body cannot see in the dark,
+;; jobs.movement.go-to :unknown with :torches: the way goes down a 3-block ledge onto a floor the body cannot see in the dark,
 ;; and no torch is carried, so go-to fetches torches once a call through jobs.lib.need, then lights the floor and arrives.
 ;; Sealed rock: a corridor (x 11..13, feet y 3) ends in a ledge over a low corridor (x 14..24, feet y 0), the goal at its east end.
 ;; The chest has air above it: a solid block over a chest keeps it from opening (inspectContainer times out).
@@ -19,12 +19,12 @@
  [{:name "chest-of-torches-is-fetched-and-the-dark-drop-is-lit"
    :blocks [[:set [12 4 15] "air"]
            [:set [12 3 15] "chest{Items:[{Slot:0b,id:\"minecraft:torch\",count:8}]}"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :unknown true :place-torches true :ignore-zones? true})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :unknown true :torches :fetch :ignore-zones? true})]]
    :expect [{:event {:kind :walk.torch-placed} :within-s 100 :of-job true}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 110 :of-job true}]
    :after [[:item "torch" [:>= 1]] [:body-near [24.5 0 16.5] 3]]}
   {:name "no-torch-in-view-ends-unseen-floor-dark-and-books-the-failure"
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :unknown true :place-torches true :ignore-zones? true})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :unknown true :torches :fetch :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :unreachable :data {:why :unseen-floor-dark}} :within-s 100 :of-job true}
             {:no-event {:kind :walk.torch-placed} :for-s 10}]
    :after [[:item "torch" 0] [:memory {:entries {:go-to/torch-fetch-failed [{:t [:any]}]}}]]}]}

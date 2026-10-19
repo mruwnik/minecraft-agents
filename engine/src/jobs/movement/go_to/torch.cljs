@@ -72,14 +72,15 @@
 (def torch-count "How many torches a fetch asks for." 4)
 
 (defn fetch-opts
-  "The need options of the torch fetch under the :fetch arg: nil when :fetch is off."
+  "The need options of the torch fetch: nil unless :torches is :fetch."
   [c]
-  (some-> (need/opts c 'jobs.movement.go-to) (select-keys [:how :explore]) (assoc :slot :need-torch)))
+  (when (= :fetch (:torches (:args c)))
+    (-> (need/opts (assoc-in c [:args :fetch] true) 'jobs.movement.go-to) (select-keys [:how :explore]) (assoc :slot :need-torch))))
 
 (defn torch-fetching? [c] (boolean (:torch-fetching (ctx/mem c))))
 
 (defn torch-fetch-open?
-  "Whether :place-torches may still fetch torches this call: :fetch is on, none was fetched yet, none failed lately."
+  "Whether :torches :fetch may still fetch torches this call: none was fetched yet, none failed lately."
   [c]
   (boolean (and (fetch-opts c) (not (:torch-fetched (ctx/mem c))) (nil? (ctx/latest c fetch-failed-kind)))))
 
@@ -92,12 +93,12 @@
     (fn [x y z] (or (:ignore-zones? in) (ok? [x y z]) (ok? [x (inc y) z])))))
 
 (defn round-unknown
-  "The mask spec of this round (c's :unknown): with :place-torches and a torch carried or a fetch still open, torches on
+  "The mask spec of this round (c's :unknown): with :torches and a torch carried or a fetch still open, torches on
   (wworld/with-light), priced by jobs.lib.cost/light-cost."
   [c]
   (let [u (:unknown c)
         n (ltorch/torches-held (:primitives c))]
-    (if (and u (:place-torches (:args c)) (or (pos? n) (torch-fetch-open? c)))
+    (if (and u (not= :never (:torches (:args c) :never)) (or (pos? n) (torch-fetch-open? c)))
       (wworld/with-light u (:cost (cost/light-cost {:carried n})) (light-ok c))
       u)))
 
@@ -118,11 +119,11 @@
 
 (defn dark-end
   "A fruitless round's result as go-to gives it up when a dark way was the better way (:dark-best, jobs.lib.near/dark-best):
-  :no-path :unseen-floor-dark with that cell (and :torches :none or :fetch-failed when :place-torches had no torch), unless the
+  :no-path :unseen-floor-dark with that cell (and :torches :none or :fetch-failed when :torches had no torch), unless the
   round failed for a reason of its own (stuck, health, air, ...)."
   [c result]
   (if (end/dark-end? result)
     (cond-> {:status :no-path :reason :unseen-floor-dark :dark-best (:dark-best result)}
-      (and (:place-torches (:args c)) (zero? (ltorch/torches-held (:primitives c))))
+      (and (not= :never (:torches (:args c) :never)) (zero? (ltorch/torches-held (:primitives c))))
       (assoc :torches (if (ctx/latest c fetch-failed-kind) :fetch-failed :none)))
     result))
