@@ -49,7 +49,7 @@
    :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :shut-in.failed} :for-s 60 :until {:source :job :kind :shut-in.sealed}}]
-   :after [[:not-block [16 -2 16] "dirt"]]
+   :after [[:body-near [16.5 -3 16.5] 2]]
    :limit-s 80}
   ;; 05fc51cf: lava hidden in the dirt beside the first dug cell flows into the hole: sealed with a carried block and the pit goes on, or (:on-lava :stop) left and the job stops
   {:name "lava-laid-open-by-the-dig-is-sealed-and-the-pit-goes-on"
