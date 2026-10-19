@@ -40,7 +40,7 @@
   A door is always shut and the morning always runs.
   Condition at the start: the night trigger's (a listed night waits :not-night, :spawn with the respawn bed's state); sheltered with nothing for the night to do, it is done before its first round. Quote: the time left of the night plus ::morning-s.
   Each pass chooses again from the world as it is, the first that applies:
-  - day: the morning (night.morning): a doorway the night filled is dug again, a dug-in or exposed night leaves the shelter (:no-way-out ends nothing-possible), a bed put down outside its own zones is picked up (not the respawn bed); a dug-in body stays while a known hostile is near and the dawn grace lasts (night.dawn-hold). Then it ends done {:night :slept|:dug-in|:logged-out|:roofed :fled n}, or nothing-possible :exposed after a night with no shelter.
+  - day: the morning (night.morning): a doorway the night filled is dug again, a dug-in or exposed night leaves the shelter (:no-way-out ends nothing-possible), a bed put down outside its own zones is picked up (not the respawn bed); a dug-in body stays while a known hostile is near and the dawn grace lasts (night.dawn-hold). Then done? ends it done {:night :slept|:dug-in|:logged-out|:roofed :fled n}, or the morning ends nothing-possible :exposed after a night with no shelter.
   - asleep: hold (:sleeping).
   - sheltered (slept, dug in, shut in): log out for a stint while someone else sleeps, else hold (:sheltered) while a bed to use or a sleeper keeps the trigger firing, else end so the queue runs.
   - a roofed :roofed-places place within the night.sites ::home-radius setting, a bed to use or carry and the body not roofed: jobs.survival.enter-room walks in (one try tonight); a carried bed is not put down in the open while one is close (night.bed-kept).
@@ -53,7 +53,7 @@
   Fleeing (the night.sites ::flee-radius setting, 0 never; at most max-flees walks): to the not-yet-tried candidate go-to reaches soonest (jobs.lib.targets/nearest!): a known bed, a :roofed-places place, a seen cave or overhang cell (walled in on arrival), or seen natural ground the carried tools dig. shelter.fled on arrival, shelter.flee_failed otherwise.
   Every hold is declared (ctx/hold-still!), waits hold-ms, and (night.hold) cooks, eats or runs get-food first.
   An overdue body warns needs_bed once a day; a respawn bed seen gone is written :spawn-lost (warn spawn_lost once).
-  Memory: job memory :enclose, :sheltered, :log-out-failed, :no-site, :shut-ins, :digging, :bed-down, :pit-trapped, :roof-walk-failed; body memory :doorway-tried and shut-in's :shut-in-failed (forgotten when the night ends, at most ten minutes).
+  Memory: job memory :enclose, :sheltered, :log-out-failed, :no-site, :shut-ins, :digging, :bed-down, :pit-trapped, :roof-walk-failed, :left; body memory :doorway-tried and shut-in's :shut-in-failed (forgotten when the night ends, at most ten minutes).
   Muting :night does not end a running night job: cancel it too.")
 
 (a/defargs args
@@ -100,11 +100,33 @@
   (when-let [pos (:lost (sh-spawn/spawn-state (:primitives c) (ctx/view c)))]
     (not= pos (:pos (:data (ctx/latest c :spawn-lost))))))
 
-(defn done?
-  "Already sheltered with nothing for the night to do (and no lost respawn bed to note): only before the start, the round ends a night it began."
+(defn morning-over?
+  "A started night is over: light outside, no shelter to leave, no doorway or bed left to take up, not an exposed night
+  (the morning ends that nothing-possible), no lost respawn bed to note."
   [c]
-  (checks/goal (and (not (checks/running? c)) (boolean (:shelter (quiet-night c))) (not (spawn-lost-unnoted? c)))
-               [:sheltered "sheltered, nothing for the night to do"] [:night "the night is not over"] {:units :nights}))
+  (and (checks/running? c)
+       (not (sh-sense/dark-outside? (:primitives c)))
+       (not= :exposed (:sheltered (ctx/mem c)))
+       (not (spawn-lost-unnoted? c))
+       (not (morning/pending? c))))
+
+(defn done?
+  "The whole goal: once started, the night is over and the morning done (result {:night how :fled n}); before the start,
+  already sheltered with nothing for the night to do (and no lost respawn bed to note). Asked every round."
+  [c]
+  (if (checks/running? c)
+    (let [over (morning-over? c)
+          result (when over (morning/done-data c (:sheltered (ctx/mem c))))]
+      (checks/goal over [:morning (or (:text result) "the night is over, the morning done")] [:night "the night is not over"]
+                   (cond-> {:units :nights} over (assoc :result result))))
+    (checks/goal (and (boolean (:shelter (quiet-night c))) (not (spawn-lost-unnoted? c)))
+                 [:sheltered "sheltered, nothing for the night to do"] [:night "the night is not over"] {:units :nights})))
+
+(defn ^:async cleanup
+  "However the night ends: tonight's failed sites and filled doorway cells someone else changed are forgotten."
+  [c _]
+  (morning/forget-night! c)
+  (ctx/end c :done nil))
 
 (defn quote-of
   "The time left of the night (jobs.time.wait-for-light's quote), a bed possibly ending it at once, and ::morning-s on top."
@@ -385,7 +407,7 @@
           (cond
             (and bed-way (log-out-wanted? c)) (await (log-out-step c))
             (sh/night-holds? p (ctx/view c) (assoc (:args c) :ways (:ways (ctx/frozen-call c))) (bed-down/bed-permit c)) (await (hold/hold! c :sheltered))
-            :else (morning/end-night! c)))
+            :else (ctx/end c :done nil (morning/done-data c (:sheltered (ctx/mem c))))))
       :else
       (let [bed (when bed-way (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c)))))
             bed-wanted (and bed-way (carried-bed-wanted? c))
@@ -416,10 +438,6 @@
           :else (await (shelter! c)))))))
 
 (defn ^:async round
-  "The whole night in one round (see doc): passes until one ends it."
+  "The whole night in one round (see doc): passes until one ends it or done? holds."
   [c]
-  (loop []
-    (let [r (await (pass c))]
-      (if (= :again r)
-        (do (await (pace/pace!)) (recur))
-        r))))
+  (await (pace/steps! c #(pass c))))

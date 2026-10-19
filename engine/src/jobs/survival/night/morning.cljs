@@ -91,23 +91,36 @@
   [c how]
   (cond-> (spent-fields c) how (assoc :night how) (fled c) (assoc :fled (fled c))))
 
-(defn end-night!
-  "The night is over: forget tonight's failed sites (sites/forget-failed!) and the filled doorway cells someone else
-  changed (sh-beds/fill-gone?), and end done {:night how}, or nothing-possible :exposed {:sites} when nothing sheltered the body."
+(defn pending?
+  "Whether the morning still has work: a pickup walk, a dig-out, a shelter to leave, a doorway the night filled to open, a
+  bed put down to collect."
   [c]
-  (let [how (:sheltered (ctx/mem c))
-        failed (pit-site/failed c)]
-    (sites/forget-failed! c)
-    (ctx/forget-where! c :doorway-filled (partial sh-beds/fill-gone? (:primitives c)))
-    (if (= :exposed how)
-      (ctx/end c :nothing-possible :exposed
-               (cond-> {:sites failed
-                        :text (str "no shelter tonight: no bed, nobody asleep, no site to dig in, nowhere safer known (" (sites/exposed-why failed) ")")}
-                 (fled c) (assoc :fled (fled c))))
-      (ctx/end c :done nil (done-data c how)))))
+  (let [p (:primitives c)
+        m (ctx/mem c)]
+    (boolean (or (:pickup m) (:dig-out m)
+                 (and (= :dug-in (:sheltered m)) (not (:left m)))
+                 (dig-leave/sheltered-in c)
+                 (sh-beds/doorway-to-open p (ctx/view c))
+                 (sh-beds/bed-to-collect p (ctx/view c))))))
+
+(defn forget-night!
+  "The night's cleanup: tonight's failed sites (sites/forget-failed!) and the filled doorway cells someone else changed
+  (sh-beds/fill-gone?) are forgotten."
+  [c]
+  (sites/forget-failed! c)
+  (ctx/forget-where! c :doorway-filled (partial sh-beds/fill-gone? (:primitives c))))
+
+(defn end-exposed!
+  "Nothing sheltered the body tonight: end nothing-possible :exposed {:sites}."
+  [c]
+  (let [failed (pit-site/failed c)]
+    (ctx/end c :nothing-possible :exposed
+             (cond-> {:sites failed
+                      :text (str "no shelter tonight: no bed, nobody asleep, no site to dig in, nowhere safer known (" (sites/exposed-why failed) ")")}
+               (fled c) (assoc :fled (fled c))))))
 
 (defn ^:async morning-step!
-  "By day, nothing to walk over: a filled doorway opened or out of a dig-in pit first, then a bed picked up, then the end."
+  "By day, nothing to walk over: a filled doorway opened or out of a dig-in pit first, then a bed picked up; done? ends the job once none is left, an exposed night ends here."
   [c]
   (cond
     (and (or (= :dug-in (:sheltered (ctx/mem c))) (dig-leave/sheltered-in c) (sh-beds/doorway-to-open (:primitives c) (ctx/view c)))
@@ -123,8 +136,9 @@
       (cond
         (= :continue r) :again
         (= :out (:reason r)) (do (ctx/update-mem! c dissoc :dig-out)
+                                 (ctx/update-mem! c assoc :left true)
                                  (when-not (= :exposed (:sheltered (ctx/mem c))) (hold/sheltered! c :dug-in))
-                                 (if (sh-beds/bed-to-collect (:primitives c) (ctx/view c)) :again (end-night! c)))
+                                 (if (and (= :exposed (:sheltered (ctx/mem c))) (not (sh-beds/bed-to-collect (:primitives c) (ctx/view c)))) (end-exposed! c) :again))
         (= :no-way-out (:reason r))
         (let [text "no way out of the shelter by day; giving the body back"]
           (ctx/emit! c :shelter.failed :warn {:reason :no-way-out :at (:at r) :tries (:tries r) :text text})
@@ -135,7 +149,7 @@
     :else
     (if-let [bed (sh-beds/bed-to-collect (:primitives c) (ctx/view c))]
       (await (collect-bed! c bed))
-      (end-night! c))))
+      (if (= :exposed (:sheltered (ctx/mem c))) (end-exposed! c) :again))))
 
 (defn ^:async morning!
   "By day: a dug bed's drop is walked over first, else morning-step!."
