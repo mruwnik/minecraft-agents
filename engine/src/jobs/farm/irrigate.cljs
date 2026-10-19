@@ -20,7 +20,7 @@
   "Give the farm cells of a box (:from/:to) or square (:center/:radius, the cells of jobs.farm.till) water: a cell of
   the field the body has seen, farmland or ground a hoe would till, is dry when every block within 4 in x and z of it, at its height
   and one above, is seen and none is water; a cell with an unseen block in reach and no water is unknown, never dry. For the spot
-  that wets the most dry cells (one of the field's own cells under open air whose four sides and underside are seen solid, nearest
+  that wets the most dry cells (one of the field's own cells under open air whose four sides are seen solid and underside not seen open, nearest
   first) it digs the cell (a jobs.blocks.dig child) and pours a water bucket in it (a jobs.blocks.use-on child), then
   looks again (a pour that fails, or a bucket gone before it, has the cell refilled with dirt (a jobs.blocks.place child); a cell that stays open is named in :holes and ends the call); one bucket wets one spot, so it ends when no cell is dry, no water bucket is left or no spot helps. A pour
   counts only once the cell is seen as water. A water bucket is fetched (jobs.lib.need, :fetch) when dry cells are left and none is carried; a
@@ -104,13 +104,19 @@
 (defn permitted? [c pos]
   (gate/allowed? c :irrigate.declined "irrigate" :dig pos {:except (:for-plan (:args c))}))
 
+(defn solid-at?
+  "Whether the block at pos is seen and neither air, fluid nor clearable."
+  [p pos]
+  (let [n (u/seen-name p pos)]
+    (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n)))))
+
 (defn contained?
-  "Whether the cell's four sides and underside are seen solid, so a source poured there stays put."
+  "Whether the cell's four sides are seen solid and its underside is not seen open (farmland hides what it rests on until
+  the cell is dug), so a source poured there stays put."
   [p {:keys [x y z]}]
-  (every? (fn [[dx dy dz]]
-            (let [n (u/seen-name p {:x (+ x dx) :y (+ y dy) :z (+ z dz)})]
-              (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n)))))
-          [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 -1 0]]))
+  (and (every? (fn [[dx dz]] (solid-at? p {:x (+ x dx) :y y :z (+ z dz)})) [[1 0] [-1 0] [0 1] [0 -1]])
+       (let [under {:x x :y (dec y) :z z}]
+         (or (nil? (u/seen-name p under)) (solid-at? p under)))))
 
 (defn spot
   "The field cell to turn into water: the one that wets the most of dry, nearest first; nil when none helps. Only a
@@ -235,7 +241,7 @@
         _ (when (and dry (not (:dry0 (ctx/mem c)))) (ctx/update-mem! c assoc :dry0 (count dry)))]
     (cond
       restore (await (restore! c restore))
-      hole (if (has-bucket? p) (await (pour! c hole)) (do (unpour! c hole) :again))
+      hole (if (and (has-bucket? p) (solid-at? p (update hole :y dec))) (await (pour! c hole)) (do (unpour! c hole) :again))
       (empty? dry) (conclude! c nil)
       (or (seq (:holes (ctx/mem c))) (seq (:restored (ctx/mem c)))) (conclude! c :no-spot)
       (not (has-bucket? p))

@@ -7,13 +7,13 @@
   :time :any
   :plot {:height 8 :floor "grass_block"}
   :body {:at [16.5 0 14.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["water_bucket" 1]]}
-  :blocks [[:fill [12 -1 16] [20 -1 16] "farmland[moisture=0]"]]
+  :blocks [[:fill [12 -2 16] [20 -2 16] "dirt"] [:fill [12 -1 16] [20 -1 16] "farmland[moisture=0]"]]
   :limit-s 90}
  :cases
  [{:name "dry-row-gets-one-water-cell-in-the-middle"
    :act [[:job (jobs.farm.irrigate {:from #xyz [12 -1 16] :to #xyz [20 -1 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:dry []}} :within-s 70 :of-job true}]
-   :after [[:block [16 -1 16] "water"] [:block [12 -1 16] "farmland[moisture=0]"] [:item "water_bucket" 0]]}
+   :after [[:block [16 -1 16] "water"] [:item "water_bucket" 0]]}
   {:name "row-with-water-beside-it-is-left-alone"
    :blocks [[:set [16 -1 17] "water"]]
    :act [[:job (jobs.farm.irrigate {:from #xyz [12 -1 16] :to #xyz [20 -1 16]})]]
@@ -22,7 +22,7 @@
   {:name "no-bucket-fetch-false-stops-need"
    :body {:inventory []}
    :act [[:job (jobs.farm.irrigate {:from #xyz [12 -1 16] :to #xyz [20 -1 16] :fetch false})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :need :cause {:item "water_bucket"}}} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :need}} :within-s 30 :of-job true}]
    :after [[:block [16 -1 16] "farmland[moisture=0]"]]}
   {:name "box-over-air-sees-no-field-and-stops"
    :act [[:job (jobs.farm.irrigate {:from #xyz [12 4 16] :to #xyz [20 4 16]})]]

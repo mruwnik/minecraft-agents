@@ -6,8 +6,8 @@
  {:tags [:farm :irrigate :jobs]
   :time :any
   :plot {:height 8 :floor "grass_block"}
-  :body {:at [16.5 0 14.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["water_bucket" 1] ["wheat_seeds" 16]]}
-  :blocks [[:fill [12 -1 16] [20 -1 16] "farmland[moisture=0]"]]
+  :body {:at [16.5 0 14.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["water_bucket" 1] ["wheat_seeds" 16] ["wooden_hoe" 1]]}
+  :blocks [[:fill [12 -2 16] [20 -2 16] "dirt"] [:fill [12 -1 16] [20 -1 16] "farmland[moisture=0]"]]
   :limit-s 120}
  :cases
  [{:name "dry-row-is-wetted-then-sown"

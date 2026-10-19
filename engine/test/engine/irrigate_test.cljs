@@ -132,6 +132,27 @@
 
 (def dirt [{:name "water_bucket" :count 1} {:name "dirt" :count 4}])
 
+(defn hide-floor!
+  "Make every block under the field row (y 62) unseen, as a dug cell's floor can stay."
+  [p]
+  (let [hidden? (fn [pos] (= 62 (.-y pos)))
+        sensed (fn [pos] (if (hidden? pos) #js {:unknown true} (.blockAt (tu/oracle p) pos)))]
+    (tu/set-sensed! p sensed)
+    (aset p "seenBlockAt" (fn [pos] (if (hidden? pos)
+                                      #js {:unknown true :pos pos}
+                                      (let [b (.blockAt (tu/oracle p) pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0}))))))
+
+(deftest a-dug-cell-whose-floor-stays-unseen-is-refilled-not-poured
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory dirt :blocks (strip 9)})
+              _ (hide-floor! p)
+              r (await (tu/child-outcome eng job (args 9) 60))]
+          (is (= 1 (count (:restored r))))
+          (is (= [] (:poured r)))
+          (is (not-any? #(#{"air" "water"} (block-at p {:x % :y 63 :z 0})) (range 9))))))))
+
 (deftest a-failed-pour-after-the-dig-has-the-cell-refilled
   (async done
     (tu/run-async done
