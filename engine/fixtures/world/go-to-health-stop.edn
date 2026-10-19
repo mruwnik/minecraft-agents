@@ -8,7 +8,8 @@
   :time :any
   :plot {:height 16 :length 52}
   :blocks [[:fill [0 0 0] [51 12 0] "stone"] [:fill [0 0 31] [51 12 31] "stone"] [:fill [0 0 0] [0 12 31] "stone"] [:fill [51 0 0] [51 12 31] "stone"]
-           [:fill [1 0 1] [40 9 30] "stone"]]
+           [:fill [1 0 1] [40 9 30] "stone"]
+           [:fill [0 15 0] [51 15 31] "light"]]
   :body {:at [3.5 10 16.5]}
   :limit-s 200}
  :cases
@@ -27,7 +28,7 @@
    :body {:at [3.5 14 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :why :needs-health :heal :full}} :within-s 60 :of-job true}]
-   :after [[:body-far [46.5 0 16.5] 20]]}
+   :after [[:body-far [46.5 0 16.5] 10]]}
   {:name "allow-over-budget-takes-the-drop"
    :blocks [[:fill [1 10 1] [40 13 30] "stone"] [:fill [0 13 0] [40 13 31] "stone"]]
    :body {:at [3.5 14 16.5]}

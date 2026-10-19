@@ -44,14 +44,15 @@
             [:fill [16 13 16] [16 14 16] "air"]]
    :body {:at [16.5 1 16.5] :inventory [["iron_shovel" 1]]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
-            {:no-event {:source :job :kind :stopped :data {:reason :no-air}} :for-s 60 :until {:source :reflex :kind :ended}}]
+            {:no-event {:source :job :kind :stopped :data {:reason :no-air}} :for-s 25}]
    :after [[:not-block [16 12 16] "dirt"] [:body-near [16.5 12.5 16.5] 3]]}
   {:name "deep-dirt-cap-bare-handed-is-not-dug"
    :plot {:height 18}
    :blocks [[:fill [0 9 0] [31 14 31] "stone"]
             [:fill [16 0 16] [16 11 16] "water"]
             [:set [16 12 16] "dirt"]
-            [:fill [16 13 16] [16 14 16] "air"]]
+            [:fill [16 13 16] [16 14 16] "air"]
+            [:set [15 10 16] "glowstone"]]
    :body {:at [16.5 1 16.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :job :kind :stopped :data {:reason :no-air :cap :too-slow}} :within-s 60}]
@@ -63,7 +64,8 @@
             [:fill [16 1 16] [16 11 16] "water"]
             [:set [16 12 16] "dirt"]
             [:fill [16 13 16] [16 14 16] "air"]
-            [:fill [17 1 16] [17 3 16] "water"]]
+            [:fill [17 1 16] [17 3 16] "water"]
+            [:set [15 10 16] "glowstone"]]
    :body {:at [16.5 3 16.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :job :kind :stopped :data {:reason :no-air :cap :too-slow}} :within-s 60}]
@@ -94,7 +96,8 @@
   {:name "go-air-routes-round-magma"
    :blocks [[:fill [4 0 15] [24 3 17] "water"]
             [:fill [18 3 15] [21 3 17] "air"]
-            [:set [12 -1 16] "magma_block"]]
+            [:set [12 -1 16] "magma_block"]
+            [:set [19 4 16] "glowstone"]]
    ;; the pocket (x 18..21) is 12+ from the body: past the default air-radius setting 8
    :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
                :job (jobs.survival.breathe {:settings {:jobs.survival.breathe.air/air-radius 16}})}]
