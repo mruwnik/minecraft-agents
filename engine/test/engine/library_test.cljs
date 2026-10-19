@@ -288,8 +288,9 @@
       (fn ^:async t []
         (is (= {:arrived true :status :done}
                (await (child-outcome (:eng (setup {:floor tu/walk-floor})) 'jobs.movement.go-to {:pos {:x 5 :y 64 :z 0}} 3))))
-        (is (= {:arrived true :status :done}
-               (await (child-outcome (:eng (setup {})) 'jobs.movement.go-to {:pos {:x 0 :y 64 :z 0}} 3)))
+        (is (= {:arrived true :status :done :already? true}
+               (select-keys (await (child-outcome (:eng (setup {})) 'jobs.movement.go-to {:pos {:x 0 :y 64 :z 0}} 3))
+                            [:arrived :status :already?]))
             "already there")
         (is (= {:arrived false :reason :unreachable}
                (select-keys (await (child-outcome (:eng (setup {:floor tu/walk-floor :unreachable ["9,64,9"]}))
