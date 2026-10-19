@@ -349,6 +349,12 @@
   (let [pit-top {[1 65 0] "air" [1 64 0] "air" [1 63 0] "air" [1 62 0] "air" [1 61 0] "air" [0 63 0] "stone"}]
     (is (= {:dig []} (job-ns/drop-route #(get pit-top %) [0 64 0] [1 61 0])))))
 
+(deftest a-drop-routes-down-a-column-whose-floors-were-never-seen
+  (let [seen {[1 10 0] "stone" [0 10 0] "stone" [1 7 0] "air" [1 6 0] "air" [0 6 0] "air"}
+        r (job-ns/drop-route #(get seen %) [0 11 0] [1 6 0])]
+    (is (nil? (:problem r)))
+    (is (seq (:dig r)))))
+
 (deftest the-job-is-a-contract-job-naming-what-it-collects
   (let [{:keys [eng]} (bd/setup {:self body})
         entry (get (:jobs eng) job)]

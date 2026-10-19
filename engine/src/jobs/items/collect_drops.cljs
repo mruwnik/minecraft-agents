@@ -175,9 +175,10 @@
 
 (defn drop-route
   "dig-route/route from a feet cell to the cell of a drop lying at goal; block-at answers a cell's name or nil when never
-  seen. A drop at rest has a solid floor, seen or not (a deep pit's floor is out of sight from its rim)."
+  seen; a cell never seen is taken for stone, floors included (a rim sees no floor down a dug column). A drop at rest has a
+  solid floor, seen or not."
   [block-at from [gx gy gz :as goal]]
-  (dig-route/route (fn [cell] (or (block-at cell) (when (= cell [gx (dec gy) gz]) "stone")))
+  (dig-route/route (fn [cell] (or (block-at cell) "stone"))
                    from goal
                    {:max-digs (settings/get settings ::dig-max-cells) :margin (settings/get settings ::dig-margin)
                     :max-fall (settings/get settings ::dig-max-fall)}))
