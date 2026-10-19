@@ -367,8 +367,9 @@
       (fn ^:async t []
         (let [stack (fn [id x n] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name "dirt" :count n}})]
           (is (= {:status :done :collected 7}
-                 (await (child-outcome (:eng (setup {:entities [(stack 1 2 5) (stack 2 3 2)]}))
-                                       'jobs.items.collect-drops {:radius 10} 8)))))))))
+                 (select-keys (await (child-outcome (:eng (setup {:entities [(stack 1 2 5) (stack 2 3 2)]}))
+                                                    'jobs.items.collect-drops {:radius 10} 8))
+                              [:status :collected]))))))))
 
 (deftest collect-drops-tries-each-item-once-when-collect-says-gone
   (async done
