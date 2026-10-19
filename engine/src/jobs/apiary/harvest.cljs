@@ -7,6 +7,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary :refer [classify found-hives hives tool-for tool-item]]
+            [jobs.lib.child :as child]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
@@ -16,9 +17,9 @@
 
 (def doc
   "Take the honey of the ripe hives (honey_level 5) near a centre, nearest first, at most :max hives, all in one call
-  (:continue only while a walk or the comb pick-up waits on the world). It looks around once first. Shears give 3
+  (:continue only while a walk or pick-up waits on the world). It looks around once first. Shears give 3
   honeycomb, a glass bottle gives a honey bottle. After each shears harvest the honeycomb on the ground is
-  collected.
+  collected; when none shows yet the job pauses (jobs.time.noop, holding :comb) for the comb-wait setting and looks once more.
   A hive is worked only when it is smoked by vanilla's rule: a lit campfire at most 5 blocks under it with only
   air-like blocks between, or a lit campfire directly under the first block in the way.
   - An unsmoked hive angers the bees, so it is declined without a click (:not-smoked).
@@ -32,8 +33,7 @@
   zone rules refuse every hive).
   Result: {:harvested n :reason r :with item :declined {pos reason} :skipped {pos reason} :collected n}. :reason is
   :harvested (some taken, nothing more to do), :limit (:max reached), :no-tool, :no-hive, :not-ripe,
-  :not-smoked, :open-fire, :need, :unreachable or :gave-up (3 fruitless hives in a row). Declines and give-ups also warn
-  apiary.gave-up.
+  :not-smoked, :open-fire, :need, :unreachable or :gave-up (3 fruitless hives in a row).
   The ending: :done once the call's :least (default 1, at most :max; :all = every hive worked) hives were taken,
   whatever stopped the run; else, with none taken, condition-failed for :no-hive, :not-ripe, :not-smoked,
   :open-fire, :no-tool, :refused and :no-zones, nothing-possible for the rest; some taken but fewer than :least is
@@ -55,8 +55,7 @@
 (a/defargs settings
   {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::max-strikes {:default 3 :doc "Strikes at one target before the job gives up on it." :spec (a/int-in 0 nil)}
-   ::comb-waits {:default 10 :doc "Rounds a shears harvest waits for its comb to show before it goes on without." :spec (a/int-in 0 nil)}
-   ::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
+   ::comb-wait-s {:default 5 :doc "Seconds a shears harvest pauses for its comb to show, once, before it goes on without." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds a harvest run may take." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn max-strikes [] (settings/get settings ::max-strikes))
@@ -119,9 +118,6 @@
                 :declined (:declined seen {})
                 :skipped (:skipped m {})
                 :collected (:collected m 0)}]
-    (when-not (#{:harvested :limit} reason)
-      (ctx/emit! c :apiary.gave-up :warn {:reason reason :declined (:declined result) :skipped (:skipped result)
-                                         :text (str "apiary harvest stopped: " (name reason))}))
     (ending-of c reason result)))
 
 (defn skip!
@@ -131,23 +127,24 @@
 
 ;; ------------------------------------------------------------------ rounds
 
-(defn comb-waits [] (settings/get settings ::comb-waits))
+(defn comb-wait-s [] (settings/get settings ::comb-wait-s))
 
 (defn ^:async collect!
-  "Pick up the honeycomb lying about, then go back to the hives. :continue while the pick-up waits, and for up to
-  comb-waits rounds while no comb shows yet (the spawn may not have reached the body); any other end of it
-  (done, declined) closes the phase."
+  "Pick up the honeycomb lying about, then go back to the hives. :continue while the pick-up waits; when no comb shows
+  yet (the spawn may not have reached the body) one comb-wait-s pause, then a second look; any other end of it closes
+  the phase."
   [c]
   (let [e (await (ctx/call c :collect 'jobs.items.collect-drops {:radius 8 :items ["honeycomb"]}))
         done? (= :done (:kind e))
-        got (if done? (get-in e [:data :collected] 0) 0)
-        waits (:comb-waits (ctx/mem c) 0)]
+        got (if done? (get-in e [:data :collected] 0) 0)]
     (when done?
       (ctx/update-mem! c update :collected (fnil + 0) got))
     (cond
       (= :continue e) :continue
-      (and done? (zero? got) (< waits (comb-waits))) (do (ctx/update-mem! c assoc :comb-waits (inc waits)) :continue)
-      :else (do (ctx/update-mem! c #(-> % (dissoc :phase) (assoc :comb-waits 0))) :again))))
+      (and done? (zero? got) (not (:comb-waited (ctx/mem c))))
+      (do (ctx/update-mem! c assoc :comb-waited true)
+          (if (= :continue (await (child/pause! c (comb-wait-s) :comb))) :continue :again))
+      :else (do (ctx/update-mem! c #(-> % (dissoc :phase) (dissoc :comb-waited))) :again))))
 
 (defn book-harvest!
   "Count the hive at pos as taken when it is no longer ripe; the comb is then collected after shears."
@@ -240,10 +237,9 @@
       (cond
         (= :continue e) :continue
         (= :done (:kind e)) :again
-        :else (do (ctx/emit! c :apiary.gave-up :warn {:reason :need :text "apiary harvest stopped: need"})
-                  (ctx/end c (:kind e) (:cause e) {:harvested (:harvested (ctx/mem c) 0) :reason :need
-                                                   :with (:tool (ctx/mem c)) :declined (:declined seen {})
-                                                   :skipped (:skipped (ctx/mem c) {}) :collected (:collected (ctx/mem c) 0)}))))))
+        :else (ctx/end c (:kind e) (:cause e) {:harvested (:harvested (ctx/mem c) 0) :reason :need
+                                               :with (:tool (ctx/mem c)) :declined (:declined seen {})
+                                               :skipped (:skipped (ctx/mem c) {}) :collected (:collected (ctx/mem c) 0)})))))
 
 (defn ^:async step
   "One piece of the harvest: collect after a shears harvest; else classify the hives and finish when none can be
@@ -269,8 +265,5 @@
           :else (do (ctx/update-mem! c assoc :tool tool)
                     (await (harvest! c pos tool))))))))
 
-(defn max-steps [] (settings/get settings ::max-steps))
-
 (defn ^:async round [c]
-  (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue)))))
+  (await (pace/steps! c #(step c))))

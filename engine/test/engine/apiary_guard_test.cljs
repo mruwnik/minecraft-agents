@@ -59,8 +59,7 @@
           (is (= :guarded (:reason result)))
           (is (= "white_carpet" (block-name p 2 65 0)))
           (is (not (apiary/open-fire? (apiary/block-at-fn p) {:x 2 :y 64 :z 0})))
-          (is (= 1 (count (kinds seen :completed))))
-          (is (empty? (kinds seen :apiary.guard-gave-up))))))))
+          (is (= 1 (count (kinds seen :completed)))))))))
 
 (deftest a-fire-behind-the-body-is-found-by-the-look-around
   (async done
@@ -158,7 +157,7 @@
           (is (= {"2,64,0" :unreachable} (:skipped result)))
           (is (empty? (calls p "place"))))))))
 
-(deftest the-count-is-bounded-by-max
+(deftest the-count-is-bounded-by-the-max-actions-setting
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -166,7 +165,7 @@
                     (update :blocks merge (:blocks (fire-world {:x 2 :z 5})))
                     (update :states merge (:states (fire-world {:x 2 :z 5}))))
               {:keys [eng p]} (setup w)
-              result (await (child-outcome eng job {:max 1} 60))]
+              result (await (child-outcome eng job {:settings {::guard/max-actions 1}} 60))]
           (is (= :limit (:reason result)))
           (is (= 1 (:carpeted result)))
           (is (= 1 (count (calls p "place")))))))))
@@ -178,12 +177,11 @@
         (let [w (-> (fire-world {:inventory (inv "white_carpet" 1)})
                     (update :blocks merge (:blocks (fire-world {:x 2 :z 5})))
                     (update :states merge (:states (fire-world {:x 2 :z 5}))))
-              {:keys [eng p seen]} (setup w)
+              {:keys [eng p]} (setup w)
               result (await (child-outcome eng job {:fetch false} 60))]
           (is (= 1 (:carpeted result)))
           (is (= :no-carpet (:reason result)))
-          (is (= 1 (count (:left result))))
-          (is (= 1 (count (kinds seen :apiary.guard-gave-up)))))))))
+          (is (= 1 (count (:left result)))))))))
 
 (deftest a-box-keeps-the-job-to-its-fires
   (async done

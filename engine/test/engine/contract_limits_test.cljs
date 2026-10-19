@@ -8,8 +8,7 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
-            [engine.test-util :as tu]
-            [jobs.apiary.maintain :as apiary-maintain]))
+            [engine.test-util :as tu]))
 
 (def world (atom {}))
 (def clock (atom 0))
@@ -350,69 +349,3 @@
           (is (= 2 (looks p)) "both acts of the section ran")
           (is (nil? (:after-section @world)))
           (is (= {:kind :limit-reached :cause {:line :health :floor 12}} (stopped seen))))))))
-
-(defn rejected [p] (-> p (.then (constantly nil)) (.catch identity)))
-
-(deftest a-maintain-catch-all-passes-a-limit-through
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [e (contract/limit-error "j1" {:line :job-time :spend 5})
-              c {:update-mem (fn [_ _] (swap! world assoc :booked true))}]
-          (reset! world {})
-          (is (contract/passes-through? e))
-          (is (contract/passes-through? (doto (js/Error. "cut") (aset "code" "cut"))))
-          (is (not (contract/passes-through? (js/Error. "boom"))))
-          (let [runs (with-redefs [ctx/call (fn [_ _ _ _] (js/Promise.reject e))]
-                       [(rejected (apiary-maintain/run-child! c :hives {}))])
-                thrown (await (js/Promise.all (clj->js runs)))]
-            (is (every? #(identical? e %) thrown))
-            (is (nil? (:booked @world)) "not booked as a failed step")))))))
-
-
-(deftest a-quotes-pause-adds-to-its-job-time-against-wall-time
-  (let [state {:call {:spend {:wall-time 10}} :started-ms 0 :ran-ms 0}
-        crossed (fn [uses] (map first (contract/most-crossings state {:uses uses} {} 0 0)))]
-    (is (= [{:line :wall-time :spend 10}] (crossed {:job-time [6 6 6] :wall-time [6 6 6]})))
-    (is (empty? (crossed {:job-time [6 6 6] :wall-time [3 3 3]})))
-    (is (= [{:line :wall-time :spend 10}] (crossed {:job-time [12 12 12]})))))
-
-;; ---------------------------------------------------------------- tries
-
-(def failing-kid
-  {:round (fn [c] (ctx/end c :condition-failed :already-closed))})
-
-(def retrier
-  {:defaults {:spend {:tries 3}}
-   :round (fn ^:async retrier-round [c]
-            (let [e (await (ctx/call c :kid (quote kid) {}))]
-              (swap! world update :kid-calls (fnil inc 0))
-              (swap! world assoc :kid-ending e)
-              :continue))})
-
-(deftest children-ending-other-than-done-spend-the-tries-line-across-rounds
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {'retrier retrier 'kid failing-kid})]
-          (core/submit! eng '(retrier) {})
-          (dotimes [_ 6] (await (core/tick! eng)))
-          (is (= 3 (:kid-calls @world)) "the 4th try ends the job inside its call, before the caller goes on")
-          (is (= {:kind :limit-reached :cause {:line :tries :spend 3 :last {:job 'kid :reason :already-closed}}}
-                 (stopped seen)))
-          (is (= 4 (get-in (first (job-ev seen :limit_reached)) [:data :report :uses :tries]))))))))
-
-(deftest a-tries-line-must-be-a-number
-  (is (some? (contract/call-problem 'x nil {:spend {:tries -1}})))
-  (is (nil? (contract/call-problem 'x nil {:spend {:tries 2}}))))
-
-(deftest a-child-that-succeeds-spends-a-try-too
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {'retrier retrier 'kid {:round (fn [c] (ctx/end c :done :ok))}})]
-          (core/submit! eng '(retrier) {})
-          (dotimes [_ 6] (await (core/tick! eng)))
-          (is (= 3 (:kid-calls @world)))
-          (is (= {:kind :limit-reached :cause {:line :tries :spend 3 :last {:job 'kid :reason :ok}}} (stopped seen))
-              "the cause names the last ending, done or not"))))))

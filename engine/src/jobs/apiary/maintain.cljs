@@ -29,11 +29,11 @@
   A step whose conditions do not hold is booked {:skipped reason} (:safe, :no-fire, :no-carpet, :no-campfire,
   :not-ripe, :no-tool, :unsafe-fire, :not-smoked, :open-fire, :no-target, :at-target, :night, :raining,
   :too-few-adults, :no-food, :no-chest, :nothing-to-store). One that declines is booked {:skipped :declined :reason why} (the child's wait)
-  and one that throws {:skipped :failed :error text}. The pass goes on either way.
-  The job declines (does nothing) unless some step would run, after one look around per run when part of the area was never seen. A started run always
-  continues.
-  It ends :done with {:target :bees :steps {step summary}} , also when every step was
-  skipped. Summaries: guard {:sunk :carpeted :reason :left}, harvest {:harvested :reason :declined}, breed {:fed
+  and the pass goes on.
+  It waits (a skipped job, :nothing-to-do) unless some step would run, after one look around when part of the area
+  was never seen. A started run always continues.
+  It ends :done with {:target :bees :steps {step summary}} when some step ran to its end; else nothing-possible
+  :failed-steps when one stopped, else condition-failed :nothing-to-do (every step skipped). Summaries: guard {:sunk :carpeted :reason :left}, harvest {:harvested :reason :declined}, breed {:fed
   :reason}, deposit {:gave-up :reason}.
   :ignore-zones? is passed to guard and harvest, which check zones and claims (see their docs); with :fetch off a missing item skips the step. :fetch is passed to guard, harvest and breed.")
 
@@ -210,7 +210,7 @@
         entries (vals report)]
     (cond
       (some ran? entries) (ctx/end c :done nil (assoc out :text (str "maintain done: " (count (filter :skipped entries)) " steps skipped")))
-      (some #(or (:stopped %) (= :failed (:skipped %))) entries) (ctx/end c :nothing-possible :failed-steps out)
+      (some :stopped entries) (ctx/end c :nothing-possible :failed-steps out)
       :else (ctx/end c :condition-failed {:reason :nothing-to-do} out))))
 
 (defn booked
@@ -227,16 +227,6 @@
     (and (#{:condition-failed :impossible} (:kind e)) (empty? (:data e))) {:skipped :declined :reason (contract/cause-key e)}
     :else (assoc (summary step (merge {:reason (contract/cause-key e)} (:data e))) :stopped (:kind e))))
 
-(defn ^:async run-child!
-  "One round of the child in slot. A child that throws is booked failed instead of failing the pass; a cut or a limit passes through."
-  [c step call-args]
-  (try
-    (await (ctx/call c step (jobs step) call-args))
-    (catch :default e
-      (when (contract/passes-through? e) (throw e))
-      (ctx/update-mem! c booked step {:skipped :failed :error (str e)})
-      :failed)))
-
 (defn ^:async step
   "One piece of the pass: :again after a step ended, :continue while its child waits on the world, or the ending."
   [c]
@@ -250,20 +240,15 @@
         (let [step (:slot call)
               call-args (or (:call-args (ctx/mem c)) (child-args c step center call))
               _ (ctx/update-mem! c assoc :call-args call-args)
-              r (await (run-child! c step call-args))]
+              r (await (ctx/call c step (jobs step) call-args))]
           (case r
             :continue :continue
-            :failed :again
             (do (ctx/update-mem! c booked step (entry-of step r)) :again)))))))
 
 (a/defargs settings
-  {::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
-   ::job-time-s {:default 1800 :doc "Seconds a maintain pass may take: its four steps." :spec (a/num-in 0 nil)}})
-(defn max-steps [] (settings/get settings ::max-steps))
-
+  {::job-time-s {:default 1800 :doc "Seconds a maintain pass may take: its four steps." :spec (a/num-in 0 nil)}})
 (defn ^:async round [c]
-  (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue)))))
+  (await (pace/steps! c #(step c))))
 
 ;; ------------------------------------------------------------------ the contract
 
@@ -293,8 +278,8 @@
 
 (defn done?
   "Ok when the apiary is in order, wrap-up included (no fire unsafe or lacking a carpet, nothing ripe, bees at :target
-  or none wanted, nothing to store); before the start that is done :already. Part of the area never seen is looked at
-  first. Else later with the steps run and left."
+  or none wanted, nothing to store); before the start that is done :already. Later while part of the area was never
+  seen (can-start? asks the look). Else later with the steps run and left."
   [c]
   (let [ran (count (filter ran? (vals (:report (ctx/mem c)))))
         left (count (:todo (ctx/mem c)))
@@ -304,7 +289,7 @@
       (contract/later :steps (str ran " steps run") :units :steps :done ran :left left)
 
       (and (look/unseen? (:primitives c) (apiary/watched-cells c)) (not (look/surveyed? c :near)))
-      (contract/look :unseen "part of the apiary was never seen")
+      (contract/later :unseen "part of the apiary was never seen" :units :steps :done ran :left left)
 
       :else
       (contract/ok :in-order "the apiary is in order" :units :steps :done ran :left 0

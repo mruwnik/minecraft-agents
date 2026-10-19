@@ -195,19 +195,6 @@
           (is (= 5 (honey s)))
           (is (true? (finished? s))))))))
 
-(deftest a-failing-child-is-booked-and-the-pass-goes-on-and-runs-it-once
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [runs (atom 0)
-              boom (fn [jobs] (assoc jobs 'jobs.apiary.harvest
-                                     {:round (fn [_c] (swap! runs inc) (throw (js/Error. "boom")))}))
-              s (await (scenario {:chest chest} (world {:inventory (into kit (inv "honey_bottle" 2)) :chest? true}) 60 boom))]
-          (is (= 1 @runs))
-          (is (= :failed (:skipped (step s :harvest))))
-          (is (= {"honey_bottle" 2} (chest-items s)))
-          (is (true? (finished? s))))))))
-
 (deftest an-apiary-never-seen-is-looked-at-before-nothing-to-do
   (async done
     (tu/run-async done
