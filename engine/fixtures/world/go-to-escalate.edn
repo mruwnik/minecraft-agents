@@ -280,7 +280,7 @@
                                         #at [16 0 15] #at [16 1 15] #at [16 2 15] #at [16 3 15]]
                     :want [:any "stone"]}]}]
    :body {:inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1 :spare-own-builds false})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1 :settings {:jobs.movement.go-to.tuning/spare-own-builds false}})]]
    :expect [{:event {:source :job :kind :go-to.dug-own-build} :within-s 120 :of-job true}
             {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 200 :of-job true}]
    :after [[:body-near [20.5 4 16.5] 2]]

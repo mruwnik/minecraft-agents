@@ -69,6 +69,8 @@
                  :doc "Times its straight walk a goal is worth a tour of loaded land on top of a trip: a near goal is worth a short tour."}
    ::tour-floor-blocks {:default 32 :spec (a/num-in 0 nil)
                         :doc "Straight blocks a goal counts as at least when worth a tour (about 670 blocks of tour): a near goal behind a ravine is still reached."}
+   ::tour-worth {:default false :spec (a/or-of false? (a/num-in 0 nil))
+                 :doc "Seconds a tour of frontiers may cost whatever its goal; false: from the goal's straight blocks (tour-ratio, tour-floor-blocks)."}
    ::torch-place-s {:default 1.5 :spec (a/num-in 0 nil)
                     :doc "Placing a torch to light a dark floor and waiting for the light to show it, in seconds."}})
 
@@ -470,9 +472,9 @@
 
 (defn tour-worth
   "Seconds of tour a goal `straight` blocks off is worth: a trip, and tour-ratio times the walk of its straight blocks,
-  at least tour-floor-blocks."
+  at least tour-floor-blocks; the setting ::tour-worth, when set, is the worth."
   [straight]
-  (+ (trip) (* (settings/get settings ::tour-ratio) (:cost (walk-cost {:distance (max straight (settings/get settings ::tour-floor-blocks))})))))
+  (or (settings/get settings ::tour-worth) (+ (trip) (* (settings/get settings ::tour-ratio) (:cost (walk-cost {:distance (max straight (settings/get settings ::tour-floor-blocks))}))))))
 
 (defn per-climb [] (settings/get settings ::per-climb))
 

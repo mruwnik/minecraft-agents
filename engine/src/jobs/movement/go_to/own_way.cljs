@@ -5,6 +5,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
+            [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.detour :as detour]
@@ -15,11 +16,11 @@
 
 (defn dive-floor!
   "The lowest y this call's searches may reach, or nil: the body is under ground, pos lies ::climb-rise or more above it
-  and no :y-margin was passed. It is ::climb-dip below where the call first found the body so (mem :dive-floor), so the
+  and the y-margin setting is unset. It is ::climb-dip below where the call first found the body so (mem :dive-floor), so the
   legs of one call do not step down floor by floor."
   [c pos]
   (let [y (js/Math.floor (:y (u/self-pos c)))]
-    (when (and (nil? (:y-margin (:args c))) (:y pos) (>= (- (:y pos) y) (climb-rise)) (sh-sense/buried? (:primitives c)))
+    (when (and (nil? (wworld/y-margin)) (:y pos) (>= (- (:y pos) y) (climb-rise)) (sh-sense/buried? (:primitives c)))
       (or (:dive-floor (ctx/mem c))
           (let [floor (- y (climb-dip))]
             (ctx/update-mem! c assoc :dive-floor floor)

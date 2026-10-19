@@ -77,7 +77,7 @@
 
 (defn walk-into-args [slot cell]
   (cond-> {:pos cell :range 0 :ways #{:walk :clear-seal}}
-    (#{:in :out} slot) (assoc :y-margin entry-depth)))
+    (#{:in :out} slot) (assoc :settings {:jobs.lib.walk.world/y-margin entry-depth})))
 
 (defn ^:async walk-into!*
   "walk-into! through ctx/call: :continue while it walks, else go-to's ending."

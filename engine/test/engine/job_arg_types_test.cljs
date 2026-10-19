@@ -65,6 +65,6 @@
                 '(jobs.movement.go-to {:pos [24 0 16] :tolls [{:x 3 :y 64 :z 0}]})
                 '(jobs.movement.go-to {:pos [24 0 16] :tolls [{:x 3 :y 64 :z 0 :factor -1}]})
                 '(jobs.movement.go-to {:pos [24 0 16] :tolls {:x 3 :y 64 :z 0 :factor 2}})
-                '(jobs.movement.go-to {:pos [22 0 16] :drop-cost -1})]]
+                '(jobs.movement.go-to {:pos [22 0 16] :settings {:jobs.lib.cost.planner/drop-cost -1}})]]
     (is (string? (expr/problem registry/jobs form)) (pr-str form)))
   (is (nil? (expr/problem registry/jobs '(jobs.movement.go-to {:pos [24 0 16] :tolls [{:x 0 :y 0 :z 0 :factor 3}]})))))

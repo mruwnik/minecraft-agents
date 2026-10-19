@@ -87,7 +87,7 @@
   false :reason ...} (report), with :goal the cell planned to and :nodes the search's expansions; a refusal {:found
   false :reason :text}, :late when the search outran the quote deadline."
   [c]
-  (let [{:keys [doors range dangers dark tolls drop-cost costs one-way unknown]} (:args c)
+  (let [{:keys [doors range tolls one-way unknown]} (:args c)
         refusal (gaim/args-refusal c)
         pos (some->> (when-not refusal (:pos (gaim/target c))) (#(if (nil? (:y %)) (:pos (gaim/aimed c %)) %)) (wworld/stand-goal (wworld/path-world (:primitives c))))]
     (cond
@@ -96,13 +96,11 @@
       :else
       (let [doors (or doors :shut)
             policy (cond-> (wworld/body-policy c)
-                     (not= :never doors) (update :moves conj :open)
-                     (some? drop-cost) (assoc :drop-cost drop-cost)
-                     (some? costs) (assoc :costs costs))
+                     (not= :never doors) (update :moves conj :open))
             spec (when unknown (wworld/unknown-spec))
             plan (try (await (near/plan! (with-deadline c) [(:x pos) (:y pos) (:z pos)] (or range 1) doors policy [] false
                                          (when-not (= :closed one-way) :open) nil true
-                                         (not (false? dangers)) nil (not (false? dark)) tolls spec))
+                                         (wworld/dangers?) nil (wworld/dark?) tolls spec))
                       (catch :default e
                         (when-not (= "cut" (.-code e)) (throw e))))]
         (if (nil? plan)

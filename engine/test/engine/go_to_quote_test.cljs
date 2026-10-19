@@ -2,6 +2,7 @@
   "go-to's quote against the fake world: the planner's route to the goal, asked as ./bin/quote asks it, walks nowhere."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.event-api :as event-api]
@@ -25,7 +26,14 @@
   [eng args]
   (await (event-api/quote-view eng "jobs.movement.go-to" (pr-str args))))
 
+(declare preview*)
+
 (defn ^:async preview
+  "preview* with the :settings of args {setting-key value} laid over the settings (a quote runs outside the call's :settings scope)."
+  [blocks args & [opts]]
+  (await (settings/with-settings (or (:settings args) {}) (fn ^:async run [] (await (preview* blocks (dissoc args :settings) opts))))))
+
+(defn ^:async preview*
   "Ask go-to's quote over the fake world (body at 0 64 1); {:out its :route :quote :reply the /quote answer :p primitives}.
   opts: :places {name pos} written to memory, :markers shared markers, :no-path-world true, :states block states."
   [blocks args & [{:keys [places markers no-path-world states]}]]
@@ -120,7 +128,7 @@
       (fn ^:async t []
         (let [world (merge (floor 0 0 3 2) (floor 61 4 0 6 2))
               free (:out (await (preview world {:pos [5 62 1] :range 0})))
-              none (:out (await (preview world {:pos [5 62 1] :range 0 :drop-cost false})))]
+              none (:out (await (preview world {:pos [5 62 1] :range 0 :settings {:jobs.lib.cost.planner/drop-cost false}})))]
           (is (true? (:found free)))
           (is (= 1 (get-in free [:moves :drop])))
           (is (false? (:found none))))))))
@@ -140,9 +148,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[args re] [[{:pos [2 64 1] :drop-cost -1} #":drop-cost must be a number >= 0 or false, got -1"]
-                           [{:pos [5 64 1] :tolls [{:x 1}]} #":tolls must be a list of \{:x :y :z :factor\}"]
-                           [{:pos [20 64 1] :costs {:swim-h 0.1}} #":costs must be a map of planner price name"]]]
+        (doseq [[args re] [[{:pos [5 64 1] :tolls [{:x 1}]} #":tolls must be a list of \{:x :y :z :factor\}"]]]
           (let [{:keys [reply]} (await (preview (floor 0 0 11 2) args))]
             (is (= :bad-args (:reason reply)) (pr-str args))
             (is (re-find re (str (:message reply))) (pr-str reply))))))))
@@ -211,7 +217,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [route (fn ^:async route [costs] (:out (await (preview (pond) (cond-> {:pos [20 64 1] :range 0} costs (assoc :costs costs))))))
+        (let [route (fn ^:async route [costs] (:out (await (preview (pond) (cond-> {:pos [20 64 1] :range 0} costs (assoc :settings {:jobs.lib.cost.planner/costs costs}))))))
               dear (await (route {:swim-h 5}))
               default (await (route nil))
               cheap (await (route {:swim-h 0.25}))]

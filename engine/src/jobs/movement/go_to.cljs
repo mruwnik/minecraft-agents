@@ -21,7 +21,7 @@
             [jobs.movement.go-to.restore :as restore]
             [jobs.movement.go-to.preview :as preview]
             [jobs.movement.go-to.result :as end]
-            [jobs.movement.go-to.tuning :refer [max-cut-resets]]
+            [jobs.movement.go-to.tuning :as tuning :refer [max-cut-resets]]
             [jobs.movement.go-to.torch :as torch]
             [jobs.movement.go-to.walk :as walk]
             [jobs.movement.go-to.way-steps :as ways]))
@@ -31,11 +31,11 @@
   it (a sphere; range 0: in that cell, 1: next to it); with :see a cell in it counts only where the eye sees the block at
   :pos (jobs.lib.aim), and a search that finds no such stand gives up :why :out-of-sight. :pos [x z] or {:x :z} (no y) walks to the seen ground of that
   column nearest the body's feet (unseen: first to within 8 of a height estimated from the seen columns around it, then looks); a y the planner finds no standable cell within :range of, or under :unknown a y seen in the ground with no seen stand within :range (asked before the first walk, pre-aim!), is re-aimed once to its column's
-  ground nearest it, at most :y-slack blocks off and never past a solid (info goal-resolved {:goal :to}); see jobs.movement.go-to.column. A
+  ground nearest it, at most the y-slack setting (4) blocks off and never past a solid (info goal-resolved {:goal :to}); see jobs.movement.go-to.column. A
   column whose ground is not made out is looked at after a fruitless walk (at most 3 a call); with no stand in reach of its guess it walks to seen stands toward it (column/waypoint, off the line past a cliff), until ::max-waypoint-misses bring it no nearer. A cell over a short floor (farmland, a path, a bottom slab) stands for that
   block's own cell, where the body's feet are. :place (a name such as :home, set by jobs.memory.set-place) walks to
   that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker).
-  - Refused at submit (or the caller's ctx/call throws): an arg its spec refuses, such as a :tolls entry that is not {:x :y :z :factor} of finite numbers, a :drop-cost that is not a number >= 0 or false, a :costs that is not a map of known price names to numbers >= 0, a :gait that is not :auto, :walk or :sneak.
+  - Refused at submit (or the caller's ctx/call throws): an arg its spec refuses, such as a :tolls entry that is not {:x :y :z :factor} of finite numbers, a :gait that is not :auto, :walk or :sneak.
   - Ends at once, before any walk, after a :refused warn, data {:arrived false :text}: impossible :bad-pos (a :pos
     outside the world), :bad-name (a :place that is not a valid name), :unsupported (a body with no pathWorld sensing)
     or :bad-args (a given :floor :health over 20, a :spend :job-time outside 0.1-120); condition-failed :unknown-place (no
@@ -72,10 +72,10 @@
     claim; the walk stops there, places one (an off-hand stack goes back to the inventory first; info walk.torch-placed) and
     walks on once it sees the floor. With none carried it fetches torches once a call (:fetch, default true; a jobs.lib.need child);
     with none and no fetch it gives up :unseen-floor-dark saying so. A torch that cannot go there is not tried there again.
-  - :dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
+  - The walk settings (per world, body or call :settings): jobs.lib.walk.world/dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
     longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
-  - :goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
-  - :dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). A
+  - Setting go-to.tuning/goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
+  - Setting jobs.lib.walk.world/dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). A
     :spend :job-time of n walks one leg of at most n s and, when it got more than 1 block nearer, ends limit-reached
     {:reason :leg :line :job-time}, data {:arrived false :leg true}, for a caller chasing a moving target to call again; a
     leg that got no nearer goes on as any round, and a search that goes on past n s gives up :leg-search-spent.
@@ -93,7 +93,7 @@
   - A search that runs out of loaded land walks to its frontier (the loaded edge), and a walk that gets nearer that edge
     is progress too: a tour of frontiers ends when every frontier within 1000 blocks of the goal is spent, or at the end of
     a frontier walk once the tour's price (jobs.lib.cost/tour-cost of the blocks and walks since the body last came nearer its goal than
-    ever in the call) passes what the goal is worth (:tour-worth, default jobs.lib.cost/tour-worth of the goal's straight
+    ever in the call) passes what the goal is worth (the setting jobs.lib.cost.value/tour-worth, default jobs.lib.cost/tour-worth of the goal's straight
     blocks at the call's start): it gives up :why :explore-spent (:explored the blocks, :walks the walks).
   - A walk stuck or off its plan at a cell is a :walker-fault warn; the next plans of the call cost that cell
     (up to 16; after a fall also the cells above it) far more (wworld/with-avoid), so a way round is taken when there is one.
@@ -138,7 +138,7 @@
       its own, while a stair up can be cut there (with :stair and ::climb-stair): it climbs as from a dive
       (:why :way-dives); when no stair can be cut it walks the plan after all. Likewise, once at the end of its own
       way (memory :own-way-top), a plan that goes more than ::climb/cave-dip below it back down a stair of its own.
-    An explicit :y-margin switches all of this off.
+    A set jobs.lib.walk.world/y-margin switches all of this off.
   - A body under ground (jobs.lib.shelter.sense/buried?) whose goal is under ::climb-rise above it
     walks no found way longer than ::detour/ratio times the distance to its goal at the call's start (at least
     ::detour/floor blocks) when half or more of its cells were never seen: it gives up :why :detour with :route,
@@ -160,32 +160,22 @@
    :place {:doc "name of a place in body memory (:home, :bed, ...) to walk to instead of :pos" :spec (a/or-of keyword? string?) :default nil}
    :range {:doc "how close counts as there: arrive within this many cells of :pos (a sphere)" :spec (a/num-in 0 nil) :default 1}
    :see {:doc "true: a cell within :range counts as there only when the eye there sees the block at :pos (jobs.lib.aim: a clear line over seen cells to its centre or a face), as a body that digs, places or uses it needs; a [x z] column goal ignores it" :spec boolean? :default false}
-   :y-slack {:doc "blocks a :pos y with no standable cell within :range may be re-aimed up or down its column to the ground; 0: never" :spec (a/int-in 0 nil) :default 4}
    :doors {:doc "what to do at shut doors, gates and trapdoors: :shut (open, pass, shut again what the walk opened), :leave-open (open and pass), :never (walls)"
            :spec #{:shut :leave-open :never} :default :shut}
-   :dangers {:doc "false: plan straight past known dangers (a walk up to the hostile being fought); true: keep away from them" :spec boolean? :default true}
    :unknown {:doc "true: plan over what the body has seen or felt only, unseen floors checked by eye before they are stepped on; false: plan over the world as it is" :spec boolean? :default false}
    :place-torches {:doc "with :unknown: light a dark floor it cannot see with a torch from the inventory, placed at the takeoff (priced by jobs.lib.cost/light-cost), fetching torches when none is carried (:fetch); false: never place one" :spec boolean? :default false}
    :fetch {:doc "get torches for :place-torches when none is carried (a jobs.lib.need child): true, a set of kinds or a map of limits; false: give up instead" :spec need/option? :default true}
-   :dark {:doc "false: plan dark cells like lit ones; true: a dark cell (seen dark, or unseen at night) costs twice a lit one" :spec boolean? :default true}
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more (jobs.lib.cost farm-tolls, zone-tolls)" :spec (a/valid-by "a list of {:x :y :z :factor} of finite numbers, :factor >= 0" wworld/tolls-problem) :default nil}
-   :drop-cost {:doc "number: scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back" :spec (a/or-of (a/num-in 0 nil) false?) :default 1}
-   :y-margin {:doc "blocks the walk's search may reach above the higher and below the lower of body and goal (default 96): a route dipping deeper, such as through deep caves, is not planned; nil: as default" :spec (a/int-in 0 nil) :default nil}
-   :costs {:doc (str "map of price name to seconds, overriding the planner's price of a move (jobs.lib.cost.planner: " (str/join " " (map name (keys cost/planner-names))) "); a price left out keeps the planner's default; :lethal-air is no price: 1 lets a plan drown the body when no other way exists, else such a plan is refused (:why :air-lethal)" ) :spec (a/valid-by "a map of planner price name to a number of seconds >= 0" cost/planner-costs-problem) :default nil}
    :gait {:doc "how the body walks: :auto (sprints on long straight runs and over gaps, as the walker does), :walk (never sprints: no gap jump over 2 or more), :sneak (slow, never sprints; holds sneak on level steps so it never walks off an edge, lets go for a planned drop, gap, climb or water); nil: the body's setting jobs.lib.walk.world/gait (:auto)" :spec #{:auto :walk :sneak} :default nil}
-   :goal-danger {:doc "when the goal lies within the full-cost radius of a known mob the body would flee: :wait (walk on; an info goal-in-danger says so once), :end (give up at once, :why :goal-dangerous with the mob)" :spec #{:wait :end "wait" "end"} :default :wait}
    :keep-out {:doc "cells the walk treats as solid, [{:x :y :z}]: no way through them is planned (jobs.lib.pen-entry gives a block job the gates of pens holding animals)" :spec (a/valid-by "a list of {:x :y :z} of whole numbers" (fn [cells] (when-not (and (sequential? cells) (every? #(and (map? %) (every? integer? (map % [:x :y :z]))) cells)) "keep-out is a list of {:x :y :z} of whole numbers"))) :default nil}
    :zone-tolls {:doc "true: also toll the cells of other bodies' zones near each walk (jobs.lib.toll-cells/zone-walk-tolls), none with :ignore-zones?; for a job that respects zones" :spec boolean? :default false}
    :leg-alert-within {:doc "with :leg-alert-s and a :spend :job-time leg: blocks within which a hostile that attacks at close range (not a ranged mob or an enderman; a creeper counts), or a loss of health since the call began, shortens a leg's search to :leg-alert-s seconds from its start" :spec (a/num-in 0 nil) :default nil}
    :leg-alert-s {:doc "seconds a search may last once the :leg-alert-within alert is on (0.1 to 120)" :spec (a/num-in 0.1 120) :default nil}
    :one-way {:doc "arg, not the :one-way key of a give-up result: :closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back, and walks to no frontier of loaded land (a walk to something visible); :open (default) takes one when the land past it runs on into unloaded land (under :unknown also land the body has not seen)" :spec #{:open :closed} :default :open}
-   :tour-worth {:doc "seconds a tour of frontiers (walks to the edge of loaded land without coming nearer its goal) may cost (jobs.lib.cost/tour-cost), then it gives up :why :explore-spent; nil: jobs.lib.cost/tour-worth of the goal's straight blocks" :spec (a/num-in 0 nil) :default nil}
    :retry {:doc "false: a walk that got no nearer gives up at once instead of walking again (up to 3 times), for a caller that re-aims itself" :spec boolean? :default true}
-   :look-round {:doc "false: no look round on arrival, for a caller that keeps moving" :spec boolean? :default true}
    :warn {:doc "false: a give-up or refusal is an info event, not a warn, for a caller that reports the failure itself"
           :spec boolean? :default true}
-   :ignore-zones? :shared
-   :spare-own-builds {:doc "the escalation never digs a cell of a plan this body made (stops :own-build); false: it may, and warns of each cell dug" :spec boolean? :default true}})
+   :ignore-zones? :shared})
 
 (defn ^:async step!
   "One iteration of a call: :again to go on in the same call, else what the call returns."
@@ -291,7 +281,7 @@
 (defn ^:async attempt
   "One whole attempt: step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps. A
   cut ends it at once (ctx/alive? per iteration, else at the next memory write or act, which throws). A goal inside a
-  fled mob's radius ends it at once under :goal-danger :end, else says so once. With :unknown, the attempt's mask spec
+  fled mob's radius ends it at once under the goal-danger setting :end, else says so once. With :unknown, the attempt's mask spec
   (wworld/unknown-spec: one missed Set for all its plans) rides on c as :unknown."
   [c0]
   (let [u (:unknown (:args c0))
@@ -316,7 +306,7 @@
                                                                          spent? (assoc :resets-spent true)))))
           (let [danger (goal-danger c pos)]
             (when danger (ctx/emit! c :goal-in-danger :info (assoc danger :target pos)))
-            (if (and danger (= :end (some-> (:goal-danger (:args c)) keyword)))
+            (if (and danger (= :end (tuning/goal-danger)))
               (await (end/give-up! c pos 0 :goal-dangerous {:reason :goal-dangerous} danger))
               (do (pre-aim! c goal pos)
                   (await (run-steps! c goal))))))))))

@@ -683,7 +683,7 @@
         (let [sent (atom nil)
               c (assoc (stub-child-ctx nil) :call (fn [_slot _def args] (reset! sent args) (js/Promise.resolve (contract/ending :done nil {:arrived true}))))]
           (await (air/go! c :leg {:x 0 :y 64 :z 0} 2))
-          (is (= {:lethal-air 1} (:costs @sent)))
+          (is (= {:jobs.lib.cost.planner/lethal-air true} (:settings @sent)))
           (is (= #{:walk :clear-seal} (:ways @sent)) "changes nothing on the way but its own seal round the air"))))))
 
 (deftest a-refire-after-a-stop-keeps-the-searched-area

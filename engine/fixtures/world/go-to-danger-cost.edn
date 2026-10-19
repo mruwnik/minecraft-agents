@@ -40,7 +40,7 @@
   {:name "gone-creeper-at-goal-does-not-block"
    :memory [{:kind :threat :data {:mob "creeper" :id 98 :uuid "00000000-0000-0000-0000-000000000098" :key "00000000-0000-0000-0000-000000000098"
                                   :pos #xyz [30.5 0 24.5] :ended :lost}}]
-   :act [[:job (jobs.movement.go-to {:pos #at [30 0 24] :range 1 :goal-danger :end :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [30 0 24] :range 1 :settings {:jobs.movement.go-to.tuning/goal-danger :end} :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :goal-in-danger} :for-s 5}]
    :after [[:body-near [30.5 0 24.5] 3]]}

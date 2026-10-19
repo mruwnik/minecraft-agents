@@ -27,13 +27,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (false? (:found (:out (await (pt/preview valley {:pos goal :y-margin 5}))))))))))
+        (is (false? (:found (:out (await (pt/preview valley {:pos goal :settings {:jobs.lib.walk.world/y-margin 5}}))))))))))
 
 (deftest a-margin-that-holds-the-valley-or-none-walks-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (true? (:found (:out (await (pt/preview valley {:pos goal :y-margin 14}))))))
+        (is (true? (:found (:out (await (pt/preview valley {:pos goal :settings {:jobs.lib.walk.world/y-margin 14}}))))))
         (is (true? (:found (:out (await (pt/preview valley {:pos goal}))))))))))
 
 ;; A body whose goal is far above and whose only way dives first: feet 40 at x 0, a ramp down one block a column to feet
@@ -61,7 +61,7 @@
     (tu/run-async done
       (fn ^:async t []
         (is (true? (:arrived @(:out (await (gt/go! (assoc buried :light [15 0]) {:pos top}))))) "sky light on the body")
-        (is (true? (:arrived @(:out (await (gt/go! buried {:pos top :y-margin 96}))))))
+        (is (true? (:arrived @(:out (await (gt/go! buried {:pos top :settings {:jobs.lib.walk.world/y-margin 96}}))))))
         (is (true? (:arrived @(:out (await (settings/with-settings {:jobs.movement.go-to.tuning/climb-dip 30}
                                              #(gt/go! buried {:pos top}))))))
             "setting ::climb-dip")
@@ -215,7 +215,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [margin (await (climb! in-shallow {:pos mass-top :y-margin 96}))
+        (let [margin (await (climb! in-shallow {:pos mass-top :settings {:jobs.lib.walk.world/y-margin 96}}))
               dip (await (settings/with-settings {:jobs.movement.go-to.climb/cave-dip 8}
                            #(climb! in-shallow {:pos mass-top})))]
           (is (= [true true] (map (comp :arrived deref :out) [margin dip])))

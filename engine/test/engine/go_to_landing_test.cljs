@@ -4,7 +4,6 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.args :as a]
             [engine.go-to-quote-test :as pt]
-            [engine.settings :as settings]
             [engine.test-util :as tu :refer [floor box]]))
 
 ;; a plateau (feet 64) ending at x 10, an 11-block drop to a floor with feet 53: a stone one beyond x 13, `block` at x 11..13
@@ -13,7 +12,7 @@
 (def args {:pos [40 53 0]})
 
 (defn ^:async found? [block landing]
-  (let [{:keys [out]} (await (settings/with-settings (if landing {:jobs.lib.cost.planner/landing landing} {}) #(pt/preview (cliff block) args)))]
+  (let [{:keys [out]} (await (pt/preview (cliff block) (cond-> args landing (assoc :settings {:jobs.lib.cost.planner/landing landing}))))]
     (:found out)))
 
 (deftest a-hay-landing-is-planned-where-a-stone-one-is-not

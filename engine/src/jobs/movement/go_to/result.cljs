@@ -95,8 +95,8 @@
 
 (def escalation-reason-words
   {:no-tool "no pickaxe" :no-dig "nothing it may dig" :no-headroom "no room above the head"
-   :own-build "the only way out cuts a plan this body made (pass :spare-own-builds false or ask)"
-   :own-pen "the only way out cuts the wall of a pen of its own with animals in it (pass :spare-own-builds false or ask)"
+   :own-build "the only way out cuts a plan this body made (set the go-to.tuning/spare-own-builds setting false or ask)"
+   :own-pen "the only way out cuts the wall of a pen of its own with animals in it (set the go-to.tuning/spare-own-builds setting false or ask)"
    :zone "a stair or dig is refused by another's zone, claim or plan (pass :ignore-zones? or ask)"})
 
 (defn escalation-words
@@ -133,7 +133,7 @@
            :out-of-sight "no stand within range that sees the block (:see) is reachable from here"
            :goal-unloaded "the goal lies in land that is not loaded and the loaded land leads no nearer"
            :no-progress "the walk ended no nearer"
-           :explore-spent (str "walked " explored " blocks in " walks " walks to the edge of loaded land without coming nearer: more than the goal is worth (:tour-worth)")
+           :explore-spent (str "walked " explored " blocks in " walks " walks to the edge of loaded land without coming nearer: more than the goal is worth (the tour-worth setting)")
            :stuck (str "the body got stuck" (some->> kind name (str " on ")) (some->> detail (str ": ")))
            :off-plan (or detail "the walk left its plan")
            :steer-failed (str "steering failed" (some->> detail (str ": ")))
@@ -149,7 +149,7 @@
                            (if escalation
                              (str "its own stair up failed (" (escalation-words escalation) "); cut one from another spot")
                              "cut a stair up")
-                           ", or pass :y-margin to walk the deep way")
+                           ", or set the walk.world y-margin setting to walk the deep way")
            :detour (str "the only way found is " route " blocks long for a goal that was " straight " blocks away, mostly over cells the body has never seen under ground: dig toward the goal, or raise the settings jobs.movement.go-to.detour/floor and /ratio to walk it")
            :door-stuck "a door in the way will not open"
            :unseen-floor-dark (str "the way goes down onto floors it cannot see in the dark: carry a torch (held in the off hand it sees deeper), light the way, or set :place-torches (go-to lights them)"

@@ -208,10 +208,12 @@
   (let [from (u/self-pos c)
         t0 (ctx/now c)
         health0 (.-health (.self (:primitives c)))
-        r (await (ctx/call c slot 'jobs.movement.go-to {:pos target :range range :ways #{:walk :clear-seal} :y-margin y-margin
+        r (await (ctx/call c slot 'jobs.movement.go-to {:pos target :range range :ways #{:walk :clear-seal}
+                                                              :settings (cond-> {:jobs.movement.go-to.tuning/look-round false}
+                                                                          y-margin (assoc :jobs.lib.walk.world/y-margin y-margin))
                                                               :warn false :spend {:job-time leg-s}
                                                               :leg-alert-within (close-radius) :leg-alert-s (close-leg-s)
-                                                              :retry false :look-round false :floor {:health 1}}))
+                                                              :retry false :floor {:health 1}}))
         res (when (contract/ending? r) (:data r))
         _ (when (= :goal-not-standable (result/why r)) (ctx/update-mem! c update :refused (fnil conj #{}) (mapv target [:x :y :z])))
         s (/ (- (ctx/now c) t0) 1000)

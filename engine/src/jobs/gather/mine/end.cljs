@@ -210,7 +210,7 @@
                                          (cond-> {:pos {:x (+ (:x cell) 0.5) :y (:y cell) :z (+ (:z cell) 0.5)} :range range :zone-tolls true
                                                   :ignore-zones? (boolean (:ignore-zones? (:args c)))}
                                            ways (assoc :ways ways)
-                                           y-margin (assoc :y-margin y-margin)))))
+                                           y-margin (assoc :settings {:jobs.lib.walk.world/y-margin y-margin})))))
         r (cond
             (arrived?) :arrived
             (:home-pillar (ctx/mem c)) (await (walk! :home-last nil))

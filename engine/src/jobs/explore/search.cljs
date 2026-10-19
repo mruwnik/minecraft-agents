@@ -400,7 +400,7 @@
   (or the ending when the failed legs in a row end the search)."
   [c]
   (let [[x y z] (:leg (ctx/mem c))
-        r (await (child/call-walk* c :leg (cond-> {:pos {:x x :y y :z z} :range 2 :goal-danger :end}
+        r (await (child/call-walk* c :leg (cond-> {:pos {:x x :y y :z z} :range 2 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}
                                                            (< (:failed-in-row (ctx/mem c) 0) (dec (max-failed-in-row))) (assoc :ways #{:walk :clear-seal}))))]
     (if (= :continue r)
       :continue

@@ -130,7 +130,7 @@
           (await (run-ticks s 120))
           (is (seq (home-go-tos @go-tos)) "home by a go-to child, not a raw moveTo")
           (is (= #{0} (set (map :range (home-go-tos @go-tos)))) "onto the start cell: range 0 on every round of the walk")
-          (is (= #{16} (set (map :y-margin (home-go-tos @go-tos)))) "a start near above: no way round through deep caves")
+          (is (= #{16} (set (map #(get-in % [:settings :jobs.lib.walk.world/y-margin]) (home-go-tos @go-tos)))) "a start near above: no way round through deep caves")
           (is (= [0 64 0] (feet s)))
           (is (finished? s)))))))
 

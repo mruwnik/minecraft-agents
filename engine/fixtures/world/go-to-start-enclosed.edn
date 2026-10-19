@@ -25,8 +25,8 @@
             {:no-event {:source :job :kind :result :data {:why :start-enclosed}} :for-s 20}]}
   {:name "open-field-unloaded-goal-never-start-enclosed"
    ;; the plots' floors run on north and south along the grid's west edge: unbounded, go-to tours that loaded edge for
-   ;; many minutes; :tour-worth 18 (about 60 blocks) ends it at the end of the first walk that got no nearer
-   :act [[:job (jobs.movement.go-to {:pos #at [-1000 0 17] :range 1 :ways #{:walk :clear-seal} :tour-worth 18})]]
+   ;; many minutes; :tour-worth setting 18 (about 60 blocks) ends it at the end of the first walk that got no nearer
+   :act [[:job (jobs.movement.go-to {:pos #at [-1000 0 17] :range 1 :ways #{:walk :clear-seal} :settings {:jobs.lib.cost.value/tour-worth 18}})]]
    :expect [{:event {:source :job :kind :planned :data {:why "goal-unloaded"}} :within-s 60 :of-job true}
             {:event {:source :job :kind :result :data {:arrived false :reason :unreachable :why :explore-spent}} :within-s 75 :of-job true}
             {:no-event {:source :job :kind :planned :data {:why "start-enclosed"}} :for-s 60 :until {:source :job :kind :result :data {:why :explore-spent}}}

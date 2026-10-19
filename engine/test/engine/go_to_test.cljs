@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.go-to-support :refer [result-of]]
             [clojure.string :as str]
+            [engine.args :as a]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -235,8 +236,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [cliff (merge (floor -2 -3 10 3) (floor 60 11 -3 47 3))
-              no (await (go! {:blocks cliff} {:pos [120 61 0] :drop-cost false :ways #{:walk :clear-seal}}))
-              dear (await (go! {:blocks cliff} {:pos [120 61 0] :drop-cost 2 :ways #{:walk :clear-seal}}))]
+              no (await (go! {:blocks cliff} {:pos [120 61 0] :settings {:jobs.lib.cost.planner/drop-cost false} :ways #{:walk :clear-seal}}))
+              dear (await (go! {:blocks cliff} {:pos [120 61 0] :settings {:jobs.lib.cost.planner/drop-cost 2} :ways #{:walk :clear-seal}}))]
           (is (= 64 (js/Math.floor (second (at (:p no))))) "no drop: still on the plateau")
           (is (= 61 (js/Math.floor (second (at (:p dear))))) "a dear drop is still the only way"))))))
 
@@ -258,29 +259,20 @@
     (tu/run-async done
       (fn ^:async t []
         (let [steps (merge (floor -2 -3 10 3) (floor 62 11 -3 47 3))
-              {:keys [p]} (await (go! {:blocks steps} {:pos [120 63 0] :drop-cost false :ways #{:walk :clear-seal}}))]
+              {:keys [p]} (await (go! {:blocks steps} {:pos [120 63 0] :settings {:jobs.lib.cost.planner/drop-cost false} :ways #{:walk :clear-seal}}))]
           (is (= 63 (js/Math.floor (second (at p)))) "a 1-block step-down is no drop"))))))
 
 (defn refusal [args] (expr/problem registry/jobs (list 'jobs.movement.go-to args)))
 
-(deftest go-to-refuses-bad-costs-at-submit
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [bad [{:swim-h -1} {:nope 1} [1]]]
-          (is (re-find #":costs must be a map of planner price name" (refusal {:pos [6 64 0] :costs bad})) (pr-str bad)))
-        (let [{:keys [out]} (await (go! {:blocks flat} {:pos [6 64 0] :costs {:swim-h 2}}))]
-          (is (= {:arrived true} @out)))))))
-
-(deftest go-to-refuses-a-bad-drop-cost-at-submit
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [bad [-1 "x" true]]
-          (is (re-find #":drop-cost must be a number >= 0 or false" (refusal {:pos [6 64 0] :drop-cost bad})) (pr-str bad)))
-        (doseq [ok [0 2 false]]
-          (let [{:keys [out]} (await (go! {:blocks flat} {:pos [6 64 0] :drop-cost ok}))]
-            (is (= {:arrived true} @out) (pr-str ok))))))))
+(deftest the-planner-price-settings-refuse-bad-values
+  (doseq [[k bad] [[:jobs.lib.cost.planner/costs [{:swim-h -1} {:nope 1} [1]]]
+                   [:jobs.lib.cost.planner/drop-cost [-1 "x" true]]
+                   [:jobs.movement.go-to.tuning/goal-danger [:bogus]]
+                   [:jobs.movement.go-to.tuning/y-slack [-1]]]
+          v bad]
+    (is (string? (a/setting-problem k v)) (pr-str k v)))
+  (doseq [[k ok] [[:jobs.lib.cost.planner/costs {:swim-h 2}] [:jobs.lib.cost.planner/drop-cost 0] [:jobs.lib.cost.planner/drop-cost false]]]
+    (is (nil? (a/setting-problem k ok)) (pr-str k ok))))
 
 (deftest go-to-refuses-a-bad-floor-or-spend-at-submit
   (async done
@@ -456,7 +448,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [watched (fn [{:keys [eng]}] (mem/entries (mem/view (:store eng)) :watched))
-              dark (await (go! {:blocks flat :light [0 0]} {:pos [10 64 0] :range 1 :look-round false}))]
+              dark (await (go! {:blocks flat :light [0 0]} {:pos [10 64 0] :range 1 :settings {:jobs.movement.go-to.tuning/look-round false}}))]
           (is (= {:arrived true} @(:out dark)))
           (is (empty? (watched dark))))))))
 
@@ -889,7 +881,7 @@
         ;; the body walks to 4 blocks short of the goal, is cut there and sent back to the start each time (a stationary
         ;; zombie's flee): the walk records how near it got, so the fourth restart gives up
         (let [near-goal [#(>= (.-x %) 6) send-back!]
-              {:keys [out returns mems]} (await (cut-cycles! {:blocks flat :entities [way-zombie]} {:pos [10 64 0] :range 0 :dangers false} [near-goal near-goal near-goal]))]
+              {:keys [out returns mems]} (await (cut-cycles! {:blocks flat :entities [way-zombie]} {:pos [10 64 0] :range 0 :settings {:jobs.lib.walk.world/dangers false}} [near-goal near-goal near-goal]))]
           (is (<= (:closest (first mems)) 4.5) (str "the cut walk recorded its approach: " (pr-str (first mems))))
           (is (= {:arrived false :reason :unreachable :why :cut-again} (select-keys @out [:arrived :reason :why])) (pr-str @out))
           (is (str/includes? (:text @out) "sent back") (:text @out))
@@ -1053,7 +1045,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[args want] [[{} true] [{:dangers false} false]]]
+        (doseq [[args want] [[{} true] [{:settings {:jobs.lib.walk.world/dangers false}} false]]]
           (let [planned (atom 0)]
             (with-redefs [threats/planner-dangers (fn [_] (swap! planned inc) nil)]
               (await (go! {:blocks flat} (assoc args :pos [10 64 0]))))
@@ -1213,7 +1205,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (with-redefs [threats/sensed-mobs (constantly [goal-zombie])]
-                  (await (go! {:blocks flat} {:pos [10 64 0] :range 0 :goal-danger :end})))]
+                  (await (go! {:blocks flat} {:pos [10 64 0] :range 0 :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))]
           (is (= {:arrived false :reason :unreachable :why :goal-dangerous} (select-keys @(:out s) [:arrived :reason :why])) (pr-str @(:out s)))
           (is (= "zombie" (:mob @(:out s))))
           (is (str/includes? (:text @(:out s)) "zombie") (:text @(:out s)))
@@ -1223,7 +1215,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [args [{:pos [10 64 0] :range 0} {:pos [10 64 0] :range 0 :goal-danger :wait}]]
+        (doseq [args [{:pos [10 64 0] :range 0} {:pos [10 64 0] :range 0 :settings {:jobs.movement.go-to.tuning/goal-danger :wait}}]]
           (let [s (with-redefs [threats/sensed-mobs (constantly [goal-zombie])]
                     (await (go! {:blocks flat} args)))]
             (is (= {:arrived true} @(:out s)) (pr-str args))
@@ -1237,7 +1229,7 @@
                                     [[{:id 9 :uuid "u9" :name "creeper" :kind "hostile" :visible false :pos {:x 11 :y 64 :z 1}}] false]]]
           (let [{:keys [eng] :as s} (setup {:blocks flat :entities entities})
                 out (atom :not-done)
-                eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [10 64 0] :range 0 :goal-danger :end})))
+                eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [10 64 0] :range 0 :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))
                 _ (mem/write! (:store eng) :threat {:mob "creeper" :id 9 :uuid "u9" :key "u9" :pos {:x 11 :y 64 :z 1} :ended 1} threats/threat-policy)]
             (core/submit! eng '(recording-parent) {})
             (await (tick-out! eng 30))
@@ -1249,8 +1241,5 @@
       (fn ^:async t []
         (let [far (assoc goal-zombie :pos {:x 11 :y 64 :z 30})
               s (with-redefs [threats/sensed-mobs (constantly [far])]
-                  (await (go! {:blocks flat} {:pos [10 64 0] :range 0 :goal-danger :end})))]
+                  (await (go! {:blocks flat} {:pos [10 64 0] :range 0 :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))]
           (is (= {:arrived true} @(:out s))))))))
-
-(deftest goal-danger-must-be-wait-or-end
-  (is (re-find #":goal-danger must be one of" (refusal {:pos [10 64 0] :goal-danger :bogus}))))

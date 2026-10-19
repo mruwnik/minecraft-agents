@@ -108,11 +108,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[slot expect] [[:walk {}] [:in {:y-margin child/entry-depth}] [:other {}]]]
+        (doseq [[slot expect] [[:walk {}] [:in {:settings {:jobs.lib.walk.world/y-margin child/entry-depth}}] [:other {}]]]
           (let [args (atom nil)
                 go-to (assoc walker :round (fn ^:async w [c] (reset! args (:args c)) (ctx/end c :done nil {:arrived true})))]
             (await (in-parent go-to (fn ^:async g [c] (await (child/walk-into!* c slot [1 65 0])))))
-            (is (= (merge {:pos [1 65 0] :range 0 :ways #{:walk :clear-seal}} expect) (select-keys @args [:pos :range :ways :checks :y-margin])) (str slot))))))))
+            (is (= (merge {:pos [1 65 0] :range 0 :ways #{:walk :clear-seal}} expect) (select-keys @args [:pos :range :ways :checks :settings])) (str slot))))))))
 
 (deftest fruitless-rounds-count-per-slot-until-progress
   (async done

@@ -255,7 +255,7 @@
           (is (= {:arrived true} (select-keys @out [:arrived]))
               (str "result " @out " at " (at p) (mapv (juxt :status :to) (moved eng)))))))))
 
-;; ---- a tour's price (jobs.lib.cost/tour-cost) against the goal's worth (:tour-worth, default jobs.lib.cost/tour-worth) ----
+;; ---- a tour's price (jobs.lib.cost/tour-cost) against the goal's worth (the tour-worth setting, default jobs.lib.cost/tour-worth) ----
 
 ;; a floor strip (feet 64) 16 wide along z over open air, the goal 400 blocks west of it across the void (live: the plot grid's
 ;; west edge, go-to-start-enclosed open field): every frontier lies along the strip, none nearer the goal
@@ -269,7 +269,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out eng]} (await (go! {:blocks abyss-strip :self {:pos {:x 2.5 :y 64 :z 0.5}} :viewChunks 1}
-                                            {:pos [-400 64 0] :range 1 :ways #{:walk :clear-seal} :tour-worth 12}))
+                                            {:pos [-400 64 0] :range 1 :ways #{:walk :clear-seal} :settings {:jobs.lib.cost.value/tour-worth 12}}))
               walked (reduce + (map #(dist-to [(:x (:from %)) 0 (:z (:from %))] [(:x (:to %)) 0 (:z (:to %))]) (moved eng)))]
           (is (= {:arrived false :reason :unreachable :why :explore-spent} (select-keys @out [:arrived :reason :why]))
               (str "result " @out " walks: " (mapv (juxt :status :from :to) (moved eng))))
@@ -284,7 +284,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (go! {:blocks (box -150 63 0 15 63 15 "stone") :self {:pos {:x 10.5 :y 64 :z 8.5}} :viewChunks 1}
-                                          {:pos [-140 64 8] :range 1 :tour-worth 6}))]
+                                          {:pos [-140 64 8] :range 1 :settings {:jobs.lib.cost.value/tour-worth 6}}))]
           (is (= {:arrived true} (select-keys @out [:arrived])) (str "result " @out " at " (at p))))))))
 
 (defn ^:async go-walked!

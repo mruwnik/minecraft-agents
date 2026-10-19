@@ -57,7 +57,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (go! {:blocks flat} {:pos [10 67 0] :y-slack 0}))]
+        (let [{:keys [out p]} (await (go! {:blocks flat} {:pos [10 67 0] :settings {:jobs.movement.go-to.tuning/y-slack 0}}))]
           (is (= {:arrived false :reason :unreachable :why :goal-not-standable} (select-keys @out [:arrived :reason :why])))
           (is (= [0 64 0] (at p))))))))
 
@@ -137,8 +137,7 @@
   (is (nil? (refusal {:pos [1 64 -3]})))
   (is (nil? (refusal {:pos {:x 1 :y 64 :z -3}})))
   (is (re-find #":pos must be \[x y z\]" (refusal {:pos [10]})))
-  (is (re-find #":pos must be \[x y z\]" (refusal {:pos {:x 1 :y 2}})))
-  (is (re-find #":y-slack must be a whole number" (refusal {:pos [10 64 0] :y-slack -1}))))
+  (is (re-find #":pos must be \[x y z\]" (refusal {:pos {:x 1 :y 2}}))))
 
 ;; a hill at x 28..32 with its ground at feet 75, a cave in it at feet 60 (nearer feet 64 than the ground is)
 (def hill-with-cave

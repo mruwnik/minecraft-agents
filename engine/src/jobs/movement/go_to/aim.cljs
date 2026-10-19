@@ -17,7 +17,7 @@
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.world :as known]
             [jobs.movement.go-to.column :as column]
-            [jobs.movement.go-to.tuning :refer [max-waypoint-misses waypoint-gain way-looks]]))
+            [jobs.movement.go-to.tuning :as tuning :refer [max-waypoint-misses waypoint-gain way-looks]]))
 
 (defn see-cell
   "The cell [x y z] the eye must see under :see: the :pos arg's block (not the cell the walk aims at, which may stand for
@@ -55,8 +55,8 @@
 (defn aimed
   "{:pos cell :resolved bool} to walk to for goal (target's :pos; no :y for a column), jobs.movement.go-to.column/aim."
   [c goal]
-  (let [{:keys [y-slack unknown]} (:args c)]
-    (column/aim (:primitives c) goal (or y-slack 4) (js/Math.floor (:y (u/self-pos c))) (not unknown))))
+  (let [{:keys [unknown]} (:args c)]
+    (column/aim (:primitives c) goal (tuning/y-slack) (js/Math.floor (:y (u/self-pos c))) (not unknown))))
 
 (defn not-standable?
   "Whether the planner answers goal-not-standable for pos alone (no search, wplan/goal-stand-problem)."
@@ -87,7 +87,7 @@
                       me (u/self-pos c)
                       roofed? (and (keyword-identical? :unknown k)
                                    (<= (js/Math.hypot (- x (:x me)) (- z (:z me))) column/approach-range)
-                                   (some #(keyword-identical? :solid (ka x (+ y %) z)) (range 1 (inc (:y-slack (:args c) 4)))))]
+                                   (some #(keyword-identical? :solid (ka x (+ y %) z)) (range 1 (inc (tuning/y-slack)))))]
                   (and (or roofed? (not (or (keyword-identical? :unknown k) (column/free? k))))
                        (not (seen-stand-within? ka cell (:range (:args c) 1))))))))
 
@@ -243,7 +243,7 @@
   wplan/goal-stand-problem), or under :unknown seen in the ground, and whose column aims it elsewhere is re-aimed now
   (mem :re-aim), not after a walk."
   [c goal pos]
-  (when (and (:y goal) (not (:re-aim (ctx/mem c))) (pos? (:y-slack (:args c) 4))
+  (when (and (:y goal) (not (:re-aim (ctx/mem c))) (pos? (tuning/y-slack))
              (or (not-standable? c pos) (in-seen-ground? c pos))
              (:resolved (aimed c goal)))
     (ctx/update-mem! c assoc :re-aim true)))

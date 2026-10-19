@@ -132,14 +132,14 @@
   and :frontier-known true when that node lay in land earlier searches knew to their end (wsearch/known-land).
   With budget (go-to), each plan searches at most that many expansions (plan!): a plan still searching is the result
   {:status :searching} (wplan/no-walk), nothing walked; progress false: an unfinished search walks nowhere (plan!).
-  dangers: whether the plans keep away from known dangers (plan!). avoid: cells the plans keep off (plan!). dark: false plans dark cells like lit ones. tolls: cells the plans price (plan!). drop-cost: the policy's :drop-cost (wplan/with-drops: a number scales drops, false takes none of 2 or 3). costs: the policy's :costs (planner price overrides, cost/planner-costs).
+  dangers: whether the plans keep away from known dangers (plan!). avoid: cells the plans keep off (plan!). dark: false plans dark cells like lit ones. tolls: cells the plans price (plan!).
   unknown: the mask spec (plan!); the result then says what the last plan said of unseen floors (with-sight).
   sight: (fn [x y z]) of a feet cell, the policy's :goal-seen: only a cell in range that answers true is the goal.
   keep-out: cells ({:x :y :z}) every plan reads as stone.
   stair-check: (fn [plan first?]) asked of the first plan and of every re-plan inside the walk; a why ends the walk before it starts (a re-plan: at once), {:status :stair-cheaper :why why}."
-  [c to range doors shut-also timeout-s explore one-way budget progress dangers & [avoid dark tolls drop-cost costs unknown sight stair-check keep-out]]
+  [c to range doors shut-also timeout-s explore one-way budget progress dangers & [avoid dark tolls unknown sight stair-check keep-out]]
   (await (walk/settle! c))
-  (let [policy-of (fn [] (cond-> (wworld/body-policy c) (not= :never doors) (update :moves conj :open) (some? drop-cost) (assoc :drop-cost drop-cost) (some? costs) (assoc :costs costs) (some? sight) (assoc :goal-seen sight)))
+  (let [policy-of (fn [] (cond-> (wworld/body-policy c) (not= :never doors) (update :moves conj :open) (some? sight) (assoc :goal-seen sight)))
         announce! (fn [_kind data] (ctx/emit! c :replan :info data))
         walk-fn (fn [steps watch]
                   (if (= :never doors)
@@ -189,16 +189,16 @@
   "One walk-once! toward the cell pos ({:x :y :z} of whole numbers) from where the body stands (the caller has checked the
   primitives have a pathWorld), with its :moved entry {:from :to :status :target} written and the round booked for the
   backoff as one walk (ctx/note-walk!: the status and the blocks the body moved). opts {:doors :shut-also :timeout-s :explore
-  :one-way :budget :progress :dangers :avoid :dark :tolls :zone-tolls :drop-cost :costs :unknown :see-cell :keep-out}: see-cell [x y z] counts only a
+  :one-way :budget :progress :dangers :avoid :dark :tolls :zone-tolls :unknown :see-cell :keep-out}: see-cell [x y z] counts only a
   stand whose eye sees that block (jobs.lib.aim) as the goal and as an arrival; unknown the mask spec (walk-once!); keep-out cells every plan reads as stone; zone-tolls true adds the cells of other bodies' zones to tolls (toll-cells/zone-walk-tolls, none under the job's :ignore-zones?); doors, shut-also (jobs.lib.pass), explore, one-way (default :open: past a drop toward a far goal), budget, progress (default true) and dangers (default true) and avoid as walk-once!, timeout-s the bound of each steer (default walk-timeout-s). {:result :status :from :to}: result
   is the walk's result map, status the entry's (\"partial\" too for a walk to a frontier that moved the body over a block:
   it went where a way may be, not stuck). A round whose plan is still searching (result :searching) walked nowhere and
   failed at nothing: status \"searching\", no :moved entry and no walk booked; likewise status \"stair\" for a stair-check (walk-once!) that ended it."
-  [c pos range {:keys [doors shut-also timeout-s explore one-way budget progress dangers avoid dark tolls zone-tolls drop-cost costs unknown see-cell stair-check keep-out] :or {timeout-s walk-timeout-s one-way :open progress true dangers true}}]
+  [c pos range {:keys [doors shut-also timeout-s explore one-way budget progress dangers avoid dark tolls zone-tolls unknown see-cell stair-check keep-out] :or {timeout-s walk-timeout-s one-way :open progress true dangers true}}]
   (let [from (u/self-pos c)
         tolls (if zone-tolls (into (vec tolls) (tc/zone-walk-tolls c pos)) tolls)
         cell [(:x pos) (:y pos) (:z pos)]
-        result (await (walk-once! c cell range doors shut-also timeout-s explore one-way budget progress dangers avoid dark tolls drop-cost costs unknown
+        result (await (walk-once! c cell range doors shut-also timeout-s explore one-way budget progress dangers avoid dark tolls unknown
                                   (when see-cell (aim/stand-sees-fn (:primitives c) see-cell)) stair-check keep-out))
         to (u/self-pos c)
         status (cond
@@ -227,23 +227,26 @@
   "Walk until the body's cell is within range cells of pos's cell (u/within?), as a jobs.movement.go-to child in slot :walk,
   so a body shut in escalates (pillar, stair, dig a way out and put back). Resolves to :there, :partial (the child waits on the world: yield and call
   again; also a :spend :job-time leg that got nearer) or :blocked (it gave up or declined). opts: :doors (jobs.lib.pass policy, default :shut; a job that works gates itself passes :never), :dangers (false: plan
-  straight past known dangers), :tolls (cells the plan prices), :zone-tolls (true adds other bodies' zone cells), :ways (go-to's), :spend (go-to's; {:job-time s} is a leg of at most that many s, :partial when it got nearer, for a
-  caller chasing something that moves; default one 60 s steer), :look-round (default true; false for a caller that keeps moving),
+  straight past known dangers, the setting jobs.lib.walk.world/dangers for this walk), :tolls (cells the plan prices), :zone-tolls (true adds other bodies' zone cells), :ways (go-to's), :spend (go-to's; {:job-time s} is a leg of at most that many s, :partial when it got nearer, for a
+  caller chasing something that moves; default one 60 s steer), :look-round (default true; false for a caller that keeps moving, the go-to.tuning setting for this walk),
   :one-way (go-to's arg, default :closed here: no drop the body cannot climb back; not the :one-way key of a give-up
   result), :see (go-to's: in range only where the eye sees the block at pos), always :retry false (the job counts its own
-  tries), :checks (go-to's call key), :y-margin (go-to's); :ignore-zones? comes from the job's args."
+  tries), :checks (go-to's call key), :y-margin (the walk.world setting for this walk); :ignore-zones? comes from the job's args."
   ([c pos range] (go-near! c pos range nil))
   ([c pos range {:keys [doors dangers tolls zone-tolls ways spend look-round one-way see checks y-margin] :or {doors :shut dangers true look-round true one-way :closed}}]
-   (let [cell (cell-of pos)]
+   (let [cell (cell-of pos)
+         walk-settings (cond-> {} (false? dangers) (assoc :jobs.lib.walk.world/dangers false)
+                                  (false? look-round) (assoc :jobs.movement.go-to.tuning/look-round false)
+                                  y-margin (assoc :jobs.lib.walk.world/y-margin y-margin))]
      (cond
        (nil? cell) (do (ctx/emit! c :refused :warn {:reason :bad-pos :text (:message (places/parse-pos pos))})
                        :blocked)
        (and (u/within? (u/self-pos c) cell range) (or (not see) (aim/body-sees? c [(:x cell) (:y cell) (:z cell)]))) :there
        :else (let [e (await (child/call-walk* c :walk
-                                              (cond-> {:pos cell :range range :doors doors :dangers dangers :tolls tolls :zone-tolls (boolean zone-tolls)
-                                                       :look-round look-round :one-way one-way :see (boolean see) :warn false :retry false :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+                                              (cond-> {:pos cell :range range :doors doors :tolls tolls :zone-tolls (boolean zone-tolls)
+                                                       :one-way one-way :see (boolean see) :warn false :retry false :ignore-zones? (boolean (:ignore-zones? (:args c)))}
                                                 checks (assoc :checks checks)
-                                                y-margin (assoc :y-margin y-margin)
+                                                (seq walk-settings) (assoc :settings walk-settings)
                                                 ways (assoc :ways ways)
                                                 spend (assoc :spend spend))))]
                (if (= :continue e)

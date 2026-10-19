@@ -12,7 +12,11 @@
   100)
 
 (a/defargs settings
-  {:jobs.movement.go-to.tuning/max-cut-restarts {:default 3 :doc "Cuts in a row, each sending the body back, before a go-to call gives up :cut-again." :spec (a/int-in 1 nil)}
+  {:jobs.movement.go-to.tuning/y-slack {:default 4 :doc "Blocks a go-to :pos y with no standable cell within :range may be re-aimed up or down its column to the ground; 0: never." :spec (a/int-in 0 nil)}
+   :jobs.movement.go-to.tuning/goal-danger {:default :wait :doc "When a go-to's goal lies within the full-cost radius of a known mob the body would flee: :wait (walk on; an info goal-in-danger says so once), :end (give up at once, :why :goal-dangerous with the mob)." :spec #{:wait :end}}
+   :jobs.movement.go-to.tuning/look-round {:default true :doc "Whether a go-to looks round once on arrival; false for a caller that keeps moving." :spec boolean?}
+   :jobs.movement.go-to.tuning/spare-own-builds {:default true :doc "Whether a go-to's escalation never digs a cell of a plan this body made (stops :own-build); false: it may, and warns of each cell dug." :spec boolean?}
+   :jobs.movement.go-to.tuning/max-cut-restarts {:default 3 :doc "Cuts in a row, each sending the body back, before a go-to call gives up :cut-again." :spec (a/int-in 1 nil)}
    :jobs.movement.go-to.tuning/cut-progress {:default 2 :doc "Blocks a go-to's closest approach to its goal must improve to clear its cut count." :spec (a/num-in 0 nil)}
    :jobs.movement.go-to.tuning/max-cut-resets {:default 2 :doc "Times a go-to clears its cut count at a restart that knows of no hostile near the way, per goal; after that a full set of cuts gives up :cut-again whatever is near." :spec (a/int-in 0 nil)}
    :jobs.movement.go-to.tuning/send-back-margin {:default 3 :doc "Blocks farther from the goal than where the cut found the body a go-to restart must begin to count as sent back (knockback and in-place reflexes stay under it)." :spec (a/num-in 0 nil)}
@@ -35,6 +39,10 @@
    :jobs.movement.go-to.tuning/max-route-replans {:default 8 :doc "Times a go-to's :dig-route escalation plans its route again, as looks show cells it guessed were rock otherwise, before it fails :no-route." :spec (a/int-in 0 nil)}
    :jobs.movement.go-to.tuning/way-looks {:default [[6 1] [3 4]] :doc "The looks taken in turn before each waypoint walk: [blocks ahead toward the goal, blocks under the feet] (ahead and a little down: a slope up; close and steeply down: a slope or drop below an edge)." :spec (a/coll-of (a/pred "a pair [ahead down] of numbers >= 0" #(and (sequential? %) (= 2 (count %)) (every? (fn [n] (and (number? n) (>= n 0))) %))))}})
 
+(defn y-slack [] (settings/get settings :jobs.movement.go-to.tuning/y-slack))
+(defn goal-danger [] (settings/get settings :jobs.movement.go-to.tuning/goal-danger))
+(defn look-round [] (settings/get settings :jobs.movement.go-to.tuning/look-round))
+(defn spare-own-builds [] (settings/get settings :jobs.movement.go-to.tuning/spare-own-builds))
 (defn max-route-replans [] (settings/get settings :jobs.movement.go-to.tuning/max-route-replans))
 (defn max-cut-restarts [] (settings/get settings :jobs.movement.go-to.tuning/max-cut-restarts))
 (defn max-cut-resets [] (settings/get settings :jobs.movement.go-to.tuning/max-cut-resets))

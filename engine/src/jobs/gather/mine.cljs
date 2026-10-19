@@ -349,7 +349,7 @@
         goal (zones/exit-goal (cell-of (u/self-pos c)) zn m)
         from (:pre-start (ctx/mem c))
         r (await (child/call-walk* c :leave
-                                 {:pos {:x (+ (:x goal) 0.5) :y (:y goal) :z (+ (:z goal) 0.5)} :range 2 :y-slack 8 :zone-tolls true}))
+                                 {:pos {:x (+ (:x goal) 0.5) :y (:y goal) :z (+ (:z goal) 0.5)} :range 2 :settings {:jobs.movement.go-to.tuning/y-slack 8} :zone-tolls true}))
         here (cell-of (u/self-pos c))]
     (cond
       (= :continue r) :continue

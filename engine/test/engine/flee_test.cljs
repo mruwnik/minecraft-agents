@@ -131,8 +131,8 @@
           (is (= :far (:ended out)))
           (is (pos? (count @args)) "every flight step is a go-to call")
           (is (every? #(not-any? #{:pillar :stair :clear-path :dig-out} (:ways %)) @args) "a flee never digs or pillars")
-          (is (every? #(= 16 (:y-margin %)) @args) "a flee plans no route far below or above itself and its goal")
-          (is (every? #(and (false? (:retry %)) (false? (:look-round %))) @args)
+          (is (every? #(= 16 (get-in % [:settings :jobs.lib.walk.world/y-margin])) @args) "a flee plans no route far below or above itself and its goal")
+          (is (every? #(and (false? (:retry %)) (false? (get-in % [:settings :jobs.movement.go-to.tuning/look-round]))) @args)
               "a step that gains nothing ends at once and never looks round")
           (is (> (fake/dist (body-pos p) (mob-pos p 7)) 35)))))))
 
@@ -1042,7 +1042,7 @@
               s (buried-setup {:inventory [] :entities [(zombie 7 6 {})]})]
           (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {:goal {:x -9 :y 64 :z 0}}))
           (is (= {:x -9 :y 64 :z 0} (:pos (first @calls))) "the leg goes to the goal")
-          (is (= (retreat-walk/max-descent) (:y-margin (first @calls))) "and its plan may not dip under the descent floor"))))))
+          (is (= (retreat-walk/max-descent) (get-in (first @calls) [:settings :jobs.lib.walk.world/y-margin])) "and its plan may not dip under the descent floor"))))))
 
 (deftest a-buried-flight-with-no-stair-digs-a-pocket-before-any-hop
   (async done

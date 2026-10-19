@@ -26,7 +26,7 @@
             [jobs.movement.go-to.health :as health]
             [jobs.movement.go-to.own-way :refer [dive-end dive-floor! own-way own-way-left! plan-check straight-from! walk-own-way!]]
             [jobs.movement.go-to.result :as end :refer [known-frontier-result unloaded-end]]
-            [jobs.movement.go-to.tuning :refer [dry-walk-rounds climb-dip climb-stair surface-air wet-restarts waypoint-gain dry-radius leave-water max-blocked max-searching]]
+            [jobs.movement.go-to.tuning :as tuning :refer [dry-walk-rounds climb-dip climb-stair surface-air wet-restarts waypoint-gain dry-radius leave-water max-blocked max-searching]]
             [jobs.movement.go-to.torch :as torch :refer [dark-end fetch-torches! round-unknown]]
             [jobs.movement.go-to.unstick :as unstick]
             [jobs.movement.go-to.way-steps :as ways]
@@ -37,7 +37,7 @@
   A goal whose y go-to chose (goal-pos) adds :resolved, the cell it walked to, :why it (:surface, :nearest-level, :explicit), with :provisional true when that was a
   column's estimated y, :stand-in true when no ground of it was known."
   [c]
-  (when-not (false? (:look-round (:args c)))
+  (when (tuning/look-round)
     (await (watch/watch! c {})))
   (let [{:keys [aimed aimed-why column-open]} (ctx/mem c)]
     (end/finish! c (cond-> {:arrived true}
@@ -118,8 +118,8 @@
   [c doors]
   (let [closed? (= :closed (some-> (:one-way (:args c)) keyword))]
     {:doors doors :explore (not closed?)
-     :dangers (not (false? (:dangers (:args c))))
-     :dark (not (false? (:dark (:args c))))
+     :dangers (wworld/dangers?)
+     :dark (wworld/dark?)
      :timeout-s (or (:leg-s (:args c)) near/walk-timeout-s)
      :one-way (when-not closed? :open)
      :shut-also (shut-foreign c)
@@ -128,8 +128,6 @@
      :tolls (:tolls (:args c))
      :zone-tolls (:zone-tolls (:args c))
      :keep-out (:keep-out (:args c))
-     :drop-cost (:drop-cost (:args c))
-     :costs (:costs (:args c))
      :unknown (round-unknown c)}))
 
 (defn ^:async walk-dry!

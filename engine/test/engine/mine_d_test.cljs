@@ -472,7 +472,7 @@
           (is (finished? s))
           (is (= :count (:reason (done-event s))))
           (is (seq go-to) "home by a go-to child")
-          (is (= [16] (distinct (map :y-margin (filter #(= 64 (:y (:pos %))) go-to)))) "the walk home plans no deep way round")
+          (is (= [16] (distinct (map #(get-in % [:settings :jobs.lib.walk.world/y-margin]) (filter #(= 64 (:y (:pos %))) go-to)))) "the walk home plans no deep way round")
           (is (= [0 64 0] (feet s)) "the body is back on its start cell")
           (is (empty? (events-of s :mine.not-home))))))))
 

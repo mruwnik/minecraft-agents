@@ -87,7 +87,7 @@
        (let [{:keys [eng]} (e/setup {:blocks (floor -2 -3 60 3)})
              seen (atom [])
              real (get-in eng [:jobs 'jobs.movement.go-to])
-             spy (assoc real :round (fn [c] (swap! seen conj (:y-margin (:args c))) ((:round real) c)))
+             spy (assoc real :round (fn [c] (swap! seen conj (get-in (:args c) [:settings :jobs.lib.walk.world/y-margin])) ((:round real) c)))
              job {:round (fn ^:async margin-round [c]
                            (await (near/go-near! c {:x 10 :y 64 :z 0} 0 {:y-margin 7 :ways #{:walk}}))
                            (ctx/end c :done nil))}
