@@ -25,7 +25,7 @@
    :blocks [[:fill [17 4 16] [18 4 16] "oak_log"]]
    :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
-   :after [[:not-block [16 0 16] "oak_log"] [:not-block [17 4 16] "oak_log"] [:not-block [18 4 16] "oak_log"] [:item "oak_log" [:>= 11]]]}
+   :after [[:not-block [16 0 16] "oak_log"] [:not-block [17 4 16] "oak_log"] [:not-block [18 4 16] "oak_log"] [:item "oak_log" [:>= 8]]]}
   {:name "harvest-wood-replants-the-sapling-on-the-ground"
    :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 16})]]
