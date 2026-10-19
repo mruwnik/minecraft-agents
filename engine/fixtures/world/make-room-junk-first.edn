@@ -34,7 +34,7 @@
          [:await {:source :job :kind :completed} 90]
          [:wait-s 40]]
    :expect [{:event {:source :job :kind :completed :data {:tossed [{:item "granite" :count 64} {:item "tuff" :count 20}]}} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :loose-items.picked} :for-s 120}]
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :loose-items}} :for-s 120}]
    :after [[:item "granite" 0] [:item "tuff" 0] [:item "coal" 30]]
    :limit-s 170}
   {:name "chest-known-deposits-instead-of-tossing"

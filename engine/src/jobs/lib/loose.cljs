@@ -3,7 +3,7 @@
   and jobs.items.pick-up-loose judge them with the same rule (judge), so the job takes what the trigger fired for.
 
   An item is taken when it is seen (not behind a wall), within :radius of the body, not on :never, and on :always or
-  worth the detour: jobs.lib.cost item-value (:value options) over detour-cost (:cost options) at least :min-ratio.
+  worth the detour: jobs.lib.cost item-value over detour-cost at least :min-ratio.
   It is left (the reason judge gives) when:
     :thrown       the body threw it (make-room's junk, a give), ever; any item of a kind make-room tossed under :dumped-s ago; another player threw it under :thrown-s ago
                   (thrower: from the spawn engine/js records; the body's own toss by item and time, a player's by its drop point);
@@ -46,11 +46,10 @@
                   :drop-dy :throw-dxz :throw-dy :toss-ms :toss-reach :hold-cap :hold-ttl-s :left-cap :check-radius :collect-pad])
 
 (defn options
-  "The settings with the non-nil keys of args over them; :value (item-value options) and :cost (detour-cost options)
-  pass through."
-  [args]
+  "The settings with the non-nil keys of overrides over them."
+  [overrides]
   (merge (into {} (map (fn [k] [k (settings/get settings (keyword "jobs.lib.loose" (name k)))])) option-keys)
-         (into {} (remove (comp nil? val)) (select-keys args (into option-keys [:value :cost])))))
+         (into {} (remove (comp nil? val)) (select-keys overrides option-keys))))
 
 (def hold-kind :collecting)
 (def left-kind :loose-left)
@@ -125,10 +124,9 @@
   [o feet e]
   (let [{:keys [name count]} (js->clj (.-item e) :keywordize-keys true)
         pos (item-pos e)
-        value (:value (apply cost/item-value [{:name name :count (or count 1)}] (mapcat identity (:value o))))
+        value (:value (cost/item-value [{:name name :count (or count 1)}]))
         detour (:cost (cost/detour-cost {:distance (u/dist feet pos)
-                                         :climb (- (js/Math.floor (:y pos)) (js/Math.floor (:y feet)))}
-                                        (:cost o)))]
+                                         :climb (- (js/Math.floor (:y pos)) (js/Math.floor (:y feet)))}))]
     {:value value :cost detour :ratio (if (pos? detour) (/ value detour) js/Infinity)}))
 
 (defn verdict

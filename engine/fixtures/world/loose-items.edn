@@ -19,11 +19,11 @@
          [:await {:source :job :kind :completed} 90]
          [:summon "item" [16.5 0 20.5] "{Item:{id:\"minecraft:oak_log\",count:2}}"]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
-            {:event {:source :job :kind :loose-items.picked :data {:collected [:>= 2]}} :within-s 110}]
+            {:event {:source :reflex :kind :ended :context {:reflex-id :loose-items} :data {:outcome :done}} :within-s 110}]
    :after [[:not-block [16 0 16] "oak_log"] [:item "oak_log" [:>= 6]]]}
   {:name "log-four-blocks-off-picked-up"
    :act [[:summon "item" [16.5 0 16.5] "{Item:{id:\"minecraft:oak_log\",count:2}}"]]
-   :expect [{:event {:source :job :kind :loose-items.picked :data {:collected 2}} :within-s 30}]
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :loose-items} :data {:outcome :done}} :within-s 30}]
    :after [[:item "oak_log" 2]]
    :limit-s 40}
   ;; should stay: 8 blocks down and 4 out from the ledge, in sight from it (radius raised to 10 so it is in range); the
@@ -34,7 +34,7 @@
    :body {:at [22.5 8 16.5]}
    :settings {:jobs.lib.loose/radius 10}
    :act [[:summon "item" [26.5 0 16.5] "{Item:{id:\"minecraft:dirt\",count:1}}"]]
-   :expect [{:no-event {:source :job :kind :loose-items.picked} :for-s 30}]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :loose-items}} :for-s 30}]
    :after [[:item "dirt" 0]]
    :limit-s 40}
   ;; the control: the same dirt on :always fires the reflex, so only the cost rule leaves it above
@@ -44,12 +44,12 @@
    :body {:at [22.5 8 16.5]}
    :settings {:jobs.lib.loose/radius 10 :jobs.lib.loose/always ["dirt"]}
    :act [[:summon "item" [26.5 0 16.5] "{Item:{id:\"minecraft:dirt\",count:1}}"]]
-   :expect [{:event {:source :job :kind :loose-items.picked} :within-s 30}]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :loose-items}} :within-s 30}]
    :limit-s 40}
   ;; should stay: another body's zone
   {:name "log-in-anothers-zone-left"
    :zones [{:name "yard" :min [12 -1 12] :max [20 4 18] :owner "Other" :allow #{}}]
    :act [[:summon "item" [16.5 0 16.5] "{Item:{id:\"minecraft:oak_log\",count:2}}"]]
-   :expect [{:no-event {:source :job :kind :loose-items.picked} :for-s 30}]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :loose-items}} :for-s 30}]
    :after [[:item "oak_log" 0]]
    :limit-s 40}]}

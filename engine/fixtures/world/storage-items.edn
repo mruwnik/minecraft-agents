@@ -29,7 +29,7 @@
    :body {:inventory [["gravel" 64] ["sand" 64] ["tuff" 64] ["andesite" 64] ["diorite" 64] ["granite" 64]]}
    :act [[:job (jobs.storage.make-room {:free 33})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :loose-items.picked} :for-s 40}]
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :loose-items}} :for-s 40}]
    :after [[:item "gravel" 0] [:item "sand" 0]]
    :limit-s 80}
   {:name "mine-deposits-first-when-the-bag-is-fullish"
@@ -84,7 +84,7 @@
    :limit-s 60}
   {:name "pick-up-loose-out-of-radius-names-the-radius"
    :act [[:summon "item" [16.5 0 28.5] "{Item:{id:\"minecraft:wheat_seeds\",count:16}}"]
-         [:job (jobs.items.pick-up-loose {:radius 8})]]
+         [:job (jobs.items.pick-up-loose {:settings {:jobs.lib.loose/radius 8}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-worth-it} :message [:contains "radius"]} :within-s 30 :of-job true}]
    :after [[:item "wheat_seeds" 0]]
    :limit-s 50}

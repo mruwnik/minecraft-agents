@@ -154,7 +154,7 @@
     (doseq [id [:suffocating :burning :wedged :hostile-near :night :hungry :inventory-nearly-full :died]]
       (is (< (at id) (at :loose-items)) (str id)))))
 
-(deftest the-reflex-picks-up-the-log-says-so-once-and-leaves-the-dirt
+(deftest the-reflex-picks-up-the-log-once-and-leaves-the-dirt
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -164,10 +164,8 @@
           (dotimes [_ 30] (await (core/tick! eng)))
           (is (= 1 (carried p "oak_log")))
           (is (= 0 (carried p "dirt")))
-          (let [picked (filterv #(= :loose-items.picked (:kind %)) @seen)]
-            (is (= 1 (count picked)))
-            (is (= :info (:level (first picked))))
-            (is (= 1 (:collected (first picked))))))))))
+          (let [ended (filterv #(= :ended (:kind %)) (filterv #(= :reflex (:source %)) @seen))]
+            (is (= [:done] (mapv :outcome ended)) "one reflex run, ended done")))))))
 
 (deftest a-child-with-nothing-worth-it-fails-its-condition
   (async done
@@ -184,7 +182,7 @@
       (fn ^:async t []
         (let [text (fn ^:async text* [w args]
                      (get-in (await (tu/child-outcome (:eng (setup w)) 'jobs.items.pick-up-loose args 6)) [:ending :cause :text]))
-              far (await (text (world log-ten-off) {:radius 8}))
+              far (await (text (world log-ten-off) {:settings {:jobs.lib.loose/radius 8}}))
               unworthy (await (text (world dirt-down) {}))
               none (await (text (world) {}))]
           (is (re-find #"within 8 blocks" far))
