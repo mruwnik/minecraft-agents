@@ -4,6 +4,7 @@
 ;; 9a44c786 (a tree of the body's own plan is skipped silently), 7b23de3a (tidy fells a part-cut trunk, leaves a log wall).
 ;; Tree: 10 logs at x 16, z 16 (y 0..9), persistent oak leaves round the top and two leaves beside the trunk at y 6 and 7.
 ;; The body carries no blocks unless a case says; the top logs are out of reach from the ground, so every felling pillars.
+;; A same-species log wall touching the trunk in another owner's zone is left standing.
 ;; Should-succeed: whole tree felled with nothing carried but an axe; harvest-wood replants on the ground; the axe comes from a chest;
 ;; the own plan's birch is spared and the oak felled; tidy fells a part-cut trunk. Should-fail: tidy leaves a leafless log wall.
 {:defaults
@@ -26,6 +27,12 @@
    :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
    :after [[:not-block [16 0 16] "oak_log"] [:not-block [17 4 16] "oak_log"] [:not-block [18 4 16] "oak_log"] [:item "oak_log" [:>= 8]]]}
+  {:name "log-wall-touching-the-tree-in-another-zone-is-left-standing"
+   :blocks [[:fill [17 1 16] [18 3 16] "oak_log"]]
+   :zones [{:name "yard" :min [17 0 15] :max [19 4 17] :owner "Other" :allow #{}}]
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
+   :after [[:not-block [16 0 16] "oak_log"] [:not-block [16 9 16] "oak_log"] [:block [17 1 16] "oak_log"] [:block [18 3 16] "oak_log"]]}
   {:name "harvest-wood-replants-the-sapling-on-the-ground"
    :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 16})]]

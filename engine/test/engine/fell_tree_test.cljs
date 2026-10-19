@@ -16,6 +16,7 @@
             [jobs.items.obtain.table :as table]
             [jobs.lib.need :as need]
             [jobs.forestry.fell-tree :as fell-tree]
+            [jobs.forestry.fell-tree.log :as log]
             [jobs.lib.trees :refer [axe-fetch-limits]]
             [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]))
@@ -602,6 +603,26 @@
           (is (= 6 (:logs out)) "trunk and branch")
           (is (= 6 (count (fm/digs p))))
           (is (= 6 (get (lt/inv p) "oak_log")) "the logs are in the bag"))))))
+
+(deftest a-log-wall-touching-the-tree-in-a-zone-that-bars-digging-stays-standing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks (merge (lt/tree 6 0 "oak" 4) {"7,65,0" "oak_log" "7,66,0" "oak_log"}) :inventory []}
+              zones [{:name "vault" :min [7 65 0] :max [7 66 0] :allow #{:place}}]
+              {:keys [p out]} (await (fm/with-zones zones #(fell world {:radius 10 :fetch false} 100)))]
+          (is (= 4 (:logs out)) "the trunk only")
+          (is (= [64 65 66 67] (dug-ys p))))))))
+
+(deftest a-chain-of-logs-leaving-the-tree-is-felled-only-within-the-spread
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [chain (into {} (for [x (range 7 15)] [(str x ",65,0") "oak_log"]))
+              world {:blocks (merge (lt/tree 6 0 "oak" 4) chain) :inventory []}
+              {:keys [p out]} (await (fell world {:radius 10 :fetch false} 200))]
+          (is (= (+ 4 (log/max-spread)) (:logs out)) "the trunk and the chain up to the spread from its column")
+          (is (not-any? #(< (+ 6 (log/max-spread)) (first %)) (fm/digs p))))))))
 
 (defn ^:async fell-far-unseen
   "fell over a world where the trunk at x 30 reads as never seen until the body stands within `within` blocks of it."

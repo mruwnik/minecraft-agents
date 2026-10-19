@@ -53,7 +53,9 @@
   Zones: a tree whose base log is in another owner's zone or claim, or in a plan's footprint (but :for-plan's
   own), is not a candidate. A later log that turns out refused makes the tree count as unreachable. The job warns
   fell-tree.declined once, with :reason :refused (or :no-zones when no zone list was read). :ignore-zones? true
-  skips the check.
+  skips the check. Logs joined to the tree (branches, the
+  rest of a 2x2 trunk) that the same rule refuses, or that lie more than the fell-tree.log/max-spread setting from the
+  trunk's column, are no part of it and stay standing.
 
   Conditions: :food-short (later, between trees: no food carried and get-food gave up lately); :no-tree (none in sight after one look around from where it stands, the condition's look; data :radius,
   :species; a listed job waits; with :at and no log there it is impossible, data :at).

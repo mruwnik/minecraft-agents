@@ -535,6 +535,16 @@
               (await (tu/child-outcome eng 'jobs.forestry.fell-tree args 60))
               (is (= n (count (digs p))) (pr-str args)))))))))
 
+(deftest fell-tree-leaves-a-log-of-another-agents-plan-that-touches-the-tree
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spec {:blocks (merge (lt/tree 3 0 "oak" 3) {"4,65,0" "oak_log"})}
+              theirs (shape/with-author (forest-plan ["a" [[4 65 0]] "oak"]) "Other")
+              {:keys [eng p]} (start spec {"forest" theirs})]
+          (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 10} 60))
+          (is (= [[3 64 0] [3 65 0] [3 66 0]] (digs p))))))))
+
 (deftest fell-tree-fells-a-tree-outside-its-own-plan-without-a-decline-warn
   (async done
     (tu/run-async done

@@ -1,8 +1,11 @@
 (ns jobs.forestry.fell-tree.log
   "What fell-tree and fell-from-pillar share: the zone rule for a log, the logs of the chosen column, the walk within
   reach of a log and one dig round of it."
-  (:require [engine.contract :as contract]
+  (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
+            [jobs.lib.access :as access]
             [jobs.lib.child :as child]
             [jobs.lib.gate :as gate]
             [jobs.lib.ledger :as ledger]
@@ -27,12 +30,25 @@
 
 (def max-tree-logs "The most logs of one tree the flood reads." 64)
 
+(a/defargs settings
+  {::max-spread {:default 6 :doc "Blocks (either axis) from the first seed log's column the flood of a tree's logs may reach: acacia and dark oak branches fit, a log wall touching the tree is cut off." :spec (a/num-in 0 nil)}})
+(defn max-spread [] (settings/get settings ::max-spread))
+
+(defn flood-allowed?
+  "A predicate on a position: whether the flood may take that log, as the base check would (zones, claims, plan footprints;
+  not :ignore-zones?, not own plans with :spare-own-builds false). Silent: the refused log is simply no part of the tree."
+  [c]
+  (let [in (access/rules-input c (gate-opts c))]
+    #(not (gate/refused? (access/may? in :dig %)))))
+
 (defn connected-logs
   "The logs of the same species as the seed logs, seen, that touch them (by face, edge or corner) or each other, at most
   max-tree-logs, lowest first, then nearest the first seed: branches and the other columns of a 2x2 trunk. Cells in skip
-  (a pillar's scaffold, logs placed beside the trunk) are no part of the tree."
-  [p seeds skip]
-  (let [{:keys [x z]} (:pos (first seeds))
+  (a pillar's scaffold, logs placed beside the trunk) and logs failing allowed? or more than max-spread from the first
+  seed's column are no part of the tree."
+  [p seeds skip allowed?]
+  (let [spread (max-spread)
+        {:keys [x z]} (:pos (first seeds))
         item (:name (first seeds))
         key (fn [pos] [(:x pos) (:y pos) (:z pos)])
         near (fn [{:keys [pos]}] (let [{px :x pz :z} pos] (+ (* (- px x) (- px x)) (* (- pz z) (- pz z)))))]
@@ -43,7 +59,9 @@
         (let [{:keys [pos]} (peek queue)
               next (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]
                          :let [q {:x (+ (:x pos) dx) :y (+ (:y pos) dy) :z (+ (:z pos) dz)}]
-                         :when (and (not (found (key q))) (not (skip (key q))) (= item (u/seen-name p q)))]
+                         :when (and (not (found (key q))) (not (skip (key q)))
+                                (<= (Math/abs (- (:x q) x)) spread) (<= (Math/abs (- (:z q) z)) spread)
+                                (= item (u/seen-name p q)) (allowed? q))]
                      {:name item :pos q})
               next (take (- max-tree-logs (count found)) next)]
           (recur (into found (map (juxt (comp key :pos) identity)) next)
@@ -64,7 +82,7 @@
         seeds (->> (into (vec column) (keep #(when (= item (u/seen-name p %)) {:name item :pos %})) logs-seen)
                    (remove (comp skip? :pos))
                    distinct vec)]
-    (if (seq seeds) (connected-logs p seeds skip) seeds)))
+    (if (seq seeds) (connected-logs p seeds skip (flood-allowed? c)) seeds)))
 
 (defn record-debt!
   "Write the replant debt for the tree of base and species, once. True when it wrote one."
