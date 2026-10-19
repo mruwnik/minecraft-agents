@@ -60,8 +60,7 @@
    :blocks [[:fill [10 -1 16] [13 -1 16] "dirt"]]
    :body {:inventory [["wheat_seeds" 8]]}
    :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :fetch false})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do :untilled 4}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :plant.done :data {:planted [:>= 1]}} :for-s 20}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do :untilled 4}} :within-s 40 :of-job true}]
    :after [[:block [10 0 16] "air"] [:item "wheat_seeds" 8]]}
   ;; Cards 37907cbf, d62866ae: till cuts the flower and the grass tuft off the ground first and tills; a berry bush is no ground cover.
   {:name "till-cuts-flower-and-tuft-then-tills-and-skips-the-berry-bush"

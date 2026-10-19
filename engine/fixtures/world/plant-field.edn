@@ -62,7 +62,7 @@
    :body {:inventory [["wheat_seeds" 10]]}
    :act [[:job (jobs.farm.plant {:plan "$plan:mine"})]]
    :expect [{:event {:source :job :kind :plant.declined :data {:reason :refused :plans [[:contains "other"]]}} :within-s 30 :of-job true}
-            {:event {:source :job :kind :plant.done :data {:planted 2}} :within-s 60 :of-job true}]
+            {:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:block [10 0 16] "wheat"] [:block [11 0 16] "wheat"] [:block [12 0 16] "air"] [:block [13 0 16] "air"]
            [:block [14 0 16] "air"]]}
   {:name "all-cells-shared-with-another-plan-warns-and-never-starts"

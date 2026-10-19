@@ -135,8 +135,7 @@
               result (await (child-outcome eng job {:box field-box} 100))]
           (is (= {:planted 9 :skipped []} (dissoc result :text)))
           (is (sown p (range 2 5) (range 2 5) "wheat"))
-          (is (= {} (inv-of p)))
-          (is (= 0 (count (events-of seen :plant.gave-up)))))))))
+          (is (= {} (inv-of p))))))))
 
 (deftest fewer-seeds-than-cells-plant-what-there-is
   (async done
@@ -226,9 +225,7 @@
           (let [result (await (child-outcome eng job {:box field-box} 100))]
             (is (= {:planted 8 :skipped [refused]} result))
             (is (= 6 (count (filter #(= 3 (.-x (.-pos (.-args %)))) (filter #(= 3 (.-z (.-pos (.-args %)))) (calls p "place")))))
-                "three tries, each a refused place plus blocks.place's one retry")
-            (is (= 1 (count (events-of seen :plant.gave-up))))
-            (is (= 1 (count (events-of seen :plant.done))))))))))
+                "three tries, each a refused place plus blocks.place's one retry")))))))
 
 ;; ------------------------------------------------------------------ zones and claims
 
@@ -453,5 +450,4 @@
         (let [{:keys [eng seen]} (start dried-world)
               result (await (child-outcome eng job {:box field-box} 100))]
           (is (= 7 (:planted result)))
-          (is (= [{:x 2 :y 63 :z 2} {:x 3 :y 63 :z 2}] (:untilled result)) "the dirt cells are named")
-          (is (= 2 (:untilled (first (events-of seen :plant.done))))))))))
+          (is (= [{:x 2 :y 63 :z 2} {:x 3 :y 63 :z 2}] (:untilled result)) "the dirt cells are named"))))))

@@ -30,7 +30,7 @@
   A missing seed is fetched before the run starts (jobs.lib.need, :fetch; a failed fetch ends the call with its ending as
   the :because), unless :fetch is false.
   One call plants the bare cells within the reach setting (eye reach), walking to the nearest (a go-to child) when none is. A cell whose place is
-  refused or unreachable, or whose walk is blocked, three times is skipped (warn plant.gave-up).
+  refused or unreachable, or whose walk is blocked, three times is skipped.
   :plan (optionally :part) makes the plan's crop cells the field instead (:box and :seed are then unused); each bare
   planned cell is sown with the seed of the crop the plan wants there, when carried. Zones and other active plans'
   footprints are asked before choosing a cell and again before the place; a cell they refuse is left bare (one
@@ -54,6 +54,7 @@
 
 (a/defargs settings
   {::reach {:default u/eye-reach :doc "Cells whose centre is this close to the eye (place accepts 4.5) are planted without walking, in blocks." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 600 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::max-fails {:default 3 :doc "Failures before the job gives up." :spec (a/int-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn max-fails [] (settings/get settings ::max-fails))
@@ -86,7 +87,7 @@
 
 (def job-sym 'jobs.farm.plant)
 (def target [:box :plan :part])
-(def defaults {:least 1})
+(def defaults {:least 1 :spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
 
@@ -299,17 +300,7 @@
   [c cause extra]
   (let [planted (:planted (ctx/mem c) 0)
         left (count (unsown c))
-        data (result-of c extra)
-        skipped (:skipped data)
-        reason (cond (nil? cause) (if (pos? planted) :done :none) (map? cause) (:reason cause) :else cause)]
-    (when (seq skipped)
-      (ctx/emit! c :plant.gave-up :warn
-                 {:cells skipped
-                  :text (str "plant gave up on " (count skipped) " cells: " (str/join ", " (map pr-str skipped)))}))
-    (ctx/emit! c :plant.done :info
-               {:planted planted :skipped-count (count skipped) :reason reason :untilled (count (:untilled data))
-                :text (str "plant done: planted " planted ", skipped " (count skipped) ", reason " (name reason)
-                           (when (seq (:untilled data)) (str ", " (count (:untilled data)) " cells are dirt: they need tilling")))})
+        data (result-of c extra)]
     (cond
       (and (nil? cause) (pos? planted)) (ctx/end c :done nil data)
       (and (pos? planted) (common/enough? c planted (+ planted left))) (ctx/end c :done nil data)
