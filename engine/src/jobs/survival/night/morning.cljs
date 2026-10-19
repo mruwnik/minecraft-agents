@@ -12,6 +12,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.survival.night.hold :as hold]
+            [jobs.survival.dig-pit-site :as pit-site]
             [jobs.survival.night.sites :as sites]))
 
 (defn ^:async walk!
@@ -95,7 +96,7 @@
   changed (sh-beds/fill-gone?), and end done {:night how}, or nothing-possible :exposed {:sites} when nothing sheltered the body."
   [c]
   (let [how (:sheltered (ctx/mem c))
-        failed (sites/failed-sites c)]
+        failed (pit-site/failed c)]
     (sites/forget-failed! c)
     (ctx/forget-where! c :doorway-filled (partial sh-beds/fill-gone? (:primitives c)))
     (if (= :exposed how)

@@ -55,7 +55,7 @@
           (st/dawn-after! p 4)
           (let [e (await (ending-of eng {:ways #{:bed :shelter}}))]
             (is (= {:kind :nothing-possible :cause :exposed} (select-keys e [:kind :cause])) (pr-str e))
-            (is (= 4 (count (get-in e [:data :sites]))) "max-sites tried, then exposed")
+            (is (< 1 (count (distinct (map :pos (get-in e [:data :sites]))))) "more than one site tried, then exposed")
             (is (empty? (st/emitted seen :shelter.fled)))
             (is (= 1 (count (st/emitted seen :shelter.exposed))))))))))
 

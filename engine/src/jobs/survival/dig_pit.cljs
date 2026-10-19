@@ -3,14 +3,18 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
+            [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.pen-gate :as pen-gate]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
+            [jobs.lib.threats :as threats]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
+            [jobs.survival.dig-pit-site :as site]
             [jobs.survival.plug-way :as way]
+            [jobs.survival.shut-in-night :as night]
             [jobs.survival.retreat-flight :as flight]
             [jobs.survival.retreat-pit :as pit]))
 
@@ -24,7 +28,8 @@
   laid a cave or fluid open). The pit is never dug into what the body sees as fluid, a hazard or open air, and it is planned again
   when the body has left its column. Lava a dig lays open is filled first (:on-lava :seal). Every plug goes to the scaffold ledger
   with :for (default :danger, ledger :retreat-plug, taken back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote:
-  time (##Inf when no pit fits, or with :for :night when the pit would cut into a plan the body made or stand on a plan's doorstep, :spared; a cell another's zone refuses adds plug-way's ::trespass-s). Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.")
+  time, with :for :night plus the walk (##Inf when no pit fits, or with :for :night when the pit would cut into a plan the body made or stand on a plan's doorstep, :spared; a cell another's zone refuses adds plug-way's ::trespass-s). Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.
+  With :for :night, when a pit failed at the feet tonight (shut-in's :shut-in-failed) or another's zone refuses them and a free site is near, it first walks (go-to) to the nearest seen ground within jobs.survival.dig-pit-site's ::reach (16) that looks like a pit fits (clear of every failed site, no known mob it would flee near), climbing out of its own failed pit first; with no such ground it ends :failed :no-site.")
 
 (a/defargs args
   {:ignore-zones? :shared
@@ -36,6 +41,7 @@
 
 (a/defargs settings
   {::job-time-s {:default 90 :doc "Seconds a pit attempt may take." :spec (a/num-in 0 nil)}
+   ::walk-s-per-block {:default 0.3 :doc "Seconds a block of walk to a night pit's site is guessed to take, for the quote." :spec (a/num-in 0 nil)}
    ::pit-s {:default 12 :doc "Seconds a pit is guessed to take, for the quote, while a floor under it is not yet seen (with :for :night a pit that fits is priced by its digging)." :spec (a/num-in 0 nil)}})
 
 (def target [])
@@ -110,12 +116,18 @@
     (/ (reduce + (map #(tools/clear-ms p (priced-name p %)) (concat (:prep plan) (mapcat :dig (:steps plan))))) 1000)))
 
 (defn quote-of [c]
-  (let [{:keys [plan stop]} (assess c)]
+  (let [{:keys [plan stop]} (assess c)
+        s (when (night/night? c) (site/site c))]
+    (if (and (night/night? c) (not= :here (:at s)))
+      (way/quote-of c (if s
+                        (+ (* (u/dist (sh-sense/feet (:primitives c)) (:cell s)) (settings/get settings ::walk-s-per-block)) (settings/get settings ::pit-s))
+                        ##Inf)
+                    (settings/get settings ::job-time-s))
     (way/quote-of c (if stop
                       ##Inf
                       (+ (if (and plan (= :night (:for (:args c)))) (dig-seconds c plan) (settings/get settings ::pit-s))
                          (if plan (way/zone-penalty c {:dig (concat (:prep plan) (mapcat :dig (:steps plan))) :plug (conj (:plugs plan) (:roof plan))}) 0)))
-                  (settings/get settings ::job-time-s))))
+                  (settings/get settings ::job-time-s)))))
 
 (defn ^:async step!
   "One step of the pit: its plan is made once and kept in job memory, made again when the body has left its column. :done,
@@ -125,7 +137,9 @@
         plan (if (and kept (pit/pit-index kept (sh-sense/feet (:primitives c)))) kept (await (pit/plan! c)))]
     (if-let [stop (or (:stop plan) (when-not kept (spared-stop c plan)))]
       (way/stop! c stop)
-      (do (ctx/update-mem! c assoc :pit plan)
+      (do (when (and (night/night? c) (not kept))
+            (ctx/remember! c :shut-in-failed {:pos (sh-sense/feet (:primitives c)) :way :pit :reason :interrupted} night/failed-policy))
+          (ctx/update-mem! c assoc :pit plan)
           (let [r (await (pit/pit-round! c plan))]
             (if (:stop r)
               (way/stop! c r)
@@ -134,4 +148,34 @@
 (def safe? ready/ok)
 (def fit? ready/ok)
 
-(defn ^:async round [c] (await (way/run! c :pit step!)))
+(defn fail! [c reason text]
+  (ctx/end c :nothing-possible :failed {:text text :reason reason}))
+
+(defn ^:async walk!
+  "The night walk to ground where a pit fits, once: nil once there, :continue while a climb or walk waits, or the ending of one that fails."
+  [c cell]
+  (if-let [start (site/pit-start c)]
+    (let [r (await (dig-leave/climb! c {:start start} cell))]
+      (if (map? r) (fail! c :trapped "could not climb out of the failed pit") :continue))
+    (let [e (await (ctx/call c :walk 'jobs.movement.go-to {:pos cell :range 0}))]
+      (cond (= :continue e) :continue
+            (not (:arrived (:data e))) (fail! c :walk-failed "could not walk to ground for a pit")
+            :else (do (ctx/update-mem! c dissoc :walk-to)
+                      (ctx/emit! c :shut-in.relocated :info {:pos cell :sites (site/failed c) :text "the last site failed; moved to dig in elsewhere"})
+                      nil)))))
+
+(defn ^:async approach!
+  "With :for :night and no pit begun: get to a site (walk!). nil once there, else :continue or the ending."
+  [c]
+  (when (and (night/night? c) (not (:pit (ctx/mem c))) (not (way/enclosed? c)))
+    (let [m (:walk-to (ctx/mem c))
+          m (when-not (and m ((threats/danger-near-fn c) m)) m)
+          s (if m {:at :there :cell m} (site/site c))]
+      (cond
+        (nil? s) (fail! c :no-site "no ground in sight where a pit fits")
+        (= :here (:at s)) nil
+        :else (do (ctx/update-mem! c assoc :walk-to (:cell s))
+                  (await (walk! c (:cell s))))))))
+
+(defn ^:async round [c]
+  (or (await (approach! c)) (await (way/run! c :pit step!))))

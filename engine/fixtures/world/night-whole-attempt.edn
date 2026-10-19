@@ -24,7 +24,7 @@
    :blocks [[:fill [0 -6 0] [31 -1 31] "dirt"] [:set [17 -1 16] "water"]]
    :act [[:job (jobs.survival.night)]]
    :expect [{:event {:source :job :kind :shut-in.failed :message [:contains "; not "]} :within-s 30}
-            {:event {:source :job :kind :shelter.relocated} :within-s 60}
+            {:event {:source :job :kind :shut-in.relocated} :within-s 60}
             {:event {:source :job :kind :shut-in.sealed} :within-s 120}
             {:no-event {:source :job :kind :shelter.exposed} :for-s 120 :until {:source :job :kind :shut-in.sealed}}]
    :after [[:block [16 -1 16] "dirt"]]
@@ -40,7 +40,7 @@
             {:event {:source :job :kind :holding :data {:reason [:contains "exposed: "]}} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :exposed}} :within-s 120 :of-job true}]
    :limit-s 140}
-  ;; Card 97fac480 (fix 57d67d3b). Night 1 relocates off a wet start site (a :night-site entry) and ends roofed; the entries are
+  ;; Card 97fac480 (fix 57d67d3b). Night 1 relocates off a wet start site (a :shut-in-failed entry) and ends roofed; the entries are
   ;; forgotten then, so night 2 (water gone) digs at the start again instead of skipping it: the start's descent cell is dug.
   {:name "failed-site-forgotten-when-the-night-ends-roofed"
    :time :night-exclusive
@@ -55,7 +55,7 @@
          [:job (jobs.survival.night)]
          ;; the expectations below are met by night 1's events, so wait here until night 2 has dug the start cell
          [:until-rcon "execute positioned $X $Y $Z unless block ~16 ~-1 ~16 minecraft:dirt" "passed" 120]]
-   :expect [{:event {:source :job :kind :shelter.relocated} :within-s 150}
+   :expect [{:event {:source :job :kind :shut-in.relocated} :within-s 150}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 300 :of-job true}]
    :after [[:not-block [16 -1 16] "dirt"]]
    :limit-s 330}

@@ -35,10 +35,10 @@
           (ctx/entries c :shut-in-failed))))
 
 (defn fail!
-  "A way ended other than :done on this site: remembered for the night, except for a lack of blocks or tool (its quote says so)."
-  [c way reason]
+  "A way ended other than :done on this site: remembered for the night, except for a lack of blocks or tool (its quote says so). :start is the top of the pit the body is in, if any."
+  [c way reason & [start]]
   (when (and (night? c) (not (#{:no-blocks :no-tool} reason)))
-    (ctx/remember! c :shut-in-failed {:pos (sh-sense/feet (:primitives c)) :way way :reason reason} failed-policy)))
+    (ctx/remember! c :shut-in-failed (cond-> {:pos (sh-sense/feet (:primitives c)) :way way :reason reason} start (assoc :start start)) failed-policy)))
 
 (defn near-gate?
   "Whether cell {:x :y :z} lies within ::take-back-gate-range of a door or fence gate some plan wants (jobs.lib.pen-gate)."

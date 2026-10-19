@@ -22,6 +22,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.targets :as targets]
+            [jobs.survival.dig-pit-site :as pit-site]
             [jobs.survival.night :as night]
             [jobs.survival.night.sites :as sites]
             [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early night-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-with-raw-beef furnace-ops held-starving cow zombie]]))
@@ -129,17 +130,15 @@
             (is (= {:x 0 :y 63 :z 0} (first roofs)) "the first pit's roof was refused")
             (is (<= 9 (js/Math.hypot (:x (last roofs)) (:z (last roofs))))
                 "a second pit 9+ blocks away was roofed (8.06 away, dig-in's futile check from the body declines it)"))
-          (is (= [[:roof-failed]] (mapv #(mapv :reason (:sites %)) (st/emitted seen :shelter.relocated)))
-              "moved once, after the failed site, with dig-in's stop reason")
-          (is (= [] (st/entries eng :night-site)) "tonight's failed sites are forgotten at morning")
-          (is (= [] (st/entries eng :shut-in-failed)) "dig-in's failed sites too: the next night digs there again")
+          (is (= 1 (count (st/emitted seen :shut-in.relocated))) "moved once, after the failed site")
+          (is (= [] (st/entries eng :shut-in-failed)) "failed sites are forgotten at morning: the next night digs there again")
           (is (empty? (st/emitted seen :shelter.exposed))))))))
 
 (deftest a-relocation-site-is-not-by-a-known-zombie
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup {:time night :blocks wide-ground :self {:food 20 :health 4}
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks wide-ground :self {:food 20 :health 4}
                                          :entities [(assoc zombie :pos {:x -7.5 :y 64 :z 0.5})]})]
           (st/refuse-cell! p [0 63 0])
           (st/dawn-after! p 3)
@@ -187,7 +186,7 @@
             (is (empty? more))
             (is (= :exposed (:reason s)) "a night with no shelter is no success")
             (is (= [:roof-failed] (take 1 (mapv :reason (:sites s)))) "the first site's reason is dig-in's")
-          (is (= 4 (count (:sites s))) "max-sites tried, then exposed"))
+          (is (< 1 (count (distinct (map :pos (:sites s))))) "more than one site tried, then exposed"))
           (is (= [] (:list (core/state eng)))))))))
 
 (deftest exposed-why-names-the-site-reasons
@@ -256,19 +255,19 @@
           (set! ctx/call (fn ^:async f [c k sym a]
                            (let [n (swap! calls inc)]
                              (when (= 2 n)
-                               (reset! seen-sites (mapv :reason (st/entries eng :night-site)))
+                               (reset! seen-sites (st/entries eng :shut-in-failed))
                                (.setTime (.-world p) st/noon))
                              (if (= :shut-in k) :continue (await (call c k sym a))))))
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
           (set! ctx/call call)
-          (is (= [:interrupted] @seen-sites) "the yield left only the in-flight mark, and the next call resumed the dig-in"))))))
+          (is (= [] @seen-sites) "the yield left no failed site, and the next call resumed the dig-in"))))))
 
 (deftest a-body-held-exposed-tries-to-dig-in-again-later
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (st/setup {:time night :blocks st/floor})
+        (let [{:keys [eng p clock seen]} (st/setup {:time night :blocks st/floor})
               tries (atom 0)
               call ctx/call]
           (st/refuse-placing! p)
@@ -292,14 +291,14 @@
 
 (deftest a-pit-site-is-judged-by-the-surface-a-player-sees
   (let [p (tu/fake {:blocks (into {} (for [x (range -2 3) z (range -2 3)] [(str x ",63," z) "dirt"]))})]
-    (is (sites/pit-site? p {:x 1 :y 64 :z 1}) "one layer of dirt shows nothing against a pit; dig-in finds out")
-    (is (not (sites/pit-site? p {:x 9 :y 64 :z 9})) "no ground to stand on")))
+    (is (pit-site/pit-site? p {:x 1 :y 64 :z 1}) "one layer of dirt shows nothing against a pit; dig-in finds out")
+    (is (not (pit-site/pit-site? p {:x 9 :y 64 :z 9})) "no ground to stand on")))
 
 (deftest a-pit-site-needs-ground-the-carried-tools-dig
   (let [stone (into {} (for [x (range -2 3) z (range -2 3)] [(str x ",63," z) "stone"]))
         site {:x 1 :y 64 :z 1}]
-    (is (not (sites/pit-site? (tu/fake {:blocks stone}) site)) "no pickaxe: stone cannot be dug")
-    (is (sites/pit-site? (tu/fake {:blocks stone :inventory [{:name "iron_pickaxe" :count 1}]}) site))))
+    (is (not (pit-site/pit-site? (tu/fake {:blocks stone}) site)) "no pickaxe: stone cannot be dug")
+    (is (pit-site/pit-site? (tu/fake {:blocks stone :inventory [{:name "iron_pickaxe" :count 1}]}) site))))
 
 (deftest with-no-pit-site-left-the-night-digs-a-niche-into-the-hill
   (async done

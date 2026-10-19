@@ -17,18 +17,19 @@
             [jobs.lib.util :as u]
             [jobs.survival.bed-down :as bed-down]
             [jobs.survival.dig-in-cells :as dig-cells]
+            [jobs.survival.dig-pit-site :as pit-site]
             [jobs.survival.night.hold :as hold]
             [jobs.survival.night.sites :as sites]))
 
 (defn ground-sites
   "Natural ground the body has seen within radius that the carried tools dig and that is no sand or gravel, as feet
-  cells ({:kind :ground :pos}) a pit can be dug at (sites/pit-site?), clear of failed sites, the nearest sites/ground-candidates."
+  cells ({:kind :ground :pos}) a pit can be dug at (pit-site/pit-site?), clear of failed sites, the nearest sites/ground-candidates."
   [c radius]
   (let [p (:primitives c)]
     (->> (look/seen-blocks p {:match #(and (solid/solid? %) (rules/natural? %) (not (rules/falling? %)) (tools/can-harvest? p %))
                               :radius (min 64 radius) :max 64})
          (map #(update (:pos %) :y inc))
-         (filter #(and (sites/pit-site? p %) (sites/clear-of-failed? c %)))
+         (filter #(and (pit-site/pit-site? p %) (pit-site/clear-of-failed? c %)))
          (take (sites/ground-candidates))
          (mapv (fn [pos] {:kind :ground :pos pos})))))
 
@@ -54,7 +55,7 @@
                    (and (some #(solid? (key-of (up f %))) (range 2 (inc roof-height)))
                         (seen-free? f) (seen-free? (up f 1))
                         (not (dig-cells/wet? p f)) (not (dig-cells/wet? p (up f 1)))
-                        (sites/clear-of-failed? c f))))
+                        (pit-site/clear-of-failed? c f))))
          (keep (fn [f]
                  (let [cells (dig-cells/fill-cells sealed? f)]
                    (when (and (<= (count cells) have)
@@ -114,7 +115,7 @@
     (if (= :continue w)
       :again
       (let [arrived (:arrived (:data w))]
-        (ctx/update-mem! c #(-> % (dissoc :fleeing :niche) (update :flees (fnil inc 0)) (update :flee-failed (fnil conj []) (:pos t))))
+        (ctx/update-mem! c #(-> % (dissoc :fleeing :niche :no-site :shut-ins) (update :flees (fnil inc 0)) (update :flee-failed (fnil conj []) (:pos t))))
         (when (and arrived (= :cave (:kind t))) (ctx/update-mem! c assoc :enclose (:pos t)))
         (if arrived
           (ctx/emit! c :shelter.fled :info (assoc (set/rename-keys (select-keys t [:kind :pos :name :distance :cost :needed]) {:kind :target})

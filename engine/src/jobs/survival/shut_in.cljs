@@ -16,7 +16,7 @@
             [jobs.survival.wall-in :as wall-in]))
 
 (def doc
-  "Shut the body in where it stands, atomically: no hostile logic, no walking (only dig-pocket may walk, to a wall); whoever calls it decides when.
+  "Shut the body in where it stands, atomically: no hostile logic, little walking (only dig-pocket, to a wall, dig-pit for :night, to ground where a pit fits, and the :room way walk); whoever calls it decides when.
   Needs nothing to start. One call is a whole attempt: it ends :done {:pos :way :placed} once the body is enclosed (a roof within
   :roof-height over no open cell round the feet, or with the :room way a roof over a closed room), at once when it already is.
   Ways (:ways) are child jobs: jobs.survival.wall-in (the open sides, a roof support and the roof with carried blocks),
@@ -34,7 +34,7 @@
   again by day), :room true; a shelter sealed again where the latest entry stood keeps its :start and :door); the event
   shut-in.sealed (when it placed blocks and the world shows the body shut in, with :spent; a warning when :resealed) or shut-in.unsealed (warning, naming the open
   cells); shut-in.failed (warning) when no way is left; and for a way that failed on the site a :shut-in-failed {:pos :way :reason} entry (cap 5, ten
-  minutes; none for a lack of blocks or of a tool), after which that way is dropped within ::futile-radius of it (jobs.survival.shut-in-night).
+  minutes; none for a lack of blocks or of a tool), after which that way is dropped within ::futile-radius of it (jobs.survival.shut-in-night), except the pit, which walks to another site (jobs.survival.dig-pit-site).
   Quote: time.")
 
 (a/defargs args
@@ -102,7 +102,7 @@
   [c]
   (let [failed (set (:failed-ways (ctx/mem c)))
         allowed (remove failed (filter #(ctx/way? c %) ways))
-        barred (if (night/night? c) (filter #(night/failed-near c %) allowed) [])
+        barred (if (night/night? c) (filter #(and (not= :pit %) (night/failed-near c %)) allowed) [])
         left (remove (set barred) allowed)
         costs (loop [[w & more] left acc []]
                 (if (nil? w) acc (recur more (conj acc [w (await (cost-of c w))]))))
@@ -117,6 +117,7 @@
   "The call's ending with what the children placed; with :for :night the shelter entry and events first."
   [c kind cause data]
   (let [data (merge data (spent/summary (spent/log c)) (select-keys (ctx/mem c) [:placed :roof :start]))]
+    (when (night/night? c) (ctx/forget-where! c :shut-in-failed #(= :interrupted (:reason %))))
     (when (and (night/night? c) (or (seq (:placed data)) (not (way/enclosed? c))))
       (night/end! c (or (:way data) (:last-way (ctx/mem c))) data (way/enclosed? c)))
     (ctx/end c kind cause data)))
@@ -149,7 +150,7 @@
 (defn failed-way!
   "A way ended other than :done: dropped for this call, remembered for the night, its cause kept for the :no-way ending."
   [c way e]
-  (night/fail! c way (or (get-in e [:data :reason]) (:cause e)))
+  (night/fail! c way (cond (and (= :walls way) (= "failed" (get-in e [:data :status]))) :walls-server-refused :else (or (get-in e [:data :reason]) (:cause e))) (:start (ctx/mem c)))
   (ctx/update-mem! c #(-> % (dissoc :way) (update :failed-ways (fnil conj []) way) (assoc-in [:why way] (or (:text (:data e)) (:cause e))) (assoc-in [:statuses way] (:status (:data e))) (assoc-in [:stops way] (select-keys (:data e) [:reason :needs])))))
 
 (defn why-not
