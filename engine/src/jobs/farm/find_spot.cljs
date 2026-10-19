@@ -284,7 +284,7 @@
             result {:spot pos :spots found}]
         (if-not (:walk a)
           (ctx/end c :done nil (assoc result :walked false))
-          (case (await (common/walk! c (update pos :y inc) 2 {:zone-tolls true}))
+          (case (await (common/walk! c (update pos :y inc) 2 {}))
             :continue :continue
             :blocked (ctx/end c :nothing-possible :unreachable (assoc result :walked false :reason :unreachable))
             (do (ctx/update-mem! c assoc :walked true)

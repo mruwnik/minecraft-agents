@@ -1,7 +1,7 @@
 ;; Card 617586af: go-to weighs a stair up against a long priced walk. A goal 8+ above the feet, :escalate on and a first plan whose priced cost
 ;; (dark, danger, tolls) exceeds 3 x 3 s x the stair steps: the stair escalation runs first, once. Stone mass x 2..61, y 0..13; the body at
 ;; the west end of a 40-cell tunnel (feet y 0), a climbing corridor at its east end and a return corridor (feet y 10) to the goal 10 east and
-;; 10 above the body; foreign zones over the tunnel and the return corridor toll them (:zone-tolls): a walk of about 100 cells against a 10-step stair.
+;; 10 above the body; foreign zones over the tunnel and the return corridor toll them (the zone-tolls setting, on by default): a walk of about 100 cells against a 10-step stair.
 ;; Should-succeed: the stair is dug (go-to.escalated :stair) and the body arrives. Should-fail (control): :escalate false walks the long way, nothing is dug.
 {:defaults
  {:tags [:movement :go-to :planner]
@@ -26,7 +26,7 @@
             [:fill [48 4 16] [48 6 16] "air"] [:fill [49 5 16] [49 7 16] "air"] [:fill [50 6 16] [50 8 16] "air"]
             [:fill [51 7 16] [51 9 16] "air"] [:fill [52 8 16] [52 10 16] "air"] [:fill [53 9 16] [53 11 16] "air"]
             [:fill [54 10 16] [54 11 16] "air"] [:fill [14 10 16] [54 11 16] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [14 10 16] :range 1 :zone-tolls true})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [14 10 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
             {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
    :after [[:body-near [14.5 10 16.5] 2.5]]}
@@ -35,7 +35,7 @@
             [:fill [48 4 16] [48 6 16] "air"] [:fill [49 5 16] [49 7 16] "air"] [:fill [50 6 16] [50 8 16] "air"]
             [:fill [51 7 16] [51 9 16] "air"] [:fill [52 8 16] [52 10 16] "air"] [:fill [53 9 16] [53 11 16] "air"]
             [:fill [54 10 16] [54 11 16] "air"] [:fill [14 10 16] [54 11 16] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [14 10 16] :range 1 :zone-tolls true :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [14 10 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 180 :of-job true}
             {:no-event {:source :job :kind :go-to.escalated} :for-s 180 :until {:source :job :kind :result :data {:arrived true}}}]
    :after [[:body-near [14.5 10 16.5] 2.5]]}]}

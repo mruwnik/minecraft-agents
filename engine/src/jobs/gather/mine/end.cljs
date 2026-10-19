@@ -207,7 +207,7 @@
         arrived? #(let [here (cell-of (u/self-pos c))] (if (zero? range) (= here cell) (beside? here start)))
         walk! (fn ^:async walk [slot ways]
                 (await (child/call-walk* c slot
-                                         (cond-> {:pos {:x (+ (:x cell) 0.5) :y (:y cell) :z (+ (:z cell) 0.5)} :range range :zone-tolls true
+                                         (cond-> {:pos {:x (+ (:x cell) 0.5) :y (:y cell) :z (+ (:z cell) 0.5)} :range range
                                                   :ignore-zones? (boolean (:ignore-zones? (:args c)))}
                                            ways (assoc :ways ways)
                                            y-margin (assoc :settings {:jobs.lib.walk.world/y-margin y-margin})))))

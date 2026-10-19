@@ -147,14 +147,14 @@
           (is (not (on-strip? tolled -5 5)))
           (is (on-strip? ignoring -5 5)))))))
 
-(deftest go-to-zone-tolls-bends-round-another-bodys-zone
+(deftest go-to-bends-round-another-bodys-zone-by-default-and-the-setting-turns-it-off
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plain (await (go-to-trail {}))
-              tolled (await (go-to-trail {:zone-tolls true}))
-              ignoring (await (go-to-trail {:zone-tolls true :ignore-zones? true}))]
-          (is (on-strip? plain -5 5) "control: without :zone-tolls the straight way crosses the zone")
+        (let [plain (await (go-to-trail {:settings {:jobs.lib.walk.world/zone-tolls false}}))
+              tolled (await (go-to-trail {}))
+              ignoring (await (go-to-trail {:ignore-zones? true}))]
+          (is (on-strip? plain -5 5) "control: with the zone-tolls setting off the straight way crosses the zone")
           (is (seq tolled))
           (is (not (on-strip? tolled -5 5)))
           (is (on-strip? ignoring -5 5) ":ignore-zones? lifts the tolls"))))))

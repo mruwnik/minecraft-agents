@@ -179,7 +179,7 @@
   "One go-to leg toward the villager at pos. :again, :continue or the stop."
   [c pos]
   (let [r (await (child/call-walk* c :walk
-                                  {:pos pos :range (reach) :spend {:job-time (leg-s)} :ways #{:walk :clear-seal} :warn false}))]
+                                  {:pos pos :range (reach) :spend {:job-time (leg-s)} :ways #{:walk :clear-seal}}))]
     (cond
       (= :continue r) :continue
       (let [res (:data r)] (or (:arrived res) (:leg res))) :again
@@ -191,7 +191,7 @@
   [c pos]
   (if (:approached (ctx/mem c))
     (stop! c :cell-unseen)
-    (let [r (await (child/call-walk* c :cell {:pos pos :range (reach) :ways #{:walk :clear-seal} :warn false}))]
+    (let [r (await (child/call-walk* c :cell {:pos pos :range (reach) :ways #{:walk :clear-seal}}))]
       (cond
         (= :continue r) :continue
         (:arrived (:data r)) (do (ctx/update-mem! c assoc :approached true) :again)

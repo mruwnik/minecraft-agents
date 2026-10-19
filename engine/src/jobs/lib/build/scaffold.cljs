@@ -84,7 +84,7 @@
 (defn ^:async walk!
   [c {:keys [plan] :as m} give-up]
   (let [[x y z] (or (:base plan) (:stand plan))
-        e (await (child/call-walk* c :swalk {:pos {:x x :y y :z z} :range 0 :ways #{:walk :clear-seal} :zone-tolls true
+        e (await (child/call-walk* c :swalk {:pos {:x x :y y :z z} :range 0 :ways #{:walk :clear-seal}
                                              :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (cond
       (= :continue e) :continue

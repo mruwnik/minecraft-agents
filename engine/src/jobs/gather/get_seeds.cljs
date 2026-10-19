@@ -289,7 +289,7 @@
   "Walk to within (reach) of pos with a go-to child: :there, :partial (it waits on the world, or a leg that got nearer)
   or :blocked."
   [c pos]
-  (let [e (await (child/call-walk* c :walk {:pos pos :range (reach) :one-way :closed :warn false :retry false :zone-tolls true
+  (let [e (await (child/call-walk* c :walk {:pos pos :range (reach) :one-way :closed :retry false
                                             :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (cond
       (= :continue e) :partial

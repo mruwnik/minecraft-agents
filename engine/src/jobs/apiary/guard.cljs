@@ -253,7 +253,7 @@
 (defn ^:async work!
   "Walk to the fire, stand clear of its cell and do the action once."
   [c {:keys [pos action kind item]}]
-  (let [w (await (near/go-near! c pos (reach) {:zone-tolls true :ways #{:walk :clear-seal}}))]
+  (let [w (await (near/go-near! c pos (reach) {:ways #{:walk :clear-seal}}))]
     (case w
       :partial :continue
       :blocked (do (skip! c pos :unreachable) :again)
@@ -267,7 +267,7 @@
   "A cut left a sink half done: walk back and run its steps again."
   [c]
   (let [{:keys [fire]} (:sinking (ctx/mem c))
-        w (await (near/go-near! c fire (reach) {:zone-tolls true :ways #{:walk :clear-seal}}))]
+        w (await (near/go-near! c fire (reach) {:ways #{:walk :clear-seal}}))]
     (case w
       :partial :continue
       :blocked (do (abandon! c fire :unreachable) :again)

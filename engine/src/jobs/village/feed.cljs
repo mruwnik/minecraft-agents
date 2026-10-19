@@ -191,7 +191,7 @@
   row ends unreachable); the legs since the last toss are bounded by max-walks. :again, :continue or :done."
   [c pos range]
   (let [r (await (child/call-walk* c :walk {:pos pos :range range :spend {:job-time (leg-s)} :doors :shut
-                                            :ways #{:walk :clear-seal} :warn false :retry false :zone-tolls true}))]
+                                            :ways #{:walk :clear-seal} :retry false}))]
     (if (= :continue r)
       :continue
       (let [res (:data r)

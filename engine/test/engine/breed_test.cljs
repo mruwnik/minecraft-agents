@@ -578,7 +578,7 @@
               s (await (tu/with-near-spy calls* (fn ^:async b [] (await (scenario {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 8) (cow 2 9)]} 12)))))
               opts (map #(nth % 2) @calls*)]
           (is (seq opts))
-          (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (nil? (:spend %)) (false? (:look-round %)) (:zone-tolls %)) opts)
+          (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (nil? (:spend %)) (false? (:look-round %))) opts)
               "a moving target is chased in legs, never dug or pillared toward")
           (is (finished? s)))))))
 

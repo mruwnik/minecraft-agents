@@ -402,7 +402,7 @@
       (do (ctx/update-mem! c assoc :table table)
           (if (u/within? (u/self-pos c) table 3)
             (if handed? (give-up! c made :unreachable) :again)
-            (let [r (await (child/call-walk* c :walk {:pos table :range 3 :ways #{:walk :clear-seal} :warn false :retry false :zone-tolls true}))]
+            (let [r (await (child/call-walk* c :walk {:pos table :range 3 :ways #{:walk :clear-seal} :retry false}))]
               (cond
                 (= :continue r) :continue
                 (:arrived (:data r)) :again

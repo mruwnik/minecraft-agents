@@ -210,8 +210,7 @@
         health0 (.-health (.self (:primitives c)))
         r (await (ctx/call c slot 'jobs.movement.go-to {:pos target :range range :ways #{:walk :clear-seal}
                                                               :settings (cond-> {:jobs.movement.go-to.tuning/look-round false}
-                                                                          y-margin (assoc :jobs.lib.walk.world/y-margin y-margin))
-                                                              :warn false :spend {:job-time leg-s}
+                                                                          y-margin (assoc :jobs.lib.walk.world/y-margin y-margin)) :spend {:job-time leg-s}
                                                               :leg-alert-within (close-radius) :leg-alert-s (close-leg-s)
                                                               :retry false :floor {:health 1}}))
         res (when (contract/ending? r) (:data r))

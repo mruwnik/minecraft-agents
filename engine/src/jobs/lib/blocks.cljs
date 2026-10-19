@@ -170,7 +170,7 @@
   [c pos see? & [range]]
   (let [pens (when-not (:enter-pens (:args c)) (await (pen-entry/pens! c)))
         keep-out (vec (mapcat :gates pens))]
-    [pens (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways #{:walk :clear-seal} :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+    [pens (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))}
             (seq keep-out) (assoc :keep-out keep-out))]))
 
 (defn warn-kept-out! [c pens]

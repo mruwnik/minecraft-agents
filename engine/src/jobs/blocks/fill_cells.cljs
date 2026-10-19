@@ -77,7 +77,7 @@
   "One cell: resolves to :placed, :failed, or :partial (the walk waits on the world)."
   [c pos item]
   (let [walked (if (> (u/dist (u/self-pos c) pos) (:reach (:args c)))
-                 (await (near/go-near! c pos (:reach (:args c)) {:zone-tolls true}))
+                 (await (near/go-near! c pos (:reach (:args c)) {}))
                  :there)]
     (cond
       (= :partial walked) :partial

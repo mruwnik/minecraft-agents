@@ -159,7 +159,7 @@
                 (ctx/update-mem! c assoc :shaft (assoc (select-keys p [:id :top :heading :to-y :bottom])
                                                        :state (if (shafts/on-line? p [(:x feet) (:y feet) (:z feet)]) :down :going)))
                 :again)))
-      :going (let [r (await (child/call-walk* c :shaft-walk {:pos top :range 0 :zone-tolls true}))]
+      :going (let [r (await (child/call-walk* c :shaft-walk {:pos top :range 0}))]
                (cond
                  (= :continue r) :continue
                  (u/within? (u/self-pos c) (cell-of (xyz top)) 1) (do (ctx/update-mem! c assoc-in [:shaft :state] :down) :again)
@@ -180,7 +180,7 @@
                 :else (do (ctx/update-mem! c assoc-in [:descent :steps] (or (:steps res) 0))
                           (shaft-none! c (or (:reason res) :stair-stopped)))))
       :walking (let [{:keys [from heading]} (:branch sh)
-                     r (when from (await (child/call-walk* c :shaft-branch {:pos from :range 0 :zone-tolls true})))]
+                     r (when from (await (child/call-walk* c :shaft-branch {:pos from :range 0})))]
                  (cond
                    (= :continue r) :continue
                    (and from (not (u/within? (u/self-pos c) (cell-of (xyz from)) 1))) (shaft-none! c :unreachable)

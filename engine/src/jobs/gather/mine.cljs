@@ -349,7 +349,7 @@
         goal (zones/exit-goal (cell-of (u/self-pos c)) zn m)
         from (:pre-start (ctx/mem c))
         r (await (child/call-walk* c :leave
-                                 {:pos {:x (+ (:x goal) 0.5) :y (:y goal) :z (+ (:z goal) 0.5)} :range 2 :settings {:jobs.movement.go-to.tuning/y-slack 8} :zone-tolls true}))
+                                 {:pos {:x (+ (:x goal) 0.5) :y (:y goal) :z (+ (:z goal) 0.5)} :range 2 :settings {:jobs.movement.go-to.tuning/y-slack 8}}))
         here (cell-of (u/self-pos c))]
     (cond
       (= :continue r) :continue
@@ -375,7 +375,7 @@
 (defn dig-walk-opts
   "The go-near! options of the walk to a dig: other ways only beyond reach, walks inside own cuts ignore the dark (the :checks forms given, when any), a level bound with :stay-level."
   [args in-reach? checks]
-  (cond-> {:zone-tolls true}
+  (cond-> {}
     in-reach? (assoc :ways #{:walk :clear-seal})
     (seq checks) (assoc :checks checks)
     (:stay-level args) (assoc :y-margin (settings/get settings ::stay-margin))))
@@ -499,7 +499,7 @@
   [c]
   (let [{:keys [x y z] :as cell} (:pre-start (ctx/mem c))
         r (await (child/call-walk* c :back
-                                 {:pos {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0 :zone-tolls true
+                                 {:pos {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0
                                   :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (cond
       (= :continue r) :continue

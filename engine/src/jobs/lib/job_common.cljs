@@ -43,16 +43,15 @@
 
 (defn ^:async walk!
   "Walk until the body's cell is within range of pos with a go-to child (slot :walk, no retry, no warn), carrying the
-  call's :ignore-zones?. opts: :tolls (go-to's), :zone-tolls. Resolves to :there, :continue (go-to waits on the world)
+  call's :ignore-zones?. opts: :tolls (go-to's). Resolves to :there, :continue (go-to waits on the world)
   or :blocked (it gave up, or pos is no cell)."
-  [c pos range {:keys [tolls zone-tolls]}]
+  [c pos range {:keys [tolls]}]
   (let [cell (:pos (places/parse-pos pos))]
     (cond
       (nil? cell) :blocked
       (u/within? (u/self-pos c) cell range) :there
       :else (let [e (await (child/call-walk* c :walk {:pos cell :range range :doors :shut :tolls tolls
-                                                      :zone-tolls (boolean zone-tolls)
-                                                      :one-way :closed :warn false :retry false
+                                                      :one-way :closed :retry false
                                                       :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
               (cond (= :continue e) :continue
                     (and (= :done (:kind e)) (:arrived (:data e))) :there

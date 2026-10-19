@@ -312,8 +312,8 @@
       (nil? cell) (do (ctx/emit! c :refused :warn {:reason :bad-pos :text (:message (places/parse-pos pos))})
                       :blocked)
       (u/within? (u/self-pos c) cell 3) :there
-      :else (let [r (await (child/call-walk* c :walk {:pos cell :range 3 :doors :shut :zone-tolls true
-                                                      :one-way :closed :warn false :retry false
+      :else (let [r (await (child/call-walk* c :walk {:pos cell :range 3 :doors :shut
+                                                      :one-way :closed :retry false
                                                       :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
                   res (:data r)]
               (cond

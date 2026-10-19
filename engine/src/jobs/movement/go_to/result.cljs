@@ -160,7 +160,10 @@
            (str "no path (" (some-> why name) ")")))
        (when waypoint-why (str "; a waypoint walk toward it failed: " (name waypoint-why)))))
 
-(defn warn-level [c] (if (false? (:warn (:args c))) :info :warn))
+(defn warn-level
+  "A give-up or refusal is a warn for a root call, an info for a child's: its parent reports its own failure."
+  [c]
+  (if (seq (:slots c)) :info :warn))
 
 (defn give-up!
   ([c pos tries status result] (give-up! c pos tries status result nil))

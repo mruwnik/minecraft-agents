@@ -11,7 +11,7 @@
   "A job that calls go-near! toward pos each round and keeps its outcome in out and its last-walk in walk."
   [out walk pos range & [opts]]
   {:round (fn ^:async probe-round [c]
-            (let [w (await (near/go-near! c pos range (merge {:zone-tolls true} opts)))]
+            (let [w (await (near/go-near! c pos range opts))]
               (if (= :partial w)
                 :continue
                 (do (reset! out w) (reset! walk (near/last-walk c)) (ctx/end c :done nil)))))})

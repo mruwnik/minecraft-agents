@@ -256,7 +256,7 @@
         (do (await (look/survey! c)) :again)) ; a table behind the body is not seen until it looks
       (let [r (if (u/within? (u/self-pos c) pos (reach))
                 :done
-                (await (child/call-walk* c :walk {:pos pos :range (reach) :ways #{:walk :clear-seal} :warn false :retry false :zone-tolls true})))]
+                (await (child/call-walk* c :walk {:pos pos :range (reach) :ways #{:walk :clear-seal} :retry false})))]
         (cond
           (= :continue r) :continue
           (not (or (u/within? (u/self-pos c) pos (reach)) (:arrived (:data r)))) (fail-up! c "unreachable")

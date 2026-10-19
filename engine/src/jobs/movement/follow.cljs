@@ -123,7 +123,7 @@
   ([c pos range target-now]
    (loop [pos pos blocked 0 out 0]
      (let [r (await (child/call-walk* c :walk
-                                     {:pos pos :range range :doors :shut :ways #{:walk :clear-seal} :warn false}))
+                                     {:pos pos :range range :doors :shut :ways #{:walk :clear-seal}}))
            res (:data r)
            blocked (if (:arrived res) 0 (inc blocked))
            now (target-now)

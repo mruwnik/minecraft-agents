@@ -280,7 +280,7 @@
   (when-let [at (:at (:args c))]
     (when-not (u/seen-name (:primitives c) at)
       (let [range (if (:at-looked (ctx/mem c)) at-close-range at-range)]
-        (when (= :partial (await (log/walk-near! c at range true))) :partial)))))
+        (when (= :partial (await (log/walk-near! c at range))) :partial)))))
 
 (defn no-tree-cause [c]
   (let [{:keys [radius species at]} (:args c)]

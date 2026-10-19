@@ -47,22 +47,20 @@
 (defn ^:async walk-near!
   "Walk until the body's cell is within range of pos with a go-to child (slot :walk, no retry): :there, :partial (go-to
   waits on the world, or a leg got nearer: call again) or :blocked (it gave up, or pos is no cell)."
-  ([c pos range] (walk-near! c pos range true))
-  ([c pos range zone-tolls]
-   (let [cell (:pos (places/parse-pos pos))]
-     (cond
-       (nil? cell) :blocked
-       (u/within? (u/self-pos c) cell range) :there
-       :else (let [e (await (child/call-walk* c :walk {:pos cell :range range :doors :shut :zone-tolls zone-tolls
-                                                       :one-way :closed :see false
-                                                       :warn false :retry false
-                                                       :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-               (cond
-                 (= :continue e) :partial
-                 (and (= :done (:kind e)) (:arrived (:data e))) :there
-                 (and (= :done (:kind e)) (:leg (:data e))) :partial
-                 :else (do (ctx/update-mem! c assoc :walk-why (some-> (:why (:data e)) name))
-                           :blocked)))))))
+  [c pos range]
+  (let [cell (:pos (places/parse-pos pos))]
+    (cond
+      (nil? cell) :blocked
+      (u/within? (u/self-pos c) cell range) :there
+      :else (let [e (await (child/call-walk* c :walk {:pos cell :range range :doors :shut
+                                                      :one-way :closed :see false :retry false
+                                                      :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+              (cond
+                (= :continue e) :partial
+                (and (= :done (:kind e)) (:arrived (:data e))) :there
+                (and (= :done (:kind e)) (:leg (:data e))) :partial
+                :else (do (ctx/update-mem! c assoc :walk-why (some-> (:why (:data e)) name))
+                          :blocked))))))
 
 (defn ^:async approach!
   "Get the log at pos within reach to dig: nothing when its centre is within eye reach already, else walk to within 2
@@ -71,9 +69,9 @@
   (if (<= (u/eye-dist (u/self-pos c) pos) dig-reach)
     :there
     (let [foot (assoc pos :y base-y)
-          w (await (walk-near! c foot 2 true))]
+          w (await (walk-near! c foot 2))]
       (if (= :blocked w)
-        (await (walk-near! c foot 3 true))
+        (await (walk-near! c foot 3))
         w))))
 
 (defn log-dig-args

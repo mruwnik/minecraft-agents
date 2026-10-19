@@ -126,7 +126,7 @@
      :budget wsearch/round-budget
      :avoid (set (:fault-cells (ctx/mem c)))
      :tolls (:tolls (:args c))
-     :zone-tolls (:zone-tolls (:args c))
+     :zone-tolls (wworld/zone-tolls?)
      :keep-out (:keep-out (:args c))
      :unknown (round-unknown c)}))
 

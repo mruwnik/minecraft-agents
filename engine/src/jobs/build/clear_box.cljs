@@ -318,7 +318,7 @@
         (finish! c)
         (if-let [[pos n] (top-cell c allowed)]
           (if (nil? n)
-            (let [w (await (common/walk! c pos 3 {:zone-tolls true}))]
+            (let [w (await (common/walk! c pos 3 {}))]
               (when (= :blocked w) (bump! c pos :unreachable))
               (when (and (= :there w) (nil? (u/seen-name (:primitives c) pos))) (bump! c pos :unloaded))
               (if (= :continue w) :continue :again))

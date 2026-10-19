@@ -50,7 +50,6 @@
             (fn ^:async b [] (core/submit! (:eng s) (spec {:block "sand" :tunnel-length 0}) {})
             (await (run-ticks s 6)))))
           (is (seq @opts))
-          (is (every? :zone-tolls @opts))
           (is (zero? (:failures (job-mem s) 0)) "a waiting walk is no failure")
           (is (zero? (dig-count s))))))))
 

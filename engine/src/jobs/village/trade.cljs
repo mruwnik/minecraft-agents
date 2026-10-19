@@ -279,7 +279,7 @@
       (in-reach? c e) (await (trade! c))
       :else
       (let [r (await (child/call-walk* c :walk
-                                      {:pos (zipmap [:x :y :z] (cell-of e)) :see true :range (reach) :spend {:job-time chase-timeout-s} :ways #{:walk :clear-seal} :warn false}))]
+                                      {:pos (zipmap [:x :y :z] (cell-of e)) :see true :range (reach) :spend {:job-time chase-timeout-s} :ways #{:walk :clear-seal}}))]
         (cond
           (= :continue r) :continue
           (let [res (:data r)] (or (:arrived res) (:leg res))) :again

@@ -146,7 +146,7 @@
   [c pos]
   (if (u/within? (u/self-pos c) pos 3)
     :there
-    (let [e (await (child/call-walk* c :walk {:pos pos :range 3 :one-way :closed :warn false :retry false :zone-tolls true
+    (let [e (await (child/call-walk* c :walk {:pos pos :range 3 :one-way :closed :retry false
                                               :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
       (cond
         (= :continue e) :continue

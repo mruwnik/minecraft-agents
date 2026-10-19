@@ -208,7 +208,7 @@
   "Walk within reach of target; with column? also off the column of the planned cell. nil when ready to act, else
   :again."
   [c cell target column?]
-  (let [w (await (near/go-near! c target 3 {:zone-tolls true}))]
+  (let [w (await (near/go-near! c target 3 {}))]
     (cond
       (= :partial w) :continue
       (= :blocked w) (count-cell-fail! c cell :unreachable)

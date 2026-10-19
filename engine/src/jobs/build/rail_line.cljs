@@ -307,7 +307,7 @@
   it as it is now. :continue while the walk waits, :again once looked, nil when nothing is due."
   [c cells]
   (when-let [pos (stale-power c cells)]
-    (let [r (await (near/go-near! c (zipmap [:x :y :z] pos) 3 {:see true :zone-tolls true}))]
+    (let [r (await (near/go-near! c (zipmap [:x :y :z] pos) 3 {:see true}))]
       (if (= :partial r)
         :continue
         (do (ctx/update-mem! c update :looked (fnil conj []) pos)

@@ -325,7 +325,6 @@
             (fn ^:async b [] (await (child-outcome eng job {:radius 30} 6)))))
           (is (seq @opts))
           (is (every? #(= #{:walk :clear-seal} (:ways %)) @opts) "a walk to a fire never digs or pillars")
-          (is (every? :zone-tolls @opts))
           (is (empty? (calls p "place"))))))))
 
 (deftest a-carpet-pick-up-that-yields-is-called-again-until-it-ends

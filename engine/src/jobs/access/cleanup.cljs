@@ -290,7 +290,7 @@
     (await (no-way? c cell))
     (do (ctx/update-mem! c assoc-in [:held cell] {:reason :no-way}) :again)
     :else
-    (let [e (await (child/call-walk* c :walk {:pos cell :range (walk-range) :ways #{:walk} :zone-tolls true
+    (let [e (await (child/call-walk* c :walk {:pos cell :range (walk-range) :ways #{:walk}
                                               :ignore-zones? (boolean (:ignore-zones? (:args c)))
                                               :spend {:job-time (leg-s)}}))
           status (if (= :done (:kind e)) :done :stopped)]
