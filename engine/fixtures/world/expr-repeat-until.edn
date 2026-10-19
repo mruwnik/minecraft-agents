@@ -1,6 +1,6 @@
 ;; Card fe086540: the (repeat n e) and (until g e) job expressions. Should-succeed: (repeat 2 pause) completes after both runs;
 ;; (until wait-for-light pause) by day (guard already met) ends without looping. Should-fail: at night the same until keeps
-;; looping, so it has not completed 25 s in (the runner cancels it). Refusal of (repeat 0 e) / one-arg until at submit is unit-tested (expr_test).
+;; looping (a stone cell is the dark by day for the failed-child case), so it has not completed 25 s in (the runner cancels it). Refusal of (repeat 0 e) / one-arg until at submit is unit-tested (expr_test).
 {:defaults
  {:tags [:scheduler]
   :plot {:height 8}
@@ -37,8 +37,9 @@
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
    :limit-s 100}
   {:name "until-stops-at-a-failed-child"
-   :time :night
-   :blocks [[:fill [27 0 27] [29 2 29] "bedrock"] [:set [28 0 28] "air"]]
+   :time :any
+   :blocks [[:fill [27 0 27] [29 2 29] "bedrock"] [:set [28 0 28] "air"]
+            [:fill [14 0 14] [18 3 18] "stone"] [:fill [15 0 15] [17 2 17] "air"]]
    :act [[:job (until (jobs.time.wait-for-light) (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :clear-seal}}))]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :resting}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]

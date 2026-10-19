@@ -19,7 +19,9 @@
 
 (a/defargs settings
   {::risk-limit {:default 0.001 :spec (a/num-in 0 nil)
-                 :doc "Spawn chance per second (jobs.lib.cost/exposure) above which a place or the walk to it is exposed: a single dark cell is 0.005, a lit or sunlit one 0."}})
+                 :doc "Spawn chance per second (jobs.lib.cost/exposure) above which a place or the walk to it is exposed: a single dark cell is 0.005, a lit or sunlit one 0."}
+   ::light-patience-s {:default 1200 :spec (a/num-in 0 nil)
+                       :doc "Seconds a job's readiness waits for light (jobs.lib.shelter.sense/light-in) before it calls the darkness unfixable; 1200 is a whole day, so a full night is waited for."}})
 
 (defn unforced
   "The :checks forms a child would be forced with, minus the keys c's own frame runs under a form for: a call key beats
@@ -31,22 +33,22 @@
 
 (defn at-status
   "The status of the exposure of the walk of c's body to `to`: ok while sheltered or the chance is within ::risk-limit,
-  else by what lowers it; light further off than the job's :spend :job-time is not waited for."
+  else by what lowers it; light further off than ::light-patience-s is not waited for."
   [c to]
   (let [p (:primitives c)
         shelter (:data (ctx/latest c :shelter))
         {:keys [chance lowered-by look-at light-in]} (cost/exposure p to shelter)
-        budget (get-in (ctx/frozen-call c) [:spend :job-time] ##Inf)
+        patience (settings/get settings ::light-patience-s)
         where (place-text to)]
     (cond
       (and (sh-sense/dark-outside? p) (sh-inside/safe-from-night? p) (not (sh-inside/walk-leaves-shelter? p shelter to 1)))
       (contract/ok :sheltered (str "sheltered at " where))
       (<= chance (settings/get settings ::risk-limit)) (contract/ok :unexposed (str "no spawn risk at " where))
       (contains? lowered-by :look) (contract/look :exposed (str "light at " where " not seen") :look-at look-at)
-      (and (contains? lowered-by :light) (<= light-in budget))
+      (and (contains? lowered-by :light) (<= light-in patience))
       (contract/later :exposed (str "dark at " where " until light") :lowered-by lowered-by :chance chance)
       (contains? lowered-by :light)
-      (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round budget) " s it would wait") :chance chance)
+      (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits") :chance chance)
       :else (contract/never :exposed (str "exposed at " where ", nothing lowers it") :chance chance))))
 
 (defn exposed

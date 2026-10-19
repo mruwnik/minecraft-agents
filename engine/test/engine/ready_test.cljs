@@ -34,6 +34,7 @@
             [jobs.survival.recover-drops :as recover-drops]
             [jobs.survival.set-spawn :as set-spawn]
             [jobs.survival.restore-broken :as restore-broken]
+            [engine.settings :as settings]
             [jobs.time.noop :as noop]
             [jobs.time.wait-for-light :as wait-for-light]))
 
@@ -66,11 +67,11 @@
     (is (re-find #"15 64 0" (second s)) "names the place")
     (is (re-find #"until light" (second s)) "and what helps")))
 
-(deftest safe-at-waits-for-light-only-within-the-job-time-budget
+(deftest safe-at-waits-for-light-only-within-the-light-patience
   (let [check (ready/safe-at (constantly outside))
-        status (fn [job-time] (lit 0 15 #(check (assoc (ctx-of open-night) :quote-call {:spend {:job-time job-time}}))))]
+        status (fn [patience] (settings/with-settings {:jobs.lib.ready/light-patience-s patience} #(lit 0 15 (fn [] (check (ctx-of open-night))))))]
     (is (= :later (first (status 100000))))
-    (is (= :never (first (status 10))) "light further off than the budget is not waited for")
+    (is (= :never (first (status 10))) "light further off than the patience is not waited for")
     (is (re-find #"s away" (second (status 10))))))
 
 (deftest safe-at-a-sheltered-place-is-ok-and-a-walk-out-of-the-hut-is-not
