@@ -1,5 +1,5 @@
 (ns jobs.gather.mine.drops
-  "The drops of jobs.gather.mine: digging one cell, then collecting what it dropped (a look down the column, a
+  "The drops of jobs.gather.dig-for: digging one cell, then collecting what it dropped (a look down the column, a
   collect-drops child, a walk or a short cut beside the dug cell) and telling what was left or lost."
   (:require [clojure.string :as str]
             [engine.args :as a]

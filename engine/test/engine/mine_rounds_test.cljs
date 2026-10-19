@@ -22,7 +22,7 @@
     (tu/run-async done
       (fn ^:async t []
         ;; each tunnel step (a stair child) yields :continue until a flow delay has passed since its dig
-        (let [s (await (m/scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4}
+        (let [s (await (m/scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :trip true}
                                    (m/rock-world {"3,64,1" "iron_ore"}) 14))]
           (is (m/finished? s) "ended once the flow delays passed")
           (is (= 1 (get (m/inv s) "raw_iron")))
@@ -34,7 +34,7 @@
       (fn ^:async t []
         (let [s (m/start {:world {:blocks (m/soil-over-stone 63 59) :drops m/cobble :inventory [{:name "stone_pickaxe" :count 1} {:name "torch" :count 10}]}})]
           (fake/swap-self! (:p s) assoc :held "stone_pickaxe")
-          (core/submit! (:eng s) (m/spec {:block "stone" :count 2 :direction "east" :tunnel-length 4 :mend false}) {})
+          (core/submit! (:eng s) (m/spec {:block "stone" :count 2 :direction "east" :tunnel-length 4}) {})
           ;; after a dig the stair yields :continue until a flow delay has passed (the fake clock moves 700 ms a tick)
           (await (m/run-ticks s 14))
           (is (m/finished? s) "ended once the flow delay passed")
@@ -71,7 +71,7 @@
                                 (swap! (fake/state (:p s)) assoc :entities [])
                                 (m/set-pos! s 3 64 0)
                                 r))))
-          (core/submit! (:eng s) (m/spec {:block "dirt" :count 1}) {})
+          (core/submit! (:eng s) (m/spec {:block "dirt" :count 1 :trip true :mend true}) {})
           (await (m/run-ticks s 1))
           (is (m/finished? s) "ended in one tick")
           (is (= 1 (count (m/events-of s :mine.mend-failed))))
@@ -88,7 +88,7 @@
   (let [dir (tu/tmp-dir)
         s (m/start {:world {:blocks blocks} :dir dir})]
     (cut! s)
-    (core/submit! (:eng s) (m/spec {:block "dirt" :count 3 :mend false}) {})
+    (core/submit! (:eng s) (m/spec {:block "dirt" :count 3}) {})
     (await (m/run-ticks s 1))
     (let [again (m/start {:p (:p s) :dir dir :clock (:clock s)})]
       (await (m/run-ticks again 40))
@@ -109,7 +109,7 @@
                          1 (.then (impl token a) (fn [_] (cut!)))
                          2 (cut!)
                          (impl token a))))
-          (core/submit! (:eng s) (m/spec {:block "dirt" :count 3 :mend false}) {})
+          (core/submit! (:eng s) (m/spec {:block "dirt" :count 3}) {})
           (await (m/run-ticks s 1))
           (is (some? (:digging (m/job-mem s))) "the cut left the dig written")
           (let [first-cell (first (m/dug-cells s))
@@ -134,7 +134,7 @@
           (is (= 2 (count (filter #(= (first cells) %) cells))) "the cut one and its repeat")
           (is (= 3 (get (m/inv again) "dirt"))))))))
 
-(def torch-tunnel {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 12 :mend false})
+(def torch-tunnel {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 12})
 (def coal-stick [{:name "iron_pickaxe" :count 1} {:name "coal" :count 1} {:name "stick" :count 1}])
 
 (deftest a-torch-craft-that-makes-nothing-is-not-retried
@@ -143,10 +143,10 @@
       (fn ^:async t []
         (let [s (m/start {:world (m/torch-world coal-stick)})]
           (.override (.-world (:p s)) "craft" (fn [_ _ _] (js/Promise.resolve #js {:status "failed" :reason "no-recipe"})))
-          (core/submit! (:eng s) (m/spec (assoc torch-tunnel :fetch false)) {})
+          (core/submit! (:eng s) (m/spec torch-tunnel) {})
           (await (m/run-ticks s 60))
           (is (m/finished? s))
-          (is (= :tunnel-length (:reason (m/done-event s))))
+          (is (= :no-torches (:reason (m/done-event s))))
           (is (>= 3 (count (m/calls s "craft"))) "bounded: the craft is given up, not retried each round"))))))
 
 (deftest a-stocking-torch-craft-that-makes-nothing-is-not-retried
@@ -155,11 +155,11 @@
       (fn ^:async t []
         (let [s (m/start {:world (m/torch-world coal-stick)})]
           (.override (.-world (:p s)) "craft" (fn [_ _ _] (js/Promise.resolve #js {:status "failed" :reason "no-recipe"})))
-          (core/submit! (:eng s) (m/spec torch-tunnel) {})
+          (core/submit! (:eng s) (m/spec (assoc torch-tunnel :trip true)) {})
           (await (m/run-ticks s 60))
           (is (m/finished? s))
-          (is (= :tunnel-length (:reason (m/done-event s))))
-          (is (>= 3 (count (m/calls s "craft"))) "bounded: the craft is given up, not retried each round"))))))
+          (is (= :no-torches (:reason (m/done-event s))))
+          (is (>= 6 (count (m/calls s "craft"))) "bounded: the stocking and the dig each give the craft up once, none retried each round"))))))
 
 (deftest a-collect-that-ends-with-nothing-gained-is-booked-and-does-not-loop
   (async done
@@ -168,7 +168,7 @@
         (let [s (m/start {:world {:blocks (m/cells "stone" [4 5 6 7 8 9] [64] [0]) :drops {"stone" "cobblestone"}
                                   :inventory m/pickaxe :unreachable ["5,64,2"]}})]
           (m/drop-away! (:p s) [5 64 2])
-          (core/submit! (:eng s) (m/spec {:block "stone" :count 4 :settings {:jobs.gather.mine/dry-digs 2} :mend false}) {})
+          (core/submit! (:eng s) (m/spec {:block "stone" :count 4 :settings {:jobs.gather.dig-for/dry-digs 2}}) {})
           (await (m/run-ticks s 60))
           (is (m/finished? s))
           (is (= :no-drops (:reason (m/done-event s))) "nothing came in, so the digs ran dry")
@@ -209,6 +209,6 @@
       (fn ^:async t []
         (let [s (m/start {:world {:blocks m/floor :self {:food 2} :inventory []}})]
           (mem/write! (:store (:eng s)) :hungry {:food 2} {:cap 10 :ttl 3600000})
-          (core/submit! (:eng s) (m/spec {:block "dirt" :count 4 :mend false}) {})
+          (core/submit! (:eng s) (m/spec {:block "dirt" :count 4}) {})
           (await (m/run-ticks s 40))
           (is (not= :hungry (:reason (m/done-event s)))))))))

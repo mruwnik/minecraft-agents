@@ -1,5 +1,5 @@
 (ns jobs.gather.mine.tunnel
-  "The strip tunnel of jobs.gather.mine: where it starts, one :level stair step at a time, turning to another heading,
+  "The strip tunnel of jobs.gather.dig-for: where it starts, one :level stair step at a time, turning to another heading,
   and its end."
   (:require [clojure.string :as str]
             [engine.args :as a]
@@ -7,7 +7,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.gather.mine-stay :as stay]
-            [jobs.gather.mine.end :refer [to-mend!]]
+            [jobs.gather.mine.end :refer [stop!]]
             [jobs.gather.mine.targets :as targets :refer [kinds carried rules-in book-ground! step-cell within-own-zone]]
             [jobs.gather.mine.torches :as torches]
             [jobs.lib.access :as access]
@@ -77,7 +77,7 @@
                                        (update :spent (fnil + 0) (or steps 0)))))
       true)))
 
-(defn tunnel-reason [stop] (if (= :tunnel-length stop) :tunnel-length :tunnel-stopped))
+(defn tunnel-reason [stop] (case stop :tunnel-length :tunnel-length :no-tool :no-tool :tunnel-stopped))
 
 (defn walk-text [{:keys [status reason cell floor]}]
   (str " (walk " (str/join " " (map #(if (keyword? %) (name %) %) (remove nil? [status reason])))
@@ -111,7 +111,7 @@
                  walk (assoc :walk walk)))
     (ctx/update-mem! c assoc-in [:tunnel :stop] stop)
     (stay/record-tunnel! c tunnel (headings heading))
-    (to-mend! c (tunnel-reason stop))))))
+    (stop! c (tunnel-reason stop))))))
 
 (defn ^:async end!
   "tunnel-end!, after a torch at the cut's end when one is due."
@@ -221,7 +221,7 @@
         cut [(update next :y inc) next]
         walk (atom nil)]
     (cond
-      stop (to-mend! c (tunnel-reason stop))
+      stop (stop! c (tunnel-reason stop))
       (:stepping m) (await (stair-step! c from next cut))
       (some #(within-own-zone c 0 (access/cell %)) cut) (end! c :own-zone next)
       (>= (+ steps (:spent m 0)) (:tunnel-length (:args c))) (end! c :tunnel-length nil)

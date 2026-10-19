@@ -1,20 +1,12 @@
 (ns jobs.gather.mine.mend
-  "The mend of jobs.gather.mine: the ground cells under the start that the run left open, filled by a blocks.fill-cells
-  child, and a dig phase resumed when the mend spent the count."
+  "The mend of jobs.gather.mine: the ground cells under the start that the dig left open, filled by a blocks.fill-cells child."
   (:require [clojure.string :as str]
-            [engine.args :as a]
             [engine.ctx :as ctx]
-            [engine.settings :as settings]
-            [jobs.gather.mine.end :refer [wrap-up!]]
-            [jobs.gather.mine.targets :refer [air carried had scan off-ground?]]
+            [jobs.gather.mine.targets :refer [air]]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.choose :as choose]
             [jobs.lib.gate :as gate]
-            [jobs.lib.look :refer [cell-of look-around!]]
             [jobs.lib.util :as u]))
-
-(a/defargs settings
-  {::max-resumes {:default 2 :doc "Resumes of a cut before the job gives up." :spec (a/int-in 0 nil)}})
 
 (defn owed
   "The ground entries whose cell is now air, cave_air or water (unloaded cells are not owed). After a descent the
@@ -45,39 +37,13 @@
 
 (defn cells-text [poss] (str/join " " (map #(str (:x %) "," (:y %) "," (:z %)) poss)))
 
-(defn spent-on-mend?
-  "Whether the mend ate into what the dig brought, leaving fewer than the goal carried."
-  [c]
-  (let [{:keys [goal at-mend]} (ctx/mem c)
-        now (carried c)]
-    (and (< now goal) (< now at-mend) (> at-mend (had c)))))
-
-(defn max-resumes [] (settings/get settings ::max-resumes))
-
-(defn ^:async mended!
-  "Nothing is owed. The mend spent the count: look around once from here, then dig on while targets off the ground
-  remain (at most max-resumes times). Else finish."
-  [c]
-  (let [{:keys [resumes reason looked]} (ctx/mem c)
-        more? (some #(off-ground? c %) (:targets (scan c)))]
-    (cond
-      (not (spent-on-mend? c)) (wrap-up! c)
-      (not= looked (cell-of (u/self-pos c))) (do (await (look-around! c)) :again)
-      (and more? (< (or resumes 0) (max-resumes)))
-      (do (ctx/update-mem! c #(-> % (assoc :phase :dig :failures 0 :dry 0 :last-carried (carried c))
-                                  (dissoc :collecting)
-                                  (update :resumes (fnil inc 0))))
-          :again)
-      :else (do (ctx/update-mem! c assoc :reason :spent-on-mend :dig-reason reason)
-                (wrap-up! c)))))
-
 (defn ^:async mend-round!
-  "The permitted owed cells are filled by a blocks.fill-cells child; its end says whether the mend is done, short of
-  blocks or failed."
+  "The permitted owed cells are filled by a blocks.fill-cells child. :continue while it works, :again after a fill (the cells are
+  looked at again), nil when nothing is owed or the mend gave up (warn mine.mend-short / mine.mend-failed)."
   [c]
   (let [cells (mend-permitted c (owed c))]
     (if (empty? cells)
-      (await (mended! c))
+      nil
       (let [e (await (ctx/call c :fill 'jobs.blocks.fill-cells {:cells (mapv :pos cells) :use {:blocks (fillers c)}}))
             {:keys [mended left]} (when (map? e) (:data e))
             left (or left (map :pos cells))]
@@ -88,7 +54,7 @@
           (= :done (:kind e)) :again
           (and (= :condition-failed (:kind e)) (= :need (get-in e [:cause :reason])))
           (do (ctx/emit! c :mine.mend-short :warn {:owed (vec left) :text (str "mine has nothing to mend with: " (cells-text left))})
-              (wrap-up! c))
+              nil)
           :else
           (do (ctx/emit! c :mine.mend-failed :warn {:owed (vec left) :text (str "mine could not mend: " (cells-text left))})
-              (wrap-up! c)))))))
+              nil))))))

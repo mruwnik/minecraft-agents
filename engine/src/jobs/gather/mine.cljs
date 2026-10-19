@@ -1,75 +1,45 @@
 (ns jobs.gather.mine
-  (:require [jobs.lib.ready :as ready]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.gather.mine.descent :refer [descent-wanted? descend-due? descend-round! shaft-due? shaft-under-way? shaft-top-here? shaft-round!]]
-            [jobs.gather.mine.drops :refer [collect! dig-cell!]]
-            [jobs.gather.mine.end :refer [end-run to-mend! wrap-up! home-round! wanted]]
-            [jobs.gather.mine.mend :refer [mend-round!]]
-            [jobs.gather.mine.side :as wall]
-            [jobs.gather.mine.targets :as targets :refer [owed reach air kinds carried rules-in soil-blocks scan snapshot way-floor last-exit? skip! skip-failed! skip-unreachable! stalled! zone-margin within-own-zone drop-in-line? next-target!]]
-            [jobs.gather.mine.torches :as torches]
-            [jobs.gather.mine.tunnel :as tunnel]
-            [jobs.lib.access :as access]
-            [jobs.lib.access.zones :as zones]
+            [jobs.gather.dig-for :as dig]
+            [jobs.gather.mine.descent :refer [descent-wanted? shaft-top-here?]]
+            [jobs.gather.mine.end :as end :refer [end-run wanted]]
+            [jobs.gather.mine.home :as home]
+            [jobs.gather.mine.mend :as mend]
+            [jobs.gather.mine.targets :refer [owed carried got had zone-margin within-own-zone]]
+                        [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
-            [jobs.lib.breath :as breath]
-            [jobs.lib.area :as area]
-            [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
-            [jobs.lib.cond :as cond]
-            [jobs.lib.ledger :as ledger]
-            [jobs.lib.look :as look :refer [cell-of heading-name facing look-around!]]
-            [jobs.lib.near :as near]
+            [jobs.lib.look :refer [cell-of heading-name]]
             [jobs.lib.need :as need]
-            [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.pace :as pace]
-            [jobs.lib.result :as result]
-            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.torch :as torch]
             [jobs.lib.tools :as tools]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
-            [jobs.lib.watch :as watch]
-            [jobs.lib.world :as known]))
+            [jobs.lib.access.zones :as zones]))
 
 (def doc
-  "Mine like a player: carry at least :count of the item of one block kind (:block) that the body has seen, strip-tunnelling to find
-  more, then mend the pit under where it started and walk back to the start cell. An ore's stone and deepslate kinds both count
-  (:variants). The run's own area is :center / :radius (waits :outside-area while the body is farther; jobs.lib.area).
+  "Mine like a player: a trip that gets what the dig needs, calls jobs.gather.dig-for, and comes back. It remembers the cell it
+  starts on, deposits when the bag is nearly full (jobs.lib.trip), gets a pickaxe when none is carried that harvests the block, a spare
+  for a worn last one, and torches before a descent or tunnel (all through jobs.lib.need; :fetch false skips them), walks out of an own
+  zone it stands near, walks back to the start cell, and calls jobs.gather.dig-for with the same args until it ends. Hungry or flooded
+  at the start, or a pickaxe or torches that cannot be had, end it before the dig. A dig that stops for a pickaxe or torches (:no-tool,
+  :no-torches) gets them again and goes on from where it stood (at most ::max-equip-rounds rounds); any other ending is passed on.
+  Then, with :mend, it fills the ground under the start that the dig opened (mine.mend), and always walks back to the start cell (a go-to
+  child with every way but a pillar first); the walk is the cleanup for a run cut by the limit or a cancel. Not arriving ends :not-home
+  (warn mine.not-home); a mend with nothing to fill with or six failed fills warn mine.mend-short / mine.mend-failed.
 
-  Needs: a pickaxe when the block wants one (fetched with jobs.items.get-tool through jobs.lib.need unless :fetch is false; a shovel or
-  axe block drops by hand), torches (stocked before a descent or tunnel; under 8 carried), health (can-run? waits :low-health), and a read zone
-  list (:no-zones unless :ignore-zones?). Impossible: :no-block. :stay-level declines :on-surface in the open. Targets come only from
-  perception (seenBlocks, never x-ray): a seen block within :radius with a seen air face, not beside seen lava (or water unless :wet),
-  that the zone rules, claims and plans let it dig (:refused when all are barred).
+  Needs and impossible: those of jobs.gather.dig-for; its can-start? checks stand here too. The run's own area is :center / :radius.
 
-  One call, in this order each step, until it ends:
-  1. Collecting the drop of a dig (mine.targets, mine.drops): collect-drops within the collect-radius setting, one walk or cut to the dug cell, a
-     drop still lying is mine.left-behind, a dig that brought nothing and shows no drop is mine.drop-lost. The count is the inventory's.
-  2. Carrying the goal ends :count; max-failures digs failed in a row end :gave-up; :dry-digs (setting) digs that raised no count end :no-drops.
-  3. Dig the nearest target (the floor under the start last; a walk within reach first; mine.targets).
-  4. No target: look round once per cell, then by a mineshaft (:shaft, mine.descent) or a stair down (:descend-limit, to the ore's :level) to
-     find stone or the tunnel level; a stair that finds no stone ends :no-stone-found.
-  5. Else the strip tunnel (mine.tunnel): 1-wide 2-high at the start level along :heading / :direction, :tunnel-length blocks, torches every
-     :torch-interval; any stop ends the dig phase :tunnel-stopped with one warn mine.tunnel-end {:reason :at :next :walk}.
-  :stay-level (jobs.gather.mine-stay, mine.side) keeps the start height and seals a cut that opens into air; seen ore out of reach is
-  :unreached in the result.
-
-  Ore beside the way is picked up by jobs.lib.ore-pick (:pick-up-ores). A head in water before a dig, hunger with no food found
-  (trip/food-short?) and a spent or missing tool end the dig phase (:flooded, :hungry, :no-tool).
-
-  Every ending, however reached, mends the pit under the start (mine.mend, mine.end) and walks back to the start cell; the walk is the
-  cleanup too, for a run cut by the limit or a cancel. Not arriving ends :not-home (warn mine.not-home), a mend with nothing to fill
-  with or six failed fills warn mine.mend-short / mine.mend-failed.
-
-  Ends :done when :got meets :count (or the call's :least) and the body is home; else condition-failed for the facts :none :wet :refused
-  :own-zone :no-shaft :flooded :no-tool, limit-reached {:line :food} for :hungry, nothing-possible for failed tries (:no-drops :gave-up
-  :tunnel-length :tunnel-stopped :no-stone-found :descent-stopped :spent-on-mend :not-home :not-back :zone-exit). 0 of :count is never done.
-  Data {:got n :reason r} plus :dig-reason, :mended, :tunnel, :descent, :left, :lost, :ores, :unreached; text says reason, :got, :mended, the
-  stair and the tunnel. Quote: about ::item-s s an item, open-ended.")
+  Ends :done when :got meets :count (or the call's :least) and the body is home; else the dig's ending (condition-failed for the facts
+  :none :wet :refused :own-zone :no-shaft :flooded :no-tool :no-torches, limit-reached {:line :food} for :hungry, nothing-possible for
+  failed tries) or :not-home. Data {:got n :reason r :mended n} plus the dig's data; text says reason, :got, :mended, the stair and the
+  tunnel. Quote: about ::item-s s an item, open-ended.")
 
 (a/defargs args
   {:block {:doc "name of the block to mine (required)" :spec a/name? :default nil}
@@ -79,9 +49,9 @@
    :center {:doc "the centre of the area the job works, a cell [x y z] or {:x :y :z}; nil: where the body stands when the job first runs (jobs.lib.area)" :spec a/position? :default nil}
    :wet {:doc "dig blocks that touch water, and tunnel beside water" :spec boolean? :default false}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach of where it stands; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
-   :fetch {:doc "get a pickaxe when none is carried (jobs.items.get-tool through jobs.lib.need): true, a set of kinds or a map of which only :how and :explore apply; false ends :no-tool" :spec need/option? :default true}
+   :fetch {:doc "get a pickaxe when none is carried (jobs.items.get-tool through jobs.lib.need), a spare for a worn one, and torches: true, a set of kinds or a map of which only :how and :explore apply; false: the dig ends with what is carried" :spec need/option? :default true}
    :ignore-zones? :shared
-   :mend {:doc "fill the ground under the start again afterwards" :spec boolean? :default true}
+   :mend {:doc "fill the ground under the start again once the dig is over" :spec boolean? :default false}
    :heading {:doc "the strip tunnel's heading, over :direction: north, south, east or west (n/s/e/w), or a cell [x y z] (the dominant axis from the start toward it); nil: :direction" :spec (a/pred "a heading name or a cell [x y z]" #(or (and (or (string? %) (keyword? %)) (heading-name %)) (and (sequential? %) (= 3 (count %)) (every? number? %)))) :default nil}
    :direction {:doc "the strip tunnel's heading: north, south, east or west (n/s/e/w); nil: the way the body faces when the job starts" :spec (a/pred "north, south, east or west (n/s/e/w), a string or keyword" #(and (or (string? %) (keyword? %)) (heading-name %))) :default nil}
    :tunnel-length {:doc "the most blocks the strip tunnel runs in this job, at the body's level; 0: no tunnel, seen blocks only" :spec (a/int-in 0 nil) :default 32}
@@ -97,12 +67,11 @@
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block); the lava and :wet rules above still hold"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}})
 
+
 (a/defargs settings
-  {::dry-digs {:default 3 :doc "Digs in a row after which the carried count of the item did not rise before giving up (:no-drops)." :spec (a/int-in 1 nil)}
-   ::max-failures {:default 3 :doc "Dig failures in a row before giving up." :spec (a/int-in 1 nil)}
-   ::job-time-s {:default 1800 :doc "Seconds a mine call may take by default (its :spend :job-time)." :spec (a/num-in 0 nil)}
-   ::stay-margin {:default 8 :doc "Blocks over the higher or under the lower of body and ore that a :stay-level walk to ore may plan through (go-to :y-margin): a body a reflex took far off does not climb a hill to get back." :spec (a/num-in 0 nil)}
-   ::item-s {:default 6 :doc "Mean seconds one item takes (walk, dig, collect), for the quote." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 1800 :doc "Seconds a mine call may take by default (its :spend :job-time)." :spec (a/num-in 0 nil)}
+   ::item-s {:default 6 :doc "Mean seconds one item takes (walk, dig, collect), for the quote." :spec (a/num-in 0 nil)}
+   ::max-equip-rounds {:default 3 :doc "Times the trip gets a pickaxe or torches again for a dig that stopped without them before it ends with the dig's ending." :spec (a/int-in 0 nil)}})
 
 (def target [:block :heading :center])
 
@@ -114,63 +83,17 @@
 
 ;; ------------------------------------------------------------------ the contract
 
-(defn no-zones
-  "{:reason :no-zones} while no zone list has been read (unless :ignore-zones?), with one warn mine.declined."
-  [c]
-  (when (and (:block (:args c)) (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
-    (ctx/warn-once! c [:access :no-zones] :mine.declined
-                    {:reason :no-zones :text "mine declined: no zone list has been read (zones.edn missing or never valid)"})
-    {:reason :no-zones}))
+(def can-start? dig/can-start?)
 
-(defn all-refused
-  "{:reason :refused ..} when every seen target is refused by zones, claims or plans, with one warn mine.declined."
-  [c]
-  (let [{:keys [targets refused]} (when (:block (:args c)) (scan c))]
-    (when (and (empty? targets) (seq refused))
-      (let [fields (assoc (access/refusal-fields refused) :reason :refused)]
-        (ctx/warn-once! c [:access :refused] :mine.declined
-                        (assoc fields :text (str "mine declined: every target is refused by " (access/refusal-text fields))))
-        fields))))
-
-(defn block-given
-  "Never :no-block without the :block to mine."
-  [c]
-  (if (:block (:args c))
-    (contract/ok :args "a block given")
-    (contract/never :no-block "no :block to mine")))
-
-(defn surface-cause
-  "{:reason :on-surface :text ..} for a :stay-level run whose head cell has full sky light (head-light 15, as loaded): it stands in
-  the open and its tunnel would breach open at the first cell. Less light is a cave mouth or an overhang (spilled light): nil, as without light data."
-  [args head-light]
-  (when (and (:stay-level args) (= 15 head-light))
-    {:reason :on-surface
-     :text "mine :stay-level declined: the body stands in the open; cut a stair down first (access.stair {:dir :down :y 16}) or run it without :stay-level with a :level"}))
-
-(defn on-surface
-  "surface-cause of the body's head cell, before the run has begun (a resumed run stands where it dug)."
-  [c]
-  (let [p (:primitives c)
-        {:keys [x y z]} (sh-sense/feet p)]
-    (when-not (or (:goal (ctx/mem c)) (:side-cut? (:args c)))
-      (surface-cause (:args c) (sh-sense/sky-light-at p {:x x :y (inc y) :z z})))))
-
-(def can-start?
-  (cond/and area/inside
-            block-given
-            (checks/refusing :underground "not in the open" on-surface)
-            (checks/refusing :zones-read "zone list read" no-zones)
-            (checks/refusing :target "a target no zone refuses" all-refused)))
-
-(def can-run? checks/low-health)
+(def can-run? dig/can-run?)
 
 (defn done?
-  "Progress in items: got against :count carried. :ok at once when :count is carried before the run began, else once the run has finished (mend and walk home done, :finished in memory) with
-  the wanted items carried and the body home; else :later, the round ends the run."
+  "Progress in items: got against :count carried. :ok at once when :count is carried before the trip began, else once it has finished
+  (:finished in memory) with the wanted items carried and the body home; else :later, the round ends the run."
   [c]
   (let [n (:count (:args c))
         m (ctx/mem c)
-        got (if (:goal m) (targets/got c) 0)
+        got (if (:goal m) (got c) 0)
         extra {:units :items :done got :left (max 0 (- (owed c) got)) :result {:got got}}]
     (if (or (and (:finished m) (not= :not-home (:reason m)) (>= got (wanted c)))
             (and (not (:goal m)) (>= (carried c) n)))
@@ -186,291 +109,250 @@
      :yields {:items {(blocks/item-name a) [0 count count]}}
      :done [0 count count]}))
 
-(defn refused!
-  "The rules refused pos (verdict v) right before the dig, no failure: a hazard skips it; a zone or a plan keeps it
-  out of the targets anyway, and counted among the refused."
-  [c pos v verdict]
-  (when (= :hazard verdict) (skip! c pos))
-  (ctx/emit! c :mine.refused :info (merge {:pos pos :verdict verdict}
-                                          (select-keys v [:reason :zone :claim :owner :plan :hazards])
-                                          {:text (str "mine left " (access/cell pos) ": " (name verdict))})))
+;; ------------------------------------------------------------------ equip
 
-(defn dug-booked!
-  "Book a dig of the mined block at pos: drops to collect, a look round at the next cell."
-  [c pos]
-  (ctx/update-mem! c #(cond-> (-> % (dissoc :digging) (assoc :failures 0 :collecting true :looked :dug :dug-at (access/cell pos)))
-                        (:stay-level (:args c)) (update :holes (fnil conj []) (access/cell pos)))))
-
-(defn settle-dig!
-  "A round cut during a dig of the mined block (:digging written before it) books the dig when the cell is air now."
-  [c]
-  (when-let [pos (:digging (ctx/mem c))]
-    (ctx/update-mem! c dissoc :digging)
-    (when (air (u/seen-name (:primitives c) pos))
-      (dug-booked! c pos))))
-
-(defn ^:async dig! [c pos]
-  (await (tools/equip! c))
-  (let [v (access/may-dig? (rules-in c) pos)
-        verdict (access/judge v (:accept (:args c)))]
-    (if (not= :ok verdict)
-      (do (refused! c pos v verdict) :again)
-      (let [_ (ctx/update-mem! c #(cond-> (assoc % :digging pos)
-                                   (= (access/cell pos) (when-let [{:keys [x y z]} (:start %)] [x (dec y) z])) (dissoc :start-floor)))
-            outcome (await (dig-cell! c pos))]
-        (when-not (= :continue outcome) (ctx/update-mem! c dissoc :digging))
-        (case outcome
-          :continue :continue
-          :dug (dug-booked! c pos)
-          :missing nil
-          :cannot (skip! c pos)
-          :refused (refused! c pos v :hazard)
-          (do (skip! c pos) (ctx/update-mem! c update :failures (fnil inc 0))))
-        (if (= :continue outcome) :continue :again)))))
+(defn allows?
+  "Whether :fetch allows getting things of kind (:tool or :item)."
+  [c kind]
+  (let [f (need/parse-arg (:fetch (:args c)))]
+    (boolean (and (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) kind))))))
 
 (defn ^:async leave-zone!
-  "Before the first dig: a go-to child to a cell zone-margin outside the own zone zn the body stands near (memory :pre-start moves with it).
-  One info mine.left-zone when out; else the job ends :zone-exit. :continue while it walks, :again once out."
+  "Before the first dig: a go-to child to a cell zone-margin outside the own zone zn the body stands near (the start moves with it).
+  :continue while it walks, :again once out, else the trip ends :zone-exit."
   [c zn]
   (let [m (zone-margin)
         goal (zones/exit-goal (cell-of (u/self-pos c)) zn m)
-        from (:pre-start (ctx/mem c))
+        from (:start (ctx/mem c))
         r (await (child/call-walk* c :leave
-                                 {:pos {:x (+ (:x goal) 0.5) :y (:y goal) :z (+ (:z goal) 0.5)} :range 2 :settings {:jobs.movement.go-to.tuning/y-slack 8}}))
+                                   {:pos {:x (+ (:x goal) 0.5) :y (:y goal) :z (+ (:z goal) 0.5)} :range 2 :settings {:jobs.movement.go-to.tuning/y-slack 8}}))
         here (cell-of (u/self-pos c))]
     (cond
       (= :continue r) :continue
       (not (within-own-zone c (dec m) (access/cell here)))
       (do (ctx/emit! c :mine.left-zone :info {:zone (:name zn) :from (access/cell from) :to (access/cell here)
                                               :text (str "mine walked out of zone " (:name zn) " to " (str/join "," (access/cell here)) " before it digs")})
-          (ctx/update-mem! c assoc :pre-start here)
+          (ctx/update-mem! c assoc :start here :resume-at here)
           :again)
       :else (end-run c {:got 0 :reason :zone-exit :mended 0
                         :text (str "mine could not get out of zone " (:name zn) " before it digs")}))))
 
-;; ------------------------------------------------------------------ the dig phase
-
-(defn underground?
-  "Whether the run has dug down or tunnelled, or the body stands on a floor of a stair it cut earlier: its walks go on at
-  night inside its own cuts."
+(defn ^:async back-to-resume!
+  "After a fetch walked the body off: a go-to child back to the cell the dig goes on from (mem :resume-at). :continue while it walks,
+  :again once there, else the trip ends :not-back."
   [c]
-  (let [m (ctx/mem c)
-        feet (cell-of (u/self-pos c))]
-    (boolean (or (pos? (get-in m [:descent :steps] 0)) (:tunnel m)
-                 (contains? (ledger/ways-of c) (access/cell (update feet :y dec)))))))
-
-(defn dig-walk-opts
-  "The go-near! options of the walk to a dig: other ways only beyond reach, walks inside own cuts ignore the dark (the :checks forms given, when any), a level bound with :stay-level."
-  [args in-reach? checks]
-  (cond-> {}
-    in-reach? (assoc :ways #{:walk :clear-seal})
-    (seq checks) (assoc :checks checks)
-    (:stay-level args) (assoc :y-margin (settings/get settings ::stay-margin))))
-
-(defn ^:async walk-to-dig!
-  "Walk toward pos until the body is within reach of it, and close enough to see its drop (range 1) when the line to it
-  is blocked from here; a body within reach that cannot get closer digs from there. :there, :partial or :blocked
-  (jobs.lib.near/go-near!)."
-  [c pos]
-  (let [in-reach? (u/within? (u/self-pos c) (cell-of pos) (reach))
-        walked (await (near/go-near! c pos (if (or (:stay-level (:args c)) (drop-in-line? c pos)) (reach) 1)
-                                     (dig-walk-opts (:args c) in-reach? (when (underground? c) (ready/unforced c {:safe? '(not (threatened))})))))]
-    (if (and (not= :there walked) (u/within? (u/self-pos c) (cell-of pos) (reach)))
-      :there
-      walked)))
-
-
-(defn ^:async dig-round-1! [c]
-  (let [{:keys [goal failures dry looked]} (ctx/mem c)
-        {:keys [wet tunnel-length]} (:args c)
-        dry-digs (settings/get settings ::dry-digs)
-        {:keys [targets refused wet? wet-n side far]} (scan c)
-        ready? (and (< (carried c) goal) (< (or dry 0) dry-digs) (< failures (settings/get settings ::max-failures)) (some? looked))
-        pos (when ready? (await (next-target! c targets)))]
-    (when (seq far) (ctx/update-mem! c update :unreached #(into (vec %) (remove (set %)) far)))
-    (cond
-      (>= (carried c) goal) (to-mend! c :count)
-      (>= (or dry 0) dry-digs) (to-mend! c :no-drops)
-      (>= failures (settings/get settings ::max-failures)) (to-mend! c :gave-up)
-      (nil? looked) (do (await (look-around! c)) :again)
-      (= :searching pos) :again
-      (shaft-under-way? c) (await (shaft-round! c))
-      (and (some? pos) (way-floor c [pos])) (do (skip! c pos) :again)
-      (and (some? pos) (last-exit? c pos)) (do (ctx/emit! c :mine.spared-exit :info {:pos (access/cell pos) :text (str "mine leaves " (str/join "," (access/cell pos)) ": it is the body's last way out")})
-                                               (skip! c pos) :again)
-      (some? pos) (let [walked (await (walk-to-dig! c pos))]
-                    (cond
-                      (and (= :blocked walked) (result/unreachable-walk? (near/last-walk c))) (do (skip-unreachable! c pos) :again)
-                      (= :blocked walked) (do (skip-failed! c pos) :again)
-                      (= :partial walked) (stalled! c pos)
-                      (torches/branch-torch-due? c) (await (torches/torch-step! c true))
-                      :else (do (await (watch/watch! c {:before-dig pos}))
-                                (await (dig! c pos)))))
-      (not= looked (cell-of (u/self-pos c))) (do (await (look-around! c)) :again)
-      :else (do (when (and wet? (not wet)) (ctx/update-mem! c update :wet-skipped #(max (or % 0) wet-n)))
-                (when (seq refused)
-                  (access/decline! c :mine.declined "mine" (assoc (access/refusal-fields refused) :reason :refused)))
-                (cond
-                  (and (empty? refused) (not (and wet? (not wet))) (shaft-due? c)) (await (shaft-round! c))
-                  (and (empty? refused) (not (and wet? (not wet))) (descend-due? c)) (await (descend-round! c))
-                  (and (seq side) (< (carried c) goal)) (await (wall/side-round! c (first side)))
-                  (pos? tunnel-length) (await (tunnel/tunnel-round! c))
-                  (seq refused) (to-mend! c :refused)
-                  :else (to-mend! c (if (and wet? (not wet)) :wet :none)))))))
-
-(defn ^:async dig-round!
-  "A side cut or tunnel step under way goes on first, then a hole dug in the wall is shut, then the ores within reach, then
-  one piece of the digging."
-  [c]
-  (cond
-    (:side-cut (ctx/mem c)) (await (wall/side-round! c (:side-cut (ctx/mem c))))
-    (:stepping (ctx/mem c)) (await (tunnel/tunnel-round! c))
-    (seq (:holes (ctx/mem c))) (await (wall/shut-holes! c))
-    (= :continue (await (ore-pick/pick! c {:leave (kinds (:args c))}))) :continue
-    :else (await (dig-round-1! c))))
-
-;; ------------------------------------------------------------------ the pickaxe
-
-(defn no-tool!
-  "End at once, before any dig: warn, and end with {:got 0 :reason :no-tool :tool <kind>} (end-run), :why the fetch's
-  cause when one failed."
-  [c & [why]]
-  (let [kind (tools/needed-kind (:primitives c) (:block (:args c)))]
-    (end-run c (cond-> {:got 0 :reason :no-tool :tool kind :mended 0 :text "mine done: no-tool, got 0, mended 0"} why (assoc :why why)))))
-
-(defn fetch-limits
-  "The limits map of :fetch when it allows a tool, else nil."
-  [c]
-  (let [o (need/opts c 'jobs.gather.mine)]
-    (when (and o (contains? (:what o) :tool)) o)))
-
-(defn ^:async fetch-pickaxe!
-  "A pickaxe is owed: jobs.items.get-tool for the block through jobs.lib.need (:fetch's :how and :explore apply).
-  :continue while it runs, :again once it got one; else the end: before any dig (no phase) at once, in the dig phase
-  the mend first, with :no-tool."
-  [c]
-  (let [{:keys [block]} (:args c)
-        o (fetch-limits c)
-        e (when o (await (need/tool! c {:block block} (select-keys o [:how :explore]))))
-        why (when (map? e) (contract/cause-key (or (:because e) e)))]
-    (cond
-      (= :continue e) :continue
-      (tools/can-harvest? (:primitives c) block) :again
-      (nil? (:phase (ctx/mem c))) (no-tool! c why)
-      :else (let [kind (tools/needed-kind (:primitives c) block)]
-              (ctx/update-mem! c assoc :end-cause (cond-> {:tool kind} why (assoc :why why)))
-              (to-mend! c :no-tool)))))
-
-(defn toward
-  "The heading name for a :heading arg h at start: a name, or the dominant axis from start to a cell [x y z]; nil when none."
-  [start h]
-  (if-not (sequential? h)
-    (heading-name h)
-    (let [dx (- (first h) (:x start)) dz (- (nth h 2) (:z start))]
-      (cond (and (zero? dx) (zero? dz)) nil
-            (>= (js/Math.abs dx) (js/Math.abs dz)) (if (pos? dx) "east" "west")
-            :else (if (pos? dz) "south" "north")))))
-
-(defn at-pre-start?
-  "Whether the body stands on the cell the job began on."
-  [c]
-  (= (access/cell (:pre-start (ctx/mem c))) (access/cell (cell-of (u/self-pos c)))))
-
-(defn ^:async back-to-pre-start!
-  "Before the first dig, after a fetch walked the body off: a go-to child back to the cell the job began on (mem :pre-start),
-  which the start, tunnel origin and walk home are taken from. Else the job ends
-  :not-back. :continue while it walks, :again once there."
-  [c]
-  (let [{:keys [x y z] :as cell} (:pre-start (ctx/mem c))
+  (let [{:keys [x y z] :as cell} (:resume-at (ctx/mem c))
         r (await (child/call-walk* c :back
-                                 {:pos {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0
-                                  :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+                                   {:pos {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0
+                                    :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (cond
       (= :continue r) :continue
-      (at-pre-start? c) :again
+      (= (access/cell cell) (access/cell (cell-of (u/self-pos c)))) :again
       :else (end-run c {:got 0 :reason :not-back :mended 0
-                        :text (str "mine could not get back to " (str/join "," (access/cell cell)) " after fetching its tool")}))))
+                        :text (str "mine could not get back to " (str/join "," (access/cell cell)) " after getting its tools")}))))
 
-(defn flooded!
-  "The head is in water: no more digging (the cut may be what let it in). Warn; before the first dig end at once
-  {:got 0 :reason :flooded}, later end the dig phase :flooded and walk home."
+(defn ^:async fetch-pickaxe!
+  "A pickaxe is owed: jobs.items.get-tool for the block through jobs.lib.need (:fetch's :how and :explore apply), once per equip. :continue
+  while it runs, else nil; a failed fetch is kept as the dig's :why (mem :tool-why)."
   [c]
-  (if (:phase (ctx/mem c))
-    (do (ctx/update-mem! c assoc :reason :flooded)
-        (wrap-up! c))
-    (end-run c {:got 0 :reason :flooded :mended 0 :text "mine got nothing: the head is in water"})))
-
-(defn hungry!
-  "Food is short and get-food found none (trip/food-short?; not for soil, dug at the surface near home): before the first dig end at once {:got 0
-  :reason :hungry}, later end the dig phase :hungry and walk home."
-  [c]
-  (if (:phase (ctx/mem c))
-    (do (ctx/update-mem! c assoc :reason :hungry)
-        (wrap-up! c))
-    (end-run c {:got 0 :reason :hungry :mended 0 :text "mine got nothing: hungry, no food"})))
-
-(defn ^:async step [c]
-  (settle-dig! c)
-  (let [m (ctx/mem c)
-        {:keys [heading direction]} (:args c)]
-    (cond
-      (and (contains? #{nil :dig} (:phase m)) (breath/head-under? (:primitives c))) (flooded! c)
-
-      (and (contains? #{nil :dig} (:phase m)) (not (contains? soil-blocks (:block (:args c)))) (trip/food-short? c)) (hungry! c)
-
-      (and (contains? #{nil :dig} (:phase m)) (not (tools/can-harvest? (:primitives c) (:block (:args c))))) (await (fetch-pickaxe! c))
-
-      (and (contains? #{nil :dig} (:phase m)) (trip/spent-tool? (:primitives c) (:block (:args c))))
-      (do (ctx/update-mem! c assoc :end-cause {:tool (tools/needed-kind (:primitives c) (:block (:args c))) :why :spent})
-          (if (nil? (:phase m)) (no-tool! c :spent) (to-mend! c :no-tool)))
-
-      (and (nil? (:phase m)) (tools/can-harvest? (:primitives c) (:block (:args c))) (:pre-start m) (not (at-pre-start? c))) (await (back-to-pre-start! c))
-
-      (and (nil? (:phase m)) (within-own-zone c (dec (zone-margin)) (access/cell (cell-of (u/self-pos c)))) (not (shaft-top-here? c)))
-      (await (leave-zone! c (within-own-zone c (dec (zone-margin)) (access/cell (cell-of (u/self-pos c))))))
-
-      (nil? (:phase m))
-      (let [faced (facing (:primitives c))
-            _ (await (look/survey! c))
-            now (carried c)
-            start (cell-of (u/self-pos c))
-            heading (or (toward start heading) (heading-name direction))]
-        (ctx/update-mem! c assoc
-                         :goal (:count (:args c)) :had now :start start :start-floor (u/feel-name (:primitives c) {:x (:x start) :y (dec (:y start)) :z (:z start)})
-                         :failures 0 :dry 0 :last-carried now
-                         :heading (or heading faced)
-                         :ground (if (:mend (:args c)) (snapshot c start) [])
-                         :phase :dig)
-        :again)
-
-      (= :home (:phase m)) (await (home-round! c))
-      (= :mend (:phase m)) (await (mend-round! c))
-      (:collecting m) (await (collect! c))
-      :else (await (dig-round! c)))))
+  (let [{:keys [block]} (:args c)
+        o (need/opts c 'jobs.gather.mine)
+        o (when (and o (contains? (:what o) :tool)) o)]
+    (when (and o (not (tools/can-harvest? (:primitives c) block)) (not (:tool-why (ctx/mem c))))
+      (let [e (await (need/tool! c {:block block} (select-keys o [:how :explore])))]
+        (cond
+          (= :continue e) :continue
+          (tools/can-harvest? (:primitives c) block) nil
+          :else (do (ctx/update-mem! c assoc :tool-why (or (when (map? e) (contract/cause-key (or (:because e) e))) :unknown)
+                                          :tool-ending (when (map? e) (dissoc (or (:because e) e) :report)))
+                    nil))))))
 
 (defn digs-left
-  "The digs the call still has to make: items short of the goal once it is written, else :count (an ore drops at least one item per dig)."
+  "The digs the call still has to make: items short of the goal, else :count (an ore drops at least one item per dig)."
   [c]
   (max 1 (- (:count (:args c)) (carried c))))
 
+(defn ^:async equip!
+  "What the dig needs, in order: room in the bag, a pickaxe, a spare, torches. :continue while one waits on the world, else nil."
+  [c]
+  (or (await (trip/ready! c))
+      (await (fetch-pickaxe! c))
+      (await (trip/tool-ready! c (:block (:args c)) (digs-left c)))
+      (await (when (and (pos? (or (:torch-interval (:args c)) 0)) (nil? (:tunnel (ctx/mem c))) (or (pos? (:tunnel-length (:args c))) (descent-wanted? c)))
+               (trip/torches-ready! c)))))
+
+(defn stop-cause
+  "Why the dig cannot begin or go on after the equip, as {:reason :text ..} (jobs.gather.dig-for/stop-cause), or for a dig that stopped
+  for torches while none are carried."
+  [c]
+  (or (dig/stop-cause c)
+      (when (and (= :no-torches (:wanted (ctx/mem c))) (zero? (torch/torches-held (:primitives c))))
+        {:reason :no-torches :text "dig-for stopped: no torches left and none could be had; the trip got no more"})))
+
+;; ------------------------------------------------------------------ the end
+
+(defn to-home!
+  "The dig is over with reason (cause: fields of a stop before a dig, else nil): the mend next with :mend, else the walk home."
+  [c reason cause]
+  (ctx/update-mem! c assoc :phase (if (:mend (:args c)) :mend :home) :reason reason :end-cause cause :at-mend (carried c))
+  :again)
+
+(defn dig-text
+  "The dig's end text as the trip's: its leading \"dig-for\" is \"mine\"."
+  [text]
+  (str "mine" (str/replace-first text #"^dig-for" "")))
+
+(defn spent-on-mend?
+  "Whether the mend ate into what the dig brought, leaving fewer than the goal carried."
+  [c]
+  (let [{:keys [at-mend]} (ctx/mem c)
+        now (carried c)]
+    (and (:mend (:args c)) at-mend (< now (:count (:args c))) (< now at-mend) (> at-mend (had c)))))
+
+(defn finish!
+  "End the trip: the dig's ending in memory, whether the body arrived home, the mend's count."
+  [c arrived?]
+  (let [{:keys [dig-end dig-ending tool-ending end-cause reason mended start tool-why]} (ctx/mem c)
+        dug (let [d (merge dig-end end-cause)]
+              (if (seq (:left d))
+                (let [left (end/still-lying c (:left d))]
+                  (if (seq left) (assoc d :left left) (dissoc d :left)))
+                d))
+        n (got c)
+        mended (or mended 0)
+        spent? (and arrived? (spent-on-mend? c))
+        end-reason (cond (not arrived?) :not-home spent? :spent-on-mend :else reason)
+        tunnel (:tunnel dug)
+        data (cond-> (merge (dissoc dug :text) {:got n :reason end-reason :mended mended})
+               (or spent? (not arrived?)) (assoc :dig-reason reason)
+               tunnel (assoc :tunnel (assoc tunnel :walked-back? (boolean arrived?) :back-at (access/cell (cell-of (u/self-pos c)))))
+               (and tool-why (= :no-tool reason)) (assoc :why tool-why))
+        home (str/join "," (access/cell start))
+        text (str (dig-text (or (:text dug) (str "dig-for got " n " of " (owed c) ": " (name end-reason))))
+                  (when (pos? mended) (str "; mended " mended))
+                  (when tunnel (if arrived? (str ", walked back to " home) ", did not get back to its origin"))
+                  (when-not arrived? (str "; did not get back to " home)))
+        because (if (and tool-ending (= :no-tool reason)) tool-ending dig-ending)
+        e (end-run c (assoc data :text text))]
+    (if (and because (not= :done (:kind e)) (not= :done (:kind because)))
+      (contract/with-because e because)
+      e)))
+
+(defn not-home!
+  "A walk home that did not arrive: warn mine.not-home."
+  [c]
+  (ctx/emit! c :mine.not-home :warn {:to (access/cell (:start (ctx/mem c))) :at (access/cell (cell-of (u/self-pos c)))
+                                     :text (str "mine did not get back to " (str/join "," (access/cell (:start (ctx/mem c)))))}))
+
+;; ------------------------------------------------------------------ the steps
+
+(defn dig-args
+  "The args of the dig-for call: the trip's, without :mend, tracking the ground when it mends, a tunnel keeping its heading."
+  [c]
+  (let [{:keys [dug-heading]} (ctx/mem c)]
+    (cond-> (-> (:args c)
+                (dissoc :mend :submitted-at)
+                (assoc :track-ground (boolean (:mend (:args c))) :least (:least (ctx/frozen-call c) :all)))
+      (and dug-heading (nil? (:heading (:args c))) (nil? (:direction (:args c)))) (assoc :heading dug-heading))))
+
+(defn booked
+  "The memory m after a dig ending e: its data kept, its ground and stair steps added to what earlier calls opened."
+  [m e]
+  (let [d (:data e)
+        known (into #{} (map :pos) (:ground m))]
+    (-> m
+        (assoc :dig-end d)
+        (update :ground (fnil into []) (remove #(known (:pos %))) (:ground d))
+        (update-in [:descent :steps] #(max (or % 0) (get-in d [:descent :steps] 0)))
+        (cond-> (get-in d [:tunnel :heading]) (assoc :dug-heading (get-in d [:tunnel :heading]))))))
+
+(defn gettable?
+  "Whether the trip may get again what a dig that stopped for reason lacked."
+  [c reason]
+  (and (< (:rounds (ctx/mem c) 0) (settings/get settings ::max-equip-rounds))
+       (case reason
+         :no-tool (allows? c :tool)
+         :no-torches (and (:stocked? (ctx/mem c)) (allows? c :item))
+         false)))
+
+(defn ^:async dig-step!
+  "One round of the dig-for child; its ending is kept. A stop for a pickaxe or torches that the trip may get again goes back to the
+  equip, to dig on from where the dig stopped; any other ending goes to the mend or the walk home."
+  [c]
+  (let [e (await (ctx/call c :dig 'jobs.gather.dig-for (dig-args c)))]
+    (if (= :continue e)
+      :continue
+      (let [reason (or (:reason (:data e)) (contract/cause-key e))]
+        (ctx/update-mem! c booked e)
+        (ctx/update-mem! c assoc :dig-ending (dissoc e :report))
+        (if (gettable? c reason)
+          (do (ctx/update-mem! c #(-> % (update :rounds (fnil inc 0))
+                                      (assoc :phase nil :resume-at (cell-of (u/self-pos c)) :wanted reason)
+                                      (dissoc :equipped? :torches-tried :tool-why :tool-ending)))
+              :again)
+          (to-home! c reason nil))))))
+
+(defn ^:async equip-step!
+  "The phase before each dig: equip once, end on a stop the equip did not cure, walk back to where the dig goes on from, out of an own
+  zone near the first start, then begin the dig."
+  [c]
+  (let [m (ctx/mem c)
+        e (when-not (:equipped? m) (await (equip! c)))
+        stop (when (:equipped? m) (stop-cause c))
+        at-resume? (= (access/cell (:resume-at m)) (access/cell (cell-of (u/self-pos c))))
+        own (when-not (:zoned? m) (within-own-zone c (dec (zone-margin)) (access/cell (cell-of (u/self-pos c)))))]
+    (cond
+      (= :continue e) :continue
+      (not (:equipped? m)) (do (ctx/update-mem! c #(cond-> (assoc % :equipped? true) (pos? (torch/torches-held (:primitives c))) (assoc :stocked? true))) :again)
+      stop (to-home! c (:reason stop) (select-keys stop [:tool :why :text]))
+      (not at-resume?) (await (back-to-resume! c))
+      (and own (not (shaft-top-here? c))) (await (leave-zone! c own))
+      :else (do (ctx/update-mem! c #(cond-> (assoc % :zoned? true :phase :dig) (not (:goal %)) (assoc :goal (:count (:args c)) :had (carried c))))
+                :again))))
+
+(defn ^:async mend-step!
+  "The mend of the ground the dig opened, then the walk home."
+  [c]
+  (let [r (await (mend/mend-round! c))]
+    (if (nil? r)
+      (do (ctx/update-mem! c assoc :phase :home) :again)
+      r)))
+
+(defn ^:async home-step!
+  "The walk back to the start cell; the trip ends when it is over."
+  [c]
+  (let [r (await (home/home-round! c))]
+    (if (= :continue r)
+      :continue
+      (do (when-not r (not-home! c))
+          (finish! c r)))))
+
+(defn ^:async step [c]
+  (case (:phase (ctx/mem c))
+    :dig (await (dig-step! c))
+    :mend (await (mend-step! c))
+    :home (await (home-step! c))
+    (await (equip-step! c))))
+
 (defn ^:async round
   [c]
-  (when (and (nil? (:phase (ctx/mem c))) (nil? (:pre-start (ctx/mem c))))
-    (ctx/update-mem! c assoc :pre-start (cell-of (u/self-pos c))))
-  (if-let [t (or (await (trip/ready! c)) (await (trip/tool-ready! c (:block (:args c)) (digs-left c)))
-                 (await (when (and (pos? (or (:torch-interval (:args c)) 0)) (nil? (:tunnel (ctx/mem c))) (or (pos? (:tunnel-length (:args c))) (descent-wanted? c)))
-                          (trip/torches-ready! c))))]
-    t
-    (await (pace/steps! c #(step c)))))
+  (when-not (:start (ctx/mem c))
+    (let [start (cell-of (u/self-pos c))]
+      (ctx/update-mem! c assoc :start start :resume-at start
+                       :start-floor (u/feel-name (:primitives c) {:x (:x start) :y (dec (:y start)) :z (:z start)}))))
+  (await (pace/steps! c #(step c))))
 
 (defn ^:async cleanup
-  "A run that ended by itself has walked home already. Cut by the limit, a cancel or a parent's end after it started digging:
-  the walk back to the start cell (home-round!), a step per round, done when it ends (arrived or not; not-home warns)."
+  "A trip that ended by itself has walked home already. Cut by the limit, a cancel or a parent's end after the dig began: the walk back
+  to the start cell, a step per round, done when it ends (arrived or not; not-home warns)."
   [c _]
   (let [m (ctx/mem c)]
-    (if (or (:finished m) (not (:start m)))
+    (if (or (:finished m) (not (:goal m)))
       (ctx/end c :done nil {})
-      (do (ctx/update-mem! c assoc :cleaning true)
-          (await (home-round! c))))))
+      (let [r (await (home/home-round! c))]
+        (if (= :continue r)
+          :continue
+          (do (when-not r (not-home! c))
+              (ctx/end c :done nil {:walked-back? (boolean r)})))))))
 
 (def meta {:tags [:mine :dig :ore :light] :position-bound? true})

@@ -22,7 +22,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
-            [jobs.gather.mine :as mine]
+            [jobs.gather.dig-for :as mine]
             [jobs.gather.mine.descent :as mine-descent]
             [jobs.gather.mine.end :as mine-end]
             [jobs.gather.mine.targets :as mine-targets]
@@ -47,7 +47,7 @@
       (fn ^:async t []
         (let [s (start {:world (update (rock-world {"0,65,-1" "glass" "0,65,-2" "glass" "1,65,-2" "iron_ore"}) :inventory into [{:name "cobblestone" :count 5}])})]
           (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
-          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :ore-reach 2 :mend false}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :ore-reach 2}) {})
           (await (run-ticks s 500))
           (is (= 1 (get (inv s) "raw_iron")) (pr-str (keep :text @(:seen s)))))))))
 
@@ -60,7 +60,7 @@
                         :dir dir})]
           (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
           (let [cut? (shutdown-at-cell! s #{[1 64 -1] [1 65 -1]})]
-            (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :ore-reach 2 :mend false}) {})
+            (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :ore-reach 2}) {})
             (await (run-until! s cut? 500)))
           (let [again (start {:p (:p s) :dir dir})]
             (is (:side-cut (core/job-memory (:eng again) "j1")) "cut in the side cut")
@@ -76,7 +76,7 @@
           (let [dir (tu/tmp-dir)
                 s (start {:world (rock-world {}) :dir dir})]
             (let [cut? (shutdown-at-cell! s #{[2 65 0]})]
-              (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :mend false :stay-level stay}) {})
+              (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :stay-level stay}) {})
               (await (run-until! s cut? 40)))
             (let [again (start {:p (:p s) :dir dir})]
               (is (:stepping (core/job-memory (:eng again) "j1")) "cut while the stair child dug")
@@ -122,7 +122,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "iron_ore" :direction "east" :tunnel-length 6 :stay-level true :mend false}
+        (let [s (await (scenario {:block "iron_ore" :direction "east" :tunnel-length 6 :stay-level true}
                                  (rock-world side-cave) 120))]
           (is (= :breach-open (:reason (first (tunnel-ends s)))) (pr-str (map :text (tunnel-ends s))))
           (is (not-any? #(> (first %) 2) (dug-cells s))))))))
@@ -131,7 +131,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :level 58 :mend false}
+        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :level 58 :trip true}
                                  (deep-rock {"9,58,1" "iron_ore"}) 400))
               e (done-event s)]
           (is (= 1 (get (inv s) "raw_iron")))
@@ -148,7 +148,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start {:world (deep-rock {"9,58,1" "iron_ore" "0,64,1" "air" "0,65,1" "air" "0,64,2" "air" "0,65,2" "air"})})]
-          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :level 58 :mend false}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :level 58}) {})
           (await (run-until s 400 #(<= 2 (count (filter (fn [e] (= :stair (:slot e))) (events-of % :child_ended))))))
           (swap! (.. (:p s) -world -state) assoc-in [:self :pos] [0.5 64 2.5])
           (await (run-ticks s 400))
@@ -167,7 +167,7 @@
                      :drops {"stone" "cobblestone"}
                      :inventory (into pickaxe [{:name "torch" :count 8}])}
               s (start {:world world})]
-          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :level 58 :tunnel-length 3 :mend false}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :level 58 :tunnel-length 3}) {})
           (await (run-ticks s 600))
           (is (= "south" (:from (first (events-of s :mine.turned)))) (pr-str (map :text (events-of s :mine.turned))))
           (is (empty? (events-of s :mine.descent-stopped)) (pr-str (map :text (events-of s :mine.descent-stopped))))
@@ -193,7 +193,7 @@
         (let [soil-over-rock (merge (cells "stone" (range -3 15) (range 50 62) (range -4 5))
                                     (dissoc (cells "dirt" (range -3 15) (range 62 68) (range -4 5)) "0,64,0" "0,65,0"))
               world {:blocks soil-over-rock :drops {"stone" "cobblestone"} :inventory (into pickaxe [{:name "torch" :count 8}])}
-              s (await (zoned {:block "stone" :count 3 :mend false} world (ew/of-data {"s" shaft-plan} {} []) 400))
+              s (await (zoned {:block "stone" :count 3} world (ew/of-data {"s" shaft-plan} {} []) 400))
               [shaft] (events-of s :mine.shaft)]
           (is (= "s" (:shaft shaft)) "the stair reached stone, the shaft was still taken")
           (is (re-find #"via shaft s" (:text (done-event s)))))))))
@@ -275,7 +275,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :level 60 :tunnel-length 3 :mend false}
+        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :level 60 :tunnel-length 3 :trip true}
                                  (deep-rock {}) 400))
               e (done-event s)]
           (is (= :tunnel-length (:reason e)))
@@ -289,7 +289,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[accept stops?] [[#{:falling-block} false] [#{} true]]]
-          (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :level 60 :tunnel-length 3 :mend false :accept accept}
+          (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :level 60 :tunnel-length 3 :accept accept}
                                    (deep-rock {"1,66,0" "gravel" "0,66,0" "air"}) 60))]
             (is (= stops? (boolean (some #(= :hazard (:stop %)) (events-of s :mine.descent-stopped)))) (pr-str accept))
             (is (= (not stops?) (boolean (some #(< (second %) 64) (dug-cells s)))) "the stair cut below the start")))))))
@@ -298,7 +298,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :level 40 :tunnel-length 3 :mend false :accept #{}}
+        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :level 40 :tunnel-length 3 :accept #{}}
                                  (deep-rock {"1,66,0" "gravel" "0,66,0" "air"}) 60))
               e (done-event s)]
           (is (= :descent-stopped (:reason e)))
@@ -320,7 +320,7 @@
                                         (swap! refills dec)
                                         (swap! (.-state world) fake/put-block [2 65 0] "gravel")))
                                     r)))))
-          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :level false :mend false}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :level false}) {})
           (await (run-ticks s 120))
           (is (= :tunnel-length (:reason (done-event s))))
           (is (= [{:reason :tunnel-length :length 4}] (map #(select-keys % [:reason :length]) (tunnel-ends s))))
@@ -421,7 +421,7 @@
       (fn ^:async t []
         (let [s (start {:world {:blocks walled-ore :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})]
           (hide-drop-until-beside! (:p s) [2 64 0])
-          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0 :mend false}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0}) {})
           (await (run-ticks s 40))
           (is (= [[2 64 0] [1 64 0]] (dug-cells s)) "dug from behind the wall, then the wall cell between")
           (is (= 1 (get (inv s) "raw_iron")) "the body cut its way beside the dug cell and picked the drop up")
@@ -445,7 +445,7 @@
           (is (finished? s))
           (is (empty? (events-of s :completed)) "2 of 5 is not completed")
           (is (some? stopped))
-          (is (re-find #"mine got 2 of 5: none" (pr-str stopped))))))))
+          (is (re-find #"dig-for got 2 of 5: none" (pr-str stopped))))))))
 
 (deftest drops-picked-up-a-moment-later-are-not-left-behind
   (async done
@@ -480,7 +480,7 @@
                                          (swap! (fake/state (:p s)) assoc :entities []))
                                        (decide pose))]
                          (impl token (js/Object.assign #js {} args #js {:decide wrapped})))))
-          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0 :trip true}) {})
           (await (run-ticks s 60))
           (is (= 1 (count (events-of s :mine.left-behind))) "reported when it was still lying")
           (is (nil? (:left (done-event s))) "but gone by the end"))))))
@@ -491,7 +491,7 @@
       (fn ^:async t []
         (let [s (start {:world {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})]
           (drop-away! (:p s) [5 64 2])
-          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0 :trip true}) {})
           (await (run-ticks s 30))
           (is (= :count (:reason (done-event s))))
           (is (= [0 64 0] (feet s))))))))
@@ -503,7 +503,7 @@
         (let [s (start {:world {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})
               _ (.override (.-world (:p s)) "dig" (fn [token args impl]
                                                      (.then (impl token args) (fn [_] (set-pos! s 2.5 64 0.5) (js/Promise. (fn [_ _]))))))
-              id (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0}) {})]
+              id (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0 :trip true}) {})]
           (core/tick! (:eng s))
           (loop [i 0]
             (when (and (< i 300) (zero? (dig-count s)))
@@ -521,7 +521,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[owner extra dug] [["Fake" {} 4] ["FAKE" {} 4] ["Miles" {} 2] ["Miles" {:ignore-zones? true} 4]]]
-          (let [s (await (zoned (merge {:block "sand" :count 4 :mend false :tunnel-length 0} extra) {:blocks two-in-two-out}
+          (let [s (await (zoned (merge {:block "sand" :count 4 :tunnel-length 0} extra) {:blocks two-in-two-out}
                                 (ew/of-data {} {} [(assoc farm-zone :owner owner)]) 40))]
             (is (= dug (count (dug-cells s))) (pr-str [owner extra]))))))))
 
@@ -529,7 +529,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (zoned {:block "sand" :count 2 :mend false :ignore-zones? true :tunnel-length 0} {:blocks two-in-two-out}
+        (let [s (await (zoned {:block "sand" :count 2 :ignore-zones? true :tunnel-length 0} {:blocks two-in-two-out}
                               (ew/of-data {} {} nil) 40))]
           (is (= 2 (count (dug-cells s)))))))))
 
@@ -543,7 +543,7 @@
                                                    ["Miles" {} false [{:reason :refused :zones ["farm"]}]]
                                                    ["Miles" {:ignore-zones? true} true []]]]
           (let [zone {:name "farm" :min [-2 60 -2] :max [2 70 2] :owner owner :allow #{:dig}}
-                s (await (zoned (merge {:block "dirt" :count 4} extra) {:blocks floor} (ew/of-data {} {} [zone]) 80))]
+                s (await (zoned (merge {:block "dirt" :count 4 :trip true :mend true} extra) {:blocks floor} (ew/of-data {} {} [zone]) 80))]
             (is (= mended-some (pos? (count (calls s "place")))) (pr-str [owner extra]))
             (is (= declined (mapv #(select-keys % [:reason :zones]) (events-of s :mine.declined))) (pr-str [owner extra]))))))))
 

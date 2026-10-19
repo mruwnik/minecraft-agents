@@ -10,25 +10,31 @@
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.child :as child]
             [jobs.lib.look :as look :refer [cell-of headings]]
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]))
 
 (defn ^:async side-round!
-  "Take ore in the tunnel wall by a child mine run: a stay-level tunnel of the cut's steps to the side, which digs the ore beside it and
-  walks home. Then the cut's mouth is shut with a carried block, and the ore is skipped."
+  "Take ore in the tunnel wall by a child dig-for run: a stay-level tunnel of the cut's steps to the side, which digs the ore beside it.
+  Then the body walks back to the cell it cut from, the cut's mouth is shut with a carried block, and the ore is skipped."
   [c {:keys [pos heading steps] :as cut}]
-  (ctx/update-mem! c assoc :side-cut cut)
-  (let [here (cell-of (u/self-pos c))
+  (ctx/update-mem! c #(-> % (assoc :side-cut cut) (update :side-from (fn [from] (or from (cell-of (u/self-pos c)))))))
+  (let [from (:side-from (ctx/mem c))
         args (-> (:args c)
                  (dissoc :direction :submitted-at)
-                 (assoc :heading heading :tunnel-length steps :count (need/carry-count c :side [(blocks/item-name (:args c))] 1) :ore-reach 0 :mend false :fetch false :shaft false :stay-level true :side-cut? true))
-        r (await (ctx/call c :side 'jobs.gather.mine args))]
-    (if (= :continue r)
+                 (assoc :heading heading :tunnel-length steps :count (need/carry-count c :side [(blocks/item-name (:args c))] 1) :ore-reach 0 :shaft false :stay-level true :side-cut? true :track-ground false))
+        r (or (:side-end (ctx/mem c))
+              (let [r (await (ctx/call c :side 'jobs.gather.dig-for args))]
+                (when-not (= :continue r) (ctx/update-mem! c assoc :side-end (dissoc r :report)))
+                r))
+        back (when-not (= :continue r)
+               (await (child/call-walk* c :side-back {:pos {:x (+ (:x from) 0.5) :y (:y from) :z (+ (:z from) 0.5)} :range 0 :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
+    (if (or (= :continue r) (= :continue back))
       :continue
-      (let [_ (ctx/update-mem! c dissoc :side-cut)
+      (let [_ (ctx/update-mem! c dissoc :side-cut :side-from :side-end)
             [dx dz] (headings heading)
-            mouth (-> here (update :x + dx) (update :z + dz))
+            mouth (-> from (update :x + dx) (update :z + dz))
             name-at #(u/seen-name (:primitives c) %)
             open (filterv #(not (rules/solid-floor? name-at %)) [mouth (update mouth :y inc)])
             took (= :done (:kind r))

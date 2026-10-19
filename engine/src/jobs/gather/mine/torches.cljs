@@ -1,5 +1,5 @@
 (ns jobs.gather.mine.torches
-  "The torches of jobs.gather.mine: when one is owed on the tunnel, a branch or the stair down, where it hangs, and
+  "The torches of jobs.gather.dig-for: when one is owed on the tunnel, a branch or the stair down, where it hangs, and
   the craft of more."
   (:require [clojure.string :as str]
             [engine.args :as a]
@@ -12,6 +12,7 @@
             [jobs.lib.torch :as torch]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
+            [jobs.gather.mine.end :refer [stop!]]
             [jobs.gather.mine.targets :refer [step-cell]]))
 
 (a/defargs settings
@@ -143,7 +144,7 @@
 
 (defn ^:async torch-step!
   "One round of a torch (the tunnel's; a branch's when branch is true, the stair's when :stair): craft more when under 2 are carried and coal or
-  charcoal and a stick are, say so once with none to hang, else hang one. :continue."
+  charcoal and a stick are, end the dig :no-torches with none to hang, else hang one. :continue."
   [c branch]
   (let [m (ctx/mem c)
         n (torch/torches-held (:primitives c))]
@@ -155,11 +156,8 @@
         (if (= :continue e) :continue :again))
 
       (zero? n)
-      (do (when-not (get-in m [:no-torches-said (if (= :stair branch) :stair (boolean branch))])
-            (ctx/emit! c :mine.no-torches :info {:text (str "mine has no torches and nothing to craft them from: the "
-                                                            (cond (= :stair branch) "stair" branch "branch" :else "tunnel") " stays dark")}))
-          (ctx/update-mem! c assoc-in [:no-torches-said (if (= :stair branch) :stair (boolean branch))] true)
-          (booked! c branch)
-          :again)
+      (stop! c :no-torches
+             {:text (str "dig-for stopped: no torches left for the " (cond (= :stair branch) "stair" branch "branch" :else "tunnel")
+                         " and nothing to craft them from; jobs.gather.mine stocks torches before it digs")})
 
       :else (do (await (hang-torch! c branch)) :again))))

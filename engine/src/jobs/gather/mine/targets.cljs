@@ -1,5 +1,5 @@
 (ns jobs.gather.mine.targets
-  "Seen-block targets of jobs.gather.mine: how a block would be dug (classify), the scan for targets and the choice of the next, the ground snapshot and the guards that skip a target, own-zone tests, drops lying near."
+  "Seen-block targets of jobs.gather.dig-for: how a block would be dug (classify), the scan for targets and the choice of the next, the ground snapshot and the guards that skip a target, own-zone tests, drops lying near."
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.game :as game]
@@ -182,7 +182,7 @@
   ([c pos name]
   (let [{:keys [start ground]} (ctx/mem c)
         cell (select-keys pos [:x :y :z])]
-    (when (and (:mend (:args c)) start name (not (not-solid name))
+    (when (and (:track-ground (:args c)) start name (not (not-solid name))
                (some #{cell} (ground-pos start))
                (not-any? #(= cell (:pos %)) ground))
       (ctx/update-mem! c update :ground (fnil conj []) {:pos cell :name name})))))
@@ -307,7 +307,7 @@
   (its walk decides); nil with no targets."
   [c targets]
   (let [{:keys [ground start]} (ctx/mem c)
-        ground (into (set (map :pos ground)) (when (and start (:mend (:args c))) (ground-pos start)))
+        ground (into (set (map :pos ground)) (when (and start (:track-ground (:args c))) (ground-pos start)))
         under (update (cell-of (u/self-pos c)) :y dec)
         pool (or (not-empty (filterv #(not= under %) targets)) targets)
         off (vec (remove ground pool))

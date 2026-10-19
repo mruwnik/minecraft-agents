@@ -21,9 +21,10 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
-            [jobs.gather.mine :as mine]
+            [jobs.gather.dig-for :as mine]
             [jobs.gather.mine.descent :as mine-descent]
             [jobs.gather.mine.end :as mine-end]
+            [jobs.gather.mine.home :as mine-home]
             [jobs.gather.mine.targets :as mine-targets]
             [jobs.gather.mine.torches :as mine-torches]
             [jobs.gather.mine.tunnel :as mine-tunnel]
@@ -85,7 +86,7 @@
                                 :inventory [{:name "cobblestone" :count 2}]}})
               ys (atom [])]
           (add-watch (fake/state (:p s)) ::ys (fn [_ _ _ w] (swap! ys conj (second (get-in w [:self :pos])))))
-          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0}) {})
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0 :trip true :mend true}) {})
           (await (run-ticks s 30))
           (is (= "cobblestone" (block-at s 0 62 0)) "the lava the dig laid open is sealed from the rim")
           (is (= [[0 63 0]] (dug-cells s)) "the sand is dug, from beside")
@@ -99,7 +100,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "sand" :count 1 :tunnel-length 0 :settings {:jobs.gather.mine/max-failures 1} :mend false}
+        (let [s (await (scenario {:block "sand" :count 1 :tunnel-length 0 :settings {:jobs.gather.dig-for/max-failures 1}}
                                  {:floor [0 0 0 0] :blocks {"0,63,0" "sand" "0,62,0" "stone"}} 20))]
           (is (empty? (dug-cells s)) "a pillar top is never dug from on top")
           (is (= [{:x 0 :y 63 :z 0}] (mapv :pos (events-of s :mine.refused))))
@@ -112,7 +113,7 @@
         (let [s (start {:world {:blocks {"0,63,0" "sand" "0,62,0" "lava"}}})
               ys (atom [])]
           (add-watch (fake/state (:p s)) ::ys (fn [_ _ _ w] (swap! ys conj (second (get-in w [:self :pos])))))
-          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0}) {})
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0 :trip true :mend true}) {})
           (await (run-ticks s 30))
           (is (every? #(>= % 63) @ys) "the body never goes down onto the open hole")
           (is (not-any? #(= {:x 0.5 :y 64 :z 0.5} (select-keys (:target %) [:x :y :z])) (moved s))
@@ -125,7 +126,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[s go-tos] (spy-go-to (start {:world {:blocks (merge wide-floor sand-patch)}}))]
-          (core/submit! (:eng s) (spec {:block "sand" :count 6 :mend false}) {})
+          (core/submit! (:eng s) (spec {:block "sand" :count 6 :trip true}) {})
           (await (run-ticks s 120))
           (is (seq (home-go-tos @go-tos)) "home by a go-to child, not a raw moveTo")
           (is (= #{0} (set (map :range (home-go-tos @go-tos)))) "onto the start cell: range 0 on every round of the walk")
@@ -147,27 +148,27 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[s go-tos] (spy-go-to (start {:world {:blocks {"0,63,0" "sand" "0,62,0" "lava"}}}))]
-          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0}) {})
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0 :trip true :mend true}) {})
           (await (run-ticks s 30))
           (is (seq (home-go-tos @go-tos)))
           (is (= 1 (count (set (home-go-tos @go-tos)))) "one set of args for the whole walk home"))))))
 
 (deftest beside-counts-only-a-standable-cell-next-to-the-start-like-go-to-range-1
   (let [start {:x 0 :y 64 :z 0}]
-    (is (mine-end/beside? {:x 1 :y 64 :z 0} start))
-    (is (mine-end/beside? {:x 0 :y 64 :z -1} start))
-    (is (mine-end/beside? {:x 0 :y 65 :z 0} start) "above the start is standable")
-    (is (not (mine-end/beside? {:x 0 :y 63 :z 0} start)) "inside the dug hole is not home")
-    (is (not (mine-end/beside? {:x 1 :y 63 :z 0} start)))
-    (is (not (mine-end/beside? {:x 1 :y 64 :z 1} start)) "a diagonal is out of go-to's range 1")
-    (is (not (mine-end/beside? {:x 2 :y 64 :z 0} start)))))
+    (is (mine-home/beside? {:x 1 :y 64 :z 0} start))
+    (is (mine-home/beside? {:x 0 :y 64 :z -1} start))
+    (is (mine-home/beside? {:x 0 :y 65 :z 0} start) "above the start is standable")
+    (is (not (mine-home/beside? {:x 0 :y 63 :z 0} start)) "inside the dug hole is not home")
+    (is (not (mine-home/beside? {:x 1 :y 63 :z 0} start)))
+    (is (not (mine-home/beside? {:x 1 :y 64 :z 1} start)) "a diagonal is out of go-to's range 1")
+    (is (not (mine-home/beside? {:x 2 :y 64 :z 0} start)))))
 
 (deftest a-start-floor-felt-at-the-start-decides-when-it-is-not-seen-now
-  (is (mine-end/solid-floor? nil "dirt") "unseen now: the felt floor counts")
-  (is (not (mine-end/solid-floor? nil nil)) "never known: no place to aim at")
-  (is (not (mine-end/solid-floor? nil "air")))
-  (is (not (mine-end/solid-floor? "air" "dirt")) "seen open now wins over the felt floor")
-  (is (mine-end/solid-floor? "dirt" "air")))
+  (is (mine-home/solid-floor? nil "dirt") "unseen now: the felt floor counts")
+  (is (not (mine-home/solid-floor? nil nil)) "never known: no place to aim at")
+  (is (not (mine-home/solid-floor? nil "air")))
+  (is (not (mine-home/solid-floor? "air" "dirt")) "seen open now wins over the felt floor")
+  (is (mine-home/solid-floor? "dirt" "air")))
 
 (deftest the-tunnel-heading-arg-names-a-way-or-a-cell-to-run-toward
   (async done
@@ -273,7 +274,7 @@
         (doseq [why [:off-plan :needs-health]]
           (let [stub {:round (fn [c] (ctx/end c :nothing-possible {:reason :unreachable :why why} {:arrived false}))}
                 s (start {:world {:blocks (cells "sand" [15] [64] [-1 0 1 2])} :jobs (assoc registry/jobs 'jobs.movement.go-to stub)})]
-            (core/submit! (:eng s) (spec {:block "sand" :count 4 :tunnel-length 0 :mend false}) {})
+            (core/submit! (:eng s) (spec {:block "sand" :count 4 :tunnel-length 0}) {})
             (await (run-ticks s 60))
             (is (= 4 (count (events-of s :mine.unreachable))) (str why))))))))
 
@@ -284,7 +285,7 @@
       (fn ^:async t []
         (let [waiting {:round (fn ^:async w [_] :continue)}
               s (start {:world {:blocks {"15,64,0" "sand"}} :jobs (assoc registry/jobs 'jobs.movement.go-to waiting)})]
-          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0 :mend false}) {})
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0}) {})
           (await (run-ticks s 60))
           (is (= 1 (count (events-of s :mine.stalled))))
           (is (finished? s)))))))
@@ -296,7 +297,7 @@
       (fn ^:async t []
         (let [w (assoc (rock-world {}) :inventory [{:name "iron_pickaxe" :count 1 :durability 250 :max 250}
                                                    {:name "stone_pickaxe" :count 1 :durability 131 :max 131}])
-              s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :mend false} w 80))
+              s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4} w 80))
               held (mapv #(.-item (.-args %)) (calls s "equip"))]
           (is (seq held))
           (is (every? #{"stone_pickaxe"} held) (pr-str held)))))))
@@ -305,7 +306,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [w (assoc (rock-world {}) :inventory [{:name "stone_pickaxe" :count 1 :durability 4 :max 131}])
+        (let [w (assoc (rock-world {}) :inventory [{:name "stone_pickaxe" :count 1 :durability 4 :max 131} {:name "torch" :count 10}])
               s (start {:world w})
               world (.-world (:p s))
               n (atom 0)]
@@ -315,7 +316,7 @@
                          (when (= 3 (swap! n inc))
                            (swap! (.. world -state) assoc :inventory []))
                          r)))
-          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 8 :mend false}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 8 :trip true}) {})
           (await (run-ticks s 120))
           (is (= 1 (count (events-of s :tool.broke))))
           (is (= 1 (count (events-of s :tool.none)))))))))
@@ -325,7 +326,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [w (ew/of-data {} {} [home-zone])
-              s (await (zoned {:block "sand" :count 2 :mend false :tunnel-length 0} {:floor [-30 -30 40 30] :blocks {"6,64,11" "sand" "7,64,11" "sand"}} w 60))
+              s (await (zoned {:block "sand" :count 2 :tunnel-length 0 :trip true} {:floor [-30 -30 40 30] :blocks {"6,64,11" "sand" "7,64,11" "sand"}} w 60))
               left (first (events-of s :mine.left-zone))
               first-dig (first (dug-cells s))]
           (is (= "home" (:zone left)))
@@ -338,7 +339,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [w (ew/of-data {} {} [home-zone])
-              s (await (zoned {:block "sand" :count 1 :mend false :tunnel-length 0 :ignore-zones? true} {:blocks {"2,64,0" "sand"}} w 20))]
+              s (await (zoned {:block "sand" :count 1 :tunnel-length 0 :ignore-zones? true} {:blocks {"2,64,0" "sand"}} w 20))]
           (is (empty? (events-of s :mine.left-zone)))
           (is (= 1 (count (dug-cells s)))))))))
 
@@ -458,7 +459,7 @@
                                      (do (swap! (fake/state (:p @setup)) assoc-in [:self :pos] [6.5 64 0.5])
                                          (ctx/end c :nothing-possible {:reason :unreachable} {}))
                                      (await ((:round real) c)))))
-              {:keys [out]} (await (as-child {:block "iron_ore" :level false :count 1 :tunnel-length 0}
+              {:keys [out]} (await (as-child {:block "iron_ore" :level false :count 1 :tunnel-length 0 :trip true}
                                              {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270} nil 300
                                              {:jobs {'jobs.movement.go-to no-walk} :before #(reset! setup %)}))]
           (is (= [:nothing-possible :not-home 1] [(:kind out) (contract/cause-key out) (:got (:data out))]) (pr-str out)))))))
@@ -467,10 +468,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out ways]} (await (home-walk-run #(= mine-end/home-ways (:ways %))))]
+        (let [{:keys [out ways]} (await (home-walk-run #(= mine-home/home-ways (:ways %))))]
           (is (= :done (:kind out)) (pr-str out))
           (is (= 2 (count ways)))
-          (is (= mine-end/home-ways (first ways)) "stair and clear-path first")
+          (is (= mine-home/home-ways (first ways)) "stair and clear-path first")
           (is (nil? (second ways)) "every way is allowed once they failed"))))))
 
 (deftest the-walk-home-does-not-pillar-when-the-other-ways-arrive
@@ -479,15 +480,15 @@
       (fn ^:async t []
         (let [{:keys [out ways]} (await (home-walk-run (constantly false)))]
           (is (= :done (:kind out)) (pr-str out))
-          (is (= [mine-end/home-ways] ways)))))))
+          (is (= [mine-home/home-ways] ways)))))))
 
 (deftest a-pickaxe-that-breaks-in-the-dig-phase-with-none-to-fetch-ends-no-tool
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [w (assoc (rock-world {}) :inventory [{:name "stone_pickaxe" :count 1 :durability 4 :max 131}])
+        (let [w (assoc (rock-world {}) :inventory [{:name "stone_pickaxe" :count 1 :durability 4 :max 131} {:name "torch" :count 10}])
               n (atom 0)
-              {:keys [out]} (await (as-child {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 8 :mend false} w nil 120
+              {:keys [out]} (await (as-child {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 8} w nil 120
                                              {:before (fn [s]
                                                         (let [world (.-world (:p s))]
                                                           (.override world "dig"
@@ -504,7 +505,7 @@
       (fn ^:async t []
         (let [s (start {:world (update (rock-world {"0,65,-1" "air" "0,65,-2" "air" "1,65,-2" "iron_ore"}) :inventory into [{:name "cobblestone" :count 5}])})]
           (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
-          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :ore-reach 2 :mend false :submitted-at [-6 64 0]}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :ore-reach 2 :submitted-at [-6 64 0]}) {})
           (await (run-ticks s 500))
           (is (= 1 (get (inv s) "raw_iron")) (pr-str (keep :text @(:seen s)))))))))
 

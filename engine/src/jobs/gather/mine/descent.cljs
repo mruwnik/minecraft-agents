@@ -1,5 +1,5 @@
 (ns jobs.gather.mine.descent
-  "The descent of jobs.gather.mine: whether and how it goes down (tunnel level, stair-or-shaft tests, the pick and the walk down a mineshaft)."
+  "The descent of jobs.gather.dig-for: whether and how it goes down (tunnel level, stair-or-shaft tests, the pick and the walk down a mineshaft)."
   (:require [clojure.string :as str]
             [jobs.lib.child :as child]
             [engine.settings :as settings]
@@ -11,7 +11,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.look :refer [cell-of]]
             [jobs.gather.mine.targets :refer [base-ore step-cell within-own-zone]]
-            [jobs.gather.mine.end :refer [to-mend!]]
+            [jobs.gather.mine.end :refer [stop!]]
             [jobs.gather.mine.torches :refer [stair-torch-due? torch-step!]]
             [jobs.gather.mine.tunnel :refer [heading-stops turn-heading! result-of]]))
 
@@ -75,7 +75,7 @@
 (defn no-stone!
   "The stair down found no stone: the mend and the walk home with :reason :no-stone-found."
   [c]
-  (to-mend! c :no-stone-found))
+  (stop! c :no-stone-found))
 
 (defn stair-stopped!
   "The stair down to the tunnel level stopped above it: one mine.descent-stopped, then the tunnel runs where the body stands,
@@ -89,7 +89,7 @@
                {:steps (or steps 0) :stop stop :y y :level level
                 :text (str "mine's stair down stopped at y " y " (" (name stop) "), short of y " level
                            (if far? "; too high to tunnel there" "; it tunnels there"))})
-    (if far? (to-mend! c :descent-stopped) :again)))
+    (if far? (stop! c :descent-stopped) :again)))
 
 (defn stair-in-own-zone?
   "The own zone the stair's next step (the cell ahead along the heading, its head and the one below) lies in, else nil."
@@ -139,7 +139,7 @@
                                        shaft (assoc :shaft shaft)))
    (ctx/update-mem! c assoc :shaft {:state :none :reason reason})
    (if (= :required (:shaft (:args c)))
-     (to-mend! c :no-shaft)
+     (stop! c :no-shaft)
      :again)))
 
 (defn ^:async shaft-round!
@@ -286,11 +286,11 @@
       own own
       (= :continue back) :continue
       back (do (ctx/emit! c :mine.not-back :warn {:cell back :text (str "mine could not walk back to its stair down at " (str/join "," back))})
-               (to-mend! c :not-back))
+               (stop! c :not-back))
       (and level? (stair-torch-due? c)) (await (torch-step! c :stair))
       (and (not level?) (>= n (:descend-limit (:args c)))) (no-stone! c)
       (stair-in-own-zone? c) (do (ctx/update-mem! c assoc-in [:descent :stop] :own-zone)
                                  (ctx/emit! c :mine.own-zone :warn {:zone (:name (stair-in-own-zone? c))
                                                                     :text (str "mine's stair stops at the edge of its own zone " (:name (stair-in-own-zone? c)))})
-                                 (if level? (stair-stopped! c) (to-mend! c :own-zone)))
+                                 (if level? (stair-stopped! c) (stop! c :own-zone)))
       :else (await (step-down! c level?)))))

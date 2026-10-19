@@ -21,7 +21,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
-            [jobs.gather.mine :as mine]
+            [jobs.gather.dig-for :as mine]
             [jobs.gather.mine.descent :as mine-descent]
             [jobs.gather.mine.end :as mine-end]
             [jobs.gather.mine.targets :as mine-targets]
@@ -31,7 +31,10 @@
             [jobs.access.stair :as stair]
             [plan.shape :as shape]))
 
-(defn spec [args] (list 'jobs.gather.mine args))
+(defn spec
+  "The job to submit: jobs.gather.dig-for, or the trip jobs.gather.mine with :trip true in args."
+  [args]
+  (if (:trip args) (list 'jobs.gather.mine (dissoc args :trip)) (list 'jobs.gather.dig-for args)))
 
 (declare as-child)
 
@@ -84,7 +87,7 @@
 (defn done-events
   "The mine job's ending events."
   [s]
-  (filterv #(and (#{:completed :stopped} (:kind %)) (= "jobs.gather.mine" (:name %))) @(:seen s)))
+  (filterv #(and (#{:completed :stopped} (:kind %)) (#{"jobs.gather.dig-for" "jobs.gather.mine"} (:name %))) @(:seen s)))
 
 (defn done-event [s] (first (done-events s)))
 
@@ -188,7 +191,7 @@
 (defn ^:async bridge-run
   "A 3-long strip tunnel east over a gap in the floor at [1 63 0], carrying inv."
   [inv]
-  (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 3 :mend false}
+  (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 3}
                    (assoc (rock-world {"1,63,0" "air" "2,63,0" "air"}) :inventory inv) 120)))
 
 (defn no-floor-end? [s] (boolean (some #(= :no-floor (:reason %)) (tunnel-ends s))))
@@ -211,7 +214,7 @@
   "A stay-level mine with no heading argument, the body facing west, over rock-world extra with cobblestone carried."
   [extra length ticks]
   (let [s (start {:world (-> (rock-world extra) (assoc :yaw 90) (update :inventory into [{:name "cobblestone" :count 5}]))})]
-    (core/submit! (:eng s) (spec {:block "iron_ore" :count 30 :tunnel-length length :stay-level true :mend false}) {})
+    (core/submit! (:eng s) (spec {:block "iron_ore" :count 30 :tunnel-length length :stay-level true}) {})
     (await (run-ticks s ticks))
     s))
 
@@ -220,7 +223,7 @@
   [extra memory]
   (let [s (start {:world (update (rock-world extra) :inventory into [{:name "cobblestone" :count 5}])})]
     (doseq [[kind data] memory] (mem/write! (:store (:eng s)) kind data))
-    (core/submit! (:eng s) (spec {:block "iron_ore" :direction "east" :tunnel-length 4 :stay-level true :mend false}) {})
+    (core/submit! (:eng s) (spec {:block "iron_ore" :direction "east" :tunnel-length 4 :stay-level true}) {})
     (await (run-ticks s 120))
     s))
 
@@ -229,7 +232,7 @@
   [reach]
   (let [s (start {:world (update (rock-world {"0,65,-1" "air" "0,65,-2" "air" "1,65,-2" "iron_ore"}) :inventory into [{:name "cobblestone" :count 5}])})]
     (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
-    (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :ore-reach reach :mend false}) {})
+    (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :ore-reach reach}) {})
     (await (run-ticks s 500))
     s))
 
@@ -262,7 +265,7 @@
                              (assoc :drops drops)
                              (update :inventory into [{:name "cobblestone" :count 5}]))})]
     (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
-    (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 3 :stay-level true :mend false}) {})
+    (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 3 :stay-level true}) {})
     (await (run-ticks s 400))
     s))
 
@@ -284,7 +287,7 @@
   [args extra zones n]
   (zoned args (deep-rock extra) (ew/of-data {"s" shaft-plan} {} zones) n))
 
-(def via-shaft {:block "iron_ore" :count 1 :level 60 :mend false})
+(def via-shaft {:block "iron_ore" :count 1 :level 60 :trip true})
 
 (def ore-east {"10,60,0" "iron_ore"})
 
@@ -340,7 +343,7 @@
         _ (swap! (fake/state p) update :self merge self)
         _ (swap! (fake/state p) assoc :light-default [0 0])
         s (start {:p p})]
-    (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 0 :mend false}) {})
+    (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 0}) {})
     (await (run-ticks s 120))
     (dug-cells s)))
 
@@ -378,7 +381,7 @@
   (let [zmax (apply max (map last ores))
         room (merge (cells "air" (range 4 16) [64 65] (range 1 (inc zmax)))
                     (into {} (for [[x y z] ores] [(str x "," y "," z) "iron_ore"])))
-        s (await (scenario (merge {:block "iron_ore" :level false :count (count ores) :direction "east" :tunnel-length 16 :mend false} args)
+        s (await (scenario (merge {:block "iron_ore" :level false :count (count ores) :direction "east" :tunnel-length 16} args)
                            (assoc (torch-world torches8) :blocks (merge long-rock room)) 300))]
     {:dug (dug-cells s)
      :torches (vec (for [x (range 4 16) y [64 65] z (range 2 (inc zmax))
@@ -405,7 +408,7 @@
               :args {:block {:default nil} :item {:default nil} :kind {:default nil} :how {:default nil} :depth {:default nil}
                      :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []} :explore {:default true}}}
         parent {:round (fn ^:async mining-parent [c]
-                         (let [e (await (ctx/call c :kid 'jobs.gather.mine args))]
+                         (let [e (await (ctx/call c :kid (if (:trip args) 'jobs.gather.mine 'jobs.gather.dig-for) (dissoc args :trip)))]
                            (if (= :continue e) :continue (do (reset! out e) (ctx/end c :done nil)))))}
         eng (assoc (:eng s) :jobs (merge (assoc (:jobs (:eng s)) 'mining-parent parent 'jobs.items.get-tool stub) jobs))]
     (core/submit! eng '(mining-parent) {})
@@ -422,7 +425,7 @@
 (def soil-all-round (merge (cells "stone" (range -8 9) (range 55 60) (range -8 9)) (cells "dirt" (range -8 9) (range 60 64) (range -8 9))))
 
 (defn ^:async descent-run
-  "A stair-down mine (mend on) of soil over stone; {:s setup :go-to the args of each go-to call}."
+  "A stair-down mine trip of soil over stone; {:s setup :go-to the args of each go-to call}."
   [n]
   (let [s (start {:world {:blocks (soil-over-stone 63 59) :drops cobble :inventory [{:name "stone_pickaxe" :count 1}]}})
         go-tos (atom [])
@@ -430,7 +433,7 @@
         spy (assoc real :round (fn [c] (swap! go-tos conj (:args c)) ((:round real) c)))
         eng (assoc (:eng s) :jobs (assoc (:jobs (:eng s)) 'jobs.movement.go-to spy))]
     (fake/swap-self! (:p s) assoc :held "stone_pickaxe")
-    (core/submit! eng (spec {:block "stone" :count 1 :direction "east" :tunnel-length 4}) {})
+    (core/submit! eng (spec {:block "stone" :count 1 :direction "east" :tunnel-length 4 :trip true}) {})
     (await (run-ticks (assoc s :eng eng) n))
     {:s s :go-to @go-tos}))
 
@@ -474,7 +477,7 @@
 ;; ------------------------------------------------------------------ an own zone is left before the first dig
 (def home-zone {:name "home" :min [-3 60 -3] :max [3 70 3] :owner "Fake"})
 
-(def no-shaft-args {:block "iron_ore" :count 1 :direction "east" :level 58 :mend false})
+(def no-shaft-args {:block "iron_ore" :count 1 :direction "east" :level 58})
 
 (def deep-ore (deep-rock {"9,58,1" "iron_ore"}))
 
@@ -492,7 +495,7 @@
                                          (ctx/end c :nothing-possible {:reason :unreachable} {})
                                          (await ((:round real) c))))
                                    (await ((:round real) c)))))
-        {:keys [out]} (await (as-child {:block "iron_ore" :level false :count 1 :tunnel-length 0}
+        {:keys [out]} (await (as-child {:block "iron_ore" :level false :count 1 :tunnel-length 0 :trip true}
                                        {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270} nil 300
                                        {:jobs {'jobs.movement.go-to spy} :before #(reset! setup %)}))]
     {:out out :ways @ways}))

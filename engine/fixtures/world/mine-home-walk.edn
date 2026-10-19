@@ -11,14 +11,14 @@
   :limit-s 120}
  :cases
  [{:name "dirt-under-the-feet-dug-from-beside-and-mended"
-   :act [[:job (jobs.gather.mine {:block "dirt" :level false :count 1 :direction :east :tunnel-length 0 :radius 3})]]
+   :act [[:job (jobs.gather.mine {:block "dirt" :level false :count 1 :direction :east :tunnel-length 0 :radius 3 :mend true})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :mine.not-home} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "dirt" 1] [:not-block [16 -1 16] "air"] [:block [16 -2 16] "cobblestone"] [:body-near [16.5 0 16.5] 1.6]]}
   {:name "nothing-to-mend-with-walk-ends-beside-the-hole"
    ;; sandstone gives no cobblestone, so the hole may stay open or be mended with the dug dirt; the felt dirt floor must not send the walk onto the hole, so it ends near the start either way
    :blocks [[:fill [0 -8 0] [31 -1 31] "sandstone"] [:set [16 -1 16] "dirt"] [:set [16 -2 16] "lava"]]
-   :act [[:job (jobs.gather.mine {:block "dirt" :level false :count 1 :direction :east :tunnel-length 0 :radius 3})]]
+   :act [[:job (jobs.gather.mine {:block "dirt" :level false :count 1 :direction :east :tunnel-length 0 :radius 3 :mend true})]]
    :body {:inventory [["stone_pickaxe" 1]]}
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :mine.not-home} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]

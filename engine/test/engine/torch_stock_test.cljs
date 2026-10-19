@@ -104,7 +104,7 @@
               w (-> (mt/torch-world mt/bare-pickaxe)
                     (update :blocks #(merge % (mt/cells "air" (range 1 12) [64 65] [0]) {chest "chest"}))
                     (assoc :containers {chest [{:name "torch" :count 20}]}))
-              s (await (mt/scenario {:block "iron_ore" :level false :count 1 :direction "north" :tunnel-length 4 :mend false} w 300))]
+              s (await (mt/scenario {:block "iron_ore" :level false :count 1 :direction "north" :tunnel-length 4 :trip true} w 300))]
           (is (pos? (get (mt/inv s) "torch" 0)) "the chest's torches were taken")
           (is (seq (mt/dug-cells s)))
           (is (every? (fn [[x]] (<= x 2)) (mt/dug-cells s)) (pr-str (mt/dug-cells s))))))))

@@ -1,5 +1,5 @@
 (ns jobs.gather.mine-stay
-  "The :stay-level option of jobs.gather.mine: ore only beside the body, and a cut that opens into a cave sealed again."
+  "The :stay-level option of jobs.gather.dig-for: ore only beside the body, and a cut that opens into a cave sealed again."
   (:require [jobs.lib.choose :as choose]
             [engine.ctx :as ctx]
             [jobs.lib.access.rules :as rules]
