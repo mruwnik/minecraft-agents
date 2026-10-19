@@ -7,7 +7,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.escape :as escape]
-            [jobs.lib.shafts :as shafts]
+            [jobs.gather.shaft-descent :refer [pick-shaft xyz]]
             [jobs.lib.util :as u]
             [jobs.lib.look :refer [cell-of]]
             [jobs.gather.mine.targets :refer [base-ore step-cell within-own-zone]]
@@ -61,9 +61,9 @@
   (and (contains? #{nil :none} (shaft-state c)) (descent-wanted? c)))
 
 (defn shaft-under-way?
-  "Whether a shaft descent is under way (walking to its top, down its stair, or to its branch)."
+  "Whether the shaft child has been called and has not ended."
   [c]
-  (and (not (false? (:shaft (:args c)))) (contains? #{:going :down :walking} (shaft-state c))))
+  (and (not (false? (:shaft (:args c)))) (= :calling (shaft-state c))))
 
 (defn shaft-due?
   "Whether the descent goes by a mineshaft: it is due and :shaft is not false, or a shaft descent is under way."
@@ -98,28 +98,6 @@
         ahead (step-cell {:origin here :heading (:heading (ctx/mem c))} 1)]
     (some #(within-own-zone c 0 (access/cell %)) [ahead (update ahead :y dec) (update ahead :y inc)])))
 
-(def failed-shaft-policy
-  "Body memory policy of :mine-shaft-failed: a shaft whose stair stopped is left alone for a day unless :shaft names it."
-  {:cap 20 :ttl (* 24 60 60 1000)})
-
-(defn failed-shafts [c]
-  (set (map (comp :id :data) (ctx/entries c :mine-shaft-failed))))
-
-(defn pick-shaft
-  "The usable mineshaft the :shaft arg names, else the nearest not failed lately (jobs.lib.shafts/lookup; :ignore-zones? uses a foreign one): the shaft,
-  or {:none reason}."
-  [c]
-  (let [{:keys [shaft ignore-zones?]} (:args c)
-        {:keys [usable refused]} (shafts/lookup c (u/self-pos c) {:foreign-zone? ignore-zones?})
-        usable (if (string? shaft) (filter #(= shaft (:id %)) usable) usable)
-        failed (when-not (string? shaft) (failed-shafts c))
-        fresh (remove #(contains? failed (:id %)) usable)]
-    (or (first fresh)
-        (when-let [stale (first usable)] {:none :failed-lately :shaft (:id stale)})
-        {:none (or (get-in (first refused) [:verdict :reason]) :no-shaft)})))
-
-(defn xyz [[x y z]] {:x x :y y :z z})
-
 (defn shaft-top-here?
   "Whether the body stands at the top of the shaft it would use."
   [c]
@@ -127,64 +105,39 @@
     (boolean (and (not none) (u/within? (u/self-pos c) (cell-of (xyz top)) 1)))))
 
 (defn shaft-none!
-  "End the shaft descent for reason (shaft: the shaft's id when it is one). A shaft whose stair or walk failed is left
-  alone by later runs (failed-shaft-policy)."
-  ([c reason] (shaft-none! c reason (:id (:shaft (ctx/mem c)))))
-  ([c reason shaft]
-   (when (and shaft (not (#{:failed-lately :zone :claim :footprint :no-shaft} reason)))
-     (ctx/remember! c :mine-shaft-failed {:id shaft} failed-shaft-policy))
-   (ctx/emit! c :mine.no-shaft :info (cond-> {:reason reason
-                                              :text (str "mine uses no mineshaft" (some->> shaft (str " ")) ": " (name reason)
-                                                         (when shaft (str "; name it with :shaft \"" shaft "\" to try it again")))}
-                                       shaft (assoc :shaft shaft)))
-   (ctx/update-mem! c assoc :shaft {:state :none :reason reason})
-   (if (= :required (:shaft (:args c)))
-     (stop! c :no-shaft)
-     :again)))
+  "End the shaft descent for reason (shaft: its id when there is one; steps: what its stair cut). The usual descent goes on."
+  [c reason shaft steps]
+  (ctx/emit! c :mine.no-shaft :info (cond-> {:reason reason
+                                             :text (str "mine uses no mineshaft" (some->> shaft (str " ")) ": " (name reason)
+                                                        (when shaft (str "; name it with :shaft \"" shaft "\" to try it again")))}
+                                      shaft (assoc :shaft shaft)))
+  (ctx/update-mem! c #(-> % (assoc-in [:descent :steps] (or steps 0)) (assoc :shaft {:state :none :reason reason})))
+  (if (= :required (:shaft (:args c)))
+    (stop! c :no-shaft)
+    :again))
+
+(defn shaft-used!
+  "The shaft child ended :done (res): remember the shaft used, the tunnel's heading is the branch's."
+  [c {:keys [shaft to-y n branch heading steps]}]
+  (ctx/update-mem! c #(cond-> (-> % (assoc-in [:descent :steps] steps) (assoc :shaft {:state :used :id shaft :to-y to-y :n n :branch branch}))
+                        heading (assoc :heading heading)))
+  (ctx/emit! c :mine.shaft :info {:shaft shaft :to-y to-y :branch n :heading (some-> heading keyword)
+                                  :text (str "mine took shaft " shaft " down to y " to-y (when heading (str ", branch " n " " heading)))})
+  :again)
 
 (defn ^:async shaft-round!
-  "One step of a descent by mineshaft: pick it, walk to its top, the stair child down to its depth, walk to the next branch and
-  set the tunnel's heading to it. A shaft that cannot be used or a stair that stops ends in :none: the usual descent."
+  "One step of a descent by mineshaft: the jobs.gather.shaft-descent child. A shaft that cannot be used or a stair that stops
+  ends in :none: the usual descent."
   [c]
-  (let [{:keys [state id top heading to-y bottom] :as sh} (:shaft (ctx/mem c))]
-    (case state
-      nil (let [p (pick-shaft c)]
-            (if (:none p)
-              (shaft-none! c (:none p) (:shaft p))
-              (let [feet (cell-of (u/self-pos c))]
-                (ctx/update-mem! c assoc :shaft (assoc (select-keys p [:id :top :heading :to-y :bottom])
-                                                       :state (if (shafts/on-line? p [(:x feet) (:y feet) (:z feet)]) :down :going)))
-                :again)))
-      :going (let [r (await (child/call-walk* c :shaft-walk {:pos top :range 0}))]
-               (cond
-                 (= :continue r) :continue
-                 (u/within? (u/self-pos c) (cell-of (xyz top)) 1) (do (ctx/update-mem! c assoc-in [:shaft :state] :down) :again)
-                 :else (shaft-none! c :unreachable)))
-      :down (let [r (await (ctx/call c :shaft-stair 'jobs.access.stair
-                                           {:dir :down :heading heading :y to-y :fetch true :through id
-                                            :ignore-zones? (:ignore-zones? (:args c))}))
-                  res (result-of r)]
-              (cond
-                (= :continue r) :continue
-                (= :done (:status res))
-                (let [shaft (assoc sh :to-y to-y)
-                      n (shafts/branch-count c id)
-                      branch (shafts/next-for c shaft)]
-                  (ctx/update-mem! c #(-> % (assoc-in [:descent :steps] (or (:steps res) 1)) (assoc-in [:shaft :state] :walking)
-                                          (assoc-in [:shaft :n] (inc n)) (assoc-in [:shaft :branch] branch)))
-                  :again)
-                :else (do (ctx/update-mem! c assoc-in [:descent :steps] (or (:steps res) 0))
-                          (shaft-none! c (or (:reason res) :stair-stopped)))))
-      :walking (let [{:keys [from heading]} (:branch sh)
-                     r (when from (await (child/call-walk* c :shaft-branch {:pos from :range 0})))]
-                 (cond
-                   (= :continue r) :continue
-                   (and from (not (u/within? (u/self-pos c) (cell-of (xyz from)) 1))) (shaft-none! c :unreachable)
-                   :else (do (ctx/update-mem! c #(cond-> (assoc-in % [:shaft :state] :used)
-                                                   heading (assoc :heading (name heading))))
-                             (ctx/emit! c :mine.shaft :info {:shaft id :to-y to-y :branch (:n sh) :heading heading
-                                                             :text (str "mine took shaft " id " down to y " to-y (when heading (str ", branch " (:n sh) " " (name heading))))})
-                             :again))))))
+  (let [shaft (:shaft (:args c))]
+    (when-not (= :calling (shaft-state c)) (ctx/update-mem! c assoc :shaft {:state :calling}))
+    (let [r (await (ctx/call c :shaft 'jobs.gather.shaft-descent
+                             {:shaft (when (string? shaft) shaft) :ignore-zones? (:ignore-zones? (:args c))}))
+          res (result-of r)]
+      (cond
+        (= :continue r) :continue
+        (= :done (:status res)) (shaft-used! c res)
+        :else (shaft-none! c (:reason res) (:shaft res) (:steps res))))))
 
 (defn own-stair-bottom
   "The lowest stand of a stair this body cut earlier (memory :stair-way) worth walking down: its top within ::own-stair-reach of the
