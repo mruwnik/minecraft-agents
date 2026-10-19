@@ -28,8 +28,10 @@
    ::shot-reach {:default 12 :doc "Blocks out along the way a shot came from that stand for the place of a shooter the body has not seen (cover, seal sides and back-off turn on it)." :spec (a/num-in 1 nil)}
    ::shot-window-s {:default 5 :doc "Seconds a shot's direction stands for an unseen shooter (flight/fire-spots)." :spec (a/num-in 0 nil)}
    ::prefer-lit? {:default true :doc "By night or under ground a flee step ends on lit ground rather than dark (jobs.lib.look/dark-fn) while a lit end is open." :spec boolean?}
+   ::hide-health {:default 12 :doc "At or under this health, in a ranged chaser's line of fire with no covered step, the body takes cover where it stands before walking on." :spec (a/num-in 0 20)}
    ::lost-s {:default 4 :doc "Seconds out of line of sight after which a mob has stopped chasing." :spec (a/num-in 0 nil)}})
 (defn lost-s [] (settings/get settings ::lost-s))
+(defn hide-health [] (settings/get settings ::hide-health))
 
 (def displaced-policy
   "One :displaced entry, half an hour: the night job may then walk back to a bed up to :urgent-bed-radius away."
@@ -231,9 +233,10 @@
   join or are seen afresh; one that stopped chasing (stopped-chasing) moves to :fled with :ended why. The chasers
   still on, as JS entities, nearest first. A mob that hurt the body in its refuge (:reached) has a way whatever the map says."
   [c]
-  (let [{:keys [radius ranged-radius hide-health]} (:args c)
+  (let [radius (danger-q/radius-in (:args c))
+        ranged-radius (danger-q/ranged-radius-in (:args c))
         p (:primitives c)
-        low? (<= (.-health (.self p)) hide-health)
+        low? (<= (.-health (.self p)) (hide-health))
         now (ctx/now c)
         dead (set (dead-ids c))
         live (remove #(dead (.-id %)) (known-chasers p))

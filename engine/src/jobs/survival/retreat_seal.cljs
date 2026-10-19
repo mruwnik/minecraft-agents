@@ -22,14 +22,19 @@
   "Where the seen melee hostiles within the flight's :radius stand."
   [c]
   (let [p (:primitives c)]
-    (->> (danger-q/known-hostiles p (:radius (:args c)) {})
+    (->> (danger-q/known-hostiles p (danger-q/radius-in (:args c)) {})
          (filter #(and (not (combat/ranged? %)) (danger-q/seen-only? %)))
          (mapv #(danger-q/mob-pos p %)))))
 
 (a/defargs settings
-  {::hit-reach {:default 3 :doc "Blocks within which a melee mob that hurt the body during a seal step ends the step (the fight is decided anew)." :spec (a/num-in 0 nil)}
+  {::max-places {:default 4 :doc "Seal placements a step of a flight makes (a call of shut-in or dig-pocket: its own :max-places)." :spec (a/int-in 1 nil)}
+   ::hit-reach {:default 3 :doc "Blocks within which a melee mob that hurt the body during a seal step ends the step (the fight is decided anew)." :spec (a/num-in 0 nil)}
    ::max-refusals {:default 2 :doc "Times the place primitive may refuse one cell before it is given up on." :spec (a/int-in 0 nil)}})
 (defn max-refusals [] (settings/get settings ::max-refusals))
+(defn max-places
+  "Seal placements a step: the call's :max-places (shut-in, dig-pocket), else ::max-places."
+  [c]
+  (or (:max-places (:args c)) (settings/get settings ::max-places)))
 
 (defn occupied?
   "Whether the seal leaves cell alone: a block it cannot clear stands in it, or the server refused it max-refusals times."
@@ -99,7 +104,8 @@
 (defn shooters
   "Where the seen ranged hostiles within the flight's :ranged-radius stand, and the unseen shooters of recent shots (flight/fire-spots)."
   [c]
-  (let [{:keys [radius ranged-radius]} (:args c)
+  (let [radius (danger-q/radius-in (:args c))
+        ranged-radius (danger-q/ranged-radius-in (:args c))
         p (:primitives c)]
     (into (->> (danger-q/known-hostiles p radius {:ranged-radius ranged-radius})
                (filter #(and (combat/ranged? %) (danger-q/seen-only? %)))
@@ -169,7 +175,7 @@
   (let [threats (into (shooters c) (melee-spots c))
         p (:primitives c)
         _ (await (look/look-unknown! c (map lb/cell (dig-cells/open-cells p (sh-sense/feet p) threats))))
-        {:keys [radius max-places]} (:args c)
+        radius (danger-q/radius-in (:args c))
         blocks (flight/blocks c)
         open (dig-cells/open-cells p (sh-sense/feet p) threats)
         free (remove #(occupied? c %) open)
@@ -184,7 +190,7 @@
       :else
       (do (when (seal/off-centre? p) (await (seal/centre! c)))
           (access/trespass! c "shut-in" (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
-          (case (await (place-seal! c (take max-places (remove #(and (not (some #{%} cells)) (access/trespass-refusal c :place %))
+          (case (await (place-seal! c (take (max-places c) (remove #(and (not (some #{%} cells)) (access/trespass-refusal c :place %))
                                                                  (dig-cells/bottom-up p cells (sh-sense/feet p))))))
             :failed :failed
             :wait :again

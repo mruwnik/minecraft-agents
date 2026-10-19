@@ -200,7 +200,7 @@
         (let [{:keys [eng p seen]} (setup {:blocks dead-end :inventory [{:name "cobblestone" :count 20}] :entities [(skeleton 4 64 0)]})
               _ (add-watch (fake/state p) :mob-out
                            (fn [_ _ _ w] (when (and (seq (:entities w)) (get-in w [:blocks [1 64 0]])) (swap! (fake/state p) assoc :entities []))))
-              round (do (core/submit! eng '(jobs.survival.retreat {:max-places 1}) {})
+              round (do (core/submit! eng '(jobs.survival.retreat {:settings {:jobs.survival.retreat-seal/max-places 1}}) {})
                         (core/tick! eng))]
           (await round)
           (is (= [[1 64 0] [1 65 0]] (placed-cells p)) "the seal is finished though the skeleton is out of sense")
@@ -1234,7 +1234,7 @@
                          (swap! (fake/state p) update-in [:self :health] - 2)
                          (mem/write! (:store eng) :hurt {:amount 2 :health 18 :hits 1 :causes ["zombie"]} {:cap 50 :ttl 60000}))
                        (impl token args)))
-          (core/submit! eng '(jobs.survival.retreat {:max-places 4}) {})
+          (core/submit! eng '(jobs.survival.retreat {}) {})
           (await (core/tick! eng))
           (is (= [[1 64 0]] (take 1 (placed-cells p))))
           (is (= 1 (count (take-while #(not= "attack" (.-name %)) (filter #(#{"place" "attack"} (.-name %)) (.-calls (.-world p))))))

@@ -77,7 +77,8 @@
   cannot reach any hostile (the option failed this flight). reach-only?: only a hostile within hit-reach is
   swung at, none walked to. A fight that ends other than done keeps its memory (its given-up counts) for the next."
   [c weapons reach-only?]
-  (let [{:keys [radius ranged-radius]} (:args c)
+  (let [radius (danger-q/radius-in (:args c))
+        ranged-radius (danger-q/ranged-radius-in (:args c))
         radius (if reach-only? (min radius (hit-reach)) radius)
         ranged-radius (if reach-only? radius ranged-radius)]
     (ctx/update-mem! c assoc :cornered true)
@@ -131,7 +132,8 @@
 (defn near-hostiles
   "The hostiles a cornered body weighs: within :radius, ranged ones within :ranged-radius, the dead skipped."
   [c]
-  (let [{:keys [radius ranged-radius]} (:args c)]
+  (let [radius (danger-q/radius-in (:args c))
+        ranged-radius (danger-q/ranged-radius-in (:args c))]
     (flight/near-known (:primitives c) (set (flight/dead-ids c)) radius ranged-radius)))
 
 (defn angry-enderman?
@@ -165,7 +167,7 @@
   [c hostiles]
   (let [p (:primitives c)
         self (.self p)
-        reserve (:reserve (:args c))]
+        reserve (danger-q/reserve-in (:args c))]
     (boolean
      (and (seq hostiles)
           (not-any? combat/creeper? hostiles)

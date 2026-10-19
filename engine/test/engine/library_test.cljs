@@ -611,6 +611,16 @@
           (is (< (.-x (.-pos (.self p))) -30) "moved away from the zombie, along x, beyond its follow range")
           (is (= [] (:list (core/state eng))) "one round"))))))
 
+(deftest retreat-reads-the-hostile-radius-from-the-danger-settings
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (flight-setup {:floor [-40 -10 10 10]
+                                             :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 5 :y 64 :z 0}}]})]
+          (core/submit! eng '(jobs.survival.retreat {:settings {:jobs.lib.danger/hostile-radius 3}}) {})
+          (await (core/tick! eng))
+          (is (> (.-x (.-pos (.self p))) -1) "a zombie beyond the danger radius starts no flight"))))))
+
 (deftest retreat-hits-back-when-the-way-is-blocked
   (async done
     (tu/run-async done

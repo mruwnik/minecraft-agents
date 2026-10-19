@@ -22,6 +22,7 @@
 
 (a/defargs settings
   {::home-range {:default 64 :doc "Blocks within which the latest :bed or :home entry is a home a flight runs or leans to." :spec (a/num-in 0 nil)}
+   ::swim-factor {:default nil :doc "Blocks of walking a block of swimming costs a flight; nil: jobs.lib.cost/swim-factor of the boots." :spec (a/num-in 1 nil)}
    ::way-reach {:default 14 :doc "Blocks within which the stairs the body cut are a way out of a flight." :spec (a/num-in 0 nil)}})
 (defn home-range [] (settings/get settings ::home-range))
 (defn way-reach [] (settings/get settings ::way-reach))
@@ -100,9 +101,9 @@
          #(walk/out-of-fire? arrow-at at %))))))
 
 (defn swim-factor
-  "The flight's price of a swim block: :swim-factor, else jobs.lib.cost/swim-factor of the boots worn."
+  "The flight's price of a swim block: ::swim-factor, else jobs.lib.cost/swim-factor of the boots worn."
   [c]
-  (or (:swim-factor (:args c)) (cost/swim-factor (.-equipment (.self (:primitives c))))))
+  (or (settings/get settings ::swim-factor) (cost/swim-factor (.-equipment (.self (:primitives c))))))
 
 (defn lost-spots
   "The places of the mobs a flight lost within lost-memory-ms (:threat entries, other than the chasers now on), as walk
@@ -173,11 +174,11 @@
                  threats)))
 
 (defn exposed-low?
-  "Whether the body is at or under :hide-health with a ranged threat's line of fire on it (covered? false at its feet),
+  "Whether the body is at or under flight/::hide-health with a ranged threat's line of fire on it (covered? false at its feet),
   or, a ranged threat seen, a plug begun where it stands is not finished (refuge/plugging-here?: its first blocks may
   be all that stop the arrows)."
   [c covered?]
   (boolean (and covered?
                 (or (refuge/plugging-here? c)
-                    (and (<= (.-health (.self (:primitives c))) (:hide-health (:args c)))
+                    (and (<= (.-health (.self (:primitives c))) (flight/hide-health))
                          (not (covered? (sh-sense/feet (:primitives c)))))))))

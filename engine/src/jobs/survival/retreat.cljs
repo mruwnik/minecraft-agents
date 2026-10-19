@@ -7,7 +7,6 @@
             [engine.settings :as settings]
             [jobs.lib.blocks :as lb]
             [jobs.lib.combat :as combat]
-            [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.survival.retreat-doors :as retreat-doors]
             [jobs.lib.goal :as goal]
@@ -58,11 +57,11 @@
      It leaves out the ends within retreat-flight/::died-radius of a recent :died place, then dark ones at night or under ground
      (retreat-flight/::prefer-lit?), each only while another end is open.
      It prefers, in this order: a step whose end is out of every ranged chaser's line of fire (cover: leaves stop arrows),
-     the full step that takes least time (a swim block costs :swim-factor), the most open.
+     the full step that takes least time (a swim block costs retreat-cover/::swim-factor), the most open.
      It first looks away and to either side where it has not seen the ground (at most 3 looks); a cell still unseen
      reads as rock.
      Eats one bite a step (up to food 20) when the nearest chaser is at least eat-gap (12) blocks away and food is carried.
-  Low on health (at most :hide-health) in a seen ranged chaser's line of fire (over the cells it has seen) with no
+  Low on health (at most retreat-flight/::hide-health, 12) in a seen ranged chaser's line of fire (over the cells it has seen) with no
   covered step, it takes cover where it stands first: plug in (as below);
   not possible, it walks on. A plug begun where it stands is finished before it walks on (refuge/plugging-here?).
   Not while a creeper chases it or a melee mob is within cover-gap: it walks (or backs off, cornered) first.
@@ -112,14 +111,11 @@
   A cell in another's zone is used only as a last resort (shut-in.trespass-last-resort warning).")
 
 (a/defargs args
-  {:radius {:doc "hostiles within this many blocks start a flight" :spec (a/num-in 0 nil) :default 8}
-   :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks start a flight" :spec (a/num-in 0 nil) :default 16}
+  {:radius {:doc "hostiles within this many blocks start a flight; nil: the jobs.lib.danger ::hostile-radius setting" :spec (a/num-in 0 nil) :default nil}
+   :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks start a flight; nil: the ::ranged-radius setting" :spec (a/num-in 0 nil) :default nil}
    :goal {:doc "a position {:x :y :z} the flight walks to with go-to legs (planner danger costs keep it round the hostiles) while the body outruns them (done within 3 blocks of it; given up for jobs.survival.retreat-goal/retry-s after a leg that lost ground or left the goal's height), else leans toward, like a refuge; nil: away only" :spec goal/pos-spec :default nil}
-   :reserve {:doc "health a cornered fight must be expected to leave" :spec (a/num-in 0 nil) :default cost/default-reserve}
-   :max-places {:doc "seal placements per step" :spec (a/int-in 1 nil) :default 4}
-   :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pocket or pit is dropped and the lava left" :spec #{:seal :stop} :default :seal}
-   :swim-factor {:doc "blocks of walking a block of swimming costs a flight; nil: jobs.lib.cost/swim-factor of the boots" :spec (a/num-in 1 nil) :default nil}
-   :hide-health {:doc "at or under this health, in a ranged chaser's line of fire with no covered step, take cover where it stands before walking on" :spec (a/num-in 0 20) :default 12}})
+   :reserve {:doc "health a cornered fight must be expected to leave; nil: the ::fight-reserve setting" :spec (a/num-in 0 nil) :default nil}
+   :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pocket or pit is dropped and the lava left" :spec #{:seal :stop} :default :seal}})
 
 (a/defargs settings
   {::job-time-s {:default 420 :doc "Seconds of a flight's time spend (its pauses included): past it the flight ends limit-reached and the hostile trigger fires again while the danger stays." :spec (a/num-in 0 nil)}
@@ -140,7 +136,8 @@
   "Done once no real danger is within range and the flight holds no chaser, fled mob or refuge: those are written by the
   flight's end (flight/end-flight!), which the call still has to make."
   [c]
-  (let [{:keys [radius ranged-radius]} (:args c)
+  (let [radius (danger-q/radius-in (:args c))
+        ranged-radius (danger-q/ranged-radius-in (:args c))
         {:keys [fled chasers refuge]} (ctx/mem c)
         data [:units :hostiles :done (count fled) :left (count chasers)]]
     (if (or (seq fled) (seq chasers) refuge (seq (danger-q/dangers (:primitives c) radius {:ranged-radius ranged-radius} {:sight? false})))

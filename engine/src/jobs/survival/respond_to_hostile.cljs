@@ -51,9 +51,9 @@
   A danger reflex: never backed off.")
 
 (a/defargs args
-  {:radius {:doc "hostiles within this many blocks count" :spec (a/num-in 0 nil) :default 8}
-   :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks count" :spec (a/num-in 0 nil) :default 16}
-   :reserve {:doc "health a fight must be expected to leave" :spec (a/num-in 0 20) :default 4}
+  {:radius {:doc "hostiles within this many blocks count; nil: the jobs.lib.danger ::hostile-radius setting" :spec (a/num-in 0 nil) :default nil}
+   :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks count; nil: the ::ranged-radius setting" :spec (a/num-in 0 nil) :default nil}
+   :reserve {:doc "health a fight must be expected to leave; nil: the ::fight-reserve setting" :spec (a/num-in 0 20) :default nil}
    :goal {:doc "passed to the retreat: where the flight leans; nil: the destination of the walk this reflex interrupted (jobs.lib.goal), read once" :spec goal/pos-spec :default nil}
    :stay-inside {:doc "at night a body shut in a closed room or its own shelter fights from there and never steps out toward a mob; under any roof it does not flee for mobs it only hears (false: it may)" :spec boolean? :default true}})
 
@@ -94,7 +94,8 @@
   it is left alone, as is one with no walkable way to the body (jobs.lib.danger),
   as the hostile-near trigger does."
   [c]
-  (let [{:keys [radius ranged-radius]} (:args c)]
+  (let [radius (danger-q/radius-in (:args c))
+        ranged-radius (danger-q/ranged-radius-in (:args c))]
     (danger-q/dangers (:primitives c) radius {:ranged-radius ranged-radius} {})))
 
 
@@ -126,8 +127,11 @@
 (defn ^:async run-child
   "One call of the child for decision: :continue, :done, :declined (a fight that ended otherwise, its memory put back,
   or a retreat that ended :condition-failed: the other child may run), or the ending of a retreat that ended otherwise."
-  [c decision {:keys [radius ranged-radius reserve]} hold]
-  (let [child-args (case decision
+  [c decision args hold]
+  (let [radius (danger-q/radius-in args)
+        ranged-radius (danger-q/ranged-radius-in args)
+        reserve (danger-q/reserve-in args)
+        child-args (case decision
                      :fight {:targets :hostiles :radius radius :ranged-radius ranged-radius :use {:tools (weapons c)}
                              :hold (or hold (hold? c)) :checks {:safe? '(always) :fit? '(always)}}
                      :flee {:radius radius :ranged-radius ranged-radius :use {:tools (weapons c)} :reserve reserve
@@ -240,7 +244,8 @@
                     (* 1000 (settings/get settings ::struck-s)))))
 
 (defn ^:async respond [c near]
-  (let [{:keys [reserve] :as a} (:args c)
+  (let [a (:args c)
+        reserve (danger-q/reserve-in a)
         p (:primitives c)
         self (.self p)
         m (ctx/mem c)
@@ -312,7 +317,7 @@
   "One call of block-arrow-gap (never fetching): :continue or its ending's kind; nothing placed lets the round decide as usual.
   Tried once it has ended; a :continue (its look around) calls it again."
   [c]
-  (let [e (await (ctx/call c :gap 'jobs.survival.block-arrow-gap {:radius (:ranged-radius (:args c)) :fetch false}))]
+  (let [e (await (ctx/call c :gap 'jobs.survival.block-arrow-gap {:radius (danger-q/ranged-radius-in (:args c)) :fetch false}))]
     (when-not (= :continue e) (ctx/update-mem! c assoc :gap-tried true))
     (if (= :continue e) :continue (:kind e))))
 

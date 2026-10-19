@@ -15,7 +15,8 @@
             [jobs.lib.threats :as threats]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.retreat-flight :as flight]
-            [jobs.survival.retreat-pillar :as pillar]))
+            [jobs.survival.retreat-pillar :as pillar]
+            [jobs.survival.retreat-seal :as seal]))
 
 (a/defargs settings
   {::leave-for-breakers {:default true :doc "Whether a hidden body leaves its refuge, before it is hit, for a creeper (its blast breaks any refuge) or, on a pillar, a spider (it climbs) within :breaker-reach." :spec boolean?}
@@ -77,7 +78,10 @@
   "Shut the body in with jobs.survival.shut-in by ways and hide there (a :plug refuge): :again while it works or once shut
   in, nil when no way shuts it. :plugging marks the option, ways and cell a plug is under way at (plugging-here?)."
   [c option ways]
-  (let [{:keys [radius ranged-radius max-places on-lava]} (:args c)
+  (let [{:keys [on-lava]} (:args c)
+        radius (danger-q/radius-in (:args c))
+        ranged-radius (danger-q/ranged-radius-in (:args c))
+        max-places (seal/max-places c)
         e (await (ctx/call c option 'jobs.survival.shut-in
                            (cond-> {:ways ways :radius radius :ranged-radius ranged-radius :max-places max-places :on-lava on-lava}
                              (ctx/use c :blocks) (assoc :use {:blocks (ctx/use c :blocks)}))))
@@ -122,7 +126,7 @@
   [c {:keys [anchor cells]}]
   (let [p (:primitives c)
         open (set cells)
-        {:keys [ranged-radius]} (:args c)
+        ranged-radius (danger-q/ranged-radius-in (:args c))
         reach-of (fn [e] (cond-> (threats/follow-range (.-name e)) (combat/ranged? e) (max ranged-radius)))
         known (flight/near-known p (set (flight/dead-ids c)) threats/max-follow-range ranged-radius)]
     (boolean (some #(and (<= (danger-q/mob-distance p %) (reach-of %))
@@ -160,7 +164,8 @@
     (when-not (:hidden-since (ctx/mem c)) (ctx/update-mem! c assoc :hidden-since now)))
   (loop []
     (when (refuge-danger? c (:refuge (ctx/mem c))) (ctx/update-mem! c assoc :quiet-from (ctx/now c)))
-    (let [{:keys [radius ranged-radius]} (:args c)
+    (let [radius (danger-q/radius-in (:args c))
+          ranged-radius (danger-q/ranged-radius-in (:args c))
           {:keys [quiet-from hidden-since refuge hold-health]} (ctx/mem c)
           health (.-health (.self (:primitives c)))
           hurt? (< health (or hold-health health))
@@ -195,7 +200,7 @@
   [c]
   (let [p (:primitives c)]
     (mapv (fn [e] {:name (.-name e) :pos (mapv #(js/Math.floor (% (danger-q/mob-pos p e))) [:x :y :z])})
-          (flight/near-known p (set (flight/dead-ids c)) threats/max-follow-range (:ranged-radius (:args c))))))
+          (flight/near-known p (set (flight/dead-ids c)) threats/max-follow-range (danger-q/ranged-radius-in (:args c))))))
 
 (defn hide-now! [c refuge text]
   (ctx/update-mem! c assoc :refuge (assoc refuge :hidden true))
