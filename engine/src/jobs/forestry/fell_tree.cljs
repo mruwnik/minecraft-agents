@@ -17,7 +17,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
             [jobs.lib.targets :as targets]
-            [jobs.lib.trees :refer [axe-worth-fetching? axe-fetch-limits trees-near tree-near tree-at unreachable-set debts replant-kind
+            [jobs.lib.trees :refer [log-name? axe-worth-fetching? axe-fetch-limits trees-near tree-near tree-at unreachable-set debts replant-kind
                                     replant-policy default-radius max-partials]]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
@@ -419,13 +419,15 @@
 (def can-run? not-hungry)
 
 (defn done?
-  "Ok once the chosen tree is down: logs were dug, none of its column is left and the body is off the canopy, no child
+  "Ok once the chosen tree is down: logs were dug, every log last seen of it is seen gone, none of its column is left and the body is off the canopy, no child
   under way; else later with the logs dug."
   [c]
   (let [m (ctx/mem c)
         dug (:dug m 0)
         data [:units :trees :done (if (pos? dug) 1 0) :left (if (pos? dug) 0 1) :result (tree-result c)]
+        gone? (fn [pos] (let [n (u/seen-name (:primitives c) pos)] (and n (not (log-name? n)))))
         down? (and (:column m) (pos? dug) (not (:pillar m))
+                   (every? gone? (:logs-seen m))
                    (empty? (tree-logs c (:radius (:args c))))
                    (not (on-canopy? c))
                    (not (checks/child-under-way? c)))]

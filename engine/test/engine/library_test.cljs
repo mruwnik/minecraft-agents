@@ -166,15 +166,14 @@
 (defn ^:async with-partial-walks
   "Run the async f with the first n fell-tree walks (all when n is nil) resolving :partial, as a walk that waits on the world; later ones walk."
   [n f]
-  (let [k "cljs$core$IFn$_invoke$arity$4"
-        orig (aget fell-log/walk-near! k)
+  (let [orig fell-log/walk-near!
         calls* (atom 0)]
-    (aset fell-log/walk-near! k (fn ^:async partial-first [c pos range tolls]
-                                  (if (or (nil? n) (< (dec (swap! calls* inc)) n))
-                                    :partial
-                                    (await (orig c pos range tolls)))))
+    (set! fell-log/walk-near! (fn ^:async partial-first [c pos range]
+                                (if (or (nil? n) (< (dec (swap! calls* inc)) n))
+                                  :partial
+                                  (await (orig c pos range)))))
     (try (await (f))
-         (finally (aset fell-log/walk-near! k orig)))))
+         (finally (set! fell-log/walk-near! orig)))))
 
 (deftest fell-tree-gives-up-on-a-tree-after-three-partials-in-a-row
   (async done

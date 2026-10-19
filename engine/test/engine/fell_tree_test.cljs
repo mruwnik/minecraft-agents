@@ -590,6 +590,23 @@
     (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (.call block-at p pos))))
     (assoc s :out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree args n)))))
 
+(deftest logs-that-fall-out-of-sight-mid-tree-are-looked-for-before-the-tree-counts-as-down
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (fm/start {:blocks (lt/tree 6 0 "oak" 4)} {})
+              p (:p s)
+              sensed (.-sensedAt p)
+              block-at (.-seenBlockAt p)
+              reads (atom 0)
+              hidden? (fn [pos] (and (< 65 (.-y pos)) (<= 2 (count (fm/digs p))) (< (swap! reads inc) 40)))]
+          (eye-reach! p)
+          (aset p "sensedAt" (fn [pos] (if (hidden? pos) #js {:unknown true} (.call sensed p pos))))
+          (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (.call block-at p pos))))
+          (let [out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10 :fetch false} 200))]
+            (is (= 4 (count (dug-ys p))) "the two logs that went out of sight were found and dug")
+            (is (= 4 (:logs out)))))))))
+
 (deftest an-at-column-not-in-sight-is-walked-to-and-felled
   (async done
     (tu/run-async done
