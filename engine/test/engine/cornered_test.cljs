@@ -1200,11 +1200,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks pool
-                                      :entities [{:id 5 :name "drowned" :kind "hostile" :pos {:x 1.5 :y 64 :z 0.5} :health 20}]})]
+        (let [{:keys [eng p seen]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks pool
+                                           :entities [{:id 5 :name "drowned" :kind "hostile" :pos {:x 1.5 :y 64 :z 0.5} :health 20}]})]
           (core/submit! eng retreat {})
           (dotimes [_ 6] (await (core/tick! eng)))
           (is (empty? (calls p "attack")) "no fist fight")
+          (is (= :swim-out (:slot (first (filter #(= :retreat.step-speed (:kind %)) @seen)))) "the walk is the swim-out step")
           (is (= -5 (:x (first-move eng))) "the first walk is to the nearest dry land, west of the pool"))))))
 
 (deftest a-sealed-body-that-keeps-taking-hits-leaves-the-seal-and-fights

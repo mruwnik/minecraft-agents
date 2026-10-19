@@ -1,6 +1,7 @@
 ;; Card fb183e73: a bare body in water with a drowned near swims to the nearest seen dry stand (cornered option :swim-out, first in the order)
 ;; instead of fist-fighting it. Stone block x 3..30, z 9..23, y 0..2 (top feet y 3) with a lake carved in it, x 4..14, z 10..22, water y 0..2 (the surface is
 ;; level with the shore). The drowned is NoAI and helmeted (it never hurts, no sun burn) and stands beside the body.
+;; The :swim-out step itself is pinned by cornered-test (a-bare-body-in-water-with-a-drowned-beside-it-swims-to-dry-land...); live the body leaves by an ordinary flee step.
 ;; Should-succeed: the bare body leaves the water (by a flee step or the cornered swim-out) and never fights the drowned (still alive).
 ;; Should-fail (control): with an iron sword the fight wins, so the body kills it and does not take the swim-out step.
 {:defaults

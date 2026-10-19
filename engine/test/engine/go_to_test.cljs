@@ -854,6 +854,10 @@
     (is (not (str/includes? (end/give-up-words [10 64 0] {:why why}) "no path (")) (str why)))
   (is (str/includes? (end/give-up-words [10 64 0] {:why :air-lethal}) "drown")))
 
+(deftest a-moved-while-searching-give-up-says-when-the-body-is-in-water
+  (is (str/includes? (end/give-up-words [10 64 0] {:why :moved-while-searching :in-water true}) "in water"))
+  (is (not (str/includes? (end/give-up-words [10 64 0] {:why :moved-while-searching}) "water"))))
+
 (deftest the-cut-again-text-names-the-nearest-hostile-as-a-guess
   (is (str/includes? (end/give-up-words [10 64 0] {:why :cut-again :nearest-hostile "zombie"}) "nearest hostile: zombie)"))
   (is (str/includes? (end/give-up-words [10 64 0] {:why :cut-again :nearest-hostile "zombie" :nearest-hostile-at [14 64 6]})

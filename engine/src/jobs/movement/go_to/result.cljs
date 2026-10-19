@@ -3,6 +3,7 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.movement.go-to.headroom :as headroom]
+            [jobs.lib.breath :as breath]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.solid :as solid]
@@ -117,7 +118,7 @@
 
 (defn give-up-words
   "The give-up reason in words, for the :text of the :unreachable event and the result: no map dumps."
-  [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at resets-spent mob mob-distance explored walks torches waypoint-why heal hp-cost hp-budget low-passage dip rise route straight]}]
+  [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at resets-spent mob mob-distance explored walks torches waypoint-why heal hp-cost hp-budget low-passage dip rise route straight in-water]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if (and escalation (not (#{:way-dives :detour} why)))
          (str (if (:into escalation) "the goal is walled in; " "shut in here; ") (escalation-words escalation))
@@ -139,7 +140,7 @@
            :steer-failed (str "steering failed" (some->> detail (str ": ")))
            :cut-again (str "the walk was cut again and again, each time with the body sent back, and got no nearer" (when resets-spent " (its cut-count resets were spent)") (when nearest-hostile (str " (nearest hostile: " (str/replace (str nearest-hostile) "_" " ") (hostile-place-words nearest-hostile-at) ")")))
            :goal-dangerous (str "the goal is in danger: " (str/replace (str mob) "_" " ") " " mob-distance " blocks from it, a mob the body would flee")
-           :moved-while-searching "the body was pushed about while the path was searched"
+           :moved-while-searching (str "the body was pushed about while the path was searched" (when in-water ": it is in water, which moves it; get onto dry land first"))
            :needs-health (str "a way exists but costs " hp-cost " hp, more than the " hp-budget " hp the body may spend"
                            (if (= :full heal) " at full health (healing cannot help; only a :floor {:health 1}, or a lower :floor :health, lets it go)" ", and it cannot heal first"))
            :air "every way there under water runs out of air"
@@ -171,6 +172,7 @@
    (let [{:keys [why kind] :as fields} (merge {:at (feet-cell c) :near (js/Math.round (u/dist (u/self-pos c) pos))}
                                               (give-up-fields result) (sh-inside/shelter-hint c) extra)
          fields (cond-> fields
+                  (and (= :moved-while-searching why) (breath/in-water? (:primitives c))) (assoc :in-water true)
                   (= :goal-enclosed why) (merge (some->> (headroom/low-passage (:primitives c) (solid/cell (if (map? pos) pos (zipmap [:x :y :z] pos))))
                                                           (hash-map :low-passage))))
          more (dissoc fields :why :kind)
