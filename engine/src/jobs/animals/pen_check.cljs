@@ -112,9 +112,11 @@
 (def animal-radius 48)
 
 (defn unseen-leak
-  "The nearest-listed leak cell that is unseen, as {:x :y :z}."
-  [checked]
-  (:pos (first (filter #(= :unloaded (:why %)) (:leaks checked)))))
+  "The nearest-listed leak cell that is unseen and not more than one layer below the start cell at, as {:x :y :z}: an
+  animal cannot leave through ground under the pen floor, and those cells can never be seen."
+  [checked at]
+  (let [floor-y (dec (if (map? at) (:y at) (second at)))]
+    (:pos (first (filter #(and (= :unloaded (:why %)) (>= (:y (:pos %)) floor-y)) (:leaks checked))))))
 
 (defn seen-leak?
   "Whether the final read of a pen still waiting on unseen cells names a leak, other than the start cell at, at a cell the
@@ -160,7 +162,7 @@
         checked (await (pen-read/read! c {:at at :box box :max-cells max-cells :near near}))
         final (when (= :unloaded (:reason checked))
                 (pen-read/read (:primitives c) {:at at :box box :max-cells max-cells :final? true}))
-        unseen (when-not (seen-leak? (:primitives c) final at) (unseen-leak checked))
+        unseen (when-not (seen-leak? (:primitives c) final at) (unseen-leak checked at))
         {:keys [walks last-unseen] :or {walks 0}} (ctx/mem c)
         stuck (if (= unseen last-unseen) walks 0)
         walk (when (and unseen (< stuck max-walks))

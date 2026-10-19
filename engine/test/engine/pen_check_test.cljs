@@ -16,6 +16,7 @@
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.animals.pen-check :as pen-check]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.pen :as pen]))
 
 (defn lcg [seed]
@@ -275,6 +276,17 @@
 
 (deftest an-open-gate-seen-on-the-way-is-no-proof-of-a-leak-while-cells-are-unseen
   (is (false? (pen-check/seen-leak? nil {:leaks [{:pos {:x 1 :y 64 :z 1} :why :open-gate}]} [2 64 2]))))
+
+(deftest a-seen-leak-other-than-an-open-gate-is-proof-while-cells-are-unseen
+  (with-redefs [dig-look/unknown? (constantly false)]
+    (is (true? (pen-check/seen-leak? nil {:leaks [{:pos {:x 1 :y 64 :z 1} :why :climb}]} [2 64 2])))))
+
+(deftest unseen-cells-under-the-pen-floor-are-never-walked-to
+  (let [leak (fn [y] {:pos {:x 1 :y y :z 1} :why :unloaded})]
+    (are [ys want] (= want (pen-check/unseen-leak {:leaks (mapv leak ys)} [2 64 2]))
+      [60 61] nil
+      [60 63] {:x 1 :y 63 :z 1}
+      [64 60] {:x 1 :y 64 :z 1})))
 
 (deftest a-plan-alone-is-read-by-a-body-that-has-not-looked-at-the-pen
   (async done
