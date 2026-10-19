@@ -216,12 +216,17 @@
         far (if (and ea (< (js/Math.abs (- ea from)) (js/Math.abs (- ea to)))) to from)
         [fx _ fz] (b/feet-cell c)
         here (if (= axis :x) fx fz)
-        stop-at (walk-stop #(let [[x cy z] (strip/at axis y line %)] (reach/seen-standable? (:primitives c) {:x x :y cy :z z})) here far)
+        seen? #(let [[x cy z] (strip/at axis y line %)] (reach/seen-standable? (:primitives c) {:x x :y cy :z z}))
+        stop-at (walk-stop seen? here far)
         cell (strip/at axis y line stop-at)
         w (await (near/go-near! c cell (walk-range stop-at far)))]
     (case w
       :partial :continue
-      :blocked (stop! c :unreachable {:cell cell})
+      ;; no floor beyond was ever seen and go-to will not walk there: what can be seen from here is all there is
+      :blocked (if (seen? stop-at)
+                 (stop! c :unreachable {:cell cell})
+                 (do (await (look/look-around! c))
+                     :again))
       (if (= stop-at far)
         (do (await (look/look-around! c))
             :again)
