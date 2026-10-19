@@ -331,7 +331,7 @@
               (pr-str (events-of seen :go-to.retrying))))))))
 
 (deftest an-approach-walk-may-take-back-its-own-seal
-  (is (= #{:walk :clear-seal} (:ways (second (esc/escalation-job {:step :approach :pos [1 64 0]} nil false false true false))))))
+  (is (= #{:walk :clear-seal} (:ways (second (esc/escalation-job {:step :approach :pos [1 64 0]} nil false false false))))))
 
 
 (deftest walker-faults-past-the-retries-feed-the-escalation-ladder
@@ -398,7 +398,7 @@
         picks #(vec (repeat % {:name "stone_pickaxe" :count 1}))]
     (is (= [true true false] (map #(fetch? (assoc flat :inventory (picks %))) [0 1 2])))
     (is (false? (fetch? (merge {:blocks room :inventory (picks 1)} in-room))) "shut in: no walk to a tool")
-    (is (= [true false] (map #(:fetch (second (esc/escalation-job {:step :stair :heading :east :steps 2} nil false false true %))) [true false])))))
+    (is (= [true false] (map #(:fetch (second (esc/escalation-job {:step :stair :heading :east :steps 2} nil false false %))) [true false])))))
 
 (deftest a-dig-route-s-digs-fetch-a-pickaxe-as-fetch-tool-says
   (async done

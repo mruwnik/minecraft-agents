@@ -1,6 +1,6 @@
 ;; Card 853d6c89: the body's own plan (:metadata :by "$body" = the running body) does not refuse blocks.dig/place; another body's
 ;; plan still refuses :footprint. Card 6fa0c797: go-to, stair and mine spare own-plan cells (go-to ends :own-build) unless
-;; :spare-own-builds false, which digs them and warns go-to.dug-own-build per cell. Run: node tools/world-test.mjs engine/fixtures/world/own-plan-footprint.edn --body <any probe body>
+;; :settings {:jobs.lib.access/spare-own-builds false}, which digs them and warns go-to.dug-own-build per cell. Run: node tools/world-test.mjs engine/fixtures/world/own-plan-footprint.edn --body <any probe body>
 ;; Pit: stone mass x 10..22, z 10..22, y 0..3, 1x1 shaft at [16 y 16]; wall cells of the shaft in a plan.
 {:defaults
  {:tags [:build :access] :time :any
@@ -53,7 +53,7 @@
                                         #at [16 0 15] #at [16 1 15] #at [16 2 15] #at [16 3 15]]
                     :want [:any "stone"]}]}]
    :blocks [[:fill [10 0 10] [22 3 22] "stone"] [:fill [16 0 16] [16 3 16] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1 :spare-own-builds false})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1 :settings {:jobs.lib.access/spare-own-builds false}})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
             {:event {:source :job :kind :go-to.dug-own-build} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :stair.stopped :data {:reason :footprint}} :for-s 180 :until {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}}}
@@ -68,7 +68,7 @@
                                         #at [16 0 15] #at [16 1 15] #at [16 2 15] #at [16 3 15]]
                     :want [:any "stone"]}]}]
    :blocks [[:fill [10 0 10] [22 3 22] "stone"] [:fill [16 0 16] [16 3 16] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [12 4 16] :range 1 :spare-own-builds false})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [12 4 16] :range 1 :settings {:jobs.lib.access/spare-own-builds false}})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
             {:event {:source :job :kind :go-to.dug-own-build} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :stair.stopped :data {:reason :footprint}} :for-s 180 :until {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}}}
@@ -94,7 +94,7 @@
    :plans [{:id "hut" :metadata {:by "$body"}
             :parts [{:id "wall" :cells [#at [17 0 16] #at [17 1 16] #at [17 2 16] #at [17 3 16]] :want [:any "stone"]}]}]
    :blocks [[:fill [10 0 10] [22 3 22] "stone"] [:fill [16 0 16] [16 3 16] "air"]]
-   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 1 :spare-own-builds false})]]
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 1 :settings {:jobs.lib.access/spare-own-builds false}})]]
    :expect [{:event {:source :job :kind :stair.done} :within-s 60 :of-job true}]
    :after [[:block [17 1 16] "air"]]
    :limit-s 90}
@@ -143,14 +143,14 @@
   {:name "mine-digs-own-plan-cells-when-not-spared-a"
    :plans [{:id "o" :metadata {:by "$body"} :parts [{:id "o" :cells [#at [20 0 16]] :want [:any "iron_ore"]}]}]
    :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [20 0 16] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :spare-own-builds false :radius 8})]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :settings {:jobs.lib.access/spare-own-builds false} :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 100 :of-job true}]
    :after [[:item "raw_iron" 1]]
    :limit-s 120}
   {:name "mine-digs-own-plan-cells-when-not-spared-b"
    :plans [{:id "o" :metadata {:by "$body"} :parts [{:id "o" :cells [#at [19 0 16]] :want [:any "coal_ore"]}]}]
    :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [19 0 16] "coal_ore"]]
-   :act [[:job (jobs.gather.mine {:block "coal_ore" :count 1 :direction :east :tunnel-length 8 :spare-own-builds false :radius 8})]]
+   :act [[:job (jobs.gather.mine {:block "coal_ore" :count 1 :direction :east :tunnel-length 8 :settings {:jobs.lib.access/spare-own-builds false} :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 100 :of-job true}]
    :after [[:item "coal" 1]]
    :limit-s 120}]}

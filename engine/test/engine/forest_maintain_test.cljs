@@ -530,7 +530,7 @@
       (fn ^:async t []
         (let [spec {:blocks (lt/tree 3 0 "oak" 3)}
               own (shape/with-author (forest-plan ["a" [[3 64 0] [3 65 0] [3 66 0]] "oak"]) "Fake")]
-          (doseq [[args n] [[{:radius 10} 0] [{:radius 10 :spare-own-builds false} 3]]]
+          (doseq [[args n] [[{:radius 10} 0] [{:radius 10 :settings {:jobs.lib.access/spare-own-builds false}} 3]]]
             (let [{:keys [eng p]} (start spec {"forest" own})]
               (await (tu/child-outcome eng 'jobs.forestry.fell-tree args 60))
               (is (= n (count (digs p))) (pr-str args)))))))))

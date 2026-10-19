@@ -1128,14 +1128,14 @@
           (is (= :refills (:reason @out)))
           (is (re-find #"put back" (str (:why @out)))))))))
 
-(deftest the-bodys-own-plan-footprint-ahead-stops-the-stair-unless-spare-own-builds-is-false
+(deftest the-bodys-own-plan-footprint-ahead-stops-the-stair-unless-the-spare-own-builds-setting-is-false
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [plan (shape/with-author {:id "wall" :parts [{:id "w" :cells [[2 63 0]] :want "stone"}]} "Fake")
               dug? (fn [p] (some #(= {:x 2 :y 63 :z 0} %) (digs p)))
               {:keys [out p]} (await (stair! {:blocks ground :plans {"wall" plan}} east (fn [_])))
-              {out2 :out p2 :p} (await (stair! {:blocks ground :plans {"wall" plan}} (assoc east :spare-own-builds false) (fn [_])))]
+              {out2 :out p2 :p} (await (stair! {:blocks ground :plans {"wall" plan}} (assoc east :settings {:jobs.lib.access/spare-own-builds false}) (fn [_])))]
           (is (= :footprint (:reason @out)))
           (is (= "wall" (:plan @out)))
           (is (not (dug? p)))

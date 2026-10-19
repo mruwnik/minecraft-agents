@@ -11,11 +11,12 @@
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.util :as u]
+            [jobs.lib.access :as access]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.escalate-choose :refer [climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
                                                          goal-way dig-way goal-walled? own-stair route-cells shelter-exit? skips sprint-only?]]
-            [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag may-dig-fn note-holes! own-holes own-placed-fn planned-cells spare-own?]]
+            [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag may-dig-fn note-holes! own-holes own-placed-fn planned-cells]]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.torch :as torch]
             [jobs.movement.go-to.tuning :as tuning]
@@ -25,14 +26,14 @@
 
 (defn escalation-job
   "[job args] of the child that carries out escalation e (jobs.lib.escape/choose); tag marks the holes it digs;
-  by-hand? digs what no carried tool clears bare-handed; spare-own? keeps the children off the body's own plans;
+  by-hand? digs what no carried tool clears bare-handed;
   fetch? lets a stair fetch a pickaxe (fetch-tool?). The body's own stair cut again (:own) is marked by no tag: it
   stays open."
-  [{:keys [step] :as e} tag ignore-zones? by-hand? spare-own? fetch?]
+  [{:keys [step] :as e} tag ignore-zones? by-hand? fetch?]
   (case step
     :pillar ['jobs.access.pillar (cond-> {:height (:height e) :fetch false :ignore-zones? ignore-zones? :checks {:safe? '(not (exposed))}} (:item e) (assoc :use {:blocks [(:item e)]}))]
-    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :accept #{:falling-block} :fetch fetch? :spent-ok true :ignore-zones? ignore-zones? :need-drop (not by-hand?) :spare-own-builds spare-own?}]
-    :clear-path ['jobs.access.clear-path {:heading (:heading e) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :spare-own-builds spare-own? :fetch false}]
+    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :accept #{:falling-block} :fetch fetch? :spent-ok true :ignore-zones? ignore-zones? :need-drop (not by-hand?)}]
+    :clear-path ['jobs.access.clear-path {:heading (:heading e) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :fetch false}]
     :approach ['jobs.movement.go-to {:pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk :clear-seal}}]
     :fill-gap ['jobs.blocks.place {:pos (zipmap [:x :y :z] (:cell e)) :use {:blocks [(:item e)]} :fetch false :ignore-zones? ignore-zones?}]))
 
@@ -131,7 +132,7 @@
         choosable? #(not= :none (:step (choose %)))
         e (cond
             (not= :none (:step e)) e
-            (and (spare-own? c) (choosable? (may-dig-fn c false)))
+            (and (access/spare-own-builds) (choosable? (may-dig-fn c false)))
             {:step :none :why (if (choosable? (may-dig-fn c true false)) :own-pen :own-build)}
             (choosable? (constantly true)) {:step :none :why :zone}
             :else e)]
@@ -303,7 +304,7 @@
   the way."
   [c pos]
   (let [{:keys [step] :as e} (:escalation (ctx/mem c))
-        [job args] (escalation-job e (hole-tag c) (boolean (:ignore-zones? (:args c))) (boolean (:by-hand (ctx/mem c))) (spare-own? c) (fetch-tool? c))
+        [job args] (escalation-job e (hole-tag c) (boolean (:ignore-zones? (:args c))) (boolean (:by-hand (ctx/mem c))) (fetch-tool? c))
         _ (await (torch/return-torch! c))
         r (await (ctx/call c :escalation job (update args :checks #(some->> % (ready/unforced c)))))]
     (let [dug (concat (:planned (ctx/mem c)) (when (not= :continue r) (:dug (:data r))))]

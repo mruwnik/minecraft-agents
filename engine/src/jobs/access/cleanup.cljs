@@ -102,8 +102,7 @@
    :accept {:doc "dig hazards accepted: :fluid-adjacent (water beside), :lava-adjacent, :falling-block"
             :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent}}
    :ignore-zones? :shared
-   :keep-at-night? {:doc "a shelter's block (:shelter, :retreat-plug) stays all night; false takes it back at night too" :spec boolean? :default true}
-   :spare-own-builds {:doc "a block on the footprint of a plan this body made is the plan's, not scaffold: its entry is dropped and never dug" :spec boolean? :default true}})
+   :keep-at-night? {:doc "a shelter's block (:shelter, :retreat-plug) stays all night; false takes it back at night too" :spec boolean? :default true}})
 
 
 (a/defargs settings
@@ -173,7 +172,7 @@
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
             :hostile-near? (hostile-near? (:primitives c)) :night? (sh-sense/night? (:primitives c)) :keep-at-night? (:keep-at-night? (:args c))
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach (dig-reach)
-            :spare-own-builds (:spare-own-builds (:args c))
+            :spare-own-builds (access/spare-own-builds)
             :guard-walks? (and (nil? (:job (:args c))) (nil? (:near (:args c))))
             :max-below (ledger/max-below) :roof-height (roof-height)
             :died-near? (died-near-of (ctx/view c))
@@ -373,7 +372,7 @@
   dropped entries (one cleanup.dropped info each). The ledger after."
   [c l picked]
   (let [{:keys [footprints own-plans]} (access/zone-input c)
-        planned (plan-cells (filterv #(picked (:cell %)) l) footprints own-plans (:spare-own-builds (:args c)))
+        planned (plan-cells (filterv #(picked (:cell %)) l) footprints own-plans (access/spare-own-builds))
         {:keys [ledger removed dropped]} (ledger/settle (filterv #(not (planned (:cell %))) l) #(picked (:cell %)) (access/sensed-at (:primitives c) nil))]
     (when (not= ledger l) (ledger/remember! c ledger))
     (doseq [cell planned]

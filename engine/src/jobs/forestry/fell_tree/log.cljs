@@ -14,7 +14,7 @@
             [jobs.lib.util :as u]))
 
 (defn gate-opts [c]
-  {:except (:for-plan (:args c)) :own-plans-ok? (false? (:spare-own-builds (:args c)))})
+  {:except (:for-plan (:args c)) :own-plans-ok? (false? (access/spare-own-builds))})
 
 (defn log-allowed?
   "Whether the job may dig the log at pos (one warn per job when refused)."

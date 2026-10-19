@@ -12,11 +12,6 @@
             [jobs.lib.world :as known]
             [jobs.movement.go-to.result :as end]))
 
-(defn spare-own?
-  "Whether go-to keeps off the plans this body made (the :spare-own-builds arg, default true)."
-  [c]
-  (not (false? (:spare-own-builds (:args c)))))
-
 (defn own-plan-fn
   "(own-plan cell): the id of the plan this body made that covers cell, else nil."
   [c]
@@ -26,9 +21,9 @@
 
 (defn may-dig-fn
   "(may-dig? cell): no other owner's zone, claim or plan footprint refuses a dig there (jobs.lib.tidy/refusal), and
-  when spare? (default: go-to's spare-own?) no plan this body made covers it and, when pens? (default spare?), it is
+  when spare? (default: the access/spare-own-builds setting) no plan this body made covers it and, when pens? (default spare?), it is
   not the wall of the own pen holding livestock the body stands in (jobs.lib.own-pen)."
-  ([c] (may-dig-fn c (spare-own? c)))
+  ([c] (may-dig-fn c (access/spare-own-builds)))
   ([c spare?] (may-dig-fn c spare? spare?))
   ([c spare? pens?]
    (let [own-plan (own-plan-fn c)

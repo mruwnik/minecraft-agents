@@ -1,5 +1,5 @@
 ;; Cards 99aab6b1, c82d8238: jobs.access.cleanup never digs a ledger block on the footprint of a plan the body made (cleanup.plan-cell, entry
-;; dropped; :spare-own-builds false digs it), keeps a shelter's block (:retreat-plug) at night unless :keep-at-night? false, and walks to an
+;; dropped; :settings {:jobs.lib.access/spare-own-builds false} digs it), keeps a shelter's block (:retreat-plug) at night unless :keep-at-night? false, and walks to an
 ;; unowned scaffold entry (no :job) 14 blocks off only when armed and healthy (an unarmed body waits, :unarmed: the fit? default) and the
 ;; entry is not 5+ below the feet or within 24 of a death (a per-cell hold, kept for :job nil only).
 ;; The night cases pass :checks {:safe? (not (threatened))}: the job's dark-sky gate would wait for dawn before its own night rule runs.
@@ -20,7 +20,7 @@
   {:name "spare-own-builds-false-digs-it"
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "dirt" :before "air" :purpose :pillar :state :placed}]}}]
    :plans [{:id "hut" :metadata {:by "$body"} :parts [{:id "wall" :cells [#at [6 0 8]] :want "dirt"}]}]
-   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true :spare-own-builds false})]]
+   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true :settings {:jobs.lib.access/spare-own-builds false}})]]
    :expect [{:event {:source :job :kind :cleanup.done :data {:removed 1}} :within-s 60 :of-job true}]
    :after [[:not-block [6 0 8] "dirt"]]}
   {:name "armed-by-day-takes-the-scaffold-back"

@@ -43,8 +43,7 @@
   {:heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
    :ignore-zones? :shared
    :fetch {:doc "get a missing tool for the dig children with jobs.lib.need: true, a set of kinds or a map of limits; false waits :dig-waits" :spec need/option? :default true}
-   :need-drop {:doc "false: dig a block no carried tool harvests bare-handed (slow, the drop is lost)" :spec boolean? :default true}
-   :spare-own-builds {:doc "a cell of a plan this body made is never dug (stops :footprint naming the plan); false: it may be" :spec boolean? :default true}})
+   :need-drop {:doc "false: dig a block no carried tool harvests bare-handed (slow, the drop is lost)" :spec boolean? :default true}})
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
 
@@ -161,7 +160,7 @@
 (defn own-build
   "The refusal naming the plan this body made that covers cell, unless :spare-own-builds is false; else nil."
   [c cell]
-  (when-not (false? (:spare-own-builds (:args c)))
+  (when (access/spare-own-builds)
     (access/own-keep (access/rules-input c {:spare-own? true}) (zipmap [:x :y :z] cell))))
 
 (defn declined?

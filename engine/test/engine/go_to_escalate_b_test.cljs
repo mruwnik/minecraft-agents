@@ -140,7 +140,7 @@
       (fn ^:async t []
         (let [world (merge in-pit {:blocks pit :plans {"hut" own-pit-wall}})
               {:keys [out p seen]} (await (run-job! world 'jobs.movement.go-to {:pos [10 64 0] :range 1} {:plans (:plans world)}))
-              {out2 :out seen2 :seen} (await (run-job! world 'jobs.movement.go-to {:pos [10 64 0] :range 1 :spare-own-builds false} {:plans (:plans world)}))
+              {out2 :out seen2 :seen} (await (run-job! world 'jobs.movement.go-to {:pos [10 64 0] :range 1 :settings {:jobs.lib.access/spare-own-builds false}} {:plans (:plans world)}))
               warned (events-of seen2 :go-to.dug-own-build)]
           (is (= false (:arrived @out)))
           (is (= {:step :none :why :own-build} (:escalation @out)))

@@ -100,7 +100,7 @@
   "The rules input: another's plans always refuse, this body's own too unless :spare-own-builds is false; a base
   block (chest, bed, furnace ...) is never dug."
   [c]
-  (assoc (access/rules-input c {:own-plans-ok? (false? (:spare-own-builds (:args c)))}) :keep-base? true))
+  (assoc (access/rules-input c {:own-plans-ok? (false? (access/spare-own-builds))}) :keep-base? true))
 
 (def soil-blocks "Mined blocks gathered from the top layer of the ground only." #{"dirt" "grass_block"})
 

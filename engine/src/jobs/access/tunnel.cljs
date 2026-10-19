@@ -136,7 +136,6 @@
    :fetch {:doc "get a missing pickaxe instead of ending :no-tool (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-tool" :spec need/option? :default true}
    :by-hand {:doc "a block whose tool could not be got is dug bare-handed (slow, no drop); false ends :no-tool instead" :spec boolean? :default true}
    :spent-ok {:doc "dig on with tools down to 3 uses instead of stopping :tool-spent (see jobs.access.stair)" :spec boolean? :default false}
-   :spare-own-builds {:doc "a cell of a plan this body made is never dug; false: it may be (see jobs.access.stair)" :spec boolean? :default true}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}})
 
 (def safe? (ready/safe-at-by-night (fn [c] (a/cell (:target (:args c))))))
@@ -317,7 +316,7 @@
   (let [cells (ln/line-cells plan)
         e (await (ctx/call c :stair 'jobs.access.stair
                            {:dir dir :heading heading :fetch (stair-fetch (:fetch (:args c))) :need-drop (empty? (:tool-failed (ctx/mem c))) :y ((cells (segment-end plan k)) 1) :on-lava (:on-lava (:args c) :seal)
-                            :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c))) :spent-ok (boolean (:spent-ok (:args c))) :spare-own-builds (:spare-own-builds (:args c))
+                            :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c))) :spent-ok (boolean (:spent-ok (:args c)))
                             :pick-up-ores (:pick-up-ores (:args c))}))]
     (if (= :continue e)
       :continue

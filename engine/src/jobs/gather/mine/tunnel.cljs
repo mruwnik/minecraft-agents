@@ -176,7 +176,7 @@
         r (await (ctx/call c :step 'jobs.access.stair
                                  {:dir :level :heading (keyword heading) :steps 1 :accept (step-accept args) :fetch (:fetch args)
                                   :pick-up-ores false :ignore-zones? (:ignore-zones? args)
-                                  :spare-own-builds (:spare-own-builds args) :cut-only (boolean (:stay-level args))}))
+                                  :cut-only (boolean (:stay-level args))}))
         res (result-of r)]
     (when-not (= :continue r) (ctx/update-mem! c dissoc :stepping))
     (book-cut! c (:dug res))

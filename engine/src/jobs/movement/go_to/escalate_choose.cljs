@@ -15,7 +15,7 @@
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
             [jobs.movement.go-to.climb :as climb]
-            [jobs.movement.go-to.holes :refer [may-dig-fn own-placed-fn spare-own?]]
+            [jobs.movement.go-to.holes :refer [may-dig-fn own-placed-fn]]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.tuning :refer [max-blocked]]
             [jobs.movement.go-to.way-steps :as ways]))

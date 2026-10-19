@@ -459,7 +459,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[kind extra n] [[nil {} 0] [nil {:spare-own-builds false} 1] [:mineshaft {} 1]]]
+        (doseq [[kind extra n] [[nil {} 0] [nil {:settings {:jobs.lib.access/spare-own-builds false}} 1] [:mineshaft {} 1]]]
           (let [own (ew/of-data {"pad" (cond-> (shape/with-author pad-plan "Fake") kind (assoc :kind kind))} {} [])
                 s (await (zoned (merge {:block "sand" :count 1 :mend false :tunnel-length 0} extra) {:blocks {"6,64,0" "sand"}} own 20))]
             (is (= n (count (dug-cells s))) (pr-str kind extra))))))))

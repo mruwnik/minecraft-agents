@@ -3,12 +3,19 @@
   claims and plan footprints come from ctx, read once per round. Zones are a rule the jobs consult, never enforced
   by the engine. A job given :ignore-zones? acts regardless of zones, claims and footprints."
   (:require [clojure.string :as str]
+            [engine.args :as a]
+            [engine.settings :as settings]
             [engine.game :as game]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.access.zones :as zones]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [jobs.lib.world :as known]))
+
+(a/defargs settings
+  {::spare-own-builds {:default true :doc "Whether the digging jobs (go-to's escalations, stair, clear-path, tunnel, mine, fell-tree, fell-from-pillar, cleanup) keep off the cells of plans this body made; false: they may dig them (go-to warns of each cell dug)." :spec boolean?}})
+
+(defn spare-own-builds [] (settings/get settings ::spare-own-builds))
 
 (defn cell [{:keys [x y z]}] [x y z])
 

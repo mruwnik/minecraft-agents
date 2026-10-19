@@ -72,7 +72,6 @@
    :radius {:doc "search radius in blocks" :spec (a/num-in 0 nil) :default default-radius}
    :at {:doc "{:x :y :z} of a base log: fell that one column, wherever the body is (the radius and species are not used), instead of the nearest tree" :spec ::a/pos :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
-   :spare-own-builds {:doc "a log in a plan this body made is not felled; false: it may be" :spec boolean? :default true}
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :lava-adjacent :falling-block" :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
    :fetch {:doc "get an axe when none is carried, and the dirt or cobblestone a pillar needs (jobs.lib.need): true, a set of kinds or a map of limits; false chops by hand and ends a tree needing a pillar :need" :spec need/option? :default true}
    :pillar? {:doc "fell a log out of reach of the ground from a pillar (blocks placed, then taken back); false: such a tree is left" :spec boolean? :default true}
@@ -191,7 +190,7 @@
 (defn pillar-args
   "The args of the fell-from-pillar child for the chosen tree."
   [c]
-  (merge (select-keys (:args c) [:at :radius :for-plan :spare-own-builds :accept :fetch :ignore-zones? :pillar?])
+  (merge (select-keys (:args c) [:at :radius :for-plan :accept :fetch :ignore-zones? :pillar?])
          {:base (:base (ctx/mem c)) :species (:species (ctx/mem c))}))
 
 (defn blocked!

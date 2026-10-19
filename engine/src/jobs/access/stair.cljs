@@ -121,7 +121,6 @@
    :spent-ok {:doc "dig on with tools down to jobs.lib.trip's ::spent-uses (3) uses instead of stopping :tool-spent before the last breaks; true for a way out" :spec boolean? :default false}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
    :make-room {:doc "a pack with no room for the next drop is made room in (a jobs.storage.make-room child that tosses junk blocks; it keeps building blocks) instead of waiting :no-free-slot" :spec boolean? :default true}
-   :spare-own-builds {:doc "a cell of a plan this body made is never dug (stops :footprint naming the plan); false: it may be" :spec boolean? :default true}
    :dig-plugs {:doc "true: a cell this body plugged against water may be dug (stops :plugged otherwise)" :spec boolean? :default false}
    :through {:doc "the id of a mineshaft plan the stair runs down: its footprint is no obstacle (jobs.lib.shafts)" :spec string? :default nil}})
 

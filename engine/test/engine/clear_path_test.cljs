@@ -171,7 +171,7 @@
         (let [plan (shape/with-author {:id "hut" :parts [{:id "w" :cells [[1 64 0] [1 65 0] [2 64 0] [2 65 0]] :want "stone"}]} "Fake")
               world (assoc wall :plans {"hut" plan})
               r (await (run-door world nil {:heading :east :need-drop false}))
-              r2 (await (run-door world nil {:heading :east :spare-own-builds false :need-drop false}))]
+              r2 (await (run-door world nil {:heading :east :settings {:jobs.lib.access/spare-own-builds false} :need-drop false}))]
           (is (= [:stopped :footprint "hut"] [(:status r) (:reason r) (:plan r)]) (pr-str r))
           (is (= :done (:status r2)) (pr-str r2)))))))
 
