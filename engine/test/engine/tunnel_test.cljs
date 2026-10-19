@@ -142,21 +142,6 @@
     (is (= [[0 65 0] [0 64 -1] [0 63 -2] [0 63 -3] [0 63 -4]] cells))
     (is (= 5 (count cells)) "n + 2 cells: 0..n and the target")))
 
-(deftest taxicab-distance
-  (are [a b d] (= d (ln/taxi a b))
-    [0 0 0] [0 0 0] 0
-    [0 0 0] [1 -2 3] 6
-    [5 5 5] [4 6 3] 4))
-
-(deftest light-falls-one-a-step-from-the-farther-of-head-and-feet
-  (let [plan {:entry [0 61 0] :heading :east :dir :down :steps 0 :run 24 :target [25 61 0]}]
-    (are [s k light] (= light (ln/torch-light plan s k))
-      0 0 13
-      0 1 12
-      0 12 1
-      0 13 0
-      11 12 12)))
-
 (def sites-plans
   {:straight-down {:entry [0 65 0] :heading :north :dir :down :steps 5 :run 0 :target [0 60 -6]}
    :eight-down {:entry [6 65 9] :heading :north :dir :down :steps 8 :run 0 :target [6 57 0]}
@@ -169,19 +154,14 @@
 (deftest torch-sites-of-known-lines
   (are [k sites] (= sites (ln/torch-sites (sites-plans k)))
     :straight-down [0]
-    :eight-down [0 5]
-    :flat-run [0 11 22]
+    :eight-down [3]
+    :flat-run [12 13]
     :one-run-step [0]
     :nothing []))
 
-(deftest sites-light-every-cell-and-each-site-is-lit-by-the-one-before
-  (doseq [[k plan] (dissoc sites-plans :nothing)
-          :let [sites (ln/torch-sites plan)
-                n (+ (:steps plan) (:run plan))]]
-    (is (every? (fn [cell] (some #(pos? (ln/torch-light plan % cell)) sites)) (range 0 (+ n 2)))
-        (str k " every cell lit"))
-    (is (every? (fn [[before s]] (pos? (ln/torch-light plan before (inc s)))) (partition 2 1 sites))
-        (str k " the standing cell of a site is lit by the site before"))))
+(deftest sites-light-every-cell-of-the-line
+  (doseq [[k plan] (dissoc sites-plans :nothing)]
+    (is (= (ln/line-cells plan) (ln/lit-cells plan (ln/torch-sites plan))) (str k " every cell lit"))))
 
 ;; ---------------------------------------------------------------- the fake world
 
@@ -494,6 +474,9 @@
 (def torches [{:name "iron_pickaxe" :count 1} {:name "torch" :count 8}])
 (def lit-blocks #{"torch" "wall_torch"})
 (def eight-down (assoc ground "6,57,0" "iron_ore"))
+(def long-down
+  "A stair of 30-odd cells: two torch sites."
+  (assoc (stone -50 12 20 64 -3 3) "6,30,0" "iron_ore"))
 
 (defn carried [p item]
   (reduce + (map #(.-count %) (filter #(= item (.-name %)) (array-seq (.-inventory (.self p)))))))
@@ -506,8 +489,7 @@
   [res]
   (let [plan (:line res)
         sites (map :site (:torches res))]
-    (remove (fn [k] (some #(pos? (ln/torch-light plan % k)) sites))
-            (range 0 (+ 2 (:steps plan) (:run plan))))))
+    (remove (set (ln/lit-cells plan sites)) (ln/line-cells plan))))
 
 (deftest torches-held-in-the-off-hand-are-hung
   (async done
@@ -542,13 +524,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[keep? n] [[false 2] [true 0]]]
-          (let [{:keys [out eng]} (await (tunnel! {:blocks eight-down :inventory torches}
-                                                  {:target [6 57 0] :keep keep?} (fn [_])))
+        (doseq [keep? [false true]]
+          (let [{:keys [out eng]} (await (tunnel! {:blocks long-down :inventory torches}
+                                                  {:max-length 60 :target [6 30 0] :keep keep?} (fn [_])))
                 l (ledger/open-entries (mem/view (:store eng)))]
             (is (= :reached (:reason @out)) (str keep?))
             (is (= keep? (:keep @out)) (str keep?))
-            (is (= n (count l)) (str keep?))
+            (is (= (if keep? 0 (count (ln/torch-sites (:line @out)))) (count l)) (str keep?))
             (is (every? #(and (= :placed (:state %)) (= :tunnel-torch (:purpose %))) l) (str keep?))
             (is (= (set (map :cell l)) (set ({false (map :cell (:torches @out)) true []} keep?))) (str keep?))))))))
 
@@ -598,13 +580,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p] :as s} (await (tunnel! {:blocks eight-down :inventory [{:name "iron_pickaxe" :count 1} {:name "torch" :count 1}]}
-                                                    {:target [6 57 0]} (fn [_])))
-              res @out]
+        (let [{:keys [out p] :as s} (await (tunnel! {:blocks long-down :inventory [{:name "iron_pickaxe" :count 1} {:name "torch" :count 1}]}
+                                                    {:max-length 60 :target [6 30 0]} (fn [_])))
+              res @out
+              [first-site & others] (ln/torch-sites (:line res))]
           (is (= :reached (:reason res)))
-          (is (= [0] (mapv :site (:torches res))))
-          (is (= [5] (mapv :site (:unlit res))))
-          (is (= [:no-torches] (mapv :reason (:unlit res))))
+          (is (= [first-site] (mapv :site (:torches res))))
+          (is (= others (mapv :site (:unlit res))))
+          (is (every? #(= :no-torches (:reason %)) (:unlit res)))
           (is (= 0 (carried p "torch")))
           (is (= 1 (count (events-of s :tunnel.unlit)))))))))
 
@@ -612,15 +595,16 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [zone {:name "no-torch" :min [2 60 0] :max [2 61 0] :allow #{:dig}}
-              {:keys [out p]} (await (tunnel! {:blocks eight-down :inventory torches :zones [zone]}
-                                              {:target [6 57 0]} (fn [_])))
-              res @out]
+        (let [zone {:name "no-torch" :min [-12 20 -3] :max [12 50 3] :allow #{:dig}}
+              {:keys [out p]} (await (tunnel! {:blocks long-down :inventory torches :zones [zone]}
+                                              {:max-length 60 :target [6 30 0]} (fn [_])))
+              res @out
+              [first-site & others] (ln/torch-sites (:line res))]
           (is (= :reached (:reason res)))
-          (is (= [0] (mapv :site (:torches res))))
-          (is (= [[5 :zone]] (mapv (juxt :site :reason) (:unlit res))))
+          (is (= [first-site] (mapv :site (:torches res))))
+          (is (= (map vector others (repeat :zone)) (mapv (juxt :site :reason) (:unlit res))))
           (is (= 7 (carried p "torch")) "one torch used")
-          (is (not-any? #(= {:x 2 :y 61 :z 0} %) (places p))))))))
+          (is (not-any? #(< (:y %) 50) (places p))))))))
 
 (deftest a-restart-with-torches-hangs-no-site-twice
   (async done

@@ -82,6 +82,11 @@
 (def eight-down (assoc (stone -12 12 50 64 -3 3) "6,57,0" "iron_ore"))
 (def entry [-3 65 0])
 (def mouth #{[-2 64 0] [-1 64 0] [0 64 0]})
+(def sixteen-down
+  "A stair long enough for two torches."
+  (assoc (stone -14 12 40 64 -3 3) "6,49,0" "iron_ore"))
+(def entry16 [-11 65 0])
+(def mouth16 #{[-10 64 0] [-9 64 0] [-8 64 0]})
 (def drops {"wall_torch" "torch" "stone" "cobblestone"})
 
 (defn inventory [& {:keys [torches cobble] :or {torches 8 cobble 10}}]
@@ -157,8 +162,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p tun out] :as s} (await (run-out! (setup {:blocks eight-down :inventory (inventory)}
-                                                                {:target [6 57 0]} {})))
+        (let [{:keys [eng p tun out] :as s} (await (run-out! (setup {:blocks sixteen-down :inventory (inventory)}
+                                                                {:target [6 49 0]} {})))
               res @out]
           (is (= 2 (count (:torches @tun))) "two torches went in")
           (is (= :done (:status res)))
@@ -166,9 +171,9 @@
           (is (= (set (map :cell (:torches @tun))) (set (:taken res))))
           (is (every? #(= "air" (block-at p (:cell %))) (:torches @tun)))
           (is (= 8 (carried p "torch")) "the torches are back")
-          (is (= entry (feet p)))
-          (is (= mouth (set (:filled res))))
-          (is (every? #(= "cobblestone" (block-at p %)) mouth))
+          (is (= entry16 (feet p)))
+          (is (= mouth16 (set (:filled res))))
+          (is (every? #(= "cobblestone" (block-at p %)) mouth16))
           (is (= 7 (carried p "cobblestone")))
           (is (empty? (:left res)))
           (is (empty? (:open res)))
@@ -288,11 +293,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [dir (tu/tmp-dir)
-              spec {:blocks eight-down :inventory (inventory)}
-              s (setup spec {:target [6 57 0]} {} :dir dir)]
+              spec {:blocks sixteen-down :inventory (inventory)}
+              s (setup spec {:target [6 49 0]} {} :dir dir)]
           (await (stall-dig! s 2))
           (is (= 7 (carried (:p s) "torch")) "the first torch is back")
-          (let [again (await (run-out! (setup spec {:target [6 57 0]} {} :dir dir :p (:p s))))
+          (let [again (await (run-out! (setup spec {:target [6 49 0]} {} :dir dir :p (:p s))))
                 p (:p s)
                 digs (calls-of p "dig")
                 places (calls-of p "place")
@@ -300,7 +305,7 @@
                 dug-cells (set (map :cell (:dug @(:tun s))))]
             (is (= :sealed (:reason @(:out again))))
             (is (= 8 (carried p "torch")))
-            (is (= entry (feet p)))
+            (is (= entry16 (feet p)))
             (is (= 1 (reduce + (map (fn [[cell n]] (- n (+ (if (torch-cells cell) 1 0) (if (dug-cells cell) 1 0))))
                                     (frequencies (map (juxt :x :y :z) digs)))))
                 "each cell dug once as stone and once as a torch; only the cut dig is asked twice")

@@ -88,9 +88,8 @@
 
   Torches: the line's cells are numbered 0 (entry) to n (stand), the target is n+1. A torch site is a cell
   index s whose torch hangs in the head cell of s on a side wall (else a floor torch in the feet cell), placed
-  from cell s+1. Sites are 0, then each time the farthest s whose cell s+1 the previous torch still lights
-  (light 14 less the taxicab distance), until every cell is lit. That is a flat run every 11 cells, a stair
-  every 5 steps, none when the entry is the stand. The stair is cut in segments up to cell s+1 of the next
+  from cell s+1. Sites are the fewest that leave no cell dark (jobs.lib.torch-plan: light spreads 13 cells
+  through the line), a flat run about every 25 cells, none when the entry is the stand. The stair is cut in segments up to cell s+1 of the next
   site so the torch goes in between.
 
   A site is placed when due (the body on s+1, nothing hanging in its cells; the world is the record, so a

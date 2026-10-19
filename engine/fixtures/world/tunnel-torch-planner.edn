@@ -1,0 +1,38 @@
+;; Card ef8e352f: torches go where they stop mob spawning (jobs.lib.torch-plan), not at fixed steps. A dark 1x2 tunnel is cut east
+;; from the body's own cell; the torches hung are the fewest that leave no feet cell at block light 0 (light spreads 13 cells).
+;; Should-succeed: 40 long: exactly 2 torches and every probed cell lit (observe light); 20 long: exactly 1.
+;; Dark sealed cell, so no clock is involved. Stone mass x 0..60, z 8..24, y 0..3; corridor cell [3 0 16].
+{:defaults
+ {:tags [:access :light :torches] :time :any
+  :plot {:height 8 :light :dark :length 64}
+  :blocks [[:fill [0 0 8] [60 3 24] "stone"] [:fill [3 0 16] [3 1 16] "air"]]
+  :body {:at [3.5 0 16.5] :inventory [["stone_pickaxe" 1] ["torch" 16] ["cobblestone" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 260}
+ :cases
+ [ {:name "forty-long-tunnel-takes-two-torches-and-no-cell-stays-dark"
+   :act [[:job (jobs.access.tunnel {:heading :east :length 40 :keep true})]
+         [:await {:source :job :kind :tunnel.done} 200]
+         [:cli "observe" ["$body" "--world" "$world" "light" [3 0 16]] {:ok true :light {:lit? true}}]
+         [:cli "observe" ["$body" "--world" "$world" "light" [7 0 16]] {:ok true :light {:lit? true}}]
+         [:cli "observe" ["$body" "--world" "$world" "light" [11 0 16]] {:ok true :light {:lit? true}}]
+         [:cli "observe" ["$body" "--world" "$world" "light" [15 0 16]] {:ok true :light {:lit? true}}]
+         [:cli "observe" ["$body" "--world" "$world" "light" [19 0 16]] {:ok true :light {:lit? true}}]
+         [:cli "observe" ["$body" "--world" "$world" "light" [23 0 16]] {:ok true :light {:lit? true}}]
+         [:cli "observe" ["$body" "--world" "$world" "light" [27 0 16]] {:ok true :light {:lit? true}}]
+         [:cli "observe" ["$body" "--world" "$world" "light" [31 0 16]] {:ok true :light {:lit? true}}]
+         [:cli "observe" ["$body" "--world" "$world" "light" [35 0 16]] {:ok true :light {:lit? true}}]
+         [:cli "observe" ["$body" "--world" "$world" "light" [39 0 16]] {:ok true :light {:lit? true}}]
+         [:cli "observe" ["$body" "--world" "$world" "light" [43 0 16]] {:ok true :light {:lit? true}}]]
+   :expect [{:event {:source :job :kind :tunnel.done :data {:torches [:any :any]}} :within-s 200 :of-job true}]
+   :limit-s 260}
+ {:name "twenty-long-tunnel-takes-one-torch-and-no-cell-stays-dark"
+   :act [[:job (jobs.access.tunnel {:heading :east :length 20 :keep true})]
+         [:await {:source :job :kind :tunnel.done} 200]
+         [:cli "observe" ["$body" "--world" "$world" "light" [3 0 16]] {:ok true :light {:lit? true}}]
+         [:cli "observe" ["$body" "--world" "$world" "light" [7 0 16]] {:ok true :light {:lit? true}}]
+         [:cli "observe" ["$body" "--world" "$world" "light" [11 0 16]] {:ok true :light {:lit? true}}]
+         [:cli "observe" ["$body" "--world" "$world" "light" [15 0 16]] {:ok true :light {:lit? true}}]
+         [:cli "observe" ["$body" "--world" "$world" "light" [19 0 16]] {:ok true :light {:lit? true}}]
+         [:cli "observe" ["$body" "--world" "$world" "light" [23 0 16]] {:ok true :light {:lit? true}}]]
+   :expect [{:event {:source :job :kind :tunnel.done :data {:torches [:any]}} :within-s 200 :of-job true}]
+   :limit-s 260}]}

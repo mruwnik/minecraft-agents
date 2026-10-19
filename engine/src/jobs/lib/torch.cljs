@@ -2,7 +2,8 @@
   "Hanging a torch in a straight 1-wide run, shared by jobs.access.tunnel and jobs.gather.mine."
   (:require [engine.ctx :as ctx]
             [jobs.lib.util :as u]
-            [jobs.lib.placement :as placement]))
+            [jobs.lib.placement :as placement]
+            [jobs.lib.shelter.sense :as sense]))
 
 (def torch-blocks #{"torch" "wall_torch"})
 
@@ -62,3 +63,8 @@
     (let [r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] cell) :item "torch"
                                                :click (placement/js-click (:click choice))})))]
       (boolean (or (= "placed" (.-status r)) (torch-blocks (block-at cell)))))))
+
+(defn perceived-dark?
+  "Whether the body counts the cell [x y z] dark: not sense/lit-here? (an unseen cell by the open-sky guess)."
+  [p [x y z]]
+  (not (sense/lit-here? p {:x x :y y :z z})))

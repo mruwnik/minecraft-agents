@@ -3,6 +3,7 @@
   (:require [jobs.lib.stair-cells :as geo]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.pillar :as pillar]
+            [jobs.lib.torch-plan :as tp]
             [plan.shape :as shape]))
 
 (def heading-order [:north :east :south :west])
@@ -48,30 +49,34 @@
   (let [{:keys [steps stand]} (line plan)]
     (-> (mapv first steps) (conj stand) (conj (:target plan)))))
 
-(defn taxi [a b] (reduce + (map #(js/Math.abs (- %1 %2)) a b)))
+(defn head-cell [cell] (shape/add cell [0 1 0]))
 
-(defn light-between
-  "The light of a torch for site s at cell k of cells: 14 less the taxicab distance, from the nearer of head and feet."
-  [cells s k]
-  (let [feet (cells s)]
-    (- 14 (max (taxi (shape/add feet [0 1 0]) (cells k)) (taxi feet (cells k))))))
+(defn open-cells
+  "The cells of the line's inside, feet and head, that light passes through."
+  [plan]
+  (let [cells (line-cells plan)]
+    (into (set cells) (map head-cell) cells)))
 
-(defn torch-light [plan s k] (light-between (line-cells plan) s k))
+(defn lit-cells
+  "The feet cells of the line that torches at the head cells of sites light (jobs.lib.torch-plan)."
+  [plan sites]
+  (let [cells (line-cells plan)
+        lit (into #{} (mapcat #(tp/lit-by (open-cells plan) (head-cell (cells %)))) sites)]
+    (filterv lit cells)))
 
 (defn torch-sites
-  "The site indices of the torches of plan: [] when the entry is the stand, else 0 and each time the largest s after
-  the last whose cell s+1 the last still lights (s up to n-1), until every cell 0..n+1 has light."
+  "The site indices of the torches of plan: [] when the entry is the stand, else the fewest (jobs.lib.torch-plan) that
+  leave no cell 0..n+1 dark; a torch hangs in the head cell of site s (0 to n-1), placed from cell s+1."
   [plan]
   (let [cells (line-cells plan)
         n (- (count cells) 2)
-        lit? (fn [sites k] (some #(pos? (light-between cells % k)) sites))
-        dark? (fn [sites] (not-every? #(lit? sites %) (range 0 (+ n 2))))]
+        open (open-cells plan)
+        by-head (zipmap (map head-cell cells) (range))]
     (if (zero? n)
       []
-      (loop [sites [0]]
-        (let [at (peek sites)
-              nxt (last (filter #(pos? (light-between cells at (inc %))) (range (inc at) n)))]
-          (if (and (dark? sites) nxt) (recur (conj sites nxt)) sites))))))
+      (->> (tp/plan {:cells cells :dark? (constantly true) :open? open
+                     :spots (map head-cell (take n cells))})
+           :spots (map by-head) sort vec))))
 
 (defn step-stop
   "jobs.lib.stair-cells/stop-of for a step of the line. With a building block carried (in :filler?) air under or in the floor is no stop:
