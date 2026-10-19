@@ -722,3 +722,17 @@
                                    (apply call! c k job more))]
             (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 10 :at {:x 6 :y 64 :z 0}} 60)))
           (is (= [{:safe? '(not (threatened))}] (distinct @checks)) "no dark-sky wait for drops lying at the tree"))))))
+
+(deftest a-pick-up-that-stopped-short-leaves-the-tree-condition-failed-with-the-logs-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (fm/start {:blocks (lt/tree 6 0 "oak" 3)} {})
+              call! ctx/call]
+          (with-redefs [ctx/call (fn [c k job & more]
+                                   (if (= 'jobs.items.collect-drops job)
+                                     {:kind :condition-failed :cause {:reason :least} :data {:collected 1}}
+                                     (apply call! c k job more)))]
+            (let [out (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 10 :at {:x 6 :y 64 :z 0}} 60))]
+              (is (= :condition-failed (:kind (:ending out))))
+              (is (= :logs-left (get-in out [:ending :cause :reason]))))))))))

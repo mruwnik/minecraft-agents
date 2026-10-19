@@ -62,6 +62,7 @@
   Its safe? is ready/safe-at-by-night :at with :at, else ready/safe-if-lit.
   Ends :done with {:base pos :logs n :axe why} of the tree it felled: n logs dug; :axe is :carried, :skipped-fetch-off,
   :skipped-small-tree or :none-found (fetch failed: chopped by hand). Condition-failed :no-tree when the look found none;
+  condition-failed :logs-left (cause {:left n}) when the pick-up stopped short (fewer than all the drops, no sign they are gone);
   nothing-possible :tree-unreachable when every tree in sight proved out of
   reach (data {:unreachable n :columns :why}) and :tree-blocked when a log cannot be dug or the pillar not taken back; the
   pillar's fetch ending when its blocks cannot be had.
@@ -325,15 +326,17 @@
 (defn ^:async collect-logs!
   "Pick up the drops of the logs dug from the ground (a collect-drops child by their ids, once per tree; it walks round
   the base to look when none is in sight). :continue while it waits on the world, else nil; drops it cannot find are not
-  this job's failure."
+  this job's failure, but a collect that stopped short (:least not met, held up) ends the tree :condition-failed :logs-left."
   [c]
   (let [{:keys [base drop-ids collected]} (ctx/mem c)]
     (when (and (seq drop-ids) (not collected))
       (let [e (await (ctx/call c :collect 'jobs.items.collect-drops
                                (log/collect-args c {:radius collect-radius :ids drop-ids :near base :search collect-search :least (count drop-ids)})))]
-        (when-not (= :continue e)
-          (ctx/update-mem! c assoc :collected (get-in e [:data :collected] 0))
-          nil)))))
+        (cond
+          (= :continue e) :continue
+          (or (= :done (:kind e)) (and (= :nothing-possible (:kind e)) (= :none-collected (contract/cause-key e))))
+          (do (ctx/update-mem! c assoc :collected (get-in e [:data :collected] 0)) nil)
+          :else (ctx/end c :condition-failed {:reason :logs-left :left (count drop-ids)} (tree-result c)))))))
 
 (defn ^:async ground-step
   "One piece of the tree from the ground: the axe, the next log dug (walking in reach first), the tree ended when no log
@@ -346,8 +349,8 @@
         (do (ctx/update-mem! c assoc :relooked true)
             (await (sense/look-at-unknown! c unseen (sense/max-looks)))
             :again)
-        (if (or (= :continue (await (come-down! c))) (= :continue (await (collect-logs! c))))
-          :continue
+        (if-let [stop (or (when (= :continue (await (come-down! c))) :continue) (await (collect-logs! c)))]
+          stop
           (if (zero? (:dug (ctx/mem c) 0))
             (ctx/end c :condition-failed {:reason :gone :base (:base (ctx/mem c))} nil)
             (ctx/end c :done nil (tree-result c)))))
