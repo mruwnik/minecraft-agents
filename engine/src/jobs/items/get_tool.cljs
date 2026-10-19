@@ -32,7 +32,6 @@
   {:block {:doc "a block name: get a tool that harvests it" :spec a/name? :default nil}
    :item {:doc "a tool item name" :spec a/item? :default nil}
    :kind {:doc "a tool kind, e.g. \"pickaxe\" or \"shears\"" :spec a/name? :default nil}
-   :fail-minutes {:doc "passed on to the obtain; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
    :for-plan {:doc "id of the plan whose work this is: passed to the obtain, so a table may stand in its own cells" :spec a/name? :default nil}
    :explore {:doc "passed to the obtain: walk and look for raw material not seen (false: fail instead; a map: jobs.explore.search options)" :spec (a/or-of boolean? map?) :default true}})
 
@@ -76,7 +75,7 @@
   (let [ways (ways-of c)
         a (:args c)]
     (into {} (remove (comp nil? val))
-          {:any-of names :count 1 :fail-minutes (:fail-minutes a) :explore (:explore a) :for-plan (:for-plan a)
+          {:any-of names :count 1 :explore (:explore a) :for-plan (:for-plan a)
            :ways (cond-> (disj ways :craft) (ways :craft) (into [:craft :smelt]))})))
 
 (defn bad-args [c]

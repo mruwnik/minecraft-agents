@@ -66,7 +66,7 @@
   [c names need]
   (let [a (:args c)]
     (into {} (remove (comp nil? val))
-          {:any-of (tools-wanted c names need) :count 1 :ways (ways-of c) :fail-minutes (:fail-minutes a) :explore (:explore a)})))
+          {:any-of (tools-wanted c names need) :count 1 :ways (ways-of c) :explore (:explore a)})))
 
 (defn ^:async pickaxe-step!
   "Get the cheapest tool that harvests the need's block (a jobs.items.obtain child): :again once it is carried, :continue

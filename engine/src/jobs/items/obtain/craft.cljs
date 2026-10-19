@@ -30,7 +30,7 @@
   "The :fetch limits of a smelt child (its fuel and furnace): this obtain's sources."
   [c]
   (into {} (remove (comp nil? val))
-        {:how (old-how c) :fail-minutes (:fail-minutes (:args c)) :explore (:explore (:args c))}))
+        {:how (old-how c) :explore (:explore (:args c))}))
 
 (defn wood-fuel
   "The planks kind to burn: the first of the smelt's wood fuels carried, else the first."

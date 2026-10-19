@@ -69,7 +69,6 @@
   {:item {:doc "the item to get" :spec a/item? :default nil}
    :any-of {:doc "items, any one will do, the first preferred (instead of :item)" :spec (a/coll-of a/item?) :default nil}
    :count {:doc "how many to carry at least (carried at the start count)" :spec (a/int-in 1 nil) :default 1}
-   :fail-minutes {:doc "passed on to the smelt child's fetch; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
    :for-plan {:doc "id of the plan whose work this is: a crafting table may stand in its own cells; passed to the craft steps" :spec a/name? :default nil}
    :avoid {:doc "cells [x y z] a crafting table is never put in or dug for (a caller's dig line); passed to the craft steps" :spec (a/coll-of a/position?) :default nil}
    :explore {:doc "walk and look for a raw need not seen: false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}})
