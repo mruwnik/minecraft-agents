@@ -6,12 +6,14 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.gather.mine.targets :refer [carried book-ground! drop-radius left-behind]]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.near :as near]
             [jobs.lib.result :as result]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.walk :as walk]))
 
 (a/defargs settings
   {::pickup-grace-ms {:default 400 :doc "How long the body waits for a drop to be picked up, in ms." :spec (a/int-in 0 nil)}
@@ -101,6 +103,41 @@
                                       (recur))
                   nil))))))
 
+(defn lip-point
+  "Where the body leans out over the cell it stands beside: its own cell's edge toward dug (a cell [x y z] at its level),
+  nil when dug is not such a cell or has a seen floor. From the middle of a cell the rim hides what lies against the wall under the dug cell."
+  [c dug]
+  (let [[x y z] (u/cell-vec (u/self-pos c))
+        [dx dy dz] (map - dug [x y z])]
+    (when (and (zero? dy) (= 1 (+ (js/Math.abs dx) (js/Math.abs dz)))
+               (let [under (u/seen-name (:primitives c) (zipmap [:x :y :z] (update dug 1 dec)))]
+                 (or (nil? under) (rules/air under))))
+      {:x (+ x 0.5 (* 0.4 dx)) :y y :z (+ z 0.5 (* 0.4 dz))})))
+
+(defn ^:async peek-over-lip!
+  "A dug cell the body stands beside whose drop is still not in sight: once per dug cell, a step to the edge of its own cell
+  toward it (walk/centre!: go-to works in cells and would not leave this one), so the drop at the foot of a pit wall shows.
+  :peeked after the step, nil when there is none to take."
+  [c dug]
+  (when-let [pt (and (not= dug (:lip-peeked (ctx/mem c))) (lip-point c dug))]
+    (ctx/update-mem! c assoc :lip-peeked dug)
+    (await (walk/centre! c (:x pt) (:z pt) 0.12))
+    :peeked))
+
+(defn ^:async look-floor-toward!
+  "The floor cells under the line from the body to dug (a cell short of it) that the body has not sensed, looked at once per dug
+  cell: a walk plans only over floors it has seen. True when it looked at any."
+  [c dug]
+  (when (not= dug (:floor-looked (ctx/mem c)))
+    (ctx/update-mem! c assoc :floor-looked dug)
+    (let [[x y z] (u/cell-vec (u/self-pos c))
+          [dx _ dz] (map - dug [x y z])
+          n (max (js/Math.abs dx) (js/Math.abs dz))
+          cells (for [i (range 1 n)] [(+ x (js/Math.round (* dx (/ i n)))) (dec y) (+ z (js/Math.round (* dz (/ i n))))])
+          unseen (filter #(dig-look/unknown? (:primitives c) %) cells)]
+      (await (dig-look/look-unknown! c unseen))
+      (boolean (seq unseen)))))
+
 (defn ^:async walk-to-drop!
   "A dig whose drop did not come in: once per dug cell, walk within 1 of it (near/go-near!, no escalation), where a drop
   out of sight or out of reach from the dig spot is seen and picked up; a dug cell no walk gets beside (dug from a
@@ -112,9 +149,11 @@
       (let [pos (zipmap [:x :y :z] dug-at)
             go! #(near/go-near! c pos 1 {:ways #{:walk :clear-seal}})
             w (await (go!))
+            w (if (and (= :blocked w) (await (look-floor-toward! c dug-at))) (await (go!)) w)
             cut (when (and (= :blocked w) (not (:stay-level (:args c))) (let [res (near/last-walk c)] (or (result/unreachable-walk? res) (= :detour (result/why res)))))
                   (await (cut-to-drop! c dug-at)))
             w (case cut :cut (await (go!)) :partial :partial w)]
+        (when (= :there w) (await (peek-over-lip! c dug-at)))
         (when-not (= :partial w) (ctx/update-mem! c assoc :drop-walked dug-at))
         (when (= :there w) (ctx/update-mem! c dissoc :drop-looked))
         (case w :partial :partial :there :walked nil)))))

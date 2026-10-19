@@ -72,7 +72,7 @@
 
   One call runs these steps in order, again and again until the job ends (it yields with :continue only while a child or
   a walk waits on the world, and after 400 steps):
-  1. Collecting: after a dig the body glances at the dug cell, the cell under it and unsensed cells further down (once per cell), then the collect-drops child gathers the item within :collect-radius; when none came in, the body walks within 1 of the dug cell once (a dug cell no walk gets beside, dug from a distance over a wall, is first cut to: at most ::drop-cut-max cells, jobs.lib.dig-route; not with :stay-level), looks and collects again. The count is the
+  1. Collecting: after a dig the body glances at the dug cell, the cell under it and unsensed cells further down (once per cell), then the collect-drops child gathers the item within :collect-radius; when none came in, the body walks within 1 of the dug cell once (floors toward it never seen are looked at first; a dug cell no walk gets beside, dug from a distance over a wall, is first cut to: at most ::drop-cut-max cells, jobs.lib.dig-route; not with :stay-level; beside a dug cell with no seen floor it leans to the edge of its own cell once, so the rim does not hide a drop at the foot of the wall), looks and collects again. The count is the
      inventory's, never the dig's report. Drops of the item still lying afterwards (out of reach) are reported
      once each, info mine.left-behind {:items [{:pos :count}]}. A dig after which nothing came in and no drop is in
      sight is told once, info mine.drop-lost {:cell}, and listed in the result's :lost. The result's :left is re-checked after the walk

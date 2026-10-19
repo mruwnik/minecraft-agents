@@ -401,6 +401,21 @@
           (is (= :count (:reason (done-event s))))
           (is (empty? (events-of s :mine.gave-up))))))))
 
+(deftest a-drop-hidden-by-the-rim-is-seen-from-the-edge-of-the-bodys-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks {"1,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})
+              p (:p s)
+              leaned (atom false)
+              show! (fn [] (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :visible @leaned) es))))]
+          (.override (.-world p) "dig" (fn [token args impl] (.then (impl token args) (fn [r] (show!) r))))
+          (.override (.-world p) "steer" (fn [token args impl] (.then (impl token args) (fn [r] (reset! leaned true) (show!) r))))
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0}) {})
+          (await (run-ticks s 40))
+          (is (= 1 (get (inv s) "raw_iron")) "the body leaned over its cell's edge and picked the drop up")
+          (is (empty? (events-of s :mine.drop-lost))))))))
+
 (deftest a-drop-of-ore-dug-over-a-wall-is-cut-to-and-collected
   (async done
     (tu/run-async done
