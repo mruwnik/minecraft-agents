@@ -5,7 +5,8 @@
 ;; submerged-tunnel-is-swum (an 18 cell tunnel two high is swum at ~3.9 b/s: out within 11 s, no hurt).
 ;; Live risk: the unseen-column case depends on the body not seeing the lake from the bank (it faces away); the dark shaft pocket is only dark when the roof really seals it.
 {:defaults
- {:tags [:movement :water :air] :time :any
+ {:settings {:jobs.lib.breath/min-oxygen 0}
+  :tags [:movement :water :air] :time :any
   :limit-s 120}
  :cases
  [{:name "lake-floor-start-walks-to-the-bank"

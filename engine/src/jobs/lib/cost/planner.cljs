@@ -77,15 +77,22 @@
   [oxygen]
   (if (number? oxygen) (+ (* (- 20 oxygen) 0.75) 0.375) 0))
 
+(defn air-limit
+  "The seconds of head-under swimming a plan may count on: the planner's airLimit, cut to the air breathe's reflex lets
+  the body use (oxygen down to min-oxygen of 20), since the reflex cuts a longer dive half way."
+  [min-oxygen]
+  (min (unchecked-get base/DEFAULT-COSTS "airLimit") (* (- 20 min-oxygen) 0.75)))
+
 (defn air-costs
-  "The planner's options.costs airDrain, airGrace, airUsed and swimH (a JS object) for a policy's :air-drain, :air-grace,
-  :air-used and :swim-h, those it has."
+  "The planner's options.costs airDrain, airGrace, airUsed, airLimit and swimH (a JS object) for a policy's :air-drain,
+  :air-grace, :air-used, :air-limit and :swim-h, those it has."
   [policy]
   (let [o #js {}]
     (when-some [h (:swim-h policy)] (unchecked-set o "swimH" h))
     (when-some [d (:air-drain policy)] (unchecked-set o "airDrain" d))
     (when-some [g (:air-grace policy)] (unchecked-set o "airGrace" g))
     (when-some [u (:air-used policy)] (unchecked-set o "airUsed" u))
+    (when-some [l (:air-limit policy)] (unchecked-set o "airLimit" l))
     o))
 
 (defn planner-costs-problem

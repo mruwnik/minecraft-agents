@@ -1,0 +1,26 @@
+;; go-to over a pond with the suffocating reflex registered (default triggers): a dive the planner allows but breathe cuts must not be planned.
+;; Pond x 8..29 across the plot, 2 deep (water y 1..2, banks y 3, feet y 4), stone rim at z 0 and 15. The body starts on the west bank, the goal is the east bank.
+;;   surface-swim-crosses (should-succeed): the pond is open; the body can swim with the head out, so it arrives and the reflex never fires.
+;;   roofed-dive-refused (should-fail): the pond one deeper under a stone ridge to the roof (a 22 cell, 11 s dive under it, no way round): refused; the body stays on the bank and the reflex never fires.
+{:defaults
+ {:tags [:movement :water :air] :time :any
+  :plot {:height 10 :length 40 :width 16}
+  :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
+              :job (jobs.survival.breathe {:min-oxygen 12})}]
+  :blocks [[:fill [0 0 0] [39 3 15] "stone"]
+           [:fill [8 1 1] [29 3 14] "air"]
+           [:fill [8 1 1] [29 2 14] "water"]]
+  :body {:at [4.5 4 8.5] :yaw 270 :settle-s 1}
+  :limit-s 120}
+ :cases
+ [{:name "surface-swim-crosses"
+   :act [[:job (jobs.movement.go-to {:pos #at [34 4 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 100 :of-job true}
+            {:no-event {:source :reflex :kind :fired} :for-s 100 :until {:source :job :kind :result}}]
+   :after [[:body-near [34.5 4 8.5] 3]]}
+  {:name "roofed-dive-refused"
+   :blocks [[:fill [8 3 1] [29 3 14] "water"] [:fill [8 4 0] [29 9 15] "stone"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [34 4 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false}} :within-s 100 :of-job true}
+            {:no-event {:source :reflex :kind :fired} :for-s 100 :until {:source :job :kind :result}}]
+   :after [[:body-near [4.5 4 8.5] 5]]}]}

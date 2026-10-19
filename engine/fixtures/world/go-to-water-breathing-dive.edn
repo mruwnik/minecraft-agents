@@ -3,7 +3,8 @@
 ;; Should-succeed: with Water Breathing (120 s) the body takes the tunnel and arrives unhurt.
 ;; Should-fail: with no effect the plan would drown the body, so go-to ends unarrived (refused :air-lethal) and the body is not hurt.
 {:defaults
- {:tags [:movement :water :air :go-to]
+ {:settings {:jobs.lib.breath/min-oxygen 0}
+  :tags [:movement :water :air :go-to]
   :time :any
   :plot {:height 12 :length 128 :width 16}
   :blocks [[:fill [0 0 0] [127 5 15] "stone"]
