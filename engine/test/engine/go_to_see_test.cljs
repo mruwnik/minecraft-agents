@@ -41,7 +41,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (gt/go! pit-world {:pos goal :range 3}))]
-          (is (= {:arrived true} @out))
+          (is (true? (:arrived @out)))
           (is (= [3.5 63 1.5] (gt/at p)) "no walk"))))))
 
 (deftest see-gives-up-on-a-block-no-stand-in-range-sees

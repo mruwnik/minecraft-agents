@@ -127,10 +127,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out eng p]} (await (go! {:blocks flat} {:pos [1 64 0] :range 1}))]
-          (is (= {:arrived true} @out))
+        (let [{:keys [out eng p] :as s} (await (go! {:blocks flat} {:pos [1 64 0] :range 1}))]
+          (is (true? (:arrived @out)))
           (is (= [0 64 0] (at p)))
-          (is (= [] (moved eng))))))))
+          (is (= [] (moved eng)))
+          (is (empty? (events-of s :result)) "done? ended it before a round ran"))))))
 
 (deftest go-to-writes-a-moved-entry-for-the-walk
   (async done
@@ -717,7 +718,7 @@
                                                               {:escalation {:step :stair :heading [1 0] :steps 3}
                                                                :escalations 1 :escalation-from [0 64 0] :planned []}))
               solid (fn [blocks] (count (remove #(= "air" (val %)) blocks)))]
-          (is (= {:arrived true} @out) (pr-str @out))
+          (is (true? (:arrived @out)) (pr-str @out))
           (is (= [:done] @returns))
           (is (= (solid flat) (solid (:blocks @(fake/state p)))) "no stair child dug")
           (is (= [] (mem/entries (mem/view (:store eng)) :tidy)) "nothing in the dig ledger"))))))

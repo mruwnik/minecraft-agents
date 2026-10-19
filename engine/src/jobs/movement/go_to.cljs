@@ -17,6 +17,7 @@
             [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.cut :refer [approaches cut-loop? nearest-hostile note-restart! start-attempt! way-hostiles]]
             [jobs.movement.go-to.escalation :as esc]
+            [jobs.movement.go-to.faults :as faults]
             [jobs.movement.go-to.health :as health]
             [jobs.movement.go-to.holes :refer [note-holes!]]
             [jobs.movement.go-to.restore :as restore]
@@ -46,8 +47,9 @@
     block), :clear-path (a door dug through a wall), :stair (a stair up, its own stair cut again) and :dig-out (out of
     its own shelter).
   - Its safe? is: at night jobs.lib.ready/safe-at the goal (a hostile near, or the goal or the walk to it exposed: later,
-    waiting for dawn; a goal whose light is unseen is walked to), by day not threatened; always ok with the head under water (it swims up for air first); and the retreat plug wait (below). A caller's :checks (an escape job's
+    waiting for dawn; a goal whose light is unseen is walked to), by day not threatened; always ok with the head under water (it swims up for air first). A caller's :checks (an escape job's
     defaults, an agent's own) replace it.
+  - A body already within :range of a goal with a y (not in water or hanging; under :see seeing it) ends :done, cause :already, before any round: no plan, no arrival look (done?).
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
     most 60 s each) until it arrives or gives up. A search that needs more slices walks on toward where it has got
     to, or not at all while it goes on; every iteration awaits a pace-ms timer. A goal in unloaded land is walked
@@ -265,6 +267,24 @@
       (meta at))))
 
 (def fit? ready/ok)
+
+(defn done?
+  "Ok before the call starts when the body already stands within :range of a goal cell with a y (and, under :see, sees
+  it), not in water and not hanging in a climbable: nothing to plan or walk, the engine ends it :done (cause :already)
+  with {:arrived true}. Later once started (the walk decides arrival: put-back of holes, looks, water), for a column
+  goal, a :place not yet recorded and any other case."
+  [c]
+  (let [later (contract/later :walking "not at the goal yet")
+        {:keys [pos reason]} (when (:quote-call c) (aim/target c))]
+    (if (or reason (nil? (:y pos)))
+      later
+      (let [c (cond-> c (:unknown (:args c)) (assoc :unknown (wworld/unknown-spec)))
+            stand (wworld/stand-goal (wworld/path-world (:primitives c) (:unknown c)) pos)]
+        (if (and (aim/here? c stand (:range (:args c)))
+                 (not (breath/in-water? (:primitives c)))
+                 (not (faults/hanging-cell c stand)))
+          (contract/ok :there "already within range of the goal" :result {:arrived true})
+          later)))))
 
 (defn ^:async run-steps!
   "pace/steps! over step!, goal aimed again each step (goal-pos), so a column seen on the way resolves; the approach
