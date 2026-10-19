@@ -44,13 +44,14 @@
          [:job (jobs.animals.shear {:count 1})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :stopped}} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :need}} :within-s 80 :of-job true}]}
-  {:name "shear-fetch-false-ends-at-once"
+  {:name "shear-fetch-false-waits-no-shears"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:shears\",count:1}]}"]]
    :act [[:summon "sheep" [20.5 0 12.5]]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"]
          [:job (jobs.animals.shear {:count 1 :fetch false})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :no-shears}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :child_ended :data {:slot :need}} :for-s 30 :until {:source :job :kind :completed}}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-shears}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :child_ended :data {:slot :need}} :for-s 30 :until {:source :job :kind :waiting}}
+            {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :waiting}}]
    :limit-s 60}
   {:name "leash-fetches-a-lead"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:lead\",count:2}]}"]]
