@@ -91,7 +91,10 @@
    :after [[:body-near [16.5 0 16.5] 1.5] [:item "bread" [:<= 5]]]}
   {:name "hp20-food7-bread-nothing-fires-body-keeps-working"
    :body {:inventory [["bread" 6]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 6 223 true"] [:until-effect-gone "hunger" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 100 29 true"] [:until-rcon "data get entity $BODY foodLevel" "data: 9\\b" 60]
+         [:rcon "effect clear $BODY minecraft:hunger"]
+         [:rcon "effect give $BODY minecraft:hunger 100 4 true"] [:until-rcon "data get entity $BODY foodLevel" "data: 7\\b" 60]
+         [:rcon "effect clear $BODY minecraft:hunger"]
          [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 40 :of-job true}
             {:no-event {:source :reflex :kind :fired} :for-s 30 :until {:source :job :kind :result :data {:arrived true}}}]
