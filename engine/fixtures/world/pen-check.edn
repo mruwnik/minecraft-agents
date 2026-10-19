@@ -147,7 +147,7 @@
                     {:id "lobby" :outline [#at [3 0 6] #at [5 0 9]] :want [:any "oak_fence"]}
                     {:id "gates" :cells [#at [4 0 6] #at [4 0 9]] :want [:any "oak_fence_gate"]}]}]
    :blocks [[:fill [2 0 2] [8 0 8] "air"]
-            [:fill [2 0 2] [6 0 6] "oak_fence" :hollow] [:fill [3 0 6] [5 0 9] "oak_fence" :hollow]
+            [:fill [2 0 2] [6 0 6] "oak_fence" :outline] [:fill [3 0 6] [5 0 9] "oak_fence" :outline]
             [:set [4 0 6] "oak_fence_gate[facing=south,open=false]"] [:set [4 0 9] "oak_fence_gate[facing=south,open=false]"]]
    :body {:at [4.5 0 4.5] :yaw 0}
    :act [[:job (jobs.animals.pen-check {:plan "$plan:pen"})]]
