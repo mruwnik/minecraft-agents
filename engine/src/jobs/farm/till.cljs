@@ -49,7 +49,8 @@
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::max-cells {:default 256 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}
+  {::job-time-s {:default 600 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+   ::max-cells {:default 256 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}
    ::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}})
 (defn max-cells [] (settings/get settings ::max-cells))
 (def loosened
@@ -85,7 +86,7 @@
     (vec (for [x (span xa xb) y (span ya yb) z (span za zb)] {:x x :y y :z z}))))
 
 (def target [:from :to :center :radius])
-(def defaults {:use {:tools :till}})
+(def defaults {:use {:tools :till} :spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
 
