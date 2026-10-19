@@ -504,6 +504,16 @@
               result (await (tu/child-outcome (:eng env) use-on {:pos at} 40))]
           (is (not= :not-allowed (:reason result))))))))
 
+(deftest a-use-on-scoop-asks-the-harvest-rule-not-the-place-rule
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zone (assoc bd/farm-zone :allow #{:harvest})
+              scoop (bd/setup {:self body :inventory [{:name "bucket" :count 1}] :blocks {"2,64,0" "water"} :zones [zone]})
+              pour (bd/setup {:self body :inventory [{:name "water_bucket" :count 1}] :zones [zone]})]
+          (is (= true (:used (await (tu/child-outcome (:eng scoop) use-on {:pos at :item "bucket"} 40)))))
+          (is (= :not-allowed (:reason (bd/wait-cause (await (bd/waiting-after pour (list use-on {:pos at :item "water_bucket"}) 3)))))))))))
+
 (deftest a-use-on-with-a-bucket-ends-by-the-place-status
   (async done
     (tu/run-async done

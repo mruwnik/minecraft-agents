@@ -15,7 +15,7 @@
    :expect [{:event {:source :job :kind :completed :data {:dry []}} :within-s 70 :of-job true}]
    :after [[:block [16 -1 16] "water"] [:item "water_bucket" 0]]}
   {:name "row-with-water-beside-it-is-left-alone"
-   :blocks [[:set [16 -1 17] "water"]]
+   :blocks [[:fill [12 -1 16] [20 -1 16] "farmland[moisture=7]"] [:set [16 -1 17] "water"]]
    :act [[:job (jobs.farm.irrigate {:from #xyz [12 -1 16] :to #xyz [20 -1 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:poured []}} :within-s 40 :of-job true}]
    :after [[:block [16 -1 16] "farmland[moisture=7]"] [:item "water_bucket" 1]]}

@@ -17,7 +17,7 @@
   A bucket :item (water_bucket pours, lava_bucket pours lava, bucket scoops) is used on the cell :pos itself, through the
   place act: the liquid goes there, or is taken from there; :face is ignored.
   One call is the whole attempt: walk into reach (one jobs.movement.go-to call, within :range, no escalation), click. Conditions (can-start? and can-run?): a bad call is
-  never (:bad-args); a bucket :item changes the cell, so zones, claims and plans may refuse it ({:reason :not-allowed :pos :by ...},
+  never (:bad-args); a bucket :item changes the cell, so zones, claims and plans may refuse it (a pour asks :place, a scoop :harvest; {:reason :not-allowed :pos :by ...},
   :ignore-zones? skips the rule); a plain click changes no block by itself and asks no zone. It yields :continue only when the walk waits on the world.
 
   Ends with data {:used true|false :pos :item :face :reason}, plus :spawn-set true when a bed answered \"respawn point set\" (a bed is used by day to set the spawn; not in the Nether or End). :reason is the primitive's
@@ -100,7 +100,7 @@
                    (fn [c]
                      (let [{:keys [pos error]} (b/parse (:args c))]
                        (when (and (not error) (bucket? (:item (:args c))))
-                         (b/not-allowed pos (access/may? (b/rules-in c) :place pos)))))))
+                         (b/not-allowed pos (access/may? (b/rules-in c) (if (= "bucket" (:item (:args c))) :harvest :place) pos)))))))
 
 (def can-start? (cond/and bad-args bucket-zones))
 (def can-run? bucket-zones)
