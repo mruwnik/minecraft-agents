@@ -52,7 +52,7 @@
   every way out of the water is spent or the run has gone 3 x the swim-range setting blocks; the searched area (the start and the
   failed headings) is remembered (:breathe-afloat, 5 min), so a refire there swims no leg the run already did;
   :no-blocks when only a step cell was left and no pillar block is carried;
-  :no-air (data :air-radius, :cap why no cap was dug: :no-cap :unseen :not-natural :protected :gravity :too-slow :dig-failed,
+  :no-air (data :air-radius, :cap why no cap was dug: :not-tried :no-cap :unseen :not-natural :protected :gravity :too-slow :dig-failed,
   :pocket why no pocket gave air: :off :made-near :no-block :afloat :no-wall :too-slow :dig-failed :step-failed :made :not-tried;
   the text names both) or :no-way-out after three failed tries in the run, or many passes. It never holds still while afloat.
   The air search is jobs.survival.breathe.air. Quote: a few seconds to a minute.
@@ -353,12 +353,17 @@
     :again
     (ctx/end c :nothing-possible cause {:text text :tries (u/max-failures)})))
 
+(defn air-stop-fields
+  "The :no-air data from the run's memory m: a cap or pocket the run never reached is :not-tried, not :no-cap."
+  [m]
+  {:air-radius (air/air-radius) :cap (:cap m :not-tried) :pocket (:pocket m :not-tried)})
+
 (defn fail-air!
   "fail! for :no-air: the stop says how far air was searched and why no pocket and no cap gave air."
   [c]
   (if-not (u/count-fail! c)
     :again
-    (let [fields {:air-radius (air/air-radius) :cap (:cap (ctx/mem c) :no-cap) :pocket (:pocket (ctx/mem c) :not-tried)}
+    (let [fields (air-stop-fields (ctx/mem c))
           text (str "drowning and no air within reach (none seen within " (:air-radius fields) "; pocket: " (name (:pocket fields))
                     "; cap: " (name (:cap fields)) ")")]
       (ctx/end c :nothing-possible :no-air (assoc fields :tries (u/max-failures) :text text)))))

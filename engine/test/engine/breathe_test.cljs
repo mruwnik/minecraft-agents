@@ -1625,3 +1625,7 @@
               c (assoc (stub-child-ctx (contract/ending :done nil {:arrived true})) :call (fn [_ _ args] (reset! seen args) (js/Promise.resolve :continue)))]
           (await (air/go! c :leg {:x 0 :y 64 :z 0} 2))
           (is (= {:health 1} (:floor @seen)) "go-to no longer heals: a drowning body must not end :needs-health"))))))
+
+(deftest a-stop-before-the-cap-was-reached-says-not-tried-not-no-cap
+  (is (= {:air-radius 8 :cap :not-tried :pocket :not-tried} (b/air-stop-fields {})))
+  (is (= :too-slow (:cap (b/air-stop-fields {:cap :too-slow})))))
