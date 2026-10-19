@@ -82,7 +82,7 @@
 
 (def target [:tunnel])
 
-(def defaults {:spend {:job-time ::job-time-s}})
+(def defaults {:checks {:fit? '(always)} :spend {:job-time ::job-time-s}})
 
 (def bad-args
   "Never :bad-args unless :tunnel is the result of jobs.access.tunnel."

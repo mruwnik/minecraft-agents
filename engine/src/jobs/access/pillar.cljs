@@ -81,7 +81,7 @@
 
 (def safe? ready/safe-here-by-night)
 
-(def fit? ready/ok)
+(def fit? ready/fit?)
 
 (def target [])
 

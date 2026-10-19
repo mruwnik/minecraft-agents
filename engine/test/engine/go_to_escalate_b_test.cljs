@@ -425,7 +425,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:safe? '(not (exposed))} (await (pillar-call-checks nil))) "no caller form: a hostile does not stall the way out")
+        (is (= {:safe? '(not (exposed)) :fit? '(always)} (await (pillar-call-checks nil))) "no caller form: a hostile does not stall the way out")
         (is (nil? (:safe? (await (pillar-call-checks {:safe? '(always)})))) "a caller's form reaches the pillar (card 02b795f1)")))))
 
 (deftest go-to-spares-the-wall-of-a-pit-pen-that-is-a-plan-of-the-body-seen-or-not

@@ -65,7 +65,7 @@
 
 (def safe? ready/safe-at-from)
 
-(def fit? ready/ok)
+(def fit? ready/fit?)
 
 (def target [:heading])
 

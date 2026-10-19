@@ -96,7 +96,7 @@
   {::job-time-s {:default 60 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (def safe? ready/safe-here-by-night)
-(def fit? ready/ok)
+(def fit? ready/fit?)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

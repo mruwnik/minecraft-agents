@@ -60,7 +60,7 @@
 
 (def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
 
-(def fit? ready/ok)
+(def fit? ready/fit?)
 
 (def target [:pos])
 
