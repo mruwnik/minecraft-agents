@@ -2,6 +2,7 @@
 ;; [12..20 -1 16] (ground layer y -1), one water bucket carried. Should-succeed: the middle cell [16 -1 16] (it wets all nine) is dug and
 ;; filled, the job completes with nothing dry. Should-fail: a field with water beside it is left alone (no pour, bucket kept);
 ;; with no bucket and :fetch false the job stops :need; a box over bare air has no field cell and stops :nothing-seen (never completed).
+;; The box case has a low roof: under a roof 4 or more cells above the box centre, a sealed cell reads as open ground at night and readiness waits for light.
 {:defaults
  {:tags [:farm :irrigate :jobs]
   :time :any
@@ -36,7 +37,8 @@
             {:no-event {:source :job :kind :completed} :for-s 10 :until {:source :job :kind :stopped}}]
    :after [[:not-block [16 -1 16] "water"] [:item "water_bucket" 1]]}
   {:name "box-over-air-sees-no-field-and-stops"
-   :act [[:job (jobs.farm.irrigate {:from #xyz [12 4 16] :to #xyz [20 4 16]})]]
+   :plot {:height 4 :floor "grass_block"}
+   :act [[:job (jobs.farm.irrigate {:from #xyz [12 1 16] :to #xyz [20 1 16]})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :nothing-seen}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 10 :until {:source :job :kind :stopped}}]
    :after [[:item "water_bucket" 1]]}]}
