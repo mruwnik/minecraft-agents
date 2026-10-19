@@ -1,0 +1,148 @@
+(ns jobs.build.light-area
+  (:require [engine.args :as a]
+            [engine.contract :as contract]
+            [engine.ctx :as ctx]
+            [jobs.lib.access :as access]
+            [jobs.lib.blocks :as b]
+            [jobs.lib.look :as look]
+            [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.solid :as solid]
+            [jobs.lib.torch :as torch]
+            [jobs.lib.torch-plan :as tp]
+            [jobs.lib.util :as u]))
+
+(def doc
+  "Light a room, corridor or box so no cell a monster could spawn in stays dark: the fewest floor torches
+  (jobs.lib.torch-plan, light spreads 13 cells through open cells). Area: :boxes (each two opposite corners) and/or :cells. The
+  cells that matter are those the body has seen as spawn ground (sense/spawnable?: air, air, solid floor) that it perceives
+  dark (jobs.lib.torch/perceived-dark?); torches already standing count through that light read, the ones this call hung
+  count at once. An area cell not seen yet that touches a seen open cell is walked to first (once) to look. Each step hangs one torch with a jobs.blocks.place child (walks in reach; a missing torch is fetched
+  by it), at the spot lighting most of the dark cells still owed. A spot whose place fails is not tried again.
+
+  Needs: the area seen, torches (carried or fetchable). Ends done {:torches [cells hung this call] :uncovered []} when no
+  spawnable cell of the area is dark (at once, with none hung, when none is); nothing-possible :uncovered when dark cells
+  remain that no spot can light or whose torch could not be placed (data :uncovered, :torches); condition-failed :need
+  when the torch is missing and cannot be had, :refused when a zone or claim refuses a spot. Impossible :bad-args with no area.")
+
+(a/defargs args
+  {:cells {:doc "cells of the area, each [x y z] or {:x :y :z}" :spec (a/coll-of a/position?) :default []}
+   :boxes {:doc "boxes of the area, each two opposite corners [[x y z] [x y z]]; their cells come first, x then y then z" :spec (a/coll-of (a/coll-of a/position?)) :default []}
+   :ignore-zones? :shared})
+
+(a/defargs settings
+  {::job-time-s {:default 600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
+
+(def target [:cells])
+(def defaults {:spend {:job-time ::job-time-s}})
+
+(defn box-cells [box]
+  (let [[lo hi] (map (comp (juxt :x :y :z) a/cell) box)
+        span (fn [i] (range (min (lo i) (hi i)) (inc (max (lo i) (hi i)))))]
+    (for [x (span 0) y (span 1) z (span 2)] [x y z])))
+
+(defn area
+  "The area's cells as [x y z]: the boxes', then :cells, no repeats."
+  [c]
+  (let [{:keys [cells boxes]} (:args c)]
+    (vec (distinct (concat (mapcat box-cells boxes) (map (comp (juxt :x :y :z) a/cell) cells))))))
+
+(defn bad-args [c]
+  (cond
+    (not-every? #(= 2 (count %)) (:boxes (:args c))) (contract/never :bad-args "light-area :boxes take two corners each")
+    (empty? (area c)) (contract/never :bad-args "light-area needs :cells or :boxes")
+    :else (contract/ok :args "an area to light")))
+
+(def can-start? bad-args)
+
+(defn spawn-cells
+  "The cells of the area the body has seen as spawn ground."
+  [c]
+  (filterv #(sh-sense/spawnable? (:primitives c) (zipmap [:x :y :z] %)) (area c)))
+
+(defn lighting
+  "{:spots [cell ..] :uncovered [cell ..]} (jobs.lib.torch-plan/plan) for what the area still owes: spots nearest the body
+  first, those a place failed at left out."
+  [c]
+  (let [p (:primitives c)
+        block-at (access/seen-at p)
+        here (u/self-pos c)
+        {:keys [torches failed]} (ctx/mem c)
+        cells (spawn-cells c)
+        spots (->> cells (remove (set failed))
+                   (sort-by #(u/dist here (zipmap [:x :y :z] %))))]
+    (tp/plan {:cells cells :dark? #(torch/perceived-dark? p %)
+              :open? #(let [n (block-at %)] (and n (not (solid/solid? n))))
+              :spots spots :sources torches})))
+
+(defn frontier
+  "The nearest cell of the area not yet seen that touches a seen open cell and has not been walked to: where the room goes on out
+  of sight. Cells inside rock never qualify."
+  [c]
+  (let [p (:primitives c)
+        block-at (access/seen-at p)
+        looked (set (:looked (ctx/mem c)))
+        here (u/self-pos c)
+        open? #(let [n (block-at %)] (and n (not (solid/solid? n))))]
+    (->> (area c)
+         (filter #(and (nil? (block-at %)) (not (looked %))
+                       (some (fn [d] (open? (mapv + % d))) tp/neighbours)))
+         (sort-by #(u/dist here (zipmap [:x :y :z] %)))
+         first)))
+
+(defn ^:async look-at!
+  "Walk next to the unseen cell (a dark cell shows from close by) and look round there, once: :again, or :continue while the walk waits."
+  [c cell]
+  (let [r (await (near/go-near! c (zipmap [:x :y :z] cell) 1 {}))]
+    (if (= :partial r)
+      :continue
+      (do (await (look/look-around! c))
+          (ctx/update-mem! c update :looked (fnil conj []) cell)
+          :again))))
+
+(defn ^:async step! [c]
+  (let [{:keys [spots uncovered]} (lighting c)
+        spot (first spots)
+        unseen (frontier c)]
+    (cond
+      unseen (await (look-at! c unseen))
+      (and (empty? spots) (empty? uncovered)) (ctx/end c :done nil {:torches (:torches (ctx/mem c) []) :uncovered []})
+      (nil? spot) (ctx/end c :nothing-possible {:reason :uncovered} {:torches (:torches (ctx/mem c) []) :uncovered uncovered})
+      :else
+      (let [o (b/place-outcome (await (ctx/call c :place 'jobs.blocks.place
+                                                (merge (select-keys (:args c) [:ignore-zones?])
+                                                       {:pos spot :item "torch"}))))]
+        (case o
+          :continue :continue
+          (:placed :already) (do (ctx/update-mem! c update :torches (fnil conj []) spot) :again)
+          :need (ctx/end c :condition-failed {:reason :need :item "torch"}
+                         {:torches (:torches (ctx/mem c) []) :uncovered (:uncovered (lighting c))})
+          :refused (do (ctx/update-mem! c update :failed (fnil conj []) spot)
+                       (if (empty? (:spots (lighting c)))
+                         (ctx/end c :condition-failed {:reason :refused :cell spot}
+                                  {:torches (:torches (ctx/mem c) []) :uncovered (:uncovered (lighting c))})
+                         :again))
+          (do (ctx/update-mem! c update :failed (fnil conj []) spot) :again))))))
+
+(defn ^:async round [c]
+  (await (pace/steps! c #(step! c))))
+
+(def safe? (ready/safe-at-by-night (fn [c] (some->> (area c) first (zipmap [:x :y :z])))))
+
+(def fit? ready/ok)
+
+(defn done?
+  "Ok when no spawnable cell of the area is dark; else later with the torches hung."
+  [c]
+  (let [{:keys [spots uncovered]} (lighting c)
+        hung (count (:torches (ctx/mem c)))]
+    (if (and (empty? spots) (empty? uncovered))
+      (contract/ok :lit "no spawnable cell of the area is dark" :units :torches :done hung
+                   :result {:torches (:torches (ctx/mem c) []) :uncovered []})
+      (contract/later :dark (str (count spots) " torches to hang") :units :torches :done hung))))
+
+(defn quote-of [c]
+  (let [n (count (:spots (lighting c)))]
+    {:uses {:job-time [0 (* 8 n) (* 20 (max 1 n))] :items {"torch" [0 n n]}}}))

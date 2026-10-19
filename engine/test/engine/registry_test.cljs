@@ -25,7 +25,7 @@
      jobs.village.feed jobs.village.breed jobs.village.maintain jobs.village.roll
      jobs.items.smelt
      jobs.items.enchant jobs.items.obtain jobs.items.get-tool jobs.items.get-kit
-     jobs.build.from-plan jobs.build.pen jobs.build.rail jobs.build.rail-line
+     jobs.build.from-plan jobs.build.light-area jobs.build.pen jobs.build.rail jobs.build.rail-line
      jobs.access.pillar jobs.access.bridge
      jobs.explore.search jobs.explore.look
      jobs.combat.hunt jobs.gather.get-seeds jobs.gather.make-obsidian jobs.gather.mine
