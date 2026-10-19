@@ -7,7 +7,7 @@
 ;; only looks (never walks), so a pen it cannot see ends :unloaded.
 {:defaults
  {:tags [:animals :pen-check]
-  :time :any
+  :time :day
   :plot {:floor "stone"}
   :body {:at [5.5 0 5.5] :yaw 0}
   :blocks [[:fill [2 0 2] [8 0 8] "oak_fence"]
@@ -30,7 +30,7 @@
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
    :blocks [[:set [5 0 2] "oak_fence_gate[facing=south,open=true]"]]
    :expect [{:event {:source :job :kind :stopped
-                     :data {:closed? false :reason :leak :leaks [{:why :open-gate}]}} :within-s 20 :of-job true}]}
+                     :data {:closed? false :reason :leak :leaks [:has {:why :open-gate}]}} :within-s 20 :of-job true}]}
   {:name "stone-1-high-leaks"
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
    :blocks [[:fill [2 0 2] [8 0 8] "stone" :hollow] [:fill [3 0 3] [7 0 7] "air"]]
@@ -140,12 +140,24 @@
    :body {:at [4.5 0 4.5] :yaw 0}
    :act [[:job (jobs.animals.pen-check {:plan "$plan:pen" :at #at [4 0 4]})]]
    :expect [{:event {:source :job :kind :completed :data {:closed? true :cells 19 :leaks []}} :within-s 20 :of-job true}]}
+  ;; the plan form on a fence ring, a lobby ring below it and two gates (the shape of a pen with an airlock): :plan alone reads closed like :at does
+  {:name "plan-form-fence-lobby-and-gates-is-closed"
+   :plans [{:id "pen" :metadata {:by "$body"}
+            :parts [{:id "fence" :outline [#at [2 0 2] #at [6 0 6]] :want [:any "oak_fence"]}
+                    {:id "lobby" :outline [#at [3 0 6] #at [5 0 9]] :want [:any "oak_fence"]}
+                    {:id "gates" :cells [#at [4 0 6] #at [4 0 9]] :want [:any "oak_fence_gate"]}]}]
+   :blocks [[:fill [2 0 2] [8 0 8] "air"]
+            [:fill [2 0 2] [6 0 6] "oak_fence" :hollow] [:fill [3 0 6] [5 0 9] "oak_fence" :hollow]
+            [:set [4 0 6] "oak_fence_gate[facing=south,open=false]"] [:set [4 0 9] "oak_fence_gate[facing=south,open=false]"]]
+   :body {:at [4.5 0 4.5] :yaw 0}
+   :act [[:job (jobs.animals.pen-check {:plan "$plan:pen"})]]
+   :expect [{:event {:source :job :kind :completed :data {:closed? true :leaks []}} :within-s 30 :of-job true}]}
   {:name "plan-form-missing-fence-lists-the-leak"
    :plans [{:id "pen" :metadata {:by "$body"} :parts [{:id "fence" :outline [#at [2 0 2] #at [8 0 8]] :want [:any "oak_fence"]}]}]
    :blocks [[:set [5 0 8] "air"]]
    :act [[:job (jobs.animals.pen-check {:plan "$plan:pen" :at #at [5 0 5]})]]
    :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :leak :leaks [[:any]]}} :within-s 20 :of-job true}]}
-  ;; card c0097f43: :animals lists the livestock on the pen cells (cow and sheep), not the cow outside the fence
+  ;; card c0097f43: :animals lists the livestock on the pen cells (cow and sheep), not the cow outside the fence.
   {:name "animals-listed-inside-only"
    :act [[:summon "cow" [4.5 0 6.5] "{NoAI:1b}"]
          [:summon "sheep" [6.5 0 4.5] "{NoAI:1b}"]

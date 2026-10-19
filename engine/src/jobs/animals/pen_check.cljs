@@ -19,7 +19,7 @@
   is not taken) from the feet cell :at [x y z], or from every surface inside :box (or the columns a :plan's fence, wall and gate cells close in), where a step out of the box
   is a leak. Reads what the body has seen; a pen it has not seen closed is checked again after it looks at the
   cells it has not seen (jobs.lib.sense/decide!); a cell that stays unseen (hidden behind a block) is walked to, at
-  most 3 times, until the eye sees it, unless the fill already leaves through a seen gap or open gate: that is answered at once. Never digs or places. Ends impossible :no-pen without :at, :box and :plan; waits (:plan-trouble) while :plan is missing or unreadable and ends impossible :plan-trouble when it has no fence, wall or gate cells.
+  most 3 times, until the eye sees it, unless the fill already leaves through a seen gap: that is answered at once (an open gate may divide the pen, so it waits for the look). Never digs or places. Ends impossible :no-pen without :at, :box and :plan; waits (:plan-trouble) while :plan is missing or unreadable and ends impossible :plan-trouble when it has no fence, wall or gate cells.
 
   The fill stops after :max-cells cells: a bigger pen is not closed, reason :unbounded. A fill without a box
   that finds no wall either side of a gap says that too.
@@ -118,12 +118,13 @@
 
 (defn seen-leak?
   "Whether the final read of a pen still waiting on unseen cells names a leak, other than the start cell at, at a cell the
-  body has seen: the way out is known and the unseen cells lie past it."
+  body has seen: the way out is known and the unseen cells lie past it. An open gate is no proof: it may divide the
+  pen, with more of the pen unseen beyond it."
   [p final at]
   (boolean (some (fn [{:keys [pos why]}]
                    (let [start (if (map? at) [(:x at) (:y at) (:z at)] (vec at))
                          cell [(:x pos) (:y pos) (:z pos)]]
-                     (and (not= :unloaded why) (not= cell start) (not (dig-look/unknown? p cell)))))
+                     (and (not (#{:unloaded :open-gate} why)) (not= cell start) (not (dig-look/unknown? p cell)))))
                  (:leaks final))))
 
 (defn leak-text

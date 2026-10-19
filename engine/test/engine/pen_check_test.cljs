@@ -6,7 +6,13 @@
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.hostile-test :as h]
+            [engine.events :as events]
+            [engine.fake.raw-world :as fake-raw]
             [engine.pen-build-test :as pb]
+            [engine.perception :as perception]
+            [engine.registry :as registry]
+            [engine.triggers :as triggers]
+            [jobs.lib.world-files :as world-files]
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.animals.pen-check :as pen-check]
@@ -245,6 +251,57 @@
           (is (= :leak (:reason result)))
           (is (some #{{:x 3 :y 64 :z 8}} (map :pos (:leaks result)))))))))
 
+(defn ring-cells
+  "The outline cells of the box [x0 z0] [x1 z1] at y 64."
+  [[x0 z0] [x1 z1]]
+  (for [x (range x0 (inc x1)) z (range z0 (inc z1)) :when (or (#{x0 x1} x) (#{z0 z1} z))] [x 64 z]))
+
+(deftest a-plan-of-two-rings-and-two-gates-reads-closed-as-a-plan-and-from-a-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [gates [[2 64 4] [2 64 7]]
+              plan {:id "p" :parts [{:id "fence" :outline [[0 64 0] [4 64 4]] :want "oak_fence"}
+                                    {:id "lobby" :outline [[1 64 4] [3 64 7]] :want "oak_fence"}
+                                    {:id "gates" :cells gates :want "oak_fence_gate"}]}
+              built (merge (into {} (map (fn [[x y z]] [(str x "," y "," z) "oak_fence"]))
+                                 (concat (ring-cells [0 0] [4 4]) (ring-cells [1 4] [3 7])))
+                           (into {} (map (fn [[x y z]] [(str x "," y "," z) "oak_fence_gate"])) gates))
+              {:keys [eng]} (b/start (pb/spec [] built) {"p" plan} [])
+              by-plan (await (tu/child-outcome eng job {:plan "p"} 300))
+              by-cell (await (tu/child-outcome eng job {:at [2 64 2]} 300))]
+          (is (true? (:closed? by-cell)) (pr-str (:leaks by-cell)))
+          (is (true? (:closed? by-plan)) (pr-str (:leaks by-plan))))))))
+
+(deftest an-open-gate-seen-on-the-way-is-no-proof-of-a-leak-while-cells-are-unseen
+  (is (false? (pen-check/seen-leak? nil {:leaks [{:pos {:x 1 :y 64 :z 1} :why :open-gate}]} [2 64 2]))))
+
+(deftest a-plan-alone-is-read-by-a-body-that-has-not-looked-at-the-pen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [gates [[2 64 4] [2 64 7]]
+              blocks (merge ground
+                            (into {} (map (fn [[x y z]] [(str x "," y "," z) "oak_fence"]))
+                                  (concat (ring-cells [0 0] [4 4]) (ring-cells [1 4] [3 7])))
+                            (into {} (map (fn [[x y z]] [(str x "," y "," z) "oak_fence_gate"])) gates))
+              clock (atom 1000000)
+              [seen sink] (tu/legacy-capture-sink)
+              raw (tu/fake-on-floor {:self {:pos {:x 2.5 :y 64 :z 2.5}} :blocks blocks :states {}})
+              now (tu/act-clock clock raw 0)
+              p (perception/wrap raw (perception/create (fake-raw/create raw) {:radius 16 :ray-deg 2 :now now :rand (constantly 0.5)}))
+              plan {:id "pen" :parts [{:id "fence" :outline [[0 64 0] [4 64 4]] :want "oak_fence"}
+                                      {:id "lobby" :outline [[1 64 4] [3 64 7]] :want "oak_fence"}
+                                      {:id "gates" :cells gates :want "oak_fence_gate"}]}
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+                                :events (events/make {:body "Fake" :sinks [sink] :now now})
+                                :world (world-files/of-data {"pen" plan} {} [])})]
+          (core/submit! eng (list job {:plan "pen"}) {})
+          (dotimes [_ 10]
+            (swap! clock + 700)
+            (await (core/tick! eng)))
+          (is (= {:closed? true :cells 11} (select-keys (ending-event @seen) [:closed? :reason :cells]))))))))
+
 (def plain
   "Open ground far past the sight radius round the fence ring."
   (into {} (for [x (range -60 66) z (range -60 66)] [(str x ",63," z) "stone"])))
@@ -323,7 +380,9 @@
 (def ring-cases
   [["an open gate in a fence ring" (assoc (ring "oak_fence" 1) "5,64,2" "oak_fence_gate") {"5,64,2" {:open true}} 0 :leak]
    ["a doorway under a lintel, facing it" (-> (ring "stone" 3) (dissoc "5,64,2" "5,65,2")) {} 180 :leak]
-   ["a doorway under a lintel, looking away" (-> (ring "stone" 3) (dissoc "5,64,2" "5,65,2")) {} 0 :leak]])
+   ["a doorway under a lintel, looking away" (-> (ring "stone" 3) (dissoc "5,64,2" "5,65,2")) {} 0 :leak]
+   ["a block against a 2-high wall, facing away" (assoc (ring "stone" 2) "3,64,5" "stone") {} 0 :leak]
+   ["a block against a 2-high wall, facing it" (assoc (ring "stone" 2) "3,64,5" "stone") {} 90 :leak]])
 
 (deftest a-ring-read-by-sight-from-inside-ends-with-the-leak-not-no-start
   (async done
