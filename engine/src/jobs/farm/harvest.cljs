@@ -443,19 +443,20 @@
 (defn max-home-fails [] (settings/get settings ::max-home-fails))
 
 (defn ^:async home!
-  "Step 2b: a body farther than :radius from the centre with debts or a sweep owed, or with nothing cut yet, walks
+  "Step 2b: a body farther than :radius from the centre (or shut in, once) with debts or a sweep owed, or with nothing cut yet, walks
   there (range radius/2): :again, or :finish after max-home-fails walks that went nowhere; nil when
   there is nothing to do."
   [c]
   (let [m (ctx/mem c)
         center (center-of c)
-        radius (:radius (:args c))]
+        radius (:radius (:args c))
+        shut-in? (and (not (:left-pit m)) (zero? (:cut m 0)) (rch/enclosed? (:primitives c)))]
     (when (and (or (seq (:replant m)) (:collect m) (zero? (:cut m 0)))
-               (> (u/dist (u/self-pos c) center) radius))
+               (or shut-in? (> (u/dist (u/self-pos c) center) radius)))
       (if (>= (:home-fails m 0) (max-home-fails))
         :finish
-        (case (await (common/walk-to! c center (quot radius 2)))
-          :there :again
+        (case (await (common/walk-to! c center (if shut-in? 1 (quot radius 2))))
+          :there (do (ctx/update-mem! c assoc :left-pit true) :again)
           :continue :continue
           (do (ctx/update-mem! c inc-in :home-fails) :again))))))
 
