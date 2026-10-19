@@ -167,6 +167,9 @@
   (are [c r expected] (= expected (obtain/reflex-step c r))
     {:reflex :needs-weapon} :continue :again
     {} :continue :continue
+    {:reflex :needs-weapon :child-wait (atom nil)} :continue :again
+    {:reflex :needs-weapon :child-wait (atom {:reason :dark})} :continue
+    (contract/ending :condition-failed {:reason :dark} nil)
     {:reflex :needs-weapon} :again :again
     {:reflex :needs-weapon} [:done] [:done]))
 

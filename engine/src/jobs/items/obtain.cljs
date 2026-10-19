@@ -2,6 +2,7 @@
   (:require [jobs.lib.ready :as ready]
             [jobs.lib.checks :as checks]
             [engine.contract :as contract]
+            [jobs.lib.waits :as waits]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -244,9 +245,12 @@
 
 (defn reflex-step
   "What a step gives the loop: a reflex job runs one round and may not :continue, so a child's yield is another step
-  (a cut ends it)."
+  (a cut ends it); a child that waits on the world (child-wait) ends the reflex condition-failed with that reason,
+  as stepping on would spin."
   [c r]
-  (if (and (:reflex c) (= :continue r)) :again r))
+  (cond
+    (not (and (:reflex c) (= :continue r))) r
+    :else (or (waits/reflex-wait-end c) :again)))
 
 (defn ^:async round
   "The whole attempt in one call: step! again until the count is carried or it ends; :continue only while a child waits on the world (a reflex's obtain steps on instead)."

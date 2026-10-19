@@ -15,4 +15,12 @@
    :body {:inventory [["iron_sword" 1] ["cobblestone" 4] ["stick" 2] ["crafting_table" 1]]}
    :expect [{:no-event {:source :job :kind :completed} :for-s 25}]
    :after [[:item "stone_sword" 0] [:item "cobblestone" 4]]
+   :limit-s 40}
+  ;; An unlit sealed room: the search child waits :dark, so the reflex obtain ends with that reason instead of re-asking at once (a log line per 100 ms).
+  {:name "dark-room-no-wood-obtain-does-not-spin"
+   :time :any
+   :blocks [[:fill [8 0 8] [24 4 24] "stone" :hollow]]
+   :body {:at [16.5 1 16.5]}
+   :expect [{:event {:source :reflex :kind :fired} :within-s 20}
+            {:count-event {:source :job :kind :obtain.exploring} :for-s 25 :at-most 3}]
    :limit-s 40}]}
