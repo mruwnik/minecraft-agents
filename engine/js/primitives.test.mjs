@@ -1636,6 +1636,19 @@ test('place with a water bucket looks at the support and activates the item inst
   assert.deepEqual(names(bot).filter(n => ['equip', 'lookAt', 'activateItem', 'placeBlock'].includes(n)), ['equip', 'lookAt', 'activateItem'])
 })
 
+test('a pour re-aims when the ray would land the water outside the cell', async () => {
+  const { bot, p } = bucketRig({ blocks: { '2,64,0': 'stone' }, item: 'water_bucket', onActivate: blocks => { blocks['1,64,0'] = 'water' } })
+  const looks = []
+  const lookAt = bot.lookAt
+  bot.lookAt = (...args) => { looks.push(args[0]); return lookAt(...args) }
+  bot.blockAtCursor = () => (looks.length < 2
+    ? { name: 'stone', position: at(1, 64, 1), face: 1 }
+    : { name: 'stone', position: at(2, 64, 0), face: 4 })
+  assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'water_bucket' }), { status: 'placed', block: 'water' })
+  assert.equal(looks.length, 2)
+  assert.equal(names(bot).filter(n => n === 'activateItem').length, 1)
+})
+
 test('place with a boat looks at the water and activates the item; the boat is down when the carried count drops', async () => {
   const items = [{ name: 'oak_boat', count: 1, slot: 36 }]
   const { bot, p } = rig({ blocks: { '0,63,0': 'stone', '1,64,0': 'water' }, items, onActivate: () => { items.length = 0 } })

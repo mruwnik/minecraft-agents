@@ -107,6 +107,19 @@ export function createDig (env) {
     return candidates.find(({ ref }) => !isInteractable(ref.name)) ?? candidates[0]
   }
 
+  const aimPoints = p => supportCandidates(p)
+    .sort((a, b) => Number(isInteractable(a.ref.name)) - Number(isInteractable(b.ref.name)))
+    .map(({ ref, face }) => ref.position.offset(0.5 + face.x * 0.5, 0.5 + face.y * 0.5, 0.5 + face.z * 0.5))
+  const faceNormals = [[0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1], [-1, 0, 0], [1, 0, 0]]
+  // Where a liquid bucket used now lands: the hit block itself when it is liquid, else the cell beyond the face hit. True when the bot cannot tell.
+  const rayEndsIn = p => {
+    if (typeof env.bot.blockAtCursor !== 'function') return true
+    const hit = env.bot.blockAtCursor(setting('prim/reach') + 1)
+    if (!hit) return false
+    const [dx, dy, dz] = isLiquid(hit.name) ? [0, 0, 0] : faceNormals[hit.face] ?? [0, 0, 0]
+    return hit.position.x + dx === p.x && hit.position.y + dy === p.y && hit.position.z + dz === p.z
+  }
+
   const isBucket = name => name === 'bucket' || name.endsWith('_bucket')
   const isLiquid = name => name === 'water' || name === 'lava'
   const isBoat = name => /_(boat|raft)$/.test(name)
@@ -141,8 +154,8 @@ export function createDig (env) {
     const there = env.bot.blockAt(vec(p))
     if (scoop && !(there && isLiquid(there.name))) return { status: 'missing' }
     if (!scoop && there && !isAir(there.name) && !isReplaceable(there.name)) return { status: 'occupied', block: there.name }
-    const aim = scoop ? there : supportFor(p)?.ref
-    if (!aim) return { status: 'no-support' }
+    const aims = scoop ? [there.position.offset(0.5, 0.5, 0.5)] : aimPoints(p)
+    if (aims.length === 0) return { status: 'no-support' }
     if (dist(eye(), center(p)) > setting('prim/reach')) return { status: 'unreachable' }
     const count = name => inventory().filter(i => i.name === name).reduce((sum, i) => sum + i.count, 0)
     const filledName = `${there?.name}_bucket`
@@ -150,8 +163,12 @@ export function createDig (env) {
     ctx.alive()
     await env.bot.equip(item, 'hand')
     ctx.alive()
-    await lookNow(() => env.bot.lookAt(aim.position.offset(0.5, 0.5, 0.5), true))
-    ctx.alive()
+    // A neighbour between the body and the aimed face catches the ray and the liquid lands above it: the first aim whose ray ends in p.
+    for (const aim of aims) {
+      await lookNow(() => env.bot.lookAt(aim, true))
+      ctx.alive()
+      if (scoop || rayEndsIn(p)) break
+    }
     await env.bot.activateItem()
     // The block update can arrive after the window while the inventory already changed, so either one counts: the
     // cell flipped, or the held bucket turned into the filled one (scoop) / the emptied one (pour).
