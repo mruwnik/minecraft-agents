@@ -22,32 +22,28 @@
             [jobs.lib.util :as u]))
 
 (def doc
-  "A hostile is near: fight it (jobs.combat.attack, best weapon equipped) when the odds are fair,
-  else retreat (jobs.survival.retreat).
-  One whole attempt per round: decides afresh before each call of the child, while a danger is near.
-  Under a roof at night, with every danger only heard or a flyer, it stays in (hostile.sealed-hold) and fights only what comes within reach.
-  Never fights a creeper or an enderman (a hit would anger it: the retreat handles it). Otherwise fights when the damage the fight is expected to cost
-  leaves at least :reserve health (jobs.lib.cost/fight-damage: weapon, armour worn, each mob's kind
-  and what is left of it after the hits landed, the dangers killed nearest first; bare hands land a hit every
-  `jobs.lib.cost.fight/fist-gap-ms`, so a body with no weapon retreats from a whole spider or zombie).
-  A fight begun goes on against a single mob above `jobs.lib.cost.fight/hysteresis-health`, and at any health against
-  a mob the body cannot outrun (jobs.lib.cost/outruns?: a spider at any food).
-  If the fight ends other than :done (its memory put back) or the retreat ends :condition-failed, the other one runs; but a fight that declines because every danger near is only heard
-  (none in sight to hit), with the body not hurt in the last ::hit-window-s (5), runs no retreat: heard mobs are muted (jobs.lib.body/heard-muted?), a
-  the ending names the mob (:mob, :text), and the job is done, so the job it cut goes on. A mob that comes into sight
-  fires the reflex through the mute.
-  Only ranged mobs with a line of fire near and the body under a roof, carrying building blocks and a tool that digs
-  stone (a block in the doorway must not shut it in): it stops the arrows instead (jobs.survival.block-arrow-gap, no
-  fetch), once per call; when that places nothing it decides as above.
-  Done once no real danger (as the hostile-near trigger, jobs.lib.danger, in sight) is within :radius
-  (:ranged-radius for ranged mobs) and the retreat is not hiding (sealed in, up a pillar or down a pit).
-  Done at once (0 hostiles) with no real danger near. The weapons are the call's :use :tools (default the
-  weapons carried), handed to both children as their :use :tools.
-  Ends :done when the danger is gone or left heard-only; :nothing-possible with the retreat's own kind and cause (:cannot-escape)
-  when the retreat ends otherwise, or :no-response after ::max-unchanged (3) calls in a row that change
-  neither the body's cell, its health, the dangers near nor the fight's hits; never :continue. Its time budget (::job-time-s) may end it :limit-reached; the hostile trigger fires again at once while the danger stands.
-  Memory: writes one :hostile entry {:mob :decision} plus :pos (seen) or :direction :band :from (heard only) per encounter,
-  and says it in one hostile.decided event.
+  "A hostile is near: fight it (jobs.combat.attack, best weapon equipped) when the odds are fair, else retreat (jobs.survival.retreat).
+  Needs: a real danger (as the hostile-near trigger, jobs.lib.danger, in sight) within :radius (:ranged-radius for ranged mobs); none near is done at once.
+  One whole attempt per round: decides afresh before each call of the child, while a danger is near. The weapons are the call's :use :tools
+  (default the weapons carried), handed to both children.
+  Fights when the damage the fight is expected to cost leaves at least :reserve health (jobs.lib.cost/fight-damage: weapon, armour worn,
+  each mob's kind and what is left of it after the hits landed, nearest killed first; bare hands land a hit every `jobs.lib.cost.fight/fist-gap-ms`,
+  so a body with no weapon retreats from a whole spider or zombie). Never fights a creeper or an enderman (a hit would anger it).
+  A fight begun goes on against a single mob above `jobs.lib.cost.fight/hysteresis-health`, and at any health against a mob the body
+  cannot outrun (jobs.lib.cost/outruns?). A flight hit twice within ::hit-window-s turns to a fight.
+  Under a roof at night, with every danger only heard or a flyer, it stays in and fights only what comes within reach (hostile.sealed-hold).
+  Only ranged mobs with a line of fire near, the body under a roof, carrying building blocks and a tool that digs stone: it stops the
+  arrows first (jobs.survival.block-arrow-gap, no fetch), once per call; when that places nothing it decides as above.
+  If the fight ends other than :done (its memory put back) or the retreat ends :condition-failed, the other one runs. A fight that
+  declines because every danger near is only heard (none in sight to hit), with the body not hurt in the last ::hit-window-s, runs no
+  retreat: heard mobs are muted (jobs.lib.body/heard-muted?), the ending names the mob (:mob, :text) and is :done, so the job it cut
+  goes on. A mob that comes into sight fires the reflex through the mute.
+  Done once no real danger is near and the retreat is not hiding (sealed in, up a pillar or down a pit).
+  Ends :done when the danger is gone or left heard-only; :nothing-possible :retreat-failed (the retreat's ending is the :because) when the
+  retreat ends so, :impossible or :limit-reached with the retreat's own cause; :nothing-possible :no-response after ::max-unchanged (3) calls
+  in a row that change neither the body's cell, its health, the dangers near nor the fight's hits. Never :continue. Its time budget
+  (::job-time-s) may end it :limit-reached; the hostile trigger fires again at once while the danger stands.
+  Memory: writes one :hostile entry {:mob :decision} plus :pos (seen) or :direction :band :from (heard only) per encounter.
   A danger reflex: never backed off.")
 
 (a/defargs args
@@ -329,10 +325,10 @@
 
 
 (defn done?
-  "No real danger near and the retreat not hiding, before the start only: the round ends an encounter it began."
+  "No real danger near and the retreat not hiding."
   [c]
   (let [n (count (near c))
-        clear? (and (not (checks/running? c)) (zero? n) (not (hiding? c)))]
+        clear? (and (zero? n) (not (hiding? c)))]
     (checks/goal clear? [:clear "no danger near"] [:danger (str n " dangers near")] {:units :hostiles :done 0 :left n})))
 
 (defn quote-of
@@ -375,7 +371,8 @@
           after (near c)]
       (if (contract/ending? outcome)
         (do (mute-heard! c hs)
-            (ctx/end c (:kind outcome) (:cause outcome) (some->> (:text (:data outcome)) (hash-map :text))))
+            (ctx/end c (:kind outcome) (if (= :nothing-possible (:kind outcome)) :retreat-failed (:cause outcome))
+                     (some->> (:text (:data outcome)) (hash-map :text))))
         (cond
           (:left-heard outcome) (ctx/end c :done nil (:left-heard outcome))
           (and (empty? after) (not (hiding? c)) (not (and (not looked?) (fight-unsettled? c outcome)))) (ctx/end c :done nil)

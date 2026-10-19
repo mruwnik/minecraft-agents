@@ -611,7 +611,7 @@
           (is (= {:status :stopped :reason :no-response} (select-keys out [:status :reason])))
           (is (= :nothing-possible (get-in out [:ending :kind]))))))))
 
-(deftest respond-to-hostile-stops-with-the-cause-of-a-retreat-that-cannot-escape
+(deftest respond-to-hostile-stops-retreat-failed-with-the-retreats-ending-as-because
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -619,7 +619,7 @@
               cornered {:round (fn ^:async no-escape [c] (ctx/end c :nothing-possible :cannot-escape))}
               s (assoc-in s [:eng :jobs 'jobs.survival.retreat] cornered)
               {:keys [out]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
-          (is (= {:status :stopped :reason :cannot-escape} (select-keys out [:status :reason])))
+          (is (= {:status :stopped :reason :retreat-failed} (select-keys out [:status :reason])))
           (is (= :nothing-possible (get-in out [:ending :kind])))
           (is (= :cannot-escape (get-in out [:ending :because :cause])) "the retreat's ending is the because"))))))
 

@@ -48,5 +48,4 @@
 
 (deftest a-goal-the-round-wraps-up-holds-only-before-the-start
   (are [job world args] (= [[:ok] [:later]] [(take 1 (done-of job world args [])) (take 1 (done-of job world args running))])
-    'jobs.survival.go-home {:time st/noon :self {:pos {:x 12.5 :y 64 :z 0.5}}} {}
-    'jobs.survival.respond-to-hostile {:time st/noon} {:range 4 :ranged-range 16}))
+    'jobs.survival.go-home {:time st/noon :self {:pos {:x 12.5 :y 64 :z 0.5}}} {}))
