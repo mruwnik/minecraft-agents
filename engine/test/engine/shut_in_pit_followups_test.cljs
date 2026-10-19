@@ -87,3 +87,18 @@
                                        :drops {"stone" "coal"}}))]
           (is (some #(re-find #"nothing to roof the pit with" (str (:text %))) (seen/failed s)))
           (is (= [:stopped :no-way] ((juxt :status :reason) @(:out s))) "the call reports the stop, not success"))))))
+
+(deftest walls-count-unsensed-rock-over-the-head-that-a-place-answers-occupied-as-sealed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [sides [[1 65 0] [-1 65 0] [0 65 1] [0 65 -1] [1 66 0] [-1 66 0] [0 66 1] [0 66 -1]]
+              p (seen/sensing {:blocks tunnel})
+              _ (await (see-cells! p sides))
+              n (atom 0)
+              _ (.override (.-world p) "look" (fn ^:async f [token a impl]
+                                                (if (< (swap! n inc) 3) #js {:status "ok"} (await (impl token a)))))
+              {:keys [out] :as s} (await (seen/tick-out! (seen/setup p 'jobs.survival.shut-in {:ways #{:walls}})))]
+          (is (= :done (:status @out)) "the first looks missed the rock over the head; the failed place looks again")
+          (is (= "cobblestone" (.-name (.blockAt p (tu/pos 1 65 0)))) "the open end is walled")
+          (is (= "cobblestone" (.-name (.blockAt p (tu/pos 1 66 0))))))))))

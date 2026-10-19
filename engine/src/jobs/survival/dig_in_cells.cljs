@@ -7,6 +7,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
             [jobs.lib.click :as click]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
@@ -220,9 +221,11 @@
 (defn ^:async clear-over!
   "A place was answered occupied at cell: dig out a block a mob walks through (a torch, a sapling) once, so the place can be
   tried again. True when it was dug. Else cell goes in occupied-key and is not tried again: a full block, a bed, one
-  already dug once (cleared-key), one in another's area, a dig that fails."
+  already dug once (cleared-key), one in another's area, a dig that fails. An unsensed cell is looked at first: the place
+  answering occupied there often means rock the body never saw, which then counts as sealed."
   [c cell cleared-key occupied-key]
   (let [p (:primitives c)
+        _ (when (dig-look/unknown? p [(:x cell) (:y cell) (:z cell)]) (await (dig-look/look-at! c [(:x cell) (:y cell) (:z cell)])))
         leave! #(do (ctx/update-mem! c update occupied-key (fnil conj #{}) cell) false)]
     (if (or (nil? (u/seen-block p cell)) (full-cube? c cell) (bed? p cell) (contains? (get (ctx/mem c) cleared-key) cell)
             (access/trespass-refusal c :dig cell))
