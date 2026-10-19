@@ -9,6 +9,7 @@
 #         "0 failures, 0 errors"; for a change of engine/fixtures/ files only, a fixtures-suite log "0 failed" counts too) is newer than that rebase; the overlapping files are named. Rerun the tests, then land.sh again.
 # Exit 1: rebase conflict (aborted; branch unchanged), dirty worktree, or no checkout has the branch you were cut from.
 # A landing that changes the agent-tools bundle sources starts a detached rebuild of the main checkout bundle.
+# Exit 6: a commit being landed adds a conflict marker (<<<<<<<, =======, >>>>>>>); the file:line is printed.
 # Exit 4: the main checkout has uncommitted edits to a file the landing changes (git refused; nothing moved): wait or ask the lead.
 set -euo pipefail
 
@@ -46,6 +47,10 @@ if [ "$(git merge-base HEAD "$target")" != "$old" ]; then
   [ -z "$overlap" ] || { printf '%s\n' "$overlap" >> "$marker"; touch "$marker"; }
   [ "$ok" = 1 ] || [ -z "$upstream_code" ] || { echo "land: rerun your tests, then land.sh again" >&2; exit 3; }
 fi
+
+# Only conflict markers are taken from --check: its whitespace warnings do not block.
+markers=$(git diff --check "$target" HEAD | grep 'leftover conflict marker' || true)
+[ -z "$markers" ] || { echo "land: commits add conflict markers; remove them:" >&2; echo "$markers" >&2; exit 6; }
 
 # A rebase over commits that touch this branch's files must be followed by a clean test run before it lands.
 if [ -s "$marker" ]; then
