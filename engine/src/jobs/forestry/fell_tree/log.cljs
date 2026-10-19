@@ -36,7 +36,7 @@
 
 (defn flood-allowed?
   "A predicate on a position: whether the flood may take that log, as the base check would (zones, claims, plan footprints;
-  not :ignore-zones?, not own plans with :spare-own-builds false). Silent: the refused log is simply no part of the tree."
+  not :ignore-zones?, not own plans with the spare-own-builds setting false). Silent: the refused log is simply no part of the tree."
   [c]
   (let [in (access/rules-input c (gate-opts c))]
     #(not (gate/refused? (access/may? in :dig %)))))

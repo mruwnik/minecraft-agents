@@ -54,7 +54,7 @@
 
   Each step is judged when chosen and each cell again right before its dig. Stops:
   - Access refusals with their reason: :zone :claim :footprint :not-loaded :no-zones. :ignore-zones? skips all
-    but :not-loaded. A cell of a plan this body made refuses :footprint too unless :spare-own-builds is false.
+    but :not-loaded. A cell of a plan this body made refuses :footprint too unless the spare-own-builds setting is false.
   - :fluid-in-cut: a cut cell holds a fluid.
   - :crop: a crop, stem or farmland in a cut cell (never dug, zone or not).
   - :base-block: a chest, bed, furnace, table, door or other base block in a cut cell, or the block a door stands on (never dug, anyone's).

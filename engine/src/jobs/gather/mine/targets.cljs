@@ -97,7 +97,7 @@
        :else :ok))))
 
 (defn rules-in
-  "The rules input: another's plans always refuse, this body's own too unless :spare-own-builds is false; a base
+  "The rules input: another's plans always refuse, this body's own too unless the spare-own-builds setting is false; a base
   block (chest, bed, furnace ...) is never dug."
   [c]
   (assoc (access/rules-input c {:own-plans-ok? (false? (access/spare-own-builds))}) :keep-base? true))

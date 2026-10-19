@@ -226,7 +226,7 @@
 
 (defn routine-idle?
   "Whether every job of a body.idle waits for something that clears by itself or holds on purpose. Idle-ok jobs (a
-  look-around) do not count: a body with only those has no work."
+  noop) do not count: a body with only those has no work."
   [jobs]
   (let [real (remove :idle-ok jobs)]
     (and (seq real)
@@ -236,7 +236,7 @@
 
 (defn idle-text [jobs]
   (if (every? :idle-ok jobs)
-    (if (empty? jobs) "no jobs" "no work, only look-around")
+    (if (empty? jobs) "no jobs" "no work, only idle jobs")
     (str/join "; " (map #(str (:job %) " " (cond (:failed %) (str "failed " (clip (:failed %) 60))
                                                     (:waiting %) (str "waits " (wait-text (:waiting %)))
                                                     (:holding %) "holding"

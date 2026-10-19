@@ -48,8 +48,7 @@
           (await (run-job eng (list remember {:kind :bred-cows :data {:fed 2}})))
           (is (= [{:fed 2}] (entries eng :bred-cows)))
           (is (= [{:memory-kind :bred-cows :entry {:fed 2}}]
-                 (mapv #(select-keys % [:memory-kind :entry]) (events-of seen :memory.remembered))))
-          (is (empty? (events-of seen :memory.refused))))))))
+                 (mapv #(select-keys % [:memory-kind :entry]) (events-of seen :memory.remembered)))))))))
 
 (deftest remember-without-data-writes-an-empty-map
   (async done

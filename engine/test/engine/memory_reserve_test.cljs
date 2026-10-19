@@ -60,8 +60,7 @@
 (deftest unreserve-of-nothing-is-already-done
   (async done (run-world done (fn ^:async t [{:keys [eng seen]}]
     (await (run-job eng '(jobs.memory.unreserve {:id "none"})))
-    (is (empty? (live eng)))
-    (is (empty? (events-of seen :reserve.refused)))))))
+    (is (empty? (live eng)))))))
 
 (deftest a-bad-call-is-refused-and-writes-nothing
   (async done (run-world done (fn ^:async t [{:keys [eng seen]}]

@@ -66,7 +66,7 @@
   (:no-floor-below).
 
   A block on the footprint of a plan this body made is the plan's: its entry is dropped (cleanup.plan-cell) and the cell
-  never dug, unless :spare-own-builds is false.
+  never dug, unless the spare-own-builds setting is false.
 
   Ready: safe? is jobs.lib.ready/safe-if-lit (:hostile-near, :dark); fit? is jobs.lib.ready/fit-armed (:low-health, :poisoned,
   :unarmed: no weapon carried). Both are the :checks defaults, so a caller or trigger overrides them (:checks {:fit? '(always)}).

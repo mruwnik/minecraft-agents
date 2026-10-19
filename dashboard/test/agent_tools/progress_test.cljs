@@ -100,7 +100,7 @@
                 {:wake :job-finished :job "j15" :result :completed}
                 {:wake :job-finished :job "j15" :result :cancelled}
                 night-idle
-                {:wake :idle :jobs [{:job "j9" :name "look-around" :idle-ok true}
+                {:wake :idle :jobs [{:job "j9" :name "noop" :idle-ok true}
                                     {:job "j14" :name "smelt" :waiting :cooking}]}]]
     (is (nil? (progress/wake-verdict wake "j14")) (pr-str wake))))
 
@@ -115,7 +115,7 @@
                        [{:wake :job-finished :job "j15" :result :stopped :message "unreachable"} :gave-up]
                        [{:wake :idle :jobs [{:job "j14" :name "obtain" :waiting {:reason :no-source}}]} :needs-you]
                        [{:wake :idle :jobs []} :needs-you]
-                       [{:wake :idle :jobs [{:job "j1" :name "look-around" :idle-ok true}]} :needs-you]
+                       [{:wake :idle :jobs [{:job "j1" :name "noop" :idle-ok true}]} :needs-you]
                        [{:wake :idle :jobs [{:job "j14" :name "obtain" :failed "boom"}]} :needs-you]]]
     (is (= kind (:wake (progress/wake-verdict wake "j14"))) (pr-str wake))))
 

@@ -31,7 +31,7 @@
   cell, ending at the far side.
   :bad-args and :no-door are conditions, checked at the start. Ends :done, or with a cause {:reason r ...}: :impossible for :bad-args (needs :heading), :condition-failed for
   :no-door (no such wall here), :protected (a block it never digs), :footprint (a cell of a plan this body made,
-  unless :spare-own-builds is false) and :dig-waits (the dig child's wait or decline, as :wait); :nothing-possible for
+  unless the spare-own-builds setting is false) and :dig-waits (the dig child's wait or decline, as :wait); :nothing-possible for
   :dig-failed (its ending, as :dig), :refills (a cell dug max-cell-digs times, e.g. sand falling in) and :step-failed
   (the walk through did not arrive). Data {:dug [{:cell :block}] :at [x y z] :through [x y z]}, also as a
   clear-path.done info or clear-path.stopped warn event.
@@ -158,7 +158,7 @@
                  (some #(and (drops (:name %)) (< (:count %) 64)) (u/inventory p))))))
 
 (defn own-build
-  "The refusal naming the plan this body made that covers cell, unless :spare-own-builds is false; else nil."
+  "The refusal naming the plan this body made that covers cell, unless the spare-own-builds setting is false; else nil."
   [c cell]
   (when (access/spare-own-builds)
     (access/own-keep (access/rules-input c {:spare-own? true}) (zipmap [:x :y :z] cell))))
