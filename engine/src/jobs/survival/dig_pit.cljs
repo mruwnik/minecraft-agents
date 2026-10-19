@@ -3,6 +3,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
+            [jobs.lib.pen-gate :as pen-gate]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
@@ -23,7 +24,7 @@
   laid a cave or fluid open). The pit is never dug into what the body sees as fluid, a hazard or open air, and it is planned again
   when the body has left its column. Lava a dig lays open is filled first (:on-lava :seal). Every plug goes to the scaffold ledger
   with :for (default :danger, ledger :retreat-plug, taken back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote:
-  time (##Inf when no pit fits, or with :for :night when the pit would cut into a plan the body made, :spared; a cell another's zone refuses adds plug-way's ::trespass-s). Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.")
+  time (##Inf when no pit fits, or with :for :night when the pit would cut into a plan the body made or stand on a plan's doorstep, :spared; a cell another's zone refuses adds plug-way's ::trespass-s). Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.")
 
 (a/defargs args
   {:ignore-zones? :shared
@@ -43,19 +44,32 @@
 
 (defn done? [c] (way/done? c :pit))
 
+(defn door-hole
+  "The verdict {:cell :plan :door} for the first of cells within a block of a door or gate some plan wants (its doorstep: a
+  hole there leaves the closed building without a way in), else nil."
+  [c cells]
+  (let [openings (pen-gate/opening-index (:world (:engine c)))]
+    (some (fn [{:keys [x y z]}]
+            (some (fn [[[gx gy gz] plan]]
+                    (when (and (<= (abs (- x gx)) 1) (<= (abs (- z gz)) 1) (<= (- gy 2) y gy))
+                      {:cell [x y z] :plan plan :door [gx gy gz]}))
+                  openings))
+          cells)))
+
 (defn spared
-  "With :for :night, the verdict ({:zone :plan :cell}) of the first cell the pit plan digs that lies in a plan the body made (access/own-keep): not dug."
+  "With :for :night, the verdict ({:zone :plan :cell}) of the first cell the pit plan digs that lies in a plan the body made (access/own-keep) or on a plan's doorstep (door-hole): not dug."
   [c plan]
   (when (= :night (:for (:args c)))
-    (let [in (access/rules-input c {:spare-own? true})]
-      (some #(access/own-keep in %) (concat (:prep plan) (mapcat :dig (:steps plan)))))))
+    (let [in (access/rules-input c {:spare-own? true})
+          cells (concat (:prep plan) (mapcat :dig (:steps plan)))]
+      (or (some #(access/own-keep in %) cells) (door-hole c cells)))))
 
 (defn spared-stop
   "The stop of a pit plan the body's own zone or plan forbids, nil when none."
   [c plan]
-  (when-let [{:keys [zone plan cell]} (spared c plan)]
+  (when-let [{:keys [zone plan cell door]} (spared c plan)]
     {:stop :spared
-     :text (str "the pit would cut into the body's own " (if zone (str "zone " zone) (str "plan " plan)) " at " (pr-str cell) "; not digging")}))
+     :text (str "the pit would cut into the body's own " (cond zone (str "zone " zone) door (str "plan " plan "'s doorstep (door " (pr-str door) ")") :else (str "plan " plan)) " at " (pr-str cell) "; not digging")}))
 
 (defn assess
   "{:plan p} for a pit that fits (p is nil while only a floor not yet seen rules it out: the pit looks first; not so for :night,

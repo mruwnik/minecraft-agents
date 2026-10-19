@@ -169,7 +169,7 @@
 
 (defn dug [p] (mapv arg-pos (calls p "dig")))
 
-(deftest dig-in-spares-the-bodys-own-plans-but-not-the-rest-of-its-zone
+(deftest dig-in-spares-the-bodys-own-plans-and-any-doorstep-but-not-the-rest-of-its-zone
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -180,7 +180,9 @@
                    ["own zone over the pit" no-blocks [pit] nil true]
                    ["foreign zone over the pit" no-blocks [(zone "Miles" [0 60 0] [0 63 0])] nil true]
                    ["own plan over the pit" no-blocks [] {:id "pen" :parts [{:id "p" :cells [[0 63 0] [0 62 0]] :want "stone"}]} false]
-                   ["another's plan over the pit" no-blocks [] {:id "pen" :metadata {:by "Miles"} :parts [{:id "p" :cells [[0 63 0] [0 62 0]] :want "stone"}]} true]]]
+                   ["another's plan over the pit" no-blocks [] {:id "pen" :metadata {:by "Miles"} :parts [{:id "p" :cells [[0 63 0] [0 62 0]] :want "stone"}]} true]
+                   ["a door beside the pit" no-blocks [] {:id "hut" :metadata {:by "Miles"} :parts [{:id "d" :cells [[1 64 0]] :want "oak_door"}]} false]
+                   ["a door three blocks off" no-blocks [] {:id "hut" :metadata {:by "Miles"} :parts [{:id "d" :cells [[3 64 0]] :want "oak_door"}]} true]]]
             (let [{:keys [eng p seen]} (if plan
                                          (setup-with-plan world (cond-> plan (nil? (:metadata plan)) (shape/with-author "Fake")))
                                          (setup world zones))]

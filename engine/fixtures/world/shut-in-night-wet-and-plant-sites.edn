@@ -53,17 +53,17 @@
    :limit-s 80}
   ;; 05fc51cf: lava hidden in the dirt beside the first dug cell flows into the hole: sealed with a carried block and the pit goes on, or (:on-lava :stop) left and the job stops
   {:name "lava-laid-open-by-the-dig-is-sealed-and-the-pit-goes-on"
-   ;; 8 blocks: fewer than the 10 walls need, so the pit is chosen (a wall over the lava cell has nothing to be placed against)
-   :blocks [[:set [17 -1 16] "lava"]]
+   ;; lava under the dirt, unseen from the surface: the dig of the cell above it lays it open (8 blocks: fewer than the 10 walls need)
+   :blocks [[:set [17 -2 16] "lava"]]
    :body {:at [16.5 0 16.5] :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["cobblestone" 8]]}
    :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :shelter_seal_failed} :for-s 90 :until {:source :job :kind :shut-in.sealed}}]
-   :after [[:not-block [16 -1 16] "lava"]]
+   :after [[:not-block [17 -2 16] "lava"]]
    :limit-s 100}
   {:name "lava-laid-open-by-the-dig-with-on-lava-stop-stops-the-pit"
-   ;; 8 blocks: fewer than the 10 walls need, so the pit is chosen (a wall over the lava cell has nothing to be placed against)
-   :blocks [[:set [17 -1 16] "lava"]]
+   ;; lava under the dirt, unseen from the surface: the dig of the cell above it lays it open (8 blocks: fewer than the 10 walls need)
+   :blocks [[:set [17 -2 16] "lava"]]
    :body {:at [16.5 0 16.5] :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["cobblestone" 8]]}
    :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night :on-lava :stop})]]
    :expect [{:event {:source :job :kind :shut-in.failed :message [:contains "lava"]} :within-s 60 :of-job true}
