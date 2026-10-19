@@ -67,7 +67,7 @@
    ^:mutable ^boolean door-through ^:mutable open-x ^:mutable open-y ^:mutable open-z
    ;; tight cells: direct-mapped caches (keys stored +1 so zeroed memory reads as empty), masks per (cell, height)
    column-keys column-flags cell-keys cell-flags ^js mask-cache ^js tight-seen ^js pick ^js best-d ^js best-at
-   ^js surface-cache ^js dive-cache
+   ^:mutable ^js surface-cache ^:mutable ^js dive-cache
    ^:mutable masks ^:mutable tight-masks ^:mutable regions-seen ^:mutable mask-ms
    ;; the goal flood: moves go to the probe instead of the search while it runs; fr the probed cell's region (-1 any)
    ^:mutable ^boolean flooding ^:mutable fx ^:mutable fy ^:mutable fz ^:mutable fr ^:mutable ^boolean hit ^:mutable flooded ^:mutable pre-flooded

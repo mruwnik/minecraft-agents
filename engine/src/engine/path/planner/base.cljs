@@ -170,6 +170,7 @@
 (def ^:const AIR-STEP 1) ; seconds of air that make an arrival at a node already reached worth a record of its own
 (def ^:const DMG-STEP 0) ; hp of damage that make an arrival at a node already reached worth a record of its own (a finite budget: exact)
 (def ^:const TABLE 8192) ; slots of the direct-mapped tight-cell caches
+(def ^:const WATER-TABLE 65536) ; slots of the direct-mapped caches of water columns (surface, dive): a Map per search grew without bound, 100 MB in a long water search
 (def ^:const FLOOD-TABLE 65536) ; slots of the direct-mapped cache of the goal flood's stand heights
 (def ^:const FLOOD-MEMO 40000) ; cells whose moves the flood keeps (flood-moves) before it starts the memo afresh
 (def ^:const SNAP 6) ; a blocked boundary point takes the region of the nearest free position within this many 1/16

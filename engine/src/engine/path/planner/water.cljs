@@ -1,6 +1,6 @@
 (ns engine.path.planner.water
   "Search methods: swimming, diving, currents and leaving the water."
-  (:require [engine.path.planner.base :refer [AIR-REFILL BODY CORNER-S DAMAGE-STAND DAMAGE-TOUCH DROWN-HP drowned-hp EXIT-SLACK HAZARD-AVOID JUMP-S JUMP-UP LAVA-ADJACENT MOVE-CORNER MOVE-EXIT MOVE-JUMP MOVE-SWIM MOVE-SWIM-DOWN MOVE-SWIM-UP MOVE-WALK NARROW NONE OPEN SNAP SQRT2 STEP UNLOADED WATER WHOLE breathable?]]
+  (:require [engine.path.planner.base :refer [AIR-REFILL BODY CORNER-S DAMAGE-STAND DAMAGE-TOUCH DROWN-HP drowned-hp EXIT-SLACK HAZARD-AVOID JUMP-S JUMP-UP LAVA-ADJACENT MOVE-CORNER MOVE-EXIT MOVE-JUMP MOVE-SWIM MOVE-SWIM-DOWN MOVE-SWIM-UP MOVE-WALK NARROW NONE OPEN SNAP SQRT2 STEP UNLOADED WATER WATER-TABLE WHOLE breathable?]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -47,13 +47,17 @@
           :else NONE))))
 
   (surfaceY [s x y z]
-    (let [key (.keyOf s x y z 0)
-          hit (.get ^js (.-surface-cache s) key)]
-      (if (undefined? hit)
+    (when (nil? ^js (.-surface-cache s))
+      (set! (.-surface-cache s) (js/Float64Array. (* 2 WATER-TABLE))))
+    (let [key (inc (.keyOf s x y z 0))
+          slot (bit-and (.hashOf s x y z 0) (dec WATER-TABLE))
+          ^js tbl (.-surface-cache s)]
+      (if (== (aget tbl slot) key)
+        (aget tbl (+ WATER-TABLE slot))
         (let [top2 (.surfaceScan s x y z)]
-          (.set ^js (.-surface-cache s) key top2)
-          top2)
-        hit)))
+          (aset tbl slot key)
+          (aset tbl (+ WATER-TABLE slot) top2)
+          top2))))
 
   (openWater [s x y z]
     (not (== (.surfaceY s x y z) NONE)))
@@ -89,13 +93,17 @@
           (recur (dec y2))))))
 
   (worthDiving [s x y z]
-    (let [key (.keyOf s x y z 0)
-          hit (.get ^js (.-dive-cache s) key)]
-      (if (undefined? hit)
+    (when (nil? ^js (.-dive-cache s))
+      (set! (.-dive-cache s) (js/Float64Array. (* 2 WATER-TABLE))))
+    (let [key (inc (.keyOf s x y z 0))
+          slot (bit-and (.hashOf s x y z 0) (dec WATER-TABLE))
+          ^js tbl (.-dive-cache s)]
+      (if (== (aget tbl slot) key)
+        (== (aget tbl (+ WATER-TABLE slot)) 1)
         (let [found ^boolean (.diveScan s x y z)]
-          (.set ^js (.-dive-cache s) key (if found 1 2))
-          found)
-        (== hit 1))))
+          (aset tbl slot key)
+          (aset tbl (+ WATER-TABLE slot) (if found 1 0))
+          found))))
 
   ;; swimming beside lava, or down onto magma
   (swimRisk [s x y z]

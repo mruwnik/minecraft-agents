@@ -354,7 +354,7 @@
      0 nil nil nil false 0 0 0
      ;; tight cells
      (js/Float64Array. TABLE) (js/Uint8Array. TABLE) (js/Float64Array. TABLE) (js/Uint8Array. TABLE) (js/Map.) (js/Set.) (js/Int8Array. REGIONS)
-     (js/Float64Array. REGIONS) (js/Int16Array. REGIONS) (js/Map.) (js/Map.)
+     (js/Float64Array. REGIONS) (js/Int16Array. REGIONS) nil nil
      0 0 0 0
      ;; the goal flood: flooding fx fy fz fr hit flooded pre-flooded flood-pending leaked
      false 0 0 0 -1 false 0 0
