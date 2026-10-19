@@ -147,7 +147,7 @@
           (is (= ["z-27-0:0..20" "x-27-20:-20..0" "x-27-20:0..20"] seg-ids) "the stem next to the entry first, then its branches")
           (is (= [{:at (xyz [-1 -27 20]) :axis :x :side :to} {:at (xyz [1 -27 20]) :axis :x :side :from}]
                  (mapv #(select-keys % [:at :axis :side]) (called env 'jobs.strip.seal))))
-          (is (= ["from-plan" "set-spawn" "set-place" "get-tool" "corridor" "corridor" "seal" "corridor" "seal" "haul" "set-place" "set-spawn"]
+          (is (= ["from-plan" "set-spawn" "set-place" "get-tool" "corridor" "corridor" "seal" "corridor" "seal" "deposit" "haul" "set-place" "set-spawn"]
                  (mapv #(last (re-find #"\.([a-z-]+)$" %)) (names env))) "the order of the children, home and spawn restored last")
           (is (= {:from [chest-1 chest-3] :to nil} (select-keys (first (called env 'jobs.storage.haul)) [:from :to]))))))))
 
@@ -211,6 +211,32 @@
           (is (= {:stripped 1 :sealed 1 :skipped 1} (:segments r)))
           (is (= 3 (count (filter #(= "x-27-20:0..20" (:id (:segment %))) (called env 'jobs.strip.corridor))))))))))
 
+(deftest a-segment-no-stripped-one-reaches-is-skipped-unlinked-not-left-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stray {:id "z-27-50:0..5" :axis :z :y -27 :line 50 :from 0 :to 5 :open-ends #{}}
+              env (setup :results {'jobs.strip.corridor {:status :done :taken {} :new-segments [stray]}})
+              r (await (start! env args))]
+          (is (= :done (:status r)))
+          (is (zero? (get (:segments r) :open 0)))
+          (is (= 1 (get (:segments r) :skipped 0)))
+          (is (not-any? #(= "z-27-50:0..5" (:id (:segment %))) (called env 'jobs.strip.corridor))))))))
+
+(deftest a-segment-the-far-end-shows-longer-is-stripped-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [longer (fn [a] (if (= "z-27-0:0..20" (:id (:segment a)))
+                               {:status :done :taken {} :new-segments [(assoc (:segment a) :to 24)]}
+                               {:status :done :taken {} :new-segments []}))
+              env (setup :results {'jobs.strip.corridor (let [n (atom 0)] (fn [a] (if (= 1 (swap! n inc)) (longer a) {:status :done :taken {} :new-segments []})))})
+              r (await (start! env args))
+              stem (filter #(= "z-27-0:0..20" (:id (:segment %))) (called env 'jobs.strip.corridor))]
+          (is (= :done (:status r)))
+          (is (= [20 24] (map #(:to (:segment %)) stem)) "second call carries the longer range")
+          (is (zero? (get (:segments r) :open 0))))))))
+
 (deftest a-site-whose-every-segment-was-skipped-ends-all-skipped-not-done
   (async done
     (tu/run-async done
@@ -233,7 +259,7 @@
           (is (= :done (:status r)))
           (is (= {:wood 10} (:taken r)))
           (is (= ["z-27-0:0..20" "z-27-0:0..20" "x-27-20:-20..0" "x-27-20:0..20"] ids))
-          (is (= [{:chest (xyz chest-1) :keep {"torch" 64}}] (mapv #(select-keys % [:chest :keep]) (called env 'jobs.storage.deposit)))))))))
+          (is (= (repeat 2 {:chest (xyz chest-1) :keep {"torch" 64}}) (mapv #(select-keys % [:chest :keep]) (called env 'jobs.storage.deposit)))))))))
 
 (deftest no-torches-and-none-to-be-had-stops-no-torches
   (async done

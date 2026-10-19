@@ -144,12 +144,13 @@
 (defn merge-segments
   "Folds newly read segments into the remembered map id -> segment. A match (same line, touching range) keeps the
   remembered id and state and takes the union of the ranges, so it never shrinks; an end stays open only while no read
-  has seen past it. New segments start :open."
+  has seen past it. A read spanning two remembered segments (a crossing cut earlier, not in this read) is dropped. New segments start :open."
   [remembered news]
   (reduce (fn [mem n]
-            (if-let [r (first (filter #(overlaps? % n) (vals mem)))]
-              (assoc mem (:id r) (merge-one r n))
-              (assoc mem (:id n) (assoc n :state :open))))
+            (let [hit (filter #(overlaps? % n) (vals mem))]
+              (cond (next hit) mem
+                    (seq hit) (assoc mem (:id (first hit)) (merge-one (first hit) n))
+                    :else (assoc mem (:id n) (assoc n :state :open)))))
           remembered news))
 
 (defn gap

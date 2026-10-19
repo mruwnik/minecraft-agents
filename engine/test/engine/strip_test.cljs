@@ -121,3 +121,9 @@
 (deftest take-set-limits-the-classes
   (let [{:keys [targets]} (strip/targets (takings-world) seg {:entry [0 y 20] :take #{:rail}})]
     (is (= #{:rail} (set (map :class targets))))))
+
+(deftest merge-drops-a-read-that-spans-two-remembered-segments
+  (let [seg (fn [from to] {:id (str from ".." to) :axis :x :y y :line 20 :from from :to to :open-ends #{}})
+        mem (strip/merge-segments {} [(seg 0 12) (seg 12 18)])
+        merged (strip/merge-segments mem [(seg 0 18)])]
+    (is (= mem merged))))

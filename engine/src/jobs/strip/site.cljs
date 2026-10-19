@@ -31,7 +31,8 @@
   :strip  go down (the :shaft plan with access.stair :through, nil = the nearest usable mineshaft plan, false = walk), read the
           site's corridors from the seen blocks (jobs.lib.strip), then repeat: strip.corridor on the next open segment
           (a branch only after the segment it hangs on; one with an unseen end first), strip.seal at the mouth of a
-          segment once it and every segment beyond it are stripped, sealed or skipped. The segment holding :at is never
+          segment once it and every segment beyond it are stripped, sealed or skipped. A segment no stripped one reaches is
+          :skipped :unlinked. A segment the far end shows longer than it was read is stripped again. The segment holding :at is never
           sealed. A segment that stops stop-limit (3) times for one reason is :skipped with the reason. A stop for
           :bag-full :food-short :no-torches :no-tool, or low torches or free slots, is a trip: deposit into the base chests
           (storage.deposit), obtain torches, get the tool, get food (survival.get-food, once per trip; still hungry with none: :food-short; :fetch false skips the try), then back down; at most max-trips (12).
@@ -41,7 +42,7 @@
           the body goes back down; the furnaces and their args are kept in :cooking. The next visit replays those
           children to collect the output, which is deposited with the rest. A smelt that gives up is listed in
           :smelt-failed and the ore stays raw (not with :smelt false).
-  :haul   first collects the output still in the furnaces (waits while it cooks, also with :haul false) and banks it in the first base chest, then
+  :haul   first collects the output still in the furnaces (waits while it cooks, also with :haul false) and banks it and the loot still carried in the first base chest, then
           storage.haul from the base chests to the main storage (not with :haul false).
   The cleanup export puts :home and the respawn bed back to :was however the call ends (a cut included). The torches the
   corridor took back are carried.
@@ -215,6 +216,11 @@
                      (:order t))]
     (get (:segments s) (or (first (filter #(seq (get-in s [:segments % :open-ends])) open)) (first open)))))
 
+(defn unlinked
+  "Open segments the tree does not reach: no stripped segment touches them, so they are passed on, not stripped."
+  [s t]
+  (filter #(= :open (get-in s [:segments % :state])) (:unreached t)))
+
 (defn mouth
   "{:at :side :entry} of seg on the side of its parent: the cell one step inside the segment from where the parent meets it."
   [s t seg]
@@ -373,8 +379,9 @@
                                          (assoc-in [:segments id] (assoc seg :state :stripped :why :spawner))
                                          (update :segments (fn [m] (reduce (fn [m k] (assoc m k (assoc (get m k) :state :skipped :why :spawner))) m (beyond t id))))))
                            :again)
-      (= :done (:kind e)) (do (save! c #(-> % taken (assoc-in [:segments id :state] :stripped)
-                                                (update :segments strip/merge-segments (filter (fn [g] (<= (strip/gap g (vec3 (:at s))) radius)) (:new-segments res)))))
+      (= :done (:kind e)) (do (save! c #(-> % taken
+                                            (update :segments strip/merge-segments (filter (fn [g] (<= (strip/gap g (vec3 (:at s))) radius)) (:new-segments res)))
+                                            (update-in [:segments id] (fn [m] (assoc m :state (if (= (select-keys seg [:from :to]) (select-keys m [:from :to])) :stripped :open))))))
                                   :again)
       (>= n stop-limit) (do (save! c #(-> % taken (assoc-in [:segments id] (assoc seg :state :skipped :why why)))) :again)
       :else (do (save! c #(cond-> (-> % taken (assoc-in [:stops id why] n))
@@ -400,8 +407,9 @@
       (trip-due? c s) (await (trip! c s))
       ready (await (seal! c s t ready))
       seg (await (corridor! c s t seg))
+      (seq (unlinked s t)) (do (save! c update :segments #(reduce (fn [m k] (assoc m k (assoc (get m k) :state :skipped :why :unlinked))) % (unlinked s t))) :again)
       (all-skipped s) (stop! c :all-skipped {:skipped (all-skipped s)})
-      :else (do (save! c assoc :phase :haul) :again))))
+      :else (do (save! c #(cond-> (assoc % :phase :haul) (some pos? (vals (:taken %))) (assoc :bank true))) :again))))
 
 (defn ^:async haul-chests! [c s]
   (let [e (await (ctx/call c :haul 'jobs.storage.haul (merge {:from (chests c s)} (select-keys (:args c) [:ignore-zones?]))))]

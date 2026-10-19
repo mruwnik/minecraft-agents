@@ -45,7 +45,7 @@
   (no drop expected); :seal stops the trip :spawner at once with it left; :skip leaves it, listed in :kept {:why :spawner}.
   Every child's failure ends the trip with the child's reason in :child.
   Ends :done with data {:taken {class n} :kept [{:pos :why}] :new-segments [segment ..]}, :new-segments being the corridors
-  seen from the far end that are not this segment (the caller folds them into its memory with merge-segments); or
+  seen from the far end, this segment's longer reading included (the caller folds them into its memory with merge-segments); or
   impossible with the cause :bag-full :food-short :no-torches :no-tool :spawner (cause keys :taken, as can-run?), or
   condition-failed :bag-full (a cart it cannot empty) :refused, or nothing-possible with :unreachable :dig-failed :cart-failed :torch-failed (data :cell, :child), the data carrying :taken.
   Event: strip.corridor.stopped (warn) at a stop of a step; a can-run? stop ends as the engine's stopped event.")
@@ -238,7 +238,7 @@
   [c seg]
   (let [p (:primitives c)
         blocks (look/seen-blocks p {:match #(or (strip/fence? %) (strip/planks? %) (strip/rail? %)) :radius 24 :max 512})
-        news (remove #(strip/overlaps? seg %) (strip/segments blocks {:block-at (access/seen-at p)}))]
+        news (strip/segments blocks {:block-at (access/seen-at p)})]
     {:taken (:taken (ctx/mem c) {})
      :kept (into (:kept (strip/targets [] seg {:block-at (access/seen-at p)}))
                  (map (fn [t] (cond-> {:pos (:pos t) :why :spawner} (= :light (:spawner (:args c))) (assoc :lit true))))
