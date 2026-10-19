@@ -27,7 +27,7 @@
        "  --exclusive  run this job alone, at once: the whole engine is paused (no triggers, no other job) until it ends; any ending, a yield (:continue) included, returns to you and normal work resumes. Cuts what runs now (a listed job continues after). One run at a time; refused offline or settling; takes no --next, --now or --survive-death; a restart or death ends it.\n"
        "  --alongside  submit even when a job of the same job name, or another digging job (mine, stair, tunnel, strip.*), is running or queued on this body: without it such a submit is held back and the answer names the clashing job; two of one job can undo each other's work. A (repeat ...) submit is never held\n"
        "  --wait   block until the job ends, or until anything that ends observe --wait (addressed chat, attention, an\n"
-       "           engine restart, the --timeout), and print {:job .. :wait <the wake>}: the job's last events and a\n"
+       "           engine restart, the --timeout), and print {:job {:id ..} :wait <the wake>} (the submit-time status is dropped: it would read :queued after the job ended): the job's last events and a\n"
        "           bounded summary of what else happened meanwhile (reflexes fired, pickups, hurt, other jobs ended,\n"
        "           warnings). If the wait ends before the job, :follow names the command that waits on, :note says the job is not lost, :now has its status and :waiting reason, and the exit code is 1 (0 only when the job ended). Uses the observer\n"
        "           checkpoint observe --wait uses, so the same events are not reported twice.\n"
@@ -403,6 +403,7 @@
                                             (fn [now]
                                               (let [waited (wait-result answer id wake now)]
                                               (output (str (data/write-edn (-> (with-hint r waited (when (:follow waited) status))
+                                                                               (update :job dissoc :status)
                                                                                (cond-> now (assoc :now now))
                                                                                (assoc :vitals report))) "\n"))
                                               (if (:follow waited) 1 0)))))))))))))))

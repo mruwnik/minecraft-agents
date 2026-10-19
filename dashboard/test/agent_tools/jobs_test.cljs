@@ -284,7 +284,7 @@
                    (let [result (data/read-edn out)
                          wait (:wait result)]
                      (is (= 0 code))
-                     (is (= {:id "j7" :status :queued} (:job result)))
+                     (is (= {:id "j7"} (:job result)) "no submit-time :queued next to the wake")
                      (is (= [:job-finished "j7" :completed] [(:wake wait) (:job wait) (:result wait)]))
                      (is (= [{:event :arrived :data {:pos [1 64 2]}}] (:events wait)) "the job's own events")
                      (is (= {:reflexes 1 :picked-up 1} (get-in wait [:summary :counts])) "and what else happened meanwhile")
