@@ -3,8 +3,8 @@
 ;; Should-succeed: deep-open-column (28 deep, several swims of the 3 s bound, none counted a failed try); dark-sealed-column (the air pocket above is sealed and dark, the body swims up
 ;; the own column unseen); deep-dirt-cap (swim up 12 cells to a dirt cap, dig it with a shovel); magma-neighbour (the capped own column is dug, the neighbour column over magma that reaches air is never entered);
 ;; go-air-routes-round-magma (a seen air pocket behind a drag column in a 3 wide tunnel is gone to round it).
-;; Should-fail: deep-dirt-cap-bare-handed-is-not-dug (the same cap bare-handed: a floating dig takes longer than the air left, so none is started: stops :no-air, cap :too-slow, cap kept); magma-between-is-not-crossed (planks cap, the only air column lies behind a drag column: stops :no-air, never crosses).
-;; too-slow-cap-over-lava-moves-to-the-still-pool: bare-handed, the column floor is lava; with the air left it swims to the still pool beside (stone floor) and stops there.
+;; Should-fail: deep-stone-cap-bare-handed-is-not-dug (a stone cap bare-handed (a dirt one fits the full air the reflex fires with): a floating dig takes longer than the air left, so none is started: stops :no-air, cap :too-slow, cap kept); magma-between-is-not-crossed (planks cap, the only air column lies behind a drag column: stops :no-air, never crosses).
+;; too-slow-cap-over-lava-moves-to-the-still-pool: bare-handed, a stone cap 5 up (a far cap leaves too little air for the swim back), the column floor is lava; with the air left it swims to the still pool beside (stone floor) and stops there.
 ;; Live risk: magma over water makes a bubble column only after a block update; the magma cases check the stop or the dug cap, not the column state.
 {:defaults
  {:tags [:survival :water] :time :any
@@ -46,30 +46,30 @@
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:no-event {:source :job :kind :stopped :data {:reason :no-air}} :for-s 25}]
    :after [[:not-block [16 12 16] "dirt"] [:body-near [16.5 12.5 16.5] 3]]}
-  {:name "deep-dirt-cap-bare-handed-is-not-dug"
+  {:name "deep-stone-cap-bare-handed-is-not-dug"
    :plot {:height 18}
    :blocks [[:fill [0 9 0] [31 14 31] "stone"]
             [:fill [16 0 16] [16 11 16] "water"]
-            [:set [16 12 16] "dirt"]
+            [:set [16 12 16] "stone"]
             [:fill [16 13 16] [16 14 16] "air"]
             [:set [15 10 16] "glowstone"]]
    :body {:at [16.5 1 16.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :job :kind :stopped :data {:reason :no-air :cap :too-slow}} :within-s 60}]
-   :after [[:block [16 12 16] "dirt"]]}
+   :after [[:block [16 12 16] "stone"]]}
   {:name "too-slow-cap-over-lava-moves-to-the-still-pool"
    :plot {:height 18}
    :blocks [[:fill [0 9 0] [31 14 31] "stone"]
             [:set [16 0 16] "lava"]
-            [:fill [16 1 16] [16 11 16] "water"]
-            [:set [16 12 16] "dirt"]
-            [:fill [16 13 16] [16 14 16] "air"]
+            [:fill [16 1 16] [16 5 16] "water"]
+            [:set [16 6 16] "stone"]
+            [:fill [16 7 16] [16 8 16] "air"]
             [:fill [17 1 16] [17 3 16] "water"]
-            [:set [15 10 16] "glowstone"]]
+            [:set [15 4 16] "glowstone"]]
    :body {:at [16.5 3 16.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :job :kind :stopped :data {:reason :no-air :cap :too-slow}} :within-s 60}]
-   :after [[:body-near [17.5 2 16.5] 2] [:block [16 12 16] "dirt"]]}
+   :after [[:body-near [17.5 2 16.5] 2] [:block [16 6 16] "stone"]]}
   {:name "magma-neighbour-is-not-entered"
    :blocks [[:fill [16 0 16] [16 3 16] "water"]
             [:set [16 4 16] "dirt"]
