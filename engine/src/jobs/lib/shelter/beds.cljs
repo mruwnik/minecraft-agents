@@ -10,6 +10,7 @@
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.shelter.sleepers :as sh-sleepers]
             [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.solid :as solid]))
 
@@ -19,12 +20,15 @@
    ::default-bed-radius {:default 48 :spec (a/num-in 0 nil)
                          :doc "Blocks within which a remembered bed may be used, when the job or trigger names no :bed-radius."}
    ::urgent-bed-radius {:default 128 :spec (a/num-in 0 nil)
-                        :doc "The bed radius once the body is overdue for sleep or displaced, when none is named."}})
+                        :doc "The bed radius once the body is overdue for sleep or displaced, when none is named."}
+   ::courtesy-radius {:default 32 :spec (a/num-in 0 nil)
+                      :doc "Blocks a body safe in a shelter may walk to a bed to sleep beside another sleeping player."}})
 
 (defn seen-bed-radius [] (settings/get settings ::seen-bed-radius))
 
 (defn default-bed-radius [] (settings/get settings ::default-bed-radius))
 (defn urgent-bed-radius [] (settings/get settings ::urgent-bed-radius))
+(defn courtesy-radius [] (settings/get settings ::courtesy-radius))
 (defn arg-radius "The :bed-radius a job names, else the default-bed-radius setting." [args] (or (:bed-radius args) (default-bed-radius)))
 
 (defn bed-in-view
@@ -125,6 +129,12 @@
   "The shelters (walk-leaves-shelter?) a body does not leave at night for a bed: a bare roof is not one of them."
   #{:underground :dug-in :room})
 
+(defn courtesy-walk?
+  "Whether a safe body walks to the bed at pos only to sleep as a courtesy: another player sleeps (others-asleep?) and
+  the bed is within courtesy-radius of the feet."
+  [p view pos]
+  (and (<= (u/dist (u/self-pos {:primitives p}) pos) (courtesy-radius)) (sh-sleepers/others-asleep? p view)))
+
 (def bed-open-policy
   "Policy of the :bed-open entries the night job writes for a bed it found open and dug in beside instead: half a day."
   {:cap 5 :ttl (quot sh-clock/ms-per-day 2)})
@@ -132,7 +142,8 @@
 (defn bed-to-use
   "The bed a body awake at night sleeps in: one it sees (seen-bed), else the remembered :bed within radius, under any
   roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable entry, or one whose walk
-  would take the body out of a kept-shelters shelter (unless overdue: max-days-awake days since :slept, phantoms);
+  would take the body out of a kept-shelters shelter (unless overdue: max-days-awake days since :slept, phantoms, or a
+  courtesy-walk?: another player sleeps and the bed is near);
   none after a sleep tonight (:slept within half an in-game day)
   or while a :sleep-failed entry is unexpired. nil otherwise."
   [p view radius permit?]
@@ -143,7 +154,7 @@
           overdue? (>= (or (days-awake-in view) 0) max-days-awake)
           ok? (fn [pos] (and (permit? pos) (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-unreachable))
                              (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-open))
-                             (or overdue? (not (kept-shelters (sh-inside/walk-leaves-shelter? p shelter pos 1))))))]
+                             (or overdue? (not (kept-shelters (sh-inside/walk-leaves-shelter? p shelter pos 1))) (courtesy-walk? p view pos))))]
       (or (seen-bed p ok?)
           (first (filter ok? (sh-spawn/standing-beds p view radius)))))))
 

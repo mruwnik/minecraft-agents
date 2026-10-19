@@ -54,6 +54,16 @@
             {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 40}]
    :after [[:item "red_bed" 1] [:body-near [10.5 0 12.5] 1.5]]
    :limit-s 80}
+  {:name "tunnel-miner-sleeps-in-remembered-bed-8-away-while-another-sleeps"
+   :blocks [[:fill [4 0 4] [26 4 20] "stone"] [:fill [10 0 12] [16 1 12] "air"]
+            [:fill [17 0 11] [19 2 13] "air"] [:set [18 1 12] "torch"] [:set [11 1 12] "torch"]
+            [:set [18 0 12] "red_bed[facing=east,part=foot]"] [:set [19 0 12] "red_bed[facing=east,part=head]"]]
+   :body {:at [10.5 0 12.5]}
+   :memory [{:kind :bed :data {:pos #xyz [18 0 12]} :policy {:cap 1 :ttl :forever}}
+            {:kind :sleep-status :data {:sleeping 1 :needed 2} :policy {:cap 1 :ttl :forever}}]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}]
+   :after [[:body-near [18.5 0 12.5] 4]]
+   :limit-s 70}
   {:name "tunnel-miner-remembered-bed-60-away-not-walked-to-no-room-no-place"
    :blocks [[:fill [4 0 4] [26 4 20] "stone"] [:fill [10 0 12] [16 1 12] "air"]
             [:fill [17 0 11] [19 2 13] "air"] [:set [18 1 12] "torch"] [:set [11 1 12] "torch"]]

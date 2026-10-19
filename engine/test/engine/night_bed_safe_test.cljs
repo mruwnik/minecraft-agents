@@ -91,6 +91,18 @@
 (deftest a-buried-body-overdue-for-sleep-walks-to-its-bed
   (is (= far-bed (bed-to-use-after-days (tunnel-world buried-light) 3))))
 
+(defn bed-to-use-with-sleeper
+  "bed-to-use for a body at x (in the tunnel) while the action bar counts one other player asleep."
+  [x]
+  (let [world (assoc-in (tunnel-world buried-light) [:self :pos :x] x)
+        {:keys [eng p]} (setup world)]
+    (mem/write! (:store eng) :sleep-status {:sleeping 1 :needed 2} nil)
+    (sh-beds/bed-to-use p (mem/view (:store eng)) 64 (constantly true))))
+
+(deftest a-buried-body-walks-to-a-near-bed-as-a-courtesy-while-another-player-sleeps
+  (is (= far-bed (bed-to-use-with-sleeper 12)) "28 blocks away, within the courtesy radius")
+  (is (nil? (bed-to-use-with-sleeper 5)) "35 blocks away is a walk too far for a courtesy"))
+
 (deftest a-buried-body-not-yet-overdue-stays-in-the-tunnel
   (is (nil? (bed-to-use-after-days (tunnel-world buried-light) 2))))
 

@@ -73,10 +73,10 @@
   16)
 
 (defn far-from-shelter
-  "The kind of kept shelter (sh-beds/kept-shelters: not a bare roof) a walk to a bed beyond leave-shelter-radius would leave, else nil."
+  "The kind of kept shelter (sh-beds/kept-shelters: not a bare roof) a walk to a bed beyond leave-shelter-radius would leave, else nil; none when another sleeps and the bed is near (courtesy-walk?)."
   [c bed]
   (let [p (:primitives c)]
-    (when (> (u/dist (u/self-pos c) bed) leave-shelter-radius)
+    (when (and (> (u/dist (u/self-pos c) bed) leave-shelter-radius) (not (sh-beds/courtesy-walk? p (ctx/view c) bed)))
       (sh-beds/kept-shelters (sh-inside/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) bed 2)))))
 
 (a/defargs settings
