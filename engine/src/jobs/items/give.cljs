@@ -15,7 +15,7 @@
   "Walk to the player :player, toss them :count of :item (everything carried when nil) and confirm the drop was
   taken. Needs the item carried and the player in sight. Quote: A, walks, the toss and the wait.
   Impossible: :bad-args (a player and an item name are needed). Conditions (a listed root job waits): :no-item (nothing is
-  carried before the toss), :gone (the player is not seen within :radius); can-run? asks both before the toss.
+  carried before the toss), :gone (the player is not seen within the radius setting); can-run? asks both before the toss.
   Nothing-possible, {:given 0}:
   - :unreachable, three walks in a row are blocked.
   - :out-of-range, three arrivals in a row are still out of reach.
@@ -35,11 +35,11 @@
 (a/defargs args
   {:player {:spec a/name? :default nil}
    :item {:spec a/item? :default nil}
-   :count {:doc "how many; nil gives everything carried" :spec (a/int-in 1 nil) :default nil}
-   :radius {:spec (a/num-in 0 nil) :default 32}})
+   :count {:doc "how many; nil gives everything carried" :spec (a/int-in 1 nil) :default nil}})
 
 (a/defargs settings
-  {::reach {:default 2 :doc "Toss from within this many blocks." :spec (a/num-in 0 nil)}
+  {::radius {:default 32 :doc "How far the player and the drop are looked for, in blocks." :spec (a/num-in 0 nil)}
+   ::reach {:default 2 :doc "Toss from within this many blocks." :spec (a/num-in 0 nil)}
    ::wait-s {:default 6 :doc "How long a drop may lie before it is taken back, in seconds." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 60 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::idle-ms {:default 500 :doc "Wait while there is nothing to do, in ms." :spec (a/int-in 0 nil)}
@@ -49,6 +49,7 @@
    ::head-height {:default 1.6 :doc "Height of a player's head above its position, in blocks." :spec (a/num-in 0 nil)}
    ::walk-s {:default 10 :doc "Seconds the walk to the player takes (the quote)." :spec (a/num-in 0 nil)}
    ::toss-s {:default 2 :doc "Seconds the toss and the confirmation take (the quote)." :spec (a/num-in 0 nil)}})
+(defn radius [] (settings/get settings ::radius))
 (defn reach [] (settings/get settings ::reach))
 (defn wait-s [] (settings/get settings ::wait-s))
 (defn idle-ms [] (settings/get settings ::idle-ms))
@@ -84,9 +85,9 @@
            .-pos
            u/pos-of))
 
-(defn in-sight "Later :gone while the player is not seen within :radius." [c]
-  (let [{:keys [player radius]} (:args c)]
-    (if (find-player (:primitives c) player radius)
+(defn in-sight "Later :gone while the player is not seen within the radius setting." [c]
+  (let [{:keys [player]} (:args c)]
+    (if (find-player (:primitives c) player (radius))
       (contract/ok :in-sight (str player " is in sight"))
       (contract/later :gone (str player " is not here")))))
 
@@ -177,10 +178,10 @@
   "In reach: remember the drops already lying, look at the player's head and
   toss. :continue, or the u/fail! verdict when the toss was refused."
   [c pos have]
-  (let [{:keys [item count radius]} (:args c)
+  (let [{:keys [item count]} (:args c)
         p (:primitives c)
         n (if count (min count have) have)]
-    (ctx/update-mem! c assoc :before (set (map :id (look/drops p item radius))) :had have)
+    (ctx/update-mem! c assoc :before (set (map :id (look/drops p item (radius)))) :had have)
     (await (ctx/act c :look (clj->js {:pos (update pos :y + (head-height))})))
     (let [r (await (ctx/act c :toss (clj->js {:item item :count n})))
           status (.-status r)]
@@ -216,10 +217,10 @@
   empty view only means taken once the drop has been seen (its spawn may not
   have arrived yet); a drop never seen within unseen-ms ends as unconfirmed."
   [c]
-  (let [{:keys [item radius]} (:args c)
+  (let [{:keys [item]} (:args c)
         {:keys [tossed tossed-t toss-at before had collecting seen-drop]} (ctx/mem c)
         p (:primitives c)
-        lying (remove #(contains? before (:id %)) (look/drops p item radius toss-at))
+        lying (remove #(contains? before (:id %)) (look/drops p item (radius) toss-at))
         back (max 0 (- (storage/carried (u/inventory p) item) (- had tossed)))
         given (- tossed back)
         since (- (ctx/now c) tossed-t)]
@@ -250,10 +251,10 @@
   "Nothing thrown yet: wait when nothing is carried or the player is not seen (can-run? answers), walk when too far,
   else toss."
   [c]
-  (let [{:keys [player item radius]} (:args c)
+  (let [{:keys [player item]} (:args c)
         p (:primitives c)
         have (storage/carried (u/inventory p) item)
-        pos (find-player p player radius)]
+        pos (find-player p player (radius))]
     (cond
       (or (zero? have) (nil? pos))
       (await (idle! c))
@@ -276,13 +277,13 @@
   "However the call ends: the drop of this call's toss that still lies is collected back, never more than was tossed.
   Done, or nothing-possible :litter when collects change nothing."
   [c _]
-  (let [{:keys [item radius]} (:args c)
+  (let [{:keys [item]} (:args c)
         {:keys [before toss-at tossed had litter]} (ctx/mem c)
         lying #(when (and tossed (not litter))
                  (let [back (- (storage/carried (u/inventory (:primitives c)) item) (- had tossed))
                        owed (- tossed back)]
                    (filter (fn [d] (and (not (contains? before (:id d))) (<= (:count d) owed)))
-                           (look/drops (:primitives c) item radius toss-at))))]
+                           (look/drops (:primitives c) item (radius) toss-at))))]
     (loop [failed 0]
       (let [l (lying)]
         (cond

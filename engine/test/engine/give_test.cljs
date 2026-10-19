@@ -1,6 +1,7 @@
 (ns engine.give-test
   "jobs.items.give against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.settings :as settings]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.fake :as fake]
@@ -123,12 +124,13 @@
 
 (deftest can-run-asks-the-item-and-the-player-until-the-toss
   (let [c (fn [world mem] (with-redefs [ctx/mem (constantly mem)]
-                            (give/can-run? {:primitives (tu/fake-on-floor world) :args {:player "Steve" :item "bread" :radius 32}})))
+                            (give/can-run? {:primitives (tu/fake-on-floor world) :args {:player "Steve" :item "bread"}})))
         reason (comp :reason last)]
     (is (= [:ok nil] [(first (c (assoc bread :entities [(steve 10)]) {})) nil]))
     (is (= [:later :gone] [(first (c bread {})) (reason (c bread {}))]))
     (is (= [:later :no-item] [(first (c {:entities [(steve 10)]} {})) (reason (c {:entities [(steve 10)]} {}))]))
-    (is (= :ok (first (c {} {:tossed 2}))))))
+    (is (= :ok (first (c {} {:tossed 2}))))
+    (is (= :later (first (settings/scoped {::give/radius 5} #(c (assoc bread :entities [(steve 10)]) {})))) "the radius setting bounds the look for the player")))
 
 (deftest three-blocked-walks-are-unreachable
   (async done
