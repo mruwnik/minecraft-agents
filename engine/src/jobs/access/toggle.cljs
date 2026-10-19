@@ -45,7 +45,7 @@
   above, or condition-failed with :no-block, :gone (block vanished or unloaded) or :refused (useOn said cannot or
   no-item), or nothing-possible with :unreachable, :unchanged (a click that changed nothing: iron-like block,
   protected area or lag, which cannot be told apart), :wrong-way (a block that moved but not to the wanted state) or
-  :unseen. Each give-up is one warn toggle.gave-up.")
+  :unseen..")
 
 (a/defargs args
   {:pos {:doc "the block, [x y z] or {:x :y :z}; either half of a door" :spec ::a/pos :default nil}
@@ -90,8 +90,7 @@
 (defn give-up!
   [c reason pos state text more]
   (let [result (report :stopped reason pos state more)]
-    (ctx/emit! c :toggle.gave-up :warn (assoc result :text (str "toggle: " text)))
-    (ctx/end c (if (condition-failures reason) :condition-failed :nothing-possible) reason (dissoc result :status :reason))))
+    (ctx/end c (if (condition-failures reason) :condition-failed :nothing-possible) {:reason reason :hint text} (dissoc result :status :reason))))
 
 (def bad-args
   "Never :bad-args unless :pos and :state parse."

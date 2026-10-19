@@ -12,8 +12,7 @@
  [{:name "dark-lever-four-blocks-off-is-pulled"
    :blocks [[:set [22 0 16] "lever[face=wall,facing=west,powered=false]"]]
    :act [[:job (jobs.access.toggle {:pos #at [22 0 16] :state :on :reach 5})]]
-   :expect [{:event {:source :job :kind :completed :data {:wanted :on}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :toggle.gave-up} :for-s 40 :until {:source :job :kind :completed :data {:wanted :on}}}]
+   :expect [{:event {:source :job :kind :completed :data {:wanted :on}} :within-s 40 :of-job true}]
    :after [[:block [22 0 16] "lever[powered=true]"]]}
   {:name "lit-lever-is-pulled"
    :blocks [[:set [22 0 16] "lever[face=wall,facing=west,powered=false]"] [:set [22 0 14] "torch"] [:set [21 0 18] "torch"]]

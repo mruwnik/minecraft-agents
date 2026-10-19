@@ -231,13 +231,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup (world "oak_door" {:open false :locked true}) (tu/capture-sink))
-              result (await (child-outcome eng job {:pos at :state :open} 40))
-              warns (filterv #(= :toggle.gave-up (:kind %)) @seen)]
+              result (await (child-outcome eng job {:pos at :state :open} 40))]
           (is (= {:status :stopped :reason :unchanged :wanted :open} (head result [:status :reason :wanted])))
           (is (= :nothing-possible (get-in result [:ending :kind])))
-          (is (= 1 (count (calls p "useOn"))) "one click, no retry")
-          (is (= 1 (count warns)))
-          (is (= :unchanged (:reason (:data (first warns))))))))))
+          (is (= 1 (count (calls p "useOn"))) "one click, no retry"))))))
 
 (deftest a-block-somebody-else-flipped-just-before-the-click-is-named-wrong-way
   (async done
@@ -265,8 +262,7 @@
               {:keys [result p seen]} (await (run w {:pos at :state :open}))]
           (is (= {:status :stopped :reason :unreachable} (head result [:status :reason])))
           (is (= :nothing-possible (get-in result [:ending :kind])))
-          (is (empty? (calls p "useOn")))
-          (is (= 1 (count (kinds seen :toggle.gave-up)))))))))
+          (is (empty? (calls p "useOn"))))))))
 
 (deftest a-walk-that-arrives-out-of-reach-by-the-jobs-own-measure-still-clicks-once
   (async done
@@ -320,8 +316,7 @@
               clicks (too-far-first! p 99)
               result (await (child-outcome eng job {:pos at :state :closed :reach 4} 80))]
           (is (= {:status :stopped :reason :unreachable} (head result [:status :reason])))
-          (is (= 3 @clicks) "the first click and one after each of two walks closer")
-          (is (= 1 (count (kinds seen :toggle.gave-up)))))))))
+          (is (= 3 @clicks) "the first click and one after each of two walks closer"))))))
 
 (deftest the-job-is-registered-with-doc-and-args
   (let [j (get registry/jobs job)]
