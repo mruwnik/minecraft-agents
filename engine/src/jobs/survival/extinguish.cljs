@@ -255,8 +255,9 @@
 (defn ^:async pour-water!
   "Pour a carried water bucket at the feet. True when the water was placed (then noted in body memory)."
   [c pos]
+  ;; the zone choice is made above (trespass-refusal, last resort), and the scoop must undo the pour: the child must not refuse again
   (ctx/hold-still! c nil)
-  (let [placed (= :done (:kind (await (child/run!* c :bucket 'jobs.blocks.use-on {:pos pos :item "water_bucket"}))))]
+  (let [placed (= :done (:kind (await (child/run!* c :bucket 'jobs.blocks.use-on {:pos pos :item "water_bucket" :ignore-zones? true}))))]
     (when placed (ctx/remember! c :extinguish-pour {:pos pos} pour-policy))
     placed))
 
@@ -314,7 +315,7 @@
 
       :else
       (do (ctx/hold-still! c nil)
-          (let [r (await (child/run!* c :bucket 'jobs.blocks.use-on {:pos cell :item "bucket"}))
+          (let [r (await (child/run!* c :bucket 'jobs.blocks.use-on {:pos cell :item "bucket" :ignore-zones? true}))
                 status (if (= :continue r) "continue" (name (or (get-in r [:data :reason]) :failed)))]
             (clear-pour! c)
             (when-not (= :done (:kind r))
