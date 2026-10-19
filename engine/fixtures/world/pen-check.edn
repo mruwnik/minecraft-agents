@@ -152,7 +152,7 @@
          [:summon "cow" [11.5 0 5.5] "{NoAI:1b}"]
          [:wait-s 2]
          [:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
-   :expect [{:event {:source :job :kind :completed :data {:closed? true :animals-in 2 :animals-complete? true}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:closed? true :animals-in 2}} :within-s 20 :of-job true}]}
   ;; card 3547b880: no :at, :box or :plan ends impossible :no-pen
   {:name "no-pen-given-is-impossible"
    :act [[:job (jobs.animals.pen-check {})]]

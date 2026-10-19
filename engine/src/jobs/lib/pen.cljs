@@ -301,12 +301,15 @@
     (boolean (and (gate? b) (on? b "open")))))
 
 (defn ridge?
-  "True when the path climbs onto cell i and steps down off it again: a wall or fence top crossed."
+  "True when the path climbs onto cell i, stays up for any run of cells and steps down off it again: a wall or fence top
+  crossed or walked along."
   [path i]
-  (let [s (fn [j] (:s (nth path j)))]
-    (and (< 0 i (dec (count path)))
-         (> (s i) (+ (s (dec i)) 0.25))
-         (> (s i) (+ (s (inc i)) 0.25)))))
+  (let [s (fn [j] (:s (nth path j)))
+        up (when (< 0 i (dec (count path))) (s i))]
+    (and up
+         (> up (+ (s (dec i)) 0.25))
+         (let [after (first (drop-while #(<= (Math/abs (- (s %) up)) 0.25) (range (inc i) (count path))))]
+           (boolean (and after (< (s after) (- up 0.25))))))))
 
 (defn evidence
   "The first cell of path that shows how the animal got out, {:index :why}, or nil: an open gate, then a gap

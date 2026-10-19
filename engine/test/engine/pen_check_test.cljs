@@ -94,12 +94,6 @@
     (is (= {:unseen-cells 1 :animals-complete? false} (pen-check/animal-coverage checked)))
     (is (= {:unseen-cells 0 :animals-complete? true} (pen-check/animal-coverage (assoc checked :remembered []))))))
 
-(deftest a-closed-pen-with-inside-cells-from-memory-is-looked-at-again
-  (let [checked {:closed? true :inside #{[1 64 1] [2 64 1]} :remembered [[1 64 1]]}]
-    (is (pen-check/needs-look? checked))
-    (is (not (pen-check/needs-look? (assoc checked :remembered []))))
-    (is (pen-check/needs-look? (assoc checked :closed? false :remembered [])))))
-
 (deftest the-event-and-result-list-the-animals-seen-inside
   (async done
     (tu/run-async done

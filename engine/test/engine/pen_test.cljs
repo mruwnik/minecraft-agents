@@ -239,7 +239,7 @@
   (let [r (check (ring "stone" [64]))]
     (is (false? (:closed? r)))
     (is (= :leak (:reason r)))
-    (is (= :climb (:why (first (:leaks r)))))))
+    (is (= [{:pos {:x 2 :y 65 :z -1} :why :climb}] (:leaks r)))))
 
 (defn lowered
   "block-at for a bare plateau (interior x 0..4, z 0..4, ground top 64) with the ground lowered to ground-top all round it."
@@ -402,6 +402,12 @@
       {[0 64 2] ["stone_slab" {:type "double"}]} nil
       slope nil
       slope {:at nil :box box})))
+
+(deftest a-block-inside-a-two-high-wall-with-unseen-ground-beyond-is-a-climb-once-no-look-is-left
+  (let [r (check (unseen-border (merge wall2 {[0 64 2] "stone"})) {:final? true})]
+    (is (false? (:closed? r)))
+    (is (= :leak (:reason r)))
+    (is (= :climb (:why (first (:leaks r)))))))
 
 (deftest a-three-high-wall-holds-past-a-block-inside
   (is (true? (:closed? (check (merge (ring "stone" [64 65 66]) {[0 64 2] "stone"}))))))
