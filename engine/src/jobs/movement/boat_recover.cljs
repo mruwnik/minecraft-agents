@@ -22,8 +22,7 @@
   Never :continue except when a child waits on the world.")
 
 (a/defargs args
-  {:id {:doc "the entity id of the boat; nil: the nearest in sight" :spec (a/int-in 1 nil) :default nil}
-  })
+  {:id {:doc "the entity id of the boat; nil: the nearest in sight" :spec (a/int-in 1 nil) :default nil}})
 
 (def target [:id])
 

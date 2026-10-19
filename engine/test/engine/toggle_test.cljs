@@ -234,7 +234,9 @@
               result (await (child-outcome eng job {:pos at :state :open} 40))]
           (is (= {:status :stopped :reason :unchanged :wanted :open} (head result [:status :reason :wanted])))
           (is (= :nothing-possible (get-in result [:ending :kind])))
-          (is (= 1 (count (calls p "useOn"))) "one click, no retry"))))))
+          (is (= 1 (count (calls p "useOn"))) "one click, no retry")
+          (is (empty? (kinds seen :toggle.gave-up)) "the ending carries the give-up, no warn")
+          (is (re-find #"did not change" (str (get-in result [:ending :cause :hint]))) "the ending's hint is the give-up text"))))))
 
 (deftest a-block-somebody-else-flipped-just-before-the-click-is-named-wrong-way
   (async done

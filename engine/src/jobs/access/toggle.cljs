@@ -45,7 +45,7 @@
   above, or condition-failed with :no-block, :gone (block vanished or unloaded) or :refused (useOn said cannot or
   no-item), or nothing-possible with :unreachable, :unchanged (a click that changed nothing: iron-like block,
   protected area or lag, which cannot be told apart), :wrong-way (a block that moved but not to the wanted state) or
-  :unseen..")
+  :unseen (the block cannot be made out after the click).")
 
 (a/defargs args
   {:pos {:doc "the block, [x y z] or {:x :y :z}; either half of a door" :spec ::a/pos :default nil}

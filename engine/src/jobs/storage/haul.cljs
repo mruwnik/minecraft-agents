@@ -19,7 +19,7 @@
   left free; jobs.storage.withdraw as carry-at-least targets), repeat. The targets are saved before the take, so a
   restart takes the same load again without doubling it; the chests and the bag are the rest of the state.
   Needs (can-start? and can-run?): some :from, else never :bad-args; a main chest (:to, else the storage group, so a known :chest place), else waits :no-chest;
-  no source left to empty that zones or claims of another refuse :take, else waits :refused {:zones :claims}. :ignore-zones? skips it.
+  any source still to empty that zones or claims of another refuse :take, else waits :refused {:zones :claims}. :ignore-zones? skips it.
   Sources that are in the storage group are not meant: withdraw may then take from the group's other chests.
   Ends done {:trips n :moved {name n}} once every source is empty (or holds only :keep), or at any other ending when at
   least the call's :least items are moved (default :all: only a clean finish); n counts the deposits. The data of
