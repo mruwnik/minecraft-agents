@@ -22,7 +22,7 @@
   Each pass reads the world again:
   - Drowning (in water, head under, air left short of the swim to air: jobs.lib.breath/drowning?): swim up the own column when it reaches air within
     the reach setting (10) blocks, else step sideways, at the feet's height, to a nearby column that does; else a go-to
-    child to the nearest air-reaching surface within the air-radius setting (8), else to the nearest seen air below the feet within the depth setting (24)
+    child to the nearest air-reaching surface within the air-radius setting (24: the swim the trigger counts on), else to the nearest seen air below the feet within the depth setting (24)
     (the way the body came; a failed target is not tried again); else dig up through a cap within 3 blocks over the head
     when it is natural (jobs.lib.access.rules/natural?), not protected and not sand or gravel, one cell a pass, at most 3 digs
     (zones respected, trespass only as a last resort), with the best tool, and only when the dig fits jobs.survival.breathe.air/cap-dig-share of the air left.

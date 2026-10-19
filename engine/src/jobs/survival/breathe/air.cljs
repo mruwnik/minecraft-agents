@@ -17,7 +17,7 @@
 (a/defargs settings
   {::radius {:default 2 :doc "Columns this far sideways are searched for air." :spec (a/num-in 0 nil)}
    ::reach {:default 10 :doc "Blocks above the feet the air search climbs." :spec (a/num-in 0 nil)}
-   ::air-radius {:default 8 :doc "When no air is near, a go-to child searches for air-reaching water this many blocks sideways." :spec (a/int-in 1 32)}
+   ::air-radius {:default 24 :doc "When no air is near, a go-to child searches for air-reaching water this many blocks sideways." :spec (a/int-in 1 32)}
    ::depth {:default 24 :doc "Blocks below the feet a drowning body looks for seen air, the way it came (within air-radius sideways)." :spec (a/int-in 0 64)}
    ::max-cap-digs {:default 3 :doc "Cap digs one run makes at most." :spec (a/int-in 0 nil)}
    ::cap-dig-share {:default 0.5 :doc "Share of the air left (oxygen, then health) a cap dig may take; a slower dig is not started and the dig gives up at it." :spec (a/num-in 0 1)}})
