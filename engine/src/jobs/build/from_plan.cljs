@@ -58,7 +58,7 @@
      (the body's feet height, or one up or down on a slope).
   3b. A cell no ground stand reaches (above reach) gets a temporary pillar (jobs.lib.build.scaffold: jobs.access.pillar
      from a base outside every footprint, this plan's too; every block in the scaffold ledger). The cells in reach of it
-     are placed, then jobs.access.cleanup takes it back, however the call ends. A zone or footprint that refuses every base
+     are placed; a bridge row (jobs.access.bridge, from the pillar's top or from the ground where no base exists, at most approach/::max-row blocks) then brings the next cell in reach before a new pillar; jobs.access.cleanup takes it all back, however the call ends. A zone or footprint that refuses every base
      refuses the cell (:refused :zone); too few pillar blocks (dirt, cobblestone) are fetched, else the call ends
      condition-failed {:reason :needs :needs :scaffold-item}.
   4. Walk toward the nearest unloaded cell. Unseen cells are never taken as built.
@@ -577,7 +577,7 @@
                            :continue
                            (recur (rest left)))
                          :again))
-      (= :up (scaffold/phase c)) (do (scaffold/finish-up! c todo (give-up)) :again)
+      (= :up (scaffold/phase c)) (do (scaffold/finish-up! c cells todo (nearest layer) (give-up)) :again)
       (seq todo) (await (reach-cell! c cells (nearest layer)))
       (seq digs) (await (walk-to! c cells (nearest digs)))
       (seq (support-looks c wanted)) (await (look-for-support! c cells (support-looks c wanted)))

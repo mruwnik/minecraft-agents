@@ -98,3 +98,25 @@
     (is (not-any? #(= [1 71 0] %) (:stand r)))
     (is (not= [1 71 0] (get-in r [:pillar :stand])))
     (is (= 64 (second (get-in r [:pillar :base]))))))
+
+(def gap
+  "Ground at y 63 under the feet cell only; the row east at z 0 is over a pit down to y 62."
+  (world (into {} (for [x (range 1 60)] [[x 0] 62]))))
+
+(defn bridge [& {:as in}]
+  (approach/bridge (merge {:targets #{[8 66 0]} :feet [0 64 0] :block-at gap :reach 4.2
+                           :zones [] :footprints #{} :self "me"}
+                          in)
+                   nil))
+
+(deftest a-bridge-row-is-the-shortest-that-brings-the-target-in-reach
+  (let [r (bridge)]
+    (is (= :east (:heading r)))
+    (is (<= 1 (:length r) 5))
+    (is (= [(:length r) 64 0] (:stand r)))))
+
+(deftest a-bridge-row-is-refused-over-a-footprint
+  (is (nil? (bridge :footprints #{[2 63 0]}))))
+
+(deftest a-bridge-row-longer-than-max-row-is-not-planned
+  (is (nil? (bridge :targets #{[40 66 0]} :max-row 5))))

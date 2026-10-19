@@ -16,7 +16,7 @@
 
   Cleanup (jobs.access.cleanup): marks an entry :removing before its dig, then settles each entry it works on
   from the cell (settle-entry):
-  - the item is there: kept as :placed
+  - the item is there (dirt grown to grass_block, podzol or mycelium counts): kept as :placed
   - a :removing cell that is now air: removed
   - anything else: dropped, it is not ours any more
   - not loaded: kept
@@ -109,6 +109,11 @@
   [l cell]
   (mapv #(if (= cell (:cell %)) (assoc % :state :removing) %) l))
 
+(defn same-block?
+  "Whether block n is the item an entry recorded: dirt left in the open turns to grass, podzol or mycelium, and still digs as dirt."
+  [item n]
+  (or (= item n) (and (= "dirt" item) (contains? #{"grass_block" "podzol" "mycelium"} n))))
+
 (defn settle-entry
   "[what entry] for an entry, from its cell now: [:keep e] (the item is there, e :placed; or not loaded, e as it was),
   [:removed e] (a :removing cell that is air) or [:dropped e] (anything else, e with :found, the block there)."
@@ -116,7 +121,7 @@
   (let [n (block-at cell)]
     (cond
       (nil? n) [:keep e]
-      (= item n) [:keep (assoc e :state :placed)]
+      (same-block? item n) [:keep (assoc e :state :placed)]
       (and (= :removing state) (rules/air n)) [:removed e]
       :else [:dropped (assoc e :found n)])))
 

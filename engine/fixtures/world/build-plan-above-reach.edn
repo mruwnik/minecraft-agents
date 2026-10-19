@@ -5,7 +5,7 @@
 ;; built, the rest is refused (build.refused) and nothing is placed outside the wall.
 {:defaults
  {:tags [:build :access :zones]
-  :time :any
+  :time :day
   :plot {:height 24 :floor "grass_block"}
   :plans [{:id "wall" :metadata {:by "$body"}
            :parts [{:id "w" :box [#at [15 0 20] #at [17 8 20]] :want "stone"}]}]
@@ -27,4 +27,12 @@
    :act [[:job (jobs.build.from-plan {:plan "$plan:wall"})]]
    :expect [{:event {:source :job :kind :build.refused} :within-s 120 :of-job true}]
    :after [[:block [16 5 20] "stone"] [:not-block [16 8 20] "stone"] [:item "dirt" 8]]
-   :limit-s 150}]}
+   :limit-s 150}
+  {:name "long-wall-from-a-bridge-row"
+   :plans [{:id "wall" :metadata {:by "$body"}
+            :parts [{:id "w" :box [#at [10 0 20] #at [21 8 20]] :want "stone"}]}]
+   :body {:at [11.5 0 12.5] :inventory [["stone" 108] ["dirt" 20]]}
+   :act [[:job (jobs.build.from-plan {:plan "$plan:wall"})]]
+   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 420 :of-job true}]
+   :after [[:block [10 8 20] "stone"] [:block [21 8 20] "stone"] [:block [15 8 20] "stone"] [:item "dirt" [:>= 10]]]
+   :limit-s 450}]}

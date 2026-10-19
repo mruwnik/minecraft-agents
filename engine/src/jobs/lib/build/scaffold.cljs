@@ -3,7 +3,7 @@
   base lies outside every plan's footprint, this plan's included (jobs.lib.access.approach/plan, which also prefers a
   stand that needs no pillar). Every block of it is in the scaffold ledger and jobs.access.cleanup takes it back once the
   cells in reach are placed, or however the call ends, so a scaffold block is never a plan block. Job memory :scaffold is
-  {:phase :walk|:build|:up|:clean :cell pos :plan {:base :height :stand} :failed true}."
+  {:phase :walk|:build|:bridge|:up|:clean :cell pos :plan {:base :height :stand :bridge row} :failed true}."
   (:require [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.access.approach :as approach]
@@ -28,16 +28,30 @@
   [c cells]
   (into (set (:scaffold-avoid (ctx/mem c))) (mapcat (fn [{:keys [pos]}] [pos (update pos 1 dec)])) cells))
 
-(defn plan-for
-  "The approach plan (jobs.lib.access.approach/plan) for placing pos, with the plan's own footprint refusing a base."
+(defn approach-input
+  "The input of jobs.lib.access.approach for placing pos, with the plan's own footprint refusing a base."
   [c cells pos]
-  (approach/plan (assoc (access/rules-input c) :targets #{pos} :reach (:reach (:args c)) :avoid (avoid-cells c cells))))
+  (assoc (access/rules-input c) :targets #{pos} :reach (:reach (:args c)) :avoid (avoid-cells c cells)))
+
+(defn plan-for
+  "The approach plan (jobs.lib.access.approach/plan) for placing pos."
+  [c cells pos]
+  (approach/plan (approach-input c cells pos)))
 
 (defn blocks [c] (choose/filler-names c :pillar))
 
 (defn carried-count [c]
   (let [have (pl/carried (:primitives c))]
     (reduce + (map #(get have % 0) (blocks c)))))
+
+(defn bridge-block
+  "The carried kind a bridge row is laid with (the one carried most), nil when none."
+  [c]
+  (let [have (pl/carried (:primitives c))]
+    (->> (blocks c) (filter #(pos? (get have % 0))) (sort-by #(- (get have % 0))) first)))
+
+(defn bridge-lack [c length]
+  (- length (get (pl/carried (:primitives c)) (bridge-block c) 0)))
 
 (defn fetch-opts
   "The limits {:how :explore} for getting the pillar's blocks, nil when :fetch does not allow items."
@@ -65,12 +79,17 @@
   (let [pos (:pos cell)
         r (plan-for c cells pos)
         height (get-in r [:pillar :height])
-        lack (when height (- height (carried-count c)))]
+        row (when (and (not (:pillar r)) (not (:stand r)) (not= :zone (:reason r)))
+              (let [in (approach-input c cells pos)] (approach/bridge in (approach/starts in))))
+        lack (cond height (- height (carried-count c))
+                   row (bridge-lack c (:length row)))]
     (cond
       (= :zone (:reason r)) (do (ctx/update-mem! c plan/refuse pos {:reason :zone :why :scaffold}) :again)
-      (not (or (:pillar r) (:stand r))) nil
+      (not (or (:pillar r) (:stand r) row)) nil
       (pos? (or lack 0)) (await (fetch-blocks! c lack result))
-      :else (do (ctx/update-mem! c assoc :scaffold {:phase :walk :cell pos :plan (or (:pillar r) {:stand (first (:stand r))})})
+      :else (do (ctx/update-mem! c assoc :scaffold {:phase :walk :cell pos
+                                                    :plan (or (:pillar r) (when row {:stand (:from row) :bridge row})
+                                                              {:stand (first (:stand r))})})
                 :again))))
 
 (defn set-phase! [c k] (ctx/update-mem! c assoc-in [:scaffold :phase] k))
@@ -88,12 +107,24 @@
                                              :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (cond
       (= :continue e) :continue
-      (and (= :done (:kind e)) (:arrived (:data e))) (do (set-phase! c (if (:height plan) :build :up)) :again)
+      (and (= :done (:kind e)) (:arrived (:data e))) (do (set-phase! c (cond (:height plan) :build (:bridge plan) :bridge :else :up)) :again)
       :else (do (fail-cell! c m give-up) :again))))
 
 (defn ^:async build!
   [c {:keys [plan]}]
   (let [e (await (ctx/call c :pillar 'jobs.access.pillar {:height (:height plan) :use {:blocks (blocks c)} :fetch false
+                                                          :ignore-zones? (:ignore-zones? (:args c))
+                                                          :checks (ready/unforced c {:safe? '(not (exposed))})}))]
+    (cond
+      (= :continue e) :continue
+      (= :done (:kind e)) (do (set-phase! c :up) :again)
+      :else (do (ctx/update-mem! c assoc-in [:scaffold :failed] true) (set-phase! c :clean) :again))))
+
+(defn ^:async bridge!
+  "Lay the planned bridge row (jobs.access.bridge) from the stand the body walked to; the stand is then the row's end."
+  [c {:keys [plan]}]
+  (let [{:keys [heading length]} (:bridge plan)
+        e (await (ctx/call c :bridge 'jobs.access.bridge {:heading heading :length length :item (bridge-block c) :fetch false
                                                           :ignore-zones? (:ignore-zones? (:args c))
                                                           :checks (ready/unforced c {:safe? '(not (exposed))})}))]
     (cond
@@ -122,12 +153,13 @@
     (case (:phase m)
       :walk (await (walk! c m give-up))
       :build (await (build! c m))
+      :bridge (await (bridge! c m))
       :clean (await (clean! c m give-up)))))
 
 (defn working?
   "Whether the scaffold is in a phase that step! runs; the :up phase is the build's own, placing from the stand."
   [c]
-  (contains? #{:walk :build :clean} (phase c)))
+  (contains? #{:walk :build :bridge :clean} (phase c)))
 
 (defn stale?
   "Whether an earlier call left scaffold blocks open that this one has not yet tried to take back."
@@ -139,11 +171,25 @@
   [c]
   (ctx/update-mem! c #(-> (assoc % :scaffold {:phase :clean}) (cond-> (not (:scaffold %)) (assoc :stale-cleaned true)))))
 
+(defn bridge-on
+  "A bridge row from the body's stand to the target cell when one is short enough and its blocks are carried, nil when not;
+  each target is tried once."
+  [c cells target]
+  (let [pos (:pos target)
+        row (when (and pos (not (contains? (:scaffold-bridged (ctx/mem c)) pos)))
+              (approach/bridge (approach-input c cells pos) nil))]
+    (when (and row (not (pos? (bridge-lack c (:length row)))))
+      row)))
+
 (defn finish-up!
   "The body stands on its scaffold with nothing in reach to place or dig: a buildable cell still out of reach counts a
-  failure (so a stand that does not reach it is not raised again for ever), and the scaffold is taken back."
-  [c todo give-up]
+  failure (so a stand that does not reach it is not raised again for ever). The scaffold is then taken back, unless a
+  short bridge row from the stand brings the next target cell (nearest of the lowest layer) in reach."
+  [c cells todo target give-up]
   (let [cell (:cell (:scaffold (ctx/mem c)))]
     (when (some #(= cell (:pos %)) todo)
       (ctx/update-mem! c plan/count-fail cell :unreachable give-up))
-    (set-phase! c :clean)))
+    (if-let [row (bridge-on c cells target)]
+      (ctx/update-mem! c #(-> % (assoc :scaffold {:phase :bridge :cell (:pos target) :plan {:bridge row}})
+                              (update :scaffold-bridged (fnil conj #{}) (:pos target))))
+      (set-phase! c :clean))))

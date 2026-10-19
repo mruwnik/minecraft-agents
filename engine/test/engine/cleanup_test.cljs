@@ -454,6 +454,20 @@
           (is (= [{:cell [0 64 0] :item "dirt" :found "stone"} {:cell [0 65 0] :item "dirt" :found "air"}] (:dropped @out)))
           (is (= [[0 64 0] [0 65 0]] (mapv :cell (of-kind seen :cleanup.dropped)))))))))
 
+(deftest dirt-that-turned-to-grass-is-still-ours-and-is-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p out digs] :as s}
+              (setup {:self {:x 3.5 :y 64 :z 0.5}
+                      :blocks (merge (floor -2 5) {"1,64,0" "grass_block"})
+                      :entries [(entry [1 64 0])]})]
+          (core/submit! eng '(recording-parent) {})
+          (await (ticks s eng 30))
+          (is (= [[1 64 0]] (mapv first @digs)))
+          (is (nil? (block p [1 64 0])))
+          (is (= [] (:dropped @out))))))))
+
 (deftest a-restart-between-the-intent-and-the-dig-digs-the-block-once
   (async done
     (tu/run-async done

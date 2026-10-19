@@ -1358,6 +1358,23 @@
           (is (empty? (scaffold-left p)) "no scaffold block stands afterwards")
           (is (empty? (ledger/open-entries (mem/view (:store eng))))))))))
 
+(def long-wall-plan
+  "A stone wall 14 wide and 5 high at z 6, its lowest row at y 64 over the floor."
+  {:id "wall" :parts [{:id "w" :cells (vec (for [x (range 2 16) y (range 64 69)] [x y 6])) :want "stone"}]})
+
+(deftest a-long-wall-above-reach-is-built-along-a-bridge-row-that-is-taken-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:inventory [{:name "stone" :count 70} {:name "dirt" :count 40}] :self {:pos {:x 3.5 :y 64 :z 2.5}}}
+                                     {"wall" long-wall-plan} [])
+              result (await (child-outcome eng job {:plan "wall" :reach 3} 900))]
+          (is (= 70 (:placed result)))
+          (is (every? #(= "stone" (block p %)) (for [x (range 2 16) y (range 64 69)] [x y 6])))
+          (is (seq (filter (comp #{"dirt"} second) (places p))) "a bridge row was laid beside the pillar")
+          (is (empty? (scaffold-left p)) "no scaffold block stands afterwards")
+          (is (empty? (ledger/open-entries (mem/view (:store eng))))))))))
+
 (deftest a-zone-over-every-pillar-base-refuses-the-cells-above-reach
   (async done
     (tu/run-async done

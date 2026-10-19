@@ -1,6 +1,7 @@
 (ns jobs.lib.access.approach
   "Pure planner: where does the body stand to work on target cells (logs, wall cells), or where does it pillar up?
-  No sensing, no side effects; never plans a bridge or a gap (the walker finds the way to a stand).
+  No sensing, no side effects. `plan` never plans a bridge or a gap (the walker finds the way to a stand); `bridge`
+  plans a bridge row for what a pillar cannot reach.
 
   Input, one map: the rules input of jobs.lib.access.rules (:block-at :zones :footprints :claims :self :now
   :ignore-zones?) plus
@@ -34,13 +35,16 @@
 (a/defargs settings
   {::default-radius {:default 3 :doc "Blocks round a target an approach cell is searched." :spec (a/int-in 1 nil)}
    ::max-radius {:default 5 :doc "The most that radius may be." :spec (a/int-in 1 nil)}
-   ::default-max-height {:default 10 :doc "How high above the body an approach may climb." :spec (a/int-in 1 nil)}})
+   ::default-max-height {:default 10 :doc "How high above the body an approach may climb." :spec (a/int-in 1 nil)}
+   ::max-row {:default 12 :doc "Longest bridge row, in blocks, laid to bring targets in reach; a longer span is pillared." :spec (a/int-in 1 64)}})
 
 (defn default-radius [] (settings/get settings ::default-radius))
 
 (defn max-radius [] (settings/get settings ::max-radius))
 
 (defn default-max-height [] (settings/get settings ::default-max-height))
+
+(defn max-row [] (settings/get settings ::max-row))
 
 (def pillar-cost
   "Walking cost of placing one block: it takes a jump and a placement, about two steps."
@@ -133,6 +137,52 @@
           (empty? plans) {:reason :no-base}
           (some #(#{:zone :footprint :claim :no-zones} (:reason (:refusal %))) plans) {:reason :zone}
           :else {:reason :no-stand})))))
+
+(def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
+
+(defn row-cell-verdict
+  "Nil when the floor cell of a bridge row step may be laid: solid already, or air the rules let a block be placed in."
+  [{:keys [block-at floor-at] :as in} floor stand]
+  (let [n (block-at floor)]
+    (cond (nil? n) {:ok false :reason :not-loaded}
+          (rules/solid-floor? (or floor-at block-at) floor) nil
+          :else (let [v (rules/may-place? (-> in (dissoc :body-cols) (assoc :cell floor :feet stand)))]
+                  (when-not (:ok v) v)))))
+
+(defn row-from
+  "The shortest bridge row from the standing cell start along one heading that brings every target in reach:
+  {:from start :heading :length :stand}. Its cells are clear at body height and head room, floored or placeable."
+  [{:keys [block-at targets reach avoid] :as in} start limit]
+  (let [[x y z] start]
+    (first
+     (for [[heading [dx dz]] headings
+           :let [steps (map (fn [k] [(+ x (* dx k)) y (+ z (* dz k))]) (range (inc limit)))]
+           :let [good (take-while (fn [[prev cell]]
+                                    (and (passable? block-at cell) (passable? block-at (update cell 1 inc))
+                                         (not (contains? targets cell)) (not (contains? avoid cell))
+                                         (nil? (row-cell-verdict in (update cell 1 dec) prev))))
+                                  (map vector steps (rest steps)))]
+           [k [_ stand]] (map-indexed vector good)
+           :when (in-reach? reach targets stand)]
+       {:from start :heading heading :length (inc k) :stand stand}))))
+
+(defn starts
+  "Standing cells on the ground round the targets from which a bridge row could start, nearest to the feet first."
+  [{:keys [block-at floor-at targets reach feet avoid] :as in}]
+  (let [ty (apply min (map second targets))
+        ys (range (- ty (js/Math.ceil reach) 1) (+ ty 2))]
+    (->> (for [[x z] (columns targets (max-radius)) y ys :let [c [x y z]]
+               :when (and (not (contains? targets c)) (not (contains? avoid c)) (standing-cell? block-at (or floor-at block-at) c))]
+           c)
+         (sort-by (juxt #(dist3 feet %) identity)))))
+
+(defn bridge
+  "The shortest bridge row to bring the targets in reach (input as plan, plus :max-row): from the feet when starts is
+  nil, else from any of the standing cells starts. nil when no row of at most max-row blocks does."
+  [in starts]
+  (let [limit (or (:max-row in) (max-row))
+        starts (or starts [(:feet in)])]
+    (->> starts (keep #(row-from in % limit)) (sort-by (juxt :length)) first)))
 
 (defn plan
   "See the namespace docstring."
