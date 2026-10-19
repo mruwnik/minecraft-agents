@@ -80,12 +80,12 @@
   (let [alive? (:alive? c) qd (:quote-deadline c)]
     (cond-> c qd (assoc :alive? #(and (or (nil? alive?) (alive?)) (<= (ctx/now c) qd))))))
 
-(def refusals "Route reasons that say the call cannot start, not that no way was found." #{:bad-pos :bad-name :unknown-place :unsupported :late})
+(def refusals "Route reasons that say the call cannot start, not that no way was found." #{:bad-pos :bad-name :unknown-place :unsupported})
 
 (defn ^:async route!
   "The dry run of go-to call c (args with the body's food and the walk limits): its route, {:found true ...} or {:found
   false :reason ...} (report), with :goal the cell planned to and :nodes the search's expansions; a refusal {:found
-  false :reason :text}, :late when the search outran the quote deadline."
+  false :reason :text}; :late (with :near, the blocks to the goal) when the search outran the quote deadline."
   [c]
   (let [{:keys [doors range tolls one-way unknown]} (:args c)
         refusal (gaim/args-refusal c)
@@ -104,23 +104,27 @@
                       (catch :default e
                         (when-not (= "cut" (.-code e)) (throw e))))]
         (if (nil? plan)
-          {:found false :reason :late :text "the search outran the quote's deadline"}
+          (let [near (u-dist c pos)]
+            (ctx/emit! c :go-to.quote-cut :debug {:goal [(:x pos) (:y pos) (:z pos)] :near near :text "the quote's search outran its deadline; priced as a straight line"})
+            {:found false :reason :late :near near :goal [(:x pos) (:y pos) (:z pos)] :text "the search outran the quote's deadline"})
           (assoc (report c plan pos policy spec) :goal [(:x pos) (:y pos) (:z pos)] :nodes (some-> plan :r .-expanded)))))))
 
 (defn quote-of-route
   "The quote of route r: time from the planner's seconds (most quote-most-factor times them); a partial route or none
-  adds quote-unseen-factor walk blocks (cost.planner/walk-floor) for each block still to go, from the route's end to the goal, and has no most; none at all, or a refusal, is ##Inf unless escalating? (a way
+  adds quote-unseen-factor walk blocks (cost.planner/walk-floor) for each block still to go, from the route's end to the goal, and has no most; a search cut by the deadline (:late) is priced so too, from its :near blocks, marked :estimate true; none at all, or a refusal, is ##Inf unless escalating? (a way
   that changes the world may still get there). Health: the planned damage. :moves-to the goal."
   [{:keys [found seconds partial near reason damage goal] :as r} escalating?]
-  (let [s (or seconds (:seconds partial) 0)
+  (let [late? (= :late reason)
+        s (or seconds (:seconds partial) 0)
         [ex _ ez] (last (:waypoints partial))
         rest-blocks (if (and goal ex) (js/Math.round (js/Math.hypot (- (first goal) ex) (- (nth goal 2) ez))) (or near 0))
         rest-s (* rest-blocks cost-planner/walk-floor (quote-unseen-factor))
         time (cond
                found [s s (* s (quote-most-factor))]
                (refusals reason) (get-in contract/too-expensive [:uses :job-time])
-               (or partial escalating?) [s (+ s rest-s) ##Inf]
+               (or partial late? escalating?) [s (+ s rest-s) ##Inf]
                :else (get-in contract/too-expensive [:uses :job-time]))]
     (cond-> {:uses {:job-time time} :route (dissoc r :goal)}
       (and found damage) (assoc-in [:uses :health] [0 damage damage])
+      late? (assoc :estimate true)
       goal (assoc :moves-to goal))))

@@ -314,7 +314,7 @@ called child ends `:condition-failed`; from `can-run?`, `safe?` or `fit?` a list
 
 **Quotes (engine.core.quote).** `{:uses {:job-time fig :health fig :food fig :items {name fig} :wear {tool fig}} :yields
 {:items {name fig}} :done fig :moves-to [x y z]}`, fig `[least mean most]` (`##Inf` allowed). `quote-of` runs token-less
-(it cannot act); none: time `(0, mean :job-report time, ##Inf)`; a quote asked past the quote deadline is `##Inf` (an answer given past it is kept). A `:least` other
+(it cannot act); none: time `(0, mean :job-report time, ##Inf)`; a quote asked past the quote deadline is `##Inf` (an answer given past it is kept; go-to's search cut by it is a straight-line estimate, `:estimate true`, event `go-to.quote-cut`). A `:least` other
 than 1 above the quote's most `:done` ends `:nothing-possible` `{:reason :least}`. `ctx/next-way` drops a way whose
 least crosses a remainder.
 

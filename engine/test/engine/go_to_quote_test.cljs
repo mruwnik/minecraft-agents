@@ -122,6 +122,15 @@
     (is (< (js/Math.abs (- mean (+ 5 (* 4 cost-planner/walk-floor (quote-unseen-factor))))) 1e-9)
         "four blocks are left past the route's end, not the 30 of the body")))
 
+(deftest a-search-cut-by-the-deadline-is-a-straight-line-estimate
+  (let [r {:found false :reason :late :near 30 :goal [30 64 0]}
+        q (pv/quote-of-route r false)
+        [least mean most] (get-in q [:uses :job-time])]
+    (is (= 0 least))
+    (is (< (js/Math.abs (- mean (* 30 cost-planner/walk-floor (quote-unseen-factor)))) 1e-9))
+    (is (= ##Inf most))
+    (is (true? (:estimate q)))))
+
 (deftest drop-cost-false-takes-no-two-block-drop
   (async done
     (tu/run-async done
