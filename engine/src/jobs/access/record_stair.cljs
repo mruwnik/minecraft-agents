@@ -6,6 +6,7 @@
             [jobs.access.stair.memory :as smem]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.look :as look]
             [jobs.lib.ready :as ready]
             [jobs.lib.reach :as reach]
             [plan.shape :as shape]))
@@ -18,7 +19,7 @@
   joined with the earlier entries that hold any of them, so a stair cut before the memory kept it whole (or dug by hand) is
   known to gather.mine (:stay-level breach, way-floor guard) and go-to's own way up again. Nothing is dug, placed or walked.
 
-  :heading limits the lines to its axis. A cell not seen ends a run there.
+  :heading limits the lines to its axis. The body first looks around once; a cell not seen ends a run there.
 
   Ends :done with data {:steps :top :bottom :floors} (the floors now in the entry; recording a stair already known changes
   nothing), or condition-failed :no-stair when no run of at least ::min-steps steps passes through the body's cell.")
@@ -33,7 +34,7 @@
 
 (def target [])
 
-(def safe? ready/safe-here-by-night)
+(def safe? ready/ok)
 
 (def fit? ready/ok)
 
@@ -92,9 +93,13 @@
 
 (defn ^:async round [c]
   (let [feet (reach/standing-vec (:primitives c))
-        run (run-of c)]
-    (if-not run
+        looked (await (look/survey! c))
+        run (when-not looked (run-of c))]
+    (cond
+      looked :continue
+      (nil? run)
       (ctx/end c :condition-failed :no-stair {:at feet :why (str "no stair of " (settings/get settings ::min-steps) " steps or more through " (pr-str feet) " in the cells seen")})
+      :else
       (let [stands (:stands run)
             floors (floors-of run)
             all (smem/remember-way! c (first floors) floors)
