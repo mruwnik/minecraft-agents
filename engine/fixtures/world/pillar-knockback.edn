@@ -51,14 +51,15 @@
    :body {:inventory [["dirt" 12]] :effects [["resistance" 600 0]]}
    :act [[:summon "zombie" [17.5 0 16.5] "{NoAI:1b,Tags:[\"kb\"]}"]
          [:job (jobs.access.pillar {:height 12})]
+         [:until-pos {:y-min 1} 40]
          [:rcon-until "execute as $BODY at @s run tp @s ~0.6 ~ ~"
           {:until {:source :job :kind :pillar.gave-up} :every-s 0.3 :limit-s 60}]]
    :expect [{:event {:source :job :kind :pillar.gave-up :data {:reason :off-column}} :within-s 60 :of-job true}]
    :limit-s 70}
   {:name "no-blocks-waits-too-few"
    :act [[:job (jobs.access.pillar {:height 5 :fetch false})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :too-few-blocks :short 5}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :pillar.done} :for-s 30 :until {:source :job :kind :stopped}}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :too-few-blocks}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :pillar.done} :for-s 30 :until {:source :job :kind :waiting}}]
    :limit-s 40}
   {:name "ceiling-two-above-head"
    :blocks [[:set [16 3 16] "stone"]]
