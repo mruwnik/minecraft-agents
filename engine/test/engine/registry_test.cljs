@@ -28,7 +28,7 @@
      jobs.build.from-plan jobs.build.light-area jobs.build.pen jobs.build.rail jobs.build.rail-line
      jobs.access.pillar jobs.access.bridge
      jobs.explore.search jobs.explore.look
-     jobs.combat.hunt jobs.gather.get-seeds jobs.gather.make-obsidian jobs.gather.mine jobs.gather.dig-for jobs.gather.shaft-descent
+     jobs.combat.hunt jobs.gather.get-seeds jobs.gather.make-obsidian jobs.gather.mine jobs.gather.dig-for jobs.gather.shaft-descent jobs.gather.strip-tunnel
      jobs.movement.go-to jobs.movement.look-around jobs.movement.follow jobs.movement.leave-vehicle jobs.movement.mount jobs.movement.boat-launch jobs.movement.boat-recover jobs.movement.boat-drive jobs.movement.boat-land jobs.movement.cross-water jobs.movement.linger-near jobs.survival.block-arrow-gap
      jobs.time.wait-for-light jobs.time.noop jobs.debug.notify jobs.debug.ready-probe
      jobs.access.stair jobs.access.record-stair jobs.access.tunnel jobs.access.toggle jobs.farm.tidy

@@ -5,16 +5,16 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.gather.mine.cause :as cause]
             [jobs.gather.mine.descent :refer [descend-due? descend-round! shaft-due? shaft-under-way? shaft-round!]]
             [jobs.gather.mine.drops :refer [collect! dig-cell!]]
             [jobs.gather.mine.end :refer [stop! wanted]]
             [jobs.gather.mine.side :as wall]
-            [jobs.gather.mine.targets :as targets :refer [owed reach air kinds carried rules-in soil-blocks scan snapshot way-floor last-exit? skip! skip-failed! skip-unreachable! stalled! drop-in-line? next-target!]]
+            [jobs.gather.mine.targets :as targets :refer [owed reach air kinds carried rules-in scan snapshot way-floor last-exit? skip! skip-failed! skip-unreachable! stalled! drop-in-line? next-target!]]
             [jobs.gather.mine.torches :as torches]
             [jobs.gather.mine.tunnel :as tunnel]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
-            [jobs.lib.breath :as breath]
             [jobs.lib.area :as area]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
@@ -27,7 +27,6 @@
             [jobs.lib.result :as result]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.tools :as tools]
-            [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]
             [jobs.lib.world :as known]))
@@ -316,21 +315,9 @@
             :else (if (pos? dz) "south" "north")))))
 
 (defn stop-cause
-  "Why the dig cannot go on before it has begun or between digs, as {:reason r :text t ..}, else nil: the head in water, hunger with
-  no food carried (not for soil, dug at the surface near home), no usable tool carried. Each text says what is missing and that
-  jobs.gather.mine gets it."
+  "mine.cause/stop-cause: why the dig cannot go on, as {:reason r :text t ..}, else nil."
   [c]
-  (let [p (:primitives c)
-        block (:block (:args c))
-        kind (tools/needed-kind p block)]
-    (cond
-      (breath/head-under? p) {:reason :flooded :text "dig-for stopped: the head is in water"}
-      (and (not (contains? soil-blocks block)) (trip/food-short? c))
-      {:reason :hungry :text "dig-for stopped: hungry with no food carried; food is needed before it digs on"}
-      (not (tools/can-harvest? p block))
-      {:reason :no-tool :tool kind :why :missing :text (str "dig-for stopped: no " kind " that harvests " block " is carried; jobs.gather.mine fetches one before it digs")}
-      (trip/spent-tool? p block)
-      {:reason :no-tool :tool kind :why :spent :text (str "dig-for stopped: every " kind " carried is nearly spent; jobs.gather.mine gets a spare before it digs")})))
+  (cause/stop-cause c))
 
 (defn ^:async step [c]
   (settle-dig! c)

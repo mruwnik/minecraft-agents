@@ -1,6 +1,6 @@
 (ns jobs.gather.mine.tunnel
-  "The strip tunnel of jobs.gather.dig-for: where it starts, one :level stair step at a time, turning to another heading,
-  and its end."
+  "The strip tunnel of jobs.gather.dig-for: where it starts, the stretches cut by jobs.gather.strip-tunnel children, turning to
+  another heading, and its end."
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -8,15 +8,14 @@
             [engine.settings :as settings]
             [jobs.gather.mine-stay :as stay]
             [jobs.gather.mine.end :refer [stop!]]
-            [jobs.gather.mine.targets :as targets :refer [kinds carried rules-in book-ground! step-cell within-own-zone]]
+            [jobs.gather.mine.targets :as targets :refer [kinds book-ground! step-cell]]
             [jobs.gather.mine.torches :as torches]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.child :as child]
-            [jobs.lib.ledger :as ledger]
-            [jobs.lib.look :as look :refer [cell-of headings glance!]]
-            [jobs.lib.util :as u]
-            [jobs.lib.watch :as watch]))
+            [jobs.lib.ore-pick :as ore-pick]
+            [jobs.lib.look :refer [cell-of headings]]
+            [jobs.lib.util :as u]))
 
 (a/defargs settings
   {::max-open-skip {:default 64 :doc "The most open cells the strip tunnel skips along its line before it starts." :spec (a/int-in 0 nil)}
@@ -113,32 +112,6 @@
     (stay/record-tunnel! c tunnel (headings heading))
     (stop! c (tunnel-reason stop))))))
 
-(defn ^:async end!
-  "tunnel-end!, after a torch at the cut's end when one is due."
-  [c stop at & [next walk]]
-  (if (torches/end-torch-due? c)
-    (await (torches/torch-step! c false))
-    (tunnel-end! c stop at next walk)))
-
-(defn step-accept [{:keys [accept wet]}]
-  (cond-> [] (some #{:falling-block} accept) (conj :falling-block) wet (conj :fluid-adjacent)))
-
-(defn step-stop
-  "The tunnel's stop from the stair step's result res (nil: it declined): a hazard is named by its key (:lava-adjacent :fluid-adjacent
-  :falling-block) at the hazard's cell; else the stair's reason (:refused when it declined) at its cell, as a map."
-  [res]
-  (let [h (first (:hazards res))
-        at (some-> (or (when (= :hazard (:reason res)) (:at h)) (:cell res)) (#(zipmap [:x :y :z] %)))]
-    {:reason (cond (nil? res) :refused (and h (= :hazard (:reason res))) (access/stair-hazard-key h) :else (:reason res)) :at at}))
-
-(defn book-cut!
-  "After a stair step: its dug cells booked for the mend (ground under the start), and the last mined block among them
-  collected like a target."
-  [c dug]
-  (doseq [{:keys [cell block]} dug] (book-ground! c (zipmap [:x :y :z] cell) block))
-  (when-let [cell (last (keep #(when (contains? (kinds (:args c)) (:block %)) (:cell %)) dug))]
-    (ctx/update-mem! c assoc :collecting true :dug-at cell)))
-
 (defn result-of
   "A child's ending e as the result map the tunnel reads: its data with :status and the cause's :reason, nil while it
   goes on."
@@ -163,73 +136,48 @@
         (= pos (cell-of (u/self-pos c))) nil
         :else (walk-of c pos (result-of r))))))
 
-(defn ^:async stair-step!
-  "The next cells by a jobs.access.stair child, one :level step (it judges, digs, seals exposed lava, plugs laid-open
-  water, bridges a missing floor and steps in). With :stay-level the stair only cuts: a cut that opened into air beyond
-  the tunnel is sealed from the line cell, else the body walks in (a go-to child)."
-  [c from next cut]
-  (let [{:keys [heading]} (ctx/mem c)
-        args (:args c)
-        name-at #(u/seen-name (:primitives c) %)
-        _ (await (watch/watch! c {:risky? true :before-dig (first (remove #(passable (name-at %)) cut))}))
-        _ (ctx/update-mem! c assoc :stepping true)
-        r (await (ctx/call c :step 'jobs.access.stair
-                                 {:dir :level :heading (keyword heading) :steps 1 :accept (step-accept args) :fetch (:fetch args)
-                                  :pick-up-ores false :ignore-zones? (:ignore-zones? args)
-                                  :cut-only (boolean (:stay-level args))}))
-        res (result-of r)]
-    (when-not (= :continue r) (ctx/update-mem! c dissoc :stepping))
-    (book-cut! c (:dug res))
-    (cond
-      (= :continue r) :continue
-      (not= :done (:status res)) (let [{:keys [reason at]} (step-stop res)]
-                                   (end! c reason at next (when (= :step-failed reason) (some->> (:because r) result-of (walk-of c next)))))
-      :else
-      (let [own (ledger/own-cells c)
-            open (when (:stay-level args) (seq (stay/breaches name-at from cut own)))]
-        (if open
-          (let [b (stay/behind name-at from cut own open)]
-            (stay/remember-behind! c (access/cell (first open)) b name-at open)
-            (ctx/update-mem! c assoc :behind b)
-            (end! c (if (await (stay/seal! c (rules-in c) open)) :breach-sealed :breach-open) (first open) next))
-          (do (ctx/update-mem! c #(-> % (update-in [:tunnel :steps] inc) (assoc :looked next)))
-              (let [w (await (back-on-line! c next))]
-                (cond
-                  (= :continue w) :continue
-                  w (end! c :walk-failed next nil w)
-                  :else (do (await (glance! c [(headings heading)])) :again)))))))))
+(defn book-cut!
+  "After a stretch of tunnel: the cells it dug booked for the mend (ground under the start), and the last mined block among them
+  collected like a target."
+  [c dug]
+  (doseq [{:keys [cell block]} dug] (book-ground! c (zipmap [:x :y :z] cell) block))
+  (when-let [cell (last (keep #(when (contains? (kinds (:args c)) (:block %)) (:cell %)) dug))]
+    (ctx/update-mem! c assoc :collecting true :dug-at cell)))
+
+(defn watch-kinds
+  "The blocks whose coming into view the strip tunnel stops for: the mined block and the ores the pick-up takes on the way."
+  [c]
+  (into (kinds (:args c)) (ore-pick/names c)))
 
 (defn ^:async tunnel-round!
-  "One step of the strip tunnel: back onto its last cell (a go-to child), a torch when due, then the stair step (a step
-  under way is gone on with first)."
+  "One stretch of the strip tunnel: a jobs.gather.strip-tunnel child (slot :tunnel), which ends when a block that is dug for or picked
+  up comes into view, so the dig's round runs between; the tunnel's end is tunnel-end!."
   [c]
   (let [m (ctx/mem c)
-        t (or (:tunnel m)
-              (let [start (cell-of (u/self-pos c))
-                    own (ledger/own-cells c)
-                    origin (open-start #(u/seen-name (:primitives c) %) start (headings (:heading m)) #(contains? own [(:x %) (:y %) (:z %)])
-                                       (when (:stay-level (:args c)) 0))]
-                (when (not= origin start)
-                  (ctx/emit! c :mine.tunnel-skipped :info {:from (access/cell start) :to (access/cell origin) :heading (:heading m)
-                                                           :text (str "mine's tunnel line is open from " (str/join "," (access/cell start)) " to "
-                                                                      (str/join "," (access/cell origin)) "; it starts there")}))
-                {:origin origin :heading (:heading m) :steps 0}))
-        _ (when-not (:tunnel m) (ctx/update-mem! c assoc :tunnel t))
-        {:keys [steps stop heading]} t
-        from (step-cell t steps)
-        next (step-cell t (inc steps))
-        cut [(update next :y inc) next]
-        walk (atom nil)]
-    (cond
-      stop (stop! c (tunnel-reason stop))
-      (:stepping m) (await (stair-step! c from next cut))
-      (some #(within-own-zone c 0 (access/cell %)) cut) (end! c :own-zone next)
-      (>= (+ steps (:spent m 0)) (:tunnel-length (:args c))) (end! c :tunnel-length nil)
-      (do (reset! walk (await (back-on-line! c from))) (= :continue @walk)) :continue
-      @walk (end! c :walk-failed from nil @walk)
-      (and (look/unseen? (:primitives c) cut) (not= next (:glanced m)))
-      (do (ctx/update-mem! c assoc :glanced next)
-          (await (glance! c [(headings heading)]))
-          :again)
-      (torches/torch-due? c) (await (torches/torch-step! c false))
-      :else (await (stair-step! c from next cut)))))
+        {:keys [steps stop heading] :as t} (:tunnel m)
+        args (:args c)]
+    (if stop
+      (stop! c (tunnel-reason stop))
+      (let [_ (ctx/update-mem! c assoc :stepping true)
+            r (await (ctx/call c :tunnel 'jobs.gather.strip-tunnel
+                               {:heading (:heading m) :origin (:origin t) :steps (or steps 0) :limit (- (:tunnel-length args) (:spent m 0))
+                                :torch-at (:torch-at m) :torch-interval (:torch-interval args) :watch-kinds (vec (watch-kinds c))
+                                :radius (:radius args) :wet (boolean (:wet args)) :accept (vec (:accept args)) :stay-level (boolean (:stay-level args))
+                                :fetch (:fetch args) :ignore-zones? (:ignore-zones? args)
+                                :block (:block args) :ore-reach (or (:ore-reach args) 0)}))]
+        (if (= :continue r)
+          :continue
+          (let [res (:data r)
+                stop (:stop res)
+                now (:steps res)
+                {:keys [origin at next walk]} res
+                cell (fn [v] (when v (zipmap [:x :y :z] v)))]
+            (ctx/update-mem! c #(cond-> (-> % (dissoc :stepping) (assoc :tunnel (merge t (select-keys res [:origin :heading :steps])) :torch-at (:torch-at res))
+                                            (cond-> (:behind res) (assoc :behind (:behind res))))
+                                  (> now (or steps 0)) (assoc :looked (step-cell {:origin origin :heading (:heading res)} now))))
+            (book-cut! c (:dug res))
+            (cond
+              (:cause res) (stop! c (:reason (:cause res)) (select-keys (:cause res) [:tool :why :text]))
+              (= :watch stop) :again
+              (= :no-torches stop) (stop! c :no-torches {:text (torches/no-torches-text false)})
+              :else (tunnel-end! c stop (cell at) (cell next) walk))))))))

@@ -61,7 +61,7 @@
   (let [head (str (first (spec-for text)))]
     (when (str/starts-with? head "jobs.") head)))
 
-(def digging-jobs #{"jobs.gather.mine" "jobs.gather.dig-for" "jobs.gather.shaft-descent" "jobs.access.stair" "jobs.access.tunnel"})
+(def digging-jobs #{"jobs.gather.mine" "jobs.gather.dig-for" "jobs.gather.shaft-descent" "jobs.gather.strip-tunnel" "jobs.access.stair" "jobs.access.tunnel"})
 
 (defn digging?
   "Mine, stair, tunnel and every jobs.strip.* job cut the same rock, so any two undercut each other."
