@@ -838,9 +838,10 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= [:pos] dig/target))
-        (let [{:keys [eng]} (setup {:self body :blocks {"2,64,0" "bedrock"} :inventory pick})
+        (let [{:keys [eng p]} (setup {:self body :blocks {"2,64,0" "bedrock"} :inventory pick})
               e (:ending (await (tu/child-outcome eng job {:pos [2 64 0] :need-drop false} 10)))]
-          (is (= {:kind :condition-failed :cause :cannot} (select-keys e [:kind :cause])) (pr-str e)))
+          (is (= {:kind :condition-failed :cause :cannot} (select-keys e [:kind :cause])) (pr-str e))
+          (is (empty? (calls p "dig")) "seen bedrock is refused without a dig action"))
         (let [{:keys [eng]} (setup {:self body :blocks {"2,64,0" "dirt"}})
               e (:ending (await (tu/child-outcome eng job {:pos [2 64 0]} 10)))]
           (is (nil? e) "a done call has no stop ending"))))))

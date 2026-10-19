@@ -6,6 +6,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.dig-look :as look]
             [jobs.lib.blocks :as b]
             [jobs.lib.checks :as checks]
@@ -396,6 +397,7 @@
           :else (finish! c {:dug true :pos pos :block block :reason :dug :collected 0 :ids ids})))
       (b/air block) (finish! c {:dug false :pos pos :block block :reason :already-clear})
       (b/fluids block) (finish! c {:dug false :pos pos :block block :reason :fluid})
+      (rules/unbreakable block) (finish! c {:dug false :pos pos :block block :reason :cannot})
       tool (let [r (await (get-tool! c tool))]
              (if (= :fetched r) :again r))
       (and (not (:walk (:args c))) (not (b/in-reach? c pos (:see (:args c)))))
