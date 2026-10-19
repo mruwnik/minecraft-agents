@@ -204,10 +204,11 @@
             {:no-event {:source :job :kind :go-to.escalated} :for-s 60 :until {:source :job :kind :stopped :data {:arrived false}}}]
    :after [[:block [16 0 16] "air"] [:block [17 1 16] "stone"] [:body-near [16.5 0 16.5] 1]]}
   {:name "open-ground-tower-never-escalates"
-   ;; open plot, a 5-high stone column whose top no walk reaches: the body is not shut in, so nothing is built or dug
+   :plot {:height 12 :length 64} ; a cell this small is under the sealed-start drain, which would make the body shut in
+   ;; open plot (the unseen goal above the feet would wait for light by night, so only threats are checked), a 5-high stone column whose top no walk reaches: the body is not shut in, so nothing is built or dug
    :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [24 0 16] [24 4 16] "stone"]]
    :body {:inventory [["dirt" 8] ["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [24 5 16] :range 0})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 5 16] :range 0 :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :go-to.escalated} :for-s 60 :until {:source :job :kind :stopped :data {:arrived false}}}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:shut-in true}} :for-s 60 :until {:source :job :kind :stopped :data {:arrived false}}}]}

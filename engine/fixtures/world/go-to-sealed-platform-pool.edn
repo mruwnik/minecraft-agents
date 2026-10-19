@@ -1,41 +1,45 @@
 ;; Card d6bd067f: go-to's goal flood over a sealed platform. A floating deck (y 11, x/z 13..19), with or without a 2x2 pool set in
 ;; it, is proved :goal-cut-off in the first rounds, with :at and :near, and the body walks under it (the nearest cell it can reach,
 ;; within budget: go-to.wall-walk) before giving up; a deck with a ramp up, and a pool on a deck
-;; reached by a ladder tower and a fall off its top, are reached.
+;; reached by a ladder tower and a fall off its top, are reached. The cell is 48 long: a deck in a room walled within 24 blocks all round is
+;; walled in, not cut off (holeInside). An unseen goal above the body's feet may be open ground: by night go-to would wait for light, so the
+;; calls only check for threats.
 {:defaults
  {:tags [:movement :planner]
   :time :any
-  :plot {:height 24}
+  :plot {:height 24 :length 48}
   :body {:at [2.5 0 16.5]}
   :limit-s 120}
  :cases
  [{:name "plain-deck-is-goal-cut-off"
    :blocks [[:fill [13 11 13] [19 11 19] "stone"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [17 12 17] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [17 12 17] :range 1 :ways #{:walk :clear-seal} :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :goal-cut-off :at [:any] :near [:any]}} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:status :stopped :arrived false :text [:contains "cut off"]}} :within-s 60 :of-job true}
             {:event {:source :job :kind :go-to.wall-walk} :within-s 30 :of-job true}]
-   :after [[:body-near [17.5 0 17.5] 1.5]]}
+   :after [[:body-near [17.5 0 17.5] 2.5]]}
   {:name "deck-with-pool-is-goal-cut-off"
    :blocks [[:fill [13 11 13] [19 11 19] "stone"] [:fill [14 10 14] [15 10 15] "stone"] [:fill [14 11 14] [15 11 15] "water"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [17 12 17] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [17 12 17] :range 1 :ways #{:walk :clear-seal} :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :goal-cut-off :at [:any] :near [:any]}} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:status :stopped :arrived false :text [:contains "cut off"]}} :within-s 60 :of-job true}
             {:event {:source :job :kind :go-to.wall-walk} :within-s 30 :of-job true}]
-   :after [[:body-near [17.5 0 17.5] 1.5]]}
+   :after [[:body-near [17.5 0 17.5] 2.5]]}
   {:name "deck-with-ramp-arrives"
    :blocks [[:fill [10 0 16] [10 0 16] "stone"] [:fill [11 0 16] [11 1 16] "stone"] [:fill [12 0 12] [20 2 20] "stone"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [16 3 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 3 16] :range 1 :ways #{:walk :clear-seal} :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:status :completed}} :within-s 60 :of-job true}]
    :after [[:body-near [16.5 3 16.5] 3]]}
   {:name "ladder-tower-fall-into-pool-arrives"
+   ;; on the surface: in a lit cell the tower top and the ladder's upper cells stay dark or unseen from the start (cut off, ladder-gap)
+   :plot {:light :sky :length 32}
    :blocks [[:fill [10 0 14] [10 15 14] "stone"]
             [:fill [9 0 14] [9 15 14] "ladder[facing=east]"]
             [:fill [11 7 13] [13 7 16] "stone"]
             [:fill [11 8 13] [13 8 16] "stone" :outline]
             [:fill [11 8 14] [12 8 15] "water"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [13 9 14] :range 0 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [13 9 14] :range 0 :ways #{:walk :clear-seal} :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}
             {:event {:source :job :kind :completed :data {:status :completed}} :within-s 90 :of-job true}]
    :after [[:body-near [13.5 9 14.5] 2]]}]}

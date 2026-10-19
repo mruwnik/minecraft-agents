@@ -1,6 +1,6 @@
 ;; Cards 29912d63 / 59551eba: go-to's backward goal flood. A goal inside a sealed area the body stands outside of ends
 ;; :unreachable :goal-enclosed (a 12x12 pen in round 1, a 26x26 = 676-cell yard after a few searching rounds);
-;; the gateless pen, 8 blocks off, is first walked up to (go-to.wall-walk: of the cells within 1.5 blocks of the nearest, the shortest walk: the west side, not the south); the yard's wall is 1 block from the body, so no walk; a way opened (a gap in the
+;; the gateless pen, 8 blocks off, is first walked up to (go-to.wall-walk: of the cells within 1.5 blocks of the nearest, the shortest walk: the west side, not the south); the yard's walls are all as near its goal, so the body ends beside one, outside it; a way opened (a gap in the
 ;; wall, a fence gate) while go-to is still in rounds, or a gate from the start, makes it arrive.
 ;; Yard: stone wall x 3..28, z 3..28, y 0..3 (open top); pen: oak fence x 10..21, z 10..21 at y 0. Body outside west, goal at 16 0 16.
 {:defaults
@@ -10,11 +10,12 @@
   :limit-s 150}
  :cases
  [{:name "big-sealed-yard-is-goal-enclosed"
+   :plot {:length 64} ; a cell whose free ring is under the sealed-start drain ends start-enclosed
    :blocks [[:fill [3 0 3] [28 3 28] "stone" :hollow]]
-   :act [[:job (jobs.movement.go-to {:pos #at [16 1 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 1 16] :range 1 :ways #{:walk :clear-seal} :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :why :goal-enclosed}} :within-s 90 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "walkTo"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :why :goal-enclosed}}}]
-   :after [[:body-near [1.5 0 16.5] 3]]}
+   :after [[:body-far [16.5 0 16.5] 12]]}
   {:name "sealed-start-with-enclosed-goal-is-start-enclosed"
    :plot {:height 10 :length 52}
    ;; the hollow fills lay a stone floor at y 0: body and goal stand at y 1, inside the shells
@@ -24,7 +25,7 @@
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :why :start-enclosed}} :within-s 30 :of-job true}]}
   {:name "big-yard-with-a-gap-in-the-wall-arrives"
    :blocks [[:fill [3 0 3] [28 3 28] "stone" :hollow] [:fill [3 0 16] [3 3 17] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [16 1 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 1 16] :range 1 :ways #{:walk :clear-seal} :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:why :goal-enclosed}} :for-s 120 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [16.5 1 16.5] 3]]}

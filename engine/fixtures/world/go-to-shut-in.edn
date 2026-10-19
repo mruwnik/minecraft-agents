@@ -50,6 +50,7 @@
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [30.5 0 16.5] 2]]}
   {:name "free-body-goal-walled-in-with-pickaxe-digs-in"
+   :plot {:height 14 :length 64} ; a 32 cell drains as start-enclosed: the body would count as shut in
    :blocks [[:fill [22 -1 14] [26 2 18] "stone" :hollow]]
    :body {:at [4.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 0})]]

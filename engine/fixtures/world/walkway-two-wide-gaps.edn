@@ -5,6 +5,8 @@
 {:defaults
  {:tags [:movement :planner :large]
   :plot {:height 20 :length 280 :width 48}
+ ;; underground the body would refuse the 195-block way to a goal 28 off as a detour over unseen cells
+ :settings {:jobs.movement.go-to.detour/ratio 20}
   :limit-s 300
   :blocks
   [[:fill [30 12 10] [250 12 11] "stone"]

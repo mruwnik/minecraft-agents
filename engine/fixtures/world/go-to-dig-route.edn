@@ -8,7 +8,9 @@
  {:tags [:movement :go-to :access]
   :time :any
   :plot {:height 12}
-  :blocks [[:fill [2 0 2] [30 5 30] "stone"] [:fill [19 2 16] [19 3 16] "air"]]
+  :blocks [[:fill [2 0 2] [30 5 30] "stone"] [:fill [19 2 16] [19 3 16] "air"]
+           ;; a light layer over the mass: the cell's own is buried, and the body must see lava a dug cell opens
+           [:fill [2 8 2] [30 8 30] "light"]]
   :body {:at [16.5 6 16.5] :settle-s 2 :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["stone_pickaxe" 1] ["cobblestone" 4]]}
   :limit-s 150}
  :cases
