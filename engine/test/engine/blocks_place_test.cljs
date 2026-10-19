@@ -471,3 +471,13 @@
         (let [env (bd/setup {:self body :inventory [{:name "bucket" :count 1}]})
               scooped (await (tu/child-outcome (:eng env) use-on {:pos at :item "bucket"} 40))]
           (is (= [:stopped :missing] [(:status scooped) (:reason scooped)])))))))
+
+(deftest a-bed-with-no-facing-turns-to-the-side-its-head-has-room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (bd/setup {:self body :inventory [{:name "white_bed" :count 1}]
+                                       :blocks {"2,64,-1" "stone" "2,64,1" "stone" "1,64,0" "stone"}})
+              result (await (tu/child-outcome eng job {:pos [2 64 0] :item "white_bed"} 5))]
+          (is (= true (:placed result)))
+          (is (= "east" (get-in result [:block :state :facing]))))))))

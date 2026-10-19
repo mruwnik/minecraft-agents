@@ -215,14 +215,20 @@
 
 (defn click-for
   "{:click} of the call's :click, else the one that turns a :facing block (jobs.lib.placement); {:refused kw} when no
-  click gives that facing; {} to place plainly."
+  click gives that facing; {} to place plainly. A bed with no :facing takes the first direction its head has room in."
   [c pos item]
   (let [{:keys [click facing]} (:args c)
         p (:primitives c)
-        block-at (fn [cell] (some-> (u/seen-block p (zipmap [:x :y :z] cell)) .-name (->> (hash-map :name))))]
+        block-at (fn [cell] (some-> (u/seen-block p (zipmap [:x :y :z] cell)) .-name (->> (hash-map :name))))
+        eye (placement/eye (u/self-pos c))
+        cell [(:x pos) (:y pos) (:z pos)]
+        try-facing (fn [f] (select-keys (placement/click {:block item :facing f} cell eye block-at) [:click :refused]))
+        bed? (re-find #"_bed$" item)]
     (cond
       click {:click click}
-      facing (select-keys (placement/click {:block item :facing facing} [(:x pos) (:y pos) (:z pos)] (placement/eye (u/self-pos c)) block-at) [:click :refused])
+      facing (try-facing facing)
+      bed? (let [tries (map try-facing ["north" "south" "east" "west"])]
+             (or (first (remove :refused tries)) (first tries)))
       :else {})))
 
 (defn ^:async place!
@@ -232,7 +238,7 @@
         {:keys [click refused]} (click-for c pos item)]
     (if refused
       (stop! c :nothing-possible {:placed false :pos pos :item item :reason :failed
-                                  :why (str "no way to place " item " facing " (:facing (:args c)) ": " (name refused))})
+                                  :why (str "no way to place " item (some->> (:facing (:args c)) (str " facing ")) ": " (name refused))})
       (let [r (await (tidy/place! c pos item false (some-> click placement/js-click)))]
         (case (.-status r)
           "placed" (finish! c :done nil (cond-> {:placed true :pos pos :item item :reason :placed}

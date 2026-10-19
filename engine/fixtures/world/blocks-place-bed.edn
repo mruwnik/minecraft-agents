@@ -1,0 +1,18 @@
+;; Card 695427e3: jobs.blocks.place of a bed in a cell with room for the head on one side only: with no :facing it turns that way,
+;; and :facing toward a wall is refused naming no-room. Walls at the north, south and west of [16 0 16]; the east is free.
+{:defaults
+ {:tags [:blocks :build :jobs]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:set [16 0 15] "stone"] [:set [16 0 17] "stone"] [:set [15 0 16] "stone"]]
+  :body {:at [19.5 0 16.5] :inventory [["white_bed" 1]] :effects [["resistance" 600 4]] :settle-s 2}
+  :limit-s 40}
+ :cases
+ [{:name "a-bed-with-no-facing-takes-the-free-side"
+   :act [[:job (jobs.blocks.place {:pos #at [16 0 16] :item "white_bed"})]]
+   :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 30 :of-job true}]
+   :after [[:block [16 0 16] "white_bed[facing=east,part=foot]"] [:block [17 0 16] "white_bed[part=head]"]]}
+  {:name "a-bed-facing-a-wall-is-refused-naming-no-room"
+   :act [[:job (jobs.blocks.place {:pos #at [16 0 16] :item "white_bed" :facing "west"})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :failed}} :within-s 30 :of-job true}]
+   :after [[:not-block [16 0 16] "white_bed"] [:item "white_bed" 1]]}]}
