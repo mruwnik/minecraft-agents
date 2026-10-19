@@ -377,3 +377,23 @@
           (dotimes [_ 4] (await (core/tick! eng)))
           (is (= {:kind :limit-reached :cause {:line :wall-time :spend 5}}
                  (select-keys (:kid @world) [:kind :cause]))))))))
+
+(def cleanup-kid
+  {:round (fn [c] (swap! clock + 10000) (log! :kid-round) (ctx/end c :done nil))})
+
+(def late
+  {:defaults {:spend {:job-time 5}}
+   :round (fn [_] (swap! clock + 6000) :continue)
+   :cleanup (fn ^:async cleanup [c _]
+              (let [e (await (ctx/call c :kid 'cleanup-kid {}))]
+                (log! [:kid-ended (:kind e)])
+                (ctx/end c :done nil)))})
+
+(deftest a-cleanup-child-runs-on-the-cleanups-budget-not-the-jobs-spent-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'late late 'cleanup-kid cleanup-kid})]
+          (core/submit! eng '(late) {})
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (is (= [:kid-round [:kid-ended :done]] (:log @world))))))))
