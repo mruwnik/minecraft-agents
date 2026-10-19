@@ -434,7 +434,8 @@
 (deftest a-gathered-log-need-fetches-no-axe
   (let [need (first (table/gather-needs {"oak_log" 3}))]
     (is (= 'jobs.forestry.harvest-wood (:job need)))
-    (is (= #{:item} (:fetch (:args need))) "an axe fetch inside a gather would gather logs again")))
+    (is (= #{:item} (:what (:fetch (:args need)))) "an axe fetch inside a gather would gather logs again")
+    (is (= #{:chest} (:how (:fetch (:args need)))) "a replant sapling is never gathered from leaves: the drop may be out of reach")))
 
 (deftest the-axe-wait-plans-a-chest-or-craft-get-tool-and-no-gather
   (let [lim (need/tighten (merge need/built-in {}) (axe-fetch-limits))

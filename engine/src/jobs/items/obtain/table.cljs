@@ -74,6 +74,10 @@
   "The :fetch of a gather mine: its pickaxe from a chest or a craft only, so a mine never starts another gather."
   {:what #{:tool} :how #{:chest :craft}})
 
+(def log-fetch
+  "The :fetch of a gather of logs: a replant sapling from a chest only; breaking leaves for one is another gather, of a drop the felling may leave out of reach."
+  {:what #{:item} :how #{:chest}})
+
 (defn gather-needs
   "The raw needs of a plan's :gather map, logs first: [{:key k :count n :job sym :args {..} :seen fn of a block name: what must have been seen}]. A new gather source
   is one more case here. An ore drop (coal, raw_iron ..) is mined from a plain or a deepslate ore (:ore? true: :block
@@ -100,9 +104,9 @@
           (for [[k n] gather :when (wool? k)]
             {:key k :count n :job 'jobs.combat.hunt :sheep (wool-color k) :max-runs 1
              :args {:mob "sheep" :color (wool-color k) :count n :radius (sheep-radius)}})
-          (when (pos? logs) [{:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen trees/log-name? :args {:fetch #{:item}}}])
+          (when (pos? logs) [{:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen trees/log-name? :args {:fetch log-fetch}}])
           (for [[k n] gather :when (trees/log-name? k)]
-            {:key k :count n :job 'jobs.forestry.harvest-wood :seen #{k} :args {:species (trees/species-of k) :fetch #{:item}}})
+            {:key k :count n :job 'jobs.forestry.harvest-wood :seen #{k} :args {:species (trees/species-of k) :fetch log-fetch}})
           (for [[k n] gather :when (material-blocks version k)]
             (let [blocks (material-blocks version k)]
               {:key k :count n :job 'jobs.gather.mine :seen blocks :tunnel? true
