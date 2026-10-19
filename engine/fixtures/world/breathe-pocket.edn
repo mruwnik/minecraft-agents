@@ -4,8 +4,8 @@
 {:defaults
  {:tags [:survival :water] :time :any
   :plot {:height 12}
-  :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-              :job (jobs.survival.breathe {:min-oxygen 12})}]
+  :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+              :job (jobs.survival.breathe)}]
   :blocks [[:fill [0 0 0] [31 8 31] "stone"]]
   :body {:effects [["resistance" 600 4]] :settle-s 1}
   :limit-s 70}

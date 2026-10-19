@@ -2,8 +2,8 @@
 ;; and one listed loop: harvest the plan's ripe wheat and replant, then put the surplus in the chest.
 ;; :suffocating is left out: on farmland (feet y 120.9375) its head cell is the wheat cell, wheat is not
 ;; in its passable list, so it dug every crop the harvest replanted under the body (99 firings in a minute).
-{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-             :job (jobs.survival.breathe {:min-oxygen 12})}
+{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+             :job (jobs.survival.breathe)}
             {:trigger :burning :persistence :cooldown :cooldown-s 2
              :job (jobs.survival.extinguish {:water-radius 6})}
             {:trigger :died :persistence :cooldown :cooldown-s 30

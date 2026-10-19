@@ -225,18 +225,6 @@
           (is (< x 6) (str "not far into the tunnel: " [x y z] " result " @out))
           (is (not (and (<= y 60) (< 6 x))) (str "not under water in the tunnel: " [x y z])))))))
 
-;; 19 blocks of tunnel is about 8 s of swimming, inside the planner's own 12 s but past the 6 s that breathe's reflex lets a
-;; body use (oxygen 12): such a dive is refused, not started and cut half way
-(deftest a-dive-the-breathe-reflex-would-cut-is-not-taken
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out p]} (await (gt/go! {:self {:pos [1.5 58 0.5] :inWater true :oxygen 20} :blocks sealed-tunnel}
-                                             {:pos [20 58 0] :range 0 :ways #{:walk :clear-seal}}))
-              [x y z] (gt/at p)]
-          (is (not (true? (:arrived @out))) (str "result " @out " at " [x y z]))
-          (is (< x 14) (str "not deep into the tunnel: " [x y z])))))))
-
 (deftest a-dive-within-the-air-left-is-taken
   (async done
     (tu/run-async done

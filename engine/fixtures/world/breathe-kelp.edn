@@ -3,8 +3,8 @@
 {:defaults
  {:tags [:survival :water] :time :any
   :plot {:height 12}
-  :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-              :job (jobs.survival.breathe {:min-oxygen 12})}]
+  :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+              :job (jobs.survival.breathe)}]
   :blocks [[:fill [0 0 0] [31 8 31] "stone"]
            [:fill [16 0 16] [16 3 16] "water"]
            [:fill [16 4 16] [16 8 16] "air"]

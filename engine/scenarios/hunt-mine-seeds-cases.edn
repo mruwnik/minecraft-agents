@@ -1,6 +1,6 @@
 ;; ProbeStuck (composite-a) live case: hunt cows count 3 keep 0 (zombie mid-hunt; console kill of target)
-{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-             :job (jobs.survival.breathe {:min-oxygen 12})}
+{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+             :job (jobs.survival.breathe)}
             {:trigger :burning :persistence :cooldown :cooldown-s 2
              :job (jobs.survival.extinguish {:water-radius 6})}
             {:trigger :died :persistence :cooldown :cooldown-s 30
@@ -18,8 +18,8 @@
 ;; ---- other cases of this feature: swap the commented form in for the active one above ----
 ;; -- case from live-ProbeStuck-g1
 ;; ;; ProbeStuck (composite-a) live case: get-seeds from a short_grass patch
-;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-;;              :job (jobs.survival.breathe {:min-oxygen 12})}
+;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+;;              :job (jobs.survival.breathe)}
 ;;             {:trigger :burning :persistence :cooldown :cooldown-s 2
 ;;              :job (jobs.survival.extinguish {:water-radius 6})}
 ;;             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
@@ -36,8 +36,8 @@
 ;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeStuck-g2
 ;; ;; ProbeStuck (composite-a) live case: get-seeds from a chest
-;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-;;              :job (jobs.survival.breathe {:min-oxygen 12})}
+;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+;;              :job (jobs.survival.breathe)}
 ;;             {:trigger :burning :persistence :cooldown :cooldown-s 2
 ;;              :job (jobs.survival.extinguish {:water-radius 6})}
 ;;             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
@@ -54,8 +54,8 @@
 ;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeStuck-g3
 ;; ;; ProbeStuck (composite-a) live case: get-seeds count 64 (small patch / boxed grass / none)
-;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-;;              :job (jobs.survival.breathe {:min-oxygen 12})}
+;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+;;              :job (jobs.survival.breathe)}
 ;;             {:trigger :burning :persistence :cooldown :cooldown-s 2
 ;;              :job (jobs.survival.extinguish {:water-radius 6})}
 ;;             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
@@ -72,8 +72,8 @@
 ;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeStuck-h0
 ;; ;; ProbeStuck (composite-a) live case: idle, survival register, to place the body
-;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-;;              :job (jobs.survival.breathe {:min-oxygen 12})}
+;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+;;              :job (jobs.survival.breathe)}
 ;;             {:trigger :burning :persistence :cooldown :cooldown-s 2
 ;;              :job (jobs.survival.extinguish {:water-radius 6})}
 ;;             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
@@ -89,8 +89,8 @@
 ;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeStuck-h1
 ;; ;; ProbeStuck (composite-a) live case: hunt one cow of three, keep 0
-;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-;;              :job (jobs.survival.breathe {:min-oxygen 12})}
+;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+;;              :job (jobs.survival.breathe)}
 ;;             {:trigger :burning :persistence :cooldown :cooldown-s 2
 ;;              :job (jobs.survival.extinguish {:water-radius 6})}
 ;;             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
@@ -107,8 +107,8 @@
 ;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeStuck-h2
 ;; ;; ProbeStuck (composite-a) live case: hunt pigs count 3 keep 2
-;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-;;              :job (jobs.survival.breathe {:min-oxygen 12})}
+;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+;;              :job (jobs.survival.breathe)}
 ;;             {:trigger :burning :persistence :cooldown :cooldown-s 2
 ;;              :job (jobs.survival.extinguish {:water-radius 6})}
 ;;             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
@@ -125,8 +125,8 @@
 ;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeStuck-h4
 ;; ;; ProbeStuck (composite-a) live case: hunt adults only, babies spared, keep 1
-;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-;;              :job (jobs.survival.breathe {:min-oxygen 12})}
+;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+;;              :job (jobs.survival.breathe)}
 ;;             {:trigger :burning :persistence :cooldown :cooldown-s 2
 ;;              :job (jobs.survival.extinguish {:water-radius 6})}
 ;;             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
@@ -143,8 +143,8 @@
 ;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeStuck-m1
 ;; ;; ProbeStuck (composite-a) live case: mine sand count 6
-;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-;;              :job (jobs.survival.breathe {:min-oxygen 12})}
+;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+;;              :job (jobs.survival.breathe)}
 ;;             {:trigger :burning :persistence :cooldown :cooldown-s 2
 ;;              :job (jobs.survival.extinguish {:water-radius 6})}
 ;;             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
@@ -161,8 +161,8 @@
 ;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeStuck-m3
 ;; ;; ProbeStuck (composite-a) live case: mine bedrock
-;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-;;              :job (jobs.survival.breathe {:min-oxygen 12})}
+;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+;;              :job (jobs.survival.breathe)}
 ;;             {:trigger :burning :persistence :cooldown :cooldown-s 2
 ;;              :job (jobs.survival.extinguish {:water-radius 6})}
 ;;             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
@@ -179,8 +179,8 @@
 ;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeStuck-m5
 ;; ;; ProbeStuck (composite-a) live case: mine stone floor under the start, mend
-;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-;;              :job (jobs.survival.breathe {:min-oxygen 12})}
+;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+;;              :job (jobs.survival.breathe)}
 ;;             {:trigger :burning :persistence :cooldown :cooldown-s 2
 ;;              :job (jobs.survival.extinguish {:water-radius 6})}
 ;;             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
@@ -197,8 +197,8 @@
 ;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeStuck-m6
 ;; ;; ProbeStuck (composite-a) live case: mine stone radius 10 (lava beside, walled)
-;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-;;              :job (jobs.survival.breathe {:min-oxygen 12})}
+;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+;;              :job (jobs.survival.breathe)}
 ;;             {:trigger :burning :persistence :cooldown :cooldown-s 2
 ;;              :job (jobs.survival.extinguish {:water-radius 6})}
 ;;             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
@@ -215,8 +215,8 @@
 ;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeStuck-m7
 ;; ;; ProbeStuck (composite-a) live case: mine stone count 6 radius 10 (floor + hill, floor only, no pickaxe)
-;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-;;              :job (jobs.survival.breathe {:min-oxygen 12})}
+;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+;;              :job (jobs.survival.breathe)}
 ;;             {:trigger :burning :persistence :cooldown :cooldown-s 2
 ;;              :job (jobs.survival.extinguish {:water-radius 6})}
 ;;             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}

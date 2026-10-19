@@ -1,6 +1,6 @@
 ;; ProbeShutIn live cases for the night trigger shut-in case (card 25a5cae0): survival reflexes plus :night; no queue idle; jobs submitted with tools/jobs.mjs
-{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-             :job (jobs.survival.breathe {:min-oxygen 12})}
+{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+             :job (jobs.survival.breathe)}
             {:trigger :burning :persistence :cooldown :cooldown-s 2
              :job (jobs.survival.extinguish {:water-radius 6})}
             {:trigger :died :persistence :cooldown :cooldown-s 30

@@ -15,8 +15,8 @@
   :limit-s 150}
  :cases
  [{:name "open-lake-bank-40-away-lands"
-   :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-               :job (jobs.survival.breathe {:min-oxygen 12})}]
+   :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+               :job (jobs.survival.breathe)}]
    :body {:at [30.5 2 32.5] :settle-s 1}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :reflex :kind :ended :data {:outcome :done :how :cleared}} :within-s 120}
@@ -27,7 +27,7 @@
             [:fill [70 0 4] [99 3 59] "stone"]
             [:fill [70 0 4] [96 3 59] "water"]]
    :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2
-               :args {:min-oxygen 12} :job (jobs.survival.breathe {:min-oxygen 12 :settings {:jobs.survival.breathe/search-radius 16 :jobs.survival.breathe/swim-range 40}})}]
+               :args {} :job (jobs.survival.breathe {:settings {:jobs.survival.breathe/search-radius 16 :jobs.survival.breathe/swim-range 40}})}]
    :body {:at [45.5 2 32.5] :settle-s 1}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :reflex :kind :ended :data {:outcome :stopped :reason :no-blocks}} :within-s 140}
@@ -41,7 +41,7 @@
             [:fill [70 0 4] [99 3 59] "stone"]
             [:fill [70 0 4] [96 3 59] "water"]]
    :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2
-               :args {:min-oxygen 12} :job (jobs.survival.breathe {:min-oxygen 12 :settings {:jobs.survival.breathe/search-radius 16 :jobs.survival.breathe/swim-range 40}})}]
+               :args {} :job (jobs.survival.breathe {:settings {:jobs.survival.breathe/search-radius 16 :jobs.survival.breathe/swim-range 40}})}]
    :body {:at [45.5 2 32.5] :settle-s 1}
    :act [[:await {:source :reflex :kind :ended :data {:outcome :stopped :reason :no-blocks}} 140]
          [:wait-s 5]] ; hold: no new leg after the stop

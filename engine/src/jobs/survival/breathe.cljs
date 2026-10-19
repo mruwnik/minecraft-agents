@@ -20,7 +20,7 @@
 (def doc
   "Get air when drowning or stuck inside a block, then out of the water, in one run (a reflex; never yields).
   Each pass reads the world again:
-  - Drowning (in water, head under, oxygen below :min-oxygen): swim up the own column when it reaches air within
+  - Drowning (in water, head under, air left short of the swim to air: jobs.lib.breath/drowning?): swim up the own column when it reaches air within
     the reach setting (10) blocks, else step sideways, at the feet's height, to a nearby column that does; else a go-to
     child to the nearest air-reaching surface within the air-radius setting (8), else to the nearest seen air below the feet within the depth setting (24)
     (the way the body came; a failed target is not tried again); else dig up through a cap within 3 blocks over the head
@@ -59,9 +59,7 @@
   Memory: one :breathe entry per run; :breathe-pocket per pocket made.")
 
 (a/defargs args
-  {:min-oxygen {:doc "oxygen (of 20) below which being in water with the head submerged is drowning (nil: the jobs.lib.breath/min-oxygen setting)"
-                :spec (a/num-in 0 20) :default nil}
-   :pocket {:doc "with no air seen, make a dry pocket: dig into the wall beside the body, step in and plug the opening with a carried block" :spec boolean? :default true}
+  {:pocket {:doc "with no air seen, make a dry pocket: dig into the wall beside the body, step in and plug the opening with a carried block" :spec boolean? :default true}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -117,7 +115,7 @@
                 (not (on-land? (:primitives c))))))
 
 (defn needs-air? [c]
-  (or (some? (breath/situation (:primitives c) (:min-oxygen (:args c))))
+  (or (some? (breath/situation (:primitives c)))
       (boolean (surfaced-in-water? c))))
 
 (def target [])
@@ -372,8 +370,7 @@
   "One look at the world and one try. :again or :held for another pass, else :done (perhaps stopped)."
   [c]
   (let [p (:primitives c)
-        min-oxygen (:min-oxygen (:args c))
-        why (breath/situation p min-oxygen)]
+        why (breath/situation p)]
     (cond
       (and (nil? why) (surfaced-in-water? c)) (await (head-for-land! c))
       (nil? why) :done
@@ -391,7 +388,7 @@
           (let [drowning? (= :drowning why)
                 ok (await (if drowning? (air/drown-out! c) (air/dig-out! c)))]
             (cond
-              (nil? (breath/situation p min-oxygen)) :again
+              (nil? (breath/situation p)) :again
               (and drowning? ok) :again
               (= :dug ok) (do (ctx/update-mem! c dissoc :failures) :again)
               drowning? (fail-air! c)

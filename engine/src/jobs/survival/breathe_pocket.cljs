@@ -98,7 +98,7 @@
     (when (= :made outcome)
       (ctx/remember! c :breathe-pocket {:pos (first cells)} made-policy)
       (loop [n (js/Math.ceil (/ (settings/ticks->ms (settings/get settings ::drain-ticks)) pace/pace-ms))]
-        (when (and (pos? n) (ctx/alive? c) (breath/situation p (:min-oxygen (:args c))))
+        (when (and (pos? n) (ctx/alive? c) (breath/situation p))
           (await (pace/pace!))
           (recur (dec n))))
       true)))

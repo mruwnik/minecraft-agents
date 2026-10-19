@@ -3,8 +3,7 @@
 ;; Should-fail: a 14 cell swim then a 28 high waterlogged ladder from full air (about 7 s + 8 s or more with the head wet, vanilla air 15 s): :why :air.
 ;; Live risk: whether the body can enter and climb a waterlogged ladder from its own cell (the unit fake could not).
 {:defaults
- {:settings {:jobs.lib.breath/min-oxygen 0}
-  :tags [:movement :water :air] :time :any
+ {:tags [:movement :water :air] :time :any
   :limit-s 120}
  :cases
  [

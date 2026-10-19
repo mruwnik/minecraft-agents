@@ -1,7 +1,7 @@
 ;; ProbeNight: the shipped survival register, plus a queue job that walks away
 ;; at day (to see whether go-to gets a body out of its dig-in hut).
-{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-             :job (jobs.survival.breathe {:min-oxygen 12})}
+{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+             :job (jobs.survival.breathe)}
             {:trigger :burning :persistence :cooldown :cooldown-s 2
              :job (jobs.survival.extinguish {:water-radius 6})}
             {:trigger :died :persistence :cooldown :cooldown-s 30

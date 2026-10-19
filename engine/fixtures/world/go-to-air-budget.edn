@@ -9,8 +9,7 @@
 ;;   Should-fail: the same seen pocket, the body at 2 hp (hunger stops regeneration) after ~14 s under water: any drowning kills, :why :air-lethal. A pocket round a bend (30 cells, never in sight): no way to air, :why :air. Resistance keeps the body alive after.
 ;; Live risks: the wait gives an oxygen of about 4..10, not exact.
 {:defaults
- {:settings {:jobs.lib.breath/min-oxygen 0}
-  :tags [:movement :water :air] :time :any
+ {:tags [:movement :water :air] :time :any
   :plot {:height 8 :length 80 :width 16}
   :body {:at [4.5 1 8.5] :yaw 270 :settle-s 1}
   :limit-s 150}

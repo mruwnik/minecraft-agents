@@ -49,7 +49,7 @@
                                [nil []]
                                [[] []]]]
           (let [{:keys [eng p seen]} (setup {:blocks {"0,65,0" "stone" "0,66,0" "stone"}} zones)]
-            (core/submit! eng '(jobs.survival.breathe {:min-oxygen 12}) {})
+            (core/submit! eng '(jobs.survival.breathe) {})
             (await (core/tick! eng))
             (is (= [{:x 0 :y 65 :z 0} {:x 0 :y 66 :z 0}] (mapv arg-pos (calls p "dig"))) (pr-str zones))
             (is (= warns (mapv :zones (trespass seen :breathe.trespass-last-resort))) (pr-str zones))))))))
@@ -75,7 +75,7 @@
                             ["fake" []]]]
           (let [{:keys [eng p seen]} (setup-with-plan {:blocks {"0,65,0" "stone" "0,66,0" "stone"}}
                                                        (cond-> roof-plan by (shape/with-author by)))]
-            (core/submit! eng '(jobs.survival.breathe {:min-oxygen 12}) {})
+            (core/submit! eng '(jobs.survival.breathe) {})
             (await (core/tick! eng))
             (is (= 2 (count (calls p "dig"))) (pr-str by))
             (is (= warns (mapv :plans (trespass seen :breathe.trespass-last-resort))) (pr-str by))))))))
@@ -218,7 +218,7 @@
               pour (setup (assoc burning-with-bucket :blocks (merge st/floor pool)) [feet-zone])
               dig (setup pit-world [(zone "Miles" [1 64 -1] [1 66 1])])
               unwedge (setup {:blocks (merge wt/boxed {"0,64,0" "sand"})} [(whole-zone "Miles")])]
-          (core/submit! (:eng breathe) '(jobs.survival.breathe {:min-oxygen 12 :ignore-zones? true}) {})
+          (core/submit! (:eng breathe) '(jobs.survival.breathe {:ignore-zones? true}) {})
           (await (core/tick! (:eng breathe)))
           (is (= 2 (count (calls (:p breathe) "dig"))) "breathe digs out")
           (is (= [] (trespass (:seen breathe) :breathe.trespass-last-resort)))

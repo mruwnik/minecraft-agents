@@ -8,8 +8,8 @@
 ;; whose condition holds until the work is done. Hostiles sit above food: respond-to-hostile already flees when
 ;; hurt and fights only when healthy (or cornered). The night sits above food: the shelter eats while it holds, and
 ;; get-food must not walk off at night.
-{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 0 :args {:min-oxygen 12}
-             :job (jobs.survival.breathe {:min-oxygen 12})}
+{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 0 :args {}
+             :job (jobs.survival.breathe)}
             {:trigger :burning :persistence :cooldown :cooldown-s 0
              :job (jobs.survival.extinguish {:water-radius 6})}
             {:trigger :wedged :persistence :cooldown :cooldown-s 0

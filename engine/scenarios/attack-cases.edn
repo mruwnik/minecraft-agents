@@ -65,8 +65,8 @@
 ;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeAttack-14
 ;; ;; ProbeAttack live case: two armed zombies with AI, survival register loaded above the attack job
-;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-;;              :job (jobs.survival.breathe {:min-oxygen 12})}
+;; {:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+;;              :job (jobs.survival.breathe)}
 ;;             {:trigger :burning :persistence :cooldown :cooldown-s 2
 ;;              :job (jobs.survival.extinguish {:water-radius 6})}
 ;;             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}

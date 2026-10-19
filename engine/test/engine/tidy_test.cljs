@@ -64,7 +64,7 @@
                                   [[] []]
                                   [nil []]]]
           (let [{:keys [eng]} (setup {:blocks enclosed} zones)]
-            (core/submit! eng '(jobs.survival.breathe {:min-oxygen 12}) {})
+            (core/submit! eng '(jobs.survival.breathe) {})
             (await (core/tick! eng))
             (is (= recorded (tidy-entries eng)) (pr-str zones))))))))
 
@@ -309,7 +309,7 @@
         (let [{:keys [eng p]} (setup (assoc enclosed-body :floor [-5 -5 5 5] :inventory [{:name "stone" :count 2}])
                                              [(zs/whole-zone "Miles")])]
           (core/register-reflex! eng {:trigger :tidy-pending})
-          (core/submit! eng '(jobs.survival.breathe {:min-oxygen 12}) {})
+          (core/submit! eng '(jobs.survival.breathe) {})
           (await (ticks! eng 40))
           (is (= [{:x 0 :y 66 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))) "gravity drops the body back to the shaft floor: the roof cell is clear of it and goes back, its head cell does not")
           (is (= 1 (count (tidy-entries eng))) "the cell at its head waits")
@@ -824,7 +824,7 @@
         (doseq [[kind plan-recorded] [[nil [:hut :hut]] [:mineshaft []]]]
           (let [{:keys [eng]} (zs/setup-with-plan {:blocks (merge enclosed {"0,63,0" "stone"})}
                                                   (cond-> (shape/with-author stair-cells-plan "Miles") kind (assoc :kind kind)))]
-            (core/submit! eng '(jobs.survival.breathe {:min-oxygen 12}) {})
+            (core/submit! eng '(jobs.survival.breathe) {})
             (await (core/tick! eng))
             (is (= (map #(some-> % name) plan-recorded) (map :plan (tidy-entries eng))) (str kind))))))))
 

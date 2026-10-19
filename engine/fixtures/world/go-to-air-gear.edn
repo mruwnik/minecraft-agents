@@ -5,8 +5,7 @@
 ;; Should-succeed: turtle + Respiration III 20 s and 50 s; Respiration III helmet 20 s; turtle only 20 s. Should-fail: bare head 20 s; Water Breathing only 20 s; turtle + Respiration III 65 s (real air to 0 at ~70 s; planner stops at 58 s).
 ;; Gear is put on with /item replace (armor.head) in the act; the body is cleared before each case. Live risk: the 100 and 130 cell tunnels need the whole water line seen from the west shaft (a refusal for another :why fails the case).
 {:defaults
- {:settings {:jobs.lib.breath/min-oxygen 0}
-  :tags [:movement :water :air] :time :any
+ {:tags [:movement :water :air] :time :any
   :plot {:height 8 :length 150 :width 16}
   :body {:at [4.5 1 8.5] :yaw 270 :settle-s 1}
   :limit-s 150}

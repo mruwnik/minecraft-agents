@@ -84,7 +84,6 @@
     go-to.in-water saying which. The leave-water setting false keeps an arrival in water. Under water with its search going on (no
     walk) it swims to air first (go-to.surfacing) when under ::surface-air seconds of air are left (always), or when the
     search began afresh more than ::wet-restarts times (at most 3 such swims in a row that leave the head under).
-    A plan dives with the head under water no longer than breathe's reflex lets the body (oxygen down to the jobs.lib.breath min-oxygen setting, 6 s), not the planner's 12 s.
   - A call starts afresh from the world: its walk counters are per call (the cut count carries over only a cut of this run's call to the same goal), and a saved escalation is dropped when the body
     is already there (a cut call's memory is a hint).
   - A walk that gets more than 1 block nearer is progress. Three walks in a row without progress give up (or escalate, below), and so

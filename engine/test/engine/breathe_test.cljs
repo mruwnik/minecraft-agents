@@ -1,6 +1,6 @@
 (ns engine.breathe-test
   "The suffocating trigger and the breathe job against the fake world."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.events :as events]
@@ -37,7 +37,7 @@
 (defn check? [p args]
   (b/needs-air? {:primitives p :args args}))
 
-(def defaults {:min-oxygen 12})
+(def defaults {})
 
 (def knobs
   {:radius :jobs.survival.breathe.air/radius :air-radius :jobs.survival.breathe.air/air-radius :reach :jobs.survival.breathe.air/reach
@@ -62,7 +62,7 @@
 
 (def cases
   [["drowning: low oxygen, head under water"
-    {:self {:inWater true :oxygen 5} :blocks water-column} true]
+    {:self {:inWater true :oxygen 4} :blocks water-column} true]
    ["swimming at the surface with low oxygen: head in air"
     {:self {:inWater true :oxygen 5} :blocks {"0,64,0" "water"}} false]
    ["in water with plenty of oxygen"
@@ -112,17 +112,40 @@
       (is (= expected (holds? p defaults)) (str "trigger: " label))
       (is (= expected (check? p defaults)) (str "check: " label)))))
 
-(deftest min-oxygen-is-an-arg
-  (let [p (tu/fake {:self {:inWater true :oxygen 15} :blocks water-column})]
-    (is (false? (holds? p defaults)))
-    (is (true? (holds? p {:min-oxygen 16})))
-    (is (true? (check? p {:min-oxygen 16})))))
+(defn shaft
+  "Water from y 64 to top in a stone shaft on a stone floor, air above."
+  [top]
+  (into {"0,63,0" "stone"} (for [y (range 64 (inc top)) [x z kind] [[0 0 "water"] [1 0 "stone"] [-1 0 "stone"] [0 1 "stone"] [0 -1 "stone"]]]
+             [(str x "," y "," z) kind])))
 
-(deftest min-oxygen-setting-is-the-default-threshold
-  (let [p (tu/fake {:self {:inWater true :oxygen 15} :blocks water-column})
-        with #(settings/with-settings {:jobs.lib.breath/min-oxygen %} (fn [] [(holds? p {}) (check? p {})]))]
-    (is (= [false false] (with 12)))
-    (is (= [true true] (with 16)))))
+(def short-shaft "Air from y 68: 3 blocks (1.5 s) up." (shaft 67))
+(def long-shaft "Air from y 81: 16 blocks (8 s) up." (shaft 80))
+
+(defn fires? [world & kvs]
+  (let [p (tu/fake world)]
+    (settings/with-settings (apply hash-map kvs) (fn [] [(holds? p {}) (check? p {})]))))
+
+(deftest fires-when-air-left-is-short-of-the-swim-to-air-plus-margin
+  (are [oxygen blocks expected] (= expected (fires? {:self {:inWater true :oxygen oxygen} :blocks blocks}))
+    ;; 1.5 s to air, margin 3: air left 11.25 s (oxygen 15) or 3.75 s (oxygen 5) at 0.75 s a bubble
+    15 short-shaft [false false]
+    5 short-shaft [true true]
+    4 short-shaft [true true]
+    ;; 8 s to air: oxygen 15 leaves 11.25 s, over 8 + 3; oxygen 14 leaves 10.5 s, under it
+    15 long-shaft [false false]
+    14 long-shaft [true true]))
+
+(deftest the-drown-allowance-and-margin-move-the-fire-point
+  (let [world {:self {:inWater true :oxygen 12} :blocks long-shaft}]
+    (is (= [true true] (fires? world)))
+    (is (= [false false] (fires? world :jobs.lib.breath/drown-hp 10)))
+    (is (= [false false] (fires? world :jobs.lib.breath/margin-s 0)))))
+
+(deftest no-air-seen-fires-at-once
+  (is (= [true true] (fires? {:self {:inWater true :oxygen 20} :blocks (assoc (shaft 69) "0,70,0" "stone")}))))
+
+(deftest water-breathing-never-fires
+  (is (= [false false] (fires? {:self {:inWater true :oxygen 0 :effects [{:name "water_breathing" :left 600}]} :blocks long-shaft}))))
 
 (deftest suffocating-is-registered-with-breathe
   (let [t (get triggers/all :suffocating)]
@@ -1505,7 +1528,7 @@
       (fn ^:async t []
         (let [{:keys [ended p pos block]} (await (cut-run! 82 "stone" 64 kit))]
           (is (= [[:completed nil]] ended))
-          (is (nil? (breath/situation p 12)) "breathing")
+          (is (nil? (breath/situation p)) "breathing")
           (is (pos? (.-health (.self p))))
           (is (= {:x 1.5 :y 64 :z 0.5} pos) "in the pocket beside the cut, not up the water column")
           (is (= ["cobblestone" "cobblestone"] [(block [0 64 0]) (block [0 65 0])]) "the opening is plugged behind it")
@@ -1536,7 +1559,7 @@
       (fn ^:async t []
         (let [{:keys [ended p pos block]} (await (cut-run! 72 "oak_planks" 70 kit))]
           (is (= [[:completed nil]] ended))
-          (is (nil? (breath/situation p 12)) "breathing")
+          (is (nil? (breath/situation p)) "breathing")
           (is (= "cobblestone" (block [0 69 0])) "the footing under the feet")
           (is (= {:x 1.5 :y 70 :z 0.5} pos) "in the pocket")
           (is (= "oak_planks" (block [0 73 0])) "the cap is left"))))))

@@ -9,8 +9,8 @@
 {:defaults
  {:tags [:survival :water] :time :any
   :plot {:height 10}
-  :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-              :job (jobs.survival.breathe {:min-oxygen 12})}]
+  :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+              :job (jobs.survival.breathe)}]
   :blocks [[:fill [0 0 0] [31 3 31] "stone"]
            [:fill [10 4 10] [21 5 21] "stone"]
            [:fill [11 4 11] [20 5 20] "air"]
@@ -84,7 +84,7 @@
   {:name "ledge-east-hostile-drops-breathe"
    :blocks [[:fill [21 4 11] [21 5 20] "air"]]
    :register [{:trigger :hostile-near :persistence :retry :backoff false :job (jobs.survival.respond-to-hostile)}
-              {:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12} :job (jobs.survival.breathe {:min-oxygen 12})}]
+              {:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {} :job (jobs.survival.breathe)}]
    :body {:at [18.5 2 15.5]}
    :act [[:await {:source :reflex :kind :fired :context {:reflex-id :suffocating}} 40]
          [:summon "zombie" [22.5 4 15.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
@@ -96,7 +96,7 @@
   {:name "ledge-east-hostile-gone-fast-refire-lands"
    :blocks [[:fill [21 4 11] [21 5 20] "air"]]
    :register [{:trigger :hostile-near :persistence :retry :backoff false :job (jobs.survival.respond-to-hostile)}
-              {:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12} :job (jobs.survival.breathe {:min-oxygen 12})}]
+              {:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {} :job (jobs.survival.breathe)}]
    :body {:at [12.5 2 15.5]}
    :act [[:await {:source :reflex :kind :fired :context {:reflex-id :suffocating}} 40]
          [:summon "zombie" [22.5 4 15.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]

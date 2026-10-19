@@ -7,8 +7,8 @@
 ;; its cooldown (counted from the job ending) has passed. Hostiles sit above
 ;; health: respond-to-hostile already flees when hurt and fights only when
 ;; healthy (or cornered), so get-food eats once no visible hostile is near.
-{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
-             :job (jobs.survival.breathe {:min-oxygen 12})}
+{:register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+             :job (jobs.survival.breathe)}
             {:trigger :burning :persistence :cooldown :cooldown-s 2
              :job (jobs.survival.extinguish {:water-radius 6})}
             {:trigger :died :persistence :cooldown :cooldown-s 30

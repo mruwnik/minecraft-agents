@@ -33,12 +33,12 @@
 
 (deftest suffocating-and-wedged-are-felt-in-the-dark
   (let [p (felt-only {:blocks {"0,64,0" "sand" "0,65,0" "sand"}})]
-    (is (= :enclosed (breath/situation p 12)))
+    (is (= :enclosed (breath/situation p)))
     (is (= pos (breath/wedged-cell p)))
     (is (nil? (breath/only-feet-cell p)) "suffocating owns it"))
   (let [p (felt-only {:blocks {"0,64,0" "sand"}})]
     (is (= pos (breath/only-feet-cell p)))
-    (is (nil? (breath/situation p 12)))))
+    (is (nil? (breath/situation p)))))
 
 (deftest footing-and-fire-at-the-feet-are-felt
   (let [p (felt-only {:blocks {"0,63,0" "stone" "0,64,0" "fire"}})]

@@ -3,8 +3,9 @@
   (jobs.survival.breathe, jobs.survival.unwedge). Sensing only.
 
   Two ways to suffocate:
-  - :drowning: in water, oxygen below :min-oxygen, and the head cell is not
-    air (a swimmer at the surface breathes and is not drowning).
+  - :drowning: in water, the head cell not air (a swimmer at the surface breathes and is not drowning), and the air
+    left plus the allowed drowning (::drown-hp) is less than the swim to the nearest air plus ::margin-s (see drowning?).
+    Water Breathing and Conduit Power never drown.
   - :enclosed: the cell holding the eyes (feet y + 1.62) holds a block whose
     collision shape fills the cell (blockAt's :fullCube), as in Minecraft.
     Air, fluids, plants, slabs and the like never do. An unloaded cell
@@ -13,6 +14,7 @@
   Wedged: the feet cell holds such a full block, e.g. sand that fell on the body. Farmland, slabs, snow layers, soul
   sand, paths, plants and fluids never do. The eye cell is the suffocating trigger's business."
   (:require [jobs.lib.access.rules :as rules]
+            [jobs.lib.cost.planner :as planner]
             [engine.args :as a]
             [engine.game :as game]
             [engine.memory :as mem]
@@ -21,7 +23,6 @@
             [jobs.lib.util :as u]))
 
 (declare settings)
-(defn min-oxygen [] (settings/get settings ::min-oxygen))
 
 (defn air? [block-name] (contains? #{"air" "cave_air" "void_air"} block-name))
 
@@ -52,15 +53,6 @@
   [p]
   (let [self (.self p)]
     (boolean (and (.-inWater self) (not (air? (or (u/feel-name p (eye-cell self)) "water")))))))
-
-(defn situation
-  "Why the body at p is suffocating, :drowning or :enclosed, or nil."
-  [p min-oxygen-arg]
-  (let [self (.self p)]
-    (cond
-      (and (< (.-oxygen self) (or min-oxygen-arg (min-oxygen))) (head-under? p)) :drowning
-      (suffocates-here? p (eye-cell self)) :enclosed
-      :else nil)))
 
 (def blocked-policy
   "Policy of the :unwedge-blocked entries written by jobs.survival.unwedge: one per cell it could not free."
@@ -217,12 +209,69 @@
            (columns radius)))))
 
 (a/defargs settings
-  {::min-oxygen {:default 12 :doc "Oxygen (of 20) below which a body in water with its head submerged counts as drowning, when the job or trigger names none." :spec (a/num-in 0 20)}
+  {::margin-s {:default 3 :doc "Seconds of spare breath a body in water with its head submerged keeps on reaching air: it counts as drowning once its air left (plus ::drown-hp) is under the swim to air plus this." :spec (a/num-in 0 nil)}
+   ::drown-hp {:default 0 :doc "Health the body may lose to drowning before it counts as drowning (an unusual job may allow some)." :spec (a/num-in 0 nil)}
    ::ticks-per-oxygen {:default 15 :doc "Game ticks a drowning body loses one point of oxygen in (the game's rule)." :spec (a/int-in 1 nil)}
    ::ticks-per-health {:default 10 :doc "Game ticks between the 2 health a drowning body loses once the oxygen is gone (the game's rule)." :spec (a/int-in 1 nil)}
    ::swim-ms {:default 500 :doc "Milliseconds a swimmer takes per block, to price a swim to a pocket of air." :spec (a/num-in 0 nil)}})
 
 (defn swim-ms [] (settings/get settings ::swim-ms))
+
+(defn effect? [self names]
+  (boolean (some #(contains? names (.-name %)) (array-seq (.-effects self)))))
+
+(defn air-left-s
+  "Seconds of breath the body has: its oxygen at the helmet's drain, plus the helmet's grace (planner/air-profile)."
+  [self]
+  (let [{:keys [air-drain air-grace]} (planner/air-profile (.-equipment self) (array-seq (.-effects self)))]
+    (+ (or air-grace 0)
+       (/ (/ (settings/ticks->ms (* (settings/get settings ::ticks-per-oxygen) (max 0 (.-oxygen self)))) 1000)
+          (or air-drain 1)))))
+
+(defn drown-allowance-s
+  "Seconds of drowning the body may take: ::drown-hp at 2 hp every ::ticks-per-health."
+  []
+  (/ (settings/ticks->ms (* (settings/get settings ::ticks-per-health) (/ (settings/get settings ::drown-hp) 2))) 1000))
+
+(defn reaches-air-within?
+  "Whether a swim of at most steps blocks through seen water and air reaches a cell whose head cell is air."
+  [p self-pos steps]
+  (let [fx (js/Math.floor (:x self-pos)) fy (js/Math.floor (:y self-pos)) fz (js/Math.floor (:z self-pos))
+        open? (fn [{:keys [x y z] :as cell}]
+                (and (<= (js/Math.abs (- x fx)) steps) (<= (js/Math.abs (- y fy)) steps) (<= (js/Math.abs (- z fz)) steps)
+                     (passable-water-or-air? (seen-water-name p cell))))
+        start {:x fx :y fy :z fz}]
+    (loop [frontier [start] seen #{start} k 0]
+      (cond
+        (empty? frontier) false
+        (some #(air? (seen-water-name p (update % :y inc))) frontier) true
+        (>= k steps) false
+        :else (let [next (->> (for [c frontier [dx dy dz] neighbours] (-> c (update :x + dx) (update :y + dy) (update :z + dz)))
+                              (remove seen)
+                              distinct
+                              (filter open?))]
+                (recur next (into seen next) (inc k)))))))
+
+(defn drowning?
+  "Whether a body in water with its head under must go for air now: its air left plus the allowed drowning is less than
+  the swim to the nearest seen air plus the margin. The search only goes as far as the air left allows, so it is short;
+  air not seen counts as out of reach."
+  [p]
+  (let [self (.self p)]
+    (and (head-under? p)
+         (number? (.-oxygen self))
+         (not (effect? self #{"water_breathing" "conduit_power"}))
+         (let [budget-s (- (+ (air-left-s self) (drown-allowance-s)) (settings/get settings ::margin-s))]
+           (or (neg? budget-s)
+               (not (reaches-air-within? p {:x (.. self -pos -x) :y (.. self -pos -y) :z (.. self -pos -z)} (js/Math.floor (/ (* 1000 budget-s) (swim-ms))))))))))
+
+(defn situation
+  "Why the body at p is suffocating, :drowning or :enclosed, or nil."
+  [p]
+  (cond
+    (drowning? p) :drowning
+    (suffocates-here? p (eye-cell (.self p))) :enclosed
+    :else nil))
 
 (defn nearest-pocket
   "The nearest seen pocket of air below the feet: {:cell :steps}, the cell (head cell air, feet cell water or air, not
