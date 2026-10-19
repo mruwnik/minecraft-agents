@@ -17,7 +17,7 @@
         result (results/project "j4" "g" events false)]
     (is (= :completed (:status result)))
     (is (= :complete (:history result)))
-    (is (= [{:event :search.done :data {:found [{:what "stone" :pos [5 70 3]}] :coverage {:scans 1}}}]
+    (is (= [{:event :search.done :job "j4/c0" :data {:found [{:what "stone" :pos [5 70 3]}] :coverage {:scans 1}}}]
            (:events result)))))
 
 (deftest the-terminal-events-data-is-the-jobs-result

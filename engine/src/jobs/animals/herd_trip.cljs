@@ -141,7 +141,7 @@
           :else
           (let [k (animals/key-of target)
                 _ (child/progress! c :equip)
-                walked (await (animals/walk! c k target (lure-reach) {:doors :shut}))]
+                walked (await (animals/walk! c k target (lure-reach) {:doors :shut :range (lure-reach)}))]
             (if (= :there walked) (start-trip! c k) :continue)))))))
 
 (defn remember-start!
@@ -168,13 +168,15 @@
            first))))
 
 (defn ^:async look-back!
-  "Walk to within look-back-range of where the animal was last listed, so it is loaded and listed again; then it is booked looked-for.
-  :continue while the walk goes on."
+  "Walk to within look-back-range of where the animal was last listed, so it is loaded and listed again; turns round there
+  (animals count only while in view, and the run's one survey was at the start); then it is booked looked-for.
+  :continue while the walk or the look goes on."
   [c {:keys [key pos]}]
   (let [r (await (near/go-near! c pos (look-back-range) {:doors :never :ways #{:walk :clear-seal}}))]
-    (if (= :partial r)
-      :continue
-      (do (ctx/update-mem! c update :looked-back (fnil conj []) key) :continue))))
+    (cond
+      (= :partial r) :continue
+      (await (look/survey! c :near)) :continue
+      :else (do (ctx/update-mem! c update :looked-back (fnil conj []) key) :continue))))
 
 (defn ^:async leash-next!
   "Bring one more animal to the body and start its trip, or end when the pen holds enough or none more can be had.

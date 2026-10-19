@@ -134,12 +134,13 @@
 
 (defn ^:async walk!
   "Walk within reach of the entity target (animal k) when further than reach. Resolves to :there, :partial or
-  :blocked; a blocked walk gives k up and bumps the row. opts: :reset-row? (a :there ends the row), :doors."
-  [c k target reach {:keys [reset-row? doors]}]
+  :blocked; a blocked walk gives k up and bumps the row. opts: :reset-row? (a :there ends the row), :doors, :range (how
+  near the walk ends, default 2; a lure only needs the body within follow range, so it stays out of the pond a cow stands in)."
+  [c k target reach {:keys [reset-row? doors range] :or {range 2}}]
   (let [tpos (u/pos-of (.-pos target))]
     (if (<= (u/dist (u/self-pos c) tpos) reach)
       :there
-      (let [r (await (near/go-near! c tpos 2 (cond-> {:ways #{:walk :clear-seal} :look-round false}
+      (let [r (await (near/go-near! c tpos range (cond-> {:ways #{:walk :clear-seal} :look-round false}
                                                doors (assoc :doors doors))))]
         (case r
           :there (do (when reset-row? (reset-row! c)) :there)

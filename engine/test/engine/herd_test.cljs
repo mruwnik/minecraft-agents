@@ -1456,6 +1456,25 @@
           (is (= :brought (:reason (done-event s))))
           (is (= #{1} (cows-in-pen s))))))))
 
+(deftest a-cow-left-behind-at-the-start-is-seen-again-by-a-look-where-it-stood
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (setup (world {:self {:pos {:x -45 :y 64 :z 3}} :entities [(cow 1 -40 3)] :inventory [wheat] :blocks far-ground}))
+                         {:target 1 :radius 30})
+              p (:p s)
+              entities (.-entities p)
+              looks #(count (filter (fn [call] (= "look" (.-name call))) (.-calls (.-world p))))
+              at-pen (atom nil)
+              seen-again (atom false)]
+          (aset p "entities" (fn [q]
+                               (when (and (>= (self-x s) -10) (not @seen-again)) (reset! at-pen (looks)))
+                               (when (and @at-pen (> (looks) @at-pen)) (reset! seen-again true))
+                               (if (or (nil? @at-pen) @seen-again) (.call entities p q) #js [])))
+          (await (run-ticks s 900))
+          (is (= :brought (:reason (done-event s))))
+          (is (= #{1} (cows-in-pen s))))))))
+
 (def other-ring
   (into {} (for [x (range -3 4) z (range 6 13) :when (or (#{-3 3} x) (#{6 12} z))] [(str x ",64," z) "oak_fence"])))
 

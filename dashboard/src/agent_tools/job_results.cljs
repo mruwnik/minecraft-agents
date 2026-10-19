@@ -46,7 +46,7 @@
 (defn project
   "Project retained observations belonging to one root job in one generation.
    Status comes from a top-level terminal event; events include child domain
-   observations, never unrelated chat or routine scheduler/action bookkeeping.
+   observations (a child's tagged with its :job, so its stop is not read as the job's), never unrelated chat or routine scheduler/action bookkeeping.
    next-id (optional) is the engine's id counter: an id it never issued is :unknown-job even when history is partial."
   ([id generation events partial?] (project id generation events partial? nil))
   ([id generation events partial? next-id]
@@ -57,6 +57,7 @@
         observations (filterv #(not (internal-kinds (:kind %))) matching)
         selected (take-last event-limit observations)
         clipped (bounded (mapv (fn [e] (cond-> {:event (:kind e)}
+                                       (not= id (get-in e [:context :job-id])) (assoc :job (get-in e [:context :job-id]))
                                        (:message e) (assoc :message (:message e))
                                        (seq (:data e)) (assoc :data (:data e)))) selected))]
     (if (empty? matching)
