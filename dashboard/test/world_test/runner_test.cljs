@@ -853,12 +853,14 @@
           (.finally done)))))
 
 (defn log-reload!
-  "Appends a world.reloaded event for files to the body's event log, as the engine writes it."
-  [opts files]
-  (let [file (r/events-file opts)]
+  "Appends a world.reloaded event for files to the body's event log, as the engine writes it; mtimes (default: far
+  ahead, newer than any edit) is the modification time of the copy read per file."
+  [opts files & [mtimes]]
+  (let [file (r/events-file opts)
+        mtimes (or mtimes (into {} (map (fn [f] [f (+ (js/Date.now) 1e6)])) files))]
     (fs/mkdirSync (path/dirname file) #js {:recursive true})
     (fs/appendFileSync file (str (pr-str {:source :system :kind :world.reloaded :level :debug :time-ms (js/Date.now)
-                                          :data {:files files}}) "\n"))))
+                                          :data {:files files :mtimes mtimes}}) "\n"))))
 
 (deftest await-reload-resolves-when-every-written-file-was-re-read-after-the-write
   (async done
@@ -880,6 +882,17 @@
             (log-reload! opts ["/w/plans/xtest-b-z.edn" "/w/plans/test-c-z.edn"])
             (r/await-reload! opts {:ino nil :pos 0} 0 ["test-b-z.edn"] 600)))
         (.then (fn [v] (is (false? v) "another file ending in the name is no reload of it")))
+        (.catch (fn [e] (is false (.-message e))))
+        (.finally done))))
+
+(deftest await-reload-ignores-a-copy-read-before-the-edit
+  (async done
+    (-> (with-body-dir
+          (fn [opts _]
+            (let [edited (js/Date.now)]
+              (log-reload! opts ["/w/zones.edn"] {"/w/zones.edn" (- edited 50)})
+              (r/await-reload! opts {:ino nil :pos 0} 0 ["zones.edn"] 600 {"zones.edn" edited}))))
+        (.then (fn [v] (is (false? v) "a first load that read the file before the edit is no reload of the edit")))
         (.catch (fn [e] (is false (.-message e))))
         (.finally done))))
 

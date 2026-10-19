@@ -1048,13 +1048,16 @@
 
 (defn await-reload!
   "Polls the body's log from cursor until every file in names (file names, e.g. \"zones.edn\") appears in a :world.reloaded
-  event newer than since-ms; resolves true then, false after limit-ms."
-  [opts cursor since-ms names limit-ms]
+  event newer than since-ms; resolves true then, false after limit-ms. With mtimes ({file name ms}) a file counts only
+  when the event's copy of it is at least that new: a body that read the file before the edit may log it later."
+  [opts cursor since-ms names limit-ms & [mtimes]]
   (let [until (+ (js/Date.now) limit-ms)
+        fresh? (fn [ev file] (>= (some (fn [[k v]] (when (= (path/basename (name k)) (path/basename file)) v)) (get-in ev [:data :mtimes]))
+                                 (get mtimes (path/basename file) 0)))
         reloaded (fn []
                    (->> (read-events-from (events-file opts) cursor)
                         (filter #(and (= :world.reloaded (:kind %)) (>= (:time-ms % 0) since-ms)))
-                        (mapcat #(get-in % [:data :files]))))
+                        (mapcat (fn [ev] (filter #(fresh? ev %) (get-in ev [:data :files]))))))
         done? (fn [] (let [files (reloaded)] (every? (fn [n] (some #(= n (path/basename %)) files)) names)))]
     (letfn [(poll []
               (cond
@@ -1131,9 +1134,10 @@
                  (let [since (js/Date.now)]
                    (when (seq zones) (edit-shared-file! (world-file opts "zones.edn") #(f/zones-with % zones)))
                    (when (seq markers) (edit-shared-file! (world-file opts "places.json") #(f/markers-with % markers)))
-                   since))))
-            (.then #(await-reload! opts cursor % (cond-> [] (seq zones) (conj "zones.edn") (seq markers) (conj "places.json"))
-                                   (:shared-settle-ms opts shared-settle-ms)))
+                   [since (into {} (map (fn [n] [n (.-mtimeMs (fs/statSync (world-file opts n)))]))
+                                (cond-> [] (seq zones) (conj "zones.edn") (seq markers) (conj "places.json")))]))))
+            (.then (fn [[since mtimes]]
+                     (await-reload! opts cursor since (vec (keys mtimes)) (:shared-settle-ms opts shared-settle-ms) mtimes)))
             (.then #(when-not %
                       (throw (js/Error. (str "the body logged no world.reloaded for the seeded zones/places within "
                                              (:shared-settle-ms opts shared-settle-ms) " ms"))))))))))

@@ -196,6 +196,7 @@
     (write-zones! file (pr-str [farm-zone]))
     (world/zones w)
     (is (= [[:debug [file]]] (map (juxt :level :files) (reloads seen))))
+    (is (= {file (.-mtimeMs (fs/statSync file))} (:mtimes (first (reloads seen)))) "the event says how new the copy read is")
     (later! clock w)
     (later! clock w)
     (is (= 1 (count (reloads seen))))

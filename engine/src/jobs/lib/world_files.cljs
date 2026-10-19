@@ -209,10 +209,11 @@
               (if kept "; the last good copy is still used" "; it was never readable"))})
 
 (defn reloaded-event
-  "The :debug event for zone or markers files whose stamp changed (so they were read again), or nil."
-  [files]
+  "The :debug event for zone or markers files whose stamp changed (so they were read again), or nil. mtimes {file
+  mtime-ms} is the modification time of the copy read: a writer waits for the one its own edit made."
+  [files mtimes]
   (when (seq files)
-    {:source :system :kind :world.reloaded :level :debug :files (vec files)
+    {:source :system :kind :world.reloaded :level :debug :files (vec files) :mtimes mtimes
      :text (str "re-read " (str/join ", " files))}))
 
 (defn changed-files
@@ -254,7 +255,9 @@
             ((:emit opts) (warn-event (get kinds kind) warn)))
           (when-let [ev (reloaded-event (cond-> (changed-files (:plans-dir opts) (:plans old) plans)
                                           (and file (not= (:stamp zone-entry) (:stamp (:zones old))) (:stamp zone-entry)) (conj file)
-                                          (and markers-file (not= (:stamp markers-entry) (:stamp (:markers old))) (:stamp markers-entry)) (conj markers-file)))]
+                                          (and markers-file (not= (:stamp markers-entry) (:stamp (:markers old))) (:stamp markers-entry)) (conj markers-file))
+                                        (into {} (keep (fn [[f e]] (when-let [[mtime] (and f (:stamp e))] [f mtime])))
+                                              [[file zone-entry] [markers-file markers-entry]]))]
             ((:emit opts) ev))
           (when zone-warn
             ((:emit opts) (zones-warn-event file zone-warn)))

@@ -3,7 +3,7 @@
 ;; (wait :refused, nothing dug or tilled); each has a control with the zone moved off the work area.
 {:defaults
  {:tags [:access :zones]
-  :time :any
+  :time :day
   :plot {:height 20 :floor "grass_block"}
   :body {:at [10.5 0 10.5] :effects [["resistance" 600 4]]}
   :limit-s 90}
@@ -55,8 +55,8 @@
    :blocks [[:fill [18 0 18] [19 1 19] "dirt"]]
    :zones [{:name "z" :min [17 0 17] :max [20 2 20] :owner "SomeoneElse"}]
    :act [[:job (jobs.build.clear-box {:from #at [18 0 18] :to #at [19 1 19]})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :zone}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :stopped :data {:reason :zone}}}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :waiting :data {:reason :refused}}}]
    :after [[:block [18 0 18] "dirt"] [:block [19 1 19] "dirt"]]}
   {:name "clear-box-free-outside-the-plan"
    :blocks [[:fill [18 0 18] [19 1 19] "dirt"]]
