@@ -200,7 +200,7 @@ again. A kept job starts again only after the respawn.
 `entities`, `inventory`, `containers`, `drops`, `unreachable`, `noPath`, `ages`, `states`, `furnaces`, `enchantTables`,
 `recipes`, `raining`, `players`, and more; the namespace docstring and `engine.fake.*` (placing, animals, trade, unequip,
 use-on, furnace, enchant) have the details. The fake has the same sensing fields and statuses as the real layer, a
-built-in recipe table, and instant, deterministic behaviour (`moveTo` jumps to the target, `offline` waits
+built-in recipe table (`tu/fake` with a `:time` also gives the body the world's sky but no cell light: see `tu/with-sky-only`), and instant, deterministic behaviour (`moveTo` jumps to the target, `offline` waits
 `ms * spec.offlineScale`).
 
 `engine.job-fuzz-test` runs every registered job on seeded random args and worlds and fails on a throwing check or round, a plain-false decline, a stop without reason or a sync runaway; carded defects sit in its `known` map. `FUZZ_JOB`, `FUZZ_SEED`, `FUZZ_CASES`, `FUZZ_TRACE`, `FUZZ_EXTREME` replay or widen a run.

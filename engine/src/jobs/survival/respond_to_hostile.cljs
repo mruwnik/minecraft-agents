@@ -107,7 +107,7 @@
   or with any when the body is shut in a closed room or its own shelter and :stay-inside is on."
   [c]
   (let [p (:primitives c)]
-    (boolean (and (sh-sense/dark-here? p)
+    (boolean (and (look/dark-here? p)
                   (or (> (count (danger-q/known-hostiles p (hold-radius) {})) 1)
                       (and (:stay-inside (:args c)) (or (sh-sense/shut-in-room? p) (sh-inside/sheltered-in c))))))))
 

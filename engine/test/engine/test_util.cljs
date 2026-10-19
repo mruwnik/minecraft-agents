@@ -87,9 +87,16 @@
               (.blockAt (oracle p) pos)
               #js {:unknown true :pos pos})))
 
+(defn with-sky-only
+  "p with a raw reader of its world giving the sky and no light for any cell (lightAt -1): the body knows the time but
+  not how bright a cell is, so sense falls back on the column. Its perception and sight stay the fake's own."
+  [p]
+  (aset p "rawWorld" (doto (fake-raw/create p) (aset "lightAt" (fn [_ _ _] -1))))
+  p)
+
 (defn fake
   "A fake primitives object (engine.fake/create) built from a cljs spec map, with an omniscient sensedAt (a fully informed
-  body; blind removes it, perception/wrap replaces it). The spec's :floor, [x0 z0 x1 z1], is stone at
+  body; blind removes it, perception/wrap replaces it; a spec with :time also gets with-sky-only). The spec's :floor, [x0 z0 x1 z1], is stone at
   y 63 over that rectangle (floor) added under the spec's :blocks, for walks over the path planner."
   ([] (fake {}))
   ([spec]
@@ -98,10 +105,10 @@
                 spec)]
      (let [p (fake-world/create spec)]
        (aset p "sensedAt" (sensed-by p))
-       p))))
+       (cond-> p (contains? spec :time) with-sky-only)))))
 
 (defn with-light-data
-  "p with the light data of its world (perception's raw) but no sight: jobs.lib.shelter.sense/dark-here? reads the sky's darkening at the world's time."
+  "p with the light data of its world (perception's raw) but no sight: the sky's darkening at the world's time and the light of its cells."
   [p]
   (aset p "perception" {:raw (fake-raw/create p) :st #js {:mobSource p} :opts {:now (constantly 0)}})
   p)

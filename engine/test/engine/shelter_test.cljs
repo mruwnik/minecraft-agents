@@ -21,6 +21,11 @@
             [engine.shelter-support :refer [day-ms night noon on-wait! dawn-after! mid-night! default-dawn setup tick-n night-then-day calls arg-pos entries know-bed! looked-round! pos-of teleport! emitted emitted-by floor bed-room dirt-stack sleeper awake declined-events always-shelter refuse-placing! after-first! fires? ground stone-ground hard-ground ms-of-offline notified refuse-cell!]]
             [engine.triggers :as triggers]))
 
+(deftest without-a-sky-nothing-is-dark-with-one-the-night-is
+  (let [bare (doto (tu/fake {:time night}) (aset "rawWorld" nil))]
+    (is (false? (sh-sense/dark-outside? bare)) "the clock is no sky: nothing is known, nothing is dark")
+    (is (true? (sh-sense/dark-outside? (tu/fake {:time night}))))))
+
 (deftest night-holds-at-night-in-the-open
   (are [world args held] (= held (fires? world args))
     {:time night} {} true

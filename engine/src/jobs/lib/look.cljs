@@ -293,12 +293,26 @@
 
 ;; ------------------------------------------------------------------ light
 
+(defn raw-of
+  "The raw world reader of p (light, sky, block states): its perception's, else the primitives' rawWorld; nil without one."
+  [p]
+  (or (some-> (aget p "perception") :raw) (.-rawWorld p)))
+
+(defn light-known?
+  "Whether raw has light data for the cell: it is loaded, and lightAt does not say -1 (no light read)."
+  [^js raw x y z]
+  (and (<= 0 (.stateAt raw x y z)) (<= 0 (.lightAt raw x y z))))
+
+(defn sky-subtract-at
+  "What the sky's light is reduced by at time of day t with rain and thunder (0-1): 0 at noon, 11 at a clear midnight."
+  [t rain thunder]
+  (js/Math.round (* 11 (/ (- 1 (perception/sky-darken t rain thunder)) 0.8))))
+
 (defn sky-subtract
-  "What the sky's light is reduced by now (0 at noon, 11 at a clear midnight): time of day, rain and thunder of raw."
+  "sky-subtract-at for the sky of raw now."
   [raw]
-  (let [s (.sky raw)
-        darken (perception/sky-darken (.-timeOfDay s) (.-rain s) (.-thunder s))]
-    (js/Math.round (* 11 (/ (- 1 darken) 0.8)))))
+  (let [s (.sky raw)]
+    (sky-subtract-at (.-timeOfDay s) (.-rain s) (.-thunder s))))
 
 (defn effective-light
   "Light at cell x y z of raw: the brighter of block light and sky light less the sky darkening."
@@ -309,20 +323,20 @@
 (defn dark-guess?
   "The guess for a cell the body has not seen: whether open sky, less its darkening, is below dark-light. False without a perception."
   [p]
-  (boolean (some-> (aget p "perception") :raw sky-subtract (->> (- 15)) (< (dark-light)))))
+  (boolean (some-> (raw-of p) sky-subtract (->> (- 15)) (< (dark-light)))))
 
 (defn buried-feet?
   "Whether the sky light at the feet cell and the cell over it is 0 (underground), read from raw; false without light data there."
   [^js raw pos]
   (let [x (js/Math.floor (.-x pos)) y (js/Math.floor (.-y pos)) z (js/Math.floor (.-z pos))]
-    (and (<= 0 (.stateAt raw x y z))
+    (and (light-known? raw x y z)
          (zero? (bit-shift-right (.lightAt raw x y z) 4))
          (zero? (bit-shift-right (.lightAt raw x (inc y) z) 4)))))
 
 (defn dark-here?
   "Whether the light at the body's feet (block or sky less the sky's darkening now) is under look/dark-light: hostiles spawn and walk in from it, at any hour. False without light data."
   [p]
-  (let [raw (:raw (aget p "perception"))
+  (let [raw (raw-of p)
         ^js pos (.-pos (.self p))]
     (boolean (and raw
                   (< (effective-light raw (js/Math.floor (.-x pos)) (js/Math.floor (.-y pos)) (js/Math.floor (.-z pos)))

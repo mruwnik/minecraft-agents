@@ -18,7 +18,7 @@
             [jobs.lib.dawn :as dawn]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.reach :as reach]
-            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.look :as look]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.lib.world-files :as world]))
@@ -40,7 +40,7 @@
   [p memory args kn]
   (boolean (and (not (body/recovery-pending? memory :scaffold-left))
                 (some? (world/zones kn))
-                (or (settings/get settings ::at-night) (not (sh-sense/dark-here? p)))
+                (or (settings/get settings ::at-night) (not (look/dark-here? p)))
                 (or (settings/get settings ::with-hostile)
                     (and (dawn/calm? p) (not (threats/fled-recently? p memory))))
                 (some (complement #(too-deep? p %))

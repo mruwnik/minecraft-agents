@@ -13,7 +13,6 @@
             [jobs.lib.look :as look]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.beds :as sh-beds]
-            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.survival.get-food.risk :as risk]))
@@ -121,7 +120,7 @@
   own (worth-cooking?); never in the dark, while the night handler holds or when rushed? (a cook under way is dropped then)."
   [c]
   (boolean
-   (and (not (sh-sense/dark-here? (:primitives c)))
+   (and (not (look/dark-here? (:primitives c)))
         (not (night-holds? c))
         (not (rushed? c))
         (or (:cooking (ctx/mem c))
