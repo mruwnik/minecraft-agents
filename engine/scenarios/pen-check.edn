@@ -8,7 +8,7 @@
          (jobs.animals.pen-check {:at [9510 151 9452]})
          (jobs.animals.pen-check {:at [9522 151 9452]})
          (jobs.animals.pen-check {:at [9475 151 9505]})
-         (jobs.animals.pen-check {:at [9450 151 9452] :max-cells 10})
+         (jobs.animals.pen-check {:at [9450 151 9452] :settings {:jobs.animals.pen-check/max-cells 10}})
          (jobs.animals.pen-check {:box {:min {:x 9460 :y 151 :z 9450} :max {:x 9464 :y 151 :z 9454}}})
          (jobs.animals.pen-check {:box {:min {:x 9472 :y 151 :z 9450} :max {:x 9476 :y 151 :z 9454}}})
          (jobs.animals.pen-check {:box {:min {:x 9520 :y 151 :z 9450} :max {:x 9524 :y 151 :z 9454}}})
