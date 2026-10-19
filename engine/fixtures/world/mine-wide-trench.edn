@@ -25,6 +25,6 @@
    :after [[:block [26 0 16] "iron_ore"]]}
   {:name "lit-ore-is-seen-and-dug-from-the-cut-end"
    :blocks [[:set [18 0 16] "torch"]]
-   :expect [{:event {:source :job :kind :mine.left-behind} :within-s 90 :of-job true}
-            {:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 1]}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :mine.left-behind} :for-s 100 :until {:source :job :kind #{:completed :stopped}} :of-job true}]
    :after [[:not-block [22 0 16] "iron_ore"] [:body-near [16.5 0 16.5] 1.5]]}]}

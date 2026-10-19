@@ -173,12 +173,19 @@
       (and (= :done (:kind r)) (:arrived (:data r))) :arrived
       :else :unreachable)))
 
+(defn open-above?
+  "Whether the nearest seen cell above cell in its column (within 8) is open."
+  [block-at [x y z]]
+  (boolean (some-> (first (keep #(block-at [x % z]) (range (inc y) (+ y 9)))) dig-route/open?)))
+
 (defn drop-route
   "dig-route/route from a feet cell to the cell of a drop lying at goal; block-at answers a cell's name or nil when never
-  seen; a cell never seen is taken for stone, floors included (a rim sees no floor down a dug column). A drop at rest has a
-  solid floor, seen or not."
+  seen; a cell never seen is taken for stone (a rim sees no floor down a dug column), except under a seen open cell: it may
+  be air of any depth (a trench), so no step lands on it. A drop at rest has a solid floor, seen or not."
   [block-at from [gx gy gz :as goal]]
-  (dig-route/route (fn [cell] (or (block-at cell) "stone"))
+  (dig-route/route (fn [cell]
+                     (or (block-at cell)
+                         (when (or (= cell [gx (dec gy) gz]) (not (open-above? block-at cell))) "stone")))
                    from goal
                    {:max-digs (settings/get settings ::dig-max-cells) :margin (settings/get settings ::dig-margin)
                     :max-fall (settings/get settings ::dig-max-fall)}))
@@ -379,9 +386,10 @@
                   stuck? (and r (= "unreachable" (.-status r)))
                   dug2 (when (and stuck? (:dig (:args c))) (await (dig-to! c item)))
                   dig2-why (when-not (#{nil :dug :continue} dug2) dug2)
-                  r2 (when (= :dug dug2) (await (collect!)))
+                  walk2 (when (= :dug dug2) (await (walk-down! c item)))
+                  r2 (when (and (= :dug dug2) (not= :continue walk2)) (await (collect!)))
                   r2-stuck? (and r2 (= "unreachable" (.-status r2)))]
-              (if (or moving? (= :continue walk) (= :continue dug) (= :continue dug2))
+              (if (or moving? (= :continue walk) (= :continue dug) (= :continue dug2) (= :continue walk2))
                 :continue
                 (do (cond
                       dig-why (leave! c item dig-why)

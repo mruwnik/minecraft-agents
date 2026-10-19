@@ -391,3 +391,11 @@
           (core/cancel! eng (first (:list (core/state eng))))
           (await (tu/run-until-empty eng 20))
           (is (empty? (held)) "the cleanup released it"))))))
+
+(deftest a-drop-across-a-trench-is-not-routed-onto-a-floor-that-was-never-seen
+  (let [seen (fn [[x y z]] (cond (and (<= 16 x 19) (<= 0 y 1) (= z 16)) "air"
+                                 (and (<= 20 x 21) (<= -2 y 1) (= z 16)) "air"))
+        r (job-ns/drop-route seen [19 0 16] [22 0 16])]
+    (is (nil? (:problem r)))
+    (is (not-any? (fn [[x y z]] (and (<= 20 x 22) (neg? y) (= z 16))) (:dig r))
+        "the trench floor is deeper than the fall the route planned, so the route goes round it")))
