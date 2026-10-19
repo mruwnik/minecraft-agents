@@ -17,7 +17,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
             [jobs.lib.targets :as targets]
-            [jobs.lib.trees :refer [log-name? axe-worth-fetching? axe-fetch-limits trees-near tree-near tree-at unreachable-set debts replant-kind
+            [jobs.lib.trees :as trees :refer [log-name? axe-worth-fetching? axe-fetch-limits trees-near tree-near tree-at unreachable-set debts replant-kind
                                     replant-policy default-radius max-partials]]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
@@ -230,14 +230,25 @@
 (defn axe-carried? [c]
   (boolean (some #(str/ends-with? (:name %) "_axe") (u/inventory (:primitives c)))))
 
+(defn crown-height
+  "Logs the seen leaves round the base column imply the trunk has (base to the highest such leaf), 0 without a base: the
+  body's first sight misses the top logs, not the crown."
+  [c]
+  (let [{:keys [base column]} (ctx/mem c)]
+    (if-not base
+      0
+      (let [near? (fn [{:keys [pos]}] (and (<= (abs (- (:x pos) (:x column))) 4) (<= (abs (- (:z pos) (:z column))) 4)))
+            tops (keep #(when (near? %) (:y (:pos %))) (trees/scan (:primitives c) (+ (:radius (:args c) default-radius) 4) trees/leaves-name? trees/max-leaves))]
+        (if (seq tops) (inc (- (apply max tops) (:y base))) 0)))))
+
 (defn axe-wanted?
   "Whether an axe should be got before the next log of a tree of logs: none carried, a tree an axe pays for (the logs dug
-  and still seen: the first sight of a tall tree misses its top), and either fewer than two dug and no fetch failed, or a
+  and still seen, or the height of the crown over the base: the first sight of a tall tree misses its top logs), and either fewer than two dug and no fetch failed, or a
   fetch failed and two logs are dug since (they may now craft one; once)."
   [c logs]
   (let [{:keys [dug axe-failed axe-retried]} (ctx/mem c)]
     (boolean (and (not (axe-carried? c))
-                  (axe-worth-fetching? (+ (or dug 0) (count logs)))
+                  (axe-worth-fetching? (max (+ (or dug 0) (count logs)) (crown-height c)))
                   (if axe-failed
                     (and (>= (or dug 0) 2) (not axe-retried))
                     (< (or dug 0) 2))))))

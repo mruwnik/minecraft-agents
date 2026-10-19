@@ -416,6 +416,17 @@
           (is (= 8 (:logs (:out s))) "felled without an axe")
           (is (= 2 (count (kinds s :fetch.failed))) "the fetch, and the craft-only ask again after two logs"))))))
 
+(deftest the-crown-over-a-tree-seen-short-makes-an-axe-worth-fetching
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (fm/start {:blocks (merge (lt/tree 6 0 "oak" 3) {"6,73,0" "oak_leaves"})} {})
+              c {:primitives p :args {:radius 10}}
+              logs (vec (repeat 3 {:name "oak_log"}))
+              wanted (fn [m] (with-redefs [ctx/mem (constantly m)] (fell-tree/axe-wanted? c logs)))]
+          (is (false? (wanted {:dug 0})) "no base chosen: three logs do not pay")
+          (is (true? (wanted {:dug 0 :base {:x 6 :y 64 :z 0} :column {:x 6 :z 0}})) "leaves ten blocks over the base do"))))))
+
 (deftest a-failed-axe-fetch-is-asked-again-by-crafting-once-two-logs-are-dug
   (let [c {:primitives (tu/fake {:blocks {}}) :args {}}
         logs (vec (repeat 8 {:name "oak_log"}))
