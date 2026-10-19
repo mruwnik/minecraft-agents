@@ -2,6 +2,7 @@
   "dig-in's zigzag pit: up-front fluid checks, the straight column only for a bad cell it refuses, a glance at unseen
   side columns, no side column with a hostile, and a bounded roof placement."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.shut-in-pit-seen-test :as seen]
             [jobs.survival.retreat-pit :as pit]))
@@ -67,6 +68,13 @@
         p (fn [es] (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :blocks seen/ground :entities es}))]
     (is (true? (pit/side-open? {:primitives (p []) :args {:radius 8}} cell)))
     (is (false? (pit/side-open? {:primitives (p [zombie]) :args {:radius 8}} cell)))))
+
+(deftest the-pit-reads-the-hostile-radius-from-the-danger-settings
+  (let [zombie {:id 1 :uuid "u1" :name "zombie" :kind "hostile" :pos {:x 1.5 :y 65 :z 0.5}}
+        c {:primitives (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :blocks seen/ground :entities [zombie]}) :args {}}
+        cell {:x 1 :y 65 :z 0}]
+    (is (false? (pit/side-open? c cell)) "the default radius sees the zombie")
+    (is (true? (settings/with-settings {:jobs.lib.danger/hostile-radius 0} #(pit/side-open? c cell))))))
 
 (deftest a-plug-answered-occupied-by-a-block-that-does-not-seal-ends-the-call
   (async done

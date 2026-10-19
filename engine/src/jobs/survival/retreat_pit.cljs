@@ -6,6 +6,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as look]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
@@ -29,14 +30,10 @@
   "The block a dug block drops, where it is another (an unlisted one drops itself)."
   {"grass_block" "dirt" "stone" "cobblestone" "deepslate" "cobbled_deepslate" "podzol" "dirt" "mycelium" "dirt"})
 
-(def default-radius
-  "Blocks within which a melee hostile stands in the way of a pit cell, where the call has no :radius."
-  8)
-
 (defn hostiles
   "The cells the melee hostiles within the call's :radius overlap."
   [c]
-  (seal/hostile-cells (:primitives c) (:radius (:args c) default-radius)))
+  (seal/hostile-cells (:primitives c) (danger-q/radius-in (:args c))))
 
 (defn side-open?
   "Whether the side column at feet height (cell and the one over it) is seen open, dry and free of hostiles: a way to

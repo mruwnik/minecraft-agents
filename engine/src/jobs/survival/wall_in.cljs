@@ -24,9 +24,9 @@
   {:ignore-zones? :shared
    :for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
-   :radius {:doc "melee hostiles within this many blocks decide which side is walled first and stand in the way of a cell" :spec (a/num-in 0 nil) :default 8}
-   :ranged-radius {:doc "ranged hostiles within this many blocks decide which side is walled first" :spec (a/num-in 0 nil) :default 16}
-   :max-places {:doc "placements per step" :spec (a/int-in 1 nil) :default 4}
+   :radius {:doc "melee hostiles within this many blocks decide which side is walled first and stand in the way of a cell; nil: the jobs.lib.danger ::hostile-radius setting" :spec (a/num-in 0 nil) :default nil}
+   :ranged-radius {:doc "ranged hostiles within this many blocks decide which side is walled first; nil: the ::ranged-radius setting" :spec (a/num-in 0 nil) :default nil}
+   :max-places {:doc "placements per step; nil: the jobs.survival.retreat-seal ::max-places setting" :spec (a/int-in 1 nil) :default nil}
    :wall-value {:doc ":night: a block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85, stone 2.85, planks 3.4, log 12.8) is taken back at dawn, which the quote counts" :spec (a/num-in 0 nil) :default 3}})
 
 (a/defargs settings

@@ -44,9 +44,9 @@
    :place {:doc "the :room way: the room to enter, a remembered place name (default the home)" :spec (a/or-of keyword? string?) :default nil}
    :fetch {:doc "dig-pocket: get a missing tool (jobs.lib.need): true, a set of kinds or a map of limits" :spec need/option? :default false}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
-   :radius {:doc "melee hostiles within this many blocks decide which side is walled first and stand in the way of a cell" :spec (a/num-in 0 nil) :default 8}
-   :ranged-radius {:doc "ranged hostiles within this many blocks decide which side is walled first" :spec (a/num-in 0 nil) :default 16}
-   :max-places {:doc "placements per step" :spec (a/int-in 1 nil) :default 4}
+   :radius {:doc "melee hostiles within this many blocks decide which side is walled first and stand in the way of a cell; nil: the jobs.lib.danger ::hostile-radius setting" :spec (a/num-in 0 nil) :default nil}
+   :ranged-radius {:doc "ranged hostiles within this many blocks decide which side is walled first; nil: the ::ranged-radius setting" :spec (a/num-in 0 nil) :default nil}
+   :max-places {:doc "placements per step; nil: the jobs.survival.retreat-seal ::max-places setting" :spec (a/int-in 1 nil) :default nil}
    :hand-clear-ms {:doc "a pit digs a block the carried tools cannot harvest by hand, once a block to roof with is in hand, when the hand breaks it within this many ms (stone by hand takes 7500); default jobs.lib.tools quick-clear-ms" :spec (a/int-in 0 nil)}
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pit or pocket is dropped and the lava left" :spec #{:seal :stop} :default :seal}
    :wall-value {:doc ":night: a block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85, stone 2.85, planks 3.4, log 12.8) is dug again at dawn, which the walls' quote counts" :spec (a/num-in 0 nil) :default 3}
