@@ -17,7 +17,7 @@
                  :main engine.main/main
                  :output-to "../engine/out/body-release.cjs"
                  :output-dir "../engine/out/body-release"
-                 :build-hooks [(engine.build-hooks/add-job-namespaces)]
+                 :build-hooks [(engine.build-hooks/add-job-namespaces) (engine.build-hooks/ascii-output)]
                  :compiler-options {:optimizations :simple :infer-externs false}}
   :test {:target :node-test
          :output-to "../engine/out/test.cjs"

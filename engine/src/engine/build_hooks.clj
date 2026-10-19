@@ -1,6 +1,8 @@
 (ns engine.build-hooks
   "shadow-cljs build hooks. See README.md, Jobs."
-  (:require [engine.registry :as registry]
+  (:require [clojure.java.io :as io]
+            [clojure.string :as str]
+            [engine.registry :as registry]
             [shadow.build.modules :as modules]))
 
 (defn add-job-namespaces
@@ -31,3 +33,15 @@
           (and engine-settings-id (seq engine-settings)) (update-in [:sources engine-settings-id] assoc :extra-requires (set engine-settings))
           (and triggers-id (seq triggers)) (update-in [:sources triggers-id] assoc :extra-requires (set triggers))
           (and hooks-id (seq hooks)) (update-in [:sources hooks-id] assoc :extra-requires (set hooks)))))))
+
+(defn ascii-output
+  "Rewrite the build's :output-to with every character above U+00FF as a \\uXXXX escape. One such character makes V8 keep the
+  whole script source as two-byte on the heap for the life of the process (10 MB bundle: 20 MB). Runs at :flush, after the
+  file is written."
+  {:shadow.build/stage :flush}
+  [state]
+  (let [f (io/file (get-in state [:shadow.build/config :output-to]))
+        s (slurp f)
+        out (str/replace s #"[^\x00-\xFF]" (fn [c] (apply str (map #(format "\\u%04x" (int %)) c))))]
+    (when-not (= s out) (spit f out))
+    state))

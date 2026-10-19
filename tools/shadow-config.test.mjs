@@ -40,6 +40,10 @@ test('engine builds output under ../engine/out', () => {
     assert.match(build(id), /:output-to "\.\.\/engine\/out\//, id)
 })
 
+test('the body-release build writes its bundle with no character above U+00FF', () => {
+  assert.match(build('body-release'), /engine\.build-hooks\/ascii-output/)
+})
+
 test('engine sources come before engine tests on the source path', () => {
   const paths = edn.match(/:source-paths \[([^\]]*)\]/)[1]
   assert.ok(paths.indexOf('"../engine/src"') >= 0)
