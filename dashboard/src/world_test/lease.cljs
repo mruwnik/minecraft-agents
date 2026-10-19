@@ -59,10 +59,21 @@
   (let [after (second (re-find #"online:\s*(.*)$" (or reply "")))]
     (vec (remove empty? (map #(.trim %) (.split (or after "") ","))))))
 
-(defn strangers
-  "Online names that are neither this runner's body nor a body holding a live lease."
+(defn probe-body?
+  "True for a name in the probe-body scheme (Probe...): a test body of ours, never another player."
+  [name]
+  (boolean (re-find #"^Probe" name)))
+
+(defn own-bodies
+  "The online names that are not strangers: this runner's body, bodies holding a live lease, and probe-scheme bodies."
   [online self leased]
-  (vec (remove #(or (= % self) (contains? leased %)) online)))
+  (into (conj (set leased) self) (filter probe-body?) online))
+
+(defn strangers
+  "Online names that are neither this runner's body, a body holding a live lease, nor a probe-scheme body."
+  [online self leased]
+  (let [own (own-bodies online self leased)]
+    (vec (remove own online))))
 
 (defn near-command
   "The command that succeeds when a player other than self and the leased bodies is within 500 blocks of [x y z]."

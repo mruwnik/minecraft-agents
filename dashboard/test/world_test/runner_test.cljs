@@ -1631,3 +1631,27 @@
                       (fs/rmSync (str (r/lease-file plot) ".guard") #js {:force true})
                       (fs/rmSync (r/run-dir {:body body}) #js {:recursive true :force true})
                       (done)))))))
+
+(defn run-await [replies]
+  (let [calls (atom 0) naps (atom [])]
+    (-> (r/await-clear! #(js/Promise.resolve (let [i @calls] (swap! calls inc) (nth replies (min i (dec (count replies))))))
+                        (fn [ms] (swap! naps conj ms) (js/Promise.resolve nil))
+                        10 25)
+        (.then (fn [res] {:res res :calls @calls :naps @naps})))))
+
+(deftest a-refused-precheck-is-retried-until-it-clears
+  (async done
+    (-> (run-await ["a stranger" "a stranger" nil])
+        (.then (fn [{:keys [res calls naps]}]
+                 (is (nil? res))
+                 (is (= 3 calls))
+                 (is (= [10 10] naps))
+                 (done))))))
+
+(deftest a-precheck-that-never-clears-gives-up-with-its-refusal
+  (async done
+    (-> (run-await ["a stranger"])
+        (.then (fn [{:keys [res calls]}]
+                 (is (= "a stranger" res))
+                 (is (= 4 calls))
+                 (done))))))

@@ -1848,15 +1848,34 @@
     (count stale)))
 
 (defn players-near
-  "Resolves to nil, or to the refusal text, when a player other than this body and the bodies of live runners
-  (body leases) is within 500 blocks of the grid's centre; it names who is online besides those."
+  "Resolves to nil, or to the refusal text, when a player other than this body, the bodies of live runners
+  (body leases) and probe-scheme bodies is within 500 blocks of the grid's centre; it names who is online besides those."
   [opts]
   (let [leased (lease/leased-bodies (read-body-leases) pid-alive?)]
-    (.then (rcon! [(lease/near-command (:body opts) leased (f/grid-centre f/default-grid)) "list"])
-           (fn [[reply listing]]
-             (when (str/includes? reply "Test passed")
-               (str "another player is within 500 blocks of the plot grid (not a leased test body): "
-                    (str/join ", " (lease/strangers (lease/parse-online listing) (:body opts) leased))))))))
+    (.then (rcon! ["list"])
+           (fn [[listing]]
+             (let [online (lease/parse-online listing)
+                   own (lease/own-bodies online (:body opts) leased)]
+               (.then (rcon! [(lease/near-command (:body opts) (disj own (:body opts)) (f/grid-centre f/default-grid))])
+                      (fn [[reply]]
+                        (when (str/includes? reply "Test passed")
+                          (str "another player is within 500 blocks of the plot grid (not a leased test body): "
+                               (str/join ", " (lease/strangers online (:body opts) leased)))))))))))
+
+(def precheck-wait-ms
+  "How long a refused players-near check is retried (a leaving player or body may clear it) before the run exits precheck-exit."
+  600000)
+
+(defn await-clear!
+  "Calls check! (a thunk to a promise of nil or a refusal) until it resolves to nil or `waited-ms` has passed, sleeping
+  step-ms between calls with sleep!. Resolves to the last refusal, or nil."
+  [check! sleep! step-ms waited-ms]
+  (.then (check!)
+         (fn [refusal]
+           (if (or (nil? refusal) (<= waited-ms 0))
+             refusal
+             (do (log! refusal " (waiting " (quot waited-ms 1000) " s more for it to clear)")
+                 (.then (sleep! step-ms) #(await-clear! check! sleep! step-ms (- waited-ms step-ms))))))))
 
 (def boot-exit
   "Exit code of a batch stopped because the body died at boot boot-limit times in a row; the pool and the sweep stop on it."
@@ -2097,7 +2116,7 @@
                    (running? opts) (do (log! "the body " (:body opts) " already runs; stop it first") 2)
                    (not (do (reset! run-start (run-state)) (refresh-body-build!))) 2
                    :else
-                   (.then (players-near opts)
+                   (.then (await-clear! #(players-near opts) sleep 30000 precheck-wait-ms)
                           (fn [refusal]
                             (if refusal
                               (do (log! refusal) precheck-exit)

@@ -77,6 +77,10 @@
   (is (= ["Someone"] (l/strangers ["Me" "BodyA" "Someone"] "Me" #{"BodyA"})))
   (is (= [] (l/strangers ["Me" "BodyA"] "Me" #{"BodyA"}))))
 
+(deftest probe-scheme-bodies-are-never-strangers
+  (is (= ["Someone"] (l/strangers ["Me" "ProbeAc6bd463" "ProbeA" "Someone"] "Me" #{})))
+  (is (= #{"Me" "BodyA" "ProbeX"} (l/own-bodies ["ProbeX" "Other"] "Me" #{"BodyA"}))))
+
 (deftest the-near-check-excludes-every-leased-body-by-name
   (is (= "execute if entity @a[name=!Me,name=!BodyA,x=1,y=2,z=3,distance=..500]"
          (l/near-command "Me" #{"BodyA"} [1 2 3]))))
