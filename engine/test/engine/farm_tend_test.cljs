@@ -459,9 +459,9 @@
   (is (= {:till {:skipped :declined}}
          (:report (tend/after-child {:report {}} :till {:from {:x 1 :y 63 :z 1}} {:kind :condition-failed :cause {:reason :no-zones}})))))
 
-(deftest a-child-that-hit-a-limit-ends-the-step-and-the-run-with-its-cause
+(deftest a-child-that-hit-its-own-limit-is-booked-and-the-run-goes-on
   (let [m (tend/after-child {:todo [:harvest :till] :report {}} :harvest {} {:kind :limit-reached :cause {:limit :job-time} :data {:cut 1}})]
-    (is (= {:limit :job-time} (:limit m)))
+    (is (not (contains? m :limit)))
     (is (= {:harvest {:cut 1}} (:report m)))
     (is (= [:till] (:todo m)))))
 

@@ -28,7 +28,7 @@
       (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args (get args sym)}))) (str sym)))))
 
 (deftest farm-jobs-default-a-time-spend
-  (doseq [sym '[jobs.farm.till jobs.farm.plant jobs.farm.fertilize jobs.farm.compost jobs.farm.find-spot]]
+  (doseq [sym '[jobs.farm.till jobs.farm.plant jobs.farm.fertilize jobs.farm.compost jobs.farm.find-spot jobs.farm.tend]]
     (is (some? (get-in (:defaults (get registry/jobs sym)) [:spend :job-time])) (str sym))))
 
 (defn ^:async ending-of

@@ -80,24 +80,14 @@
   [cells]
   (into {} (for [[crop n] (frequencies (vals cells))] [(crops/seed-of crop) (* 2 n)])))
 
-(defn note-refused!
-  "One farm-tend.refused warn per job when the rules refuse the hoe on untilled ground cells of the plan for a
-  social reason: names the zones, claims and plans and the owners that refuse, so a run with nothing else to do is
-  never silent. Returns the refused positions."
+(defn refusers
+  "What refuses the hoe on untilled ground cells of the plan for a social reason: {:refused n :zones :claims :plans
+  :owners}, or nil when nothing is refused. It names them so a run with nothing else to do says why."
   [c plan cells]
-  (let [verdicts (into [] (keep (fn [pos] (let [v (permit/permit c plan :dig pos)]
-                                            (when (gate/refused? v) [pos v]))))
-                       cells)
-        vs (map second verdicts)
-        fields {:zones (vec (distinct (keep :zone vs))) :claims (vec (distinct (keep :claim vs)))
-                :plans (vec (distinct (keep :plan vs))) :owners (vec (distinct (keep :owner vs)))}]
-    (when (seq verdicts)
-      (ctx/warn-once! c [plan :refused] :farm-tend.refused
-                      (assoc fields :plan plan :count (count verdicts)
-                             :text (str "tend of " plan " leaves " (count verdicts) " untilled cells: refused by "
-                                        (access/refusal-text fields)
-                                        (when (seq (:owners fields)) (str " (owner " (str/join ", " (:owners fields)) ")"))))))
-    (mapv first verdicts)))
+  (let [vs (keep (fn [pos] (let [v (permit/permit c plan :dig pos)] (when (gate/refused? v) v))) cells)]
+    (when (seq vs)
+      {:refused (count vs) :zones (vec (distinct (keep :zone vs))) :claims (vec (distinct (keep :claim vs)))
+       :plans (vec (distinct (keep :plan vs))) :owners (vec (distinct (keep :owner vs)))})))
 
 (defn wet?
   "Whether a ground cell is hydrated: seen water within 4 blocks horizontally, at its level or one up."
@@ -114,6 +104,16 @@
             (assoc h :cells (count (filter #(= seed (crops/seed-of (val %))) cells)))))
         (distinct (map (comp crops/seed-of val) cells))))
 
+(defn untilled-cells
+  "The [pos crop] ground cells of the plan's crop cells that are untilled and not yet tried by a till child."
+  [c]
+  (let [p (:primitives c)
+        {:keys [answer crops]} (planned c)
+        tried (:till-tried (ctx/mem c) #{})]
+    (->> (ground-cells answer crops)
+         (remove (fn [[pos _]] (tried pos)))
+         (filter (fn [[pos _]] (stock/untilled? (ground-cell p pos)))))))
+
 (defn plan-facts
   "What the decisions are made from for a plan, read live."
   [c]
@@ -123,17 +123,12 @@
         inventory (u/inventory p)
         have (farm/sowable inventory)
         me (u/self-pos c)
-        tried (:till-tried (ctx/mem c) #{})
         bare (fld/planned-bare p crops)
         bare-of (frequencies (map :seed bare))
         sowing (plant/sowing c crops)
         [mid R] (fld/plan-field crops)
         keep (stock/keeps (seed-reserve crops) inventory keep)
-        untilled-cells (->> (ground-cells answer crops)
-                            (remove (fn [[pos _]] (tried pos)))
-                            (filter (fn [[pos _]] (stock/untilled? (ground-cell p pos)))))
-        _ (note-refused! c plan (map key untilled-cells))
-        tillable (filter (fn [[pos _]] (permit/ok? c plan :dig pos)) untilled-cells)
+        tillable (filter (fn [[pos _]] (permit/ok? c plan :dig pos)) (untilled-cells c))
         seeded (filter (fn [[_ crop]] (let [seed (crops/seed-of crop)] (> (get have seed 0) (get bare-of seed 0)))) tillable)
         seeded-set (set (map key seeded))
         unseeded (remove (comp seeded-set key) tillable)
@@ -147,6 +142,7 @@
      :untilled (->> tilled-cells (map key) (sort-by #(u/dist me %)) vec)
      :till-short (count dry)
      :till-held (reserve-held inventory dry)
+     :refusers (refusers c plan (map key (untilled-cells c)))
      :bare (- (count bare) (count (:refused sowing)))
      :seed (boolean (seq (:ready sowing)))
      :short (:short sowing)

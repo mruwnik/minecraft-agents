@@ -56,7 +56,8 @@
   way is not re-decided.
   Ends :done with data {:steps {step summary} :field {:crops :bare :untilled}} when some step
   changed something (units steps); nothing-possible :gave-up with the same data when children ran and none did;
-  limit-reached with a child's cause when a child hit a limit; condition-failed :nothing-to-do when no step ran.
+  condition-failed :nothing-to-do when no step ran. A child that ends in any failure, a limit of its own too, is booked
+  with what it did and the run goes on; tend's own time spend is the only limit it ends on.
   :field is counted live at the end. Summaries: harvest {:cut :replanted :bare :gave-up}, till {:tilled n}, plant {:planted
   :reason :skipped}, fertilize {:used}, compost {:fed :bone-meal :reason}, deposit {:gave-up :reason}.
   Limits: harvest and fertilize work in a sphere around the box centre, so crops just outside the box may be
@@ -74,8 +75,8 @@
     farm-tend.short-seed warn per missing seed.
   - fertilize, compost and deposit work as in box mode. The seed reserve is twice the planned cells of each crop.
   Tilling and sowing are checked against zones and the footprints of the other active plans, when a cell is chosen
-  and again before the act. Untilled ground the rules refuse is left alone with one farm-tend.refused warn.
-  When only refused ground remains, the check stays false: the job waits and the reason is on record.
+  and again before the act. Untilled ground the rules refuse is left alone.
+  When only refused ground remains, the check stays false: the job waits with :refused n and the :zones, :claims, :plans and :owners that refuse.
   :parts (a list of part names) works those parts in one job, a pass each in order, and ends :done with
   {:parts {part {:steps :field}}}. A part is tried once per run; the caller decides when to run again.
   {:reason :plan-trouble :why text} (one farm-tend.declined warn): a wait while the plan is missing or unreadable or no zone
@@ -95,12 +96,13 @@
    :ignore-zones? :shared})
 
 (def target [:box :plan :part :parts])
-(def defaults {:least 1})
+(def defaults {:least 1 :spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
 
 (a/defargs settings
-  {::max-cells {:default 2048 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}})
+  {::job-time-s {:default 1200 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+   ::max-cells {:default 2048 :doc "Most cells a field may cover; a larger box is refused :no-box." :spec (a/int-in 0 nil)}})
 (defn max-cells [] (settings/get settings ::max-cells))
 
 (def seed-items ["wheat_seeds" "carrot" "potato" "beetroot_seeds"])
@@ -274,7 +276,7 @@
   "The wait reason when no step would run: :covered counts tillable cells with a block over them (the box sits too low),
   :refused untilled cells a zone or claim refuses, :food-reserve the seed the reserve keeps from dry cells."
   [f]
-  (cond-> (into {:reason :nothing-to-do} (filter (comp pos? val)) (select-keys f [:covered :refused]))
+  (cond-> (into (into {:reason :nothing-to-do} (filter (comp pos? val)) (select-keys f [:covered :refused])) (:refusers f))
     (:till-held f) (assoc :food-reserve (:till-held f))))
 
 (defn part-status
@@ -381,8 +383,7 @@
   (let [m (ctx/mem c)
         worked (count (filter #(apply worked? %) (step-summaries m)))
         data [:units :steps :done worked :left (count (:todo m)) :result (or (out-of c) {})]]
-    (if (and (not (:limit m))
-             (pos? worked)
+    (if (and (pos? worked)
              (every? #(in-order? (for-part c %)) (parts-of c)))
       (apply contract/ok :in-order "farm tend: the field is in order" data)
       (apply contract/later :tending "farm tend: the field is being tended" data))))
@@ -401,10 +402,10 @@
     :harvest (select-keys r [:cut :replanted :bare :gave-up])
     :irrigate {:poured (count (:poured r))}
     :till {:tilled (:tilled r 0)}
-    :plant (select-keys r [:planted :reason :skipped :refused :short])
+    :plant (select-keys r [:planted :skipped :refused :short])
     :fertilize (select-keys r [:used])
     :compost (select-keys r [:fed :bone-meal :reason])
-    :deposit (assoc (select-keys r [:reason]) :gave-up (boolean (:gave-up r)))))
+    :deposit {:gave-up (boolean (:gave-up r))}))
 
 (defn part-report
   "{:steps :field} of the pass just made over the field c works (and the plan's notes about it)."
@@ -449,7 +450,6 @@
         sum #(reduce + (map (fn [f] (get f % 0)) fields))
         done (cond-> out (seq results) (assoc :text (str "farm tend done: " (sum :crops) " crops, " (sum :bare) " bare, " (sum :untilled) " untilled")))]
     (cond
-      (:limit m) (ctx/end c :limit-reached (:limit m) out)
       (some #(apply worked? %) summaries) (ctx/end c :done nil done)
       (some (fn [[_ s]] (not (:skipped s))) summaries) (ctx/end c :nothing-possible :gave-up out)
       :else (ctx/end c :condition-failed {:reason :nothing-to-do} out))))
@@ -473,7 +473,7 @@
   (and (= :condition-failed (:kind e)) (empty? (:data e))))
 
 (defn after-child
-  "Memory after the child of step ended with e. A limit the child hit is kept as :limit to end the run with."
+  "Memory after the child of step ended with e: its summary is booked whatever its ending, and the run goes on."
   [m step call-args e]
   (let [declined? (or (refused? e) (= :impossible (:kind e)))
         r (:data e)]
@@ -482,8 +482,7 @@
               (-> m
                   (update :todo rest)
                   (dissoc :call-args)
-                  (assoc-in [:report step] (if declined? {:skipped :declined} (summary step r)))))
-      (= :limit-reached (:kind e)) (assoc :limit (:cause e)))))
+                  (assoc-in [:report step] (if declined? {:skipped :declined} (summary step r))))))))
 
 (defn with-zone-opt-out
   "The args of the child of step, with :ignore-zones? true when the tend job has it (the children that change blocks)."
@@ -499,7 +498,7 @@
     (ctx/update-mem! c assoc :todo decide/steps :report {} :till-tried #{} :tilled 0))
   (let [{:keys [call] :as p} (steps/next-plan decide/decide decide/jobs c facts)]
     (ctx/update-mem! c assoc :todo (:todo p) :report (:report p))
-    (if (or (not call) (:limit (ctx/mem c)))
+    (if-not call
       (finish-part! c (:report p))
       (let [step (:slot call)
             _ (ctx/update-mem! c assoc :call-args (:args call))
@@ -540,7 +539,7 @@
   [c]
   (if-let [cur (:cur (ctx/mem c))]
     (await (pass-step (for-part c (:part cur))))
-    (if-let [{:keys [part]} (when-not (:limit (ctx/mem c)) (next-part c))]
+    (if-let [{:keys [part]} (next-part c)]
       (do (ctx/update-mem! c assoc :cur {:part part})
           :again)
       (finish-all! c))))
