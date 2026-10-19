@@ -27,7 +27,7 @@
   A plan with :surface true is put on the ground the body has seen (a pen on a slope follows it).
   Phase 0 clears the trees (logs and leaves) inside the box up to the fence tops with a jobs.build.clear-box child
   (:only), so no leaf staircase leads over the fence; trees not seen yet are left to the check.
-  Phase 1 runs jobs.build.from-plan on the plan. Its args :reach :accept and the give-up setting (3) pass through, and its rules
+  Phase 1 runs jobs.build.from-plan on the plan. Its args :reach :accept pass through, and its rules
   (zones, other plans' footprints, materials, cuts) apply. Phase 2: a body still inside the box walks out through the
   gate (a jobs.movement.go-to child to the cell outside it) and jobs.animals.shut-gate shuts it. Phase 3 checks the pen
   over that box with jobs.lib.pen (see jobs.animals.pen-check): a step out of the box is a leak.
@@ -66,9 +66,7 @@
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one pen build may take." :spec (a/int-in 1 nil)}
-   ::give-up {:default 3 :doc "As the :give-up arg of jobs.build.from-plan." :spec (a/int-in 1 nil)}
    ::max-cells {:default pen/default-max-cells :doc "Most cells the pen check visits before it gives up with :unbounded." :spec (a/int-in 1 nil)}})
-(defn give-up [] (settings/get settings ::give-up))
 (defn max-cells [] (settings/get settings ::max-cells))
 
 (defn gate? [want] (boolean (some #(str/ends-with? % "_fence_gate") (pen-read/want-blocks want))))
@@ -132,7 +130,7 @@
   (pen-read/read (:primitives c) (pen-opts c cells)))
 
 (defn build-args [c]
-  (assoc (select-keys (:args c) [:plan :part :reach :accept :fetch :ignore-zones?]) :give-up (give-up)))
+  (select-keys (:args c) [:plan :part :reach :accept :fetch :ignore-zones?]))
 
 ;; ------------------------------------------------------------------ conditions
 

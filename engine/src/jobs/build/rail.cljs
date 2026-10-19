@@ -37,13 +37,14 @@
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
    :reach {:doc "as jobs.build.from-plan" :spec (a/num-in 0 nil) :default u/eye-reach}
-   :give-up {:doc "as jobs.build.from-plan" :spec (a/int-in 1 nil) :default 3}
    :accept {:doc "as jobs.build.from-plan" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
    :fix {:doc "times a rail whose settled shape is wrong is dug and placed again, then given up as :shape (0 or false: given up at once)" :spec (a/or-of (a/int-in 0 nil) false?) :default 1}
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::job-time-s {:default 1800 :doc "Seconds one build may take." :spec (a/int-in 1 nil)}})
+  {::job-time-s {:default 1800 :doc "Seconds one build may take." :spec (a/int-in 1 nil)}
+   ::give-up {:default 3 :doc "Failed walks or shapes after which a rail cell is given up." :spec (a/int-in 1 nil)}})
+(defn give-up [] (settings/get settings ::give-up))
 
 (def target [:plan :part])
 
@@ -163,7 +164,7 @@
         bad (set (:bad-stands (ctx/mem c)))
         beside (beside-stand c body (:pos cell) planned bad)
         stand (or (stand-behind c ps from cell) beside)
-        give-up (:give-up (:args c))]
+        give-up (give-up)]
     (if-not stand
       (do (ctx/update-mem! c plan/count-fail (:pos cell) :unreachable give-up)
           :again)
@@ -209,7 +210,7 @@
           (= :cut-off (:kind r)) :continue
           (and (= :done (:kind r)) (:dug (:data r))) (do (ctx/update-mem! c update-in [:fixes pos] (fnil inc 0)) :again)
           (or (= :done (:kind r)) (#{:hazard :fluid-adjacent :cannot :unreachable} (contract/cause-key r)))
-          (do (ctx/update-mem! c plan/count-fail pos :shape (:give-up (:args c))) :again)
+          (do (ctx/update-mem! c plan/count-fail pos :shape (give-up)) :again)
           :else (ctx/end c (:kind r) (:cause r)))))))
 
 (defn ^:async fix-step!

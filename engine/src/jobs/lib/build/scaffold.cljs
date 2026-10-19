@@ -77,19 +77,19 @@
 
 (defn fail-cell!
   "Drop the scaffold plan and count a failure on its cell."
-  [c m]
-  (ctx/update-mem! c #(-> (plan/count-fail (dissoc % :scaffold) (:cell m) :unreachable (:give-up (:args c)))
+  [c m give-up]
+  (ctx/update-mem! c #(-> (plan/count-fail (dissoc % :scaffold) (:cell m) :unreachable give-up)
                           (update :scaffold-avoid (fnil conj #{}) (or (get-in m [:plan :base]) (get-in m [:plan :stand]))))))
 
 (defn ^:async walk!
-  [c {:keys [plan] :as m}]
+  [c {:keys [plan] :as m} give-up]
   (let [[x y z] (or (:base plan) (:stand plan))
         e (await (child/call-walk* c :swalk {:pos {:x x :y y :z z} :range 0 :ways #{:walk :clear-seal} :zone-tolls true
                                              :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (cond
       (= :continue e) :continue
       (and (= :done (:kind e)) (:arrived (:data e))) (do (set-phase! c (if (:height plan) :build :up)) :again)
-      :else (do (fail-cell! c m) :again))))
+      :else (do (fail-cell! c m give-up) :again))))
 
 (defn ^:async build!
   [c {:keys [plan]}]
@@ -111,18 +111,18 @@
 
 (defn ^:async clean!
   "Take the scaffold back, then drop its plan (a failed one counts on its cell)."
-  [c {:keys [failed] :as m}]
+  [c {:keys [failed] :as m} give-up]
   (or (await (take-back! c))
-      (do (if failed (fail-cell! c m) (ctx/update-mem! c dissoc :scaffold)) :again)))
+      (do (if failed (fail-cell! c m give-up) (ctx/update-mem! c dissoc :scaffold)) :again)))
 
 (defn ^:async step!
-  "One step of the scaffold in its walk, build or clean phase: :again or :continue."
-  [c]
+  "One step of the scaffold in its walk, build or clean phase: :again or :continue. A failed cell is given up after give-up failures."
+  [c give-up]
   (let [m (:scaffold (ctx/mem c))]
     (case (:phase m)
-      :walk (await (walk! c m))
+      :walk (await (walk! c m give-up))
       :build (await (build! c m))
-      :clean (await (clean! c m)))))
+      :clean (await (clean! c m give-up)))))
 
 (defn working?
   "Whether the scaffold is in a phase that step! runs; the :up phase is the build's own, placing from the stand."
@@ -142,8 +142,8 @@
 (defn finish-up!
   "The body stands on its scaffold with nothing in reach to place or dig: a buildable cell still out of reach counts a
   failure (so a stand that does not reach it is not raised again for ever), and the scaffold is taken back."
-  [c todo]
+  [c todo give-up]
   (let [cell (:cell (:scaffold (ctx/mem c)))]
     (when (some #(= cell (:pos %)) todo)
-      (ctx/update-mem! c plan/count-fail cell :unreachable (:give-up (:args c))))
+      (ctx/update-mem! c plan/count-fail cell :unreachable give-up))
     (set-phase! c :clean)))

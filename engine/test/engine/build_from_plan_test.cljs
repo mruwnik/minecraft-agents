@@ -152,6 +152,20 @@
             (is (= 8 (:placed result)))
             (is (= 1 (count (h/events-of seen :build.gave-up))))))))))
 
+(deftest the-give-up-setting-sets-how-often-a-refused-cell-is-tried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:inventory kit} {"pen" (pen-plan)})]
+          (.override (.-world p) "place"
+                     (fn ^:async f [token args impl]
+                       (if (= [4 3] [(.-x (.-pos args)) (.-z (.-pos args))])
+                         #js {:status "no-support"}
+                         (await (impl token args)))))
+          (let [result (await (child-outcome eng job {:plan "pen" :settings {:jobs.build.from-plan/give-up 1}} 200))]
+            (is (= 1 (count (filter #(= [4 64 3] (first %)) (places p)))))
+            (is (= {[4 64 3] :no-support} (:given-up result)))))))))
+
 (deftest a-fence-placed-over-air-warns-of-the-gap-under-it
   (async done
     (tu/run-async done

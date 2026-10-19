@@ -101,7 +101,6 @@
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
    :reach {:doc "cells whose centre is this close to the eye are placed without walking, in blocks" :spec (a/num-in 0 nil) :default u/eye-reach}
-   :give-up {:doc "refused places or failed walks after which a cell is given up" :spec (a/int-in 1 nil) :default 3}
    :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
    :fetch {:doc "get the blocks and tools the plan lacks (jobs.lib.need): true, a set of kinds or a map of limits; false builds with what is carried" :spec need/option? :default {:explore true}}
    :ignore-zones? :shared})
@@ -113,7 +112,10 @@
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one build may take." :spec (a/int-in 1 nil)}
+   ::give-up {:default 3 :doc "Refused places or failed walks after which a cell is given up." :spec (a/int-in 1 nil)}
    ::cell-s {:default 3 :doc "Seconds one cell of the plan is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
+
+(defn give-up [] (settings/get settings ::give-up))
 
 (defn judged-plan
   "planned, judged once per check-cache window."
@@ -231,7 +233,7 @@
                                          {:for-plan (:plan (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))
                                           :click (:click h) :clear false}))
             outcome (blocks/place-outcome e)
-            give-up (:give-up (:args c))]
+            give-up (give-up)]
         (case outcome
           :continue :continue
           :placed (let [wrong (misplaced want item (:block (:data e)))]
@@ -267,11 +269,11 @@
             (case outcome
               :continue :continue
               :dug (ctx/update-mem! c #(let [m (update-in % [:digs pos] (fnil inc 0))]
-                                         (if (>= (get-in m [:digs pos]) (:give-up (:args c)))
+                                         (if (>= (get-in m [:digs pos]) (give-up))
                                            (assoc-in m [:given-up pos] :refilled)
                                            m)))
-              :missing (ctx/update-mem! c count-fail pos :missing (:give-up (:args c)))
-              (ctx/update-mem! c count-fail pos :refused (:give-up (:args c)))))
+              :missing (ctx/update-mem! c count-fail pos :missing (give-up))
+              (ctx/update-mem! c count-fail pos :refused (give-up))))
       :refused (ctx/update-mem! c refuse pos (select-keys v [:reason :zone :plan :claim]))
       :hazard (ctx/update-mem! c refuse pos {:reason :hazard
                                              :hazards (vec (distinct (remove accept (map access/hazard-key (:hazards v)))))})
@@ -403,7 +405,7 @@
         all (stands-for (:primitives c) (:pos cell) (js/Math.floor (:y body)) facing planned bad)
         stands (or (seq (reaching c all (:pos cell))) all)
         stand (first (sort-by #(u/dist body (zipmap [:x :y :z] %)) stands))
-        give-up (:give-up (:args c))]
+        give-up (give-up)]
     (if-not stand
       (do (ctx/update-mem! c walk-fail (:pos cell) :unreachable give-up (u/self-pos c))
           :again)
@@ -503,7 +505,7 @@
         dig-near (in-dig-reach c digs)
         nearest #(first (sort-by (fn [cell] (u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos cell)))) %))]
     (cond
-      (scaffold/working? c) (await (scaffold/step! c))
+      (scaffold/working? c) (await (scaffold/step! c (give-up)))
       (scaffold/stale? c) (do (scaffold/begin-clean! c) :again)
       (:leave (ctx/mem c)) (await (leave! c))
       (and underfoot (not= (:pos underfoot) (:stepped-off (ctx/mem c))))
@@ -513,7 +515,7 @@
                      (loop [left near]
                        (if (seq left)
                          (if (seals? c (:pos (first left)))
-                           (do (ctx/update-mem! c #(-> (count-fail % (:pos (first left)) :unreachable (:give-up (:args c)))
+                           (do (ctx/update-mem! c #(-> (count-fail % (:pos (first left)) :unreachable (give-up))
                                                        (assoc :leave (exit-point cells (u/self-pos c)))))
                                :again)
                            (if (= :continue (await (place-one! c (first left))))
@@ -526,7 +528,7 @@
                            :continue
                            (recur (rest left)))
                          :again))
-      (= :up (scaffold/phase c)) (do (scaffold/finish-up! c todo) :again)
+      (= :up (scaffold/phase c)) (do (scaffold/finish-up! c todo (give-up)) :again)
       (seq todo) (await (reach-cell! c cells (nearest layer)))
       (seq digs) (await (walk-to! c cells (nearest digs)))
       (seq (support-looks c wanted)) (await (look-for-support! c cells (support-looks c wanted)))
