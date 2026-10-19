@@ -1387,6 +1387,17 @@
             (is (= cell (:cell e)) label)
             (is (re-find text (:text (refusal s))) label)))))))
 
+(deftest an-outside-floor-never-seen-does-not-make-the-job-wait-for-a-gate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (setup (world {:entities [(cow 1 4 3)]})) {:target 1})
+              p (:p s)
+              sensed (.-sensedAt p)]
+          (aset p "sensedAt" (fn [pos] (if (and (= 9 (.-x pos)) (= 63 (.-y pos)) (= 3 (.-z pos))) #js {:unknown true} (sensed pos))))
+          (await (run-ticks s 20))
+          (is (nil? (last (events-of s :waiting)))))))))
+
 (deftest herd-refusals-name-the-cell
   (async done
     (tu/run-async done

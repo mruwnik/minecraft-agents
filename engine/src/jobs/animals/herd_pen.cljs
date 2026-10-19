@@ -330,13 +330,14 @@
 (defn pen-refusal
   "Why the pen, as the body sees and remembers it from where it stands, will not do: later with the verdict's refusal as
   its reason and its :why, :cell, :leaks or :depth. ok when it will do, already holds :target (done? answers)
-  or cannot be read from here (the run reads it at the pen). The setting ::precheck? false skips it."
+  or cannot be read from here (the run reads it at the pen), or lacks only a look at an approach cell never seen (the run looks). The setting ::precheck? false skips it."
   [c]
   (let [answer (when (precheck?) (check-cache/cached c ::pen-refusal #(read-pen c)))
         {:keys [refuse extra]} (when-not (or (nil? answer)
                                              (#{:unloaded :no-start} (:reason answer))
                                              (>= (count (in-pen-adults c answer)) (:target (:args c))))
-                                 (verdict c answer))]
+                                 (let [v (verdict c answer)]
+                                   (when-not (and (= :no-gate (:refuse v)) (unseen-approach c (:extra v))) v)))]
     (if refuse
       (apply contract/later refuse (str "herd waits: the pen will not do, " (name refuse) (detail-text extra)) (mapcat identity extra))
       (contract/ok :pen "the pen will do, or is read at the pen"))))
