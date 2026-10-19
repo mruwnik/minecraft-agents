@@ -171,7 +171,11 @@
   [a b]
   (max (js/Math.abs (- (:x a) (:x b))) (js/Math.abs (- (:z a) (:z b)))))
 
-(defn tossing-gap? [me v] (<= (min-gap) (gap me v) (max-gap)))
+(defn tossing-gap?
+  "Within min-gap to max-gap, with a quarter block of slack: the stand cell's centre is exactly min-gap out for a
+  villager standing on a block centre, and a body that arrives drifts a little in."
+  [me v]
+  (<= (- (min-gap) 0.25) (gap me v) (+ (max-gap) 0.25)))
 
 (defn stand
   "The cell to toss from at the villager at v: on the body's side of it along the axis the body is farther along (x on a

@@ -273,3 +273,11 @@
           (is (> (.-x (.-pos (.self p))) 7) "the body walked back to the spot first")
           (is (= 0 (:fed @out)) "the drop at the spot is the body's own")
           (is (= {"bread" 5} (inv p))))))))
+
+(deftest a-body-that-drifted-a-little-inside-the-stand-cell-is-at-the-tossing-gap
+  (are [x ok?] (= ok? (feed/tossing-gap? {:x x :z 0.5} {:x 16.5 :z 0.5}))
+    14.55 true
+    14.5 true
+    13.5 true
+    15.5 false
+    12.5 false))
