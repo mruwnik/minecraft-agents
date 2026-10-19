@@ -7,7 +7,7 @@
 ;; An empty bucket carried and a pond in view (a water source at [18 -1 20]) is filled there; with no pond in view the obtain waits :no-source naming water.
 {:defaults
  {:tags [:fetch :gather :mining] :time :day
-  :plot {:height 12 :floor "grass_block"}
+  :plot {:height 12 :floor "grass_block" :isolate true}
   :blocks [[:set [16 0 18] "crafting_table"]]
   :body {:at [16.5 0 12.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]]

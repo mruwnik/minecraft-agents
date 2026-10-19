@@ -93,6 +93,17 @@
     (is (= ["forceload remove 20064 19968 20159 20063"]
            (filter #(re-find #"^forceload remove" %) (f/cleanup-commands g origin "B" c))))))
 
+(deftest isolated-plain-plot-clears-the-gap-round-it-to-the-sky
+  (let [c {:plot {:height 12 :floor "grass_block" :isolate true}}
+        g (f/case-grid c)
+        origin (f/plot-origin g 437)
+        air (for [cmd (f/setup-commands g origin c) :when (re-find #"^fill .* air$" cmd)] (mapv js/Number (re-seq #"-?\d+" cmd)))]
+    (is (= [437 465] (f/plot-range g)) "still a plain plot")
+    (is (= [19968 142 20288 20063 181 20383]
+           [(apply min (map #(% 0) air)) (apply min (map #(% 1) air)) (apply min (map #(% 2) air))
+            (apply max (map #(% 3) air)) (apply max (map #(% 4) air)) (apply max (map #(% 5) air))])
+        "32 blocks of air on every side up to height 31: a neighbour's leftover floor or wall is not in sight")))
+
 (deftest hostile-summons-make-a-mob-case
   (is (f/mob-case? mob-case))
   (is (f/mob-case? {:act [[:summon "minecraft:zombie" [1 0 1]]]}))

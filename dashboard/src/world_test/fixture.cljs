@@ -73,7 +73,8 @@
   [c]
   (let [{:keys [length width]} (:plot c)]
     (cond-> (assoc default-grid :size-x (or length (:size default-grid)) :size-z (or width (:size default-grid)))
-      (mob-case? c) (assoc :mob-plots? true))))
+      (mob-case? c) (assoc :mob-plots? true :island? true)
+      (get-in c [:plot :isolate]) (assoc :island? true))))
 
 (defn plot-range
   "[first end) of the plot indexes a case may lease: the plain rows of the 32x32 grid, the mob plots for a case that
@@ -567,7 +568,7 @@
 (defn load-box
   "[grid origin] of the area a plot loads: a large plot its lane's width, a mob plot its island."
   [grid origin]
-  (if (:mob-plots? grid)
+  (if (:island? grid)
     (take 2 (island grid origin 0))
     [(lane-grid grid) origin]))
 
@@ -637,9 +638,9 @@
   [grid origin c]
   (let [{:keys [height floor]} (:plot c)
         lane (lane-grid grid)
-        [ig io ih] (island grid origin height)]
+        [ig io ih] (island grid origin (if (:isolate (:plot c)) 31 height))]
     (-> (vec (forceload-commands "add" grid origin))
-        (cond-> (:mob-plots? grid) (-> (conj (kill-command ig io ih)) (into (clear-commands ig io ih "air"))))
+        (cond-> (:island? grid) (-> (conj (kill-command ig io ih)) (into (clear-commands ig io ih "air"))))
         (conj (kill-command grid origin height))
         (cond-> (not= lane grid) (into (clear-commands lane origin 0 "air")))
         (into (clear-commands grid origin height floor)))))
