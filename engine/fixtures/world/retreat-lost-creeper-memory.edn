@@ -18,7 +18,7 @@
          [:job (jobs.survival.retreat {})]
          [:wait-s 12]] ; hold: the flight takes this long to show its distance
    :expect [{:event {:source :job :kind :retreat.target} :within-s 20}]
-   :after [[:body-near [24.5 0 16.5] 8]]
+   :after [[:body-far [10.5 0 16.5] 18]]
    :limit-s 40}
   {:name "flee-without-the-lost-creeper-may-run-east"
    :memory [{:kind :home :data {:pos #xyz [21000 150 20016]}}]
