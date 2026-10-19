@@ -22,7 +22,8 @@
     {:reason :zone}       every base up to max-radius is refused by zones, claims or footprints
     {:reason :no-stand}   ground and permission exist but no column gives a stand (headroom, too tall)
 
-  A :stand cell is not zone-checked: walking there is go-to's business.
+  A :stand cell is not zone-checked: walking there is go-to's business. A stand or base on a floor cell the rules
+  refuse to dig (a spared wall) is never planned; a base so refused counts as a zone refusal.
 
   Ranking: walking a block costs 1, placing a block pillar-cost. A stand needs no placement, so any stand wins over a
   pillar."
@@ -64,6 +65,12 @@
        (rules/solid-floor? floor-at [x (dec y) z])
        (not (str/ends-with? (str (floor-at [x (dec y) z])) "_leaves"))))
 
+(defn floor-refused?
+  "Whether the floor under a stand or base is a cell the rules refuse to dig (a zone's wall, a plan's block): a body
+  does not climb onto what it must leave standing, and go-to finds no way up to a stand on top of one."
+  [in [x y z]]
+  (not (:ok (rules/may-dig? (-> in (dissoc :body-cols) (assoc :cell [x (dec y) z]))))))
+
 (defn in-reach?
   "Every target within reach of the eye of a body standing at the middle of the feet cell."
   [reach targets [x y z]]
@@ -89,9 +96,10 @@
 
 (defn stands
   "Standing cells with every target in reach, nearest to feet first."
-  [{:keys [block-at floor-at targets reach feet avoid]} cols ys]
+  [{:keys [block-at floor-at targets reach feet avoid] :as in} cols ys]
   (->> (for [[x z] cols y ys :let [c [x y z]]
-             :when (and (not (contains? targets c)) (not (contains? avoid c)) (standing-cell? block-at (or floor-at block-at) c) (in-reach? reach targets c))]
+             :when (and (not (contains? targets c)) (not (contains? avoid c)) (standing-cell? block-at (or floor-at block-at) c) (in-reach? reach targets c)
+                        (not (floor-refused? in c)))]
          c)
        (sort-by (juxt #(dist3 feet %) identity))))
 
@@ -112,10 +120,11 @@
   [{:keys [block-at floor-at targets reach feet max-height avoid] :as in} cols ys]
   (for [[x z] cols y ys :let [base [x y z]]
         :when (and (not (contains? targets base)) (not (contains? avoid base)) (standing-cell? block-at (or floor-at block-at) base))
-        :let [tries (for [n (range 1 (inc max-height))
+        :let [floor-refusal (when (floor-refused? in base) (rules/refuse :zone))
+              tries (for [n (range 1 (inc max-height))
                           :let [stand [x (+ y n) z]]
                           :when (in-reach? reach targets stand)]
-                      [n stand (column-verdict in base n)])
+                      [n stand (or floor-refusal (column-verdict in base n))])
               ok (first (filter (comp nil? #(nth % 2)) tries))
               last-try (last tries)]]
     (if ok

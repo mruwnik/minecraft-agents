@@ -120,3 +120,11 @@
 
 (deftest a-bridge-row-longer-than-max-row-is-not-planned
   (is (nil? (bridge :targets #{[40 66 0]} :max-row 5))))
+
+(deftest a-wall-top-the-zone-bars-digging-is-no-stand-and-no-base
+  (let [wall (for [x [1 2] y [64 65 66]] [[x y 0] "oak_log"])
+        zone {:name "yard" :owner "other" :allow #{:place} :min [1 64 0] :max [2 66 0]}
+        r (plan :targets (set (for [y (range 68 74)] [0 y 0])) :feet [1 67 0] :zones [zone]
+                :block-at (apply world {} (mapcat identity (concat wall (for [y (range 64 74)] [[0 y 0] "oak_log"])))))]
+    (is (nil? (:stand r)))
+    (is (not-any? #{[1 67 0] [2 67 0]} [(:base (:pillar r))]))))
