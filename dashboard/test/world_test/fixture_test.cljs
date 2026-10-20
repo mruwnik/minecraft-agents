@@ -97,13 +97,14 @@
     (is (= (count (filter #(re-find #"^forceload add" %) (f/setup-commands g origin dark-case)))
            (count (filter #(re-find #"^forceload remove" %) cmds))))))
 
-(deftest a-dark-cell-clears-natural-mobs-in-its-own-box-and-a-lit-one-none
-  (let [dg (f/case-grid dark-case) lg (f/case-grid lit-case) sg (f/case-grid {:plot {}})
+(deftest a-sealed-cell-clears-the-natural-mobs-of-the-caves-round-it-lit-or-dark
+  (let [dg (f/case-grid dark-case) lg (f/case-grid lit-case)
         origin (f/plot-origin dg 465)]
-    (is (empty? (f/natural-hostiles-commands lg origin lit-case)))
-    (is (seq (f/natural-hostiles-commands dg origin dark-case)))
-    (is (every? #(re-find #"dx=31,dy=17,dz=31" %) (f/natural-hostiles-commands dg origin dark-case)))
-    (is (seq (f/natural-hostiles-commands sg (f/plot-origin sg 437) {:plot {:height 16}})))))
+    (doseq [[g c] [[dg dark-case] [lg lit-case]]
+            :let [cmds (f/natural-hostiles-commands g origin c)]]
+      (is (seq cmds))
+      (is (every? #(re-find #"dx=79,dy=\d+,dz=79" %) cmds) "the cell box widened by 24 each way"))
+    (is (seq (f/natural-hostiles-commands (f/case-grid {:plot {}}) (f/plot-origin (f/case-grid {:plot {}}) 437) {:plot {:height 16}})))))
 
 (def timed-file "{:defaults {:time :night :time-why :sleep} :cases [{:name \"a\" :expect [{:event {:kind :x} :within-s 5}]} {:name \"b\" :time :any :expect [{:event {:kind :x} :within-s 5}]} {:name \"c\" :plot {:light :lit} :expect [{:event {:kind :x} :within-s 5}]}]}")
 

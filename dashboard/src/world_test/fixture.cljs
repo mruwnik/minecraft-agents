@@ -696,17 +696,11 @@
 (defn natural-hostiles-commands
   "One kill per natural hostile type in the plot's box widened by natural-margin, never one a runner
   summoned (tag wt): mobs spawned on the dark plots around (or left from dusk) would answer the body's hostile reflex.
-  None with :mobs :keep. A sealed cell sees no other plot: a dark one clears its own box, a lit one nothing (light
-  stops spawns)."
-  [grid [ox oy oz :as origin] c]
-  (cond
-    (= :keep (:mobs c)) []
-    (:underground? grid)
-    (let [box (box-selector grid origin (get-in c [:plot :height] 6))]
-      (if (= :lit (:light grid))
-        []
-        (vec (for [t natural-hostile-types] (str "kill @e[type=minecraft:" t ",tag=!wt," box "]")))))
-    :else
+  Sealed cells too, lit or dark: the rock round a cell holds caves whose mobs the body hears through the wall.
+  None with :mobs :keep."
+  [grid [ox oy oz] c]
+  (if (= :keep (:mobs c))
+    []
     (let [[sx sz] (dims grid)
           m natural-margin
           box (str "x=" (- ox m) ",y=" (- (dec oy) m) ",z=" (- oz m) ",dx=" (+ (dec sx) (* 2 m))
