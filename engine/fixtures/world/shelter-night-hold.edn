@@ -1,6 +1,6 @@
 ;; jobs.survival.night holds the body at night and lets it out at day (card 79be43a4; the shelter-level hold was not ported in
 ;; card 8aa80fca). Night case: on open ground with a remembered bed the night job sleeps (a known bed within :bed-radius
-;; comes before log-out and dig-in); the sleep skips the night (vanilla, all online players asleep), the body wakes and the job completes.
+;; comes before log-out and dig-in); the clock is then set to morning (a vanilla skip needs every online player asleep), the body wakes and the job completes.
 ;; (The release at day and the queued-job hold are the known-failing fixture shelter-night-hold-queued-job.) Day case: a shelter
 ;; job by day does nothing and ends :done at once. The bed is in a closed hut: the night does not sleep in an open bed (card 4e99ddb0). Night: run with --allow-time --time-log <the shared time log>.
 {:defaults
@@ -11,7 +11,6 @@
  :cases
  [{:name "night-sleeps-wakes-and-completes"
    :time :night-exclusive
-   :sleep-skip true
    :tags [:night]
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
@@ -19,7 +18,8 @@
    :body {:at [13.5 0 13.5]}
    :act [[:job (jobs.memory.set-place {:name :bed :pos #at [10 0 12]})]
          [:job (jobs.survival.night {})]
-         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 60]]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 60]
+         [:time-set 1000]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}
             {:event {:source :body :kind :woke} :within-s 60}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60}]

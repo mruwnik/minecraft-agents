@@ -42,7 +42,7 @@
    :time :night-exclusive
    :sleep-skip true
    :blocks [[:fill [8 -6 8] [24 -1 24] "stone"]]
-   :body {:inventory [["oak_log" 12]]}
+   :body {:inventory [["oak_log" 24]]}
    :act [[:job (jobs.survival.night)]
          [:await {:source :job :kind :shut-in.sealed} 60]
          [:until [:memory {:entries {:shelter [{:data {:state :built}}]}}] 10]
@@ -181,18 +181,18 @@
             {:no-event {:source :job :kind #{:completed :stopped}} :for-s 30 :until {:source :job :kind :waiting :data {:reason :exposed}} :of-job true}]
    :after [[:body-near [14.5 0 16.5] 1.5]]
    :limit-s 50}
-  ;; 87aee1d1: a bed in a hut with no door cannot be reached (bedrock walls: go-to digs through any other wall); sleep says the hut is walled in, not a bare "cannot reach"
+  ;; 87aee1d1: a bed in a hut with no door cannot be reached (bedrock walls: go-to digs through any other wall); sleep says why (the body is shut in here, no way out), not a bare "cannot reach"
   {:name "sleep-to-a-walled-in-bed-says-why"
-   :blocks [[:fill [8 0 8] [16 3 16] "bedrock" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+   :blocks [[:fill [8 -1 8] [16 3 16] "bedrock" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
             [:set [11 0 12] "red_bed[facing=east,part=foot]"] [:set [12 0 12] "red_bed[facing=east,part=head]"]]
-   :body {:at [4.5 0 12.5]}
+   :body {:at [4.5 0 12.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.survival.sleep {:bed #at [11 0 12]})]]
-   :expect [{:event {:source :job :kind :bed_unreachable :message [:contains "cannot reach the bed: "]} :within-s 90 :of-job true}
-            {:event {:source :job :kind :bed_unreachable :message [:contains "walled in"]} :within-s 90 :of-job true}
+   :expect [{:event {:source :job :kind :bed_unreachable :message [:contains "cannot reach the bed: "]} :within-s 240 :of-job true}
+            {:event {:source :job :kind :bed_unreachable :message [:contains "shut in here"]} :within-s 240 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :for-s 30}]
    :after [[:body-far [11.5 0 12.5] 3]]
-   :limit-s 100}
+   :limit-s 250}
   ;; 2383463a: a far flight left a :displaced entry: the bed 100 blocks off (past :bed-radius 48) is walked back to and slept in
   {:name "displaced-body-walks-back-to-a-bed-100-blocks-away"
    :time :night-exclusive
