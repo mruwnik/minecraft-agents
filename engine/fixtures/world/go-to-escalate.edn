@@ -307,17 +307,28 @@
    :memory [{:kind :scaffold :data {:entries [{:cell #at [20 1 16] :item "cobblestone" :before "air" :job "j1" :purpose :pillar :state :placed}
                                               {:cell #at [20 2 16] :item "cobblestone" :before "air" :job "j1" :purpose :pillar :state :placed}]}}]
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1 :checks {:safe? (not (threatened))} :ways #{:walk :clear-path :pillar :stair :dig-out}})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [24.5 1 16.5] 2]]}
+  ;; with :clear-seal the walk takes the ledger blocks back (cleanup) before any escalation
+  {:name "own-placed-cobble-wall-is-cleared-as-a-seal"
+   :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
+            [:fill [12 0 12] [20 3 20] "cobblestone" :hollow]]
+   :memory [{:kind :scaffold :data {:entries [{:cell #at [20 1 16] :item "cobblestone" :before "air" :job "j1" :purpose :pillar :state :placed}
+                                              {:cell #at [20 2 16] :item "cobblestone" :before "air" :job "j1" :purpose :pillar :state :placed}]}}]
+   :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1 :checks {:safe? (not (threatened))}})]]
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated} :for-s 5 :until {:source :job :kind :completed :data {:arrived true}}}]
+   :after [[:body-near [24.5 1 16.5] 2] [:block [20 1 16] "air"] [:block [20 2 16] "air"]]}
   {:name "intent-only-cobble-wall-is-never-dug"
    :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
             [:fill [12 0 12] [20 3 20] "cobblestone" :hollow]]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [20 1 16] :item "cobblestone" :before "air" :job "j1" :purpose :pillar :state :intent}
                                               {:cell #at [20 2 16] :item "cobblestone" :before "air" :job "j1" :purpose :pillar :state :intent}]}}]
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1 :checks {:safe? (not (threatened))} :ways #{:walk :clear-path :pillar :stair :dig-out}})]]
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :escalation {:step :none :why :no-dig}}} :within-s 90 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :no-dig}}}}]
    :after [[:block [20 1 16] "cobblestone"] [:block [20 2 16] "cobblestone"]]}]}
