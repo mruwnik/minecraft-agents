@@ -144,6 +144,14 @@
               {:keys [r]} (await (run-round p {}))]
           (is (= :dry (:landed (:data r)))))))))
 
+(deftest a-landing-in-the-air-over-water-is-in-water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (aboard {:blocks {"1,65,0" "air"} :self {:vehicle 9 :inWater false} :entities [(assoc boat :dismountAt {:x 1.5 :y 65.1 :z 0.5})]})
+              {:keys [r]} (await (run-round p {}))]
+          (is (= :in-water (:landed (:data r)))))))))
+
 (deftest toward-wins-over-the-dry-cell
   (async done
     (tu/run-async done

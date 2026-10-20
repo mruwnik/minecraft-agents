@@ -67,10 +67,11 @@
     (when target (vehicle/yaw-toward from (vehicle/centre target)))))
 
 (defn landed-in-water?
-  "Whether the landing cell is water. The physics flag keeps its value from the ride (a boat is boarded from the water), so it is read only for a cell not seen."
+  "Whether the landing is in water: water at the feet, or over water (the body is put down at the boat's height and drops in). The physics flag keeps its value from the ride (a boat is boarded from the water), so it is read only when neither cell is seen."
   [p pos flag]
-  (let [n (u/seen-name p (look/cell-of pos))]
-    (if n (= "water" n) (boolean flag))))
+  (let [cell (look/cell-of pos)
+        names (keep #(u/seen-name p %) [cell (update cell :y dec)])]
+    (if (seq names) (boolean (some #{"water"} names)) (boolean flag))))
 
 (defn ^:async round [c]
   (let [p (:primitives c)

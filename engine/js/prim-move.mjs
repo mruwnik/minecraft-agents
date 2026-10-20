@@ -282,14 +282,14 @@ export function createMove (env) {
   const mount = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(isNum(a.id), 'mount needs an entity id')
-    return act(token, { boundS: 2 }, ctx => mountVehicle(env.bot, ctx, a, { timeScale }))
+    return act(token, { boundS: setting('vehicle/mount-wait-ms') / 1000 + 2 }, ctx => mountVehicle(env.bot, ctx, a, { timeScale }))
   }
 
   const dismount = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(a.yaw == null || isNum(a.yaw), 'dismount yaw must be a number of degrees (0 south, 90 west)')
     need(a.pitch == null || isNum(a.pitch), 'dismount pitch must be a number of degrees')
-    return act(token, { boundS: 2 }, ctx => dismountVehicle(env.bot, ctx, a, { timeScale }))
+    return act(token, { boundS: setting('vehicle/dismount-wait-ms') / 1000 + 2 }, ctx => dismountVehicle(env.bot, ctx, a, { timeScale }))
   }
   // One stroke of steering the boat the body is in (vehicle.mjs paddleBoat): `ticks` ticks of turn 'left'|'right' and forward.
   const paddle = async (token, a = {}) => {
