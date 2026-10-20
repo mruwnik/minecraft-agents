@@ -65,15 +65,18 @@
             vec)))))
 
 (defn walkable-near
-  "The seen-roofed cell {:x :y :z} of the closed region the body stands in (doors shut, as pending reads it) nearest cell [x y z],
-  or nil: a player judging a room does not walk out through its doorway to look at the outside; the flood runs a few
-  seen cells past an open doorway, whose roof is unseen."
+  "The cell {:x :y :z} of the closed region the body stands in (doors shut, as pending reads it) nearest cell [x y z], or nil.
+  Only cells with a seen roof, those not beside a cell without one first: a player judging a room does not walk out through its
+  doorway to look at the outside, nor stand in the doorway (the flood runs past an open one over seen cells)."
   [p [x y z]]
   (let [feet (sh-sense/feet p)
-        roofed? (fn [c] (sh-sense/roofed? p (sh-sense/room-roof-height) {:x (aget c 0) :y (aget c 1) :z (aget c 2)}))
-        cells (filter roofed? (:cells (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) (:x feet) (:y feet) (:z feet))))
-        best (first (sort-by (fn [c] (+ (js/Math.abs (- (aget c 0) x)) (js/Math.abs (- (aget c 1) y)) (js/Math.abs (- (aget c 2) z)))) cells))]
-    (when best {:x (aget best 0) :y (aget best 1) :z (aget best 2)})))
+        flood (set (map vec (:cells (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) (:x feet) (:y feet) (:z feet)))))
+        roofed (set (filter (fn [[cx cy cz]] (sh-sense/roofed? p (sh-sense/room-roof-height) {:x cx :y cy :z cz})) flood))
+        inner? (fn [[cx cy cz]] (every? (fn [[dx dz]] (let [n [(+ cx dx) cy (+ cz dz)]] (or (roofed n) (not (flood n)))))
+                                        [[1 0] [-1 0] [0 1] [0 -1]]))
+        nearest (fn [cells] (first (sort-by (fn [[cx cy cz]] (+ (js/Math.abs (- cx x)) (js/Math.abs (- cy y)) (js/Math.abs (- cz z)))) cells)))
+        best (or (nearest (filter inner? roofed)) (nearest roofed))]
+    (when best {:x (best 0) :y (best 1) :z (best 2)})))
 
 (defn ^:async look!
   "A closed region with sides never seen is not yet known shut (an unseen cell may be an opening). The nearest of cells is
