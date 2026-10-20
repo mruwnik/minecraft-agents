@@ -44,37 +44,55 @@
 
 (def absent ::absent)
 
+(defn store
+  "A fresh cell store: a JS Map from pack, with the origin the keys are relative to (set by the first key packed)."
+  []
+  #js {:m (js/Map.) :ox nil :oy 0 :oz 0})
+
+(defn pack
+  "x y z as one number, the key of the per-cell JS maps (hashing a [x y z] vector per lookup was a fifth of a pen check's
+  time). Within 1024 columns and 128 cells of the store's origin the key is a small integer (V8 hashes those fast);
+  further out it is a negative number that is still unique."
+  [o x y z]
+  (when (nil? (.-ox o)) (set! (.-ox o) x) (set! (.-oy o) y) (set! (.-oz o) z))
+  (let [dx (+ (- x (.-ox o)) 1024) dz (+ (- z (.-oz o)) 1024) dy (+ (- y (.-oy o)) 128)]
+    (if (and (>= dx 0) (< dx 2048) (>= dz 0) (< dz 2048) (>= dy 0) (< dy 256))
+      (+ (* (+ (* dx 2048) dz) 256) dy)
+      (- -1 (+ (* (+ (* (+ x 1048576) 2097152) (+ z 1048576)) 1024) (+ y 256))))))
+
 (defn make-world
   "Memoised reader over block-at: {:block f :cell f :unloaded volatile-of-set :head volatile-of-set}; both take x y z.
   The cells in sealed ([x y z]) read as a wall two high. :head collects the unloaded cells clear? read as head room.
-  blocks (a volatile map) holds the blocks read, shared by the fills of one check: block-at is asked once per cell."
+  blocks (a JS Map from pack) holds the blocks read, shared by the fills of one check: block-at is asked once per cell."
   [block-at sealed blocks]
-  (let [cells (volatile! {})
+  (let [cells (js/Map.)
+        walls (when (seq sealed) (js/Set. (to-array (map (fn [[x y z]] (pack blocks x y z)) sealed))))
         unloaded (volatile! #{})
         head (volatile! #{})
         block (fn [x y z]
-                (let [k [x y z]
-                      known (get @blocks k absent)
-                      b (if (identical? known absent) (block-at {:x x :y y :z z}) known)]
-                  (when (identical? known absent) (vswap! blocks assoc k b))
-                  (when (nil? b) (vswap! unloaded conj k))
+                (let [k (pack blocks x y z)
+                      known (.get (.-m blocks) k)
+                      b (if (undefined? known) (block-at {:x x :y y :z z}) known)]
+                  (when (undefined? known) (.set (.-m blocks) k b))
+                  (when (nil? b) (vswap! unloaded conj [x y z]))
                   b))
         read (fn [x y z]
                (if-let [b (block x y z)]
                  (collision b)
                  {:lo 0 :hi 1 :unloaded? true}))]
-    {:block block
+    {:store blocks
+     :block block
      :unloaded unloaded
      :head head
      :max-drop (max-drop)
      :body-height (body-height)
      :cell (fn [x y z]
-             (let [k [x y z]
-                   known (get @cells k absent)]
+             (let [k (pack blocks x y z)
+                   known (.get cells k)]
                (cond
-                 (contains? sealed k) {:lo 0 :hi 2}
-                 (not (identical? known absent)) known
-                 :else (let [c (read x y z)] (vswap! cells assoc k c) c))))}))
+                 (and walls (.has walls k)) {:lo 0 :hi 2}
+                 (not (undefined? known)) known
+                 :else (let [c (read x y z)] (.set cells k c) c))))}))
 
 (defn floor-cell [n] (js/Math.floor (+ n eps)))
 
@@ -85,10 +103,13 @@
   "True when nothing in column x z collides with the open height interval (bottom, top). An unloaded cell read goes
   in the world's :head."
   [{:keys [cell head]} x z bottom top]
-  (every? (fn [y] (let [c (cell x y z)]
-                    (when (:unloaded? c) (vswap! head conj [x y z]))
-                    (or (nil? c) (not (overlaps? c y bottom top)))))
-          (range (js/Math.floor bottom) (inc (js/Math.floor (- top eps))))))
+  (let [last-y (js/Math.floor (- top eps))]
+    (loop [y (js/Math.floor bottom)]
+      (or (> y last-y)
+          (let [c (cell x y z)]
+            (when (:unloaded? c) (vswap! head conj [x y z]))
+            (and (or (nil? c) (not (overlaps? c y bottom top)))
+                 (recur (inc y))))))))
 
 (defn standable?
   [{:keys [body-height] :as world} x z c y]
@@ -128,19 +149,23 @@
 
 (def orthogonal [[1 0] [-1 0] [0 1] [0 -1]])
 (def diagonal [[1 1] [1 -1] [-1 1] [-1 -1]])
+;; each diagonal: the indices in orthogonal of its two straight neighbours
+(def diagonal-via [[0 2] [0 3] [1 2] [1 3]])
 
 (defn moves
   "[[dx dz] {:top :perch?}] for every step from column x z at height s; a diagonal needs both orthogonals."
   [world x z floor]
   (let [s (swim-top world x z floor)
         at (fn [[dx dz]] (reach world (+ x dx) (+ z dz) s))
-        straight (into {} (keep (fn [d] (when-let [r (at d)] [d r]))) orthogonal)
-        corners (for [[dx dz] diagonal
-                      :when (and (straight [dx 0]) (straight [0 dz]))
-                      :let [r (at [dx dz])]
+        straight (mapv at orthogonal)
+        corners (for [i (range 4)
+                      :let [[a b] (nth diagonal-via i)]
+                      :when (and (nth straight a) (nth straight b))
+                      :let [d (nth diagonal i)
+                            r (at d)]
                       :when r]
-                  [[dx dz] r])]
-    (concat straight corners)))
+                  [d r])]
+    (concat (keep-indexed (fn [i r] (when r [(nth orthogonal i) r])) straight) corners)))
 
 ;; ------------------------------------------------------------------ where the fill starts
 
@@ -193,33 +218,43 @@
 
 ;; ------------------------------------------------------------------ the fill
 
+(defn fill*
+  "fill with the seen cells in a JS Map from pack: {:seen map :order [key] :exits [...] :truncated? bool :last key}."
+  [world seeds box max-cells]
+  (let [seen (js/Map.)
+        o (:store world)
+        put! (fn [[x y z] v] (.set seen (pack o x y z) v))]
+    (doseq [{:keys [key s]} seeds] (put! key {:s s :from nil}))
+    (loop [queue (into cljs.core/PersistentQueue.EMPTY (map :key) seeds)
+           order (mapv :key seeds)
+           exits []]
+      (cond
+        (empty? queue) {:seen seen :order order :exits exits :truncated? false}
+        (>= (.-size seen) max-cells) {:seen seen :order order :exits exits :truncated? true :last (peek order)}
+        :else
+        (let [[x y z :as k] (peek queue)
+              s (:s (.get seen (pack o x y z)))
+              [order' exits' queue']
+              (reduce (fn [[order exits queue] [[dx dz] {:keys [top perch?]}]]
+                        (let [nx (+ x dx) nz (+ z dz)
+                              ny (floor-cell top)]
+                          (cond
+                            (and box (outside? box nx nz)) [order (conj exits {:from k :to [nx ny nz] :top top :perch? perch?}) queue]
+                            (.has seen (pack o nx ny nz)) [order exits queue]
+                            :else (let [nk [nx ny nz]]
+                                    (put! nk {:s top :from k :perch? perch?})
+                                    [(conj order nk) exits (conj queue nk)]))))
+                      [order exits (pop queue)]
+                      (moves world x z s))]
+          (recur queue' order' exits'))))))
+
 (defn fill
   "Breadth first from seeds ({:key :s}) until the queue is empty or max-cells are seen. With a box, a step
   into a column outside it is recorded as an exit and not taken. {:seen {key {:s :from}} :order [key]
   :exits [{:from key :to key}] :truncated? bool :last key}."
   [world seeds box max-cells]
-  (loop [queue (into cljs.core/PersistentQueue.EMPTY (map :key) seeds)
-         seen (into {} (map (fn [{:keys [key s]}] [key {:s s :from nil}])) seeds)
-         order (mapv :key seeds)
-         exits []]
-    (cond
-      (empty? queue) {:seen seen :order order :exits exits :truncated? false}
-      (>= (count seen) max-cells) {:seen seen :order order :exits exits :truncated? true :last (peek order)}
-      :else
-      (let [[x _ z :as k] (peek queue)
-            s (get-in seen [k :s])
-            steps (moves world x z s)
-            [seen' order' exits' queue']
-            (reduce (fn [[seen order exits queue] [[dx dz] {:keys [top perch?]}]]
-                      (let [nx (+ x dx) nz (+ z dz)
-                            nk [nx (floor-cell top) nz]]
-                        (cond
-                          (and box (outside? box nx nz)) [seen order (conj exits {:from k :to nk :top top :perch? perch?}) queue]
-                          (contains? seen nk) [seen order exits queue]
-                          :else [(assoc seen nk {:s top :from k :perch? perch?}) (conj order nk) exits (conj queue nk)])))
-                    [seen order exits (pop queue)]
-                    steps)]
-        (recur queue' seen' order' exits')))))
+  (let [{:keys [seen order] :as r} (fill* world seeds box max-cells)]
+    (assoc r :seen (persistent! (reduce (fn [m [x y z :as k]] (assoc! m k (.get seen (pack (:store world) x y z)))) (transient {}) order)))))
 
 (defn path-to
   "The cells from a seed to key, each {:key :s}."
@@ -289,7 +324,7 @@
   limit cells: a field, not a pocket the pen's own fences wall in."
   [{:keys [cell] :as world} seed limit]
   (let [walled (assoc world :cell (fn [x y z] (let [c (cell x y z)] (if (and c (> (:hi c) 1)) (assoc c :hi 3) c))))]
-    (boolean (:truncated? (fill walled [seed] nil limit)))))
+    (boolean (:truncated? (fill* walled [seed] nil limit)))))
 
 (defn perch-ins
   "Leaks {:pos :why :perch-in} of the pen's fences, walls and gates (a cell higher than a block beside an inside
@@ -461,7 +496,7 @@
   :leaks is [{:pos {:x :y :z} :why}], :why one of :open-gate :gap :climb :perch-in :open :unloaded.
   :gate-drops is [{:gate :from :to :drop}]: a gate whose side of the pen is cut off from the rest by a drop of more than 1."
   [{:keys [max-cells] :or {max-cells default-max-cells} :as opts}]
-  (let [opts (assoc opts :max-cells max-cells :sealed #{} :blocks (volatile! {}))
+  (let [opts (assoc opts :max-cells max-cells :sealed #{} :blocks (store))
         {:keys [world fill leaks]} (analyse opts)]
     (if (or (not world) (and (empty? (:order fill)) (empty? leaks)))
       (answer false :no-start #{} [] [])

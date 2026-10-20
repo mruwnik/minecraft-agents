@@ -36,19 +36,46 @@
 
 (defn gate? [b] (some-> b .-name (ends? "_fence_gate")))
 
+(defn kind-of*
+  [n]
+  (cond
+    (contains? hazards n) :hazard
+    (passes? n) :pass
+    (ends? n "_carpet") :carpet
+    (ends? n "_fence_gate") :gate
+    (re-find #"_(fence|wall)$" n) :wall
+    (ends? n "_slab") :slab
+    (ends? n "_trapdoor") :trapdoor
+    (ends? n "_door") :door
+    (ends? n "_bed") :bed
+    (contains? heights n) :height
+    :else :full))
+
+(def kinds (js/Map.))
+
+(defn kind-of
+  "What kind of collision block name n has, read once per name: classifying took a dozen regex and set lookups per cell."
+  [n]
+  (or (.get kinds n)
+      (let [k (kind-of* n)] (.set kinds n k) k)))
+
+(def full {:lo 0 :hi 1})
+(def hazard {:lo 0 :hi 1 :hazard? true})
+(def wall {:lo 0 :hi 1.5})
+
 (defn collision
   "{:lo :hi} (heights inside the cell, plus :hazard?) of block b, or nil when an animal passes through."
   [b]
   (let [n (.-name b)]
-    (cond
-      (contains? hazards n) {:lo 0 :hi 1 :hazard? true}
-      (passes? n) nil
-      (ends? n "_carpet") {:lo 0 :hi 0.0625}
-      (ends? n "_fence_gate") (when-not (on? b "open") {:lo 0 :hi 1.5})
-      (re-find #"_(fence|wall)$" n) {:lo 0 :hi 1.5}
-      (ends? n "_slab") (case (prop b "type") "bottom" {:lo 0 :hi 0.5} "top" {:lo 0.5 :hi 1} {:lo 0 :hi 1})
-      (ends? n "_trapdoor") (when-not (on? b "open") (if (= "top" (prop b "half")) {:lo 0.8125 :hi 1} {:lo 0 :hi 0.1875}))
-      (ends? n "_door") (when-not (on? b "open") {:lo 0 :hi 1})
-      (ends? n "_bed") {:lo 0 :hi 0.5625}
-      (contains? heights n) {:lo 0 :hi (heights n)}
-      :else {:lo 0 :hi 1})))
+    (case (kind-of n)
+      :hazard hazard
+      :pass nil
+      :carpet {:lo 0 :hi 0.0625}
+      :gate (when-not (on? b "open") wall)
+      :wall wall
+      :slab (case (prop b "type") "bottom" {:lo 0 :hi 0.5} "top" {:lo 0.5 :hi 1} full)
+      :trapdoor (when-not (on? b "open") (if (= "top" (prop b "half")) {:lo 0.8125 :hi 1} {:lo 0 :hi 0.1875}))
+      :door (when-not (on? b "open") full)
+      :bed {:lo 0 :hi 0.5625}
+      :height {:lo 0 :hi (heights n)}
+      full)))
