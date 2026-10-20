@@ -1,25 +1,25 @@
 ;; Card 67b04bdb (owner Q350): the retreat pillar goes through another's area only after every way that keeps off has failed.
-;; Same course as retreat-early-pillar (helmeted zombie 7 east, 10 hp, no weapon, dirt carried); a foreign plan footprint
-;; stands in for the zone round the pillar column (as in go-to-zone-pit). Should-succeed: ground to dig into beside the
-;; footprint: the body digs a pit and never pillars. Should-fail (pillars): with no pickaxe-free dig possible (a bedrock-hard
-;; floor) the pillar is the last way and goes up with a trespass warning.
+;; An unarmed body in a one-wide stone doorway (x 9 and 11, z 15..19, closed at z 15) with a zombie in the cell in front of it: no wall
+;; can be placed there, so the pillar is the way. A foreign plan footprint on the pillar's top cell stands in for the zone (as in
+;; go-to-zone-pit). Should-succeed: with the footprint the pillar still goes up as the last resort and says so
+;; (retreat.trespass-last-resort). Control: without the footprint it pillars and says nothing.
 {:defaults
  {:tags [:hostile :survival :cornered :zones]
   :time :any
   :plot {:height 16}
-  :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [10 0 16] #at [10 5 16]] :want "stone"}]}]
+  :blocks [[:fill [9 0 15] [9 1 19] "stone"] [:fill [11 0 15] [11 1 19] "stone"] [:fill [10 0 15] [10 1 15] "stone"]]
   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
               :job (jobs.survival.respond-to-hostile)}]
   :body {:at [10.5 0 16.5] :inventory [["dirt" 24]]}
-  :act [[:rcon "damage $BODY 10 minecraft:generic"]
-        [:summon "zombie" [17.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+  :act [[:summon "zombie" [10.5 0 17.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
   :limit-s 90}
  :cases
- [{:name "foreign-footprint-on-the-column-with-ground-to-dig-takes-the-pit-not-the-pillar"
-   :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
-            {:no-event {:source :job :kind :child_ended :data {:slot :pillar :status :done}} :for-s 40}]}
-  {:name "foreign-footprint-on-the-column-with-nothing-else-left-pillars-and-warns"
-   :blocks [[:fill [4 -1 10] [24 -1 22] "bedrock"]]
-   :expect [{:event {:source :job :kind :retreat.trespass-last-resort} :within-s 40}
-            {:event {:source :job :kind :child_ended :data {:slot :pillar :status :done}} :within-s 40}]
+ [{:name "foreign-footprint-on-the-pillar-top-still-pillars-as-the-last-resort-and-warns"
+   :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [10 2 16] #at [10 2 16]] :want "stone"}]}]
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :pillar :status :done}} :within-s 40}
+            {:event {:source :job :kind :retreat.trespass-last-resort} :within-s 40}]
+   :after [[:body-near [10.5 3 16.5] 3]]}
+  {:name "no-footprint-pillars-without-a-warning"
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :pillar :status :done}} :within-s 40}
+            {:no-event {:source :job :kind :retreat.trespass-last-resort} :for-s 30}]
    :after [[:body-near [10.5 3 16.5] 3]]}]}
