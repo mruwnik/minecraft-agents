@@ -19,11 +19,13 @@
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
             [jobs.lib.breath :as breath]
+            [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.movement.go-to.column :as column]
+            [jobs.survival.breathe.air :as breathe-air]
             [jobs.movement.go-to.tuning :as tuning]))
 
 (def max-surfacings "Walks to air one go-to call makes at most." 3)
@@ -31,8 +33,6 @@
 (def max-search-rounds "Rounds a swim to the air it knows keeps searching for its way: it is a few cells, and the air is running out." 20)
 
 (def look-args "breath/find-air!'s look: columns within :radius, cells up to :reach above the feet." {:radius 2 :reach 10})
-
-(def air-radius "Columns this far sideways are read for air when the looks found none nearer (breathe's :air-radius default)." 8)
 
 (defn dry-stand
   "The seen cell within radius of pos (the body) and within range within of goal, nearest pos, where the body stands
@@ -104,32 +104,23 @@
             (recur more))))
       true)))
 
-(defn ^:async swim-up-blind!
-  "No air known and nothing seen over the own column: swim up it, as breathe does in the dark (a body learns by moving).
-  True when the swim surfaced or rose; nil otherwise."
-  [c pos]
-  (let [fy (js/Math.floor (:y pos))
-        r (await (ctx/act c :swim #js {}))
-        y (js/Math.floor (:y (u/self-pos c)))]
-    (or (= "surfaced" (.-status r)) (> y fy))))
-
 (defn ^:async swim-to-air!
   "Look for air (up the own column first, then the columns beside it, breath/find-air!), else read seen air within
-  air-radius, and walk one round (near/walk-round! with walk-opts) to that surface cell, range 0: a way to air, whose
+  the air-radius setting of survival.breathe, and walk one round (near/walk-round! with walk-opts) to that surface cell, range 0: a way to air, whose
   drowning is priced, not refused; why starts its go-to.surfacing info. With no air known and the own column open, swims
-  up it blind (one swim); with the column not open (a block seen over it), look-again! toward goal. counted is called
+  up it blind (breathe.air/swim-up!); with the column not open (a block seen over it), look-again! toward goal. counted is called
   when it swims. True when it walked there or on (the caller plans again); nil when no air is known and nothing is left
   to look at."
   [c walk-opts goal why counted]
   (let [p (:primitives c)
         pos (u/self-pos c)
         target (or (await (breath/find-air! c pos (:radius look-args) (:reach look-args)))
-                   (breath/nearest-air p pos air-radius (:reach look-args) nil false))]
+                   (breath/nearest-air p pos (breathe-air/air-radius) (:reach look-args) nil false))]
     (if-not target
       (if (breath/column-open? p (js/Math.floor (:x pos)) (js/Math.floor (:z pos)) (js/Math.floor (:y pos)) (:reach look-args))
         (do (counted)
             (ctx/emit! c :go-to.surfacing :info {:text (str why ", nothing seen above: swimming up blind")})
-            (await (swim-up-blind! c pos)))
+            (true? (await (breathe-air/swim-up! c nil))))
         (await (look-again! c pos goal)))
       (do
         (counted)
@@ -140,9 +131,7 @@
               (recur (inc n))
               (contains? #{"arrived" "partial" "searching"} status))))))))
 
-(def breath-wait-ms "One wait of breathe-back!." 250)
-
-(def max-breath-waits "Waits of breathe-back! at most: vanilla refills 4 of 300 air a tick, a full breath in under 4 s." 20)
+(def max-breath-waits "Pauses of breathe-back! at most: vanilla refills 4 of 300 air a tick, a full breath in under 4 s." 20)
 
 (defn ^:async breathe-back!
   "With the head out after a swim to air, wait until the air is back: the plan counts the air used, so planning at once
@@ -153,8 +142,8 @@
       (let [oxygen (.-oxygen (.self p))]
         (when (and (< n max-breath-waits) (number? oxygen) (< oxygen 20) (not (breath/head-under? p)))
           (when (zero? n) (ctx/emit! c :go-to.breathing :info {:oxygen oxygen :text "head out: waiting for its air to come back"}))
-          (await (ctx/act c :wait #js {:ms breath-wait-ms :why "getting its breath back"}))
-          (recur (inc n)))))))
+          (when-not (= :continue (await (child/pause! c 0.25 "getting its breath back")))
+            (recur (inc n))))))))
 
 (defn short-under-water?
   "A walk that reached the end of its plan short of a goal above the body, the head under water (a dark shaft: the plan
