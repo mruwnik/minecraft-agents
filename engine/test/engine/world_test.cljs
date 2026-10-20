@@ -61,11 +61,23 @@
                                  :blueprints {"hut" {:value hut-bp}}})
         edited (assoc-in prior [:plans "field"] {:stamp [2 2] :value (assoc-in wheat [:parts 0 :box] [[0 64 0] [2 64 0]])})
         next (world/expand-all edited prior)]
-    (is (= 3 (count (get-in next [:claims "field"]))))
+    (is (= 3 (count @(get-in next [:claims "field"]))))
     (is (identical? (get-in prior [:expanded "huts"]) (get-in next [:expanded "huts"])))
-    (is (= (world/expand-all edited) next) "same result as expanding everything")
+    (is (= (world/expansion (world/expand-all edited) "field") (world/expansion next "field")) "same result as expanding everything")
     (let [bp-changed (world/expand-all (assoc-in edited [:blueprints "hut"] {:value (assoc hut-bp :layers [["SS"]])}) edited)]
-      (is (= 2 (count (get-in bp-changed [:claims "huts"]))) "a changed blueprint expands every plan again"))))
+      (is (= 2 (count @(get-in bp-changed [:claims "huts"]))) "a changed blueprint expands every plan again"))))
+
+(deftest nothing-is-expanded-until-a-reader-asks
+  (let [state (world/expand-all {:plans {"field" {:value wheat} "huts" {:value huts}} :blueprints {"hut" {:value hut-bp}}})]
+    (is (not-any? realized? (vals (:expanded state))))
+    (world/answer state "field")
+    (is (= [true false] (map #(realized? (get-in state [:expanded %])) ["field" "huts"])) "an answer expands only its plan")))
+
+(deftest derived-with-needles-expands-only-the-plans-that-mention-one
+  (let [w (world/of-data {"field" wheat "huts" huts} {"hut" hut-bp})
+        seen (world/derived w :ids (fn [answers] (mapv :id answers)) ["wheat"])]
+    (is (= ["field"] seen))
+    (is (= [true false] (map #(realized? (get-in @(:state w) [:expanded %])) ["field" "huts"])))))
 
 (deftest a-world-from-data-answers-without-a-disk
   (let [w (world/of-data {"field" wheat} {})]

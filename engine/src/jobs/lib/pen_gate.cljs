@@ -53,12 +53,12 @@
 (defn opening-index
   "opening-cells of the world's plans, rebuilt only when a plan or blueprint changed."
   [kn]
-  (world/derived kn :plan-openings opening-cells))
+  (world/derived kn :plan-openings opening-cells ["_fence_gate" "_door"]))
 
 (defn gate-index
   "gate-cells of the world's plans, rebuilt only when a plan or blueprint changed; nil for a nil world."
   [kn]
-  (world/derived kn :pen-gates gate-cells))
+  (world/derived kn :pen-gates gate-cells ["_fence_gate"]))
 
 ;; ------------------------------------------------------------------ reading the world
 

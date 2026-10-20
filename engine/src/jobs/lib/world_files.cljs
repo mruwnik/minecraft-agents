@@ -20,8 +20,10 @@
   place job declines. An empty vector is a valid \"no zones\".
   Claims differ: a missing file is [] (no claims, no warn). So are markers (world.markers-unreadable on a bad file).
 
-  The state: {:plans {id entry} :blueprints {id entry} :zones entry :area-claims entry :expanded {id expansion}
-  :claims {id #{cell}} :footprints {cell id} :checked-at ms}.
+  The state: {:plans {id entry} :blueprints {id entry} :zones entry :area-claims entry :expanded {id (delay expansion)}
+  :claims {id (delay #{cell})} :footprints (delay {cell id}) :checked-at ms}.
+    Expansions are delays, forced by the first reader that needs them (a trigger that asks for gates forces only the plans
+    that mention one), so a body that never asks pays nothing at start.
     An entry is {:stamp [mtime size] :value v :error text}: :value the last good copy, :error the current file's
     trouble. The zone entry is {:missing true} while there is no file.
     :area-claims holds the claims file, :markers the markers file. :claims and :footprints are the plans' cells, by plan and by cell."
@@ -44,35 +46,33 @@
 
 ;; ------------------------------------------------------------------ pure bookkeeping
 
-(defn claims
-  "{id #{[x y z]}}: the expanded cells of each plan that has a last good copy."
-  [{:keys [plans expanded]}]
-  (into {} (keep (fn [[id e]] (when (:value e)
-                                [id (into #{} (map :pos) (get-in expanded [id :cells]))])))
-        plans))
-
 (defn footprint-index
   "{[x y z] id} of claims; a cell two plans claim names one of them."
   [claims]
   (into {} (for [[id cells] claims cell cells] [cell id])))
 
 (defn expand-all
-  "state with :expanded rebuilt (each plan's last good copy expanded over the blueprints' last good copies), and the
-  :claims and :footprints of the active plans with it. With prior (the state before), a plan whose entry is unchanged
-  keeps its expansion and claim, unless a blueprint changed."
+  "state with :expanded rebuilt (a delay of each plan's last good copy expanded over the blueprints' last good copies), and
+  the :claims and :footprints of the active plans with it (delays too). With prior (the state before), a plan whose entry
+  is unchanged keeps its expansion and claim, unless a blueprint changed."
   ([state] (expand-all state nil))
   ([state prior]
    (let [blueprints (into {} (keep (fn [[id e]] (when (:value e) [id (:value e)]))) (:blueprints state))
          reuse? (and prior (= (:blueprints prior) (:blueprints state)))
          same? (fn [id e] (and reuse? (= e (get-in prior [:plans id])) (contains? (:expanded prior) id)))
-         expand (fn [id e] (if (same? id e) (get-in prior [:expanded id]) (shape/expand (:value e) blueprints)))
-         state (assoc state :expanded (into {} (keep (fn [[id e]] (when (:value e) [id (expand id e)])))
-                                            (:plans state)))
-         cell-set (fn [id] (into #{} (map :pos) (get-in state [:expanded id :cells])))
-         cs (into {} (keep (fn [[id e]] (when (:value e)
-                                          [id (if (same? id e) (get-in prior [:claims id]) (cell-set id))])))
-                  (:plans state))]
-     (assoc state :claims cs :footprints (footprint-index cs)))))
+         active (filter (fn [[_ e]] (:value e)) (:plans state))
+         expanded (into {} (map (fn [[id e]] [id (if (same? id e) (get-in prior [:expanded id]) (delay (shape/expand (:value e) blueprints)))]))
+                        active)
+         cs (into {} (map (fn [[id e]] [id (if (same? id e)
+                                             (get-in prior [:claims id])
+                                             (let [x (get expanded id)] (delay (into #{} (map :pos) (:cells @x)))))]))
+                  active)]
+     (assoc state :expanded expanded :claims cs :footprints (delay (footprint-index (update-vals cs deref)))))))
+
+(defn expansion
+  "The expansion of plan id in state (see shape/expand), expanded now if nobody has needed it yet; nil without one."
+  [state id]
+  (some-> (get-in state [:expanded id]) deref))
 
 (defn answer
   "What a job gets for plan id: nil (no such file), {:id :broken text} (never readable), or
@@ -80,7 +80,7 @@
   :error when the current file is bad and this is the last good copy."
   [state id]
   (let [{:keys [value error] :as entry} (get-in state [:plans id])
-        expansion (get-in state [:expanded id])]
+        expansion (when value (expansion state id))]
     (cond
       (nil? entry) nil
       (nil? value) {:id id :broken error}
@@ -348,15 +348,31 @@
   (let [[old _] (swap-vals! (:said w) conj key)]
     (not (contains? old key))))
 
+(defn mentions?
+  "Whether plan id, or a blueprint it places, names a block containing one of needles (text): false means the plan has no cell
+  wanting such a block, so it need not be expanded."
+  [state id needles]
+  (let [value (get-in state [:plans id :value])
+        text (str (pr-str value)
+                  (apply str (for [part (:parts value)
+                                   :let [bp (get-in state [:blueprints (:blueprint part) :value])]
+                                   :when bp]
+                               (pr-str (:key bp)))))]
+    (boolean (some #(str/includes? text %) needles))))
+
 (defn answers
-  "The answers (see answer) of every plan in state, by id."
-  [state]
-  (keep #(answer state %) (sort (keys (:plans state)))))
+  "The answers (see answer) of every plan in state, by id; with needles only of the plans that mention one (see mentions?)."
+  ([state] (answers state nil))
+  ([state needles]
+   (keep #(when (or (nil? needles) (mentions? state % needles)) (answer state %))
+         (sort (keys (:plans state))))))
 
 (defn derived
   "(f answers) over the answers of all plans, kept under key k until a plan or blueprint changes: for a
-  reader asked every tick (a trigger) that must not rebuild its index per tick. nil for a nil world."
-  [w k f]
+  reader asked every tick (a trigger) that must not rebuild its index per tick. nil for a nil world. With needles (block
+  name parts), only the plans that mention one are answered (and expanded): f must ignore the cells of the others."
+  ([w k f] (derived w k f nil))
+  ([w k f needles]
   (when w
     (refresh! w)
     (let [{:keys [plans expanded] :as state} @(:state w)
@@ -365,9 +381,9 @@
         (and kept (identical? plans (:plans kept)) (identical? expanded (:expanded kept))) (:value kept)
         (and kept (= plans (:plans kept)) (= expanded (:expanded kept)))
         (do (swap! (:derived w) assoc k (assoc kept :plans plans :expanded expanded)) (:value kept))
-        :else (let [value (f (answers state))]
+        :else (let [value (f (answers state needles))]
                 (swap! (:derived w) assoc k {:plans plans :expanded expanded :value value})
-                value)))))
+                value))))))
 
 (defn memo
   "(f) kept under key k until the plans or claims change (f must read only those and k's own inputs): for readers asked
@@ -405,8 +421,8 @@
     (do (refresh! w)
         (let [{:keys [claims footprints]} @(:state w)]
           (if (contains? claims except)
-            (memo w [:footprints-except except] #(footprint-index (dissoc (:claims @(:state w)) except)))
-            (or footprints {}))))))
+            (memo w [:footprints-except except] #(footprint-index (update-vals (dissoc (:claims @(:state w)) except) deref)))
+            (if footprints @footprints {}))))))
 
 (defn shaft-ids
   "The ids of the plans of :kind :mineshaft, as a set; #{} for a nil world."

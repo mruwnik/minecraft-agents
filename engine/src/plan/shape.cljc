@@ -318,14 +318,45 @@
              [x letter] (map-indexed vector row)]
          {:offset [x y z] :want (get key (str letter))})))
 
-(defn place
-  "A blueprint placed by a plan part {:id :at :turn}: {:cells [{:pos :want}] :spots {\"id/spot\" [x y z]}}."
-  [bp {:keys [id at turn]}]
+(defn placed-cells
+  "The cells of blueprint bp placed by part {:at :turn}: [{:pos :want}], plus :part part-id when given. One pass; each letter's
+  want is turned once, not per cell."
+  [bp {:keys [at turn]} part-id]
   (let [turn (or turn 0)
         size (layer-size bp)
-        world (fn [offset] (mapv + at (turn-offset offset size turn)))]
-    {:cells (mapv (fn [{:keys [offset want]}] {:pos (world offset) :want (clear-air (turn-want want turn))}) (blueprint-cells bp))
-     :spots (into {} (map (fn [[spot offset]] [(str id "/" spot) (world offset)])) (:spots bp))}))
+        [ax ay az] at
+        wants (volatile! {})
+        want-of (fn [letter]
+                  (let [m @wants]
+                    (if (contains? m letter)
+                      (get m letter)
+                      (let [w (clear-air (turn-want (get (:key bp) letter) turn))]
+                        (vswap! wants assoc letter w)
+                        w))))
+        out (volatile! (transient []))
+        layers (:layers bp)]
+    (dotimes [y (count layers)]
+      (let [layer (nth layers y)]
+        (dotimes [z (count layer)]
+          (let [row (nth layer z)]
+            (dotimes [x (count row)]
+              (let [[ox oy oz] (turn-offset [x y z] size turn)
+                    pos [(+ ax ox) (+ ay oy) (+ az oz)]
+                    want (want-of (subs row x (inc x)))]
+                (vswap! out conj! (if part-id {:pos pos :want want :part part-id} {:pos pos :want want}))))))))
+    (persistent! @out)))
+
+(defn placed-spots
+  "The spots of blueprint bp placed by part {:id :at :turn}: {\"id/spot\" [x y z]}."
+  [bp {:keys [id at turn]}]
+  (let [turn (or turn 0)
+        size (layer-size bp)]
+    (into {} (map (fn [[spot offset]] [(str id "/" spot) (mapv + at (turn-offset offset size turn))])) (:spots bp))))
+
+(defn place
+  "A blueprint placed by a plan part {:id :at :turn}: {:cells [{:pos :want}] :spots {\"id/spot\" [x y z]}}."
+  [bp part]
+  {:cells (placed-cells bp part nil) :spots (placed-spots bp part)})
 
 ;; ---------------------------------------------------------------- expansion
 (defn where-of [part] (or (some #(when (contains? part %) %) (conj where-keys :blueprint)) :none))
@@ -335,9 +366,10 @@
   [blueprints part]
   (if (contains? part :blueprint)
     (if-let [bp (get blueprints (:blueprint part))]
-      (update (place bp part) :cells (fn [cells] (mapv #(assoc % :part (:id part)) cells)))
+      {:cells (placed-cells bp part (:id part)) :spots (placed-spots bp part)}
       {:error (str "no blueprint called " (pr-str (:blueprint part)))})
-    {:cells (mapv (fn [pos] {:pos pos :want (clear-air (:want part)) :part (:id part)}) (part-cells part))}))
+    (let [want (clear-air (:want part))]
+      {:cells (mapv (fn [pos] {:pos pos :want want :part (:id part)}) (part-cells part))})))
 
 (defn later-wins
   "Cells with each position kept once, from the last part that names it, in their first order otherwise."
