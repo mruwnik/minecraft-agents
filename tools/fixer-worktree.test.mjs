@@ -45,7 +45,7 @@ const writeLate = (wt) => {
 
 test('--remove refuses while a process runs inside the worktree, and succeeds once it is gone', withRepo(async ({ repo, tool, env }) => {
   const wt = sh(repo, tool, [card], env).stdout.trim().split('\n').pop()
-  const child = spawn('sleep', ['30'], { cwd: wt })
+  const child = spawn('sleep', ['30'], { cwd: wt, detached: true })
   try {
     const r = sh(repo, tool, ['--remove', card], env)
     assert.notEqual(r.status, 0)
@@ -78,6 +78,13 @@ test('--remove run from inside the worktree (as land.sh does) does not count its
   const rm = sh(wt, tool, ['--remove', card], env)
   assert.equal(rm.status, 0, rm.stderr)
   assert.equal(rm.stderr, '')
+  assert.equal(fs.existsSync(wt), false)
+}))
+
+test('a pipe peer of the caller with its cwd in the worktree is not a live run', withRepo(({ repo, tool, env }) => {
+  const wt = sh(repo, tool, [card], env).stdout.trim().split('\n').pop()
+  const rm = sh(wt, 'bash', ['-c', `${tool} --remove ${card} | cat`], env)
+  assert.equal(rm.status, 0, rm.stderr)
   assert.equal(fs.existsSync(wt), false)
 }))
 

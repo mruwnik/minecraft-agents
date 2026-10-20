@@ -23,6 +23,7 @@ esac
 # Pids (other than this script's own ancestors) whose cwd is inside $1 or whose command line names it: a test or body run of that worktree.
 live_pids() {
   local dir=$1 self=" $$ " p q c
+  pgrp() { sed -n 's/.*) [A-Za-z] [0-9]* //p' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f1; }
   ppid() { sed -n 's/.*) [A-Za-z] //p' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f1; }
   q=$BASHPID
   while [ -n "$q" ] && [ "$q" != "$$" ]; do self="$self$q "; q=$(ppid "$q"); done
@@ -33,6 +34,8 @@ live_pids() {
     p=${p#/proc/}
     case "$skip" in *" $p "*) continue ;; esac
     case "$self" in *" $(ppid "$p") "*) continue ;; esac
+    # Pipe peers of the caller (e.g. "land.sh | tail") share its process group; a test or body run has its own.
+    [ "$(pgrp "$p")" != "$(pgrp $$)" ] || continue
     c=$(readlink "/proc/$p/cwd" 2>/dev/null || true)
     case "$c" in "$dir"|"$dir"/*) echo "$p"; continue ;; esac
     { tr '\0' ' ' < "/proc/$p/cmdline" | grep -qF -- "$dir/" && echo "$p"; } 2>/dev/null || true
