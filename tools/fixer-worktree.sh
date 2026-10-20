@@ -20,11 +20,42 @@ case "${1-}" in
   -*) [[ "$1" =~ ^--(remove|checkout|base)$ ]] || { echo "$usage" >&2; exit 2; } ;;
 esac
 
+# Pids (other than this script's own ancestors) whose cwd is inside $1 or whose command line names it: a test or body run of that worktree.
+live_pids() {
+  local dir=$1 skip=" $$ " p q c
+  q=$$
+  while [ "$q" -gt 1 ] 2>/dev/null; do q=$(awk '{print $4}' "/proc/$q/stat" 2>/dev/null) || break; skip="$skip$q "; done
+  for p in /proc/[0-9]*; do
+    p=${p#/proc/}
+    case "$skip" in *" $p "*) continue ;; esac
+    c=$(readlink "/proc/$p/cwd" 2>/dev/null || true)
+    case "$c" in "$dir"|"$dir"/*) echo "$p"; continue ;; esac
+    tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -qF -- "$dir/" && echo "$p" || true
+  done
+}
+
+# True when $1 holds nothing but late-written test logs (.claude/live-tests) and probe body files (worlds/test/agents).
+only_late_files() {
+  [ -z "$(find "$1" -mindepth 1 \( -path "$1/.claude/live-tests" -o -path "$1/worlds/test/agents" \) -prune -o \
+    -not -path "$1/.claude" -not -path "$1/worlds" -not -path "$1/worlds/test" \
+    -not -path "$1/.claude/live-tests/*" -not -path "$1/worlds/test/agents/*" -print -quit)" ]
+}
+
 if [ "${1-}" = --remove ]; then
   valid "${2-}"
   # Found by its branch, so a worktree cut under an older root is removed too.
   wt=$(git -C "$repo" worktree list --porcelain | awk -v b="refs/heads/fix/$2" '/^worktree /{p=substr($0,10)} $0=="branch "b{print p}')
-  git -C "$repo" worktree remove --force "${wt:-$root/fix-$2}"
+  wt=${wt:-$root/fix-$2}
+  pids=$(live_pids "$wt" | tr '\n' ' ')
+  if [ -n "${pids// /}" ]; then
+    echo "a run of $wt is still alive (pids: $pids); stop it (kill <pid>) and run --remove again, or it writes files back and leaves a stub dir" >&2
+    exit 6
+  fi
+  git -C "$repo" worktree remove --force "$wt" || [ -d "$wt" ]
+  git -C "$repo" worktree prune
+  if [ -d "$wt" ]; then
+    only_late_files "$wt" && rm -rf "$wt" || { echo "left $wt: it holds files besides test logs and probe body files" >&2; exit 7; }
+  fi
   git -C "$repo" branch -D "fix/$2" >/dev/null
   exit
 fi
@@ -40,6 +71,18 @@ else
   wt=$root/fix-$1
   mkdir -p "$root"
   [ -n "$base" ] || base=$(git -C "$repo" symbolic-ref --short HEAD)
+  git -C "$repo" worktree prune
+  # A stub left by an earlier removal (late test logs, probe files) is cleared; anything else in the way is an error.
+  if [ -e "$wt" ] && [ ! -e "$wt/.git" ]; then
+    only_late_files "$wt" || { echo "$wt exists and holds other files; remove it by hand" >&2; exit 7; }
+    [ -z "$(live_pids "$wt")" ] || { echo "a run of $wt is still alive; stop it first" >&2; exit 6; }
+    rm -rf "$wt"
+  fi
+  # A leftover fix/<card8> branch with no commits beyond its base is reused (recreated at the base).
+  if git -C "$repo" rev-parse -q --verify "refs/heads/fix/$1" >/dev/null; then
+    [ "$(git -C "$repo" rev-list --count "$base..fix/$1")" = 0 ] || { echo "branch fix/$1 already has commits beyond $base" >&2; exit 8; }
+    git -C "$repo" branch -D "fix/$1" >/dev/null
+  fi
   git -C "$repo" worktree add -q -b "fix/$1" "$wt" "$base"
   git -C "$repo" config "branch.fix/$1.fixbase" "$base"
 fi
