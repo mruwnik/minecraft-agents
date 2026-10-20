@@ -666,8 +666,13 @@
                            (str "fill " x0 " " (dec oy) " " oz " " x1 " " (dec oy) " " (+ oz (dec sz)) " " floor))))
                  (segments ox sx 64)))))
 
-(defn kill-command [grid origin height]
-  (str "kill @e[type=!player," (box-selector grid origin height) "]"))
+(def kill-depth
+  "Blocks below the floor that the entity kill reaches: a case digs pits and trenches below its plot, and a drop left in one
+  would else survive into the next case on the plot."
+  16)
+
+(defn kill-command [grid [ox oy oz] height]
+  (str "kill @e[type=!player," (box-selector grid [ox (- oy kill-depth) oz] (+ height kill-depth)) "]"))
 
 (def hostile-types
   "Hostile mob types the runner kills near a plot (never players, bodies or animals)."

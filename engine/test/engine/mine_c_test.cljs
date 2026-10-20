@@ -415,6 +415,12 @@
           (is (= 1 (get (inv s) "raw_iron")) "the body leaned over its cell's edge and picked the drop up")
           (is (empty? (events-of s :mine.drop-lost))))))))
 
+(deftest the-lean-over-the-lip-digs-a-roof-over-the-dug-cell-first
+  (let [roof (fn [blocks] (let [s (start {:world {:blocks blocks :inventory pickaxe :yaw 270}})]
+                            (drops/roof-cell {:primitives (:p s)} [1 64 0])))]
+    (is (= [1 65 0] (roof {"1,65,0" "stone" "0,65,0" "stone"})) "a 1.8-tall body cannot lean into a pocket with a roof")
+    (is (nil? (roof {"0,65,0" "stone"})) "open air over the dug cell: nothing to dig")))
+
 (deftest a-drop-of-ore-dug-over-a-wall-is-cut-to-and-collected
   (async done
     (tu/run-async done

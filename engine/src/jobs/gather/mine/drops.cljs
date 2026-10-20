@@ -115,13 +115,22 @@
                  (or (nil? under) (bs/air under))))
       {:x (+ x 0.5 (* 0.6 dx)) :y y :z (+ z 0.5 (* 0.6 dz))})))
 
+(defn roof-cell
+  "The cell over dug when it is solid: the 1.8-tall body cannot lean into a pocket with a roof, so the lean stops at the edge."
+  [c dug]
+  (let [roof (update dug 1 inc)
+        n (u/seen-name (:primitives c) (zipmap [:x :y :z] roof))]
+    (when (and n (not (bs/air n))) roof)))
+
 (defn ^:async peek-over-lip!
   "A dug cell the body stands beside whose drop is still not in sight: once per dug cell, a step to the edge of its own cell
   toward it (walk/centre!: go-to works in cells and would not leave this one), so the drop at the foot of a pit wall shows.
-  :peeked after the step, nil when there is none to take."
+  A solid cell over dug is dug first (roof-cell). :peeked after the step, nil when there is none to take."
   [c dug]
   (when-let [pt (and (not= dug (:lip-peeked (ctx/mem c))) (lip-point c dug))]
     (ctx/update-mem! c assoc :lip-peeked dug)
+    (when-let [roof (roof-cell c dug)]
+      (await (dig-cell! c (zipmap [:x :y :z] roof))))
     (await (walk/centre! c (:x pt) (:z pt) 0.12))
     :peeked))
 

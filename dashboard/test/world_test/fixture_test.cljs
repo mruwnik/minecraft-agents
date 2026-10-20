@@ -160,7 +160,7 @@
                        (map #(rect (f/case-grid {:plot {}}) %) (apply range (f/plot-range (f/case-grid {:plot {}}))))
                        (map #(rect (f/case-grid {:plot {:length 1024 :width 64}}) %) (range 400 416)))]
     (is (= "forceload add 20064 19968 20159 20063" (first cmds)))
-    (is (some #{"kill @e[type=!player,x=20064,y=142,z=19968,dx=95,dy=24,dz=95]"} cmds))
+    (is (some #{"kill @e[type=!player,x=20064,y=126,z=19968,dx=95,dy=40,dz=95]"} cmds))
     (is (every? (fn [[x y z x2 y2 z2]] (<= (* (inc (- x2 x)) (inc (- y2 y)) (inc (- z2 z))) 32768)) air))
     (is (= [20064 142 19968 20159 166 20063]
            [(apply min (map #(% 0) air)) (apply min (map #(% 1) air)) (apply min (map #(% 2) air))
@@ -205,7 +205,7 @@
     (is (= 20000 (apply min (map first fills)) (apply min (map first loads))))
     (is (= 20399 (apply max (map #(nth % 3) fills)) (apply max (map #(nth % 2) loads))))
     (is (= [150 166] [(apply min (map second (remove #(= 149 (second %)) fills))) (apply max (map #(nth % 4) fills))]))
-    (is (re-find #"dx=399,dy=17,dz=31" (some #(when (re-find #"^kill" %) %) cmds)))
+    (is (re-find #"dx=399,dy=33,dz=31" (some #(when (re-find #"^kill" %) %) cmds)))
     (is (= (count loads) (count (filter #(re-find #"^forceload remove" %) (f/cleanup-commands g origin "B" {:plot {:height 16 :floor "stone"}})))))))
 
 (deftest large-plot-setup-removes-a-wider-left-over-floor
@@ -344,7 +344,7 @@
         origin [20000 150 20000]
         setup (f/setup-commands grid origin open)]
     (is (= "forceload add 20000 20000 20031 20031" (first setup)))
-    (is (= "kill @e[type=!player,x=20000,y=149,z=20000,dx=31,dy=17,dz=31]" (second setup)))
+    (is (= "kill @e[type=!player,x=20000,y=133,z=20000,dx=31,dy=33,dz=31]" (second setup)))
     (is (= ["fill 20000 150 20000 20031 166 20031 air" "fill 20000 149 20000 20031 149 20031 stone"] (drop 2 setup))
         "16 high fits one fill of 32x32x17 = 17408 blocks")
     (is (= 1 (count (filter #(re-find #"air$" %) (f/clear-commands grid origin 31 "stone")))) "32x32x32 is one fill at the limit")
