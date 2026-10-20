@@ -7,6 +7,7 @@
             [engine.args :as a]
             [jobs.lib.look :as look]
             [jobs.lib.pen :as pen]
+            [jobs.lib.pen-world :as pen-world]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.lib.world :as known]))
@@ -101,7 +102,7 @@
   [cells]
   (let [ps (map :pos (filter #(barrier? (:want %)) cells))]
     (when (seq ps)
-      (pen/with-cols {:min (zipmap [:x :y :z] (apply map min ps))
+      (pen-world/with-cols {:min (zipmap [:x :y :z] (apply map min ps))
                       :max (zipmap [:x :y :z] (apply map max ps))}
                      ps))))
 

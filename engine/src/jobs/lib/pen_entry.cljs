@@ -6,6 +6,7 @@
             [engine.settings :as settings]
             [jobs.lib.combat :as combat]
             [jobs.lib.pen :as pen]
+            [jobs.lib.pen-world :as pen-world]
             [jobs.lib.pen-blocks :as pb]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
@@ -28,7 +29,7 @@
   [block-at inside]
   (boolean (some (fn [[x y z]]
                    (some (fn [[dx dz]] (some->> (block-at {:x (+ x dx) :y y :z (+ z dz)}) .-name (re-find #"(fence|fence_gate|_wall)$")))
-                         pen/orthogonal))
+                         pen-world/orthogonal))
                  inside)))
 
 (defn pens
