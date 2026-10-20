@@ -1,0 +1,16 @@
+;; Lava buried in the rock beside a cut is unseen until the stair opens the cut; once seen it is covered with a building block (stair.sealed) and the stair goes on.
+;; Stone mass x 8..24, z 8..24, y 0..9; the stair goes down east from (10 10 16): step k lands on feet (10+k, 10-k) and cuts feet..feet+2. Lava sits beside step 3's cut at (13 7 17).
+;; Should-fail (control): without a block to seal with, the lava stays and the stair stops.
+{:defaults
+ {:tags [:access :mining :lava]
+  :time :any
+  :plot {:height 20}
+  :blocks [[:fill [8 0 8] [24 9 24] "stone"] [:set [13 7 17] "lava"]]
+  :body {:at [10.5 10 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 8]] :effects [["resistance" 600 4] ["fire_resistance" 600 0]]}
+  :limit-s 150}
+ :cases
+ [{:name "stair-seals-lava-its-cut-opens-onto"
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]]
+   :expect [{:event {:source :job :kind :stair.sealed} :within-s 120 :of-job true}
+            {:event {:source :job :kind :completed :data {:steps 6}} :within-s 140 :of-job true}]
+   :after [[:not-block [13 7 17] "lava"]]}]}

@@ -13,6 +13,11 @@
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 100 :of-job true}]
    :after [[:item "raw_iron" 1]]}
+  {:name "lava-opened-by-a-cut-is-covered-and-the-mine-goes-on"
+   :blocks [[:set [22 0 17] "lava"]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}]
+   :after [[:not-block [22 0 17] "lava"]]}
   {:name "water-pocket-beside-the-line-is-not-known-so-the-cut-is-plugged-not-refused"
    :blocks [[:set [22 0 17] "water"]]
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
