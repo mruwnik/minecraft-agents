@@ -19,6 +19,7 @@
 (def world
   {:self {:pos {:x 14.5 :y 64 :z 16.5}}
    :ray-deg 2
+   :rand (constantly 0.5)
    :blocks (merge ground ring {"18,64,16" "oak_fence_gate"})
    :states {"18,64,16" {:open true :facing "east"}}
    :entities [(ht/cow 1 21.5 15.5) (ht/cow 2 22.5 17.5)]})
