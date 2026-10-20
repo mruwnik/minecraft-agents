@@ -169,6 +169,7 @@
 
 (a/defargs settings
   {::enter-pens {:default false :doc "true: the walk of blocks.dig, place and use-on may go through the gate of a pen holding animals; false: it keeps out of those gates and, with no other way, declines (a :blocks.pen-kept-out warn names the pen)." :spec boolean?}
+   ::max-walks {:default 2 :doc "Failed walks into reach of one blocks.dig, place or use-on call before it ends :unreachable." :spec (a/int-in 0 nil)}
    ::seal-fetch {:default true :doc "How blocks.dig gets a building block to seal lava with when none is carried, whatever its :fetch says: true, a set of kinds or a map of limits (jobs.lib.need); false seals only with a carried block." :spec need/option?}})
 
 (def low-floor-radius 4)
@@ -200,8 +201,8 @@
   "walk! through ctx/call: :arrived, :continue (go-to waits on the world; the round holds still with its reason), else
   an ending: go-to's when it did not end :done, else nothing-possible :out-of-reach, or go-to's :why (:unreachable)
   when it ended not having arrived."
-  [c pos & [see?]]
-  (let [[pens args] (await (walk-request c pos see?))
+  [c pos & [see? range]]
+  (let [[pens args] (await (walk-request c pos see? range))
         r (await (child/call-walk* c :walk args))
         arrived? (and (= :done (:kind r)) (:arrived (:data r)))]
     (cond
@@ -211,6 +212,25 @@
                 (if (= :done (:kind r))
                   (ctx/end c :nothing-possible (if arrived? :out-of-reach (:why (:data r) :unreachable)) (:data r))
                   r)))))
+
+(defn max-walks [] (settings/get settings ::max-walks))
+
+(defn ^:async walk-into-reach!
+  "One walk into reach of pos for blocks.dig, place and use-on: :continue (go-to waits), :again (arrived: the caller re-checks),
+  a child's ending that is not a failed walk (pass it up), else a failed walk, counted in the job memory across rounds:
+  :again until max-walks have failed, then {:unreachable why :text go-to's words}."
+  [c pos & [see? range]]
+  (let [w (await (walk!* c pos see? range))]
+    (cond
+      (= :continue w) :continue
+      (= :arrived w) :again
+      (not (#{:nothing-possible :condition-failed} (:kind w))) w
+      :else (let [n (inc (:walk-fails (ctx/mem c) 0))]
+              (ctx/update-mem! c assoc :walk-fails n)
+              (if (< n (max-walks))
+                :again
+                {:unreachable (or (:why (:data w)) (when (map? (:cause w)) (:why (:cause w))) (contract/cause-key w))
+                 :text (get-in w [:data :text])})))))
 
 ;; ------------------------------------------------------------------ for parents
 

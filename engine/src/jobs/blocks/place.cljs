@@ -252,9 +252,7 @@
           (stop! c :nothing-possible {:placed false :pos pos :item item :reason :failed :primitive (.-status r) :why (refusal-why r)}))))))
 
 (a/defargs settings
-  {::job-time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
-   ::max-walks {:default 2 :doc "Failed walks of one call before it ends :unreachable." :spec (a/int-in 0 nil)}})
-(defn max-walks [] (settings/get settings ::max-walks))
+  {::job-time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (defn unreachable
   "The nothing-possible :unreachable ending, why a keyword; walk-text is go-to's words for the give-up (the body is shut in...), if any."
@@ -284,7 +282,7 @@
 (defn ^:async attempt!
   "One step of the place: fetch the item if due, clear a plant, walk into reach, or place. A walk that fails or leaves
   the cell out of reach is tried once more, then the call ends :unreachable. :again, :continue or the ending."
-  [c pos items fails]
+  [c pos items]
   (let [block (b/target-name (:primitives c) pos "air")
         full (occupied-by c pos items)
         already (some #{block} items)
@@ -299,12 +297,8 @@
       (let [w (await (clear! c pos items))]
         (if (= :cleared w) :again w))
       (not (b/in-reach? c pos (:see (:args c))))
-      (let [w (await (b/walk!* c pos (:see (:args c))))]
-        (cond
-          (= :continue w) :continue
-          (= :arrived w) :again
-          (>= (inc @fails) (max-walks)) (unreachable c pos items (or (get-in w [:data :why]) (contract/cause-key w)) (get-in w [:data :text]))
-          :else (do (swap! fails inc) :again)))
+      (let [w (await (b/walk-into-reach! c pos (:see (:args c))))]
+        (if (:unreachable w) (unreachable c pos items (:unreachable w) (:text w)) w))
       lacking? (finish! c :condition-failed (assoc (needs c items) :reason :need :pos pos)
                         {:placed false :pos pos :item (first items) :reason :need})
       :else
@@ -323,5 +317,4 @@
 (defn ^:async round [c]
   (let [{:keys [pos items]} (parse c)]
     (when-not (= pos (:for (ctx/mem c))) (ctx/update-mem! c b/fresh-mem pos))
-    (let [fails (atom 0)]
-      (await (pace/steps! c #(look-first! c pos (fn [] (attempt! c pos items fails))))))))
+    (await (pace/steps! c #(look-first! c pos (fn [] (attempt! c pos items)))))))

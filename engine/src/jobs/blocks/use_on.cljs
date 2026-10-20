@@ -43,9 +43,7 @@
 
 (def faces #{"up" "down" "north" "south" "east" "west"})
 (a/defargs settings
-  {::job-time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
-   ::max-walks {:default 2 :doc "Failed walks of one call before it ends :unreachable." :spec (a/int-in 0 nil)}})
-(defn max-walks [] (settings/get settings ::max-walks))
+  {::job-time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (def condition-reasons
   "The click statuses that name a missing target or item; any other failed status is nothing-possible."
@@ -62,20 +60,6 @@
   (let [result (update result :text #(or % (str (if used "clicked " "did not click ") (pr-str (b/cell (:pos result)))
                                                 (when-not used (str ": " (name (:reason result)))))))]
     (ctx/end c kind (when-not used (select-keys result [:reason :why])) result)))
-
-(defn ^:async walk!
-  "The walk to pos: :arrived, :continue or {:unreachable why}."
-  [c pos see? range]
-  (let [[pens args] (await (b/walk-request c pos see? range))
-        r (await (child/call-walk* c :walk args))
-        arrived? (and (= :done (:kind r)) (:arrived (:data r)))]
-    (cond
-      (= :continue r) :continue
-      (and arrived? (b/in-reach? c pos see?)) :arrived
-      :else (do (b/warn-kept-out! c pens)
-                {:unreachable (cond (not= :done (:kind r)) :declined
-                                    arrived? :out-of-reach
-                                    :else (get-in r [:data :why] :unreachable))}))))
 
 (defn bucket? [item] (and (string? item) (boolean (re-find #"bucket$" item))))
 
@@ -107,14 +91,12 @@
 
 (defn ^:async attempt!
   "One step: walk into reach (:again after a failed walk, until the limit), else click and end."
-  [c pos fails]
+  [c pos]
   (let [{:keys [item face see range] :or {face "up"}} (:args c)
-        w (when-not (b/in-reach? c pos see) (await (walk! c pos see range)))]
+        w (when-not (b/in-reach? c pos see) (await (b/walk-into-reach! c pos see range)))]
     (cond
-      (= :continue w) :continue
-      (map? w) (if (>= (inc @fails) (max-walks))
-                 (finish! c :nothing-possible {:used false :pos pos :item item :face face :reason :unreachable :why (:unreachable w)})
-                 (do (swap! fails inc) :again))
+      (:unreachable w) (finish! c :nothing-possible {:used false :pos pos :item item :face face :reason :unreachable :why (:unreachable w)})
+      w w
       :else
       (let [[status r] (await (click! c {:pos pos :item item :face face}))]
         (finish! c (cond (= :used status) :done (condition-reasons status) :condition-failed :else :nothing-possible)
@@ -122,6 +104,5 @@
                    (.-spawnSet r) (assoc :spawn-set true)))))))
 
 (defn ^:async round [c]
-  (let [{:keys [pos]} (b/parse (:args c))
-        fails (atom 0)]
-    (await (pace/steps! c #(attempt! c pos fails)))))
+  (let [{:keys [pos]} (b/parse (:args c))]
+    (await (pace/steps! c #(attempt! c pos)))))

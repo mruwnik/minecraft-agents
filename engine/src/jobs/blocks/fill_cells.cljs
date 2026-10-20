@@ -6,7 +6,6 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.choose :as choose]
             [jobs.lib.look :refer [cell-of]]
-            [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]))
@@ -14,9 +13,9 @@
 (def doc
   "Fill cells that are air, cave_air or water with the first carried block of the call's :use {:blocks} (default: the
   carried building blocks, in that order). The caller has judged the cells (zones, claims); the job does not ask the rules
-  again. Per step: the lowest cell that is not the body's feet or head (then the nearest) is walked to within the reach setting (one
-  go-near child) and placed by a jobs.blocks.place child (:fetch false, :ignore-zones? true); when only the feet or head
-  cell is left, the body jump-places. Cells that no longer read air or water are done. It yields :continue only
+  again. Per step: the lowest cell that is not the body's feet or head (then the nearest) is placed by a jobs.blocks.place
+  child (:fetch false, :ignore-zones? true; it walks into reach itself); when only the feet or head cell is left, the body
+  jump-places (a bare act, not access.pillar: the block is meant to stay, so no scaffold ledger entry, and the pillar's ceiling and zone checks do not apply). Cells that no longer read air or water are done. It yields :continue only
   when a child waits on the world.
 
   Needs the blocks carried; it fetches none. Condition, at the start only: {:reason :need :any-of [names]} when cells are
@@ -32,11 +31,8 @@
   {:cells {:doc "the cells to fill, each [x y z] or {:x :y :z}" :spec (a/coll-of a/position?) :default nil}})
 
 (a/defargs settings
-  {::reach {:default 4 :doc "Walk within this many blocks of a cell before placing." :spec (a/int-in 0 nil)}
-   ::max-failures {:default 6 :doc "Failed steps in a row before the job ends nothing-possible." :spec (a/int-in 1 nil)}
+  {::max-failures {:default 6 :doc "Failed steps in a row before the job ends nothing-possible." :spec (a/int-in 1 nil)}
    ::job-time-s {:default 600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
-
-(def safe? (ready/safe-at-by-night (fn [c] (a/cell (first (:cells (:args c)))))))
 
 (def fit? ready/ok)
 
@@ -72,21 +68,17 @@
          (sort-by (juxt :y #(u/dist here %)))
          first)))
 
+(def safe? (ready/safe-at-by-night (fn [c] (or (next-cell c (owed c)) (a/cell (first (:cells (:args c))))))))
+
 (defn bump! [c k] (ctx/update-mem! c update k (fnil inc 0)))
 
 (defn ^:async place!
-  "One cell: resolves to :placed, :failed, or :partial (the walk waits on the world)."
+  "One cell: resolves to :placed, :failed, or :partial (the place child waits on the world)."
   [c pos item]
-  (let [walked (if (> (u/dist (u/self-pos c) pos) (settings/get settings ::reach))
-                 (await (near/go-near! c pos (settings/get settings ::reach) {}))
-                 :there)]
-    (cond
-      (= :partial walked) :partial
-      (not= :there walked) :failed
-      :else (let [e (await (ctx/call c :place 'jobs.blocks.place {:pos pos :item item :fetch false :ignore-zones? true}))]
-              (cond (= :continue e) :partial
-                    (= :done (:kind e)) :placed
-                    :else :failed)))))
+  (let [e (await (ctx/call c :place 'jobs.blocks.place {:pos pos :item item :fetch false :ignore-zones? true}))]
+    (cond (= :continue e) :partial
+          (= :done (:kind e)) :placed
+          :else :failed)))
 
 (defn ^:async raise!
   [c item]

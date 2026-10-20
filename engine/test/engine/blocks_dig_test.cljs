@@ -406,6 +406,15 @@
           (is (= {:reason :unreachable :why :out-of-sight} (select-keys r [:reason :why])) (pr-str r))
           (is (empty? (calls (:p env) "dig"))))))))
 
+(deftest a-dig-act-that-times-out-is-a-failed-attempt-not-the-time-budget
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self body :blocks {"2,64,0" "dirt"}})
+              _ (.override (.-world p) "dig" (fn [_ _ _] (js/Promise.resolve #js {:status "timeout"})))
+              e (:ending (await (tu/child-outcome eng job {:pos [2 64 0]} 10)))]
+          (is (= [:nothing-possible :timeout] ((juxt :kind :cause) e))))))))
+
 (defn failing-walks
   "env with jobs.movement.go-to replaced by a walk that never arrives (why :no-path); walks counts its calls."
   [env walks]
