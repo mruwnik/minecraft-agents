@@ -4,7 +4,7 @@
   (:require [engine.game :as game]
             [engine.sight :as sight]
             [engine.perception.light :refer [darken-now max-light table-now]]
-            [engine.perception.store :refer [new-stamp! record! store-of]]))
+            [engine.perception.store :refer [cell-index new-stamp! record! section-key store-of]]))
 
 ;; ---- the view cone
 
@@ -110,10 +110,30 @@
   (let [name-in (fn [k] (when-let [f (aget ^js raw k)] (f)))]
     (if (some #{"torch" "soul_torch"} [(name-in "offHand") (name-in "heldItem")]) (max (:near opts) (:near-torch opts)) (:near opts))))
 
+(def max-mark-sections 600)
+
+(defn marks-of
+  "The slice marks of section `key`: a Uint32Array of the slice stamp that last recorded each cell, kept in st.marks
+  (dropped past max-mark-sections) with the last one asked for cached."
+  [^js st key]
+  (if (== key (.-markKey st))
+    (.-markArr st)
+    (let [^js m (or (.-marks st) (set! (.-marks st) (js/Map.)))
+          arr (or (.get m key)
+                  (do (when (>= (.-size m) max-mark-sections) (.clear m))
+                      (let [a (js/Uint32Array. 4096)] (.set m key a) a)))]
+      (set! (.-markKey st) key)
+      (set! (.-markArr st) arr)
+      arr)))
+
 (defn cast!
-  "One ray from (ox oy oz) along the unit vector (dx dy dz). Returns the number of cells entered."
+  "One ray from (ox oy oz) along the unit vector (dx dy dz). Returns the number of cells entered.
+  A cell an earlier ray of this slice recorded (st.markStamp) is not read or recorded again: recording it again would
+  write the same state id and time. Cells not recorded are never marked, so another ray may still record them. The
+  light of the previous cell is read only when a blocking cell needs it."
   [{:keys [raw opts]} ^js st store ox oy oz dx dy dz now]
   (let [radius (:radius opts) near (.-near st)
+        stamp (.-markStamp st)
         ^js sight (.-sight st) ^js visible (.-visible st)
         sx (if (pos? dx) 1 -1) sy (if (pos? dy) 1 -1) sz (if (pos? dz) 1 -1)
         tdx (if (zero? dx) js/Infinity (js/Math.abs (/ 1 dx)))
@@ -124,7 +144,12 @@
         stops? (fn [id x y z] (blocks-line? raw sight id x y z ox oy oz ex ey ez))
         first-id (.stateAt ^js raw x0 y0 z0)
         first-light (.lightAt ^js raw x0 y0 z0)]
-    (when (>= first-id 0) (record! st store x0 y0 z0 first-id now))
+    (when (>= first-id 0)
+      (let [^js marks (marks-of st (section-key (bit-shift-right x0 4) (bit-shift-right y0 4) (bit-shift-right z0 4)))
+            i (cell-index x0 y0 z0)]
+        (when-not (== stamp (aget marks i))
+          (record! st store x0 y0 z0 first-id now)
+          (aset marks i stamp))))
     (if (or (< first-id 0) (stops? first-id x0 y0 z0))
       1
       (loop [x x0 y y0 z z0
@@ -137,19 +162,33 @@
           (if (> t radius)
             n
             (let [ax (== t tmx) ay (and (not ax) (== t tmy)) az (and (not ax) (not ay))
+                  px x py y pz z
                   x (if ax (+ x sx) x) y (if ay (+ y sy) y) z (if az (+ z sz) z)
                   id (.stateAt ^js raw x y z)]
               (if (< id 0)
                 n
-                (let [light (.lightAt ^js raw x y z)
-                      blocks? (stops? id x y z)
-                      shown (if blocks? (max-light light prev) light)]
-                  (when (or (== 1 (aget visible shown)) (<= t near)) (record! st store x y z id now))
-                  (if blocks?
-                    (inc n)
-                    (recur x y z
-                           (if ax (+ tmx tdx) tmx) (if ay (+ tmy tdy) tmy) (if az (+ tmz tdz) tmz)
-                           light (inc n))))))))))))
+                (let [^js marks (marks-of st (section-key (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4)))
+                      i (cell-index x y z)
+                      marked? (== stamp (aget marks i))
+                      blocks? (stops? id x y z)]
+                  (if marked?
+                    (if blocks?
+                      (inc n)
+                      (recur x y z
+                             (if ax (+ tmx tdx) tmx) (if ay (+ tmy tdy) tmy) (if az (+ tmz tdz) tmz)
+                             -1 (inc n)))
+                    (let [light (.lightAt ^js raw x y z)
+                          shown (if blocks?
+                                  (max-light light (if (neg? prev) (.lightAt ^js raw px py pz) prev))
+                                  light)]
+                      (when (or (== 1 (aget visible shown)) (<= t near))
+                        (record! st store x y z id now)
+                        (aset marks i stamp))
+                      (if blocks?
+                        (inc n)
+                        (recur x y z
+                               (if ax (+ tmx tdx) tmx) (if ay (+ tmy tdy) tmy) (if az (+ tmz tdz) tmz)
+                               light (inc n))))))))))))))
 
 (defn moved? [{:keys [opts]} ^js last ^js eye]
   (or (nil? last)
@@ -206,6 +245,7 @@
                    (let [len (js/Math.hypot dx dy dz)]
                      (cast! per st store ox oy oz (/ dx len) (/ dy len) (/ dz len) now)))]
     (set! (.-near st) (near-of per))
+    (set! (.-markStamp st) (inc (or (.-markStamp st) 0)))
     (loop [k from cells 0]
       (cond
         (>= k to) cells
