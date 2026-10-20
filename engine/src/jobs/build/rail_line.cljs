@@ -13,7 +13,6 @@
             [jobs.lib.pace :as pace]
             [jobs.build.rail :as builder]
             [jobs.build.rail-spans :as spans]
-            [jobs.build.rail-restock :as restock]
             [jobs.build.rail-stock :as stock]
             [jobs.lib.placement :as placement]
             [jobs.lib.build.plan :as plan]
@@ -361,21 +360,19 @@
                                  (when (seq left) (str "; " left))))))))
 
 (defn ^:async fetch-step!
-  "Before the build is begun with :least :all, fetch a share of what is certainly lacking (jobs.build.rail-stock): from a
-  chest already looked into with one withdraw child (jobs.build.rail-restock), else the first item with jobs.lib.need.
-  :continue while the child waits, :again once got, the failed ending, nil when nothing is due."
+  "Before the build is begun with :least :all, fetch a share of what is certainly lacking (jobs.build.rail-stock): the
+  first item with jobs.lib.need. :continue while the child waits, :again once got, the failed ending, nil when nothing is due."
   [c cells]
   (when-let [shares (and (whole? c) (not (:building (ctx/mem c))) (fetch-opts c)
                          (seq (stock/shares (shortages (filter #(= :missing (:answer %)) (plan/owed cells))
                                                        (storage/carried-totals (u/inventory (:primitives c))))
                                             (u/free-slots (:primitives c)))))]
-    (or (and (contains? (:how (fetch-opts c)) :chest) (await (restock/step! c shares)))
-        (let [[_ n names] (first shares)
-              o (fetch-opts c)
-              e (await (if (= 1 (count names)) (need/item! c (first names) n o) (need/blocks! c names n o)))]
-          (cond (= :continue e) :continue
-                (= :done (:kind e)) :again
-                :else e)))))
+    (let [[_ n names] (first shares)
+          o (fetch-opts c)
+          e (await (if (= 1 (count names)) (need/item! c (first names) n o) (need/blocks! c names n o)))]
+      (cond (= :continue e) :continue
+            (= :done (:kind e)) :again
+            :else e))))
 
 (defn ^:async step [c]
   (let [{:keys [cells trouble]} (planned c)

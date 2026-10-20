@@ -1,0 +1,23 @@
+;; Card 1faf534b: items.obtain uses a chest it remembers holding the item at any distance (here 90 blocks, out of sight).
+;; Plot 100 long, body at x 3, chest at x 93 booked in body memory as holding 3 iron ingots.
+;; Should succeed: the body walks to the chest and carries the ingots.
+;; Should fail: the memory says the far chest holds only dirt, so nothing is walked to and the call ends without a source.
+{:defaults
+ {:tags [:items :obtain :storage :jobs] :time :any
+  :plot {:height 8 :length 100 :width 16 :floor "grass_block"}
+  :body {:at [3.5 0 8.5] :yaw 270 :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "a-remembered-chest-90-blocks-off-is-walked-to"
+   :blocks [[:set [93 0 8] "chest{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"]]
+   :memory [{:kind :fetch/stock :data {:pos #at [93 0 8] :items {"iron_ingot" 3}} :policy {:cap 64 :ttl :forever}}]
+   :act [[:job (jobs.items.obtain {:item "iron_ingot" :count 3 :ways #{:chest} :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 190 :of-job true}]
+   :after [[:item "iron_ingot" 3]]}
+  {:name "a-far-chest-remembered-without-the-item-is-not-walked-to"
+   :blocks [[:set [93 0 8] "chest{Items:[{Slot:0b,id:\"minecraft:dirt\",count:3}]}"]]
+   :memory [{:kind :fetch/stock :data {:pos #at [93 0 8] :items {"dirt" 3}} :policy {:cap 64 :ttl :forever}}]
+   :act [[:job (jobs.items.obtain {:item "iron_ingot" :count 3 :ways #{:chest} :explore false})]]
+   :expect [{:event {:source :job :kind #{:stopped :waiting}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 60 :until {:source :job :kind #{:stopped :waiting}}}]
+   :limit-s 90}]}

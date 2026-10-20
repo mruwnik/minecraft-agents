@@ -482,6 +482,17 @@
           (await (run-ticks s 5))
           (is (re-find #"needs 2 stick, have 1" (no-source-why s :waiting))))))))
 
+(deftest obtain-walks-to-a-remembered-chest-however-far
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far-at "40,64,3"
+              s (start (-> (world {far-at [{:name "stone_pickaxe" :count 1}]}) (update :blocks #(-> % (dissoc chest-at) (assoc far-at "chest")))) [own-zone])]
+          (mem/write! (:store (:eng s)) stock/stock-kind {:pos [40 64 3] :items {"stone_pickaxe" 1}} stock/stock-policy)
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"}) {})
+          (await (run-ticks s 120))
+          (is (= 1 (get (inv s) "stone_pickaxe"))))))))
+
 (deftest obtain-any-of-takes-the-first-name-the-chest-holds
   (async done
     (tu/run-async done
@@ -1143,7 +1154,7 @@
       (fn ^:async t []
         (let [s (start (assoc (update (bare []) :blocks merge tree-blocks) :unreachable (vec (keys tree-blocks))) [own-zone])]
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :explore true}) {})
-          (await (settings/with-settings {:jobs.items.obtain.base/explore small-explore} #(run-ticks s 300)))
+          (await (settings/with-settings {:jobs.items.obtain.base/explore small-explore} #(run-ticks s 120)))
           (is (seq (events-of s :obtain.exploring)) "it walked to look for another tree")
           (is (<= (count (events-of s :obtain.exploring)) 3) "bounded")
           (is (= :no-source (:reason (last (events-of s :stopped))))))))))

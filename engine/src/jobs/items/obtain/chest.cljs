@@ -3,23 +3,39 @@
   (:require [engine.ctx :as ctx]
             [clojure.string]
             [jobs.items.obtain.base :refer [holds names-of]]
+            [jobs.lib.access :as access]
             [jobs.lib.waits :as waits]
             [jobs.lib.chests :as chests]
             [jobs.lib.stock :as stock]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]))
 
+(defn remembered-chests
+  "Cells of chests booked in stock as holding one of names, however far, whose zone or claim allows :take: a player walks
+  back to a chest he knows holds the item."
+  [c stock names]
+  (->> stock
+       (filter (fn [[_ items]] (holds items names)))
+       (map (fn [[[x y z]]] {:x x :y y :z z}))
+       (remove #(access/container-refusal c :take %))))
+
 (defn candidates
-  "Usable seen chests not yet withdrawn from or given up: [{:pos :stock items-or-nil}]."
+  "Usable chests not yet withdrawn from or given up, the seen ones and the remembered ones holding a name at any
+  distance, nearest first: [{:pos :stock items-or-nil}]."
   [c names]
   (let [stock (stock/stock-of (ctx/view c))
-        done (:done-chests (ctx/mem c) #{})]
-    (keep (fn [pos]
-            (let [cell (stock/cell-of pos)
-                  items (get stock cell)]
-              (when-not (or (done cell) (and items (not (holds items names))))
-                {:pos pos :stock items})))
-          (stock/usable-chests c))))
+        done (:done-chests (ctx/mem c) #{})
+        me (u/self-pos c)
+        seen (stock/usable-chests c)
+        seen-cells (set (map stock/cell-of seen))
+        far (remove #(seen-cells (stock/cell-of %)) (remembered-chests c stock names))]
+    (->> (concat seen far)
+         (keep (fn [pos]
+                 (let [cell (stock/cell-of pos)
+                       items (get stock cell)]
+                   (when-not (or (done cell) (and items (not (holds items names))))
+                     {:pos pos :stock items}))))
+         (sort-by #(u/dist me (:pos %))))))
 
 (defn say-chest!
   "One info event per chest the walk goes to, naming the item wanted there."
