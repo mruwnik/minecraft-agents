@@ -4,6 +4,7 @@
   or the fist) instead of failing the same round again and again."
   (:require [cljs.test :refer [deftest is are async]]
             [clojure.string :as str]
+            [jobs.lib.blocks :as lb]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.world-files :as ew]
             [engine.memory :as mem]
@@ -1428,3 +1429,19 @@
     (is (false? (boxed? (assoc closed :inventory [{:name "iron_sword" :count 1}]) (mob-at "zombie" 4))) "armed")
     (is (false? (boxed? {:blocks dead-end} (mob-at "zombie" 4))) "a one-wide tunnel may lead on")
     (is (false? (boxed? {} (mob-at "zombie" 4))) "open ground: it can walk")))
+
+(deftest a-walking-body-takes-cover-after-shot-hits-hits-by-a-ranged-mob
+  (let [arrow {:data {:damageType "arrow" :attacker {:name "skeleton"}}}
+        melee {:data {:attacker {:name "zombie"}}}
+        shot-on-run? (fn [entries carried]
+                       (with-redefs [ctx/since (constantly entries)
+                                     lb/carried (constantly carried)
+                                     flight/blocks (constantly nil)
+                                     ctx/now (constantly 100000)]
+                         (cornered/shot-on-the-run? {})))]
+    (is (not (shot-on-run? [] [:cobblestone])))
+    (is (not (shot-on-run? [arrow] [:cobblestone])) "one arrow is walked off")
+    (is (not (shot-on-run? [arrow melee] [:cobblestone])) "melee hits are the beaten rule's")
+    (is (shot-on-run? [arrow arrow] [:cobblestone]))
+    (is (shot-on-run? [(assoc-in arrow [:data :hits] 2)] [:cobblestone]))
+    (is (not (shot-on-run? [arrow arrow] [])) "no blocks, no cover to take")))

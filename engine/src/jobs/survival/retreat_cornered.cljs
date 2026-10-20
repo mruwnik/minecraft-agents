@@ -57,6 +57,7 @@
    :jobs.survival.retreat-cornered/close-leg-s {:default 1 :doc "Seconds a flee step may search or walk while a close-range hostile is within close-radius, or the body was hurt: a body that stands searching there is hit for the whole leg." :spec (a/num-in 0 nil)}
    :jobs.survival.retreat-cornered/hurt-window-s {:default 5 :doc "Seconds after the body lost health in which a flee step is bounded to close-leg-s, even with no hostile seen in reach (an unseen attacker hits as hard)." :spec (a/num-in 0 nil)}
    :jobs.survival.retreat-cornered/fire-hits {:default 1 :doc "Hits by a ranged mob (the damage's attacker, or an arrow) within hurt-window-s that put a cornered body under fire: cover comes before any fight, and a shooter it has not seen is never weighed as beaten. 0: never." :spec (a/int-in 0 nil)}
+   :jobs.survival.retreat-cornered/shot-hits {:default 2 :doc "Hits by a ranged mob within hurt-window-s that make a walking body take cover (seal, or break the line of fire) instead of walking on under fire it cannot answer. 0: it keeps walking." :spec (a/int-in 0 nil)}
    :jobs.survival.retreat-cornered/beaten-hits {:default 2 :doc "Hits by a melee mob near (the damage names one within close-radius; not a creeper or an enderman) within hurt-window-s that show the flight is failing: the body fights it first, armed or not. 0: never." :spec (a/int-in 0 nil)}
    :jobs.survival.retreat-cornered/press-gap {:default 2 :doc "Blocks within which a melee mob (not a creeper or an enderman) makes a cornered armed body fight before it builds a seal or pillar, hit or not: the mob strikes before a block is placed and stands in the cells to fill." :spec (a/num-in 0 nil)}
    :jobs.survival.retreat-cornered/hold-cap {:default 60 :doc "Holds (one wait-ms each) a flight makes in water or under a roof against an angry enderman before it tries the next option (seal, pit, pocket, fight); 0: none." :spec (a/int-in 0 nil)}
@@ -447,6 +448,17 @@
   (let [n (fire-hits)]
     (and (pos? n)
          (<= n (count (filter shot/shot? (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s))))))))))
+
+(defn shot-on-the-run?
+  "Whether a ranged mob hit the body shot-hits times within hurt-window-s and it carries blocks to wall with: walking on only feeds the shooter, so the flight takes cover."
+  [c]
+  (let [n (settings/get settings :jobs.survival.retreat-cornered/shot-hits)]
+    (and (pos? n)
+         (seq (lb/carried c (flight/blocks c)))
+         (<= n (->> (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s))))
+                    (filter shot/shot?)
+                    (map #(:hits (:data %) 1))
+                    (reduce + 0))))))
 
 (defn retry-covers
   "Pure: mem of a body under fire at feet cell: in another cell than the last time (:fire-cell), the covers that failed
