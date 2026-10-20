@@ -31,13 +31,12 @@
    :act [[:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 50 :of-job true}]
    :after [[:block [20 0 14] "oak_sapling"]]}
-  {:name "bone-meal-is-used-through-a-use-on-child"
-   :memory [{:kind :forestry/replant :data {:pos #xyz [20 0 14] :species "oak"}}]
-   :body {:inventory [["oak_sapling" 1] ["bone_meal" 2]]}
-   :act [[:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak" :bone-meal 1})]]
-   :expect [{:event {:source :job :kind :child_ended :data {:slot :place :status :done}} :within-s 40 :of-job true}
-            {:event {:source :job :kind :child_ended :data {:slot :meal :status :done}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :completed} :within-s 60 :of-job true}]}
+  {:name "fertilize-uses-bone-meal-on-a-sapling"
+   ;; the bone meal for a planted sapling is farm.fertilize's (a sapling at :at); grown or used up, the call completes
+   :blocks [[:set [20 0 14] "oak_sapling"]]
+   :body {:inventory [["bone_meal" 2]]}
+   :act [[:job (jobs.farm.fertilize {:at #at [20 0 14] :max 1})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]}
   {:name "stone-on-spot-fails-occupied"
    ;; card f3248d31 should-fail: a foreign block on the spot still fails (debt kept)
    :blocks [[:set [20 0 14] "stone"]]

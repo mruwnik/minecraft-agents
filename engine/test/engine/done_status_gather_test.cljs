@@ -96,7 +96,6 @@
   (are [blocks args m reason] (= reason (tu/kind-reason (done-of 'jobs.forestry.plant-sapling {:blocks blocks} args m)))
     {"0,64,0" "oak_sapling"} {:at [0 64 0] :species "oak"} {} [:ok :planted]
     {"0,64,0" "birch_sapling"} {:at [0 64 0] :species "oak"} {} [:later :owed]
-    {"0,64,0" "oak_sapling"} {:at [0 64 0] :species "oak" :bone-meal 2} {:meal {:pos {:x 0 :y 64 :z 0} :left 2}} [:later :owed]
     {"0,64,0" "oak_sapling"} {:at [0 64 0]} {:children {:walk {}}} [:later :wrapping-up]
     {} {:at [0 64 0]} {} [:later :owed]))
 

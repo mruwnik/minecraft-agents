@@ -15,10 +15,11 @@
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.places :as places]
-            [jobs.lib.toll-cells :as tc]))
+            [jobs.lib.toll-cells :as tc]
+            [jobs.lib.trees :as trees]))
 
 (def doc
-  "Use bone meal on unripe crops: the crop at :at, or the unripe crops within :radius, nearest first.
+  "Use bone meal on unripe crops: the crop or sapling at :at, or the unripe crops within :radius, nearest first.
   With :grass true it uses bone meal once on each open grass block (nothing on top) it has seen, instead of on crops.
   Needs bone meal in the inventory; it is fetched (jobs.lib.need, :fetch) when none is carried and none was used yet; a
   failed fetch ends the call with its ending as the :because. A crop that refuses bone meal or cannot be reached is skipped.
@@ -31,7 +32,7 @@
   took bone meal (zones, unreachable, the crop refused), :need when the bone meal ran out under :least. done? counts the uses and the targets left.")
 
 (a/defargs args
-  {:at {:doc "one crop position to fertilize; the crops around the body when nil" :spec ::a/pos :default nil}
+  {:at {:doc "one crop or sapling position to fertilize; the crops around the body when nil" :spec ::a/pos :default nil}
    :radius {:doc "crops within this many blocks of the body count, when :at is nil" :spec (a/num-in 0 nil) :default 8}
    :center {:doc "centre of the radius search; the body's position when nil" :spec ::a/pos :default nil}
    :grass {:doc "fertilize open grass blocks instead of crops" :spec boolean? :default false}
@@ -83,7 +84,7 @@
               (if (and (= "grass_block" (u/seen-name p at)) (= "air" (u/seen-name p (update at :y inc)))) [at] [])
               (open-grass p mid radius reach))
       at (let [b (u/seen-block p at)]
-           (if (unripe? b) [at] []))
+           (if (or (unripe? b) (trees/sapling-name? (some-> b .-name))) [at] []))
       :else
       (->> (crops/seen-crops p (keys ripe-age) reach 4096)
            (filter #(some-> (:age %) (< (ripe-age (:name %)))))

@@ -217,3 +217,28 @@
                 {:keys [eng p]} (setup {:inventory meal :blocks {"2,64,0" "wheat"} :ages {"2,64,0" 3}} (ew/of-data {"hut" plan} {} []))]
             (await (child-outcome eng job {} 20))
             (is (= ripe (age p "2,64,0")) author)))))))
+
+(def sapling-world {:inventory meal :blocks {"2,64,0" "oak_sapling"}})
+
+(deftest fertilize-at-a-sapling-uses-bone-meal-up-to-max
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup sapling-world)
+              r (await (child-outcome eng job {:at [2 64 0] :max 3} 20))]
+          (is (= 3 (count (calls p "useOn"))))
+          (is (= 3 (:used r))))))))
+
+(deftest fertilize-at-a-sapling-stops-when-it-grew
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup sapling-world)]
+          (.override (.-world p) "useOn"
+                     (fn ^:async f [token a impl]
+                       (let [r (await (impl token a))]
+                         (fake/set-block! p [2 64 0] "oak_log")
+                         r)))
+          (let [r (await (child-outcome eng job {:at [2 64 0] :max 3} 20))]
+            (is (= 1 (count (calls p "useOn"))))
+            (is (= 1 (:used r)))))))))

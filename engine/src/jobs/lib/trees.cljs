@@ -155,13 +155,18 @@
     ("crimson" "warped") (str species "_fungus")
     (str species "_sapling")))
 
+(defn sapling-name?
+  "Whether n names what a tree is planted as: a sapling, a mangrove propagule or a fungus (sapling-of's names)."
+  [n]
+  (boolean (and n (or (str/ends-with? n "_sapling") (= "mangrove_propagule" n) (str/ends-with? n "_fungus")))))
+
 (defn sapling-for
   "The name of a sapling carried, of species when given."
   [items species]
   (let [want (when species (sapling-of species))]
     (->> items
          (map :name)
-         (filter #(if want (= want %) (or (str/ends-with? % "_sapling") (= "mangrove_propagule" %))))
+         (filter #(if want (= want %) (sapling-name? %)))
          first)))
 
 (def all-drops
