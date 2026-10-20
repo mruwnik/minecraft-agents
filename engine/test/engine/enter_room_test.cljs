@@ -116,7 +116,7 @@
             (is (seq (st/ended-because seen :no-blocks)))
             (is (empty? (st/calls p "place")))))
         (let [{:keys [eng]} (await (enter-with doorway-hut []))]
-          (is (seq (st/entries eng :doorway-tried)) "the doorway is not tried again tonight"))))))
+          (is (empty? (st/entries eng :doorway-tried)) "the night, not enter-room, marks a doorway it could not fill"))))))
 
 (deftest the-quote-is-infinite-when-the-room-cannot-be-closed-and-free-when-it-is-shut
   (async done

@@ -32,9 +32,9 @@
   open door or gate of the room is shut (retreat-doors/shut-home-door!; a door still open once clicked writes
   :night-door-failed, which ends the job nothing-possible :door-open), a doorway gap in its walls is
   filled (jobs.blocks.fill-cells: a carried wooden door, else the call's :use :blocks; the filled cells are remembered as
-  :doorway-filled, which night.morning digs again by day; a doorway tried once, or left open for want of blocks, is not tried again tonight, :doorway-tried) and a hole in
+  :doorway-filled, which survival.leave-shelter digs again by day; a doorway filled once is not tried again tonight, :doorway-tried) and a hole in
   the roof over the body is filled with one block (the cell is in :placed and the scaffold ledger as :shelter). Needs the
-  blocks for a gap or a hole carried (none fetched), nothing for a walk or a door.
+  blocks for a gap or a hole carried (none fetched; in the room already it waits :no-blocks at the start), nothing for a walk or a door.
   Done {:pos :placed :roof} when the body is in a closed room (sh-sense/shut-in-room?) with no open door and no doorway gap, at once when it is.
   Nothing-possible: :no-room (no place known and the body not roofed), :no-walk (go-to did not arrive), :door-open, :no-blocks (a gap or hole
   and none carried), :failed (a fill that did not hold), :open (the room cannot be closed).
@@ -174,11 +174,16 @@
                   cell (not hidden?) (nil? (room-lib/shut-by p pos cell any?))))))
 
 (defn can-start?
-  "A room to enter: a place, the home or a closed room seen, or the body already in one."
+  "A room to enter: a place, the home or a closed room seen, or the body already in one; and, in it already, a block to
+  close its doorway or roof hole with unless a door is to be shut."
   [c]
-  (if (or (target-of c) (here? c nil))
-    (contract/ok :room "a room to enter")
-    (contract/later :no-room "no room to enter: no place remembered or closed room seen that no zone refuses, and the body is not under a roof")))
+  (let [t (target-of c)]
+    (cond
+      (not (or t (here? c nil)))
+      (contract/later :no-room "no room to enter: no place remembered or closed room seen that no zone refuses, and the body is not under a roof")
+      (and (here? c t) (= :no-blocks (:stop (judge c))))
+      (contract/later :no-blocks "no block carried to close the room with")
+      :else (contract/ok :room "a room to enter"))))
 
 (defn ^:async quote-of [c]
   (let [p (:primitives c)
@@ -281,9 +286,7 @@
       (:plug j) (await (mend! c (:plug j)))
       (:done j) (ctx/end c :done nil (cond-> (merge {:pos (sh-sense/feet (:primitives c)) :placed (:placed (ctx/mem c) [])} (spent/summary (spent/log c)))
                                          (:roof (ctx/mem c)) (assoc :roof (:roof (ctx/mem c)))))
-      :else (do (when-let [g (and (= :no-blocks (:stop j)) (room-lib/gap c))]
-                  (ctx/remember! c :doorway-tried (first g) room-lib/doorway-tried-policy))
-                (ctx/end c :nothing-possible (:stop j) (merge {:text (:text j) :placed (:placed (ctx/mem c) [])} (spent/summary (spent/log c))))))))
+      :else (ctx/end c :nothing-possible (:stop j) (merge {:text (:text j) :placed (:placed (ctx/mem c) [])} (spent/summary (spent/log c)))))))
 
 (defn ^:async step!
   "One step of the entering (judge): the walk, a door, the doorway or the roof, the end."

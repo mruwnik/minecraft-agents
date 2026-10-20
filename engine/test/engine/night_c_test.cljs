@@ -251,6 +251,15 @@
         (let [{:keys [p]} (await (dug-into-home room-with-doorway))]
           (is (seq (filterv #(= -1 (:z (st/arg-pos %))) (st/calls p "place"))) "the doorway was filled"))))))
 
+(deftest a-doorway-the-room-cannot-be-closed-for-want-of-blocks-is-marked-tried-by-the-night
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home (assoc (with-room room-with-doorway) :inventory [{:name "red_bed" :count 1}]) {:x 10 :y 64 :z 0}))
+              log (await (with-child-log #(tu/run-until-empty eng 60)))]
+          (is (<= (count (filter #(= :enter-room (first %)) log)) 2) "enter-room is not called again for a gap it said :no-blocks to: the night marked it tried")
+          (is (empty? (filter #(not= "red_bed" (.-item (.-args %))) (st/calls p "place"))) "nothing placed in the doorway"))))))
+
 (deftest a-doorway-with-an-animal-in-it-is-not-filled
   (async done
     (tu/run-async done
