@@ -1465,3 +1465,47 @@
     (know-bed! eng {:x 60 :y 64 :z 0})
     (core/submit! eng '(jobs.survival.sleep) {})
     (is (some? (settings/with-settings {:jobs.lib.shelter.beds/default-bed-radius 80} #(core/tick! eng))))))
+
+(def tunnel-blocks
+  "A 1-wide tunnel x 0..9 at y 64-65 in solid stone x -3..12, z -3..3, y 62..67; open-end? opens x 9 into a cave x 10..60."
+  (fn [open-end?]
+    (into (if open-end?
+            (into {} (for [x (range 10 61) z (range -3 4) y [63 66]] [(str x "," y "," z) "stone"]))
+            {})
+          (for [x (range -3 13) z (range -3 4) y (range 62 68)
+                :when (not (and (<= 0 x 9) (zero? z) (#{64 65} y)))
+                :when (not (and open-end? (<= 10 x)))]
+            [(str x "," y "," z) "stone"]))))
+
+(defn sight-of-tunnel
+  "A fake body at x 0 of the tunnel that has had one sight pass, not seen everything. The tunnel is lit 14; the cave,
+  when open, is lit fading from the mouth and dark beyond 23."
+  [open-end?]
+  (let [raw-p (tu/fake {:time night :yaw -90 :blocks (tunnel-blocks open-end?)})
+        _ (swap! (fake/state raw-p) assoc :light-default [0 0]
+                 :light (into {} (for [x (range 0 (if open-end? 24 10)) z (if open-end? (range -3 4) [0]) y [64 65]]
+                              [[x y z] [0 (max 0 (- 14 (max 0 (- x 9))))]])))
+        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})
+        p (perception/wrap raw-p per)]
+    (perception/pass! per)
+    p))
+
+(deftest a-lit-dead-end-tunnel-is-shelter-though-its-sides-were-not-looked-at
+  (is (true? (sh-inside/safe-from-night? (sight-of-tunnel false)))))
+
+(deftest a-tunnel-open-into-a-dark-cave-is-no-shelter
+  (is (false? (sh-inside/safe-from-night? (sight-of-tunnel true)))))
+
+
+
+(deftest a-long-lit-tunnel-with-torches-is-shelter-though-far-walls-were-not-seen
+  (let [raw-p (tu/fake {:time night :yaw -90 :blocks (into {} (for [x (range -3 53) z (range -3 4) y (range 62 68)
+                                                                 :when (not (and (<= 0 x 49) (zero? z) (#{64 65} y)))]
+                                                             [(str x "," y "," z) "stone"]))})
+        _ (swap! (fake/state raw-p) assoc :light-default [0 0]
+                 :light (into {} (for [x (range 0 50) y [64 65]]
+                                   [[x y 0] [0 (max 0 (- 14 (apply min (map #(js/Math.abs (- x %)) (range 0 50 6)))))]])))
+        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})
+        p (perception/wrap raw-p per)]
+    (perception/pass! per)
+    (is (true? (sh-inside/safe-from-night? p)))))

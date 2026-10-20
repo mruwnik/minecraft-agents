@@ -470,29 +470,43 @@
 
 (defn unseen-edge?
   "Whether a walker at cell #js [x y z] may lead somewhere the body has not seen: a side feet cell, or the head cell over
-  a side block it could step onto, is unseen. Unseen is unknown, not wall."
-  [p kind-at c]
+  a side block it could step onto, is unseen. Unseen is unknown, not wall. tolerate? (fn [x y z], default none): a cell it
+  accepts is no unseen edge."
+  ([p kind-at c] (unseen-edge? p kind-at c nil))
+  ([p kind-at c tolerate?]
   (let [x (aget c 0) y (aget c 1) z (aget c 2)
-        unseen? (fn [x y z] (nil? (u/seen-block p {:x x :y y :z z})))]
+        unseen? (fn [x y z] (and (nil? (u/seen-block p {:x x :y y :z z})) (not (and tolerate? (tolerate? x y z)))))]
     (some (fn [[dx dz]]
             (let [nx (+ x dx) nz (+ z dz)]
               (or (unseen? nx y nz)
                   (and (not (passable? kind-at nx y nz)) (passable? kind-at x (+ y 2) z) (unseen? nx (inc y) nz)))))
-          [[1 0] [-1 0] [0 1] [0 -1]])))
+          [[1 0] [-1 0] [0 1] [0 -1]]))))
+
+(defn- unseen-loaded?
+  "Whether the cell is loaded but never seen."
+  [p x y z]
+  (true? (some-> (u/sensed p {:x x :y y :z z}) .-unknown)))
 
 (defn room-flood
   "{:cells [...] :unseen? bool}: the cells a walker at cell [x y z] reaches (room-kind-at) fewer than room-cells, and
-  whether any is an unseen-edge?; nil when the flood is open."
-  [p kind-at x y z]
-  (let [kind-at (room-kind-at p kind-at)]
-    (when-let [cells (flood-cells (partial forward kind-at) [x y z] room-cells)]
-      {:cells cells :unseen? (boolean (some #(unseen-edge? p kind-at %) cells))})))
+  whether any is an unseen-edge?; nil when the flood is open. lit-cell? (a cell #js [x y z] -> bool, default none): the
+  unseen edge of such a cell does not count where the neighbour is loaded (an unloaded one still does): an open cell beside
+  a lit one would be lit and so seen, if in view."
+  ([p kind-at x y z] (room-flood p kind-at x y z nil))
+  ([p kind-at x y z lit-cell?]
+   (let [kind-at (if lit-cell?
+                   (let [base (room-kind-at p kind-at)]
+                     (memo-kind-at (fn [x y z] (if (unseen-loaded? p x y z) :solid (base x y z)))))
+                   (room-kind-at p kind-at))]
+     (when-let [cells (flood-cells (partial forward kind-at) [x y z] room-cells)]
+       {:cells cells
+        :unseen? (boolean (some #(unseen-edge? p kind-at % (when (and lit-cell? (lit-cell? %)) (fn [x y z] (some? (u/sensed p {:x x :y y :z z}))))) cells))}))))
 
 (defn room-from
   "The closed room a walker at cell [x y z] reaches (room*'s answer), nil when it is no closed room or any cell of it is
-  an unseen-edge?."
-  [p kind-at x y z]
-  (let [{:keys [cells unseen?]} (room-flood p kind-at x y z)]
+  an unseen-edge? (room-flood's lit-cell?)."
+  [p kind-at x y z lit-cell?]
+  (let [{:keys [cells unseen?]} (room-flood p kind-at x y z lit-cell?)]
     (when (and cells (not unseen?))
       (let [cells (set (map vec cells))
             doors (for [[cx cy cz] cells
@@ -517,13 +531,14 @@
   or unloaded cell, unseen-edge?). {:cells #{[x y
   z]} feet cells, :doors [{:cell {:x :y :z} :inside {:x :y :z}}] each door or gate beside a room cell at its feet, with
   that room cell}; nil when it is no closed room. A door or gate cell is the room's boundary whether open or shut, so
-  a pos in one is judged by the first closed room beside it."
-  [p {:keys [x y z]}]
-  (let [kind-at (shut-kind-at p)
-        in-door? (some-> (u/seen-block p {:x x :y y :z z}) .-name openable?)]
-    (if in-door?
-      (some (fn [[dx dz]] (room-from p kind-at (+ x dx) y (+ z dz))) [[1 0] [-1 0] [0 1] [0 -1]])
-      (room-from p kind-at x y z))))
+  a pos in one is judged by the first closed room beside it. lit-cell? as in room-flood."
+  ([p pos] (room* p pos nil))
+  ([p {:keys [x y z]} lit-cell?]
+   (let [kind-at (shut-kind-at p)
+         in-door? (some-> (u/seen-block p {:x x :y y :z z}) .-name openable?)]
+     (if in-door?
+       (some (fn [[dx dz]] (room-from p kind-at (+ x dx) y (+ z dz) lit-cell?)) [[1 0] [-1 0] [0 1] [0 -1]])
+       (room-from p kind-at x y z lit-cell?)))))
 
 (defn unseen-room?
   "Whether the cell pos {:x :y :z} holds a room that closes over what the body has seen but has a cell it has not seen
@@ -588,19 +603,21 @@
          (.-x eye) "|" (.-y eye) "|" (.-z eye) "|" (.-yaw eye) "|" (.-pitch eye))))
 
 (defn room
-  "room* kept per body (in its perception store) for room-memo-ms while its eye and the world stay the same; not kept without a perception."
-  [p pos]
+  "room* kept per body (in its perception store) for room-memo-ms while its eye and the world stay the same; not kept without a perception.
+  With lit-cell? the answer is kept apart (lit-cell? must depend only on the world and the body's eye)."
+  ([p pos] (room p pos nil))
+  ([p pos lit-cell?]
   (let [per (aget p "perception") k (some-> per steady-key)]
     (if-not k
-      (room* p pos)
+      (room* p pos lit-cell?)
       (let [^js st (:st per)]
         (when-not (= k (.-roomKey st))
           (set! (.-roomKey st) k)
           (set! (.-roomMemo st) (js/Map.)))
-        (let [^js m (.-roomMemo st) ck (str (:x pos) "|" (:y pos) "|" (:z pos))]
+        (let [^js m (.-roomMemo st) ck (str (when lit-cell? "lit|") (:x pos) "|" (:y pos) "|" (:z pos))]
           (if (.has m ck)
             (.get m ck)
-            (let [v (room* p pos)] (.set m ck v) v)))))))
+            (let [v (room* p pos lit-cell?)] (.set m ck v) v))))))))
 
 (defn walk-steps
   "The steps of a walk (search-steps) from cell from to a cell next to cell to ({:x :y :z} each) over the blocks the
