@@ -463,6 +463,17 @@
                 (or (:hit-on-the-run (ctx/mem c)) (recently-hurt? c))
                 (sh-sense/shut-in-room? (:primitives c)))))
 
+(defn bare-boxed-in?
+  "Whether the body is in a closed hut (not a one-wide tunnel, which may lead on) with a melee mob (not a creeper or an enderman) within close-radius and has no
+  weapon and no block to wall with: the fist is all it has, so it fights at once rather than dodge about the room."
+  [c hostiles]
+  (boolean (and (some #(and (not (combat/ranged? %)) (not (combat/creeper? %)) (not (combat/enderman? %))
+                            (<= (danger-q/mob-distance (:primitives c) %) (close-radius)))
+                      hostiles)
+                (sh-sense/shut-in-hut? (:primitives c))
+                (nil? (combat/best-weapon (:primitives c) (weapons c)))
+                (empty? (lb/carried c (flight/blocks c))))))
+
 (defn ^:async cornered!
   "Nowhere worth walking to: the first option of escape-order that it can take and has not failed since the last
   start over (blocked!). home?: the body is in its home room."

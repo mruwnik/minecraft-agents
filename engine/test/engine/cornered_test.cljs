@@ -1395,3 +1395,22 @@
                     (await (refuge/plug-option! (assoc (stub-ctx p m) :args {}) :plug-dig #{:pit :pocket})))]
           (is (nil? out))
           (is (zero? @plugs) "no pit or pocket is dug in a sealed cell, the hide-hold loop"))))))
+
+(defn mob-at [mob-name x] #js {:name mob-name :id 9 :seen true :pos #js {:x x :y 64 :z 0} :distance x})
+
+(def hut
+  "A closed 5x3 room on z -1..1, x 0..4, two cells tall, in stone."
+  (let [open (set (for [x (range 0 5) y [64 65] z [-1 0 1]] [x y z]))]
+    (into {} (for [x (range -1 6) y (range 62 68) z (range -2 3) :when (not (open [x y z]))] [(key-of x y z) "stone"]))))
+
+(deftest a-bare-body-in-a-closed-hut-is-boxed-in-by-a-melee-mob-in-the-room-hit-or-not
+  (let [boxed? (fn [world mob] (cornered/bare-boxed-in? {:primitives (tu/fake-on-floor world) :quote-call {}} [mob]))
+        closed {:blocks hut}]
+    (is (true? (boxed? closed (mob-at "zombie" 4))) "never hurt: no hit is needed")
+    (is (false? (boxed? closed (mob-at "zombie" 12))) "beyond close-radius")
+    (is (false? (boxed? closed (mob-at "skeleton" 4))))
+    (is (false? (boxed? closed (mob-at "creeper" 4))))
+    (is (false? (boxed? (assoc closed :inventory [{:name "cobblestone" :count 4}]) (mob-at "zombie" 4))) "blocks to wall with")
+    (is (false? (boxed? (assoc closed :inventory [{:name "iron_sword" :count 1}]) (mob-at "zombie" 4))) "armed")
+    (is (false? (boxed? {:blocks dead-end} (mob-at "zombie" 4))) "a one-wide tunnel may lead on")
+    (is (false? (boxed? {} (mob-at "zombie" 4))) "open ground: it can walk")))
