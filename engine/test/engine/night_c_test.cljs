@@ -174,7 +174,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [j [0.0 0.5 0.99]]
-          (let [{:keys [eng p]} (await (night-at-home (update bed-world :blocks merge walled-home) {:x 10 :y 64 :z 0} {} {:rand (constantly j) :ray-deg 1}))]
+          (let [{:keys [eng p]} (await (night-at-home (update bed-world :blocks merge walled-home) {:x 10 :y 64 :z 0} {} {:rand (constantly j) :ray-deg 1 :radius 14}))]
             (await (tu/run-until-empty eng 60))
             (is (= [] (bed-places p)) (str "no bed in the open, sight jitter " j))
             (is (= [] (st/calls p "sleep")) "and no sleep out there")
