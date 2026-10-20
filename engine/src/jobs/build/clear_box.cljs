@@ -50,7 +50,7 @@
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}})
 
 (a/defargs settings
-  {::max-cells {:default 400 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}
+  {::max-cells {:default 400 :doc "Most cells the box may hold; a bigger box is impossible (:bad-args)." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds one call may take." :spec (a/int-in 1 nil)}
    ::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}
    ::cell-s {:default 1.5 :doc "Mean seconds one cell takes (walk, dig, pick up, pace), for the quote." :spec (a/num-in 0 nil)}})
@@ -137,10 +137,10 @@
     (contract/never :bad-args text :why text)
     (contract/ok :args "the box fits")))
 
-(def no-zones
+(defn no-zones
   "Later :no-zones when no zone list could be read (unless :ignore-zones?), also in the middle of the job."
-  (checks/refusing :zones-read "a zone list is read"
-                      #(when-not (box-error (:args %)) (common/no-zones % :clear-box.declined "clear-box"))))
+  [c]
+  (if (box-error (:args c)) (contract/ok :zones-read "a zone list is read") (checks/zones-read c)))
 
 (def all-refused
   "Later :refused when every pending cell is refused by a zone or plan."
@@ -150,10 +150,7 @@
      (when-not (box-error (:args c))
        (let [{:keys [allowed refused]} (sort-out c (pending c))]
          (when (and (empty? allowed) (seq refused))
-           (let [fields (assoc (access/refusal-fields (map second refused)) :reason :refused)]
-             (ctx/warn-once! c [:access :refused] :clear-box.declined
-                             (assoc fields :text (str "clear-box declined: every target is refused by " (access/refusal-text fields))))
-             fields)))))))
+           (assoc (access/refusal-fields (map second refused)) :reason :refused)))))))
 
 (def target [:from :to])
 (def defaults {:spend {:job-time ::job-time-s}})
@@ -285,7 +282,7 @@
   (if (or (blocks/body-wait? w) (= :not-loaded (:reason w))) :continue :again))
 
 (defn ^:async dig!
-  "One round of the dig child on the target cell t; book its end. A refused dig counts a try (:refused after two)."
+  "One round of the dig child on the target cell t; book its end. Any other ending counts a try (skipped after two under the ending's cause key)."
   [c t]
   (let [e (await (ctx/call c :dig 'jobs.blocks.dig (dig-args c t)))]
     (cond
@@ -298,7 +295,7 @@
             :already-clear (ctx/update-mem! c update :cell-tries dissoc t)
             (:cannot :fluid) (skip! c t :cannot)
             :unreachable (skip! c t :unreachable)
-            (bump! c t :refused))
+            (bump! c t (contract/cause-key e)))
           :again))))
 
 (defn ^:async step

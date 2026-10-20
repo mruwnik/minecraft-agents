@@ -70,13 +70,13 @@
           (is (= {:dug 0 :skipped {{:x 1 :y 64 :z 1} :cannot} :kept 0 :fluids {}} (dissoc result :text)))
           (is (= 1 (count (kinds seen :clear-box.skipped)))))))))
 
-(deftest clear-box-skips-a-refused-dig-after-two-tries
+(deftest clear-box-skips-a-failed-dig-after-two-tries-under-its-cause
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks {"1,64,1" "dirt"}})]
           (.override (.-world p) "dig" (fn ^:async f [_ _ _] #js {:status "timeout"}))
-          (is (= {:dug 0 :skipped {{:x 1 :y 64 :z 1} :refused} :kept 0 :fluids {}} (dissoc (await (child-outcome eng job one 8)) :text)))
+          (is (= {:dug 0 :skipped {{:x 1 :y 64 :z 1} :timeout} :kept 0 :fluids {}} (dissoc (await (child-outcome eng job one 8)) :text)))
           (is (= 2 (count (calls p "dig")))))))))
 
 (deftest clear-box-skips-an-unreachable-cell
@@ -206,24 +206,23 @@
           (is (= [{:zones ["farm"] :plans ["pad"] :cells 6}]
                  (map #(select-keys % [:zones :plans :cells]) (kinds seen :clear-box.refused)))))))))
 
-(deftest a-box-wholly-refused-declines-once-naming-zone-and-plan-and-stays-listed
+(deftest a-box-wholly-refused-declines-without-a-warn-and-stays-listed
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks eight} (ew/of-data {"pad" pad-plan} {} [farm-zone]))]
           (is (= 1 (await (listed-after eng 5))))
           (is (empty? (calls p "dig")))
-          (is (= [{:reason :refused :zones ["farm"] :plans ["pad"]}]
-                 (map #(select-keys % [:reason :zones :plans]) (kinds seen :clear-box.declined)))))))))
+          (is (empty? (kinds seen :clear-box.declined))))))))
 
-(deftest no-zone-list-declines-with-one-warn-and-digs-nothing
+(deftest no-zone-list-declines-without-a-warn-and-digs-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks eight} (ew/of-data {} {} nil))]
           (is (= 1 (await (listed-after eng 5))))
           (is (empty? (.-calls (.-world p))))
-          (is (= [:no-zones] (map :reason (kinds seen :clear-box.declined)))))))))
+          (is (empty? (kinds seen :clear-box.declined))))))))
 
 (deftest a-zone-added-between-the-choice-and-the-dig-stops-the-dig
   (async done
