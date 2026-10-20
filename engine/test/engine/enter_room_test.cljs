@@ -132,6 +132,18 @@
           (is (= ##Inf (await (mean doorway-hut []))))
           (is (= 6 (await (mean doorway-hut stones)))))))))
 
+(deftest a-walk-to-a-seen-roof-with-open-sides-is-not-quoted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [quote-of (:quote-of (get registry/jobs 'jobs.survival.enter-room))
+              {:keys [eng p]} (st/setup {:floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 12}} :inventory stones
+                                         :blocks (tu/box 3 67 -2 7 67 2 "cobblestone")})
+              _ (mem/write! (:store eng) :home {:pos {:x 5 :y 64 :z 0}} mem/place-policy)
+              q (await (quote-of {:primitives p :args {} :view (fn [] (mem/view (:store eng)))
+                                  :quote-call {:use {:blocks ["dirt"]}}}))]
+          (is (= ##Inf (get-in q [:uses :job-time 1]))))))))
+
 (deftest a-home-in-anothers-zone-is-not-walked-into
   (async done
     (tu/run-async done

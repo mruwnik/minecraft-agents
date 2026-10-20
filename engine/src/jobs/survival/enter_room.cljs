@@ -160,6 +160,14 @@
                   (or (some combat/creeper? threats)
                       (and way (not (room-lib/race-won? p room way threats))))))))
 
+(defn unclosable?
+  "Whether the room seen at pos can be closed by nothing the job does: a seen room that is no closed room, with an
+  unroofed cell and no doorway that shuts it (a roof on open sides). Read-only."
+  [p pos]
+  (let [cell (:cell (reach/unroofed-cell p pos))]
+    (boolean (and (not (room-lib/refuge-room? p pos)) (not (reach/unseen-room? p pos))
+                  cell (nil? (room-lib/shut-by p pos cell any?))))))
+
 (defn ^:async quote-of [c]
   (let [p (:primitives c)
         t (target-of c)
@@ -168,7 +176,7 @@
     (cond
       (and (shut? c) (nil? (room-lib/gap c))) (priced 0)
       (not (here? c t))
-      (if (or (nil? t) (race-lost? c t))
+      (if (or (nil? t) (unclosable? (:primitives c) (:pos t)) (race-lost? c t))
         (priced ##Inf)
         (let [route (await (room-lib/route-cost c (walk-args t)))]
           (priced (or route ##Inf))))
