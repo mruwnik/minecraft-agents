@@ -301,7 +301,7 @@
       (if (risk/refused? c pos)
         :again
         (let [e (await (child/run!* c :field 'jobs.farm.harvest
-                                    {:center pos :crops ["wheat"] :radius (inc (apply max (map #(/ (js/Math.abs (- %1 %2)) 2) lo hi)))}))]
+                                    {:area {:pos pos :radius (inc (apply max (map #(/ (js/Math.abs (- %1 %2)) 2) lo hi)))} :crops ["wheat"]}))]
           (if (= :continue e) :continue :again))))))
 
 (defn ^:async next-way!
