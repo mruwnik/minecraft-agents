@@ -572,7 +572,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
                                            :blocks (merge (lake -6 6 6) (bank 7 7 6) (bank -7 -7 6) wall-all-round)})]
-          (await (one-run! eng small-args))
+          (await (one-run! eng no-shore-args))
           (is (= [[:stopped :no-land-in-range]] (ended seen)))
           (is (< (dist-from-origin p) 7) "never left the pond")
           (is (empty? (of-kind seen :holding)) "no job.holding event")
@@ -589,7 +589,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
                                          :blocks (merge (lake -6 6 6) (bank 7 7 6) (bank -7 -7 6) wall-all-round)})]
-          (await (one-run! eng small-args))
+          (await (one-run! eng no-shore-args))
           (is (= [[:stopped :no-land-in-range]] (ended seen)))
           (is (<= 1 (unreachable-count seen) (b/land-tries))))))))
 
@@ -689,7 +689,7 @@
               args (tune no-shore-args :swim-range 9 :leg-length 9 :search-radius 16)]
           (await (one-run! eng args))
           (is (= [[:stopped :no-land-in-range]] (ended seen)))
-          (is (= 2 (unreachable-count seen)) "two walled banks tried (2 x 15 blocks, beyond 3 x swim-range), not a third try"))))))
+          (is (<= 1 (unreachable-count seen) (b/land-tries)) "go-tos tried, each walks the body toward the wall so later tries are short"))))))
 
 (defn stub-child-ctx
   "A ctx whose go-to child call resolves to the ending e, with a go-to registry entry."
@@ -746,7 +746,7 @@
                                          :blocks (merge (lake -6 6 6) (bank 7 7 6) (bank -7 -7 6) wall-all-round)}
                                         raw)
               gave-up? #(= :unreachable (get-in % [:data :ending :cause :reason]))]
-          (await (one-run! eng small-args))
+          (await (one-run! eng no-shore-args))
           (is (= [[:stopped :no-land-in-range]] (ended seen)))
           (is (pos? (count (filter gave-up? @raw))) "the children gave up"))))))
 
@@ -818,7 +818,7 @@
   (merge (into {} (for [x (range -2 3) z (range -2 3)
                         [y n] [[63 "stone"] [64 "water"] [65 "water"]]]
                     [(str x "," y "," z) n]))
-         (into {} (for [x (range -3 4) z (range -3 4) y (range 63 67)
+         (into {} (for [x (range -3 4) z (range -3 4) y (range 63 68)
                         :when (= 3 (max (js/Math.abs x) (js/Math.abs z)))]
                     [(str x "," y "," z) "stone"]))
          extra))
@@ -877,7 +877,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [ended ledger]} (await (step-run! {:inventory [{:name "dirt" :count 4}]
-                                                       :blocks {"3,66,0" "air"}}))]
+                                                       :blocks {"3,66,0" "air" "3,67,0" "air"}}))]
           (is (= [[:completed nil]] ended))
           (is (empty? ledger)))))))
 

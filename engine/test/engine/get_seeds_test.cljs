@@ -260,8 +260,7 @@
 (defn setup-with-jobs
   "setup-seeing with the registry's jobs overridden by stubs."
   [world stubs]
-  (with-redefs [registry/jobs (merge registry/jobs stubs)]
-    (setup-seeing world)))
+  (update (setup-seeing world) :eng #(update % :jobs merge stubs)))
 
 (deftest a-walk-waiting-on-the-world-is-a-yield-not-a-skipped-cell
   (async done

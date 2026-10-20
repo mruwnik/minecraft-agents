@@ -84,7 +84,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out]} (await (equip (stacks "dirt") {:item "iron_pickaxe" :fetch false}))]
+        (let [{:keys [p out]} (await (equip (stacks "dirt") {:item "iron_pickaxe" :ways #{:carried}}))]
           (is (= [:condition-failed :no-item] [(:kind (:ending @out)) (:reason @out)]))
           (is (nil? (held p))))))))
 
@@ -127,7 +127,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (ft/start (ft/world ft/pickaxe-stock) [])]
-          (core/submit! (:eng s) (list job {:item "wooden_pickaxe" :fetch false}) {})
+          (core/submit! (:eng s) (list job {:item "wooden_pickaxe" :ways #{:carried}}) {})
           (await (ft/run-ticks s 10))
           (is (nil? (held (:p s))))
           (is (empty? (filter #(= :need (:slot %)) (ft/events-of s :child_started))))
