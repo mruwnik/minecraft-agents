@@ -60,6 +60,16 @@
          [:job (jobs.survival.get-food {:explore true})]]
    :expect [{:event {:source :job :kind :food.killed} :within-s 150}]
    :limit-s 180}
+  {:name "hungry-body-in-a-lit-plot-searches-and-eats-at-any-hour"
+   :plot {:height 6 :length 96 :width 32}
+   :body {:at [16.5 0 16.5]}
+   :act [[:summon "cow" [72.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [74.5 0 14.5] "{NoAI:1b}"] [:summon "cow" [74.5 0 18.5] "{NoAI:1b}"]
+         [:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 8 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore true})]]
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :explore}} :within-s 150}
+            {:event {:source :job :kind :food.killed} :within-s 150}]
+   :limit-s 180}
   {:name "night-starving-body-explores-calm"
    :time :night
    :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
