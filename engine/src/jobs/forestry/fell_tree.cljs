@@ -28,7 +28,7 @@
   (:continue) while a child waits on the world, and after ::max-steps pieces of work.
   The base log's :forestry/replant debt (one per cell of a 2x2 trunk) is written before it is dug; a lower log of the
   column seen later becomes the base. It ends on the ground: from the canopy it walks down beside the base (warn
-  fell-tree.stranded when it cannot). With :at it fells that one column instead (:radius and :species are then unused).
+  a :stranded true result when it cannot). With :at it fells that one column instead (:radius and :species are then unused).
   The tree is the one the body walks to soonest among at most 32 candidates, nearest in a line first (jobs.lib.targets);
   one whose walk is blocked, or partial three times in a row, is marked unreachable. A log out of reach from the foot
   is felled from a pillar by jobs.forestry.fell-from-pillar (unless :pillar? is false); a tree that pillar cannot reach
@@ -109,7 +109,7 @@
 
 (defn ^:async come-down!
   "Walk to the ground beside the base (a go-to child, slot :down) when the body stands up in the canopy. :continue while
-  go-to waits on the world, else nil; a walk that does not arrive warns fell-tree.stranded."
+  go-to waits on the world, else nil; a walk that does not arrive sets :stranded in the result."
   [c]
   (when (on-canopy? c)
     (let [{:keys [x y z]} (:base (ctx/mem c))
@@ -117,7 +117,7 @@
       (cond
         (= :continue e) :continue
         (not (and (= :done (:kind e)) (:arrived (:data e))))
-        (ctx/warn-once! c :stranded :fell-tree.stranded {:text "felled the tree but could not come down from the canopy"})))))
+        (ctx/update-mem! c assoc :stranded true)))))
 
 (defn own-spared?
   "Whether the dig at pos is refused only by a plan this body made: a build it spares, not a refusal to report."
@@ -297,7 +297,9 @@
     (if (= :continue e) :continue (pillar-ended! c e))))
 
 (defn tree-result [c]
-  {:base (:base (ctx/mem c)) :logs (:dug (ctx/mem c) 0) :axe (axe-status c)})
+  (let [m (ctx/mem c)]
+    (cond-> {:base (:base m) :logs (:dug m 0) :axe (axe-status c)}
+      (:stranded m) (assoc :stranded true))))
 
 (defn relook-cells
   "The cells of logs last seen of the tree that are unknown now (the body moved, e.g. to collect a drop), once per tree:
@@ -465,7 +467,7 @@
 
 (defn ^:async quote-of
   "The walk to the tree's base as go-to quotes it, then 3 s and 1.5 s a log, and the wear of the axe on the logs. The
-  logs stay on the ground, so none are yielded."
+  logs are picked up: one log item per log of the tree."
   [c]
   (let [{:keys [species radius at]} (:args c)
         t (if at (tree-at (:primitives c) at) (tree-near (:primitives c) radius species))
@@ -474,4 +476,5 @@
         least (+ 2 wl)
         mean (+ 2 wm 3 (* 1.5 n))]
     (cond-> {:uses {:job-time [least mean (max mean (time-s))]} :done [0 1 1]}
-      (pos? n) (assoc-in [:uses :wear] (choose/dig-wear c (repeat n (str (:species t) "_log")))))))
+      (pos? n) (-> (assoc-in [:uses :wear] (choose/dig-wear c (repeat n (str (:species t) "_log"))))
+                   (assoc :yields {:items {(str (:species t) "_log") [0 n n]}})))))

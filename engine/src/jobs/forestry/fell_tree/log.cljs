@@ -1,8 +1,7 @@
 (ns jobs.forestry.fell-tree.log
   "What fell-tree and fell-from-pillar share: the zone rule for a log, the logs of the chosen column, the walk within
   reach of a log and one dig round of it."
-  (:require [clojure.string :as str]
-            [engine.args :as a]
+  (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -13,7 +12,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.places :as places]
             [jobs.lib.ready :as ready]
-            [jobs.lib.trees :refer [scan-logs logs-at debts replant-kind dig-reach log-name?]]
+            [jobs.lib.trees :as trees :refer [scan-logs logs-at debts replant-kind dig-reach log-name?]]
             [jobs.lib.util :as u]))
 
 (defn gate-opts [c]
@@ -168,7 +167,7 @@
   something else than leaves is in the way."
   [c pos]
   (let [at (some->> pos u/cell-vec (aim/first-blocker (aim/seen-kind-at (:primitives c)) (aim/body-eye c)))]
-    (when (some-> at u/cell-pos (->> (u/seen-name (:primitives c))) (str/ends-with? "_leaves"))
+    (when (some-> at u/cell-pos (->> (u/seen-name (:primitives c))) (trees/leaves-name?))
       (u/cell-pos at))))
 
 (defn ^:async dig-log!

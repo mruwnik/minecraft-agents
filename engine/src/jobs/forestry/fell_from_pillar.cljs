@@ -1,6 +1,5 @@
 (ns jobs.forestry.fell-from-pillar
-  (:require [clojure.string :as str]
-            [jobs.lib.ready :as ready]
+  (:require [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -16,7 +15,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.pillar :as pl]
             [jobs.lib.sense :as sense]
-            [jobs.lib.trees :refer [dig-reach default-radius log-name? log-names]]
+            [jobs.lib.trees :as trees :refer [dig-reach default-radius log-name? log-names]]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]))
 
@@ -54,6 +53,7 @@
    ::settle-min {:default 5 :doc "Fewest looks at the cut logs before the top collect goes on: a drop may be seen a moment after it lands." :spec (a/int-in 0 nil)}
    ::settle-looks {:default 8 :doc "Most looks at the falling logs before the top collect goes on." :spec (a/int-in 0 nil)}
    ::max-walk-fails {:default 3 :doc "Stands or bases the walk may fail to reach before the call ends :walk." :spec (a/int-in 1 nil)}
+   ::max-lowered {:default 4 :doc "Drops lowered by digging their support, per call." :spec (a/int-in 0 nil)}
    ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 (defn max-steps [] (settings/get settings ::max-steps))
@@ -170,7 +170,7 @@
 (defn fetch-opts
   "The limits {:how :explore} for getting the pillar's blocks, nil when :fetch does not allow items."
   [c]
-  (when-let [o (need/opts c 'jobs.forestry.fell-tree)]
+  (when-let [o (need/opts c 'jobs.forestry.fell-from-pillar)]
     (when (contains? (:what o) :item) (select-keys o [:how :explore]))))
 
 (defn ^:async blocks!
@@ -290,7 +290,7 @@
     (->> cells
          (remove (fn [[cx _ cz]] (and (= cx sx) (= cz sz))))
          (filter (fn [cell] (let [n (u/seen-name (:primitives c) (u/cell-pos cell))]
-                              (and n (or (log-name? n) (str/ends-with? n "_leaves"))))))
+                              (and n (or (log-name? n) (trees/leaves-name? n))))))
          first)))
 
 (defn left-cells
@@ -298,7 +298,6 @@
   [e]
   (into [] (comp (filter #(= :unreachable (:reason %))) (map #(u/cell-vec (:pos %)))) (get-in e [:data :left])))
 
-(def max-lowered "Drops lowered by digging their support, per call." 4)
 
 (defn ^:async settle-drops!
   "Wait until the logs lying in dig reach are seen and stop moving (a drop in the air is given up as unreachable, one
@@ -330,7 +329,7 @@
                                   (log/collect-args c {:radius dig-reach :ids ids :near (u/self-pos c) :search 0})))
               :done)
           at (into {} (map (juxt #(u/cell-vec (u/pos-of (.-pos %))) #(u/pos-of (.-pos %)))) ents)
-          cell (when (and (map? e) (< n max-lowered)) (some #(drop-support c % (at %)) (left-cells e)))]
+          cell (when (and (map? e) (< n (settings/get settings ::max-lowered))) (some #(drop-support c % (at %)) (left-cells e)))]
       (cond
         (or (= :continue settle) (= :continue e)) :continue
         (not cell) (do (ctx/update-mem! c assoc-in [:pillar :topped] true) nil)

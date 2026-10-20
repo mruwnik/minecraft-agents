@@ -289,11 +289,11 @@
         (is (= {:r [:nothing-possible :cleanup-open] :started false} (await (step-with-scaffold true :done))) "still open: ends, plans nothing")
         (is (= {:r :continue :started false} (await (step-with-scaffold true :continue))) "the cleanup child waits")))))
 
-(deftest fell-tree-quotes-axe-wear-and-no-logs
+(deftest fell-tree-quotes-axe-wear-and-the-logs-it-picks-up
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (fm/start (assoc ft/tall :inventory [{:name "iron_axe" :count 1}]) {})
               q (await (quote-of eng 'jobs.forestry.fell-tree {:radius 10}))]
           (is (= {"iron_axe" [8 8 8]} (get-in q [:uses :wear])))
-          (is (nil? (:yields q)) "the logs stay on the ground"))))))
+          (is (= {:items {"oak_log" [0 8 8]}} (:yields q)) "the logs are picked up"))))))
