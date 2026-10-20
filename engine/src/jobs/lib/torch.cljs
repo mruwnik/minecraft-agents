@@ -15,6 +15,15 @@
   [p]
   (reduce + (map :count (filter #(#{"coal" "charcoal"} (:name %)) (u/inventory p)))))
 
+(defn stick-supply
+  "How many sticks the body has or can make from carried planks (2 planks make 4 sticks): each torch crafting needs one."
+  [p]
+  (reduce + (map (fn [{n :name c :count}]
+                   (cond (= "stick" n) c
+                         (re-find #"_planks$" n) (* 2 c)
+                         :else 0))
+                 (u/inventory p))))
+
 (defn off-hand-torches
   "The torches in the off hand (the place act takes only the inventory's)."
   [p]

@@ -18,6 +18,7 @@
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.torch :as torch]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.night.sites :as sites]
             [engine.fake.raw-world :as fake-raw]
@@ -1678,3 +1679,35 @@
           (core/submit! eng '(jobs.survival.night) {})
           (await (run-until-empty eng 30))
           (is (empty? (for [z (range 40) y [64 65] :when (re-find #"torch" (or (bd/block-at raw-p {:x 0 :y y :z z}) ""))] z)) "one torch cannot light the hall: a wall or pit is quoted instead"))))))
+
+(defn ^:async torches-hung-in-dark-hall
+  "Runs the night in a sealed dark hall carrying inv; the number of cells holding a torch afterwards."
+  [inv]
+  (let [raw-p (tu/fake {:time night :blocks (box 1 40 false) :inventory inv :drops {"torch" "torch"}})
+        _ (swap! (fake/state raw-p) assoc :light-default [0 0])
+        p (tu/seeing-all (perception/wrap raw-p (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})))
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now (constantly 1000000)
+                          :events (events/make {:body "Fake" :sinks [] :now (constantly 1000000)})})]
+    (core/submit! eng '(jobs.survival.night) {})
+    (await (run-until-empty eng 30))
+    (count (for [z (range 40) y [64 65] :when (re-find #"torch" (or (bd/block-at raw-p {:x 0 :y y :z z}) ""))] z))))
+
+(deftest torches-short-for-the-hall-cannot-be-made-from-coal-without-a-stick
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (zero? (await (torches-hung-in-dark-hall [{:name "torch" :count 1} {:name "coal" :count 16} {:name "dirt" :count 64}])))
+            "coal alone cannot make the missing torches: a wall or pit is quoted instead")))))
+
+(deftest a-dark-hall-is-not-lit-when-nothing-can-light-it-and-no-way-is-quoted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (zero? (await (torches-hung-in-dark-hall [{:name "torch" :count 1} {:name "dirt" :count 2}])))
+            "infinite light against infinite ways does not pick light")))))
+
+(deftest sticks-come-from-carried-sticks-and-planks
+  (are [inv n] (= n (torch/stick-supply (tu/fake {:inventory inv})))
+    [{:name "stick" :count 3}] 3
+    [{:name "oak_planks" :count 2} {:name "stick" :count 1}] 5
+    [{:name "coal" :count 9}] 0))

@@ -29,17 +29,18 @@
           (recur more (if (contract/ending? q) best (min best (get-in q [:uses :job-time 1] ##Inf)))))))))
 
 (defn ^:async light-cost
-  "Seconds light-area over the room's cells quotes, plus crafting the torches that are short from coal (##Inf when the coal
-  cannot make them)."
+  "Seconds light-area over the room's cells quotes, plus crafting the torches that are short from coal and sticks (##Inf when
+  they cannot make them)."
   [c cells]
   (let [p (:primitives c)
         q (await (ctx/quote c 'jobs.build.light-area {:cells cells}))
         need (get-in q [:uses :items "torch" 1] 0)
-        short (max 0 (- need (torch/torches-held p)))]
+        short (max 0 (- need (torch/torches-held p)))
+        crafts (js/Math.ceil (/ short 4))]
     (cond
       (contract/ending? q) ##Inf
-      (> short (* 4 (torch/fuel-held p))) ##Inf
-      :else (+ (get-in q [:uses :job-time 1] ##Inf) (* (settings/get settings ::craft-s) (js/Math.ceil (/ short 4)))))))
+      (> crafts (min (torch/fuel-held p) (torch/stick-supply p))) ##Inf
+      :else (+ (get-in q [:uses :job-time 1] ##Inf) (* (settings/get settings ::craft-s) crafts)))))
 
 (defn ^:async wanted?
   "Once a night: the body stands in a sealed room whose only fault is a dark spawnable cell beyond the spawn-free radius, holds
@@ -49,8 +50,8 @@
     (and (not (:light-tried (ctx/mem c)))
          (or (pos? (torch/torches-held p)) (pos? (torch/fuel-held p)))
          (sh-inside/dark-room-at? p (sh-sense/feet p))
-         (<= (await (light-cost c (:cells (reach-room/room p (sh-sense/feet p)))))
-             (await (way-cost c))))))
+         (let [light (await (light-cost c (:cells (reach-room/room p (sh-sense/feet p)))))]
+           (and (< light ##Inf) (<= light (await (way-cost c))))))))
 
 (defn ^:async light!
   "jobs.build.light-area over the room's cells, called again while it goes on; once it ends, :light-tried, whatever came of it
