@@ -97,7 +97,10 @@
   [c]
   (min widen-max (inc (ctx/count-in c :hungry (:ttl hungry-policy)))))
 
-(defn hunt-radius [c] (* (widen c) (:hunt-radius (:args c))))
+(defn hunt-radius
+  "How far the hunt and the crop way look: the widened :hunt-radius, or as far as the search saw what it found (:found-reach), so a find at the edge is not out of reach."
+  [c]
+  (max (* (widen c) (:hunt-radius (:args c))) (:found-reach (ctx/mem c) 0)))
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one attempt at getting fed may take: a hunt, a search, a cook." :spec (a/num-in 0 nil)}
@@ -340,6 +343,8 @@
           (if (= :continue e)
             :continue
             (let [res (:data e)]
+              (ctx/update-mem! c assoc :found-reach
+                               (reduce max 0 (for [{[x y z] :pos} (:found res) :when x] (+ 4 (u/dist (u/self-pos c) {:x x :y y :z z})))))
               (ctx/update-mem! c assoc :explored
                                (str (count (:found res)) " found, " (get-in res [:coverage :legs] 0) " legs"
                                     (when (:why res) (str ", " (name (:why res))))))

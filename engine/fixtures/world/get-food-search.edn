@@ -81,7 +81,8 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore false})]]
-   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.get-food"}} :within-s 90}]
+   ;; a melon drops 3 to 7 slices, so one may or may not fill the body (ends completed or stopped): the case is that it is dug
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 90 :of-job true}]
    :after [[:not-block [20 0 16] "melon"]]}
   {:name "chest-booked-with-bread-100-blocks-off-is-walked-to"
    :plot {:height 6 :length 128 :width 32}
