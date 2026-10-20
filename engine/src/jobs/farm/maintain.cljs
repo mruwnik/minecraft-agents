@@ -30,8 +30,8 @@
   crops above it are stored; seed above it is composted.
   Skipped steps are booked {:skipped reason}: :no-composter, :no-surplus-seed, :no-chest, :nothing-to-store, or
   :declined when the child declined.
-  It starts when tend would run or a stock step has something to do. Done (:already before the start) when tend has nothing
-  to do and nothing is left to compost or store. Ends :done with {:steps {step summary}} when a step ran to its end,
+  It starts when tend would run or a stock step has something to do. Done once a step ran and tend has nothing
+  to do and nothing is left to compost or store; a farm in order before the first pass waits :nothing-to-do. Ends :done with {:steps {step summary}} when a step ran to its end,
   nothing-possible :failed-steps when one stopped early and none ran, else condition-failed :nothing-to-do. Summaries: tend
   {:field :parts}, compost {:fed :bone-meal :reason}, deposit {:gave-up :reason}.")
 
@@ -108,12 +108,12 @@
       :else t)))
 
 (defn done?
-  "Ok when tend has nothing to do and nothing is left to compost or store; else later with the steps run and left."
+  "Ok once a step ran and tend has nothing left to do and nothing is left to compost or store; else later with the steps run and left (a farm in order before the first pass stays a failed condition)."
   [c]
   (let [m (ctx/mem c)
         ran (count (remove (some-fn :skipped :stopped) (vals (:report m))))
         left (count (:todo m))]
-    (if (or (tend-work? c) (stock-work? c))
+    (if (or (zero? ran) (tend-work? c) (stock-work? c))
       (contract/later :steps (str ran " steps run") :units :steps :done ran :left left)
       (contract/ok :in-order "the farm is in order" :units :steps :done ran :left 0 :result {:steps (:report m)}))))
 
