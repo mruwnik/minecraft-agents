@@ -7,7 +7,9 @@
             [engine.library-test :as lt]
             [engine.memory :as mem]
             [engine.test-util :as tu]
+            [jobs.forestry.fell-tree :as fell-tree]
             [jobs.lib.part-cut :as part-cut]
+            [jobs.lib.trees :as trees]
             [jobs.forestry.plant-sapling :as plant-sapling]
             [jobs.lib.world-files :as ew]
             [triggers.forestry.part-cut-tree :as pct]
@@ -40,6 +42,12 @@
   (let [p (:p (lt/setup {:blocks (merge (fm/ground [[6 0]]) (part-cut 6))}))]
     (is (= {:x 6 :y 64 :z 0} (part-cut/ground-cell p {:x 6 :y 65 :z 0})))
     (is (nil? (part-cut/ground-cell (:p (lt/setup {:blocks (part-cut 6)})) {:x 6 :y 65 :z 0})) "no ground seen")))
+
+(deftest the-walk-to-a-raised-base-aims-at-the-ground-under-it
+  (let [p (:p (lt/setup {:blocks (merge (fm/ground [[6 0] [9 0]]) (part-cut 6) (lt/tree 9 0 "oak" 4))}))
+        trees (into {} (map (juxt (comp :x :base) identity)) (trees/trees-near p 12 nil #{}))]
+    (is (= {:x 6 :y 64 :z 0} (fell-tree/walk-target p (trees 6))) "the hanging trunk: the ground under it")
+    (is (= (:base (trees 9)) (fell-tree/walk-target p (trees 9))) "a standing trunk: its own base")))
 
 (defn ^:async fell
   "Run fell-tree :part-cut? over the zones in a world of spec; {:p :eng :out}."

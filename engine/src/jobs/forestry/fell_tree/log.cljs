@@ -9,6 +9,7 @@
             [jobs.lib.aim :as aim]
             [jobs.lib.child :as child]
             [jobs.lib.gate :as gate]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.places :as places]
             [jobs.lib.ready :as ready]
@@ -152,12 +153,14 @@
 (defn ^:async approach!
   "Get the log at pos within reach to dig: nothing when its centre is within eye reach already, else walk to within 2
   of the column's foot (3 when that has no path: the foot may be the trunk itself). When the cell under the foot is
-  unseen the trunk may go on down, so the walk aims at the column's ground (go-to's column goal), not at that height.
+  unseen the trunk may go on down, and when it is air the log hangs (cut below), so the walk aims at the column's ground
+  (go-to's column goal), not at that height: no walk reaches a cell in the air.
   :there, :partial or :blocked."
   [c pos base-y]
   (if (<= (u/eye-dist (u/self-pos c) pos) dig-reach)
     :there
-    (let [foot (if (nil? (trees/seen-name (:primitives c) {:x (:x pos) :y (dec base-y) :z (:z pos)}))
+    (let [foot (if (let [under (trees/seen-name (:primitives c) {:x (:x pos) :y (dec base-y) :z (:z pos)})]
+                     (or (nil? under) (contains? bs/air under)))
                  (select-keys pos [:x :z])
                  (assoc pos :y base-y))
           w (await (walk-near! c foot 2))]

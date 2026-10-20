@@ -14,6 +14,13 @@
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :within-s 40}
             {:event {:source :reflex :kind :ended :context {:reflex-id :part-cut-tree} :data {:kind :done}} :within-s 140}]
    :after [[:not-block [16 1 16] "oak_log"] [:not-block [16 6 16] "oak_log"] [:item "oak_log" [:>= 5]]]}
+  {:name "part-cut-tree-trigger-fells-a-trunk-hanging-three-blocks-up"
+   :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
+   :blocks [[:fill [16 0 16] [16 11 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
+            [:fill [16 4 16] [16 6 16] "oak_log"] [:fill [14 6 14] [18 8 18] "oak_leaves[persistent=true]"] [:fill [16 6 16] [16 6 16] "oak_log"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :within-s 40}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :part-cut-tree} :data {:kind :done}} :within-s 140}]
+   :after [[:not-block [16 4 16] "oak_log"] [:not-block [16 6 16] "oak_log"] [:item "oak_log" [:>= 1]]]}
   {:name "part-cut-tree-trigger-leaves-a-whole-tree"
    :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]

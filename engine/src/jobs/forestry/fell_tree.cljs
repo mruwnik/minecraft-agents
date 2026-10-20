@@ -154,6 +154,13 @@
   [c trees]
   (ctx/update-mem! c update :unreachable (fnil into []) (map (fn [t] [(get-in t [:column :x]) (get-in t [:column :z])]) trees)))
 
+(defn walk-target
+  "The cell the body walks to for tree t: its base, or the ground under a base raised over air (a part-cut trunk; no walk
+  reaches a cell in the air, so the search would flood the land)."
+  [p t]
+  (let [base (:base t)]
+    (or (when (part-cut/raised? p base) (part-cut/ground-cell p base)) base)))
+
 (defn ^:async choose-tree!
   "Choose the tree to fell among the candidates (at most targets/max-targets): the one the body walks to soonest
   (targets/nearest!), committed (commit-tree!). :searching while that search goes on; nil when no candidate is in
@@ -163,7 +170,7 @@
   [c radius species]
   (let [ts (vec (take targets/max-targets (candidates c radius species)))]
     (when (seq ts)
-      (let [a (await (targets/nearest! c (mapv :base ts) (approach-range) {:tag :fell-tree}))]
+      (let [a (await (targets/nearest! c (mapv #(walk-target (:primitives c) %) ts) (approach-range) {:tag :fell-tree}))]
         (case (:status a)
           :found (commit-tree! c (nth ts (:index a)))
           :searching :searching
@@ -438,7 +445,7 @@
   (let [{:keys [species radius at]} (:args c)
         t (if at (tree-at (:primitives c) at) (tree-near (:primitives c) radius species))
         n (if t (count (log/tree-logs c radius t)) 0)
-        [wl wm] (or (when t (get-in (await (ctx/quote c 'jobs.movement.go-to {:pos (:base t) :range 2})) [:uses :job-time])) [0 0])
+        [wl wm] (or (when t (get-in (await (ctx/quote c 'jobs.movement.go-to {:pos (walk-target (:primitives c) t) :range 2})) [:uses :job-time])) [0 0])
         least (+ 2 wl)
         mean (+ 2 wm 3 (* 1.5 n))]
     (cond-> {:uses {:job-time [least mean (max mean (time-s))]} :done [0 1 1]}
