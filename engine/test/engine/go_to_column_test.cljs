@@ -344,7 +344,8 @@
    :update-mem (fn [f more] (apply swap! mem* f more))
    :remember (fn [_ _ _] nil)
    :emit (fn [_ _ _] nil)
-   :hold-still (fn [_] nil)})
+   :hold-still (fn [_] nil)
+   :left (fn [] {})})
 
 (deftest a-y-goals-first-look-is-at-the-goal-cell
   (async done
