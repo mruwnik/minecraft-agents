@@ -1584,6 +1584,15 @@
     (is (= {:x 19 :y 64 :z 0} (look-edge/walkable-near p [23 64 0])) "the dead end, past it is rock")
     (is (= {:x 5 :y 64 :z 0} (look-edge/walkable-near p [5 64 3])))))
 
+(deftest walkable-near-stays-inside-the-closed-region-and-does-not-open-its-door
+  (let [{:keys [blocks light]} (lit-tunnel-box false)
+        raw-p (tu/fake {:time night :yaw -90 :blocks (assoc blocks "10,64,0" "oak_door" "10,65,0" "oak_door")})
+        _ (swap! (fake/state raw-p) assoc :light-default [0 0] :light light)
+        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})
+        p (perception/wrap raw-p per)]
+    (perception/pass! per)
+    (is (= {:x 9 :y 64 :z 0} (look-edge/walkable-near p [15 64 0])) "the far side of a shut door is not walked to")))
+
 (deftest an-edge-cell-is-looked-at-walked-towards-looked-at-again-then-counted-tried
   (async done
     (tu/run-async done

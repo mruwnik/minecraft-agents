@@ -5,7 +5,6 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
-            [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
@@ -66,11 +65,11 @@
             vec)))))
 
 (defn walkable-near
-  "The cell {:x :y :z} the body can walk to (the real ground, doors opened) nearest cell [x y z], or nil."
+  "The cell {:x :y :z} of the closed region the body stands in (doors shut, as pending reads it) nearest cell [x y z], or nil:
+  a player judging a room does not walk out through its doorway to look at the outside."
   [p [x y z]]
-  (let [kind-at (reach/lookup p reach-room/body-kind-of)
-        {:keys [x0 y0 z0]} (let [f (sh-sense/feet p)] {:x0 (:x f) :y0 (:y f) :z0 (:z f)})
-        cells (:cells (reach-room/flood-visit (partial reach/forward kind-at) [x0 y0 z0] reach-room/room-cells))
+  (let [feet (sh-sense/feet p)
+        cells (:cells (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) (:x feet) (:y feet) (:z feet)))
         best (first (sort-by (fn [c] (+ (js/Math.abs (- (aget c 0) x)) (js/Math.abs (- (aget c 1) y)) (js/Math.abs (- (aget c 2) z)))) cells))]
     (when best {:x (aget best 0) :y (aget best 1) :z (aget best 2)})))
 
