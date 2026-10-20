@@ -40,7 +40,7 @@
     outside the world), :bad-name (a :place that is not a valid name), :unsupported (a body with no pathWorld sensing)
     or :bad-args (a given :floor :health over 20, a :spend :job-time under 0.1); condition-failed :unknown-place (no
     recorded position). A call whose :ways leave out :walk ends nothing-possible :no-way.
-  - Ways (:ways, all by default): :walk, and those that change the world: :clear-seal (its own ledger blocks round a
+  - Ways (:ways, all by default): :walk, and those that change the world: :clear-seal (its own ledger blocks round the body shut in by them, or round a
     goal it cannot reach taken back, one jobs.access.cleanup child a call), :pillar (a pillar, a gap filled with a
     block), :clear-path (a door dug through a wall), :stair (a stair up, its own stair cut again) and :dig-out (out of
     its own shelter).

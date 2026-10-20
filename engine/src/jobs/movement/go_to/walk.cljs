@@ -226,12 +226,14 @@
 (def seal-clear-radius 3)
 
 (defn ^:async clear-goal-seal!
-  "A goal the walk could not reach (:goal-enclosed, :goal-cut-off, or a search that ran out of land: :exhausted, :ladder-gap)
+  "A goal the walk could not reach (:goal-enclosed, :goal-cut-off, or a search that ran out of land: :exhausted, :out-of-sight, :ladder-gap)
   with blocks of the body's own ledger within seal-clear-radius of it (a dig-in's seal beside a gate, a plug in a stair
-  mouth): one jobs.access.cleanup child takes them back. True when it ran, so the walk is planned again."
+  mouth), or a body shut in (:start-enclosed) with such blocks within seal-clear-radius of its feet (a retreat's seal
+  once the hostile is gone): one jobs.access.cleanup child takes them back. True when it ran, so the walk is planned again."
   [c pos result]
-  (let [near {:pos {:x (js/Math.floor (:x pos)) :y (js/Math.floor (:y pos)) :z (js/Math.floor (:z pos))} :radius seal-clear-radius}]
-    (when (and (ways/way? c :clear-seal) (#{:goal-enclosed :goal-cut-off :exhausted :ladder-gap} (:reason result)) (not (:seal-cleared (ctx/mem c)))
+  (let [[x y z] (if (= :start-enclosed (some-> (:reason result) keyword)) (end/feet-cell c) [(:x pos) (:y pos) (:z pos)])
+        near {:pos {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)} :radius seal-clear-radius}]
+    (when (and (ways/way? c :clear-seal) (#{:goal-enclosed :goal-cut-off :exhausted :out-of-sight :ladder-gap :start-enclosed} (some-> (:reason result) keyword)) (not (:seal-cleared (ctx/mem c)))
                (seq (ledger/near-of (ledger/open-entries (ctx/view c)) near)))
       (ctx/update-mem! c assoc :seal-cleared true)
       (await (ctx/call c :seal-cleanup 'jobs.access.cleanup {:job :all :near near :checks {:fit? '(always)}}))

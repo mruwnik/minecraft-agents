@@ -1,0 +1,24 @@
+;; A dig job cut by hostile-near: the retreat seals the body in a 1-wide lit tunnel and the zombie waits outside the seal
+;; (NoAI, so it stays). The cut job must not dig toward the zombie while it is in range (the dirt target lies beyond the
+;; seal, and a dirt block in the wall leaves the tunnel open for the zombie); once the zombie is gone it resumes and finishes. Tunnel x 7..29 at z 16, target dirt in the south wall at x 12, zombie at x 9.
+{:defaults
+ {:tags [:hostile :survival :retreat :underground]
+  :time :any
+  :plot {:height 8}
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile)}]
+  :limit-s 150}
+ :cases
+ [{:name "dig-cut-by-seal-waits-for-the-zombie-then-resumes"
+   :blocks [[:fill [6 0 12] [30 4 20] "stone"] [:fill [7 0 16] [29 1 16] "air"] [:set [12 0 17] "dirt"]
+            [:set [8 1 16] "torch"] [:set [13 1 16] "torch"] [:set [17 1 16] "torch"] [:set [23 1 16] "torch"] [:set [28 1 16] "torch"]]
+   :body {:at [20.5 0 16.5] :yaw 90 :inventory [["cobblestone" 8] ["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+   :act [[:job (jobs.blocks.dig {:pos #at [12 0 17]})]
+         [:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :job :kind :retreat_sealed} 60]
+         [:wait-s 25]
+         [:until-rcon "execute positioned $X $Y $Z if block ~12 ~ ~17 dirt" "Test passed" 3]
+         [:rcon "kill @e[type=zombie,$BOX]"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 30}
+            {:event {:source :job :kind :completed :data {:reason :dug}} :within-s 140 :of-job true}]
+   :after [[:block [12 0 17] "air"]]}]}

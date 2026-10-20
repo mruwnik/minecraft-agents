@@ -611,6 +611,31 @@
             (await (tick-out! eng clock 60))
             (is (= arrives? (boolean (:arrived @out))) (pr-str label @out))))))))
 
+(def body-seal-cells
+  "A 3x3x3 dirt box round the body (0 64 0) (0 65 0) it placed: a retreat's seal."
+  (vec (for [x [-1 0 1] y [64 65 66] z [-1 0 1]
+             :when (not (and (= [0 0] [x z]) (#{64 65} y)))]
+         [x y z])))
+
+(deftest a-body-shut-in-by-its-own-seal-takes-it-back-then-arrives
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label entries arrives?]
+                [["own seal in the ledger" (mapv (fn [cell] {:cell cell :item "dirt" :before "air" :job "j9" :purpose :retreat-seal :state :placed}) body-seal-cells) true]
+                 ["same blocks, not the body's" [] false]]]
+          (let [world {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (merge flat (zipmap (map #(clojure.string/join "," %) body-seal-cells) (repeat "dirt")))}
+                {:keys [eng clock]} (setup world [])
+                out (atom :not-done)
+                parent {:round (fn ^:async sealed-round [c]
+                                 (let [e (await (ctx/call c :kid 'jobs.movement.go-to {:pos [10 64 0] :range 0 :ways #{:walk :clear-seal}}))]
+                                   (if (= :continue e) :continue (do (reset! out (gts/result-of e)) (ctx/end c :done nil)))))}
+                eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
+            (ledger/write! (:store eng) entries)
+            (core/submit! eng '(recording-parent) {})
+            (await (tick-out! eng clock 60))
+            (is (= arrives? (boolean (:arrived @out))) (pr-str label (select-keys @out [:arrived :why])))))))))
+
 (deftest a-dirt-plug-of-the-bodys-own-in-a-wall-across-the-way-is-taken-back-near-the-goal
   (async done
     (tu/run-async done
