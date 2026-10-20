@@ -16,7 +16,7 @@
    :blocks [[:set [4 0 12] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:64},{Slot:1b,id:\"minecraft:cobblestone\",count:64}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
-   :expect [{:event {:source :job :kind :fetch.started :data {:args {:item "cobblestone"}}} :within-s 40 :of-job true}
+   :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 40 :of-job true}
             {:event {:source :job :kind :completed :data {:kind :done}} :within-s 220 :of-job true}]
    :after [[:block [18 0 12] "cobblestone"] [:block [27 0 21] "cobblestone"] [:block [22 0 17] "cobblestone"]]}
   {:name "no-chest-no-stone-fetch-fails"

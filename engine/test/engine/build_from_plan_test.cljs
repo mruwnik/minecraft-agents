@@ -1313,7 +1313,7 @@
                                        :want [:any "oak_fence" "spruce_fence"]}]}
               {:keys [eng p seen]} (start {:inventory [{:name "oak_fence" :count 2} {:name "spruce_fence" :count 10}]} {"row" plan})
               result (await (child-outcome eng job {:plan "row"} 200))]
-          (is (empty? (h/events-of seen :fetch.started)) "nothing is fetched: a listed choice is carried")
+          (is (empty? (filter #(= :need (:slot %)) (h/events-of seen :child_started))) "nothing is fetched: a listed choice is carried")
           (is (= 6 (:placed result)))
           (is (= {} (:short result))))))))
 

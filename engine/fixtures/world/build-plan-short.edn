@@ -26,14 +26,14 @@
                     {:id "cell" :cells [#at [20 0 16]] :want "dirt"}]}]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.build.from-plan {:plan "$plan:mixed" :fetch {:explore false}})]]
-   :expect [{:event {:source :job :kind :fetch.done} :within-s 100 :of-job true}
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :need :ending {:kind :done}}} :within-s 100 :of-job true}
             {:event {:source :job :kind :stopped} :within-s 130 :of-job true}]
    :after [[:block [20 0 16] "dirt"] [:item "stone_pickaxe" 1] [:not-block [22 0 16] "gold_block"]]}
   {:name "default-fetch-gathers-logs-and-crafts-planks"
    :blocks [[:fill [24 0 14] [24 3 14] "oak_log"] [:set [24 4 14] "oak_leaves[persistent=true]"]]
    :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [14 0 14] #at [15 0 14]] :want "oak_planks"}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
-   :expect [{:event {:source :job :kind :fetch.started} :within-s 30 :of-job true}
+   :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 30 :of-job true}
             {:event {:source :job :kind :completed :data {:missing []}} :within-s 140 :of-job true}]
    :after [[:block [14 0 14] "oak_planks"] [:block [15 0 14] "oak_planks"]]}
   {:name "fetch-false-names-the-short-item"
@@ -42,7 +42,7 @@
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 135 40"] [:wait-s 3]
          [:job (jobs.build.from-plan {:plan "$plan:floor" :fetch false})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-items :needs {"oak_planks" 2}}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :fetch.started} :for-s 30}]
+            {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 30}]
    :after [[:not-block [14 0 14] "oak_planks"]]
    :limit-s 60}
   {:name "grass-under-the-floor-says-short"
@@ -61,7 +61,7 @@
    :plans [{:id "ring" :metadata {:by "$body"} :parts [{:id "cell" :cells [#at [18 -1 16]] :want "cobblestone"}]}]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.build.from-plan {:plan "$plan:ring"})]]
-   :expect [{:event {:source :job :kind :fetch.done} :within-s 80 :of-job true}
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :need :ending {:kind :done}}} :within-s 80 :of-job true}
             {:event {:source :job :kind :completed :data {:missing []}} :within-s 130 :of-job true}]
    :after [[:block [18 -1 16] "cobblestone"]]}
   {:name "air-want-clears-the-cell"
@@ -72,7 +72,7 @@
                     {:id "wall" :cells [#at [20 0 15]] :want "dirt"}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:door"})]]
    :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :fetch.started} :for-s 20}]
+            {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 20}]
    :after [[:not-block [20 0 16] "stone"] [:not-block [20 0 17] "stone"] [:block [20 0 15] "dirt"]]
    :limit-s 120}
   {:name "in-a-pit-walks-out-and-places"
@@ -89,7 +89,7 @@
    :plans [{:id "ramp" :metadata {:by "$body"} :parts [{:id "r" :cells [#at [20 0 14] #at [21 0 14] #at [22 0 14] #at [23 0 14] #at [24 0 14]] :want [:any "cobblestone" "granite" "dirt"]}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:ramp"})]]
    :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :fetch.started} :for-s 20}]
+            {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 20}]
    :after [[:not-block [20 0 14] "air"] [:not-block [24 0 14] "air"]]
    :limit-s 120}
   {:name "any-want-with-none-carried-fetches-the-first-listed"
@@ -97,7 +97,7 @@
    :plans [{:id "ramp" :metadata {:by "$body"} :parts [{:id "r" :cells [#at [20 0 14] #at [21 0 14]] :want [:any "cobblestone" "granite" "dirt"]}]}]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.build.from-plan {:plan "$plan:ramp"})]]
-   :expect [{:event {:source :job :kind :fetch.started} :within-s 40 :of-job true}
+   :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 40 :of-job true}
             {:event {:source :job :kind :completed :data {:missing []}} :within-s 130 :of-job true}]
    :after [[:block [20 0 14] "cobblestone"]]}
   ;; card a8b2455b: a from-plan check that cannot pass waits with its reason, a few events at most, not a warning each tick (farm.tend: farm-tend-zones.edn keeps tend waiting :nothing-to-do)

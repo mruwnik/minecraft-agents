@@ -14,6 +14,6 @@
  :cases
  [{:name "table-stands-in-the-plans-own-cells-then-the-fences-are-placed"
    :act [[:job (jobs.build.from-plan {:plan "$plan:fences"})]]
-   :expect [{:event {:source :job :kind :fetch.done} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :need :ending {:kind :done}}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:block [11 0 12] "oak_fence"] [:block [11 1 12] "oak_fence"] [:block [13 1 12] "oak_fence"]]}]}

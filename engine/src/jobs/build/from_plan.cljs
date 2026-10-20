@@ -88,7 +88,7 @@
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
-   :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
+   :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell), :falling-block (a dig under sand or gravel that falls in)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
    :fetch {:doc "get the blocks and tools the plan lacks (jobs.lib.need): true, a set of kinds or a map of limits; false builds with what is carried" :spec need/option? :default {:explore true}}
    :ignore-zones? :shared})
 
@@ -103,6 +103,7 @@
    ::off-bed-tries {:default 3 :doc "Walks off a bed or bottom slab the body stands on, before the roof cells over it are given up." :spec (a/int-in 1 nil)}
    ::hole-depth {:default 2 :doc "Levels of walls round the body from its feet up that make it a body in a hole, whose walks may climb out." :spec (a/int-in 1 nil)}
    ::hole-walks {:default 2 :doc "Walks in a row that fail from a hole after which the build stops :shut-in." :spec (a/int-in 1 nil)}
+   ::look-range {:default 16 :doc "Cells farther than this from the eye are walked to, not looked at: they may be unloaded, which a look cannot tell." :spec (a/num-in 0 nil)}
    ::cell-s {:default 3 :doc "Seconds one cell of the plan is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
 
 (defn give-up [] (settings/get settings ::give-up))
@@ -129,11 +130,11 @@
       later? (contract/later :plan-trouble trouble :why trouble)
       :else (contract/never :plan-trouble trouble :why trouble))))
 
-(def look-range "Cells farther than this from the eye are walked to, not looked at: they may be unloaded, which a look cannot tell." 16)
+(defn look-range [] (settings/get settings ::look-range))
 
 (defn no-items-cause
   "Why there is nothing to build, dig, fetch or look at: the cells' items are not carried and no fetch is due. While the
-  cells are unseen but all unknown and within look-range, the cause carries :look-at them: the verdict waits for a look."
+  cells are unseen but all unknown and within ::look-range, the cause carries :look-at them: the verdict waits for a look."
   [c]
   (let [closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
         cached (judged-plan c)
@@ -148,7 +149,7 @@
                   (seq (buildable cells carried {}))
                   (seq (digging cells)))
       (let [here (u/self-pos c)
-            near (filter #(and (<= (u/eye-dist here %) look-range) (sense/unknown? (:primitives c) %)) (sense/targets (:primitives c) here cells-of #{}))]
+            near (filter #(and (<= (u/eye-dist here %) (look-range)) (sense/unknown? (:primitives c) %)) (sense/targets (:primitives c) here cells-of #{}))]
         (cond
           (and (seq hidden) (not= (count near) (count cells-of))) nil
           (and (empty? hidden) (some? (need-of c cells))) nil
@@ -158,7 +159,7 @@
 
 (def no-items
   "Later :no-items {:plan :part :needs} when there is nothing to build, dig, fetch or look at: the cells' items are
-  not carried and no fetch is due; a :look first while unseen cells are all within look-range."
+  not carried and no fetch is due; a :look first while unseen cells are all within ::look-range."
   (fn [c]
     (if-let [cause (no-items-cause c)]
       (checks/cause-status (if (:look-at cause) :look :later) cause)
@@ -599,7 +600,7 @@
   [c w e]
   (let [cause (:cause e)
         failed (if (map? cause) (or (:why cause) (:reason cause)) (contract/cause-key e))]
-    (ctx/update-mem! c #(-> (dissoc % :fetching) (assoc-in [:fetch-failed (plan/fetch-key w)] {:failed failed})))))
+    (ctx/update-mem! c #(-> % (assoc-in [:fetch-failed (plan/fetch-key w)] {:failed failed})))))
 
 (defn ^:async fetch-step!
   "Fetch what the plan lacks (jobs.lib.need) when a fetch is due: :continue while the child waits on the world, :again
@@ -607,20 +608,12 @@
   [c]
   (when-let [w (plan/problem c)]
     (let [o (assoc (select-keys (need/opts c plan/fetch-job) [:how :explore]) :for-plan (:plan (:args c)))
-          key (plan/fetch-key w)
-          what (or (:item w) (str "a tool for " (:block w)))
-          _ (when-not (= key (:fetching (ctx/mem c)))
-              (ctx/update-mem! c assoc :fetching key)
-              (ctx/emit! c :fetch.started :info {:for (:reason w) :args (select-keys w [:item :block])
-                                                 :text (str "fetching " what " for " (name (:reason w)))}))
           e (await (if (= :need (:reason w))
                      (need/item! c (:item w) (:count w) o)
                      (need/tool! c {:block (:block w)} o)))]
       (cond
         (= :continue e) :continue
-        (= :done (:kind e)) (do (ctx/update-mem! c dissoc :fetching)
-                                (ctx/emit! c :fetch.done :info {:for (:reason w) :text (str "fetched " what)})
-                                :again)
+        (= :done (:kind e)) :again
         :else (do (book-failed! c w e) :again)))))
 
 (defn ^:async step [c]
