@@ -73,6 +73,11 @@
     (is (= 3 (ws/pending marked #{} 1)))
     (is (nil? (ws/pending marked #{3} 1)))))
 
+(deftest marks-skip-swim-steps-and-the-step-leaving-them
+  (let [steps [(st 1 64 0 :start) (assoc (st 2 64 0 :swim) :swim true) (st 3 64 0 :walk) (st 4 64 0 :walk)]
+        marked (ws/mark-steps steps (constantly true))]
+    (is (= [nil nil nil true] (mapv :unseen-floor marked)) "no gate under water or on the step out of it; the next dry step keeps its")))
+
 (deftest sense-resolves-a-plain-floor-and-stops-at-another
   (let [marked (ws/mark-steps road (fn [x y z] (= [4 61 0] [x y z])))
         env (fn [answer] {:see (constantly answer) :plain? #(= "stone" %)})

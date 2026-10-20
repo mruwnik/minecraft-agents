@@ -6,7 +6,7 @@
 // remembered as tried (no re-read) and reads UNLOADED.
 // With unknown {id, known, ...}: a copied section is masked once, every cell the body never saw or felt reading unknown.id
 // (known(cx, sy, cz), sy the WORLD section y, is the body's memory of that section, ids + 1 and 0 for never seen, or null:
-// all unseen); a known cell reads its live id. The snapshot carries unknown (the planner's options.unknown).
+// all unseen); a known cell reads its live id. unknown.blocked, a Set of "x,y,z" cells the body looked at and still could not see, reads unknown.blockedId (stone: hidden behind other blocks, as rock is). The snapshot carries unknown (the planner's options.unknown).
 import { createSnapshot, sectionIds, UNLOADED } from './snapshot.mjs'
 
 const mask = (ids, memory, id) => {
@@ -16,6 +16,13 @@ const mask = (ids, memory, id) => {
 
 export function liveSnapshot (world, { minY, height, unknown }) {
   const inner = createSnapshot({ minY, height })
+  const block = (ids, u, cx, sy, cz) => {
+    for (const key of u.blocked ?? []) {
+      const [x, y, z] = key.split(',').map(Number)
+      if (x >> 4 === cx && (y - minY) >> 4 === sy && z >> 4 === cz) ids[(((y - minY) & 15) << 8) | ((z & 15) << 4) | (x & 15)] = u.blockedId
+    }
+    return ids
+  }
   const columns = new Map() // "cx,cz" -> column or null
   const tried = new Set() // "cx,sy,cz"
 
@@ -34,7 +41,7 @@ export function liveSnapshot (world, { minY, height, unknown }) {
     const container = columnAt(cx, cz)?.sections[sy]?.data
     if (!container) return
     const ids = sectionIds(container)
-    inner.setSection(cx, sy, cz, unknown ? mask(ids, unknown.known(cx, sy + (minY >> 4), cz), unknown.id) : ids)
+    inner.setSection(cx, sy, cz, unknown ? block(mask(ids, unknown.known(cx, sy + (minY >> 4), cz), unknown.id), unknown, cx, sy, cz) : ids)
   }
 
   const inRange = y => y >= minY && y < minY + height

@@ -28,6 +28,8 @@
 
 (def max-surfacings "Walks to air one go-to call makes at most." 3)
 
+(def max-search-rounds "Rounds a swim to the air it knows keeps searching for its way: it is a few cells, and the air is running out." 20)
+
 (def look-args "breath/find-air!'s look: columns within :radius, cells up to :reach above the feet." {:radius 2 :reach 10})
 
 (def air-radius "Columns this far sideways are read for air when the looks found none nearer (breathe's :air-radius default)." 8)
@@ -132,8 +134,11 @@
       (do
         (counted)
         (ctx/emit! c :go-to.surfacing :info {:at target :text (str why ": swimming up to " [(:x target) (:y target) (:z target)] " first")})
-        (let [{:keys [status]} (await (near/walk-round! c target 0 walk-opts))]
-          (contains? #{"arrived" "partial" "searching"} status))))))
+        (loop [n 0]
+          (let [{:keys [status]} (await (near/walk-round! c target 0 walk-opts))]
+            (if (and (= "searching" status) (< n max-search-rounds) (breath/head-under? p))
+              (recur (inc n))
+              (contains? #{"arrived" "partial" "searching"} status))))))))
 
 (def breath-wait-ms "One wait of breathe-back!." 250)
 

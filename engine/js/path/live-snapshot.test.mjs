@@ -108,7 +108,7 @@ const memoryRig = () => {
   const asked = []
   const known = (cx, sy, cz) => { asked.push([cx, sy, cz]); return cx === 0 && sy === 4 && cz === 0 ? memory : null }
   const unknown = { id: id('void_air'), known }
-  return { snapshot: liveSnapshot(world, { ...SIZE, unknown }), asked, unknown }
+  return { snapshot: liveSnapshot(world, { ...SIZE, unknown }), asked, unknown, world }
 }
 
 test('with unknown, a cell the body knows reads its live id', () => {
@@ -119,6 +119,15 @@ test('with unknown, a cell the body knows reads its live id', () => {
 
 test('with unknown, a cell the body never saw in a known section reads the mask id', () => {
   assert.equal(memoryRig().snapshot.stateAt(5, 70, 4), id('void_air'))
+})
+
+test('with unknown, a cell in the blocked set reads the blocked id, others stay masked', () => {
+  const { unknown, world } = memoryRig()
+  unknown.blockedId = id('stone')
+  unknown.blocked = new Set(['5,70,4'])
+  const masked = liveSnapshot(world, { ...SIZE, unknown })
+  assert.equal(masked.stateAt(5, 70, 4), id('stone'))
+  assert.equal(masked.stateAt(6, 70, 4), id('void_air'))
 })
 
 test('with unknown, the memory is asked by world section y (minY offset), not the snapshot section index', () => {

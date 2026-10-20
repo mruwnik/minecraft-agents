@@ -33,11 +33,11 @@
 (defn unknown-spec
   "go-to's :unknown as the mask spec of one go-to call (the planner's options.unknown less what path-world adds): the prices
   (jobs.lib.cost/walk-unknown-prices) and one missed Set, shared by every pathWorld made with this spec (the floors the
-  walk looked for and could not see)."
+  walk looked for and could not see), and one blocked Set of cells it looked at and could not see (they read as stone)."
   []
   (let [{:keys [cell floor peek-s aim-s see-lit-depth light-depth]} (cost/walk-unknown-prices)]
     #js {:cell cell :floor floor :peekS peek-s :aimS aim-s :seeLitDepth see-lit-depth :lightDepth light-depth :missed (js/Set.)
-         :noLight (js/Set.)}))
+         :noLight (js/Set.) :blocked (js/Set.)}))
 
 (def torch-base*
   (delay (let [^js t (blocks/default-state-table)
@@ -84,7 +84,7 @@
            known (when unknown (memory-sections p))
            mask (when known
                   (js/Object.assign #js {} unknown
-                                    #js {:id (first (blocks/state-ids table "void_air")) :known known
+                                    #js {:id (first (blocks/state-ids table "void_air")) :blockedId (first (blocks/state-ids table "stone")) :known known
                                          :seeDepth (see-depth-now p) :seeLit (look/see-lit-fn p)}))]
        (when-let [pw (if mask (.pathWorld p mask) (.pathWorld p))]
          (js/Object.assign #js {:table table :space space/space} pw))))))
@@ -99,7 +99,7 @@
   where a torch failed and the torch price."
   [pw]
   (when-let [^js u (unknown-of pw)]
-    [(.-size ^js (.-missed u)) (.-seeDepth u) (some-> ^js (.-noLight u) .-size) (.-lightCost u)]))
+    [(.-size ^js (.-missed u)) (.-size ^js (.-blocked u)) (.-seeDepth u) (some-> ^js (.-noLight u) .-size) (.-lightCost u)]))
 
 (defn wall-id
   "A state id of a full block with no collision tricks (stone, the first state that is one), of a state table."

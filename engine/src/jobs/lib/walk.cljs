@@ -5,8 +5,11 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [engine.ctx :as ctx]
+            [engine.game :as game]
             [engine.path.blocks :as blocks]
             [engine.path.executor :as executor]
+            [jobs.lib.look :as look]
+            [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.lib.walk.light :as wlight]
             [jobs.lib.walk.plan :as wplan]
@@ -247,25 +250,92 @@
 
 (defn light-wait-ms [] (settings/get settings ::light-wait-ms))
 
+(def look-ahead-steps "Steps ahead of the body whose own cells a masked walk looks at before it commits to them." 3)
+
+(defn first-unseen-step
+  "The index of the first step from 1 on whose feet or head cell the body has never seen and not looked at (looked, a set
+  of cells), nil when there is none."
+  [p steps looked]
+  (let [new? (fn [cell] (and (not (contains? looked cell)) (sense/unknown? p cell)))]
+    (first (keep-indexed (fn [i {:keys [x y z]}]
+                           (when (and (pos? i) (or (new? [x y z]) (new? [x (inc y) z]))) i))
+                         steps))))
+
+(defn occluded?
+  "Whether a seen solid block lies between the body's eye and the centre of cell: what it cannot see there is rock, not
+  a place it has failed to look at."
+  [c [x y z :as cell]]
+  (let [p (:primitives c)
+        {ex :x ey :y ez :z} (let [pos (u/self-pos c)] (update pos :y + game/eye-height))
+        tx (+ x 0.5) ty (+ y 0.5) tz (+ z 0.5)
+        d (js/Math.hypot (- tx ex) (- ty ey) (- tz ez))
+        n (js/Math.ceil (/ d 0.2))]
+    (boolean (some (fn [k]
+                     (let [t (/ k n)
+                           at [(js/Math.floor (+ ex (* t (- tx ex)))) (js/Math.floor (+ ey (* t (- ty ey)))) (js/Math.floor (+ ez (* t (- tz ez))))]]
+                       (and (not= at cell)
+                            (true? (some-> (u/sensed p (zipmap [:x :y :z] at)) .-fullCube)))))
+                   (range 1 n)))))
+
+(defn ^:async look-ahead!
+  "Over a mask (go-to :unknown) a step may enter cells the body never saw, which the plan reads as air: look round and at the
+  next look-ahead-steps steps' cells first, as a player looks before climbing into the dark. A cell that turns out solid, or
+  stays unseen behind a seen solid block (rock: added to the mask's blocked Set), ends the walk {:status :replan :why
+  :changed}, so the next plan avoids it. {:end done} then; else {:looked cells} the walk goes on over."
+  [c steps]
+  (let [p (:primitives c)
+        cells (for [{:keys [x y z]} (take look-ahead-steps (rest steps)) y' [y (inc y)]] [x y' z])
+        unseen (filter #(sense/unknown? p %) cells)]
+    (await (look/survey! c :near))
+    (await (sense/look-at-unknown! c (sort-by #(u/eye-dist (u/self-pos c) %) unseen) look-ahead-steps))
+    (let [hidden (filter #(and (sense/unknown? p %) (occluded? c %)) cells)
+          solid (filter #(true? (some-> (u/sensed p (zipmap [:x :y :z] %)) .-fullCube)) cells)]
+      (doseq [[x y z] hidden] (.add ^js (.-blocked ^js (:unknown c)) (str x "," y "," z)))
+      (if-let [cell (first (concat solid hidden))]
+        (let [{:keys [x y z]} (u/self-pos c)]
+          {:end {:status :replan :why :changed :cells [cell] :at [x y z] :step 1}})
+        {:looked unseen}))))
+
+(defn ^:async walk-lit!
+  "Follow steps once, a floor the plan lights (:light) lit on the way: walk!'s inner loop."
+  [c steps timeout-s watch]
+  (loop [steps steps base 0 ms 0]
+    (let [[done wms] (await (steer-walk! c steps (max 1 (- timeout-s (/ ms 1000))) watch))
+          ms (+ ms wms)
+          rebase (fn [d] (cond-> d (:step d) (update :step + base)))]
+      (if-not (= :light (:status done))
+        [(rebase done) ms]
+        (if-let [end (await (wlight/light! c steps done (:see (gate-env (:primitives c) steps)) (light-wait-ms)))]
+          [(rebase end) ms]
+          (let [k (:step done)]
+            (recur (update (subvec steps (dec k)) 1 dissoc :light) (+ base (dec k)) ms)))))))
+
 (defn ^:async walk!
   "Follow steps once. [result ms]: the executor's done map, or {:status :stuck ...} on a timeout,
   {:status :failed ...}; ms is the wall time of the steer acts. With a watch (see watch-stop), the walk also stops at a step
   boundary with {:status :replan ...} when the way ahead changed or a partial plan is due a refresh. (:on-pose c), when
   set, is called with each tick's pose {:x :y :z ...} (go-to records its approach with it). A floor the plan lights
   (:light) that the gate cannot see is lit by a torch (light!) and the walk goes on from its takeoff, within timeout-s
-  of steering in all; light!'s other ends end the walk."
+  of steering in all; light!'s other ends end the walk. Over a mask (go-to :unknown) the walk goes in legs that end
+  before the first step into cells the body has not seen, looks at them there (look-ahead!) and goes on, or ends
+  {:status :replan :why :changed}."
   ([c steps timeout-s] (walk! c steps timeout-s nil))
   ([c steps timeout-s watch]
-   (loop [steps steps base 0 ms 0]
-     (let [[done wms] (await (steer-walk! c steps (max 1 (- timeout-s (/ ms 1000))) watch))
-           ms (+ ms wms)
+   (loop [steps steps base 0 ms 0 looked #{}]
+     (let [j (when (:unknown c) (first-unseen-step (:primitives c) steps looked))
            rebase (fn [d] (cond-> d (:step d) (update :step + base)))]
-       (if-not (= :light (:status done))
-         [(rebase done) ms]
-         (if-let [end (await (wlight/light! c steps done (:see (gate-env (:primitives c) steps)) (light-wait-ms)))]
-           [(rebase end) ms]
-           (let [k (:step done)]
-             (recur (update (subvec steps (dec k)) 1 dissoc :light) (+ base (dec k)) ms))))))))
+       (cond
+         (= 1 j) (let [r (await (look-ahead! c steps))]
+                   (if-let [end (:end r)]
+                     [(rebase end) ms]
+                     (recur steps base ms (into looked (:looked r)))))
+         (nil? j) (let [[done wms] (await (walk-lit! c steps (max 1 (- timeout-s (/ ms 1000))) watch))]
+                    [(rebase done) (+ ms wms)])
+         :else (let [[done wms] (await (walk-lit! c (subvec steps 0 j) (max 1 (- timeout-s (/ ms 1000))) watch))
+                     ms (+ ms wms)]
+                 (if (= :arrived (:status done))
+                   (recur (subvec steps (dec j)) (+ base (dec j)) ms looked)
+                   [(rebase done) ms])))))))
 
 (defn partial-end
   "A partial plan that was walked to its end is not an arrival unless the body is in range of the goal: then the walk

@@ -124,11 +124,14 @@
 
 (defn mark-steps
   "steps with :unseen-floor on each step after the first that stands on its floor (h 0) where (unknown-floor? x y z) of
-  that floor cell is true."
+  that floor cell is true. A step in water or leaving it stands on nothing the body could stop to look at: holding still
+  there only spends air."
   [steps unknown-floor?]
   (vec (map-indexed (fn [i s]
                       (cond-> s
-                        (and (pos? i) (zero? (:h s)) (apply unknown-floor? (floor-cell s))) (assoc :unseen-floor true)))
+                        (and (pos? i) (zero? (:h s)) (not (:swim s)) (not (:swim (nth steps (dec i))))
+                             (apply unknown-floor? (floor-cell s)))
+                        (assoc :unseen-floor true)))
                     steps)))
 
 (defn pending
