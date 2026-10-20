@@ -26,7 +26,7 @@
   looks again (a pour that fails, or a bucket gone before it, has the cell refilled with dirt (a jobs.blocks.place child); a cell that stays open is named in :holes and ends the call, a refilled one only drops that spot); one bucket wets one spot, so it ends when no cell is dry, no water bucket is left or no spot helps. A pour
   counts only once the cell is seen as water. A water bucket is fetched (jobs.lib.need, :fetch) when dry cells are left and none is carried; a
   failed fetch ends the call with its ending as the :because. Zones: a spot in another owner's zone or claim, or in a
-  plan's footprint (unless :for-plan), is not used, with an irrigate.declined warn once.
+  plan's footprint (unless :for-plan), is not used, with an irrigate.declined warn once. With no field cell seen yet it looks round even in the dark (the exposure check starts once a field cell is seen).
   Refused before it starts: impossible {:reason :bad-args :why}; failed conditions {:reason :no-zones} (unless :ignore-zones?)
   and {:reason :need :item \"water_bucket\"} (dry cells, none carried, :fetch false).
   Ends with data {:poured [cells] :dry [cells still dry] :unknown [cells with unseen reach] :failed [spots given up] :restored
@@ -49,7 +49,6 @@
 
 (def target [:from :to :center :radius])
 (def defaults {:spend {:job-time ::job-time-s}})
-(def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
 
 (def field-ground (conj till/tillable "farmland"))
@@ -60,6 +59,15 @@
   (let [p (:primitives c)
         cs (try (till/cells (:args c)) (catch :default _ []))]
     (filterv #(field-ground (u/seen-name p %)) cs)))
+
+;; The first step only looks: with no field cell seen there is nothing to risk the dark for. Seen cells bring the exposure check back.
+(def safe-at-box (ready/safe-at-by-night work-place/spot))
+(def safe?
+  (with-meta
+   (fn [c] (if (empty? (field-cells c))
+             (contract/ok :looking "no field cell seen yet: looking costs no exposure")
+             (safe-at-box c)))
+   (meta safe-at-box)))
 
 (defn waters
   "The seen water as a set of [x y z] near the cells; a cell poured is water only once it is seen as such."

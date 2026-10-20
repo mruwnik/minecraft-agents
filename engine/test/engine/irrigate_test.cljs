@@ -81,6 +81,14 @@
               r (await (tu/child-outcome eng job (args 3) 20))]
           (is (= {:status :stopped :reason :nothing-seen} (ending-of r))))))))
 
+(deftest a-box-with-no-field-ends-nothing-seen-in-the-dark-instead-of-waiting-for-light
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:inventory bucket :blocks (strip 0) :time 15000})
+              r (await (tu/child-outcome eng job (args 3) 20))]
+          (is (= {:status :stopped :reason :nothing-seen} (ending-of r))))))))
+
 (deftest a-cell-whose-whole-reach-is-seen-is-dry-and-gets-water
   (async done
     (tu/run-async done

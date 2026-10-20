@@ -39,4 +39,10 @@
    :act [[:job (jobs.farm.irrigate {:from #xyz [12 4 16] :to #xyz [20 4 16]})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :nothing-seen}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 10 :until {:source :job :kind :stopped}}]
+   :after [[:item "water_bucket" 1]]}
+  {:name "box-over-air-in-the-dark-sees-no-field-and-stops"
+   :plot {:height 8 :floor "grass_block" :light :dark}
+   :act [[:job (jobs.farm.irrigate {:from #xyz [12 4 16] :to #xyz [20 4 16]})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :nothing-seen}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 10 :until {:source :job :kind :stopped}}]
    :after [[:item "water_bucket" 1]]}]}
