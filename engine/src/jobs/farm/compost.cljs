@@ -73,6 +73,7 @@
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::max-strikes {:default 3 :doc "Failures in a row before the job gives up." :spec (a/int-in 1 nil)}
+   ::meal-looks {:default 5 :doc "Looks at the composter right after a take for the meal it dropped." :spec (a/int-in 0 nil)}
    ::max-waits {:default 6 :doc "Yields on a level-7 composter that count as one failure." :spec (a/int-in 1 nil)}
    ::meal-look {:default 20 :doc "Bone meal on the ground is looked for this far from the body, in blocks." :spec (a/num-in 0 nil)}
    ::meal-reach {:default 3 :doc "Bone meal this close to the composter counts as its own, in blocks." :spec (a/num-in 0 nil)}})
@@ -99,8 +100,18 @@
      :uses {:job-time [2 (* 40 times) (* 200 times)]}
      :done [0 times times]}))
 
-(defn level-of [b]
-  (or (some-> b .-properties .-level) 0))
+(defn level-of
+  "The composter's level as a number: perception keeps block properties as strings."
+  [b]
+  (or (some-> b .-properties .-level js/parseInt) 0))
+
+(defn ^:async level-now!
+  "The composter's level after a look at it: it changes with every item fed, and the last sight of it is old by then."
+  [c pos]
+  (let [{:keys [x y z]} (:pos (places/parse-pos pos))]
+    (await (ctx/act c :look #js {:pos #js {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}}))
+    (look/see! c)
+    (level-of (u/seen-block (:primitives c) pos))))
 
 (defn composter-allowed?
   "Whether the job may use the composter at pos (zones, claims, footprints; one warn when refused)."
@@ -133,6 +144,16 @@
        (filter #(= "bone_meal" (some-> (.-item %) .-name)))
        (filter #(<= (u/dist at (u/pos-of (.-pos %))) (settings/get settings ::meal-reach)))
        first))
+
+(defn ^:async collect-meal!
+  "Right after a take, up to ::meal-looks looks at the composter for the dropped meal, collecting it when seen: the round ends
+  on done? as soon as the take is counted, and the drop shows a moment after it."
+  [c pos]
+  (loop [n 0]
+    (await (level-now! c pos))
+    (if-let [meal (meal-near c pos)]
+      (await (ctx/act c :collect #js {:id (.-id meal)}))
+      (when (< n (settings/get settings ::meal-looks)) (recur (inc n))))))
 
 (defn problem
   "The cause the job cannot start: no composter seen or allowed, else nothing to feed to one that has no bone meal
@@ -206,14 +227,14 @@
               (if (= "collected" (.-status r)) :again (strike! c level)))
 
             (>= taken times)
-            (let [fed (:fed mem {})]
-              (finish! c {:level level}))
+            (finish! c {:level level})
 
             :else
             (let [w (await (common/walk! c pos 3 {:tolls (tc/walk-tolls c (:pos (places/parse-pos pos)))}))]
               (case w
                 :continue :continue
                 :blocked (strike! c level)
+                (let [level (await (level-now! c pos))]
                 (cond
                   (not (composter-allowed? c pos))
                   (finish! c {:reason :no-composter})
@@ -222,6 +243,7 @@
                   (let [r (await (ctx/act c :useOn #js {:pos (clj->js pos) :face "up"}))]
                     (if (= "used" (.-status r))
                       (do (ctx/update-mem! c #(-> % (update :taken (fnil inc 0)) (assoc :strikes 0)))
+                          (await (collect-meal! c pos))
                           :again)
                       (strike! c level)))
 
@@ -243,7 +265,7 @@
                     (if (pos? consumed)
                       (do (ctx/update-mem! c #(-> % (update-in [:fed name] (fnil + 0) consumed) (assoc :strikes 0)))
                           :again)
-                      (strike! c level))))))))))))
+                      (strike! c level)))))))))))))
 
 (defn ^:async round
   "The whole attempt: loop the steps until one ends; :continue only while a walk waits on the world."

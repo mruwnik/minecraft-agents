@@ -1,8 +1,9 @@
 ;; Cards 2d8e72f2, aed44d73: a pit whose dug block is not placeable (coal_ore drops coal) is roofed with a carried log; with no log
-;; it stops "nothing to roof the pit with". The zigzag pit lays a log in the roof cell (y -2) and one in the side plug. Coal pad y -6..-1 under the body (the plot floor is over void).
+;; it stops "nothing to roof the pit with". The zigzag pit lays a log in the roof cell (y -2) and one in the side plug. Coal pad y -6..-1 under the body (the plot floor is over void). Open sky: in the default sealed cell its ceiling already roofs the pit, so no log is needed.
 {:defaults
  {:tags [:night :survival :shut-in]
   :time :any
+  :plot {:height 8 :length 32 :width 32 :light :sky}
   :blocks [[:fill [8 -6 8] [24 -1 24] "coal_ore"]]
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
  :cases
