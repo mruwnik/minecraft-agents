@@ -7,6 +7,7 @@
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger]
+            [jobs.lib.look :as look]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]))
 
@@ -241,11 +242,12 @@
       (is (= {:chance open-night-chance :lowered-by #{:light}} (dissoc e :light-in)))
       (is (pos? (:light-in e)) "and the seconds till light"))))
 
-(deftest exposure-of-a-walk-out-of-shelter-to-a-lit-cell-is-no-chance
-  (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks pit}))]
-    (with-redefs [sh-sense/seen-cell? (constantly false) sh-sense/block-light-at (constantly 14)]
-      (is (= {:chance 0.0 :lowered-by #{}} (cost/exposure p {:x 3 :y 64 :z 0})) "an unseen cell near the feet is judged by its loaded light")
-      (is (pos? (:chance (cost/exposure p {:x 15 :y 64 :z 0}))) "a far unseen cell is guessed dark"))))
+(deftest exposure-of-a-walk-out-of-shelter-judges-an-unseen-cell-only-where-it-could-be-seen
+  (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks pit}))
+        exposure (fn [glimpse? to] (with-redefs [sh-sense/seen-cell? (constantly false) sh-sense/block-light-at (constantly 14) look/glimpse? (constantly glimpse?)]
+                                     (cost/exposure p to)))]
+    (is (= {:chance 0.0 :lowered-by #{}} (exposure true {:x 3 :y 64 :z 0})) "a lit cell in clear line is made out")
+    (is (pos? (:chance (exposure false {:x 3 :y 64 :z 0}))) "a lit cell behind a wall stays unknown, so dark")))
 
 (deftest exposure-of-a-walk-in-the-open-is-the-spawn-chance-at-its-end
   (let [night (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}}}))

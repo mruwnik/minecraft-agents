@@ -390,6 +390,18 @@
   [p]
   (some-> (aget p "perception") rays/near-of))
 
+(defn glimpse?
+  "Whether the cell {:x :y :z} could be seen by turning to it: a clear line from the eye (nothing between, no wall) and it is lit enough to see or within near-of.
+  False without a perception."
+  [p {:keys [x y z]}]
+  (boolean
+   (when-let [^js raw (some-> (aget p "perception") :raw)]
+     (let [^js eye (.eye raw)
+           lit? (when-let [f (see-lit-fn p)] (= 1 (f x y z)))
+           near? (<= (js/Math.hypot (- (+ x 0.5) (.-x eye)) (- (+ y 0.5) (.-y eye)) (- (+ z 0.5) (.-z eye))) (near-of p))]
+       (and (or lit? near?)
+            (rays/line-clear? raw (.sightTable raw) (.-x eye) (.-y eye) (.-z eye) (+ x 0.5) (+ y 0.5) (+ z 0.5)))))))
+
 (defn drops
   "Item entities of name within radius as [{:id :pos :count}], nearest first; only those within toss-reach of near
   (a position) when given."

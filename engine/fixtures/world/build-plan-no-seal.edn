@@ -35,6 +35,7 @@
    :after [[:block [10 1 10] "dirt"] [:block [13 2 13] "dirt"] [:block [13 3 10] "dirt"] [:block [11 2 13] "dirt"]
            [:not-block [11 2 11] "dirt"] [:not-block [12 2 12] "dirt"]]}
   {:name "clear-doorway-leaves"
+   ;; Sea lanterns light the plot so the walk out through the cleared doorway is no wait for dawn (a body that sees a lit cell is not in the dark); this case pins that the leaves in the doorway are cleared and the hut finished.
    :plans [{:id "hut" :metadata {:by "$body"}
             :parts [{:id "walls" :box [#at [10 0 10] #at [13 1 10]] :want "dirt"}
                     {:id "wall-w" :box [#at [10 0 11] #at [10 1 12]] :want "dirt"}
@@ -44,7 +45,7 @@
                     {:id "door" :cells [#at [11 0 13] #at [11 1 13]] :want :clear}
                     {:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]
    :blocks [[:set [11 1 13] "oak_leaves[persistent=true]"] [:set [11 0 13] "oak_leaves[persistent=true]"] [:set [9 0 12] "sea_lantern"] [:set [14 0 12] "sea_lantern"]]
-   :body {:at [11.5 0 16.5]}
+   :body {:at [11.5 0 17.5]}
    :act [[:job (jobs.build.from-plan {:plan "$plan:hut"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 140 :until {:source :job :kind :completed}}]

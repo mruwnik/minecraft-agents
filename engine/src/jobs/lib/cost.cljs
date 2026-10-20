@@ -120,10 +120,6 @@
 (def per-danger value/per-danger)
 (def spawn-chance value/spawn-chance)
 
-(def judged-here-within
-  "Blocks: a cell this near the feet whose light is loaded is judged by it, seen or not (a lit pit around the body is made out; same reach as jobs.lib.ready ::unseen-judged-here-within)."
-  6)
-
 (defn exposure
   "{:chance :lowered-by} of the walk of p to `to` ({:x :y :z}, a column {:x :z} at the feet's height; floored): the mob spawn chance per second it meets and
   what lowers it (with :light-in, the seconds until light, when :light does), data the readiness checks read (empty: nothing foreseeable does, so never). A walk that leaves shelter
@@ -137,9 +133,7 @@
    (let [to (update-vals (assoc to :y (or (:y to) (:y (sh-sense/feet p)))) js/Math.floor)
          cell [(:x to) (if (sh-sense/solid-at? p to) (inc (:y to)) (:y to)) (:z to)]
          dark (look/dark-light)
-         feet (sh-sense/feet p)
-         made-out? (fn [at] (or (sh-sense/seen-cell? p at)
-                                (<= (js/Math.hypot (- (:x at) (:x feet)) (- (:y at) (:y feet)) (- (:z at) (:z feet))) judged-here-within)))
+         made-out? (fn [at] (or (sh-sense/seen-cell? p at) (look/glimpse? p at)))
          block-of (fn [c] (let [[x y z] c
                                 at {:x x :y y :z z}]
                             (when (made-out? at) (sh-sense/block-light-at p at))))
