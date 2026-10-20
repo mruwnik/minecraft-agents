@@ -12,6 +12,6 @@
  :cases
  [{:name "descent-walks-down-its-own-stair-and-goes-on-from-its-foot"
    :blocks [[:set [8 -10 16] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :count 1 :direction :west :level #at [16 -10 16] :tunnel-length 14 :radius 8 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :direction :west :level #at [16 -10 16] :tunnel-length 14 :radius 8 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1 :reason :count}} :within-s 280 :of-job true}]
    :after [[:item "raw_iron" 1] [:block [35 -1 16] "stone"] [:block [34 -1 16] "stone"] [:block [36 -1 16] "stone"]]}]}

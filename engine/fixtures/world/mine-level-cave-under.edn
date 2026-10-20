@@ -7,7 +7,7 @@
   :plot {:height 12}
   :blocks [[:fill [2 -6 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [18 -2 16] "air"]]
   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
-  :act [[:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 4})]]
+  :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 4})]]
   :limit-s 110}
  :cases
  [{:name "cave-two-under-the-tunnel-floor-is-no-stop"

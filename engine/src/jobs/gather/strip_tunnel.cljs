@@ -20,7 +20,7 @@
 
 (def doc
   "Cut a straight level tunnel along :heading from where the body stands (its start moves on over open cells the body cut itself,
-  tunnel/open-start), one jobs.access.stair {:dir :level :steps 1} child per step, torches hung every :torch-interval steps: the
+  tunnel/open-start), one jobs.access.stair {:dir :level :steps 1} child per step, torches hung where jobs.lib.torch-plan says (see :torches): the
   tunnel way of jobs.gather.dig-for. A call is one stretch of a tunnel: :origin and :steps name the stretch already cut (nil and 0
   at the start), :limit the most steps the tunnel may have in all. With :stay-level the stair only cuts, a cut that opened into air
   beyond the tunnel is sealed with a carried block, else the body walks in.
@@ -29,7 +29,7 @@
   a seen air face is in view that was not when the call began, or a step dug one (the caller digs it, then calls again). Any other
   stop ends the call with data {:stop reason :at :next :walk} (the stair's stops, :own-zone, :walk-failed, :breach-sealed,
   :breach-open): condition-failed for facts, else nothing-possible. No torch to hang and none to craft ends condition-failed
-  :no-torches. The data always carries :origin :heading :steps :torch-at :dug [{:cell :block}] :behind. Needs a pickaxe as the
+  :no-torches. The data always carries :origin :heading :steps :hung :dug [{:cell :block}] :behind. Needs a pickaxe as the
   stair does (:fetch passed on).")
 
 (a/defargs args
@@ -37,8 +37,8 @@
    :origin {:doc "the tunnel's first cell {:x :y :z}; nil: the body's cell, moved on over open cells it cut itself" :spec (a/pred "a cell map or nil" #(or (nil? %) (map? %))) :default nil}
    :steps {:doc "steps already cut" :spec (a/int-in 0 nil) :default 0}
    :limit {:doc "the most steps the tunnel has in all" :spec (a/int-in 0 nil)}
-   :torch-at {:doc "the step the last torch hung at; nil: none yet" :spec (a/pred "a step or nil" #(or (nil? %) (number? %))) :default nil}
-   :torch-interval {:doc "steps between torches; 0: none" :spec (a/int-in 0 nil) :default 10}
+   :hung {:doc "the cells [x y z] torches are already hung from" :spec (a/coll-of a/position?) :default []}
+   :torches {:doc "hang torches where the planner says (jobs.lib.torch-plan: no dark cell of the last few or the next stays unlit); false: none" :spec boolean? :default true}
    :watch-kinds {:doc "block names whose coming into view (with a seen air face) or being dug ends the call" :spec (a/coll-of string?) :default []}
    :radius {:doc "blocks round the body within which :watch-kinds are looked for" :spec (a/num-in 0 nil) :default 16}
    :wet {:doc "water beside a watched block does not hide it; water beside the cut is taken" :spec boolean? :default false}
@@ -93,28 +93,20 @@
 (defn data-of [c stop at next walk]
   (let [m (ctx/mem c)
         {:keys [origin heading steps]} (or (:tunnel m) (select-keys (:args c) [:origin :heading :steps]))]
-    (cond-> {:stop stop :origin origin :heading heading :steps steps :torch-at (:torch-at m) :dug (:dug m []) :behind (:behind m)}
+    (cond-> {:stop stop :origin origin :heading heading :steps steps :hung (:hung m) :dug (:dug m []) :behind (:behind m)}
       at (assoc :at (access/cell at))
       next (assoc :next (access/cell next))
       walk (assoc :walk walk))))
 
 (defn finish!
   "End the call: :done for the stretch's own ends (:tunnel-length :watch), else by the stop a kind."
-  [c stop at next walk]
+  [c stop at & [next walk]]
   (ctx/update-mem! c assoc :finished true)
   (let [data (assoc (data-of c stop at next walk) :text (str "strip-tunnel " (name stop) " after " (get-in (ctx/mem c) [:tunnel :steps]) " steps"))]
     (cond
       (#{:tunnel-length :watch} stop) (ctx/end c :done nil data)
       (or (stair/facts stop) (#{:own-zone :no-torches} stop)) (ctx/end c :condition-failed {:reason stop} data)
       :else (ctx/end c :nothing-possible {:reason stop} data))))
-
-(defn ^:async end!
-  "finish!, after a torch at the cut's end when one is due."
-  [c stop at & [next walk]]
-  (if (torches/end-torch-due? c)
-    (let [r (await (torches/torch-round! c false))]
-      (if (= :no-torches r) (finish! c :no-torches nil nil nil) r))
-    (finish! c stop at next walk)))
 
 (defn step-accept [{:keys [accept wet]}]
   (cond-> [] (some #{:falling-block} accept) (conj :falling-block) wet (conj :fluid-adjacent)))
@@ -147,7 +139,7 @@
     (cond
       (= :continue r) :continue
       (not= :done (:status res)) (let [{:keys [reason at]} (step-stop res)]
-                                   (await (end! c reason at next (when (= :step-failed reason) (some->> (:because r) result-of (walk-of c next))))))
+                                   (finish! c reason at next (when (= :step-failed reason) (some->> (:because r) result-of (walk-of c next)))))
       :else
       (let [own (ledger/own-cells c)
             open (when (:stay-level args) (seq (stay/breaches name-at from cut own)))]
@@ -155,19 +147,19 @@
           (let [b (stay/behind name-at from cut own open)]
             (stay/remember-behind! c (access/cell (first open)) b name-at open)
             (ctx/update-mem! c assoc :behind b)
-            (await (end! c (if (await (stay/seal! c (rules-in c) open)) :breach-sealed :breach-open) (first open) next)))
+            (finish! c (if (await (stay/seal! c (rules-in c) open)) :breach-sealed :breach-open) (first open) next))
           (do (ctx/update-mem! c update-in [:tunnel :steps] inc)
               (let [w (await (back-on-line! c next))]
                 (cond
                   (= :continue w) :continue
-                  w (await (end! c :walk-failed next nil w))
+                  w (finish! c :walk-failed next nil w)
                   :else (do (await (glance! c [(headings heading)]))
                             (if (watch-hit? c) (finish! c :watch nil nil nil) :again))))))))))
 
 (defn start!
   "The tunnel's first cell (the :origin arg, else the body's cell moved on over open cells it cut itself) and what is in view."
   [c]
-  (let [{:keys [heading steps torch-at stay-level origin]} (:args c)
+  (let [{:keys [heading steps hung stay-level origin]} (:args c)
         start (cell-of (u/self-pos c))
         own (ledger/own-cells c)
         origin (or origin
@@ -177,7 +169,7 @@
                                                                 :text (str "mine's tunnel line is open from " (str/join "," (access/cell start)) " to "
                                                                            (str/join "," (access/cell o)) "; it starts there")}))
                      o))]
-    (ctx/update-mem! c assoc :tunnel {:origin origin :heading heading :steps steps} :torch-at torch-at :watching (vec (exposed c)) :dug [])))
+    (ctx/update-mem! c assoc :tunnel {:origin origin :heading heading :steps steps} :hung (vec hung) :watching (vec (exposed c)) :dug [])))
 
 (defn ^:async step [c]
   (let [m (ctx/mem c)
@@ -195,16 +187,16 @@
             walk (atom nil)]
         (cond
           (:stepping m) (await (stair-step! c from next cut))
-          (some #(within-own-zone c 0 (access/cell %)) cut) (await (end! c :own-zone next))
-          (>= steps (:limit (:args c))) (await (end! c :tunnel-length nil))
+          (some #(within-own-zone c 0 (access/cell %)) cut) (finish! c :own-zone next)
+          (>= steps (:limit (:args c))) (finish! c :tunnel-length nil)
           (do (reset! walk (await (back-on-line! c from))) (= :continue @walk)) :continue
-          @walk (await (end! c :walk-failed from nil @walk))
+          @walk (finish! c :walk-failed from nil @walk)
           (and (look/unseen? (:primitives c) cut) (not= next (:glanced m)))
           (do (ctx/update-mem! c assoc :glanced next)
               (await (glance! c [(headings heading)]))
               :again)
           (torches/torch-due? c) (let [r (await (torches/torch-round! c false))]
-                                   (if (= :no-torches r) (finish! c :no-torches nil nil nil) r))
+                                   (if (= :no-torches r) (finish! c :no-torches nil) r))
           :else (await (stair-step! c from next cut)))))))
 
 (defn done?

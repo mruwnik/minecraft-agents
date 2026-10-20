@@ -16,6 +16,6 @@
             {:no-event {:source :job :kind :stopped} :for-s 100}]}
   {:name "repeat-of-an-impossible-child-ends"
    :limit-s 40
-   :act [[:http :submit (repeat (jobs.gather.mine {:torch-interval 0 })) [] {:ok true}]
+   :act [[:http :submit (repeat (jobs.gather.mine {:torches false })) [] {:ok true}]
          [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 30]]
    :expect [{:event {:source :job :kind :stopped} :within-s 30 :of-job true}]}]}

@@ -10,19 +10,17 @@
             [jobs.lib.need :as need]
             [jobs.lib.placement :as placement]
             [jobs.lib.shelter.sense :as sense]
+            [jobs.lib.solid :as solid]
             [jobs.lib.torch :as torch]
+            [jobs.lib.torch-plan :as tp]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
             [jobs.gather.mine.end :refer [stop!]]
             [jobs.gather.mine.targets :refer [step-cell]]))
 
 (a/defargs settings
-  {::end-torch-gap {:default 4 :doc "A cut's end gets a torch when the last hangs this many steps back or more." :spec (a/int-in 0 nil)}
-   ::branch-gap {:default 4 :doc "A dig this far from the tunnel line (and from any torch hung on a branch) gets a torch of its own." :spec (a/int-in 0 nil)}
-   ::torch-min {:default 2 :doc "A torch round crafts more when fewer torches than this are carried." :spec (a/int-in 0 nil)}
+  {::torch-min {:default 2 :doc "A torch round crafts more when fewer torches than this are carried." :spec (a/int-in 0 nil)}
    ::torch-craft-count {:default 4 :doc "Torches one craft makes." :spec (a/int-in 1 nil)}})
-
-(defn end-torch-gap [] (settings/get settings ::end-torch-gap))
 
 (defn torch-min [] (settings/get settings ::torch-min))
 
@@ -49,60 +47,40 @@
   (let [{:keys [tunnel]} (ctx/mem c)]
     (and (pos? (:steps tunnel 0)) (= (cell-of (u/self-pos c)) (step-cell tunnel (:steps tunnel))))))
 
-(defn torch-gap
-  "Steps since the last torch hung (the steps taken when none did yet)."
+(defn on?
+  "Whether the dig hangs torches at all (its :torches arg)."
   [c]
-  (let [m (ctx/mem c)] (- (get-in m [:tunnel :steps] 0) (or (:torch-at m) 0))))
+  (boolean (:torches (:args c))))
 
-(defn torch-due?
-  "Whether the tunnel's next torch is owed: the first at step 1, then every :torch-interval."
+(defn due-spot
+  "The site (a cell vector) a torch is owed at, or nil: jobs.lib.torch-plan over cells (seen, judged by how the body perceives
+  their light) and ahead (not yet cut; dark when the light under the feet is 1 or less), light passing through open cells, the
+  sites being only site, the torches already hung the sources."
+  [c cells ahead site]
+  (when site
+    (let [p (:primitives c)
+          feet-light (sense/light-at p (cell-of (u/self-pos c)))
+          ahead? (set ahead)
+          plan (tp/plan {:cells (concat cells ahead)
+                         :dark? #(if (ahead? %) (or (nil? feet-light) (<= feet-light 1)) (torch/perceived-dark? p %))
+                         :open? #(or (ahead? %) (let [n (u/seen-name p (zipmap [:x :y :z] %))] (and n (not (solid/solid? n)))))
+                         :spots [site]
+                         :sources (:hung (ctx/mem c))})]
+      (first (:spots plan)))))
+
+(defn vec-of [{:keys [x y z]}] [x y z])
+
+(defn tunnel-spot
+  "Where the tunnel owes a torch: the cell behind the body, when the body stands on the tunnel's last cell and a cell of the last
+  few or the next is dark and no hung torch reaches it."
   [c]
-  (let [interval (:torch-interval (:args c))]
-    (and (pos? (or interval 0)) (on-line? c)
-         (or (nil? (:torch-at (ctx/mem c))) (>= (torch-gap c) interval)))))
+  (let [{:keys [tunnel]} (ctx/mem c)
+        n (:steps tunnel 0)
+        cell #(vec-of (step-cell tunnel %))]
+    (when (and (on? c) (on-line? c))
+      (due-spot c (map cell (range (max 0 (- n tp/spread)) (inc n))) [(cell (inc n))] (cell (dec n))))))
 
-(defn end-torch-due? [c]
-  (and (pos? (or (:torch-interval (:args c)) 0)) (on-line? c) (>= (torch-gap c) (end-torch-gap))))
-
-(defn branch-gap [] (settings/get settings ::branch-gap))
-
-(defn line-dist
-  "The distance from cell to the nearest cell of the tunnel dug so far."
-  [tunnel cell]
-  (apply min (map #(u/dist cell (step-cell tunnel %)) (range (inc (:steps tunnel 0))))))
-
-(defn branch-torch-due?
-  "Whether the body stands off the tunnel line by branch-gap or more with no branch torch within that of it."
-  [c]
-  (let [{:keys [tunnel branch-torches]} (ctx/mem c)
-        here (cell-of (u/self-pos c))]
-    (and (some? tunnel) (pos? (or (:torch-interval (:args c)) 0))
-         (>= (line-dist tunnel here) (branch-gap))
-         (every? #(>= (u/dist here %) (branch-gap)) branch-torches))))
-
-(defn booked!
-  "Book the torch step done: a tunnel torch at the tunnel's length, a stair one (branch :stair) at the descent's steps, a branch one
-  (branch true) at the body's cell."
-  [c branch]
-  (cond
-    (= :stair branch) (ctx/update-mem! c assoc-in [:descent :torch-at] (get-in (ctx/mem c) [:descent :steps] 0))
-    branch (ctx/update-mem! c update :branch-torches (fnil conj []) (cell-of (u/self-pos c)))
-    :else (ctx/update-mem! c assoc :torch-at (get-in (ctx/mem c) [:tunnel :steps]))))
-
-(defn stair-torch-due?
-  "Whether the stair down to the ore level owes a torch: the first after its first step, then every :torch-interval steps."
-  [c]
-  (let [interval (:torch-interval (:args c))
-        {:keys [steps torch-at]} (:descent (ctx/mem c))]
-    (and (pos? (or interval 0)) (pos? (or steps 0))
-         (or (nil? torch-at) (>= (- steps torch-at) interval)))))
-
-(defn left-out!
-  "Book the torch step done, with an info event of the reason."
-  [c cell reason branch]
-  (booked! c branch)
-  (ctx/emit! c :mine.torch-left-out :info {:cell cell :reason reason
-                                           :text (str "mine hung no torch" (some->> cell (str/join ",") (str " at ")) ": " (name reason))}))
+(defn torch-due? [c] (some? (tunnel-spot c)))
 
 (defn branch-site
   "{:dir :site} for a torch on a branch: the run goes away from the tunnel along the axis it is farthest off on, the
@@ -116,6 +94,42 @@
     (when (not= [0 0] dir)
       {:dir dir :site (-> here (update :x - (first dir)) (update :z - (second dir)))})))
 
+(defn branch-torch-due?
+  "Whether the body, off the tunnel line, stands in a dark cell no hung torch reaches."
+  [c]
+  (let [{:keys [tunnel]} (ctx/mem c)
+        here (cell-of (u/self-pos c))
+        site (some-> tunnel (branch-site here) :site vec-of)]
+    (boolean (and (on? c) site (due-spot c [(vec-of here)] [] site)))))
+
+(defn stair-site
+  "The cell the stair's torch hangs from: the body's cell one step back up the stair."
+  [c]
+  (let [[dx dz] (headings (:heading (ctx/mem c)))
+        {:keys [x y z]} (cell-of (u/self-pos c))]
+    [(- x dx) (inc y) (- z dz)]))
+
+(defn stair-torch-due?
+  "Whether the stair down to the ore level owes a torch: past its first step, a dark cell of the stair or the next is out of reach of every hung torch."
+  [c]
+  (let [[dx dz] (headings (:heading (ctx/mem c)))
+        {:keys [x y z]} (cell-of (u/self-pos c))
+        site (stair-site c)]
+    (boolean (and (on? c) (pos? (:steps (:descent (ctx/mem c)) 0))
+                  (due-spot c [site [x y z]] [[(+ x dx) (dec y) (+ z dz)]] site)))))
+
+(defn booked!
+  "Book the torch step done: the cell of the torch hung, or the site a torch was left out of, joins the planner's sources so it is not asked again."
+  [c site]
+  (ctx/update-mem! c update :hung (fnil conj []) site))
+
+(defn left-out!
+  "Book the torch step done, with an info event of the reason."
+  [c site cell reason]
+  (booked! c site)
+  (ctx/emit! c :mine.torch-left-out :info {:cell cell :reason reason
+                                           :text (str "mine hung no torch" (some->> cell (str/join ",") (str " at ")) ": " (name reason))}))
+
 (defn ^:async hang-torch!
   "Hang a torch on the cell behind the body (a branch: behind it on its way off the tunnel), after a glance at it and
   its side walls when the support is not yet seen."
@@ -125,8 +139,7 @@
         block-at (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
         here (cell-of (u/self-pos c))
         {:keys [dir site]} (cond
-                             (= :stair branch) (let [[dx dz :as d] (headings (:heading (ctx/mem c)))]
-                                                 {:dir d :site (-> here (update :x - dx) (update :z - dz) (update :y inc))})
+                             (= :stair branch) {:dir (headings (:heading (ctx/mem c))) :site (zipmap [:x :y :z] (stair-site c))}
                              branch (branch-site tunnel here)
                              :else {:dir (headings (:heading tunnel)) :site (step-cell tunnel (dec (:steps tunnel)))})
         pick (fn [] (when site (torch/torch-at dir [(:x site) (:y site) (:z site)] (placement/eye (u/self-pos c)) block-at)))
@@ -134,14 +147,14 @@
                    (when site (let [[dx dz] dir] (await (glance! c [[(- dx) (- dz)] [(- dz) dx] [dz (- dx)]]))))
                    (pick))
         cell (:cell choice)
+        booked (vec-of (or site here))
         reason (cond (nil? site) :no-site
                      (:refused choice) (:refused choice)
                      (not (gate/allowed? c :mine.declined "mine" :place (zipmap [:x :y :z] cell))) :refused)]
     (if reason
-      (left-out! c cell reason branch)
+      (left-out! c booked cell reason)
       (let [held? (await (torch/place! c choice block-at))]
-        (booked! c branch)
-        (when-not held? (left-out! c cell :place-failed branch))))))
+        (if held? (booked! c (vec cell)) (left-out! c booked cell :place-failed))))))
 
 (defn lit-here?
   "Whether the body's cell is already lit (block light, or sky light less the darkening): a torch is not needed there."
@@ -171,7 +184,7 @@
         (if (= :continue e) :continue :again))
 
       (and (zero? n) (lit-here? c))
-      (let [{:keys [x y z]} (cell-of (u/self-pos c))] (left-out! c [x y z] :lit branch) :again)
+      (let [{:keys [x y z]} (cell-of (u/self-pos c))] (left-out! c [x y z] [x y z] :lit) :again)
 
       (zero? n) :no-torches
 

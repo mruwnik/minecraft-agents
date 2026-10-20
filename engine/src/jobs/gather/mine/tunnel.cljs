@@ -71,7 +71,7 @@
       (ctx/emit! c :mine.turned :info {:from (:heading m) :to to :stop stop :length (or steps 0)
                                        :text (str "mine's " (name stop) " blocks its heading " (:heading m) (when mid? (str " after " steps " blocks")) "; it turns " to)})
       (when mid? (stay/record-tunnel! c tunnel (headings (:heading m))))
-      (ctx/update-mem! c #(cond-> (-> % (assoc :heading to :tried-headings tried) (dissoc :tunnel :behind :torch-at :glanced :looked) (update :descent dissoc :stop))
+      (ctx/update-mem! c #(cond-> (-> % (assoc :heading to :tried-headings tried) (dissoc :tunnel :behind :glanced :looked) (update :descent dissoc :stop))
                             tunnel (-> (update :legs (fnil conj []) (cond-> {:heading (:heading m) :length (or steps 0) :stop stop} (:behind m) (assoc :behind (:behind m))))
                                        (update :spent (fnil + 0) (or steps 0)))))
       true)))
@@ -161,7 +161,7 @@
       (let [_ (ctx/update-mem! c assoc :stepping true)
             r (await (ctx/call c :tunnel 'jobs.gather.strip-tunnel
                                {:heading (:heading m) :origin (:origin t) :steps (or steps 0) :limit (- (:tunnel-length args) (:spent m 0))
-                                :torch-at (:torch-at m) :torch-interval (:torch-interval args) :watch-kinds (vec (watch-kinds c))
+                                :hung (vec (:hung m)) :torches (:torches args) :watch-kinds (vec (watch-kinds c))
                                 :radius (:radius args) :wet (boolean (:wet args)) :accept (vec (:accept args)) :stay-level (boolean (:stay-level args))
                                 :fetch (:fetch args) :ignore-zones? (:ignore-zones? args)
                                 :block (:block args) :ore-reach (or (:ore-reach args) 0)}))]
@@ -172,7 +172,7 @@
                 now (:steps res)
                 {:keys [origin at next walk]} res
                 cell (fn [v] (when v (zipmap [:x :y :z] v)))]
-            (ctx/update-mem! c #(cond-> (-> % (dissoc :stepping) (assoc :tunnel (merge t (select-keys res [:origin :heading :steps])) :torch-at (:torch-at res))
+            (ctx/update-mem! c #(cond-> (-> % (dissoc :stepping) (assoc :tunnel (merge t (select-keys res [:origin :heading :steps])) :hung (:hung res))
                                             (cond-> (:behind res) (assoc :behind (:behind res))))
                                   (> now (or steps 0)) (assoc :looked (step-cell {:origin origin :heading (:heading res)} now))))
             (book-cut! c (:dug res))

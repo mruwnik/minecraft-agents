@@ -16,7 +16,7 @@
             [:fill [16 0 13] [16 6 13] "bedrock"] [:set [16 7 13] "stone"]
             [:fill [16 0 19] [16 6 19] "bedrock"] [:set [16 7 19] "stone"]]
    :body {:at [16.5 0 16.5]}
-   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "stone" :count 3 :radius 10 :tunnel-length 0 :descend-limit 0})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 3 :radius 10 :tunnel-length 0 :descend-limit 0})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :text [:contains "seen ore out of reach"]}} :within-s 130 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:unreached [:has #at [13 7 16]]}} :within-s 130 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:unreached [:has #at [19 7 16]]}} :within-s 130 :of-job true}
@@ -26,7 +26,7 @@
   {:name "pit-with-obsidian-walls-pillars-home"
    :blocks [[:fill [14 -5 14] [18 -1 18] "obsidian"] [:fill [15 -3 15] [17 -1 17] "air"] [:fill [15 -4 15] [17 -4 17] "stone"]]
    :body {:at [16.5 0 13.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
-   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "stone" :count 2 :radius 10 :tunnel-length 0 :descend-limit 0})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 2 :radius 10 :tunnel-length 0 :descend-limit 0})]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :home-last}} :within-s 130 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 2]}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :mine.not-home} :for-s 140 :until {:source :job :kind #{:completed :stopped}}}]

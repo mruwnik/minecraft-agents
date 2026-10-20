@@ -36,13 +36,13 @@
    :blocks [[:set [20 0 12] "chest[facing=west]"] [:fill [22 0 18] [28 2 22] "stone"]]
    :memory [{:kind :chest :data {:pos #xyz [20 0 12]} :policy {:cap 1 :ttl :forever}}]
    :body {:inventory [["stone_pickaxe" 1] ["dirt" 1] ["sand" 1] ["gravel" 1] ["tuff" 1] ["andesite" 1] ["diorite" 1] ["granite" 1] ["netherrack" 1] ["deepslate" 1] ["calcite" 1] ["coarse_dirt" 1] ["red_sand" 1] ["clay_ball" 1] ["flint" 1] ["feather" 1] ["bone" 1] ["string" 1] ["gunpowder" 1] ["rotten_flesh" 1] ["spider_eye" 1] ["leather" 1] ["paper" 1] ["sugar" 1] ["slime_ball" 1] ["ink_sac" 1] ["egg" 1] ["snowball" 1] ["glowstone_dust" 1] ["redstone" 1] ["lapis_lazuli" 1]]}
-   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "stone" :count 2 :direction :east :tunnel-length 8 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 2 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :trip.deposited} :within-s 60 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 95 :of-job true}]}
   {:name "mine-with-no-chest-known-goes-on"
    :blocks [[:fill [22 0 18] [28 2 22] "stone"]]
    :body {:inventory [["stone_pickaxe" 1] ["dirt" 1] ["sand" 1] ["gravel" 1] ["tuff" 1] ["andesite" 1] ["diorite" 1] ["granite" 1] ["netherrack" 1] ["deepslate" 1] ["calcite" 1] ["coarse_dirt" 1] ["red_sand" 1] ["clay_ball" 1] ["flint" 1] ["feather" 1] ["bone" 1] ["string" 1] ["gunpowder" 1] ["rotten_flesh" 1] ["spider_eye" 1] ["leather" 1] ["paper" 1] ["sugar" 1] ["slime_ball" 1] ["ink_sac" 1] ["egg" 1] ["snowball" 1] ["glowstone_dust" 1] ["redstone" 1] ["lapis_lazuli" 1]]}
-   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "stone" :count 2 :direction :east :tunnel-length 8 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 2 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :trip.no-chest} :within-s 60 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 95 :of-job true}]}
   {:name "deposit-into-a-full-chest-places-the-carried-chest"

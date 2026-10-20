@@ -129,7 +129,7 @@
   {:name "mine-spares-own-plan-cells-by-default-a"
    :plans [{:id "o" :metadata {:by "$body"} :parts [{:id "o" :cells [#at [20 0 16]] :want [:any "iron_ore"]}]}]
    :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [20 0 16] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0}} :within-s 100 :of-job true}]
    :after [[:block [20 0 16] "iron_ore"]]
    :limit-s 120}
@@ -143,7 +143,7 @@
   {:name "mine-digs-own-plan-cells-when-not-spared-a"
    :plans [{:id "o" :metadata {:by "$body"} :parts [{:id "o" :cells [#at [20 0 16]] :want [:any "iron_ore"]}]}]
    :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [20 0 16] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :settings {:jobs.lib.access/spare-own-builds false} :radius 8})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :settings {:jobs.lib.access/spare-own-builds false} :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 100 :of-job true}]
    :after [[:item "raw_iron" 1]]
    :limit-s 120}

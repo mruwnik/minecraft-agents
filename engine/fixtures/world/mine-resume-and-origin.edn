@@ -41,6 +41,6 @@
    :after [[:item "raw_iron" 1] [:block [8 0 16] "torch"]]}
   {:name "heading-west-beats-the-facing-east"
    :blocks [[:set [12 0 16] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :level false :count 1 :heading :west :tunnel-length 8 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :heading :west :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 120 :of-job true}]
    :after [[:item "raw_iron" 1] [:block [17 0 16] "stone"] [:block [20 0 16] "stone"]]}]}

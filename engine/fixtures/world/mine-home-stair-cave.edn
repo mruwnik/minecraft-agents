@@ -14,12 +14,12 @@
             [:fill [14 -1 16] [14 1 16] "air"] [:fill [13 -2 16] [13 0 16] "air"] [:fill [12 -3 16] [12 -1 16] "air"]
             [:fill [11 -4 16] [11 -2 16] "air"] [:fill [10 -5 16] [10 -3 16] "air"] [:fill [9 -6 16] [9 -4 16] "air"]
             [:fill [8 -7 16] [8 -5 16] "air"] [:fill [7 -8 16] [7 -6 16] "air"] [:fill [6 -9 16] [6 -7 16] "air"]]
-   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "stone" :count 9 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 9 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 1]}} :within-s 180 :of-job true}
             {:no-event {:source :job :kind :mine.not-home} :for-s 180 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [16.5 0 16.5] 4] [:body-far [4.5 -9 16.5] 8]]}
   {:name "stone-run-on-flat-ground-ends-at-the-start"
-   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "stone" :count 9 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 9 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 1]}} :within-s 180 :of-job true}
             {:no-event {:source :job :kind :mine.not-home} :for-s 180 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [16.5 0 16.5] 4]]}]}

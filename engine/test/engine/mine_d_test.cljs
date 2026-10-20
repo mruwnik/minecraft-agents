@@ -85,14 +85,14 @@
         (is (some #{[6 64 0]} (await (dark-ore-dug {:held "torch"}))) "main hand")
         (is (not-any? #{[6 64 0]} (await (dark-ore-dug {}))) "no torch")))))
 
-(deftest the-tunnel-hangs-a-torch-every-interval
+(deftest the-tunnel-hangs-a-torch-where-the-next-cell-would-stay-dark
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 22}
-                                 (torch-world torches8) 200))]
-          (is (= [0 10 20] (torch-xs s)) "the entry, then every 10")
-          (is (= 5 (get (inv s) "torch")))
+        (let [s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 22}
+                                 (torch-world torches8) 200 [0 0]))]
+          (is (= [0 11] (torch-xs s)) "the entry, then where the next cell lies past its light (the torch at the entry reaches 12 cells on)")
+          (is (= 6 (get (inv s) "torch")))
           (is (empty? (events-of s :mine.no-torches)))
           (is (= :tunnel-length (:reason (done-event s)))))))))
 
@@ -101,11 +101,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [run (fn [inv] (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 22}
-                                      (torch-world inv) 200))
+        (let [run (fn [inv] (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 22}
+                                      (torch-world inv) 200 [0 0]))
               lit (await (run torches8))
               dark (await (run pickaxe))]
-          (is (= [0 10 20] (torch-xs lit)))
+          (is (= [0 11] (torch-xs lit)))
           (is (= (count (calls dark "look")) (count (calls lit "look")))))))))
 
 (deftest torches-held-in-the-off-hand-are-hung-and-none-crafted
@@ -114,34 +114,27 @@
       (fn ^:async t []
         (let [world (assoc (torch-world [{:name "iron_pickaxe" :count 1} {:name "coal" :count 3} {:name "stick" :count 3}])
                            :equipment {"offHand" {:name "torch" :count 8}})
-              s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 22} world 200))]
-          (is (= [0 10 20] (torch-xs s)) "hung from the off-hand stack")
+              s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 22} world 200 [0 0]))]
+          (is (= [0 11] (torch-xs s)) "hung from the off-hand stack")
           (is (empty? (events-of s :mine.no-torches)))
           (is (= 3 (get (inv s) "coal")) "nothing crafted"))))))
 
-(deftest the-torch-interval-is-an-arg
+(deftest torches-false-hangs-none
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 9 :torch-interval 4}
-                                 (torch-world torches8) 200))]
-          (is (= [0 4 8] (torch-xs s))))))))
-
-(deftest the-end-of-the-cut-gets-a-torch
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 6}
-                                 (torch-world torches8) 120))]
-          (is (= [0 5] (torch-xs s)) "the entry, and the cut's end 5 blocks on"))))))
+        (let [s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 9 :torches false}
+                                 (torch-world torches8) 200 [0 0]))]
+          (is (= [] (torch-xs s)))
+          (is (empty? (events-of s :mine.no-torches))))))))
 
 (deftest coal-and-sticks-are-crafted-into-torches
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 12}
-                                 (torch-world [{:name "iron_pickaxe" :count 1} {:name "coal" :count 1} {:name "stick" :count 1}]) 300))]
-          (is (= [0 10] (torch-xs s)))
+        (let [s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 15}
+                                 (torch-world [{:name "iron_pickaxe" :count 1} {:name "coal" :count 1} {:name "stick" :count 1}]) 300 [0 0]))]
+          (is (= [0 11] (torch-xs s)))
           (is (= 2 (get (inv s) "torch")) "4 crafted, 2 hung")
           (is (nil? (get (inv s) "coal")))
           (is (empty? (events-of s :mine.no-torches))))))))
@@ -150,9 +143,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 12}
-                                 (torch-world [{:name "iron_pickaxe" :count 1} {:name "coal" :count 1} {:name "oak_log" :count 1}]) 300))]
-          (is (= [0 10] (torch-xs s)) "the first one hung")
+        (let [s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 15}
+                                 (torch-world [{:name "iron_pickaxe" :count 1} {:name "coal" :count 1} {:name "oak_log" :count 1}]) 300 [0 0]))]
+          (is (= [0 11] (torch-xs s)) "the first one hung")
           (is (pos? (get (inv s) "torch" 0)))
           (is (empty? (events-of s :mine.no-torches))))))))
 
@@ -419,7 +412,7 @@
         (let [s (start {:world {:blocks (stair-down-east 4) :drops {"iron_ore" "raw_iron" "stone" "cobblestone"} :inventory pickaxe
                                 :self {:pos [0.5 64 0.5]}}})]
           (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors (vec (for [i (range 1 5)] [i (- 63 i) 0]))})
-          (core/submit! (:eng s) (spec {:block "iron_ore" :level 58 :heading "east" :count 1 :tunnel-length 3 :torch-interval 0}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level 58 :heading "east" :count 1 :tunnel-length 3 :torches false}) {})
           (await (run-ticks s 300))
           (is (every? (fn [[x]] (> x 4)) (dug-cells s)) "nothing is cut from the lawn or along the old stair")
           (is (seq (dug-cells s)) "the new steps go on past its foot")
@@ -433,7 +426,7 @@
         (let [s (start {:world {:blocks (stair-down-east 4) :drops {"iron_ore" "raw_iron" "stone" "cobblestone"} :inventory pickaxe
                                 :self {:pos [0.5 64 0.5]}}})]
           (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors (vec (for [i (range 1 5)] [i (- 63 i) 0]))})
-          (core/submit! (:eng s) (spec {:block "iron_ore" :level 58 :heading "north" :count 1 :tunnel-length 3 :torch-interval 0}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level 58 :heading "north" :count 1 :tunnel-length 3 :torches false}) {})
           (await (run-ticks s 300))
           (is (some (fn [[_ _ z]] (neg? z)) (dug-cells s)) "the new steps turn north from the old foot"))))))
 
@@ -444,7 +437,7 @@
         (let [s (start {:world {:blocks (assoc (stair-down-east 4) "2,62,0" "stone" "2,63,0" "stone" "2,64,0" "stone") :drops {"iron_ore" "raw_iron" "stone" "cobblestone"} :inventory pickaxe
                                 :self {:pos [0.5 64 0.5]}}})]
           (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors (vec (for [i (range 1 5)] [i (- 63 i) 0]))})
-          (core/submit! (:eng s) (spec {:block "iron_ore" :level 58 :heading "east" :count 1 :tunnel-length 3 :torch-interval 0}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level 58 :heading "east" :count 1 :tunnel-length 3 :torches false}) {})
           (await (run-ticks s 300))
           (is (= 1 (count (events-of s :mine.stair-plan))))
           (is (= [5 61 0] (first (dug-cells s))) "the new steps go on from the foot of the old stair"))))))
@@ -457,7 +450,7 @@
         (let [s (start {:world {:blocks (stair-down-east 4) :drops {"iron_ore" "raw_iron" "stone" "cobblestone"} :inventory pickaxe
                                 :self {:pos [4.5 60 0.5]}}})]
           (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors (vec (for [i (range 1 5)] [i (- 63 i) 0]))})
-          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :heading "west" :tunnel-length 6 :torch-interval 0}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :heading "west" :tunnel-length 6 :torches false}) {})
           (await (run-ticks s 200))
           (is (finished? s))
           (is (= "stone" (block-at s 3 60 0)) "the floor of the lowest step is not cut")

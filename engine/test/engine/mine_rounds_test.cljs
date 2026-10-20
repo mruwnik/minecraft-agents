@@ -44,8 +44,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (m/scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :torch-interval 2}
-                                   (assoc (m/rock-world {}) :inventory m/pickaxe) 14))]
+        (let [s (await (m/scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4}
+                                       (assoc (m/rock-world {}) :inventory m/pickaxe) 14 [0 0]))]
           (is (m/finished? s) "ended once the flow delays passed")
           (is (some #(= "torch" (.-item (.-args %))) (m/calls s "place")) "a torch was placed"))))))
 

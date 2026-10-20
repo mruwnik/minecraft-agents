@@ -1,6 +1,5 @@
 ;; jobs.gather.mine hangs torches in its strip tunnel (card 50602363, b0d9d76c): gather.mine iron_ore east, tunnel-length 25,
-;; in an unlit stone mass (no ore: the run ends at the length). Torches carried: a wall torch at steps 1, 11 and 21 and one at
-;; the cut's end. With only coal and sticks it crafts torches (the craft child) and hangs them. With neither, the tunnel still
+;; in an unlit stone mass (no ore: the run ends at the length). Torches carried: a wall torch at the entry cell and every 11 cells on (a torch lights 13 cells, jobs.lib.torch-plan). With only coal and sticks it crafts torches (the craft child) and hangs them. With neither, the tunnel still
 ;; stops (a dig with no torch to hang ends :no-torches).
 ;; Cards 725b53a5, d3185e6b, 5e6b46ac, 195f12ba: coal with logs and no stick is crafted into torches (sticks on the way) and hung, stocked
 ;; before the dig (info torch.stocked); a torch stack in the off hand counts and is hung; coal with nothing to make a stick from says
@@ -13,36 +12,35 @@
   :body {:at [2.5 0 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4]]}
   :limit-s 200}
  :cases
- [{:name "torches-in-the-bag-hang-at-steps-1-11-21-and-the-end"
+ [{:name "torches-in-the-bag-hang-where-the-next-cell-would-stay-dark"
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8]]}
    :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 25 :radius 3})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 190 :of-job true}
             ]
-   :after [[:block [2 1 16] "wall_torch"] [:block [12 1 16] "wall_torch"] [:block [22 1 16] "wall_torch"]
-           [:block [26 1 16] "wall_torch"] [:not-block [7 1 16] "wall_torch"] [:not-block [17 1 16] "wall_torch"]]}
+   :after [[:block [2 1 16] "wall_torch"] [:block [13 1 16] "wall_torch"] [:block [24 1 16] "wall_torch"]
+           [:not-block [7 1 16] "wall_torch"] [:not-block [18 1 16] "wall_torch"]]}
   {:name "torches-in-the-bag-hang-twice-over"
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 4]]}
    :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 25 :radius 3})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 190 :of-job true}]
-   :after [[:block [2 1 16] "wall_torch"] [:block [12 1 16] "wall_torch"] [:block [22 1 16] "wall_torch"]
-           [:block [26 1 16] "wall_torch"]]}
+   :after [[:block [2 1 16] "wall_torch"] [:block [13 1 16] "wall_torch"] [:block [24 1 16] "wall_torch"]]}
   {:name "coal-and-sticks-are-crafted-into-torches-and-hung"
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["coal" 4] ["stick" 4]]}
    :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 25 :radius 3})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 190 :of-job true}
             ]
-   :after [[:block [2 1 16] "wall_torch"] [:block [12 1 16] "wall_torch"] [:block [22 1 16] "wall_torch"]]}
+   :after [[:block [2 1 16] "wall_torch"] [:block [13 1 16] "wall_torch"] [:block [24 1 16] "wall_torch"]]}
   {:name "no-torches-no-materials-the-dig-ends-no-torches"
    :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 25 :radius 3})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-torches}} :within-s 120 :of-job true}]
-   :after [[:not-block [2 1 16] "wall_torch"] [:not-block [12 1 16] "wall_torch"]]}
+   :after [[:not-block [2 1 16] "wall_torch"] [:not-block [13 1 16] "wall_torch"]]}
   {:name "coal-and-logs-no-sticks-stocked-crafted-and-hung"
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["coal" 4] ["oak_log" 2]]}
    :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 25 :radius 3})]]
    :expect [{:event {:source :job :kind :torch.stocked} :within-s 90 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 190 :of-job true}
             ]
-   :after [[:block [2 1 16] "wall_torch"] [:block [12 1 16] "wall_torch"] [:block [22 1 16] "wall_torch"]]}
+   :after [[:block [2 1 16] "wall_torch"] [:block [13 1 16] "wall_torch"] [:block [24 1 16] "wall_torch"]]}
   {:name "torches-in-the-off-hand-count-and-are-hung"
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16]]}
    :act [[:rcon "item replace entity $BODY weapon.offhand with torch 16"] [:wait-s 2]
@@ -50,7 +48,7 @@
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 190 :of-job true}
             {:no-event {:source :job :kind :torch.no-stock} :for-s 190 :of-job true :until {:source :job :kind #{:completed :stopped}}}
             ]
-   :after [[:block [2 1 16] "wall_torch"] [:block [12 1 16] "wall_torch"] [:block [22 1 16] "wall_torch"] [:item "coal" 0]]}
+   :after [[:block [2 1 16] "wall_torch"] [:block [13 1 16] "wall_torch"] [:block [24 1 16] "wall_torch"] [:item "coal" 0]]}
   {:name "coal-only-no-wood-says-no-stock-and-crafts-no-more-than-three-times"
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["coal" 4]]}
    :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 25 :radius 3})]]
@@ -66,7 +64,7 @@
    :expect [{:event {:source :job :kind :torch.stocked} :within-s 150 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 195 :of-job true}
             {:no-event {:source :job :kind :torch.no-stock} :for-s 190 :of-job true :until {:source :job :kind #{:completed :stopped}}}]
-   :after [[:block [2 1 16] "wall_torch"] [:block [12 1 16] "wall_torch"]]
+   :after [[:block [2 1 16] "wall_torch"] [:block [13 1 16] "wall_torch"]]
    :limit-s 210}
   ;; Card c5237564, e5710f3a: the stocking trip to a torch chest in a short carved corridor, inside the near-sight range (the plot is unlit past it) ends back at the start cell, where the
   ;; tunnel is cut (south of the start), not at the chest.

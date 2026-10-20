@@ -69,7 +69,7 @@
   {:name "pickaxe-with-two-uses-left-is-not-dug-to-breakage"
    :blocks [[:fill [20 0 14] [26 2 18] "iron_ore"]]
    :body {:inventory [["stone_pickaxe[minecraft:damage=129]" 1] ["cobblestone" 64]]}
-   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :reason :no-tool}} :within-s 100 :of-job true}]
    :after [[:block [20 0 16] "iron_ore"] [:item "stone_pickaxe" 1]]}
   ;; card 90468b67: the pickaxe is a copper one whose ingots are still being smelted: the obtain waits, it does not stop no-source
@@ -141,7 +141,7 @@
   {:name "mine-stone-does-not-wander-to-a-far-exposed-ore"
    :blocks [[:fill [22 0 15] [28 2 19] "stone"] [:set [4 0 28] "iron_ore"]]
    :body {:inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.gather.mine {:torch-interval 0 :block "stone" :count 2 :radius 10})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 2 :radius 10})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}]
    :after [[:block [4 0 28] "iron_ore"] [:item "raw_iron" 0] [:body-near [22 0 17] 14]]
    :limit-s 120}

@@ -8,7 +8,7 @@
   :plot {:height 12}
   :blocks [[:fill [2 -6 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:fill [18 0 17] [18 1 17] "air"]]
   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4]]}
-  :act [[:job (jobs.gather.mine {:torch-interval 0 :block "iron_ore" :count 1 :direction :east :stay-level true :tunnel-length 6 :mend false})]]
+  :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :direction :east :stay-level true :tunnel-length 6 :mend false})]]
   :limit-s 110}
  :cases
  [{:name "cut-into-a-cave-is-sealed-before-the-body-steps-in"
