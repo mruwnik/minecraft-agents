@@ -499,19 +499,6 @@
    (into-array (concat ["--max-old-space-size=160" "--max-semi-space-size=8" "out/body-release.cjs" "--agent" (:body opts) "--world" (:world opts) "--scenario" scenario]
                        (when-not restore? ["--fresh"])))))
 
-(defn snapshot-argv
-  "argv started from the V8 snapshot of the body (tools/build-body-snapshot.mjs, run by tools/compile after each body-release build)
-  when engine/out/body-snapshot.blob is not older than the bundle: the loaded code comes from the blob and out/body-release.cjs is
-  only a name for argv[1]. MC_BODY_SNAPSHOT=0 opts out."
-  ([argv] (snapshot-argv argv (repo-path "engine" "out" "body-snapshot.blob") (repo-path "engine" "out" "body-release.cjs")))
-  ([argv blob bundle]
-   (let [script (.indexOf argv "out/body-release.cjs")]
-     (if (and (not= "0" (.. js/process -env -MC_BODY_SNAPSHOT))
-              (fs/existsSync blob)
-              (>= (.-mtimeMs (fs/statSync blob)) (.-mtimeMs (fs/statSync bundle))))
-       (into-array (concat (take script argv) ["--snapshot-blob" blob] (drop script argv)))
-       argv))))
-
 (defn await-online!
   "Polls the server's player list (every 250 ms, up to 10 s) until the body is on it (the start check polls the rest)."
   [opts]
@@ -550,14 +537,12 @@
 
 (defn body-env
   "The environment of a probe body: the view dump on demand (only while a browser watches the body; no cost otherwise), always on with --view; Node's
-  compile cache for the 10 MB bundle (a rebuild changes the file, so Node recompiles it). A body from the snapshot gets none: Node crashes on
-  restore with both."
-  ([opts] (body-env opts nil))
-  ([opts argv]
+  compile cache for the 10 MB bundle (a rebuild changes the file, so Node recompiles it)."
+  [opts]
   (js/Object.assign #js {} js/process.env
-                    (when-not (some #{"--snapshot-blob"} argv) #js {:NODE_COMPILE_CACHE (repo-path "engine" "out" "compile-cache")})
+                    #js {:NODE_COMPILE_CACHE (repo-path "engine" "out" "compile-cache")}
                     #js {:BODY_VIEW (if (:view opts) "1" "demand")}
-                    (when (:trace-dir opts) #js {:MC_STEP_TRACE (steps-file opts)}))))
+                    (when (:trace-dir opts) #js {:MC_STEP_TRACE (steps-file opts)})))
 
 (defn start-body!
   "Starts the body with a scenario holding register, --fresh; resolves once it logged :system :started. The body's own
@@ -584,10 +569,9 @@
     (fs/mkdirSync dir #js {:recursive true})
     (fs/writeFileSync scenario (pr-str {:register [] :queue []}))
     (let [fd (fs/openSync out "a")
-          argv (snapshot-argv (body-argv opts scenario restore?))
-          child (cp/spawn "node" argv
+          child (cp/spawn "node" (body-argv opts scenario restore?)
                           #js {:cwd (repo-path "engine") :stdio #js ["ignore" fd fd]
-                               :env (body-env opts argv)})]
+                               :env (body-env opts)})]
       (swap! bodies assoc (:body opts) child)
       (.then (await-event opts offset started-event since 90000 #{})
              (fn [ev]

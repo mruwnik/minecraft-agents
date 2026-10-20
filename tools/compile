@@ -296,10 +296,7 @@ rm -f "$out"; out=
 if [ -n "$tmp_bundle" ]; then
   [ "$code" != 0 ] || "$repo/tools/bundle-jobs-check" "$tmp_bundle" "$repo/engine/src/jobs" || code=1
   # Node adds a cache entry per changed bundle and never drops one; entries older than 2 days are stale (a live one is rewritten on its next load).
-  if [ "$code" = 0 ]; then mv -f "$tmp_bundle" "$repo/engine/out/body-release.cjs"; find "$repo/engine/out/compile-cache" "$repo/state/compile-cache" -type f -atime +2 -delete 2>/dev/null
-    # V8 start-up snapshot of the bundle for world-test bodies (skips ~0.7 s of module loading per start); a failed build leaves the old blob, which the runner then ignores as older than the bundle
-    node "$repo/tools/build-body-snapshot.mjs" 2>&1 | grep -v -e '^(node:' -e '^It may still' -e '^To request' -e 'trace-warnings' -e '^ ' -e '^eternal' >&2 || true
-  else echo "tools/compile: body-release.cjs left as it was" >&2; fi
+  if [ "$code" = 0 ]; then mv -f "$tmp_bundle" "$repo/engine/out/body-release.cjs"; find "$repo/engine/out/compile-cache" "$repo/state/compile-cache" -type f -atime +2 -delete 2>/dev/null; else echo "tools/compile: body-release.cjs left as it was" >&2; fi
   rm -rf "$tmp_bundle" "$repo/engine/out/body-release.new"
 fi
 [ "$code" = 0 ] && [ -z "${MC_COMPILE_IN_POOL:-}" ] && write_build_id
