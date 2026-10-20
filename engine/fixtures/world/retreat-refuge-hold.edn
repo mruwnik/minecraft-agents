@@ -3,7 +3,7 @@
 ;; off a pillar keeps out of reach of a zombie at its foot), 24fe30d6 (the hide names the zombie; a queued job runs after),
 ;; e0670a91 and 8d9b5bbc (seal blocks are ledgered: cleanup takes them back once the mob is gone),
 ;; b5c1d94a 40613c1e 94b5eaee 1f0b4279 and 8035feed (a body in a hole with dirt, a zombie that moves).
-;; Pit case: the zombie stands 4 off on the stone top, close enough for its line of sight over the lip to reach the body in the pit.
+;; Pit case: bare level pit, the zombie stands 3 off on the stone top (farther off its line of sight over the lip misses the body, so the reflex never fires).
 ;; Pillar cases: open ground, 20 dirt, one NoAI zombie 7 blocks off (a lone melee mob between cover-gap 5 and refuge-gap 10:
 ;; pillar first). Tunnel cases: the cornered-retreat stone mass (x 2..30, z 10..22, y 0..4), 1x2 tunnel along z 16 from x 5.
 {:defaults
@@ -90,7 +90,7 @@
             {:count-event {:source :body :kind :hurt :data {:causes [:has "zombie"]}} :for-s 60 :at-most 6}]
    :limit-s 70}
   {:name "zombie-coming-at-a-body-in-a-pit-with-4-dirt-seals-it"
-   :blocks [[:fill [0 0 0] [31 2 31] "stone"] [:fill [16 1 16] [16 2 16] "air"] [:set [15 3 16] "stone"]]
+   :blocks [[:fill [0 0 0] [31 2 31] "stone"] [:fill [16 1 16] [16 2 16] "air"]]
    :body {:at [16.5 1 16.5] :inventory [["dirt" 4]] :effects [["resistance" 900 1]]}
    :act [[:summon "zombie" [19.5 3 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat_sealed} :within-s 60}
