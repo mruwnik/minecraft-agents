@@ -24,6 +24,7 @@
 ;; ------------------------------------------------------------------ the :fetch arg and its limits
 
 (def kinds #{:tool :item})
+(def fetch-ways "The ways of a job whose missing things are fetched: :carried is the job's own stock." [:carried :chest :craft :gather])
 (def sources #{:chest :craft :gather})
 
 (def built-in
@@ -68,6 +69,16 @@
   "The spec of a job's :fetch arg."
   (a/pred "true, false, a set of kinds (:tool :item) or a map of limits {:what :how :minutes :fail-minutes :explore}"
           #(nil? (:error (parse-arg %)))))
+
+(defn call-ways
+  "The ways the call of the job running in c allows: the frozen call's, before it starts the args', else all."
+  [c]
+  (set (or (:ways (ctx/frozen-call c)) (:ways (:args c)) fetch-ways)))
+
+(defn fetch-how
+  "The sources a fetch of the job running in c may use: its call's ways but :carried."
+  [c]
+  (disj (call-ways c) :carried))
 
 (defn merge-limits
   "Limits: built-in, then job-default, then call."

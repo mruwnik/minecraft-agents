@@ -377,7 +377,7 @@
   the child waits on the world, else nil."
   [c]
   (when (and (not (:fished (ctx/mem c))) (not (search-waits? c)) (rod-carried? c))
-    (let [e (await (child/run!* c :fish 'jobs.food.fish {:count 2 :least 1 :fetch false} {:max-calls 1}))]
+    (let [e (await (child/run!* c :fish 'jobs.food.fish {:count 2 :least 1 :ways #{:carried}} {:max-calls 1}))]
       (if (= :continue e)
         :continue
         (do (ctx/update-mem! c assoc :fished true)

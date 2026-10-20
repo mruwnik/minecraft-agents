@@ -19,22 +19,21 @@
   "Carry :count fish, caught with a fishing rod from a bank beside seen water.
   The bank is a land cell with seen water (two deep) beside it at the level below, within the bank-radius setting (48) of the body (:pos names the water cell
   to cast at instead). The body walks there (go-to), holds the rod and casts: one cast waits for a bite up to the cast-s setting (45), then reels.
-  A body with no rod gets one first (jobs.lib.need, unless :fetch is false).
+  A body with no rod gets one first (jobs.lib.need) from the ways the call allows (:carried only: none).
   Ends with the data {:got n :text}, info fish.caught per fish, and the ending:
   - :done: :count fish (cod, salmon, tropical fish, pufferfish) are carried, or the call's :least (default 1, :all = :count)
     before any stop below, or when the time ends it (the engine's rule: report :limit).
   - :condition-failed: a failed rod fetch (the cause names the rod, :because the fetch's ending).
   - :nothing-possible :unreachable (the bank could not be walked to) or :no-bite (the max-misses setting, 8, casts in a row caught nothing).
   - :limit-reached: the call's :spend :job-time (default ::job-time-s) is used up with fewer than :least caught; the engine ends it, with {:got}.
-  It waits (can-start?, before the first cast) on :no-rod (none carried and :fetch false) and :no-water (no seen water with a bank
+  It waits (can-start?, before the first cast) on :no-rod (none carried and the call's :ways #{:carried}) and :no-water (no seen water with a bank
   within the bank-radius setting); can-run? waits on :no-water again after a look round (the water gone mid-run).
   The goal is to carry :count fish: the carried fish are counted at every round, so a body already carrying them is done,
   and fish eaten or stored mid-job are caught again.")
 
 (a/defargs args
   {:count {:doc "fish to catch" :spec (a/int-in 1 nil) :default 3}
-   :pos {:doc "the water cell to cast at, [x y z] or {:x :y :z}; nil: the nearest bank in sight" :spec ::a/pos :default nil}
-   :fetch {:doc "get a rod when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-rod" :spec need/option? :default true}})
+   :pos {:doc "the water cell to cast at, [x y z] or {:x :y :z}; nil: the nearest bank in sight" :spec ::a/pos :default nil}})
 
 (a/defargs settings
   {::cast-s {:default 45 :doc "Seconds one cast waits for a bite." :spec (a/num-in 1 nil)}
@@ -49,6 +48,7 @@
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (def target [:pos])
+(def ways need/fetch-ways)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-or-if-lit #(when (:pos (:args %)) (work-place/spot %))))
@@ -98,7 +98,7 @@
   "At the call's start, why it cannot fish: [cause text], or nil."
   [c]
   (cond
-    (and (not (rod-carried? c)) (nil? (need/parse-arg (:fetch (:args c))))) [:no-rod "no fishing rod is carried and :fetch is off"]
+    (and (not (rod-carried? c)) (empty? (need/fetch-how c))) [:no-rod "no fishing rod is carried and the call allows only :carried"]
     (empty? (spots c)) [:no-water "no seen water with a bank in reach"]))
 
 (defn can-start?
@@ -128,8 +128,7 @@
 (defn ^:async get-rod!
   "A rod through jobs.lib.need (its time counts in the call's :spend like any child): :again once it is done, :continue while it waits, else the ending."
   [c]
-  (let [limits (select-keys (need/parse-arg (:fetch (:args c))) [:how :explore])
-        e (await (need/item! c "fishing_rod" 1 limits))]
+  (let [e (await (need/item! c "fishing_rod" 1 {:how (need/fetch-how c)}))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) :again

@@ -1,5 +1,5 @@
 ;; Card bf0348c9: jobs.food.fish casts a carried rod from the bank at seen water 2 deep and reels fish in (fish.caught, the fish in the bag);
-;; with no rod and :fetch false it waits :no-rod, with only 1-deep water :no-water, and neither casts. Pond x 12..20, z 10..22 in a stone block
+;; with no rod and :ways #{:carried} it waits :no-rod, with only 1-deep water :no-water, and neither casts. Pond x 12..20, z 10..22 in a stone block
 ;; (water y -2..-1, flush with the floor), the body on the bank at x 8.5. Bites are random: the catching case allows 170 s for one fish.
 {:defaults
  {:tags [:food :fish :jobs]
@@ -16,7 +16,7 @@
    :after [[:item "fishing_rod" 1]]
    :limit-s 185}
   {:name "no-rod-and-no-fetch-waits-no-rod"
-   :act [[:job (jobs.food.fish {:count 1 :fetch false})]]
+   :act [[:job (jobs.food.fish {:count 1 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-rod}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :fish.caught} :for-s 30}]}
   {:name "one-deep-water-waits-no-water"

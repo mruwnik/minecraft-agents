@@ -42,7 +42,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [res]} (await (run (world [] {}) {:count 1 :fetch false}))]
+        (let [{:keys [res]} (await (run (world [] {}) {:count 1 :ways #{:carried}}))]
           (is (= [:condition-failed :no-rod] [(:kind (:ending res)) (:reason res)])))))))
 
 (deftest casts-that-never-bite-end-no-bite-with-the-count-got

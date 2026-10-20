@@ -55,7 +55,7 @@
       (fn ^:async t []
         (is (= {:event :completed} (select-keys (await (angle {:count 2} {:inventory rod :fish {:catch ["cod"] :misses 1}})) [:event])))
         (is (= {:event :waiting :reason :no-rod}
-               (await (angle {:count 1 :fetch false} {:inventory []}))))
+               (await (angle {:count 1 :ways #{:carried}} {:inventory []}))))
         (is (= {:event :waiting :reason :no-water}
                (await (angle {:count 1} {:inventory rod :blocks bank}))))
         (is (= {:event :stopped :kind :nothing-possible :reason :no-bite}

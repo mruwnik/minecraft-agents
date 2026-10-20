@@ -112,7 +112,7 @@
               {:key k :count n :job 'jobs.gather.mine :seen blocks :tunnel? true
                :args {:block (first (sort blocks)) :item k :count n :fetch mine-fetch :radius (seen-radius)}}))
           (for [[k n] gather :when (fish-items k)]
-            {:key k :count n :job 'jobs.food.fish :seen #{"water"} :args {:count n :fetch #{:item}}})
+            {:key k :count n :job 'jobs.food.fish :seen #{"water"} :args {:count n}})
           (when-let [n (get gather "obsidian")]
             [{:key "obsidian" :count n :job 'jobs.gather.mine :seen #{"obsidian" "lava"}
               :args {:block "obsidian" :item "obsidian" :count n :mend false :fetch mine-fetch :radius (seen-radius)}}])
