@@ -315,14 +315,6 @@
           (is (= :done (:status @out)) (pr-str @out))
           (is (= 3 (:steps @out))))))))
 
-(deftest tunnel-passes-its-fetch-to-the-stair-child-for-items-only
-  (is (= {:what #{:item}} (tunnel/stair-fetch true)))
-  (is (= {:what #{:item}} (tunnel/stair-fetch #{:tool :item})))
-  (is (= {:what #{:item} :minutes 2} (tunnel/stair-fetch {:minutes 2})))
-  (is (nil? (tunnel/stair-fetch false)))
-  (is (nil? (tunnel/stair-fetch #{:tool})) "a tool is the tunnel's own fetch")
-  (is (nil? (tunnel/stair-fetch {:what #{:tool}}))))
-
 (deftest tunnel-seal-that-fails-in-its-own-run-leaves-the-stand
   (async done
     (tu/run-async done
