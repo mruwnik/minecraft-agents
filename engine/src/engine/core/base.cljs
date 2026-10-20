@@ -222,9 +222,10 @@
   (and @(:memory-dirty eng) (>= (- (now eng) @(:memory-saved-at eng)) (:memory-save-ms eng))))
 
 (defn save-memory-soon!
-  "save-memory! for the per-act saves: skipped within :memory-save-ms of the last write (housekeep flushes what was skipped)."
+  "save-memory! for the per-act saves: skipped within :memory-save-ms of the last write (housekeep flushes what was skipped),
+  except when a :durable? policy kind was written since the last save: its entry must be on disk before the act."
   [eng]
-  (if (< (- (now eng) @(:memory-saved-at eng)) (:memory-save-ms eng))
+  (if (and (< (- (now eng) @(:memory-saved-at eng)) (:memory-save-ms eng)) (not (:urgent @(:store eng))))
     (reset! (:memory-dirty eng) true)
     (save-memory! eng)))
 

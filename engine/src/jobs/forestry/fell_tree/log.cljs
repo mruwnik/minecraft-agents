@@ -90,7 +90,7 @@
   "Write the replant debt for the log cell pos of the tree of species, once. True when it wrote one."
   [c pos species]
   (when-not (some #(= pos (:pos %)) (debts c))
-    (ctx/remember! c replant-kind {:pos pos :species species} {:cap 50 :ttl :forever})
+    (ctx/remember! c replant-kind {:pos pos :species species} {:cap 50 :ttl :forever :durable? true})
     true))
 
 (defn trunk-cell?

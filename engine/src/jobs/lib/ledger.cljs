@@ -44,7 +44,7 @@
 
 (def kind :scaffold)
 
-(def policy {:cap 1 :ttl :forever})
+(def policy {:cap 1 :ttl :forever :durable? true})
 
 (defn entry-at [l cell] (first (filter #(= cell (:cell %)) l)))
 

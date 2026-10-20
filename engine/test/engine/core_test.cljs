@@ -1715,6 +1715,26 @@
             (is (= "memory.edn" (:file e)))
             (is (string? (:error e)))))))))
 
+(defn ^:async durable-round
+  [c]
+  (ctx/remember! c :scaffold {:cell [1 2 3]} {:cap 1 :ttl :forever :durable? true})
+  (await (ctx/act c :moveTo #js {:pos #js {:x 5 :y 64 :z 0}}))
+  (done c))
+
+(deftest a-durable-memory-write-reaches-disk-before-the-next-act-despite-the-save-gap
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p dir]} (setup)
+              eng (assoc-in eng [:jobs 'durable] (tu/job durable-round))
+              release (.hold (.-world p) "moveTo")]
+          (core/submit! eng '(durable) {})
+          (let [r (core/tick! eng)]
+            (await (in-act (.-world p) "moveTo"))
+            (is (= {:cell [1 2 3]} (get-in (memory-on-disk dir) [:entries :scaffold 0 :data])))
+            (release)
+            (await r)))))))
+
 (deftest acts-within-the-save-gap-skip-the-memory-write-and-housekeeping-flushes-it
   (async done
     (tu/run-async done

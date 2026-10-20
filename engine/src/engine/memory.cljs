@@ -5,7 +5,8 @@
   maps to a vector of entries {:t wall-clock-ms :wt world-time :data ...},
   newest last, and its policy {:cap n :ttl ms-or-:forever} is stored beside
   it. A write may pass a policy; a new kind written without one gets
-  default-policy. Forever is the keyword :forever, never an omitted ttl.
+  default-policy. Forever is the keyword :forever, never an omitted ttl. A policy with :durable? true
+  marks its writes as needed on disk before the job's next act (the engine's debounced act saves honour it).
 
   Writes change the store in RAM; save! sweeps and writes the file. The
   sweep drops expired entries, kinds with no entries left, and :job/<id>
@@ -162,7 +163,7 @@
          age (when world-age (world-age))
          entry (cond-> {:t (now) :wt (world-time) :data data}
                  age (assoc :age age))]
-     (swap! store update :data add-entry kind entry policy)
+     (swap! store #(cond-> (update % :data add-entry kind entry policy) (:durable? policy) (assoc :urgent true)))
      entry)))
 
 (defn forget! [store kind]
@@ -184,7 +185,7 @@
   ([store] (save! store false))
   ([store force?]
    (let [{:keys [dir now live-jobs]} @store
-         data (:data (swap! store update :data sweep (now) (when live-jobs (live-jobs))))]
+         data (:data (swap! store #(-> % (dissoc :urgent) (update :data sweep (now) (when live-jobs (live-jobs))))))]
      (when (or force? (not= data (:saved @store)))
        (let [written (fsu/write-edn! (file dir) data)]
          (swap! store assoc :saved data)
