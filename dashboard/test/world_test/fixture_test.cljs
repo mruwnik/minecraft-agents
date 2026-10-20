@@ -573,6 +573,10 @@
   (let [data (f/memory-seed [{:kind :spawn-set :data {} :age-s 7200} {:kind :spawn-set :data {}}] 10000000)]
     (is (= [2800000 10000000] (mapv :t (get-in data [:entries :spawn-set]))))))
 
+(deftest memory-seed-stamps-an-opened-entry-with-its-opening-time
+  (let [data (f/memory-seed [{:kind :opened :data {:cell [1 0 1]} :age-s 5} {:kind :opened :data {:t 7}}] 10000)]
+    (is (= [5000 7] (mapv #(get-in % [:data :t]) (get-in data [:entries :opened]))))))
+
 (deftest memory-seed-problems
   (let [ps #(f/problems (merge {:name "a" :time :day :plot {:height 6} :body {:at [1 0 1]} :act [] :after [] :expect [{:event {:kind :x} :within-s 1}]} %))]
     (is (empty? (ps {:memory [{:kind :food-source :data {:pos [1 0 1]}}]})))

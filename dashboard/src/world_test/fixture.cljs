@@ -205,12 +205,15 @@
 
 (defn memory-seed
   "The body's memory data (what engine/memory.edn holds) for a case's :memory entries, positions already absolute:
-  each {:kind k :data {...}} (optionally :policy {:cap :ttl}, :age-s seconds old) becomes an entry written at now-ms (minus its age), in order."
+  each {:kind k :data {...}} (optionally :policy {:cap :ttl}, :age-s seconds old) becomes an entry written at now-ms (minus its age), in order.
+  An :opened entry's data carries its opening time :t, as a walk writes it (the door-left trigger waits :open-s from it)."
   [entries now-ms]
   (reduce (fn [acc {:keys [kind data policy age-s]}]
-            (-> acc
-                (update-in [:entries kind] (fnil conj []) {:t (- now-ms (* 1000 (or age-s 0))) :data data})
-                (assoc-in [:policies kind] (or policy default-memory-policy))))
+            (let [t (- now-ms (* 1000 (or age-s 0)))
+                  data (if (= kind :opened) (merge {:t t} data) data)]
+              (-> acc
+                (update-in [:entries kind] (fnil conj []) {:t t :data data})
+                (assoc-in [:policies kind] (or policy default-memory-policy)))))
           {:entries {} :policies {}}
           entries))
 
