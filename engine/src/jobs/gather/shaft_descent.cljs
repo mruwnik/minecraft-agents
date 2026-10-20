@@ -18,7 +18,7 @@
   to its depth, then walks to the shaft's next branch (jobs.lib.shafts/next-for). A body already on the shaft's stair continues it
   from there. Digs nothing but the stair's steps; the caller digs the branch.
 
-  Needs: a read zone list, torches and a pickaxe as the stair needs them (:fetch passed on). Impossible: nothing.
+  Needs: a read zone list, torches and a pickaxe as the stair needs them (the stair is called with :fetch true). Impossible: nothing.
 
   Ends :done with data {:shaft id :to-y y :n branch number :branch {:from :heading} :heading name-or-nil :steps stair steps}. A shaft
   that cannot be used ends :condition-failed (:no-shaft :failed-lately :zone :claim :footprint, no stair part), one whose walk or stair

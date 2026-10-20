@@ -465,6 +465,10 @@
                      {:no-event {:kind :plan.failed :data {:plan "test-probex-wood"}} :for-s 5}]}
            (f/resolve-expect-refs c "test-probex-")))))
 
+(deftest after-plan-refs-resolve-in-memory-keys
+  (is (= {:after [[:memory {:entries {:mine/shafts [{:data {"test-probex-s" {:n [:>= 1]}}}]}}]]}
+         (f/resolve-expect-refs {:after [[:memory {:entries {:mine/shafts [{:data {"$plan:s" {:n [:>= 1]}}}]}}]]} "test-probex-"))))
+
 (deftest body-refs-resolve-to-the-running-body
   (is (= {:id "w" :metadata {:by "ProbeX"}} (f/resolve-body-refs {:id "w" :metadata {:by "$body"}} "ProbeX")))
   (is (= {:metadata {:by "Other"}} (f/resolve-body-refs {:metadata {:by "Other"}} "ProbeX")))

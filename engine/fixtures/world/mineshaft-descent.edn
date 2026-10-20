@@ -19,7 +19,8 @@
    :act [[:job (jobs.gather.mine {:torch-interval 0 :block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.shaft :data {:shaft [:contains "-s"] :branch 1}} :within-s 100 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4] :text [:contains "via shaft test-"]}} :within-s 130 :of-job true}]
-   :after [[:not-block [17 -1 16] "dirt"] [:not-block [19 -3 16] "dirt"] [:item "cobblestone" [:>= 4]]]}
+   :after [[:not-block [17 -1 16] "dirt"] [:not-block [19 -3 16] "dirt"] [:item "cobblestone" [:>= 4]]
+           [:memory {:entries {:mine/shafts [{:data {"$plan:s" {:n [:>= 1]}}}]}}]]}
   {:name "no-shaft-stair-is-cut-and-declaring-it-is-suggested"
    :act [[:job (jobs.gather.mine {:torch-interval 0 :block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4] :shaft-suggest {:to-y [:any]} :text [:contains "plans.mjs mineshaft"]}} :within-s 130 :of-job true}]
