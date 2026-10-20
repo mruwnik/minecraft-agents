@@ -4,6 +4,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.game :as game]
             [jobs.lib.animals :as animals]
             [jobs.lib.child :as child]
             [jobs.lib.need :as need]
@@ -12,8 +13,7 @@
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
             [jobs.lib.walk.world :as wworld]
-            [jobs.lib.escort :as escort]
-            [jobs.animals.unleash :as unleash]))
+            [jobs.lib.escort :as escort]))
 
 (def doc
   "Put a lead on one animal of type :mob, walk to :pos with it following, then tie it to the fence post :fence
@@ -93,7 +93,7 @@
    ::max-ties {:default 2 :doc "Ties tried before the job gives up." :spec (a/int-in 0 nil)}
    ::moved-eps {:default 0.25 :doc "An animal that moved less than this many blocks between two looks has settled." :spec (a/num-in 0 nil)}
    ::max-settles {:default 20 :doc "Looks spent waiting for the animal to settle before a pull." :spec (a/int-in 0 nil)}
-   ::max-reach {:default 10 :doc "The farthest a pull's target lies from the animal. The lead breaks past animals/leash-break blocks, so 10 leaves a margin." :spec (a/num-in 0 nil)}
+   ::max-reach {:default 10 :doc "The farthest a pull's target lies from the animal. The lead breaks past engine.game/leash-break blocks, so 10 leaves a margin." :spec (a/num-in 0 nil)}
    ::path-reach {:default 11 :doc "How far from the animal any point of a pull's walk may lie; a path that strays farther (a detour round a wall) would break the lead." :spec (a/num-in 0 nil)}
    ::pull-range {:default 1 :doc "How close to the pull target the walk must get." :spec (a/num-in 0 nil)}
    ::pull-slack {:default 1 :doc "Blocks a pull aims farther than the lead's length strictly needs: the animal comes to a little over it." :spec (a/num-in 0 nil)}
@@ -264,7 +264,7 @@
   than max-reach from the animal, or nil when the animal is at pos or too far out for any pull."
   [animal-pos pos radius]
   (let [d (u/flat-dist animal-pos pos)
-        extra (min (+ (- animals/lead-trail radius) (pull-range) (pull-slack)) (- (max-reach) d))
+        extra (min (+ (- game/lead-trail radius) (pull-range) (pull-slack)) (- (max-reach) d))
         k (/ extra d)]
     (when (and (pos? d) (pos? extra))
       (assoc pos
@@ -305,7 +305,7 @@
   (let [d (u/flat-dist animal-pos (:pos (:args c)))]
     (if (await (path-leaves-reach? c target animal-pos))
       (stop-gathering! c d)
-      (let [r (await (escort/walk-legs! c :pull target (pull-range) escort/follow-reach))]
+      (let [r (await (escort/walk-legs! c :pull target (pull-range) (escort/follow-reach)))]
         (cond
           (= :waiting r) :yield
           (#{:searching :stopped} r) :again

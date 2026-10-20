@@ -470,7 +470,7 @@
         (let [s (setup {:floor tu/walk-floor :inventory lead})
               opts (atom nil)]
           (with-redefs [walk/plan-walk! (fn ([_ _ _ _ _] (js/Promise.resolve nil)) ([_ _ _ _ _ o] (reset! opts o) (js/Promise.resolve nil)))]
-            (await (escort/leg-target {:primitives (:p s)} {:x 150 :y 64 :z 0} 3)))
+            (await (escort/leg-target {:primitives (:p s)} {:x 150 :y 64 :z 0})))
           (is (pos? (:budget @opts)) "a far target is searched a round at a time"))))))
 
 (deftest the-reach-check-is-false-when-planning-throws
@@ -761,7 +761,7 @@
               s {:eng eng :clock clock :p p}]
           (await (submit s {} 1))
           (is (seq @pauses) "the wait is a pause child")
-          (is (= #{{:seconds (/ escort/wait-look-ms 1000) :why :waiting-for-animal}} (set (filter #(= :waiting-for-animal (:why %)) @pauses)))))))))
+          (is (= #{{:seconds (escort/wait-look-s) :why :waiting-for-animal}} (set (filter #(= :waiting-for-animal (:why %)) @pauses)))))))))
 
 (deftest a-post-that-is-no-fence-waits-the-start
   (let [c {:primitives (tu/fake {:blocks {"5,64,0" "stone"}}) :args {:mob "cow" :fence {:x 5 :y 64 :z 0}}}]

@@ -8,6 +8,10 @@
   "The minecraft-data version used when no body is connected (the connect default, engine/js/connect.mjs)."
   "26.1")
 
+(def leash-break "A lead breaks when the animal is farther than this many blocks from the holder (12 since 1.21.6)." 12)
+
+(def lead-trail "How far behind a walking holder a led animal trails, in blocks." 6)
+
 (def eye-height constants/eye-height)
 (def hitbox-half constants/hitbox-half-width)
 (def body-height constants/body-height)

@@ -270,7 +270,7 @@
   [c]
   (let [me (u/self-pos c)]
     (->> (when-not (:uuid (:args c)) (candidates c))
-         (filterv #(<= (u/flat-dist me (u/pos-of (.-pos %))) escort/follow-reach))
+         (filterv #(<= (u/flat-dist me (u/pos-of (.-pos %))) (escort/follow-reach)))
          first)))
 
 (defn ^:async get-food!
@@ -344,7 +344,7 @@
         since (or (:arrive-since (ctx/mem c)) now)]
     (cond
       (and a (at-destination? c a)) (finish! c :arrived)
-      (and a (:box (:args c)) (not (:led-deeper (ctx/mem c))) (<= (u/flat-dist (u/self-pos c) (u/pos-of (.-pos a))) escort/lead-deeper-gap))
+      (and a (:box (:args c)) (not (:led-deeper (ctx/mem c))) (<= (u/flat-dist (u/self-pos c) (u/pos-of (.-pos a))) (escort/lead-deeper-gap)))
       (await (escort/lead-deeper! c (:box (:args c)) (u/pos-of (.-pos a))))
       (> (- now since) (escort/max-wait-ms)) (finish! c (if a :animal-outside :lost))
       :else (do (ctx/update-mem! c assoc :arrive-since since)

@@ -215,7 +215,7 @@
       (if (= :wait verdict)
         (do (await (escort/wait-for-animal! c :never)) :continue)
         (lure-lost! c verdict))
-      (let [{:keys [leg searching]} (await (escort/leg-plan c target 1))
+      (let [{:keys [leg searching]} (await (escort/leg-plan c target))
             n (inc (:search-rounds m 0))]
         (ctx/update-mem! c assoc :search-rounds (if searching n 0))
         (cond

@@ -52,15 +52,23 @@
 (a/defargs settings
   {::watch-radius {:default 64 :doc "Blocks from the body within which the lured or led animal is looked for." :spec (a/num-in 0 nil)}
    ::stall-s {:default 10 :doc "Seconds a seen animal beyond the safe gap may make no progress toward the body before the walk ends :animal-stalled." :spec (a/num-in 0 nil)}
-   ::safe-gap {:default 7 :doc "The body does not walk on while a seen animal trails it by more than this many blocks: the lead breaks past 10." :spec (a/num-in 0 nil)}
+   ::safe-gap {:default 7 :doc "The body does not walk on while a seen animal trails it by more than this many blocks: the lead breaks past engine.game/leash-break." :spec (a/num-in 0 nil)}
    ::max-wait-s {:default 10 :doc "Seconds spent waiting for an animal to come into sight at the destination before the job gives it up." :spec (a/num-in 0 nil)}
    ::unseen-lost-s {:default 3 :doc "Seconds the animal must stay out of sight, from the first look that missed it, before it counts as lost (a ledge or tree can hide a led animal)." :spec (a/num-in 0 nil)}
    ::back-limit-s {:default 15 :doc "Seconds from the first miss after which the walk back toward the last sighting gives up and the animal is lost." :spec (a/num-in 0 nil)}
    ::back-near {:default 4 :doc "Blocks from the last sighting at which the body counts as back there." :spec (a/num-in 0 nil)}
    ::closing-blocks {:default 0.2 :doc "Blocks nearer the body an animal must come to count as making progress (a cow swimming in covers a block in 20-30 s)." :spec (a/num-in 0 nil)}
    ::max-search-rounds {:default 40 :doc "Calls in a row a walk may spend on the plan search of its next leg (about 80 ms each) before it counts as failed." :spec (a/int-in 0 nil)}
+   ::leg-steps {:default 4 :doc "How many path steps one leg of a walk covers." :spec (a/int-in 1 nil)}
+   ::follow-reach {:default 10 :doc "A pull passes this as the gap: an animal trailing the body by more blocks is about to break the lead (past engine.game/leash-break)." :spec (a/num-in 0 nil)}
+   ::wait-look-s {:default 0.25 :doc "Seconds of one look's wait while the body holds still for the animal." :spec (a/num-in 0 nil)}
+   ::lead-deeper-gap {:default 3.5 :doc "An animal this near the body (flat) and outside the box has stopped tempted: lead on." :spec (a/num-in 0 nil)}
    ::lure-reach {:default 6 :doc "A lured animal is waited for once the body is this near it, in blocks." :spec (a/num-in 0 nil)}
    ::back-blocks {:default 12 :doc "An animal out of sight for unseen-lost-ms is looked for by walking back toward where it was last seen, when that is no farther from the body than this." :spec (a/num-in 0 nil)}})
+(defn leg-steps [] (settings/get settings ::leg-steps))
+(defn wait-look-s [] (settings/get settings ::wait-look-s))
+(defn follow-reach [] (settings/get settings ::follow-reach))
+(defn lead-deeper-gap [] (settings/get settings ::lead-deeper-gap))
 (defn lure-reach [] (settings/get settings ::lure-reach))
 (defn safe-gap [] (settings/get settings ::safe-gap))
 (defn max-wait-ms [] (* 1000 (settings/get settings ::max-wait-s)))
@@ -89,14 +97,6 @@
                                  (assoc opts :policy (update (wworld/body-policy c) :moves conj :open))))
          (catch js/RangeError _ nil)))))
 
-(def leg-steps
-  "How many path steps one leg of a walk covers."
-  4)
-
-(def follow-reach
-  "The animal trailing the body by more than this many blocks is about to break the lead (it breaks past 12)."
-  10)
-
 (defn snap-to-ground
   "target with its y moved to the nearest standable cell of its column (down first, then a little up), unchanged when
   it already is one or the column has none: a spot in the air or underground still plans legs."
@@ -109,16 +109,16 @@
     (if y' {:x x :y y' :z z} target)))
 
 (defn ^:async leg-plan
-  "Where the next leg of a walk to target (within range) goes: {:leg cell} the planned path's cell leg-steps on,
+  "Where the next leg of a walk to target goes: {:leg cell} the planned path's cell leg-steps on,
   {} while the plan search is still going on (the caller looks at the animal and asks again), else {}
   (the rest is within one leg, there is no plan, or the leg would not move the body: the caller walks the whole way).
   The search is one round of go-to's budget (the path to where it has got to): a far target never leaves the body silent
   for seconds, which body.idle would report."
-  [c target range]
+  [c target]
   (let [pw (wworld/path-world (:primitives c))
         plan (when pw (await (plan-or-nil c pw (snap-to-ground c target) {:budget wsearch/round-budget})))
         steps (:steps plan)
-        step (when (< leg-steps (count steps)) (nth steps leg-steps))
+        step (when (< (leg-steps) (count steps)) (nth steps (leg-steps)))
         me (u/self-pos c)]
     (cond
       (and (empty? steps) (= "searching" (:status plan))) {:searching true}
@@ -127,12 +127,8 @@
 
 (defn ^:async leg-target
   "The :leg of leg-plan, nil when none."
-  [c target range]
-  (:leg (await (leg-plan c target range))))
-
-(def wait-look-ms
-  "One look's wait while the body holds still for the animal."
-  250)
+  [c target]
+  (:leg (await (leg-plan c target))))
 
 (defn following?
   "True when the animal is on this body's lead, or (a lure-to run, memory :method :lure) the body still holds its food."
@@ -208,11 +204,9 @@
                                                        :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
       :yield
       :again)
-    (do (await (child/pause! c (/ wait-look-ms 1000) :waiting-for-animal))
+    (do (await (child/pause! c (wait-look-s) :waiting-for-animal))
         (ctx/hold-still! c nil)
         :again))))
-
-(def lead-deeper-gap "An animal this near the body (flat) and outside the box has stopped tempted: lead on." 3.5)
 
 (defn deep-cell
   "The middle of the box cell farthest from the animal, one cell in from its far edge when the box is wider than two."
@@ -247,7 +241,7 @@
       (do
         (ctx/update-mem! c dissoc :catching-up)
         (loop []
-          (let [{:keys [leg searching]} (await (leg-plan c target range))
+          (let [{:keys [leg searching]} (await (leg-plan c target))
                 r (when-not searching
                     (await (child/call-walk* c slot
                                              {:pos (or leg target) :range (if leg 1 range) :doors :leave-open :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]

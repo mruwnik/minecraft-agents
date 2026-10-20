@@ -530,7 +530,7 @@
         (let [{:keys [p]} (h/setup {:floor tu/walk-floor :inventory wheat} 50)
               opts (atom nil)]
           (with-redefs [walk/plan-walk! (fn ([_ _ _ _ _] (js/Promise.resolve nil)) ([_ _ _ _ _ o] (reset! opts o) (js/Promise.resolve nil)))]
-            (await (escort/leg-target {:primitives p} {:x 30 :y 64 :z 0} 2)))
+            (await (escort/leg-target {:primitives p} {:x 30 :y 64 :z 0})))
           (is (contains? (:moves (:policy @opts)) :open) "a planned gate is a way, not a wall"))))))
 
 (deftest the-animal-is-named-by-the-start-of-its-uuid

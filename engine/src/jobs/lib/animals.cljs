@@ -12,10 +12,6 @@
             [jobs.lib.reserve :as reserve]
             [jobs.lib.util :as u]))
 
-(def leash-break "A lead breaks when the animal is farther than this many blocks from the holder (12 since 1.21.6)." 12)
-
-(def lead-trail "How far behind a walking holder a led animal trails, in blocks." 6)
-
 (defn in-box?
   "True when pos stands on a feet cell of the box ({:min :max}, cells, inclusive), floored as jobs.lib.pen/in-pen? floors it."
   [{:keys [min max]} {:keys [x y z]}]
