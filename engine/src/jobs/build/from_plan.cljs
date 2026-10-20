@@ -190,10 +190,13 @@
         open (if trouble [] (owed cells))
         n (count open)
         s (* n (settings/get settings ::cell-s))
-        items (frequencies (keep :item (vals (into {} (map (juxt :pos identity)) open))))]
+        items (frequencies (keep :item (vals (into {} (map (juxt :pos identity)) open))))
+        ;; a door, gate or trapdoor out of sight for 10 s reads unknown (owed), so the done check may find a built one owed
+        ;; where this quote, read a moment later, sees it: the quote allows for them, else a :least call ends at once
+        flaky (if trouble 0 (count (filter #(and (= :match (:answer %)) (not (:companion %)) (some->> (:found %) (re-find plan/opening-pattern))) cells)))]
     {:uses (cond-> {:job-time [(* 0.5 s) s (* 4 s)]}
              (seq items) (assoc :items (update-vals items (fn [k] [0 k k]))))
-     :done [0 n n]}))
+     :done [0 n (+ n flaky)]}))
 
 ;; ------------------------------------------------------------------ steps
 

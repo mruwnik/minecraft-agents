@@ -161,6 +161,15 @@
           (is (nil? (contract/quote-problem q)) (pr-str q))
           (is (= [0 9 9] (:done q))))))))
 
+(deftest from-plan-quote-of-a-built-gate-allows-it-to-read-unseen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (bfp/start {:inventory bfp/kit} {"pen" (bfp/pen-plan)})
+              _ (await (bfp/child-outcome (:eng s) from-plan {:plan "pen"} 200))
+              q (:quote (await (event-api/quote-view (:eng s) (str from-plan) (pr-str {:plan "pen"}))))]
+          (is (= [0 0 1] (:done q))))))))
+
 (deftest from-plan-start-facts
   (async done
     (tu/run-async done

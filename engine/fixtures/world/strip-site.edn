@@ -16,6 +16,7 @@
 ;; strip needs, with no source for more, stops :child-failed (items.obtain :no-source) before any digging.
 {:defaults
  {:tags [:strip :site :mineshaft :build :storage :jobs]
+  :time :day :time-why :sleep
   :plot {:height 8 :floor "stone"}
   :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [2 0 15] [26 2 17] "air"] [:fill [3 0 16] [25 0 16] "rail"] [:set [12 1 16] "cobweb"]
            [:set [8 0 15] "oak_fence"] [:set [8 1 15] "oak_fence"] [:set [8 0 17] "oak_fence"] [:set [8 1 17] "oak_fence"] [:fill [8 2 15] [8 2 17] "oak_planks"]
