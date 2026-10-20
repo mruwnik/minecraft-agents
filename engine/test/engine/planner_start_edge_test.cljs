@@ -87,8 +87,11 @@
 
 (def stair [2 64 4 2 64 4 "cherry_stairs" {:facing "east" :half "bottom" :shape "straight"}])
 
-(deftest start-on-a-stair-plans-from-the-cell-above-it
-  (are [from] (= ["found" nil [2 65 4]] (status+first (run (world {:fill [stair]}) (near 8 64 4) {} from)))
-    {:x 2 :y 64 :z 4 :px 2.7 :py 64.5 :pz 4.5}
-    {:x 2 :y 64 :z 4 :px 2.2 :py 64.5 :pz 4.5}))
+(deftest start-on-a-stair-with-no-ground-beside-it-plans-from-the-cell-above-it
+  (is (= ["found" nil [2 65 4]]
+         (status+first (run (world {:fill [stair [1 64 4 1 64 4 "stone"]]}) (near 8 64 4) {} {:x 2 :y 64 :z 4 :px 2.2 :py 64.5 :pz 4.5})))))
 
+(deftest start-on-the-low-half-of-a-stair-steps-down-off-it
+  (are [from first-cell] (= ["found" nil first-cell] (status+first (run (world {:fill [stair]}) (near 8 64 4) {} from)))
+    ;; the low half (x .2, the box reaches the cell to the west): the walk starts from that cell, not hovering over the stair
+    {:x 2 :y 64 :z 4 :px 2.2 :py 64.5 :pz 4.5} [1 64 4]))

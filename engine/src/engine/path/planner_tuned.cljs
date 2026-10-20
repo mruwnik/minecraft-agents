@@ -438,8 +438,9 @@
 (defn- start-query
   "query with its start cell moved for a body on the edge of a block: when from (the floored body position) is no
   place to stand but from.px/pz is given, the first cell the body's box (HITBOX-HALF) overlaps (hitbox-cells) that stands with
-  the feet at from.py (when given, within 1/16). A body whose feet are above the floored cell's floor (a stair, whose
-  stand the search puts in the cell above it) starts from the cell above when that stands. Unchanged when the floored
+  the feet at from.py (when given, within 1/16); failing that, a cell the box overlaps whose stand is up to half a block
+  under the feet (the low half of a stairs block: the body steps down off it). A body whose feet are above the floored
+  cell's floor (a stair, whose stand the search puts in the cell above it) otherwise starts from the cell above when that stands. Unchanged when the floored
   cell stands or no cell does.
   search: a search of query, initialised."
   [^Search search ^js query]
@@ -451,10 +452,18 @@
                                 (let [h (.nodeH search x fy z)]
                                   (and (>= h 0) (or (nil? py) (<= (js/Math.abs (- (+ fy (/ h WHOLE)) py)) (/ 1 WHOLE))))))
                               (hitbox-cells fx fz px pz))))
+        ;; a body on the low half of a stairs block (its box reaches the neighbour cell) steps down off it
+        step-off (when (and (some? px) (some? pz) (some? py))
+                   (first (filter (fn [[x z]]
+                                    (let [h (.nodeH search x fy z)
+                                          d (- py (+ fy (/ h WHOLE)))]
+                                      (and (>= h 0) (<= (- (/ 1 WHOLE)) d 0.5))))
+                                  (hitbox-cells fx fz px pz))))
         above? (and (some? py) (> py (+ fy (/ 1 WHOLE))) (>= (.nodeH search fx (inc fy) fz) 0))]
     (cond
       (>= (.-start-h search) 0) query
       (some? edge) (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:x (first edge) :z (second edge)})})
+      (some? step-off) (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:x (first step-off) :z (second step-off)})})
       above? (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:y (inc fy)})})
       :else query)))
 
