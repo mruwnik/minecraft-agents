@@ -1,0 +1,18 @@
+;; Card 399acdc7 (mine branch torch, dark): the tunnel (east from x 4, torches carried; its one torch lights 13 steps, to x 17) breaks into a dark hall at x 10.
+;; The ore capping the hall at x 24 is lit by a torch at the end of a side alcove 12 steps from it (level 2, so it is seen from afar). The cell the body
+;; digs it from, 4 nearer, is 16 steps from that torch and past the tunnel torch: dark, so the branch hangs a torch of its own (jobs.lib.torch-plan).
+;; Stone mass x 2..30, z 2..30, y 0..6. Should-succeed: the ore is dug and a second torch is placed (the tunnel hangs only its entry torch).
+{:defaults
+ {:tags [:mine :torch :jobs] :time :any
+  :plot {:height 12}
+  :blocks [[:fill [2 0 2] [30 6 30] "stone"] [:fill [4 0 16] [4 1 16] "air"]]
+  :body {:at [4.5 0 16.5] :yaw 0 :inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "ore-lit-from-far-at-the-end-of-a-dark-hall-gets-a-branch-torch"
+   :blocks [[:fill [10 0 16] [23 1 16] "air"] [:fill [23 0 4] [23 1 15] "air"] [:fill [24 0 15] [24 1 17] "iron_ore"]
+            [:set [23 1 4] "wall_torch[facing=south]"]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got #{1 2}}} :within-s 190 :of-job true}
+            {:count-event {:source :action :kind :done :data {:name "place" :status "placed"}} :for-s 190 :at-least 2}]
+   :after [[:item "raw_iron" [:>= 1]]]}]}

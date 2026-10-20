@@ -1,0 +1,15 @@
+;; Card 399acdc7 (stair torch): a stair of its own down 18 levels through unlit stone gets its first torch at the mouth after the first step, and a
+;; second one once a dark stair cell lies beyond the 13 steps the first lights (jobs.gather.mine.torches stair-torch-due?).
+;; Stone mass x 2..40, z 4..28, y 0..19 (surface feet y 20); the body starts at [16.5 20 16.5], digs east, 8 torches carried.
+;; Should-succeed: at least two torches are placed on the way down and the dig reaches the level.
+{:defaults
+ {:tags [:mine :stairs :torch :jobs] :time :any
+  :plot {:length 48 :height 30 :light :lit}
+  :blocks [[:fill [2 0 4] [40 19 28] "stone"]]
+  :body {:at [16.5 20 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 16]] :effects [["resistance" 900 4]]}
+  :limit-s 300}
+ :cases
+ [{:name "stair-down-eighteen-gets-a-mouth-torch-and-a-second-one"
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :level #at [16 2 16] :count 1 :heading :east :tunnel-length 3 :radius 8 :mend false})]]
+   :expect [{:count-event {:source :action :kind :done :data {:name "place" :status "placed"}} :for-s 280 :at-least 2}
+            {:event {:source :job :kind :mine.tunnel-end :data {:reason :tunnel-length}} :within-s 290 :of-job true}]}]}
