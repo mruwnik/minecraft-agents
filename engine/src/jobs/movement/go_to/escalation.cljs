@@ -19,6 +19,7 @@
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
+            [jobs.lib.need :as need]
             [jobs.lib.ready :as ready]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.block-sets :as bs]
@@ -354,7 +355,7 @@
         (bs/passable? n) :open
         (or (escape/protected? n) (not (escape/diggable? block-at (may-dig-fn c) (own-placed-fn c) cell))) :not-diggable
         :else
-        (let [args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :fetch (fetch-tool? c) :need-drop (fetch-tool? c) :accept #{:lava-adjacent}}
+        (let [args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (need/ways-of-fetch (fetch-tool? c)) :need-drop (fetch-tool? c) :accept #{:lava-adjacent}}
               pos (zipmap [:x :y :z] cell)
               e (await (b/dig-cell-ending! c pos args))
               boxed? (and (not= :continue e) (= :no-side-stand (:why (:cause e))))

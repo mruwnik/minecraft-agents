@@ -408,8 +408,8 @@
               one (await (dig-route-run! below-pocket [pick] nil))
               two (await (dig-route-run! below-pocket [pick pick] nil))]
           (is (= [true true] (map (comp :arrived deref :out) [one two])))
-          (is (= #{true} (set (map :fetch @(:digs one)))) "one pickaxe: its breaking is no stop")
-          (is (= #{false} (set (map :fetch @(:digs two)))) "a spare pickaxe: no fetch")
+          (is (= #{true} (set (map (comp boolean :chest :ways) @(:digs one)))) "one pickaxe: its breaking is no stop")
+          (is (= #{false} (set (map (comp boolean :chest :ways) @(:digs two)))) "a spare pickaxe: no fetch")
           (is (= #{true} (set (map :need-drop @(:digs one)))) "a fetching dig needs a tool, else it punches the rock by hand and the route was priced for a tool it never gets")
           (is (= #{false} (set (map :need-drop @(:digs two)))))
           (is (= #{#{:lava-adjacent}} (set (map :accept @(:digs one)))) "seen lava beside a route cell is sealed by the dig, not a refusal that ends the route"))))))
