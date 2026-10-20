@@ -30,7 +30,7 @@
             {:no-event {:source :job :kind :completed} :of-job true :for-s 20 :until {:source :job :kind :waiting :data {:reason :low-health}}}]
    :after [[:block [16 1 16] "air"]]}
   {:name "hurt-body-go-to-still-pillars-out-of-a-pit"
-   :blocks [[:fill [8 0 8] [24 3 24] "dirt"] [:fill [14 1 14] [18 3 18] "air"]]
+   :blocks [[:fill [8 0 8] [24 3 24] "dirt"] [:fill [14 1 14] [18 3 18] "air"] [:set [20 4 20] "glowstone"]]
    :zones [{:name "pen" :min [13 0 13] :max [19 4 19] :owner "Other" :allow #{:place}}]
    :body {:at [16.5 1 16.5] :inventory [["dirt" 8]] :effects [["hunger" 120 255]]}
    :act [[:rcon "damage $BODY 17 minecraft:generic"]
