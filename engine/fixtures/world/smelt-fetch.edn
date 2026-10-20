@@ -93,4 +93,13 @@
    :act [[:job (jobs.items.smelt {:item "charcoal" :count 1})]]
    :expect [{:event {:source :job :kind :completed :data {:smelted 1}} :within-s 200 :of-job true}]
    :after [[:item "charcoal" 1]]
-   :limit-s 230}]}
+   :limit-s 230}
+  ;; card 27f9ef18: a furnace 8 behind the body is not in its first sight; smelt's start check answers :look, the body looks round,
+  ;; finds the furnace and uses it, so the carried cobblestone is not made into a second one.
+  {:name "furnace-behind-the-body-is-looked-for-and-used-not-made-anew"
+   :settings {:jobs.items.smelt/seen-radius 12 :jobs.lib.stock/chest-radius 12}
+   :blocks [[:set [8 0 16] "furnace[facing=east]"]]
+   :body {:inventory [["raw_iron" 2] ["coal" 2] ["crafting_table" 1] ["cobblestone" 16]]}
+   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 100 :of-job true}]
+   :after [[:item "iron_ingot" 2] [:item "cobblestone" 16]]}]}

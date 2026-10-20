@@ -122,4 +122,12 @@
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
             {:event {:source :job :kind :child_ended :data {:ending {:data {:item "furnace"}}}} :within-s 60}
             {:no-event {:source :job :kind :child_ended :data {:ending {:data {:item "furnace" :pos #{[:near #xyz [16 0 16] 0.5] [:near #xyz [17 0 16] 0.5] [:near #xyz [19 0 16] 0.5] [:near #xyz [20 0 16] 0.5] [:near #xyz [21 0 16] 0.5] [:near #xyz [22 0 16] 0.5] [:near #xyz [16 1 16] 0.5] [:near #xyz [17 1 16] 0.5] [:near #xyz [19 1 16] 0.5] [:near #xyz [20 1 16] 0.5] [:near #xyz [21 1 16] 0.5] [:near #xyz [22 1 16] 0.5]}}}}} :for-s 80 :until {:source :job :kind :completed :context {:chain [[:any]]}}}]
-   :after [[:item "iron_ingot" 1]]}]}
+   :after [[:item "iron_ingot" 1]]}
+  ;; card 27f9ef18: a table 8 behind the body is not in its first sight; craft's start check answers :look, the body looks round,
+  ;; finds the table and uses it, so the planks that would make a second table stay in the bag.
+  {:name "table-behind-the-body-is-looked-for-and-used-not-made-anew"
+   :blocks [[:set [8 0 16] "crafting_table"]]
+   :body {:inventory [["oak_planks" 8] ["stick" 2]]}
+   :act [[:job (jobs.items.craft {:item "wooden_pickaxe" :radius 10})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:item "wooden_pickaxe" 1] [:item "oak_planks" 5] [:item "crafting_table" 0]]}]}
