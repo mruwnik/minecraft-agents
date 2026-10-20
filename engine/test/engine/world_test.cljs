@@ -475,3 +475,11 @@
     (world/set-data! w {"pad" pad "wall" wall} {})
     (is (= 3 (read)))
     (is (= 2 (count (world/footprints w "pad"))))))
+
+(deftest a-change-drops-the-kept-entries-of-the-old-plans
+  (let [w (world/of-data {"pad" pad} {})]
+    (world/memo w :a (fn [] 1))
+    (world/memo w :b (fn [] 2))
+    (world/set-data! w {"pad" pad "wall" wall} {})
+    (world/memo w :c (fn [] 3))
+    (is (= #{:c} (set (filter #{:a :b :c} (keys @(:derived w))))))))

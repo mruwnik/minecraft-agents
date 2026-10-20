@@ -382,8 +382,11 @@
             (and kept (identical? plans (:plans kept)) (identical? claims (:claims kept))) (:value kept)
             (and kept (= plans (:plans kept)) (= claims (:claims kept)))
             (do (swap! (:derived w) assoc k (assoc kept :plans plans :claims claims)) (:value kept))
-            :else (let [value (f)]
-                    (swap! (:derived w) assoc k {:plans plans :claims claims :value value})
+            :else (let [value (f)
+                        current? (fn [e] (and (= plans (:plans e)) (= claims (:claims e))))]
+                    (swap! (:derived w)
+                           (fn [d] (assoc (into {} (remove (fn [[_ e]] (and (contains? e :claims) (not (current? e))))) d)
+                                          k {:plans plans :claims claims :value value})))
                     value))))))
 
 (defn zones
