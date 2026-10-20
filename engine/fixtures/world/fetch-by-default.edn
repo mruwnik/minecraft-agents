@@ -1,5 +1,5 @@
 ;; Card 88a7e29c: a job that starts without the item it needs fetches it from a chest the body has seen, by default, through its need child.
-;; Should-succeed: animals.tend with no wheat carried fetches it for the breed step; leave-tunnel with no block to seal with fetches cobblestone
+;; Should-succeed: animals.maintain with no wheat carried fetches it for the breed step; leave-tunnel with no block to seal with fetches cobblestone
 ;; and shuts the mouth (:sealed); apiary.maintain with no shears fetches them and harvests the ripe, smoked hive.
 ;; Should-fail (control): leave-tunnel with :fetch false leaves the mouth open.
 {:defaults
@@ -8,12 +8,12 @@
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 150}
  :cases
- [{:name "tend-fetches-wheat-for-the-breed-step"
-   :tags [:animals :tend]
+ [{:name "maintain-fetches-wheat-for-the-breed-step"
+   :tags [:animals :maintain]
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:8}]}"]]
    :act [[:summon "cow" [20.5 0 12.5]] [:summon "cow" [21.5 0 12.5]]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"]
-         [:job (jobs.animals.tend {:mob "cow" :target 4 :box {:min #xyz [17 0 9] :max #xyz [25 0 16]}})]]
+         [:job (jobs.animals.maintain {:mob "cow" :target 4 :box {:min #xyz [17 0 9] :max #xyz [25 0 16]}})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 70 :of-job true}
             {:event {:source :job :kind :completed} :within-s 140 :of-job true}]
    :after [[:item "wheat" [:< 8]]]}

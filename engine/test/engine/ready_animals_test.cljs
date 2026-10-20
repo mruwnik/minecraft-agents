@@ -13,7 +13,7 @@
             [jobs.animals.pen-check :as pen-check]
             [jobs.animals.shear :as shear]
             [jobs.animals.shut-gate :as shut-gate]
-            [jobs.animals.tend :as tend]
+            [jobs.animals.maintain :as maintain]
             [jobs.animals.unleash :as unleash]
             [jobs.apiary.guard :as guard]
             [jobs.apiary.harvest :as harvest]
@@ -72,8 +72,8 @@
     cull/safe? {:box hut-box} :ok
     cull/safe? {:box far-box} :later
     cull/safe? {:center {:x 15 :z 0}} :later
-    tend/safe? {:box hut-box} :ok
-    tend/safe? {:box far-box} :later
+    maintain/safe? {:box hut-box} :ok
+    maintain/safe? {:box far-box} :later
     pen-check/safe? {:box hut-box} :ok
     pen-check/safe? {:box far-box} :later
     pen-check/safe? {:at [15 64 0]} :later
@@ -91,11 +91,11 @@
   (let [c (-> (rt/ctx-of (assoc rt/open-night :time st/noon))
               (assoc :args {:box far-box})
               (assoc-in [:engine :world] (world/of-data plans {})))]
-    (is (= :ok (first (tend/safe? c))))
+    (is (= :ok (first (maintain/safe? c))))
     (is (= :ok (first (unleash/safe? c))))))
 
 (deftest a-pen-reached-by-plan-is-judged-at-its-box
-  (are [part expected] (= expected (status tend/safe? {:plan "pens" :part part}))
+  (are [part expected] (= expected (status maintain/safe? {:plan "pens" :part part}))
     "hut" :ok
     "far" :later))
 
@@ -108,7 +108,7 @@
   (are [check expected] (= expected (status check {} {:self {:pos {:x 0 :y 64 :z 0} :health 5}}))
     breed/fit? :later
     cull/fit? :later
-    tend/fit? :later
+    maintain/fit? :later
     herd/fit? :later
     guard/fit? :later
     roll/fit? :later

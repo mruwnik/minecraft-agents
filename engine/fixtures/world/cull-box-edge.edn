@@ -1,4 +1,4 @@
-;; Card 9ad7560a: cull and tend count animals with one cell-inclusive box test (jobs.lib.animals/in-box?, shared with herd):
+;; Card 9ad7560a: cull and maintain count animals with one cell-inclusive box test (jobs.lib.animals/in-box?, shared with herd):
 ;; an adult at a fractional position in the box's max row or column (x 23.7, z 18.7 in cell 23,18) counts as inside.
 ;; Box x 19..23, z 14..18. NoAI cows stand still at exact positions. Two adults in the box with :keep 1: one is culled
 ;; (before the fix the max-row cow was not counted, one adult looked like the :keep and nothing was killed). Control: the

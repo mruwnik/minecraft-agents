@@ -12,7 +12,7 @@
             [engine.pen-gate-test :as pg]
             [engine.registry :as registry]
             [engine.rail-line-test :as rl]
-            [engine.tend-test :as tt]
+            [engine.animal-maintain-test :as tt]
             [engine.test-util :as tu]
             [jobs.lib.world-files :as ew]))
 
@@ -78,13 +78,13 @@
               w (:world eng)]
           (is (true? (await (alive-after-plan-loss? eng w 'jobs.animals.shut-gate '(jobs.animals.shut-gate {:plan "pen-a"}) 3)))))))))
 
-(deftest animals-tend-round-leaves-plan-trouble-to-the-checks
+(deftest animals-maintain-round-leaves-plan-trouble-to-the-checks
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [w (ew/of-data {"pen" tt/pen-plan} {} [])
               {:keys [eng]} (h/setup {:inventory [(tt/wheat 4)] :entities [(tt/cow 1 2) (tt/cow 2 3)]} 0 w)]
-          (is (true? (await (alive-after-plan-loss? eng w 'jobs.animals.tend '(jobs.animals.tend {:plan "pen" :part "cows"}) 3)))))))))
+          (is (true? (await (alive-after-plan-loss? eng w 'jobs.animals.maintain '(jobs.animals.maintain {:plan "pen" :part "cows"}) 3)))))))))
 
 (def stone-plan {:id "pen" :parts [{:id "s" :cells [[2 64 2]] :want "stone"}]})
 
@@ -98,7 +98,7 @@
 (defn starts
   "Per job: [sym args start-fn] over plans, the kit and pen worlds."
   [plans]
-  (let [tend-world (fn [] (let [w (ew/of-data plans {} [])]
+  (let [maintain-world (fn [] (let [w (ew/of-data plans {} [])]
                             [(:eng (h/setup {:inventory [(tt/wheat 4)] :entities [(tt/cow 1 2)]} 0 w))]))]
     (merge
      {'jobs.build.from-plan [(fn [] [(:eng (bfp/start {:inventory bfp/kit} plans))]) {:plan "pen" :part "nope"}]
@@ -106,7 +106,7 @@
       'jobs.build.rail-line [(fn [] [(:eng (bfp/start (rl/spec "stone" 63 (rl/kit {})) plans []))]) {:plan "line"}]
       'jobs.build.rail [(fn [] [(:eng (bfp/start (rl/spec "stone" 63 (rl/kit {})) plans []))]) {:plan "line"}]
       'jobs.animals.pen-check [(fn [] [(:eng (bfp/start (pb/spec [] pb/built-pen) plans []))]) {:plan "pen"}]
-      'jobs.animals.tend [tend-world {:plan "pen" :part "nowhere"}]}
+      'jobs.animals.maintain [maintain-world {:plan "pen" :part "nowhere"}]}
      (into {} (map (fn [sym] [sym [(fn [] [(:eng (bfp/start {} plans))]) {:plan "pen"}]]))
            '[jobs.farm.harvest jobs.farm.plant jobs.farm.tend jobs.farm.tidy jobs.forestry.prepare jobs.forestry.maintain]))))
 

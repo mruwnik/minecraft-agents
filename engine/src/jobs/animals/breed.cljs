@@ -4,7 +4,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.animals.tend :as tend]
+            [jobs.animals.maintain :as maintain]
             [jobs.lib.animals :as animals]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
@@ -41,7 +41,7 @@
   - :nothing-possible :food-out (the food ran out below :least fed), :unreachable (one was given up as unreachable)
     or :unpaired (an odd number fed), when no candidate is left. The same after three fruitless animals in a row.
 
-  With :box (or :plan and :part, the pen of a plan part as tend reads it) the body knows a pen: when fewer than two adults
+  With :box (or :plan and :part, the pen of a plan part as maintain reads it) the body knows a pen: when fewer than two adults
   stand near it first walks to the middle of the box (once), and when it ends inside the box, however it ends (the
   cleanup, after the hand is put back), it walks back out to where it started (go-to shuts the gate behind it).
 
@@ -318,7 +318,7 @@
 (defn pen-box
   "The known pen's box ({:min :max}): :box, else the box of the plan part; nil when neither is known."
   [c]
-  (or (:box (:args c)) (:box (:args (tend/pen-of c)))))
+  (or (:box (:args c)) (:box (:args (maintain/pen-of c)))))
 
 (defn pen-cell
   "The [x z] cell of pos, as go-to takes it."
@@ -331,7 +331,7 @@
   [c box]
   (when-not (:from (ctx/mem c))
     (ctx/update-mem! c assoc :from (pen-cell (u/self-pos c))))
-  (let [r (await (child/call-walk* c :pen {:pos (tend/look-pos box) :range 3}))]
+  (let [r (await (child/call-walk* c :pen {:pos (maintain/look-pos box) :range 3}))]
     (if (= :continue r)
       :continue
       (do (ctx/update-mem! c assoc :pen-walked true) :again))))

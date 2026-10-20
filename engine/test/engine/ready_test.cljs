@@ -378,10 +378,10 @@
       'jobs.animals.cull {:box (box-at 15)} night-hut :later
       'jobs.animals.cull {:box (box-at 5)} night-hut :ok
       'jobs.animals.cull {:center {:x 15 :z 0}} night-hut :later
-      'jobs.animals.tend {:box (box-at 15)} night-hut :later
-      'jobs.animals.tend {:box (box-at 5)} night-hut :ok
-      'jobs.animals.tend {:plan "pen-far" :part "p"} night-hut :later
-      'jobs.animals.tend {:plan "pen-near" :part "p"} night-hut :ok
+      'jobs.animals.maintain {:box (box-at 15)} night-hut :later
+      'jobs.animals.maintain {:box (box-at 5)} night-hut :ok
+      'jobs.animals.maintain {:plan "pen-far" :part "p"} night-hut :later
+      'jobs.animals.maintain {:plan "pen-near" :part "p"} night-hut :ok
       'jobs.animals.pen-check {:box (box-at 15)} night-hut :later
       'jobs.animals.pen-check {:plan "far"} night-hut :later
       'jobs.animals.pen-check {:plan "near"} night-hut :ok

@@ -1,8 +1,8 @@
 ;; Bodies outside a pen with a shut fence gate. Cards 6b8e84d0 (go-to into a fenced pen opens the gate instead of ending
-;; :goal-enclosed, entities lists the animals in a fenced pen), 159e43f6 (animals.tend started outside the pen walks to the box once
+;; :goal-enclosed, entities lists the animals in a fenced pen), 159e43f6 (animals.maintain started outside the pen walks to the box once
 ;; and counts again instead of :adults 0). Pen: oak fence ring x 18..24, z 13..19, inside 19..23 x 14..18, shut gate west at [18 0 16].
-;; Walled pen (tend case): stone ring of the same size, 4 high, gate in the west wall, nothing inside is visible from outside.
-;; Should-succeed: go-to a cell inside the fenced pen arrives; entities lists the sheep inside; tend from outside the walled pen counts
+;; Walled pen (maintain case): stone ring of the same size, 4 high, gate in the west wall, nothing inside is visible from outside.
+;; Should-succeed: go-to a cell inside the fenced pen arrives; entities lists the sheep inside; maintain from outside the walled pen counts
 ;; the 3 chickens inside. Should-fail: none (go-to never ends :goal-enclosed here).
 {:defaults
  {:tags [:animals :jobs :pen :go-to]
@@ -24,11 +24,11 @@
    :act [[:summon "sheep" [21.5 0 16.5] "{NoAI:1b}"]
          [:until [:cli "entities" ["$body" "--world" "$world" "--type" "sheep"] {:total 1}] 30]]
    :after [[:entities "type=sheep,tag=wt" [[19 0 14] [23 1 18]] 1]]}
-  {:name "tend-from-outside-a-walled-pen-looks-and-counts"
+  {:name "maintain-from-outside-a-walled-pen-looks-and-counts"
    :blocks [[:fill [18 0 13] [24 3 19] "stone"] [:fill [19 0 14] [23 3 18] "air"]
             [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"] [:set [18 1 16] "air"]]
    :body {:at [10.5 0 16.5] :yaw 90}
    :act [[:summon "chicken" [20.5 0 15.5] "{NoAI:1b}"] [:summon "chicken" [21.5 0 16.5] "{NoAI:1b}"] [:summon "chicken" [22.5 0 17.5] "{NoAI:1b}"]
-         [:job (jobs.animals.tend {:mob "chicken" :target 3 :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
+         [:job (jobs.animals.maintain {:mob "chicken" :target 3 :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :adults 3}} :within-s 100 :of-job true}]
    :limit-s 140}]}
