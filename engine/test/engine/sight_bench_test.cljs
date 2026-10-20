@@ -58,3 +58,22 @@
                                               ((juxt :world :cells :distinct :visits-per-distinct :ms-per-pass :ns-per-cell) r))))))
     (is (every? #(pos? (:cells %)) rows))
     (is (every? #(>= (:visits-per-distinct %) 1) rows))))
+
+(defn measure-real
+  "Passes from eight eye cells (so each starts with fresh marks) over a real raw world of `kind`: cpu ms per pass, cells
+  per pass, the seen-set checksum."
+  [kind]
+  (let [{:keys [per pass!]} (pin/real-rig kind)
+        _ (dotimes [i 8] (pass! i))
+        c0 (:cells (perception/stats per))
+        t0 (js/process.cpuUsage)
+        _ (dotimes [i 16] (pass! (+ 8 i)))
+        ms (/ (let [u (js/process.cpuUsage t0)] (+ (.-user u) (.-system u))) 16000)
+        cells (/ (- (:cells (perception/stats per)) c0) 16)]
+    {:world kind :cells cells :ms-per-pass ms :ns-per-cell (/ (* 1e6 ms) (max 1 cells))}))
+
+(deftest sight-pass-bench-real-raw-world
+  (let [rows (mapv measure-real ["hills" "cave" "pen"])]
+    (println "\nsight pass bench (real raw world)")
+    (doseq [r rows] (println (:world r) (fmt (:cells r)) (fmt (:ms-per-pass r)) (fmt (:ns-per-cell r))))
+    (is (every? #(pos? (:cells %)) rows))))

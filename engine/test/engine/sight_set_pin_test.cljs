@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is]]
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
+            [engine.fake.node :as node]
             [engine.perception :as perception]
             [engine.test-util :as tu]))
 
@@ -39,3 +40,47 @@
 
 (deftest sealed-room-dark
   (is (= [96 711454558] (seen-set cave {:light-default [0 0]} 45))))
+
+;; The same pin over the real raw world (engine/js/raw-world.mjs on prismarine chunk columns, engine/js/sight-bench-world.mjs).
+(def bench-world (delay (node/require-here "./js/sight-bench-world.mjs")))
+
+(defn store-checksum
+  "[sections cells checksum] of the state ids in memory (not their times): the seen set."
+  [per]
+  (let [st (:st per)
+        secs (mapcat (fn [^js m] (es6-iterator-seq (.values m))) (es6-iterator-seq (.values (.-stores ^js st))))]
+    (reduce (fn [[n c sum] ^js sec]
+              (let [^js ids (.-ids sec)]
+                (loop [i 0 c c sum sum]
+                  (if (< i 4096)
+                    (let [v (aget ids i)]
+                      (recur (inc i) (if (pos? v) (inc c) c)
+                             (if (pos? v) (mod (+ (* sum 31) (* v (+ i (* 4096 (+ (.-cx sec) (* 64 (+ (.-cz sec) (* 64 (.-sy sec))))))))) 1000000007) sum)))
+                    [(inc n) c sum]))))
+            [0 0 0]
+            (sort-by (fn [^js s] [(.-cx s) (.-sy s) (.-cz s)]) secs))))
+
+(defn real-rig
+  "{:per :pass!} over the real raw world of `kind` (hills, cave, pen): (pass! i) moves the eye to the i-th of eight cells,
+  turns it and casts a whole pass."
+  [kind]
+  (let [^js w (.makeRaw ^js @bench-world kind)
+        ^js bot (.-bot w)
+        ^js pos (.. bot -entity -position)
+        x0 (.-x pos)
+        per (perception/create (.-raw w) {:rand (constantly 0.5)})]
+    {:per per
+     :pass! (fn [i]
+              (set! (.-x pos) (+ x0 (mod i 8)))
+              (set! (.-y pos) (inc (.groundAt ^js @bench-world kind (.-x pos) (.-z pos))))
+              (set! (.. bot -entity -yaw) (* i 0.7))
+              (perception/pass! per))}))
+
+(defn real-seen [kind]
+  (let [{:keys [per pass!]} (real-rig kind)]
+    (dotimes [i 4] (pass! i))
+    (store-checksum per)))
+
+(deftest real-raw-world-hills (is (= [59 69318 895800427] (real-seen "hills"))))
+(deftest real-raw-world-cave-dark (is (= [4 232 97244877] (real-seen "cave"))))
+(deftest real-raw-world-pen-with-fences (is (= [50 93064 899788773] (real-seen "pen"))))

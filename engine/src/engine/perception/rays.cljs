@@ -1,7 +1,9 @@
 (ns engine.perception.rays
   "Sight: the view cone, the sight pass that casts rays from the eye into block memory, and keeping memory current
   after block changes and touches."
-  (:require [engine.game :as game]
+  (:require ["module" :refer [createRequire]]
+            [engine.game :as game]
+            [engine.path.offsets :as offsets]
             [engine.sight :as sight]
             [engine.perception.light :refer [darken-now max-light table-now]]
             [engine.perception.store :refer [cell-index new-stamp! record! section-key store-of]]))
@@ -134,76 +136,6 @@
         (thin-boxes raw sight id) 3
         :else 2))
 
-(defn cast!
-  "One ray from (ox oy oz) along the unit vector (dx dy dz). Returns the number of cells entered.
-  A cell an earlier ray of this slice recorded is not read or recorded again: recording it again would write the same
-  state id and time. Its mark (st.markStamp * 4 + mark-kind) also says whether it stops every line, so the ray goes on
-  or ends without reading the cell; only a thin block is read again. Cells not recorded are never marked, so another ray
-  may still record them. The light of the previous cell is read only when a blocking cell needs it."
-  [{:keys [raw opts]} ^js st store ox oy oz dx dy dz now]
-  (let [radius (:radius opts) near (.-near st)
-        base (* 4 (.-markStamp st))
-        ^js sight (.-sight st) ^js visible (.-visible st)
-        sx (if (pos? dx) 1 -1) sy (if (pos? dy) 1 -1) sz (if (pos? dz) 1 -1)
-        tdx (if (zero? dx) js/Infinity (js/Math.abs (/ 1 dx)))
-        tdy (if (zero? dy) js/Infinity (js/Math.abs (/ 1 dy)))
-        tdz (if (zero? dz) js/Infinity (js/Math.abs (/ 1 dz)))
-        x0 (js/Math.floor ox) y0 (js/Math.floor oy) z0 (js/Math.floor oz)
-        ex (+ ox (* dx radius)) ey (+ oy (* dy radius)) ez (+ oz (* dz radius))
-        stops? (fn [id x y z] (blocks-line? raw sight id x y z ox oy oz ex ey ez))
-        cx0 (bit-shift-right x0 4) cy0 (bit-shift-right y0 4) cz0 (bit-shift-right z0 4)
-        ^js marks0 (marks-of st (section-key cx0 cy0 cz0))
-        i0 (cell-index x0 y0 z0)
-        kind0 (- (aget marks0 i0) base)
-        known? (< 0 kind0 4)
-        first-id (if (== kind0 1) 0 (.stateAt ^js raw x0 y0 z0))
-        first-light (if (== kind0 1) -1 (.lightAt ^js raw x0 y0 z0))]
-    (when (and (>= first-id 0) (not known?))
-      (record! st store x0 y0 z0 first-id now)
-      (aset marks0 i0 (+ base (mark-kind raw sight first-id))))
-    (if (or (== kind0 2) (and (not= kind0 1) (or (< first-id 0) (stops? first-id x0 y0 z0))))
-      1
-      (loop [x x0 y y0 z z0
-             tmx (if (zero? dx) js/Infinity (* tdx (if (pos? dx) (- (inc x0) ox) (- ox x0))))
-             tmy (if (zero? dy) js/Infinity (* tdy (if (pos? dy) (- (inc y0) oy) (- oy y0))))
-             tmz (if (zero? dz) js/Infinity (* tdz (if (pos? dz) (- (inc z0) oz) (- oz z0))))
-             prev first-light
-             n 1
-             marks marks0 mcx cx0 mcy cy0 mcz cz0]
-        (let [t (js/Math.min tmx tmy tmz)]
-          (if (> t radius)
-            n
-            (let [ax (== t tmx) ay (and (not ax) (== t tmy)) az (and (not ax) (not ay))
-                  px x py y pz z
-                  x (if ax (+ x sx) x) y (if ay (+ y sy) y) z (if az (+ z sz) z)
-                  cx (bit-shift-right x 4) cy (bit-shift-right y 4) cz (bit-shift-right z 4)
-                  ^js marks (if (and (== cx mcx) (== cy mcy) (== cz mcz)) marks (marks-of st (section-key cx cy cz)))
-                  i (cell-index x y z)
-                  kind (- (aget marks i) base)
-                  ntmx (if ax (+ tmx tdx) tmx) ntmy (if ay (+ tmy tdy) tmy) ntmz (if az (+ tmz tdz) tmz)]
-              (cond
-                (== kind 1) (recur x y z ntmx ntmy ntmz -1 (inc n) marks cx cy cz)
-                (== kind 2) (inc n)
-                :else
-                (let [id (.stateAt ^js raw x y z)]
-                  (if (< id 0)
-                    n
-                    (let [blocks? (stops? id x y z)]
-                      (if (== kind 3)
-                        (if blocks?
-                          (inc n)
-                          (recur x y z ntmx ntmy ntmz -1 (inc n) marks cx cy cz))
-                        (let [light (.lightAt ^js raw x y z)
-                              shown (if blocks?
-                                      (max-light light (if (neg? prev) (.lightAt ^js raw px py pz) prev))
-                                      light)]
-                          (when (or (== 1 (aget visible shown)) (<= t near))
-                            (record! st store x y z id now)
-                            (aset marks i (+ base (mark-kind raw sight id))))
-                          (if blocks?
-                            (inc n)
-                            (recur x y z ntmx ntmy ntmz light (inc n) marks cx cy cz)))))))))))))))
-
 (defn moved-why
   "Why a pass is due for the eye's change since the last pass started: :moved, :turned, or nil."
   [{:keys [opts]} ^js last ^js eye]
@@ -286,37 +218,76 @@
       (set! (.-gen st) #js {:epoch epoch :darken darken :near near :dim (.-dimension eye) :at now
                             :cx (js/Math.floor (.-x eye)) :cy (js/Math.floor (.-y eye)) :cz (js/Math.floor (.-z eye))}))))
 
-(defn cast-slice!
-  "Casts rays [from, to) of the pass from the eye's current place and look: the grid, then the ground rows (along the
-  eye's yaw now, and only those still inside the view cone)."
-  [{:keys [grid] :as per} ^js st ^js pass ^js eye from to now]
+(def kernel-cache (atom nil)) ;; [root module]
+
+(defn kernel
+  "The sight kernel module (engine/js/sight-kernel.mjs), loaded from the engine root."
+  []
+  (let [r (offsets/root) [loaded-root module] @kernel-cache]
+    (if (= r loaded-root)
+      module
+      (let [module ((createRequire (str r "/")) "./js/sight-kernel.mjs")]
+        (reset! kernel-cache [r module])
+        module))))
+
+(defn sections-of
+  "Where the kernel reads section arrays: the raw world's own, else lazy sections filled from its stateAt and lightAt,
+  kept for the mark stamp (the cells read stay valid as long as the marks do)."
+  [raw ^js st]
+  (if (.-sectionStates ^js raw)
+    raw
+    (let [^js lazy (.-lazy st)]
+      (if (and lazy (== (.-stamp lazy) (.-markStamp st)))
+        (.-sections lazy)
+        (let [sections (.lazySections ^js (kernel))]
+          (set! (.-lazy st) #js {:stamp (.-markStamp st) :sections sections})
+          sections)))))
+
+(defn slice-dirs
+  "The unit directions of rays [from, to) of the pass as a Float64Array of triples (NaN x: a ground ray outside the cone now)."
+  [{:keys [grid]} ^js pass ^js eye from to]
   (let [{:keys [hx hy]} grid
         cols (.-cols pass) n-grid (* cols (.-rows pass))
         ^js ground (.-ground pass)
         yaw (.-yaw eye)
         b (basis yaw (.-pitch eye))
         fx (- (js/Math.sin yaw)) fz (- (js/Math.cos yaw)) rx (js/Math.cos yaw) rz (- (js/Math.sin yaw))
-        store (store-of st (.-dimension eye))
-        ox (.-x eye) oy (.-y eye) oz (.-z eye)
         du (/ (* 2 hx) cols) dv (/ (* 2 hy) (.-rows pass))
-        cast-dir (fn [dx dy dz]
-                   (let [len (js/Math.hypot dx dy dz)]
-                     (cast! per st store ox oy oz (/ dx len) (/ dy len) (/ dz len) now)))]
+        out (js/Float64Array. (* 3 (- to from)))
+        put! (fn [j dx dy dz]
+               (let [len (js/Math.hypot dx dy dz)]
+                 (aset out (* 3 j) (/ dx len)) (aset out (+ (* 3 j) 1) (/ dy len)) (aset out (+ (* 3 j) 2) (/ dz len))))]
+    (loop [k from]
+      (when (< k to)
+        (let [j (- k from)]
+          (if (< k n-grid)
+            (let [a (+ (- hx) (* du (+ (mod k cols) (.-jx pass))))
+                  v (+ (- hy) (* dv (+ (js/Math.floor (/ k cols)) (.-jy pass))))]
+              (put! j (+ (aget b 0) (* a (aget b 3)) (* v (aget b 6)))
+                    (+ (aget b 1) (* v (aget b 7)))
+                    (+ (aget b 2) (* a (aget b 5)) (* v (aget b 8)))))
+            (let [i (* 2 (- k n-grid)) d (aget ground i) l (aget ground (inc i))
+                  dx (+ (* d fx) (* l rx)) dy (- game/eye-height) dz (+ (* d fz) (* l rz))]
+              (if (in-cone? b hx hy dx dy dz) (put! j dx dy dz) (aset out (* 3 j) js/NaN)))))
+        (recur (inc k))))
+    out))
+
+(defn cast-slice!
+  "Casts rays [from, to) of the pass from the eye's current place and look: the grid, then the ground rows (along the
+  eye's yaw now, and only those still inside the view cone). Returns the cells entered."
+  [{:keys [raw opts] :as per} ^js st ^js pass ^js eye from to now]
+  (let [^js sight (.-sight st)
+        store (store-of st (.-dimension eye))]
     (set! (.-near st) (near-of per))
     (renew-marks! per st eye now)
-    (loop [k from cells 0]
-      (cond
-        (>= k to) cells
-        (< k n-grid)
-        (let [a (+ (- hx) (* du (+ (mod k cols) (.-jx pass))))
-              v (+ (- hy) (* dv (+ (js/Math.floor (/ k cols)) (.-jy pass))))]
-          (recur (inc k) (+ cells (cast-dir (+ (aget b 0) (* a (aget b 3)) (* v (aget b 6)))
-                                            (+ (aget b 1) (* v (aget b 7)))
-                                            (+ (aget b 2) (* a (aget b 5)) (* v (aget b 8)))))))
-        :else
-        (let [i (* 2 (- k n-grid)) d (aget ground i) l (aget ground (inc i))
-              dx (+ (* d fx) (* l rx)) dy (- game/eye-height) dz (+ (* d fz) (* l rz))]
-          (recur (inc k) (if (in-cone? b hx hy dx dy dz) (+ cells (cast-dir dx dy dz)) cells)))))))
+    (.castRays ^js (kernel)
+               #js {:raw raw :sections (sections-of raw st) :sight sight :visible (.-visible st) :base (* 4 (.-markStamp st))
+                    :radius (:radius opts) :near (.-near st)
+                    :marksOf (fn [cx cy cz] (marks-of st (section-key cx cy cz)))
+                    :record (fn [x y z id] (record! st store x y z id now))
+                    :markKind (fn [id] (mark-kind raw sight id))
+                    :thin (fn [id x y z ox oy oz ex ey ez] (blocks-line? raw sight id x y z ox oy oz ex ey ez))}
+               (.-x eye) (.-y eye) (.-z eye) (slice-dirs per pass eye from to) (- to from))))
 
 (defn step!
   "One slice of the sight pass (one game tick's share). Starts a new pass when none runs and the eye moved, turned or

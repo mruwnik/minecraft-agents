@@ -71,6 +71,16 @@ test('lightAt prefers the relight overlay of the section', () => {
   assert.equal(raw.lightAt(3, 71, 4), 9)
 })
 
+test('section arrays answer what stateAt and lightAt do, null where no column is', () => {
+  const { bot } = makeBot()
+  const raw = createRawWorld({ getBot: () => bot })
+  const s = (70 + 64) >> 4
+  const i = ((70 + 64) & 15) << 8 | 4 << 4 | 3
+  assert.deepEqual(
+    [raw.sectionStates(0, s, 0)[i], raw.sectionLight(0, ((71 + 64) >> 4), 0).block[(((71 + 64) & 15) << 8) | 4 << 4 | 3], raw.sectionStates(2, s, 0), raw.sectionLight(2, s, 0), raw.sectionRange()],
+    [id('stone'), 5, null, null, { minY: -64, sections: 24 }])
+})
+
 test('a block update reaches the listeners with the new state and the stale section copy is dropped', () => {
   const { bot, column } = makeBot()
   const raw = createRawWorld({ getBot: () => bot })

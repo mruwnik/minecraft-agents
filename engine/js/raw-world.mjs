@@ -178,6 +178,23 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
     return lightOf(lastLight, ry, x, z)
   }
 
+  // the state ids of world section s (0 at the world's minY) of column (cx, cz) as a Uint16Array, null where no column is
+  const sectionStatesAt = (cx, s, cz) => {
+    const bot = follow()
+    if (!bot) return null
+    const key = keyOf(cx, cz, s)
+    return states.has(key) ? states.get(key) : sectionStates(bot, cx, cz, s, key)
+  }
+
+  // {sky, block} light arrays of the section (one nibble value per cell), null where no column is; reloaded after lightTtlMs
+  const sectionLightAt = (cx, s, cz) => {
+    const bot = follow()
+    if (!bot) return null
+    const key = keyOf(cx, cz, s)
+    const cached = lights.get(key)
+    return cached && now() - cached.at <= lightTtlMs ? cached : sectionLight(bot, cx, cz, s, key)
+  }
+
   const tablesOf = bot => {
     if (tables?.registry === bot.registry) return tables
     tables = { registry: bot.registry, sight: sightTable(bot.registry), info: stateInfo(bot.registry) }
@@ -187,6 +204,10 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
   return {
     stateAt,
     lightAt,
+    sectionStates: sectionStatesAt,
+    sectionLight: sectionLightAt,
+    // {minY, sections}: the world's lowest y and its number of 16-high sections
+    sectionRange: () => { const bot = follow(); return { minY: bot ? minYOf(bot) : -64, sections: bot ? heightOf(bot) >> 4 : 0 } },
     // {x, y, z, yaw, pitch, dimension}: the eye, mineflayer radians (yaw 0 faces -z, pitch up is positive); null offline
     eye: () => {
       const bot = follow()
