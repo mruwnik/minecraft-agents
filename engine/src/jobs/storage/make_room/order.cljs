@@ -30,11 +30,6 @@
   [name]
   (boolean (or (storage/tool? name) (tool-like name) (= "torch" name) (contains? foods/precious name))))
 
-(defn totals
-  "{name carried} over all stacks."
-  [inventory]
-  (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} inventory))
-
 ;; what shelter, mend, furnace and tool jobs spend
 (def shelter-blocks
   (into #{"dirt" "cobblestone"} (filter #(str/ends-with? % "_planks")) (choose/fillers :build)))
@@ -55,7 +50,7 @@
   shelter-blocks keep up to keep-blocks each, seeds up to keep-seeds each, keep-items whole, held ({name n}, the reserve
   register) at least n; the rest 0."
   [inventory {:keys [keep-food keep-blocks keep-seeds keep-items]} held]
-  (let [totals (totals inventory)
+  (let [totals (storage/carried-totals inventory)
         names (keys totals)
         food (->> names
                   (filter #(and (not (protected? %)) (foods/edible? %)))
@@ -89,7 +84,7 @@
   what the name carries above its keep, after the stacks of the name that come
   before it in the order: a toss frees a whole slot and never cuts into a floor."
   [inventory keep recency max-worth]
-  (let [totals (totals inventory)
+  (let [totals (storage/carried-totals inventory)
         budgets (into {} (map (fn [[n total]] [n (- total (get keep n 0))])) totals)
         candidates (->> inventory
                         (map #(assoc (select-keys % [:name :count :slot]) :worth (stack-worth %) :junk (contains? junk-blocks (:name %))))
@@ -114,7 +109,7 @@
   picked up (recency {name t}; never is 0, oldest first), then its lowest slot
   (the stack's index when it has no :slot)."
   [inventory keep recency]
-  (let [totals (totals inventory)
+  (let [totals (storage/carried-totals inventory)
         stacks (map-indexed (fn [i s] (assoc s :slot (or (:slot s) i))) inventory)
         order-key (fn [[n ss]]
                     [(if (pos? (get keep n 0)) 1 0)

@@ -1,5 +1,6 @@
 (ns jobs.items.kitchen
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.foods :as foods]
+            [jobs.lib.ready :as ready]
             [clojure.string :as str]
             [jobs.lib.checks :as checks]
             [engine.args :as a]
@@ -42,15 +43,12 @@
   cause), or nothing-possible {:reason :nothing-to-do} when every step was skipped.
   Quote: a smelt of each raw food carried.")
 
-(def raw-foods ["beef" "porkchop" "chicken" "mutton" "rabbit" "cod" "salmon"])
-(def cooked-foods ["cooked_beef" "cooked_porkchop" "cooked_chicken" "cooked_mutton" "cooked_rabbit" "cooked_cod" "cooked_salmon"])
-
 (a/defargs args
   {:furnace {:doc "furnace or smoker position {:x :y :z}; the nearest one seen when nil" :spec ::a/pos :default nil}
    :chest {:doc "store chest position {:x :y :z}; the known :chest place when nil (none known: nothing is baked or stored)" :spec ::a/pos :default nil}
-   :foods {:doc "raw foods to smelt, in this order" :spec (a/coll-of a/item?) :default raw-foods}
+   :foods {:doc "raw foods to smelt, in this order" :spec (a/coll-of a/item?) :default foods/raw-meals}
    :stock {:doc "{item count}: what the chest should hold of ready food and bread" :spec (a/map-of string? number?)
-           :default (into {"bread" 16} (map (fn [f] [f 8])) cooked-foods)}
+           :default (into {"bread" 16} (map (fn [f] [f 8])) foods/cooked-meals)}
    :reserve {:doc "{item count}: never used, carried or in the chest (wheat for bait, seed)" :spec (a/map-of string? number?)
              :default {"wheat" 2}}
    :ignore-zones? :shared})
@@ -103,14 +101,14 @@
   [report]
   (let [loaves (get-in report [:bake :baked] 0)]
     (into (if (pos? loaves) {"bread" loaves} {})
-          (keep (fn [[food b]] (when (pos? (:smelted b 0)) [(str "cooked_" food) (:smelted b)])))
+          (keep (fn [[food b]] (when (pos? (:smelted b 0)) [(foods/cooked-of food) (:smelted b)])))
           (:smelt report))))
 
 (defn facts
   "What the decisions are made from: {name count} carried, {name n} made this pass, whether a chest is known, the
   stock it is booked to hold (nil when unknown), the wheat carried when the pass began, the foods tried this pass."
   [c]
-  {:carried (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} (u/inventory (:primitives c)))
+  {:carried (storage/carried-totals (u/inventory (:primitives c)))
    :made (made (:report (ctx/mem c)))
    :chest (some? (storage/chest-of (ctx/view c) (:args c)))
    :table (boolean (or (pos? (storage/carried (u/inventory (:primitives c)) "crafting_table"))
@@ -149,7 +147,7 @@
         reserve (or reserve {})]
     (case step
       :smelt (if-let [[food n] (first (keep (fn [food]
-                                              (let [n (min (:carried (usable reserve food f)) (shortfall stock (str "cooked_" food) f))]
+                                              (let [n (min (:carried (usable reserve food f)) (shortfall stock (foods/cooked-of food) f))]
                                                 (when (and (pos? n) (not (contains? tried food))) [food n])))
                                             foods))]
                {:call {:slot :smelt :job (jobs :smelt) :food food :args (merge zone {:furnace furnace :item food :count n})}}
@@ -170,7 +168,7 @@
                 (and (not table?) (not (fetching? a))) {:skip :no-table}
                 (not (pos? n)) {:skip :no-wheat}
                 :else {:call {:slot :bake :job (jobs :bake) :args {:item "bread" :count (+ n (get carried "bread" 0)) :ways (ways-of a)}}}))
-      :deposit (let [items (vec (filter #(pos? (min (get made % 0) (get carried % 0))) (conj cooked-foods "bread")))
+      :deposit (let [items (vec (filter #(pos? (min (get made % 0) (get carried % 0))) (conj foods/cooked-meals "bread")))
                      spare-wheat? (> (get carried "wheat" 0) (or wheat0 (get carried "wheat" 0)))
                      items (cond-> items spare-wheat? (conj "wheat"))
                      keep (cond-> (into {} (map (fn [n] [n (max 0 (- (get carried n 0) (get made n 0)))])) items)

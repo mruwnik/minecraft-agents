@@ -8,6 +8,13 @@
   "The minecraft-data version used when no body is connected (the connect default, engine/js/connect.mjs)."
   "26.1")
 
+(def cooking
+  "[raw cooked] of the foods a furnace or smoker cooks (the vanilla recipes are in no minecraft-data file), meats and fish first."
+  [["beef" "cooked_beef"] ["porkchop" "cooked_porkchop"] ["chicken" "cooked_chicken"] ["mutton" "cooked_mutton"]
+   ["rabbit" "cooked_rabbit"] ["cod" "cooked_cod"] ["salmon" "cooked_salmon"] ["potato" "baked_potato"] ["kelp" "dried_kelp"]])
+
+(def meat-animal "The animal a raw meat comes from." {"beef" "cow" "porkchop" "pig" "mutton" "sheep" "chicken" "chicken" "rabbit" "rabbit"})
+
 (def leash-break "A lead breaks when the animal is farther than this many blocks from the holder (12 since 1.21.6)." 12)
 
 (def lead-trail "How far behind a walking holder a led animal trails, in blocks." 6)

@@ -1,5 +1,6 @@
 (ns jobs.storage.make-room
   (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.storage :as storage]
             [jobs.lib.ready :as ready]
             [jobs.storage.make-room.order :as ord]
             [engine.contract :as contract]
@@ -148,7 +149,7 @@
 (defn carried-of
   "Total carried of item."
   [p item]
-  (get (ord/totals (u/inventory p)) item 0))
+  (storage/carried (u/inventory p) item))
 
 (defn tossed!
   "Record a toss of n item from at, thrown along dir: in :tossed, and as the spot to walk away from (body memory)."

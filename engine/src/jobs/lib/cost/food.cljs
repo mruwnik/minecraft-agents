@@ -4,7 +4,8 @@
   estimate, not a measure, kept on the safe side), so the reserve is 60 points. Pure over an inventory
   ([{:name :count}]); food is what jobs.lib.foods calls edible, except precious food (golden apples), which is kept
   for emergencies and never counts."
-  (:require [jobs.lib.foods :as foods]))
+  (:require [engine.game :as game]
+            [jobs.lib.foods :as foods]))
 
 (def days 3)
 
@@ -43,12 +44,10 @@
 (defn cooked-name
   "The cooked food a raw one gives, or nil."
   [name]
-  (let [cooked (if (= "potato" name) "baked_potato" (str "cooked_" name))]
+  (when-let [cooked (foods/cooked-of name)]
     (when (foods/food? cooked) cooked)))
 
-(def meat-animal
-  "The animal a raw meat comes from; nil for any other food."
-  {"beef" "cow" "porkchop" "pig" "mutton" "sheep" "chicken" "chicken" "rabbit" "rabbit"})
+(def meat-animal "The animal a raw meat comes from; nil for any other food." game/meat-animal)
 
 (defn meat-factor
   "What a raw meat is worth against its cooking gain, for an animal kind seen {:wild n :penned n} (adults near the

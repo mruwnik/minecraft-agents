@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [jobs.lib.animal-spare :as spare]
+            [jobs.lib.foods :as foods]
             [jobs.lib.furnace :as furnace]
             [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]
@@ -28,7 +29,7 @@
    ::meat-wild-premium {:default 3 :doc "Extra worth of raw meat from wild animals (times its cooking gain) when none of the kind is near and no pen breeds it: every hunt leaves fewer." :spec (a/num-in 0 nil)}
    ::meat-wild-relief {:default 4 :doc "Wild adults of a kind in sight that halve the wild premium." :spec (a/num-in 0.1 nil)}
    ::meat-radius {:default 32 :doc "Blocks within which the animals of a kind count toward the replacement cost of its meat." :spec (a/int-in 1 nil)}
-   ::cook-kinds {:default #{"chicken" "beef" "porkchop" "mutton" "rabbit" "cod" "salmon" "potato"} :doc "Raw foods the cook step puts in a furnace." :spec (a/set-of a/item?)}})
+   ::cook-kinds {:default (set foods/raw-meals) :doc "Raw foods the cook step puts in a furnace." :spec (a/set-of a/item?)}})
 
 (defn shelter-cook-reach [] (settings/get settings ::shelter-cook-reach))
 

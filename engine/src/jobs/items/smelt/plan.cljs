@@ -1,12 +1,13 @@
 (ns jobs.items.smelt.plan
   "What a furnace cooks and burns, and what to load into it: pure functions over a furnace read and the carried items."
-  (:require [jobs.lib.fuel :as fuel]
+  (:require [engine.game :as game]
+            [jobs.lib.fuel :as fuel]
             [jobs.lib.game-facts :as facts]
             [jobs.lib.storage :as storage]))
 
 (def cook-ticks {"furnace" 200 "blast_furnace" 100 "smoker" 100})
 
-(def foods #{"beef" "porkchop" "chicken" "mutton" "rabbit" "cod" "salmon" "potato" "kelp"})
+(def foods (set (map first game/cooking)))
 (def furnace-only #{"cobblestone" "cobbled_deepslate" "stone" "sand" "red_sand" "clay_ball" "clay" "netherrack"
                     "sandstone" "red_sandstone" "stone_bricks" "quartz_block" "sea_pickle" "cactus" "chorus_fruit"})
 
@@ -27,14 +28,14 @@
 (def made-from
   "{output input} of what the furnaces cook, for naming the input of a product. The vanilla recipes are in no
   minecraft-data file."
-  {"cooked_beef" "beef" "cooked_porkchop" "porkchop" "cooked_chicken" "chicken" "cooked_mutton" "mutton"
-   "cooked_rabbit" "rabbit" "cooked_cod" "cod" "cooked_salmon" "salmon" "baked_potato" "potato" "dried_kelp" "kelp"
-   "iron_ingot" "raw_iron" "gold_ingot" "raw_gold" "copper_ingot" "raw_copper" "netherite_scrap" "ancient_debris"
+  (into
+   {"iron_ingot" "raw_iron" "gold_ingot" "raw_gold" "copper_ingot" "raw_copper" "netherite_scrap" "ancient_debris"
    "glass" "sand" "smooth_stone" "stone" "brick" "clay_ball" "terracotta" "clay"
    "nether_brick" "netherrack" "smooth_sandstone" "sandstone" "smooth_red_sandstone" "red_sandstone"
    "cracked_stone_bricks" "stone_bricks" "cracked_deepslate_bricks" "deepslate_bricks"
    "cracked_deepslate_tiles" "deepslate_tiles" "cracked_nether_bricks" "nether_bricks" "smooth_quartz" "quartz_block" "lime_dye" "sea_pickle" "green_dye" "cactus"
-   "popped_chorus_fruit" "chorus_fruit"})
+   "popped_chorus_fruit" "chorus_fruit"}
+   (map (fn [[raw cooked]] [cooked raw])) game/cooking))
 
 (declare smeltable?)
 

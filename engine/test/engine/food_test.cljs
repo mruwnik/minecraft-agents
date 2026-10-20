@@ -924,3 +924,9 @@
           (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "partial" :reason "no-item" :made 0 :used #js {} :have #js {} :recipes #js [#js {"wheat" 3}]}))
           (await (run-food! eng))
           (is (re-find #"cannot bake \(short\)" (:text (first (none-events seen))))))))))
+
+(deftest the-cooking-table-names-real-foods
+  (is (every? foods/food? (vals foods/cooked-of)))
+  (is (= ["cooked_beef" "cooked_porkchop" "cooked_chicken" "cooked_mutton" "cooked_rabbit" "cooked_cod" "cooked_salmon" "baked_potato"]
+         foods/cooked-meals))
+  (is (every? (set (keys foods/cooked-of)) (keys game/meat-animal))))

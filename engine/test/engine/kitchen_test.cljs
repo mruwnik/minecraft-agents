@@ -118,7 +118,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [inventory [[(item "wheat" 2) (item "cooked_beef" 4) (item "bread" 5)] [(item "potato" 4)]]]
+        (doseq [inventory [[(item "wheat" 2) (item "cooked_beef" 4) (item "bread" 5)] [(item "apple" 4)]]]
           (let [s (await (run-with inventory))]
             (is (empty? (events-of s :round_started)) (pr-str inventory))
             (is (= [[:nothing-to-do nil]] (waits s)) (pr-str inventory))))))))
@@ -177,7 +177,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run-with [(item "potato" 4)] {"cobblestone" 20}))]
+        (let [s (await (run-with [(item "apple" 4)] {"cobblestone" 20}))]
           (is (empty? (events-of s :round_started)))
           (is (= [[:nothing-to-do nil]] (waits s))))))))
 

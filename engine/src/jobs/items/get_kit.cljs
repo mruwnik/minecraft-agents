@@ -1,5 +1,6 @@
 (ns jobs.items.get-kit
   (:require [jobs.lib.ready :as ready]
+            [jobs.lib.storage :as storage]
             [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -128,7 +129,7 @@
   (let [p (:primitives c)
         inv (u/inventory p)]
     {:inv inv
-     :carried (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} inv)
+     :carried (storage/carried-totals inv)
      :worn (armour/worn-of (.-equipment (.self p)))}))
 
 (defn to-wear

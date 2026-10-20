@@ -26,6 +26,14 @@
 
 (defn table [] (table-for @game/version))
 
+(def cooked-of "{raw food cooked food} of what a furnace cooks." (into {} game/cooking))
+
+(def raw-meals
+  "The raw foods worth cooking as a meal, in order; kelp is left out (dried kelp feeds 1 point)."
+  (vec (remove #{"kelp"} (map first game/cooking))))
+
+(def cooked-meals (mapv cooked-of raw-meals))
+
 (def harmful
   "Foods that hurt or only half feed (hunger, poison, a rotten stomach): eaten only with :allow-bad, last."
   #{"rotten_flesh" "spider_eye" "pufferfish" "poisonous_potato" "chicken"})

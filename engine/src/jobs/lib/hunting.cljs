@@ -5,14 +5,11 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.animals :as animals]
+            [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.waits :as waits]
             [jobs.lib.util :as u]))
-
-(def raw-meats
-  {"beef" "cooked_beef" "porkchop" "cooked_porkchop" "mutton" "cooked_mutton"
-   "chicken" "cooked_chicken" "rabbit" "cooked_rabbit"})
 
 (def wool-colors
   ["white" "orange" "magenta" "light_blue" "yellow" "lime" "pink" "gray"
@@ -26,7 +23,7 @@
              "sheep" (into ["mutton"] (map #(str % "_wool")) wool-colors)
              "chicken" ["chicken" "feather"]
              "rabbit" ["rabbit" "rabbit_hide" "rabbit_foot"]}]
-    (update-vals raw (fn [items] (into items (keep raw-meats) items)))))
+    (update-vals raw (fn [items] (into items (keep foods/cooked-of) items)))))
 
 (a/defargs settings
   {::max-skips {:default 3 :doc "Animals skipped in a row before the hunt or cull gives up." :spec (a/int-in 0 nil)}
