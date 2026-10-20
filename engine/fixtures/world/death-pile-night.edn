@@ -17,17 +17,17 @@
    :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 200}
             {:no-event {:source :job :kind :shut-in.sealed} :for-s 200 :until {:source :job :kind :recover-drops.decided}}]
    :after [[:item "raw_iron" 24]]}
-  {:name "far-pile-in-the-open-waits-for-day-and-shelters"
-   ;; card 18d5778f: respawn late at night 136 blocks from the pile with no bed under the open sky: the pile lasts until morning, so
-   ;; recover-drops' safe? (the exposure of the pile) holds the died trigger instead of the long night walk, and the night job shelters where the body is;
-   ;; the case ends before dawn: after it the held trigger walks to the pile, so no position is checked at the end
+  {:name "far-pile-in-the-open-is-fetched-at-night-before-sheltering"
+   ;; Q367: late at night, 136 blocks from the pile, no bed, open sky: the drops despawn 5 min after the death, so the body walks to them
+   ;; (never waits for light or dawn) and only then shelters. The pile beats the night job.
    :time :night-exclusive
    :act [[:time-set 21500] [:wait-s 1] [:kill-body]]
    :plot {:length 160 :width 32 :height 10 :floor "dirt"}
    :body {:at [140.5 0 16.5] :spawnpoint [4 0 16]}
-   :expect [{:event {:source :reflex :kind :held :data {:reason :exposed}} :within-s 90}
-            {:no-event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :for-s 60}]
-   :limit-s 100}
+   :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 200}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 200 :until {:source :job :kind :recover-drops.decided}}]
+   :after [[:item "raw_iron" 24]]
+   :limit-s 220}
   {:name "night-shelter-moves-off-another-players-zone"
    ;; the respawn point lies inside another body's zone: the night job relocates to a free site (shut-in.relocated) before digging in.
    ;; Dirt floor (the stone default has no pit site for a body without a pickaxe) and no :died trigger (it walks the body to the death spot, outside the zone)

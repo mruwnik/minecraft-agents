@@ -13,7 +13,6 @@
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
-            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
@@ -28,7 +27,7 @@
   "After a death, go back for the drops when they are worth it.
   Serves one :died entry no :recovered covers (its :death-t): the one a trip is keyed to, else the open pile with the best value net of the walk. A death whose despawn window closed while a newer one is open is closed :abandoned :superseded. With every death decided the job waits (condition :no-drops) naming the decision.
   One run is the whole trip: it holds still (:respawning, then :settling) until the respawn and its 2 s have passed, decides, walks, collects and writes :recovered {:decision :skip|:collected|:partial|:abandoned}. A run cut by a reflex, or a restarted body, goes on with the same trip (the decision, the baseline of carried items and the phase are kept in :recover-trip).
-  Ready: fit? ok; safe? is ok by day, ok at night when the pile despawns before morning, else the exposure of the pile's cell (ready/exposed). The children walk under :checks {:safe? (always)}: the trip prices its own danger.
+  Ready: fit? ok; safe? is ok: it never waits for light or dawn, the drops despawn 5 min after the death (game/despawn-ticks). The children walk under :checks {:safe? (always)}: the trip prices its own danger; a pile it cannot reach before the despawn ends :too-far or :window-closed.
   Decision (settings ::margin, ::leg-s; args :value-overrides, :danger-overrides): skip when the value of what was carried (jobs.lib.cost/item-value, plus 5 per level of experience) is at most the fetch cost plus ::margin. Cost: a trip of 10, 0.3 per block, and 10 per point of route danger (jobs.lib.cost/route-danger) past the hostiles the body knows of, the killer assumed at the pile for ::killer-guard-ms; infinite for lava, fire, the void, or a walk that ends after the despawn. A pile in water adds ::wet-danger.
   A real danger (jobs.lib.danger/nearest-danger) the hostile-near trigger sees (its radii), or a hit, has the trip weighed again once per mob. A skip for danger alone is not final: the run ends condition-failed :danger, the danger is remembered (:recover-danger) for ::danger-memory-ms and the pile weighed anew; no time left to come back: :abandoned :danger. :retry weighs it now. A skip for value is final.
   Kit: a body without weapon or armour whose pile is worth it were the route safe fetches the best piece a chest of known stock holds (:fetch, jobs.lib.need) and wears it; a failed fetch is dropped (warn recover-drops.kit-dropped with the ending).
@@ -52,22 +51,12 @@
 (def target [])
 
 (def own-checks
-  "The :checks of the job's children: the trip prices its own danger, and safe? has judged the night for the pile."
+  "The :checks of the job's children: the trip prices its own danger."
   {:safe? '(always)})
-
-(defn pile-exposure
-  "Whether the walk to the pile of the next open death is exposed: ok by day and when the pile despawns before morning
-  (weighed by its route danger alone), else the exposure of the pile's cell."
-  [c]
-  (let [d (first (dth/open-deaths c))
-        night-ms (* 1000 (or (sh-sense/sky-in (:primitives c)) 0))]
-    (if (or (nil? d) (zero? night-ms) (>= night-ms (settings/ticks->ms (game/despawn-left-ticks d (ctx/view c)))))
-      (contract/ok :ready "no night to wait out for the pile")
-      (ready/exposed c (:pos (:data d))))))
 
 (def meta {:category :reflex})
 
-(def safe? (with-meta pile-exposure {::ready/exposure pile-exposure}))
+(def safe? ready/ok)
 
 (def fit? ready/ok)
 

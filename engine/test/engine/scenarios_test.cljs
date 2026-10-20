@@ -194,12 +194,11 @@
   "Dirt (no tool needed) from y 60 to 63 over x and z -8..8."
   (into {} (for [x (range -8 9) z (range -8 9) y (range 60 64)] [(str x "," y "," z) "dirt"])))
 
-(deftest survival-respawned-at-night-far-from-home-shelters-where-it-stands
+(deftest survival-respawned-at-night-far-from-home-goes-for-the-pile
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; morning comes before the pile despawns, so the pile is held; earlier at night recover-drops walks for a pile that would not last
-        (let [{:keys [eng p seen clock]} (boot "scenarios/survival.edn" {:time 21000 :floor [-30 -10 260 10] :blocks dirt-ground :inventory [{:name "stone_sword" :count 1}]} 1000)
+                (let [{:keys [eng p seen clock]} (boot "scenarios/survival.edn" {:time 21000 :floor [-30 -10 260 10] :blocks dirt-ground :inventory [{:name "stone_sword" :count 1}]} 1000)
               store (:store eng)
               pile (for [i (range 3)] {:name "iron_ingot" :count 30 :slot i})]
           (mem/write! store :home {:pos {:x 200 :y 64 :z 0}} mem/place-policy)
@@ -211,9 +210,7 @@
           (swap! clock + 5000)
           (await (run-ticks eng clock 8 1000))
           (is (not-any? #{:dusk-home} (fired seen)) "no walk home at night")
-          (is (some #{:night} (fired seen)) "the night reflex has the body")
-          (is (< (js/Math.abs (first (:pos (fake/self p)))) 10) "it stays where it stands: needs-bed may fire, its job's safe? keeps it from walking in the dark")
-          (is (seq (filter #(= "place" (.-name %)) (.-calls (.-world p)))) "and shelters"))))))
+          (is (some #{:died} (fired seen)) "the pile is fetched in the dark, not waited for"))))))
 
 (def scenario-files
   (->> (fs/readdirSync "scenarios") (filter #(str/ends-with? % ".edn")) sort))

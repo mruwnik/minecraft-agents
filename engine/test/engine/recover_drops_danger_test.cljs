@@ -340,36 +340,13 @@
          (await (run-until-empty eng 20))
          {:eng eng :seen seen :p p :id id})))))
 
-(deftest a-pile-that-lasts-until-day-is-waited-for-out-of-the-shelter
+(deftest a-pile-is-fetched-from-a-shelter-in-the-dark-however-long-the-night
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[world far-x] [[roofed-at-night 20] [roofed-at-night 200]]]
-          (let [{:keys [eng p id]} (await ((night-run world far-x)))]
-            (is (= :exposed (:reason (core/waiting eng id))) (pr-str [world far-x (core/waiting eng id)]))
-            (is (= [] (tu/walk-calls p)))
-            (is (nil? (recovered eng)) "not final: the window may still be open at dawn")))))))
-
-(deftest a-pile-that-will-not-last-until-day-is-fetched-from-a-shelter-at-night
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (await ((night-run (assoc roofed-at-night :time st/night) 20)))]
-          (is (= :collected (:decision (recovered eng)))))))))
-
-(deftest a-checks-override-walks-out-of-a-shelter-at-night
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (await ((night-run roofed-at-night 20 '(jobs.survival.recover-drops {:checks {:safe? (not (threatened))}}))))]
-          (is (= :collected (:decision (recovered eng)))))))))
-
-(deftest a-body-under-a-roof-by-day-walks-for-the-pile
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (await ((night-run (assoc roofed-at-night :time st/noon) 20)))]
-          (is (= :collected (:decision (recovered eng)))))))))
+        (doseq [[world far-x] [[roofed-at-night 20] [roofed-at-night 200] [(assoc roofed-at-night :time st/night) 20]]]
+          (let [{:keys [eng]} (await ((night-run world far-x)))]
+            (is (= :collected (:decision (recovered eng))) (pr-str [world far-x]))))))))
 
 (deftest a-skip-for-danger-is-remembered-then-tried-again
   (async done
