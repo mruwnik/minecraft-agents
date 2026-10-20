@@ -14,6 +14,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.storage :as storage]
             [jobs.lib.world :as known]))
 
@@ -143,13 +144,18 @@
 (defn no-zones [c]
   (when (zones-missing? c) (decline! c :no-zones)))
 
+(defn spare-meal
+  "The bone meal carried that the reserve register leaves to a fertilize."
+  [c]
+  (storage/carried (reserve/free c :fertilize) "bone_meal"))
+
 (defn can-fertilize?
-  "Whether the fertilize way may run now: allowed, grass is the source, bone meal is carried and it has not run yet."
+  "Whether the fertilize way may run now: allowed, grass is the source, unreserved bone meal is carried and it has not run yet."
   [c]
   (and (ctx/way? c :fertilize)
        (= :grass (mode (:args c)))
        (not (:fertilized (ctx/mem c)))
-       (contains? (u/carried-names (:primitives c)) "bone_meal")))
+       (pos? (spare-meal c))))
 
 (defn nothing-in-range
   "No source in range once the body has looked around: a stand too short to cut declines :too-short; the first look is
@@ -317,6 +323,7 @@
   (let [{:keys [radius ignore-zones?]} (:args c)
         r (waits/waiting-out c (await (ctx/call c :fertilize 'jobs.farm.fertilize
                                                 {:grass true :area {:pos (u/self-pos c) :radius radius}
+                                                 :max (spare-meal c)
                                                  :ways #{:carried} :ignore-zones? ignore-zones?})))]
     (if (= :continue r)
       :continue

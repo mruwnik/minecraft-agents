@@ -5,6 +5,7 @@
             [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.fake :as fake]
+            [engine.memory :as mem]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.hostile-test :as h]
@@ -530,3 +531,15 @@
                                   (core/submit! (:eng s) (spec (cond-> {:count 2} ways (assoc :ways ways))) {})
                                   (await (run-ticks s 30 700))
                                   (is (= used? (boolean (seq (h/calls (:p s) "useOn")))) (pr-str ways))))))))))
+
+(deftest the-fertilize-way-leaves-reserved-bone-meal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (tu/each-async [[2 false] [1 true]]
+                              (fn ^:async one [[reserved used?]]
+                                (let [s (setup-seeing {:blocks (patch "grass_block" [2 3] [0]) :inventory [{:name "bone_meal" :count 2}]})]
+                                  (mem/write! (:store (:eng s)) :reserve {:id "meal" :item "bone_meal" :count reserved} {:cap 100 :ttl :forever})
+                                  (core/submit! (:eng s) (spec {:count 2}) {})
+                                  (await (run-ticks s 30 700))
+                                  (is (= used? (boolean (seq (h/calls (:p s) "useOn")))) (str reserved " reserved of 2"))))))))))
