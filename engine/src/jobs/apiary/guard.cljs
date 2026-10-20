@@ -23,7 +23,7 @@
     one block lower. Mining a campfire gives charcoal, not the fire, so one must be carried.
   - Every lit fire with nothing on it gets a non-moss carpet, since an open fire burns landing bees.
   One call works every fire (:continue only while a walk or the carpet pick-up waits on the world). Fires are
-  worked nearest first, at most the max-actions setting in a run. A fire that cannot be reached or refuses is
+  worked nearest first, until none is left (the job-time spend bounds the run). A fire that cannot be reached or refuses is
   skipped for the rest of the run. The body never stands in a fire's cell.
   A carpet or campfire the work needs and the body lacks is fetched (jobs.lib.need) unless :fetch is false; a
   failed fetch ends nothing-possible or condition-failed with :reason :need.
@@ -31,10 +31,10 @@
   that all need nothing end done :already), :no-carpet or :no-campfire (the body carries what the work needs, :fetch false), :refused or :no-zones
   (the zone rules refuse every fire).
   Result: {:sunk n :carpeted n :reason r :left {pos reason} :skipped {pos reason} :fires n}. :reason is
-  :guarded (work done, nothing left), :limit (max-actions reached), :safe, :no-fire, :no-carpet, :no-campfire, :need, a skip
+  :guarded (work done, nothing left), :safe, :no-fire, :no-carpet, :no-campfire, :need, a skip
   reason (:unreachable, :on-fire, :occupied, :cannot, :place-failed, :refused) or :gave-up (3 fruitless fires
   in a row).
-  The ending: :done for :guarded, :limit, :safe, and any other reason when the call's :least (default 1; :all =
+  The ending: :done for :guarded, :safe, and any other reason when the call's :least (default 1; :all =
   every fire worked, so only those three) actions were done; else condition-failed for :no-fire, :no-carpet, :no-campfire, :occupied, :refused and :no-zones,
   nothing-possible for the rest, with the reason as the cause and the result as its data.
   Zones: a fire in another owner's zone or claim, or in a plan's footprint, is left out of the survey (all refused
@@ -58,11 +58,11 @@
   {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::max-strikes {:default 3 :doc "Strikes at one target before the job gives up on it." :spec (a/int-in 0 nil)}
    ::max-sink-steps {:default 8 :doc "Steps of the sink walk before it gives up." :spec (a/int-in 0 nil)}
-   ::max-actions {:default 12 :doc "Actions (sinks and carpets) in one run, at most; the run then ends done :limit." :spec (a/int-in 1 nil)}
+   ::collect-radius {:default 6 :doc "Blocks round the body in which a dug-up carpet is picked up." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds a guard run may take." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn max-strikes [] (settings/get settings ::max-strikes))
-(defn max-actions [] (settings/get settings ::max-actions))
+(defn collect-radius [] (settings/get settings ::collect-radius))
 
 ;; ------------------------------------------------------------------ the plan
 
@@ -82,13 +82,13 @@
   #{:no-fire :no-carpet :no-campfire :occupied :refused :no-zones})
 
 (defn ending-of
-  "The ending of a run that stopped for reason: :done for :guarded, :limit and :safe or when the call's :least actions
+  "The ending of a run that stopped for reason: :done for :guarded and :safe or when the call's :least actions
   were done, else condition-failed for failed-conditions, else nothing-possible; result is its data."
   [c reason result]
   (let [least (:least (ctx/frozen-call c) 1)
         need (if (= :all least) ##Inf least)]
     (cond
-      (or (#{:guarded :limit :safe} reason) (>= (actions (ctx/mem c)) need))
+      (or (#{:guarded :safe} reason) (>= (actions (ctx/mem c)) need))
       (ctx/end c :done nil (assoc result :text (str "apiary guard done: " (name reason) ", sunk " (:sunk result) ", carpeted " (:carpeted result))))
       (failed-conditions reason) (ctx/end c :condition-failed reason result)
       :else (ctx/end c :nothing-possible reason result))))
@@ -187,7 +187,7 @@
 (defn ^:async collect-carpet!
   "Pick up the carpet that was dug up."
   [c carpet]
-  (await (ctx/call c :collect 'jobs.items.collect-drops {:radius 6 :items [carpet]})))
+  (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (collect-radius) :items [carpet]})))
 
 (defn abandon!
   "Give up the sink: clear it and skip the fire."
@@ -314,7 +314,7 @@
       (contract/later :guarding (str (actions m) " fires worked") :units :fires :done (actions m) :left left))))
 
 (defn quote-of [_c]
-  {:uses {:job-time [0 (* 10 (max-actions)) ##Inf]}})
+  {:uses {:job-time [0 (settings/get settings ::job-time-s) ##Inf]}})
 
 (def lacked-item {:no-carpet "white_carpet" :no-campfire "campfire"})
 
@@ -350,7 +350,6 @@
       (let [seen (survey c center)
             target (first (:todo seen))]
         (cond
-          (>= (actions m) (max-actions)) (finish! c :limit seen)
           (>= (:strikes m 0) (max-strikes)) (finish! c :gave-up seen)
           (nil? target) (or (await (supply! c seen)) (finish! c (end-reason m seen) seen))
           :else (await (work! c target)))))))

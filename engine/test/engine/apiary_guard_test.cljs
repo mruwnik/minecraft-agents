@@ -157,18 +157,20 @@
           (is (= {"2,64,0" :unreachable} (:skipped result)))
           (is (empty? (calls p "place"))))))))
 
-(deftest the-count-is-bounded-by-the-max-actions-setting
+(deftest every-open-fire-is-worked-however-many-there-are
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [w (-> (fire-world {:inventory (inv "white_carpet" 2)})
-                    (update :blocks merge (:blocks (fire-world {:x 2 :z 5})))
-                    (update :states merge (:states (fire-world {:x 2 :z 5}))))
+        (let [zs (range 0 39 3)
+              ws (map #(fire-world {:x 2 :z %}) zs)
+              w (-> (fire-world {:inventory (inv "white_carpet" 13)})
+                    (update :blocks #(apply merge % (map :blocks ws)))
+                    (update :states #(apply merge % (map :states ws))))
               {:keys [eng p]} (setup w)
-              result (await (child-outcome eng job {:settings {::guard/max-actions 1}} 60))]
-          (is (= :limit (:reason result)))
-          (is (= 1 (:carpeted result)))
-          (is (= 1 (count (calls p "place")))))))))
+              result (await (child-outcome eng job {:radius 60} 300))]
+          (is (= :guarded (:reason result)))
+          (is (= 13 (:carpeted result)))
+          (is (= 13 (count (calls p "place")))))))))
 
 (deftest a-fire-left-for-want-of-a-carpet-is-reported-after-the-others
   (async done

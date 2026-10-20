@@ -56,6 +56,7 @@
   {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::max-strikes {:default 3 :doc "Strikes at one target before the job gives up on it." :spec (a/int-in 0 nil)}
    ::comb-wait-s {:default 5 :doc "Seconds a shears harvest pauses for its comb to show, once, before it goes on without." :spec (a/num-in 0 nil)}
+   ::collect-radius {:default 8 :doc "Blocks round the body in which honeycomb is picked up." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds a harvest run may take." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn max-strikes [] (settings/get settings ::max-strikes))
@@ -143,7 +144,7 @@
   [c]
   (if (= :pausing (:comb-wait (ctx/mem c)))
     (await (wait-for-comb! c))
-    (let [e (await (ctx/call c :collect 'jobs.items.collect-drops {:radius 8 :items ["honeycomb"]}))
+    (let [e (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (settings/get settings ::collect-radius) :items ["honeycomb"]}))
           done? (= :done (:kind e))
           got (if done? (get-in e [:data :collected] 0) 0)]
       (when done?
