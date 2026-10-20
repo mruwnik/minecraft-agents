@@ -17,8 +17,8 @@
 
 (def doc
   "Shut the body in where it stands, atomically: no hostile logic, little walking (only dig-pocket, to a wall, dig-pit for :night, to ground where a pit fits, and the :room way walk); whoever calls it decides when.
-  Needs nothing to start. One call is a whole attempt: it ends :done {:pos :way :placed} once the body is enclosed (a roof within
-  :roof-height over no open cell round the feet, or with the :room way a roof over a closed room), at once when it already is.
+  Needs nothing to start. Tuning is by setting, per call with :settings (the roof height, the hostile radii, the placements per step, how long a hand dig may take, the dear-block value). One call is a whole attempt: it ends :done {:pos :way :placed} once the body is enclosed (a roof within
+  the plug-way ::roof-height setting over no open cell round the feet, or with the :room way a roof over a closed room), at once when it already is.
   Ways (:ways) are child jobs: jobs.survival.wall-in (the open sides, a roof support and the roof with carried blocks),
   dig-pit (dig down under a solid side and plug the hole), dig-pocket (dig a pocket beside the body, step in, wall the way in), and :room
   (jobs.survival.enter-room: walk into the :place, else the home or the closed room the body is in, shut its doors, fill a doorway or a hole in its roof; walks, which the others do not).
@@ -30,7 +30,7 @@
   hostile is near; :night: ledger :shelter, left alone). A cell in another's zone is used only as a last resort (each way's quote adds plug-way's ::trespass-s).
   :for :night adds, on every end: the :shelter {:pos :state :built} entry that jobs.lib.dig-in-leave/leave! reads (:sealed false when the body
   is open; :roof, :door (the cells of one side placed, or of the pocket's way in), :start (the cell dug from, or the top of the shaft walled
-  at the bottom of), :take-back (placed blocks worth more than :take-back-value, and any near a gate a plan wants, which leave! digs
+  at the bottom of), :take-back (placed blocks worth more than shut-in-night's ::take-back-value, and any near a gate a plan wants, which leave! digs
   again by day), :room true; a shelter sealed again where the latest entry stood keeps its :start and :door); the event
   shut-in.sealed (when it placed blocks and the world shows the body shut in, with :spent; a warning when :resealed) or shut-in.unsealed (warning, naming the open
   cells); and for a way that failed on the site a :shut-in-failed {:pos :way :reason} entry (cap 5, ten
@@ -43,19 +43,11 @@
    :for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}
    :place {:doc "the :room way: the room to enter, a remembered place name (default the home)" :spec (a/or-of keyword? string?) :default nil}
    :fetch {:doc "dig-pocket: get a missing tool (jobs.lib.need): true, a set of kinds or a map of limits" :spec need/option? :default false}
-   :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
-   :radius {:doc "melee hostiles within this many blocks decide which side is walled first and stand in the way of a cell; nil: the jobs.lib.danger ::hostile-radius setting" :spec (a/num-in 0 nil) :default nil}
-   :ranged-radius {:doc "ranged hostiles within this many blocks decide which side is walled first; nil: the ::ranged-radius setting" :spec (a/num-in 0 nil) :default nil}
-   :max-places {:doc "placements per step; nil: the jobs.survival.retreat-seal ::max-places setting" :spec (a/int-in 1 nil) :default nil}
-   :hand-clear-ms {:doc "a pit digs a block the carried tools cannot harvest by hand, once a block to roof with is in hand, when the hand breaks it within this many ms (stone by hand takes 7500); default jobs.lib.tools quick-clear-ms" :spec (a/int-in 0 nil)}
-   :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pit or pocket is dropped and the lava left" :spec #{:seal :stop} :default :seal}
-   :wall-value {:doc ":night: a block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85, stone 2.85, planks 3.4, log 12.8) is dug again at dawn, which the walls' quote counts" :spec (a/num-in 0 nil) :default 3}
-   :take-back-value {:doc ":night: a placed block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85) is dug again and collected when the shelter is left by day" :spec (a/num-in 0 nil) :default 0.5}})
+   :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pit or pocket is dropped and the lava left" :spec #{:seal :stop} :default :seal}})
 
 (a/defargs settings
   {::job-time-s {:default 300 :doc "Seconds a shut-in may take." :spec (a/num-in 0 nil)}
-   ::mean-s {:default 12 :doc "Seconds an enclosing is guessed to take, for the quote." :spec (a/num-in 0 nil)}
-   ::night-hand-clear-ms {:default 10000 :doc "For :night, the :hand-clear-ms when the call gives none: a block the carried tools cannot harvest is dug by hand when the hand breaks it within this many ms (stone by hand takes 7500)." :spec (a/int-in 0 nil)}})
+   ::mean-s {:default 12 :doc "Seconds an enclosing is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
 
 (def target [])
 
@@ -69,10 +61,10 @@
 
 (def children
   "Each way's job and the args of this call it takes."
-  {:room ['jobs.survival.enter-room [:place :roof-height]]
-   :walls ['jobs.survival.wall-in [:for :ignore-zones? :roof-height :radius :ranged-radius :max-places :wall-value]]
-   :pit ['jobs.survival.dig-pit [:for :ignore-zones? :roof-height :radius :on-lava :hand-clear-ms]]
-   :pocket ['jobs.survival.dig-pocket [:for :ignore-zones? :fetch :roof-height :radius :ranged-radius :max-places :on-lava]]})
+  {:room ['jobs.survival.enter-room [:place]]
+   :walls ['jobs.survival.wall-in [:for :ignore-zones?]]
+   :pit ['jobs.survival.dig-pit [:for :ignore-zones? :on-lava]]
+   :pocket ['jobs.survival.dig-pocket [:for :ignore-zones? :fetch :on-lava]]})
 
 (defn done? [c] (way/done? c (:way (ctx/mem c)) (merge (spent/summary (spent/log c)) (select-keys (ctx/mem c) [:placed :roof :start]))))
 
@@ -80,14 +72,8 @@
   (let [mean (if (way/enclosed? c) 0 (settings/get settings ::mean-s))]
     {:uses {:job-time [0 mean (max (* 3 mean) (settings/get settings ::job-time-s))]} :done [0 1 1]}))
 
-(defn with-defaults
-  "c with the night's default :hand-clear-ms when the call gives none."
-  [c]
-  (cond-> c
-    (and (night/night? c) (nil? (:hand-clear-ms (:args c)))) (assoc-in [:args :hand-clear-ms] (settings/get settings ::night-hand-clear-ms))))
-
 (defn child-args [c way]
-  (merge (select-keys (:args (with-defaults c)) (second (children way)))
+  (merge (select-keys (:args c) (second (children way)))
          (when-let [blocks (night/blocks c)] {:use {:blocks blocks}})))
 
 (defn ^:async cost-of
@@ -139,7 +125,7 @@
     (let [{:keys [x z] :as feet} (sh-sense/feet (:primitives c))
           y (dig-cells/shaft-top (:primitives c) feet)]
       (ctx/update-mem! c assoc :shaft-start (when y {:x x :y y :z z}))
-      (when (and (night/night? c) (ctx/way? c :pit)) (await (dig-pit/look! (with-defaults c)))))))
+      (when (and (night/night? c) (ctx/way? c :pit)) (await (dig-pit/look! c))))))
 
 (defn ^:async run-way!
   "One step of way: its child job."
@@ -157,7 +143,7 @@
   [c way]
   (case way
     :walls (wall-in/why-not c)
-    :pit (dig-pit/why-not (with-defaults c))
+    :pit (dig-pit/why-not c)
     nil))
 
 (defn note-dropped!

@@ -15,8 +15,7 @@
             [jobs.lib.threats :as threats]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.retreat-flight :as flight]
-            [jobs.survival.retreat-pillar :as pillar]
-            [jobs.survival.retreat-seal :as seal]))
+            [jobs.survival.retreat-pillar :as pillar]))
 
 (a/defargs settings
   {::leave-for-breakers {:default true :doc "Whether a hidden body leaves its refuge, before it is hit, for a creeper (its blast breaks any refuge) or, on a pillar, a spider (it climbs) within :breaker-reach." :spec boolean?}
@@ -85,9 +84,8 @@
   (let [{:keys [on-lava]} (:args c)
         radius (danger-q/radius-in (:args c))
         ranged-radius (danger-q/ranged-radius-in (:args c))
-        max-places (seal/max-places c)
         e (await (ctx/call c option 'jobs.survival.shut-in
-                           (cond-> {:ways ways :radius radius :ranged-radius ranged-radius :max-places max-places :on-lava on-lava}
+                           (cond-> {:ways ways :on-lava on-lava :settings {:jobs.lib.danger/hostile-radius radius :jobs.lib.danger/ranged-radius ranged-radius}}
                              (ctx/use c :blocks) (assoc :use {:blocks (ctx/use c :blocks)}))))
         feet (sh-sense/feet (:primitives c))]
     (cond

@@ -27,14 +27,14 @@
          (mapv #(danger-q/mob-pos p %)))))
 
 (a/defargs settings
-  {::max-places {:default 4 :doc "Seal placements a step of a flight makes (a call of shut-in or dig-pocket: its own :max-places)." :spec (a/int-in 1 nil)}
+  {::max-places {:default 4 :doc "Seal placements a step of a flight makes (also the shut-in ways')." :spec (a/int-in 1 nil)}
    ::hit-reach {:default 3 :doc "Blocks within which a melee mob that hurt the body during a seal step ends the step (the fight is decided anew)." :spec (a/num-in 0 nil)}
    ::max-refusals {:default 2 :doc "Times the place primitive may refuse one cell before it is given up on." :spec (a/int-in 0 nil)}})
 (defn max-refusals [] (settings/get settings ::max-refusals))
 (defn max-places
-  "Seal placements a step: the call's :max-places (shut-in, dig-pocket), else ::max-places."
-  [c]
-  (or (:max-places (:args c)) (settings/get settings ::max-places)))
+  "Seal placements a step."
+  []
+  (settings/get settings ::max-places))
 
 (defn occupied?
   "Whether the seal leaves cell alone: a block it cannot clear stands in it, or the server refused it max-refusals times."
@@ -190,7 +190,7 @@
       :else
       (do (when (seal/off-centre? p) (await (seal/centre! c)))
           (access/trespass! c "shut-in" (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
-          (case (await (place-seal! c (take (max-places c) (remove #(and (not (some #{%} cells)) (access/trespass-refusal c :place %))
+          (case (await (place-seal! c (take (max-places) (remove #(and (not (some #{%} cells)) (access/trespass-refusal c :place %))
                                                                  (dig-cells/bottom-up p cells (sh-sense/feet p))))))
             :failed :failed
             :wait :again

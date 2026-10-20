@@ -146,7 +146,7 @@
               log (await (with-child-log #(tu/run-until-empty eng 160)))
               dig-ins (filter #(and (= 'jobs.survival.shut-in (second %)) (contains? (:ways (nth % 2)) :walls)) log)]
           (is (seq dig-ins))
-          (is (every? #(= 5 (:wall-value (nth % 2))) dig-ins) (pr-str (map #(nth % 2) dig-ins))))))))
+          (is (every? #(= 5 (get-in (nth % 2) [:settings :jobs.survival.wall-in/wall-value])) dig-ins) (pr-str (map #(nth % 2) dig-ins))))))))
 
 (deftest an-overhang-whose-roof-the-body-has-not-seen-is-no-flee-target
   (async done

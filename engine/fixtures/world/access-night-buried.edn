@@ -68,7 +68,7 @@
    ;; on the open mass top the walls need 10 blocks (4 sides x 2, the roof support, the roof): fewer and the pit is chosen at once
    ;; dirt, not cobblestone: the pit digs stone and roofs with its drops, which the clear must not take
    :body {:inventory [["dirt" 12] ["stone_pickaxe" 1]]}
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night :max-places 2})]
+   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night :settings {:jobs.survival.retreat-seal/max-places 2}})]
          [:await {:source :action :kind :done :data {:name "place"}} 30]
          [:rcon "clear $BODY dirt"]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 90 :of-job true}

@@ -22,8 +22,10 @@
 
 (a/defargs settings
   {::max-refills {:default 3 :doc "Times a dug cell may fill again (sand, gravel, a sealed lava cell) before the pit is given up." :spec (a/int-in 0 nil)}
+   ::night-hand-clear-ms {:default 10000 :doc "For :night, a block the carried tools cannot harvest is dug by hand when the hand breaks it within this many ms (stone by hand takes 7500); by day tools/quick-clear-ms." :spec (a/int-in 0 nil)}
    ::max-occupied {:default 2 :doc "Times a plug cell may answer occupied by a block that does not seal before the pit is given up." :spec (a/int-in 0 nil)}})
 (defn max-refills [] (settings/get settings ::max-refills))
+(defn hand-clear-ms [c] (if (= :night (:for (:args c))) (settings/get settings ::night-hand-clear-ms) (tools/quick-clear-ms)))
 (defn max-occupied [] (settings/get settings ::max-occupied))
 
 (def drop-of
@@ -78,7 +80,7 @@
 
 (defn material-stop
   "Whether the body can roof the pit with what it has and digs, cell by cell in dig order: a stop (stop) when a cell needs a
-  tool it lacks with no block to roof with yet or that the hand breaks slower than the call's :hand-clear-ms (default tools/quick-clear-ms) (:no-tool, naming the block), or none is
+  tool it lacks with no block to roof with yet or that the hand breaks slower than ::night-hand-clear-ms for :night, else tools/quick-clear-ms (:no-tool, naming the block), or none is
   carried or dropped by the end (:no-blocks); nil otherwise. A cell it cannot harvest is still dug by hand once a block is in hand."
   [c blocks cells]
   (let [p (:primitives c)]
@@ -87,7 +89,7 @@
         (when-not have (stop :no-blocks "nothing to roof the pit with"))
         (let [name (dig-cells/rock-name p cell)
               ok (tools/can-harvest? p name)]
-          (if (and (not ok) (or (not have) (> (tools/clear-ms p name) (or (:hand-clear-ms (:args c)) (tools/quick-clear-ms)))))
+          (if (and (not ok) (or (not have) (> (tools/clear-ms p name) (hand-clear-ms c))))
             (stop :no-tool (str "cannot harvest " name (if have " in good time" "; nothing to roof the pit with") ", so not digging") name)
             (recur more (or have (and ok (boolean (some #{(get drop-of name name)} blocks)))))))))))
 

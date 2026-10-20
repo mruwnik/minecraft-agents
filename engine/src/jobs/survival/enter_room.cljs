@@ -21,6 +21,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.waits :as waits]
             [jobs.survival.dig-in-cells :as dig-cells]
+            [jobs.survival.plug-way :as way]
             [jobs.survival.retreat-doors :as retreat-doors]))
 
 (def doc
@@ -40,8 +41,7 @@
   Picked by jobs.survival.shut-in as its :room way, and called by the night for a door, a doorway and the walk home to a bed.")
 
 (a/defargs args
-  {:place {:doc "the room to enter: a remembered place name (default the home)" :spec (a/or-of keyword? string?) :default nil}
-   :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}})
+  {:place {:doc "the room to enter: a remembered place name (default the home)" :spec (a/or-of keyword? string?) :default nil}})
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds an entering may take." :spec (a/num-in 0 nil)}
@@ -107,7 +107,7 @@
     (boolean (or (and t (at-target? c t))
                  (and (not (:place (:args c)))
                       (or (sh-sense/roofed? p (sh-sense/room-roof-height)) (sh-sense/shut-in-room? p)
-                          (some? (dig-cells/room-plug p (sh-sense/feet p) (:roof-height (:args c))))))))))
+                          (some? (dig-cells/room-plug p (sh-sense/feet p) (way/roof-height)))))))))
 
 (defn shut?
   "Whether the body is in a closed room (sh-sense/shut-in-room?) with no open door."
@@ -127,7 +127,7 @@
       (let [door (sh/open-room-door p (ctx/view c))
             gap (room-lib/gap c)
             plug (when (and (not (shut? c)) (not gap))
-                   (dig-cells/room-plug p (sh-sense/feet p) (:roof-height (:args c))))
+                   (dig-cells/room-plug p (sh-sense/feet p) (way/roof-height)))
             blocks? (have-blocks? c)]
         (cond
           door {:door door}

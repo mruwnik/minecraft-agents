@@ -22,7 +22,7 @@
 (def doc
   "A plug way: dig down 2 (3 on flat ground) under a solid side and plug the hole over the head with carried or dug blocks.
   Needs a pit that fits (every cell solid rock, no fluid or hazard in or beside it, none at the roof, solid under the bottom) and a
-  block to plug with, carried or dug (a block the tools cannot harvest is dug by hand once one is in hand and the hand breaks it within :hand-clear-ms).
+  block to plug with, carried or dug (a block the tools cannot harvest is dug by hand once one is in hand and the hand breaks it within retreat-pit's ::night-hand-clear-ms for :night, else jobs.lib.tools quick-clear-ms).
   One call is a whole attempt: :done {:pos :way :pit :roof :start} once enclosed, at once when it already is; nothing-possible :failed
   {:reason :text :needs} when a pit fails, the reason a stop of jobs.survival.retreat-pit: :no-floor, :fluid-here, :fluid-adjacent,
   :fluid-above, :hazard-below, :no-tool (:needs the block), :hostile-near (a melee hostile stands in the way), :no-blocks, :dig-failed, :descent-stalled, :roof-failed, :lays-open (a dig
@@ -35,9 +35,6 @@
 (a/defargs args
   {:ignore-zones? :shared
    :for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}
-   :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
-   :radius {:doc "melee hostiles within this many blocks stand in the way of a cell; nil: the jobs.lib.danger ::hostile-radius setting" :spec (a/num-in 0 nil) :default nil}
-   :hand-clear-ms {:doc "a block the carried tools cannot harvest is dug by hand, once a block to roof with is in hand, when the hand breaks it within this many ms; default jobs.lib.tools quick-clear-ms" :spec (a/int-in 0 nil)}
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pit is dropped and the lava left" :spec #{:seal :stop} :default :seal}})
 
 (a/defargs settings

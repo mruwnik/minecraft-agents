@@ -15,7 +15,10 @@
             [jobs.survival.retreat-seal :as seal]))
 
 (a/defargs settings
-  {::trespass-s {:default 1000 :doc "Seconds a way's quote adds when a cell it digs or fills is another's (zone, claim or plan): a last resort, after every way that keeps off." :spec (a/num-in 0 nil)}})
+  {::roof-height {:default sh-sense/default-roof-height :doc "A solid block within this many blocks above counts as a roof (the ways, enter-room and the enclosed test; a call overrides it with :settings)." :spec (a/int-in 0 nil)}
+   ::trespass-s {:default 1000 :doc "Seconds a way's quote adds when a cell it digs or fills is another's (zone, claim or plan): a last resort, after every way that keeps off." :spec (a/num-in 0 nil)}})
+
+(defn roof-height [] (settings/get settings ::roof-height))
 
 (defn zone-penalty
   "Seconds to add to a way's quote for the cells in {:dig :place :plug} that the zone rules refuse (a plug is placed from a
@@ -29,11 +32,11 @@
       0)))
 
 (defn enclosed?
-  "Whether the world shows the body shut in: for :night safe from the night (sh-inside/safe-from-night?); else a roof within :roof-height over no open cell round the feet, or, with the call's
+  "Whether the world shows the body shut in: for :night safe from the night (sh-inside/safe-from-night?); else a roof within ::roof-height over no open cell round the feet, or, with the call's
   :room way, a roof over a room that is not breached, with no open door."
   [c]
   (let [p (:primitives c)
-        roof-height (:roof-height (:args c))]
+        roof-height (roof-height)]
     (boolean (if (= :night (:for (:args c)))
                (sh-inside/safe-from-night? p)
                (and (not (sh-sense/head-in-block? p))

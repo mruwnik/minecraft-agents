@@ -13,7 +13,8 @@
             [jobs.survival.dig-in-cells :as dig-cells]))
 
 (a/defargs settings
-  {::futile-radius {:default 8 :doc "Blocks around a site where a way failed that count as the same site." :spec (a/int-in 0 nil)}
+  {::take-back-value {:default 0.5 :doc "A placed block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85) is dug again and collected when the shelter is left by day." :spec (a/num-in 0 nil)}
+   ::futile-radius {:default 8 :doc "Blocks around a site where a way failed that count as the same site." :spec (a/int-in 0 nil)}
    ::take-back-gate-range {:default 2 :doc "A cheap seal block this near a door or fence gate some plan wants is taken back with the dear ones: it would box the gate in." :spec (a/int-in 0 nil)}})
 
 (defn futile-radius [] (settings/get settings ::futile-radius))
@@ -55,7 +56,7 @@
 (defn end!
   "The night's end of a call: the :shelter entry {:pos :state :built} (:sealed false when the world shows the body open;
   :roof the cell placed above it; :door the cells of one side placed, or of the pocket's way in; :start the cell dug from, or
-  the top of the shaft walled at the bottom of; :take-back the placed {:cell :item} dearer than :take-back-value and any near
+  the top of the shaft walled at the bottom of; :take-back the placed {:cell :item} dearer than ::take-back-value and any near
   a planned gate, which dig-in-leave/leave! digs again by day; :room true for a mended roof), and the shut-in.sealed / .unsealed event.
   way is the way that ended the call, data its result ({:placed :roof :start :spent}), sealed? whether the world shows the body shut in."
   [c way {:keys [placed roof start spent]} sealed?]
@@ -71,7 +72,7 @@
                nil)
         start (or (case way :walls (:shaft-start (ctx/mem c)) :pit start nil) (when resealed (:start prev)))
         door (or door (when resealed (:door prev)))
-        cheap (set (choose/cheap-blocks (keys spent) (:take-back-value (:args c))))
+        cheap (set (choose/cheap-blocks (keys spent) (settings/get settings ::take-back-value)))
         take-back (->> (concat (when resealed (:take-back prev))
                                (for [{:keys [cell item]} placed :when (or (not (cheap item)) (near-gate? c (u/cell-pos cell)))] {:cell (u/cell-pos cell) :item item}))
                        (reduce #(assoc %1 (:cell %2) %2) {}) vals vec)

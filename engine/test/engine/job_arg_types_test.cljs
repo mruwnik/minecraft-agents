@@ -43,8 +43,8 @@
                 '(jobs.items.obtain {:item "stick" :count 0})
                 '(jobs.storage.deposit {:free "text"})
                 '(jobs.storage.deposit {:ignore-zones? 3})
-                '(jobs.survival.shut-in {:max-places 0})
-                '(jobs.survival.shut-in {:wall-value "text"})
+                '(jobs.survival.shut-in {:ways #{:bogus}})
+                '(jobs.survival.shut-in {:place 3})
                 '(jobs.survival.retreat {:radius "text"})
                 '(jobs.survival.retreat {:reserve -7})]]
     (is (string? (expr/problem registry/jobs form)) (pr-str form)))
@@ -54,7 +54,7 @@
                 '(jobs.items.obtain {:item "stick" :count 64})
                 '(jobs.items.obtain {:item "stick" :count 100})
                 '(jobs.storage.deposit {:free 2})
-                '(jobs.survival.shut-in {:max-places 4 :for :night :ways #{:walls}})
+                '(jobs.survival.shut-in {:for :night :ways #{:walls}})
                 '(jobs.survival.retreat {:radius 8 :reserve 6})]]
     (is (nil? (expr/problem registry/jobs form)) (pr-str form))))
 

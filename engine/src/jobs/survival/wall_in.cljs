@@ -16,24 +16,20 @@
   hostile stands in a cell (not with :for :night), no block is left or a place is refused. A place refused for a mob in the cell is retried
   (dig-in-cells/mob-wait-ticks), then fails; one refused otherwise goes after the others and is given up after two refusals; a torch or sapling in a cell is dug once and placed over. Every block goes to the scaffold ledger with :for (default :danger, ledger :retreat-plug, taken
   back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote: time, a placement per open cell
-  (##Inf with no block carried). With :for :night the quote counts night seconds only (placing), and a block worth more than :wall-value
+  (##Inf with no block carried). With :for :night the quote counts night seconds only (placing), and a block worth more than the ::wall-value setting
   (jobs.lib.cost/item-value) adds the dig back at dawn; it needs a carried block for every open cell. A cell another's zone refuses adds plug-way's ::trespass-s.
   Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.")
 
 (a/defargs args
   {:ignore-zones? :shared
-   :for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}
-   :roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
-   :radius {:doc "melee hostiles within this many blocks decide which side is walled first and stand in the way of a cell; nil: the jobs.lib.danger ::hostile-radius setting" :spec (a/num-in 0 nil) :default nil}
-   :ranged-radius {:doc "ranged hostiles within this many blocks decide which side is walled first; nil: the ::ranged-radius setting" :spec (a/num-in 0 nil) :default nil}
-   :max-places {:doc "placements per step; nil: the jobs.survival.retreat-seal ::max-places setting" :spec (a/int-in 1 nil) :default nil}
-   :wall-value {:doc ":night: a block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85, stone 2.85, planks 3.4, log 12.8) is taken back at dawn, which the quote counts" :spec (a/num-in 0 nil) :default 3}})
+   :for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}})
 
 (a/defargs settings
-  {::job-time-s {:default 60 :doc "Seconds a walls attempt may take." :spec (a/num-in 0 nil)}
+  {::wall-value {:default 3 :doc ":night: a block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85, stone 2.85, planks 3.4, log 12.8) is taken back at dawn, which the quote counts" :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 60 :doc "Seconds a walls attempt may take." :spec (a/num-in 0 nil)}
    ::place-s {:default 3 :doc "Seconds a placement is guessed to take, for the quote." :spec (a/num-in 0 nil)}
    ::night-place-s {:default 1 :doc "Seconds a placement (aim, place, settle) takes for a night's shelter; the dig back at dawn is daylight work, so only placing is priced." :spec (a/num-in 0 nil)}
-   ::dear-s {:default 0.4 :doc "Seconds a wall block worth more than :wall-value adds per cell for the night: it is dug again at dawn." :spec (a/num-in 0 nil)}})
+   ::dear-s {:default 0.4 :doc "Seconds a wall block worth more than ::wall-value adds per cell for the night: it is dug again at dawn." :spec (a/num-in 0 nil)}})
 
 (def target [])
 
@@ -43,11 +39,11 @@
 
 (defn cell-seconds
   "Seconds one wall cell is priced at: a placement, for the night only the placing plus the dawn dig of a block worth more than
-  :wall-value when the carried cheap ones do not cover every open cell."
+  ::wall-value when the carried cheap ones do not cover every open cell."
   [c open]
   (if-not (= :night (:for (:args c)))
     (settings/get settings ::place-s)
-    (let [cheap (choose/cheap-blocks (flight/blocks c) (:wall-value (:args c)))
+    (let [cheap (choose/cheap-blocks (flight/blocks c) (settings/get settings ::wall-value))
           have (reduce + (map :count (lb/carried c cheap)))]
       (+ (settings/get settings ::night-place-s) (if (>= have open) 0 (settings/get settings ::dear-s))))))
 
