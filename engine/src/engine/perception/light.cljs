@@ -52,4 +52,4 @@
 (defn max-light
   "Per channel, the brighter of two packed lights."
   [a b]
-  (bit-or (max (bit-and a 0xF0) (bit-and b 0xF0)) (max (bit-and a 15) (bit-and b 15))))
+  (bit-or (js/Math.max (bit-and a 0xF0) (bit-and b 0xF0)) (js/Math.max (bit-and a 15) (bit-and b 15))))

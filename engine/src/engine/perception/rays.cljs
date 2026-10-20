@@ -133,7 +133,7 @@
              tmz (if (zero? dz) js/Infinity (* tdz (if (pos? dz) (- (inc z0) oz) (- oz z0))))
              prev first-light
              n 1]
-        (let [t (min tmx tmy tmz)]
+        (let [t (js/Math.min tmx tmy tmz)]
           (if (> t radius)
             n
             (let [ax (== t tmx) ay (and (not ax) (== t tmy)) az (and (not ax) (not ay))
@@ -292,7 +292,7 @@
            tmz (if (zero? dz) js/Infinity (* tdz (if (pos? dz) (- (inc z0) oz) (- oz z0))))
            prev (or (.lightAt raw x0 y0 z0) 0)
            budget (+ 3 (js/Math.abs (- x1 x0)) (js/Math.abs (- y1 y0)) (js/Math.abs (- z1 z0)))]
-      (let [t (min tmx tmy tmz)]
+      (let [t (js/Math.min tmx tmy tmz)]
         (cond
           (or (and (== cx x1) (== cy y1) (== cz z1)) (> t d)) prev
           (<= budget 0) nil

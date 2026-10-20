@@ -54,6 +54,7 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
   let lastStateKey = -1
   let lastStates = null
   let lastLightKey = -1
+  let lightCalls = 0
   let lastLight = null
   let epoch = 0 // counts block updates and chunk loads/unloads within EPOCH_RANGE of the body: "what it can see may differ"
   const near = (bot, x, y, z, range) => {
@@ -152,6 +153,12 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
     return entry
   }
 
+  const lightOf = (entry, ry, x, z) => {
+    if (entry === null) return 0
+    const i = ((ry & 15) << 8) | ((z & 15) << 4) | (x & 15)
+    return (entry.sky[i] << 4) | entry.block[i]
+  }
+
   // sky << 4 | block of the cell, 0 when not loaded
   const lightAt = (x, y, z) => {
     const bot = follow()
@@ -160,15 +167,15 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
     if (ry < 0 || ry >= heightOf(bot)) return ry < 0 ? 0 : 0xF0
     const s = ry >> 4
     const key = keyOf(x >> 4, z >> 4, s)
-    const t = now()
-    if (key !== lastLightKey || (lastLight && t - lastLight.at > lightTtlMs)) {
+    // the clock is read when the section changes or every 256th call, not per cell
+    if (key !== lastLightKey || (++lightCalls & 255) === 0) {
+      const t = now()
+      if (key === lastLightKey && lastLight && t - lastLight.at <= lightTtlMs) return lightOf(lastLight, ry, x, z)
       const cached = lights.get(key)
       lastLight = cached && t - cached.at <= lightTtlMs ? cached : sectionLight(bot, x >> 4, z >> 4, s, key)
       lastLightKey = key
     }
-    if (lastLight === null) return 0
-    const i = ((ry & 15) << 8) | ((z & 15) << 4) | (x & 15)
-    return (lastLight.sky[i] << 4) | lastLight.block[i]
+    return lightOf(lastLight, ry, x, z)
   }
 
   const tablesOf = bot => {
