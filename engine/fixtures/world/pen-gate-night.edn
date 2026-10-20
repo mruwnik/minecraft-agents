@@ -11,7 +11,7 @@
   :time :night
   :plot {:floor "grass_block" :height 8}
   :blocks [[:fill [14 0 14] [18 2 18] "stone"] [:fill [15 0 15] [17 1 17] "air"] [:set [15 0 15] "torch"]
-           [:set [18 0 16] "oak_door[facing=east,half=lower]"] [:set [18 1 16] "oak_door[facing=east,half=upper]"]
+           [:set [18 0 16] "oak_door[facing=east,half=lower,open=false]"] [:set [18 1 16] "oak_door[facing=east,half=upper,open=false]"]
            [:fill [24 0 10] [24 0 22] "oak_fence"] [:set [24 0 16] "oak_fence_gate[facing=east,open=false]"]]
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 900 4]]}
   :limit-s 90}
