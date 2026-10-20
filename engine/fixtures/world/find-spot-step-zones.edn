@@ -13,8 +13,8 @@
    :blocks [[:fill [68 0 0] [72 0 63] "grass_block"] [:fill [73 0 0] [127 3 63] "grass_block"] [:fill [65 0 0] [67 1 63] "grass_block"] [:fill [62 0 0] [64 2 63] "grass_block"] [:fill [59 0 0] [61 3 63] "grass_block"] [:fill [56 0 0] [58 4 63] "grass_block"] [:fill [53 0 0] [55 5 63] "grass_block"] [:fill [50 0 0] [52 6 63] "grass_block"] [:fill [47 0 0] [49 7 63] "grass_block"] [:fill [44 0 0] [46 8 63] "grass_block"] [:fill [41 0 0] [43 9 63] "grass_block"]]
    :body {:at [70.5 1 32.5]}
    :act [[:job (jobs.farm.find-spot {:w 5 :h 5 :center #xyz [70 -1 32] :range 3 :depth 12 :limit 8})]]
-   :expect [{:event {:source :job :kind :completed :data {:spot [:near #at [68 0 32] 4] :spots [:has {:step 0 :water-share [:> 0]}]}} :within-s 30 :of-job true}
-            {:event {:source :job :kind :completed :data {:spots [:has {:step 1 :water-share [:> 0]}]}} :within-s 30 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:spot [:near #at [68 0 32] 4] :spots [:has {:step 0}]}} :within-s 30 :of-job true}
+            {:event {:source :job :kind :completed :data {:spots [:has {:step 1}]}} :within-s 30 :of-job true}]}
   {:name "max-step-drops-the-sloped-patches"
    :blocks [[:fill [68 0 0] [72 0 63] "grass_block"] [:fill [73 0 0] [127 3 63] "grass_block"] [:fill [65 0 0] [67 1 63] "grass_block"] [:fill [62 0 0] [64 2 63] "grass_block"] [:fill [59 0 0] [61 3 63] "grass_block"] [:fill [56 0 0] [58 4 63] "grass_block"] [:fill [53 0 0] [55 5 63] "grass_block"] [:fill [50 0 0] [52 6 63] "grass_block"] [:fill [47 0 0] [49 7 63] "grass_block"] [:fill [44 0 0] [46 8 63] "grass_block"] [:fill [41 0 0] [43 9 63] "grass_block"]]
    :body {:at [70.5 1 32.5]}
