@@ -15,8 +15,6 @@
  "bed-occupied-rule/free-blue-bed-slept"
  "bed-occupied-rule/free-red-bed-slept"
  "bed-occupied-rule/occupied-bed-skipped"
- "cleanup-own-plan-and-holds/keep-at-night-false-takes-it-back"
- "cleanup-own-plan-and-holds/shelter-block-stays-all-night"
  "death-pile-night/far-pile-in-the-open-waits-for-day-and-shelters"
  "death-pile-night/night-respawn-fetches-the-pile-before-sealing-in"
  "death-pile-night/night-shelter-moves-off-another-players-zone"

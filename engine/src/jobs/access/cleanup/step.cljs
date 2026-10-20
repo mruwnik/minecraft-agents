@@ -76,15 +76,15 @@
 (defn blocker
   "Why entry e cannot be dug now, as {:reason ...detail}, or nil. in: {:feet :block-at :zones :footprints :ledger
   :accept :floor-at (block-at over what was seen, no guess: the cell under the body's floor must be seen solid) :can-clear? (block name -> whether the body can clear it now, by hand or a carried tool; absent: always)
-  :hostile-near? (a known hostile near) :night?: a shelter's blocks stay}."
-  [{:keys [feet block-at floor-at accept can-clear? hostile-near? night? keep-at-night?] :as in} {:keys [cell purpose]}]
+  :hostile-near? (a known hostile near) :opens-dark? (fn of a cell: it opens onto a dark cell, so a shelter's block stays)}."
+  [{:keys [feet block-at floor-at accept can-clear? hostile-near? opens-dark? keep-at-night?] :as in} {:keys [cell purpose]}]
   (let [[fx fy fz] feet
         [x y z] cell
         below (rules/offset cell 0 -1 0)]
     (cond
       (nil? (block-at cell)) {:reason :not-loaded}
       (and hostile-near? (shelter-purposes purpose)) {:reason :hostile-near}
-      (and night? (not (false? keep-at-night?)) (shelter-purposes purpose)) {:reason :night}
+      (and opens-dark? (not (false? keep-at-night?)) (shelter-purposes purpose) (opens-dark? cell)) {:reason :night}
       (and can-clear? (not (can-clear? (block-at cell)))) {:reason :no-tool :block (block-at cell)}
       (and (= [x z] [fx fz]) (< y (dec fy))) {:reason :under-body}
       (and (= cell [fx (dec fy) fz]) (not (rules/solid-floor? (or floor-at block-at) below)))

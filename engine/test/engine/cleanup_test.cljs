@@ -161,17 +161,17 @@
            (step :entries [plug] :hostile-near? false :block-at (lookup [3 64 1] "dirt")))
         "the hostile gone, the plug is taken back")))
 
-(deftest a-shelter-seal-stays-at-night-and-while-a-hostile-is-near
+(deftest a-shelter-seal-stays-while-it-opens-onto-dark-and-while-a-hostile-is-near
   (let [seal (entry [3 64 1] :purpose :shelter)
         plug (entry [3 65 1] :purpose :retreat-plug)
         pillar (entry [3 66 1])
         world (lookup [3 64 1] "dirt" [3 65 1] "dirt" [3 66 1] "dirt")]
-    (is (= #{:night} (set (map :reason (:open (step :entries [seal plug] :night? true :block-at world))))))
+    (is (= #{:night} (set (map :reason (:open (step :entries [seal plug] :opens-dark? any? :block-at world))))))
     (is (= [{:cell [3 64 1] :item "dirt" :reason :hostile-near}]
            (:open (step :entries [seal] :hostile-near? true :block-at world))))
-    (is (= :dig (:step (step :entries [pillar] :night? true :block-at world))) "other scaffold is taken back")
-    (is (= :dig (:step (step :entries [seal] :night? false :block-at world))) "by day the seal is taken back")
-    (is (= :dig (:step (step :entries [seal] :night? true :keep-at-night? false :block-at world))) "unless the night keep is off")))
+    (is (= :dig (:step (step :entries [pillar] :opens-dark? any? :block-at world))) "other scaffold is taken back")
+    (is (= :dig (:step (step :entries [seal] :opens-dark? (constantly false) :block-at world))) "opening onto lit cells the seal is taken back")
+    (is (= :dig (:step (step :entries [seal] :opens-dark? any? :keep-at-night? false :block-at world))) "unless the night keep is off")))
 
 ;; ------------------------------------------------------------------ the trigger
 
@@ -216,7 +216,7 @@
         hostile (fn [] (doto (tu/fake {:blocks {"0,64,0" "dirt"}})
                          (fake/add-entity! {:id 9 :name "zombie" :kind "hostile" :pos {:x 4 :y 64 :z 0} :health 20})))]
     (is (false? (fires? (night) dirt [])) "dark")
-    (is (false? (fires? (night) (trigger-store [(entry [0 64 0] :purpose :retreat-plug)] []) [])) "a retreat plug at night: cleanup keeps it all night, so no run")
+    (is (false? (fires? (night) (trigger-store [(entry [0 64 0] :purpose :retreat-plug)] []) [])) "a retreat plug opening onto dark cells: cleanup keeps it, so no run")
     (is (true? (settings/with-settings {:jobs.access.cleanup/keep-at-night? false}
                  #(fires? (night) (trigger-store [(entry [0 64 0] :purpose :retreat-plug)] []) [])))
         "with the night keep off the plug is taken back in the dark")
