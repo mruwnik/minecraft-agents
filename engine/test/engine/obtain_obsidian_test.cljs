@@ -146,3 +146,17 @@
         (let [{:keys [res left]} (await (obtain-remembering (world far-ground [pick {:name "water_bucket" :count 1}])))]
           (is (not= :done (:status res)) (pr-str res))
           (is (empty? left)))))))
+
+(deftest water-is-never-poured-into-another-bodys-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/seeing-all (tu/fake-on-floor (world lava-lake [pick {:name "water_bucket" :count 1}])))
+              zone {:name "other" :min [0 60 -2] :max [8 70 2] :owner "Miles"}
+              [_ sink] (tu/legacy-capture-sink)
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now (constantly 1000000)
+                                :world (ew/of-data {} {} [zone])
+                                :events (events/make {:body "Fake" :sinks [sink] :now (constantly 1000000)})})
+              res (await (tu/child-outcome eng 'jobs.gather.make-obsidian {:count 1} 100))]
+          (is (= :no-lava (:reason res)) (pr-str res))
+          (is (= 1 (carried p "water_bucket")) "no water was poured"))))))

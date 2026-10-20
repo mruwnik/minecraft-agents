@@ -13,6 +13,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
             [jobs.lib.tidy :as tidy]
+            [jobs.lib.near :as near]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.shore :as shore]
@@ -25,7 +26,7 @@
   it walks to the stand (go-to, which keeps off lava), pours the water there, waits for the lava to turn to obsidian,
   scoops the water back up (also in the cleanup of a cut run), and mines the obsidian (a mine child, which fetches its pickaxe from a chest or a craft).
   Ends :done {:got n} at :count obsidian gained. Else it ends with :got n in its data: condition-failed :no-bucket (no water bucket and no bucket
-  with water seen, or :fetch off); a failed bucket fetch ends with its need cause or :no-lava (no seen lava with open air above and a safe stand); nothing-possible :pour-failed (two sites in a row where
+  with water seen, or :fetch off); a failed bucket fetch ends with its need cause or :no-lava (no seen lava with open air above and a safe stand); nothing-possible :pour-failed (failed sites in a row where
   the pour or the conversion failed: moving lava gives cobblestone) or :unreachable (the stand could not be walked to); the mine child's
   ending (:no-tool ..) passes up; a limit of the call ends limit-reached.
   Quote: time by the walk to the stand and the pour; yields the obsidian.")
@@ -37,7 +38,9 @@
    :fetch {:doc "get a bucket when no bucket is carried, and the mine child's pickaxe, with jobs.lib.need: true, a set of kinds or a map of limits; false waits :no-bucket" :spec need/option? :default true}})
 
 (a/defargs settings
-  {::job-time-s {:default 600 :doc "Seconds making obsidian may take: the walks, the pour, the wait for the conversion and the mining." :spec (a/num-in 0 nil)}})
+  {::settle-looks {:default 6 :doc "Half-second looks at the poured water before the pour counts as failed." :spec (a/int-in 1 nil)}
+   ::max-failed-sites {:default 2 :doc "Failed pour sites in a row before the job ends :pour-failed." :spec (a/int-in 1 nil)}
+   ::job-time-s {:default 600 :doc "Seconds making obsidian may take: the walks, the pour, the wait for the conversion and the mining." :spec (a/num-in 0 nil)}})
 
 (def mine-fetch {:what #{:tool} :how #{:chest :craft}})
 
@@ -89,6 +92,7 @@
                    (let [above (update pos :y inc)]
                      (when (and (shore/seen-air? p above) (not (tried pos)))
                        (for [pour (pours p above)
+                             :when (not (#{:zone :claim :footprint} (:reason (access/may? c :place pour))))
                              [dx dz] shore/sides
                              :let [stand {:x (+ (:x pour) dx) :y (:y pour) :z (+ (:z pour) dz)}]
                              :when (and (not= stand above) (shore/standable? p stand) (not (lava-near? p stand)))]
@@ -114,16 +118,10 @@
   (ctx/end c kind cause {:got (gained c) :text text}))
 
 (defn ^:async walk!
-  "Walk to within range of pos with a go-to child: :there, :continue (it waits on the world, or a leg that got nearer) or
-  :blocked (it gave up)."
+  "Walk to within range of pos (jobs.lib.near/go-near!): :there, :continue (it waits on the world, or a leg that got nearer) or :blocked."
   [c pos range]
-  (let [e (await (child/call-walk* c :walk {:pos pos :range range :one-way :closed :spend {:tries 1}
-                                            :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-    (cond
-      (= :continue e) :continue
-      (and (= :done (:kind e)) (:arrived (:data e))) :there
-      (and (= :done (:kind e)) (:leg (:data e))) :continue
-      :else :blocked)))
+  (let [w (await (near/go-near! c pos range))]
+    (if (= :partial w) :continue w)))
 
 (defn cell-of [v] (if (map? v) v (zipmap [:x :y :z] v)))
 
@@ -193,8 +191,6 @@
           :continue :continue
           :blocked)))))
 
-(def settle-looks 6)
-
 (defn ^:async pour!
   "Note the pour cell of site in memory (:poured), then pour there (the note first: a cut right after the
   pour still finds its water); settle! waits and scoops. :again, or :failed."
@@ -212,7 +208,7 @@
   (let [p (:primitives c)
         {:keys [lava pour looks]} (:poured (ctx/mem c))
         made? (= "obsidian" (u/seen-name p lava))]
-    (if (or made? (>= looks settle-looks))
+    (if (or made? (>= looks (settings/get settings ::settle-looks)))
       (do (when (= "water" (u/seen-name p pour))
             (await (ctx/act c :place (clj->js {:pos pour :item "bucket"}))))
           (ctx/update-mem! c #(-> (dissoc % :poured)
@@ -263,7 +259,7 @@
       (>= got count) (ctx/end c :done nil {:got got})
       (:poured (ctx/mem c)) (await (settle! c))
       (or (:mining (ctx/mem c)) (seq (seen-of c ["obsidian"]))) (await (mine-seen! c got))
-      (>= (:failed (ctx/mem c) 0) 2) (end c :nothing-possible :pour-failed "water on the lava did not make obsidian twice in a row")
+      (>= (:failed (ctx/mem c) 0) (settings/get settings ::max-failed-sites)) (end c :nothing-possible :pour-failed "water on the lava did not make obsidian in a row")
       (zero? (carried c "water_bucket"))
       (if (pos? (carried c "bucket"))
         (let [r (await (fill-bucket! c))]
