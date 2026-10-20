@@ -37,13 +37,18 @@
 
 (defn place-text [{:keys [x y z]}] (str/join " " (remove nil? [x y z])))
 
+(defn roof-over?
+  "Whether a solid block the body has seen lies over the cell `to` in its column (within 32): terrain or a roof covers it."
+  [p to]
+  (boolean (some #(sh-sense/solid-at? p (update to :y + %)) (range 1 33))))
+
 (defn hidden-below?
   "Whether `to` is an unseen cell at least ::hidden-below-depth under the feet with a seen solid block over it in its column (within 32): terrain hides it (a pit or cliff foot seen from its rim is seen), so it is underground (Q279). A valley behind a ridge has no seen roof and stays open surface."
   [p to]
   (and (:y to)
        (>= (- (:y (sh-sense/feet p)) (:y to)) (settings/get settings ::hidden-below-depth))
        (not (sh-sense/seen-cell? p to))
-       (boolean (some #(sh-sense/solid-at? p (update to :y + %)) (range 1 33)))))
+       (roof-over? p to)))
 
 (defn at-status
   "The status of the exposure of the walk of c's body to `to`: ok while sheltered or the chance is within ::risk-limit,
@@ -130,8 +135,8 @@
 (defn safe-at-by-night
   "The checker of a job that goes to the place (f c): while the place is dark safe-at it, by day or when body and place are both
   underground only not threatened (an unseen place's light is no reason to wait, and darkness underground does not end
-  at dawn; a walk from a tunnel to open ground is exposed). A buried body's unseen place no higher than its feet is
-  underground (Q279: caves count only reachable hostiles); one above them may be open ground."
+  at dawn; a walk from a tunnel to open ground is exposed). A buried body's unseen place no higher than its feet with a seen solid block over it is
+  underground (Q279: caves count only reachable hostiles); one above them, or with open sky over it (outside a hut), may be open ground."
   ([f] (safe-at-by-night f false))
   ([f walk?]
   (let [at (safe-at f walk?)
@@ -144,7 +149,7 @@
                       (and (not (sh-sense/lit-here? p (if (and to (sh-sense/solid-at? p to)) (update to :y inc) (or to feet))))
                            (not (and to (sh-sense/buried? p)
                                      (or (sh-sense/buried-at? p to)
-                                         (and (not (sh-sense/seen-cell? p to)) (<= (:y to) (:y feet)))))))))]
+                                         (and (not (sh-sense/seen-cell? p to)) (<= (:y to) (:y feet)) (roof-over? p to))))))))]
     (with-meta (fn [c] (if (by-night? c) (at c) (if walk? (threatened-walking c (f c)) (threatened c))))
       {::exposure (fn [c] (if (by-night? c) ((::exposure (meta at)) c) (contract/ok :day "an unseen place's light is no reason to wait")))}))))
 

@@ -289,12 +289,14 @@
     nil :ok
     outside :later))
 
-(deftest safe-at-by-night-takes-an-unseen-goal-no-higher-than-a-buried-body-as-underground
-  (are [goal expected] (= expected (with-redefs [sh-sense/seen-cell? (constantly false)]
-                                     (kind (ready/safe-at-by-night (constantly goal)) tunnel)))
-    {:x 40 :y 64 :z 0} :ok
-    {:x 40 :y 50 :z 0} :ok
-    {:x 40 :y 70 :z 0} :later))
+(deftest safe-at-by-night-takes-an-unseen-goal-no-higher-than-a-buried-body-as-underground-when-roofed
+  (are [goal roofed? expected] (= expected (with-redefs [sh-sense/seen-cell? (constantly false)
+                                                        ready/roof-over? (constantly roofed?)]
+                                             (kind (ready/safe-at-by-night (constantly goal)) tunnel)))
+    {:x 40 :y 64 :z 0} true :ok
+    {:x 40 :y 50 :z 0} true :ok
+    {:x 40 :y 70 :z 0} true :later
+    {:x 40 :y 64 :z 0} false :later))
 
 (deftest explore-search-underground-at-night-is-ok
   (is (= :ok (bound search/safe? tunnel {}))))
