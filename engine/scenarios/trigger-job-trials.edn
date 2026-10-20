@@ -106,15 +106,6 @@
 ;; {:register []
 ;;  :queue [(repeat (jobs.animals.cull {:mob "cow" :keep 1 :radius 12}))
 ;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
-;; -- case from live-ProbeStuck-farm-tend-nochest
-;; ;; ProbeStuck live case: jobs.farm.tend on a 7x7 field, no chest given
-;; {:register []
-;;  :queue [(jobs.farm.tend {:box {:min {:x 8500 :y 100 :z 8500} :max {:x 8506 :y 102 :z 8506}}})]}
-;; -- case from live-ProbeStuck-farm-tend
-;; ;; ProbeStuck live case: jobs.farm.tend on a 7x7 field (farmland layer y 100, crops y 101), chest beside it
-;; {:register []
-;;  :queue [(jobs.farm.tend {:box {:min {:x 8500 :y 100 :z 8500} :max {:x 8506 :y 102 :z 8506}}
-;;                           :chest {:x 8509 :y 101 :z 8503}})]}
 ;; -- case from live-ProbeStuck-tend-cow-nochest
 ;; ;; ProbeStuck live case: jobs.animals.maintain without a chest (produce stays carried)
 ;; {:register []

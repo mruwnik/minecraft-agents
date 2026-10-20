@@ -36,12 +36,3 @@
 ;; ;; batch-block: find-spot fail case: searched around a point high in the air (no ground within :depth)
 ;; {:register []
 ;;  :queue [(jobs.farm.find-spot {:center {:x 5000 :y 200 :z 5000} :range 12})]}
-;; -- case from live-ProbeDummy-till-1
-;; ;; batch-block: jobs.farm.till live case on a 4x3 box at x 5001..5004, z 5001..5003, ground y 99
-;; ;; (setup: grass, grass under short_grass, farmland, stone, dirt under cobblestone, dirt_path, the rest dirt)
-;; {:register []
-;;  :queue [(jobs.farm.till {:from {:x 5001 :y 99 :z 5001} :to {:x 5004 :y 99 :z 5003}})]}
-;; -- case from live-ProbeDummy-till-2
-;; ;; batch-block: jobs.farm.till fail case, a single dirt cell floating 10 blocks above the plot (unreachable)
-;; {:register []
-;;  :queue [(jobs.farm.till {:from {:x 5000 :y 110 :z 4994} :to {:x 5000 :y 110 :z 4994}})]}
