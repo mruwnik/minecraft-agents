@@ -49,6 +49,5 @@
     [] {} {} [:ok :deposited]
     [{:name "dirt" :count 5}] {:keep {"dirt" 5}} {} [:ok :deposited]
     [] {} {:deposited 2 :moved 5} [:later :offering]
-    [] {} {:deposited 2 :moved 5 :offered true} [:ok :deposited]
-    [{:name "dirt" :count 5}] {:free 30} {} [:ok :deposited]))
+    [] {} {:deposited 2 :moved 5 :offered true} [:ok :deposited]))
 

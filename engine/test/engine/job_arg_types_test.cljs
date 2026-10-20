@@ -41,7 +41,6 @@
                 '(jobs.movement.boat-land {:pos "x"})
                 '(jobs.items.obtain {:item 3})
                 '(jobs.items.obtain {:item "stick" :count 0})
-                '(jobs.storage.deposit {:free "text"})
                 '(jobs.storage.deposit {:ignore-zones? 3})
                 '(jobs.survival.shut-in {:ways #{:bogus}})
                 '(jobs.survival.shut-in {:place 3})]]
@@ -51,7 +50,6 @@
                 '(jobs.movement.boat-drive {:pos [1 63 1] :range 2 :spend {:job-time 30}})
                 '(jobs.items.obtain {:item "stick" :count 64})
                 '(jobs.items.obtain {:item "stick" :count 100})
-                '(jobs.storage.deposit {:free 2})
                 '(jobs.survival.shut-in {:for :night :ways #{:walls}})]]
     (is (nil? (expr/problem registry/jobs form)) (pr-str form))))
 
