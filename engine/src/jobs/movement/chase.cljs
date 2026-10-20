@@ -3,6 +3,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.aim :as aim]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.places :as places]
@@ -15,7 +16,7 @@
   The :walk map is the go-to call (its args and call keys, such as :ways :doors :see :checks :settings :floor, and a
   :spend; :tries is 1 unless it says otherwise: a leg is re-aimed by the caller, not retried); :pos, :range and :spend :job-time are this job's.
   Ends:
-  - :done {:arrived true} when the body is within :range of the thing (at once when it already is).
+  - :done {:arrived true} when the body is within :range of the thing (at once when it already is; with :walk {:see true} only when it also sees the thing's cell).
   - limit-reached {:reason :leg :line :job-time} with {:arrived false :leg true :nearer bool} when the leg's seconds ran out
     (also mid-search): :nearer says the body got more than 1 block closer. A leg that got no nearer is no failure: the next
     leg is aimed afresh.
@@ -65,8 +66,9 @@
 
 (defn done?
   [c]
-  (let [aim (aim-of c)
-        there? (and aim (u/within? (u/self-pos c) aim (:range (:args c))))]
+  (let [cell (aim-of c)
+        there? (and cell (u/within? (u/self-pos c) cell (:range (:args c)))
+                    (or (not (:see (:walk (:args c)))) (aim/body-sees? c [(:x cell) (:y cell) (:z cell)])))]
     (checks/goal there? [:there "within range of the thing"] [:walking "not within range yet"] {:result {:arrived true}})))
 
 (defn quote-of [c]

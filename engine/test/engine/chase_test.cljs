@@ -110,3 +110,14 @@
                    :settings {:jobs.movement.go-to.tuning/look-round false :jobs.lib.walk.world/y-margin 9}}]
                  (map #(select-keys % [:pos :ways :floor :job-time :settings]) @calls)))
           (is (= {:arrived false :leg true :nearer false} (:data r))))))))
+
+(deftest under-see-a-thing-in-range-behind-a-wall-is-not-arrived
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              wall (into {} (for [y [64 65] z [-1 0 1]] [(str "1," y "," z) "stone"]))
+              r (await (run-chase {:entities [(cow 2)] :blocks wall} {:entity 7 :range 5 :leg-s 4 :walk {:see true}} calls
+                                  (fn [c _] (leg-over c))))]
+          (is (= 1 (count @calls)) "the walk is made: in range is not seen")
+          (is (false? (:arrived (:data r)))))))))
