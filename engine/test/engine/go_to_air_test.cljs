@@ -134,3 +134,13 @@
         (let [{:keys [out p]} (await (gt/go! {:self {:pos [5.5 60 0.5] :inWater true :oxygen 20} :blocks night-pool :light [0 0] :time 18000}
                                              {:pos [14 64 0] :range 1}))]
           (is (true? (:arrived @out)) (pr-str @out)))))))
+
+(deftest a-body-sealed-in-a-dark-water-pocket-looks-round-and-gives-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out ticks]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen 20}
+                                                  :blocks (merge (box -4 60 -4 30 70 20 "stone") (box 4 64 8 4 65 8 "water")) :light [0 0]}
+                                                 {:pos [12 64 8] :range 1 :ways #{:walk :clear-seal}}))]
+          (is (false? (:arrived @out)) (pr-str @out))
+          (is (< ticks 30) "ends"))))))
