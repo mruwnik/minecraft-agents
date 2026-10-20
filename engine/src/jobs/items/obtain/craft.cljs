@@ -9,9 +9,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.util :as u]
             [jobs.lib.need :as need]
-            [jobs.lib.spot :as free-spot]
-            [jobs.lib.waits :as waits]
-            [jobs.lib.world :as known]))
+            [jobs.lib.waits :as waits]))
 
 (defn fruitless! [c why]
   (child/fruitless! c :craft)
@@ -56,23 +54,6 @@
                   (ctx/update-mem! c assoc-in [:craft :detail] why))
                 (fruitless! c (contract/cause-key e))))))))
 
-(defn plan-table
-  "The table this obtain put down in a cell of its :for-plan plan, else nil: the build keeps tables, so it is dug up once the count is carried."
-  [c]
-  (let [{:keys [x y z] :as spot} (:plan-table (ctx/mem c))
-        plan (:for-plan (:args c))]
-    (when (and spot plan (= plan (get (known/footprints c) (mapv #(js/Math.floor %) [x y z]))))
-      spot)))
-
-(defn ^:async pick-plan-table!
-  "Dig up the table in a plan cell (a jobs.blocks.dig child): :continue while it waits, else :again (a failed dig is not retried)."
-  [c spot]
-  (let [r (await (ctx/call c :pickup 'jobs.blocks.dig {:pos spot :collect true :need-drop false :fetch false :on-fluid :fail :for-plan (:for-plan (:args c))}))]
-    (if (= :continue r)
-      :continue
-      (do (ctx/update-mem! c dissoc :plan-table)
-          :again))))
-
 (defn ^:async craft-step!
   "One round of the craft source: run the current step of the plan as a child, until it ends."
   [c names have target]
@@ -91,28 +72,12 @@
       (nil? step)
       (tried! c :craft :no-plan)
 
-      (= :place (:op step))
-      (do (ctx/update-mem! c assoc-in [:craft :step] step)
-          (let [r (await (free-spot/place-beside! c (:item step) [:craft :spot]
-                                                  {:wrap (when (= "crafting_table" (:item step))
-                                                           (fn ^:async place-wrapped [call]
-                                                             (await (ctx/atomic c :urgent :place-table (fn ^:async place-table [] (await (call)))))))}))]
-            (cond
-              (= :continue r) :continue
-              (:placed r) (do (ctx/update-mem! c update :craft dissoc :step)
-                              (ctx/update-mem! c assoc :table (:placed r) :plan-table (:placed r))
-                              (ctx/update-mem! c update :craft dissoc :table-unreachable)
-                              :again)
-              :else (do (ctx/update-mem! c update :craft dissoc :step)
-                        (fruitless! c (if (= :no-spot (:cause r)) :no-table-spot (:cause r)))))))
-
       (= :smelt (:op step))
       (await (smelt-step! c step))
 
       :else
       (do (ctx/update-mem! c assoc-in [:craft :step] step)
-          (let [e (await (ctx/call c :craft 'jobs.items.craft (cond-> {:item (:item step) :count (need/carry-count c :craft [(:item step)] (:count step)) :fetch false :avoid (:avoid (:args c)) :for-plan (:for-plan (:args c))}
-                                                                (and (:table? step) (:table (ctx/mem c))) (assoc :table (:table (ctx/mem c))))))]
+          (let [e (await (ctx/call c :craft 'jobs.items.craft {:item (:item step) :count (need/carry-count c :craft [(:item step)] (:count step)) :fetch false :avoid (:avoid (:args c)) :for-plan (:for-plan (:args c))}))]
             (if (= :continue e)
               :continue
               (do

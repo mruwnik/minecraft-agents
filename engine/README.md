@@ -765,7 +765,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 
 **The `:fetch` arg** (spec and limits in `jobs.lib.need`): `blocks.dig` and `blocks.place` take `:fetch`; `access.bridge`, `access.stair`, `access.clear-path`, `access.tunnel`, `access.leave-tunnel`, `items.craft`, `items.equip` and `items.enchant` (contract jobs) take it too
 (default true; `false` waits or stops with the reason). Go-to's escalation children, the stairs and places
-of leave-tunnel, tunnel, dig-in and breathe, obtain's table place passes `:fetch false`, its gather mines `:fetch {:what #{:tool} :how #{:chest :craft}}` (no mine inside a mine's fetch); `gather.mine`'s stair passes true. `true` allows every kind (`:tool :item`) and source (`:chest :craft :gather`); a
+of leave-tunnel, tunnel, dig-in and breathe, obtain's craft children pass `:fetch false`, its gather mines `:fetch {:what #{:tool} :how #{:chest :craft}}` (no mine inside a mine's fetch); `gather.mine`'s stair passes true. `true` allows every kind (`:tool :item`) and source (`:chest :craft :gather`); a
 set narrows the kinds; a map gives limits `{:what :how :minutes :fail-minutes :explore}` (built-in, the job's default, then the call's arg; later wins). `need/plan-for` says which fetch job (`items.get-tool`, `items.obtain`) a wait (`:no-tool`, `:need`) asks for under the limits. Only the job given `:fetch`
 fetches; its children and go-to never do. Sources are carried items, seen chests, crafting and gathering (a sapling by breaking seen leaves).
 

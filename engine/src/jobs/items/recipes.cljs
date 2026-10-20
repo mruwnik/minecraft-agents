@@ -3,8 +3,8 @@
   carried counts and whether a crafting table is at hand are arguments.
 
   (plan version have item n opts) -> {:steps [step ...]} or nil when no chain of crafts gets n more of item.
-  A step is {:op :craft :item name :count n :table? bool} or {:op :place :item \"crafting_table\"} (put the table down
-  before the first craft that needs one). Ingredients are taken from what is carried first, then crafted; a recipe
+  A step is {:op :craft :item name :count n :table? bool}; a crafting table is a craft step before the first that
+  needs one. Ingredients are taken from what is carried first, then crafted; a recipe
   whose ingredients are carried is tried before one that needs more crafts. opts: :table? (a table is at hand: no table
   steps), :max-depth (nested crafts, default 6), :gather? (items that are gatherable? and not carried count as
   gathered, not crafted: the plan then has :gather {name n}, what must be mined or felled before its crafts can run),
@@ -146,4 +146,4 @@
       (not needs-table) (with-gather {:steps (:steps main)} main)
       :else (when-let [t (acquire rs st0 table-item 1 #{} max-depth)]
               (when-let [m (make rs t item n #{} max-depth)]
-                (with-gather {:steps (vec (concat (:steps t) [{:op :place :item table-item}] (subvec (:steps m) (count (:steps t)))))} m))))))
+                (with-gather {:steps (vec (concat (:steps t) (subvec (:steps m) (count (:steps t)))))} m))))))

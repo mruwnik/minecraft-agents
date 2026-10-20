@@ -949,8 +949,8 @@
 (deftest obtain-plan-uses-the-remembered-table
   (is (= [:craft] (plan-ops {:table [1 64 0]}))))
 
-(deftest obtain-plan-puts-a-table-down-once-the-table-is-unreachable
-  (is (some #{:place} (plan-ops {:table [1 64 0] :craft {:table-unreachable true}}))))
+(deftest obtain-plan-crafts-a-new-table-once-the-table-is-unreachable
+  (is (= [:craft :craft] (plan-ops {:table [1 64 0] :craft {:table-unreachable true}}))))
 
 (deftest get-tool-for-an-unknown-block-is-bad-args-not-a-hand-block
   (async done

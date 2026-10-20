@@ -8,7 +8,7 @@
 (defn shape [p] (mapv (juxt :op :item :count) (:steps p)))
 
 (deftest logs-only-make-planks-table-sticks-and-the-pickaxe
-  (is (= [[:craft "oak_planks" 4] [:craft "crafting_table" 1] [:place "crafting_table" nil]
+  (is (= [[:craft "oak_planks" 4] [:craft "crafting_table" 1]
           [:craft "oak_planks" 4] [:craft "oak_planks" 4] [:craft "stick" 4] [:craft "wooden_pickaxe" 1]]
          (shape (plan {"oak_log" 12} "wooden_pickaxe" 1)))))
 
@@ -17,7 +17,7 @@
          (shape (plan {"oak_log" 2} "wooden_pickaxe" 1 {:table? true})))))
 
 (deftest sticks-and-planks-carried-need-only-the-table-and-pickaxe
-  (is (= [[:craft "oak_planks" 4] [:craft "crafting_table" 1] [:place "crafting_table" nil] [:craft "wooden_pickaxe" 1]]
+  (is (= [[:craft "oak_planks" 4] [:craft "crafting_table" 1] [:craft "wooden_pickaxe" 1]]
          (shape (plan {"oak_log" 1 "oak_planks" 3 "stick" 2} "wooden_pickaxe" 1)))))
 
 (deftest another-wood-works-too
