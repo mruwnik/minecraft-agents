@@ -1443,5 +1443,7 @@
     (is (not (shot-on-run? [arrow] [:cobblestone])) "one arrow is walked off")
     (is (not (shot-on-run? [arrow melee] [:cobblestone])) "melee hits are the beaten rule's")
     (is (shot-on-run? [arrow arrow] [:cobblestone]))
+    (is (shot-on-run? [{:data {:attacker {:name "zombie"} :damages [{:attacker {:name "zombie"}} {:damageType "arrow"} {:attacker {:name "skeleton"}}]}}] [:cobblestone])
+        "arrows merged into one loss with a blow")
     (is (shot-on-run? [(assoc-in arrow [:data :hits] 2)] [:cobblestone]))
     (is (not (shot-on-run? [arrow arrow] [])) "no blocks, no cover to take")))

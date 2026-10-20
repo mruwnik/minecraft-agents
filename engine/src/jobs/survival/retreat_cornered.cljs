@@ -440,6 +440,13 @@
   [{:keys [beaten? armed? blocks?]}]
   (boolean (and beaten? (or armed? (not blocks?)))))
 
+(defn shots-in
+  "Shots in one :hurt entry: its hits when the entry is a shot, else the shot packets among its merged damages (a skeleton's arrow and a zombie's blow in one loss)."
+  [e]
+  (if (shot/shot? e)
+    (:hits (:data e) 1)
+    (count (filter #(shot/shot? {:data %}) (:damages (:data e))))))
+
 (defn fire-hits [] (settings/get settings :jobs.survival.retreat-cornered/fire-hits))
 
 (defn under-fire?
@@ -447,7 +454,7 @@
   [c]
   (let [n (fire-hits)]
     (and (pos? n)
-         (<= n (count (filter shot/shot? (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s))))))))))
+         (<= n (transduce (map shots-in) + 0 (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s)))))))))
 
 (defn shot-on-the-run?
   "Whether a ranged mob hit the body shot-hits times within hurt-window-s and it carries blocks to wall with: walking on only feeds the shooter, so the flight takes cover."
@@ -456,8 +463,7 @@
     (and (pos? n)
          (seq (lb/carried c (flight/blocks c)))
          (<= n (->> (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s))))
-                    (filter shot/shot?)
-                    (map #(:hits (:data %) 1))
+                    (map shots-in)
                     (reduce + 0))))))
 
 (defn retry-covers
