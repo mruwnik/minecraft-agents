@@ -216,7 +216,10 @@
   [job spec args & [setup before]]
   (run-job-unpinned job (merge {:jitter 0.5} spec) args setup before))
 
-(defn run-go-to [spec args & [setup before]] (run-job 'jobs.movement.go-to spec args setup before))
+(defn run-go-to
+  "go-to over the sensed-only world with :unknown false unless args say otherwise: these cases test the escalations and the walk, not the unseen."
+  [spec args & [setup before]]
+  (run-job 'jobs.movement.go-to spec (merge {:unknown false} args) setup before))
 
 (defn steps [seen] (mapv :step (filter #(= :go-to.escalated (:kind %)) seen)))
 
@@ -475,7 +478,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [preview (fn [args] (quote-route in-tunnel (merge {:pos [9 61 0] :range 1} args) dark-and-looked))
-              seen-all (await (preview {}))
+              seen-all (await (preview {:unknown false}))
               masked (await (preview {:unknown true}))]
           (is (true? (:found seen-all)) (pr-str seen-all))
           (is (= [false :unseen-floor-dark] [(:found masked) (:reason masked)]) (pr-str masked))

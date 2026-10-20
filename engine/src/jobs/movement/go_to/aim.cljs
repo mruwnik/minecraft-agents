@@ -77,18 +77,20 @@
 (defn in-seen-ground?
   "Under :unknown, whether the y goal pos is a position in the ground with no seen stand within the :range arg of it: a
   seen cell that is not free, or an unseen one under a seen solid cell of its column within :y-slack (the roof of a
-  plateau: its inside is never shown), with the body within approach-range of the column."
+  plateau: its inside is never shown), with the body within approach-range of the column. A door or gate cell is no ground: the
+  walk opens it."
   [c pos]
   (boolean (and (:unknown c) (:y pos)
                 (let [ka (column/seen-kind-at (:primitives c))
                       cell (mapv #(js/Math.floor (% pos)) [:x :y :z])
                       [x y z] cell
                       k (apply ka cell)
+                      door? (some-> (u/seen-block (:primitives c) {:x x :y y :z z}) .-name reach/openable?)
                       me (u/self-pos c)
                       roofed? (and (keyword-identical? :unknown k)
                                    (<= (js/Math.hypot (- x (:x me)) (- z (:z me))) column/approach-range)
                                    (some #(keyword-identical? :solid (ka x (+ y %) z)) (range 1 (inc (tuning/y-slack)))))]
-                  (and (or roofed? (not (or (keyword-identical? :unknown k) (column/free? k))))
+                  (and (or roofed? (not (or (keyword-identical? :unknown k) (column/free? k) door?)))
                        (not (seen-stand-within? ka cell (:range (:args c) 1))))))))
 
 (def lookout-reach "Blocks from a y goal hidden in seen ground (hidden-in-ground?) a stand go-to looks at it from may be." 4)

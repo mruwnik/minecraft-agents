@@ -289,8 +289,10 @@
   "snapshot read through unknown, live-snapshot.mjs's mask option: a cell the body's memory ((.known unknown cx sy cz), sy the
   world section y: ids + 1, 0 never seen; nil: none of it seen) has not got reads (.-id unknown); unloaded stays unloaded. It
   carries unknown, as the live snapshot does. sectionHas stays unmasked (live masks it): it is the planner's pre-check
-  that lets it skip reading cells, so a true where live says false only makes it read the masked cells, same plan."
-  [^js snapshot ^js unknown]
+  that lets it skip reading cells, so a true where live says false only makes it read the masked cells, same plan.
+  pinned (a set of [x y z], the buried cells of :unreachable and :no-path) stay as they are: they stand for the old
+  walker's refusal, which no unseen cell can hide."
+  [^js snapshot ^js unknown pinned]
   (let [view (js/Object.create snapshot)
         id (.-id unknown)
         known? (fn [x y z]
@@ -298,7 +300,7 @@
                    (pos? (aget mem (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left (bit-and z 15) 4) (bit-and x 15))))))]
     (set! (.-stateAt view) (fn [x y z]
                              (let [s (.stateAt snapshot x y z)]
-                               (if (or (== s 0xFFFF) (known? x y z)) s id))))
+                               (if (or (== s 0xFFFF) (known? x y z) (contains? pinned [x y z])) s id))))
     (set! (.-unknown view) unknown)
     view))
 

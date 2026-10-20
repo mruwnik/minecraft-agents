@@ -22,13 +22,15 @@
 
 ;; Sight jitters each pass's rays within their grid cells; seen edge-on, the pocket is hit by some jitters only (0.25 to
 ;; 0.75 at the first look), so the cases run over jitters the first look misses it at too: the body looks again.
+(def tunnel-seen [[3 64 7 22 65 9] [3 66 7 10 66 9] [14 66 7 22 66 9]])
+
 (def jitters [0 0.1 0.5 0.9 0.999])
 
 (defn ^:async go-east!
   ([yaw jitter] (go-east! yaw jitter {}))
   ([yaw jitter args]
    (let [{:keys [out]} (await (gt/go! {:self {:pos [5.5 64 8.5] :inWater true :oxygen 4 :yaw yaw} :blocks (:blocks args tunnel) :light [15 15]
-                                       :jitter jitter}
+                                       :seen tunnel-seen :jitter jitter}
                                       (merge {:pos [12 65 8] :range 1 :ways #{:walk :clear-seal}} (dissoc args :blocks))))]
      @out)))
 
@@ -91,7 +93,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen 6 :pitch 0} :blocks long-tunnel :light [15 15]}
-                                             {:pos [70 70 8] :range 1 :ways #{:walk :clear-seal}}))]
+                                             {:pos [70 70 8] :range 1 :unknown false :ways #{:walk :clear-seal}}))]
           (is (= :air (:why @out)) (str "result " @out))
           (is (<= 69 (second (gt/at p))) (str "it swam up for air: at " (gt/at p))))))))
 
@@ -117,7 +119,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen 10 :pitch 0} :blocks surface-stretch :light [15 15]}
-                                             {:pos [59 65 8] :range 1 :ways #{:walk :clear-seal}}))]
+                                             {:pos [59 65 8] :range 1 :unknown false :ways #{:walk :clear-seal}}))]
           (is (true? (:arrived @out)) (str "result " @out " at " (gt/at p))))))))
 
 ;; open water 4 deep, a land floor at feet 64 round it, the body on its bottom at night in the dark: its safe? would

@@ -444,6 +444,8 @@
           (is (some (fn [[_ _ z]] (neg? z)) (dug-cells s)) "the new steps turn north from the old foot"))))))
 
 (deftest a-run-goes-on-from-the-foot-of-its-old-stair
+  ;; the walk down the plugged stair is planned over the world as it is (go-to :unknown false by the job-args overlay): the
+  ;; case is the new steps' start, not the unseen
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -451,7 +453,8 @@
                                 :self {:pos [0.5 64 0.5]}}})]
           (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors (vec (for [i (range 1 5)] [i (- 63 i) 0]))})
           (core/submit! (:eng s) (spec {:block "iron_ore" :level 58 :heading "east" :count 1 :tunnel-length 3 :torches false}) {})
-          (await (run-ticks s 300))
+          (await (settings/with-settings {:engine.settings/job-args {'jobs.movement.go-to {:unknown false}}}
+                   #(run-ticks s 300)))
           (is (= 1 (count (events-of s :mine.stair-plan))))
           (is (= [5 61 0] (first (dug-cells s))) "the new steps go on from the foot of the old stair"))))))
 

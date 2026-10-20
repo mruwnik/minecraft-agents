@@ -32,20 +32,33 @@
 
 (def start {:x 0 :y 64 :z 0})
 
+(defn blocks-box
+  "The box [x0 y0 z0 x1 y1 z1] round the cells of blocks, three more on every side: the world a body that has been all over
+  it has seen."
+  [blocks]
+  (let [ks (map (fn [k] (if (string? k) (mapv js/parseInt (.split k ",")) k)) (keys blocks))
+        [lo hi] (for [f [min max]] (mapv (fn [i] (apply f (map #(nth % i) ks))) [0 1 2]))]
+    (vec (concat (map #(- % 3) lo) (map #(+ % 3) hi)))))
+
 (defn setup
   "A world key :light [sky block] makes the body see through perception, in that light everywhere; :jitter (0.5) fixes
   where each pass's rays fall in their grid cells; :clock is the atom of the fake time (ms); :sight true runs the sight
-  passes on a timer as the body's does (main.cljs starts them), else the body sees only what its jobs look at; :stop stops them."
+  passes on a timer as the body's does (main.cljs starts them), else the body sees only what its jobs look at; :stop stops them.
+  :seen is :all (the box round the blocks) or boxes [x0 y0 z0 x1 y1 z1] whose cells the body has already seen (memory takes their true state), for the
+  planner's :unknown default: a world with :light and no :seen is one the body has never looked at."
   ([world] (setup world nil))
   ([world shared]
   (let [clock (or (:clock world) (atom 1000000))
         [seen sink] (tu/legacy-capture-sink)
-        raw (tu/fake (merge {:self {:pos start}} (dissoc world :light :jitter :clock :ray-deg :jobs :sight)))
+        raw (tu/fake (merge {:self {:pos start}} (dissoc world :light :jitter :clock :ray-deg :jobs :sight :seen)))
         _ (when-let [l (:light world)] (swap! (fake/state raw) assoc :light-default l))
-        p (if (:light world)
-            (perception/wrap raw (perception/create (fake-raw/create raw) {:radius 16 :ray-deg (:ray-deg world 2) :now #(deref clock)
-                                                                      :rand (constantly (:jitter world 0.5))}))
-            raw)
+        per (when (:light world)
+              (perception/create (fake-raw/create raw) {:radius 16 :ray-deg (:ray-deg world 2) :now #(deref clock)
+                                                        :rand (constantly (:jitter world 0.5))}))
+        boxes (if (= :all (:seen world)) [(blocks-box (:blocks world))] (:seen world))
+        _ (doseq [[x0 y0 z0 x1 y1 z1] boxes x (range x0 (inc x1)) y (range y0 (inc y1)) z (range z0 (inc z1))]
+            (rays/touch! per [x y z]))
+        p (if per (perception/wrap raw per) raw)
         eng (core/create (cond-> {:primitives p :jobs (merge registry/jobs (:jobs world)) :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
                            shared (assoc :world shared)))]

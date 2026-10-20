@@ -268,7 +268,7 @@
       (doseq [yaw [0 90 180 270]]
         (swap! (fake/state raw-p) assoc :yaw yaw)
         (perception/pass! per)))
-    (get-in (await (quote-reply eng {:pos [10 64 1] :range 0})) [:quote :route :dark])))
+    (get-in (await (quote-reply eng {:pos [10 64 1] :range 0 :unknown false})) [:quote :route :dark])))
 
 (def night-ms 14000)
 

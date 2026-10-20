@@ -256,7 +256,7 @@
         out (atom :not-done)
         dig-round (get-in eng [:jobs 'jobs.blocks.dig :round])
         eng (-> eng
-                (assoc-in [:jobs 'recording-parent] (recording-parent out 'jobs.movement.go-to {:pos [3 60 0] :range 0}))
+                (assoc-in [:jobs 'recording-parent] (recording-parent out 'jobs.movement.go-to {:pos [3 60 0] :range 0 :unknown false}))
                 (assoc-in [:jobs 'jobs.blocks.dig :round] (fn [c] (swap! digs conj (:args c)) (dig-round c))))]
     (some-> sense (apply [p]))
     (core/submit! eng '(recording-parent) {})

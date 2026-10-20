@@ -44,7 +44,7 @@
 
 (def top [88 60 0])
 
-(def buried {:blocks dive :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0]})
+(def buried {:blocks dive :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0]})
 
 (deftest a-buried-body-does-not-dive-to-reach-a-goal-far-above
   (async done
@@ -82,7 +82,7 @@
 
 (def on-top [20 60 0])
 
-(def in-mine {:blocks mine :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0]})
+(def in-mine {:blocks mine :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0]})
 
 (defn ^:async climb!
   "go! with ticks enough for a stair, a second of fake time each (the stair waits out a lava delay): {:out :p :seen
@@ -157,7 +157,7 @@
            (floor 32 21 -17 53 17)
            (into {} ramp))))
 
-(def in-shallow {:blocks shallow :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0]})
+(def in-shallow {:blocks shallow :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0]})
 
 (def mass-top [10 60 0])
 
@@ -238,7 +238,7 @@
            (floor 39 21 -17 46 17)
            (into {} ramp))))
 
-(def in-forked {:blocks forked :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0] :stair-way stair-floors})
+(def in-forked {:blocks forked :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0] :stair-way stair-floors})
 
 (def fork-top [18 60 0])
 
@@ -333,7 +333,7 @@
         stairs (for [[x y _] (concat far-floors stub-floors) dy [1 2 3]] (str x "," (+ y dy) ",0"))]
     (apply dissoc (box -90 29 -1 10 59 1 "dirt") (concat tunnel stairs))))
 
-(def in-branched {:blocks branched :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0]
+(def in-branched {:blocks branched :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0]
                   :own-ways [[:stair-way {:floors far-floors}] [:stair-way {:floors stub-floors}]
                              [:tunnel-way {:origin [0 40 0] :delta [-1 0] :steps 60}]]})
 
@@ -362,7 +362,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p] :as s} (await (climb! {:blocks capped :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0] :stair-way short-floors
+        (let [{:keys [out p] :as s} (await (climb! {:blocks capped :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0] :stair-way short-floors
                                                     :inventory [{:name "stone_pickaxe" :count 1}]}
                                                    {:pos [-6 46 0]}))
               blocks (:blocks @(fake/state p))]
@@ -410,6 +410,7 @@
 (deftest a-walk-up-its-own-way-slower-than-a-new-stair-is-not-taken
   (is (= [true false] (map #(:take (climb/weigh (vec (range %)) 16 3)) [193 200]))))
 
+;; (These cases are about the planner's refusal of a long way over cells never seen, so they pass :unknown false.)
 ;; Two corridors 6 apart (z 0 and z 6, x 0..40) joined only at their far end: the goal is 6 blocks from the body across
 ;; a gap it cannot jump, and 84 by the only way. No sky light: under ground, the far cells never seen.
 (def loop-way (merge (floor 63 0 0 40 0) (floor 63 40 0 40 6) (floor 63 0 6 40 6)))
@@ -422,7 +423,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (gt/go! in-loop {:pos across}))]
+        (let [{:keys [out p]} (await (gt/go! in-loop {:pos across :unknown false}))]
           (is (= {:arrived false :why :detour :route 84 :straight 6 :allowed 48}
                  (select-keys @out [:arrived :why :route :straight :allowed])))
           (is (re-find #"84 blocks.*6 blocks away.*detour/floor" (str (:text @out))))
@@ -435,7 +436,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p] :as s} (await (climb! (assoc in-loop :blocks rock-loop :inventory [{:name "stone_pickaxe" :count 1}]) {:pos across :range 0}))]
+        (let [{:keys [out p] :as s} (await (climb! (assoc in-loop :blocks rock-loop :inventory [{:name "stone_pickaxe" :count 1}]) {:pos across :range 0 :unknown false}))]
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= [:dig-route] (map :step (gt/events-of s :go-to.escalated))))
           (is (empty? (gt/events-of s :go-to.escalation-stopped)) "the goal's cell, guessed rock and seen open, leaves nothing to dig: no failed route")
@@ -452,9 +453,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world (assoc in-loop :blocks bedrock-loop :inventory [{:name "stone_pickaxe" :count 1}])
-              {:keys [out p] :as s} (await (climb! world {:pos across :range 0}))
+              {:keys [out p] :as s} (await (climb! world {:pos across :range 0 :unknown false}))
               capped (await (settings/with-settings {:jobs.movement.go-to.tuning/max-route-replans 0}
-                              #(climb! world {:pos across :range 0})))]
+                              #(climb! world {:pos across :range 0 :unknown false})))]
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= [0 64 6] (mapv js/Math.floor (gt/at p))))
           (is (= ["bedrock" "bedrock"] (map #(.-name (.blockAt p (clj->js %))) [{:x 0 :y 64 :z 3} {:x 0 :y 65 :z 3}])))

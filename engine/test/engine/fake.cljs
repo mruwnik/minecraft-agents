@@ -1060,7 +1060,7 @@
                       (when (full-cube? block) (aset o "fullCube" true))
                       o))))
               "pathWorld" (fn [unknown] (let [{:keys [snapshot table space]} (steer/path-world @state)]
-                                          #js {:snapshot (if unknown (steer/masked snapshot unknown) snapshot) :table table :space space}))
+                                          #js {:snapshot (if unknown (steer/masked snapshot unknown (into #{} (map first) (steer/buried @state))) snapshot) :table table :space space}))
               "onBodyEvent" (fn [listener] (swap! listeners conj listener) (fn [] (swap! listeners disj listener)))
               "close" (fn [])}]
        (aset p k f))
