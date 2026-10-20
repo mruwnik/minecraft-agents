@@ -124,6 +124,13 @@
     (seen/observe! c s 1000)
     (is (= {"c-1" true "c-2" nil} (into {} (map (juxt :uuid :baby)) (:entities (seen/snapshot c 1000)))))))
 
+(deftest a-villager-row-carries-its-profession
+  (let [c (cache) bot (js-obj)
+        s (sample bot [(entity 1 "villager" "v-1" 1) (entity 2 "cow" "c-2" 2)])]
+    (set! (.-fields s) (fn [e] (if (= 1 (.-id e)) #js {:profession "unemployed"} #js {})))
+    (seen/observe! c s 1000)
+    (is (= {"v-1" "unemployed" "c-2" nil} (into {} (map (juxt :uuid :profession)) (:entities (seen/snapshot c 1000)))))))
+
 (deftest loaded-entities-refresh-and-unloaded-entities-expire
   (let [c (cache) bot (js-obj) e (entity 1 "villager" "v-1" 1)]
     (seen/observe! c (sample bot [e]) 1000)

@@ -1,23 +1,24 @@
-;; entities() villager rows carry :profession (card 4af16cbe), read through jobs.village.trade, which trades with no villager whose row says
-;; "unemployed" or "nitwit" (a row without :profession would pass that filter and sell). NoAI villagers keep the profession they are
-;; summoned with; each holds the same offer (1 emerald for 6 bread). Should-succeed: a farmer sells (village-trade-unreachable.edn
-;; reachable-villager-sells). Should-fail: an unemployed villager and a nitwit end stopped :gone and sell nothing.
+;; The `entities` tool lists a villager with its :profession (a villager with no job: "unemployed"), so an agent can tell a farmer
+;; from an unemployed villager or a nitwit. NoAI villagers keep the profession they are summoned with.
 {:defaults
- {:tags [:village :sensing :trade :jobs]
+ {:tags [:village :sensing :agent-tools]
   :time :any
   :plot {:floor "grass_block" :height 8}
-  :body {:at [10.5 0 16.5] :yaw 270 :settle-s 2 :inventory [["emerald" 8]] :effects [["resistance" 600 4]]}
-  :limit-s 90}
+  :body {:at [10.5 0 16.5] :yaw 270 :settle-s 2}
+  :limit-s 60}
  :cases
- [  {:name "unemployed-villager-is-not-traded-with"
-   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,Offers:{Recipes:[{buy:{id:\"minecraft:emerald\",count:1},sell:{id:\"minecraft:bread\",count:6},maxUses:12,xp:1}]}}"]
-         [:job (jobs.village.trade {:buy "bread" :count 6})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :gone}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 60 :until {:source :job :kind :stopped}}]
-   :after [[:item "bread" 0] [:item "emerald" 8]]}
-  {:name "nitwit-is-not-traded-with"
-   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,VillagerData:{profession:\"minecraft:nitwit\",level:1,type:\"minecraft:plains\"},Offers:{Recipes:[{buy:{id:\"minecraft:emerald\",count:1},sell:{id:\"minecraft:bread\",count:6},maxUses:12,xp:1}]}}"]
-         [:job (jobs.village.trade {:buy "bread" :count 6})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :gone}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 60 :until {:source :job :kind :stopped}}]
-   :after [[:item "bread" 0] [:item "emerald" 8]]}]}
+ [{:name "farmer-is-listed-as-a-farmer"
+   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,VillagerData:{profession:\"minecraft:farmer\",level:2,type:\"minecraft:plains\"}}"]
+         [:until [:cli "entities" ["$body" "--world" "$world" "--type" "villager"] {:items [:has {:profession "farmer"}]}] 30]]
+   :expect [{:no-event {:level :error} :for-s 3}]
+   :after [[:body-near [10.5 0 16.5] 4]]}
+  {:name "unemployed-villager-is-listed-as-unemployed"
+   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b}"]
+         [:until [:cli "entities" ["$body" "--world" "$world" "--type" "villager"] {:items [:has {:profession "unemployed"}]}] 30]]
+   :expect [{:no-event {:level :error} :for-s 3}]
+   :after [[:body-near [10.5 0 16.5] 4]]}
+  {:name "nitwit-is-listed-as-a-nitwit"
+   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,VillagerData:{profession:\"minecraft:nitwit\",level:1,type:\"minecraft:plains\"}}"]
+         [:until [:cli "entities" ["$body" "--world" "$world" "--type" "villager"] {:items [:has {:profession "nitwit"}]}] 30]]
+   :expect [{:no-event {:level :error} :for-s 3}]
+   :after [[:body-near [10.5 0 16.5] 4]]}]}

@@ -4,6 +4,7 @@
 import vec3 from 'vec3'
 import { emptyHand } from './unequip.mjs'
 import { setting } from './settings.mjs'
+import { professionOf, villagerData } from './villager.mjs'
 import constants from '../src/engine/constants.json' with { type: 'json' }
 
 export const LOVE_STATUS = 18
@@ -24,10 +25,11 @@ export const sheepDye = (bot, e) => e.name === 'sheep' ? (e.metadata?.[metaIndex
 
 const DYE_COLORS = ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray', 'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black']
 
-// What a mob shows that a use can change: identity, age and (sheep) colour and shearing. Keys appear only when they apply.
+// What a mob shows that a use can change: identity, age, (villager) profession and (sheep) colour and shearing. Keys appear only when they apply.
 export const mobFields = (bot, e) => ({
   ...(typeof e.uuid === 'string' && { uuid: e.uuid }),
   ...(hasMetaKey(bot, e, 'baby') && { baby: e.metadata?.[metaIndex(bot, e, 'baby', -1)] === true }),
+  ...(e.name === 'villager' && { profession: professionOf(villagerData(bot, e).villagerProfession) }),
   ...(e.name === 'enderman' && { angry: e.metadata?.[metaIndex(bot, e, 'creepy', 17)] === true }),
   ...(e.name === 'creeper' && { fusing: e.metadata?.[metaIndex(bot, e, 'swell_dir', 16)] === 1 }),
   ...(e.name === 'sheep' && { color: DYE_COLORS[sheepDye(bot, e)] }),
