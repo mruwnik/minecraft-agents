@@ -220,6 +220,15 @@
     (is (= [] (wplan/dry-end [(s 0 11)] (constantly false) ok?)))
     (is (= [] (wplan/dry-end [(s 0 3)])) "without wet-ok? swimming steps are cut")))
 
+(deftest masked-wet-ok-keeps-swimming-steps-while-the-air-left-brings-the-body-back
+  (let [ok (fn [oxygen] (wplan/masked-wet-ok {:primitives (tu/fake {:self {:pos [0 64 0] :inWater true :oxygen oxygen}})}))
+        step (fn [air] {:swim true :air air})]
+    (are [oxygen air kept?] (= kept? (boolean ((ok oxygen) (step air))))
+      20 wplan/masked-wet-limit-s true
+      20 (inc wplan/masked-wet-limit-s) false
+      14 wplan/masked-wet-limit-s true
+      11 0 false)))
+
 (deftest stop-short-ends-a-partial-plan-out-of-reach-of-a-blocking-mob
   (let [steps (mapv (fn [x] {:x x :y 12 :z 16}) (range 0 12))
         d (fn [x block] #js {:x x :y 12 :z 16.5 :block block})
