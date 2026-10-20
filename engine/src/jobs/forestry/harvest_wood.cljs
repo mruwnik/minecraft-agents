@@ -22,7 +22,7 @@
   Only replant debts within :radius of where the body stood when :plant began are planted; the others stay owed and the job warns harvest-wood.debts-owed with their :count and the :nearest one's :pos.
   Before the first tree it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!).
   With :count, the two phases repeat on the next tree until that many logs are carried; done? holds at once when they are carried already (:done :already).
-  Needs: a tree in range (a start wait :no-tree until one shows); an axe and a sapling are fetched (:fetch).
+  Needs: a tree in range (a start wait :no-tree until one shows); an axe and a sapling are fetched (from the call's :ways).
   Ends :done (the wood is the goal) with {:replant-owed n} when near debts stay unplanted. Any other ending is the felling's, passed up with :got (the logs carried) and :replant-owed in the data: condition-failed :no-tree when no tree is left, a need, a limit, nothing-possible :tree-unreachable / :tree-blocked (data :why, :columns).")
 
 (a/defargs args
@@ -31,24 +31,25 @@
    :center {:doc "the centre of the area the job works, a cell [x y z] or {:x :y :z}; nil: where the body stands when the job first runs (jobs.lib.area)" :spec a/position? :default nil}
    :ignore-zones? :shared
    :avoid {:doc "columns [x z] of trees to leave alone (passed to fell-tree)" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
-   :count {:doc "logs to carry: another tree is felled while fewer of the species' logs (any log when no species) are carried; nil: one tree" :spec (a/int-in 1 nil) :default nil}
-   :fetch {:doc "get a missing sapling or an axe (passed to plant-sapling and fell-tree; see their :fetch): true, a set of kinds or a map of limits; false leaves the replant owed" :spec need/option? :default true}})
+   :count {:doc "logs to carry: another tree is felled while fewer of the species' logs (any log when no species) are carried; nil: one tree" :spec (a/int-in 1 nil) :default nil}})
+
+(def ways need/fetch-ways)
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds a harvest may take: every tree's felling, collecting and planting." :spec (a/num-in 0 nil)}})
 
-(defn fell-args [{:keys [species radius ignore-zones? fetch avoid]}]
+(defn fell-args [{:keys [species radius ignore-zones? ways avoid]}]
   (cond-> {:species species :radius radius :ignore-zones? ignore-zones?}
-    (some? fetch) (assoc :fetch fetch)
+    (some? ways) (assoc :ways ways)
     (seq avoid) (assoc :avoid avoid)))
 
 (defn phases
   "The children in order: [phase job args]; the phase is also the slot."
   [args origin]
-  (let [{:keys [species radius ignore-zones? fetch]} args]
+  (let [{:keys [species radius ignore-zones? ways]} args]
     [[:fell 'jobs.forestry.fell-tree (fell-args args)]
      [:plant 'jobs.forestry.plant-sapling (cond-> {:species species :ignore-zones? ignore-zones? :near origin :within radius}
-                                            (some? fetch) (assoc :fetch fetch))]]))
+                                            (some? ways) (assoc :ways ways))]]))
 
 (defn current-phase
   "The [phase job args] the job is in, from its memory."

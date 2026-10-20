@@ -26,7 +26,7 @@
   would not run; their replant debts stay owed) after the max-trees setting's trunks or when none is left in sight. With nothing to tidy
   (done? true once the first round has looked round) it ends done {:tidied 0}. A fell child that ends for want of a tool, blocks or food (a need, a limit,
   :food-short) ends the job with that ending (:tidied n in its data), done when trunks were tidied first;
-  a trunk it cannot reach is left. A missing axe, a pillar's blocks or a sapling are fetched by the children (:fetch).
+  a trunk it cannot reach is left. A missing axe, a pillar's blocks or a sapling are fetched by the children (from the call's :ways).
   Quote: time by the trunks to fell, at most the max-trees setting.")
 
 (a/defargs settings
@@ -34,11 +34,12 @@
    ::job-time-s {:default 1200 :doc "Seconds a tidy run may take: the trunks, their drops and replants." :spec (a/num-in 0 nil)}
    ::ground-depth {:default 24 :doc "Blocks under a raised log looked down for the ground to replant on." :spec (a/int-in 1 nil)}})
 
+(def ways need/fetch-ways)
+
 (a/defargs args
   {:species {:doc "log species; any when nil" :spec a/name? :default nil}
    :radius {:doc "search radius in blocks" :spec (a/num-in 0 nil) :default default-radius}
-   :ignore-zones? :shared
-   :fetch {:doc "get a missing axe, pillar blocks or sapling (passed to fell-tree and plant-sapling; see their :fetch)" :spec need/option? :default true}})
+   :ignore-zones? :shared})
 
 (defn raised?
   "Whether the block under pos is seen as air."
@@ -98,12 +99,12 @@
 
 (defn phases
   "The children in order: [phase job args] for the trunk tree {:base :species :ground}."
-  [{:keys [radius ignore-zones? fetch]} {:keys [base species ground]}]
-  [[:fell 'jobs.forestry.fell-tree (cond-> {:at base :ignore-zones? ignore-zones?} (some? fetch) (assoc :fetch fetch))]
+  [{:keys [radius ignore-zones? ways]} {:keys [base species ground]}]
+  [[:fell 'jobs.forestry.fell-tree (cond-> {:at base :ignore-zones? ignore-zones?} (some? ways) (assoc :ways ways))]
    [:collect 'jobs.items.collect-drops {:radius radius :items (drop-filter species) :near base :search radius
                                            :least-items [(str species "_log")]}]
    [:plant 'jobs.forestry.plant-sapling (cond-> {:at ground :species species :ignore-zones? ignore-zones?}
-                                          (some? fetch) (assoc :fetch fetch))]])
+                                          (some? ways) (assoc :ways ways))]])
 
 (defn limit [_c] (settings/get settings ::max-trees))
 

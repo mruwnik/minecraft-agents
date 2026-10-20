@@ -61,7 +61,7 @@
   {:name "fetch-false-chops-by-hand-and-fetches-no-axe"
    :blocks [[:set [14 0 20] "chest{Items:[{Slot:0b,id:\"minecraft:iron_axe\",count:1}]}"]]
    :body {:inventory []}
-   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16] :fetch false})]]
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16] :ways #{:carried}})]]
    :expect [{:event {:source :job :kind #{:completed :waiting :stopped}} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 40}]
    :after [[:item "iron_axe" 0]]

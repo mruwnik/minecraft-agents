@@ -117,7 +117,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [end p]} (await (fell-ending (assoc ft/tall :inventory [] :lose-logs? true) 'jobs.forestry.fell-tree {:radius 10 :fetch false} 100))]
+        (let [{:keys [end p]} (await (fell-ending (assoc ft/tall :inventory [] :lose-logs? true) 'jobs.forestry.fell-tree {:radius 10 :ways #{:carried}} 100))]
           (is (= {:kind :condition-failed :cause :need} (kc end)))
           (is (= ["dirt"] (get-in end [:cause :any-of])))
           (is (pos? (get-in end [:cause :count])))

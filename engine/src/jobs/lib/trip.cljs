@@ -149,13 +149,12 @@
   (slot :spare; chest, craft, gather; a table is never put in the dig line). Resolves nil to go on, :continue while the
   get waits on the world. Told once per tool name in the job's memory (:spare-tried): info tool.spare when one came, warn
   tool.no-spare with the get's reason when not (the job goes on with the worn tool). amount (the digs the job will make,
-  optional) is spare-need's. The job's :fetch off, or a set of kinds without :tool, skips it; so does a job under a spare
+  optional) is spare-need's. The job's fetch off (ways #{:carried}, or :fetch off or without :tool) skips it; so does a job under a spare
   fetch (no spare of a spare)."
   ([c block-name] (tool-ready! c block-name nil))
   ([c block-name amount]
    (let [p (:primitives c)
-         f (need/parse-arg (:fetch (:args c)))
-         worn (when (and block-name (not (in-spare? c)) (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) :tool)))
+         worn (when (and block-name (not (in-spare? c)) (need/fetch-allowed? c :tool))
                 (spare-need c block-name amount))
          tool-name (when worn (spare-name p block-name worn))]
      (when (and worn (not (contains? (:spare-tried (ctx/mem c)) tool-name)))

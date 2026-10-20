@@ -29,7 +29,7 @@
   Anything else on a planned cell (another species, a block) is left and reported once (forest.foreign). Trees off
   the planned cells are never touched.
   A bare cell whose sapling is not carried gets it from jobs.forestry.plant-sapling (a child that fetches it: a seen
-  chest, or the leaves of its tree). With :fetch off for items it is skipped, with one forest.no-sapling note.
+  chest, or the leaves of its tree). With :ways #{:carried} it is skipped, with one forest.no-sapling note.
   A tree is left standing (forest.left, once, and skipped for the rest of the call; the next call looks again) when:
   - its column holds more than ::max-logs (6) logs and :pillar? is false (else it is felled from a pillar),
   - fell-tree gave up on it (its cause is the :because of forest.left),
@@ -50,13 +50,12 @@
    :pillar? {:doc "fell a tree too tall for the ground from a pillar (jobs.forestry.fell-tree); false: leave one over ::max-logs" :spec boolean? :default true}
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :lava-adjacent :falling-block"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
-   :fetch {:doc "get a missing sapling (passed to plant-sapling; see its :fetch): true, a set of kinds or a map of limits; false skips a bare cell whose sapling is not carried" :spec need/option? :default true}
    :ignore-zones? :shared})
 
 (defn fetching?
-  "Whether :fetch lets the job get a missing sapling."
+  "Whether the call's ways let the job get a missing sapling."
   [c]
-  (boolean (some-> (need/opts c 'jobs.forestry.plant-sapling) :what (contains? :item))))
+  (boolean (seq (need/fetch-how c))))
 
 ;; ------------------------------------------------------------------ access
 
@@ -102,6 +101,8 @@
       (not ((soil-for species) below)) :no-ground
       (some-> (u/seen-name p (up pos)) forestry/log-name?) :cramped
       :else :bare)))
+
+(def ways need/fetch-ways)
 
 (a/defargs settings
   {::max-logs {:default 6 :doc "With :pillar? false, a tree whose column holds more logs than this is too tall to fell from the ground and is left." :spec (a/int-in 1 nil)}
@@ -342,7 +343,7 @@
   [c pos species]
   (cond-> {:at pos :species species :for-plan (:plan (:args c))
            :ignore-zones? (boolean (:ignore-zones? (:args c)))}
-    (some? (:fetch (:args c))) (assoc :fetch (:fetch (:args c)))))
+    (some? (:ways (:args c))) (assoc :ways (:ways (:args c)))))
 
 (defn ^:async fetch-plant!
   "Plant at pos with jobs.forestry.plant-sapling, which fetches the sapling it lacks. :again, :continue while it waits."

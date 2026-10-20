@@ -8,10 +8,9 @@
             [jobs.lib.trip :as trip]))
 
 (defn fetch-allows?
-  "Whether the call's :fetch lets it get a thing of kind (:item or :tool)."
+  "Whether the call lets it get a thing of kind (:item or :tool)."
   [c kind]
-  (let [f (need/parse-arg (:fetch (:args c)))]
-    (boolean (and (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) kind))))))
+  (need/fetch-allowed? c kind))
 
 (defn no-stock-text [held e]
   (let [tried (get-in e [:data :tried])]

@@ -1,6 +1,6 @@
 ;; Card fe73a5ef: jobs.forestry.plant-sapling with no sapling carried. A seen chest holding one is fetched and planted;
 ;; seen oak leaves are broken for the drop (obtain :gather via gather.get-seeds; the drop is chance and the dig bound is 20 leaves,
-;; so that case checks the bounded outcome: the :need child ends (a sapling came) or fails (20 dry digs)); with no source the job waits :no-sapling; harvest-wood :fetch false passes down and leaves the debt owed.
+;; so that case checks the bounded outcome: the :need child ends (a sapling came) or fails (20 dry digs)); with no source the job waits :no-sapling; harvest-wood :ways #{:carried} passes down and leaves the debt owed.
 {:defaults
  {:tags [:forestry :plant-sapling :fetch]
   :plot {:height 10 :floor "grass_block" :length 64 :width 32}
@@ -79,7 +79,7 @@
   {:name "fetch-false-waits-despite-chest"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:oak_sapling\",count:2}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"]
-         [:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak" :fetch false})]]
+         [:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-sapling}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 20}]
    :after [[:not-block [20 0 14] "oak_sapling"]]}
@@ -90,7 +90,7 @@
             [:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:oak_sapling\",count:2}]}"]]
    :body {:inventory [["iron_axe" 1]]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"]
-         [:job (jobs.forestry.harvest-wood {:radius 16 :fetch false})]]
+         [:job (jobs.forestry.harvest-wood {:radius 16 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed :data {:replant-owed 1}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 80 :until {:source :job :kind :completed}}]
    :after [[:not-block [22 0 16] "oak_sapling"]]}]}

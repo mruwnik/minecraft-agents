@@ -107,6 +107,14 @@
   (let [arg (parse-arg v)]
     (boolean (and arg (not (:error arg)) (contains? (:what (merge-limits nil arg)) kind)))))
 
+(defn fetch-allowed?
+  "Whether the job running in c may fetch things of kind (:tool or :item): its call's ways when it has some, else its
+  old :fetch arg."
+  [c kind]
+  (if (contains? (ctx/frozen-call c) :ways)
+    (boolean (seq (fetch-how c)))
+    (allows? (:fetch (:args c)) kind)))
+
 (defn tighten
   "Limits o tightened by a wait's limits l: the sources both allow, the shorter :minutes; other keys of l fill in."
   [o l]

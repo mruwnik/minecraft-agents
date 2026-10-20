@@ -1,5 +1,5 @@
 (ns engine.fetch-default-test
-  "A job that starts without the item it needs gets it from a seen chest by default, and leaves the chest alone with :fetch false."
+  "A job that starts without the item it needs gets it from a seen chest by default, and leaves the chest alone with fetch off (:fetch false, or :ways #{:carried})."
   (:require [cljs.test :refer [deftest is async]]
             [engine.library-test :as lt]
             [engine.test-util :as tu]))
@@ -12,6 +12,7 @@
 
 (def cases
   [{:job 'jobs.forestry.plant-sapling
+    :ways? true
     :args {:at {:x 3 :y 64 :z 0} :species "oak"}
     :world {:blocks {chest "chest"} :containers {chest [{:name "oak_sapling" :count 1}]}}
     :item "oak_sapling"
@@ -25,9 +26,10 @@
     :item "bucket"
     :used #(pos? (carried % "obsidian"))}])
 
-(defn ^:async run-case [{:keys [job args world]} fetch]
+(defn ^:async run-case [{:keys [job args world ways?]} fetch]
   (let [{:keys [eng p]} (lt/setup (merge {:self {:pos [0.5 64 0.5]}} world))
-        res (await (tu/child-outcome eng job (assoc args :fetch fetch) 200))]
+        call (cond (not ways?) (assoc args :fetch fetch) fetch args :else (assoc args :ways #{:carried}))
+        res (await (tu/child-outcome eng job call 200))]
     {:res res :p p}))
 
 (deftest a-job-without-its-item-fetches-it-from-a-seen-chest-by-default

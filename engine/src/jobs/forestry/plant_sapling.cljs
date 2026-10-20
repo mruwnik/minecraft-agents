@@ -16,7 +16,7 @@
 (def doc
   "Plant a sapling at :at, or at the oldest replant debt (then at the next, until none is owed), and clear that debt.
   With :near and :within only the debts within :within blocks of :near count; the others stay owed.
-  A missing sapling is got with jobs.lib.need (a seen chest, or the leaves of its tree broken for the drop) unless :fetch
+  A missing sapling is got with jobs.lib.need (a seen chest, or the leaves of its tree broken for the drop) unless the call's :ways are #{:carried}
   is false or leaves out :item. The sapling kind is the species' (mangrove propagule, fungus too); the same one already on the spot counts as
   planted.
   Zones: a spot in another owner's zone or claim, or in another body's plan footprint (but :for-plan's own, or the body's own plan), is not planted.
@@ -26,7 +26,7 @@
   The planting is a jobs.blocks.place child (:ways #{:carried}: the sapling is got here). Bone meal for it is jobs.farm.fertilize's.
 
   Start conditions: :refused or :no-zones (the spot may not be planted; the debt stays owed), :no-sapling (none carried and
-  :fetch off for items; data :species); a log on the spot (data :pos) is waited out. A spot that holds its sapling, or no debt owed, is done at once. Ends :done with data
+  :ways #{:carried}; data :species); a log on the spot (data :pos) is waited out. A spot that holds its sapling, or no debt owed, is done at once. Ends :done with data
   {:pos} once planted; condition-failed with the need cause when the fetch
   failed, :refused when the zone rule changed on the way; a failed place child ends it with that ending
   (:occupied, :unreachable, :not-loaded ..). Quote: the walk to the spot.")
@@ -37,8 +37,9 @@
    :within {:doc "radius for :near" :spec (a/num-in 0 nil) :default nil}
    :species {:doc "sapling species; any when nil" :spec a/name? :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
-   :fetch {:doc "get a missing sapling with jobs.lib.need: true, a set of kinds or a map of limits; false or without :item waits :no-sapling" :spec need/option? :default true}
    :ignore-zones? :shared})
+
+(def ways need/fetch-ways)
 
 (a/defargs settings
   {::job-time-s {:default 180 :doc "Seconds a planting may take: the walk, a fetch." :spec (a/num-in 0 nil)}})
@@ -77,10 +78,10 @@
         species (assoc :item (sapling-of species))))))
 
 (defn fetch-opts
-  "The limits {:how :explore :minutes} for fetching a sapling, nil when :fetch does not allow items."
+  "The limits {:how} for fetching a sapling, nil when the call's ways leave only :carried."
   [c]
-  (when-let [o (need/opts c 'jobs.forestry.plant-sapling)]
-    (when (contains? (:what o) :item) (select-keys o [:how :explore :minutes]))))
+  (when-let [how (seq (need/fetch-how c))]
+    {:how (set how)}))
 
 (def spot-refused
   (checks/refusing :spot-allowed "the spot may be planted"

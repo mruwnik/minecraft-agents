@@ -852,7 +852,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (assoc-in (world {chest-at [{:name "bone_meal" :count 4}]}) [:blocks "3,63,1"] "grass_block") [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.farm.fertilize {:grass true :max 1 :fetch true}) {})
+          (core/submit! (:eng s) (list 'jobs.farm.fertilize {:grass true :max 1}) {})
           (await (run-ticks s 40))
           (is (empty? (listed s)) "the job ended")
           (is (= 1 (count (calls s "useOn")))))))))
@@ -888,7 +888,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (forest-world) [own-zone] sight-opts oak-plan)]
-          (core/submit! (:eng s) (list 'jobs.forestry.maintain {:plan "forest" :fetch false}) {})
+          (core/submit! (:eng s) (list 'jobs.forestry.maintain {:plan "forest" :ways #{:carried}}) {})
           (await (run-ticks s 10))
           (is (= 1 (count (listed s))) "still queued")
           (is (empty? (transfers s)))
@@ -900,18 +900,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {chest-at [{:name "oak_sapling" :count 2}]}) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "oak" :fetch false}) {})
-          (await (run-ticks s 10))
-          (is (= 1 (count (listed s))) "still queued")
-          (is (empty? (transfers s)))
-          (is (= [:no-sapling] (mapv :reason (events-of s :waiting)))))))))
-
-(deftest plant-sapling-with-fetch-limited-to-tools-waits-no-sapling-and-touches-no-chest
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start (world {chest-at [{:name "oak_sapling" :count 2}]}) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "oak" :fetch #{:tool}}) {})
+          (core/submit! (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "oak" :ways #{:carried}}) {})
           (await (run-ticks s 10))
           (is (= 1 (count (listed s))) "still queued")
           (is (empty? (transfers s)))

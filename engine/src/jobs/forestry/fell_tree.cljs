@@ -1,5 +1,6 @@
 (ns jobs.forestry.fell-tree
-  (:require [jobs.lib.ready :as ready]
+  (:require [clojure.set :as set]
+            [jobs.lib.ready :as ready]
             [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -34,7 +35,7 @@
   or whose pillar digs no log counts as unreachable. Once a tree is chosen the rest of it is a comfort section
   (ctx/atomic): reflexes at or below that level wait for it, up to their caps.
   Before the third log of a tree big enough for an axe to pay (jobs.lib.trees/axe-worth-fetching?) with none carried it
-  gets one (jobs.lib.need) unless :fetch is false or lacks :tool; a failed fetch ends the tree chopped by hand (:axe :none-found), asking once more (craft only) after two logs. Before the first log, a carried axe that is the last of
+  gets one (jobs.lib.need) unless :ways is #{:carried}; a failed fetch ends the tree chopped by hand (:axe :none-found), asking once more (craft only) after two logs. Before the first log, a carried axe that is the last of
   its kind and worn gets a spare (jobs.lib.trip/tool-ready!).
   Each log is dug by a jobs.blocks.dig child that leaves the drop on the ground; a leaf hiding a log from the eye is dug
   first. When the tree is down a jobs.items.collect-drops child picks up the drops of the logs dug from the ground (by
@@ -60,11 +61,12 @@
    :at {:doc "{:x :y :z} of a base log: fell that one column, wherever the body is (the radius and species are not used), instead of the nearest tree" :spec ::a/pos :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :lava-adjacent :falling-block" :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
-   :fetch {:doc "get an axe when none is carried, and the dirt or cobblestone a pillar needs (jobs.lib.need): true, a set of kinds or a map of limits; false chops by hand and ends a tree needing a pillar :need" :spec need/option? :default true}
    :pillar? {:doc "fell a log out of reach of the ground from a pillar (blocks placed, then taken back); false: such a tree is left" :spec boolean? :default true}
    :avoid {:doc "columns [x z] of trees to leave alone (ones an earlier run found cut off)" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :replant? {:doc "write a :forestry/replant debt per trunk cell felled; false when the tree is only in the way (clearing a site: a player would not plant there)" :spec boolean? :default true}
    :ignore-zones? :shared})
+
+(def ways need/fetch-ways)
 
 (a/defargs settings
   {::approach-range {:default 3 :doc "Blocks from a tree's base the search for the tree to fell counts as reaching it." :spec (a/num-in 0 nil)}
@@ -178,7 +180,7 @@
 (defn pillar-args
   "The args of the fell-from-pillar child for the chosen tree."
   [c]
-  (merge (select-keys (:args c) [:for-plan :accept :fetch :ignore-zones? :replant?])
+  (merge (select-keys (:args c) [:for-plan :accept :ways :ignore-zones? :replant?])
          {:base (:base (ctx/mem c)) :species (:species (ctx/mem c))}))
 
 (defn blocked!
@@ -259,12 +261,10 @@
                     (< (or dug 0) 2))))))
 
 (defn axe-fetch-opts
-  "The limits {:how :explore} for getting an axe, nil when :fetch does not allow tools; retry? asks only to craft."
+  "The limits {:how} for getting an axe, nil when the call's ways and the axe's sources share none; retry? asks only to craft."
   [c retry?]
-  (when-let [o (need/opts c job)]
-    (when (contains? (:what o) :tool)
-      (cond-> (select-keys (need/tighten o (axe-fetch-limits)) [:how :explore])
-        retry? (assoc :how #{:craft})))))
+  (when-let [how (seq (set/intersection (need/fetch-how c) (:how (axe-fetch-limits))))]
+    {:how (if retry? #{:craft} (set how))}))
 
 (defn ^:async axe!
   "Get an axe before a log of a tree it pays for (axe-wanted?): nil to go on (one came, or none could be had: the tree is
@@ -284,7 +284,7 @@
   [c]
   (cond
     (axe-carried? c) :carried
-    (not (contains? (:what (need/opts c job)) :tool)) :skipped-fetch-off
+    (empty? (need/fetch-how c)) :skipped-fetch-off
     (not (axe-worth-fetching? (:first-logs (ctx/mem c) 0))) :skipped-small-tree
     :else :none-found))
 

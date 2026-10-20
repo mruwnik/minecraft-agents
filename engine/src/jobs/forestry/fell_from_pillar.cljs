@@ -28,13 +28,13 @@
   (jobs.access.cleanup) takes the pillar back however the call ends, a cut included (and when the call starts with
   this job's scaffold still open).
   The pillar is built of dirt, cobblestone (only with a pickaxe carried: the cleanup digs it back with one) and the logs cut so far; with too few of those carried it gets the height in
-  blocks with jobs.lib.need unless :fetch is false.
+  blocks with jobs.lib.need unless :ways is #{:carried}.
   The build and dig, and the cleanup's take-back, are urgent sections (ctx/atomic): reflexes at or below that level wait for them, up to their caps.
   Zones: a pillar a zone, claim or footprint refuses ends :condition-failed :refused.
   Done? is ok once a log was dug from a pillar, the ledger is closed and no log is left in dig reach of its stand.
   Ends :done with {:logs n} when a log was dug (a pillar the cleanup could not take back is its :cleanup-open).
   A scaffold of an earlier call still open when the call starts is taken back first.
-  Condition-failed {:reason :need ...} when the blocks cannot be had (the fetch's cause is the :because; with :fetch false, :any-of and :count in the cause) and
+  Condition-failed {:reason :need ...} when the blocks cannot be had (the fetch's cause is the :because; with :ways #{:carried}, :any-of and :count in the cause) and
   :refused; nothing-possible :no-stand (or the planner's reason), :walk, :build, :dig or :no-log-in-reach after the
   pillar was taken back.
   Quote: time by the logs standing.")
@@ -44,9 +44,10 @@
    :species {:doc "log species of the tree" :spec a/name? :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :lava-adjacent :falling-block" :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
-   :fetch {:doc "get the pillar's blocks with jobs.lib.need: true, a set of kinds or a map of limits; false ends :need" :spec need/option? :default true}
    :replant? {:doc "write a replant debt for a trunk-level log (see fell-tree)" :spec boolean? :default true}
    :ignore-zones? :shared})
+
+(def ways need/fetch-ways)
 
 (a/defargs settings
   {::drop-radius {:default 6 :doc "Blocks round the base the cut logs are picked up from before a pillar is built." :spec (a/num-in 0 nil)}
@@ -169,14 +170,14 @@
       {:reason :need :any-of (pillar-items c) :count (- (:height plan) (logs-carried c))})))
 
 (defn fetch-opts
-  "The limits {:how :explore} for getting the pillar's blocks, nil when :fetch does not allow items."
+  "The limits {:how} for getting the pillar's blocks, nil when the call's ways leave only :carried."
   [c]
-  (when-let [o (need/opts c 'jobs.forestry.fell-from-pillar)]
-    (when (contains? (:what o) :item) (select-keys o [:how :explore]))))
+  (when-let [how (seq (need/fetch-how c))]
+    {:how (set how)}))
 
 (defn ^:async blocks!
   "Get the blocks a planned pillar lacks: nil when none is lacking, :continue while the fetch waits on the world, :again
-  once they are had, else the ending of the call (the fetch's, or the :need cause when :fetch is off)."
+  once they are had, else the ending of the call (the fetch's, or the :need cause when :ways is #{:carried})."
   [c]
   (when-let [w (pillar-problem c)]
     (if-let [opts (fetch-opts c)]

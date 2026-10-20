@@ -115,7 +115,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out]} (await (outcome {:blocks (merge (fm/ground [[6 0]]) (part-cut 6))} {:radius 12 :fetch false}))]
+        (let [{:keys [p out]} (await (outcome {:blocks (merge (fm/ground [[6 0]]) (part-cut 6))} {:radius 12 :ways #{:carried}}))]
           (is (= #{65 66 67} (dug-ys p 6)))
           (is (= {:status :done :tidied 1 :replant-owed 1} out)))))))
 

@@ -418,7 +418,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {})]
-          (core/submit! eng (list 'jobs.forestry.plant-sapling {:at {:x 5 :y 64 :z 5} :fetch false}) {})
+          (core/submit! eng (list 'jobs.forestry.plant-sapling {:at {:x 5 :y 64 :z 5} :ways #{:carried}}) {})
           (is (nil? (core/tick! eng)) "no sapling in the inventory: not yet")
           (swap! (fake/state p) assoc :inventory [{:name "birch_sapling" :count 1}])
           (await (run-until-empty eng 4))

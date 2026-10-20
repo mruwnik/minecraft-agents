@@ -1,12 +1,12 @@
 ;; Cards b72b070d, e87d918f: jobs.forestry.fell-tree felling a 10-log trunk (x 16, z 16, the top logs out of reach from the ground)
 ;; from a pillar. b72b070d: the pillar is taken back (the ledger ends empty) and the job completes, with no round repeating;
 ;; a pillar refused by a plan's footprint ends :tree-unreachable and the top log stays. e87d918f: too few blocks carried
-;; fetches the height in dirt or cobblestone from a seen chest (a :need child) and felling goes on; :fetch false, or
+;; fetches the height in dirt or cobblestone from a seen chest (a :need child) and felling goes on; :ways #{:carried}, or
 ;; no chest, stops :need.
 ;; The need cases use a tree whose only ground log is the base (logs y 8..13 float above it, no lower canopy): the pillar is built of dirt, cobblestone and
 ;; the logs cut (2b670ae6), so with one log carried it is short and the shortfall is what is fetched or waited for. A trunk reaching the ground
 ;; gives the pillar its own logs; one taller than the approach's height (10) plus reach is :tree-unreachable.
-;; Should-succeed: dirt carried; dirt fetched from a chest. Should-fail: no blocks (stops :need), :fetch false with a chest
+;; Should-succeed: dirt carried; dirt fetched from a chest. Should-fail: no blocks (stops :need), :ways #{:carried} with a chest
 ;; (stops :need, no fetch), no chest (the need child stops, then :need), a footprint ring that refuses the pillar.
 {:defaults
  {:tags [:forestry :fell-tree :pillar] :time :any
@@ -26,7 +26,7 @@
    :after [[:not-block [16 9 16] "oak_log"] [:item "dirt" [:>= 12]]]}
   {:name "no-blocks-waits-need"
    :blocks [[:fill [14 8 14] [18 10 18] "air"] [:fill [16 1 16] [16 5 16] "air"] [:fill [16 8 16] [16 13 16] "oak_log"] [:fill [14 12 14] [18 14 18] "oak_leaves[persistent=true]"] [:fill [16 12 16] [16 13 16] "oak_log"]]
-   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16] :fetch false})]]
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16] :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :need}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :stopped :data {:reason :need}}}]
    :after [[:block [16 13 16] "oak_log"] [:item "dirt" 0]]}
@@ -48,7 +48,7 @@
   {:name "fetch-false-waits-need-despite-chest"
    :blocks [[:set [14 0 20] "chest{Items:[{Slot:0b,id:\"minecraft:dirt\",count:64}]}"]
             [:fill [14 8 14] [18 10 18] "air"] [:fill [16 1 16] [16 5 16] "air"] [:fill [16 8 16] [16 13 16] "oak_log"] [:fill [14 12 14] [18 14 18] "oak_leaves[persistent=true]"] [:fill [16 12 16] [16 13 16] "oak_log"]]
-   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16] :fetch false})]]
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16] :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :need}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 40}]
    :after [[:block [16 13 16] "oak_log"] [:item "dirt" 0]]}
@@ -68,6 +68,6 @@
   {:name "dirt-and-log-pillar-leaves-no-block"
    :blocks [[:fill [14 8 14] [18 10 18] "air"] [:fill [16 1 16] [16 9 16] "air"] [:fill [16 4 16] [16 7 16] "oak_log"] [:fill [14 6 14] [18 8 18] "oak_leaves[persistent=true]"] [:fill [16 6 16] [16 7 16] "oak_log"]]
    :body {:inventory [["dirt" 1] ["oak_log" 1]]}
-   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16] :fetch false})]]
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16] :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]
    :after [[:any-not-block [[[12 0 12] [20 9 20]]] "dirt"] [:not-block [16 7 16] "oak_log"]]}]}

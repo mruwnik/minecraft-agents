@@ -210,11 +210,11 @@
           (is (= [] (lt/debts eng)) "the debt is cleared")
           (is (= [] (filterv #(#{:error :failed} (:kind %)) @seen)) "no failure"))))))
 
-(deftest the-plant-child-gets-the-fetch-arg-only-when-given
+(deftest the-plant-child-gets-the-ways-arg-only-when-given
   (let [plant-args #(nth (some (fn [ph] (when (= :plant (first ph)) ph)) (hw/phases % nil)) 2)]
-    (is (not (contains? (plant-args {:species "oak"}) :fetch)) "unset: the child's default (true) applies")
-    (is (false? (:fetch (plant-args {:species "oak" :fetch false}))))
-    (is (= {:log 4} (:fetch (plant-args {:fetch {:log 4}}))))))
+    (is (not (contains? (plant-args {:species "oak"}) :ways)) "unset: the child's default (all) applies")
+    (is (= #{:carried} (:ways (plant-args {:species "oak" :ways #{:carried}}))))
+    (is (= #{:carried :chest} (:ways (plant-args {:ways #{:carried :chest}}))))))
 
 (deftest the-sapling-list-is-derived-from-the-species-table
   (is (= (set (map trees/sapling-of trees/species)) (set ps/saplings)))

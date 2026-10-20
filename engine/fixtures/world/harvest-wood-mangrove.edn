@@ -1,7 +1,7 @@
 ;; Card 2f9da188: a felled mangrove tree is replanted with a mangrove_propagule (trees/sapling-of: mangrove's sapling is the propagule,
 ;; crimson and warped trees use their fungus), where it was left owed before. The propagule is carried; the grass floor takes it.
 ;; Should-succeed: harvest-wood on a mangrove log column replants the propagule. Should-fail: no propagule carried leaves the
-;; replant owed (the ending carries :replant-owed, :fetch false: leaves may drop a propagule) and plants nothing.
+;; replant owed (the ending carries :replant-owed, :ways #{:carried}: leaves may drop a propagule) and plants nothing.
 {:defaults
  {:tags [:forestry :harvest-wood :mangrove]
   :plot {:height 10 :floor "grass_block"}
@@ -19,7 +19,7 @@
    :after [[:block [16 0 16] "mangrove_propagule"] [:not-block [16 1 16] "mangrove_log"]]}
   {:name "no-propagule-leaves-the-replant-owed"
    :body {:inventory [["iron_axe" 1]]}
-   :act [[:job (jobs.forestry.harvest-wood {:radius 32 :fetch false})]]
+   :act [[:job (jobs.forestry.harvest-wood {:radius 32 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed :data {:replant-owed 1}} :within-s 100 :of-job true}]
    :after [[:not-block [16 0 16] "mangrove_propagule"]]}
   {:name "stray-item-in-radius-not-taken"
