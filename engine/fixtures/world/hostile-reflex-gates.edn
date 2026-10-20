@@ -44,7 +44,7 @@
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :for-s 95}
             {:event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :within-s 170}]
    :limit-s 180}
-  {:name "fight-back-leash-does-not-chase-past-it"
+  {:name "attack-leash-does-not-chase-past-it"
    :register []
    :body {:inventory [["iron_sword" 1]] :effects [["resistance" 600 4]] :yaw 270}
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
@@ -54,7 +54,7 @@
             {:no-event {:source :action :kind :started :data {:name "attack"}} :for-s 20}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 6 31]] 1] [:body-near [16.5 0 16.5] 3]]
    :limit-s 30}
-  {:name "fight-back-within-the-leash-kills"
+  {:name "attack-within-the-leash-kills"
    :register []
    :body {:inventory [["iron_sword" 1]] :effects [["resistance" 600 4]]}
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
