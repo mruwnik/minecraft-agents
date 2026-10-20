@@ -233,6 +233,16 @@
       (is (= ["gold_block" true -5] [(.-name a) (.-visible a) (.-z (.-pos a))]))
       (is (= #{"name" "pos" "ageMs" "visible" "fullCube"} (set (js/Object.keys a)))))))
 
+(deftest sensedAt-sees-a-block-changed-within-the-same-tick
+  (let [{:keys [p per]} (rig {"0,65,-5" "gold_block"})
+        wrapped (perception/wrap p per)
+        at #(.sensedAt wrapped #js {:x 0 :y 65 :z -5})]
+    (turn! p 180)
+    (perception/pass! per)
+    (is (= "gold_block" (.-name (at))))
+    (fake/set-block! p [0 65 -5] "iron_block")
+    (is (= "iron_block" (.-name (at))))))
+
 (deftest the-seeing-curve-is-the-view-lightmap
   (are [sky block time rain]
        (let [darken (.skyDarken ^js @shading time rain 0)]

@@ -132,7 +132,7 @@
               :stamp 0 :lastKey -1 :lastSec nil :dim "overworld" :sight nil :visible nil
               :pass nil :passRays nil :lastStart nil :unsubscribe nil
               :mobs (js/Map.) :mobSource nil
-              :infoOf (fn [id] (.stateInfo ^js raw id)) :kinds nil :sensedKey nil :sensed (js/Map.)
+              :infoOf (fn [id] (.stateInfo ^js raw id)) :kinds nil :sensedKey nil :sensed (js/Map.) :sensedJs (js/Map.)
               :passes 0 :rays 0 :cells 0 :steps 0 :stepMs 0 :stepMsMax 0}}))
 
 (defn stats [{:keys [st] :as per}]
@@ -218,23 +218,25 @@
                      (identical? (.-x eye) (aget last 3)) (identical? (.-y eye) (aget last 4)) (identical? (.-z eye) (aget last 5))
                      (identical? (.-yaw eye) (aget last 6)) (identical? (.-pitch eye) (aget last 7)))
         (set! (.-sensedKey st) #js [tick epoch (.-dimension eye) (.-x eye) (.-y eye) (.-z eye) (.-yaw eye) (.-pitch eye)])
-        (.clear ^js (.-sensed st)))
+        (.clear ^js (.-sensed st))
+        (.clear ^js (.-sensedJs st)))
       true)))
 
 (defn sensed
   "What the body knows of the cell pos [x y z] now: nil (unloaded or offline), felt, visible, remembered or unknown (see
   the namespace doc). Cached for one tick while the eye and the world stay the same."
-  [{:keys [raw st] :as per} [x y z :as pos]]
-  (let [^js st st]
-    (when (sense-fresh! per)
-      (let [ck (str x "," y "," z)
-            hit (.get ^js (.-sensed st) ck)]
-        (if (undefined? hit)
-          (let [answer (when (>= (.stateAt ^js raw x y z) 0)
-                         (or (feel! per pos) (glance! per pos) (remembered per pos)))]
-            (.set ^js (.-sensed st) ck answer)
-            answer)
-          hit)))))
+  ([per pos] (sensed per pos nil))
+  ([{:keys [raw st] :as per} [x y z :as pos] ck]
+   (let [^js st st]
+     (when (sense-fresh! per)
+       (let [ck (or ck (str x "," y "," z))
+             hit (.get ^js (.-sensed st) ck)]
+         (if (undefined? hit)
+           (let [answer (when (>= (.stateAt ^js raw x y z) 0)
+                          (or (feel! per pos) (glance! per pos) (remembered per pos)))]
+             (.set ^js (.-sensed st) ck answer)
+             answer)
+           hit))))))
 
 (defn pos-js [[x y z]] #js {:x x :y y :z z})
 
@@ -253,6 +255,18 @@
           :properties (aset o "properties" (clj->js v))
           (aset o (name k) v)))
       o)))
+
+(defn sensed-js
+  "sensed as JS, one object per cell and tick (sensed's cache window), shared between callers."
+  [{:keys [st] :as per} [x y z :as pos]]
+  (let [ck (str x "," y "," z)
+        answer (sensed per pos ck)]
+    (when answer
+      (let [^js m (.-sensedJs ^js st)
+            hit (.get m ck)]
+        (if (undefined? hit)
+          (let [o (answer-js answer)] (.set m ck o) o)
+          hit)))))
 
 (defn cell-of [^js a]
   (when-let [^js pos (some-> a .-pos)]
@@ -289,7 +303,7 @@
     (aset out "seenBlockAt" (fn [^js a]
                               (let [b (store/seen-block per (cell a))]
                                 (clj->js (-> b (dissoc :state-id) (update :pos pos-js))))))
-    (aset out "sensedAt" (fn [a] (answer-js (sensed per (cell a)))))
+    (aset out "sensedAt" (fn [a] (sensed-js per (cell a))))
     (aset out "blockAt" (aget out "sensedAt"))
     (aset out "feel" (fn [a] (answer-js (feel! per (cell a)))))
     (aset out "glance" (fn [a] (answer-js (glance! per (cell a)))))
