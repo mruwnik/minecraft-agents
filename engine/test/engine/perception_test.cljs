@@ -65,6 +65,12 @@
     (perception/pass! per)
     (is (= ["glass" "gold_block"] (mapv #(seen-name per %) [[0 65 3] [0 65 6]])))))
 
+(deftest ore-eight-blocks-behind-a-glass-window-is-seen
+  (let [window (tu/box -2 64 3 2 66 3 "glass")
+        {:keys [per]} (rig (merge (wall 3 3 (keys window) window) {"0,65,11" "diamond_ore" "2,65,11" "diamond_ore"}))]
+    (perception/pass! per)
+    (is (= ["diamond_ore" "diamond_ore"] (mapv #(seen-name per %) [[0 65 11] [2 65 11]])))))
+
 (defn door-rig
   "The body at [0 64 0] (eye in the door's upper half when a door is there), the cells in `doors` [x y z] shut or open
   doors of `name` facing `facing`, gold at [0 65 -5] and [0 65 5]."

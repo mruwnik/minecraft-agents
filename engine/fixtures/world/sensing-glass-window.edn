@@ -1,0 +1,13 @@
+;; Card cf472872: a body sees through glass as a player does. A lit cave behind a 5x3 window in the wall, ore 8 blocks behind the window.
+{:defaults
+ {:tags [:sensing :explore] :time :any
+  :plot {:height 12}
+  :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [17 1 16] "air"]
+           [:fill [19 0 14] [28 2 18] "air"] [:set [22 2 16] "sea_lantern"] [:set [26 1 16] "iron_ore"]]
+  :body {:at [16.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1]] :settle-s 3}
+  :limit-s 90}
+ :cases
+ [{:name "ore-eight-behind-a-glass-window-is-seen"
+   :blocks [[:fill [18 0 14] [18 2 18] "glass"]]
+   :act [[:job (jobs.explore.look {:at #at [26 1 16] :max-blocks 0 :max-entities 0})]]
+   :expect [{:event {:source :job :kind :completed :data {:at {:name "iron_ore"}}} :within-s 40 :of-job true}]}]}
