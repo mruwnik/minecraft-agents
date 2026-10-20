@@ -30,6 +30,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.sense :as sense]
@@ -343,6 +344,9 @@
             way (when (and (not fetched) (not way-looked?) (= :goal-not-standable (:reason walked))) (guess-waypoint c pos))
             col-looked? (when (and (not aided?) (not looked?) (not surfaced?) (not fetched) (not way) (not way-looked?) (not (#{"arrived" "searching"} status)))
                           (await (look-at-column! c pos)))
+            surveyed? (when (and (:unknown c) (= :exhausted (:reason walked)) (breath/head-under? (:primitives c)) (not (look/surveyed? c :near)))
+                        (await (look/survey! c :near))
+                        true)
             result (known-frontier-result walked)
             left (u/dist to pos)
             best (:best (ctx/mem c) d)
@@ -398,6 +402,8 @@
           aided? :again
 
           looked? :again
+
+          surveyed? :again
 
           surfaced? :again
 

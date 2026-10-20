@@ -51,9 +51,9 @@
             floor)))))
 
 (defn dive-end
-  "A fruitless round's result as go-to gives it up under a dive floor: a search the floor cut short (:box) is :way-dives."
+  "A fruitless round's result as go-to gives it up under a dive floor: a search the floor cut short (:box), or a masked one that spent its node budget flooding unseen cells under it (:budget), is :way-dives."
   [c pos result]
-  (if (and (:dive-floor c) (= :box (some-> (:reason result) keyword)))
+  (if (and (:dive-floor c) (#{:box :budget} (some-> (:reason result) keyword)))
     (assoc result :reason :way-dives :dip (climb-dip) :rise (js/Math.round (- (:y pos) (:y (u/self-pos c)))))
     result))
 

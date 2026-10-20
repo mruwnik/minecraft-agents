@@ -62,7 +62,7 @@
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}]
    :after [[:body-near [30.5 0 16.5] 2.5] [:body-far [30.5 1 16.5] 1.2]]}
   {:name "column-behind-a-bottomless-gap-gives-up-bounded"
-   :blocks [[:fill [40 -1 0] [50 -1 31] "air"]]
+   :blocks [[:fill [40 -8 0] [50 -1 31] "air"]]
    :act [[:job (jobs.movement.go-to {:pos #at [70 16] :range 0})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 140 :of-job true}]
    :after [[:body-far [70.5 0 16.5] 10]]}

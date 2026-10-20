@@ -193,7 +193,7 @@
         ;; a lone block floats at y 70 over x 30: out of sight, the column is estimated at the feet (64, nothing around it
         ;; seen); once seen, its ground under it (64) is said again, no longer a guess
         (let [floating (merge flat (box 30 70 0 30 70 0 "stone"))
-              {:keys [out p] :as s} (await (go! {:blocks floating :light [15 0]} {:pos [30 0] :range 0}))]
+              {:keys [out p] :as s} (await (go! {:blocks floating :light [15 0]} {:pos [30 0] :range 0 :unknown false}))]
           (is (= {:arrived true :resolved {:x 30 :y 64 :z 0} :why :surface} @out) (pr-str @out))
           (is (= [30 64 0] (mapv #(js/Math.floor %) (at p))))
           (is (= [{:to {:x 30 :y 64 :z 0} :provisional true} {:to {:x 30 :y 64 :z 0}}]
@@ -273,7 +273,7 @@
       (fn ^:async t []
         ;; the column x 30 is never seen: its guess (the seen ground beside it, 64) is walked to within approach-range, looked at
         ;; max-column-looks times, then walked to within the :range arg; the result says it was a guess
-        (let [{:keys [out p eng]} (await (go-hidden! {:blocks flat} (fn [[x _ z]] (= [30 0] [x z])) {:pos [30 0] :range 0}))
+        (let [{:keys [out p eng]} (await (go-hidden! {:blocks flat} (fn [[x _ z]] (= [30 0] [x z])) {:pos [30 0] :range 0 :unknown false}))
               walks (gt/moved eng)]
           (is (= {:arrived true :resolved {:x 30 :y 64 :z 0} :provisional true} @out) (pr-str @out))
           (is (= [30 64 0] (mapv #(js/Math.floor %) (at p))))

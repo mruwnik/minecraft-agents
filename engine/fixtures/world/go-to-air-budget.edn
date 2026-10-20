@@ -47,18 +47,18 @@
    :act [[:job (jobs.movement.go-to {:pos #at [86 1 8] :range 1 :unknown false :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
    :after [[:body-near [4.5 1 8.5] 3]]}
-  ;; full air, no walk round (ridge has no gap): the 12 cell tunnel is the way and fits in the air
+  ;; full air, no walk round (ridge has no gap): the 16 cell tunnel (8 s) is the way and fits in the air, with room for the seconds the job spends starting
   {:name "replan-full-air-takes-the-tunnel"
    :plot {:height 12 :length 44 :width 64}
    :blocks [[:fill [0 0 0] [43 5 63] "stone"]
-            [:fill [4 0 8] [4 5 8] "water"] [:fill [5 0 8] [28 1 8] "water"] [:fill [29 0 8] [29 5 8] "water"]
+            [:fill [4 0 8] [4 5 8] "water"] [:fill [5 0 8] [20 1 8] "water"] [:fill [21 0 8] [21 5 8] "water"]
             [:fill [11 6 0] [11 9 63] "bedrock"]
             [:set [8 2 8] "sea_lantern"] [:set [16 2 8] "sea_lantern"] [:set [24 2 8] "sea_lantern"]]
    :body {:at [4.5 5 8.5]}
    :act [[:until-rcon "data get entity $BODY Air" "data: 300s" 60] [:rcon "execute positioned $X $Y $Z run tp $BODY ~4 ~0 ~8"] [:job (jobs.movement.go-to {:pos #at [30 6 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
-   :after [[:body-near [30.5 6 8.5] 3]]}
+   :after [[:body-near [22.5 6 8.5] 3]]}
   ;; air about half spent: the tunnel does not fit, so swim up the shaft (about 1.5 s) and walk round the ridge; no drowning
   {:name "replan-low-air-surfaces-and-walks-round"
    :plot {:height 12 :length 44 :width 64}

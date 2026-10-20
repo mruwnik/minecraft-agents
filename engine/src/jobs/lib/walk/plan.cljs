@@ -201,12 +201,28 @@
       (let [id (.stateAt snapshot x (inc y) z)]
         (and (not (== id planner/UNLOADED)) (pos? (aget (.-wet table) id)) (zero? (aget (.-bubble table) id)))))))
 
+(def masked-wet-limit-s
+  "Seconds of air a masked walk's partial plan may have used (counted from the last breath) at its wet end, and the least it
+  may add: a body swims on into water it cannot see all of, looking as it goes, while the air left still brings it back."
+  8)
+(def masked-wet-min-s 2)
+
+(defn masked-wet-ok
+  "(fn [step]) for dry-end of a masked walk: a swimming step is kept while the air used at it stays within masked-wet-limit-s,
+  and none is when the body has less than masked-wet-min-s of that left."
+  [c]
+  (if (< (- masked-wet-limit-s (or (:air-used (wworld/body-policy c)) 0)) masked-wet-min-s)
+    (constantly false)
+    #(<= (or (:air %) 0) masked-wet-limit-s)))
+
 (defn dry-end
   "A partial plan up to its last step out of water: a walk that cannot reach the goal never leaves the body swimming (at a
-  bank too high to climb out, say), nor with its head in water (wet?, head-wet-fn: on a waterlogged ladder)."
+  bank too high to climb out, say), nor with its head in water (wet?, head-wet-fn: on a waterlogged ladder). With wet-ok? (a
+  masked walk), a swimming step it accepts counts as out of water too (a plan cut short by unseen water, not one that ran out of air)."
   ([steps] (dry-end steps (constantly false)))
-  ([steps wet?]
-   (let [k (last (keep-indexed (fn [i s] (when-not (or (:swim s) (wet? s)) i)) steps))]
+  ([steps wet?] (dry-end steps wet? (constantly false)))
+  ([steps wet? wet-ok?]
+   (let [k (last (keep-indexed (fn [i s] (when (or (not (or (:swim s) (wet? s))) (wet-ok? s)) i)) steps))]
      (if k (subvec steps 0 (inc k)) []))))
 
 (defn- near-blocker-fn
@@ -288,7 +304,9 @@
         past (when (and (not edge) (not out) (= :open one-way)) (open-path r))
         steps (cond edge (path-steps walled (:path edge)) past (path-steps walled past) :else steps)
         status (if (or edge past) "partial" (.-status r))
-        dry (if (= "partial" status) (dry-end steps (head-wet-fn walled)) steps)
+        dry (if (= "partial" status)
+              (dry-end steps (head-wet-fn walled) (if (and (:unknown c) (not= "air" (.-reason r))) (masked-wet-ok c) (constantly false)))
+              steps)
         walked (if (= "partial" status) (stop-short dry (.-dangers walled)) dry)
         step (one-way-of r)]
     {:r r :steps walked :beyond beyond :status status :pw pw

@@ -213,6 +213,13 @@
       [(s 0 true) (s 1 true)] []
       [(s 0 false) (s 1 false)] [0 1])))
 
+(deftest dry-end-keeps-a-swimming-step-the-masked-walk-accepts
+  (let [s (fn [x air] {:x x :move :walk :swim true :air air})
+        ok? #(<= (:air %) wplan/masked-wet-limit-s)]
+    (is (= [0 1 2] (mapv :x (wplan/dry-end [(s 0 3) (s 1 6) (s 2 8) (s 3 11)] (constantly false) ok?))) "kept to the last step within the air limit")
+    (is (= [] (wplan/dry-end [(s 0 11)] (constantly false) ok?)))
+    (is (= [] (wplan/dry-end [(s 0 3)])) "without wet-ok? swimming steps are cut")))
+
 (deftest stop-short-ends-a-partial-plan-out-of-reach-of-a-blocking-mob
   (let [steps (mapv (fn [x] {:x x :y 12 :z 16}) (range 0 12))
         d (fn [x block] #js {:x x :y 12 :z 16.5 :block block})

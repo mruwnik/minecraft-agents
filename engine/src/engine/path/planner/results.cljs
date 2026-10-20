@@ -76,6 +76,7 @@
                           :pz (+ z (if tight (/ (bit-and (bit-shift-right shape 10) 31) 16) 0.5))}]
             (when ^boolean (.isWater s x (aget (.-ys s) i) z) (unchecked-set step "swim" true))
             (when (== (aget (.-lights s) i) 1) (unchecked-set step "light" true))
+            (when (pos? (aget (.-airs s) i)) (unchecked-set step "air" (aget (.-airs s) i)))
             (let [dmg (- (aget (.-dmgs s) i) (if (neg? (aget (.-parents s) i)) 0 (aget (.-dmgs s) (aget (.-parents s) i))))]
               (when (pos? dmg) (unchecked-set step "damage" dmg)))
             (when (pos? (aget (.-opens s) i)) (unchecked-set step "opens" (aget ^js (.-open-lists s) (dec (aget (.-opens s) i)))))
