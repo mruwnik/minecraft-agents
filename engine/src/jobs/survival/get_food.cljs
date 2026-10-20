@@ -14,6 +14,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.foods :as foods]
             [jobs.lib.animal-spare :as spare]
+            [jobs.lib.cost.food :as food-cost]
             [jobs.lib.reserve :as reserve]
             [jobs.survival.eat :as eat]
             [jobs.lib.food-animals :as animals]
@@ -52,9 +53,9 @@
   ::explore setting; not while the search would wait (dark sky, danger near)) and goes on if it found some; at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it ends nothing-possible :no-food (the text says what was searched, the nearest known source) and writes
   :hungry, which widens the next search; the hungry trigger rests after that ending (its :rest-s).
-  :eat false: only gathers, done when the pack holds :stock food points (jobs.survival.eat fetches this way; a job cannot call its own caller).
-  :stock n: a fed body also takes the ways until the pack holds n food points, else ends nothing-possible :no-stock.
-  A fed body (not hungry, nothing to top up with, no :stock short) is done at once.
+  :eat false: only gathers, done when the pack holds :carry food points (jobs.survival.eat fetches this way; a job cannot call its own caller).
+  :carry n (default the 3-day reserve, 60 points; 0: only feed): a fed body also takes the ways until the pack holds n food points, else ends nothing-possible :no-carry.
+  A fed body (not hungry, nothing to top up with, no :carry short) is done at once.
   A go-to that waits on the world, or a child still going after jobs.lib.child's call cap, yields :continue; a reflex
   call (it never yields) waits it out in the round.
   More than 12 ways in one call without getting fed ends nothing-possible :still-hungry.
@@ -75,8 +76,8 @@
   {:food {:doc "hungry below this much food (of 20)" :spec (a/num-in 0 20) :default foods/default-food}
    :health {:doc "below this health eat up to a full bar" :spec (a/num-in 0 20) :default foods/default-health}
    :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms; not underground unless starving): false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}
-   :stock {:doc "also carry food worth this many hunger points: a fed body takes the ways below until the pack holds it (0: only feed)" :spec (a/num-in 0 nil) :default 0}
-   :eat {:doc "eat what is carried and what the ways bring: false only gathers (the way jobs.survival.eat fetches: it is the caller, and a job cannot call its own caller), done when the pack holds :stock food points" :spec boolean? :default true}
+   :carry {:doc "carry food worth this many hunger points: a fed body takes the ways below until the pack holds it (0: only feed)" :spec (a/num-in 0 nil) :default food-cost/reserve-points}
+   :eat {:doc "eat what is carried and what the ways bring: false only gathers (the way jobs.survival.eat fetches: it is the caller, and a job cannot call its own caller), done when the pack holds :carry food points" :spec boolean? :default true}
    :ignore-zones? :shared})
 
 (def harvest-items
@@ -126,14 +127,14 @@
   (and (foods/food? (:name item))
        (or (not (contains? foods/harmful (:name item))) (<= (food-level c) (eat-bad-food)))))
 
-(defn stock-short?
-  "A :stock is asked for and the pack holds fewer food points than that."
+(defn carry-short?
+  "A :carry is asked for and the pack holds fewer food points than that."
   [c]
-  (< (foods/stock-points (u/inventory (:primitives c))) (:stock (:args c))))
+  (< (foods/stock-points (u/inventory (:primitives c))) (:carry (:args c))))
 
 (defn eats? [c] (not (false? (:eat (:args c)))))
 
-(defn wants-food? [c] (or (and (eats? c) (hungry-now? c)) (stock-short? c)))
+(defn wants-food? [c] (or (and (eats? c) (hungry-now? c)) (carry-short? c)))
 
 (defn starving?
   "Food 0, or health at or below 6 and hungry: the rest after a fruitless search is only foods/::starving-rest-ms."
@@ -238,11 +239,11 @@
 ;; ------------------------------------------------------------------ start
 
 (defn fed?
-  "Neither hungry, nor topping up, nor short of :stock."
+  "Neither hungry, nor topping up, nor short of :carry."
   [c]
   (let [self (.self (:primitives c))]
     (if-not (eats? c)
-      (not (stock-short? c))
+      (not (carry-short? c))
       (not (or (wants-food? c)
              (foods/top-up? (.-food self) (.-health self) (foods/carried-names self (reserve/spared (ctx/view c) self)))
              (foods/eat-now? self (:args c) (reserve/spared (ctx/view c) self)))))))
@@ -420,13 +421,13 @@
     (stop! c :no-food text
            :food food :animals passed :nearby around)))
 
-(defn stock-stop!
-  "Fed but the pack cannot be filled: end :no-stock (no :hungry entry, the body is not hungry)."
+(defn carry-stop!
+  "Fed but the pack cannot be filled: end :no-carry (no :hungry entry, the body is not hungry)."
   [c]
   (let [have (foods/stock-points (u/inventory (:primitives c)))]
-    (stop! c :no-stock (str "fed (food " (food-level c) ") but carries " have " of " (:stock (:args c))
+    (stop! c :no-carry (str "fed (food " (food-level c) ") but carries " have " of " (:carry (:args c))
                             " food points and found no more within " (hunt-radius c) " blocks")
-           :food (food-level c) :stock (:stock (:args c)) :have have)))
+           :food (food-level c) :carry (:carry (:args c)) :have have)))
 
 (defn ^:async round
   "One whole attempt: eat, then while hungry take the next way and eat again. A step that yields (:continue) is
@@ -456,7 +457,7 @@
                 (cond
                   (or (= :continue more) (= :continue bad)) (if (:reflex c) (do (await (pace/pace!)) (recur n)) :continue)
                   (or more bad) (recur (inc n))
-                  (not (hungry-now? c)) (stock-stop! c)
+                  (not (hungry-now? c)) (carry-stop! c)
                   (:too-dangerous (ctx/mem c))
                   (let [why (str "hungry (food " (food-level c) "), " (:too-dangerous (ctx/mem c)))]
                     (ctx/remember! c :food-too-dangerous {:why why} danger-policy)

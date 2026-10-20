@@ -55,7 +55,7 @@
 (defn ^:async one-round!
   "Submit get-food with args and run exactly one tick."
   [eng args]
-  (core/submit! eng (list 'jobs.survival.get-food args) {})
+  (core/submit! eng (list 'jobs.survival.get-food (merge {:carry 0} args)) {})
   (await (core/tick! eng)))
 
 (def cow {:id 7 :name "cow" :kind "passive" :pos {:x 5 :y 64 :z 0} :health 20 :drops [{:name "beef" :count 1}]})
@@ -304,7 +304,7 @@
                                                (await (real c))))]
             (let [out (atom nil)
                   parent {:round (fn ^:async r [c]
-                                   (let [e (await (ctx/call c :kid 'jobs.survival.get-food {}))]
+                                   (let [e (await (ctx/call c :kid 'jobs.survival.get-food {:carry 0}))]
                                      (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause])) (ctx/end c :done nil)))))}
                   eng (assoc-in eng [:jobs 'rec-parent] parent)]
               (core/submit! eng '(rec-parent) {})
@@ -374,7 +374,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:food 0} :containers {"20,64,0" [{:name "bread" :count 4}]}})]
           (know-source! eng {:x 20 :y 64 :z 0} :chest)
-          (core/submit! eng '(jobs.survival.get-food) {})
+          (core/submit! eng '(jobs.survival.get-food {:carry 0}) {})
           (await (cut-at-transfer! eng p (fn [])))
           (is (= 1 (count (:list (core/state eng)))) "the cut job stays listed")
           (await (core/tick! eng))
@@ -388,7 +388,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:food 0} :containers {"20,64,0" [{:name "bread" :count 4}]}})]
           (know-source! eng {:x 20 :y 64 :z 0} :chest)
-          (core/submit! eng '(jobs.survival.get-food) {})
+          (core/submit! eng '(jobs.survival.get-food {:carry 0}) {})
           (await (cut-at-transfer! eng p #(swap! (fake/state p) assoc-in [:containers [20 64 0]] [])))
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
@@ -529,7 +529,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:self {:food 8 :health 20}})]
-          (core/submit! eng '(jobs.survival.get-food {:explore false}) {})
+          (core/submit! eng '(jobs.survival.get-food {:carry 0 :explore false}) {})
           (await (core/tick! eng))
           (is (= [] (events-of seen :waiting)))
           (is (= [] (:list (core/state eng)))))))))
@@ -675,7 +675,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (merge bread-chest {:self {:food 5 :health 2} :time 6000}) :step-ms 5)]
           (know-source! eng {:x 60 :y 64 :z 0} :chest)
-          (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
+          (core/submit! eng (list 'jobs.survival.get-food {:carry 0 :explore false}) {})
           (await (tu/run-until-empty eng 60))
           (is (= ["bread"] (call-args p "transfer" "item")))
           (is (> (food p) 5)))))))
@@ -709,7 +709,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (assoc furnace-world :self {:food 2}) :step-ms 2000)]
-          (core/submit! eng (list 'jobs.survival.get-food {}) {})
+          (core/submit! eng (list 'jobs.survival.get-food {:carry 0}) {})
           (await (run-until-idle! eng p 40))
           (is (= [] (:list (core/state eng))) "the job ended")
           (is (some #{"take"} (call-args p "furnace" "op")) "the cooked output was taken")
@@ -721,7 +721,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (assoc furnace-world :self {:food 2} :time 15000) :step-ms 2000)]
-          (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
+          (core/submit! eng (list 'jobs.survival.get-food {:carry 0 :explore false}) {})
           (await (run-until-idle! eng p 40))
           (is (some #{"take"} (call-args p "furnace" "op")) "the clock alone is no reason to skip the cook"))))))
 
@@ -751,7 +751,7 @@
         (let [{:keys [eng p]} (setup {:blocks {"2,64,0" "furnace"} :self {:food 5}
                                       :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]}
                                      :step-ms 2000)]
-          (core/submit! eng (list 'jobs.survival.get-food {}) {})
+          (core/submit! eng (list 'jobs.survival.get-food {:carry 0}) {})
           (await (run-until-idle! eng p 40))
           (is (some #{"take"} (call-args p "furnace" "op")) "the cooked output was taken")
           (is (< (count (filter #{"beef"} (map #(.-name %) (.-inventory (.self p))))) 4) "raw beef was cooked")
@@ -774,7 +774,7 @@
         (let [{:keys [eng p]} (setup {:blocks {"2,64,0" "furnace"} :self {:food 0 :health 20}
                                       :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]}
                                      :step-ms 2000)]
-          (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
+          (core/submit! eng (list 'jobs.survival.get-food {:carry 0 :explore false}) {})
           (await (run-until-idle! eng p 40))
           (is (some #{"take"} (call-args p "furnace" "op")) "cooked first")
           (is (> (food p) 0)))))))
@@ -786,7 +786,7 @@
         (let [{:keys [eng p]} (setup {:blocks {"40,64,0" "furnace"} :self {:food 5}
                                       :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]}
                                      :step-ms 500)]
-          (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
+          (core/submit! eng (list 'jobs.survival.get-food {:carry 0 :explore false}) {})
           (await (run-until-idle! eng p 80))
           (is (some #{"take"} (call-args p "furnace" "op")) "walked to the furnace it had seen")
           (is (> (food p) 5)))))))
@@ -798,7 +798,7 @@
         (let [{:keys [eng p]} (setup {:blocks {"2,64,0" "furnace"} :self {:food 3}
                                       :inventory [{:name "beef" :count 2} {:name "coal" :count 2}]}
                                      :step-ms 2000)]
-          (core/submit! eng (list 'jobs.survival.get-food {}) {})
+          (core/submit! eng (list 'jobs.survival.get-food {:carry 0}) {})
           (await (run-until-idle! eng p 40))
           (is (some #{"take"} (call-args p "furnace" "op")) "the cooked output was taken")
           (is (> (food p) 3)))))))
@@ -818,7 +818,7 @@
   (let [{:keys [eng p] :as w} (setup {:blocks {"30,64,0" "furnace"} :self {:food 5 :health 2} :time 6000 :entities entities
                                       :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]}
                                      :step-ms 500)]
-    (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
+    (core/submit! eng (list 'jobs.survival.get-food {:carry 0 :explore false}) {})
     (await (run-until-idle! eng p 40))
     w))
 
@@ -845,7 +845,7 @@
                                       :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]}
                                      :step-ms 500)]
           (mem/write! (:store eng) :furnace {:pos {:x 30 :y 64 :z 0}} mem/place-policy)
-          (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
+          (core/submit! eng (list 'jobs.survival.get-food {:carry 0 :explore false}) {})
           (await (run-until-idle! eng p 80))
           (is (some #{"take"} (call-args p "furnace" "op")) "walked to the remembered furnace and took the output")
           (is (> (food p) 5)))))))
@@ -868,7 +868,7 @@
                                       :inventory [{:name "beef" :count 4} {:name "furnace" :count 1} {:name "coal" :count 2}]}
                                      :step-ms 500
                                      :zones [{:name "home" :owner "Fake" :min [-20 60 -20] :max [20 70 20]}])]
-          (core/submit! eng (list 'jobs.survival.get-food {}) {})
+          (core/submit! eng (list 'jobs.survival.get-food {:carry 0}) {})
           (await (run-until-idle! eng p 60))
           (is (= 1 (count (:furnaces @(fake/state p)))) "a furnace was put down")
           (is (some #{"take"} (call-args p "furnace" "op")))
@@ -884,7 +884,7 @@
                                 :recipes {"furnace" {:count 1 :needs {"cobblestone" 8} :table true}}}
                                :step-ms 500
                                :zones [{:name "home" :owner "Fake" :min [-20 60 -20] :max [20 70 20]}])]
-    (core/submit! eng (list 'jobs.survival.get-food {}) {})
+    (core/submit! eng (list 'jobs.survival.get-food {:carry 0}) {})
     (await (run-until-idle! eng p 60))
     (count (calls p "craft"))))
 
@@ -904,7 +904,7 @@
                                       :inventory [{:name "porkchop" :count 1} {:name "furnace" :count 1} {:name "oak_planks" :count 4}]}
                                      :step-ms 500
                                      :zones [{:name "home" :owner "Fake" :min [-20 60 -20] :max [20 70 20]}])]
-          (core/submit! eng (list 'jobs.survival.get-food {}) {})
+          (core/submit! eng (list 'jobs.survival.get-food {:carry 0}) {})
           (await (run-until-idle! eng p 60))
           (is (= 1 (count (:furnaces @(fake/state p)))) "the carried furnace was put down")
           (is (some #{"take"} (call-args p "furnace" "op")) "the cooked output was taken"))))))
@@ -915,7 +915,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:food 5} :inventory [{:name "beef" :count 4}]}
                                           :zones [{:name "home" :owner "Fake" :min [-20 60 -20] :max [20 70 20]}])]
-          (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
+          (core/submit! eng (list 'jobs.survival.get-food {:carry 0 :explore false}) {})
           (await (run-until-idle! eng p 40))
           (is (> (food p) 5) "the beef was eaten raw after"))))))
 
@@ -925,18 +925,18 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks {"2,64,0" "furnace"} :self {:food 5}
                                            :inventory [{:name "beef" :count 4}]})]
-          (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
+          (core/submit! eng (list 'jobs.survival.get-food {:carry 0 :explore false}) {})
           (await (run-until-idle! eng p 40))
           (is (> (food p) 5) "the beef was eaten raw after"))))))
 
-;; ---------------------------------------------------------------- :stock
+;; ---------------------------------------------------------------- :carry
 
-(deftest stock-hunts-for-carried-food-when-already-fed
+(deftest carry-hunts-for-carried-food-when-already-fed
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:food 20} :entities herd})]
-          (await (one-round! eng {:stock 3 :settings {:jobs.lib.combat/attack-gap-ms 0}}))
+          (await (one-round! eng {:carry 3 :settings {:jobs.lib.combat/attack-gap-ms 0}}))
           (is (= [7 7 7 7] (call-args p "attack" "id")))
           (is (empty? (call-args p "eat" "item")) "a fed body eats nothing")
           (is (= [:completed] (mapv :kind (ended seen)))))))))
@@ -946,39 +946,39 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:food 2} :entities herd})]
-          (await (one-round! eng {:eat false :stock 3 :settings {:jobs.lib.combat/attack-gap-ms 0}}))
+          (await (one-round! eng {:eat false :carry 3 :settings {:jobs.lib.combat/attack-gap-ms 0}}))
           (is (= [7 7 7 7] (call-args p "attack" "id")) "the cow is hunted")
           (is (empty? (call-args p "eat" "item")) "the caller eats, not get-food")
           (is (= [:completed] (mapv :kind (ended seen)))))))))
 
-(deftest stock-already-carried-does-nothing
+(deftest carry-already-carried-does-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:food 20} :inventory [{:name "bread" :count 3}] :entities herd})]
-          (await (one-round! eng {:stock 10}))
+          (await (one-round! eng {:carry 10}))
           (is (empty? (call-args p "attack" "id")))
           (is (= [:completed] (mapv :kind (ended seen))) "the goal holds: done without acting"))))))
 
-(deftest stock-with-no-source-stops-naming-the-reason
+(deftest carry-with-no-source-stops-naming-the-reason
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:self {:food 20}} :step-ms 5)]
-          (await (one-round! eng {:stock 8 :explore false}))
+          (await (one-round! eng {:carry 8 :explore false}))
           (let [stop (first (ended seen))]
             (is (= :stopped (:kind stop)))
-            (is (= :no-stock (:reason stop)) (pr-str stop))))))))
+            (is (= :no-carry (:reason stop)) (pr-str stop))))))))
 
-(deftest a-stock-ask-searches-despite-an-earlier-give-up
+(deftest a-carry-ask-searches-despite-an-earlier-give-up
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:self {:food 20}} :step-ms 5)]
           (mem/write! (:store eng) :hungry {:food 3} {:cap 10 :ttl 3600000})
-          (await (one-round! eng {:stock 8}))
+          (await (one-round! eng {:carry 8}))
           (is (= 1 (count (searches seen))) "searched though it gave up a minute ago")
-          (is (= :no-stock (:reason (first (ended seen))))))))))
+          (is (= :no-carry (:reason (first (ended seen))))))))))
 
 (deftest explore-is-done-once-per-job-unless-starving-and-rested
   (is (false? (get-food/explore-done? nil false 100 60000)))

@@ -101,7 +101,7 @@
   (await (eat-if-hungry! c))
   (when (food-wanted? c)
     (ctx/hold-still! c nil)
-    (await (ctx/call c :food 'jobs.survival.get-food (if (inside/safe-from-night? (:primitives c)) {:ways in-shelter-ways} {})))
+    (await (ctx/call c :food 'jobs.survival.get-food (if (inside/safe-from-night? (:primitives c)) {:ways in-shelter-ways :carry 0} {:carry 0})))
     (ctx/hold-still! c reason))
   (await (child/pause! c (/ hold-ms 1000) reason))
   :again)

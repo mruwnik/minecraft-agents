@@ -21,7 +21,7 @@
   [eng args]
   (let [out (atom nil)
         parent {:round (fn ^:async recording-round [c]
-                         (let [e (await (ctx/call c :kid food args))]
+                         (let [e (await (ctx/call c :kid food (merge {:carry 0} args)))]
                            (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data])) (ctx/end c :done nil)))))}
         eng (assoc-in eng [:jobs 'recording-parent] parent)]
     (core/submit! eng '(recording-parent) {})
@@ -59,14 +59,14 @@
           (is (= {:kind :nothing-possible :cause :no-food} (kc e)))
           (is (re-find #"no food" (str (get-in e [:data :text])))))))))
 
-(deftest an-unmet-stock-ends-nothing-possible-no-stock
+(deftest an-unmet-carry-ends-nothing-possible-no-carry
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:self {:food 20}})
-              e (await (ending-of eng {:stock 8 :explore false}))]
-          (is (= {:kind :nothing-possible :cause :no-stock} (kc e)))
-          (is (= 8 (get-in e [:data :stock]))))))))
+              e (await (ending-of eng {:carry 8 :explore false}))]
+          (is (= {:kind :nothing-possible :cause :no-carry} (kc e)))
+          (is (= 8 (get-in e [:data :carry]))))))))
 
 (deftest a-body-above-the-hungry-line-is-done-already
   (async done

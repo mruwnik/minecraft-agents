@@ -19,7 +19,7 @@
   An unnamed meal leaves one of each seed a noted dug crop needs for the tidy-up (jobs.lib.tidy) until food is nearly starving.
   Golden apples are eaten only when named or at low health. Chorus fruit and suspicious stew only when named.
   Done? means fed (food at :until): a fed body ends done without eating. Hungry with no edible food carried, it fetches
-  through get-food (a child, :eat false :stock the missing food points; :fetch false: not), else condition-failed :no-food (a listed job waits);
+  through get-food (a child, :eat false :carry the missing food points; :fetch false: not), else condition-failed :no-food (a listed job waits);
   a fetch that brought none ends condition-failed :no-food with the get-food ending as its because. A named item that is not food, or is harmful without :allow-bad, is
   impossible :not-food or :bad-food (the cause's :text says why).
   Ends :done with {:ate bites} when food reached :until or :max-bites were eaten; nothing-possible :out-of-food when the
@@ -150,7 +150,7 @@
           (nil? best) (cond
                         (pos? bites) (ctx/end c :nothing-possible :out-of-food {:ate bites})
                         (:fetch (:args c)) (let [e (await (child/run!* c :fetch 'jobs.survival.get-food
-                                                         {:eat false :stock (max 1 (- until (food-of c)))}))]
+                                                         {:eat false :carry (max 1 (- until (food-of c)))}))]
                                              (cond
                                                (= :continue e) :continue
                                                (carried-best c) (recur bites)

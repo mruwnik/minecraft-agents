@@ -11,6 +11,7 @@
             [jobs.items.smelt.plan :as smelt-plan]
             [jobs.lib.armour :as armour]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cost.food :as food-cost]
             [jobs.lib.foods :as foods]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
@@ -28,9 +29,9 @@
   order and the job stops at the first one it cannot make. Then one obtain child per missing piece, in order, with :explore and a :spend :job-time of the ::minutes setting
   (longer than the fetch limit). Each piece got is an info kit.progress.
   While furnace material is still short (mining or smelting ahead; pure crafting needs no food) and fewer than
-  ::min-food food points are carried (harmful food does not count), a jobs.survival.get-food child
-  (with :explore, and :stock ::min-food to fill the pack) runs before the work and again after each piece (:food false: no child, stops :needs-food instead). A child that
-  stops (:no-food, or :no-stock when fed with nothing to stock) ends the job :needs-food with its reason as :cause only
+  the 3-day food reserve (60 points) are carried (harmful food does not count), a jobs.survival.get-food child
+  (with :explore; it fills the pack to its :carry default, the reserve) runs before the work and again after each piece (:food false: no child, stops :needs-food instead). A child that
+  stops (:no-food, or :no-carry when fed with nothing to carry) ends the job :needs-food with its reason as :cause only
   when the body is starving (jobs.lib.foods/starving?); else a warn kit.no-food names the cause and the work goes on, with
   no new food search unless the body starves. Get a base first.
   A death since the job began (body memory :died) clears the children and what was made; the next round re-plans from
@@ -38,7 +39,7 @@
   Needs (condition): :items, else impossible :bad-args. Ends done with {:have [..] :made [..]}. Every other ending has
   :have, :made, the next :item, a :why and a :text:
   - the obtain child's kind and cause (:no-source, a walk cause such as :zone-exit or :not-home, :time ..; :item is then the furnace material when that failed);
-  - condition-failed {:reason :needs-food :cause c :food :min-food} (the starving body found no food, or :food is false);
+  - condition-failed {:reason :needs-food :cause c :food :carry} (the starving body found no food, or :food is false);
   - nothing-possible {:reason :wear-failed}.
   Quote: a guess per missing item. done? is ok when every item is carried or worn.")
 
@@ -49,13 +50,12 @@
   {:items {:doc "the items to get, in order" :spec (a/coll-of a/item?) :default iron-kit}
    :wear {:doc "wear each armour piece once it is carried" :spec boolean? :default true}
    :explore {:doc "passed to the obtain children: walk and look for raw needs not seen" :spec boolean? :default true}
-   :food {:doc "run a get-food child when mining or smelting is ahead and fewer than ::min-food points are carried; false: stop :needs-food" :spec boolean? :default true}})
+   :food {:doc "run a get-food child when mining or smelting is ahead and fewer than the food reserve is carried; false: stop :needs-food" :spec boolean? :default true}})
 
 (a/defargs settings
   {::minutes {:default 45 :doc "Time budget of each obtain child of the kit." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 10800 :doc "Seconds a kit may last: every child of every piece." :spec (a/num-in 0 nil)}
-   ::item-s {:default 120 :doc "Seconds a quote counts for each missing item of the kit." :spec (a/num-in 0 nil)}
-   ::min-food {:default 20 :doc "Food points carried before the kit job starts work or a new piece." :spec (a/int-in 0 nil)}})
+   ::item-s {:default 120 :doc "Seconds a quote counts for each missing item of the kit." :spec (a/num-in 0 nil)}})
 
 (def target [:items])
 
@@ -195,10 +195,9 @@
                       {:text (str "kit stopped at " (:item out) ": " (name (:reason out)) (when (:why out) (str " (" (:why out) ")")))})))))
 
 (defn food-args
-  "The get-food child's args: feed the body, then stock the pack up to ::min-food points."
+  "The get-food child's args: feed the body, then fill the pack to get-food's :carry default."
   [c]
-  {:explore (:explore (:args c))
-   :stock (settings/get settings ::min-food)})
+  {:explore (:explore (:args c))})
 
 (defn ^:async run-food!
   "One get-food child round: :continue, nil when the body is fed or not hungry, or {:cause :why} when it could not be fed."
@@ -213,7 +212,6 @@
 (defn ^:async round [c]
   (let [a (:args c)
         items (vec (:items a))
-        min-food (settings/get settings ::min-food)
         version (game/version-of (:primitives c))
         m (ctx/mem c)]
     (cond
@@ -250,7 +248,7 @@
 
           (empty? todo) (finish! c items have nil)
 
-          (and short (< fp min-food) (not (:fed (ctx/mem c)))
+          (and short (< fp food-cost/reserve-points) (not (:fed (ctx/mem c)))
                (not (and (:no-food (ctx/mem c)) (not (foods/starving? (.self (:primitives c)) {})))))
           (let [r (when (:food a) (await (run-food! c)))]
             (cond (= :continue r) :continue
@@ -259,10 +257,10 @@
                       (ctx/emit! c :kit.no-food :warn {:cause (:cause r) :why (:why r) :food fp
                                                        :text (str "no food found (" (name (:cause r)) "), going on with " fp " food points carried")})
                       :again)
-                  (some? r) (finish! c items have (assoc (stop-of :condition-failed {:reason :needs-food :cause (:cause r) :food fp :min-food min-food} (:why r))
+                  (some? r) (finish! c items have (assoc (stop-of :condition-failed {:reason :needs-food :cause (:cause r) :food fp :carry food-cost/reserve-points} (:why r))
                                                          :item (first todo)))
-                  (not (:food a)) (finish! c items have (assoc (stop-of :condition-failed {:reason :needs-food :food fp :min-food min-food}
-                                                                        (str "carries " fp " food points, needs " min-food ": get a food supply first"))
+                  (not (:food a)) (finish! c items have (assoc (stop-of :condition-failed {:reason :needs-food :food fp :carry food-cost/reserve-points}
+                                                                        (str "carries " fp " food points, needs " food-cost/reserve-points ": get a food supply first"))
                                                                :item (first todo)))
                   :else (do (ctx/update-mem! c assoc :fed true) :again)))
 

@@ -514,7 +514,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:food 3} :inventory [{:name "bread" :count 5}]})]
-          (core/submit! eng '(jobs.survival.get-food) {})
+          (core/submit! eng '(jobs.survival.get-food {:carry 0}) {})
           (await (run-until-empty eng 10))
           (is (= 18 (food p)) "eats until fed, as the eat job does")
           (is (= [] (tu/walk-calls p)))
@@ -525,7 +525,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:food 19}})]
-          (core/submit! eng '(jobs.survival.get-food) {})
+          (core/submit! eng '(jobs.survival.get-food {:carry 0}) {})
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (= [] (tu/walk-calls p))))))))
@@ -541,7 +541,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup (assoc farm :self {:food 0}))]
           (know-source! eng {:x 11 :y 64 :z 0} :farm)
-          (core/submit! eng '(jobs.survival.get-food) {})
+          (core/submit! eng '(jobs.survival.get-food {:carry 0}) {})
           (await (run-until-empty eng 40))
           (is (= [] (:list (core/state eng))))
           (is (= [{:x 10 :y 64 :z 0} {:x 12 :y 64 :z 0}] (call-args p "dig" "pos"))
@@ -556,7 +556,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:food 0}})]
           (know-source! eng {:x 500 :y 64 :z 0} :farm)
-          (core/submit! eng '(jobs.survival.get-food {:explore false}) {})
+          (core/submit! eng '(jobs.survival.get-food {:carry 0 :explore false}) {})
           (await (run-until-empty eng 10))
           (is (= [] (tu/walk-calls p))))))))
 
@@ -568,7 +568,7 @@
                                       :containers {"20,64,0" [{:name "cobblestone" :count 30} {:name "bread" :count 4}
                                                               {:name "carrot" :count 9}]}})]
           (know-source! eng {:x 20 :y 64 :z 0} :chest)
-          (core/submit! eng '(jobs.survival.get-food) {})
+          (core/submit! eng '(jobs.survival.get-food {:carry 0}) {})
           (await (run-until-empty eng 20))
           (is (= ["bread"] (call-args p "transfer" "item")) "the best food in the chest, not the stone")
           (is (= ["withdraw"] (call-args p "transfer" "direction")))
@@ -582,7 +582,7 @@
 
 (defn hunt-world [entities zones]
   (let [{:keys [eng p seen] :as w} (setup {:self {:food 4} :entities entities} zones)]
-    (core/submit! eng '(jobs.survival.get-food {:settings {:jobs.lib.combat/attack-gap-ms 0}}) {})
+    (core/submit! eng '(jobs.survival.get-food {:carry 0 :settings {:jobs.lib.combat/attack-gap-ms 0}}) {})
     w))
 
 (deftest get-food-keeps-the-last-two-adults-of-a-kind-for-breeding
@@ -614,7 +614,7 @@
       (fn ^:async t []
         (let [plan (shape/with-author {:id "pen" :parts [{:id "p" :box [[4 64 -1] [10 64 1]] :want "dirt"}]} "Miles")
               {:keys [eng p seen]} (setup-in {:self {:food 4} :entities three-cows} (ew/of-data {"pen" plan} {} []))]
-          (core/submit! eng '(jobs.survival.get-food {:settings {:jobs.lib.combat/attack-gap-ms 0} :explore false}) {})
+          (core/submit! eng '(jobs.survival.get-food {:carry 0 :settings {:jobs.lib.combat/attack-gap-ms 0} :explore false}) {})
           (await (run-until-empty eng 40))
           (is (= [] (calls p "attack")))
           (is (seq (none-events seen))))))))
@@ -635,7 +635,7 @@
         (let [penned (mapv #(assoc cow :id %1 :pos {:x %2 :y 64 :z 0}) [7 8 9] [33 36 37])
               {:keys [eng p]} (setup {:self {:food 4} :entities penned}
                                      [{:name "far-pen" :owner "Fake" :min [30 60 -3] :max [40 70 3]}])]
-          (core/submit! eng '(jobs.survival.get-food {:settings {:jobs.lib.combat/attack-gap-ms 0} :explore false}) {})
+          (core/submit! eng '(jobs.survival.get-food {:carry 0 :settings {:jobs.lib.combat/attack-gap-ms 0} :explore false}) {})
           (await (run-until-empty eng 60))
           (is (seq (tu/walk-calls p)) "walked to the pen it could not see")
           (is (= [7] (distinct (call-args p "attack" "id"))))
@@ -693,7 +693,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:food 0} :entities (take 2 three-cows)})]
-          (core/submit! eng '(jobs.survival.get-food {:settings {:jobs.lib.combat/attack-gap-ms 0}}) {})
+          (core/submit! eng '(jobs.survival.get-food {:carry 0 :settings {:jobs.lib.combat/attack-gap-ms 0}}) {})
           (await (run-until-empty eng 40))
           (is (= [] (calls p "attack")))
           (is (some #(and (= :no-food (:reason %)) (re-find #"cow: kept for breeding" (str (:text %)))) @seen)))))))
@@ -704,7 +704,7 @@
       (fn [] (settings/with-settings {:jobs.survival.get-food/kept-lifted-below 3}
         (fn ^:async t []
           (let [{:keys [eng seen]} (setup {:self {:food 2} :entities (take 2 three-cows)})]
-            (core/submit! eng '(jobs.survival.get-food {:settings {:jobs.lib.combat/attack-gap-ms 0}}) {})
+            (core/submit! eng '(jobs.survival.get-food {:carry 0 :settings {:jobs.lib.combat/attack-gap-ms 0}}) {})
             (await (run-until-empty eng 40))
             (is (= [{:adults 2 :keep 2 :food 2 :rule :starved}]
                    (mapv #(select-keys % [:adults :keep :food :rule]) (killed-events seen)))))))))))
@@ -718,7 +718,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (let [w (setup {:self {:food 4} :entities three-cows :blocks pen-ring})]
-                                     (core/submit! (:eng w) '(jobs.survival.get-food {:settings {:jobs.lib.combat/attack-gap-ms 0}}) {})
+                                     (core/submit! (:eng w) '(jobs.survival.get-food {:carry 0 :settings {:jobs.lib.combat/attack-gap-ms 0}}) {})
                                      w)]
           (await (run-until-empty eng 40))
           (is (= [] (calls p "attack")))
@@ -729,7 +729,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (h/setup-seeing {:self {:food 4 :pos {:x -9 :y 64 :z 0}} :yaw 270 :entities three-cows :blocks (merge (tu/box 3 63 -2 12 63 2 "stone") pen-ring)} nil 700)]
-          (core/submit! eng '(jobs.survival.get-food {:settings {:jobs.lib.combat/attack-gap-ms 0}}) {})
+          (core/submit! eng '(jobs.survival.get-food {:carry 0 :settings {:jobs.lib.combat/attack-gap-ms 0}}) {})
           (await (run-until-empty eng 40))
           (is (= [] (calls p "attack")))
           (is (some #(and (= :no-food (:reason %)) (re-find #"cow: pen" (str (:text %)))) @seen)))))))
@@ -739,7 +739,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:food 2} :entities three-cows})]
-          (core/submit! eng '(jobs.survival.get-food {:settings {:jobs.lib.combat/attack-gap-ms 0}}) {})
+          (core/submit! eng '(jobs.survival.get-food {:carry 0 :settings {:jobs.lib.combat/attack-gap-ms 0}}) {})
           (await (run-until-empty eng 40))
           (is (= [] (:list (core/state eng))))
           (is (= [7 7 7 7] (call-args p "attack" "id")) "20 health, 5 a swing")
@@ -753,7 +753,7 @@
       (fn ^:async t []
         (let [{:keys [eng p clock]} (setup {:self {:food 2} :inventory [{:name "iron_axe" :count 1}] :entities three-cows})]
           (.override (.-world p) "wait" (fn [token a impl] (swap! clock + (.-ms a)) (impl token a)))
-          (core/submit! eng '(jobs.survival.get-food) {})
+          (core/submit! eng '(jobs.survival.get-food {:carry 0}) {})
           (await (run-until-empty eng 40))
           (is (seq (h/waited-between-swings p)))
           (is (every? #(<= 1072 % 1112) (h/waited-between-swings p)) "the iron axe's 1112 ms, not a fixed gap"))))))
@@ -765,7 +765,7 @@
         (let [{:keys [eng p]} (setup {:self {:food 1}
                                       :blocks {"6,64,0" "sweet_berry_bush"} :ages {"6,64,0" 3}
                                       :drops {:sweet_berry_bush "sweet_berries"}})]
-          (core/submit! eng '(jobs.survival.get-food) {})
+          (core/submit! eng '(jobs.survival.get-food {:carry 0}) {})
           (await (run-until-empty eng 20))
           (is (= [{:x 6 :y 64 :z 0}] (call-args p "dig" "pos")))
           (is (= ["sweet_berries"] (call-args p "eat" "item"))))))))
@@ -777,7 +777,7 @@
         (let [{:keys [eng p]} (setup {:self {:food 1}
                                       :blocks {"6,64,0" "melon"}
                                       :drops {:melon "melon_slice"}})]
-          (core/submit! eng '(jobs.survival.get-food) {})
+          (core/submit! eng '(jobs.survival.get-food {:carry 0}) {})
           (await (run-until-empty eng 20))
           (is (= [{:x 6 :y 64 :z 0}] (call-args p "dig" "pos")))
           (is (= ["melon_slice"] (call-args p "eat" "item"))))))))
@@ -792,7 +792,7 @@
       (fn ^:async t []
         (let [run (fn ^:async run1 [zones]
                     (let [{:keys [eng p]} (setup wheat-field zones)]
-                      (core/submit! eng '(jobs.survival.get-food {:explore false}) {})
+                      (core/submit! eng '(jobs.survival.get-food {:carry 0 :explore false}) {})
                       (await (run-until-empty eng 60))
                       p))
               own (await (run own-farm))
@@ -810,7 +810,7 @@
         (let [{:keys [eng seen]} (setup {:self {:food 1} :containers {"20,64,0" [{:name "cobblestone" :count 3}]}})
               none #(none-events seen)]
           (know-source! eng {:x 20 :y 64 :z 0} :chest)
-          (core/submit! eng '(jobs.survival.get-food) {})
+          (core/submit! eng '(jobs.survival.get-food {:carry 0}) {})
           (await (run-until-empty eng 20))
           (is (= [] (entries eng :food-source)))
           (is (= 1 (count (none))))
@@ -825,7 +825,7 @@
 (defn ^:async run-food!
   "A new firing of get-food (hungry below 14, so food 12 is hungry), run until it ends."
   [eng]
-  (core/submit! eng '(jobs.survival.get-food {:food 14}) {})
+  (core/submit! eng '(jobs.survival.get-food {:carry 0 :food 14}) {})
   (await (run-until-empty eng 30)))
 
 (deftest get-food-bakes-carried-wheat-and-eats-the-bread
@@ -911,7 +911,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:food 19 :health 5} :inventory [{:name "bread" :count 5}]})]
-          (core/submit! eng '(jobs.survival.get-food) {})
+          (core/submit! eng '(jobs.survival.get-food {:carry 0}) {})
           (await (run-until-empty eng 10))
           (is (= 20 (food p)) "saturation heals fastest on a full bar")
           (is (= [] (tu/walk-calls p))))))))
