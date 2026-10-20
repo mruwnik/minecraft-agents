@@ -44,13 +44,12 @@
 
 (def passes
   "Names an animal walks through: no collision."
-  #{"air" "cave_air" "void_air" "water" "bubble_column" "short_grass" "tall_grass" "short_dry_grass" "tall_dry_grass" "leaf_litter" "wildflowers" "pink_petals" "bush" "fern" "large_fern" "dead_bush"
-    "seagrass" "tall_seagrass" "kelp" "kelp_plant" "vine" "glow_lichen" "snow" "cobweb" "light" "structure_void"
-    "lily_pad" "sugar_cane" "redstone_wire" "rail" "powered_rail" "detector_rail" "activator_rail" "lever" "tripwire"
-    "tripwire_hook" "string" "ladder" "torch" "wall_torch" "redstone_torch" "redstone_wall_torch"
-    "dandelion" "poppy" "blue_orchid" "allium" "azure_bluet" "red_tulip" "orange_tulip" "white_tulip" "pink_tulip"
-    "oxeye_daisy" "cornflower" "lily_of_the_valley" "torchflower" "sunflower" "lilac" "rose_bush" "peony" "pitcher_plant"
-    "wheat" "carrots" "potatoes" "beetroots" "melon_stem" "pumpkin_stem" "nether_wart" "hanging_roots" "bamboo_sapling"})
+  (into (into bs/air bs/flowers)
+        #{"water" "bubble_column" "short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "leaf_litter"
+          "seagrass" "tall_seagrass" "kelp" "kelp_plant" "vine" "glow_lichen" "snow" "cobweb" "structure_void"
+          "lily_pad" "sugar_cane" "redstone_wire" "rail" "powered_rail" "detector_rail" "activator_rail" "lever" "tripwire"
+          "tripwire_hook" "string" "ladder" "torch" "wall_torch" "redstone_torch" "redstone_wall_torch"
+          "wheat" "carrots" "potatoes" "beetroots" "melon_stem" "pumpkin_stem" "nether_wart" "hanging_roots" "bamboo_sapling"}))
 
 (def pass-patterns
   [#"_sapling$" #"_button$" #"_pressure_plate$" #"_sign$" #"_banner$" #"_torch$" #"^attached_.*_stem$" #"_propagule$"])

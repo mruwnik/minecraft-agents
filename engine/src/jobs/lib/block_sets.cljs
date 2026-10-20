@@ -2,8 +2,7 @@
   "The named sets of block names every job reads, each defined once. They differ on purpose: air is only open
   cells; replaceable is what a placement overwrites; passable? is what a body walks through; harms-in-cell and
   bad-floor are what hurts to stand in or on."
-  (:require [jobs.lib.solid :as solid]
-            [plan.shape :as shape]))
+  (:require [plan.shape :as shape]))
 
 (def air "Open cells (plan.shape/air-names); the invisible light block counts: a body walks through it." (conj shape/air-names "light"))
 
@@ -28,6 +27,11 @@
   "Names that are no floor to stand on: the harmful blocks and the ones a body sinks into or is held by."
   (into harms-in-cell #{"powder_snow" "cobweb" "tripwire"}))
 
+(def walk-through
+  "Blocks a mob or body walks through or over (signs, banners, rails, plates, buttons, levers, carpets, tripwire,
+  cobweb). Not solid: neither roof, wall nor floor."
+  #"(_sign|_banner|_carpet|_pressure_plate|_button|_rail)$|^(rail|lever|tripwire|tripwire_hook|string|cobweb|redstone_wire)$")
+
 (def passable-pattern
   "Blocks without a collision box besides the named sets: torches, saplings, tulips, orchids and the solid.cljs walk-through list."
   #"(torch|_sapling|_tulip|_orchid|_flower)$")
@@ -43,7 +47,7 @@
   (boolean
    (and name (not (fluids name)) (not (slows-or-triggers name))
         (or (replaceable name) (flowers name) (= "grass" name) (= "sweet_berry_bush" name)
-            (re-find passable-pattern name) (re-find solid/walk-through name)))))
+            (re-find passable-pattern name) (re-find walk-through name)))))
 
 (defn passable-or-water?
   "passable?, or water a walker swims through."

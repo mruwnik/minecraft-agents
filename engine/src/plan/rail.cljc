@@ -65,8 +65,9 @@
 
 (def loose
   "Blocks with nothing to stand a rail on."
-  #{"air" "cave_air" "void_air" "water" "lava" "bubble_column" "fire" "soul_fire" "short_grass" "tall_grass" "grass"
-    "fern" "large_fern" "snow" "vine" "dead_bush" "seagrass" "tall_seagrass" "light"})
+  (into shape/air-names
+        #{"light" "water" "lava" "bubble_column" "fire" "soul_fire" "short_grass" "tall_grass" "grass"
+          "fern" "large_fern" "snow" "vine" "dead_bush" "seagrass" "tall_seagrass"}))
 
 (def thin
   "Blocks without a full top face (a rail pops off them)."

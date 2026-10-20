@@ -625,7 +625,7 @@
       (nil? name) :open
       (openable? name) (if (open-prop? b) :open :solid)
       (solid/non-solid name) :open
-      (re-find solid/walk-through name) :open
+      (re-find bs/walk-through name) :open
       (re-find arrow-passes name) :open
       :else :solid)))
 
