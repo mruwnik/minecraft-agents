@@ -963,3 +963,11 @@
           (is (true? (:out (:data e))))
           (is (seq (:dug (:data e))))
           (is (= [-3 65 0] (:entry (:data e)))))))))
+
+(deftest the-surface-scan-stops-at-the-first-unseen-cell-under-a-seen-one
+  ;; The air over the ground is seen, the ground and the rock under it are not: only the ground is left to look at.
+  (let [read (atom [])
+        block-at (fn [[_ y _ :as c]] (swap! read conj y) (if (< y 65) "stone" "air"))
+        seen-at (fn [[_ y _]] (when (> y 65) "air"))]
+    (is (nil? (ln/surface block-at seen-at [3 5] 40 80)))
+    (is (= 65 (apply min @read)) (pr-str @read))))

@@ -20,15 +20,19 @@
   "The feet height of the top stand of column [x z], looking down from hi to lo: the first cell that is not open must
   be a solid floor with two open cells over it. nil when it is not (a fluid, a cave roof above hi), or a cell on the
   way is not loaded. With seen-at (nil for a cell not seen) the floor and the two cells over it must be seen: unseen
-  cells read as air above the surface, so the first seen stone of a hidden column is no surface."
+  cells read as air above the surface, so the first seen stone of a hidden column is no surface. The scan ends (nil)
+  at the first unseen cell under a seen one: it is the surface still to look at, and the rock under it is hidden, so
+  reading it would spend the looks on cells no sight pass can show."
   ([block-at column lo hi] (surface block-at nil column lo hi))
   ([block-at seen-at [x z] lo hi]
-   (loop [y hi]
+   (loop [y hi above-seen? false]
      (when (>= y lo)
-       (let [n (block-at [x y z])]
+       (let [n (block-at [x y z])
+             seen? (or (nil? seen-at) (some? (seen-at [x y z])))]
          (cond
            (nil? n) nil
-           (pillar/clear? n) (recur (dec y))
+           (and above-seen? (not seen?)) nil
+           (pillar/clear? n) (recur (dec y) seen?)
            (and (<= (+ y 2) hi) (or (nil? seen-at) (every? seen-at [[x y z] [x (+ y 1) z] [x (+ y 2) z]])) (rules/solid-floor? block-at [x y z])) (inc y)
            :else nil))))))
 
