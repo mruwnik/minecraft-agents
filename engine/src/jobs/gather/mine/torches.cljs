@@ -57,7 +57,7 @@
   their light) and ahead (not yet cut; dark when the light under the feet is 1 or less), light passing through open cells, the
   sites being only site, the torches already hung the sources."
   [c cells ahead site]
-  (when site
+  (when (and site (not (some #{site} (:left-out (ctx/mem c)))))
     (let [p (:primitives c)
           feet-light (sense/light-at p (cell-of (u/self-pos c)))
           ahead? (set ahead)
@@ -119,14 +119,14 @@
                   (due-spot c [site [x y z]] [[(+ x dx) (dec y) (+ z dz)]] site)))))
 
 (defn booked!
-  "Book the torch step done: the cell of the torch hung, or the site a torch was left out of, joins the planner's sources so it is not asked again."
+  "Book a torch hung: its cell joins the planner's sources."
   [c site]
   (ctx/update-mem! c update :hung (fnil conj []) site))
 
 (defn left-out!
-  "Book the torch step done, with an info event of the reason."
+  "Book the torch step done with no torch hung: the site is not asked again, but lights nothing. An info event of the reason."
   [c site cell reason]
-  (booked! c site)
+  (ctx/update-mem! c update :left-out (fnil conj []) site)
   (ctx/emit! c :mine.torch-left-out :info {:cell cell :reason reason
                                            :text (str "mine hung no torch" (some->> cell (str/join ",") (str " at ")) ": " (name reason))}))
 

@@ -96,6 +96,19 @@
           (is (empty? (events-of s :mine.no-torches)))
           (is (= :tunnel-length (:reason (done-event s)))))))))
 
+(deftest a-torch-that-could-not-be-placed-lights-nothing-so-the-next-step-asks-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake-on-floor (assoc (torch-world torches8) :floor-block floor-block))
+              _ (swap! (fake/state p) assoc :light-default [0 0])
+              _ (.override (.-world p) "place" (fn ^:async f [tok a impl] (if (= "torch" (.-item a)) #js {:status "failed" :reason "no"} (await (impl tok a)))))
+              s (start {:p p})]
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 22}) {})
+          (await (run-ticks s 200))
+          (is (> (count (filter #(= :place-failed (:reason %)) (events-of s :mine.torch-left-out))) 3)
+              "a failed torch is no light source: later steps are still owed torches"))))))
+
 ;; the glance at the support before a torch is for support not yet seen: all is seen here, so hanging adds no looks
 (deftest a-torch-on-seen-support-is-hung-without-a-glance
   (async done
