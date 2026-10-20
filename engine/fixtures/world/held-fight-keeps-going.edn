@@ -12,17 +12,17 @@
          [:until-seen {:entity "zombie"} 10]
          [:job (jobs.combat.attack {:targets :hostiles :radius 8 :hold true})]
          [:summon "zombie" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 5] ; hold: time must pass here, nothing to poll
+         [:wait-s 5]
          [:summon "zombie" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 5] ; hold: time must pass here, nothing to poll
+         [:wait-s 5]
          [:summon "zombie" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 5] ; hold: time must pass here, nothing to poll
+         [:wait-s 5]
          [:summon "zombie" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 5] ; hold: time must pass here, nothing to poll
+         [:wait-s 5]
          [:summon "zombie" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 5] ; hold: time must pass here, nothing to poll
+         [:wait-s 5]
          [:summon "zombie" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 5]] ; hold: time must pass here, nothing to poll
+         [:wait-s 5]]
    :expect [{:event {:source :action :kind :done :data {:name "attack" :status "killed"}} :within-s 35}
             {:no-event {:source :job :kind :stopped} :for-s 30 :of-job true}
             {:event {:source :job :kind :stopped :data {:kind :nothing-possible}} :within-s 60 :of-job true}]

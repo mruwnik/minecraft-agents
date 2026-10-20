@@ -50,7 +50,7 @@
   {:name "door-shut-out-of-sight-is-looked-at-once-then-dropped"
    :register [{:trigger :door-left :args {:open-s 12} :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut-doors)}]
    :memory [{:kind :opened :data {:cell #xyz [16 0 16] :by "j0" :shut? true}}]
-   :act [[:wait-s 4] ; settle: nothing the body reports to poll
+   :act [[:wait-s 4]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 0"]
          [:rcon "execute positioned $X $Y $Z run setblock ~16 ~1 ~16 oak_door[facing=south,half=upper,hinge=left,open=false]"]
          [:rcon "execute positioned $X $Y $Z run setblock ~16 ~0 ~16 oak_door[facing=south,half=lower,hinge=left,open=false]"]]

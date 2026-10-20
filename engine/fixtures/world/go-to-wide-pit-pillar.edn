@@ -21,7 +21,7 @@
    :body {:at [16.5 1 16.5] :inventory [["dirt" 8]]}
    :act [[:summon "cow" [16.9 1 16.5] "{NoAI:1b}"]
          [:job (jobs.access.pillar {:height 2 :here true})]
-         [:wait-s 4] ; settle: nothing the body reports to poll
+         [:wait-s 4]
          [:rcon "kill @e[type=cow,$BOX]"]]
    :expect [{:event {:source :job :kind :completed} :within-s 40}
             {:no-event {:source :job :kind :stopped} :for-s 40 :until {:source :job :kind :completed}}]

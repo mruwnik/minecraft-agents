@@ -105,7 +105,7 @@
          [:until [:memory {:entries {:shelter [{:data {:state :built}}]}}] 10]
          [:time-set 23500]
          [:await {:source :job :kind :night.dawn-hold} 60]
-         [:wait-s 5] ; hold: time must pass here, nothing to poll
+         [:wait-s 5]
          [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
    :expect [{:event {:source :job :kind :night.dawn-hold} :within-s 120}
             {:event {:source :job :kind :dig-in.left} :within-s 240}]

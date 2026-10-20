@@ -14,7 +14,7 @@
    :body {:at [7.5 0 16.5]}
    :act [[:job (jobs.build.light-area {:boxes [[#at [3 0 12] #at [11 0 20]]]})]
          [:await {:source :job :kind :completed} 150]
-         [:wait-s 1] ; settle: nothing the body reports to poll
+         [:wait-s 1]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [3 0 12]] {:ok true :light {:lit? true}}]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [11 0 12]] {:ok true :light {:lit? true}}]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [3 0 20]] {:ok true :light {:lit? true}}]
@@ -28,7 +28,7 @@
    :body {:at [3.5 0 16.5]}
    :act [[:job (jobs.build.light-area {:boxes [[#at [3 0 16] #at [30 0 16]] [#at [30 0 17] #at [30 0 24]]]})]
          [:await {:source :job :kind :completed} 150]
-         [:wait-s 1] ; settle: nothing the body reports to poll
+         [:wait-s 1]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [3 0 16]] {:ok true :light {:lit? true}}]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [6 0 16]] {:ok true :light {:lit? true}}]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [9 0 16]] {:ok true :light {:lit? true}}]
@@ -48,7 +48,7 @@
    :body {:at [3.5 0 16.5]}
    :act [[:job (jobs.build.light-area {:boxes [[#at [3 0 16] #at [14 0 16]] [#at [14 0 17] #at [14 0 24]]]})]
          [:await {:source :job :kind :completed} 150]
-         [:wait-s 1] ; settle: nothing the body reports to poll
+         [:wait-s 1]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [14 0 20]] {:ok true :light {:lit? true}}]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [14 0 24]] {:ok true :light {:lit? true}}]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :torches [:any]}} :within-s 150 :of-job true}]}

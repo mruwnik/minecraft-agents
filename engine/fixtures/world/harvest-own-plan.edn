@@ -15,14 +15,14 @@
  :cases
  [{:name "harvest-plan-looks-round-for-wheat-that-grew-out-of-view"
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 0"] [:until-rcon "data get entity $BODY Rotation[0]" "data: -?180\\b" 10]
-         [:rcon "execute positioned $X $Y $Z run fill ~10 ~ ~16 ~13 ~ ~16 wheat[age=7]"] [:wait-s 1] ; settle: nothing the body reports to poll
+         [:rcon "execute positioned $X $Y $Z run fill ~10 ~ ~16 ~13 ~ ~16 wheat[age=7]"] [:wait-s 1]
          [:job (jobs.farm.harvest {:plan "$plan:field"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :nothing-to-do}} :for-s 20 :of-job true}]
    :after [[:item "wheat" [:>= 1]]]}
   {:name "tend-plan-looks-round-for-wheat-that-grew-out-of-view"
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 0"] [:until-rcon "data get entity $BODY Rotation[0]" "data: -?180\\b" 10]
-         [:rcon "execute positioned $X $Y $Z run fill ~10 ~ ~16 ~13 ~ ~16 wheat[age=7]"] [:wait-s 1] ; settle: nothing the body reports to poll
+         [:rcon "execute positioned $X $Y $Z run fill ~10 ~ ~16 ~13 ~ ~16 wheat[age=7]"] [:wait-s 1]
          [:job (jobs.farm.tend {:plan "$plan:field"})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :nothing-to-do}} :for-s 20 :of-job true}]

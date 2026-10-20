@@ -25,7 +25,7 @@
    :limit-s 220}
   {:name "kick-reconnects-then-walks"
    :act [[:rcon "kick $BODY"]
-         [:wait-s 25] ; hold: time must pass here, nothing to poll
+         [:wait-s 25]
          [:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}]
    :after [[:body-near [24.5 0 16.5] 2]]

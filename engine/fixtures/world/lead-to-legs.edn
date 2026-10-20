@@ -21,13 +21,13 @@
   {:name "lead-broken-mid-walk"
    :act [[:summon "cow" [6.5 0 18.5]]
          [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [70 0 16]})]
-         [:wait-s 4] ; settle: nothing the body reports to poll
+         [:wait-s 4]
          [:rcon "execute as @e[type=cow,tag=wt,$BOX] run data remove entity @s leash"]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :lead-broke}} :within-s 60 :of-job true}]}
   {:name "cow-teleported-away-mid-walk"
    :act [[:summon "cow" [6.5 0 18.5]]
          [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [70 0 16]})]
-         [:wait-s 4] ; settle: nothing the body reports to poll
+         [:wait-s 4]
          [:rcon "execute as @e[type=cow,tag=wt,$BOX] run tp @s ~ ~ ~-13"]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :lost}} :within-s 60 :of-job true}]}
   {:name "jammed-cow-stalled"

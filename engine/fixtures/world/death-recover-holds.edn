@@ -37,7 +37,7 @@
    :register [{:trigger :died :persistence :cooldown :cooldown-s 30 :args {}}]
    :body {:spawnpoint [5 0 5]}
    :act [[:time-set 21500]
-         [:wait-s 1] ; settle: nothing the body reports to poll
+         [:wait-s 1]
          [:kill-body]
          [:await {:source :body :kind :respawned} 30]
          [:wait-s 40]] ; hold: the body stays in the hut all night
@@ -53,7 +53,7 @@
    :register [{:trigger :died :persistence :cooldown :cooldown-s 30 :args {}}]
    :body {:spawnpoint [5 0 5]}
    :act [[:time-set 21500]
-         [:wait-s 1] ; settle: nothing the body reports to poll
+         [:wait-s 1]
          [:kill-body]
          [:await {:source :body :kind :respawned} 30]
          [:await {:source :reflex :kind :held} 40]

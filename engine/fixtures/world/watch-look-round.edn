@@ -18,7 +18,7 @@
  [{:name "lit-creeper-behind-seen-then-reflex"
    :blocks [[:set [16 2 20] "sea_lantern"] [:set [16 2 24] "sea_lantern"] [:set [16 2 28] "sea_lantern"]]
    :act [[:job (jobs.gather.mine {:torches false :block "diamond_ore" :level false :direction :n :tunnel-length 12 :count 1 :radius 8})]
-         [:wait-s 3] ; settle: nothing the body reports to poll
+         [:wait-s 3]
          [:summon "creeper" [16.5 0 29.5] "{NoAI:1b}"]]
    :expect [{:event {:kind :watch.saw :data {:name "creeper"}} :within-s 15}
             {:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 16}]}

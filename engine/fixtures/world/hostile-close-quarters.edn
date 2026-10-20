@@ -27,7 +27,7 @@
             [:set [13 1 13] "torch"] [:set [19 1 19] "torch"]]
    :body {:effects [["resistance" 600 3]]}
    :act [[:job (jobs.movement.go-to {:pos #at [27 0 16] :range 1})]
-         [:wait-s 2] ; settle: nothing the body reports to poll
+         [:wait-s 2]
          [:summon "zombie" [18.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
             {:event {:source :action :kind :started :data {:name "attack"}} :within-s 15}

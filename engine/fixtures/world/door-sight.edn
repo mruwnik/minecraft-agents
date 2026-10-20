@@ -27,7 +27,7 @@
             [:set [14 1 16] "oak_door[facing=east,half=upper,hinge=left,open=false]"]]
    :act [[:until [:cli "plans" ["--world" "$world" "check" "$plan:face" "--body" "$body"]
           {:evidence :seen-memory :score {:counts {:match 1}}}] 30]
-         [:wait-s 3] ; settle: nothing the body reports to poll
+         [:wait-s 3]
          [:cli "plans" ["--world" "$world" "check" "$plan:gold" "--body" "$body"]
           {:evidence :seen-memory :score {:counts {:unknown 1} :checked {:seen 0 :unseen 1}}}]]
    :expect [{:no-event {:level :error} :for-s 3}]

@@ -128,7 +128,7 @@
    :plot {:height 8 :floor "grass_block" :length 64 :width 32}
    :plans [{:id "pen" :metadata {:by "$body"} :parts [{:id "pen" :box [#at [4 0 12] #at [12 1 20]] :want "dirt"}]}]
    :body {:at [8.5 0 24.5] :yaw 180}
-   :act [[:summon "cow" [8.5 0 16.5] "{NoAI:1b,PersistenceRequired:1b}"] [:wait-s 2] ; settle: nothing the body reports to poll
+   :act [[:summon "cow" [8.5 0 16.5] "{NoAI:1b,PersistenceRequired:1b}"] [:wait-s 2] ; the cow is behind the body, so no poll can see it: the 2 s only lets the summon land
          [:job (jobs.explore.search {:target "cow" :settings {:jobs.explore.search/max-legs 0} :max-distance 12 :use-notes false})]
          [:await {:source :job :kind :completed} 40]
          [:rcon "tp $BODY ~34 ~ ~-8 90 0"] [:until-facing {:yaw 90 :pitch 0} 10]
@@ -138,7 +138,7 @@
   {:name "search-notes-count-a-cow-outside-and-say-where"
    :plot {:height 8 :floor "grass_block" :length 64 :width 32}
    :body {:at [8.5 0 24.5] :yaw 180}
-   :act [[:summon "cow" [8.5 0 16.5] "{NoAI:1b,PersistenceRequired:1b}"] [:wait-s 2] ; settle: nothing the body reports to poll
+   :act [[:summon "cow" [8.5 0 16.5] "{NoAI:1b,PersistenceRequired:1b}"] [:wait-s 2] ; the cow is behind the body, so no poll can see it: the 2 s only lets the summon land
          [:job (jobs.explore.search {:target "cow" :settings {:jobs.explore.search/max-legs 0} :max-distance 12 :use-notes false})]
          [:await {:source :job :kind :completed} 40]
          [:rcon "execute as $BODY at @s run tp @s ~34 ~ ~-8 90 0"] [:until-facing {:yaw 90 :pitch 0} 10]
@@ -157,7 +157,7 @@
    :body {:at [12.5 0 12.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8
                                      :use-notes false :max-distance 60 :settings {:jobs.explore.search/spacing 8 :jobs.explore.search/max-legs 16} :spend {:job-time 45}})]
-         [:wait-s 70] ; hold: time must pass here, nothing to poll
+         [:wait-s 70] ; outlasts the 45 s job time: the wait must not time the job out
          [:time-set 1000]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 70 :of-job true}

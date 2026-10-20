@@ -13,7 +13,7 @@
    :blocks [[:fill [10 -1 20] [13 -1 20] "farmland[moisture=7]"]]
    :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 20] :max #xyz [13 -1 20]}})]
          [:await {:source :job :kind :waiting} 30]
-         [:wait-s 10] ; hold: time must pass here, nothing to poll
+         [:wait-s 10]
          [:time-set 1000]]
    :expect [{:no-event {:source :job :kind :completed :data {:name "jobs.farm.plant"}} :for-s 10}
             {:event {:source :job :kind :completed :data {:planted 4 :status :completed}} :within-s 90 :of-job true}]
@@ -22,7 +22,7 @@
    :blocks [[:fill [10 -1 20] [12 -1 22] "grass_block"]]
    :act [[:job (jobs.build.path {:from #at [10 -1 20] :to #at [12 -1 22]})]
          [:await {:source :job :kind :waiting} 30]
-         [:wait-s 10] ; hold: time must pass here, nothing to poll
+         [:wait-s 10]
          [:time-set 1000]]
    :expect [{:no-event {:source :job :kind :completed :data {:pathed 9}} :for-s 10}
             {:event {:source :job :kind :completed :data {:pathed 9}} :within-s 90 :of-job true}]
@@ -31,7 +31,7 @@
    :blocks [[:fill [10 0 20] [12 0 22] "dirt"]]
    :act [[:job (jobs.build.clear-box {:from #at [10 0 20] :to #at [12 0 22]})]
          [:await {:source :job :kind :waiting} 30]
-         [:wait-s 10] ; hold: time must pass here, nothing to poll
+         [:wait-s 10]
          [:time-set 1000]]
    :expect [{:no-event {:source :job :kind :completed :data {:dug 9}} :for-s 10}
             {:event {:source :job :kind :completed :data {:dug 9}} :within-s 90 :of-job true}]
@@ -40,7 +40,7 @@
    :act [[:summon "cow" [13.5 0 12.5] "{NoAI:1b}"]
          [:job (jobs.combat.hunt {:mob "cow" :count 1 :keep 0})]
          [:await {:source :job :kind :waiting :data {:reason :dark}} 30]
-         [:wait-s 10] ; hold: time must pass here, nothing to poll
+         [:wait-s 10]
          [:time-set 1000]]
    :expect [{:no-event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :for-s 10}
             {:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 90 :of-job true}]
@@ -50,7 +50,7 @@
          [:until-seen {:entity "zombie" :min 1} 10]
          [:job (jobs.combat.attack {:targets "zombie"})]
          [:await {:source :job :kind :waiting :data {:reason :dark}} 30]
-         [:wait-s 10] ; hold: time must pass here, nothing to poll
+         [:wait-s 10]
          [:time-set 1000]]
    :expect [{:no-event {:source :job :kind :completed :data {:name "jobs.combat.attack"}} :for-s 10}
             {:event {:source :job :kind :completed :data {:reason :cleared}} :within-s 90 :of-job true}]
