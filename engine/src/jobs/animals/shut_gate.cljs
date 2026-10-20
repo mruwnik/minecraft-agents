@@ -28,8 +28,8 @@
   One run shuts them all, nearest first. For each it walks within :reach (a jobs.movement.go-to child, doors :never, :ways #{:walk}),
   waits a few moments (pass/shut-waits) when an animal stands in the gate (never pushes it), clicks it with an empty hand and reads
   the block again. A gate the body stands in is left (reason :standing-in), as is one an animal never left
-  (:animal-in-the-way), or one the walk to it was interrupted for (:walk-interrupted); both get a 30 s :gate-gave-up
-  entry, no warn. A gate that could not be reached or did not shut after the tries setting (3) clicks is given up with one warn
+  (:animal-in-the-way); both get a 30 s :gate-gave-up entry, no warn. A walk that goes on or waits (go-to :continue)
+  yields the round with :continue; the gate is not given up. A gate that could not be reached or did not shut after the tries setting (3) clicks is given up with one warn
   shut-gate.gave-up and a :gate-gave-up memory entry, which keeps the trigger away from it for 10 minutes.
 
   Ends :done with the data {:shut n :left []} when every open gate was shut; a call that finds none open (or unread) at its start ends done at once, with no event (done?); with any left, :nothing-possible :left with warn shut-gate.stopped and {:shut n :left [{:cell [x y z] :reason r}]}.
@@ -132,13 +132,13 @@
   {:cell cell :reason reason})
 
 (defn ^:async walk!
-  "nil when the body stands within reach, else why not: :walk-interrupted (the walk ended :continue) or :unreachable."
+  "nil when the body stands within reach, else why not: :continue (the walk goes on or waits) or :unreachable."
   [c cell]
   (let [e (await (child/call-walk* c :walk {:pos (u/cell-pos cell) :range (:reach (:args c)) :doors :never :ways #{:walk}}))
         res (:data e)]
     (ctx/update-mem! c dissoc :blocker)
     (cond
-      (= :continue e) :walk-interrupted
+      (= :continue e) :continue
       (and (= :done (:kind e)) (:arrived res)) nil
       :else (do (ctx/update-mem! c assoc :blocker (str (or (:hint res) (some-> (:why res) name) "no walk leads there")))
                 :unreachable))))
@@ -269,7 +269,8 @@
         (cond
           (nil? reason) (keep! (inc shut) left skip)
           (= :was-shut reason) (keep! shut left (conj skip cell))
-          (#{:animal-in-the-way :walk-interrupted} reason) (keep! shut (conj left (leave! c cell reason)) skip)
+          (= :continue reason) :continue
+          (= :animal-in-the-way reason) (keep! shut (conj left (leave! c cell reason)) skip)
           :else (keep! shut (conj left (give-up! c cell reason)) skip)))
       (finish! c shut left))))
 

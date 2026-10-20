@@ -423,15 +423,15 @@
               s (await (run-job (pen-world true 2 -6 {:entities [cow]}) {"pen-a" pen-a} {} 1))]
           (is (= [[2 64 0]] (gave-up-cells s))))))))
 
-(deftest a-walk-that-ends-continue-is-not-read-as-unreachable
+(deftest a-walk-that-ends-continue-yields-and-gives-the-gate-up-nowhere
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [stub {'jobs.movement.go-to {:args {} :ways [:walk :clear-seal] :round (fn ^:async r [_c] :continue)}}
               s (await (run-job (pen-world true 2 7) {"pen-a" pen-a} {} 1 stub))]
-          (is (= [:walk-interrupted] (mapv :reason (:left (first (events-of s :shut-gate.stopped))))))
+          (is (empty? (events-of s :shut-gate.stopped)) "the job is not ended")
           (is (empty? (events-of s :shut-gate.gave-up)) "no warn: it is not a verdict on the gate")
-          (is (= [[2 64 0]] (gave-up-cells s)) "a short entry"))))))
+          (is (empty? (gave-up-cells s)) "no entry either"))))))
 
 ;; ------------------------------------------------------------------ gates not seen lately
 
