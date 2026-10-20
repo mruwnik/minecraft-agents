@@ -60,8 +60,21 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
   const lightTimer = setInterval(() => { lastLightKey = -1 }, Math.max(lightTtlMs, 50))
   lightTimer.unref()
   let epoch = 0 // counts block updates and chunk loads/unloads within EPOCH_RANGE of the body: "what it can see may differ"
-  const near = (bot, x, y, z, range) => {
+  // The body's travel since the last bump widens the range: marks made earlier saw from where it was then, and a fall or
+  // flight can outrun the fixed margin. The bump ends the marks, so the count restarts.
+  let walked = 0
+  let lastPos = null
+  const sample = bot => {
     const e = bot?.entity?.position
+    if (!e) return
+    if (lastPos) walked += Math.max(Math.abs(e.x - lastPos.x), Math.abs(e.y - lastPos.y), Math.abs(e.z - lastPos.z))
+    lastPos = { x: e.x, y: e.y, z: e.z }
+  }
+  const bump = () => { epoch++; walked = 0 }
+  const near = (bot, x, y, z, extra = 0) => {
+    sample(bot)
+    const e = bot?.entity?.position
+    const range = setting('raw-world/epoch-range') + extra + walked
     return !e || (Math.abs(x - e.x) <= range && Math.abs(z - e.z) <= range && Math.abs(y - e.y) <= range)
   }
 
@@ -74,7 +87,7 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
 
   // a column's sections (world section indices 0..63) leave the caches; the arg is mineflayer's corner Vec3 in blocks
   const forgetColumn = corner => {
-    if (near(getBot(), corner.x + 8, hereY(getBot()), corner.z + 8, setting('raw-world/epoch-range') + 8)) epoch++
+    if (near(getBot(), corner.x + 8, hereY(getBot()), corner.z + 8, 8)) bump()
     const cx = corner.x >> 4
     const cz = corner.z >> 4
     for (let s = 0; s < 64; s++) {
@@ -88,7 +101,7 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
 
   // light-only changes reach a marked cell's darkness without any block update
   const onLight = packet => {
-    if (near(getBot(), packet.chunkX * 16 + 8, hereY(getBot()), packet.chunkZ * 16 + 8, setting('raw-world/epoch-range') + 8)) epoch++
+    if (near(getBot(), packet.chunkX * 16 + 8, hereY(getBot()), packet.chunkZ * 16 + 8, 8)) bump()
     for (let s = 0; s < 64; s++) lights.delete(keyOf(packet.chunkX, packet.chunkZ, s))
     lastLightKey = -1
   }
@@ -96,7 +109,7 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
   const onUpdate = (oldBlock, newBlock) => {
     const p = (newBlock ?? oldBlock)?.position
     if (!p) return
-    if (near(getBot(), p.x, p.y, p.z, setting('raw-world/epoch-range'))) epoch++
+    if (near(getBot(), p.x, p.y, p.z)) bump()
     const bot = getBot()
     const s = (p.y - (bot.game?.minY ?? -64)) >> 4
     const key = keyOf(p.x >> 4, p.z >> 4, s)
@@ -114,6 +127,8 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
     if (bot === hooked) return bot
     unhook()
     forget()
+    lastPos = null
+    walked = 0
     hooked = bot
     tables = null
     if (!bot?.on) { unhook = () => {}; return bot }
@@ -249,7 +264,7 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
       return { timeOfDay: bot?.time?.timeOfDay ?? 6000, rain: bot?.rainState ?? 0, thunder: bot?.thunderState ?? 0 }
     },
     // changes whenever a block, chunk column, chunk light or the hooked bot changes near the body
-    epoch: () => { follow(); return epoch },
+    epoch: () => { sample(follow()); return epoch },
     version: () => follow()?.version ?? null,
     // null while the bot has no registry yet (the perception waits and asks again)
     sightTable: () => { const bot = follow(); return bot?.registry ? tablesOf(bot).sight : null },

@@ -157,6 +157,19 @@ test('epoch also counts a block update a little past the sight radius and chunk 
   assert.equal(raw.epoch(), e0 + 2)
 })
 
+test('epoch range grows with the body travel since the last bump, so a fall cannot outrun it', () => {
+  const { bot } = makeBot()
+  const raw = createRawWorld({ getBot: () => bot })
+  const e0 = raw.epoch()
+  bot.entity.position = new Vec3(0, 70, 0)
+  raw.epoch()
+  bot.entity.position = new Vec3(0, -20, 0)
+  bot.emit('blockUpdate', { position: new Vec3(0, 70, 0), stateId: id('stone') }, { position: new Vec3(0, 70, 0), stateId: id('dirt') })
+  assert.equal(raw.epoch(), e0 + 1, 'the cell lies 90 below the fall start, past the fixed range from where the body is now')
+  bot.emit('blockUpdate', { position: new Vec3(0, 70, 0), stateId: id('dirt') }, { position: new Vec3(0, 70, 0), stateId: id('stone') })
+  assert.equal(raw.epoch(), e0 + 1, 'the bump reset the travel: the same cell is out of range again')
+})
+
 test('sightTable lets sight pass fences, fence gates and iron bars', () => {
   const table = sightTable(registry)
   assert.deepEqual(['oak_fence', 'oak_fence_gate', 'nether_brick_fence', 'iron_bars', 'cobblestone_wall'].map(n => table[id(n)]), [0, 0, 0, 0, 1])
