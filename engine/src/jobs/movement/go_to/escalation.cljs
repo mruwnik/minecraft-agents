@@ -357,7 +357,7 @@
         (let [args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :fetch (fetch-tool? c) :accept #{:lava-adjacent}}
               pos (zipmap [:x :y :z] cell)
               e (await (b/dig-cell-ending! c pos args))
-              boxed? (and (not= :continue e) (= :no-side-stand (:why (:data e))))
+              boxed? (and (not= :continue e) (= :no-side-stand (:why (:cause e))))
               e (if boxed? (await (b/dig-cell-ending! c pos (update args :accept conj :under-feet))) e)
               o (b/dig-outcome e)
               dug (assoc planned :block n)]
