@@ -31,8 +31,13 @@
 (def fence-ring
   (into {} (for [x (range -1 6) z (range -1 6) :when (or (#{-1 5} x) (#{-1 5} z))] [(str x ",64," z) "oak_fence"])))
 
+(def floor-box
+  "The walk floor of the seeing bodies: the ground and no more (the default floor is a hundred blocks wide, and the fill walks all of it)."
+  [-10 -10 15 15])
+
 (defn world [more & [states]]
-  {:self {:pos {:x 2 :y 64 :z 2}}
+  {:floor floor-box
+   :self {:pos {:x 2 :y 64 :z 2}}
    :blocks (merge ground fence-ring more)
    :states (or states {})})
 
@@ -164,11 +169,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [long-ring (into {} (for [x (range -1 111) z (range -1 6) :when (or (#{-1 110} x) (#{-1 5} z))] [(str x ",64," z) "oak_fence"]))
-              floor (into {} (for [x (range -10 120) z (range -10 16)] [(str x ",63," z) "stone"]))
-              w (assoc (world {}) :blocks (merge floor long-ring))
+        (let [long-ring (into {} (for [x (range -1 41) z (range -1 6) :when (or (#{-1 40} x) (#{-1 5} z))] [(str x ",64," z) "oak_fence"]))
+              floor (into {} (for [x (range -10 50) z (range -10 16)] [(str x ",63," z) "stone"]))
+              w (assoc (world {}) :blocks (merge floor long-ring) :floor [-10 -10 50 16] :radius 8)
               event (await (run-seeing {:at [2 64 2]} w 90 120))]
-          (is (= {:closed? true :cells 550} (select-keys event [:closed? :cells]))
+          (is (= {:closed? true :cells 200} (select-keys event [:closed? :cells]))
               "each walk to an unseen cell reveals more, so the walks continue while they make progress"))))))
 
 (defn ^:async check-twice
@@ -341,7 +346,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [w (assoc (world {}) :blocks (merge plain fence-ring {"2,64,-1" "air"}))
+        (let [w (assoc (world {}) :blocks (merge plain fence-ring {"2,64,-1" "air"}) :floor [-60 -60 65 65])
               {:keys [event looks fills]} (await (run-counting {:at [2 64 2]} w [2 63 2]))]
           (is (= :leak (:reason event)))
           (is (some #{{:x 2 :y 64 :z -1}} (map :pos (:leaks event))))
@@ -415,7 +420,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[why blocks states yaw reason] ring-cases]
-          (let [w {:self {:pos {:x 5.5 :y 64 :z 5.5}} :blocks blocks :states states}
+          (let [w {:self {:pos {:x 5.5 :y 64 :z 5.5}} :blocks blocks :states states :floor floor-box}
                 event (await (run-seeing {:at [5 64 5]} w yaw 10))]
             (is (= reason (:reason event)) why)))))))
 
@@ -426,7 +431,7 @@
         (let [blocks (merge (ring "stone" 2)
                             (into {} (for [x (range 3 8) z (range 3 8)] [(str x ",64," z) "water"]))
                             {"5,64,5" "stone"})
-              event (await (run-seeing {:at [5 65 5]} {:self {:pos {:x 5.5 :y 65 :z 5.5}} :blocks blocks :states {}} 0 10))]
+              event (await (run-seeing {:at [5 65 5]} {:self {:pos {:x 5.5 :y 65 :z 5.5}} :blocks blocks :states {} :floor floor-box} 0 10))]
           (is (true? (:closed? event))))))))
 
 (deftest a-body-reading-a-doorway-pen-stays-inside-the-wall
@@ -435,7 +440,7 @@
       (fn ^:async t []
         (doseq [yaw [0 180]]
           (let [blocks (-> (ring "stone" 3) (dissoc "5,64,2" "5,65,2"))
-                s (h/setup-seeing {:self {:pos {:x 5.5 :y 64 :z 5.5}} :blocks blocks :states {} :yaw yaw :rand (constantly 0.5)} nil)]
+                s (h/setup-seeing {:floor floor-box :self {:pos {:x 5.5 :y 64 :z 5.5}} :blocks blocks :states {} :yaw yaw :rand (constantly 0.5)} nil)]
             (core/submit! (:eng s) (list job {:at [5 64 5]}) {})
             (dotimes [_ 10]
               (swap! (:clock s) + 700)

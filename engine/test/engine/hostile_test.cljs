@@ -63,15 +63,15 @@
 
 (defn setup-seeing
   "As setup, the body seeing through perception (engine.perception/wrap) as it does live; light is [sky block] for
-  every cell when given (jobs that look round only in the dark)."
+  every cell when given (jobs that look round only in the dark); :radius in world sets the sight radius (default 16)."
   ([world light] (setup-seeing world light 0))
   ([world light ms]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        raw (tu/fake-on-floor (merge {:floor flight-floor} (dissoc world :ray-deg :rand)))
+        raw (tu/fake-on-floor (merge {:floor flight-floor} (dissoc world :ray-deg :rand :radius)))
         _ (when light (swap! (fake/state raw) assoc :light-default light))
         now (tu/act-clock clock raw ms)
-        p (perception/wrap raw (perception/create (fake-raw/create raw) (cond-> {:radius 16 :ray-deg (:ray-deg world 2) :now now}
+        p (perception/wrap raw (perception/create (fake-raw/create raw) (cond-> {:radius (:radius world 16) :ray-deg (:ray-deg world 2) :now now}
                                                                           (:rand world) (assoc :rand (:rand world)))))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
