@@ -124,9 +124,9 @@
      (if (sh-sense/night? p)
        (and (not (sh-sense/sleeping? p))
             (or (and bed-way
-                     (or (some? (sh-beds/bed-to-use p view (sh-beds/bed-radius view args) permit?))
+                     (or (some? (sh-beds/bed-to-use p view (sh-beds/bed-radius view) permit?))
                          (unlooked-for-bed? p view)
-                         (and (not buried) (sh-beds/bed-place-wanted? p view (sh-beds/bed-radius view args) permit?))
+                         (and (not buried) (sh-beds/bed-place-wanted? p view (sh-beds/bed-radius view) permit?))
                          (and (or (not buried) (sh-inside/in-own-shelter p shelter)) (sh-sleepers/log-out-for-sleepers? p view))))
                 (not (sh-inside/safe-from-night? p))
                 (breached-home? p view)

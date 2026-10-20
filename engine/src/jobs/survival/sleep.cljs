@@ -19,7 +19,7 @@
             [jobs.lib.places :as places]))
 
 (def doc
-  "Walk to a bed and sleep in it: the :bed argument, else the remembered :bed within :bed-radius, else the live :spawn-bed within it.
+  "Walk to a bed and sleep in it: the :bed argument, else the remembered :bed within the default-bed-radius setting, else the live :spawn-bed within it.
   Conditions: night and a bed, also before every round (day came or the bed gone: a listed call waits, a called one ends condition-failed); at the start only: the bed not in :bed-unreachable
   (an unexpired entry with the same position), else :bed-unreachable {:pos}; with :open-bed false and the body within 3 blocks of
   the bed, a roofed room, else :bed-open. A body already asleep is done.
@@ -43,9 +43,7 @@
   Quote: time by the straight distance to the bed at :speed blocks a second; done 1 sleep.")
 
 (a/defargs args
-  {:bed-radius {:doc "a remembered bed farther than this many blocks from the body is not used (nil: the jobs.lib.shelter.beds/default-bed-radius setting)"
-                :spec (a/num-in 0 nil) :default nil}
-   :open-bed {:doc "false: a bed that is not shut in a closed, roofed room is not lain in (the job ends condition-failed :bed-open once the body is beside it)"
+  {:open-bed {:doc "false: a bed that is not shut in a closed, roofed room is not lain in (the job ends condition-failed :bed-open once the body is beside it)"
               :spec boolean? :default true}
    :bed {:doc "bed position [x y z] or {:x :y :z} to sleep in instead of the remembered :bed (no radius); it is recorded as :bed when that is unset or gone" :spec ::a/pos
          :default nil}})
@@ -60,13 +58,13 @@
   (boolean (some #(= bed (:pos (:data %))) (ctx/entries c :bed-unreachable))))
 
 (defn bed-of
-  "The bed to sleep in: the :bed argument (nil when it is not a position), else the remembered :bed within :bed-radius (so a
+  "The bed to sleep in: the :bed argument (nil when it is not a position), else the remembered :bed within the default-bed-radius setting (so a
   gone one is found out and retracted), else sh-spawn/standing-bed."
   [c]
   (if-let [given (:bed (:args c))]
     (:pos (places/parse-pos given))
-    (or (sh-beds/bed c (sh-beds/arg-radius (:args c)))
-        (sh-spawn/standing-bed (:primitives c) (ctx/view c) (sh-beds/arg-radius (:args c))))))
+    (or (sh-beds/bed c (sh-beds/default-bed-radius))
+        (sh-spawn/standing-bed (:primitives c) (ctx/view c) (sh-beds/default-bed-radius)))))
 
 (a/defargs settings
   {::pause-s {:default 5 :doc "Seconds one hold pauses (jobs.time.noop) before the call looks again." :spec (a/num-in 0 nil)}

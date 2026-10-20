@@ -34,7 +34,7 @@
 (defn hide-health [] (settings/get settings ::hide-health))
 
 (def displaced-policy
-  "One :displaced entry, half an hour: the night job may then walk back to a bed up to :urgent-bed-radius away."
+  "One :displaced entry, half an hour: the night job may then walk back to a bed up to the urgent-bed-radius setting away."
   {:cap 1 :ttl 1800000})
 
 (defn fire-spots [c] (shot/view-spots (:primitives c) (ctx/view c)))

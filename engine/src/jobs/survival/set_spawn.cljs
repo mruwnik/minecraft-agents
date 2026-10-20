@@ -14,7 +14,7 @@
 (def doc
   "Set the respawn point at a bed without sleeping: by day, click the bed (jobs.blocks.use-on walks to within 2 cells where the eye sees it (the server sets the point only within 3 blocks), through the door of a hut) and the
   server answers \"respawn point set\".
-  Needs a bed: the :bed argument, else the remembered :bed within :bed-radius (forgotten when its block is seen to be gone), else a bed the body sees.
+  Needs a bed: the :bed argument, else the remembered :bed within the default-bed-radius setting (forgotten when its block is seen to be gone), else a bed the body sees.
   Conditions (at the start only): not night (at night the sleep job sets it), else it waits :night; a bed: with none the start check looks round first, then waits (:later); with none found it ends condition-failed :no-bed.
   Done at once (:already) when the :spawn-bed it writes is recorded at the bed. Done {:spawn pos} when the server set the point, or at once with :why :unchanged when the spawn is already
   known at that bed (jobs.lib.shelter.spawn/spawn-known?: :spawn-bed or :spawn-set near it, not reset since). A click that reached the bed
@@ -24,15 +24,13 @@
   Quote: time of one click and walk; done 1 spawn.")
 
 (a/defargs args
-  {:bed-radius {:doc "a remembered bed farther than this many blocks from the body is not used (nil: the jobs.lib.shelter.beds/default-bed-radius setting)"
-                :spec (a/num-in 0 nil) :default nil}
-   :bed {:doc "bed position [x y z] or {:x :y :z} to use instead of the remembered :bed (no radius)" :spec ::a/pos :default nil}})
+  {:bed {:doc "bed position [x y z] or {:x :y :z} to use instead of the remembered :bed (no radius)" :spec ::a/pos :default nil}})
 
 (defn remembered-gone?
   "Whether the remembered :bed (no :bed arg) is loaded and no longer a bed."
   [c]
   (let [p (:primitives c)
-        pos (when-not (:bed (:args c)) (sh-beds/bed c (sh-beds/arg-radius (:args c))))]
+        pos (when-not (:bed (:args c)) (sh-beds/bed c (sh-beds/default-bed-radius)))]
     (boolean (and pos (places/gone? :bed (u/block-name p pos))))))
 
 (defn bed-of
@@ -40,8 +38,8 @@
   [c]
   (if-let [given (:bed (:args c))]
     (:pos (places/parse-pos given))
-    (or (when-not (remembered-gone? c) (sh-beds/bed c (sh-beds/arg-radius (:args c))))
-        (sh-beds/seen-bed (:primitives c) (constantly true) (sh-beds/arg-radius (:args c))))))
+    (or (when-not (remembered-gone? c) (sh-beds/bed c (sh-beds/default-bed-radius)))
+        (sh-beds/seen-bed (:primitives c) (constantly true) (sh-beds/default-bed-radius)))))
 
 (a/defargs settings
   {::job-time-s {:default 60 :doc "Seconds the walk to the bed and the click may take." :spec (a/num-in 0 nil)}
@@ -74,8 +72,8 @@
 
 (defn ^:async round [c]
   (when (remembered-gone? c)
-    (sh-spawn/lose-spawn! c (sh-beds/bed c (sh-beds/arg-radius (:args c))) :missing)
-    (places/retract-if-missing! c :bed (sh-beds/bed c (sh-beds/arg-radius (:args c))) "missing"))
+    (sh-spawn/lose-spawn! c (sh-beds/bed c (sh-beds/default-bed-radius)) :missing)
+    (places/retract-if-missing! c :bed (sh-beds/bed c (sh-beds/default-bed-radius)) "missing"))
   (let [bed (bed-of c)]
     (cond
       (nil? bed) (ctx/end c :condition-failed :no-bed)

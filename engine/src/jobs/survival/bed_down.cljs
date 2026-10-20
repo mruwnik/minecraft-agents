@@ -43,7 +43,7 @@
   [c]
   (sh-beds/bed-permit (:primitives c) (:world (:engine c))))
 
-(defn radius [c] (sh-beds/bed-radius (ctx/view c) (:args c)))
+(defn radius [c] (sh-beds/bed-radius (ctx/view c)))
 
 (defn overdue? [c]
   (let [days (sh-beds/days-awake c)]

@@ -1,5 +1,5 @@
 (ns engine.night-d-test
-  "The one night handler: the :night trigger and jobs.survival.night. A bed first (seen, remembered within :bed-radius
+  "The one night handler: the :night trigger and jobs.survival.night. A bed first (seen, remembered within the default-bed-radius setting
   under any roof, or carried, also in the open), then a sleeper on the server (the action bar's sleep count, or a
   sleeping player in sight): logged out in short stints until morning, then roofed or buried: the queue runs, else
   dig in."

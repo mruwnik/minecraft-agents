@@ -1,5 +1,5 @@
 (ns engine.night-a-test
-  "The one night handler: the :night trigger and jobs.survival.night. A bed first (seen, remembered within :bed-radius
+  "The one night handler: the :night trigger and jobs.survival.night. A bed first (seen, remembered within the default-bed-radius setting
   under any roof, or carried, also in the open), then a sleeper on the server (the action bar's sleep count, or a
   sleeping player in sight): logged out in short stints until morning, then roofed or buried: the queue runs, else
   dig in."
@@ -36,7 +36,7 @@
     (st/looked-round! eng p)
     (seed! eng)
     (let [view (mem/view (:store eng))]
-      (boolean (sh-beds/bed-to-use p view (sh-beds/bed-radius view {}) (sh-beds/bed-permit p nil))))))
+      (boolean (sh-beds/bed-to-use p view (sh-beds/bed-radius view) (sh-beds/bed-permit p nil))))))
 
 (deftest a-remembered-bed-within-the-radius-is-one-to-use
   (let [world {:time night :floor tu/walk-floor :blocks {"20,64,0" "red_bed" "60,64,0" "red_bed"}}]

@@ -18,9 +18,9 @@
   {::seen-bed-radius {:default 6 :spec (a/int-in 1 nil)
                       :doc "Blocks (square) within which a bed in the body's room counts as seen."}
    ::default-bed-radius {:default 48 :spec (a/num-in 0 nil)
-                         :doc "Blocks within which a remembered bed may be used, when the job or trigger names no :bed-radius."}
+                         :doc "Blocks within which a remembered bed may be used, ."}
    ::urgent-bed-radius {:default 128 :spec (a/num-in 0 nil)
-                        :doc "The bed radius once the body is overdue for sleep or displaced, when none is named."}
+                        :doc "The bed radius once the body is overdue for sleep or displaced."}
    ::max-days-awake {:default 3 :spec (a/num-in 0 nil)
                      :doc "In-game days without sleep before finding a bed becomes urgent: a bed in the open is slept in and the urgent radius applies."}
    ::courtesy-radius {:default 32 :spec (a/num-in 0 nil)
@@ -31,7 +31,6 @@
 (defn default-bed-radius [] (settings/get settings ::default-bed-radius))
 (defn urgent-bed-radius [] (settings/get settings ::urgent-bed-radius))
 (defn courtesy-radius [] (settings/get settings ::courtesy-radius))
-(defn arg-radius "The :bed-radius a job names, else the default-bed-radius setting." [args] (or (:bed-radius args) (default-bed-radius)))
 
 (defn bed-in-view
   "The remembered bed position when it is within radius of the body, else nil."
@@ -119,13 +118,13 @@
     (/ (- (:now view) t) sh-clock/ms-per-day)))
 
 (defn bed-radius
-  "How far a remembered bed may be: :bed-radius, or :urgent-bed-radius once the latest :slept entry is :max-days-awake
+  "How far a remembered bed may be: the default-bed-radius setting, or the urgent one once the latest :slept entry is :max-days-awake
   in-game days old (phantoms come), or while a :displaced entry stands (a far flight drove the body off its bed)."
-  [view {:keys [bed-radius] :as args}]
+  [view]
   (let [days (days-awake-in view)]
     (if (or (and days (>= days (max-days-awake))) (seq (mem/entries view :displaced)))
-      (or (:urgent-bed-radius args) (urgent-bed-radius))
-      (or bed-radius (default-bed-radius)))))
+      (urgent-bed-radius)
+      (default-bed-radius))))
 
 (def kept-shelters
   "The shelters (walk-leaves-shelter?) a body does not leave at night for a bed: a bare roof is not one of them."

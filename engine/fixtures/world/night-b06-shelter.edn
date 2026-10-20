@@ -193,7 +193,7 @@
             {:no-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :for-s 30}]
    :after [[:body-far [11.5 0 12.5] 3]]
    :limit-s 250}
-  ;; 2383463a: a far flight left a :displaced entry: the bed 100 blocks off (past :bed-radius 48) is walked back to and slept in
+  ;; 2383463a: a far flight left a :displaced entry: the bed 100 blocks off (past the 48 default-bed-radius) is walked back to and slept in
   {:name "displaced-body-walks-back-to-a-bed-100-blocks-away"
    :time :night-exclusive
    :plot {:length 120 :width 32}
