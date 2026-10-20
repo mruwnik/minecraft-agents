@@ -119,7 +119,10 @@
           (f {:eng eng :p p :seen seen}))))))
 
 ;; ------------------------------------------------------------------ job: a roofed place close by
-(def home-roof {"10,66,0" "stone"})
+(def home-roof
+  "A one-cell stone room at x 10, z 0 with a doorway in its west wall and a roof over the cell: a roof on open sides is no shelter, nothing quotes a walk to it."
+  (into {"10,66,0" "stone"}
+        (for [x [9 10 11] y [64 65] z [-1 0 1] :when (not (#{[10 0] [9 0]} [x z]))] [(str x "," y "," z) "stone"])))
 
 (def lit-world
   "A lit route home with the body's own cell dark: darkness is the light of the cell it stands in, so a lit cell is no night to shelter from."
