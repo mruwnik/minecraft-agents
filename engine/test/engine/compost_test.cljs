@@ -44,13 +44,6 @@
     (inv "stick" 3) {:items ["stick"] :keep {}} []
     (inv "oak_leaves" 3) {:items ["wheat_seeds"] :keep {}} []))
 
-(deftest level-of-reads-the-string-the-world-reports
-  (are [level expected] (= expected (compost/level-of (doto #js {} (aset "properties" (doto #js {} (aset "level" level))))))
-    "8" 8
-    "7" 7
-    "0" 0
-    nil 0))
-
 (deftest compost-feeds-asked-items-and-takes-the-bone-meal
   (async done
     (tu/run-async done

@@ -25,9 +25,14 @@
 
 (defn distance [a b] (js/Math.hypot (- (a 0) (b 0)) (- (a 1) (b 1)) (- (a 2) (b 2))))
 
+(defn perceived
+  "Block properties as perception gives them: whole numbers as strings."
+  [props]
+  (update-vals props #(if (number? %) (str %) %)))
+
 (defn snapshot [w pos]
   {:name (get-in w [:blocks pos] "air")
-   :properties (merge {} (get-in w [:states pos]) (when (contains? (:ages w) pos) {:age (get-in w [:ages pos])}))})
+   :properties (perceived (merge {} (get-in w [:states pos]) (when (contains? (:ages w) pos) {:age (get-in w [:ages pos])})))})
 
 (defn spawn-item
   "World with a dropped item entity at pos."

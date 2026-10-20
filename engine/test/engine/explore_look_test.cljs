@@ -39,7 +39,7 @@
             (is (empty? (:list (core/state eng))) "impossible: it leaves the queue")))))))
 (deftest loaded-air-unloaded-cell-and-exact-properties-have-distinct-evidence
   (let [p (tu/seeing-all (tu/fake {:blocks {"1,64,0" "wheat"} :ages {"1,64,0" 7} :states {"1,64,0" {:age 7}} :unloaded ["4,64,0"]}))]
-    (is (= {:name "wheat" :pos [1 64 0] :properties {:age 7} :seen? true}
+    (is (= {:name "wheat" :pos [1 64 0] :properties {:age "7"} :seen? true}
            (:at (look/observe p (look/options {:at [1 64 0]})))))
     (is (= {:name "air" :pos [2 64 0] :seen? true}
            (:at (look/observe p (look/options {:at [2 64 0]})))))))

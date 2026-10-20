@@ -851,7 +851,7 @@
            age (:age (first (blocks-of p {:names ["wheat"]})))
            left (:count (first (:inventory (self-of p))))]
        (is (= {:status "placed" :block "wheat_seeds"} r))
-       (is (= {:name "wheat" :pos (at 1 64 0) :age 0 :properties {:age 0}} b))
+       (is (= {:name "wheat" :pos (at 1 64 0) :age 0 :properties {:age "0"}} b))
        (is (= 0 age))
        (is (= 1 left))))))
 

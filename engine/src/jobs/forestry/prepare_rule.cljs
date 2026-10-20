@@ -125,8 +125,8 @@
   [p pos]
   (let [b (u/seen-block p pos)]
     (when (= "water" (some-> b .-name))
-      (let [l (some-> b .-properties .-level)]
-        (when (number? l) l)))))
+      (let [l (some-> b .-properties .-level js/parseInt)]
+        (when-not (js/isNaN l) l)))))
 
 (defn wet-state
   "{:state ...} of a planned cell holding water: :fill (the source is in the cell and no source lies beside it),

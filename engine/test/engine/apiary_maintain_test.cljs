@@ -61,7 +61,7 @@
   (into {} (map (juxt :name :count))
         (get-in @(fake/state p) [:containers [8 64 0]])))
 (defn block-name [{:keys [p]} x y z] (.-name (.blockAt p #js {:x x :y y :z z})))
-(defn honey [{:keys [p]}] (.-honey_level (.-properties (.blockAt p #js {:x 2 :y 66 :z 0}))))
+(defn honey [{:keys [p]}] (js/Number (.-honey_level (.-properties (.blockAt p #js {:x 2 :y 66 :z 0})))))
 
 (def kit (inv "shears" 1 "white_carpet" 2))
 

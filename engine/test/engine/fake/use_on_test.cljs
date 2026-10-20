@@ -63,7 +63,7 @@
     (testing (str crop " age " age)
       (let [[w r] (click (owned {:blocks {p crop} :ages {p age} :inventory [(stack "bone_meal" 3)]}) {:item "bone_meal"})]
         (is (= [status age after consumed]
-               [(:status r) (get-in r [:before :properties :age]) (get-in r [:after :properties :age]) (:consumed r)]))
+               [(:status r) (some-> (get-in r [:before :properties :age]) js/Number) (some-> (get-in r [:after :properties :age]) js/Number) (:consumed r)]))
         (is (= after (get-in w [:ages p])))
         (is (= left (get-in w [:inventory 0 :count])))))))
 
@@ -77,7 +77,7 @@
 
 (deftest emptied-composter-spits-bone-meal
   (let [[w r] (click (owned {:blocks {p "composter"} :states {p {:level 8}}}) {})]
-    (is (= {:status "used" :before {:name "composter" :properties {:level 8}} :after {:name "composter" :properties {:level 0}} :consumed 0} r))
+    (is (= {:status "used" :before {:name "composter" :properties {:level "8"}} :after {:name "composter" :properties {:level "0"}} :consumed 0} r))
     (is (= [["bone_meal" 1 [1 65 0]]] (drops w)))))
 
 (deftest full-composter-empties-for-a-held-item-too
@@ -90,7 +90,7 @@
   (doseq [[level states after] [[nil {} 1] [0 {p {:level 0}} 1] [3 {p {:level 3}} 4] [6 {p {:level 6}} 8]]]
     (testing (str "level " level)
       (let [[w r] (click (owned {:blocks {p "composter"} :states states :inventory [(stack "wheat_seeds" 2)]}) {:item "wheat_seeds"})]
-        (is (= ["used" 1 after] [(:status r) (:consumed r) (get-in r [:after :properties :level])]))
+        (is (= ["used" 1 after] [(:status r) (:consumed r) (js/Number (get-in r [:after :properties :level]))]))
         (is (= [["wheat_seeds" 1]] (counts w)))
         (is (= [] (drops w)))))))
 
@@ -98,7 +98,7 @@
   (doseq [[label level args] [["level 7 with seeds" 7 {:item "wheat_seeds"}] ["a non-compostable item" 2 {:item "stick"}] ["an empty hand" 2 {}]]]
     (testing label
       (let [[w r] (click (owned {:blocks {p "composter"} :states {p {:level level}} :inventory [(stack "wheat_seeds" 1) (stack "stick" 1)]}) args)]
-        (is (= ["unchanged" 0 level] [(:status r) (:consumed r) (get-in r [:after :properties :level])]))
+        (is (= ["unchanged" 0 level] [(:status r) (:consumed r) (js/Number (get-in r [:after :properties :level]))]))
         (is (= 2 (count (:inventory w))))))))
 
 (deftest anything-else-is-unchanged
@@ -135,12 +135,12 @@
 
 (deftest shears-on-a-ripe-hive
   (let [[w r] (click (owned (assoc (hive 5) :inventory [(stack "shears" 1)])) {:item "shears"})]
-    (is (= {:status "used" :before {:name "beehive" :properties {:honey_level 5}} :after {:name "beehive" :properties {:honey_level 0}} :consumed 0} r))
+    (is (= {:status "used" :before {:name "beehive" :properties {:honey_level "5"}} :after {:name "beehive" :properties {:honey_level "0"}} :consumed 0} r))
     (is (= [["honeycomb" 3 [1 65 0]]] (drops w)))))
 
 (deftest glass-bottle-on-a-ripe-bee-nest
   (let [[w r] (click (owned {:blocks {p "bee_nest"} :states {p {:honey_level 5}} :inventory [(stack "glass_bottle" 2)]}) {:item "glass_bottle"})]
-    (is (= ["used" 1 0] [(:status r) (:consumed r) (get-in r [:after :properties :honey_level])]))
+    (is (= ["used" 1 "0"] [(:status r) (:consumed r) (get-in r [:after :properties :honey_level])]))
     (is (= [["glass_bottle" 1] ["honey_bottle" 1]] (counts w)))))
 
 (deftest hive-unchanged-cases

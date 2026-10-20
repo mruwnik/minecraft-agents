@@ -315,9 +315,9 @@
 (defn after-walk [w from] (-> w (animals/drag-leashed from) animals/tempt-follow (chase-body from)))
 
 (defn properties-of
-  "A cell's block properties: the rail's, its state and its crop age."
+  "A cell's block properties: the rail's, its state and its crop age, as perception gives them (whole numbers as strings)."
   [w pos]
-  (merge (rail/rail-properties w pos) (get-in w [:states pos]) (when (contains? (:ages w) pos) {:age (get-in w [:ages pos])})))
+  (use-on/perceived (merge (rail/rail-properties w pos) (get-in w [:states pos]) (when (contains? (:ages w) pos) {:age (get-in w [:ages pos])}))))
 
 ;; ---- the acts: (act w args) -> [world' result], args as cljs data
 

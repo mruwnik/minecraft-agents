@@ -57,7 +57,7 @@
           (is (= "shears" (:with result)))
           (is (= 3 (carried p "honeycomb")))
           (is (= 1 (count (calls p "useOn"))))
-          (is (= 0 (.-honey_level (.-properties (.blockAt p #js {:x 2 :y 64 :z 0})))))
+          (is (= "0" (.-honey_level (.-properties (.blockAt p #js {:x 2 :y 64 :z 0})))))
           (is (= 1 (count (kinds seen :completed)))))))))
 
 (defn delay-items!
