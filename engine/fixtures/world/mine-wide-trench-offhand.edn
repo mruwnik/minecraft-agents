@@ -2,7 +2,7 @@
 ;; unseen without a torch (engine.perception :near 4), seen and dug with a torch or soul torch in either hand (:near-torch 7, cards 50602363/10d96ca4).
 {:defaults
  {:tags [:mine :jobs] :time :any
-  :plot {:height 12}
+  :plot {:light :dark :height 12}
   :blocks [[:fill [2 -6 8] [30 6 24] "stone"] [:fill [16 0 16] [24 1 16] "air"] [:set [25 0 16] "iron_ore"]]
   :body {:at [19.5 0 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4]]}
   :limit-s 60}

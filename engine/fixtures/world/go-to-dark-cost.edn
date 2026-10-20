@@ -10,7 +10,7 @@
 {:defaults
  {:tags [:movement :planner :dark]
   :time :any
-  :plot {:height 8}
+  :plot {:light :dark :height 8}
   :blocks [[:fill [0 0 0] [31 2 31] "stone"]
            [:fill [1 0 15] [3 1 17] "air"] [:fill [27 0 15] [29 1 17] "air"]
            [:fill [4 0 16] [26 1 16] "air"]
@@ -27,7 +27,9 @@
   {:name "walked-lit-detour-beats-the-dark-direct-corridor"
    :limit-s 120
    :act [[:job (jobs.movement.go-to {:pos #at [19 0 24] :range 0})]
+         [:until-pos {:z-min 23} 30]
          [:job (jobs.movement.go-to {:pos #at [28 0 20] :range 0}) [:alongside]]
+         [:until-pos {:x-min 27} 40]
          [:job (jobs.movement.go-to {:pos #at [2 0 16] :range 0}) [:alongside]]
          [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:> 35]}}}] 110]]
    :expect [{:count-event {:source :job :kind :completed :data {:arrived true}} :for-s 90 :at-least 3 :at-most 3 :of-job true}

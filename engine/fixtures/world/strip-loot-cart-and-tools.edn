@@ -6,7 +6,7 @@
 ;; string; the field base is built. Should-fail: a hostile near the cart makes the job wait (:hostile-near), cart untouched; an unknown cart id stops; a cart in another owner's zone stops :refused and keeps its loot.
 {:defaults
  {:tags [:strip :loot-cart :tools :build] :time :any
-  :plot {:height 8 :floor "grass_block"}
+  :plot {:light :dark :height 8 :floor "grass_block"}
   :body {:at [16.5 0 16.5] :yaw 270 :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 100}
  :cases
@@ -62,6 +62,7 @@
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
    :after [[:not-block [18 0 16] "cobweb"] [:item "string" [:>= 1]] [:item "cobweb" 0]]}
   {:name "field-base-blueprint-built-by-from-plan"
+   :plot {:light :lit}
    :blocks [[:fill [8 -1 8] [14 -1 12] "grass_block"]]
    :plans [{:id "base" :metadata {:by "$body"} :parts [{:id "base" :blueprint "field-base" :at #at [8 -1 8]}]}]
    :body {:at [11.5 0 16.5] :yaw 180 :inventory [["cobblestone" 64] ["oak_planks" 96] ["chest" 4] ["furnace" 2] ["crafting_table" 1]

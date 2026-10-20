@@ -9,7 +9,7 @@
   :time :any
   :register [{:trigger :hostile-near :args {:radius 16 :ranged-radius 16}
               :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 16 :jobs.lib.danger/ranged-radius 16}})}]
-  :plot {:height 8}
+  :plot {:light :dark :height 8}
   :blocks [[:fill [10 0 4] [22 5 31] "stone"]
            [:fill [16 0 20] [16 1 29] "air"]]
   :body {:at [16.5 0 26.5] :inventory [["diamond_pickaxe" 1]] :effects [["resistance" 600 4]]}

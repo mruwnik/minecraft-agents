@@ -4,7 +4,7 @@
 ;; Control: with a torch beside the lever it is seen and pulled the same way.
 {:defaults
  {:tags [:access :toggle :light] :time :any
-  :plot {:height 8}
+  :plot {:light :dark :height 8}
   :blocks [[:fill [8 -1 8] [24 4 24] "stone" :hollow]]
   :body {:at [18.5 0 16.5] :settle-s 3 :effects [["resistance" 600 4]]}
   :limit-s 60}

@@ -4,7 +4,7 @@
 {:defaults
  {:tags [:light :survival]
   :time :any
-  :plot {:height 8}
+  :plot {:light :dark :height 8}
   :blocks [[:fill [12 0 12] [20 3 20] "stone"] [:fill [13 0 13] [19 2 19] "air"]]
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 2}
   :limit-s 40}
@@ -36,7 +36,7 @@
    :limit-s 60}
   ;; 5b02f58c: the same hungry body in a torch-lit cell at real night is not held by the clock: the trigger fires
   {:name "hungry-in-a-lit-cell-at-night-fires"
-   :time :night :time-why :night-light
+   :time :night :time-why :night-light :plot {:light :sky}
    :blocks [[:set [16 0 14] "torch"]]
    :body {:effects []}
    :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]

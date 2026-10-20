@@ -6,7 +6,7 @@
 ;; Should-fail: ore 3 off the line places no torch.
 {:defaults
  {:tags [:mine :torch :jobs] :time :any
-  :plot {:height 12}
+  :plot {:light :dark :height 12}
   :blocks [[:fill [2 0 8] [30 6 30] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
   :body {:at [16.5 0 16.5] :yaw 0 :inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8]] :effects [["resistance" 600 4]]}
   :limit-s 160}

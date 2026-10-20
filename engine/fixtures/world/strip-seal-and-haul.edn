@@ -7,7 +7,7 @@
 ;; Should-fail: no blocks carried and none fetchable (empty bag, bare hands, no tree or chest in the plot) ends :no-blocks with the failed fetch as its cause; no blocks carried stops with a :short count and leaves the rail; a chest in the section stops :blocked, chest kept.
 {:defaults
  {:tags [:strip :seal :haul :storage] :time :any
-  :plot {:height 8 :floor "stone"}
+  :plot {:light :dark :height 8 :floor "stone"}
   :body {:at [12.5 0 16.5] :yaw 270 :settle-s 2 :effects [["resistance" 600 4]] :inventory [["cobblestone" 20]]}
   :limit-s 120}
  :cases

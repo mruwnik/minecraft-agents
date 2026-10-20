@@ -3,7 +3,7 @@
 ;; cobblestone) and digs on dark. A 17x17 slab 6 high, the body on top of it with a pickaxe and 11 logs.
 {:defaults
  {:tags [:items :torch :access :jobs] :time :any
-  :plot {:height 14}
+  :plot {:light :dark :height 14}
   :body {:at [16.5 6 16.5] :inventory [["stone_pickaxe" 1] ["oak_log" 11] ["cooked_beef" 8]] :effects [["resistance" 600 4]]}
   :act [[:job (jobs.access.tunnel {:target #at [22 3 16] :max-length 12 :keep true})]]
   :limit-s 200}

@@ -3,7 +3,7 @@
 ;; Stone mass x 2..30, z 8..30, y 0..6, a 1x2 tunnel cell at the body (x 16..19), iron ore at x 24. Resistance and fire resistance keep the probe alive.
 {:defaults
  {:tags [:mine :sensing :jobs] :time :any
-  :plot {:height 12}
+  :plot {:light :dark :height 12}
   :blocks [[:fill [2 0 8] [30 6 30] "stone"] [:fill [16 0 16] [19 1 16] "air"] [:set [24 0 16] "iron_ore"]]
   :body {:at [16.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8] ["bread" 4]] :effects [["resistance" 600 4] ["fire_resistance" 600 0]]}
   :limit-s 120}
