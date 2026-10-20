@@ -153,15 +153,15 @@
     (when (contains? (:what o) :item) (select-keys o [:how :explore :minutes]))))
 
 (defn ^:async fetch-blocks!
-  "With none of the blocks carried: :continue while the fetch waits, :again once got, the failed ending, or the :no-blocks
-  stop with :fetch off. nil when one is carried."
+  "With none of the blocks carried: :continue while the fetch waits, :again once got, the :no-blocks stop (the failed fetch's
+  ending as its :because), also with :fetch off. nil when one is carried."
   [c open]
   (when-not (b/chosen c (blocks c))
     (if-let [o (fetch-opts c)]
       (let [e (await (need/blocks! c (or (seq (blocks c)) (choose/filler-names c :seal)) open o))]
         (cond (= :continue e) :continue
               (= :done (:kind e)) :again
-              :else e))
+              :else (contract/with-because (stop! c :no-blocks {:short open}) e)))
       (stop! c :no-blocks {:short open}))))
 
 (defn ^:async place! [c cell open]

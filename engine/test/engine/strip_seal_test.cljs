@@ -149,3 +149,12 @@
     :x :to [1 64 0]
     :z :from [0 64 -1]
     :z :to [0 64 1]))
+
+(deftest a-failed-block-fetch-ends-no-blocks-with-the-fetch-as-because
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (world :inventory tools)
+              r (await (run! env args))]
+          (is (= {:status :stopped :reason :no-blocks} (select-keys r [:status :reason])) (pr-str r))
+          (is (some? (:because (:ending r))) "the fetch's own ending rides as the because"))))))
