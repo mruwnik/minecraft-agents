@@ -13,7 +13,7 @@
 
 (def doc
   "Toss :count food to the villager with uuid :villager and confirm that villager took it. One call is the whole
-  feeding: find the villager within :radius, walk to a cell 2.5 to 3.5 blocks from it (jobs.movement.go-to legs of 5 s, it
+  feeding: find the villager within :radius, walk to a cell 2.5 to 3.5 blocks from it, on the side where no other villager is near the toss, (jobs.movement.go-to legs of 5 s, it
   wanders), look level toward it and toss, so the drop flies about that far and lands within the villager's pickup reach but outside the body's own (a
   drop in both is taken back by the body when the pickup delay ends), with a pickup receipt (the toss primitive's :watchS reports who collected the drop, by uuid). Only what that
   villager collected counts as fed; the rest of the drop lying near the toss is collected back (a jobs.items.collect-drops child), never left as litter.
@@ -24,7 +24,7 @@
   (default :all) when it gave up after that many. Otherwise with the cause:
   - condition-failed :no-food: none carried and none fetched (a listed call with :fetch off waits for food).
   - condition-failed :gone: the villager is not seen within :radius (also a non-villager under the uuid).
-  - nothing-possible :crowded: another villager stood within ::crowd-gap of it for ::crowd-s (it would take the drop).
+  - nothing-possible :crowded: from no side of it was the toss free of other villagers (one within ::crowd-gap of the landing spot or ::line-gap of the line would take the drop) for ::crowd-s.
   - nothing-possible :unreachable: three blocked walks in a row, or eight legs without getting within reach.
   - nothing-possible :not-taken: three tosses in a row that the villager did not collect (full inventory, not
     wanted), or the toss status as a keyword when the toss is refused three times, or :litter when the drop
@@ -47,7 +47,9 @@
 (a/defargs settings
   {::min-gap {:default 2.5 :doc "Fewest blocks along x or z between body and villager at a toss: a level toss lands about 2.5 to 3 ahead; nearer, the drop is in the body's own pickup reach." :spec (a/num-in 0 nil)}
    ::max-gap {:default 3.5 :doc "Most blocks along x and z between body and villager at a toss: farther, the drop falls short of the villager's pickup reach." :spec (a/num-in 0 nil)}
-   ::crowd-gap {:default 3 :doc "Blocks around the villager that must hold no other villager at a toss: one nearer takes the drop, and it is not counted." :spec (a/num-in 0 nil)}
+   ::crowd-gap {:default 2 :doc "Blocks around the spot a toss lands (::land-gap in front of the villager) that must hold no other villager: one nearer takes the drop, and it is not counted." :spec (a/num-in 0 nil)}
+   ::land-gap {:default 1 :doc "Blocks in front of the villager, on the body's side, where the toss is taken to land." :spec (a/num-in 0 nil)}
+   ::line-gap {:default 1.5 :doc "Blocks a villager must keep from the line of the toss: nearer, it picks up the flying drop." :spec (a/num-in 0 nil)}
    ::crowd-s {:default 30 :doc "Seconds to wait for other villagers to move off before the call stops :crowded." :spec (a/int-in 0 nil)}
    ::leg-s {:default 5 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
    ::max-refused {:default 3 :doc "Refusals before the job gives up on the animal." :spec (a/int-in 0 nil)}
@@ -59,6 +61,8 @@
 (defn min-gap [] (settings/get settings ::min-gap))
 (defn max-gap [] (settings/get settings ::max-gap))
 (defn crowd-gap [] (settings/get settings ::crowd-gap))
+(defn land-gap [] (settings/get settings ::land-gap))
+(defn line-gap [] (settings/get settings ::line-gap))
 (defn crowd-s [] (settings/get settings ::crowd-s))
 (defn leg-s [] (settings/get settings ::leg-s))
 (defn max-refused [] (settings/get settings ::max-refused))
@@ -181,25 +185,58 @@
   [me v]
   (<= (- (min-gap) 0.25) (gap me v) (+ (max-gap) 0.25)))
 
-(defn stand
-  "The cell to toss from at the villager at v: on the body's side of it along the axis the body is farther along (x on a
-  tie), its centre min-gap to max-gap out; each blocked walk in a row turns it a quarter round the villager."
-  [me v blocked]
+(defn sides
+  "The four sides of the villager at v as [sx sz] unit steps, the body's own side (along the axis it is farther along,
+  x on a tie) first."
+  [me v]
   (let [sign #(if (neg? %) -1 1)
-        dx (- (:x me) (:x v)) dz (- (:z me) (:z v))
-        sides (if (>= (js/Math.abs dx) (js/Math.abs dz))
-                [[(sign dx) 0] [0 (sign dz)] [(- (sign dx)) 0] [0 (- (sign dz))]]
-                [[0 (sign dz)] [(sign dx) 0] [0 (- (sign dz))] [(- (sign dx)) 0]])
-        [sx sz] (nth sides (mod blocked 4))
-        out (/ (+ (min-gap) (max-gap)) 2)]
+        dx (- (:x me) (:x v)) dz (- (:z me) (:z v))]
+    (if (>= (js/Math.abs dx) (js/Math.abs dz))
+      [[(sign dx) 0] [0 (sign dz)] [(- (sign dx)) 0] [0 (- (sign dz))]]
+      [[0 (sign dz)] [(sign dx) 0] [0 (- (sign dz))] [(- (sign dx)) 0]])))
+
+(defn side-of
+  "The side of the villager at v the body at me stands on."
+  [me v]
+  (first (sides me v)))
+
+(defn stand
+  "The cell to toss from at the villager at v on side [sx sz]: its centre min-gap to max-gap out."
+  [v [sx sz]]
+  (let [out (/ (+ (min-gap) (max-gap)) 2)]
     {:x (js/Math.floor (+ (:x v) (* sx out))) :y (js/Math.floor (:y v)) :z (js/Math.floor (+ (:z v) (* sz out)))}))
 
-(defn crowded?
-  "Whether another villager than e stands within crowd-gap of it: it would take the drop."
+(defn seg-dist
+  "Distance from point o to the segment a-b on x and z."
+  [a b o]
+  (let [abx (- (:x b) (:x a)) abz (- (:z b) (:z a))
+        l2 (+ (* abx abx) (* abz abz))
+        t (if (zero? l2) 0 (max 0 (min 1 (/ (+ (* (- (:x o) (:x a)) abx) (* (- (:z o) (:z a)) abz)) l2))))]
+    (js/Math.hypot (- (:x o) (+ (:x a) (* t abx))) (- (:z o) (+ (:z a) (* t abz))))))
+
+(defn clear-side?
+  "Whether a toss from side [sx sz] of the villager at v, thrown from `from`, meets none of the other villagers: the drop
+  lands land-gap in front of the villager (nobody within crowd-gap of that spot) and flies over a line that passes
+  no other villager within pickup reach."
+  [others v [sx sz] from]
+  (let [land {:x (+ (:x v) (* sx (land-gap))) :z (+ (:z v) (* sz (land-gap)))}]
+    (every? #(and (> (gap land %) (crowd-gap)) (> (seg-dist from land %) (line-gap))) others)))
+
+(defn others
+  "Positions of the villagers seen other than e."
   [c e]
-  (let [v (u/pos-of (.-pos e))]
-    (boolean (some #(and (not= (.-uuid e) (.-uuid %)) (<= (gap v (u/pos-of (.-pos %))) (crowd-gap)))
-                   (look/seen-objs (:primitives c) {:radius (+ 8 (crowd-gap)) :names ["villager"]})))))
+  (->> (look/seen-objs (:primitives c) {:radius (+ 8 (crowd-gap)) :names ["villager"]})
+       (remove #(= (.-uuid e) (.-uuid %)))
+       (map #(u/pos-of (.-pos %)))))
+
+(defn from-stand [v side] (merge v (select-keys (stand v side) [:x :z])))
+
+(defn clear-stand
+  "The first side of v, turned round by blocked, that is clear of the other villagers, or nil."
+  [others v me blocked]
+  (let [ss (sides me v)
+        turned (take 4 (drop (mod blocked 4) (cycle ss)))]
+    (first (filter #(clear-side? others v % (from-stand v %)) turned))))
 
 (defn ^:async wait-room!
   "Hold 0.5 s for the crowd round the villager to move off; the held time is booked, and the call stops :crowded after
@@ -334,9 +371,13 @@
       (and (nil? e) (not (look/surveyed? c))) (await (look/survey! c)) ; villagers count only while in view
       (nil? e) (stop! c :gone)
       (nil? item) (await (fetch-food! c))
-      (and (tossing-gap? (u/self-pos c) (u/pos-of (.-pos e))) (crowded? c e)) (await (wait-room! c))
-      (tossing-gap? (u/self-pos c) (u/pos-of (.-pos e))) (await (toss! c e item))
-      :else (await (walk! c (stand (u/self-pos c) (u/pos-of (.-pos e)) (:blocked m 0)) 0)))))
+      :else
+      (let [me (u/self-pos c) v (u/pos-of (.-pos e)) os (others c e)
+            side (clear-stand os v me (:blocked m 0))]
+        (cond
+          (nil? side) (await (wait-room! c))
+          (and (tossing-gap? me v) (clear-side? os v (side-of me v) me)) (await (toss! c e item))
+          :else (await (walk! c (stand v side) 0)))))))
 
 (defn ^:async round
   "The whole attempt: steps (a pace between) until fed or stopped; it yields only while a walk or fetch waits."

@@ -152,6 +152,17 @@
           (is (= 0 (:fed @out)))
           (is (empty? (tosses p))))))))
 
+(deftest a-villager-crowded-on-one-side-is-tossed-to-from-another
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [xs (atom [])
+              {:keys [out]} (await (feed {:entities [(villager 6) (villager 3 {:id 2 :uuid "v-2"})] :inventory bread}
+                                         {:villager "v-1"} 200
+                                         #(taking % (fn [n] (swap! xs conj (.-x (.-pos (.self %)))) {"v-1" n}))))]
+          (is (= {:fed 1 :status :done} (select-keys @out [:fed :status])))
+          (is (<= 6 (first @xs)) "not tossed from the neighbour's side"))))))
+
 (deftest a-blocked-walk-is-unreachable
   (async done
     (tu/run-async done

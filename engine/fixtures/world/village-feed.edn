@@ -25,6 +25,14 @@
          [:job (jobs.village.feed {:villager "00004f26-0000-0007-0000-00030000034b" :count 2})]]
    :expect [{:event {:source :job :kind :completed :data {:fed 2}} :within-s 40 :of-job true}]
    :after [[:item "bread" 6] [:entities "type=item,tag=wt" [[0 -1 0] [31 4 31]] 1]]}
+  ;; card dff72bd6: two villagers stand near the target, one west of it (the body's side) and one south; the body walks round to a side whose landing spot and line are free of them (north or east) and the target takes the toss
+  {:name "crowded-target-is-fed-from-a-free-side"
+   :act [[:summon "villager" [13.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0.0d}],CanPickUpLoot:1b,UUID:[I;20262,7,7,843]}"]
+         [:summon "villager" [16.5 0 19.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0.0d}],CanPickUpLoot:1b,UUID:[I;20262,7,8,843]}"]
+         [:summon "villager" [16.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0.0d}],CanPickUpLoot:1b,UUID:[I;20262,7,6,843]}"]
+         [:job (jobs.village.feed {:villager "00004f26-0000-0007-0000-00060000034b" :count 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:fed 1}} :within-s 60 :of-job true}]
+   :after [[:item "bread" 7]]}
   ;; should fail: the villager is not there
   {:name "absent-villager-is-gone"
    :act [[:job (jobs.village.feed {:villager "00004f26-0000-0007-0000-00040000034b" :count 1})]]
