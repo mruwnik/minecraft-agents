@@ -192,7 +192,7 @@
         (not (log-allowed? c pos)) :refused
         (and (:pillar? (:args c)) (> (u/eye-dist (u/self-pos c) pos) dig-reach)) :high
         :else
-        (let [wrote? (and (trunk-cell? base pos) (record-debt! c pos species))
+        (let [wrote? (and (:replant? (:args c)) (trunk-cell? base pos) (record-debt! c pos species))
               e (await (ctx/call c :dig 'jobs.blocks.dig (log-dig-args c pos)))]
           (when (:dug (:data e))
             (ctx/update-mem! c #(-> % (update :dug (fnil inc 0)) (update :drop-ids (fnil into []) (:ids (:data e))))))

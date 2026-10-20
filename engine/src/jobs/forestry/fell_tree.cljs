@@ -26,7 +26,7 @@
 (def doc
   "Fell the nearest tree: a log column with leaves near its top, lowest log first, the whole of it in one call. It yields
   (:continue) while a child waits on the world, and after ::max-steps pieces of work.
-  The base log's :forestry/replant debt (one per cell of a 2x2 trunk) is written before it is dug; a lower log of the
+  The base log's :forestry/replant debt (one per cell of a 2x2 trunk; none with :replant? false) is written before it is dug; a lower log of the
   column seen later becomes the base. It ends on the ground: from the canopy it walks down beside the base (warn
   a :stranded true result when it cannot). With :at it fells that one column instead (:radius and :species are then unused).
   The tree is the one the body walks to soonest among at most 32 candidates, nearest in a line first (jobs.lib.targets);
@@ -64,6 +64,7 @@
    :fetch {:doc "get an axe when none is carried, and the dirt or cobblestone a pillar needs (jobs.lib.need): true, a set of kinds or a map of limits; false chops by hand and ends a tree needing a pillar :need" :spec need/option? :default true}
    :pillar? {:doc "fell a log out of reach of the ground from a pillar (blocks placed, then taken back); false: such a tree is left" :spec boolean? :default true}
    :avoid {:doc "columns [x z] of trees to leave alone (ones an earlier run found cut off)" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
+   :replant? {:doc "write a :forestry/replant debt per trunk cell felled; false when the tree is only in the way (clearing a site: a player would not plant there)" :spec boolean? :default true}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -180,7 +181,7 @@
 (defn pillar-args
   "The args of the fell-from-pillar child for the chosen tree."
   [c]
-  (merge (select-keys (:args c) [:for-plan :accept :fetch :ignore-zones?])
+  (merge (select-keys (:args c) [:for-plan :accept :fetch :ignore-zones? :replant?])
          {:base (:base (ctx/mem c)) :species (:species (ctx/mem c))}))
 
 (defn blocked!

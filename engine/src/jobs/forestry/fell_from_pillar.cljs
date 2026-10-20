@@ -45,6 +45,7 @@
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :lava-adjacent :falling-block" :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
    :fetch {:doc "get the pillar's blocks with jobs.lib.need: true, a set of kinds or a map of limits; false ends :need" :spec need/option? :default true}
+   :replant? {:doc "write a replant debt for a trunk-level log (see fell-tree)" :spec boolean? :default true}
    :ignore-zones? :shared})
 
 (a/defargs settings

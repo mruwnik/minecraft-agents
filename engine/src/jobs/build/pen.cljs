@@ -271,7 +271,7 @@
       (if-let [[x y z :as base] (first (trunk-bases c trees felled))]
         (let [r (await (ctx/call c (keyword (str "fell-" x "-" y "-" z)) 'jobs.forestry.fell-tree
                                  (merge (select-keys (:args c) [:fetch :ignore-zones?])
-                                        {:at {:x x :y y :z z} :for-plan (:plan (:args c))})))]
+                                        {:at {:x x :y y :z z} :for-plan (:plan (:args c)) :replant? false})))]
           (if (= :continue r)
             :continue
             (do (ctx/update-mem! c update :felled (fnil conj []) base) :again)))
