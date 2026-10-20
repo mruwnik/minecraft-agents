@@ -165,7 +165,7 @@
   "Use the shears on sheep once (an items.interact child) and book the outcome. :continue while the child waits."
   [c sheep]
   (let [k (animals/key-of sheep)
-        r (await (animals/use-on! c k sheep "shears" {:reset-row? true :doors :shut}))]
+        r (await (animals/use-on! c k sheep "shears"))]
     (cond
       (= :continue r) :continue
       (= :used (:status r)) (ctx/update-mem! c #(-> % (update :shorn (fnil conj []) k) (assoc :in-row 0)))

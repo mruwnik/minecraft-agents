@@ -6,6 +6,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.registry :as registry]
+            [engine.fake :as fake]
             [engine.test-util :as tu]))
 
 (def jobs '[jobs.items.equip jobs.items.interact jobs.items.give jobs.items.enchant])
@@ -85,6 +86,28 @@
           (await (tu/run-until-empty eng 40))
           (is (= {:kind :done :data {:used true :id 7 :item "wheat" :text "used wheat on entity 7"}}
                  (update @out :data dissoc :raw))))))))
+
+(deftest interact-walks-again-when-the-entity-moved-off-after-the-walk-arrived
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (merge {:entities [(cow 7 8)]} (stacks "wheat"))
+              reads (atom 0)
+              wrap (fn [p] (let [raw (.-entities p)]
+                             (aset p "entities" (fn [a]
+                                                  (when (and (= 64 (.-radius a)) (= 2 (swap! reads inc)))
+                                                    (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [18 64 0]) es))))
+                                                  (raw a)))
+                             p))
+              out (atom nil)
+              parent {:round (fn ^:async recording-round [c]
+                               (let [e (await (ctx/call c :kid 'jobs.items.interact {:id 7 :item "wheat"}))]
+                                 (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :data])) (ctx/end c :done nil)))))}
+              eng (core/create {:primitives (wrap (tu/seeing-all (tu/fake-on-floor world))) :jobs (assoc registry/jobs 'recording-parent parent)
+                                :dir (tu/tmp-dir)})]
+          (core/submit! eng '(recording-parent) {})
+          (await (tu/run-until-empty eng 80))
+          (is (= :done (:kind @out)) "an animal that walked off was followed, not clicked from afar"))))))
 
 (deftest give-ends-before-the-toss-with-the-fact
   (async done

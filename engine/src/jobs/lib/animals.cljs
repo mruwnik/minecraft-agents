@@ -134,17 +134,17 @@
     (bump-row! c)))
 
 (defn ^:async walk!
-  "Walk within reach of the entity target (animal k) when further than reach. Resolves to :there, :partial or
-  :blocked; a blocked walk gives k up and bumps the row. opts: :reset-row? (a :there ends the row), :doors, :range (how
-  near the walk ends, default 2; a lure only needs the body within follow range, so it stays out of the pond a cow stands in)."
-  [c k target reach {:keys [reset-row? doors range] :or {range 2}}]
+  "Walk within range of the entity target (animal k) when further than reach, for a caller that leads rather than clicks.
+  Resolves to :there, :partial or :blocked; a blocked walk gives k up and bumps the row. :doors as go-near!; range
+  defaults to 2 (a lure only needs the body within follow range, so it stays out of the pond a cow stands in)."
+  [c k target reach {:keys [doors range] :or {range 2}}]
   (let [tpos (u/pos-of (.-pos target))]
     (if (<= (u/dist (u/self-pos c) tpos) reach)
       :there
       (let [r (await (near/go-near! c tpos range (cond-> {:ways #{:walk :clear-seal} :look-round false}
                                                doors (assoc :doors doors))))]
         (case r
-          :there (do (when reset-row? (reset-row! c)) :there)
+          :there :there
           :partial :partial
           (do (give-up! c k :unreachable)
               (bump-row! c)
@@ -158,33 +158,25 @@
   (let [k (:use-on (ctx/mem c))]
     (or (some #(when (= k (key-of %)) %) cands) (first cands))))
 
-(def walk-reach "How near the body walks to an animal before the click child takes over (it closes the rest)." 3)
-
 (defn ^:async use-on!
-  "Walk within reach of target (walk!, walk-opts), then use item (nil: the empty hand) on it, the entity of animal k,
-  through an items.interact child. A blocked walk is booked by walk!. Resolves to
-  :continue while the child waits on the world, else {:status :raw}: status :used or the child's cause (:no-effect
-  :gone :out-of-reach :cannot :failed :no-item :unreachable), raw the primitive's answer."
-  ([c k target item] (use-on! c k target item {}))
-  ([c k target item walk-opts]
-   (ctx/update-mem! c assoc :use-on k)
-   (let [walked (await (walk! c k target walk-reach walk-opts))]
-     (case walked
-       :partial :continue
-       :blocked (do (ctx/update-mem! c dissoc :use-on) {:status :blocked})
-       (let [e (await (ctx/call c :use 'jobs.items.interact (cond-> {:id (.-id target)} item (assoc :item item))))]
-         (if (= :continue e)
-           :continue
-           (do (ctx/update-mem! c dissoc :use-on)
-               {:status (if (= :done (:kind e)) :used (or (contract/cause-key e) :failed))
-                :raw (:raw (:data e))})))))))
+  "Use item (nil: the empty hand) on target, the entity of animal k, through an items.interact child (it walks into
+  reach, re-walks after the animal moves, and clicks). Resolves to :continue while the child waits on the world, else
+  {:status :raw}: status :used or the child's cause (:no-effect :gone :out-of-reach :cannot :failed :no-item
+  :unreachable), raw the primitive's answer."
+  [c k target item]
+  (ctx/update-mem! c assoc :use-on k)
+  (let [e (await (ctx/call c :use 'jobs.items.interact (cond-> {:id (.-id target)} item (assoc :item item))))]
+    (if (= :continue e)
+      :continue
+      (do (ctx/update-mem! c dissoc :use-on)
+          {:status (if (= :done (:kind e)) :used (or (contract/cause-key e) :failed))
+           :raw (:raw (:data e))}))))
 
 (defn book-failed!
   "Book a click on k that did not work: given up for :gone, :cannot, :no-effect, :unreachable; two :out-of-reach; any
-  other status as :failed. All but :gone count as fruitless in a row; :blocked was booked by the walk."
+  other status as :failed. All but :gone count as fruitless in a row."
   [c k status]
   (case status
-    :blocked nil
     :gone (give-up! c k :gone)
     :out-of-reach (book-out-of-reach! c k)
     (do (give-up! c k (if (#{:cannot :no-effect :unreachable} status) status :failed))

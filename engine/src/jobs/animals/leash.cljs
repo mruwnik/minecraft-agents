@@ -148,7 +148,7 @@
   is on the lead afterwards, [:no-lead nil] when the server found none, else nil with the outcome booked."
   [c animal]
   (let [k (animals/key-of animal)
-        r (await (animals/use-on! c k animal "lead" {:doors :shut}))]
+        r (await (animals/use-on! c k animal "lead"))]
     (if (= :continue r)
       :continue
       (case (:status r)

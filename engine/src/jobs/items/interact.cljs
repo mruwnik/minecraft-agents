@@ -11,7 +11,7 @@
 
 (def doc
   "Use :item (the empty hand when nil) on the entity :id once, as a right-click. One call is the whole attempt: find the
-  entity in sight, walk into reach (a go-to child, range 2, no escalation), interact. It yields :continue only when
+  entity in sight, walk into reach (a go-to child, range 2, no escalation; again when the entity moved since the walk arrived), interact. It yields :continue only when
   the walk waits on the world. Quote: A, a click and the walks.
 
   An entity that drops out of sight (the pit rim, a wall) between the sighting and the click is walked to at its last
@@ -80,8 +80,8 @@
                     more))))
 
 (defn ^:async step!
-  "One walk or the click; :again after a walk that arrived (the click follows whatever the reach, the server judges it) or
-  failed below the limit."
+  "One walk or the click; :again after a walk that arrived (the click follows whatever the reach, the server judges it,
+  unless the target moved since: then it is walked to again) or failed below the limit."
   [c fails]
   (let [{:keys [id item]} (:args c)
         p (:primitives c)
@@ -90,11 +90,12 @@
         target (if seen (u/pos-of (.-pos seen)) (:last-pos (ctx/mem c)))]
     (cond
       (nil? target) (finish! c id item :gone)
-      (and (> (u/dist (u/self-pos c) target) (reach)) (not (:arrived (ctx/mem c))))
+      (and (> (u/dist (u/self-pos c) target) (reach))
+           (not (some-> (:arrived (ctx/mem c)) (u/dist target) (< 1))))
       (let [r (await (child/call-walk* c :walk {:pos target :range 2 :ways #{:walk :clear-seal}}))]
         (cond
           (= :continue r) :continue
-          (and (= :done (:kind r)) (:arrived (:data r))) (do (ctx/update-mem! c assoc :arrived true) :again)
+          (and (= :done (:kind r)) (:arrived (:data r))) (do (ctx/update-mem! c assoc :arrived target) :again)
           (>= (swap! fails inc) (max-walks)) (finish! c id item :unreachable {:why (contract/cause-key r)})
           :else :again))
       :else

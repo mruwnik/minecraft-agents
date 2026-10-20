@@ -186,7 +186,7 @@
   "Click target with an empty hand and book what became of animal."
   [c animal target]
   (let [k (animals/key-of animal)
-        r (await (animals/use-on! c k target nil {:doors :shut}))]
+        r (await (animals/use-on! c k target nil))]
     (cond
       (= :continue r) :continue
       (#{:used :no-effect} (:status r)) (case (await (await-state! c k (not (animals/led-by-me? animal)) (settle-tries)))

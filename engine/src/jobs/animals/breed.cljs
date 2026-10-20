@@ -239,7 +239,7 @@
   (let [k (animals/key-of animal)
         _ (ctx/update-mem! c assoc :food food)
         _ (note-hand! c)
-        r (await (animals/use-on! c k animal food {:reset-row? true}))]
+        r (await (animals/use-on! c k animal food))]
     (if (= :continue r)
       :continue
       (let [{:keys [status raw]} r]
