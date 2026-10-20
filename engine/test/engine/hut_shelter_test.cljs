@@ -7,6 +7,7 @@
             [engine.fake :as fake]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.survival.room-plug :as room-plug]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.scenario :as scenario]
@@ -83,6 +84,15 @@
             (is (= before (room-blocks p)) "no block placed at feet or head height in the room")
             (is (= [{:pos pos :roof {:x 5 :y 67 :z 0} :state :built :room true}]
                    (st/entries eng :shelter)))))))))
+
+(deftest room-plug-names-the-hole-only-for-a-closed-room-with-a-door-a-hand-uses
+  (are [why extra unloaded plug]
+       (= plug (let [p (tu/fake (assoc (hut-world {:x 5 :y 64 :z 0} (assoc extra "5,67,0" "air")) :unloaded unloaded))]
+                 (room-plug/room-plug p (sh-sense/feet p) 5)))
+    "a shut door in the wall" {} [] {:x 5 :y 67 :z 0}
+    "a trapdoor in the wall is no door" {"5,64,2" "oak_trapdoor" "5,65,2" "cobblestone"} [] nil
+    "a door in the ceiling is no way out" {"5,64,2" "cobblestone" "5,65,2" "cobblestone" "4,67,0" "oak_door"} [] nil
+    "a wall cell never seen leaves the room unknown" {} ["3,65,0"] nil))
 
 (defn big-hut-world
   "A 10x10 room (x 1..10, z 1..10, y 64..66: 300 cells, over the old 256 cap), roof y 67 with a hole over the body at 2,64,2, a shut door in the south wall."
