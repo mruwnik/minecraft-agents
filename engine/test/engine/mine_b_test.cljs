@@ -520,6 +520,9 @@
                             [{:x 2 :y 64 :z 2} 0 nil]]]
     (is (= want (stay/side-cut {:x 2 :y 64 :z 0} [1 0] reach pos)) (pr-str pos reach))))
 
+(deftest the-default-ore-reach-takes-remembered-ore-nine-blocks-into-the-wall
+  (is (= {:heading "south" :steps 8} (stay/side-cut {:x 2 :y 64 :z 0} [1 0] (settings/get stay/settings ::stay/ore-reach) {:x 2 :y 64 :z 9}))))
+
 (defn lava-drip!
   "Lava above a dug cell flows into it before the next dig or place (the flow delay), as a source dripping down."
   [p]
