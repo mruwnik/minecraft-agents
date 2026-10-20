@@ -22,7 +22,7 @@
    :act [[:summon "cow" [20.5 0 12.5]] [:summon "cow" [21.5 0 12.5]]
          [:job (jobs.animals.breed {:mob "cow" :count 2})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :stopped}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :stopped :data {:reason :need}} :within-s 80 :of-job true}]}
+            {:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 80 :of-job true}]}
   {:name "breed-fetch-false-waits-no-food"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:8}]}"]]
    :act [[:summon "cow" [20.5 0 12.5]] [:summon "cow" [21.5 0 12.5]]
