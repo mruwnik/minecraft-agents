@@ -537,6 +537,21 @@
           (is (empty? (calls p "steer")) "no flee step first")
           (is (empty? (calls p "moveTo")) "no flee step first"))))))
 
+(deftest a-pillar-looks-at-the-ground-round-it-before-taking-unseen-cells-for-a-ledge
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:self {:health 10} :inventory [{:name "dirt" :count 39}] :entities [(zombie 8 64 0)]})
+              {:keys [p eng]} s
+              hidden #{[-2 63 0] [-2 64 0] [-1 63 0] [-1 64 0] [-1 65 0]}
+              sensed (.-sensedAt p)]
+          (tu/set-sensed! p (fn [q] (if (and (hidden [(.-x q) (.-y q) (.-z q)]) (empty? (calls p "look")))
+                                      #js {:unknown true}
+                                      (sensed q))))
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (is (= 3 (count (calls p "jumpPlace"))) "unseen cells beside the column read as rock; once looked at they are open air, so the pillar stands"))))))
+
 (deftest the-calls-blocks-are-the-only-blocks-a-refuge-uses
   (async done
     (tu/run-async done

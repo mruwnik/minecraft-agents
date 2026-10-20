@@ -71,9 +71,21 @@
 
 (defn cell-map [[x y z]] {:x x :y y :z z})
 
+(defn unseen-zone
+  "The cells the climb check reads (climb-radius round the pillar, from the floor to above its top) that the body has not sensed, nearest first."
+  [p [x y z]]
+  (let [r (climb-radius)]
+    (->> (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy (range -1 (+ 2 (pillar-height)))
+               :let [cell [(+ x dx) (+ y dy) (+ z dz)]]
+               :when (look/unknown? p cell)]
+           [(+ (* dx dx) (* dz dz) (* dy dy)) cell])
+         (sort-by first)
+         (mapv second))))
+
 (defn ^:async plan!
   "The pillar refuge ({:kind :pillar :item :anchor :cells}) when a pillar-height pillar fits here, else nil. The cells it
-  rises into that the body has not sensed are looked at first, so open sky is not taken for rock."
+  rises into that the body has not sensed are looked at first, so open sky is not taken for rock; so are the unsensed cells
+  round it when the pillar does not fit, so unseen ground behind the body is not taken for a ledge a mob climbs."
   [c]
   (let [p (:primitives c)
         feet (pl/feet-cell c)
@@ -81,6 +93,9 @@
     (when item
       (doseq [cell (map #(escape/up feet %) (range 1 (+ 2 (pillar-height))))]
         (when (look/unknown? p cell) (await (look/look-at! c cell)))))
+    (when (and item (not (pillar-ok? (escape/block-at-of p) feet)))
+      (when-let [zone (not-empty (unseen-zone p feet))]
+        (await (look/look-unknown! c zone))))
     (when (and item (pillar-ok? (escape/block-at-of p) feet))
       (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place (cell-map (escape/up feet %)))
                                           (range (pillar-height))))
