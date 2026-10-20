@@ -11,6 +11,7 @@
             [engine.test-util :as tu]
             [jobs.animals.herd-survey :as hs]
             [jobs.animals.herd-run :as hr]
+            [jobs.lib.pen :as pen]
             [jobs.lib.pen-gate :as pg]))
 
 (defn coarse-world
@@ -38,6 +39,23 @@
     s))
 
 (defn read [s] (hr/read-pen {:primitives (:p s) :args {:box ht/box}}))
+
+(deftest a-pen-read-is-reused-until-what-the-body-knows-changes
+  (let [s (seeing {} false)
+        calls (atom 0)
+        check pen/check]
+    (with-redefs [pen/check (fn [o] (swap! calls inc) (check o))]
+      (let [a (read s)
+            b (read s)]
+        (is (= a b))
+        (is (= 1 @calls) "same tick, same eye, same memory: one check")
+        (swap! (:clock s) + 5000)
+        (read s)
+        (is (= 2 @calls) "a later tick reads again")
+        (perception/pass! (aget (:p s) "perception"))
+        (swap! (fake/state (:p s)) assoc :yaw 17)
+        (read s)
+        (is (= 3 @calls) "a turned head reads again")))))
 
 (defn gate-unknown? [s]
   (boolean (some #(and (= :unloaded (:why %)) (= ht/gate (:pos %))) (:leaks (read s)))))

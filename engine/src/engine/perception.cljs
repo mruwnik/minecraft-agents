@@ -222,6 +222,12 @@
         (.clear ^js (.-sensedJs st)))
       true)))
 
+(defn memo-key
+  "[k writes] that stay equal while every sensed answer does (same tick, raw-world epoch and eye, and no change to the remembered blocks); k is identical, not just equal; nil offline."
+  [per]
+  (when (sense-fresh! per)
+    (let [^js st (:st per)] [(.-sensedKey st) (.-writes st)])))
+
 (defn sensed
   "What the body knows of the cell pos [x y z] now: nil (unloaded or offline), felt, visible, remembered or unknown (see
   the namespace doc). Cached for one tick while the eye and the world stay the same."

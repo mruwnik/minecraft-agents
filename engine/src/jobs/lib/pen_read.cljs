@@ -5,6 +5,7 @@
   from memory that stay out of view."
   (:require [clojure.string :as str]
             [engine.args :as a]
+            [engine.perception :as perception]
             [jobs.lib.look :as look]
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-world :as pen-world]
@@ -22,12 +23,31 @@
           (vswap! stale conj (u/cell-vec pos)))
         s))))
 
-(defn read
-  "jobs.lib.pen/check with opts (without :block-at), plus :remembered, a vector of [x y z]."
+(defn read-fresh
+  "read without the memo."
   [p opts]
   (let [stale (volatile! #{})
         answer (pen/check (assoc opts :block-at (block-at-fn p stale)))]
     (assoc answer :remembered (vec @stale))))
+
+(defn read
+  "jobs.lib.pen/check with opts (without :block-at), plus :remembered, a vector of [x y z]. While the perception's
+  memo-key stays (every cell reads as before), the same opts answer from the memo: a look round reads the same pen many times."
+  [p opts]
+  (let [per (aget p "perception")
+        key (when per (perception/memo-key per))]
+    (if-not key
+      (read-fresh p opts)
+      (let [^js st (:st per)
+            memo (.-penMemo st)
+            memo (if (and memo (identical? (key 0) (aget memo 0)) (== (key 1) (aget memo 1)))
+                   memo
+                   (set! (.-penMemo st) #js [(key 0) (key 1) (volatile! {})]))
+            hit (get @(aget memo 2) opts)]
+        (or hit
+            (let [answer (read-fresh p opts)]
+              (vswap! (aget memo 2) assoc opts answer)
+              answer))))))
 
 (defn remembered?
   "True while the body knows cell [x y z] from memory only."
