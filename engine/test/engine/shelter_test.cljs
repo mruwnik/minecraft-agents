@@ -10,6 +10,7 @@
             [engine.scenario :as scenario]
             [engine.fake :as fake]
             [engine.ctx :as ctx]
+            [jobs.lib.cost :as cost]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look-edge :as look-edge]
             [jobs.lib.shelter.beds :as sh-beds]
@@ -93,6 +94,21 @@
     1 26 false [0 0] false
     1 40 false [0 14] true
     5 5 true [0 14] false))
+
+(defn without-blocks [blocks cells] (apply dissoc blocks (map (fn [[x y z]] (str x "," y "," z)) cells)))
+
+(deftest a-two-wide-one-high-gap-in-a-wall-is-a-way-in-for-a-spider-but-a-one-wide-one-is-not
+  (let [safe? (fn [gap] (sh-inside/safe-from-night? (seen-box (without-blocks (box 5 5 false) gap) [0 0])))]
+    (is (true? (safe? [])))
+    (is (true? (safe? [[-1 65 1]])) "a spider is 1.4 wide")
+    (is (false? (safe? [[-1 65 1] [-1 65 2]])))
+    (is (false? (safe? [[-1 64 1] [-1 64 2]])) "at the floor too")))
+
+(deftest the-exposure-of-a-work-cell-follows-the-shelter-rule
+  (let [chance (fn [w d at] (:chance (cost/exposure (seen-box (box w d false) [0 0]) at)))]
+    (is (zero? (chance 5 5 {:x 2 :y 64 :z 2})) "a dark closed room within the spawn-free radius")
+    (is (zero? (chance 1 25 {:x 0 :y 64 :z 12})))
+    (is (pos? (chance 1 40 {:x 0 :y 64 :z 39})) "the room reaches a dark spawnable cell beyond 24 blocks of it")))
 
 (deftest a-leaf-roof-keeps-mobs-out-like-stone
   (let [leaf-roof (into {} (map (fn [[k v]] [k (if (= k "0,66,0") "oak_leaves" v)])) (box 3 3 false))]

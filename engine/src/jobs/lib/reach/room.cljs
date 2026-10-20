@@ -219,6 +219,28 @@
                            (backward kind-at x y z)))
                    cells))))
 
+(defn spider-gap?
+  "Whether a spider (1.4 wide, 0.9 high) gets into the room (room*'s answer) through a wall opening a walker cannot use:
+  two seen air cells side by side beside a room cell, at its feet or head height, walled in on every other side (a gap
+  two wide and one high), with open air beyond it."
+  [p {:keys [cells]}]
+  (let [kind-at (shut-kind-at p)
+        solid? (fn [x y z] (keyword-identical? :solid (kind-at x y z)))
+        air? (fn [x y z] (and (some? (u/seen-block p {:x x :y y :z z})) (passable? kind-at x y z)
+                              (not-any? #(cells [x (- y %) z]) (range 4))))
+        gap? (fn [x y z dx dz]
+               (let [px (js/Math.abs dz) pz (js/Math.abs dx)
+                     slot (fn [k] [(+ x (* k px)) y (+ z (* k pz))])
+                     bounded? (fn [[sx sy sz]] (and (solid? sx (dec sy) sz) (solid? sx (inc sy) sz)))]
+                 (and (apply air? (slot 0)) (apply air? (slot 1))
+                      (bounded? (slot 0)) (bounded? (slot 1))
+                      (apply solid? (slot -1)) (apply solid? (slot 2))
+                      (air? (+ x dx) y (+ z dz)))))]
+    (boolean (some (fn [[x y z]]
+                     (some (fn [[dx dz]] (some #(gap? (+ x dx) (+ y %) (+ z dz) dx dz) [0 1]))
+                           [[1 0] [-1 0] [0 1] [0 -1]]))
+                   cells))))
+
 (defn unseen-room?
   "Whether the cell pos {:x :y :z} holds a room that closes over what the body has seen but has a cell it has not seen
   beside it (room* nil for that reason, not because the room is open): it is unknown, look first."

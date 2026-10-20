@@ -24,10 +24,10 @@
 
 (defn roofed?
   "Whether a solid block lies within height blocks straight above the feet cell, the head not inside one."
-  [p height]
-  (let [{:keys [x y z]} (feet p)]
-    (boolean (and (not (head-in-block? p))
-                  (some #(solid-at? p {:x x :y (+ y %) :z z}) (range 1 (inc height)))))))
+  ([p height]
+   (boolean (and (not (head-in-block? p)) (roofed? p height (feet p)))))
+  ([p height {:keys [x y z]}]
+   (boolean (some #(solid-at? p {:x x :y (+ y %) :z z}) (range 1 (inc height))))))
 
 (defn sky-light-at
   "Sky light (0-15, before the night's darkening) of the cell, or nil when no light data is loaded there. Read only for the body's cells and cells it has seen."
@@ -138,16 +138,17 @@
 (defn leaf-roofed?
   "Whether a leaf block lies within height blocks straight above the feet cell: no mob comes through it, and the cells
   under it are judged by their light."
-  [p height]
-  (let [{:keys [x y z]} (feet p)]
-    (boolean (some #(some-> (u/seen-name p {:x x :y (+ y %) :z z}) (.endsWith "_leaves")) (range 1 (inc height))))))
+  ([p height] (leaf-roofed? p height (feet p)))
+  ([p height {:keys [x y z]}]
+   (boolean (some #(some-> (u/seen-name p {:x x :y (+ y %) :z z}) (.endsWith "_leaves")) (range 1 (inc height))))))
 
 (defn shut-in-room?
   "Whether the body stands in a closed room (reach-room/closed-room?) with a roof (solid or leaves) over it within
   room-roof-height blocks: safe from the night though the roof is above :roof-height. Sealed from the sky (buried?)
   counts as roofed: the roof over the feet cannot be looked at from inside."
-  [p]
-  (and (or (roofed? p (room-roof-height)) (leaf-roofed? p (room-roof-height)) (buried? p)) (reach-room/closed-room? p (feet p))))
+  ([p] (shut-in-room? p (feet p)))
+  ([p cell]
+   (and (or (roofed? p (room-roof-height) cell) (leaf-roofed? p (room-roof-height) cell) (buried-at? p cell)) (reach-room/closed-room? p cell))))
 
 (defn shut-in-hut?
   "shut-in-room? and wide: a hut, not a one-wide tunnel the body dug."
