@@ -21,10 +21,12 @@
   "Carry at least :count of :item (a planting material), renewably.
 
   The way depends on the material:
-  - wheat_seeds: break grass (:sources, 1 drop in 8).
+  - wheat_seeds: break grass (:sources, 1 drop in 8). The :fertilize way (bone meal carried, never fetched) uses it once per run on
+    the open grass within :radius (a jobs.farm.fertilize child) when no grass is left to break, then breaks what grew.
   - sugar_cane and bamboo: cut a wild stand above its base (the second segment from the bottom, so the base
     grows again; a stand of one is never cut).
   - Any other material declines (:no-source); a chest is items.obtain's way, not this job's. :sources always means the break way.
+  The call's :ways: :break (default both) and :fertilize.
 
   The goal (:count carried, so a body that carries it is done at once) is fixed in the first step. One call runs these steps until the job ends (it yields with :continue only while a child or
   a walk waits on the world):
@@ -72,6 +74,8 @@
 (defn per-round [] (settings/get settings ::per-round))
 (defn collect-radius [] (settings/get settings ::collect-radius))
 (defn time-s [] (settings/get settings ::job-time-s))
+
+(def ways #{:break :fertilize})
 
 (def target [:item])
 
@@ -139,12 +143,20 @@
 (defn no-zones [c]
   (when (zones-missing? c) (decline! c :no-zones)))
 
+(defn can-fertilize?
+  "Whether the fertilize way may run now: allowed, grass is the source, bone meal is carried and it has not run yet."
+  [c]
+  (and (ctx/way? c :fertilize)
+       (= :grass (mode (:args c)))
+       (not (:fertilized (ctx/mem c)))
+       (contains? (u/carried-names (:primitives c)) "bone_meal")))
+
 (defn nothing-in-range
   "No source in range once the body has looked around: a stand too short to cut declines :too-short; the first look is
   the round's own."
   [c]
   (let [m (mode (:args c))]
-    (when-not (or (= :unknown m) (zones-missing? c) (:goal (ctx/mem c)) (seq (source-blocks c)))
+    (when-not (or (= :unknown m) (zones-missing? c) (:goal (ctx/mem c)) (can-fertilize? c) (seq (source-blocks c)))
       (cond
         (and (= :stalk m) (stalks-in-range? c)) (decline! c :too-short)
         (look/surveyed? c) :nothing-in-range))))
@@ -299,6 +311,19 @@
                   (give-up! c :barren)
                   :again)))))
 
+(defn ^:async fertilize!
+  "Bone meal on the open grass round the body (the child never fetches), then a look at what grew."
+  [c]
+  (let [{:keys [radius ignore-zones?]} (:args c)
+        r (waits/waiting-out c (await (ctx/call c :fertilize 'jobs.farm.fertilize
+                                                {:grass true :area {:pos (u/self-pos c) :radius radius}
+                                                 :ways #{:carried} :ignore-zones? ignore-zones?})))]
+    (if (= :continue r)
+      :continue
+      (do (ctx/update-mem! c assoc :fertilized true)
+          (await (look/survey! c))
+          :again))))
+
 (defn ^:async step [c]
   (when-not (:goal (ctx/mem c))
     (let [now (carried c)]
@@ -311,6 +336,7 @@
       (>= dry (dry-digs)) (give-up! c :dry)
       (and (empty? targets) (seq (:refused (ctx/mem c)))) (refuse-up! c)
       (and (empty? targets) (not (look/surveyed? c))) (do (await (look/survey! c)) :again)
+      (and (empty? targets) (can-fertilize? c)) (await (fertilize! c))
       (empty? targets) (finish! c :none)
       :else (await (dig-round! c targets)))))
 

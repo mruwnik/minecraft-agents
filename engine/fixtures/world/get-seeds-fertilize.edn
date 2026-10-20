@@ -1,0 +1,19 @@
+;; Card 75a88e72 (D58): gather.get-seeds has a :fertilize way: with no grass to break and bone meal carried it spends bone meal on the open grass
+;; blocks (a farm.fertilize :grass child), then breaks what grew. Grass-block floor (no short grass), 8 bone meal carried, radius 8.
+;; Should-succeed: bone meal is spent and the job ends (seeds come by chance, so :got may be 0). Should-fail: :ways #{:break} leaves the bone meal alone and ends :none.
+{:defaults
+ {:tags [:gather :farm :jobs]
+  :time :any
+  :plot {:floor "grass_block"}
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["bone_meal" 8]]}
+  :limit-s 160}
+ :cases
+ [{:name "bone-meal-on-grass-when-none-is-left-to-break"
+   :act [[:job (jobs.gather.get-seeds {:item "wheat_seeds" :count 1 :radius 8})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 0]}} :within-s 150 :of-job true}]
+   :after [[:item "bone_meal" [:<= 7]]]}
+  {:name "break-only-ways-keep-the-bone-meal"
+   :act [[:job (jobs.gather.get-seeds {:item "wheat_seeds" :count 1 :radius 8 :ways #{:break}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :none}} :within-s 60 :of-job true}]
+   :after [[:item "bone_meal" 8]]
+   :limit-s 70}]}

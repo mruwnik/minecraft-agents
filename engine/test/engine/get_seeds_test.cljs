@@ -519,3 +519,14 @@
           (await (run-ticks s 60 700))
           (is (seq (h/calls (:p s) "look")))
           (is (pos? (dig-count s))))))))
+
+(deftest the-fertilize-way-uses-bone-meal-on-open-grass-when-none-is-left-to-break
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (tu/each-async [[nil true] [#{:break} false]]
+                              (fn ^:async one [[ways used?]]
+                                (let [s (setup-seeing {:blocks (patch "grass_block" [2 3] [0]) :inventory [{:name "bone_meal" :count 2}]})]
+                                  (core/submit! (:eng s) (spec (cond-> {:count 2} ways (assoc :ways ways))) {})
+                                  (await (run-ticks s 30 700))
+                                  (is (= used? (boolean (seq (h/calls (:p s) "useOn")))) (pr-str ways))))))))))
