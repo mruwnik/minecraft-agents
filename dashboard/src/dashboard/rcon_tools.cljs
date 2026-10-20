@@ -51,7 +51,7 @@
 
 (defn clash-message [value other]
   (str value " is not admitted: the whitelist holds " other " (other case, other login UUID). Use the name "
-       other " or ask the lead to run `whitelist remove " other "` and add " value " again."))
+       other " or a fresh probe name (remove + add does not help: the server re-adds the case from its profile cache)."))
 
 ;; ---- rcon-raw.mjs: any command ----
 
