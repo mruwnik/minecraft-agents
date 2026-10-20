@@ -400,7 +400,7 @@
                                   :entities [(zombie-at 4)]}
                                  [[[] 0]]))]
           (is (hiding? seen))
-          (is (>= waits 25) "about 30 s of holds after the zombie is gone")
+          (is (>= waits 8) "30 s of holds (each with its look round) after the zombie is gone")
           (is (= [:quiet] (hidden-holds seen)))
           (is (= [] (:list (core/state eng)))))))))
 
@@ -408,7 +408,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[q ok?] [[0 #(< % 5)] [120 #(>= % 100)]]]
+        (doseq [[q ok?] [[0 #(< % 5)] [120 #(>= % 30)]]]
           (let [{:keys [waits]}
                 (await (hide-steps (list 'jobs.survival.respond-to-hostile {:settings {:jobs.survival.hide-out/quiet-s q :jobs.survival.hide-out/hide-s 100000}})
                                    {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
@@ -425,7 +425,7 @@
                                             :entities [(skeleton 4 64 0)]}
                                    0 (constantly nil)
                                    [{:id 3 :name "zombie" :kind "hostile" :pos {:x 0 :y 64 :z 5} :health 20}]))]
-          (is (>= (count (calls p "wait")) 25) "about 30 s of holds before it ends"))))))
+          (is (>= (count (calls p "wait")) 15) "30 s of holds (each with its look round) before it ends"))))))
 
 (def hard-sided-dead-end
   "dead-end with obsidian beside and behind the tunnel: a stone pickaxe digs no pocket into it."
@@ -1465,6 +1465,27 @@
                 ev (first (filter #(= :retreat.hide-breached (:kind %)) @seen))]
             (is (= mob-name (:mob ev)) "the arrival is logged with the mob")
             (is (empty? (filter #(= :retreat.hide-hurt (:kind %)) @seen)) "left before being hit")))))))
+
+(deftest a-hidden-body-looks-round-all-four-ways-while-it-holds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks doorway :inventory [{:name "cobblestone" :count 20}] :entities [(zombie 0 64 1)]})
+              holds (atom 0)
+              looks-before (atom nil)]
+          (.override (.-world p) "wait"
+                     (fn [token a impl]
+                       (when (hiding? seen)
+                         (swap! looks-before #(or % (count (calls p "look"))))
+                         (when (> (swap! holds inc) 6) (swap! (fake/state p) assoc :entities [])))
+                       (impl token a)))
+          (core/submit! eng hiding-retreat {})
+          (await (core/tick! eng))
+          (is (>= (->> (drop @looks-before (calls p "look"))
+                       (map (fn [c] (let [pos (.-pos (.-args c))] [(.-x pos) (.-z pos)])))
+                       set count)
+                  4)
+              "the hold looks along each heading in turn"))))))
 
 (deftest an-unarmed-cornered-body-looks-for-a-way-to-walk-before-it-punches
   (doseq [[in held] [[{:armed? false :win? false :sweeps 0 :fist-sweeps 1} true]

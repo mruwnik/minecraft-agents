@@ -7,6 +7,7 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-in-leave :as dig-leave]
+            [jobs.lib.look :as look]
             [jobs.lib.ready :as ready]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -124,8 +125,17 @@
            (filter #(or (combat/creeper? %) (and (= :pillar (:kind (:args c))) (combat/climber? %))))
            first))))
 
+(defn ^:async glance-round!
+  "One heading's look (level and down) and sight pass, the next heading each round: a silent creeper is sensed only inside
+  the view cone, and a body that pillared up faces the floor."
+  [c]
+  (let [i (:look-i (ctx/mem c) 0)]
+    (ctx/update-mem! c assoc :look-i (inc i))
+    (await (look/glance! c [(nth (vec (vals look/headings)) (mod i 4))]))))
+
 (defn ^:async round
   [c]
+  (await (glance-round! c))
   (let [p (:primitives c)
         now (ctx/now c)
         health (.-health (.self p))
