@@ -182,7 +182,8 @@
 (defn setup
   "An engine over the fake world; a recording parent runs the tunnel as its child and keeps its result in :out.
   opts: :p and :dir to restart over an earlier engine's world and state (nothing submitted then); :raw true
-  keeps the child's ending in :out (else its outcome), and the parent does not wait on the child's conditions."
+  keeps the child's ending in :out (else its outcome), and the parent does not wait on the child's conditions.
+  :root true submits the job itself, listed (a called child ends at a :later check, only a root waits)."
   [spec args prep & {:keys [dir] :as opts}]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
@@ -195,7 +196,7 @@
                           :triggers triggers/all :dir (or dir (tu/tmp-dir)) :now #(deref clock) :world w
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (prep p)
-    (let [id (when-not (:p opts) (core/submit! eng '(recording-parent) {}))]
+    (let [id (when-not (:p opts) (if (:root opts) (core/submit! eng (list job args) {}) (core/submit! eng '(recording-parent) {})))]
       {:eng eng :p p :clock clock :seen seen :out out :id id})))
 
 (defn ^:async tick-out! [{:keys [eng clock] :as s}]
@@ -335,7 +336,7 @@
         (doseq [spec [{:blocks (assoc ground "6,57,0" "iron_ore") :zones [{:name "test-zone" :min [6 57 0] :max [6 57 0]}]}
                       {:blocks (assoc ground "6,57,0" "iron_ore")
                        :plans {"wall" {:id "wall" :parts [{:id "w" :cells [[6 57 0]] :want "stone"}]}}}]]
-          (let [{:keys [out p] :as s} (setup spec {:target [6 57 0]} (fn [_]))]
+          (let [{:keys [out p] :as s} (setup spec {:target [6 57 0]} (fn [_]) :root true)]
             (await (tick-n! s 6))
             (is (= :not-done @out) "no :stopped result")
             (is (= 1 (count (:list (core/state (:eng s))))) "stays listed")
