@@ -7,6 +7,7 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -148,11 +149,10 @@
           (is (= (mapv (fn [c] [c :placed "dirt" "air" :pillar]) (column base 6))
                  (mapv (juxt :cell :state :item :before :purpose) (the-ledger eng))))
           (is (= 58 (.-count (first (.-inventory (.self p))))))
-          (let [d (first (of-kind seen :pillar.done))]
+          (let [d (first (of-kind seen :completed))]
             (is (= (column base 6) (:cells d)))
             (is (= {"dirt" 6} (:spent d)))
             (is (= (conj (vec (take 4 (column base 6))) (last (column base 6))) (:spent-at d)))
-            (is (re-find #"used 6 dirt" (:text d)))
             (is (= 6 (:height d)))))))))
 
 (deftest one-call-builds-the-whole-height
@@ -164,7 +164,7 @@
           (await (ticks s eng 1))
           (is (finished? eng) "one round is the whole pillar")
           (is (= [0 68 0] (feet p)))
-          (is (= 1 (count (of-kind seen :pillar.done)))))))))
+          (is (= 1 (count (of-kind seen :completed)))))))))
 
 (deftest a-ceiling-stops-the-pillar-below-it
   (async done
@@ -176,7 +176,7 @@
           (is (finished? eng))
           (is (= [0 66 0] (feet p)) "two blocks: a third would put the head in the ceiling")
           (is (= 2 (count (the-ledger eng))))
-          (let [g (first (of-kind seen :pillar.gave-up))]
+          (let [g (first (of-kind seen :stopped))]
             (is (= :ceiling (:reason g)))
             (is (= [0 68 0] (:at g)))
             (is (= (column base 2) (:cells g)))
@@ -222,7 +222,7 @@
           (is (finished? eng) "one call: it does not hold the body waiting for blocks")
           (is (= [0 66 0] (feet p)))
           (is (= 2 (count (the-ledger eng))))
-          (is (= [:too-few-blocks 4 2] ((juxt :reason :short :built) (first (of-kind seen :pillar.gave-up))))))))))
+          (is (= [:too-few-blocks 4 2] ((juxt :reason :short :built) (first (of-kind seen :stopped))))))))))
 
 (deftest a-zone-refuses-before-any-placement
   (async done
@@ -234,7 +234,7 @@
           (is (finished? eng))
           (is (empty? (calls p "jumpPlace")))
           (is (empty? (the-ledger eng)))
-          (is (= [:zone "keep-out"] ((juxt :reason :zone) (first (of-kind seen :pillar.gave-up))))))))))
+          (is (= [:zone "keep-out"] ((juxt :reason :zone) (first (of-kind seen :stopped))))))))))
 
 (deftest no-zone-list-refuses-before-any-placement
   (async done
@@ -245,7 +245,7 @@
           (await (ticks s eng 4))
           (is (finished? eng))
           (is (empty? (calls p "jumpPlace")))
-          (is (= :no-zones (:reason (first (of-kind seen :pillar.gave-up))))))))))
+          (is (= :no-zones (:reason (first (of-kind seen :stopped))))))))))
 
 (defn stall-at!
   "Override jumpPlace so that its nth call never resolves (after placing the block when place?); the calls before are
@@ -283,7 +283,7 @@
             (is (finished? again))
             (is (= [0 70 0] (feet p)))
             (is (= (mapv (fn [c] [c :placed]) (column base 6)) (mapv (juxt :cell :state) (the-ledger again))))
-            (is (= (column base 6) (:cells (first (of-kind seen :pillar.done)))))))))))
+            (is (= (column base 6) (:cells (first (of-kind seen :completed)))))))))))
 
 (deftest a-block-the-jump-reports-placed-stays-in-the-ledger-while-the-sensed-cell-lags
   (async done
@@ -321,7 +321,7 @@
             (is (= 6 (count (calls p "jumpPlace"))) "three before the restart, three after")
             (is (= (mapv (fn [c] [c :placed]) (column base 6)) (mapv (juxt :cell :state) (the-ledger again))))
             (is (= 58 (.-count (first (.-inventory (.self p))))))
-            (is (= (column base 6) (:cells (first (of-kind seen :pillar.done)))))))))))
+            (is (= (column base 6) (:cells (first (of-kind seen :completed)))))))))))
 
 (deftest three-failed-placements-in-a-row-give-up
   (async done
@@ -335,11 +335,10 @@
           (is (finished? eng))
           (is (= 3 (count (calls p "jumpPlace"))))
           (is (empty? (the-ledger eng)) "the intents of blocks that never went in are dropped")
-          (let [g (first (of-kind seen :pillar.gave-up))]
+          (let [g (first (of-kind seen :stopped))]
             (is (= :place-failed (:reason g)))
             (is (= "not-raised" (:detail g)))
-            (is (= [0 64 0] (:at g)) "the give-up names the cell it could not place on")
-            (is (re-find #"at \[0 64 0\] \(not-raised\)" (:text g)))))))))
+            (is (= [0 64 0] (:at g)) "the give-up names the cell it could not place on")))))))
 
 (deftest a-job-that-sees-its-own-earlier-blocks-does-not-place-them-again
   (async done
@@ -379,7 +378,7 @@
           (core/submit! eng (list job {:height 3}) {})
           (await (ticks s eng 30))
           (is (finished? eng))
-          (is (empty? (of-kind seen :pillar.gave-up)))
+          (is (empty? (of-kind seen :stopped)))
           (is (= [0 67 0] (feet p)))
           (is (= (repeat 3 "dirt") (blocks-at p (column base 3)))))))))
 
@@ -393,7 +392,7 @@
           (core/submit! eng (list job {:height 2}) {})
           (await (ticks s eng 30))
           (is (finished? eng))
-          (is (empty? (of-kind seen :pillar.gave-up)))
+          (is (empty? (of-kind seen :stopped)))
           (is (= 66 (second (feet p))))
           (is (<= (js/Math.abs (- 0.5 (first (feet p)))) 0.2) "centred over the column"))))))
 
@@ -410,7 +409,7 @@
           (core/submit! eng (list job {:height 2}) {})
           (await (ticks s eng 12))
           (is (finished? eng))
-          (is (empty? (of-kind seen :pillar.gave-up)))
+          (is (empty? (of-kind seen :stopped)))
           (is (= [0 66 0] (feet p))))))))
 
 (deftest shoved-off-every-time-it-ends-failed-with-a-reason
@@ -422,7 +421,7 @@
           (core/submit! eng (list job {:height 3}) {})
           (await (ticks s eng 60))
           (is (finished? eng))
-          (is (= :off-column (:reason (first (of-kind seen :pillar.gave-up))))))))))
+          (is (= :off-column (:reason (first (of-kind seen :stopped))))))))))
 
 (deftest refused-every-time-in-the-column-mid-air-is-a-failed-place-not-a-knockback
   (async done
@@ -433,7 +432,7 @@
           (core/submit! eng (list job {:height 3}) {})
           (await (ticks s eng 60))
           (is (finished? eng))
-          (is (= :place-failed (:reason (first (of-kind seen :pillar.gave-up))))))))))
+          (is (= :place-failed (:reason (first (of-kind seen :stopped))))))))))
 
 (def cow {:id 7 :name "cow" :kind "passive" :width 0.9 :height 1.4 :pos {:x 0.6 :y 64 :z 0.5}})
 
@@ -462,8 +461,8 @@
           (await (ticks s eng 20))
           (is (finished? eng))
           (is (= [0 67 0] (feet p)))
-          (is (seq (of-kind seen :pillar.done)))
-          (is (empty? (of-kind seen :pillar.gave-up))))))))
+          (is (seq (of-kind seen :completed)))
+          (is (empty? (of-kind seen :stopped))))))))
 
 (deftest a-mob-that-stays-in-the-cell-ends-the-pillar-naming-it
   (async done
@@ -474,7 +473,7 @@
           (core/submit! eng (list job {:height 3}) {})
           (await (ticks s eng 20))
           (is (finished? eng))
-          (let [g (first (of-kind seen :pillar.gave-up))]
+          (let [g (first (of-kind seen :stopped))]
             (is (= :mob-in-cell (:reason g)))
             (is (= "cow" (:mob g)))
             (is (= [0 64 0] (:at g)))))))))
@@ -489,7 +488,7 @@
           (await (ticks s eng 20))
           (is (finished? eng))
           (is (= 3 (count (calls p "jumpPlace"))))
-          (is (= :place-failed (:reason (first (of-kind seen :pillar.gave-up))))))))))
+          (is (= :place-failed (:reason (first (of-kind seen :stopped))))))))))
 
 (deftest a-pillar-told-not-to-wait-for-mobs-ends-at-once-naming-it
   (async done
@@ -497,11 +496,11 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:entities [cow]})]
           (refuse-while-a-mob-stands-in! p 5)
-          (core/submit! eng (list job {:height 3 :mob-waits 0}) {})
-          (await (ticks s eng 20))
+          (core/submit! eng (list job {:height 3}) {})
+          (await (settings/with-settings {:jobs.access.pillar/mob-waits 0} #(ticks s eng 20)))
           (is (finished? eng))
           (is (empty? (calls p "jumpPlace")))
-          (is (= ["cow"] (map :mob (of-kind seen :pillar.gave-up)))))))))
+          (is (= ["cow"] (map :mob (of-kind seen :stopped)))))))))
 
 (deftest a-mob-beside-the-cell-is-no-reason-to-wait
   (is (nil? (pl/mob-in [{:name "cow" :width 0.9 :height 1.4 :pos {:x 1.5 :y 64 :z 0.5}}] [0 64 0])))
@@ -534,7 +533,7 @@
           (core/submit! eng (list job {:height 3}) {})
           (await (ticks s eng 40))
           (is (finished? eng))
-          (is (empty? (of-kind seen :pillar.gave-up)))
+          (is (empty? (of-kind seen :stopped)))
           (is (= [0 67 0] (feet p)))
           (is (= (repeat 3 "dirt") (blocks-at p (column base 3)))))))))
 
@@ -552,7 +551,7 @@
           (shove-after-place! p [[1 0 0]])
           (core/submit! eng (list job {:height 3}) {})
           (await (ticks s eng 40))
-          (is (empty? (of-kind seen :pillar.gave-up)) "an unlooked cell over the column is no ceiling")
+          (is (empty? (of-kind seen :stopped)) "an unlooked cell over the column is no ceiling")
           (is (finished? eng)))))))
 
 (defn stub-body [x z] {:primitives #js {:self (fn [] #js {:pos #js {:x x :y 64 :z z}})}})
@@ -639,5 +638,4 @@
           (await (ticks s eng 5))
           (is (finished? eng))
           (is (= [0 67 0] (feet p)))
-          (is (= 1 (count (of-kind seen :pillar.done))) "the done event is told once, by the cleanup")
           (is (= 3 (count (calls p "jumpPlace")))))))))

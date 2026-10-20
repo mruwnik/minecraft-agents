@@ -23,15 +23,15 @@
          [:job (jobs.access.pillar {:height 2 :here true})]
          [:wait-s 4]
          [:rcon "kill @e[type=cow,$BOX]"]]
-   :expect [{:event {:source :job :kind :pillar.done} :within-s 40}
-            {:no-event {:source :job :kind :pillar.gave-up} :for-s 40 :until {:source :job :kind :pillar.done}}]
+   :expect [{:event {:source :job :kind :completed} :within-s 40}
+            {:no-event {:source :job :kind :stopped} :for-s 40 :until {:source :job :kind :completed}}]
    :after [[:block [16 1 16] "dirt"] [:block [16 2 16] "dirt"]]}
   {:name "pillar-cow-stays-mob-in-cell"
    :blocks [[:fill [12 0 12] [20 0 20] "stone"]]
    :body {:at [16.5 1 16.5] :inventory [["dirt" 8]]}
    :act [[:summon "cow" [16.9 1 16.5] "{NoAI:1b}"]
          [:job (jobs.access.pillar {:height 2 :here true})]]
-   :expect [{:event {:source :job :kind :pillar.gave-up :data {:reason :mob-in-cell :mob "cow"}} :within-s 40}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :mob-in-cell :mob "cow"}} :within-s 40}]
    :after [[:block [16 1 16] "air"]]}
   {:name "night-pit-pillar-climbs-under-a-caller-safe-form"
    ;; card 02b795f1: at night, go-to under a caller :checks {:safe? (not (threatened))} pillars out of the pit at once; the

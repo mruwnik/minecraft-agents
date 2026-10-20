@@ -18,11 +18,11 @@
  :cases
  [{:name "cornered-with-dirt-pillars-up-and-hides"
    :body {:inventory [["dirt" 12]]}
-   :expect [{:event {:source :job :kind :pillar.done} :within-s 60}
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :pillar :status :done}} :within-s 60}
             {:event {:source :job :kind :retreat_sealed :message [:contains "pillared up"]} :within-s 60}]
    :after [[:block [16 0 16] "dirt"] [:body-near [16.5 3 16.5] 2]]}
   {:name "cornered-without-blocks-places-no-pillar"
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 15}
             {:no-event {:source :job :kind :retreat_sealed} :for-s 40}
-            {:no-event {:source :job :kind :pillar.done} :for-s 40}]
+            {:no-event {:source :job :kind :child_ended :data {:slot :pillar :status :done}} :for-s 40}]
    :after [[:not-block [16 0 16] "dirt"]]}]}

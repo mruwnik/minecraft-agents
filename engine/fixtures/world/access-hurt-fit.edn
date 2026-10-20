@@ -27,7 +27,7 @@
    :act [[:rcon "damage $BODY 17 minecraft:generic"]
          [:job (jobs.access.pillar {:height 2 :here true})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :pillar.done} :of-job true :for-s 20 :until {:source :job :kind :waiting :data {:reason :low-health}}}]
+            {:no-event {:source :job :kind :completed} :of-job true :for-s 20 :until {:source :job :kind :waiting :data {:reason :low-health}}}]
    :after [[:block [16 1 16] "air"]]}
   {:name "hurt-body-go-to-still-pillars-out-of-a-pit"
    :blocks [[:fill [8 0 8] [24 3 24] "dirt"] [:fill [14 1 14] [18 3 18] "air"]]

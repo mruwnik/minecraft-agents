@@ -226,7 +226,7 @@
         (let [ring [{:name "ring" :min [3 63 -3] :max [9 80 3] :allow #{:dig}}]
               s (await (fm/with-zones ring #(fell-ring-floor-unseen bare {:radius 10} 400)))]
           (is (= [] (kinds s :fell-tree.declined)) "the zone ring is not the whole story: the floor beyond it was unseen")
-          (is (= 1 (count (kinds s :pillar.done))) "a pillar was built from outside the ring"))))))
+          (is (pos? (count (h/calls (:p s) "jumpPlace"))) "a pillar was built from outside the ring"))))))
 
 (deftest a-floor-that-stays-unseen-after-the-looks-ends-the-pillar-with-the-reason
   (async done

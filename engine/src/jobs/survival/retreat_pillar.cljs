@@ -89,7 +89,7 @@
 (defn ^:async build!
   "A jobs.access.pillar child of height with item, from where the body stands: :continue, or the blocks it built."
   [c height item]
-  (let [r (await (ctx/call c :pillar 'jobs.access.pillar {:height height :use {:blocks [item]} :fetch false :ignore-zones? true :mob-waits 0}))]
+  (let [r (await (ctx/call c :pillar 'jobs.access.pillar {:height height :use {:blocks [item]} :fetch false :ignore-zones? true :settings {:jobs.access.pillar/mob-waits 0}}))]
     (if (contract/ending? r) (:built (:data r) 0) r)))
 
 (defn ^:async step!

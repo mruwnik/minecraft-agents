@@ -76,13 +76,13 @@
    :after [[:block [16 -1 16] "soul_sand"] [:body-near [16.5 0 16.5] 1.5]]}
  {:name "n2-pillar-up-no-false-wedge-1"
    :body {:inventory [["dirt" 8]]}
-   :act [[:job (jobs.access.pillar {:height 4})] [:await {:source :job :kind :pillar.done} 60]]
+   :act [[:job (jobs.access.pillar {:height 4})] [:await {:source :job :kind :completed} 60]]
    :expect [{:no-event {:source :reflex :kind :fired} :for-s 20}]
    :after [[:not-block [16 2 16] "air"]]
    :limit-s 90}
   {:name "n2-pillar-up-no-false-wedge-2"
    :body {:inventory [["cobblestone" 8]]}
-   :act [[:job (jobs.access.pillar {:height 3})] [:await {:source :job :kind :pillar.done} 60]]
+   :act [[:job (jobs.access.pillar {:height 3})] [:await {:source :job :kind :completed} 60]]
    :expect [{:no-event {:source :reflex :kind :fired} :for-s 20}]
    :after [[:not-block [16 1 16] "air"]]
    :limit-s 90}

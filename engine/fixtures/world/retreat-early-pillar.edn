@@ -15,12 +15,12 @@
  :cases
  [{:name "lone-zombie-at-seven-low-health-pillars-up-first"
    :body {:inventory [["dirt" 24]]}
-   :expect [{:event {:source :job :kind :pillar.done} :within-s 40}
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :pillar :status :done}} :within-s 40}
             {:event {:source :job :kind :retreat_sealed :message [:contains "pillared up"]} :within-s 40}
-            {:no-event {:source :job :kind :retreat.target} :for-s 40 :until {:source :job :kind :pillar.done}}]
+            {:no-event {:source :job :kind :retreat.target} :for-s 40 :until {:source :job :kind :child_ended :data {:slot :pillar :status :done}}}]
    :after [[:body-near [10.5 3 16.5] 3]]}
   {:name "two-blocks-only-flees-as-before"
    :body {:inventory [["dirt" 2]]}
    :expect [{:event {:source :job :kind :retreat.target} :within-s 40}
-            {:no-event {:source :job :kind :pillar.done} :for-s 30}]
+            {:no-event {:source :job :kind :child_ended :data {:slot :pillar :status :done}} :for-s 30}]
    :limit-s 60}]}

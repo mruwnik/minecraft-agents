@@ -44,7 +44,7 @@
   - a block is carried: :item, or without it dirt while any is carried, then cobblestone
   - the cell passes jobs.lib.access.rules/may-place?
   - a seen mob other than a hostile stands in the cell: it waits for it to move on (a failed jump while one does is not counted), up to
-    :mob-waits looks, then gives up :mob-in-cell (:mob its name); a hostile there is not waited on
+    ::mob-waits looks (an escape from danger sets it 0 in the call's :settings), then gives up :mob-in-cell (:mob its name); a hostile there is not waited on
 
   A knockback (a failed jump with the body airborne or more than 0.2 off its start point) is not a refusal: it waits to land,
   walks back to where it began (go-to child if off the column, then a short centring nudge) and tries again; up to 8 per pillar, then :off-column.
@@ -56,21 +56,21 @@
   :not-on-solid, :zone, :footprint, :no-zones, :not-loaded, :not-replaceable and :bad-args; :nothing-possible for
   :off-column (the body left the column it started in) and :place-failed (3 failed jumps in a row with the body in
   the column, :detail the primitive's reason). Data {:cells [[x y z] ...] :built n :height n}: :cells are this job's
-  confirmed blocks, lowest first. Events: pillar.done (info) and pillar.gave-up (warn, with :reason and by
-  reason :at :block :zone :short :detail). pillar.done is told by the cleanup.")
+  confirmed blocks, lowest first. The give-up data holds by reason
+  :at :block :zone :short :detail :mob.")
 
 (a/defargs args
   {:fetch {:doc "get the blocks with jobs.items.obtain when none is carried at the start, and walk back (false: end :too-few-blocks); a set of kinds or a map of limits counts as true" :spec need/option? :default true}
    :height {:doc "blocks to rise, 1 to 64 (the short form of :y: the feet's y at the start plus this)" :spec (a/int-in 1 64) :default 1}
    :y {:doc "the y the feet end at; nil: the start's y plus :height" :spec (a/int-in -64 320) :default nil}
-   :ignore-zones? :shared
-   :mob-waits {:doc "how many looks, ::mob-step-ms apart, to wait for a mob to leave the cell; nil: ::mob-waits (an escape from danger passes 0)" :spec (a/int-in 0 nil) :default nil}})
+   :ignore-zones? :shared})
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::max-height {:default 64 :doc "Tallest pillar a call may ask for, in blocks." :spec (a/int-in 0 nil)}
    ::max-failures {:default 3 :doc "Failed placements before the pillar gives up." :spec (a/int-in 0 nil)}
    ::mob-waits {:default 20 :doc "Looks a pillar waits for a mob to leave the cell it places into before it gives up :mob-in-cell." :spec (a/int-in 0 nil)}
+   ::max-displacements {:default 8 :doc "Knockbacks (a failed jump with the body airborne or off its column) a pillar rides out before it gives up :off-column." :spec (a/int-in 0 nil)}
    ::mob-step-ms {:default 500 :doc "Wait between looks for a mob in the pillar's cell, in ms." :spec (a/int-in 1 nil)}
    ::land-step-ms {:default 50 :doc "Wait between looks for the ground after a pillar, in ms." :spec (a/int-in 0 nil)}
    ::land-max-steps {:default 20 :doc "Looks for the ground after a pillar before it goes on." :spec (a/int-in 0 nil)}
@@ -89,9 +89,7 @@
 
 (defn max-failures [] (settings/get settings ::max-failures))
 
-(def max-displacements
-  "Knockbacks (a failed jump with the body airborne or off its column) a pillar rides out before it gives up."
-  8)
+(defn max-displacements [] (settings/get settings ::max-displacements))
 
 (defn land-step-ms [] (settings/get settings ::land-step-ms))
 
@@ -192,20 +190,13 @@
            (some-> (spent-log c l) spent/summary))))
 
 (defn finish!
-  "End the job: a give-up has its event and a kind by reason, the cause the step's; a pillar made ends :done (its event is cleanup's)."
+  "End the job: a give-up has a kind by reason and the step's cause; a pillar made ends :done."
   [c l step]
-  (let [result (merge (result-of c l (if (= :done (:step step)) :done :stopped)) (dissoc step :step))
-        {:keys [cells height]} result]
+  (let [result (merge (result-of c l (if (= :done (:step step)) :done :stopped)) (dissoc step :step))]
     (if (= :done (:step step))
       (ctx/end c :done nil result)
-      (do (ctx/emit! c :pillar.gave-up :warn
-                     (assoc result :text (str "pillar gave up at " (count cells) " of " height ": " (name (:reason step))
-                                              (when (:short step) (str ", " (:short step) " blocks short"))
-                                              (when (:mob step) (str ", " (:mob step) " stays in the cell"))
-                                              (when (:at step) (str " at " (pr-str (:at step))))
-                                              (when (:detail step) (str " (" (:detail step) ")")))))
-          (ctx/end c (cond (= :bad-args (:reason step)) :impossible (nothing-possible (:reason step)) :nothing-possible :else :condition-failed)
-                   (dissoc step :step) result)))))
+      (ctx/end c (cond (= :bad-args (:reason step)) :impossible (nothing-possible (:reason step)) :nothing-possible :else :condition-failed)
+               (dissoc step :step) result))))
 
 (defn blocks-of
   "The block names the call lists for the pillar: its :use {:blocks}, before the call has started (the engine freezes
@@ -255,16 +246,6 @@
     (if (on-top? c)
       (contract/ok :on-top "the feet are at the top" :units :blocks :done n :left 0 :result (result-of c l :done))
       (contract/later :building "the pillar is being built" :units :blocks :done n :left (max 0 (- (height-of c) n))))))
-
-(defn ^:async cleanup
-  "After a pillar made: pillar.done told."
-  [c ending]
-  (when (= :done (:kind ending))
-    (let [{:keys [cells] :as result} (:data ending)
-          log (spent-log c (ledger/open-entries (ctx/view c)))]
-      (ctx/emit! c :pillar.done :info (assoc result :text (str "pillar of " (count cells) " up to " (pr-str (peek cells))
-                                                               (some->> (spent/text log "pillar") (str "; ")))))))
-  (ctx/end c :done nil {}))
 
 (defn quote-of [c]
   (let [h (max 0 (height-of c))
@@ -326,7 +307,7 @@
   [c]
   (let [n (inc (:mob-waits (ctx/mem c) 0))]
     (ctx/update-mem! c assoc :mob-waits n)
-    (<= n (or (:mob-waits (:args c)) (settings/get settings ::mob-waits)))))
+    (<= n (settings/get settings ::mob-waits))))
 
 (defn ^:async wait-out-mob!
   "A mob stands in the cell of the next block: wait mob-step-ms for it to move on, :again; after mob-waits of it,
@@ -354,7 +335,7 @@
             _ (when shoved? (ctx/update-mem! c #(-> % (update :displaced (fnil inc 0)) (assoc :counted true))))
             failures (if (or shoved? (and (mob-in-cell c cell) (mob-wait! c))) (:failures (ctx/mem c) 0) (inc (:failures (ctx/mem c) 0)))]
         (ctx/update-mem! c assoc :failures failures)
-        (if (and (< failures (max-failures)) (<= (:displaced (ctx/mem c) 0) max-displacements))
+        (if (and (< failures (max-failures)) (<= (:displaced (ctx/mem c) 0) (max-displacements)))
           :again
           (let [settled (ledger/reconcile l block-at)]
             (ledger/remember! c settled)
@@ -364,15 +345,15 @@
 
 (defn ^:async shoved-back!
   "Before a round: a body off the base column (whatever the last place did) counts one knockback and walks back
-  (up to max-displacements). :continue while the walk goes on, else nil."
+  (up to the max-displacements setting). :continue while the walk goes on, else nil."
   [c]
   (let [{:keys [stand base counted walking displaced home]} (ctx/mem c)
         [bx _ bz] base
         [fx _ fz] (pl/feet-cell c)
         off? (and base home (not (centred? c [bx bz] home)))
         displaced (cond-> (or displaced 0) (and off? (not counted) (not walking)) inc)]
-    (ctx/update-mem! c #(-> % (assoc :displaced displaced) (dissoc :counted) (assoc :walking (boolean (and off? (<= displaced max-displacements))))))
-    (when (and off? stand (<= displaced max-displacements))
+    (ctx/update-mem! c #(-> % (assoc :displaced displaced) (dissoc :counted) (assoc :walking (boolean (and off? (<= displaced (max-displacements)))))))
+    (when (and off? stand (<= displaced (max-displacements)))
       (let [[x y z] stand
             block-at (access/sensed-at (:primitives c) "air")
             top (or (first (filter #(pl/clear? (block-at [x % z])) (range y (+ y 3)))) y)
