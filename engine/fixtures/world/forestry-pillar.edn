@@ -63,4 +63,11 @@
    :expect [{:event {:source :job :kind :stopped :data {:reason :tree-unreachable}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :stopped}}]
    :after [[:block [16 9 16] "oak_log"] [:item "dirt" 16]]
-   :limit-s 120}]}
+   :limit-s 120}
+  ;; The pillar the felling builds is one dirt and one cut log: cleanup digs both, no pillar block is left on the ground.
+  {:name "dirt-and-log-pillar-leaves-no-block"
+   :blocks [[:fill [14 8 14] [18 10 18] "air"] [:fill [16 1 16] [16 9 16] "air"] [:fill [16 4 16] [16 7 16] "oak_log"] [:fill [14 6 14] [18 8 18] "oak_leaves[persistent=true]"] [:fill [16 6 16] [16 7 16] "oak_log"]]
+   :body {:inventory [["dirt" 1] ["oak_log" 1]]}
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16] :fetch false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]
+   :after [[:any-not-block [[[12 0 12] [20 9 20]]] "dirt"] [:not-block [16 7 16] "oak_log"]]}]}
