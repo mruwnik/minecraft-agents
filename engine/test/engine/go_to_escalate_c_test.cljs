@@ -432,21 +432,22 @@
           (is (= "cobblestone" (block p [4 62 0])) "the lava it laid open is sealed")
           (is (seq (events-of seen :blocks.dig.sealed))))))))
 
-(deftest a-body-is-boxed-in-only-when-no-cell-beside-its-column-can-be-stood-on
-  ;; dig-route digs onto an unseen floor only when boxed in; with a free cell beside, a player steps aside and looks first
+(deftest a-dig-route-cell-whose-floor-is-unseen-is-not-dug-on-top-while-a-side-stand-exists
+  ;; a floor shows only once its cell is dug; with a cell to stand on beside, a player steps aside and looks first (a 1-wide shaft is the live case sealed-pocket-below-is-dug-down-to)
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [shaft (apply dissoc (box -5 50 -5 5 70 5 "stone") (for [y (range 60 71)] (str "0," y ",0")))
-              boxed? (fn ^:async boxed [blocks]
-                       (let [{:keys [eng]} (setup {:self {:pos {:x 0.5 :y 61 :z 0.5}} :blocks blocks})
-                             out (atom :not-done)
-                             eng (assoc-in eng [:jobs 'probe] {:round (fn ^:async r [c] (reset! out (await (esc/boxed-in? c))) (ctx/end c :done nil))})]
-                         (core/submit! eng '(probe) {})
-                         (await (tick-out! eng 20))
-                         @out))]
-          (is (true? (await (boxed? shaft))))
-          (is (false? (await (boxed? (dissoc shaft "1,61,0" "1,62,0"))))))))))
+        (let [hide (fn [p]
+                     (let [sensed (.-sensedAt p)]
+                       (aset p "sensedAt" (fn [q] (if (and (= [3 61 0] [(.-x q) (.-y q) (.-z q)]) (not= "air" (block p [3 62 0])))
+                                                    #js {:unknown true}
+                                                    (sensed q))))))
+              pick [{:name "stone_pickaxe" :count 1}]
+              seen-floors (await (dig-route-run! below-pocket pick nil))
+              unseen-floor (await (dig-route-run! below-pocket pick hide))
+              under-feet #(set (map (fn [d] (contains? (:accept d) :under-feet)) @(:digs %)))]
+          (is (= #{false} (under-feet seen-floors)))
+          (is (= #{false} (under-feet unseen-floor)) "the bend leaves a cell to step aside to and look from"))))))
 
 (defn hiding-with-pickaxe [blocks hidden?]
   (let [p (tu/fake {:blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]})]
