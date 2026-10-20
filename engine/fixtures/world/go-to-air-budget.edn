@@ -54,11 +54,23 @@
             [:fill [4 0 8] [4 5 8] "water"] [:fill [5 0 8] [20 1 8] "water"] [:fill [21 0 8] [21 5 8] "water"]
             [:fill [11 6 0] [11 9 63] "bedrock"]
             [:set [8 2 8] "sea_lantern"] [:set [16 2 8] "sea_lantern"]]
-   :body {:at [4.5 6 8.5]}
-   :act [[:rcon "execute positioned $X $Y $Z run tp $BODY ~4 ~0 ~8"] [:job (jobs.movement.go-to {:pos #at [22 6 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :body {:at [2.5 6 8.5]}
+   :act [[:until-rcon "data get entity $BODY Air" "data: 300s" 30] [:rcon "execute positioned $X $Y $Z run tp $BODY ~4 ~0 ~8"] [:job (jobs.movement.go-to {:pos #at [22 6 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [22.5 6 8.5] 3]]}
+  ;; as above with a 24 cell tunnel (6.2 s sprint-swum; the sealed way takes about 2/3 of the air). Live it passes about 1 in 3: the masked search floods the unseen rock round the tunnel (cards 1958b209, 9a66ed9f). The body starts on stone and waits for full air before the tp: spawned over the shaft it sat in the water and drowned before the job began.
+  {:name "replan-full-air-takes-the-24-cell-tunnel"
+   :plot {:height 12 :length 52 :width 64}
+   :blocks [[:fill [0 0 0] [51 5 63] "stone"]
+            [:fill [4 0 8] [4 5 8] "water"] [:fill [5 0 8] [28 1 8] "water"] [:fill [29 0 8] [29 5 8] "water"]
+            [:fill [11 6 0] [11 9 63] "bedrock"]
+            [:set [8 2 8] "sea_lantern"] [:set [16 2 8] "sea_lantern"] [:set [24 2 8] "sea_lantern"]]
+   :body {:at [2.5 6 8.5]}
+   :act [[:until-rcon "data get entity $BODY Air" "data: 300s" 30] [:rcon "execute positioned $X $Y $Z run tp $BODY ~4 ~0 ~8"] [:job (jobs.movement.go-to {:pos #at [30 6 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-near [30.5 6 8.5] 3]]}
   ;; air about half spent: the tunnel does not fit, so swim up the shaft (about 1.5 s) and walk round the ridge; no drowning
   {:name "replan-low-air-surfaces-and-walks-round"
    :plot {:height 12 :length 44 :width 64}
