@@ -181,8 +181,12 @@
         ^js c (or (aget m (name why)) (aset m (name why) #js {:passes 0 :rays 0}))]
     (aset c (name k) (+ (aget c (name k)) n))))
 
+(def tile-rays
+  "Rays per tile of a pass: adjacent rays run back to back, so they share the sections they read."
+  16)
+
 (defn stride-of
-  "A step near the golden share of n that is coprime to n: casting ray k*stride mod n puts any prefix of a pass spread
+  "A step near the golden share of n that is coprime to n: visiting tile t*stride mod n puts any prefix of a pass spread
   over the whole view, so a pass cut short by a turn still sampled all of its view."
   [n]
   (let [gcd (fn gcd [a b] (if (zero? b) a (recur b (mod a b))))]
@@ -202,9 +206,12 @@
           ground (ground-rays opts hx hy (.-yaw eye) (.-pitch eye) jx jy)]
       (set! (.-pass st) #js {:next 0 :jx jx :jy jy :cols cols :rows rows :ground ground
                              :total (+ (* cols rows) (/ (.-length ground) 2)) :why why})
-      (set! (.-stride (.-pass st)) (stride-of (.-total (.-pass st))))
+      (let [^js pass (.-pass st) tiles (js/Math.ceil (/ (.-total pass) tile-rays))]
+        (set! (.-tiles pass) tiles)
+        (set! (.-stride pass) (stride-of tiles))
+        (set! (.-span pass) (* tiles tile-rays)))
       (count-why! st why :passes 1)
-      (set! (.-passRays st) (.-total (.-pass st))))))
+      (set! (.-passRays st) (.-span (.-pass st))))))
 
 (def mark-gen-ms
   "How long a view generation (the mark stamp) lasts: a cell it marked keeps its recorded time that long."
@@ -267,13 +274,16 @@
     (loop [q from]
       (when (< q to)
         (let [j (- q from)
-              k (mod (* q (.-stride pass)) (.-total pass))]
-          (if (< k n-grid)
+              k (+ (* tile-rays (mod (* (quot q tile-rays) (.-stride pass)) (.-tiles pass))) (mod q tile-rays))]
+          (cond
+            (>= k (.-total pass)) (aset out (* 3 j) js/NaN)
+            (< k n-grid)
             (let [a (+ (- hx) (* du (+ (mod k cols) (.-jx pass))))
                   v (+ (- hy) (* dv (+ (js/Math.floor (/ k cols)) (.-jy pass))))]
               (put! j (+ (aget b 0) (* a (aget b 3)) (* v (aget b 6)))
                     (+ (aget b 1) (* v (aget b 7)))
                     (+ (aget b 2) (* a (aget b 5)) (* v (aget b 8)))))
+            :else
             (let [i (* 2 (- k n-grid)) d (aget ground i) l (aget ground (inc i))
                   dx (+ (* d fx) (* l rx)) dy (- game/eye-height) dz (+ (* d fz) (* l rz))]
               (if (in-cone? b hx hy dx dy dz) (put! j dx dy dz) (aset out (* 3 j) js/NaN)))))
@@ -312,7 +322,7 @@
        (when-let [why (and (nil? (.-pass st)) (start-why per (.-lastStart st) eye now force?))]
          (start-pass! per st eye now effort why))
        (when-let [^js pass (.-pass st)]
-         (let [total (.-total pass)
+         (let [total (.-span pass)
                from (.-next pass)
                to (min total (+ from (js/Math.ceil (/ total (steps-per-pass per)))))
                cells (cast-slice! per st pass eye from to now)]
