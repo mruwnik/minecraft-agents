@@ -37,6 +37,12 @@
   [{:keys [armed? win? sweeps fist-sweeps]}]
   (and (not armed?) (not win?) (< sweeps fist-sweeps)))
 
+(defn reach-only?
+  "Pure: whether the fight swings only at what is within reach and walks to nothing: blind? (a body that cannot see), or
+  the nearest of hostiles by dist is a creeper. A zombie nearer than a creeper is fought as any mob would be."
+  [blind? hostiles dist]
+  (boolean (or blind? (some-> (seq hostiles) (->> (apply min-key dist)) combat/creeper?))))
+
 (defn ^:async fight-or-wait!
   "fight!, except that a reach-only fight with no hostile within hit-reach fails the option at once: attack would sit waiting for one to come."
   [c weapons reach-only? hostiles]
@@ -230,7 +236,7 @@
                   :fight (if (fist-hold? {:armed? (or beaten-fight? armed?) :win? win?
                                           :sweeps (:sweeps (ctx/mem c) 0) :fist-sweeps max-fist-sweeps})
                            (await (fist-look! c))
-                           (await (fight-or-wait! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons)) (or blind? (some? (some combat/creeper? hostiles))) hostiles)))
+                           (await (fight-or-wait! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons)) (reach-only? blind? hostiles #(danger-q/mob-distance (:primitives c) %)) hostiles)))
                   :plug (await (refuge/plug-option! c :plug #{:walls}))
                   :plug-zone (when (:zone-walls (ctx/mem c)) (await (refuge/plug-option! c :plug-zone #{:walls})))
                   :plug-dig (await (refuge/plug-option! c :plug-dig #{:pit :pocket}))

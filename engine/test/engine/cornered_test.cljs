@@ -773,6 +773,20 @@
           (is (= 1 (count (tu/walked-to eng))) "one step back, into the last cell of the room (then the creeper leaves)")
           (is (= -1 (:x (first-move eng)))))))))
 
+(deftest the-fight-is-reach-only-when-the-nearest-hostile-is-a-creeper-or-the-body-is-blind
+  (let [zombie #js {:name "zombie" :d 2}
+        creeper #js {:name "creeper" :d 6}
+        near-creeper #js {:name "creeper" :d 2}
+        far-zombie #js {:name "zombie" :d 6}
+        dist #(.-d %)]
+    (are [blind? hostiles expected] (= expected (pick/reach-only? blind? hostiles dist))
+      false [zombie creeper] false
+      false [creeper zombie] false
+      false [near-creeper far-zombie] true
+      false [creeper] true
+      true [zombie] true
+      false [] false)))
+
 (deftest an-unarmed-body-at-a-dead-end-never-walks-to-a-creeper-to-punch-it
   (async done
     (tu/run-async done
