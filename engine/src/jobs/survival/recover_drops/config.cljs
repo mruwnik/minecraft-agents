@@ -21,7 +21,7 @@
    ::danger-memory-ms {:default 150000 :doc "How long a skip for danger is remembered: the died trigger rests and the job waits (:danger) for that death, then the danger is weighed anew. A skip for the assumed killer alone lasts only while the killer guard does." :spec (a/num-in 0 nil)}
    ::margin {:default 0 :doc "Added to the fetch cost before comparing it to the value." :spec (a/num-in nil nil)}
    ::leg-s {:default 6 :doc "The walk to the pile goes in legs of this many seconds; after each the danger and the cost are weighed again." :spec (a/num-in 0.1 120)}
-   ::see-range {:default 16 :doc "A hostile a declined trip saw stays priced where it stood until the body is this near the place and no such mob is known there." :spec (a/num-in 0 nil)}
+   ::see-range {:default 32 :doc "A hostile a declined trip saw stays priced where it stood until the body is this near the place with a clear line to it and no such mob is known there." :spec (a/num-in 0 nil)}
    ::mob-spot-radius {:default 6 :doc "A known hostile of the same kind this near a remembered mob's place is that mob." :spec (a/num-in 0 nil)}
    ::bed-away-blocks {:default 10 :doc "A respawn farther than this from the bed the body slept in is reported." :spec (a/int-in 0 nil)}})
 

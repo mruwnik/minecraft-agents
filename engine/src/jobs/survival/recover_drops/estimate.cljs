@@ -5,6 +5,7 @@
             [engine.game :as game]
             [engine.memory :as mem]
             [engine.settings :as settings]
+            [jobs.lib.aim :as aim]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
@@ -69,14 +70,17 @@
 
 (defn remembered-mobs
   "[{:name :pos}] of the hostiles an earlier decline of this death (the :recover-danger entry) saw, still priced where they
-  stood: until the body is within ::see-range of the place and no such mob is known near it, as a player forgets a mob
-  only on seeing the place empty. known is [{:name :pos}] of the hostiles known now."
+  stood: until the body is within ::see-range of the place with a clear line to it and no such mob is known near it, as a
+  player forgets a mob only on seeing the place empty. known is [{:name :pos}] of the hostiles known now."
   [c known]
   (let [here (u/self-pos c)
         entry (last (filter #(= (:death-t (ctx/mem c)) (:death-t (:data %))) (mem/entries (ctx/view c) :recover-danger)))
+        sees? (fn [{:keys [pos]}]
+                (let [[x y z] (map #(js/Math.floor %) [(:x pos) (:y pos) (:z pos)])]
+                  (and (<= (u/dist here pos) (cfg/see-range)) (or (aim/body-sees? c [x y z]) (aim/body-sees? c [x (inc y) z])))))
         still-there? (fn [{:keys [name pos]}] (some #(and (= name (:name %)) (<= (u/dist pos (:pos %)) (cfg/mob-spot-radius))) known))]
     (vec (for [m (:mobs (:data entry))
-               :when (and (> (u/dist here (:pos m)) (cfg/see-range)) (not (still-there? m)))]
+               :when (and (not (sees? m)) (not (still-there? m)))]
            m))))
 
 (defn flight-s

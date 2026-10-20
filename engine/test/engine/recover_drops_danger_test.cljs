@@ -372,6 +372,24 @@
           (is (not= :collected (:decision (recovered eng))) "the mob forgotten out of sight is still priced")
           (is (= [] (tu/walk-calls p)) "no walk back toward it"))))))
 
+(deftest a-declined-mob-is-forgotten-when-its-place-is-seen-empty-from-afar
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pile dt/death-pile-of-the-field-report
+              zombie (assoc dt/zombie-by-the-way :pos {:x 22.5 :y 64 :z 3.5})
+              {:keys [eng p clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) zombie)})
+              dear '(jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}})]
+          (die! eng {:pos dt/death-pos :inventory pile})
+          (core/submit! eng dear {})
+          (await (run-until-empty eng 5))
+          (core/submit! eng dear {})
+          (await (core/tick! eng))
+          (swap! clock + 151000)
+          (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "hostile" (:kind e))) %))
+          (await (run-until-empty eng 20))
+          (is (= :collected (:decision (recovered eng))) "the empty place is in clear sight 23 blocks off: the mob is no longer priced"))))))
+
 (deftest a-skip-for-danger-is-remembered-then-tried-again
   (async done
     (tu/run-async done
