@@ -59,7 +59,9 @@
    ::back-near {:default 4 :doc "Blocks from the last sighting at which the body counts as back there." :spec (a/num-in 0 nil)}
    ::closing-blocks {:default 0.2 :doc "Blocks nearer the body an animal must come to count as making progress (a cow swimming in covers a block in 20-30 s)." :spec (a/num-in 0 nil)}
    ::max-search-rounds {:default 40 :doc "Calls in a row a walk may spend on the plan search of its next leg (about 80 ms each) before it counts as failed." :spec (a/int-in 0 nil)}
+   ::lure-reach {:default 6 :doc "A lured animal is waited for once the body is this near it, in blocks." :spec (a/num-in 0 nil)}
    ::back-blocks {:default 12 :doc "An animal out of sight for unseen-lost-ms is looked for by walking back toward where it was last seen, when that is no farther from the body than this." :spec (a/num-in 0 nil)}})
+(defn lure-reach [] (settings/get settings ::lure-reach))
 (defn safe-gap [] (settings/get settings ::safe-gap))
 (defn max-wait-ms [] (* 1000 (settings/get settings ::max-wait-s)))
 (defn unseen-lost-ms [] (* 1000 (settings/get settings ::unseen-lost-s)))

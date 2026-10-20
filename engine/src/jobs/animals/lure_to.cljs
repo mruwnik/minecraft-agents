@@ -13,6 +13,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.need :as need]
+            [jobs.lib.pace :as pace]
             [jobs.lib.pen-gate :as pg]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]
@@ -41,7 +42,7 @@
   Result {:reason :animal key
   :near bool (the animal is within 6 blocks of :pos) :at pos (the body) :animal-at pos (the animal, nil unseen) :in-box bool (with :box)
   :lost / :stalled detail for those reasons}. Reasons:
-  - :arrived: the body stands within :range of :pos and the animal is seen in :box (none: within :range + 3 blocks of :pos) and not in the cell of a planned gate, else the
+  - :arrived: the body stands within ::arrive-range of :pos and the animal is seen in :box (none: within ::arrive-range + ::arrive-slack blocks of :pos) and not in the cell of a planned gate, else the
     body holds still for it up to 10 s and the end is :animal-outside (seen elsewhere) or :lost (not seen). The food is then put away (another carried item in hand when no slot is free); :near says whether the animal is by the spot.
   - :animal-outside: the body is at :pos but the animal is not in the destination; the result gives :distance (animal to :pos).
   Every ending the job concludes itself gives :distance: the animal's, or its last sighting's when it is unseen (the engine's limit ending carries no data).
@@ -57,7 +58,6 @@
   {:mob {:doc "the animal's name, such as \"cow\"" :spec a/name? :default nil}
    :pos {:doc "where to lure it {:x :y :z}" :spec ::a/pos :default nil}
    :box {:doc "the destination pen {:min :max} (feet cells, inclusive): animals in it are not lured, and the job arrives only when the led animal stands in it; none: the animal within 6 blocks of :pos" :spec a/box? :default nil}
-   :range {:doc "how close to :pos counts as there" :spec (a/num-in 0 nil) :default 2}
    :radius {:doc "animals within this many blocks (flat, height ignored) of where the job starts are lured" :spec (a/num-in 0 nil) :default 8}
    :fetch {:doc "get the food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}
    :uuid {:doc "lead only this animal (its uuid or the start of it, as the entities tool shows; the id when it has none); nothing else takes its place. An empty or ambiguous start (more than one animal matches) never starts; one already at the destination ends the job at once (done? :ok)" :spec string? :default nil}
@@ -66,15 +66,15 @@
 (a/defargs settings
   {::timeout-s {:default 180 :doc "The call's :spend :job-time when it gives none: seconds before the lure gives up." :spec (a/num-in 0 nil)}
    ::sighting-age-s {:default 30 :doc "Seconds a chosen animal's last sighting stays worth walking back to while the animal is out of sight." :spec (a/num-in 0 nil)}
+   ::arrive-range {:default 2 :doc "How close to :pos counts as there." :spec (a/num-in 0 nil)}
    ::near-spot {:default 6 :doc "An animal this close (flat) to :pos counts as :near." :spec (a/num-in 0 nil)}
-   ::arrive-slack {:default 3 :doc "Without :box the animal arrives when it is within :range plus this many blocks (flat) of :pos: it follows the food a few blocks behind." :spec (a/num-in 0 nil)}
-   ::lure-reach {:default 6 :doc "The body walks this close to the animal before it leads the way." :spec (a/num-in 0 nil)}
+   ::arrive-slack {:default 3 :doc "Without :box the animal arrives when it is within ::arrive-range plus this many blocks (flat) of :pos: it follows the food a few blocks behind." :spec (a/num-in 0 nil)}
    ::gate-hold-range {:default 10 :doc "Planned gates this near :pos are held open while the lure runs, in blocks." :spec (a/num-in 0 nil)}
    ::ground-search {:default 16 :doc "Blocks above and below :pos looked over for the ground of its column when the unreachable text names it." :spec (a/int-in 0 nil)}})
 (defn sighting-age-ms [] (* 1000 (settings/get settings ::sighting-age-s)))
 (defn near-spot [] (settings/get settings ::near-spot))
 (defn arrive-slack [] (settings/get settings ::arrive-slack))
-(defn lure-reach [] (settings/get settings ::lure-reach))
+(defn arrive-range [] (settings/get settings ::arrive-range))
 (defn gate-hold-range [] (settings/get settings ::gate-hold-range))
 (defn ground-search [] (settings/get settings ::ground-search))
 
@@ -233,14 +233,14 @@
   (contains? (pg/gate-index (:world (:engine c))) [(js/Math.floor x) (js/Math.floor (+ y 0.01)) (js/Math.floor z)]))
 
 (defn at-destination?
-  "True when the animal stands in :box, else within :range plus arrive-slack of :pos, and not in a gate's cell."
+  "True when the animal stands in :box, else within arrive-range plus arrive-slack of :pos, and not in a gate's cell."
   [c a]
-  (let [{:keys [box pos range]} (:args c)
+  (let [{:keys [box pos]} (:args c)
         there (u/pos-of (.-pos a))]
     (and (not (in-doorway? c there))
          (if box
            (animals/in-box? box there)
-           (<= (u/flat-dist there pos) (+ range (arrive-slack)))))))
+           (<= (u/flat-dist there pos) (+ (arrive-range) (arrive-slack)))))))
 
 (defn free-adults
   "The adults within radius of the start, on nobody's lead, none already in :box, nearest first. The animal sighted at the
@@ -327,7 +327,7 @@
                                            (await (ctx/act c :equip (clj->js {:item food})))
                                            :again))
       :else (let [k (animals/key-of target)
-                  walked (await (animals/walk! c k target (lure-reach) {:doors :shut}))]
+                  walked (await (animals/walk! c k target (escort/lure-reach) {:doors :shut}))]
               (if (= :there walked)
                 (do (ctx/update-mem! c #(-> % (assoc :animal k :phase :walk :last-seen (u/pos-of (.-pos target))) (dissoc :sighting))) :again)
                 :again)))))
@@ -361,7 +361,7 @@
                 (await (escort/wait-for-animal! c))))))
 
 (defn ^:async walk-legs-to-pos! [c]
-  (let [r (await (escort/walk-legs! c :walk (:pos (:args c)) (:range (:args c)) (escort/safe-gap)))]
+  (let [r (await (escort/walk-legs! c :walk (:pos (:args c)) (arrive-range) (escort/safe-gap)))]
     (cond
       (= :waiting r) :yield
       (= :searching r) :again
@@ -400,7 +400,7 @@
     (cond
       (:ending (ctx/mem c)) (conclude! c (:ending (ctx/mem c)))
       (nil? phase) (do (ctx/update-mem! c assoc :method :lure :origin (u/self-pos c) :phase :start) :again)
-      (= :start phase) (await (u/untimed! c #(start! c)))
+      (= :start phase) (await (start! c))
       (nil? a) (if-let [next-one (successor c)]
                  (do (ctx/update-mem! c #(-> % (assoc :animal (animals/key-of next-one)) (dissoc :unseen-since))) :again)
                  (if (= :lost (escort/escort-problem c (escort/safe-gap)))
@@ -412,12 +412,7 @@
   "The whole attempt: steps until the job ends; yields only while a child waits on the world."
   [c]
   (animals/reserve-bait! c (:mob (:args c)))
-  (loop []
-    (let [r (await (step c))]
-      (case r
-        :again (recur)
-        :yield :continue
-        r))))
+  (await (pace/steps! c (fn ^:async s [] (let [r (await (step c))] (if (= :yield r) :continue r))))))
 
 (defn ^:async cleanup
   "However the lure ended: the food is put away, then the gates the legs left open are shut (escort/close-up!). Done."

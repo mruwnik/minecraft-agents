@@ -13,15 +13,14 @@
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.bait :as bait]
+            [jobs.animals.escort :as escort]
             [jobs.animals.herd-run :refer [animal-now deepest end! finish! gate-open? held-by-me? in-pen-adults lure? near-pen out-1 read-pen regather-radius set-phase!]]
             [jobs.animals.herd-pen :refer [animal-pos pinned-ms settle-at! step-in-step]]))
 
 
 (a/defargs settings
-  {::lure-reach {:default 6 :doc "A lured animal is waited for once the body is this near it, in blocks." :spec (a/int-in 0 nil)}
-   ::look-back-range {:default 12 :doc "How near the body goes to where an animal near the start was last listed, to see it again, in blocks." :spec (a/int-in 0 nil)}
+  {::look-back-range {:default 12 :doc "How near the body goes to where an animal near the start was last listed, to see it again, in blocks." :spec (a/int-in 0 nil)}
    ::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}})
-(defn lure-reach [] (settings/get settings ::lure-reach))
 (defn look-back-range [] (settings/get settings ::look-back-range))
 (defn max-tries [] (settings/get settings ::max-tries))
 
@@ -147,7 +146,7 @@
           :else
           (let [k (animals/key-of target)
                 _ (child/progress! c :equip)
-                walked (await (animals/walk! c k target (lure-reach) {:doors :shut :range (lure-reach)}))]
+                walked (await (animals/walk! c k target (escort/lure-reach) {:doors :shut :range (escort/lure-reach)}))]
             (if (= :there walked) (start-trip! c k) :continue)))))))
 
 (defn remember-start!

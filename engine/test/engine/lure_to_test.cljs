@@ -257,7 +257,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:box pen-box :radius 12 :pos {:x 34 :y 64 :z 0} :range 1}
+        (let [s (await (scenario {:box pen-box :radius 12 :pos {:x 34 :y 64 :z 0}}
                                  {:self {:pos {:x 26 :y 64 :z 0}} :inventory wheat :entities [(cow 1 29) (cow 2 21)]} 20))]
           (is (= :arrived (:reason (done-event s))))
           (is (= "u2" (:animal (done-event s))) "the penned cow stays")
@@ -304,6 +304,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
+       (await (settings/with-settings {::lure-to/arrive-range 1}
+        (fn ^:async f []
         (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :self {:pos {:x 22 :y 64 :z 0}} :inventory wheat :entities [(cow 1 20)]} 50)
               hold! (fn [token a impl]
                       (.then (impl token a)
@@ -311,11 +313,11 @@
                                (when (>= (.. p self -pos -x) 24) (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [25 64 0]) es))))
                                r)))]
           (doseq [act ["steer" "wait"]] (.override (.-world p) act hold!))
-          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :range 1}) {})
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
           (loop [i 0] (when (and (< i 150) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
           (is (finished? s))
           (is (= :animal-outside (:reason (done-event s))) (pr-str (done-event s)))
-          (is (= 5 (js/Math.round (:distance (done-event s))))))))))
+          (is (= 5 (js/Math.round (:distance (done-event s)))))))))))))
 
 (deftest a-cow-out-of-sight-at-the-spot-is-lost-not-arrived
   (async done
@@ -516,7 +518,7 @@
               budget wsearch/round-budget]
           (set! wsearch/round-budget 1)
           (try
-            (let [s (await (scenario {:pos {:x 30 :y 64 :z 0} :range 3}
+            (let [s (await (scenario {:pos {:x 30 :y 64 :z 0}}
                                      {:floor [-30 -30 40 30] :blocks wall :inventory wheat :entities [(cow 1 2)]} 6))]
               (is (< 10 (count (tu/walked-to (:eng s)))) (pr-str (tu/walked-to (:eng s)))))
             (finally (set! wsearch/round-budget budget))))))))
