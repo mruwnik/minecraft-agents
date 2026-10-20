@@ -1,0 +1,40 @@
+;; animals.leash and animals.unleash on a lit plot with NoAI-free cows: leash a cow in plain view 1 and 3 blocks off,
+;; the honest endings (no lead and :fetch false waits :no-lead; no cow around), and unleash (frees, picks the lead up; nobody led).
+{:defaults
+ {:tags [:animals :jobs]
+  :time :any
+  :plot {:floor "grass_block" :height 12}
+  :body {:at [16.5 0 16.5] :inventory [["lead" 2]] :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "leash-a-cow-one-block-off"
+   :act [[:summon "cow" [17.5 0 16.5] "{NoAI:1b}"] [:until-seen {:entity "cow"} 10]
+         [:job (jobs.animals.leash {:mob "cow"})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :leashed}} :within-s 40 :of-job true}]
+   :after [[:item "lead" 1]]}
+  {:name "leash-a-cow-three-blocks-off"
+   :act [[:summon "cow" [19.5 0 16.5] "{NoAI:1b}"] [:until-seen {:entity "cow"} 10]
+         [:job (jobs.animals.leash {:mob "cow"})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :leashed}} :within-s 40 :of-job true}]
+   :after [[:item "lead" 1]]}
+  {:name "leash-without-a-lead-waits-no-lead"
+   :body {:inventory []}
+   :act [[:summon "cow" [17.5 0 16.5] "{NoAI:1b}"] [:until-seen {:entity "cow"} 10]
+         [:job (jobs.animals.leash {:mob "cow" :fetch false})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-lead}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed :data {:reason :leashed}} :for-s 20 :until {:source :job :kind :waiting}}]}
+  {:name "leash-with-no-cow-around-is-none"
+   :act [[:job (jobs.animals.leash {:mob "cow" :radius 6})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :none}} :within-s 40 :of-job true}]
+   :after [[:item "lead" 2]]}
+  {:name "unleash-frees-the-cow-and-takes-the-lead-back"
+   :act [[:summon "cow" [18.5 0 16.5] "{NoAI:1b}"] [:until-seen {:entity "cow"} 10]
+         [:job (jobs.animals.leash {:mob "cow"})]
+         [:await {:source :job :kind :completed} 40]
+         [:job (jobs.animals.unleash {:mob "cow"})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :unleashed}} :within-s 60 :of-job true}]
+   :after [[:item "lead" 2]]}
+  {:name "unleash-with-nobody-led-is-already"
+   :act [[:summon "cow" [18.5 0 16.5] "{NoAI:1b}"] [:until-seen {:entity "cow"} 10]
+         [:job (jobs.animals.unleash {:mob "cow"})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :unleashed :cause :already}} :within-s 40 :of-job true}]}]}
