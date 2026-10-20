@@ -75,3 +75,14 @@
         kind-at (fn [x y z] (if (solid [x y z]) :solid :open))]
     (is (= [2 5 0] (aim/first-blocker kind-at [0.5 5.5 0.5] [5 5 0])))
     (is (nil? (aim/first-blocker kind-at [0.5 7.5 0.5] [5 7 0])) "a clear line has no blocker")))
+
+(deftest lava-between-the-eye-and-the-goal-is-no-blocker
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (update pit-world :blocks assoc "4,65,0" "lava")
+              {:keys [p]} (gt/setup world)
+              {p2 :p} (gt/setup (assoc-in world [:blocks "4,65,0"] "stone"))
+              eye [2.5 66.1 0.5]]
+          (is (nil? (aim/first-blocker (aim/seen-kind-at p) eye goal)))
+          (is (= [4 65 0] (aim/first-blocker (aim/seen-kind-at p2) eye goal))))))))

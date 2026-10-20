@@ -45,7 +45,7 @@
   floors to the scaffold ledger for jobs.access.cleanup (setting take-back-floors?).
 
   Hazards: exposed lava is filled with a building block (a jobs.blocks.place child, fetched when :fetch allows; :on-lava :stop stops
-  :lava-exposed instead); a failed seal, or lava flowing back after a reseal, backs the body off and stops :lava-unsealed. A cut that
+  :lava-exposed instead); after a seal it waits half a second, looking, before it digs or steps on; a failed seal, or lava flowing back after a reseal, backs the body off and stops :lava-unsealed. A cut that
   now touches seen water is plugged the same way (stops :hazard with :plugged; :water-unplugged if it cannot). :accept
   (#{:fluid-adjacent :lava-adjacent :falling-block}, default #{}) takes those hazards. A falling block over the body's own column is
   never taken. The stair never digs the block it stands on, a cell it plugged (memory :stair-plug; setting dig-plugs? digs it),

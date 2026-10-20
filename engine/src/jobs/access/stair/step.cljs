@@ -102,23 +102,33 @@
     (await (look-at! c cell))
     :again))
 
+(def seal-settle-ms "How long after a seal the stair waits, looking, before it goes on: lava put back beside the cell shows within a tick or two and reaches the body's cell after about 1.5 s." 500)
+
 (defn ^:async lava-step!
   "Exposed lava by the job's :on-lava: nil when there is none; :stop gives the stop :lava-exposed, else the first is
-  sealed (jobs.lib.lava/seal!, event kind)."
+  sealed (jobs.lib.lava/seal!, event kind). After a seal :continue until seal-settle-ms have passed, so lava that
+  comes back is seen before the stair digs or walks on beside it."
   [c kind block-at feet cut]
-  (when-let [cell (first (cells/exposed-lava block-at feet cut))]
-    (if (= :stop (:on-lava (:args c)))
-      {:reason :lava-exposed :cell cell :fluid "lava"}
-      (await (lava/seal! c kind block-at cell {:fetch (:fetch (:args c)) :ignore-zones? (:ignore-zones? (:args c))})))))
+  (let [sealed-at (:sealed-at (ctx/mem c))]
+    (if (and sealed-at (< (- (ctx/now c) sealed-at) seal-settle-ms))
+      :continue
+      (when-let [cell (first (cells/exposed-lava block-at feet cut))]
+        (if (= :stop (:on-lava (:args c)))
+          {:reason :lava-exposed :cell cell :fluid "lava"}
+          (let [r (await (lava/seal! c kind block-at cell {:fetch (:fetch (:args c)) :ignore-zones? (:ignore-zones? (:args c))}))]
+            (when (= :again r) (ctx/update-mem! c assoc :sealed-at (ctx/now c)))
+            r))))))
 
 (defn ^:async look-at-lava!
-  "Once per lava cell (memory :lava-looked), look at the first exposed lava: cells between the eye and it never sensed
-  count as clear to body-sees?, and the seal's place child finds them solid only after its own look."
+  "Once per lava cell and state of the cut (memory :lava-looked), look at the first exposed lava: cells between the eye
+  and it never sensed count as clear to body-sees?, and the seal's place child finds them solid only after its own look.
+  A cut cell dug since the last look opens a new line, so it is looked again."
   [c block-at feet cut]
   (when-let [lava (first (cells/exposed-lava block-at feet cut))]
-    (when (not= lava (:lava-looked (ctx/mem c)))
-      (ctx/update-mem! c assoc :lava-looked lava)
-      (await (look-at! c lava)))))
+    (let [looked [lava (set (filter #(bs/air (block-at %)) cut))]]
+      (when (not= looked (:lava-looked (ctx/mem c)))
+        (ctx/update-mem! c assoc :lava-looked looked)
+        (await (look-at! c lava))))))
 
 (defn blind-cell
   "The first cut cell still solid when the body does not see the first exposed lava cell and the cell does not touch it:

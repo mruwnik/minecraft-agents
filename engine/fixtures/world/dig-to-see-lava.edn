@@ -7,7 +7,7 @@
   :time :any
   :plot {:height 20}
   :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
-  :body {:at [10.5 10 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4] ["fire_resistance" 600 0]]}
+  :body {:at [10.5 10 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4]]}
   :limit-s 120}
  :cases
  [{:name "stair-digs-to-lava-behind-stone-seals-it-and-goes-on"
@@ -60,7 +60,7 @@
   {:name "stair-lava-beside-a-cut-flows-in-after-the-dig-is-sealed-and-the-stair-backs-off"
    ;; the lava is a block beside the cut cell (12 8 16), buried under the surface layer so unseen until the dig; a sealed cell stays sealed in vanilla, so the runner puts lava back into it (as a flow would) right after each of the two seals it makes (each pour waits for the stair's sealed event): the second seal fails the same way, the stair backs off
    :blocks [[:set [12 8 17] "lava"]]
-   :body {:effects [["speed" 600 0] ["fire_resistance" 600 0]]}
+   :body {:effects [["speed" 600 0]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]
          [:await {:source :job :kind :stair.sealed :data {:cell #at [12 8 17]}} 90]
          [:rcon "execute positioned $X $Y $Z run setblock ~12 ~8 ~17 lava"]

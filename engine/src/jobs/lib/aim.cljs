@@ -16,9 +16,12 @@
     [[cx cy cz] [(+ x lo) cy cz] [(+ x hi) cy cz] [cx (+ y lo) cz] [cx (+ y hi) cz] [cx cy (+ z lo)] [cx cy (+ z hi)]]))
 
 (defn seen-kind-at
-  "(fn [x y z]) -> reach/kind-of of the block the body of primitives p sees or remembers there (never seen: :open)."
+  "(fn [x y z]) -> reach/kind-of of the block the body of primitives p sees or remembers there (never seen: :open). Lava
+  is :open: a player's aim passes through fluids, and lava flowing into the cell between the eye and a source must not
+  hide the source from the seal."
   [p]
-  (fn [x y z] (reach/kind-of (u/seen-block p {:x x :y y :z z}))))
+  (fn [x y z] (let [b (u/seen-block p {:x x :y y :z z})]
+                (if (= "lava" (some-> b .-name)) :open (reach/kind-of b)))))
 
 (defn eye-at
   "The eye [x y z] of a body whose feet are at pos {:x :y :z}."
