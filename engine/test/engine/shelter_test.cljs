@@ -1563,6 +1563,14 @@
     (perception/pass! per)
     p))
 
+(defn tunnel-seen-body
+  "The lit dead-end tunnel with every cell in range seen (seeded, so the farthest roofed cell is exact)."
+  []
+  (let [{:keys [blocks light]} (lit-tunnel-box false)
+        raw-p (tu/fake {:time night :yaw -90 :blocks blocks})]
+    (swap! (fake/state raw-p) assoc :light-default [0 0] :light light)
+    (tu/seeing-all raw-p)))
+
 (deftest the-edge-of-a-lit-region-is-looked-at-but-a-side-of-only-dark-cells-is-skipped
   (let [lit (look-edge/pending {:primitives (tunnel-edge-body nil)} #{} 0)]
     (is (seq lit) "an unseen side beside lit cells is looked at")
@@ -1580,8 +1588,8 @@
     (is (some? some-cell))))
 
 (deftest walkable-near-is-the-reachable-ground-nearest-the-cell
-  (let [p (tunnel-edge-body nil)]
-    (is (<= 3 (:x (look-edge/walkable-near p [23 64 0])) 19) "the farthest cell whose roof was seen, not past the dead end")
+  (let [p (tunnel-seen-body)]
+    (is (= {:x 19 :y 64 :z 0} (look-edge/walkable-near p [23 64 0])) "the farthest cell whose roof was seen, not past the dead end")
     (is (= {:x 5 :y 64 :z 0} (look-edge/walkable-near p [5 64 3])))))
 
 (deftest walkable-near-stays-inside-the-closed-region-and-does-not-open-its-door
@@ -1597,7 +1605,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [p (tunnel-edge-body nil)
+        (let [p (tunnel-seen-body)
               mem* (atom {})
               c {:primitives p :id "edge-stub" :root "edge-stub" :slots []
                  :view (fn [] {:now 1000000 :data {:entries {(mem/job-kind "edge-stub") [{:t 1000000 :data @mem*}]}
@@ -1618,7 +1626,7 @@
             (await (look-edge/look! c cells)))
           (is (= [:look :walk :walk :look] (map first @log))
               "look, walk (still walking: again), walk done, look again")
-          (is (<= 3 (:x (nth (nth @log 1) 2)) 19) "the stride reaches the cell 3 away, not the one 10 away")
+          (is (= 19 (:x (nth (nth @log 1) 2))) "the stride reaches the cell 3 away, not the one 10 away")
           (is (= #{[20 64 0]} (:edge-looked @mem*)))
           (is (= 5 (:edge-steps @mem*))))))))
 

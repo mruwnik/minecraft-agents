@@ -25,8 +25,9 @@ export function installFastBlockUpdates (bot) {
   const light = (stateId, position) => ({ type: stateType(stateId), stateId, position })
 
   // count of `blockUpdate:(x, y, z)` listeners, kept by the bot's listener events (Mineflayer forwards them to the world) so the common update builds no key string
-  let keyed = 0
   const isKeyed = event => typeof event === 'string' && event.startsWith('blockUpdate:')
+  // starts from the listeners already registered, so removing one of them cannot hide a later waiter
+  let keyed = bot.eventNames().filter(isKeyed).reduce((n, event) => n + bot.listenerCount(event), 0)
   bot.on('newListener', event => { if (isKeyed(event)) keyed++ })
   bot.on('removeListener', event => { if (isKeyed(event)) keyed-- })
 

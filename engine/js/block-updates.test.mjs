@@ -16,7 +16,7 @@ const World = prismarineWorld(registry)
 const Chunk = require('prismarine-chunk')(registry)
 const id = name => registry.blocksByName[name].defaultState
 
-function fakeBot () {
+function fakeBot (beforeInstall = () => {}) {
   const client = new EventEmitter()
   client.on('block_change', () => assert.fail('the stock handler must be removed'))
   const world = new World(null).sync
@@ -24,6 +24,7 @@ function fakeBot () {
   const bot = Object.assign(new EventEmitter(), { _client: client, registry, world, supportFeature: name => mineflayer.supportFeature(name, '26.1') })
   const updates = []
   world.on('blockUpdate', (oldBlock, newBlock) => updates.push([registry.blocks[oldBlock.type].name, registry.blocks[newBlock.type].name, newBlock.position.toString()]))
+  beforeInstall(bot)
   installFastBlockUpdates(bot)
   return { client, world, updates, bot }
 }
@@ -48,6 +49,18 @@ test('a listener of one cell gets full Blocks for it; other cells build none', (
   world.off('blockUpdate:(3, 70, 5)', listener)
   client.emit('block_change', { location: { x: 3, y: 70, z: 5 }, type: id('dirt') })
   assert.deepEqual(keyed, [['air', 'stone', 'block']])
+})
+
+test('a waiter registered before the install is counted, so its removal cannot starve the next waiter', () => {
+  const early = () => {}
+  const seen = []
+  const late = (oldBlock, newBlock) => seen.push(newBlock.name)
+  const { client, bot, world } = fakeBot(b => b.on('blockUpdate:(9, 70, 5)', early))
+  bot.off('blockUpdate:(9, 70, 5)', early)
+  bot.on('blockUpdate:(3, 70, 5)', late)
+  world.on('blockUpdate:(3, 70, 5)', late)
+  client.emit('block_change', { location: { x: 3, y: 70, z: 5 }, type: id('stone') })
+  assert.deepEqual(seen, ['stone'])
 })
 
 test('a multi_block_change writes every record, decoded as Mineflayer does', () => {
