@@ -11,12 +11,11 @@
 (defn carried [c] (u/inventory (:primitives c)))
 
 (defn fetch-opts
-  "The options of a need call for stage (a slot name) under the :fetch arg: nil when :fetch is off or leaves out items."
+  "The options of a need call for stage (a slot name) from the call's ways: nil when they allow no fetch."
   [c stage]
-  (let [o (need/parse-arg (:fetch (:args c)))]
-    (when (and o (or (nil? (:what o)) (contains? (:what o) :item)))
-      (-> (select-keys o [:how :explore])
-          (assoc :slot (keyword (str "need-" (name stage))))))))
+  (let [how (need/fetch-how c)]
+    (when (seq how)
+      {:how how :explore (:explore (:args c)) :slot (keyword (str "need-" (name stage)))})))
 
 (defn want-count
   "How many items are to be smelted: :count, else what is carried of the input (at least 1 when nothing is)."

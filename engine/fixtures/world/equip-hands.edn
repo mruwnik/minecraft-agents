@@ -16,7 +16,7 @@
    :act [[:job (jobs.items.equip {:item "shield"})]]
    :expect [{:event {:source :job :kind :completed :data {:item "shield" :slot "off-hand"}} :within-s 20 :of-job true}]}
   {:name "no-item"
-   :act [[:job (jobs.items.equip {:item "diamond_pickaxe" :fetch false})]]
+   :act [[:job (jobs.items.equip {:item "diamond_pickaxe" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-item}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 10}]}
   {:name "unknown-item"

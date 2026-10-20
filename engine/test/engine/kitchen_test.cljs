@@ -138,7 +138,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world {:inventory [(item "coal" 1)] :blocks {"11,64,0" "air"} :containers {"10,64,0" [(item "wheat" 9)]}}
-              s (await (run (list job (assoc args :reserve {} :stock {"bread" 3} :fetch false)) world 12 {"wheat" 9}))]
+              s (await (run (list job (assoc args :reserve {} :stock {"bread" 3} :ways #{:carried})) world 12 {"wheat" 9}))]
           (is (= {"wheat" 9} (chest-items s)))
           (is (nil? (get (inv s) "wheat")))
           (is (empty? (events-of s :round_started)))
@@ -203,8 +203,8 @@
 
 (deftest bake-asks-for-the-loaves-the-stock-lacks-from-the-wheat-above-the-reserve
   (are [facts args-extra call] (= call (select-keys (:call (kitchen/decide :bake (merge base args-extra) facts)) [:args]))
-    {:carried {"wheat" 9} :chest true :table true :chest-stock {"bread" 14}} {} {:args {:item "bread" :count 2 :fetch true}}
-    {:carried {"wheat" 9} :chest true :table true :chest-stock {}} {:reserve {"wheat" 6}} {:args {:item "bread" :count 1 :fetch true}}))
+    {:carried {"wheat" 9} :chest true :table true :chest-stock {"bread" 14}} {} {:args {:item "bread" :count 2 :ways #{:carried :chest :craft :gather}}}
+    {:carried {"wheat" 9} :chest true :table true :chest-stock {}} {:reserve {"wheat" 6}} {:args {:item "bread" :count 1 :ways #{:carried :chest :craft :gather}}}))
 
 (deftest take-fetches-only-the-wheat-the-shortfall-needs-and-keeps-the-reserve
   (are [facts extra items] (= items (get-in (kitchen/decide :take (merge base extra) facts) [:call :args :items]))

@@ -94,7 +94,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"60,64,0" "crafting_table"}} {:item "bread" :fetch false :radius 40}))]
+        (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"60,64,0" "crafting_table"}} {:item "bread" :ways #{:carried} :radius 40}))]
           (is (= {:item "bread" :made 0 :status :stopped :reason :no-table} (dissoc result :text)))
           (is (empty? (tu/walked-to eng)))
           (is (str/includes? (:text result) "[60 64 0]"))
@@ -104,7 +104,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p _ eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"30,64,0" "crafting_table"}} {:item "bread" :fetch false}))]
+        (let [[result p _ eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"30,64,0" "crafting_table"}} {:item "bread" :ways #{:carried}}))]
           (is (= {:item "bread" :made 1 :status :done} (dissoc result :text)))
           (is (= {"bread" 1} (inv p)))
           (is (= 1 (count (tu/walked-to eng)))))))))
@@ -131,7 +131,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks table-block})
               _ (await (child-outcome eng 'jobs.memory.reserve {:item "wheat" :count 2} 4))
-              result (await (child-outcome eng job {:item "bread" :fetch false} 8))]
+              result (await (child-outcome eng job {:item "bread" :ways #{:carried}} 8))]
           (is (= {:made 0 :status :stopped :reason :need :short {"wheat" 2}} (dissoc result :item :text)))
           (is (= {"wheat" 3} (inv p))))))))
 
@@ -279,7 +279,7 @@
               _ (.override (.-world p) "craft" (fn ^:async f [token args impl]
                              (await (impl token args))
                              #js {:status "partial" :reason "no-item" :made 4 :used #js {} :have #js {} :recipes #js [#js {"oak_log" 1}]}))
-              result (await (child-outcome eng job {:item "oak_planks" :count 8 :fetch false} 8))]
+              result (await (child-outcome eng job {:item "oak_planks" :count 8 :ways #{:carried}} 8))]
           (is (= {"oak_log" 1} (:short result)))
           (is (= 4 (:made result)))
           (is (= :stopped (:status result)) "a partial stop is not done"))))))
@@ -394,7 +394,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (wheat-world))
-              result (await (child-outcome eng job {:item "bread" :fetch false} 80))]
+              result (await (child-outcome eng job {:item "bread" :ways #{:carried}} 80))]
           (is (= {:made 0 :status :stopped :reason :need :short {"wheat" 1} :text "craft bread is missing {\"wheat\" 1}"} (dissoc result :item)))
           (is (= 1 (chest-wheat p))))))))
 
@@ -513,7 +513,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}]})
-              result (await (child-outcome eng job {:item "bread" :fetch false} 40))]
+              result (await (child-outcome eng job {:item "bread" :ways #{:carried}} 40))]
           (is (= 1 (:made result)))
           (is (= 1 (get (inv p) "bread"))))))))
 
@@ -521,7 +521,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (craft {:inventory [{:name "wheat" :count 3}]} {:item "bread" :fetch false}))]
+        (let [[result p] (await (craft {:inventory [{:name "wheat" :count 3}]} {:item "bread" :ways #{:carried}}))]
           (is (= {:item "bread" :made 0 :status :stopped :reason :no-table} (dissoc result :text)))
           (is (nil? (get (inv p) "bread"))))))))
 
@@ -530,7 +530,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result _ _ _ walks] (await (craft-counting-walks {:inventory [{:name "wheat" :count 3}] :blocks table-block :unreachable ["10,64,0"]}
-                                                                {:item "bread" :fetch false}))]
+                                                                {:item "bread" :ways #{:carried}}))]
           (is (= {:made 0 :status :stopped :reason :unreachable} (select-keys result [:made :status :reason])))
           (is (= 1 walks) "a table the walk cannot reach is not walked to again")
           (is (re-find #"cannot be reached" (:text result))))))))
@@ -572,7 +572,7 @@
                                1 #js {:status "out-of-reach" :reason "too-far" :table #js {:x 10 :y 64 :z 0}}
                                2 #js {:status "unreachable" :reason "no-table"}
                                (await (impl token args)))))
-              result (await (child-outcome eng job {:item "bread" :fetch false} 20))]
+              result (await (child-outcome eng job {:item "bread" :ways #{:carried}} 20))]
           (is (seq (calls p "look")) "the table behind the body is not known until it looks")
           (is (= {:item "bread" :made 1 :status :done} (dissoc result :text))))))))
 
@@ -673,7 +673,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (craft {:inventory [{:name "crafting_table" :count 1}]} {:item "bread" :fetch false}))]
+        (let [[result p] (await (craft {:inventory [{:name "crafting_table" :count 1}]} {:item "bread" :ways #{:carried}}))]
           (is (some? (:short result)) (pr-str result))
           (is (= 1 (get (inv p) "crafting_table"))))))))
 
@@ -716,9 +716,9 @@
           (is (= {:event :completed :kind :done :made 4}
                  (await (end {:inventory [{:name "oak_log" :count 1}]} {:item "oak_planks" :count 4}))))
           (is (= {:event :stopped :kind :condition-failed :reason :need :made 0 :short {"wheat" 1}}
-                 (await (end {:inventory wheat2 :blocks table-block} {:item "bread" :fetch false}))) "an ingredient short")
+                 (await (end {:inventory wheat2 :blocks table-block} {:item "bread" :ways #{:carried}}))) "an ingredient short")
           (is (= {:event :stopped :kind :condition-failed :reason :no-table :made 0}
-                 (await (end {:inventory [{:name "wheat" :count 3}]} {:item "bread" :fetch false}))))
+                 (await (end {:inventory [{:name "wheat" :count 3}]} {:item "bread" :ways #{:carried}}))))
           (is (= {:event :stopped :kind :condition-failed :reason :not-a-table :made 0}
                  (await (end {:inventory [{:name "wheat" :count 3}] :blocks {"10,64,0" "stone"}} {:item "bread" :table table}))))
           (is (= {:event :stopped :kind :nothing-possible :reason :unreachable :made 0}
@@ -743,7 +743,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (craft {:inventory [{:name "wheat" :count 2} {:name "crafting_table" :count 1}]} {:item "bread" :fetch false}))]
+        (let [[result p] (await (craft {:inventory [{:name "wheat" :count 2} {:name "crafting_table" :count 1}]} {:item "bread" :ways #{:carried}}))]
           (is (= {:item "bread" :made 0 :status :stopped :reason :need :short {"wheat" 1}} (dissoc result :text)))
           (is (empty? (calls p "place")) "no table placed")
           (is (= 1 (get (inv p) "crafting_table"))))))))

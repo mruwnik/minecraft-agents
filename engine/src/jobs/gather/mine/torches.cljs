@@ -190,7 +190,7 @@
         n (torch/torches-held (:primitives c))]
     (cond
       (and (< n (torch-min)) (craftable? c) (not (:craft-failed m)))
-      (let [e (await (ctx/call c :torch-craft 'jobs.items.craft {:item "torch" :count (need/carry-count c :torch-craft ["torch"] (torch-craft-count)) :fetch (:fetch (:args c)) :avoid (trip/line-ahead c)}))]
+      (let [e (await (ctx/call c :torch-craft 'jobs.items.craft {:item "torch" :count (need/carry-count c :torch-craft ["torch"] (torch-craft-count)) :ways (need/ways-of-fetch (:fetch (:args c))) :avoid (trip/line-ahead c)}))]
         (when (and (not= :continue e) (not (and (= :done (:kind e)) (pos? (:made (:data e) 0)))))
           (ctx/update-mem! c assoc :craft-failed true))
         (if (= :continue e) :continue :again))

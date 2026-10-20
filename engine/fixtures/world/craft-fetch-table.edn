@@ -1,7 +1,7 @@
 ;; Card 5de16da7 (part 1): jobs.items.craft with no crafting table in view fetches one (a crafting_table obtain child) from a
 ;; seen chest, puts it down beside the body and crafts. The body stands at the middle facing the chest (yaw turned by RCON so its
 ;; first sight sees it); 3 planks + 2 sticks make a wooden pickaxe at a table. The chest is at [14 0 19], no table on the plot.
-;; Should-succeed: the need-crafting_table child starts and ends, the pickaxe is carried. Should-fail: :fetch false ends stopped :no-table, no pickaxe.
+;; Should-succeed: the need-crafting_table child starts and ends, the pickaxe is carried. Should-fail: :ways #{:carried} ends stopped :no-table, no pickaxe.
 ;; Card c13758ed: a table put down from the inventory is reported in the result (:spent, :spent-at) and dug up again.
 {:defaults
  {:tags [:fetch :crafting] :time :any
@@ -21,7 +21,7 @@
    :after [[:item "wooden_pickaxe" 1]]}
   {:name "fetch-false-ends-no-table"
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
-         [:job (jobs.items.craft {:item "wooden_pickaxe" :fetch false})]]
+         [:job (jobs.items.craft {:item "wooden_pickaxe" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-table}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :need-crafting_table}} :for-s 30 :of-job true :until {:source :job :kind :stopped}}]
    :after [[:item "wooden_pickaxe" 0] [:item "oak_planks" 3]]}
@@ -34,6 +34,6 @@
   {:name "missing-sticks-leave-the-carried-table-in-the-bag"
    :blocks [[:set [14 0 19] "stone"]]
    :body {:inventory [["oak_planks" 3] ["crafting_table" 1]]}
-   :act [[:job (jobs.items.craft {:item "wooden_pickaxe" :fetch false})]]
+   :act [[:job (jobs.items.craft {:item "wooden_pickaxe" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :need}} :within-s 40 :of-job true}]
    :after [[:item "wooden_pickaxe" 0] [:item "crafting_table" 1]]}]}

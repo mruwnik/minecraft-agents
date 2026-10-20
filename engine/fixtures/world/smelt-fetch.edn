@@ -4,7 +4,7 @@
 ;; Open plot, body at [16.5 0 16.5] looking east (yaw 270).
 ;; Should-succeed: ingots from a crafted furnace, cooked chicken by product name, ingots from a placed carried furnace, iron after the copper.
 ;; Cases that need no furnace seen set a small seen-radius and chest-radius: the pool runs neighbouring plots at once and their furnaces and chests are in sight.
-;; Should-fail: :fetch false with no furnace seen gives up no-furnace-seen; a diamond is no input (not-smeltable).
+;; Should-fail: :ways #{:carried} with no furnace seen gives up no-furnace-seen; a diamond is no input (not-smeltable).
 {:defaults
  {:tags [:items :smelt :fetch :jobs]
   :time :any
@@ -18,10 +18,10 @@
    :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
    :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}]
    :after [[:item "iron_ingot" 2]]}
-  {:name "fetch-false-no-furnace-seen-gives-up"
+  {:name "carried-only-no-furnace-seen-gives-up"
    :settings {:jobs.items.smelt/seen-radius 12 :jobs.lib.stock/chest-radius 12}
    :body {:inventory [["raw_iron" 2] ["coal" 2] ["crafting_table" 1] ["cobblestone" 16]]}
-   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2 :fetch false})]]
+   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-furnace-seen}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15 :of-job true :until {:source :job :kind :stopped}}]
    :after [[:item "iron_ingot" 0] [:item "raw_iron" 2]]
@@ -87,7 +87,7 @@
   {:name "charcoal-with-no-furnace-to-be-had-leaves-the-logs"
    :settings {:jobs.items.smelt/seen-radius 12 :jobs.lib.stock/chest-radius 12}
    :body {:inventory [["oak_log" 11]]}
-   :act [[:job (jobs.items.smelt {:item "charcoal" :count 3 :fetch {:how #{:chest}}})]]
+   :act [[:job (jobs.items.smelt {:item "charcoal" :count 3 :ways #{:carried :chest}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-furnace-seen}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15 :of-job true :until {:source :job :kind :stopped}}]
    :after [[:item "oak_log" 11] [:item "oak_planks" 0] [:item "charcoal" 0]]

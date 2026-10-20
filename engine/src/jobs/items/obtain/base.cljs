@@ -73,10 +73,10 @@
   [c plan]
   (every? #(way? c (step-way %)) (:steps plan)))
 
-(defn old-how
-  "The ways as the :how sources of an old job's fetch option."
+(defn child-ways
+  "The ways of this call a fetching child job takes: :carried and the :chest :craft :gather it allows."
   [c]
-  (set (filter #{:chest :craft :gather} (ways-of c))))
+  (into #{:carried} (filter #{:chest :craft :gather} (ways-of c))))
 
 (defn holds [items names]
   (first (filter #(pos? (get items % 0)) names)))

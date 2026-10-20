@@ -3,7 +3,7 @@
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.items.craft :as craft]
-            [jobs.items.obtain.base :refer [carried-of old-how tried!]]
+            [jobs.items.obtain.base :refer [carried-of child-ways tried!]]
             [jobs.items.obtain.plan :refer [craft-plan]]
             [jobs.items.smelt :as smelt]
             [jobs.lib.child :as child]
@@ -24,12 +24,6 @@
     (select-keys (:data e) [:short :alternatives])
     (contract/cause-key e)))
 
-(defn smelt-fetch
-  "The :fetch limits of a smelt child (its fuel and furnace): this obtain's sources."
-  [c]
-  (into {} (remove (comp nil? val))
-        {:how (old-how c) :explore (:explore (:args c))}))
-
 (defn wood-fuel
   "The planks kind to burn: the first of the smelt's wood fuels carried, else the first."
   [inv]
@@ -43,7 +37,7 @@
   [c step]
   (ctx/update-mem! c assoc-in [:craft :step] step)
   (let [e (waits/waiting-out c (await (ctx/call c :smelt 'jobs.items.smelt
-                           (cond-> {:item (:item step) :count (:count step) :fetch (smelt-fetch c)}
+                           (cond-> {:item (:item step) :count (:count step) :ways (child-ways c) :explore (boolean (:explore (:args c)))}
                              (= "charcoal" (:item step)) (assoc :fuel (wood-fuel (u/inventory (:primitives c))))))))]
     (if (= :continue e)
       :continue
@@ -77,7 +71,7 @@
 
       :else
       (do (ctx/update-mem! c assoc-in [:craft :step] step)
-          (let [e (await (ctx/call c :craft 'jobs.items.craft {:item (:item step) :count (need/carry-count c :craft [(:item step)] (:count step)) :fetch false :avoid (:avoid (:args c)) :for-plan (:for-plan (:args c))
+          (let [e (await (ctx/call c :craft 'jobs.items.craft {:item (:item step) :count (need/carry-count c :craft [(:item step)] (:count step)) :ways #{:carried} :avoid (:avoid (:args c)) :for-plan (:for-plan (:args c))
                                                                     :keep-table (nil? (:for-plan (:args c)))}))]
             (if (= :continue e)
               :continue

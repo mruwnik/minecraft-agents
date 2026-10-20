@@ -1,4 +1,4 @@
-;; Cards c277d5a3 (equip, tunnel and leave-tunnel fetch by default, :fetch false opts out), caf02a9d (:fetch for tunnel: the
+;; Cards c277d5a3 (equip, tunnel and leave-tunnel fetch by default; equip opts out with :ways #{:carried}, the others with :fetch false), caf02a9d (:fetch for tunnel: the
 ;; stair's booked :no-tool wait and a :no-tool stop of the tunnel's own digs fetch a pickaxe then walk back), df7d29f9 (a
 ;; tunnel's :fetch false reaches its leave-tunnel child: one-off, see the note on the card).
 ;; Stone mass x 8..24, z 8..24, y 0..9; the body stands on top (feet y 10) facing south and a little down, so its first
@@ -19,7 +19,7 @@
   {:name "equip-fetch-false-waits-no-item-chest-untouched"
    :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:iron_pickaxe\",count:1}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
-         [:job (jobs.items.equip {:item "iron_pickaxe" :fetch false})]]
+         [:job (jobs.items.equip {:item "iron_pickaxe" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting} :within-s 30 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 30}]
    :after [[:item "iron_pickaxe" 0]]}

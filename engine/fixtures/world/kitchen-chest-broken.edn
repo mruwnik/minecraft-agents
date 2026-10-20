@@ -11,11 +11,11 @@
   :limit-s 150}
  :cases
  [{:name "intact-chest-completes-the-pass"
-   :act [[:job (jobs.items.kitchen {:furnace #xyz [20 0 14] :chest #xyz [12 0 18] :stock {"cooked_beef" 1} :fetch false})]]
+   :act [[:job (jobs.items.kitchen {:furnace #xyz [20 0 14] :chest #xyz [12 0 18] :stock {"cooked_beef" 1} :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 130 :of-job true}]
    :after [[:item "cooked_beef" 0]]}
   {:name "chest-broken-mid-pass-ends-chest-gone"
-   :act [[:job (jobs.items.kitchen {:furnace #xyz [20 0 14] :chest #xyz [12 0 18] :stock {"cooked_beef" 1} :fetch false})]
+   :act [[:job (jobs.items.kitchen {:furnace #xyz [20 0 14] :chest #xyz [12 0 18] :stock {"cooked_beef" 1} :ways #{:carried}})]
          [:await {:source :job :kind :child_started :data {:slot :smelt-beef}} 60]
          [:rcon "execute positioned $X $Y $Z run setblock ~12 ~ ~18 air"]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :chest-gone}} :within-s 130 :of-job true}

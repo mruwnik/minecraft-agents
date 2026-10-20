@@ -6,6 +6,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.need :as need]
             [jobs.lib.crafting-table :as crafting-table]
             [jobs.lib.pace :as pace]
             [jobs.lib.places :as places]
@@ -26,11 +27,11 @@
   - :take (jobs.storage.withdraw): the wheat for the loaves the bread shortfall needs that the carried wheat above
     its :reserve entry does not cover, from the chest (wheat there above what :reserve still holds back).
   - :bake (jobs.items.craft, bread): the loaves of the carried wheat above its :reserve entry, at most the
-    shortfall. The table is the craft's: a seen one, else a carried one put down, else one fetched (:fetch false: none).
+    shortfall. The table is the craft's: a seen one, else a carried one put down, else one fetched (the call's ways allow no fetch: none).
   - :deposit (jobs.storage.deposit) of the cooked food and bread this pass made, and wheat taken and not used, into
     :chest; food the body brought or withdrew stays carried. Bread is never withdrawn: carrying food is get-food's.
   :reserve is never used, carried or in the chest (wheat for bait and seed: the default keeps a breeding pair's).
-  A step with nothing to do is skipped and booked {:skipped reason}: :no-food, :no-wheat, :no-table (none seen or carried, :fetch false), :no-chest, :stocked,
+  A step with nothing to do is skipped and booked {:skipped reason}: :no-food, :no-wheat, :no-table (none seen or carried, the call's :ways #{:carried}), :no-chest, :stocked,
   :nothing-to-store. A step whose child stops is booked with its summary and the stop as :reason; the pass goes on.
   Needs (can-start?, a listed job waits): a step that would run (raw food carried above the
   reserve with a cooked shortfall, wheat for a loaf), so a body with nothing to cook is not held, and not too far from
@@ -52,7 +53,6 @@
            :default (into {"bread" 16} (map (fn [f] [f 8])) cooked-foods)}
    :reserve {:doc "{item count}: never used, carried or in the chest (wheat for bait, seed)" :spec (a/map-of string? number?)
              :default {"wheat" 2}}
-   :fetch {:doc "get a crafting table when none is seen or carried (jobs.items.craft's fetch); false skips take and bake then" :spec boolean? :default true}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -61,6 +61,7 @@
    ::food-s {:default 10 :doc "Seconds a quote counts for each raw food carried: its time in the furnace." :spec (a/num-in 0 nil)}})
 
 (def target [:stock])
+(def ways need/fetch-ways)
 
 (def safe? (ready/safe-at-by-night #(:furnace (:args %))))
 (def fit? ready/ok)
@@ -89,6 +90,9 @@
       (not (reached? (:args c) chest-stock)) (apply contract/later :short (str "kitchen: " left " stock entries short") data)
       (:todo (ctx/mem c)) (apply contract/later :pass-under-way "kitchen: stocked, the pass goes on" data)
       :else (apply contract/ok :stocked "kitchen: the chest is stocked" data))))
+
+(defn ways-of [a] (set (:ways a need/fetch-ways)))
+(defn fetching? [a] (boolean (seq (disj (ways-of a) :carried))))
 
 (def steps [:smelt :take :bake :deposit])
 (def jobs {:smelt 'jobs.items.smelt :take 'jobs.storage.withdraw :bake 'jobs.items.craft :deposit 'jobs.storage.deposit})
@@ -155,7 +159,7 @@
                   need (- (* 3 want) cu)]
               (cond
                 (not chest?) {:skip :no-chest}
-                (and (not table?) (not (:fetch a true))) {:skip :no-table}
+                (and (not table?) (not (fetching? a))) {:skip :no-table}
                 (not (pos? want)) {:skip :no-wheat}
                 (not (pos? need)) {:skip :stocked}
                 :else {:call {:slot :take :job (jobs :take)
@@ -163,9 +167,9 @@
       :bake (let [n (min (loaves a f) (quot (:carried (usable reserve "wheat" f)) 3))]
               (cond
                 (not chest?) {:skip :no-chest}
-                (and (not table?) (not (:fetch a true))) {:skip :no-table}
+                (and (not table?) (not (fetching? a))) {:skip :no-table}
                 (not (pos? n)) {:skip :no-wheat}
-                :else {:call {:slot :bake :job (jobs :bake) :args {:item "bread" :count (+ n (get carried "bread" 0)) :fetch (:fetch a true)}}}))
+                :else {:call {:slot :bake :job (jobs :bake) :args {:item "bread" :count (+ n (get carried "bread" 0)) :ways (ways-of a)}}}))
       :deposit (let [items (vec (filter #(pos? (min (get made % 0) (get carried % 0))) (conj cooked-foods "bread")))
                      spare-wheat? (> (get carried "wheat" 0) (or wheat0 (get carried "wheat" 0)))
                      items (cond-> items spare-wheat? (conj "wheat"))
@@ -176,7 +180,7 @@
                    (empty? items) {:skip :nothing-to-store}
                    :else {:call {:slot :deposit :job (jobs :deposit) :args (merge zone {:chest chest :items items :keep keep})}})))))
 
-(defn decisions [c f] (into {} (map (juxt identity #(decide % (:args c) f))) steps))
+(defn decisions [c f] (into {} (map (juxt identity #(decide % (assoc (:args c) :ways (need/call-ways c)) f))) steps))
 
 (defn would-run? [c f] (boolean (some :call (vals (decisions c f)))))
 

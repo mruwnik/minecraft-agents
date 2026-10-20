@@ -39,7 +39,7 @@
           (storage.deposit), obtain torches, get the tool, get food (survival.get-food, once per trip; still hungry with none: :food-short; :fetch false skips the try), then back down; at most ::max-trips (12).
   Each time at the base, before the deposit, the raw ore the base chests are known to hold (body memory stock) is withdrawn (storage.withdraw,
           up to 64 a free furnace; a failed withdraw is not a stop), then the raw ore carried (raw_iron raw_gold raw_copper) is loaded into the base
-          furnaces (items.smelt, :fetch only from chests; one kind split over both furnaces, several one kind each) and
+          furnaces (items.smelt, :ways #{:carried :chest}; one kind split over both furnaces, several one kind each) and
           the body goes back down; the furnaces and their args are kept in :cooking. The next visit replays those
           children to collect the output, which is deposited with the rest. A smelt that gives up is listed in
           :smelt-failed and the ore stays raw (not with :smelt false).

@@ -24,9 +24,9 @@
   yield (:continue) until the cook is due, take the output. :item may be a list, and with :item nil and two or more raw foods or ores
   carried every one is cooked: one child smelt per item, each with the same :count (data {:smelted n :wanted n :items {item result}},
   :failed the items that gave up). What is owed is kept in memory before the load, so a restart loads nothing twice.
-  Needs: the input, the fuel (the :fuel item, else coal, charcoal or planks, sized by what one item smelts) and a furnace. With :fetch
-  (default true; jobs.lib.need) a furnace comes first (a seen one, a carried one put down, else one fetched), then what else is
-  missing is fetched by obtain children; the fetch's ending is the :because. :fetch false skips it.
+  Needs: the input, the fuel (the :fuel item, else coal, charcoal or planks, sized by what one item smelts) and a furnace. With fetching ways
+  (the call's :ways minus :carried, default all; jobs.lib.need) a furnace comes first (a seen one, a carried one put down, else one fetched), then what else is
+  missing is fetched by obtain children; the fetch's ending is the :because. :ways #{:carried} skips it.
   can-start?: never :not-smeltable for an item no furnace cooks. can-start? and can-run?: later :refused {:zones :claims} while a zone
   or claim of another bars :put or :take at the furnace (:ignore-zones? skips it); a cooking job yields until the cook is due,
   without touching the furnace.
@@ -44,7 +44,7 @@
    :item {:doc "what to smelt, or a list of them (an input; a product such as cooked_chicken or iron_ingot means its input, charcoal the carried log there is most of; an item no furnace cooks ends not-smeltable at once); the first smeltable thing carried when nil, or every raw food and ore carried when there are several" :spec (a/or-of a/item? (a/coll-of a/item?)) :default nil}
    :count {:doc "how many; all carried (at most one stack) when nil" :spec (a/int-in 0 nil) :default nil}
    :fuel {:doc "fuel item to load; the best carried when nil" :spec a/item? :default nil}
-   :fetch {:doc "get a missing input, fuel or furnace (jobs.lib.need): true, a set of kinds or a map of limits; false ends with the reason" :spec need/option? :default true}
+   :explore {:doc "look beyond what is seen for a missing input, fuel or furnace (passed to the fetches)" :spec boolean? :default false}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -411,6 +411,7 @@
 ;; ------------------------------------------------------------------ the contract
 
 (def target [:item])
+(def ways need/fetch-ways)
 
 (def safe? (ready/safe-at-by-night furnace-of))
 (def fit? ready/ok)

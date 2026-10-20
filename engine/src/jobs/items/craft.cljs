@@ -26,7 +26,7 @@
 (def doc
   "Craft until at least :count of :item are carried. 2x2 recipes work anywhere; bigger ones use a crafting table
   (:table, else the nearest seen within :radius), put down from the bag or fetched when none is in reach.
-  Needs: an item name (impossible :bad-args). An ingredient that runs out is fetched (jobs.lib.need) unless :fetch is false.
+  Needs: an item name (impossible :bad-args). An ingredient that runs out is fetched (jobs.lib.need) from the ways the call allows (:ways #{:carried}: stops :short).
   Returns :done {:made n :item :text}. Stopping short it ends with :made, :item and :text: condition-failed
   :need (:short, :alternatives), :no-table, :not-a-table or :full; nothing-possible :unreachable, :cannot or :craft-failed.
   A table this call put down is dug up again however the call ends, unless :keep-table.")
@@ -36,7 +36,6 @@
    :count {:doc "how many to carry at least" :spec (a/int-in 0 nil) :default 1}
    :table {:doc "crafting table position; the nearest seen within :radius when nil and the recipe needs one" :spec ::a/pos :default nil}
    :radius {:doc "how far to look for a crafting table, and to walk to a seen one (the seen memory reaches 64)" :spec (a/num-in 0 64) :default 64}
-   :fetch {:doc "get an ingredient that runs out (jobs.lib.need): true, a set of kinds or a map of limits; false stops :short" :spec need/option? :default true}
    :keep-table {:doc "leave a table this call put down standing; false: it is dug up again when the call ends" :spec boolean? :default false}
    :avoid {:doc "cells [x y z] a table is never put in or dug for: the dig line of a job that crafts as its child" :spec (a/coll-of a/position?) :default nil}
    :for-plan {:doc "id of the plan whose work this is: a table may stand in its own cells; nil: no plan's cells are used" :spec a/name? :default nil}})
@@ -52,6 +51,7 @@
 (defn seen-radius [] (settings/get settings ::seen-radius))
 
 (def target [:item])
+(def ways need/fetch-ways)
 
 (def safe? ready/safe-here-by-night)
 (def fit? ready/ok)
@@ -170,11 +170,11 @@
 
 (defn ^:async fetch!
   "Get what (problem c) names with jobs.items.obtain children (jobs.lib.need) until nothing is due any more: nil (the item
-  arrived, the fetch failed or :fetch is off; the craft judges where it stands), :continue while a child waits."
+  arrived, the fetch failed or the call's ways allow none; the craft judges where it stands), :continue while a child waits."
   [c problem]
   (loop []
-    (when-let [{:keys [item count]} (and (:fetch (:args c)) (problem c))]
-      (let [e (await (need/item! c item count {:slot (keyword (str "need-" item)) :for-plan (:for-plan (:args c))}))]
+    (when-let [{:keys [item count]} (and (seq (need/fetch-how c)) (problem c))]
+      (let [e (await (need/item! c item count {:how (need/fetch-how c) :slot (keyword (str "need-" item)) :for-plan (:for-plan (:args c))}))]
         (cond
           (= :continue e) :continue
           (not= :done (:kind e)) nil
@@ -219,7 +219,7 @@
 (defn ^:async table-step!
   "table-fetch! once the ingredients are in hand: fetch a table when wanted, put a carried one down and craft at it."
   [c]
-  (when (and (:fetch (:args c)) (not (carried-table? c))) (ctx/update-mem! c assoc :want-table true))
+  (when (and (seq (need/fetch-how c)) (not (carried-table? c))) (ctx/update-mem! c assoc :want-table true))
   (let [f (when (:want-table (ctx/mem c)) (await (fetch! c table-problem)))
         r (when (and (nil? f) (carried-table? c))
             (await (ctx/atomic c :urgent :craft
@@ -231,7 +231,7 @@
     (or f r)))
 
 (defn ^:async table-fetch!
-  "With no table in reach: put a carried table down (also with :fetch off), else fetch one (:fetch) and put it down. Once per craft.
+  "With no table in reach: put a carried table down (also when the ways allow no fetch), else fetch one and put it down. Once per craft.
   Missing ingredients come first (short-of-ingredients!): a table is the last step. :again / :continue to go on, nil when
   there is nothing to do (give up). Putting a carried table down and the craft call at
   it run as one urgent section (ctx/atomic :craft), so a reflex does not leave the table unused; the
@@ -289,13 +289,13 @@
           (:wants (ctx/mem c)))))
 
 (defn ^:async short!
-  "A craft ran out of an ingredient: fetch what it lacks (:fetch) and craft again (:again, :continue while a fetch
+  "A craft ran out of an ingredient: fetch what it lacks and craft again (:again, :continue while a fetch
   waits), else emit the info and finish with what is missing, and the alternatives (name [cousins]) when other
   recipes use different ingredients. shortage is jobs.items.shortfall/no-item over the candidate recipes, have the
   counts carried."
   [c item shortage have made]
   (let [{:keys [short]} shortage]
-    (when (and (seq short) (:fetch (:args c)) (not (contains? (:fetched (ctx/mem c)) [made short])))
+    (when (and (seq short) (seq (need/fetch-how c)) (not (contains? (:fetched (ctx/mem c)) [made short])))
       (ctx/update-mem! c assoc :wants (into {} (map (fn [[name n]] [name (+ n (get have name 0))])) short)))
     (let [f (when (seq (:wants (ctx/mem c))) (await (fetch! c problem)))]
       (cond

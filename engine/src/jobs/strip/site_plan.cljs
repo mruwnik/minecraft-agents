@@ -27,7 +27,7 @@
   [fs carried ignore-zones?]
   (let [kinds (sort-by (comp - val) (filter (comp pos? val) (select-keys carried ores)))
         k (count fs)
-        one (fn [[slot f] item n] [slot {:furnace f :item item :count (min 64 n) :fetch {:what #{:item} :how #{:chest}} :ignore-zones? ignore-zones?}])]
+        one (fn [[slot f] item n] [slot {:furnace f :item item :count (min 64 n) :ways #{:carried :chest} :ignore-zones? ignore-zones?}])]
     (cond (or (zero? k) (empty? kinds)) []
           (= 1 (count kinds)) (let [[item n] (first kinds)]
                                 (vec (keep-indexed (fn [i fs1] (let [share (+ (quot n k) (if (< i (rem n k)) 1 0))] (when (pos? share) (one fs1 item share)))) fs)))

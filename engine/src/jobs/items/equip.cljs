@@ -16,14 +16,13 @@
   (:hand \"main\"/\"off\" overrides that for a non-armour item). Without :item, the best carried armour piece goes into
   each slot that is empty or worn with a weaker one (leather < golden < turtle helmet < chainmail < iron < diamond < netherite);
   a worn piece the new one replaces comes back to the pockets.
-  Needs the item carried; a missing one is fetched (jobs.lib.need) unless :fetch is false. done? holds when it is in its slot (without :item: when nothing carried beats what is worn).
-  Ends :done {:item :slot :worn [{:item :slot}] :text}. Impossible: :unknown-item (no such item for the body's version). Conditions (a listed root job waits): :no-item (not carried, :fetch false). A failed fetch ends as {:reason :need} with its ending as
+  Needs the item carried; a missing one is fetched (jobs.lib.need) from the ways the call allows. done? holds when it is in its slot (without :item: when nothing carried beats what is worn).
+  Ends :done {:item :slot :worn [{:item :slot}] :text}. Impossible: :unknown-item (no such item for the body's version). Conditions (a listed root job waits): :no-item (not carried, the call's :ways #{:carried}). A failed fetch ends as {:reason :need} with its ending as
   the :because. Nothing-possible :failed (the server did not take a piece; data :equip the primitive's status, :worn the pieces done so far). Quote: a fixed time per piece to put on.")
 
 (a/defargs args
   {:item {:doc "the item to put on or hold; nil puts on the best carried armour for each slot" :spec a/item? :default nil}
-   :hand {:doc "\"main\" or \"off\" (a keyword works too) for a non-armour item; nil follows from the item" :spec #{"main" "off" :main :off nil} :default nil}
-   :fetch {:doc "get a missing item (jobs.lib.need): true, a set of kinds or a map of limits; false stops :no-item instead" :spec need/option? :default true}})
+   :hand {:doc "\"main\" or \"off\" (a keyword works too) for a non-armour item; nil follows from the item" :spec #{"main" "off" :main :off nil} :default nil}})
 
 (a/defargs settings
   {::job-time-s {:default 10 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
@@ -80,8 +79,8 @@
   "The cause :no-item when the item is neither carried nor in its slot and nothing fetches it."
   [c]
   (let [p (:primitives c)
-        {:keys [item fetch]} (:args c)]
-    (when (and item (seq (steps c)) (not (carried? p item)) (not (need/parse-arg fetch)))
+        {:keys [item]} (:args c)]
+    (when (and item (seq (steps c)) (not (carried? p item)) (empty? (need/fetch-how c)))
       {:reason :no-item :item item})))
 
 (defn can-start? [c]
@@ -103,7 +102,9 @@
   (let [t (* (max 1 (count (steps c))) (settings/get settings ::equip-s))]
     {:uses {:job-time [0 t t]}}))
 
-(defn fetch-opts [c] (need/opts c 'jobs.items.equip))
+(def ways need/fetch-ways)
+
+(defn fetch-opts [c] (when-let [how (seq (need/fetch-how c))] {:how (set how)}))
 
 (defn refuse!
   [c kind reason text data]

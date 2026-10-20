@@ -52,7 +52,7 @@
         (is (= {:kind :impossible :cause :unknown-item}
                (kc (await (ending-of (stacks "dirt") 'jobs.items.equip {:item "iron_pickaxx"})))))
         (is (= {:kind :condition-failed :cause :no-item}
-               (kc (await (ending-of (stacks "dirt") 'jobs.items.equip {:item "iron_pickaxe" :hand "main" :fetch false})))))))))
+               (kc (await (ending-of (stacks "dirt") 'jobs.items.equip {:item "iron_pickaxe" :hand "main" :ways #{:carried}})))))))))
 
 (deftest interact-ends-by-what-the-click-did
   (async done
@@ -139,7 +139,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [xp {:self {:experience {:level 30}}}]
-          (is (true? (await (waits? (stacks "dirt") 'jobs.items.equip {:item "iron_pickaxe" :fetch false}))))
+          (is (true? (await (waits? (stacks "dirt") 'jobs.items.equip {:item "iron_pickaxe" :ways #{:carried}}))))
           (is (true? (await (waits? (merge xp (stacks "lapis_lazuli")) 'jobs.items.enchant {:item "iron_sword" :ways #{:carried}}))))
           (is (true? (await (waits? (merge xp (stacks "iron_sword")) 'jobs.items.enchant {:item "iron_sword" :ways #{:carried}}))))
           (is (true? (await (waits? (stacks "iron_sword" "lapis_lazuli") 'jobs.items.enchant {:item "iron_sword"}))) "no level at all")
@@ -151,7 +151,7 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= :need (:cause (kc (await (ending-of (stacks "dirt") 'jobs.items.equip {:item "iron_helmet"}))))) "no source: the fetch fails as :need")
-        (is (= :no-item (:cause (kc (await (ending-of (stacks "dirt") 'jobs.items.equip {:item "iron_helmet" :fetch false}))))))))))
+        (is (= :no-item (:cause (kc (await (ending-of (stacks "dirt") 'jobs.items.equip {:item "iron_helmet" :ways #{:carried}}))))))))))
 
 (deftest enchant-fetches-the-lapis-and-the-item-by-default
   (async done
@@ -167,5 +167,5 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (true? (await (waits? (stacks "dirt") 'jobs.items.equip {:item "iron_helmet" :fetch false}))) "not carried")
+        (is (true? (await (waits? (stacks "dirt") 'jobs.items.equip {:item "iron_helmet" :ways #{:carried}}))) "not carried")
         (is (true? (await (waits? {} 'jobs.items.pick-up-loose {}))) "no loose item in sight")))))

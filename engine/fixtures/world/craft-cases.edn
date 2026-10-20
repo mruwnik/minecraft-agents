@@ -26,7 +26,7 @@
    :after [[:item "stick" 4]]}
   {:name "white-bed-short-of-planks-and-no-table-is-not-crafted"
    :body {:inventory [["white_wool" 3] ["oak_planks" 1]]}
-   :act [[:job (jobs.items.craft {:item "white_bed" :fetch false})]]
+   :act [[:job (jobs.items.craft {:item "white_bed" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15 :of-job true :until {:source :job :kind :stopped}}]
    :after [[:item "white_bed" 0]]
@@ -62,7 +62,7 @@
    :plot {:length 80 :width 16 :height 8}
    :blocks [[:set [22 0 8] "crafting_table"]]
    :body {:at [66.5 0 8.5] :yaw 90 :inventory [["cobblestone" 3] ["stick" 2]]}
-   :act [[:job (jobs.items.craft {:item "stone_pickaxe" :fetch false})]]
+   :act [[:job (jobs.items.craft {:item "stone_pickaxe" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 85 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 80 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "stone_pickaxe" 1]]
@@ -71,7 +71,7 @@
    :plot {:length 80 :width 16 :height 8}
    :blocks [[:set [22 0 8] "crafting_table"]]
    :body {:at [66.5 0 8.5] :yaw 90 :settle-s 8 :inventory [["cobblestone" 3] ["stick" 2]]}
-   :act [[:job (jobs.items.craft {:item "stone_pickaxe" :fetch false :radius 40})]]
+   :act [[:job (jobs.items.craft {:item "stone_pickaxe" :ways #{:carried} :radius 40})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-table :text [:contains "the nearest known is at"]}} :within-s 40 :of-job true}]
    :after [[:item "stone_pickaxe" 0]]
    :limit-s 60}

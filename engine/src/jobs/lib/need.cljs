@@ -80,6 +80,12 @@
   [c]
   (disj (call-ways c) :carried))
 
+(defn ways-of-fetch
+  "The call ways for a job still on the old :fetch arg v: :carried alone when it is off, else its :how sources too."
+  [v]
+  (let [arg (parse-arg v)]
+    (if (:error arg) (set fetch-ways) (into #{:carried} (when arg (or (:how arg) sources))))))
+
 (defn merge-limits
   "Limits: built-in, then job-default, then call."
   [job-default call]

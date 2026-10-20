@@ -823,7 +823,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (seeing-setup {:inventory iron-and-coal})]
-          (core/submit! eng '(jobs.items.smelt {:item "raw_iron" :count 3 :fetch false}) {})
+          (core/submit! eng '(jobs.items.smelt {:item "raw_iron" :count 3 :ways #{:carried}}) {})
           (await (seeing-ticks s 4))
           (is (= 10 (count (calls p "look"))) "four headings, level and down, up unless that ray is seen, once")
           (is (= [:no-furnace-seen] (mapv :reason (of-kind seen :stopped)))))))))
@@ -914,7 +914,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [chest {"-2,64,3" "chest"}
-              run (fn [world args] (fetched-run world (assoc args :fetch false)))
+              run (fn [world args] (fetched-run world (assoc args :ways #{:carried})))
               furnace {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3}]
           (is (= :no-fuel (:reason (first (await (run {:blocks {pos-key "furnace" "-2,64,3" "chest"} :inventory [{:name "raw_iron" :count 5}]
                                                          :containers {"-2,64,3" [{:name "coal" :count 4}]}} furnace))))))
@@ -968,7 +968,7 @@
         (let [[r p] (await (fetched-run {:blocks {"-2,64,3" "crafting_table"}
                                          :recipes {"oak_planks" {:count 4 :needs {"oak_log" 1}}}
                                          :inventory [{:name "oak_log" :count 11}]}
-                                        {:item "charcoal" :count 4 :fetch {:how #{:chest}}}))
+                                        {:item "charcoal" :count 4 :ways #{:carried :chest}}))
               carried (into {} (map (juxt :name :count)) (:inventory @(fake/state p)))]
           (is (= :no-furnace-seen (:reason r)))
           (is (= {"oak_log" 11} carried) "no log was turned into planks"))))))
@@ -997,7 +997,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (result-of two-foods {:furnace {:x 1 :y 64 :z 0} :item ["dirt" "stick"] :fetch false}))]
+        (let [r (await (result-of two-foods {:furnace {:x 1 :y 64 :z 0} :item ["dirt" "stick"] :ways #{:carried}}))]
           (is (= :stopped (:status r)))
           (is (= 0 (:smelted r))))))))
 
