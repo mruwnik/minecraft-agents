@@ -157,6 +157,18 @@
           (is (= :stopped (:status res)) (pr-str res))
           (is (re-find #"28 64 0" (str (:text res))) (pr-str res)))))))
 
+(deftest go-to-refusing-the-goal-cell-at-once-never-gives-the-pile-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [refuse #(ctx/end % :nothing-possible :unreachable {:arrived false :why :goal-not-standable})
+              {:keys [eng calls]} (await ((walk-script (vec (repeat 6 [0 64 0])) far-pile refuse)))]
+          (dotimes [_ 4]
+            (core/submit! eng job {})
+            (await (run-until-empty eng 10)))
+          (is (<= 5 (count @calls)) "every run walked again")
+          (is (nil? (recovered eng)) "refusals that searched nothing are no failed walks"))))))
+
 (deftest a-stair-the-tunnel-cannot-start-abandons-the-pile-once
   (async done
     (tu/run-async done

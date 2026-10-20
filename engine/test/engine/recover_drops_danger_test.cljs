@@ -348,6 +348,24 @@
           (let [{:keys [eng]} (await ((night-run world far-x)))]
             (is (= :collected (:decision (recovered eng))) (pr-str [world far-x]))))))))
 
+(deftest a-declined-mob-stays-priced-until-its-place-is-seen-empty
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pile dt/death-pile-of-the-field-report
+              {:keys [eng p clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})
+              dear '(jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}})]
+          (die! eng {:pos dt/death-pos :inventory pile})
+          (core/submit! eng dear {})
+          (await (run-until-empty eng 5))
+          (swap! clock + 151000)
+          (swap! (fake/state p) #(-> (update % :entities (fn [es] (filterv (fn [e] (not= "hostile" (:kind e))) es)))
+                                      (assoc-in [:self :pos] {:x -40 :y 64 :z 0})))
+          (core/submit! eng dear {})
+          (await (run-until-empty eng 20))
+          (is (not= :collected (:decision (recovered eng))) "the mob forgotten out of sight is still priced")
+          (is (= [] (tu/walk-calls p)) "no walk back toward it"))))))
+
 (deftest a-skip-for-danger-is-remembered-then-tried-again
   (async done
     (tu/run-async done

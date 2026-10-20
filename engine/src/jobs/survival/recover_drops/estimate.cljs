@@ -67,6 +67,18 @@
           :when (and at (not= at pos) (string? cause) (pos? left))]
       {:name cause :pos at :left-ms left})))
 
+(defn remembered-mobs
+  "[{:name :pos}] of the hostiles an earlier decline of this death (the :recover-danger entry) saw, still priced where they
+  stood: until the body is within ::see-range of the place and no such mob is known near it, as a player forgets a mob
+  only on seeing the place empty. known is [{:name :pos}] of the hostiles known now."
+  [c known]
+  (let [here (u/self-pos c)
+        entry (last (filter #(= (:death-t (ctx/mem c)) (:death-t (:data %))) (mem/entries (ctx/view c) :recover-danger)))
+        still-there? (fn [{:keys [name pos]}] (some #(and (= name (:name %)) (<= (u/dist pos (:pos %)) (cfg/mob-spot-radius))) known))]
+    (vec (for [m (:mobs (:data entry))
+               :when (and (> (u/dist here (:pos m)) (cfg/see-range)) (not (still-there? m)))]
+           m))))
+
 (defn flight-s
   "Seconds a flight from the priced mobs ([{:name :pos}]) may add to the walk back: until the farthest gives up the chase
   (jobs.lib.threats/follow-range past it), at walking speed."
@@ -79,7 +91,9 @@
   ::danger-memory-ms, or what is left of the killer guards when only assumed killers add danger; :flight-s: flight-s) of recovering the drops of the :died data (cost js/Infinity when they cannot be fetched)."
   [c {:keys [pos inventory cause experience]} elapsed]
   (let [p (:primitives c)
-        known (danger-q/seen-hostiles p)
+        seen (danger-q/seen-hostiles p)
+        known-spots (mapv (fn [m] {:name (.-name m) :pos (danger-q/mob-pos p m)}) seen)
+        known (concat seen (remembered-mobs c known-spots))
         here (u/self-pos c)
         kind-at (reach/lookup p)
         worth (cost/item-value inventory :overrides (:value-overrides (:args c)))
@@ -87,6 +101,7 @@
         version (game/version-of p)
         guard (concat (when (and pos (string? cause) (< elapsed (cfg/killer-guard-ms))) [{:name cause :pos pos :left-ms (- (cfg/killer-guard-ms) elapsed)}]) ; route-danger drops a cause that is no hostile mob
                       (later-killers c pos))
+        guard-spots (set (map :pos guard))
         threat (if route
                  (cost/route-danger version kind-at route (concat known guard) (.-equipment (.self p))
                                     :overrides (:danger-overrides (:args c)) :weapon (combat/best-weapon p combat/default-weapons) :health (.-health (.self p)))
@@ -97,14 +112,15 @@
         fetch (cost/fetch-cost {:distance (when pos (u/dist here pos)) :danger (:danger threat) :elapsed-ms elapsed :cause cause})]
     (cond-> {:value (+ (:value worth) (cost/experience-cost experience))
              :cost (:cost fetch)
-             :hold-ms (if (every? (set (map :pos guard)) (map :pos (:mobs threat)))
+             :hold-ms (if (and (seq (:mobs threat)) (every? guard-spots (map :pos (:mobs threat))))
                         (min (cfg/danger-memory-ms) (apply max 0 (map :left-ms guard)))
                         (cfg/danger-memory-ms))
              :flight-s (flight-s here (:mobs threat))
              :top-items (mapv #(select-keys % [:name :count :value]) (take (cfg/top-n) (:items worth)))}
       (:parts fetch) (assoc :parts (:parts fetch))
       (:reason fetch) (assoc :reason (:reason fetch))
-      (seq (:mobs threat)) (assoc :top-mobs (mapv #(select-keys % [:name :danger]) (take (cfg/top-n) (:mobs threat)))))))
+      (seq (:mobs threat)) (assoc :seen-mobs (vec (for [m (:mobs threat) :when (and (:pos m) (not (guard-spots (:pos m))))] (select-keys m [:name :pos])))
+                                  :top-mobs (mapv #(select-keys % [:name :danger]) (take (cfg/top-n) (:mobs threat)))))))
 
 (defn danger-only?
   "Whether the estimate e is a skip for danger alone: the pile would be fetched were the route safe."
