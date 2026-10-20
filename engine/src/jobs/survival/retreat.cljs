@@ -214,7 +214,7 @@
                   (await (pick/cornered! c why (or inside? (and (seq blast) (room-lib/in-home? c (cover/home-pos c))))))
                   (do (ctx/update-mem! c update :since-gain (fnil inc 0))
                       (if (flight/no-gain? (ctx/mem c) (flight/no-gain-steps))
-                        (flight/end-flight! c :keeps-off)
+                        (flight/end-flight! c :keeps-off {:text (flight/keeps-off-text p threats)})
                         (await (wait-far! c))))))
         near (when threat (cornered/near-hostiles c))
         {:keys [option why reset-gain?]}

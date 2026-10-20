@@ -606,7 +606,8 @@
         (let [s (setup {:floor [-8 -8 8 8] :entities [(zombie 7 4 {:pos {:x 4 :y 64 :z 4}})]})
               {:keys [calls out]} (await (run-job! s 'jobs.survival.retreat {}))]
           (is (= [:done] calls) "the flight ends, it does not dance for ever")
-          (is (= :keeps-off (:ended out))))))))
+          (is (= :keeps-off (:ended out)))
+          (is (re-find #"still following" (:text out))))))))
 
 (def long-tunnel
   "Stone round a 1-wide tunnel along x on z 0, feet and head height, x 0..20, closed behind the body at x -1."

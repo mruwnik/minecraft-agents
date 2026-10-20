@@ -267,6 +267,12 @@
    :keeps-off "it kept up, no ground was gained"
    :cannot-escape "no way of escaping was left"})
 
+(defn keeps-off-text
+  "The :keeps-off ending's text: the chasers are still following, the nearest `threats` how many blocks off."
+  [p threats]
+  (let [d (some->> (seq threats) (map #(danger-q/mob-distance p %)) (apply min) js/Math.round)]
+    (str "no ground gained: the mob is still following" (when d (str ", " d " blocks off")) "; the reflex fires again if it comes close")))
+
 (defn fled-notice
   "Pure: the hostile.fled fields for a flight that moved the body from `from` to `to` ({:x :y :z}) away from the mobs
   fled ([{:mob :id}]), ended why; nil when it moved less than far blocks."
