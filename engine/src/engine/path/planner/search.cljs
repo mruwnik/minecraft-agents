@@ -146,7 +146,7 @@
    ;; no torches), its test of a takeoff (light-ok, fn x y z, nil: every one), the floors a torch stands on (torch-base, by
    ;; state id), and the floor cells the walk could not see and the takeoffs where a torch failed (Sets of cell-key, nil: none)
    unk-id unk-floor-id unk-cell unk-floor see-depth ^js see-lit see-lit-depth light-depth peek-s aim-s light-cost ^js light-ok ^js torch-base
-   ^js missed ^js no-light ^js see-keys ^js see-flags
+   ^js missed ^js no-light ^js see-keys ^js see-flags ^js slip-keys ^js slip-flags
    ;; what the move being made adds (set by unseenRefuses): seconds, and 1 when it lights its landing; each node's light flag;
    ;; a phantom floor was refused for want of sight (dark-refused; the refused stand nearest the goal, dark-best-*) or because
    ;; the walk could not stop to check it first (unseen-refused)

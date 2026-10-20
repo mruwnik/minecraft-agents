@@ -1,7 +1,7 @@
 (ns engine.path.planner.world
   "Search methods: the world as the body sees it: cell states, whether the body fits and stands in a cell, hazards
    beside it."
-  (:require [engine.path.planner.base :refer [BODY CLIMB-INSIDE CLIMB-TRAP-SHUT DAMAGE-STAND DAMAGE-TOUCH FREE-FALL HAZARD-AVOID LADDER LAVA LAVA-ADJACENT NARROW OPENABLE PORTAL SLOW UNLOADED WATER WHOLE]]
+  (:require [engine.path.planner.base :refer [TABLE BODY CLIMB-INSIDE CLIMB-TRAP-SHUT DAMAGE-STAND DAMAGE-TOUCH FREE-FALL HAZARD-AVOID LADDER LAVA LAVA-ADJACENT NARROW OPENABLE PORTAL SLOW UNLOADED WATER WHOLE]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -97,7 +97,7 @@
 
   ;; true when the column x,z, open at the body's level y, drops to farmland at least a cell down: a body brushing it on a
   ;; diagonal can slip in and trample it (a landing from over half a block up)
-  (slipsOnFarmland [s x z y]
+  (slipScan [s x z y]
     (loop [y2 (dec y)]
       (when (>= y2 (- y (.-max-drop s) 1))
         (let [id (.stateAt s x y2 z)]
@@ -106,6 +106,19 @@
             (== (aget (.-tbl-farmland s) id) 1) (< y2 (dec y))
             (pos? (aget (.-tbl-top s) id)) false
             :else (recur (dec y2)))))))
+
+  ;; slipScan, cached per column in a direct-mapped table (keys +1, the opening pass its own entries): the side columns of
+  ;; neighbouring diagonals repeat, and a masked search reads each one through a drop of void
+  (slipsOnFarmland [s x z y]
+    (let [ks (.-slip-keys s)
+          key (* (inc (.keyOf s x y z 0)) (if ^boolean (.-open-mode s) -1 1))
+          slot (bit-and (.hashOf s x y z 0) (dec TABLE))]
+      (if (== (aget ks slot) key)
+        (== 1 (aget (.-slip-flags s) slot))
+        (let [slips (true? (.slipScan s x z y))]
+          (aset ks slot key)
+          (aset (.-slip-flags s) slot (if slips 1 0))
+          slips))))
 
   ;; DAMAGE_TOUCH cells (berry bush, wither rose, cactus) in column x,z over lo..hi (1/16 absolute): a diagonal brushes both
   ;; side columns, so each one hurts as one in the body's own column does (`fits`' touch)
