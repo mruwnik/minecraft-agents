@@ -255,7 +255,8 @@
   [{:keys [raw opts] :as per} ^js st ^js eye now effort why]
   (when (sight-of per st)
     (set! (.-visible st) (table-now raw (:seeing-min opts)))
-    (set! (.-lastStart st) #js {:at now :eye eye :epoch (epoch-of raw) :darken (darken-now raw) :near (near-of per)})
+    (set! (.-lastStart st) #js {:at now :eye eye :epoch (epoch-of raw) :darken (darken-now raw) :near (near-of per)
+                                :effort (or effort (:effort opts)) :done false})
     (let [{:keys [cols rows hx hy]} (grid opts (or effort (:effort opts)))
           jx ((:rand opts)) jy ((:rand opts))
           ground (ground-rays opts hx hy (.-yaw eye) (.-pitch eye) jx jy)]
@@ -342,6 +343,7 @@
            (set! (.-cells st) (+ (.-cells st) cells))
            (when (>= to total)
              (set! (.-pass st) nil)
+             (set! (.-done (.-lastStart st)) true)
              (set! (.-passes st) (inc (.-passes st))))))
        (let [ms (- (js/performance.now) started)]
          (set! (.-steps st) (inc (.-steps st)))
@@ -353,16 +355,34 @@
        (set! (.-pass st) nil)
        (set! (.-lastStart st) nil)))))
 
+(defn repeat-pass?
+  "Whether a pass now would see what the last one (finished) did: the same eye spot and look, raw-world epoch, darkness
+  and near, at the same effort or lower, still inside its view generation (see renew-marks!). Then the cells it would
+  record are recorded already, at most mark-gen-ms old."
+  [per ^js last ^js eye now effort]
+  (let [raw (:raw per) ^js e (some-> last .-eye)]
+    (boolean
+     (and last (.-done last) (some? (.-epoch last))
+          (<= (or effort (:effort (:opts per))) (.-effort last))
+          (< (- now (.-at last)) mark-gen-ms)
+          (== (.-epoch last) (epoch-of raw)) (== (.-darken last) (darken-now raw)) (== (.-near last) (near-of per))
+          (= (.-dimension e) (.-dimension eye))
+          (== (.-x e) (.-x eye)) (== (.-y e) (.-y eye)) (== (.-z e) (.-z eye))
+          (== (.-yaw e) (.-yaw eye)) (== (.-pitch e) (.-pitch eye))))))
+
 (defn pass!
   "A whole sight pass from the eye as it is now (tests, and a forced look), at {:effort} (0-1, default the opts' :effort).
-  A pass in flight is dropped, not finished: this one covers the whole cone."
+  A pass in flight is dropped, not finished: this one covers the whole cone. With {:reuse? true} a pass that would see
+  what the last finished one did (repeat-pass?) is not cast; returns true then."
   ([per] (pass! per nil))
-  ([{:keys [st] :as per} {:keys [effort]}]
-  (let [^js st st]
-    (set! (.-pass st) nil)
-    (when (.eye ^js (:raw per))
-      (step! per true effort)
-      (while (.-pass st) (step! per))))))
+  ([{:keys [st] :as per} {:keys [effort reuse?]}]
+   (let [^js st st ^js eye (.eye ^js (:raw per))]
+     (set! (.-pass st) nil)
+     (cond
+       (not eye) nil
+       (and reuse? (repeat-pass? per (.-lastStart st) eye ((:now (:opts per))) effort)) (do (count-why! st :repeated :passes 1) true)
+       :else (do (step! per true effort)
+                 (while (.-pass st) (step! per)))))))
 
 ;; ---- block changes and touch
 

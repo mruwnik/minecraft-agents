@@ -560,3 +560,22 @@
 (deftest a-mob-is-forgotten-at-the-speed-the-cost-library-chases-it
   (are [mob-name] (= (* 1000 (/ 20 (danger/chase-speed mob-name))) (mobs/mob-forget-ms {:opts {:mob-drift 20}} mob-name))
     "spider" "zombie" "skeleton" "pillager" "guardian"))
+
+
+(deftest a-reusing-pass-from-the-same-look-casts-nothing-until-the-world-changes
+  (let [clock (atom 0)
+        {:keys [p per]} (rig {"0,65,3" "gold_block"} {:now #(deref clock)})
+        reuse #(perception/pass! per {:reuse? true})
+        _ (reuse)
+        rays #(:rays (perception/stats per))
+        r1 (rays)
+        again (reuse)
+        _ (fake/set-block! p [0 66 3] "iron_block")
+        _ (reuse)
+        r3 (rays)
+        _ (swap! clock + 3000)
+        _ (reuse)]
+    (is (pos? r1))
+    (is (true? again))
+    (is (> r3 r1) "a block change in range casts again")
+    (is (> (rays) r3) "after the generation, casts again")))

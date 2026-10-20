@@ -98,7 +98,7 @@
   ([c] (see! c (glance-effort)))
   ([c effort]
    (when-let [per (aget (:primitives c) "perception")]
-     (perception/pass! per {:effort effort})
+     (perception/pass! per {:effort effort :reuse? true})
      (when (fn? (.-knownMobs (:primitives c))) (.knownMobs (:primitives c))))))
 
 (defn ^:async glance!
