@@ -14,10 +14,10 @@
   [{:job 'jobs.forestry.plant-sapling
     :ways? true
     :args {:at {:x 3 :y 64 :z 0} :species "oak"}
-    :world {:blocks {chest "chest"} :containers {chest [{:name "oak_sapling" :count 1}]}}
+    :world {:blocks {chest "chest" "3,63,0" "dirt"} :containers {chest [{:name "oak_sapling" :count 1}]}}
     :item "oak_sapling"
     :used #(= "oak_sapling" (some-> (.blockAt % #js {:x 3 :y 64 :z 0}) .-name))}
-   {:job 'jobs.gather.make-obsidian
+   {:job 'jobs.gather.cast-obsidian
     :args {:count 1}
     :world {:blocks (merge ground {"4,63,0" "lava" "0,63,-2" "water" chest "chest"})
             :containers {chest [{:name "bucket" :count 1}]}

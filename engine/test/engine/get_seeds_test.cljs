@@ -1,6 +1,6 @@
 (ns engine.get-seeds-test
   "jobs.gather.get-seeds against the fake world."
-  (:require [engine.contract :as contract]
+  (:require
             [engine.child-ends :as ce]
             [cljs.test :refer [deftest is async]]
             [engine.core :as core]
@@ -60,8 +60,7 @@
                                        [{} {:blocks {"2,64,0" "dirt"}} {:kind :stopped :reason :none}]
                                        [{:settings {:jobs.gather.get-seeds/dry-digs 6}} {:blocks (patch "short_grass" (range 2 12) [0]) :drops {"short_grass" nil}} {:kind :stopped :reason :dry}]
                                        [{:count 64} {:blocks (patch "short_grass" [2 3 4] [0]) :drops seed-drops} {:kind :stopped :reason :none}]
-                                       [{:count 2 :chest {:x 10 :y 64 :z 0}} {:containers {"10,64,0" []}} {:kind :stopped :reason :short}]
-                                       [{:count 2 :chest {:x 10 :y 64 :z 0}} {:containers {"10,64,0" [{:name "wheat_seeds" :count 10}]}} {:kind :completed :reason :count}]]]
+                                       ]]
           (let [s (await (scenario args world 40))]
             (is (= expected (ending-of s)) (pr-str args))))))))
 
@@ -104,7 +103,7 @@
           (is (= :count (:reason (done-event s))))
           (is (finished? s)))))))
 
-(deftest the-check-declines-without-a-source-or-chest
+(deftest the-check-declines-without-a-source
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -155,15 +154,6 @@
           (is (re-find #"no short_grass/tall_grass within 16" text) text)
           (is (not (re-find #"nearest" text)) text))))))
 
-(deftest the-check-passes-with-only-a-chest
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup-seeing {})]
-          (core/submit! eng (spec {:chest {:x 10 :y 64 :z 0}}) {})
-          (await (core/tick! eng))
-          (is (some #(= :child_started (:kind %)) @seen) "the job ran, it did not wait"))))))
-
 (deftest grass-that-drops-nothing-ends-dry
   (async done
     (tu/run-async done
@@ -196,26 +186,6 @@
           (is (= :none (:reason (done-event s))))
           (is (= 3 (:got (done-event s))))
           (is (= 3 (get (inv s) "wheat_seeds")))
-          (is (finished? s)))))))
-
-(deftest takes-seeds-from-a-chest
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {:count 2 :chest {:x 10 :y 64 :z 0}}
-                                 {:containers {"10,64,0" [{:name "wheat_seeds" :count 10}]}} 20))]
-          (is (>= (get (inv s) "wheat_seeds") 2))
-          (is (= :count (:reason (done-event s))))
-          (is (= 0 (dig-count s)))
-          (is (finished? s)))))))
-
-(deftest an-empty-chest-ends-short
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {:count 2 :chest {:x 10 :y 64 :z 0}} {:containers {"10,64,0" []}} 20))]
-          (is (= :short (:reason (done-event s))))
-          (is (= 0 (:got (done-event s))))
           (is (finished? s)))))))
 
 (deftest only-the-item-is-collected
@@ -512,32 +482,7 @@
             (is (= expected (dug-cells s)))
             (is (walks? (count (tu/walked-to (:eng s)))))))))))
 
-;; ------------------------------------------------------------------ roots: from a chest only
-
-(def chest-world (fn [stock] {:containers {"10,64,0" stock}}))
-
-(deftest roots-come-out-of-the-chest
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [[item] [["carrot"] ["potato"] ["beetroot_seeds"]]]
-          (let [s (await (scenario {:item item :count 4 :chest {:x 10 :y 64 :z 0}}
-                                   (chest-world [{:name item :count 10}]) 20))]
-            (is (= :count (:reason (done-event s))) item)
-            (is (= 4 (get (inv s) item)))
-            (is (zero? (dig-count s)))
-            (is (finished? s))))))))
-
-(deftest a-chest-with-less-ends-short-with-what-it-gave
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {:item "carrot" :count 8 :chest {:x 10 :y 64 :z 0}}
-                                 (chest-world [{:name "carrot" :count 3}]) 20))]
-          (is (= :short (:reason (done-event s))))
-          (is (= 3 (:got (done-event s))))
-          (is (= 3 (get (inv s) "carrot")))
-          (is (finished? s)))))))
+;; ------------------------------------------------------------------ roots are not gathered here
 
 (deftest roots-are-never-dug-from-the-field
   (async done
@@ -549,43 +494,10 @@
             (is (nil? (core/tick! eng)) item)
             (is (zero? (dig-count {:p p})))))))))
 
-(deftest roots-without-a-chest-decline-with-one-warn
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (setup-seeing {})]
-          (core/submit! (:eng s) (spec {:item "carrot"}) {})
-          (await (run-ticks s 5 700))
-          (is (= [:no-chest] (declined-reasons s)))
-          (is (not (finished? s))))))))
-
 (def farm-plan
   {:id "farm"
    :parts [{:id "beds" :box [[2 64 0] [4 64 0]] :want {:crop "carrots"}}
            {:id "store" :box [[10 64 0] [10 64 0]] :want "chest"}]})
-
-(deftest the-chest-of-a-plan-is-the-source
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (in-world {:item "carrot" :count 2 :plan "farm"}
-                                 (chest-world [{:name "carrot" :count 5}])
-                                 (ew/of-data {"farm" farm-plan} {} []) 20))]
-          (is (= :count (:reason (done-event s))))
-          (is (= 2 (get (inv s) "carrot")))
-          (is (zero? (dig-count s))))))))
-
-(deftest an-unusable-plan-declines-with-its-reason
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [[plans reason] [[{} :plan-missing]
-                                [{"farm" (update farm-plan :parts subvec 0 1)} :no-chest-cell]]]
-          (let [s (await (in-world {:item "carrot" :plan "farm"} (chest-world [{:name "carrot" :count 5}])
-                                   (ew/of-data plans {} []) 5))]
-            (is (= [reason] (declined-reasons s)))
-            (is (zero? (count (h/calls (:p s) "transfer"))))
-            (is (not (finished? s)))))))))
 
 (deftest a-material-nobody-gathers-this-way-declines
   (async done
@@ -596,16 +508,6 @@
           (await (run-ticks s 5 700))
           (is (= [:no-source] (declined-reasons s)))
           (is (zero? (dig-count s))))))))
-
-(deftest a-declined-withdraw-ends-with-a-reason
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (setup-with-jobs {} {'jobs.storage.withdraw (tu/job [(constantly (contract/later :not-ready "not ready"))] nil)})]
-          (let [out (await (tu/child-outcome (:eng s) 'jobs.gather.get-seeds {:count 2 :chest {:x 10 :y 64 :z 0}} 40))]
-            (is (= :condition-failed (get-in out [:ending :kind])))
-            (is (= :withdraw-declined (:reason out))))
-          (is (finished? s)))))))
 
 (deftest grass-behind-the-body-is-found-after-a-look-around
   (async done

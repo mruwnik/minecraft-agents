@@ -1,5 +1,5 @@
 (ns engine.forest-prepare-test
-  "jobs.forestry.prepare: a forest plan's planting spots made ready (cleared, soiled, planted), against the fake world."
+  "jobs.forestry.prepare: a forest plan's planting spots made ready (cleared, soiled, dammed), against the fake world."
   (:require [engine.child-ends :as ce]
             [cljs.test :refer [deftest is are async]]
             [clojure.string :as str]
@@ -17,7 +17,7 @@
 
 (def job 'jobs.forestry.prepare)
 
-(def zero {:cleared 0 :soiled 0 :planted 0 :dammed 0 :short {} :wrong [] :no-soil [] :no-tool [] :cramped [] :wet [] :refused [] :gave-up []})
+(def zero {:cleared 0 :soiled 0 :dammed 0 :wrong [] :no-soil [] :no-tool [] :cramped [] :wet [] :refused [] :gave-up []})
 
 (defn expect [m] (merge zero m))
 
@@ -103,16 +103,14 @@
 
 ;; ------------------------------------------------------------------ the cell itself
 
-(deftest a-stray-in-the-cell-is-dug-and-the-sapling-planted
+(deftest a-stray-in-the-cell-is-dug-and-the-cell-left-bare
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [stray ["short_grass" "tall_grass" "poppy" "snow" "oak_leaves" "fern"]]
           (let [{:keys [p result]} (await (outcome (world {"3,64,0" stray} (item "oak_sapling" 1)) {"forest" one-cell}))]
             (is (= [[3 64 0]] (digs p)) stray)
-            (is (= [[3 64 0 "oak_sapling"]] (places p)) stray)
-            (is (= "oak_sapling" (h/block-at p 3 64 0)) stray)
-            (is (= (expect {:cleared 1 :planted 1}) result) stray)))))))
+            (is (= (expect {:cleared 1}) result) stray)))))))
 
 (deftest every-dig-goes-through-the-dig-job
   (async done
@@ -138,7 +136,7 @@
       (fn ^:async t []
         (let [{:keys [p result]} (await (outcome (world {"3,64,0" "stone" "4,64,0" "short_grass"} (item "oak_sapling" 2)) {"forest" two-cells}))]
           (is (= [[4 64 0]] (digs p)))
-          (is (= (expect {:cleared 1 :planted 1 :no-tool [{:pos [3 64 0] :block "stone"}]}) result)))))))
+          (is (= (expect {:cleared 1 :no-tool [{:pos [3 64 0] :block "stone"}]}) result)))))))
 
 (deftest a-pickaxe-that-breaks-in-the-clearing-dig-says-tool-broke-and-tool-none
   (async done
@@ -156,28 +154,12 @@
           (is (= 1 (count (h/events-of (:seen s) :tool.broke))))
           (is (= 1 (count (h/events-of (:seen s) :tool.none)))))))))
 
-(deftest a-sapling-the-body-does-not-see-after-the-plant-is-not-counted
+(deftest a-bare-cell-over-soil-is-ready-and-nothing-is-planted
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (world {} (item "oak_sapling" 1)) {"forest" one-cell})
-              p (:p s)
-              sensed (.-sensedAt p)]
-          (aset p "sensedAt" (fn [pos] (if (and (seq (places p)) (= 3 (.-x pos)) (= 64 (.-y pos)))
-                                         #js {:name "air" :pos pos}
-                                         (sensed pos))))
-          (let [result (await (tu/child-outcome (:eng s) job {:plan "forest"} 300))]
-            (is (seq (places p)) "the sapling was placed")
-            (is (zero? (:planted result)) "planted counts what is seen, not what the world holds")))))))
-
-(deftest a-bare-cell-over-soil-is-just-planted
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [p result]} (await (outcome (world {} (item "oak_sapling" 1)) {"forest" one-cell}))]
-          (is (= [] (digs p)))
-          (is (= [[3 64 0 "oak_sapling"]] (places p)))
-          (is (= (expect {:planted 1}) result)))))))
+        (let [{:keys [p]} (await (run (world {} (item "oak_sapling" 1)) {"forest" one-cell} {:plan "forest"} 10))]
+          (is (= 0 (calls-made p))))))))
 
 ;; ------------------------------------------------------------------ the soil under it
 
@@ -188,9 +170,9 @@
         (doseq [under ["stone" "sand" "gravel" "cobblestone"]]
           (let [{:keys [p result]} (await (outcome (world {"3,63,0" under} (item "dirt" 1) (item "oak_sapling" 1) (item "stone_pickaxe" 1)) {"forest" one-cell}))]
             (is (= [[3 63 0]] (digs p)) under)
-            (is (= [[3 63 0 "dirt"] [3 64 0 "oak_sapling"]] (places p)) under)
+            (is (= [[3 63 0 "dirt"]] (places p)) under)
             (is (= "dirt" (h/block-at p 3 63 0)) under)
-            (is (= (expect {:soiled 1 :planted 1}) result) under)))))))
+            (is (= (expect {:soiled 1}) result) under)))))))
 
 (deftest the-soil-goes-through-the-place-job
   (async done
@@ -205,9 +187,8 @@
       (fn ^:async t []
         (let [{:keys [p result seen]} (await (outcome (world {"3,64,0" "short_grass" "4,63,0" "stone"} (item "oak_sapling" 2)) {"forest" two-cells}))]
           (is (= [[3 64 0]] (digs p)) "the stone under the other cell is not dug")
-          (is (= [[3 64 0 "oak_sapling"]] (places p)))
           (is (= "stone" (h/block-at p 4 63 0)))
-          (is (= (expect {:cleared 1 :planted 1 :no-soil [{:pos [4 64 0] :why :no-dirt}]}) result)))))))
+          (is (= (expect {:cleared 1 :no-soil [{:pos [4 64 0] :why :no-dirt}]}) result)))))))
 
 (deftest ground-that-is-not-natural-is-never-dug
   (async done
@@ -217,8 +198,7 @@
           (let [{:keys [p result]} (await (outcome (world {"4,63,0" under "3,64,0" "short_grass"} (item "dirt" 3) (item "oak_sapling" 2))
                                                    {"forest" two-cells}))]
             (is (= [[3 64 0]] (digs p)) under)
-            (is (= [[3 64 0 "oak_sapling"]] (places p)) under)
-            (is (= (expect {:cleared 1 :planted 1 :no-soil [{:pos [4 64 0] :why why}]}) result) under)))))))
+            (is (= (expect {:cleared 1 :no-soil [{:pos [4 64 0] :why why}]}) result) under)))))))
 
 (deftest a-plan-cell-under-the-cell-is-never-dug
   (async done
@@ -229,31 +209,9 @@
               {:keys [p result]} (await (outcome (world {"4,63,0" "stone" "3,64,0" "short_grass"} (item "dirt" 3) (item "oak_sapling" 2))
                                                  {"forest" plan}))]
           (is (= [[3 64 0]] (digs p)))
-          (is (= (expect {:cleared 1 :planted 1 :no-soil [{:pos [4 64 0] :why :planned}]}) result)))))))
+          (is (= (expect {:cleared 1 :no-soil [{:pos [4 64 0] :why :planned}]}) result)))))))
 
 ;; ------------------------------------------------------------------ the sapling
-
-(deftest cells-without-a-carried-sapling-are-listed-as-short-with-one-note
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [carried [[] [(item "birch_sapling" 4)]]]
-          (let [{:keys [p result seen]} (await (outcome (apply world {"3,64,0" "short_grass" "4,64,0" "poppy"} carried) {"forest" two-cells}))]
-            (is (= [[3 64 0] [4 64 0]] (digs p)))
-            (is (= (expect {:cleared 2 :short {"oak" 2}}) result))))
-        (let [{:keys [p result]} (await (outcome (world {"3,64,0" "short_grass" "4,64,0" "poppy"} (item "oak_sapling" 1)) {"forest" two-cells}))]
-          (is (= [[3 64 0 "oak_sapling"]] (places p)) "the nearest cell is planted first")
-          (is (= (expect {:cleared 2 :planted 1 :short {"oak" 1}}) result)))))))
-
-(deftest part-of-the-field-worked-and-cells-left-ends-with-the-reason-not-done
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (are [saplings ending] (= ending (let [s (start (world {"3,64,0" "short_grass" "4,64,0" "poppy"} (item "oak_sapling" saplings)) {"forest" two-cells})
-                                               r (await (tu/child-outcome (:eng s) job {:plan "forest"} 300))]
-                                           ((juxt :status :reason) r)))
-          1 [:stopped :cells-short]
-          2 [:done nil])))))
 
 (deftest a-sapling-of-another-species-in-the-cell-is-left-and-reported
   (async done
@@ -262,9 +220,8 @@
         (doseq [found ["birch_sapling" "birch_log" "chest"]]
           (let [{:keys [p result seen]} (await (outcome (world {"3,64,0" found "4,64,0" "short_grass"} (item "oak_sapling" 2)) {"forest" two-cells}))]
             (is (= [[4 64 0]] (digs p)) found)
-            (is (= [[4 64 0 "oak_sapling"]] (places p)) found)
             (is (= found (h/block-at p 3 64 0)) found)
-            (is (= (expect {:cleared 1 :planted 1 :wrong [{:pos [3 64 0] :found found :species "oak"}]}) result) found)))))))
+            (is (= (expect {:cleared 1 :wrong [{:pos [3 64 0] :found found :species "oak"}]}) result) found)))))))
 
 (deftest the-species-own-sapling-and-log-are-left-without-a-word
   (async done
@@ -273,7 +230,7 @@
         (doseq [here ["oak_sapling" "oak_log"]]
           (let [{:keys [p result seen]} (await (outcome (world {"3,64,0" here "4,64,0" "short_grass"} (item "oak_sapling" 2)) {"forest" two-cells}))]
             (is (= [[4 64 0]] (digs p)) here)
-            (is (= (expect {:cleared 1 :planted 1}) result) here)))))))
+            (is (= (expect {:cleared 1}) result) here)))))))
 
 ;; ------------------------------------------------------------------ headroom
 
@@ -287,12 +244,11 @@
           (let [{:keys [p result seen]} (await (outcome (world (merge {"3,64,0" "short_grass" "4,64,0" "short_grass"} blocks) (item "oak_sapling" 2))
                                                         {"forest" two-cells} args))]
             (is (= [[4 64 0]] (digs p)) (pr-str blocks))
-            (is (= [[4 64 0 "oak_sapling"]] (places p)) (pr-str blocks))
-            (is (= (expect {:cleared 1 :planted 1 :cramped [reported]}) result) (pr-str blocks))))
+            (is (= (expect {:cleared 1 :cramped [reported]}) result) (pr-str blocks))))
         (doseq [blocks [{"3,71,0" "stone"} {"3,66,0" "oak_leaves" "3,67,0" "short_grass" "3,68,0" "vine"} {"3,70,0" "birch_sapling"}]]
           (let [{:keys [p result]} (await (outcome (world (merge {"3,64,0" "short_grass"} blocks) (item "oak_sapling" 1)) {"forest" one-cell}))]
             (is (= [[3 64 0]] (digs p)) (pr-str blocks))
-            (is (= (expect {:cleared 1 :planted 1}) result) (pr-str blocks))))))))
+            (is (= (expect {:cleared 1}) result) (pr-str blocks))))))))
 
 (deftest a-taller-species-needs-more-room
   (async done
@@ -311,11 +267,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[zones plans cleared planted reason]
-                [[[] {"forest" two-cells "other" stone-plan} 1 1 :footprint]]]
+        (doseq [[zones plans cleared reason]
+                [[[] {"forest" two-cells "other" stone-plan} 1 :footprint]]]
           (let [{:keys [p result seen]} (await (with-zones zones #(outcome (world {"3,64,0" "short_grass" "4,64,0" "short_grass"} (item "oak_sapling" 2)) plans)))]
-            (is (= (expect {:cleared cleared :planted planted :refused [{:pos [4 64 0] :reason reason}]}) result) (str reason))
-            (is (= [[3 64 0 "oak_sapling"]] (places p)) (str reason))))))))
+            (is (= (expect {:cleared cleared :refused [{:pos [4 64 0] :reason reason}]}) result) (str reason))))))))
 
 (deftest a-zone-over-a-plan-cell-is-no-obstacle-the-plan-is-the-permission
   (async done
@@ -324,8 +279,7 @@
         (doseq [allow [#{} #{:dig}]]
           (let [{:keys [p result]} (await (with-zones [{:name "vault" :min [4 64 0] :max [4 64 0] :allow allow}]
                                             #(outcome (world {"3,64,0" "short_grass" "4,64,0" "short_grass"} (item "oak_sapling" 2)) {"forest" two-cells})))]
-            (is (= (expect {:cleared 2 :planted 2}) result) (pr-str allow))
-            (is (= [[3 64 0 "oak_sapling"] [4 64 0 "oak_sapling"]] (places p)) (pr-str allow))))))))
+            (is (= (expect {:cleared 2}) result) (pr-str allow))))))))
 
 (deftest a-zone-over-the-ground-under-a-cell-refuses-the-soil-work
   (async done
@@ -344,8 +298,7 @@
         (let [{:keys [p]} (await (outcome (world {"3,64,0" "short_grass" "5,64,0" "short_grass" "3,65,1" "short_grass" "2,63,0" "stone"}
                                                  (item "oak_sapling" 3) (item "dirt" 3))
                                           {"forest" one-cell}))]
-          (is (= [[3 64 0]] (digs p)))
-          (is (= [[3 64 0 "oak_sapling"]] (places p))))))))
+          (is (= [[3 64 0]] (digs p))))))))
 
 (deftest only-the-asked-part-is-prepared
   (async done
@@ -354,8 +307,7 @@
         (let [plan (forest-plan ["a" [[3 64 0]] "oak"] ["b" [[4 64 0]] "oak"])
               {:keys [p]} (await (outcome (world {"3,64,0" "short_grass" "4,64,0" "short_grass"} (item "oak_sapling" 2))
                                           {"forest" plan} {:plan "forest" :part "b"}))]
-          (is (= [[4 64 0]] (digs p)))
-          (is (= [[4 64 0 "oak_sapling"]] (places p))))))))
+          (is (= [[4 64 0]] (digs p))))))))
 
 (deftest the-access-rules-are-asked-again-right-before-the-dig
   (async done
@@ -399,14 +351,14 @@
               {:keys [seen eng]} (await (run (far-world {"9,64,0" "short_grass"} (item "oak_sapling" 1)) {"forest" far-plan "other" claim} {:plan "forest"} 20))]
           (is (= [] (tu/walked-to eng)) "asked when the cell is chosen, before the walk"))))))
 
-(deftest the-body-steps-off-a-cell-before-soiling-and-planting-it
+(deftest the-body-steps-off-a-cell-before-soiling-it
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p result]} (await (outcome (far-world {"9,63,0" "stone"} (item "dirt" 1) (item "oak_sapling" 1) (item "stone_pickaxe" 1)) {"forest" far-plan}))]
           (is (= [[9 63 0]] (digs p)))
-          (is (= [[9 63 0 "dirt"] [9 64 0 "oak_sapling"]] (places p)))
-          (is (= (expect {:soiled 1 :planted 1}) result)))))))
+          (is (= [[9 63 0 "dirt"]] (places p)))
+          (is (= (expect {:soiled 1}) result)))))))
 
 (deftest a-cell-that-cannot-be-reached-is-given-up-after-three-tries
   (async done
@@ -417,7 +369,7 @@
                                                           {"forest" plan}))]
           (is (= 3 (count (filter #(= 9 (:x %)) (tu/walked-to eng)))) "three walks toward the cell at x 9")
           (is (= [[3 64 0]] (digs p)))
-          (is (= (expect {:cleared 1 :planted 1 :gave-up [{:pos [9 64 0] :reason :unreachable}]}) result)))))))
+          (is (= (expect {:cleared 1 :gave-up [{:pos [9 64 0] :reason :unreachable}]}) result)))))))
 
 (deftest a-species-without-a-table-entry-is-refused
   (async done
@@ -427,7 +379,7 @@
               {:keys [p result]} (await (outcome (world {"3,64,0" "short_grass" "4,64,0" "short_grass"} (item "oak_sapling" 2) (item "mangrove_propagule" 1))
                                                  {"forest" plan}))]
           (is (= [[4 64 0]] (digs p)))
-          (is (= (expect {:cleared 1 :planted 1 :refused [{:pos [3 64 0] :reason :unsupported-species}]}) result)))))))
+          (is (= (expect {:cleared 1 :refused [{:pos [3 64 0] :reason :unsupported-species}]}) result)))))))
 
 ;; ------------------------------------------------------------------ declining, not spinning
 
@@ -487,7 +439,7 @@
           (give! p "oak_sapling" 1)
           (await (ticks eng 30))
           (is (= [[4 63 0]] (digs p)))
-          (is (= [[4 63 0 "dirt"] [4 64 0 "oak_sapling"]] (places p))))))))
+          (is (= [[4 63 0 "dirt"]] (places p))))))))
 
 (deftest a-second-run-over-a-prepared-field-does-nothing
   (async done
@@ -495,7 +447,7 @@
       (fn ^:async t []
         (let [{:keys [p eng result]} (await (outcome (world {"3,64,0" "short_grass" "4,63,0" "stone"} (item "dirt" 1) (item "oak_sapling" 2) (item "stone_pickaxe" 1)) {"forest" two-cells}))
               before (calls-made p)]
-          (is (= (expect {:cleared 1 :soiled 1 :planted 2}) result))
+          (is (= (expect {:cleared 1 :soiled 1}) result))
           (core/submit! eng (list job {:plan "forest"}) {})
           (await (ticks eng 40))
           (is (= before (calls-made p)) "no act in 40 ticks")
@@ -516,13 +468,12 @@
           (is (= [] (places (:p s))))
           (is (empty? (h/events-of (:seen s) :prepare.declined))))))))
 
-(deftest the-saplings-a-dug-leaf-drops-are-collected-and-planted
+(deftest a-dug-leaf-stray-is-collected-and-the-cell-left-bare
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p result]} (await (outcome (assoc (world {"3,64,0" "oak_leaves"}) :drops {"oak_leaves" "oak_sapling"}) {"forest" one-cell}))]
-          (is (= [[3 64 0 "oak_sapling"]] (places p)))
-          (is (= (expect {:cleared 1 :planted 1}) result)))))))
+          (is (= (expect {:cleared 1}) result)))))))
 
 (deftest a-dug-hole-is-filled-after-a-restart
   (async done
@@ -539,21 +490,20 @@
                 (await (ticks eng 1))
                 (recur (inc i)))))
           (is (= [[3 63 0]] (digs p)))
-          (is (= [[3 63 0 "dirt"] [3 64 0 "oak_sapling"]] (places p))))))))
+          (is (= [[3 63 0 "dirt"]] (places p))))))))
 
 ;; ------------------------------------------------------------------ water in the cell
 
 (def sapling-and-dirt [(item "dirt" 1) (item "oak_sapling" 1)])
 
-(deftest a-source-in-the-cell-is-filled-with-dirt-dug-out-and-planted
+(deftest a-source-in-the-cell-is-filled-with-dirt-and-dug-out
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p result]} (await (outcome (apply wet-world {"3,64,0" 0} sapling-and-dirt) {"forest" one-cell}))]
-          (is (= [[3 64 0 "dirt"] [3 64 0 "oak_sapling"]] (places p)))
+          (is (= [[3 64 0 "dirt"]] (places p)))
           (is (= [[3 64 0]] (digs p)))
-          (is (= "oak_sapling" (h/block-at p 3 64 0)))
-          (is (= (expect {:dammed 1 :cleared 1 :planted 1}) result)))))))
+          (is (= (expect {:dammed 1 :cleared 1}) result)))))))
 
 (deftest a-source-cell-with-source-neighbours-dams-them-before-it-is-filled
   (async done
@@ -561,9 +511,9 @@
       (fn ^:async t []
         (let [{:keys [p eng seen]} (await (run (assoc (update (wet-world {"3,64,0" 0 "2,64,0" 0 "4,64,0" 0} (item "dirt" 3) (item "oak_sapling" 1)) :blocks merge (ground [[1 0] [2 0] [5 0]])) :self {:pos {:x 1 :y 64 :z 0}})
                                                {"forest" one-cell} {:plan "forest"} 60))]
-          (is (= [[4 64 0 "dirt"] [2 64 0 "dirt"] [3 64 0 "dirt"] [3 64 0 "oak_sapling"]] (places p)))
+          (is (= [[4 64 0 "dirt"] [2 64 0 "dirt"] [3 64 0 "dirt"]] (places p)))
           (is (= [[3 64 0]] (digs p)))
-          (is (= [{:dammed 3 :cleared 1 :planted 1}] (mapv #(select-keys % [:dammed :cleared :planted]) (h/events-of seen :completed)))))))))
+          (is (= [{:dammed 3 :cleared 1}] (mapv #(select-keys % [:dammed :cleared]) (h/events-of seen :completed)))))))))
 
 (deftest the-dam-goes-through-the-place-job
   (async done
@@ -571,7 +521,7 @@
       (fn ^:async t []
         (let [{:keys [p seen]} (await (outcome (apply wet-world {"3,64,0" 0} sapling-and-dirt) {"forest" one-cell}))
               placed (count (h/calls p "place"))]
-          (is (= 2 placed))
+          (is (= 1 placed))
           (is (= 1 (count (filter #(= "dirt" (:item (ce/data %))) (ce/ends seen :placed))))))))))
 
 (deftest a-source-beside-the-cell-is-dammed-and-the-flow-waited-out
@@ -589,8 +539,8 @@
           (is (listed? eng))
           (drain! p "3,64,0")
           (await (ticks eng 30))
-          (is (= [[2 64 0 "dirt"] [3 64 0 "oak_sapling"]] (places p)))
-          (is (= [{:dammed 1 :planted 1}] (mapv #(select-keys % [:dammed :planted]) (h/events-of seen :completed))))))))))
+          (is (= [[2 64 0 "dirt"]] (places p)))
+          (is (= [{:dammed 1}] (mapv #(select-keys % [:dammed]) (h/events-of seen :completed))))))))))
 
 (deftest a-stream-is-followed-to-its-source-and-only-that-is-dammed
   (async done
@@ -619,9 +569,8 @@
                                                 #(outcome (-> (apply wet-world {"3,64,0" 1 "2,64,0" 0} sapling-and-dirt)
                                                               (update :blocks merge stray-and-sapling))
                                                           {"forest" two-cells})))]
-          (is (= [[4 64 0 "oak_sapling"]] (places p)) "only the dry cell is worked")
           (is (= [[4 64 0]] (digs p)))
-          (is (= (expect {:cleared 1 :planted 1 :wet [{:pos [3 64 0] :why :zone :source [2 64 0]}]}) result)))))))
+          (is (= (expect {:cleared 1 :wet [{:pos [3 64 0] :why :zone :source [2 64 0]}]}) result)))))))
 
 (deftest without-dirt-a-wet-cell-is-left-and-reported-with-its-source
   (async done
@@ -630,9 +579,8 @@
         (let [{:keys [p result seen]} (await (outcome (-> (wet-world {"3,64,0" 0} (item "oak_sapling" 1))
                                                           (update :blocks merge stray-and-sapling))
                                                       {"forest" two-cells}))]
-          (is (= [[4 64 0 "oak_sapling"]] (places p)) "nothing is placed in the water")
           (is (= [[4 64 0]] (digs p)))
-          (is (= (expect {:cleared 1 :planted 1 :wet [{:pos [3 64 0] :why :no-dirt :source [3 64 0]}]}) result)))))))
+          (is (= (expect {:cleared 1 :wet [{:pos [3 64 0] :why :no-dirt :source [3 64 0]}]}) result)))))))
 
 (deftest water-that-cannot-be-traced-is-left-and-reported-without-a-source
   (async done
@@ -641,8 +589,7 @@
         (doseq [[label water] [["level 3 and nothing around" (wet-world {"3,64,0" 3} (item "dirt" 1) (item "oak_sapling" 1))]
                                   ["water without a level" (assoc (world {"3,64,0" "water"} (item "dirt" 1) (item "oak_sapling" 1)) :states {})]]]
           (let [{:keys [p result seen]} (await (outcome (update water :blocks merge stray-and-sapling) {"forest" two-cells}))]
-            (is (= [[4 64 0 "oak_sapling"]] (places p)) label)
-            (is (= (expect {:cleared 1 :planted 1 :wet [{:pos [3 64 0] :why :untraced}]}) result))))))))
+            (is (= (expect {:cleared 1 :wet [{:pos [3 64 0] :why :untraced}]}) result))))))))
 
 (deftest lava-in-the-cell-is-wrong-and-never-touched
   (async done
@@ -650,9 +597,8 @@
       (fn ^:async t []
         (let [{:keys [p result]} (await (outcome (far-world {"3,64,0" "lava" "9,64,0" "short_grass"} (item "dirt" 1) (item "oak_sapling" 2)) {"forest" (oak-plan [3 64 0] [9 64 0])}))]
           (is (= [[9 64 0]] (digs p)))
-          (is (= [[9 64 0 "oak_sapling"]] (places p)))
           (is (= "lava" (h/block-at p 3 64 0)))
-          (is (= (expect {:cleared 1 :planted 1 :wrong [{:pos [3 64 0] :found "lava" :species "oak"}]}) result)))))))
+          (is (= (expect {:cleared 1 :wrong [{:pos [3 64 0] :found "lava" :species "oak"}]}) result)))))))
 
 (deftest a-place-that-finds-no-item-or-an-occupied-cell-is-tried-three-times-then-the-cell-is-given-up
   (async done
@@ -671,12 +617,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (world {} (item "oak_sapling" 1)) {"forest" one-cell})
+        (let [s (start (world {"3,64,0" "short_grass"}) {"forest" one-cell})
               refuse? (atom true)]
-          (.override (.-world (:p s)) "place" (fn ^:async f [tok a impl] (if @refuse? #js {:status "occupied"} (await (impl tok a)))))
+          (.override (.-world (:p s)) "dig" (fn ^:async f [tok a impl] (if @refuse? #js {:status "timeout"} (await (impl tok a)))))
           (is (= :gave-up (:reason (await (tu/child-outcome (:eng s) job {:plan "forest"} 300)))))
           (reset! refuse? false)
-          (is (= (expect {:planted 1}) (dissoc (await (tu/child-outcome (:eng s) job {:plan "forest"} 300)) :text :status))))))))
+          (let [r (await (tu/child-outcome (:eng s) job {:plan "forest"} 300))] (is (= 1 (:cleared r)) (pr-str r))))))))
 
 (deftest a-cell-receding-from-a-dam-pauses-until-its-water-is-gone
   (async done
@@ -699,8 +645,7 @@
               {:keys [eng p]} (start spec {"forest" one-cell} (tu/tmp-dir) (tu/seeing-after-look (tu/fake-on-floor spec)))
               result (dissoc (await (tu/child-outcome eng job {:plan "forest"} 300)) :status :text)]
           (is (seq (h/calls p "look")))
-          (is (= [[3 64 0 "oak_sapling"]] (places p)))
-          (is (= (expect {:planted 1}) result)))))))
+          (is (nil? (:planted result))))))))
 
 (deftest ground-under-the-feet-is-replaced-from-beside
   (async done
@@ -711,7 +656,7 @@
                                                  {"forest" one-cell}))]
           (is (= [[3 63 0]] (digs p)) "the body stands on the stone: it is dug once the body is off the column, not refused")
           (is (= "dirt" (h/block-at p 3 63 0)))
-          (is (= (expect {:soiled 1 :planted 1}) result)))))))
+          (is (= (expect {:soiled 1}) result)))))))
 
 ;; ------------------------------------------------------------------ the check
 
@@ -726,13 +671,6 @@
                    [(digs p) (vec (waiting-reasons seen)) (listed? eng)])
                 (pr-str blocks))))))))
 
-(deftest a-check-over-cells-short-of-a-sapling-waits-with-the-reason-and-no-warn
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [seen]} (await (run (world {}) {"forest" one-cell} {:plan "forest"} 12))]
-          (is (= [:cells-short] (vec (waiting-reasons seen)))))))))
-
 (deftest the-check-assesses-the-field-once-per-window-and-sees-a-change-after-it
   (async done
     (tu/run-async done
@@ -744,6 +682,6 @@
             (core/submit! (:eng s) (list job {:plan "forest"}) {})
             (await (ticks (:eng s) 10)))
           (is (< 0 @n 10) "ten ticks, fewer than ten assessments")
-          (set-block! (:p s) 3 64 0 "air")
+          (set-block! (:p s) 3 64 0 "short_grass")
           (await (ticks (:eng s) 10))
-          (is (= [[3 64 0 "oak_sapling"]] (places (:p s)))))))))
+          (is (= [[3 64 0]] (digs (:p s)))))))))

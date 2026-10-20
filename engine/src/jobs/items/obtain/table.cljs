@@ -27,7 +27,7 @@
   "The recipes/plan options of the gather and smelt sources: ore drops count as gathered, and every furnace product
   (jobs.items.smelt.plan/made-from; charcoal from any overworld log) is also made by a smelt step."
   []
-  {:raw (conj (into ore-drops (concat fish-items (keys mob-drops) (keys crop-blocks))) "obsidian")
+  {:raw (conj (into ore-drops (concat fish-items (keys mob-drops) (keys crop-blocks))) "obsidian" "bone_meal")
    :smelts (assoc (into {} (map (fn [[out in]] [out [in]])) smelt-plan/made-from) "charcoal" trees/log-names)})
 
 (defn leaves-of
@@ -129,6 +129,8 @@
             (let [blocks (material-blocks version k)]
               {:key k :count n :job 'jobs.gather.mine :seen blocks :tunnel? true
                :args {:block (first (sort blocks)) :item k :count n :fetch mine-fetch :radius (seen-radius)}}))
+          (when-let [n (get gather "bone_meal")]
+            [{:key "bone_meal" :count n :job 'jobs.farm.compost :seen #{"composter"} :max-runs 1 :args {:times n}}])
           (for [[k n] gather :when (fish-items k)]
             {:key k :count n :job 'jobs.food.fish :seen #{"water"} :args {:count n}})
           (when-let [n (get gather "obsidian")]

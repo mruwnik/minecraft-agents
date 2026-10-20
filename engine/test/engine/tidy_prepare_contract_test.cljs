@@ -99,7 +99,7 @@
         (let [{:keys [eng]} (fm/start (fp/world {"3,64,0" "short_grass"} (fm/item "oak_sapling" 1)) {"forest" fp/one-cell})
               e (await (ending-of eng prepare {:plan "forest"} 300))]
           (is (= :done (:kind e)))
-          (is (= {:cleared 1 :planted 1} (select-keys (:data e) [:cleared :planted]))))))))
+          (is (= {:cleared 1} (select-keys (:data e) [:cleared]))))))))
 
 (deftest prepare-with-a-plan-it-cannot-work-is-condition-failed-plan-trouble
   (async done
@@ -151,8 +151,7 @@
           (aset p "sensedAt" (fn [pos] (if (hidden? pos) #js {:unknown true} (sensed-at pos))))
           (core/submit! eng '(jobs.forestry.prepare {:plan "forest"}) {})
           (await (tu/run-until-empty eng 40))
-          (is (= [[3 64 0]] (fm/digs p)))
-          (is (= [[3 64 0 "oak_sapling"]] (fm/places p))))))))
+          (is (= [[3 64 0]] (fm/digs p))))))))
 
 ;; ------------------------------------------------------------------ forestry.maintain
 

@@ -162,7 +162,7 @@
 (defn assess
   "{:state ...} of one planned cell: :unsupported, :unloaded, :growing, :grown, :wrong (:found), :cramped (:at :block),
   :fill / :dam / :wet (:why :source) for water in the cell, :clear (:block: a stray to dig), :soil-dig, :soil-place,
-  :no-soil (:why), :no-tool (:block: a dig no carried tool harvests; snow, whose drop is a snowball, is dug anyway), :plant (:item) or :short."
+  :no-soil (:why), :no-tool (:block: a dig no carried tool harvests; snow, whose drop is a snowball, is dug anyway) or :ready (ground and room fit for the sapling)."
   [p pos species world]
   (let [r (assess-open p pos species world)
         dug (when (#{:clear :soil-dig} (:state r)) (:block r))]
@@ -181,6 +181,6 @@
         (growth-space p pos species)
         (when-not (bs/air n) {:state :clear :block n})
         (soil-state p pos species world)
-        (if (carried sapling) {:state :plant :item sapling} {:state :short}))))
+        {:state :ready})))
 
-(def steps #{:fill :dam :clear :soil-dig :soil-place :plant})
+(def steps #{:fill :dam :clear :soil-dig :soil-place})

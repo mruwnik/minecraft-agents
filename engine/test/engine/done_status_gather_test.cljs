@@ -25,7 +25,7 @@
 
 (def fresh-args
   {'jobs.gather.get-seeds {:count 2}
-   'jobs.gather.make-obsidian {}
+   'jobs.gather.cast-obsidian {}
    'jobs.gather.mine {:block "stone" :count 2}
    'jobs.farm.till {:area {:pos [0 63 0] :radius 0}}
    'jobs.farm.tidy {:plan "p"}
@@ -76,13 +76,13 @@
     {:count 6} {} [:later :short])
   (is (= {:got 2 :reason :count} (:result (nth (done-of 'jobs.gather.get-seeds seeds {:count 5} {:had 3}) 2)))))
 
-(deftest make-obsidian-is-done-at-the-count-gained-and-no-child-under-way
-  (are [m reason] (= reason (tu/kind-reason (done-of 'jobs.gather.make-obsidian {:inventory [{:name "obsidian" :count 1}]} {:count 1} m)))
+(deftest cast-obsidian-is-done-at-the-count-gained-and-no-child-under-way
+  (are [m reason] (= reason (tu/kind-reason (done-of 'jobs.gather.cast-obsidian {:inventory [{:name "obsidian" :count 1}]} {:count 1} m)))
     {:base 0} [:ok :made]
     {:base 0 :children {:mine {}}} [:later :wrapping-up]
     {:base 1} [:later :short]
     {} [:later :short])
-  (is (= {:got 1} (:result (nth (done-of 'jobs.gather.make-obsidian {:inventory [{:name "obsidian" :count 1}]} {:count 1} {:base 0}) 2)))))
+  (is (= {:got 1} (:result (nth (done-of 'jobs.gather.cast-obsidian {:inventory [{:name "obsidian" :count 1}]} {:count 1} {:base 0}) 2)))))
 
 (def section (tu/box -1 64 0 -1 66 2 "stone"))
 
@@ -108,7 +108,8 @@
     {"3,63,0" "dirt" "3,64,0" "oak_sapling"} {} [:ok :prepared]
     {"3,63,0" "dirt" "3,64,0" "oak_sapling"} {:collect true} [:later :wrapping-up]
     {"3,63,0" "dirt" "3,64,0" "oak_sapling"} {:children {:dig {}}} [:later :wrapping-up]
-    {"3,63,0" "dirt"} {} [:later :preparing]))
+    {"3,63,0" "dirt"} {} [:ok :prepared]
+    {"3,63,0" "stone"} {} [:later :preparing]))
 
 (deftest fertilize-and-compost-are-done-once-their-count-is-reached
   (are [sym args m reason] (= reason (tu/kind-reason (done-of sym {} args m)))

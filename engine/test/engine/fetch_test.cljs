@@ -64,7 +64,7 @@
   so its first sight pass sees them."
   [containers]
   {:self {:pos {:x 0 :y 64 :z 0}}
-   :blocks {stone-at "stone" chest-at "chest"}
+   :blocks {stone-at "stone" chest-at "chest" "4,63,3" "podzol"}
    :containers containers
    :drops {"stone" "cobblestone"}})
 

@@ -29,16 +29,18 @@
   Cells are read from the plan and the world at every step. A sapling of the wanted species is left to grow.
   Anything else on a planned cell (another species, a block) is left and reported once (forest.foreign). Trees off
   the planned cells are never touched.
-  A bare cell whose sapling is not carried gets it from jobs.forestry.plant-sapling (a child that fetches it: a seen
-  chest, or the leaves of its tree). With :ways #{:carried} it is skipped, with one forest.no-sapling note.
+  A bare cell whose sapling is not carried gets it with jobs.lib.need (a seen chest, or the leaves of its tree) before
+  jobs.forestry.plant-sapling plants it. With :ways #{:carried} it is skipped, with one forest.no-sapling note. Cells that cannot take a
+  sapling yet (no soil, cramped, a stray, water) are readied once per call by a jobs.forestry.prepare child; the cells it cannot ready stay
+  (:cells-unplantable).
   A tree is left standing (forest.left, once, and skipped for the rest of the call; the next call looks again) when:
   - its column holds more than ::max-logs (6) logs and the call's :ways leave out :pillar (else it is felled from a pillar),
   - fell-tree gave up on it (its cause is the :because of forest.left),
   - a log of it may not be dug (another plan's footprint or a zone; checked for the whole column before the first
     dig and again before every felling round), or
   - planting it was refused or failed three times.
-  Does not start (condition-failed, a skipped job) unless a grown tree stands on a planned cell that is not left, or a
-  bare planned cell has its sapling carried: the cause is the worst blocked state ({:reason :cells-foreign
+  Does not start (condition-failed, a skipped job) unless a grown tree stands on a planned cell that is not left, a
+  bare planned cell has its sapling carried or can be fetched, or a cell wants readying: the cause is the worst blocked state ({:reason :cells-foreign
   :cells-unplantable :no-sapling :cells [..]}) or :nothing-to-do. {:reason :plan-trouble :why text}
   a wait while the plan is missing or unreadable or no zone list is loaded; impossible when it
   has no tree cells, also later in the call.
@@ -201,6 +203,11 @@
       (or (seq (:no-ground kinds)) (seq (:cramped kinds))) {:reason :cells-unplantable :cells (cells :no-ground :cramped)}
       (seq short) {:reason :no-sapling :cells (vec (sort (map (comp cell-vec key) short)))})))
 
+(defn unplantable-cells
+  "The planned cells whose ground or room is not fit for a sapling yet."
+  [classes]
+  (keep (fn [[pos [kind _]]] (when (#{:no-ground :cramped} kind) pos)) classes))
+
 (defn not-ready
   "Whether the job may start: ok while a grown tree is ripe on a planned cell or a bare one has its sapling carried; else
   later with the cells that hold it back, a look first while one was never seen. The cells are read once per
@@ -214,8 +221,9 @@
             read #(classes-of c (:trees field))
             classes (if unseen? (read) (check-cache/cached c :classes read))]
         (if (or (seq (ripe-cells c classes))
-                (seq (plantable c (owed-cells c classes))))
-          (contract/ok :work "a tree is ripe or a sapling can be planted")
+                (seq (plantable c (owed-cells c classes)))
+                (seq (unplantable-cells classes)))
+          (contract/ok :work "a tree is ripe, a sapling can be planted or a cell wants readying")
           (checks/cause-status (if (and unseen? (not (look/surveyed? c :near))) :look :later)
                                (or (blocked-reason c classes) {:reason :nothing-to-do})))))))
 
@@ -310,16 +318,28 @@
     :again))
 
 (defn plant-args
-  "The args of the plant-sapling child for the cell at pos."
+  "The args of the plant-sapling child for the cell at pos: the sapling is carried by then."
   [c pos species]
-  (cond-> {:at pos :species species :for-plan (:plan (:args c))
-           :ignore-zones? (boolean (:ignore-zones? (:args c)))}
-    (some? (:ways (:args c))) (assoc :ways (:ways (:args c)))))
+  {:at pos :species species :for-plan (:plan (:args c)) :ways #{:carried}
+   :ignore-zones? (boolean (:ignore-zones? (:args c)))})
+
+(defn ^:async fetch-sapling!
+  "The sapling of species fetched with jobs.lib.need when it is not carried: :continue while it works, nil once carried, or the ending."
+  [c species]
+  (let [item (forestry/sapling-of species)]
+    (when-not ((u/carried-names (:primitives c)) item)
+      (let [e (await (need/item! c item 1 {:how (set (need/fetch-how c))}))]
+        (cond (= :continue e) :continue
+              (= :done (:kind e)) nil
+              :else e)))))
 
 (defn ^:async fetch-plant!
-  "Plant at pos with jobs.forestry.plant-sapling, which fetches the sapling it lacks. :again, :continue while it waits."
+  "Fetch the sapling for pos, then plant it with jobs.forestry.plant-sapling. :again, :continue while it waits."
   [c pos species]
-  (let [e (await (ctx/call c :plant 'jobs.forestry.plant-sapling (plant-args c pos species)))]
+  (let [f (await (fetch-sapling! c species))
+        e (cond (= :continue f) :continue
+                f f
+                :else (await (ctx/call c :plant 'jobs.forestry.plant-sapling (plant-args c pos species))))]
     (cond
       (= :continue e) :continue
       (= (forestry/sapling-of species) (u/seen-name (:primitives c) pos))
@@ -342,6 +362,17 @@
         (contains? under (cell-vec pos)) (await (step-off! c pos))
         (place-refusal c pos) (do (leave! c pos :refused :why (place-refusal c pos)) :again)
         :else (await (fetch-plant! c pos species))))))
+
+(defn ^:async prepare!
+  "Once per call, when a cell cannot take a sapling: ready the ground with a jobs.forestry.prepare child. :again, :continue while it waits, or nil."
+  [c classes]
+  (when (and (not (:prepared (ctx/mem c))) (seq (unplantable-cells classes)))
+    (let [e (await (ctx/call c :prepare 'jobs.forestry.prepare
+                             {:plan (:plan (:args c)) :part (:part (:args c)) :accept (:accept (:args c))
+                              :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+      (if (= :continue e)
+        :continue
+        (do (ctx/update-mem! c assoc :prepared true) :again)))))
 
 (defn finish!
   "Step 5: say what was done and end: done when it felled or planted, else nothing-possible :left or condition-failed."
@@ -370,6 +401,7 @@
                   (or (when (:cut (ctx/mem c)) (await (fell! c trees classes)))
                       (await (plant! c classes))
                       (await (fell! c trees classes))
+                      (await (prepare! c classes))
                       (finish! c classes)))))))))
 
 (defn ^:async round [c]
@@ -409,6 +441,7 @@
                   (:cut m) :working
                   (seq (ripe-cells c classes)) :ripe
                   (seq (plantable c (owed-cells c classes))) :planting
+                  (and (not (:prepared m)) (seq (unplantable-cells classes))) :preparing
                   (blocked-reason c classes) :blocked
                   (seq (left-cells c)) :left
                   (checks/child-under-way? c) :wrapping-up)]

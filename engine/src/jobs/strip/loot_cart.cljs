@@ -14,7 +14,7 @@
 (def doc
   "Empty a chest minecart and take the cart: walk within reach (jobs.lib.near/go-near!), open it and move every stack into the bag
   (a jobs.storage.withdraw :entity child), then break it (a jobs.combat.attack child) and pick up what falls (a
-  jobs.items.collect-drops child, radius 4 round the cart): the cart item, and the stacks the bag had no room for.
+  jobs.items.collect-drops child, ::collect-radius (4) round the cart): the cart item, and the stacks the bag had no room for.
   The cart is :id (an entity id) or the nearest chest_minecart within :radius of :near (default the body). It starts
   only when a cart is in sight (condition :gone; start only). Its safe? is ready/safe-at-by-night :near, else ready/safe-if-lit. A cart in
   another owner's zone, claim or plan footprint is refused (:ignore-zones? true skips that). Broken-and-gone carts are not looked for again:
@@ -28,11 +28,12 @@
 (a/defargs args
   {:id {:doc "entity id of the chest minecart; nil: the nearest one to :near" :spec number? :default nil}
    :near {:doc "[x y z] or {:x :y :z} the search for the cart is centred on; the body when nil" :spec ::a/pos :default nil}
-   :radius {:doc "blocks round :near the cart is searched for, and round the cart that drops are collected" :spec (a/num-in 0 nil) :default 4}
+   :radius {:doc "blocks round :near the cart is searched for" :spec (a/num-in 0 nil) :default 4}
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::job-time-s {:default 120 :doc "Seconds a loot may take before it ends." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 120 :doc "Seconds a loot may take before it ends." :spec (a/num-in 0 nil)}
+   ::collect-radius {:default 4 :doc "Blocks round the broken cart that drops are collected." :spec (a/num-in 0 nil)}})
 
 (def target [:id :near])
 
@@ -116,7 +117,7 @@
 (defn ^:async collect!
   "Pick up the drops round the cart's place: :done, or :continue while the child waits."
   [c pos]
-  (let [r (await (child/run!* c :collect 'jobs.items.collect-drops {:radius (:radius (:args c)) :near pos}))]
+  (let [r (await (child/run!* c :collect 'jobs.items.collect-drops {:radius (settings/get settings ::collect-radius) :near pos}))]
     (when-not (= :continue r) (ctx/update-mem! c assoc :dropped (:collected (:data r) 0)))
     (if (= :continue r) :continue :done)))
 

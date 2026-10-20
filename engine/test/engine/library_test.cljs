@@ -384,7 +384,7 @@
                                        [{} {} {:kind :completed}]
                                        [{} {:at {:x 5 :y 64 :z 5}} {:kind :stopped :reason :need}]
                                        [{:blocks {"5,64,5" "oak_log"} :inventory [{:name "oak_sapling" :count 1}]} {:at {:x 5 :y 64 :z 5}} nil]]]
-          (let [{:keys [eng seen]} (setup world)]
+          (let [{:keys [eng seen]} (setup (update world :blocks #(merge {"5,63,5" "dirt"} %)))]
             (core/submit! eng (list 'jobs.forestry.plant-sapling (assoc args :species "oak")) {})
             (await (run-until-empty eng 12))
             (is (= (or expected {}) (end-of seen)) (pr-str [world args]))))))))
@@ -405,7 +405,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:inventory [{:name "oak_sapling" :count 2}]})]
+        (let [{:keys [eng p seen]} (setup {:blocks {"5,63,5" "dirt" "6,63,5" "dirt"} :inventory [{:name "oak_sapling" :count 2}]})]
           (doseq [x [5 6]]
             (mem/write! (:store eng) :forestry/replant {:pos {:x x :y 64 :z 5} :species "oak"} {:cap 50 :ttl :forever}))
           (core/submit! eng (list 'jobs.forestry.plant-sapling {:species "oak"}) {})
@@ -418,7 +418,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {})]
+        (let [{:keys [eng p]} (setup {:blocks {"5,63,5" "dirt"}})]
           (core/submit! eng (list 'jobs.forestry.plant-sapling {:at {:x 5 :y 64 :z 5} :ways #{:carried}}) {})
           (is (nil? (core/tick! eng)) "no sapling in the inventory: not yet")
           (swap! (fake/state p) assoc :inventory [{:name "birch_sapling" :count 1}])
@@ -771,7 +771,7 @@
         (doseq [[owner extra placed declined] [["Fake" {} 1 []] ["FAKE" {} 1 []]
                                                ["Miles" {} 0 [{:reason :refused :zones ["grove"]}]]
                                                ["Miles" {:ignore-zones? true} 1 []]]]
-          (let [{:keys [eng p seen]} (setup {:inventory [{:name "birch_sapling" :count 1}]
+          (let [{:keys [eng p seen]} (setup {:blocks {"5,63,5" "dirt"} :inventory [{:name "birch_sapling" :count 1}]
                                              :zones [(zone-of owner [4 4] [6 6])]})]
             (core/submit! eng (list 'jobs.forestry.plant-sapling (merge {:at {:x 5 :y 64 :z 5}} extra)) {})
             (await (run-until-empty eng 6))

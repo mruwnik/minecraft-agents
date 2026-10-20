@@ -1,5 +1,5 @@
 (ns engine.forestry-contract-test
-  "jobs.forestry.harvest-wood and gather.make-obsidian as contract jobs: they export the contract and end
+  "jobs.forestry.harvest-wood and gather.cast-obsidian as contract jobs: they export the contract and end
   with a kind and a cause (0 of N is never done); a child's failed ending is read, not taken for success."
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
@@ -17,7 +17,7 @@
 
 (defn kc [e] {:kind (:kind e) :cause (contract/cause-key e)})
 
-(def jobs '[jobs.forestry.harvest-wood jobs.gather.make-obsidian])
+(def jobs '[jobs.forestry.harvest-wood jobs.gather.cast-obsidian])
 
 (deftest the-three-jobs-export-the-contract-and-quote-validly
   (async done
@@ -73,9 +73,9 @@
         (let [{:keys [end]} (await (harvest-end oak {:species "oak" :radius 10} 40 (fail :condition-failed {:reason :need :any-of ["dirt"] :count 4})))]
           (is (= {:kind :condition-failed :cause :need} (kc end))))))))
 
-;; ------------------------------------------------------------------ make-obsidian
+;; ------------------------------------------------------------------ cast-obsidian
 
-(def obsidian 'jobs.gather.make-obsidian)
+(def obsidian 'jobs.gather.cast-obsidian)
 
 (defn ^:async obsidian-end [w args]
   (let [s (lt/setup w)]
@@ -107,7 +107,7 @@
             (is (= {:kind :nothing-possible :cause :scoop-failed} (kc end)))))))))
 
 (defn ^:async obsidian-with-slow-lava
-  "make-obsidian on a lava lake where the poured water never turns it, the engine's clock moving 20 seconds with every
+  "cast-obsidian on a lava lake where the poured water never turns it, the engine's clock moving 20 seconds with every
   primitive call; the 'wait' calls it made, and the end state."
   [args]
   (let [clock (atom 1000000)
@@ -137,7 +137,7 @@
           (is (< waits 6) "the limit cuts the wait between its half-second looks"))))))
 
 (defn ^:async obsidian-cut-after-the-pour
-  "make-obsidian on a lava lake cancelled right after it poured, the body then moved far off (x 8.5, out of reach of the
+  "cast-obsidian on a lava lake cancelled right after it poured, the body then moved far off (x 8.5, out of reach of the
   pour); scoop-fails? makes the bucket's place answer failed. {:p :end} with the job's stopped event data."
   [scoop-fails?]
   (let [{:keys [eng p seen]} (lt/setup (ot/world ot/lava-lake [ot/pick {:name "water_bucket" :count 1}]))

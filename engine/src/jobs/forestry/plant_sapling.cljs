@@ -8,6 +8,9 @@
             [jobs.lib.cond :as cond]
             [jobs.lib.gate :as gate]
             [jobs.lib.need :as need]
+            [jobs.lib.look :as look]
+            [jobs.lib.forestry :as lib]
+            [jobs.forestry.prepare-rule :as rule]
             [jobs.lib.trees :refer [debts target-of with-sapling sapling-for sapling-of sapling-name? log-name? replant-kind species]
              :rename {species all-species}]
             [jobs.lib.util :as u]
@@ -26,7 +29,10 @@
 
   The planting is a jobs.blocks.place child (:ways #{:carried}: the sapling is got here). Bone meal for it is jobs.farm.fertilize's.
 
-  Start conditions: :refused or :no-zones (the spot may not be planted; the debt stays owed), :no-sapling (none carried and
+  Start conditions: :refused or :no-zones (the spot may not be planted; the debt stays owed), the spot's soil, light and room (checked
+  before any sapling is fetched: :no-soil with :found, :cramped with :at and :block, the species' growth space of
+  jobs.forestry.prepare-rule/headroom, :too-dark when the cell's best light, sky or block, is under ::min-light (9); an unseen cell or light is no refusal;
+  jobs.forestry.prepare readies the ground), :no-sapling (none carried and
   :ways #{:carried}; data :species); a log on the spot (data :pos) is waited out. A spot that holds its sapling, or no debt owed, is done at once. Ends :done with data
   {:pos} once planted; condition-failed with the need cause when the fetch
   failed, :refused when the zone rule changed on the way; a failed place child ends it with that ending
@@ -43,7 +49,8 @@
 (def ways need/fetch-ways)
 
 (a/defargs settings
-  {::job-time-s {:default 180 :doc "Seconds a planting may take: the walk, a fetch." :spec (a/num-in 0 nil)}})
+  {::min-light {:default 9 :doc "The light (the better of sky and block light, the clock left out) a planted sapling's cell needs to grow." :spec (a/int-in 0 15)}
+   ::job-time-s {:default 180 :doc "Seconds a planting may take: the walk, a fetch." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (def target [:at :near])
@@ -89,6 +96,33 @@
   (when-let [how (seq (need/fetch-how c))]
     {:how (set how)}))
 
+(defn light-at
+  "The better of the sky and block light at pos, from the raw world; nil when it is unknown."
+  [p pos]
+  (when-let [raw (look/raw-of p)]
+    (let [{:keys [x y z]} pos]
+      (when (look/light-known? raw x y z)
+        (let [v (.lightAt raw x y z)]
+          (max (bit-and v 15) (bit-shift-right v 4)))))))
+
+(defn unfit
+  "Why a sapling of species cannot grow at pos, as a cause {:reason ..}, or nil (unseen ground, room or light is no refusal)."
+  [c pos species]
+  (let [p (:primitives c)
+        under (u/seen-name p (lib/down pos))
+        space (when (rule/headroom-of species) (rule/growth-space p pos species))
+        light (light-at p pos)]
+    (cond
+      (and under (not ((lib/soil-for species) under))) {:reason :no-soil :pos pos :found under}
+      (= :cramped (:state space)) (assoc (select-keys space [:at :block]) :reason :cramped :pos pos)
+      (and light (< light (settings/get settings ::min-light))) {:reason :too-dark :pos pos :light light})))
+
+(def spot-unfit
+  (checks/refusing :spot-fit "the spot has soil, light and room"
+                   (fn [c]
+                     (let [t (current-target c)]
+                       (when (and t (not (#{"crimson" "warped"} (:species t)))) (unfit c (:pos t) (:species t)))))))
+
 (def spot-refused
   (checks/refusing :spot-allowed "the spot may be planted"
                    (fn [c]
@@ -108,7 +142,7 @@
                        (when (and t (log-name? (some-> (u/seen-block (:primitives c) (:pos t)) .-name)))
                          {:reason :log-on-spot :pos (:pos t)})))))
 
-(def can-start? (cond/and spot-refused no-sapling))
+(def can-start? (cond/and spot-refused spot-unfit no-sapling))
 
 (def can-run? log-on-spot)
 

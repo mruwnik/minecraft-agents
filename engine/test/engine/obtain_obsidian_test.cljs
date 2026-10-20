@@ -51,17 +51,17 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (lt/setup (world (assoc lava-lake "1,63,0" "obsidian") [pick {:name "water_bucket" :count 1}]))
+        (let [{:keys [eng p]} (lt/setup (world lava-lake [pick {:name "water_bucket" :count 1}]))
               calls (atom 0)
               stub {:round (fn ^:async mine-round [c]
                              (if (= 1 (swap! calls inc))
-                               (do (await (ctx/act c :dig (clj->js {:pos {:x 1 :y 63 :z 0}}))) :continue)
+                               (do (await (ctx/act c :dig (clj->js {:pos {:x 4 :y 63 :z 0}}))) :continue)
                                (ctx/end c :done nil)))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.gather.mine stub))
-              res (await (tu/child-outcome eng 'jobs.gather.make-obsidian {:count 1} 100))]
+              res (await (tu/child-outcome eng 'jobs.gather.cast-obsidian {:count 1} 100))]
           (is (= 2 @calls) "the mine child ran on after the block was dug")
           (is (= :mine-failed (:reason res)) (pr-str res))
-          (is (= 1 (carried p "water_bucket")) "no water was poured"))))))
+          (is (= 1 (carried p "water_bucket")) "the water was scooped back"))))))
 
 (defn ^:async refused
   "{:reason :why} of an obsidian obtain that ends before it gets anywhere."
@@ -77,17 +77,17 @@
               no-bucket (await (refused (world lava-lake [pick])))]
           (is (= :no-source (:reason none)))
           (is (re-find #"obsidian" (:why none)))
-          (is (= :no-bucket (:reason no-bucket)) "make-obsidian's start condition is the wait reason"))))))
+          (is (= :no-bucket (:reason no-bucket)) "cast-obsidian's start condition is the wait reason"))))))
 
 (defn ^:async no-zone-list-outcome
-  "The outcome of make-obsidian with args on a body whose zone list was never read."
+  "The outcome of cast-obsidian with args on a body whose zone list was never read."
   [args]
   (let [[_ sink] (tu/legacy-capture-sink)
-        p (tu/seeing-all (tu/fake-on-floor (world (assoc ground "4,63,0" "obsidian") [pick])))
+        p (tu/seeing-all (tu/fake-on-floor (world lava-lake [pick {:name "water_bucket" :count 1}])))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now (constantly 1000000)
                           :world (ew/of-data {} {} nil)
                           :events (events/make {:body "Fake" :sinks [sink] :now (constantly 1000000)})})]
-    (await (tu/child-outcome eng 'jobs.gather.make-obsidian args 300))))
+    (await (tu/child-outcome eng 'jobs.gather.cast-obsidian args 300))))
 
 (deftest ignore-zones-reaches-the-mine-child
   (async done
@@ -103,12 +103,12 @@
   {:dim "overworld" :at [62 63 1] :names ["air" "lava"] :cells [[62 63 0]] :lava [[62 63 0]] :seals [[62 63 1]]})
 
 (defn ^:async obtain-remembering
-  "make-obsidian with a water bucket, on w, with a :breach-behind entry in memory."
+  "cast-obsidian with a water bucket, on w, with a :breach-behind entry in memory."
   ([w] (obtain-remembering w breach))
   ([w entry]
   (let [{:keys [eng p]} (lt/setup w)]
     (mem/write! (:store eng) :breach-behind entry)
-    {:res (await (tu/child-outcome eng 'jobs.gather.make-obsidian {:count 1 :radius 24} 600))
+    {:res (await (tu/child-outcome eng 'jobs.gather.cast-obsidian {:count 1 :radius 24} 600))
      :p p
      :left (mem/entries (mem/view (:store eng)) :breach-behind)})))
 
@@ -136,7 +136,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup (world ground [pick {:name "water_bucket" :count 1}]))]
-          (core/submit! eng '(jobs.gather.make-obsidian {:count 1}) {})
+          (core/submit! eng '(jobs.gather.cast-obsidian {:count 1}) {})
           (await (tu/run-until-empty eng 6))
           (is (pos? (sense/looks p))))))))
 
@@ -158,9 +158,9 @@
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now (constantly 1000000)
                                 :world (ew/of-data {} {} [zone])
                                 :events (events/make {:body "Fake" :sinks [sink] :now (constantly 1000000)})})
-              res (await (tu/child-outcome eng 'jobs.gather.make-obsidian {:count 1} 100))]
+              res (await (tu/child-outcome eng 'jobs.gather.cast-obsidian {:count 1} 100))]
           (is (= :no-lava (:reason res)) (pr-str res))
-          (is (= 1 (carried p "water_bucket")) "no water was poured"))))))
+          (is (= 1 (carried p "water_bucket")) "the water was scooped back"))))))
 
 (deftest a-bucket-click-that-takes-no-water-ends-scoop-failed-not-for-ever
   (async done
@@ -170,7 +170,7 @@
               real (get registry/jobs 'jobs.items.use)
               idle (assoc real :round (fn ^:async r [c] (ctx/end c :done nil {:used true})))
               eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.items.use idle))
-              res (await (tu/child-outcome eng 'jobs.gather.make-obsidian {:count 1} 300))]
+              res (await (tu/child-outcome eng 'jobs.gather.cast-obsidian {:count 1} 300))]
           (is (= :stopped (:status res)) (pr-str res))
           (is (= :scoop-failed (:reason res)) (pr-str res)))))))
 
@@ -186,7 +186,7 @@
                                              (do (reset! waited true) :continue)
                                              (await ((:round real) c)))))
               eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.items.use wrapped))
-              res (await (tu/child-outcome eng 'jobs.gather.make-obsidian {:count 1} 300))]
+              res (await (tu/child-outcome eng 'jobs.gather.cast-obsidian {:count 1} 300))]
           (is @waited "the scoop child waited once")
           (is (= :done (:status res)) (pr-str res))
           (is (= 1 (carried p "water_bucket")) "the water was scooped back after the wait"))))))
@@ -195,7 +195,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (lt/setup (world (assoc ground "4,63,0" "obsidian") [pick]))
+        (let [{:keys [eng p]} (lt/setup (world lava-lake [pick {:name "water_bucket" :count 1}]))
               in-water-at-start (atom nil)
               stub {:round (fn ^:async mine-round [c]
                              (reset! in-water-at-start (.-inWater (.self p)))
@@ -206,14 +206,14 @@
                              (ctx/end c :done nil))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.gather.mine stub 'jobs.time.noop noop))]
           (fake/swap-self! p assoc :inWater true)
-          (await (tu/child-outcome eng 'jobs.gather.make-obsidian {:count 1} 100))
+          (await (tu/child-outcome eng 'jobs.gather.cast-obsidian {:count 1} 100))
           (is (false? @in-water-at-start) "the mine child waited for the flow to drain"))))))
 
 (deftest each-obsidian-waits-for-the-scooped-water-to-drain-again
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (lt/setup (world (assoc ground "4,63,0" "obsidian" "5,63,0" "obsidian") [pick]))
+        (let [{:keys [eng p]} (lt/setup (world (assoc lava-lake "7,63,0" "lava") [pick {:name "water_bucket" :count 1}]))
               mined (atom 0)
               stub {:round (fn ^:async mine-round [c]
                              (swap! mined inc)
@@ -223,6 +223,6 @@
               noop {:round (fn ^:async noop-round [c] (swap! pauses inc) (ctx/end c :done nil))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.gather.mine stub 'jobs.time.noop noop))]
           (fake/swap-self! p assoc :inWater true)
-          (await (tu/child-outcome eng 'jobs.gather.make-obsidian {:count 2} 100))
+          (await (tu/child-outcome eng 'jobs.gather.cast-obsidian {:count 2} 100))
           (is (= 2 @mined))
           (is (= 12 @pauses) "six half-second looks before each mine child, not only before the first"))))))

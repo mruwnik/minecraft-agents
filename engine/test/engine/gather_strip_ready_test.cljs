@@ -9,7 +9,7 @@
             [jobs.forestry.harvest-wood :as harvest-wood]
             [jobs.forestry.plant-sapling :as plant-sapling]
             [jobs.gather.get-seeds :as get-seeds]
-            [jobs.gather.make-obsidian :as make-obsidian]
+            [jobs.gather.cast-obsidian :as cast-obsidian]
             [jobs.gather.mine :as mine]
             [jobs.strip.corridor :as corridor]
             [jobs.strip.loot-cart :as loot-cart]
@@ -25,7 +25,7 @@
 
 (deftest roaming-jobs-wait-at-night-above-ground
   (are [check] (= [:later :ok] [(kind check rt/open-night {}) (kind check rt/tunnel {})])
-    get-seeds/safe? make-obsidian/safe? mine/safe? harvest-wood/safe? collect-drops/safe?))
+    get-seeds/safe? cast-obsidian/safe? mine/safe? harvest-wood/safe? collect-drops/safe?))
 
 (deftest jobs-going-to-a-place-judge-that-place
   (are [check arg] (= [:ok :later] [(kind check rt/night-hut {arg inside}) (kind check rt/night-hut {arg outside})])
@@ -50,7 +50,7 @@
 
 (deftest can-start-no-longer-holds-for-danger-or-night
   (are [check world args] (= :ok (kind check world args))
-    corridor/can-start? zombie-day {:segment segment :danger-check true}))
+    corridor/can-start? zombie-day {:segment segment}))
 
 (deftest fit-is-later-only-below-the-risky-health
   (are [check] (= :ok (kind check rt/night-hut {}))

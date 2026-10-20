@@ -130,7 +130,7 @@
   {:name "empty-bucket-is-filled-at-seen-water-then-makes-obsidian"
    :blocks [[:fill [22 0 14] [26 0 18] "stone"] [:set [24 0 16] "lava"] [:set [19 0 16] "water"]]
    :body {:inventory [["diamond_pickaxe" 1] ["bucket" 1]]}
-   :act [[:job (jobs.gather.make-obsidian {:count 1})]]
+   :act [[:job (jobs.gather.cast-obsidian {:count 1})]]
    :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}]
    :after [[:item "obsidian" [:>= 1]]]
    :limit-s 130}
@@ -138,17 +138,25 @@
   {:name "two-lava-sources-make-two-obsidian"
    :blocks [[:fill [22 0 14] [26 0 18] "stone"] [:set [23 0 15] "lava"] [:set [25 0 18] "lava"]]
    :body {:inventory [["diamond_pickaxe" 1] ["water_bucket" 1]]}
-   :act [[:job (jobs.gather.make-obsidian {:count 2})]]
+   :act [[:job (jobs.gather.cast-obsidian {:count 2})]]
    :expect [{:event {:source :job :kind :completed} :within-s 170 :of-job true}]
    :after [[:item "obsidian" [:>= 2]]]
    :limit-s 190}
+  ;; card 75a88e72 (D60): :at names the lava cell to pour on; the other lava source stays lava
+  {:name "cast-at-the-named-lava-cell"
+   :blocks [[:fill [22 0 14] [26 0 18] "stone"] [:set [23 0 15] "lava"] [:set [25 0 18] "lava"]]
+   :body {:inventory [["diamond_pickaxe" 1] ["water_bucket" 1]]}
+   :act [[:job (jobs.gather.cast-obsidian {:count 1 :at #at [25 0 18]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}]
+   :after [[:item "obsidian" [:>= 1]] [:block [23 0 15] "lava"]]
+   :limit-s 130}
   ;; card ff7ec4e1: flowing lava only (the source under a glass wall, so no site): water on it makes cobblestone; the wall at
   ;; x 10 (glass: stone would hide the west flow from the east side) keeps each pour's water to its own side, so a failed east pour leaves the west flow for a second failed pour
   {:name "water-on-flowing-lava-twice-ends-pour-failed"
    :blocks [[:fill [4 0 10] [16 0 22] "stone"] [:fill [7 0 16] [13 0 16] "air"] [:fill [10 1 10] [10 1 22] "glass"]
             [:set [10 0 16] "lava"]]
    :body {:at [14.5 1 20.5] :inventory [["diamond_pickaxe" 1] ["water_bucket" 2]]}
-   :act [[:wait-s 8] [:job (jobs.gather.make-obsidian {:count 1})]]
+   :act [[:wait-s 8] [:job (jobs.gather.cast-obsidian {:count 1})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :pour-failed}} :within-s 110 :of-job true}
             {:count-event {:source :action :kind :started :data {:name "place" :args {"item" "water_bucket"}}} :for-s 85 :at-least 2 :of-job true}]
    :after [[:item "obsidian" 0]]

@@ -24,7 +24,7 @@
 (defn ^:async plant-unseen
   "plant-sapling at the spot, whose cell reads as never seen until (seen-now? p)."
   [seen-now?]
-  (let [{:keys [eng p]} (lt/setup {:blocks {} :inventory [{:name "oak_sapling" :count 1}]})
+  (let [{:keys [eng p]} (lt/setup {:blocks {"3,63,0" "dirt"} :inventory [{:name "oak_sapling" :count 1}]})
         omniscient (.-sensedAt p)]
     (aset p "sensedAt" (fn [pos] (if (and (= 3 (.-x pos)) (= 64 (.-y pos)) (= 0 (.-z pos)) (not (seen-now? p)))
                                    #js {:unknown true}
@@ -39,6 +39,18 @@
         (let [p (await (plant-unseen looked-at-spot?))]
           (is (= "oak_sapling" (.-name (.blockAt p spot))) "planted after the look"))))))
 
+(deftest a-spot-without-soil-or-room-is-declined-and-nothing-is-planted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[blocks reason] [[{"3,63,0" "stone"} :no-soil]
+                                 [{"3,63,0" "dirt" "3,70,0" "stone"} :cramped]
+                                 [{"3,63,0" "dirt"} nil]]]
+          (let [{:keys [eng p]} (lt/setup {:blocks blocks :inventory [{:name "oak_sapling" :count 1}]})
+                res (await (tu/child-outcome eng 'jobs.forestry.plant-sapling {:at {:x 3 :y 64 :z 0} :species "oak"} 60))]
+            (is (= reason (:reason res)) (pr-str blocks))
+            (is (= (if reason "air" "oak_sapling") (.-name (.blockAt p spot))) (pr-str blocks))))))))
+
 (deftest a-sapling-is-planted-in-the-footprint-of-its-own-plan-but-not-another-bodys
   (async done
     (tu/run-async done
@@ -47,7 +59,7 @@
           (let [plan (shape/with-author {:id "hut" :parts [{:id "p" :box [[3 64 0] [3 64 0]] :want "stone"}]} author)
                 clock (atom 1000000)
                 [_ sink] (tu/legacy-capture-sink)
-                p (tu/seeing-all (tu/fake-on-floor {:blocks {} :inventory [{:name "oak_sapling" :count 1}]}))
+                p (tu/seeing-all (tu/fake-on-floor {:blocks {"3,63,0" "dirt"} :inventory [{:name "oak_sapling" :count 1}]}))
                 eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                                   :world (ew/of-data {"hut" plan} {} [])
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]

@@ -49,7 +49,7 @@
    :act [[:job (jobs.forestry.prepare {:plan "$plan:wood"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
             {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 60 :until {:source :job :kind :completed} :of-job true}]
-   :after [[:item "iron_pickaxe" 1] [:block [16 0 16] "oak_sapling"]]}
+   :after [[:item "iron_pickaxe" 1] [:block [16 0 16] "air"]]}
   {:name "prepare-no-pick-digs-by-hand-no-tool-event"
    :blocks [[:set [16 0 16] "cobblestone"]]
    :plans [{:id "wood" :parts [{:id "t" :cells [#at [16 0 16]] :want {:tree "oak"}}]}]

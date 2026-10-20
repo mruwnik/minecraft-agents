@@ -24,17 +24,14 @@
   - wheat_seeds: break grass (:sources, 1 drop in 8).
   - sugar_cane and bamboo: cut a wild stand above its base (the second segment from the bottom, so the base
     grows again; a stand of one is never cut).
-  - carrot, potato, beetroot_seeds: take from a chest only, never from a field.
-  - A :chest or :plan always means the chest way. :sources always means the break way. Any other material
-    with neither declines.
+  - Any other material declines (:no-source); a chest is items.obtain's way, not this job's. :sources always means the break way.
 
   The goal (:count carried, so a body that carries it is done at once) is fixed in the first step. One call runs these steps until the job ends (it yields with :continue only while a child or
   a walk waits on the world):
   1. Carrying the goal ends :count.
-  2. Chest way: the withdraw child takes the item. It ends :count when the goal is carried, else :short.
-  3. After a dig batch the collect-drops child picks up the item (only it) within the collect-radius setting (8).
-  4. The dry-digs setting (40) digs in a row that brought no new item end :dry (the ending says so).
-  5. Otherwise a batch: the nearest source blocks within :radius not skipped (for a stand: its cut cells) are
+  2. After a dig batch the collect-drops child picks up the item (only it) within the collect-radius setting (8).
+  3. The dry-digs setting (40) digs in a row that brought no new item end :dry (the ending says so).
+  4. Otherwise a batch: the nearest source blocks within :radius not skipped (for a stand: its cut cells) are
      judged by jobs.lib.access.rules. At most the per-round setting (4) of the permitted ones are walked to (within 3) and
      dug, each judged again right before its dig.
 
@@ -47,13 +44,11 @@
   (the ending says so). A batch of only skipped blocks is not barren.
 
   done? is :ok when the goal is carried and no child is under way: ends :done (data {:got n :reason :count}). Any
-  other end is condition-failed with the cause :refused, :withdraw-declined or :none, else nothing-possible with the cause
-  :dry, :barren or :short (the chest gave less), and data {:got n :reason r :text}; :got is how many more are
+  other end is condition-failed with the cause :refused or :none, else nothing-possible with the cause
+  :dry or :barren, and data {:got n :reason r :text}; :got is how many more are
   carried than at the start, at least 0.
 
-  Conditions (the check waits with the reason): :no-source (a material with no known way),
-  :no-chest (chest way with no :chest and no known chest place), :plan-missing, :plan-broken, :no-chest-cell (the
-  :plan has no chest cell), :no-zones (break way with no zone list read), :too-short (cane or bamboo in range but no
+  Conditions (the check waits with the reason): :no-source (a material with no known way), :no-zones (break way with no zone list read), :too-short (cane or bamboo in range but no
   stand of two or more: the job stays queued, a stand may grow) and :nothing-in-range (after one look around).
   Quote: time by the way (about 8 breaks for a seed from grass), yields :count of the item.")
 
@@ -62,8 +57,6 @@
    :count {:doc "how many to carry at least" :spec (a/int-in 0 nil) :default 8}
    :radius {:doc "source blocks within this many blocks of the body count" :spec (a/num-in 0 nil) :default 16}
    :sources {:doc "block names to break for the item; nil: the material's own (grass for wheat_seeds)" :spec (a/coll-of a/name?) :default nil}
-   :chest {:doc "chest position: take the item from it instead of breaking blocks" :spec ::a/pos :default nil}
-   :plan {:doc "id of a plan: take the item from the chest cell (want \"chest\") of the plan" :spec a/name? :default nil}
    :ignore-zones? :shared
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent water, :lava-adjacent seen lava, :falling-block)"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:falling-block}}})
@@ -73,14 +66,14 @@
    ::per-round {:default 4 :doc "Blocks dug per step at most." :spec (a/int-in 1 nil)}
    ::collect-radius {:default 8 :doc "How far around to collect drops after a batch, in blocks." :spec (a/num-in 0 nil)}
    ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
-   ::job-time-s {:default 600 :doc "Seconds a gathering may take: the walks, digs, drops and the chest." :spec (a/num-in 0 nil)}})
+   ::job-time-s {:default 600 :doc "Seconds a gathering may take: the walks, digs and drops." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn dry-digs [] (settings/get settings ::dry-digs))
 (defn per-round [] (settings/get settings ::per-round))
 (defn collect-radius [] (settings/get settings ::collect-radius))
 (defn time-s [] (settings/get settings ::job-time-s))
 
-(def target [:item :chest :plan])
+(def target [:item])
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
@@ -91,16 +84,12 @@
 (def materials
   {"wheat_seeds" {:from :grass :sources ["short_grass" "tall_grass"]}
    "sugar_cane" {:from :stalk :block "sugar_cane"}
-   "bamboo" {:from :stalk :block "bamboo"}
-   "carrot" {:from :chest}
-   "potato" {:from :chest}
-   "beetroot_seeds" {:from :chest}})
+   "bamboo" {:from :stalk :block "bamboo"}})
 
 (defn mode
-  "How the item is got: :chest, :grass, :stalk or :unknown."
-  [{:keys [chest plan sources item]}]
+  "How the item is got: :grass, :stalk or :unknown."
+  [{:keys [sources item]}]
   (cond
-    (or chest plan) :chest
     sources :grass
     :else (get-in materials [item :from] :unknown)))
 
@@ -108,29 +97,6 @@
   "Total of the item carried over all stacks."
   [c]
   (storage/carried (u/inventory (:primitives c)) (:item (:args c))))
-
-(defn chest-want? [want]
-  (or (= "chest" want) (and (map? want) (= "chest" (:block want)))))
-
-(defn plan-chest
-  "{:chest [x y z]} of the plan's chest cell, or {:trouble reason}."
-  [c id]
-  (let [answer (known/plan c id)
-        cell (some #(when (chest-want? (:want %)) (:pos %)) (:cells answer))]
-    (cond
-      (nil? answer) {:trouble :plan-missing}
-      (:broken answer) {:trouble :plan-broken}
-      (nil? cell) {:trouble :no-chest-cell}
-      :else {:chest cell})))
-
-(defn chest-target
-  "{:chest value-for-withdraw} (nil: the known chest place) or {:trouble reason}."
-  [c]
-  (let [{:keys [plan chest] :as a} (:args c)]
-    (cond
-      plan (plan-chest c plan)
-      (storage/chest-of (ctx/view c) a) {:chest chest}
-      :else {:trouble :no-chest})))
 
 (defn cut-cell?
   "Whether the stalk block at pos is the second segment of its stand: a stalk under it, none under that."
@@ -167,12 +133,8 @@
 (defn no-source [c]
   (when (= :unknown (mode (:args c))) (decline! c :no-source)))
 
-(defn chest-trouble [c]
-  (when (= :chest (mode (:args c)))
-    (some->> (:trouble (chest-target c)) (decline! c))))
-
 (defn zones-missing? [c]
-  (and (not (#{:chest :unknown} (mode (:args c)))) (nil? (known/zones c)) (not (:ignore-zones? (:args c)))))
+  (and (not= :unknown (mode (:args c))) (nil? (known/zones c)) (not (:ignore-zones? (:args c)))))
 
 (defn no-zones [c]
   (when (zones-missing? c) (decline! c :no-zones)))
@@ -182,14 +144,13 @@
   the round's own."
   [c]
   (let [m (mode (:args c))]
-    (when-not (or (#{:chest :unknown} m) (zones-missing? c) (:goal (ctx/mem c)) (seq (source-blocks c)))
+    (when-not (or (= :unknown m) (zones-missing? c) (:goal (ctx/mem c)) (seq (source-blocks c)))
       (cond
         (and (= :stalk m) (stalks-in-range? c)) (decline! c :too-short)
         (look/surveyed? c) :nothing-in-range))))
 
 (def can-start?
   (cond/and (checks/refusing :source "a source known" no-source)
-            (checks/refusing :chest "the chest is fit" chest-trouble)
             (checks/refusing :zones-read "zone list read" no-zones)
             (checks/refusing :in-range "a source in range" nothing-in-range)))
 
@@ -234,10 +195,10 @@
            (str "no " (str/join "/" names) " within " radius))
          (when far (str ", the nearest seen is " (Math/round (u/dist (u/self-pos c) (:pos far))) " away")))))
 
-(def condition-reasons #{:refused :withdraw-declined :none})
+(def condition-reasons #{:refused :none})
 
 (defn finish!
-  "End the job: :done for :count, condition-failed for :refused, :withdraw-declined and :none (a zone, claim, chest or source can change), else nothing-possible with the reason."
+  "End the job: :done for :count, condition-failed for :refused and :none (a zone, claim or source can change), else nothing-possible with the reason."
   ([c reason] (finish! c reason {}))
   ([c reason fields]
   (let [got (got c)
@@ -316,23 +277,6 @@
           (recur (rest todo) (cond-> counts (contains? counts r) (update r inc)))))
       counts)))
 
-(defn ^:async take! [c]
-  (let [{:keys [item]} (:args c)
-        goal (:goal (ctx/mem c))
-        chest (:chest (chest-target c))
-        e (await (ctx/call c :take 'jobs.storage.withdraw
-                           (merge (select-keys (:args c) [:ignore-zones?]) {:chest chest :items {item goal}})))
-        out (:data e)]
-    (cond
-      (= :continue e) :continue
-      (>= (carried c) goal) (finish! c :count)
-      (and (= :condition-failed (:kind e)) (= :refused (contract/cause-key e))) (give-up! c :refused (select-keys (:cause e) [:zones :claims]))
-      (and (= :condition-failed (:kind e)) (not (contains? out :gave-up))) (give-up! c :withdraw-declined)
-      (:gave-up out) (finish! c :short (merge (select-keys out [:zones :claims])
-                                              {:why (contract/cause-key e)
-                                               :text (str "get-seeds: withdraw gave up: " (name (contract/cause-key e)))}))
-      :else (finish! c :short))))
-
 (defn ^:async collect! [c]
   (let [{:keys [item]} (:args c)
         r (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (collect-radius) :items [item]})))]
@@ -360,11 +304,9 @@
     (let [now (carried c)]
       (ctx/update-mem! c assoc :goal (:count (:args c)) :had now :last-carried now :dry 0 :barren 0)))
   (let [{:keys [goal collecting dry]} (ctx/mem c)
-        chest? (= :chest (mode (:args c)))
-        targets (when-not (or chest? collecting) (vec (take (per-round) (vet! c (source-blocks c)))))]
+        targets (when-not collecting (vec (take (per-round) (vet! c (source-blocks c)))))]
     (cond
       (>= (carried c) goal) (finish! c :count)
-      chest? (await (take! c))
       collecting (await (collect! c))
       (>= dry (dry-digs)) (give-up! c :dry)
       (and (empty? targets) (seq (:refused (ctx/mem c)))) (refuse-up! c)

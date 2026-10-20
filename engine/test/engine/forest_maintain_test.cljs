@@ -560,10 +560,10 @@
   (is (= #{:falling-block}
          (:accept (maintain/fell-args {:args {:accept #{:falling-block}}} {:x 3 :y 64 :z 0} "oak")))))
 
-(deftest maintain-plants-through-the-plant-sapling-child-with-its-plan-zones-and-fetch
+(deftest maintain-plants-through-the-plant-sapling-child-with-its-plan-and-zones-after-its-own-fetch
   (is (= {:at {:x 3 :y 64 :z 0} :species "oak" :for-plan "forest" :ignore-zones? true :ways #{:carried}}
          (maintain/plant-args {:args {:plan "forest" :ignore-zones? true :ways #{:carried}}} {:x 3 :y 64 :z 0} "oak")))
-  (is (= {:at {:x 3 :y 64 :z 0} :species "oak" :for-plan "forest" :ignore-zones? false}
+  (is (= {:at {:x 3 :y 64 :z 0} :species "oak" :for-plan "forest" :ignore-zones? false :ways #{:carried}}
          (maintain/plant-args {:args {:plan "forest"}} {:x 3 :y 64 :z 0} "oak"))))
 
 (deftest maintain-fells-a-tall-tree-from-a-pillar-unless-the-way-is-left-out

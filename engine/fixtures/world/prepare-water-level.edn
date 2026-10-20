@@ -1,9 +1,9 @@
 ;; forestry.prepare reads the level of the water in a planned cell (perception gives it as a string): a source in the cell
-;; is filled with the carried dirt and the sapling planted on it; with no dirt carried the cell stays wet and nothing is planted.
+;; is filled with the carried dirt and dug out again, the cell left bare; with no dirt carried the cell stays wet.
 ;; A source beside the cell floods it with a flow: prepare traces the flow up to the source, fills it with dirt, pauses (jobs.time.noop)
-;; while the puddle recedes, then plants.
-;; Should-succeed: water-source-filled-with-dirt-then-planted, flow-traced-to-its-source-then-planted after the water recedes.
-;; Should-fail: wet-cell-without-dirt-stays-unplanted.
+;; while the puddle recedes, then leaves the cell bare.
+;; Should-succeed: water-source-filled-with-dirt-then-readied, flow-traced-to-its-source-then-readied after the water recedes.
+;; Should-fail: wet-cell-without-dirt-stays-wet.
 {:defaults
  {:tags [:forestry :prepare :jobs]
   :time :any
@@ -14,19 +14,19 @@
   :body {:at [16.5 0 12.5] :yaw 0 :inventory [["oak_sapling" 1] ["dirt" 2] ["iron_pickaxe" 1]] :effects [["resistance" 600 4]] :settle-s 2}
   :limit-s 120}
  :cases
- [{:name "water-source-filled-with-dirt-then-planted"
+ [{:name "water-source-filled-with-dirt-then-readied"
    :act [[:http :submit (jobs.forestry.prepare {:plan "$plan:wood"}) [] {:ok true}]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
-   :after [[:block [16 0 16] "oak_sapling"]]}
-  {:name "wet-cell-without-dirt-stays-unplanted"
+   :after [[:block [16 0 16] "air"]]}
+  {:name "wet-cell-without-dirt-stays-wet"
    :body {:inventory [["oak_sapling" 1] ["iron_pickaxe" 1]]}
    :act [[:http :submit (jobs.forestry.prepare {:plan "$plan:wood"}) [] {:ok true}]
          [:wait-s 25]]
    :expect [{:no-event {:source :job :kind :completed} :for-s 25 :of-job true}]
    :after [[:not-block [16 0 16] "oak_sapling"] [:item "oak_sapling" 1]]}
-  {:name "flow-traced-to-its-source-then-planted"
+  {:name "flow-traced-to-its-source-then-readied"
    :blocks [[:set [16 0 16] "air"] [:set [15 0 16] "water"]]
    :body {:at [16.5 0 5.5]}
    :act [[:http :submit (jobs.forestry.prepare {:plan "$plan:wood"}) [] {:ok true}]]
    :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}]
-   :after [[:block [16 0 16] "oak_sapling"] [:block [15 0 16] "dirt"]]}]}
+   :after [[:block [16 0 16] "air"] [:block [15 0 16] "dirt"]]}]}

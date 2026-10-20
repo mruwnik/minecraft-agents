@@ -3,6 +3,7 @@
             [engine.args :as a]
             [jobs.lib.ready :as ready]
             [jobs.lib.click :as click]
+            [jobs.lib.look :as look]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [engine.contract :as contract]
@@ -24,7 +25,10 @@
   - :on / :off: a lever.
   - :press: a button. It counts when the click shows it powered.
 
-  Iron doors and iron trapdoors ignore a hand (:needs-redstone). Any other block is :not-toggleable. A state the
+  Iron doors and iron trapdoors ignore a hand: they are worked through a seen lever or button within ::switch-radius (6) of
+  them (the switch way): nearest first, each is a toggle child of this job (a lever to the other state, a button pressed), then a short wait
+  and a read of the door; the first switch that puts the door in the wanted state ends the run :changed (data of the door), and when none does
+  the run is nothing-possible :unchanged. With no switch seen the start is :needs-redstone. Any other block is :not-toggleable. A state the
   block cannot have is :bad-state with :valid. Zones and footprints do not apply, since no block type changes.
 
   The body walks within the ::reach setting (3) of the block (jobs.movement.go-to child with :doors :never, so the approach
@@ -54,6 +58,8 @@
 (a/defargs settings
   {::reach {:default 3 :doc "Walk until within this many cells of the block (the click reaches 4.5 from the eye)." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds a toggle may take: the walk, the click and the walks closer." :spec (a/num-in 0 nil)}
+   ::switch-radius {:default 6 :doc "How far from an iron door or trapdoor a lever or button counts as its switch." :spec (a/num-in 0 nil)}
+   ::switch-wait-s {:default 0.5 :doc "Seconds waited after a switch is worked before the iron door is read." :spec (a/num-in 0 nil)}
    ::max-closer {:default 2 :doc "How often a click the game answers out of reach is followed by a walk one cell closer." :spec (a/int-in 0 nil)}})
 (defn max-closer [] (settings/get settings ::max-closer))
 (defn time-s [] (settings/get settings ::job-time-s))
@@ -67,7 +73,16 @@
 (def defaults {:spend {:job-time ::job-time-s}})
 
 (def valid-states
-  {:openable #{:open :closed} :lever #{:on :off} :button #{:press}})
+  {:openable #{:open :closed} :iron #{:open :closed} :lever #{:on :off} :button #{:press}})
+
+(defn switches
+  "The levers and buttons seen within ::switch-radius of the iron block at pos that this run has not worked, nearest to it first."
+  [c pos]
+  (let [r (settings/get settings ::switch-radius)
+        tried (set (when (:view c) (:tried (ctx/mem c))))]
+    (->> (look/seen-blocks (:primitives c) {:match #(contains? #{:lever :button} (click/kind-of %)) :radius (+ r (u/dist (u/self-pos c) pos)) :live? true :properties? true})
+         (filter #(and (<= (u/dist (:pos %) pos) r) (not (tried (:pos %)))))
+         (sort-by #(u/dist (:pos %) pos)))))
 
 (defn parse
   "{:pos {:x :y :z} :state kw} of the args, or {:error text}."
@@ -120,7 +135,8 @@
     (cond
       (or error (nil? b)) (contract/ok :ready "nothing settled yet")
       (click/air? block) (contract/later :no-block (str "no block at " (pr-str pos)) :pos pos)
-      (= :iron kind) (contract/never :needs-redstone (str block " at " (pr-str pos) " ignores a hand") :block block)
+      (and (= :iron kind) (empty? (switches c pos)))
+      (contract/never :needs-redstone (str block " at " (pr-str pos) " ignores a hand and no lever or button is seen beside it") :block block)
       (nil? kind) (contract/never :not-toggleable (str block " at " (pr-str pos) " is not a gate, door, trapdoor, lever or button") :block block)
       (not (contains? (valid-states kind) state))
       (contract/never :bad-state (str block " at " (pr-str pos) " cannot be " (name state)) :block block :valid (sort (valid-states kind)))
@@ -205,6 +221,36 @@
       (= :arrived r) :again
       :else (give-up! c :unreachable pos state (str "cannot step out of " block " at " (pr-str pos)) {:block block :why (:unreachable r)}))))
 
+(defn switch-state
+  "The state that works switch sw: a lever to the other side of its powered, a button pressed."
+  [sw]
+  (if (= :lever (click/kind-of (:name sw)))
+    (if (click/reached? :on (:properties sw)) :off :on)
+    :press))
+
+(defn ^:async work-switch!
+  "The iron block at pos is not in state: work the nearest untried switch (a toggle child, :continue while it waits), wait a moment and read the door.
+  :again, or the ending when no switch is left or the door is gone."
+  [c pos state block]
+  (let [sw (or (:switch (ctx/mem c)) (first (switches c pos)))]
+    (if-not sw
+      (give-up! c :unchanged pos state (str block " at " (pr-str pos) " did not move for any lever or button seen beside it") {:block block})
+      (let [_ (ctx/update-mem! c assoc :switch sw)
+            e (if (:worked (ctx/mem c))
+                :done
+                (await (child/run!* c :switch 'jobs.access.toggle {:pos (:pos sw) :state (switch-state sw)})))]
+        (if (= :continue e)
+          :continue
+          (let [_ (ctx/update-mem! c assoc :worked true)
+                w (await (child/pause! c (settings/get settings ::switch-wait-s) :waiting-for-door))]
+            (if (= :continue w)
+              :continue
+              (let [b (known-block (:primitives c) pos)]
+                (ctx/update-mem! c #(-> % (update :tried (fnil conj []) (:pos sw)) (dissoc :switch :worked)))
+                (when (and b (click/reached? state (click/props-of b)))
+                  (ctx/update-mem! c assoc :clicked {:was nil :now (click/props-of b)}))
+                :again))))))))
+
 (defn ^:async next!
   "One piece of the run: the step out of the closed door's column, the walk or the click. :again, :continue (a walk waits) or the ending."
   [c]
@@ -212,6 +258,8 @@
         b (known-block (:primitives c) pos)
         block (some-> b .-name)]
     (cond
+      (= :iron (click/kind-of block)) (await (work-switch! c pos state block))
+
       (and (= :openable (click/kind-of block)) (= :closed state)
            (not (click/reached? state (click/props-of b)))
            (click/standing-in? (u/self-pos c) pos (:half (click/props-of b))))

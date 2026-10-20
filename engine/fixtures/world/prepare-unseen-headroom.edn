@@ -1,6 +1,6 @@
 ;; Card bf1d3d6e: forestry.prepare's unseen headroom is a look-first condition. The planned oak cell [16 0 16] and its headroom stand inside a closed stone
 ;; box the body (at [16.5 0 9.5], looking south) cannot see into: the queued prepare looks once and stays listed, not started, and never stops
-;; :cells-unloaded; once the walls are gone (RCON) it works the cells and plants the sapling.
+;; :cells-unloaded; once the walls are gone (RCON) it works the cells.
 {:defaults
  {:tags [:forestry :prepare :sensing :jobs]
   :time :any
@@ -18,4 +18,4 @@
          [:rcon "execute positioned $X $Y $Z run fill ~14 ~ ~14 ~18 ~8 ~18 air replace stone"]]
    :expect [{:no-event {:source :job :data {:reason :cells-unloaded}} :for-s 12 :of-job true}
             {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
-   :after [[:block [16 0 16] "oak_sapling"]]}]}
+   :after [[:block [16 0 16] "air"]]}]}

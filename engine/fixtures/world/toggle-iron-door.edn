@@ -1,0 +1,16 @@
+;; Card 75a88e72 (D55): access.toggle opens an iron door through the lever beside it (the switch way). Stone wall x 10..16 at z 12 with the iron door
+;; at x 12; the lever sits on the south face of the wall block at x 13, which it powers, and so the door beside it. The body starts 4 blocks south.
+{:defaults
+ {:tags [:access :toggle :iron-door] :time :any
+  :plot {:floor "grass_block" :light :sky}
+  :blocks [[:fill [10 0 12] [16 2 12] "stone"]
+           [:set [12 0 12] "iron_door[facing=south,half=lower,open=false]"]
+           [:set [12 1 12] "iron_door[facing=south,half=upper,open=false]"]
+           [:set [13 0 13] "lever[face=wall,facing=south,powered=false]"]]
+  :body {:at [12.5 0 16.5] :settle-s 3 :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "iron-door-is-opened-through-the-lever-beside-it"
+   :act [[:job (jobs.access.toggle {:pos #at [12 0 12] :state :open})]]
+   :expect [{:event {:source :job :kind :completed :data {:wanted :open}} :within-s 40 :of-job true}]
+   :after [[:block [12 0 12] "iron_door[open=true]"] [:block [13 0 13] "lever[powered=true]"]]}]}

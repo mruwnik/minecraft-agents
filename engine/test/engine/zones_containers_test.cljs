@@ -88,16 +88,6 @@
 
 ;; ------------------------------------------------------------------ the parents propagate :refused
 
-(deftest get-seeds-from-a-foreign-chest-ends-short-with-the-refusal
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:containers {"10,64,0" [{:name "carrot" :count 10}]}} [vault])]
-          (core/submit! eng '(jobs.gather.get-seeds {:item "carrot" :count 4 :chest {:x 10 :y 64 :z 0}}) {})
-          (await (run-until-empty eng 30))
-          (is (empty? (calls p "transfer")))
-          (is (= [:refused] (mapv :reason (events-of seen :stopped)))))))))
-
 ;; ------------------------------------------------------------------ get-food
 
 (def two-chests {"20,64,0" [{:name "bread" :count 4}] "30,64,0" [{:name "apple" :count 5}]})
