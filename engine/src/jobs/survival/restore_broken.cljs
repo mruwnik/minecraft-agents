@@ -4,6 +4,7 @@
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.blocks :as b]
             [jobs.lib.child :as child]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.near :as near]
@@ -23,7 +24,7 @@
   Touches only a cell whose block is still what the job left (a changed cell is somebody's, left alone),
   with at most 3 tries per cell.
   One run over every entry, paced between steps, a cell put back forgotten at once; a step takes the first cell
-  (while the pass's search allowance lasts) whose put-back cuts the body's way to no other it reaches now; a walk is one go-to call and
+  (while the pass's search allowance lasts) whose put-back cuts the body's way to no other it reaches now (a cell with no block beside it to place against comes last); a walk is one go-to call and
   a failed try is repeated until the cell gave up. A cell not restored for now (item not carried) keeps its
   entry. The others are forgotten.
   Done at once with no :tidy entry pending. Ends :done {:restored n :cells [cells put back] :not-restored [{:cell :was :why}]}
@@ -274,6 +275,14 @@
   (let [[x y z] (reach/cell-of (u/self-pos c))]
     (sort-by (fn [{[cx cy cz] :cell}] (- (+ (* (- cx x) (- cx x)) (* (- cy y) (- cy y)) (* (- cz z) (- cz z))))) waiting)))
 
+(defn supported-first
+  "waiting with the cells that have a block beside them to place against first (a cell hanging in the air waits for the
+  neighbour put back first), the order within each kept."
+  [c waiting]
+  (let [p (:primitives c)
+        hangs? (fn [{[x y z] :cell action :action}] (and (= :dig action) (not (b/support? p {:x x :y y :z z}))))]
+    (concat (remove hangs? waiting) (filter hangs? waiting))))
+
 (defn max-passes [] (settings/get settings ::max-passes))
 
 (defn decide
@@ -284,8 +293,8 @@
   [c waiting]
   (let [pr (probe c)
         e (or (first (filter #(= :occupied (why-not c % pr)) waiting))
-              (first (remove #(seals-others? c % waiting pr) (take-while (fn [_] (search-left? pr)) (farthest-first c waiting))))
-              (first waiting))
+              (first (remove #(seals-others? c % waiting pr) (take-while (fn [_] (search-left? pr)) (supported-first c (farthest-first c waiting)))))
+              (first (supported-first c waiting)))
         why (when e (why-not c e pr))]
     (cond
       (nil? e) [:done]

@@ -854,3 +854,9 @@
         sixth (last waiting)]
     (with-redefs [restore-broken/seals-others? (fn [_ e _ _] (not= sixth e))]
       (is (= [:restore sixth] (restore-broken/decide c waiting))))))
+
+(deftest decide-restores-the-cell-with-a-block-beside-it-before-one-hanging-in-the-air
+  (let [{:keys [p]} (setup (assoc with-hitbox :floor [-30 -30 30 30] :self {:pos [0 64 0]}) [(zs/whole-zone "Miles")])
+        lower (dug-cell [5 64 0])
+        upper (dug-cell [5 65 0])]
+    (is (= [:restore lower] (restore-broken/decide {:primitives p} [upper lower])) "the upper cell is farther but rests on the lower")))
