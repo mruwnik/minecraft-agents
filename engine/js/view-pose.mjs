@@ -59,7 +59,15 @@ const inSight = (bot, eye, e) => {
 
 const near = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) <= ENTITY_RANGE
 
-export function poseSnapshot (bot, { world, now }) {
+export const poseEntities = bot => {
+  const self = bot.entity
+  const p = self.position
+  const eye = { x: p.x, y: p.y + eyeHeight(self), z: p.z }
+  return liveEntities(bot).filter(e => e !== self && e.position && near(e.position, p)).map(e => entityView(bot, e, inSight(bot, eye, e)))
+}
+
+// withEntities false leaves the list empty: the caller's write gates need only the body part, and the entity scan is the costly bit
+export function poseSnapshot (bot, { world, now, withEntities = true }) {
   const self = bot.entity
   const p = self.position
   const eye = { x: p.x, y: p.y + eyeHeight(self), z: p.z }
@@ -76,7 +84,7 @@ export function poseSnapshot (bot, { world, now }) {
     pitch: self.pitch,
     velocity: xyz(self.velocity ?? { x: 0, y: 0, z: 0 }),
     onGround: Boolean(self.onGround),
-    entities: liveEntities(bot).filter(e => e !== self && e.position && near(e.position, p)).map(e => entityView(bot, e, inSight(bot, eye, e))),
+    entities: withEntities ? poseEntities(bot) : [],
     timeOfDay: bot.time?.timeOfDay ?? null,
     rain: bot.rainState ?? 0,
     held: bot.heldItem?.name ?? null,

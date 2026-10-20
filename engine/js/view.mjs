@@ -13,7 +13,7 @@ import { bodyDir, worldsDir } from './bodies.mjs'
 import { writeAtomic } from './write-atomic.mjs'
 import { RELIGHT_BUDGET_MS, RELIGHT_MAX_POINTS, RELIGHT_REACH, columnLightSection, columnStateSection, hasSkyLight, maskBit, tableFor, mergeOverlapping } from './view-light.mjs'
 import { VIEW_VERSION, encodeColumn } from './view-column.mjs'
-import { poseJson, poseSnapshot, bodyKey, poseKey, offlinePose, hudSnapshot, hudKey } from './view-pose.mjs'
+import { poseJson, poseSnapshot, poseEntities, bodyKey, poseKey, offlinePose, hudSnapshot, hudKey } from './view-pose.mjs'
 export * from './view-light.mjs'
 export * from './view-column.mjs'
 export * from './view-pose.mjs'
@@ -457,14 +457,15 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     const json = (() => {
       try {
         const t = now()
-        const pose = poseSnapshot(bot, { world, now: t })
-        const key = poseKey(pose)
-        const body = bodyKey(pose)
+        const base = poseSnapshot(bot, { world, now: t, withEntities: false })
+        const body = bodyKey(base)
         const sinceWrite = t - lastPoseAt
-        if (key === lastPoseKey && sinceWrite < POSE_REFRESH_MS) return null
         if (body === lastBodyKey && sinceWrite < POSE_SURROUND_MS) return null
-        const moved = lastPose && (lastPose.dimension !== pose.dimension || Math.hypot(pose.pos.x - lastPose.pos.x, pose.pos.y - lastPose.pos.y, pose.pos.z - lastPose.pos.z) > POSE_JUMP)
+        const moved = lastPose && (lastPose.dimension !== base.dimension || Math.hypot(base.pos.x - lastPose.pos.x, base.pos.y - lastPose.pos.y, base.pos.z - lastPose.pos.z) > POSE_JUMP)
         if (body !== lastBodyKey && sinceWrite < POSE_BODY_MS && !moved && lastPoseKey !== null) return null
+        const pose = { ...base, entities: poseEntities(bot) }
+        const key = poseKey(pose)
+        if (key === lastPoseKey && sinceWrite < POSE_REFRESH_MS) return null
         lastPoseKey = key
         lastBodyKey = body
         lastPoseAt = t

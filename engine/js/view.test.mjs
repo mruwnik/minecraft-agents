@@ -370,6 +370,26 @@ test('pose writes only on change, but at least every 2 seconds', async () => {
   assert.equal(view.stats().poses, 3)
 })
 
+test('a tick the write gates drop does not scan the entities', async () => {
+  const bot = fakeBot({ entities: { 2: entity(2, 12, -3) } })
+  let scans = 0
+  const table = bot.entities
+  Object.defineProperty(bot, 'entities', { get: () => { scans++; return table } })
+  let clock = 10000
+  const { view } = makeView(bot, { now: () => clock })
+  await view.tickPose()
+  const after = scans
+  clock = 10030
+  await view.tickPose()
+  bot.entity.position.x += 0.5
+  clock = 10050
+  await view.tickPose()
+  clock = 10070
+  await view.tickPose()
+  assert.ok(after > 0)
+  assert.equal(scans, after)
+})
+
 test('10 s of walking (a step every 50 ms tick) writes about 10 poses a second', async () => {
   const bot = fakeBot()
   let clock = 10000
