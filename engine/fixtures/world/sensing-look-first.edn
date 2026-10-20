@@ -17,14 +17,14 @@
             {:no-event {:source :job :kind :completed} :for-s 10 :of-job true}]}
   {:name "search-default-max-legs-reaches-a-far-target"
    :blocks [[:set [56 0 16] "emerald_block"]]
-   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 8 :scan-radius 8
-                                     :use-notes false :max-distance 60 :spend {:job-time 150}})]]
+   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8
+                                     :use-notes false :max-distance 60 :spend {:job-time 150} :settings {:jobs.explore.search/spacing 8}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 160 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 160 :of-job true :until {:source :job :kind :completed}}]
    :limit-s 170}
   {:name "search-with-nothing-ends-distance-not-legs"
-   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 6 :scan-radius 8
-                                     :use-notes false :max-distance 14 :spend {:job-time 100}})]]
+   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8
+                                     :use-notes false :max-distance 14 :spend {:job-time 100} :settings {:jobs.explore.search/spacing 6}})]]
    :expect [{:event {:source :job :kind :stopped :data {:why :distance}} :within-s 110 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 110 :of-job true :until {:source :job :kind :stopped}}]
    :limit-s 120}

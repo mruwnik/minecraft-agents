@@ -106,8 +106,8 @@
    :plot {:height 8 :floor "grass_block" :length 64 :width 32}
    :blocks [[:fill [18 0 0] [19 7 31] "bedrock"] [:set [8 0 2] "emerald_block"]]
    :body {:at [8.5 0 28.5] :yaw 0}
-   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :spiral :spacing 8 :scan-radius 8 :use-notes false
-                                     :max-distance 32 :settings {:jobs.explore.search/max-legs 32} :spend {:job-time 130}})]]
+   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :spiral :scan-radius 8 :use-notes false
+                                     :max-distance 32 :settings {:jobs.explore.search/spacing 8 :jobs.explore.search/max-legs 32} :spend {:job-time 130}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:why :stuck}} :for-s 140 :of-job true :until {:source :job :kind :completed}}]
    :limit-s 150}
@@ -115,8 +115,8 @@
    :plot {:height 8 :floor "grass_block" :length 64 :width 32}
    :blocks [[:fill [18 0 0] [19 7 31] "bedrock"] [:set [26 0 16] "emerald_block"]]
    :body {:at [8.5 0 16.5] :yaw 0}
-   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :spiral :spacing 8 :scan-radius 6 :use-notes false
-                                     :max-distance 20 :settings {:jobs.explore.search/max-legs 32} :spend {:job-time 130}})]]
+   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :spiral :scan-radius 6 :use-notes false
+                                     :max-distance 20 :settings {:jobs.explore.search/spacing 8 :jobs.explore.search/max-legs 32} :spend {:job-time 130}})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 150 :of-job true :until {:source :job :kind :stopped}}]
    :limit-s 160}
@@ -155,8 +155,8 @@
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [40 0 12] "emerald_block"]]
    :body {:at [12.5 0 12.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 8 :scan-radius 8
-                                     :use-notes false :max-distance 60 :settings {:jobs.explore.search/max-legs 16} :spend {:job-time 45}})]
+   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8
+                                     :use-notes false :max-distance 60 :settings {:jobs.explore.search/spacing 8 :jobs.explore.search/max-legs 16} :spend {:job-time 45}})]
          [:wait-s 70]
          [:time-set 1000]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 60 :of-job true}

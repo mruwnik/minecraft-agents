@@ -1,5 +1,6 @@
 (ns jobs.explore.search
   (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.reach :as reach]
             [jobs.lib.ready :as ready]
             [engine.settings :as settings]
             [engine.args :as a]
@@ -26,7 +27,7 @@
   jobs.movement.go-to as a child (range 2). One call is the whole search; it yields (:continue) only while go-to waits
   on the world or for leg columns to load (:chunks-loading).
 
-  Legs are :spacing apart: :spiral points on rings round the origin, the one nearest the body first (so a body in a corridor walks on), or :outward ahead along :heading (a :heading alone means :outward), then the sides, and on further ahead once those are tried or searched. A
+  Legs are ::spacing apart: :spiral points on rings round the origin, the one nearest the body first (so a body in a corridor walks on), or :outward ahead along :heading (a :heading alone means :outward), then the sides, and on further ahead once those are tried or searched. A
   leg is never tried twice and never goes beyond :max-distance (XZ) of the origin. It is skipped (:skipped)
   when a live :searched note of any body, this one included, listing every target name lies within half its
   radius.
@@ -69,11 +70,9 @@
    :max-distance {:doc "how far (XZ) from the origin a leg may go, 1 to 128" :spec (a/int-in 1 128) :default 96}
    :pattern {:doc ":spiral (rings round the origin, the default) or :outward (ahead along :heading); :outward when a :heading is given" :spec #{:spiral :outward} :default nil}
    :heading {:doc "a compass heading (:north, :north-east, :east ...), for :outward (default :north)" :spec (set (keys headings)) :default nil}
-   :spacing {:doc "blocks between legs, 4 to 64" :spec (a/int-in 4 64) :default 16}
    :scan-radius {:doc "how far round the body each look reaches" :spec (a/num-in 0 nil) :default 24}
    :takeable {:doc "leave out blocks a zone, claim or plan footprint bars this body from taking" :spec boolean? :default false}
    :avoid {:doc "columns [x z] whose blocks do not count as found" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
-   :avoid-boxes {:doc "boxes [[x1 z1] [x2 z2]] (corners inclusive, any order) of columns whose blocks do not count as found: a pen is one box, not its columns (a job expression is size-limited)" :spec (a/coll-of (a/pred "two [x z] corners" #(and (vector? %) (= 2 (count %)) (every? vector? %)))) :default nil}
    :use-notes {:doc "targets noted (by any body) within :max-distance count as found" :spec boolean? :default true}})
 
 (a/defargs settings
@@ -86,7 +85,8 @@
    ::max-failed-in-row {:default 3 :doc "Failed attempts in a row before the search gives up." :spec (a/int-in 0 nil)}
    ::wait-ms {:default 2000 :doc "How long the search waits for the world to settle, in ms." :spec (a/int-in 0 nil)}
    ::descent {:default 40 :doc "How far below its feet a leg's ground is looked for, in blocks (go-to does the descent)." :spec (a/int-in 0 nil)}
-   ::reach {:default 12 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+   ::rise {:default 12 :doc "How far above its feet a leg's ground is looked for, in blocks." :spec (a/int-in 0 nil)}
+   ::spacing {:default 16 :doc "Blocks between legs." :spec (a/int-in 4 64)}
    ::held-angle {:default 60 :doc "A leg lies the way a failed leg went when the angle between them, seen from the body, is under this many degrees." :spec (a/num-in 0 180)}
    ::held-near {:default 4 :doc "Blocks from where a leg failed within which its way still holds others back." :spec (a/num-in 0 nil)}
    ::near-sight {:default 6 :doc "Within this many blocks a look misses no animal: a noted animal not seen there is taken as gone." :spec (a/num-in 0 nil)}
@@ -94,7 +94,8 @@
 (defn time-s [] (settings/get settings ::job-time-s))
 (defn max-failed-in-row [] (settings/get settings ::max-failed-in-row))
 (defn wait-ms [] (settings/get settings ::wait-ms))
-(defn reach [] (settings/get settings ::reach))
+(defn rise [] (settings/get settings ::rise))
+(defn leg-spacing [] (settings/get settings ::spacing))
 (defn descent [] (settings/get settings ::descent))
 (def target [:target :center])
 
@@ -140,10 +141,11 @@
                        (js/Math.floor (+ z (* spacing (+ (* dz f) (* sz a)))))])
           outward-offsets)))
 
-(defn open? [n]
-  (bs/passable? n))
+(defn leaves? [n] (and (string? n) (str/ends-with? n "_leaves")))
 
-(defn leaves? [n] (str/ends-with? n "_leaves"))
+(defn open? [n]
+  (and (string? n) (= :open (reach/kind-of #js {:name n}))))
+
 (def wet-names bs/fluids)
 
 (defn seen-at
@@ -155,22 +157,22 @@
       (or (u/seen-name p pos) (when (u/sensed p pos) :unseen)))))
 
 (defn stand-cell
-  "Where a body could stand in column x z near feet height y, read top down from y+reach to y-descent through open cells and
-  leaves to the first other block: {:y feet} when the two cells above it are open, else {:fail :wet} (a fluid),
+  "Where a body could stand in column x z near feet height y, read top down from y+rise to y-descent through cells a walker passes
+  (jobs.lib.reach/kind-of) and leaves (a canopy is no ground to walk to) to the first other block: {:y feet} when the two cells above it are open, else {:fail :wet} (a fluid),
   {:fail :not-loaded} (an unloaded cell on the way), {:fail :unseen} (a loaded cell not yet seen) or {:fail :no-surface}.
   block-at: [x y z] -> name, :unseen or nil."
   [block-at x z y]
   (let [y0 (js/Math.floor y)]
-    (loop [h (+ y0 (reach))]
+    (loop [h (+ y0 (rise))]
       (if (< h (- y0 (descent)))
         {:fail :no-surface}
         (let [n (block-at [x h z])]
           (cond
             (nil? n) {:fail :not-loaded}
             (= :unseen n) {:fail :unseen}
-            (or (open? n) (leaves? n)) (recur (dec h))
             (wet-names n) {:fail :wet}
-            (and (open? (block-at [x (inc h) z])) (open? (block-at [x (+ h 2) z]))) {:y (inc h)}
+            (or (open? n) (leaves? n)) (recur (dec h))
+            (and (= :solid (reach/kind-of #js {:name n})) (open? (block-at [x (inc h) z])) (open? (block-at [x (+ h 2) z]))) {:y (inc h)}
             :else {:fail :no-surface}))))))
 
 (defn finding-key [{:keys [what id pos]}] [what (or id pos)])
@@ -281,20 +283,18 @@
       (ctx/end c :nothing-possible why result))))
 
 (defn takeable
-  "found without the blocks in :avoid columns and :avoid-boxes, the blocks on the footprint of a plan the body made (its
+  "found without the blocks in :avoid columns, the blocks on the footprint of a plan the body made (its
   posts and walls are not material to cut), the noted entities standing in a zone or plan of the body's own (its pens),
   and (when :takeable is on) those a zone, claim or plan footprint bars taking."
   [c found]
-  (let [{:keys [takeable avoid avoid-boxes]} (:args c)
+  (let [{:keys [takeable avoid]} (:args c)
         avoid (set (map vec avoid))
-        boxes (map (fn [[[x1 z1] [x2 z2]]] [(min x1 x2) (min z1 z2) (max x1 x2) (max z1 z2)]) avoid-boxes)
-        avoided? (fn [[x z]] (or (avoid [x z]) (some (fn [[x1 z1 x2 z2]] (and (<= x1 x x2) (<= z1 z z2))) boxes)))
         in (when takeable (access/rules-input c))
         own (access/rules-input c {:spare-own? true})]
     (cond->> found
       true (remove #(and (not (:id %)) (access/own-keep own (zipmap [:x :y :z] (:pos %)))))
       true (remove #(and (:noted %) (:id %) (access/in-own-area? c (zipmap [:x :y :z] (:pos %)))))
-      (or (seq avoid) (seq boxes)) (remove #(and (not (:id %)) (avoided? [((:pos %) 0) ((:pos %) 2)])))
+      (seq avoid) (remove #(and (not (:id %)) (avoid [((:pos %) 0) ((:pos %) 2)])))
       takeable (filter #(or (:id %) (:ok (access/may? in :harvest (:pos %))))))))
 
 (defn ^:async scan!
@@ -319,7 +319,8 @@
                                    (update :found #(add-found (or % []) sighted want)))))))
 
 (defn candidates [c m]
-  (let [{:keys [pattern heading spacing max-distance]} (:args c)
+  (let [{:keys [pattern heading max-distance]} (:args c)
+        spacing (leg-spacing)
         [ox _ oz] (:origin m)
         [x _ z] (here c)]
     (if (or (= :outward (keyword pattern)) (and heading (not pattern)))

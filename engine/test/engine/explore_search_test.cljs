@@ -114,6 +114,7 @@
     {[5 63 5] "grass_block"} {:y 64}
     {[5 70 5] "stone" [5 69 5] "stone"} {:y 71}
     {[5 66 5] "oak_leaves" [5 63 5] "dirt"} {:y 64}
+    {[5 63 5] "dirt" [5 64 5] "wheat"} {:y 64}
     {[5 63 5] "water"} {:fail :wet}
     {[5 63 5] "dirt" [5 64 5] "oak_log" [5 65 5] "oak_log" [5 66 5] "oak_leaves"} {:fail :no-surface}
     {[5 43 5] "dirt"} {:y 44}
@@ -158,13 +159,6 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (search! {:target "diamond_block" :avoid [[10 0]]} {:blocks two-diamonds}))]
-          (is (= [[0 64 12]] (map :pos (:found (found-of s))))))))))
-
-(deftest a-target-in-an-avoided-box-is-not-found
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (search! {:target "diamond_block" :avoid-boxes [[[8 -3] [14 3]]]} {:blocks two-diamonds}))]
           (is (= [[0 64 12]] (map :pos (:found (found-of s))))))))))
 
 (deftest a-target-in-a-foreign-zone-is-found-only-without-takeable
@@ -276,7 +270,7 @@
           (is (= :job-time (:reason (event-of timed :stopped))) "the engine's time limit ends it"))))))
 
 (deftest the-spiral-legs-nearest-the-body-come-first
-  (let [c {:args {:pattern :spiral :spacing 16 :max-distance 64} :primitives #js {:self (fn [] #js {:pos #js {:x 42.5 :y 0 :z 0.5}})}}
+  (let [c {:args {:pattern :spiral :max-distance 64} :primitives #js {:self (fn [] #js {:pos #js {:x 42.5 :y 0 :z 0.5}})}}
         m {:origin [0 0 0]}
         order (search/candidates c m)]
     (is (= [48 0] (first order)) "straight on from the body, not the origin's ring 1 first")
@@ -585,8 +579,9 @@
         counting (js/Proxy. p #js {:get (fn [t k] (if (= "blockAt" k)
                                                    (fn [pos] (swap! reads inc) (.blockAt t pos))
                                                    (let [v (aget t k)] (if (fn? v) (.bind v t) v))))})
-        c {:args {:pattern :spiral :spacing 4 :max-distance 128} :primitives counting}
-        r (search/choose-leg c {:origin [0 64 0]} ["diamond_block"] [])]
+        c {:args {:pattern :spiral :max-distance 128} :primitives counting}
+        r (settings/with-settings {:jobs.explore.search/spacing 4}
+            #(search/choose-leg c {:origin [0 64 0]} ["diamond_block"] []))]
     (is (nil? (:leg r)))
     (is (:more r))
     (is (< @reads 5000))))
@@ -596,7 +591,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {} 0)]
-          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :max-distance 40 :spacing 4}) {})
+          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :max-distance 40 :settings {:jobs.explore.search/spacing 4}}) {})
           (await (run-until-done s 400))
           (let [e (not-found-of s)]
             (is (<= (get-in e [:coverage :scans]) 2) "a step that only goes on choosing points does not look again")
@@ -612,7 +607,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "iron_ore" :count 1 :max-distance 8 :spacing 4 :scan-radius 16 :spend {:job-time 40}}
+        (let [s (await (search! {:target "iron_ore" :count 1 :max-distance 8 :settings {:jobs.explore.search/spacing 4} :scan-radius 16 :spend {:job-time 40}}
                                 {:blocks sealed-room :cone? true :self {:pos {:x 16.5 :y 64 :z 16.5}}} 60))]
           (is (nil? (found-of s)) (pr-str (:found (found-of s)))))))))
 
