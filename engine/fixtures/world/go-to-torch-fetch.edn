@@ -1,3 +1,4 @@
+;; The plot is dark (:light :dark): in a lit cell no torch is due, so the call would just arrive.
 ;; jobs.movement.go-to :unknown with :torches: the way goes down a 3-block ledge onto a floor the body cannot see in the dark,
 ;; and no torch is carried, so go-to fetches torches once a call through jobs.lib.need, then lights the floor and arrives.
 ;; Sealed rock: a corridor (x 11..13, feet y 3) ends in a ledge over a low corridor (x 14..24, feet y 0), the goal at its east end.
@@ -8,7 +9,7 @@
 {:defaults
  {:tags [:movement :go-to :torch :fetch :jobs]
   :time :any
-  :plot {:height 12}
+  :plot {:height 12 :light :dark}
   :blocks [[:fill [10 0 14] [26 8 18] "stone"]
            [:fill [11 3 16] [13 4 16] "air"]
            [:fill [14 0 16] [24 4 16] "air"]
