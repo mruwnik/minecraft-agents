@@ -17,7 +17,7 @@
   An entity that drops out of sight (the pit rim, a wall) between the sighting and the click is walked to at its last
   seen place and clicked there (the click finds it by id); it is :gone when the click does not.
 
-  Ends with data {:used true|false :id :item :text}. The primitive's status :used is done.
+  Ends with data {:used true|false :id :item :text, and after a click :raw the primitive's answer as a map}. The primitive's status :used is done.
   Impossible: :bad-args (no :id). Condition-failed: :gone (no such entity in sight), :no-item, :full, :cannot. Nothing-possible:
   :unreachable (the walk failed twice, data :why), :no-effect, :out-of-reach, :failed.")
 
@@ -27,7 +27,7 @@
 
 (a/defargs settings
   {::job-time-s {:default 60 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
-   ::reach {:default 2.5 :doc "How near the body stands to act on its target, in blocks." :spec (a/num-in 0 nil)}
+   ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/num-in 0 nil)}
    ::max-walks {:default 2 :doc "Failed walks of one call before it stops :unreachable." :spec (a/int-in 0 nil)}
    ::click-s {:default 0.5 :doc "Seconds one click takes (the quote)." :spec (a/num-in 0 nil)}
    ::walk-s {:default 10 :doc "Seconds one walk into reach takes (the quote)." :spec (a/num-in 0 nil)}})
@@ -80,7 +80,8 @@
                     more))))
 
 (defn ^:async step!
-  "One walk or the click; :again after a walk that arrived or failed below the limit."
+  "One walk or the click; :again after a walk that arrived (the click follows whatever the reach, the server judges it) or
+  failed below the limit."
   [c fails]
   (let [{:keys [id item]} (:args c)
         p (:primitives c)
@@ -89,18 +90,18 @@
         target (if seen (u/pos-of (.-pos seen)) (:last-pos (ctx/mem c)))]
     (cond
       (nil? target) (finish! c id item :gone)
-      (> (u/dist (u/self-pos c) target) (reach))
+      (and (> (u/dist (u/self-pos c) target) (reach)) (not (:arrived (ctx/mem c))))
       (let [r (await (child/call-walk* c :walk {:pos target :range 2 :ways #{:walk :clear-seal}}))]
         (cond
           (= :continue r) :continue
-          (and (= :done (:kind r)) (:arrived (:data r))) :again
+          (and (= :done (:kind r)) (:arrived (:data r))) (do (ctx/update-mem! c assoc :arrived true) :again)
           (>= (swap! fails inc) (max-walks)) (finish! c id item :unreachable {:why (contract/cause-key r)})
           :else :again))
       :else
       (let [r (await (ctx/act c :interact (clj->js (cond-> {:id id} item (assoc :item item)))))
             status (keyword (.-status r))]
         (when (= :used status) (ctx/update-mem! c assoc :used true))
-        (finish! c id item status)))))
+        (finish! c id item status {:raw (js->clj r :keywordize-keys true)})))))
 
 (defn ^:async round [c]
   (let [fails (atom 0)]

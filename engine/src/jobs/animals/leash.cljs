@@ -44,9 +44,7 @@
 
 (a/defargs settings
   {::job-time-s {:default 30 :doc "Seconds of working, fetching included, before leashing gives up." :spec (a/num-in 0 nil)}
-   ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
-   ::max-in-row {:default 3 :doc "Animals handled in a row before the body looks again." :spec (a/int-in 0 nil)}})
-(defn reach [] (settings/get settings ::reach))
+   ::max-in-row {:default 3 :doc "Fruitless animals in a row that end the run." :spec (a/int-in 0 nil)}})
 (defn max-in-row [] (settings/get settings ::max-in-row))
 
 (def target [:mob])
@@ -131,7 +129,7 @@
 (defn none-reason
   "Why the job ends with no animal left to leash."
   [c]
-  (let [given-up (vals (:given-up (ctx/mem c)))]
+  (let [given-up (remove #{:gone} (vals (:given-up (ctx/mem c))))]
     (cond
       (some #{:unreachable} given-up) :unreachable
       (seq given-up) :failed
@@ -146,29 +144,27 @@
     (when (and now (animals/led-by-me? now)) now)))
 
 (defn ^:async lead!
-  "Use the lead on the animal once. :leashed when it is on the lead afterwards, :no-lead when the server
-  found none, else nil with the outcome booked."
+  "Use the lead on the animal once (an items.interact child). :continue while it waits, [:leashed now] when the animal
+  is on the lead afterwards, [:no-lead nil] when the server found none, else nil with the outcome booked."
   [c animal]
   (let [k (animals/key-of animal)
-        r (await (ctx/act c :interact #js {:id (.-id animal) :item "lead"}))]
-    (case (.-status r)
-      "used" (if-let [now (on-my-lead c k)]
-               [:leashed now]
-               (do (animals/give-up! c k :unconfirmed) (animals/bump-row! c) nil))
-      "no-item" [:no-lead nil]
-      "no-effect" (do (animals/give-up! c k :no-effect) (animals/bump-row! c) nil)
-      "gone" (do (animals/give-up! c k :gone) nil)
-      "out-of-reach" (do (animals/book-out-of-reach! c k) nil)
-      "cannot" (do (animals/give-up! c k :cannot) (animals/bump-row! c) nil)
-      "failed" (do (animals/give-up! c k :failed) (animals/bump-row! c) nil)
-      nil)))
+        r (await (animals/use-on! c k animal "lead" {:doors :shut}))]
+    (if (= :continue r)
+      :continue
+      (case (:status r)
+        :used (if-let [now (on-my-lead c k)]
+                [:leashed now]
+                (do (animals/give-up! c k :unconfirmed) (animals/bump-row! c) nil))
+        :no-item [:no-lead nil]
+        (do (animals/book-failed! c k (:status r)) nil)))))
 
 (defn ^:async engage!
-  "Walk to the animal and lead it; end when fruitless three times in a row."
+  "Lead the animal; end when fruitless :max-in-row times in a row."
   [c animal]
-  (let [walked (await (animals/walk! c (animals/key-of animal) animal (reach) {:doors :shut}))
-        [reason led] (when (= :there walked) (await (lead! c animal)))]
+  (let [r (await (lead! c animal))
+        [reason led] (when (vector? r) r)]
     (cond
+      (= :continue r) :continue
       reason (finish! c reason led)
       (>= (:in-row (ctx/mem c) 0) (max-in-row)) (finish! c (none-reason c) nil)
       :else :again)))
@@ -197,7 +193,7 @@
       (and (empty? cands) (not (look/surveyed? c))) (await (look/survey! c)) ; animals count only while in view
       (not (animals/lead-carried? c)) (await (no-lead! c))
       (empty? cands) (finish! c (none-reason c) nil)
-      :else (await (engage! c (first cands))))))
+      :else (await (engage! c (animals/pick c cands))))))
 
 (defn ^:async round
   "The whole attempt: steps (a pace between; done? and can-run? are asked between them) until one ends or yields."

@@ -49,9 +49,7 @@
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds of working, fetching included, before shearing gives up." :spec (a/num-in 0 nil)}
-   ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::max-in-row {:default 3 :doc "Fruitless animals in a row that end the run." :spec (a/int-in 0 nil)}})
-(defn reach [] (settings/get settings ::reach))
 (defn max-in-row [] (settings/get settings ::max-in-row))
 
 (def wool-names
@@ -164,28 +162,22 @@
     (finish! c (none-reason c))))
 
 (defn ^:async shear!
-  "Use the shears on sheep once and book the outcome."
+  "Use the shears on sheep once (an items.interact child) and book the outcome. :continue while the child waits."
   [c sheep]
   (let [k (animals/key-of sheep)
-        r (await (ctx/act c :interact #js {:id (.-id sheep) :item "shears"}))]
-    (case (.-status r)
-      "used" (ctx/update-mem! c #(-> % (update :shorn (fnil conj []) k) (assoc :in-row 0)))
-      "no-effect" (do (animals/give-up! c k :no-effect) (animals/bump-row! c))
-      "gone" (animals/give-up! c k :gone)
-      "out-of-reach" (animals/book-out-of-reach! c k)
-      "cannot" (do (animals/give-up! c k :cannot) (animals/bump-row! c))
-      "failed" (do (animals/give-up! c k :failed) (animals/bump-row! c))
-      nil)))
+        r (await (animals/use-on! c k sheep "shears" {:reset-row? true :doors :shut}))]
+    (cond
+      (= :continue r) :continue
+      (= :used (:status r)) (ctx/update-mem! c #(-> % (update :shorn (fnil conj []) k) (assoc :in-row 0)))
+      :else (animals/book-failed! c k (:status r)))))
 
 (defn ^:async engage!
-  "Walk to the sheep and shear it; end when fruitless three times in a row."
+  "Shear the sheep; end when fruitless :max-in-row times in a row."
   [c sheep]
-  (let [walked (await (animals/walk! c (animals/key-of sheep) sheep (reach) {:reset-row? true :doors :shut}))]
-    (when (= :there walked)
-      (await (shear! c sheep)))
-    (if (>= (:in-row (ctx/mem c) 0) (max-in-row))
-      (out-of-sheep! c)
-      :again)))
+  (cond
+    (= :continue (await (shear! c sheep))) :continue
+    (>= (:in-row (ctx/mem c) 0) (max-in-row)) (out-of-sheep! c)
+    :else :again))
 
 (defn ^:async collect!
   "One round of the pick-up phase; finish with the stored reason when it is done."
@@ -227,7 +219,7 @@
       (not (shears-carried? c)) (await (no-shears! c))
       (and n (>= (count (:shorn m)) n)) (go-collect! c :shorn)
       (empty? cands) (out-of-sheep! c)
-      :else (await (engage! c (first cands))))))
+      :else (await (engage! c (animals/pick c cands))))))
 
 (defn ^:async round
   "The whole attempt: steps (a pace between; done? and can-run? are asked between them) until one ends or yields."

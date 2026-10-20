@@ -71,10 +71,8 @@
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds of working, fetching included, before breeding gives up." :spec (a/num-in 0 nil)}
-   ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::calf-wait-s {:default 4 :doc "Seconds to wait for the calf to be seen after a pair was fed, before the count of babies is reported." :spec (a/num-in 0 nil)}
    ::max-in-row {:default 3 :doc "Animals in a row that brought nothing (refused, given up on) before the run ends." :spec (a/int-in 0 nil)}})
-(defn reach [] (settings/get settings ::reach))
 (defn max-in-row [] (settings/get settings ::max-in-row))
 (defn calf-wait-ms [] (* 1000 (settings/get settings ::calf-wait-s)))
 
@@ -225,42 +223,39 @@
       :else :too-few)))
 
 (defn fed?
-  "Whether the animal went into love mode."
-  [r]
-  (true? (.-love r)))
+  "Whether the animal went into love mode (raw: the click's answer as a map)."
+  [raw]
+  (true? (:love raw)))
 
 (defn baby?
   "Whether the food was eaten without love: a baby the sensing missed."
-  [r]
-  (and (not (fed? r)) (pos? (or (.-consumed r) 0))))
+  [raw]
+  (and (not (fed? raw)) (pos? (or (:consumed raw) 0))))
 
 (defn ^:async feed!
-  "Use food on animal once; book the outcome. Resolves to :no-food when the
-  food is gone, else :again."
+  "Use food on animal once through an items.interact child; book the outcome. Resolves to :continue while the child
+  waits, :no-food when the food is gone, else :again."
   [c animal food]
   (let [k (animals/key-of animal)
         _ (ctx/update-mem! c assoc :food food)
         _ (note-hand! c)
-        r (await (ctx/act c :interact #js {:id (.-id animal) :item food}))]
-    (case (.-status r)
-      "used" (cond
-               (fed? r) (ctx/update-mem! c #(-> % (update :fed (fnil conj []) k) (assoc :in-row 0)))
-               (baby? r) (do (animals/give-up! c k :baby)
-                             (ctx/emit! c :breed.baby :warn {:uuid k :text "fed a baby the sensing missed; given up on"}))
-               (zero? (or (.-consumed r) 0)) (do (ctx/update-mem! c update :refused (fnil conj []) k)
-                                                 (animals/bump-row! c))
-               :else (animals/reset-row! c))
-      "no-effect" (do (ctx/update-mem! c update :refused (fnil conj []) k)
-                      (animals/bump-row! c))
-      "gone" (animals/give-up! c k :gone)
-      "cannot" (do (animals/give-up! c k :cannot) (animals/bump-row! c))
-      "failed" (do (animals/give-up! c k :failed) (animals/bump-row! c))
-      "out-of-reach" (let [n (inc (get-in (ctx/mem c) [:fails k] 0))]
-                       (ctx/update-mem! c assoc-in [:fails k] n)
-                       (when (>= n 2) (animals/give-up! c k :unreachable))
-                       (animals/bump-row! c))
-      nil)
-    (if (= "no-item" (.-status r)) :no-food :again)))
+        r (await (animals/use-on! c k animal food {:reset-row? true}))]
+    (if (= :continue r)
+      :continue
+      (let [{:keys [status raw]} r]
+        (case status
+          :used (cond
+                  (fed? raw) (ctx/update-mem! c #(-> % (update :fed (fnil conj []) k) (assoc :in-row 0)))
+                  (baby? raw) (do (animals/give-up! c k :baby)
+                                  (ctx/emit! c :breed.baby :warn {:uuid k :text "fed a baby the sensing missed; given up on"}))
+                  (zero? (or (:consumed raw) 0)) (do (ctx/update-mem! c update :refused (fnil conj []) k)
+                                                     (animals/bump-row! c))
+                  :else (animals/reset-row! c))
+          :no-effect (do (ctx/update-mem! c update :refused (fnil conj []) k)
+                         (animals/bump-row! c))
+          :no-item nil
+          (animals/book-failed! c k status))
+        (if (= :no-item status) :no-food :again)))))
 
 (defn ^:async no-food!
   "Out of food: done when some animals were fed, else :no-food (with the failed fetch's ending when given)."
@@ -270,13 +265,11 @@
     (await (finish! c :no-food ending))))
 
 (defn ^:async engage!
-  "Walk to the animal and feed it; finish when out of food or fruitless three times in a row."
+  "Feed the animal; finish when out of food or fruitless :max-in-row times in a row."
   [c animal food]
-  (let [walked (await (animals/walk! c (animals/key-of animal) animal (reach) {:reset-row? true}))
-        fed (case walked
-              :there (await (feed! c animal food))
-              :again)]
+  (let [fed (await (feed! c animal food))]
     (cond
+      (= :continue fed) :continue
       (= :no-food fed) (await (no-food! c))
       (>= (:in-row (ctx/mem c) 0) (max-in-row)) (await (finish! c (out-reason c)))
       :else :again)))
@@ -367,7 +360,7 @@
       (and (empty? cands) (empty? (:fed m)) (not (look/surveyed? c))) (await (look/survey! c)) ; animals count only while in view
       (nil? food) (await (fetch-food! c))
       (or (empty? cands) (and (empty? (:fed m)) (< (count (animals/adults (:primitives c) mob (:radius (:args c)))) 2))) (await (finish! c (out-reason c)))
-      :else (await (engage! c (first cands) food)))))
+      :else (await (engage! c (animals/pick c cands) food)))))
 
 (defn ^:async round
   "The whole attempt: steps (a pace between; can-run? is asked between them) until the job ends."

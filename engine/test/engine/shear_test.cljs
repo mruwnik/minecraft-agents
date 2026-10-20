@@ -249,18 +249,6 @@
           (is (finished? s))
           (is (= :need (:reason (done-event s)))))))))
 
-(deftest the-walk-to-the-sheep-is-short-legs-that-never-escalate
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [calls* (atom [])
-              s (await (tu/with-near-spy calls* (fn ^:async b [] (await (scenario {} {:inventory shears :entities [(sheep 1 8) (sheep 2 9)]} 12)))))
-              opts (map #(nth % 2) @calls*)]
-          (is (seq opts))
-          (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (nil? (:spend %)) (false? (:look-round %))) opts)
-              "a moving target is chased in legs, never dug or pillared toward")
-          (is (finished? s)))))))
-
 (deftest a-colour-shear-leaves-other-colours-alone
   (async done
     (tu/run-async done
@@ -279,3 +267,15 @@
           (await (run-ticks s 8 700))
           (is (= :shorn (:reason (done-event s))))
           (is (= [true] (world-sheared s))))))))
+
+(deftest the-walk-to-the-sheep-is-short-legs-that-never-escalate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls* (atom [])
+              s (await (tu/with-near-spy calls* (fn ^:async b [] (await (scenario {} {:inventory shears :entities [(sheep 1 8) (sheep 2 9)]} 12)))))
+              opts (map #(nth % 2) @calls*)]
+          (is (seq opts))
+          (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (nil? (:spend %)) (false? (:look-round %))) opts)
+              "a moving target is chased in legs, never dug or pillared toward")
+          (is (finished? s)))))))

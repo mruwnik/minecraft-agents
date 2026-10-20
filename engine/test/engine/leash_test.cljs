@@ -239,18 +239,6 @@
           (is (finished? s))
           (is (= :need (:reason (done-event s)))))))))
 
-(deftest the-walk-to-the-cow-is-short-legs-that-never-escalate
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [calls* (atom [])
-              s (await (tu/with-near-spy calls* (fn ^:async b [] (await (scenario {} {:inventory lead :entities [(cow 1 8)]} 12)))))
-              opts (map #(nth % 2) @calls*)]
-          (is (seq opts))
-          (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (nil? (:spend %)) (false? (:look-round %))) opts)
-              "a moving target is chased in legs, never dug or pillared toward")
-          (is (finished? s)))))))
-
 (deftest a-center-moves-the-radius-off-the-body
   (async done
     (tu/run-async done
@@ -269,3 +257,15 @@
           (core/submit! (:eng s) (list 'jobs.animals.leash {:mob "cow"}) {})
           (await (run-ticks s 8 700))
           (is (= :leashed (:reason (done-event s)))))))))
+
+(deftest the-walk-to-the-cow-is-short-legs-that-never-escalate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls* (atom [])
+              s (await (tu/with-near-spy calls* (fn ^:async b [] (await (scenario {} {:inventory lead :entities [(cow 1 8)]} 12)))))
+              opts (map #(nth % 2) @calls*)]
+          (is (seq opts))
+          (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (nil? (:spend %)) (false? (:look-round %))) opts)
+              "a moving target is chased in legs, never dug or pillared toward")
+          (is (finished? s)))))))

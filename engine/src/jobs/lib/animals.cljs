@@ -1,6 +1,7 @@
 (ns jobs.lib.animals
   "Helpers for the animal jobs: what each mob breeds on, and the herd near the body."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.contract :as contract]
+            [engine.ctx :as ctx]
             [jobs.lib.bait :as bait]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
@@ -148,6 +149,46 @@
           (do (give-up! c k :unreachable)
               (bump-row! c)
               :blocked))))))
+
+;; A click on an animal is a jobs.items.interact child (the walk into reach and the click); the job reads :raw for what
+;; only it knows (love, a lead) and books every other outcome with book-failed!.
+(defn pick
+  "The animal to work on next: the one a click child is still under way on, else the first of cands."
+  [c cands]
+  (let [k (:use-on (ctx/mem c))]
+    (or (some #(when (= k (key-of %)) %) cands) (first cands))))
+
+(def walk-reach "How near the body walks to an animal before the click child takes over (it closes the rest)." 3)
+
+(defn ^:async use-on!
+  "Walk within reach of target (walk!, walk-opts), then use item (nil: the empty hand) on it, the entity of animal k,
+  through an items.interact child. A blocked walk is booked by walk!. Resolves to
+  :continue while the child waits on the world, else {:status :raw}: status :used or the child's cause (:no-effect
+  :gone :out-of-reach :cannot :failed :no-item :unreachable), raw the primitive's answer."
+  ([c k target item] (use-on! c k target item {}))
+  ([c k target item walk-opts]
+   (ctx/update-mem! c assoc :use-on k)
+   (let [walked (await (walk! c k target walk-reach walk-opts))]
+     (case walked
+       :partial :continue
+       :blocked (do (ctx/update-mem! c dissoc :use-on) {:status :blocked})
+       (let [e (await (ctx/call c :use 'jobs.items.interact (cond-> {:id (.-id target)} item (assoc :item item))))]
+         (if (= :continue e)
+           :continue
+           (do (ctx/update-mem! c dissoc :use-on)
+               {:status (if (= :done (:kind e)) :used (or (contract/cause-key e) :failed))
+                :raw (:raw (:data e))})))))))
+
+(defn book-failed!
+  "Book a click on k that did not work: given up for :gone, :cannot, :no-effect, :unreachable; two :out-of-reach; any
+  other status as :failed. All but :gone count as fruitless in a row; :blocked was booked by the walk."
+  [c k status]
+  (case status
+    :blocked nil
+    :gone (give-up! c k :gone)
+    :out-of-reach (book-out-of-reach! c k)
+    (do (give-up! c k (if (#{:cannot :no-effect :unreachable} status) status :failed))
+        (bump-row! c))))
 
 (defn lead-carried? [c]
   (some #(= "lead" (:name %)) (u/inventory (:primitives c))))

@@ -58,8 +58,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world (merge {:entities [(cow 7 2)]} (stacks "wheat"))]
-          (is (= {:kind :done :data {:used true :id 7 :item "wheat" :text "used wheat on entity 7"}}
-                 (select-keys (await (ending-of world 'jobs.items.interact {:id 7 :item "wheat"})) [:kind :data])))
+          (let [e (await (ending-of world 'jobs.items.interact {:id 7 :item "wheat"}))]
+            (is (= {:kind :done :data {:used true :id 7 :item "wheat" :text "used wheat on entity 7"}}
+                   (-> (select-keys e [:kind :data]) (update :data dissoc :raw))))
+            (is (= "used" (get-in e [:data :raw :status])) "the primitive's answer rides along"))
           (is (= {:kind :condition-failed :cause :gone} (kc (await (ending-of world 'jobs.items.interact {:id 99})))))
           (is (= {:kind :condition-failed :cause :no-item}
                  (kc (await (ending-of world 'jobs.items.interact {:id 7 :item "lead"}))))))))))
@@ -81,7 +83,8 @@
                                 :dir (tu/tmp-dir)})]
           (core/submit! eng '(recording-parent) {})
           (await (tu/run-until-empty eng 40))
-          (is (= {:kind :done :data {:used true :id 7 :item "wheat" :text "used wheat on entity 7"}} @out)))))))
+          (is (= {:kind :done :data {:used true :id 7 :item "wheat" :text "used wheat on entity 7"}}
+                 (update @out :data dissoc :raw))))))))
 
 (deftest give-ends-before-the-toss-with-the-fact
   (async done

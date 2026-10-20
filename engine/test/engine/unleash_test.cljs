@@ -207,6 +207,17 @@
             (is (= freed (vec (sort (:freed (done-event s))))) (pr-str owner extra))
             (is (= declined (mapv :reason (events-of s :unleash.declined))) (pr-str owner extra))))))))
 
+(deftest an-animal-on-a-lead-behind-the-body-is-looked-for-before-the-run-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:entities [(led 1 3)]})]
+          (ls/entities-after-look (:p s))
+          (core/submit! (:eng s) (list 'jobs.animals.unleash {}) {})
+          (await (run-ticks s 8 700))
+          (is (= ["u1"] (:freed (done-event s))))
+          (is (empty? (still-leashed s))))))))
+
 (deftest the-walk-to-the-animal-is-short-legs-that-never-escalate
   (async done
     (tu/run-async done
@@ -218,14 +229,3 @@
           (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (nil? (:spend %)) (false? (:look-round %))) opts)
               "a moving target is chased in legs, never dug or pillared toward")
           (is (finished? s)))))))
-
-(deftest an-animal-on-a-lead-behind-the-body-is-looked-for-before-the-run-ends
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (h/setup {:entities [(led 1 3)]})]
-          (ls/entities-after-look (:p s))
-          (core/submit! (:eng s) (list 'jobs.animals.unleash {}) {})
-          (await (run-ticks s 8 700))
-          (is (= ["u1"] (:freed (done-event s))))
-          (is (empty? (still-leashed s))))))))

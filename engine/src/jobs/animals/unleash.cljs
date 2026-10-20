@@ -51,13 +51,11 @@
 
 (a/defargs settings
   {::job-time-s {:default 60 :doc "Seconds from the start of the call before unleashing gives up; a walk to the animal and the collect of the lead (10 s at most) fit." :spec (a/num-in 0 nil)}
-   ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
-   ::max-in-row {:default 3 :doc "Animals handled in a row before the body looks again." :spec (a/int-in 0 nil)}
+   ::max-in-row {:default 3 :doc "Fruitless animals in a row that end the run." :spec (a/int-in 0 nil)}
    ::knot-margin {:default 12 :doc "Blocks around the knot searched for the animal." :spec (a/int-in 0 nil)}
    ::settle-ms {:default 250 :doc "How long the body waits for an animal to settle, in ms." :spec (a/int-in 0 nil)}
    ::settle-tries {:default 6 :doc "Looks at the animal before it counts as settled." :spec (a/int-in 0 nil)}
    ::drop-wait-ms {:default 800 :doc "How long the body waits for a dropped item, in ms." :spec (a/int-in 0 nil)}})
-(defn reach [] (settings/get settings ::reach))
 (defn max-in-row [] (settings/get settings ::max-in-row))
 (def knot-name "leash_knot")
 (defn knot-margin [] (settings/get settings ::knot-margin))
@@ -188,29 +186,27 @@
   "Click target with an empty hand and book what became of animal."
   [c animal target]
   (let [k (animals/key-of animal)
-        r (await (ctx/act c :interact #js {:id (.-id target)}))]
-    (case (.-status r)
-      ("used" "no-effect") (case (await (await-state! c k (not (animals/led-by-me? animal)) (settle-tries)))
-                            :freed (ctx/update-mem! c #(-> % (update :freed (fnil conj []) k) (assoc :in-row 0)))
-                            :handed (ctx/update-mem! c assoc :in-row 0)
-                            (do (animals/give-up! c k :no-effect) (animals/bump-row! c)))
-      "gone" (animals/give-up! c k :gone)
-      "out-of-reach" (animals/book-out-of-reach! c k)
-      "cannot" (do (animals/give-up! c k :cannot) (animals/bump-row! c))
-      (do (animals/give-up! c k :failed) (animals/bump-row! c)))))
+        r (await (animals/use-on! c k target nil {:doors :shut}))]
+    (cond
+      (= :continue r) :continue
+      (#{:used :no-effect} (:status r)) (case (await (await-state! c k (not (animals/led-by-me? animal)) (settle-tries)))
+                                          :freed (ctx/update-mem! c #(-> % (update :freed (fnil conj []) k) (assoc :in-row 0)))
+                                          :handed (ctx/update-mem! c assoc :in-row 0)
+                                          (do (animals/give-up! c k :no-effect) (animals/bump-row! c)))
+      :else (animals/book-failed! c k (:status r)))))
 
 (defn ^:async engage!
-  "Walk to what holds the animal's lead and click it; end when fruitless three times in a row."
+  "Click what holds the animal's lead; end when fruitless :max-in-row times in a row."
   [c a]
   (let [k (animals/key-of a)
-        target (if (animals/led-by-me? a) a (knot-of c a))]
-    (if-not target
-      (do (animals/give-up! c k :no-knot) (animals/bump-row! c))
-      (when (= :there (await (animals/walk! c k target (reach) {:doors :shut})))
-        (await (click! c a target))))
-    (if (>= (:in-row (ctx/mem c) 0) (max-in-row))
-      (go-collect! c (none-reason c))
-      :again)))
+        target (if (animals/led-by-me? a) a (knot-of c a))
+        r (if target
+            (await (click! c a target))
+            (do (animals/give-up! c k :no-knot) (animals/bump-row! c)))]
+    (cond
+      (= :continue r) :continue
+      (>= (:in-row (ctx/mem c) 0) (max-in-row)) (go-collect! c (none-reason c))
+      :else :again)))
 
 (defn ^:async collect! [c]
   (let [waited (if (:dropped (ctx/mem c))
@@ -230,11 +226,11 @@
         cands (candidates c)]
     (cond
       (= :collect (:phase m)) (await (collect! c))
-      (and (empty? cands) (not (look/surveyed? c))) (do (await (look/survey! c)) (await (step c))) ; animals count only while in view; no done? between the look and its verdict, which keeps the :already cause
+      (and (empty? cands) (not (look/surveyed? c))) (do (await (look/survey! c)) (if (look/surveyed? c) (await (step c)) :again)) ; animals count only while in view; no done? between the look and its verdict, which keeps the :already cause
       (empty? cands) (cond (seq (:freed m)) (go-collect! c :unleashed)
                            (and (empty? (:given-up m)) (empty? (on-a-lead c))) (finish! c :unleashed :already)
                            :else (finish! c (none-reason c)))
-      :else (await (engage! c (first cands))))))
+      :else (await (engage! c (animals/pick c cands))))))
 
 (defn ^:async round
   "The whole attempt: steps (a pace between; done? and can-run? are asked between them) until one ends or yields."

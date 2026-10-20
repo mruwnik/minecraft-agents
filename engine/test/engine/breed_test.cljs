@@ -574,6 +574,25 @@
           (is (finished? s))
           (is (= :need (:reason (done-event s)))))))))
 
+(deftest each-feeding-is-an-items-interact-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 8) (cow 2 9)]} 12))]
+          (is (= 2 (count (filter #(= :use (:slot %)) (events-of s :child_started)))))
+          (is (finished? s)))))))
+
+
+(deftest cows-behind-the-body-are-looked-for-before-the-run-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory (wheat 4) :entities [(cow 1 2) (cow 2 3)]})]
+          (ls/entities-after-look (:p s))
+          (core/submit! (:eng s) (list 'jobs.animals.breed {:mob "cow"}) {})
+          (await (run-ticks s 10 700))
+          (is (= 2 (count (:fed (done-event s))))))))))
+
 (deftest the-walk-to-the-animal-is-short-legs-that-never-escalate
   (async done
     (tu/run-async done
@@ -585,13 +604,3 @@
           (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (nil? (:spend %)) (false? (:look-round %))) opts)
               "a moving target is chased in legs, never dug or pillared toward")
           (is (finished? s)))))))
-
-(deftest cows-behind-the-body-are-looked-for-before-the-run-ends
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (h/setup {:inventory (wheat 4) :entities [(cow 1 2) (cow 2 3)]})]
-          (ls/entities-after-look (:p s))
-          (core/submit! (:eng s) (list 'jobs.animals.breed {:mob "cow"}) {})
-          (await (run-ticks s 10 700))
-          (is (= 2 (count (:fed (done-event s))))))))))
