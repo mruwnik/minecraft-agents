@@ -1572,7 +1572,7 @@
         melee {:data {:attacker {:name "zombie"}}}
         shot-on-run? (fn [entries carried]
                        (with-redefs [ctx/since (constantly entries)
-                                     lb/carried (constantly carried)
+                                     lb/carried (fn ([_ _] carried) ([_ _ _] carried))
                                      flight/blocks (constantly nil)
                                      ctx/now (constantly 100000)]
                          (pick/shot-on-the-run? {})))]
