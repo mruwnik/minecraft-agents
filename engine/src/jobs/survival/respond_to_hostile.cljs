@@ -122,6 +122,9 @@
                              :use {:tools (weapons c)} :hold (or hold (hold? c)) :prior (:fight-prior (ctx/mem c))
                              :checks {:safe? '(always) :fit? '(always)}}
                      :flee {:use {:tools (weapons c)} :goal (:goal (ctx/mem c)) :settings (scoped-settings args)})
+        _ (when (and (= :fight decision) (not= :fight (:last-run (ctx/mem c))))
+            (ctx/update-mem! c #(cond-> % (:fight (:children %)) (update-in [:children :fight] dissoc :start))))
+        _ (ctx/update-mem! c assoc :last-run decision)
         e (await (ctx/call c decision (child-jobs decision) child-args))]
     (cond
       (= :continue e) :continue
@@ -338,7 +341,7 @@
   {:health (.-health (.self (:primitives c)))
    :cell (let [{:keys [x y z]} (u/self-pos c)] [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)])
    :ids (set (map #(.-id %) hs))
-   :fight (select-keys (get-in (ctx/mem c) [:children :fight]) [:struck :no-damage :blocked :killed])
+   :fight (select-keys (get-in (ctx/mem c) [:children :fight]) [:hits :quiet :fails :killed])
    :prior (select-keys (:fight-prior (ctx/mem c)) [:struck :given-up :killed])})
 
 (defn fight-unsettled?

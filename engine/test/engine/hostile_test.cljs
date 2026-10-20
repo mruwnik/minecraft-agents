@@ -545,7 +545,7 @@
               hits (atom 0)
               pausing {:round (fn ^:async pause [c]
                                 (swap! hits inc)
-                                (ctx/update-mem! c update-in [:struck 7 :hits] (fnil inc 0))
+                                (ctx/update-mem! c update-in [:hits 7] (fnil inc 0))
                                 (when (= 6 @hits) (swap! (fake/state p) assoc :entities []))
                                 :continue)}
               eng (assoc-in eng [:jobs 'jobs.combat.attack] pausing)]
@@ -571,6 +571,41 @@
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (<= 2 @calls) "one empty check after a :continue does not end the round"))))))
 
+(deftest a-fight-resumed-after-a-flee-measures-its-leash-from-where-the-body-now-stands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:self {:health 20} :entities [(zombie 7 1 0)]})
+              seen (atom :unset)
+              runner {:defaults {:checks {:safe? '(always) :fit? '(always)}}
+                      :round (fn ^:async r [c]
+                               (ctx/update-mem! c assoc :last-run :flee :children {:fight {:start {:x 0 :y 64 :z 0}}})
+                               (await (respond-to-hostile/run-child c :fight {} false))
+                               (ctx/end c :done nil))}
+              eng (-> eng
+                      (assoc-in [:jobs 'runner] runner)
+                      (assoc-in [:jobs 'jobs.combat.attack] {:round (fn ^:async look [c] (reset! seen (:start (ctx/mem c))) :continue)}))]
+          (core/submit! eng '(runner) {})
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (nil? @seen) "the start from before the flee is dropped"))))))
+
+(deftest the-round-signature-changes-when-the-running-fight-lands-a-hit
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:self {:health 20} :entities [(zombie 7 1 0)]})
+              out (atom nil)
+              runner {:defaults {:checks {:safe? '(always) :fit? '(always)}}
+                      :round (fn ^:async r [c]
+                               (let [before (respond-to-hostile/signature c [])]
+                                 (ctx/update-mem! c assoc-in [:children :fight :hits 7] 1)
+                                 (reset! out [before (respond-to-hostile/signature c [])]))
+                               (ctx/end c :done nil))}
+              eng (assoc-in eng [:jobs 'runner] runner)]
+          (core/submit! eng '(runner) {})
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (apply not= @out) "a hit the attack child counted shows in the signature"))))))
+
 (deftest a-refired-reflex-remembers-the-hits-the-fight-landed
   (async done
     (tu/run-async done
@@ -579,7 +614,7 @@
               fights (atom 0)
               hitter {:round (fn ^:async hit [c]
                                (swap! fights inc)
-                               (ctx/update-mem! c assoc-in [:struck 7] {:hits 3 :health 2})
+                               (ctx/update-mem! c merge {:hits {7 3} :health {7 2}})
                                (swap! (fake/state p) assoc :entities [])
                                :continue)}
               eng (assoc-in eng [:jobs 'jobs.combat.attack] hitter)]
