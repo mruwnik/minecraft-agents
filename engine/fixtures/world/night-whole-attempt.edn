@@ -74,15 +74,15 @@
    :limit-s 230}
   ;; Card 7647c987: unarmed, a fist loses to the helmeted zombie and the body has only its 3 dirt: the flight digs down (a pit regains
   ;; its blocks) instead of pillaring with the last dirt, so the night's dig-in still seals.
-  ;; The NoAI zombie never catches the body: the flight ends keeps-off at the plot's west side and the night digs in there, so the
-  ;; whole plot is dirt (on the default pad the pit at the edge opens onto air and the night walked back into the zombie's range).
+  ;; The NoAI zombie never catches the body: the flight ends keeps-off, far from the plot's edge (a pit at the edge opens onto air), and the night
+  ;; digs in there: the whole plot is dirt.
   {:name "reflex-cut-night-unarmed-few-blocks-seals"
-   :blocks [[:fill [0 -6 0] [31 -1 31] "dirt"]
-            [:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
-            [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
+   :plot {:length 64 :width 64 :height 6}
+   :body {:at [32.5 0 32.5]}
+   :blocks [[:fill [0 -6 0] [63 -1 63] "dirt"]]
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
-   :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+   :act [[:summon "zombie" [38.5 0 32.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.survival.night)]
          [:await {:source :job :kind :shut-in.sealed} 120]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 30}

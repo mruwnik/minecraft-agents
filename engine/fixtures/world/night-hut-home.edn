@@ -47,8 +47,9 @@
    :expect [{:event {:source :job :kind :shelter.room_open} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed :data {:name "jobs.survival.night" :night :roofed}} :for-s 60}]
    :limit-s 80}
-  ;; 724f7976: an intact hut with an old :bed-open entry is still shelter
+  ;; 724f7976: an intact hut with an old :bed-open entry is still shelter (a torch in it: a body sees no wall in the dark, so the room would stay unknown)
   {:name "intact-hut-with-a-stale-bed-open-entry-ends-roofed"
+   :blocks [[:set [9 1 9] "torch"]]
    :memory [{:kind :bed-open :data {:pos #xyz [12 0 12]} :policy {:cap 5 :ttl 600000}}]
    :act [[:job (jobs.survival.night)]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 40 :of-job true}
