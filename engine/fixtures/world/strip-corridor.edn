@@ -9,7 +9,7 @@
 ;; A zombie in the corridor: the job waits :hostile-near, then strips once it is gone.
 {:defaults
  {:tags [:strip :corridor :mineshaft :jobs] :time :any
-  :plot {:height 8 :floor "stone"}
+  :plot {:height 8 :floor "stone" :light :dark}
   :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [6 0 15] [26 2 17] "air"] [:fill [7 0 16] [25 0 16] "rail"] [:set [10 1 16] "cobweb"]]
   :body {:at [7.5 0 16.5] :yaw 270 :settle-s 2 :effects [["resistance" 600 4]]
          :inventory [["stone_pickaxe" 1] ["stone_axe" 1] ["shears" 1] ["torch" 8] ["bread" 8]]}
