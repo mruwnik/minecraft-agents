@@ -47,7 +47,7 @@
     (checks/goal (not wedged) [:free "the feet cell is free"] [:wedged "wedged in a block"] {:units :cells :left (if wedged 1 0)})))
 
 (defn ^:async block!
-  "Give up on cell: warn once, remember it so the trigger stays quiet there. Resolves the nothing-possible ending."
+  "Give up on cell: remember it so the trigger stays quiet there. Resolves the nothing-possible ending."
   [c cell why]
   (ctx/remember! c :unwedge-blocked {:cell cell :why why} breath/blocked-policy)
   (ctx/end c :nothing-possible {:reason :blocked :why why} {:cell cell}))
