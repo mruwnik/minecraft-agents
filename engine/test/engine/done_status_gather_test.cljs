@@ -188,13 +188,12 @@
     (field-of 3 [2]) {:looked here} [:later :fertilizing]
     (field-of 7 [2]) {} [:later :fertilizing]))
 
-(deftest find-spot-is-done-when-spots-are-found-and-the-walk-is-made
+(deftest find-spot-is-done-when-spots-are-found
   (let [spots [{:pos {:x 4 :y 64 :z 4} :score 90}]]
     (are [args m reason] (= reason (tu/kind-reason (done-of 'jobs.farm.find-spot {} args m)))
       {} {} [:later :searching]
       {} {:spots spots} [:ok :found]
-      {:walk true} {:spots spots} [:later :searching]
-      {:walk true} {:spots spots :walked true} [:ok :found])))
+      {} {:spots []} [:later :searching])))
 
 (def tidy-plan {:id "p" :parts [{:id "a" :cells [[0 65 0]] :want :clear}]})
 

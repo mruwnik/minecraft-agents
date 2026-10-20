@@ -1,7 +1,7 @@
 ;; Card 8d734336: jobs.farm.find-spot stops its scan after 30000 reads per attempt and settles for the best spots so far (open-air
 ;; range 48 once read 1.7M blocks in one call). A 128 x 64 grass plot, body in the middle, :range 48.
-;; Should-succeed: find-spot.found and the job completes within 60 s, no error event. Should-fail: a plot floored with water but for a
-;; 3x3 stone platform (smaller than the 5x5 patch) has no spot: find-spot.none, result :none.
+;; Should-succeed: the job completes with spots within 60 s, no error event. Should-fail: a plot floored with water but for a
+;; 3x3 stone platform (smaller than the 5x5 patch) has no spot: the job stops nothing-possible :none.
 {:defaults
  {:tags [:farm :find-spot :jobs] :time :any
   :plot {:light :sky :height 8 :floor "grass_block" :length 128 :width 64}
@@ -10,16 +10,15 @@
  :cases
  [{:name "wide-range-open-grass-finishes-with-spots"
    :act [[:job (jobs.farm.find-spot {:range 48 :depth 7})]]
-   :expect [{:event {:source :job :kind :find-spot.found} :within-s 60 :of-job true}
-            {:event {:source :job :kind :completed} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :completed :data {:spots [:has {:pos [:any]}]}} :within-s 60 :of-job true}
             {:no-event {:source :system :kind :error} :for-s 30}]}
   {:name "water-all-round-finds-no-spot"
    :plot {:floor "water"}
    :blocks [[:fill [0 -2 0] [127 -2 63] "stone"] [:fill [63 -1 31] [65 -1 33] "stone"]]
    :act [[:job (jobs.farm.find-spot {:range 12 :depth 7})]]
-   :expect [{:event {:source :job :kind :find-spot.none} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :find-spot.found} :for-s 30 :until {:source :job :kind :find-spot.none}}]}
-  ;; Card e3e88fbd: the found event lists every spot with its score and level, not only the best.
-  {:name "found-event-lists-every-spot-with-score-and-level"
+   :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :none}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :stopped}}]}
+  ;; Card e3e88fbd: the ending lists every spot with its score and level, not only the best.
+  {:name "ending-lists-every-spot-with-score-and-level"
    :act [[:job (jobs.farm.find-spot {:range 20 :depth 7 :limit 3})]]
-   :expect [{:event {:source :job :kind :find-spot.found :data {:spots [:>= 2]} :message [:contains "(level"]} :within-s 60 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :completed :data {:spots [:has {:level [:>= 0] :score [:any]}]}} :within-s 60 :of-job true}]}]}

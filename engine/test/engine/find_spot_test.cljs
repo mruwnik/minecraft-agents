@@ -139,8 +139,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:blocks stepped-world})
-              all (await (child-outcome eng job (assoc small :walk false) 4))
-              r (await (child-outcome eng job (assoc small :walk false :max-step 1) 4))]
+              all (await (child-outcome eng job small 4))
+              r (await (child-outcome eng job (assoc small :max-step 1) 4))]
           (is (= [1 2] (sort (map :step (:spots all)))))
           (is (= [{:x 2 :y 63 :z 0}] (mapv :pos (:spots r)))))))))
 
@@ -156,19 +156,17 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:blocks wet-world})
-              r (await (child-outcome eng job (assoc small :walk false) 4))]
+              r (await (child-outcome eng job small 4))]
           (is (= [{:x 2 :y 63 :z 0} {:x -4 :y 63 :z 0} {:x 2 :y 63 :z -6}] (mapv :pos (:spots r))))
           (is (= {:x 2 :y 63 :z 0} (:spot r)))
-          (is (= [1.0 0] (mapv :water-share (take 2 (:spots r)))))
-          (is (= false (:walked r)))
-          (is (= 1 (count (kinds seen :find-spot.found)))))))))
+          (is (= [1.0 0] (mapv :water-share (take 2 (:spots r))))))))))
 
 (deftest never-picks-water-or-lava
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:blocks (merge (patch 2 0 3 3 63 "water") (patch -4 0 3 3 63 "lava"))})
-              r (await (child-outcome eng job (assoc small :walk false) 4))]
+              r (await (child-outcome eng job small 4))]
           (is (= {:spot nil :reason :none} r)))))))
 
 (deftest no-ground-is-none
@@ -177,62 +175,24 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:blocks {}})
               r (await (child-outcome eng job small 4))]
-          (is (= {:spot nil :reason :none} r))
-          (is (= 1 (count (kinds seen :find-spot.none))))
-          (is (empty? (kinds seen :find-spot.found))))))))
+          (is (= {:spot nil :reason :none} r)))))))
 
 (deftest limit-caps-the-spots
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:blocks wet-world})
-              r (await (child-outcome eng job (assoc small :walk false :limit 1) 4))]
+              r (await (child-outcome eng job (assoc small :limit 1) 4))]
           (is (= 1 (count (:spots r)))))))))
 
-(deftest walk-false-does-not-move
+(deftest find-spot-does-not-move
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks (patch 4 0 3 3 63 "dirt")})]
-          (await (child-outcome eng job (assoc small :range 8 :walk false) 4))
+          (await (child-outcome eng job (assoc small :range 8) 4))
           (is (empty? (tu/walked-to eng)))
           (is (empty? (tu/walk-calls p))))))))
-
-(deftest walk-true-walks-and-hands-over
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:blocks (merge (ice-path -2 3) (patch 4 0 3 3 63 "dirt"))})
-              r (await (child-outcome eng job (assoc small :range 8 :walk true) 4))]
-          (is (= {:x 4 :y 63 :z 0} (:spot r)))
-          (is (= true (:walked r)))
-          (is (= 1 (count (tu/walked-to eng))))
-          (is (u/within? (u/self-pos {:primitives p}) {:x 4 :y 64 :z 0} 2)))))))
-
-(deftest unreachable-spot-is-reported
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (setup {:blocks (patch 4 0 3 3 63 "dirt") :unreachable ["4,64,0"]})
-              r (await (child-outcome eng job (assoc small :range 8 :walk true) 4))]
-          (is (= false (:walked r)))
-          (is (= :unreachable (:reason r)))
-          (is (= {:x 4 :y 63 :z 0} (:spot r))))))))
-
-(deftest spots-survive-a-cut-so-the-second-round-does-not-rescan
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:blocks (merge (ice-path -2 99) (patch 100 0 3 3 63 "dirt"))})
-              _ (tu/short-walks! p 40 1)
-              n (atom 0)
-              orig (.-blocks p)
-              _ (set! (.-blocks p) (fn [& a] (swap! n inc) (.apply orig p (to-array a))))
-              r (await (child-outcome eng job (assoc small :range 8 :walk true :center {:x 102 :y 64 :z 1}) 12))]
-          (is (= true (:walked r)))
-          (is (= 2 (count (tu/walked-to eng))) "a walk cut short is partial, the next one arrives")
-          (is (= 3 @n) "one water read before the look, one per scan round (2 rounds); the walk rounds do not rescan")
-          (is (= 1 (count (kinds seen :find-spot.found)))))))))
 
 (defn scan-at [world self args from]
   (let [p (tu/seeing-all (tu/fake {:blocks world :self {:pos self}}))]
@@ -263,7 +223,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world (merge (patch 2 0 3 3 63 "dirt") (patch -4 4 3 3 63 "dirt") {"6,63,1" "water"})
-              a {:w 3 :h 3 :range 10 :depth 12 :limit 3 :walk false}
+              a {:w 3 :h 3 :range 10 :depth 12 :limit 3}
               from {:x 0 :y 64 :z 0}
               expected (scan-at world {:x 0 :y 64 :z 0} a from)
               {:keys [eng p]} (setup {:blocks world})
@@ -276,7 +236,7 @@
               ;; one patch row: (2*range+1) z cells x w columns, each reading at most the
               ;; top scan (2*depth) + 1 + the sky scan (2*depth + 8)
               row-reads (* (inc (* 2 (:range a))) (:w a) (+ (* 4 (:depth a)) 9))
-              bound (+ fs/read-budget row-reads)]
+              bound (+ (fs/read-budget) row-reads)]
           (core/submit! eng '(recording-parent) {})
           (await (core/tick! eng))
           (is (empty? (:list (core/state eng))) "one call scans the whole range")
@@ -288,7 +248,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [a {:w 16 :h 16 :range 48 :depth 7 :limit 3 :walk false}
+        (let [a {:w 16 :h 16 :range 48 :depth 7 :limit 3}
               {:keys [eng p]} (setup {:blocks {}})
               reads (atom 0)
               orig (.-blockAt p)
@@ -307,7 +267,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world (merge (patch 2 0 3 3 63 "dirt") (patch -4 4 3 3 63 "dirt") {"6,63,1" "water"})
-              a {:w 3 :h 3 :range 10 :depth 12 :limit 3 :walk false}
+              a {:w 3 :h 3 :range 10 :depth 12 :limit 3}
               expected (scan-at world {:x 0 :y 64 :z 0} a {:x 0 :y 64 :z 0})
               {:keys [eng p]} (setup {:blocks world})
               out (atom :not-done)
@@ -355,24 +315,9 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks wet-world})
               _ (tu/seeing-after-look p)
-              r (await (child-outcome eng job (assoc small :walk false) 8))]
+              r (await (child-outcome eng job small 8))]
           (is (seq (calls p "look")))
           (is (= [1.0 0] (mapv :water-share (take 2 (:spots r))))))))))
-
-(deftest the-found-text-lists-every-spot-with-what-its-score-is-made-of
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:blocks wet-world})
-              r (await (child-outcome eng job (assoc small :walk false) 4))
-              text (:text (first (kinds seen :find-spot.found)))]
-          (is (= 3 (count (:spots r))))
-          (is (every? #(re-find (re-pattern (str "x " (get-in % [:pos :x]) " y " (get-in % [:pos :y]) " z " (get-in % [:pos :z])
-                                                 ".*score " (:score %) ".*level " (:level %) ".*work " (:work %)))
-                                text)
-                      (:spots r))
-              text))))))
-
 
 (deftest a-stone-patch-scores-below-a-grass-patch
   (let [p (tu/seeing-all (tu/fake {:blocks (merge (patch 0 0 3 3 63 "stone") (patch 10 0 3 3 63 "grass_block"))}))
@@ -407,3 +352,12 @@
               eng (assoc eng :primitives p)
               r (await (child-outcome eng job {:w 5 :h 5 :range 24 :depth 12} 20))]
           (is (seq (:spots r)) (pr-str r)))))))
+
+(deftest existing-farmland-ranks-with-farmable-ground
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:blocks (merge (patch 1 0 3 3 63 "farmland") (patch -6 0 3 3 63 "grass_block"))})
+              r (await (child-outcome eng job small 4))]
+          (is (= [{:x 1 :y 63 :z 0} {:x -6 :y 63 :z 0}] (mapv :pos (:spots r))))
+          (is (= [100 100] (mapv :farmable (:spots r)))))))))

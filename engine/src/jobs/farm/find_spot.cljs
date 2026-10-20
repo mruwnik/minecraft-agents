@@ -4,29 +4,26 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.surface :as surface :refer [open?]]
-            [jobs.lib.job-common :as common]
             [jobs.farm.till :as till]
             [jobs.lib.look :as look]
             [jobs.lib.ready :as ready]
             [jobs.lib.world :as known]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.util :as u]
-            [jobs.lib.pace :as pace]
-            [clojure.string :as str]))
+            [jobs.lib.pace :as pace]))
 
 (def doc
   "Pick where a :w x :h farm would go. Ranks patches by flatness first, then water within 4,
   open sky and nearness to :center. It tries patches nearest-first and stops once :limit flat open-sky ones are found (with water within 4, when water is in range).
   A patch of 8 or more is tried at every fourth corner. Reads blocks only: it never digs or marks anything.
-  A scan reads at most about 45000 blocks, then settles for the best spots so far.
-  With :walk true it then walks to the best spot (a go-to child).
-  Ends with data {:spot pos-or-nil :spots [...] :walked bool}: done with the spots, nothing-possible :none (no patch found)
-  or :unreachable (spots found, the walk failed; :walked false). :spots best first up to :limit, each {:pos :score :level :work
-  :step :water-share :sky :away :y}; :step is the largest height difference between two neighbouring cells of the patch; the info find-spot.found lists them all. A pos is the north-west corner at ground level.
-  Score = level (% of the patch's cells at its commonest ground height y, 0-100) + 25 x water-share + 15 for open sky,
-  less :work (sum of blocks the other cells are off y, at most 40) and :away / 4 (blocks from :center, at most 30).
-  A spot with level under 100 has cells to level or build up. :farmable is the % of its cells whose ground a hoe makes
-  farmland of (dirt, grass, path, coarse or rooted dirt); every missing tenth costs 4 points.
+  A scan reads at most ::max-reads blocks, then settles for the best spots so far. It never walks: a parent walks to the spot.
+  Ends with data {:spot pos :spots [...]}: done with the spots, or nothing-possible :none (no patch found).
+  :spots best first up to :limit, each {:pos :score :level :work :step :water-share :sky :away :y :farmable}; :step is
+  the largest height difference between two neighbouring cells of the patch. A pos is the north-west corner at ground level.
+  Score = level (% of the patch's cells at its commonest ground height y, 0-100) + ::water-weight x water-share + ::sky-weight for open sky,
+  less :work (sum of blocks the other cells are off y, at most ::work-cap), :away / 4 (blocks from :center, at most ::away-cap)
+  and up to ::farmable-weight for cells a hoe cannot make farmland of. A spot with level under 100 has cells to level or build up.
+  :farmable is the % of its cells whose ground is farmland or a hoe makes farmland of (dirt, grass, path, coarse or rooted dirt).
   A patch is left out when a column of it is unseen, lies under a plan's footprint, or in a zone or claim of another owner (the body's own zones are fine);
   :max-step drops patches with a bigger step.
   Needs nothing; it reads only what the body has seen and looks around once when no water is in sight.")
@@ -38,13 +35,19 @@
    :center {:doc "where to search from {:x :y :z}; nil is the body's cell" :spec ::a/pos :default nil}
    :depth {:doc "how far above and below the centre's y to look for ground, 1 to 16" :spec (a/int-in 1 16) :default 12}
    :limit {:doc "how many spots to keep, 1 to 8" :spec (a/int-in 1 8) :default 3}
-   :max-step {:doc "drop patches whose largest step between neighbouring cells is over this; nil: keep all" :spec (a/int-in 0 16) :default nil}
-   :walk {:doc "walk to the best spot (finding and walking are separate; a parent can walk)" :spec boolean? :default false}})
+   :max-step {:doc "drop patches whose largest step between neighbouring cells is over this; nil: keep all" :spec (a/int-in 0 16) :default nil}})
 
 (a/defargs settings
   {::job-time-s {:default 30 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::water-reach {:default 4 :doc "Blocks from water within which farmland is hydrated." :spec (a/int-in 0 nil)}
-   ::sky-extra {:default 8 :doc "Extra blocks of sky checked above a spot." :spec (a/int-in 0 nil)}})
+   ::sky-extra {:default 8 :doc "Extra blocks of sky checked above a spot." :spec (a/int-in 0 nil)}
+   ::read-budget {:default 4096 :doc "blockAt reads after which a round stops scanning (at the end of the row it is in)." :spec (a/int-in 1 nil)}
+   ::max-reads {:default 45000 :doc "blockAt reads one attempt may spend on scanning (a cut and restart keeps the count); then it settles for the best spots found." :spec (a/int-in 1 nil)}
+   ::water-weight {:default 25 :doc "Score points for a patch wholly within reach of water." :spec (a/num-in 0 nil)}
+   ::sky-weight {:default 15 :doc "Score points for open sky over a patch." :spec (a/num-in 0 nil)}
+   ::work-cap {:default 40 :doc "Most score points the earthwork (blocks the cells are off the commonest height) costs." :spec (a/num-in 0 nil)}
+   ::away-cap {:default 30 :doc "Most score points the distance from the centre costs." :spec (a/num-in 0 nil)}
+   ::farmable-weight {:default 40 :doc "Score points lost when no cell of a patch can be made farmland." :spec (a/num-in 0 nil)}})
 (defn water-reach [] (settings/get settings ::water-reach))
 
 (defn commonest
@@ -63,10 +66,10 @@
           work (reduce + (map #(js/Math.abs (- % y)) tops))
           level (js/Math.round (/ (* 100 (count (filter #(= y %) tops))) (count tops)))
           away (or away 0)
-          score (- (+ level (js/Math.round (* 25 water-share)) (if sky 15 0))
-                   (min 40 work)
-                   (min 30 (js/Math.round (/ away 4)))
-                   (if farmable (js/Math.round (* 40 (- 1 farmable))) 0))]
+          score (- (+ level (js/Math.round (* (settings/get settings ::water-weight) water-share)) (if sky (settings/get settings ::sky-weight) 0))
+                   (min (settings/get settings ::work-cap) work)
+                   (min (settings/get settings ::away-cap) (js/Math.round (/ away 4)))
+                   (if farmable (js/Math.round (* (settings/get settings ::farmable-weight) (- 1 farmable))) 0))]
       (cond-> {:y y :level level :work work :water-share water-share :sky (boolean sky)
                :away (js/Math.round away) :score score}
         farmable (assoc :farmable (js/Math.round (* 100 farmable)))))))
@@ -90,11 +93,11 @@
                    (zones/foreign-holder {:zones zones :claims claims :self self :now now :cell [x y z]}))))))
 
 (def farmable-ground
-  "The grounds a hoe makes farmland of (coarse and rooted dirt in two passes)."
-  till/tillable)
+  "The grounds that are farmland or a hoe makes farmland of (coarse and rooted dirt in two passes)."
+  (conj till/tillable "farmland"))
 
 (defn hydrated?
-  "True when a water cell of water-set (a set of [x y z]) lies within 4 in x and
+  "True when a water cell of water-set (a set of [x y z]) lies within ::water-reach in x and
   z of the farmland at x y z, at its y or one above."
   [water-set x y z]
   (boolean (some (fn [[wx wy wz]]
@@ -103,13 +106,9 @@
                         (or (= wy y) (= wy (inc y)))))
                  water-set)))
 
-(def read-budget
-  "blockAt reads after which a round stops scanning (at the end of the row it is in)."
-  4096)
+(defn read-budget [] (settings/get settings ::read-budget))
 
-(def max-reads
-  "blockAt reads one attempt may spend on scanning (a cut and restart keeps the count); then it settles for the best spots found."
-  45000)
+(defn max-reads [] (settings/get settings ::max-reads))
 
 (defn sky-extra [] (settings/get settings ::sky-extra))
 
@@ -210,46 +209,31 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 (def safe?
-  "A survey that stays put only needs no danger near; with :walk the walk's own light matters too."
-  (with-meta (fn [c] (if (:walk (:args c)) (ready/safe-if-lit c) (ready/threatened c)))
-    {::ready/exposure (fn [c] (if (:walk (:args c))
-                                ((::ready/exposure (meta ready/safe-if-lit)) c)
-                                (contract/ok :survey "a survey that walks nowhere is no exposure")))}))
+  "A survey that stays put only needs no danger near."
+  (with-meta ready/threatened
+    {::ready/exposure (fn [_] (contract/ok :survey "a survey that walks nowhere is no exposure"))}))
 (def fit? ready/fit?)
 
 (defn done?
-  "Ok once spots are found (and, with :walk, the body stands at the best one); else later."
+  "Ok once spots are found; else later."
   [c]
-  (let [{:keys [spots walked]} (ctx/mem c)
-        found (boolean (and (seq spots) (or (not (:walk (:args c))) walked)))
-        data [:units :spots :done (count spots) :left (if found 0 1)
-              :result (if (seq spots) {:spot (:pos (first spots)) :spots spots :walked (boolean walked)} {})]]
-    (if found
+  (let [spots (:spots (ctx/mem c))
+        data [:units :spots :done (count spots) :left (if (seq spots) 0 1)
+              :result (if (seq spots) {:spot (:pos (first spots)) :spots spots} {})]]
+    (if (seq spots)
       (apply contract/ok :found (str "find-spot: " (count spots) " spots found") data)
       (apply contract/later :searching (str "find-spot: " (count spots) " spots found") data))))
 
-(defn quote-of [c]
-  (let [{:keys [range walk]} (merge (settings/job-defaults (quote jobs.farm.find-spot) args) (:args c))]
-    {:uses {:job-time [0.1 1 (+ 20 (if walk (* 4 range) 0))]}}))
-
-(defn spot-text [{:keys [pos score level work step water-share sky away]}]
-  (str "x " (:x pos) " y " (:y pos) " z " (:z pos) " score " score " (level " level "% work " work " step " step " water "
-       (js/Math.round (* 100 water-share)) "% " (if sky "open sky" "roofed") ", " away " away)"))
+(defn quote-of [_c]
+  {:uses {:job-time [0.1 1 20]}})
 
 (defn finish-scan!
-  "Remember and announce the found spots in memory (dropping the scan state);
-  nil (after a warn) when there are none."
-  [c a from found]
+  "Remember the found spots in memory (dropping the scan state); nil when there are none."
+  [c found]
   (ctx/update-mem! c dissoc :scan)
-  (if (empty? found)
-    (do (ctx/emit! c :find-spot.none :warn
-                   {:text (str "no " (:w a) "x" (:h a) " patch of open ground within " (:range a) " of " (pr-str from))})
-        nil)
-    (do (ctx/update-mem! c assoc :spots found)
-        (ctx/emit! c :find-spot.found :info
-                   {:spots (count found) :best (:pos (first found)) :score (:score (first found))
-                    :text (str (count found) " spots, best first: " (str/join "; " (map spot-text found)))})
-        found)))
+  (when (seq found)
+    (ctx/update-mem! c assoc :spots found)
+    found))
 
 (defn scan-step!
   "One bounded scan slice. :again while rows remain (state kept in :scan),
@@ -260,10 +244,10 @@
         state (or saved {:next-ring 0 :found []})
         a (assoc a :blocked? (blocked-fn {:footprints (known/footprints c) :zones (known/zones c) :claims (known/claims c)
                                           :self (ctx/self-name c) :now (ctx/now c)}))
-        r (scan-rows (:primitives c) a from state read-budget)
+        r (scan-rows (:primitives c) a from state (read-budget))
         spent (+ (:reads state 0) (:reads r))]
-    (if (or (:done r) (>= spent max-reads))
-      (finish-scan! c a from (:found r))
+    (if (or (:done r) (>= spent (max-reads)))
+      (finish-scan! c (:found r))
       (do (ctx/update-mem! c assoc :scan (assoc (select-keys r [:next-ring :found :cache]) :from from :reads spent))
           :again))))
 
@@ -274,8 +258,7 @@
        (empty? (look/seen-blocks (:primitives c) {:names ["water"] :radius (+ (:range a) (:w a) (:h a) 4) :max 1}))))
 
 (defn ^:async step
-  "Look around when no water is in sight, scan (a bounded slice per step, remembering the spots), then walk to the
-  best one if :walk."
+  "Look around when no water is in sight, then scan (a bounded slice per step, remembering the spots)."
   [c]
   (let [a (merge (settings/job-defaults (quote jobs.farm.find-spot) args) (:args c))
         found (if (water-unseen? c a)
@@ -283,19 +266,10 @@
                 (or (:spots (ctx/mem c)) (scan-step! c a)))]
     (cond
       (= :again found) :again
-      (nil? found) (ctx/end c :nothing-possible :none {:spot nil :reason :none})
-      :else
-      (let [pos (:pos (first found))
-            result {:spot pos :spots found}]
-        (if-not (:walk a)
-          (ctx/end c :done nil (assoc result :walked false))
-          (case (await (common/walk! c (update pos :y inc) 2 {}))
-            :continue :continue
-            :blocked (ctx/end c :nothing-possible :unreachable (assoc result :walked false :reason :unreachable))
-            (do (ctx/update-mem! c assoc :walked true)
-                (ctx/end c :done nil (assoc result :walked true)))))))))
+      (nil? found) (ctx/end c :nothing-possible :none {:spot nil})
+      :else (ctx/end c :done nil {:spot (:pos (first found)) :spots found}))))
 
 (defn ^:async round
-  "The whole attempt: scan slice after slice, then the walk; :continue only while the walk waits on the world."
+  "The whole attempt: scan slice after slice."
   [c]
   (await (pace/steps! c (fn ^:async s [] (await (step c))))))

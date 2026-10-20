@@ -385,7 +385,6 @@
 
 (deftest roaming-jobs-wait-for-dawn-above-ground
   (are [job args] (= :later (lit 0 15 #(bound (safe-of job) night-hut args)))
-    'jobs.farm.find-spot {:walk true}
     'jobs.food.fish {}))
 
 (deftest a-find-spot-survey-that-walks-nowhere-needs-no-light

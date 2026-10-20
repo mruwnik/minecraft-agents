@@ -184,11 +184,8 @@
         (is (= {:kind :nothing-possible :cause :none} (kc (await (ending-of (fst/setup {:blocks {}}) find-spot fst/small 4)))))
         (let [e (await (ending-of (fst/setup {:blocks (fst/patch 4 0 3 3 63 "dirt")}) find-spot (assoc fst/small :range 8) 4))]
           (is (= :done (:kind e)))
-          (is (= {:x 4 :y 63 :z 0} (get-in e [:data :spot]))))
-        (let [e (await (ending-of (fst/setup {:blocks (fst/patch 4 0 3 3 63 "dirt") :unreachable ["4,64,0"]}) find-spot
-                                  (assoc fst/small :range 8 :walk true) 4))]
-          (is (= {:kind :nothing-possible :cause :unreachable} (kc e)))
-          (is (= {:x 4 :y 63 :z 0} (get-in e [:data :spot])) "the spot is still handed over"))))))
+          (is (= {:x 4 :y 63 :z 0} (get-in e [:data :spot]))))))))
+
 
 ;; ------------------------------------------------------------------ plant
 
