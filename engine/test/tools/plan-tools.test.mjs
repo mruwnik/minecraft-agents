@@ -293,6 +293,15 @@ test('compiled CLJS preserves trailing EDN comments and rejects additional forms
   } finally { fx.close() }
 })
 
+test('a door with a planned wall beside it validates (the release bundle reads block shapes from minecraft-data by name)', async () => {
+  const fx = fixture()
+  try {
+    const edn = '{:id "x" :parts [{:id "d" :cells [[61 69 10]] :want "oak_door"} {:id "w" :cells [[60 69 10]] :want "cobblestone"}]}'
+    const result = await invoke('plan', fx, ['validate', 'x', '--edn', edn])
+    assert.equal(result.code, 0, result.output)
+  } finally { fx.close() }
+})
+
 test('native plan checks report overlapping saved claims', async () => {
   const fx = fixture()
   try {
