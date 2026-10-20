@@ -5,7 +5,6 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.cond :as cond]
-            [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.sense :as sh-sense]))
 
 (def idle-ok true)
@@ -44,8 +43,7 @@
         feet (sh-sense/feet p)]
     (cond
       (sh-sense/lit-here? p feet) {:uses {:job-time [0 0 0]}}
-      (sh-sense/sky-light-at p feet) (let [s (or (sh-sense/light-in p feet) ##Inf)]
-                                       {:uses {:job-time [0 s (if (and (pos? s) (settings/frozen?)) ##Inf s)]}})
-      :else (sh-clock/night-left-quote c))))
+      :else (let [s (if (sh-sense/sky-light-at p feet) (or (sh-sense/light-in p feet) ##Inf) ##Inf)]
+              {:uses {:job-time [0 s (if (and (pos? s) (settings/frozen?)) ##Inf s)]}}))))
 
 (defn ^:async round [c] (ctx/end c :done nil))

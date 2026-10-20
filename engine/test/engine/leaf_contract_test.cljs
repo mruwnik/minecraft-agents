@@ -20,12 +20,11 @@
       (is (vector? (:target job)) (str sym " has a target"))
       (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args {}}))) (str sym)))))
 
-(deftest waiting-for-light-is-quoted-by-the-ticks-left-of-the-night
+(deftest waiting-for-light-with-no-sky-light-is-quoted-as-never-by-the-clock
   (let [quote-of (fn [time] (get-in ((:quote-of (get registry/jobs 'jobs.time.wait-for-light)) {:primitives (tu/fake {:time time})})
                                     [:uses :job-time]))]
     (is (= [0 0 0] (quote-of 1000)) "day: nothing to wait for")
-    (is (< 0 (second (quote-of 13000)) (nth (quote-of 13000) 2)))
-    (is (> (second (quote-of 13000)) (second (quote-of 20000))) "later in the night, less to wait")))
+    (is (= [0 ##Inf ##Inf] (quote-of 13000)) "no sky light reaches the cell: only another light ends the wait")))
 
 (defn ^:async stopped-data [spec]
   (let [[seen sink] (tu/capture-sink)
