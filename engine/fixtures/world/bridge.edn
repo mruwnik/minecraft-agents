@@ -29,12 +29,12 @@
   {:name "no-blocks-without-fetch-gives-up-too-few"
    :body {:inventory []}
    :act [[:job (jobs.access.bridge {:heading :east :length 5 :fetch false :ignore-zones? true})]]
-   :expect [{:event {:source :job :kind :bridge.gave-up :data {:reason :too-few-blocks :short 5 :built 0}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :bridge.gave-up}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :too-few-blocks :short 5 :built 0}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :stopped}}]
    :limit-s 40}
   {:name "low-ceiling-ahead-is-blocked"
    :blocks [[:set [9 1 16] "stone"]]
    :act [[:job (jobs.access.bridge {:heading :east :length 5 :ignore-zones? true})]]
-   :expect [{:event {:source :job :kind :bridge.gave-up :data {:reason :blocked :built 0}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :blocked :built 0}} :within-s 40 :of-job true}]
    :after [[:not-block [9 -1 16] "dirt"]]
    :limit-s 50}]}

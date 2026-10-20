@@ -186,7 +186,7 @@
           (is (finished? eng))
           (is (= [2 64 0] (feet p)))
           (is (= 2 (count (the-ledger eng))))
-          (let [g (first (of-kind seen :bridge.gave-up))]
+          (let [g (first (of-kind seen :stopped))]
             (is (= :too-few-blocks (:reason g)))
             (is (= (row 2) (:placed g))))
           (is (= [:too-few-blocks] (mapv :reason (of-kind seen :stopped))) "the job ends stopped with the reason, not completed")
@@ -220,7 +220,7 @@
           (await (ticks s eng 5))
           (is (finished? eng))
           (is (empty? (calls p "place")))
-          (is (= :blocked (:reason (first (of-kind seen :bridge.gave-up))))))))))
+          (is (= :blocked (:reason (first (of-kind seen :stopped))))))))))
 
 (defn stall-at!
   "Override place so that its nth call never resolves (after placing the block when place?); the calls before are the
@@ -312,4 +312,4 @@
           (let [again (make)]
             (await (ticks s again 10))
             (is (finished? again))
-            (is (= :off-line (:reason (first (of-kind seen :bridge.gave-up)))))))))))
+            (is (= :off-line (:reason (first (of-kind seen :stopped)))))))))))

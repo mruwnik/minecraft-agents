@@ -90,7 +90,7 @@
    :body {:at [8.5 0 16.5] :yaw 270 :pitch -70 :inventory [["dirt" 8]]}
    :act [[:job (jobs.access.bridge {:heading :east :length 5 :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:built 5}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :bridge.gave-up} :for-s 30 :of-job true :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind :stopped} :for-s 30 :of-job true :until {:source :job :kind :completed}}]
    :after [[:block [11 -1 16] "dirt"] [:body-near [13.5 0 16.5] 3]]}
   {:name "pillar-with-the-body-looking-down"
    :plot {:height 12 :floor "grass_block"}

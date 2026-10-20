@@ -47,7 +47,7 @@
   :blocked (a cell ahead at body height is not clear), :zone, :footprint, :no-zones, :not-loaded, :not-replaceable,
   :unseen or :bad-args, or nothing-possible with :off-line, :place-failed (3 failed places in a row, :detail the
   primitive's reason) or :move-failed (3 failed walks onto a placed block); the data holds :placed and :built as well,
-  and by reason :at :block :zone :short :detail. Event: bridge.gave-up (warn).")
+  and by reason :at :block :zone :short :detail.")
 
 (a/defargs args
   {:heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
@@ -158,16 +158,9 @@
   #{:not-on-solid :blocked :zone :footprint :no-zones :not-loaded :not-replaceable :unseen :too-few-blocks})
 
 (defn finish!
-  "End the job on a give-up step: its event and ending."
+  "End the job on a give-up step: the ending carries the reason and the result."
   [c l step]
-  (let [{:keys [heading length]} (:args c)
-        result (merge (result-of c l (:start (ctx/mem c)) heading) (dissoc step :step :reason))
-        cells (:placed result)]
-    (ctx/emit! c :bridge.gave-up :warn
-               (assoc result :status :stopped :reason (:reason step)
-                      :text (str "bridge gave up at " (count cells) " of " length ": " (name (:reason step))
-                                 (when (:short step) (str ", " (:short step) " blocks short"))
-                                 (when (:at step) (str " at " (pr-str (:at step)))))))
+  (let [result (merge (result-of c l (:start (ctx/mem c)) (:heading (:args c))) (dissoc step :step :reason))]
     (ctx/end c (cond (= :bad-args (:reason step)) :impossible (condition-reasons (:reason step)) :condition-failed :else :nothing-possible)
              (:reason step) result)))
 

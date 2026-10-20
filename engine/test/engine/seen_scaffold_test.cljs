@@ -98,7 +98,7 @@
               (swap! (:clock s) + 500)
               (await (core/tick! eng))
               (recur (inc i))))
-          (is (= [:too-few-blocks] (mapv :reason (d/events-of s :bridge.gave-up))) "blocks missing at the start end the job")
+          (is (= :too-few-blocks (:reason @(:out s))) "blocks missing at the start end the job")
           (is (empty? (:list (core/state eng)))))))))
 
 (deftest dig-looks-at-water-beside-the-cell-before-it-digs
