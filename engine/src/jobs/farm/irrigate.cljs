@@ -24,11 +24,11 @@
   that wets the most dry cells (one of the field's own cells under open air whose four sides are seen solid and underside not seen open, nearest
   first) it digs the cell (a jobs.blocks.dig child) and pours a water bucket in it (a jobs.blocks.use-on child), then
   looks again (a pour that fails, or a bucket gone before it, has the cell refilled with dirt (a jobs.blocks.place child); a cell that stays open is named in :holes and ends the call, a refilled one only drops that spot); one bucket wets one spot, so it ends when no cell is dry, no water bucket is left or no spot helps. A pour
-  counts only once the cell is seen as water. A water bucket is fetched (jobs.lib.need, :fetch) when dry cells are left and none is carried; a
+  counts only once the cell is seen as water. A water bucket is fetched (jobs.lib.need, from the call's :ways) when dry cells are left and none is carried; a
   failed fetch ends the call with its ending as the :because. Zones: a spot in another owner's zone or claim, or in a
   plan's footprint (unless :for-plan), is not used. With no field cell seen yet it looks round even in the dark (the exposure check starts once a field cell is seen).
   Refused before it starts: impossible {:reason :bad-args :why}; failed conditions {:reason :no-zones} (unless :ignore-zones?)
-  and {:reason :need :item \"water_bucket\"} (dry cells, none carried, :fetch false).
+  and {:reason :need :item \"water_bucket\"} (dry cells, none carried, :ways #{:carried}).
   Ends with data {:poured [cells] :dry [cells still dry] :unknown [cells with unseen reach] :failed [spots given up] :restored
   [dug cells refilled] :holes [dug cells left open]}: done when no cell is dry (and, if none was poured, none is unknown), or the cells
   wetted meet :least (default 1; :all: every dry cell); else condition-failed :need (no bucket), nothing-possible
@@ -41,8 +41,9 @@
    :center {:doc "centre of a square of cells at its y; with :radius" :spec ::a/pos :default nil}
    :radius {:doc "the square covers |dx|,|dz| <= radius, 0 to 7" :spec (a/int-in 0 7) :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
-   :fetch {:doc "get a water bucket when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false refuses the call :need" :spec need/option? :default true}
    :ignore-zones? :shared})
+
+(def ways need/fetch-ways)
 
 (a/defargs settings
   {::job-time-s {:default 180 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
@@ -149,12 +150,11 @@
 (defn has-bucket? [p] (boolean (some #(= "water_bucket" (:name %)) (u/inventory p))))
 
 (defn fetch-opts
-  "The limits {:how :explore} for fetching a water bucket, nil when :fetch does not allow items or leaves only
-  :gather (which would scoop back the water just poured)."
+  "The limits {:how} for fetching a water bucket, nil when the call's ways leave only :carried or :gather (which
+  would scoop back the water just poured)."
   [c]
-  (when-let [o (need/opts c 'jobs.farm.irrigate)]
-    (let [how (disj (set (or (:how o) need/sources)) :gather)]
-      (when (and (contains? (:what o) :item) (seq how)) (assoc (select-keys o [:explore]) :how how)))))
+  (when-let [how (seq (disj (need/fetch-how c) :gather))]
+    {:how (set how)}))
 
 (defn needs-bucket?
   "Whether a bucket is to be got: dry cells, none carried and no pour waiting."

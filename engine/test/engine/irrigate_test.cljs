@@ -67,7 +67,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:blocks (strip 5)})
-              r (await (tu/child-outcome eng job (assoc (args 5) :fetch false) 10))]
+              r (await (tu/child-outcome eng job (assoc (args 5) :ways #{:carried}) 10))]
           (is (= {:reason :need :item "water_bucket"} (select-keys (:cause (:ending r)) [:reason :item]))))))))
 
 
