@@ -12,6 +12,7 @@
             [jobs.lib.cond :as cond]
             [jobs.build.from-plan :as from-plan]
             [jobs.lib.pen :as pen]
+            [jobs.lib.pen-patch :as pen-patch]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.sense :as sense]
             [jobs.lib.build.plan :as plan]
@@ -213,14 +214,6 @@
 
 ;; ------------------------------------------------------------------ rounds
 
-(def patchable #{:gap :climb})
-
-(defn patch-cells
-  "The cells [x y z] a patch fills: each :gap leak's cell, the cell above each :climb leak's fence."
-  [leaks]
-  (vec (distinct (for [{:keys [pos why]} leaks :when (patchable why)]
-                   [(:x pos) (if (= :climb why) (inc (:y pos)) (:y pos)) (:z pos)]))))
-
 (defn patch-item
   "The fence or wall item of the plan's cells to patch with: the first barrier cell that is no gate, as allotted."
   [cells]
@@ -237,8 +230,8 @@
     (cond
       (:closed? answer)
       (ctx/end c :done nil (assoc result :text (str "pen of " plan " holds, " (:cells answer) " cells, placed " (:placed built))))
-      (and (ctx/way? c :patch) (not (:patched (ctx/mem c))) (seq (patch-cells (:leaks answer))) (patch-item cells))
-      (do (ctx/update-mem! c assoc :phase :patch :patched true :patch-queue (patch-cells (:leaks answer)))
+      (and (ctx/way? c :patch) (not (:patched (ctx/mem c))) (seq (pen-patch/patch-cells (:leaks answer))) (patch-item cells))
+      (do (ctx/update-mem! c assoc :phase :patch :patched true :patch-queue (pen-patch/patch-cells (:leaks answer)))
           :again)
       :else
       (ctx/end c :nothing-possible (:reason answer) result))))
@@ -278,9 +271,7 @@
   "One fence of the patch queue by a blocks.place child (its ending, placed or not, passes it on); then back to the check."
   [c cells]
   (if-let [[x y z] (first (:patch-queue (ctx/mem c)))]
-    (let [r (await (ctx/call c :patch 'jobs.blocks.place
-                             (merge (select-keys (:args c) [:ignore-zones? :fetch])
-                                    {:pos [x y z] :item (patch-item cells) :for-plan (:plan (:args c))})))]
+    (let [r (await (pen-patch/place-fence! c [x y z] (patch-item cells) {:for-plan (:plan (:args c))}))]
       (if (= :continue r)
         :continue
         (do (ctx/update-mem! c update :patch-queue rest) :again)))

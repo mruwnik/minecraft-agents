@@ -11,6 +11,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.near :as near]
             [jobs.lib.pen :as pen]
+            [jobs.lib.pen-patch :as pen-patch]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]))
@@ -191,14 +192,11 @@
   [c result]
   (let [p (:primitives c)
         item (:item (:args c))]
-    (vec (keep (fn [{:keys [pos why]}]
-                 (let [cell [(:x pos) (:y pos) (:z pos)]
-                       up [(:x pos) (inc (:y pos)) (:z pos)]]
-                   (case why
-                     :gap (when-let [i (or item (fence-near p cell))] {:op :place :pos cell :item i})
-                     :climb (when-let [i (or item (fence-near p cell))] {:op :place :pos up :item i})
-                     :open-gate {:op :shut :pos cell}
-                     nil)))
+    (vec (keep (fn [{:keys [pos why] :as leak}]
+                 (if (= :open-gate why)
+                   {:op :shut :pos [(:x pos) (:y pos) (:z pos)]}
+                   (when-let [cell (pen-patch/patch-cell leak)]
+                     (when-let [i (or item (fence-near p cell))] {:op :place :pos cell :item i}))))
                (:leaks result)))))
 
 (defn ^:async patch-step!
@@ -208,7 +206,7 @@
         shared (select-keys (:args c) [:ignore-zones?])
         r (await (if (= :shut op)
                    (ctx/call c :patch 'jobs.blocks.use-on (assoc shared :pos pos :item "none"))
-                   (ctx/call c :patch 'jobs.blocks.place (assoc (merge shared (select-keys (:args c) [:fetch])) :pos pos :item item))))]
+                   (pen-patch/place-fence! c pos item nil)))]
     (if (= :continue r)
       :continue
       (let [ok? (= :done (:kind r))
