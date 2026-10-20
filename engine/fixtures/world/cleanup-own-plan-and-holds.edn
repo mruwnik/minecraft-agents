@@ -62,6 +62,6 @@
    :plot {:height 12 :light :dark}
    :blocks [[:fill [0 0 4] [30 3 12] "stone"] [:fill [1 0 8] [14 1 8] "air"] [:set [6 0 8] "dirt"] [:set [7 0 8] "torch"]]
    :body {:at [10.5 0 8.5]}
-   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true :settings {:jobs.access.cleanup/keep-at-night? false} :checks {:safe? (not (threatened))}})]]
+   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true :settings {:jobs.lib.shelter.keep/at-night? false} :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :cleanup.done :data {:removed 1}} :within-s 60 :of-job true}]
    :after [[:not-block [6 0 8] "dirt"]]}]}
