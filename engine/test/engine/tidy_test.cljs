@@ -12,6 +12,7 @@
             [jobs.lib.tidy :as tidy]
             [jobs.survival.restore-broken :as restore-broken]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -330,6 +331,13 @@
           (is (= [[{:cell [50 64 0] :was "stone" :why :gave-up}]] (mapv :cells (not-restored-runs seen)))
               "each failed walk is a try; after max-tries the cell is given up, all in one run")
           (is (= [] (tidy-entries eng))))))))
+
+(deftest unreachable-reads-the-one-reach-setting-for-trigger-and-job
+  (let [p (tu/fake (assoc-in (assoc with-hitbox :blocks walled-cube) [:self :pos] [0 64 0]))
+        far {:cell [5 64 0]}
+        unreachable #(settings/with-settings {:jobs.lib.tidy/reach %} (fn [] (tidy/unreachable? p far)))]
+    (is (unreachable 3) "farther than the reach, sealed in")
+    (is (not (unreachable 10)) "within the reach, no walk needed")))
 
 ;; ------------------------------------------------------------------ the tidy-pending trigger
 
@@ -763,7 +771,7 @@
         flood reach/flood
         verdict (with-redefs [reach/search (fn [& xs] (swap! searches inc) (apply search xs))
                               reach/flood (fn [& xs] (swap! floods inc) (apply flood xs))]
-                  (first (restore-broken/decide {:primitives p :args {:reach 3}} (holes n))))]
+                  (first (restore-broken/decide {:primitives p} (holes n))))]
     {:verdict verdict :searches @searches :floods @floods}))
 
 (deftest one-pass-decision-does-bounded-work-however-many-entries-wait
@@ -812,7 +820,7 @@
 
 (deftest a-pass-decision-in-cramped-terrain-expands-a-bounded-number-of-cells
   (let [{:keys [p]} (setup (assoc two-fields-world :self {:pos [-10 64 0]}) [(zs/whole-zone "Miles")])
-        {:keys [result nodes]} (count-work #(restore-broken/decide {:primitives p :args {:reach 3}}
+        {:keys [result nodes]} (count-work #(restore-broken/decide {:primitives p}
                                                                    (tunnel-holes 5 16)))]
     (is (= :restore (first result)) "a seal search that runs out of budget is no seal")
     (is (<= nodes 12000) (str nodes " cells expanded"))))
@@ -841,7 +849,7 @@
 
 (deftest decide-looks-past-the-first-window-for-a-cell-that-seals-no-other
   (let [{:keys [p]} (setup (assoc with-hitbox :floor [-30 -30 30 30] :self {:pos [0 64 0]}) [(zs/whole-zone "Miles")])
-        c {:primitives p :args {:reach 3}}
+        c {:primitives p}
         waiting (holes 6)
         sixth (last waiting)]
     (with-redefs [restore-broken/seals-others? (fn [_ e _ _] (not= sixth e))]

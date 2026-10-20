@@ -22,7 +22,7 @@
             [jobs.lib.util :as u]
             [engine.memory :as mem]))
 
-(def defaults {:reach 3 :move-far 8})
+(def defaults {:move-far 8})
 
 (a/defargs settings
   {::range {:default 48 :doc "Blocks from the body within which a :tidy entry is held for; farther ones wait until the body comes near." :spec (a/int-in 1 nil)}
@@ -66,7 +66,7 @@
   [p view args live enclosed here]
   (let [reported (set (:cells (:data (mem/latest view :tidy-reported))))]
     (filterv #(or (not (contains? reported (:cell %)))
-                  (and (tidy/restorable? p % enclosed) (not (tidy/unreachable? p % (:reach args)))))
+                  (and (tidy/restorable? p % enclosed) (not (tidy/unreachable? p %))))
              (loaded-entries p view live here))))
 
 (defn tidy-pending

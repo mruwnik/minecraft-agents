@@ -19,13 +19,15 @@
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::max-tries {:default 3 :doc "Tries to tidy one cell before it is left." :spec (a/int-in 1 nil)}})
+  {::max-tries {:default 3 :doc "Tries to tidy one cell before it is left." :spec (a/int-in 1 nil)}
+   ::reach {:default 3 :doc "Blocks from a cell within which the body can put it back; a cell it cannot walk to within this is unreachable." :spec (a/num-in 0 nil)}})
 
 (def tidy-policy
   "Body memory policy of the :tidy entries: they outlive a restart for six hours."
   {:cap 100 :ttl (* 6 60 60 1000)})
 
 (defn max-tries [] (settings/get settings ::max-tries))
+(defn reach-blocks [] (settings/get settings ::reach))
 
 (def reported-policy
   "Body memory policy of :tidy-reported, the cells still waiting when restore-broken last ended."
@@ -76,12 +78,12 @@
      (and (= :dig action) (in-body? p cell) (not (crops/seed-of (:was e)))) :occupied))) ; a sown crop has no hitbox
 
 (defn unreachable?
-  "Whether the body cannot get within reach blocks of entry's cell: it is farther off and has no walkable way to the
+  "Whether the body cannot get within ::reach blocks of entry's cell: it is farther off and has no walkable way to the
   cell (a sealed body). An unknown answer counts as reachable."
-  [p {:keys [cell]} reach]
+  [p {:keys [cell]}]
   (let [here (u/self-pos {:primitives p})
         at (zipmap [:x :y :z] cell)]
-    (and (> (u/dist here {:x (+ 0.5 (:x at)) :y (:y at) :z (+ 0.5 (:z at))}) (inc reach))
+    (and (> (u/dist here {:x (+ 0.5 (:x at)) :y (:y at) :z (+ 0.5 (:z at))}) (inc (reach-blocks)))
          (not (reach/walkable-way? p here at)))))
 
 (defn refusal

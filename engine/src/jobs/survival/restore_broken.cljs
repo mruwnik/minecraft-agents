@@ -34,9 +34,6 @@
   Memory: reads :tidy. Writes :tidy-reported, the cells still waiting, which the :tidy-pending trigger reads
   to warn once per set of cells.")
 
-(a/defargs args
-  {:reach {:doc "walk to within this many blocks of a cell" :spec (a/num-in 0 nil) :default 3}})
-
 (declare skip!)
 
 (a/defargs settings
@@ -190,8 +187,8 @@
 
 (defn ^:async walk-to!
   "Walk to within reach of cell: true when it arrived, :continue when the walk yielded, false when it gave up."
-  [c cell reach]
-  (case (await (near/go-near! c (zipmap [:x :y :z] cell) reach {:ways #{:walk :clear-seal} :one-way :open}))
+  [c cell]
+  (case (await (near/go-near! c (zipmap [:x :y :z] cell) (tidy/reach-blocks) {:ways #{:walk :clear-seal} :one-way :open}))
     :there true
     :partial :continue
     false))
@@ -220,8 +217,8 @@
   "One try at putting entry e back: a walk that yields (:continue) is no try (the next pass walks again); else the
   try is counted before the put-back (a cut run still used one), the cell is forgotten as soon as it is put back.
   A cell that failed is tried again on the next pass until it gave up."
-  [c {:keys [cell tries] :as e} reach]
-  (let [walked (await (walk-to! c cell reach))]
+  [c {:keys [cell tries] :as e}]
+  (let [walked (await (walk-to! c cell))]
     (if (= :continue walked)
       :continue
       (do (tidy/count-try! c cell)
@@ -285,8 +282,7 @@
   the first, farthest from the body first, whose put-back seals no other (checked while the pass's search allowance
   lasts), else the first in order."
   [c waiting]
-  (let [a (:args c)
-        pr (probe c)
+  (let [pr (probe c)
         e (or (first (filter #(= :occupied (why-not c % pr)) waiting))
               (first (remove #(seals-others? c % waiting pr) (take-while (fn [_] (search-left? pr)) (farthest-first c waiting))))
               (first waiting))
@@ -295,7 +291,7 @@
       (nil? e) [:done]
       (= :occupied why) [:step-clear e]
       why [:skip e why]
-      (tidy/unreachable? (:primitives c) e (:reach a)) [:skip e :unreachable]
+      (tidy/unreachable? (:primitives c) e) [:skip e :unreachable]
       (>= (:tries e) (tidy/max-tries)) [:skip e :gave-up]
       (or (seals-body? c e pr) (seals-others? c e waiting pr)) [:skip e :seals]
       :else [:restore e])))
@@ -316,7 +312,7 @@
                   (skip! c e why))
                 :again)
       :step-clear (do (await (step-clear! c e waiting)) :again)
-      :restore (if (= :continue (await (restore-one! c e (:reach (:args c))))) :continue :again))))
+      :restore (if (= :continue (await (restore-one! c e))) :continue :again))))
 
 (defn ^:async round [c]
   (let [i (volatile! 0)
