@@ -24,11 +24,32 @@
   [{:keys [eng clock]} n step]
   (await (tu/run-ticks eng clock n step)))
 
+(defn calf-per-pair!
+  "A calf appears in p's world for every pair of animals fed (in love)."
+  [p]
+  (let [calves (atom 0)]
+    (.override (.-world p) "interact"
+               (fn [token args impl]
+                 (let [r (impl token args)
+                       calve! (fn [x]
+                                (let [loved (filter :in-love (fake/entities p))]
+                                  (when (<= (* 2 (inc @calves)) (count loved))
+                                    (fake/add-entity! p (ent (+ 100 (swap! calves inc)) (:name (first loved)) 4 {:baby true}))))
+                                x)]
+                   (if (and r (fn? (.-then r))) (.then r calve!) (calve! r)))))))
+
+(defn setup
+  "h/setup with a calf for every pair fed."
+  [& args]
+  (let [s (apply h/setup args)]
+    (calf-per-pair! (:p s))
+    s))
+
 (defn ^:async scenario
-  "Submit (jobs.animals.breed args) in a world with no calf wait, so a fed pair ends at once; run n ticks 700 ms apart; the setup map."
+  "Submit (jobs.animals.breed args) in a world with no calf wait, so a fed pair ends at once, and a calf for every pair fed; run n ticks 700 ms apart; the setup map."
   [args world n]
   (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 0}
-           #(let [s (h/setup world)]
+           #(let [s (setup world)]
               (core/submit! (:eng s) (list 'jobs.animals.breed args) {})
               (.then (run-ticks s n 700) (fn [_] s))))))
 
@@ -125,7 +146,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:mob "cow" :count 4} {:inventory (wheat 4) :entities (mapv #(cow % 2) [1 2 3 4])} 8))]
+        (let [s (await (scenario {:mob "cow" :pairs 2} {:inventory (wheat 4) :entities (mapv #(cow % 2) [1 2 3 4])} 8))]
           (is (= :fed (:reason (done-event s))))
           (is (= 4 (count (:fed (done-event s)))))
           (is (= 0 (count-of s "wheat"))))))))
@@ -135,7 +156,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:mob "cow" :count 4} {:inventory (wheat 4) :entities (mapv #(cow % 2) [1 2 3 4])} 1))]
+        (let [s (await (scenario {:mob "cow" :pairs 2} {:inventory (wheat 4) :entities (mapv #(cow % 2) [1 2 3 4])} 1))]
           (is (finished? s))
           (is (= :fed (:reason (done-event s))))
           (is (= 4 (count (interacts s)))))))))
@@ -231,7 +252,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p] :as s} (h/setup {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]})
+        (let [{:keys [eng p] :as s} (setup {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]})
               release (.hold (.-world p) "interact")]
           (core/submit! eng '(jobs.animals.breed {:mob "cow"}) {})
           (let [round (core/tick! eng)]
@@ -304,9 +325,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p] :as s} (h/setup {:self {:held "iron_axe"} :inventory (into (wheat 4) axe) :entities [(cow 1 2) (cow 2 3) (cow 3 4) (cow 4 5)]})
+        (let [{:keys [eng p] :as s} (setup {:self {:held "iron_axe"} :inventory (into (wheat 4) axe) :entities [(cow 1 2) (cow 2 3) (cow 3 4) (cow 4 5)]})
               release (.hold (.-world p) "interact")
-              id (core/submit! eng '(jobs.animals.breed {:mob "cow" :count 4}) {})
+              id (core/submit! eng '(jobs.animals.breed {:mob "cow" :pairs 2}) {})
               round (core/tick! eng)]
           (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
           (core/cancel! eng id)
@@ -332,7 +353,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p] :as s} (h/setup {:self {:held "iron_axe"} :inventory (into (wheat 2) axe) :entities [(cow 1 2) (cow 2 3)]})
+        (let [{:keys [eng p] :as s} (setup {:self {:held "iron_axe"} :inventory (into (wheat 2) axe) :entities [(cow 1 2) (cow 2 3)]})
               release (.hold (.-world p) "interact")]
           (core/submit! eng '(jobs.animals.breed {:mob "cow"}) {})
           (let [round (core/tick! eng)]
@@ -357,11 +378,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p] :as s} (h/setup {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]})]
+        (let [{:keys [eng p] :as s} (h/setup {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]})
+              fed (atom 0)]
           (.override (.-world p) "interact"
                      (fn [token args impl]
                        (let [r (impl token args)]
                          (swap! (fake/state p) update :entities (partial mapv #(update % :id + 100)))
+                         (when (= 2 (swap! fed inc)) (fake/add-entity! p (cow 300 4 {:baby true})))
                          r)))
           (core/submit! eng '(jobs.animals.breed {:mob "cow"}) {})
           (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 0} #(run-ticks s 4 700)))
@@ -373,7 +396,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p] :as s} (h/setup {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]})]
+        (let [{:keys [eng p] :as s} (setup {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]})]
           (.override (.-world p) "interact"
                      (fn [_token _args _impl]
                        (js/Promise.resolve #js {:status "used" :consumed 1 :love false :worn 0 :leash nil :changed #js {}})))
@@ -459,7 +482,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (h/setup {:inventory (wheat 2) :blocks (pen-blocks true) :states {"6,64,0" {:open false :facing "east"}}
+        (let [s (setup {:inventory (wheat 2) :blocks (pen-blocks true) :states {"6,64,0" {:open false :facing "east"}}
                           :entities [(cow 1 19 {:pos {:x 19 :y 64 :z 1}}) (cow 2 19 {:pos {:x 19 :y 64 :z -1}})]})
               inside-at-cancel (atom nil)]
           (.override (.-world (:p s)) "interact"
@@ -488,7 +511,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p] :as s} (h/setup {:inventory (wheat 4) :entities [(cow 1 2) (cow 2 3)]})]
+        (let [{:keys [eng p] :as s} (setup {:inventory (wheat 4) :entities [(cow 1 2) (cow 2 3)]})]
           (.override (.-world p) "interact"
                      (fn [_token _args _impl]
                        (js/Promise.resolve #js {:status "used" :consumed 0 :love false :worn 0 :leash nil :changed #js {}})))
@@ -505,9 +528,11 @@
               calls (atom 0)]
           (.override (.-world p) "interact"
                      (fn [token args impl]
-                       (if (= 1 (swap! calls inc))
-                         (js/Promise.resolve #js {:status "no-effect" :consumed 0 :love false :worn 0 :leash nil :changed #js {}})
-                         (impl token args))))
+                       (let [n (swap! calls inc)]
+                         (when (= 3 n) (fake/add-entity! p (cow 300 4 {:baby true})))
+                         (if (= 1 n)
+                           (js/Promise.resolve #js {:status "no-effect" :consumed 0 :love false :worn 0 :leash nil :changed #js {}})
+                           (impl token args)))))
           (core/submit! eng '(jobs.animals.breed {:mob "cow"}) {})
           (await (run-ticks s 8 700))
           (is (= :fed (:reason (done-event s))))
@@ -522,7 +547,7 @@
                  ["Miles" {} [2] [:refused]]
                  ["Miles" {:ignore-zones? true} [1 2] []]
                  [nil {} [] [:no-zones]]]]
-          (let [{:keys [eng] :as s} (h/setup {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]} 0 (h/zone-store 2 owner))]
+          (let [{:keys [eng] :as s} (setup {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]} 0 (h/zone-store 2 owner))]
             (core/submit! eng (list 'jobs.animals.breed (merge {:mob "cow"} extra)) {})
             (await (tu/run-ticks eng (:clock s) 20 700))
             (is (= acted (vec (sort (map #(.-id (.-args %)) (interacts s))))) (pr-str owner extra))
@@ -533,7 +558,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[owner reason] [["Miles" :refused] [nil :no-zones]]]
-          (let [{:keys [eng] :as s} (h/setup {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 2)]} 0 (h/zone-store 2 owner))]
+          (let [{:keys [eng] :as s} (setup {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 2)]} 0 (h/zone-store 2 owner))]
             (core/submit! eng (list 'jobs.animals.breed {:mob "cow"}) {})
             (await (tu/run-ticks eng (:clock s) 20 700))
             (is (= reason (:reason (done-event s))) (pr-str owner))))))))
@@ -548,6 +573,7 @@
   "As scenario, the body seeing through perception (a chest must be seen to be fetched from)."
   [args world n]
   (let [s (h/setup-seeing world nil)]
+    (calf-per-pair! (:p s))
     (perception/pass! (aget (:p s) "perception"))
     (core/submit! (:eng s) (list 'jobs.animals.breed args) {})
     (await (run-ticks s n 700))
@@ -578,7 +604,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:mob "cow" :count 4} {:inventory (wheat 2) :entities (mapv #(cow % 2) [1 2 3 4])} 8))]
+        (let [s (await (scenario {:mob "cow" :pairs 2} {:inventory (wheat 2) :entities (mapv #(cow % 2) [1 2 3 4])} 8))]
           (is (finished? s))
           (is (= 2 (count (:fed (done-event s)))))
           (is (= 0 (count-of s "wheat"))))))))
@@ -613,7 +639,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (h/setup {:inventory (wheat 4) :entities [(cow 1 2) (cow 2 3)]})]
+        (let [s (setup {:inventory (wheat 4) :entities [(cow 1 2) (cow 2 3)]})]
           (ls/entities-after-look (:p s))
           (core/submit! (:eng s) (list 'jobs.animals.breed {:mob "cow"}) {})
           (await (run-ticks s 10 700))

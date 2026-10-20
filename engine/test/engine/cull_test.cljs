@@ -12,7 +12,7 @@
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]))
 
-(defn spec [args] (list 'jobs.animals.cull args))
+(defn spec [args] (list 'jobs.animals.cull (merge {:mob "cow"} args)))
 
 (def cow-drops [{:name "beef" :count 1} {:name "leather" :count 1}])
 
@@ -214,7 +214,7 @@
                  ["Miles" {:ignore-zones? true} [1 2] []]
                  [nil {} [] []]]]
           (let [{:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2) (cow 2 3)]} 50 (h/zone-store 2 owner))]
-            (core/submit! eng (list 'jobs.animals.cull (merge {:keep 0} extra)) {})
+            (core/submit! eng (list 'jobs.animals.cull (merge {:mob "cow" :keep 0} extra)) {})
             (await (tu/run-ticks eng (:clock s) 20 700))
             (is (= acted (vec (sort (distinct (attacked s))))) (pr-str owner extra))
             (is (= declined (mapv :reason (events-of s :cull.declined))) (pr-str owner extra))))))))
@@ -225,7 +225,7 @@
       (fn ^:async t []
         (doseq [[owner reason] [["Miles" :refused] [nil :no-zones]]]
           (let [{:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2)]} 50 (h/zone-store 2 owner))]
-            (core/submit! eng (list 'jobs.animals.cull {:keep 0}) {})
+            (core/submit! eng (list 'jobs.animals.cull {:mob "cow" :keep 0}) {})
             (await (tu/run-ticks eng (:clock s) 20 700))
             (is (= 0 (rounds s)) (pr-str owner reason))
             (is (empty? (attacked s)) (pr-str owner reason))))))))
@@ -235,7 +235,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2) (cow 2 3)]} 50 (h/zone-store 2 "Miles"))]
-          (core/submit! eng (list 'jobs.animals.cull {:keep 0 :count 2 :least 2}) {})
+          (core/submit! eng (list 'jobs.animals.cull {:mob "cow" :keep 0 :count 2 :least 2}) {})
           (await (tu/run-ticks eng (:clock s) 30 700))
           (is (= [2] (vec (distinct (attacked s)))) "the allowed cow is killed")
           (is (not (finished? s)) "the refused one is waited for")
@@ -255,7 +255,7 @@
         (doseq [[author acted] [["Fake" [1]] ["Miles" []]]]
           (let [plan (shape/with-author {:id "pen" :parts [{:id "p" :box [[2 64 0] [2 64 0]] :want "stone"}]} author)
                 {:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2)]} 50 (ew/of-data {"pen" plan} {} []))]
-            (core/submit! eng (list 'jobs.animals.cull {:keep 0}) {})
+            (core/submit! eng (list 'jobs.animals.cull {:mob "cow" :keep 0}) {})
             (await (tu/run-ticks eng (:clock s) 20 700))
             (is (= acted (vec (distinct (attacked s)))) author)))))))
 
@@ -316,3 +316,6 @@
           (await (tu/run-ticks (:eng s) (:clock s) 60 700))
           (is (= 2 (:killed (done-event s))) "the four cows were seen before the goal was judged")
           (is (= 2 (count (world-ids s)))))))))
+
+(deftest a-cull-with-no-mob-is-bad-args
+  (is (= :never (first (cull/bad-args {:args {:keep 0}})))))

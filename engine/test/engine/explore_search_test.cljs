@@ -65,7 +65,7 @@
   [args spec & [n before]]
   (let [s (setup spec (some-> (:max-distance args) (+ 8)))]
     (when before (before s))
-    (core/submit! (:eng s) (list 'jobs.explore.search args) {})
+    (core/submit! (:eng s) (list 'jobs.explore.search (child/search-args args)) {})
     (await (run-until-done s (or n 400)))))
 
 (defn event-of [{:keys [seen]} kind] (first (filter #(= kind (:kind %)) @seen)))
@@ -270,9 +270,9 @@
           (is (= :job-time (:reason (event-of timed :stopped))) "the engine's time limit ends it"))))))
 
 (deftest the-spiral-legs-nearest-the-body-come-first
-  (let [c {:args {:pattern :spiral :max-distance 64} :primitives #js {:self (fn [] #js {:pos #js {:x 42.5 :y 0 :z 0.5}})}}
+  (let [c {:args {:pattern :spiral} :primitives #js {:self (fn [] #js {:pos #js {:x 42.5 :y 0 :z 0.5}})}}
         m {:origin [0 0 0]}
-        order (search/candidates c m)]
+        order (settings/with-settings {:jobs.explore.search/max-distance 64} #(search/candidates c m))]
     (is (= [48 0] (first order)) "straight on from the body, not the origin's ring 1 first")
     (is (= (count (search/spiral-points [0 0] 16 64)) (count order)))))
 
@@ -350,7 +350,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {:unloaded ring-1-cells} 28)]
-          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :max-distance 20}) {})
+          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :settings {:jobs.explore.search/max-distance 20}}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 8 700))
           (is (not (finished? s)) "still waiting for the chunks")
           (is (= [] (walks s)))
@@ -579,8 +579,8 @@
         counting (js/Proxy. p #js {:get (fn [t k] (if (= "blockAt" k)
                                                    (fn [pos] (swap! reads inc) (.blockAt t pos))
                                                    (let [v (aget t k)] (if (fn? v) (.bind v t) v))))})
-        c {:args {:pattern :spiral :max-distance 128} :primitives counting}
-        r (settings/with-settings {:jobs.explore.search/spacing 4}
+        c {:args {:pattern :spiral} :primitives counting}
+        r (settings/with-settings {:jobs.explore.search/spacing 4 :jobs.explore.search/max-distance 128}
             #(search/choose-leg c {:origin [0 64 0]} ["diamond_block"] []))]
     (is (nil? (:leg r)))
     (is (:more r))
@@ -591,7 +591,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {} 0)]
-          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :max-distance 40 :settings {:jobs.explore.search/spacing 4}}) {})
+          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :settings {:jobs.explore.search/max-distance 40 :jobs.explore.search/spacing 4}}) {})
           (await (run-until-done s 400))
           (let [e (not-found-of s)]
             (is (<= (get-in e [:coverage :scans]) 2) "a step that only goes on choosing points does not look again")

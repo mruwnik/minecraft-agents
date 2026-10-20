@@ -14,7 +14,7 @@
 (def doc
   "Put a carried item where it belongs: armour in its armour slot, a shield in the off-hand, anything else in the main hand
   (:hand \"main\"/\"off\" overrides that for a non-armour item). Without :item, the best carried armour piece goes into
-  each slot that is empty or worn with a weaker one (leather < golden < turtle helmet < chainmail < iron < diamond < netherite);
+  each slot that is empty or worn with a weaker one, and a carried shield into an empty off-hand (leather < golden < turtle helmet < chainmail < iron < diamond < netherite);
   a worn piece the new one replaces comes back to the pockets.
   Needs the item carried; a missing one is fetched (jobs.lib.need) from the ways the call allows. done? holds when it is in its slot (without :item: when nothing carried beats what is worn).
   Ends :done {:item :slot :worn [{:item :slot}] :text}. Impossible: :unknown-item (no such item for the body's version). Conditions (a listed root job waits): :no-item (not carried, the call's :ways #{:carried}). A failed fetch ends as {:reason :need} with its ending as
@@ -59,7 +59,8 @@
     (if item
       (let [slot (slot-of item hand)]
         (if (= item (in-slot p slot)) [] [{:item item :slot slot}]))
-      (armour/plan (armour/worn-of (.-equipment (.self p))) (map :name (u/inventory p))))))
+      (cond-> (armour/plan (armour/worn-of (.-equipment (.self p))) (map :name (u/inventory p)))
+        (and (carried? p "shield") (nil? (in-slot p "off-hand"))) (conj {:item "shield" :slot "off-hand"})))))
 
 (def target [:item :hand])
 

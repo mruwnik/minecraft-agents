@@ -163,7 +163,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [trail (await (job-trail '(jobs.items.craft {:item "bread" :radius 60})
+        (let [trail (await (job-trail '(jobs.items.craft {:item "bread"})
                                       {:inventory [{:name "wheat" :count 3}] :blocks {"40,64,0" "crafting_table"}}))]
           (is (seq trail))
           (is (not (on-strip? trail -5 5))))))))

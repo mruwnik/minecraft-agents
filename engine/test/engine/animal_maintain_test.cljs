@@ -261,7 +261,7 @@
     :too-few-adults {:adults 1 :babies 0}
     :no-food {:adults 2 :babies 0 :food nil}
     nil {:adults 2 :babies 0 :food "wheat" :reach 5})
-  (is (= {:call {:slot :breed :job 'jobs.animals.breed :args {:mob "cow" :count 2 :radius 5 :box box :ways #{:carried :chest}}}}
+  (is (= {:call {:slot :breed :job 'jobs.animals.breed :args {:mob "cow" :pairs 1 :radius 5 :box box :ways #{:carried :chest}}}}
          (maintain/decide :breed {:mob "cow" :target 4 :box box :ways #{:carried :chest}} {:adults 2 :babies 0 :food nil :reach 5}))
       "no food but ways allow a fetch: breed is called with the pen and fetches")
   (is (= {:call {:slot :shear :job 'jobs.animals.shear :args {:radius 5 :ways #{:carried :chest}}}}

@@ -23,13 +23,13 @@
 
   Each step looks around (blocks and entities with those names within :scan-radius; not again within 3 blocks of the
   last look round, nor when what it has seen already makes up :count), notes what it saw (:seen) and
-  the spot (:searched) (engine.notes). Blocks the body saw earlier anywhere within :max-distance of the origin count as
+  the spot (:searched) (engine.notes). Blocks the body saw earlier anywhere within the max-distance setting of the origin count as
   found too, nearest first. It ends when :count are found. Otherwise it walks the next leg with
   jobs.movement.go-to as a child (range 2). One call is the whole search; it yields (:continue) only while go-to waits
   on the world or for leg columns to load (:chunks-loading).
 
   Legs are ::spacing apart: :spiral points on rings round the origin, the one nearest the body first (so a body in a corridor walks on), or :outward ahead along :heading (a :heading alone means :outward), then the sides, and on further ahead once those are tried or searched. A
-  leg is never tried twice and never goes beyond :max-distance (XZ) of the origin. It is skipped (:skipped)
+  leg is never tried twice and never goes beyond the max-distance setting (XZ) of the origin. It is skipped (:skipped)
   when a live :searched note of any body, this one included, listing every target name lies within half its
   radius.
 
@@ -44,7 +44,7 @@
   A leg whose goal lies by a mob the body would flee is not walked (go-to :goal-danger
   :end): it is recorded :goal-dangerous, no stuck walk; a step toward an unseen column given up so leaves that column.
 
-  With :use-notes, live :seen notes of a target within :max-distance count as found (:noted true, :by), unless the body
+  With :use-notes, live :seen notes of a target within the max-distance setting count as found (:noted true, :by), unless the body
   sees another block at that cell now, and a noted entity standing in a zone or plan of the body's own (its pens) never counts. The
   ending text lists the positions.
 
@@ -71,17 +71,17 @@
   {:target {:doc "a block or entity name, or several (a vector or set)" :spec (a/or-of a/name? (a/coll-of a/name?)) :default nil}
    :count {:doc "how many targets end the search" :spec (a/int-in 1 nil) :default 1}
    :center {:doc "the centre of the area the job works, a cell [x y z] or {:x :y :z}; nil: where the body stands when the job first runs (jobs.lib.area)" :spec a/position? :default nil}
-   :max-distance {:doc "how far (XZ) from the origin a leg may go, 1 to 128" :spec (a/int-in 1 128) :default 96}
    :pattern {:doc ":spiral (rings round the origin, the default) or :outward (ahead along :heading); :outward when a :heading is given" :spec #{:spiral :outward} :default nil}
    :heading {:doc "a compass heading (:north, :north-east, :east ...), for :outward (default :north)" :spec (set (keys headings)) :default nil}
    :scan-radius {:doc "how far round the body each look reaches" :spec (a/num-in 0 nil) :default 24}
    :takeable {:doc "leave out blocks a zone, claim or plan footprint bars this body from taking" :spec boolean? :default false}
    :avoid {:doc "columns [x z] whose blocks do not count as found" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :patch {:doc "look for a patch of ground instead of named things: {:w :h :range :depth :limit :max-step :plan :farmland?} as jobs.lib.patch scans (jobs.farm.find-spot builds it); the search ends at the first look round with one, and :found is then [{:what \"patch\" :pos :spots}]" :spec map? :default nil}
-   :use-notes {:doc "targets noted (by any body) within :max-distance count as found" :spec boolean? :default true}})
+   :use-notes {:doc "targets noted (by any body) within the max-distance setting count as found" :spec boolean? :default true}})
 
 (a/defargs settings
-  {::max-legs {:default 32 :doc "Legs walked before the search gives up." :spec (a/int-in 0 nil)}
+  {::max-distance {:default 96 :doc "How far (XZ) from the origin a leg may go and a noted or remembered target still counts." :spec (a/int-in 1 nil)}
+   ::max-legs {:default 32 :doc "Legs walked before the search gives up." :spec (a/int-in 0 nil)}
    ::seen-ttl-s {:default 259200 :doc "Seconds a note of a block seen lasts." :spec (a/num-in 0 nil)}
    ::entity-ttl-s {:default 600 :doc "Seconds a note of an entity seen lasts." :spec (a/num-in 0 nil)}
    ::searched-ttl-s {:default 86400 :doc "Seconds a note of searched ground lasts." :spec (a/num-in 0 nil)}
@@ -96,6 +96,7 @@
    ::held-near {:default 4 :doc "Blocks from where a leg failed within which its way still holds others back." :spec (a/num-in 0 nil)}
    ::near-sight {:default 6 :doc "Within this many blocks a look misses no animal: a noted animal not seen there is taken as gone." :spec (a/num-in 0 nil)}
    ::stand-cap {:default 48 :doc "Stand cells one choice reads; past it :more says candidates are left for the next step." :spec (a/int-in 0 nil)}})
+(defn max-distance [] (settings/get settings ::max-distance))
 (defn time-s [] (settings/get settings ::job-time-s))
 (defn max-failed-in-row [] (settings/get settings ::max-failed-in-row))
 (defn wait-ms [] (settings/get settings ::wait-ms))
@@ -324,7 +325,8 @@
                                    (update :found #(add-found (or % []) sighted want)))))))
 
 (defn candidates [c m]
-  (let [{:keys [pattern heading max-distance]} (:args c)
+  (let [{:keys [pattern heading]} (:args c)
+        max-distance (max-distance)
         spacing (leg-spacing)
         [ox _ oz] (:origin m)
         [x _ z] (here c)]
@@ -369,7 +371,7 @@
   points passed over for now (held?, m's :blocked)}; an unloaded column is not tried, so a later round looks again (m's
   :deferred ones are kept out of this sweep)."
   [c m names ns]
-  (let [{:keys [max-distance]} (:args c)
+  (let [max-distance (max-distance)
         [ox y oz] (here c)
         origin [((:origin m) 0) ((:origin m) 2)]
         tried (into (set (:tried m)) (map (fn [{[x _ z] :pos}] [x z])) (:deferred m))
@@ -471,7 +473,8 @@
 (defn ^:async step!
   "Look round; end when enough is found or the legs are used up, else start the next leg."
   [c]
-  (let [{:keys [use-notes max-distance] want :count} (:args c)
+  (let [{:keys [use-notes] want :count} (:args c)
+        max-distance (max-distance)
         names (targets c)
         resumed (:choosing (ctx/mem c))
         _ (when-not (or resumed (breath/in-water? (:primitives c))) (await (scan! c names)))

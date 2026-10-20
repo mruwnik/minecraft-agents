@@ -10,6 +10,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.combat.attack :as attack]
+            [jobs.lib.child :as child]
             [jobs.explore.search :as search]
             [jobs.lib.world-files :as world]))
 
@@ -118,7 +119,7 @@
         eng (core/create {:primitives (:p s) :jobs registry/jobs :dir (tu/tmp-dir) :now #(deref clock)
                           :world (world/of-data {} {} [])
                           :events (events/make {:sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng (list 'jobs.explore.search args) {})
+    (core/submit! eng (list 'jobs.explore.search (child/search-args args)) {})
     (loop [i 0]
       (when (and (< i (or n 400)) (not-any? #(#{:completed :stopped} (:kind %)) @seen))
         (swap! clock + 700)

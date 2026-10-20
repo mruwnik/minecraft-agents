@@ -13,7 +13,7 @@
             [jobs.lib.util :as u]))
 
 (def doc
-  "Shear the adult sheep within :radius and pick up the wool. A one-shot order that starts and ends itself; a cut job resumes.
+  "Shear the adult sheep and mooshrooms (a sheared mooshroom turns into a cow) within :radius and pick up the wool or mushrooms. A one-shot order that starts and ends itself; a cut job resumes.
 
   One call is the whole run. It takes the nearest adult sheep not yet shorn or given up on (babies and sheared sheep are
   skipped). The body walks to within 3 blocks (doors :shut) and uses the
@@ -54,7 +54,7 @@
 (defn max-in-row [] (settings/get settings ::max-in-row))
 
 (def wool-names
-  (mapv #(str % "_wool") game/dye-colors))
+  (conj (mapv #(str % "_wool") game/dye-colors) "red_mushroom" "brown_mushroom"))
 
 (defn shears-carried? [c]
   (some #(= "shears" (:name %)) (u/inventory (:primitives c))))
@@ -118,17 +118,21 @@
     (do (ctx/update-mem! c assoc :phase :collect :reason reason)
         :again)))
 
-(defn sheep-in-radius [c]
-  (let [color (:color (:args c))]
-    (cond->> (animals/herd (:primitives c) "sheep" (:radius (:args c)))
-      color (filterv #(= color (.-color %))))))
+(defn shearable-in-radius
+  "The sheep and mooshrooms in radius; with a :color only the sheep of that colour."
+  [c]
+  (let [{:keys [color radius]} (:args c)
+        p (:primitives c)]
+    (if color
+      (filterv #(= color (.-color %)) (animals/herd p "sheep" radius))
+      (vec (look/seen-objs p {:radius radius :names ["sheep" "mooshroom"] :max 64})))))
 
 (defn candidates
   "The adult unsheared sheep within radius not shorn or given up on, nearest first."
   [c]
   (let [{:keys [shorn given-up]} (ctx/mem c)
         skip (into (set shorn) (keys given-up))]
-    (->> (sheep-in-radius c)
+    (->> (shearable-in-radius c)
          (filterv #(and (not (true? (.-baby %)))
                         (not (true? (.-sheared %)))
                         (not (contains? skip (animals/key-of %)))))
@@ -139,7 +143,7 @@
   to shear: the run ends itself with its reason (a run that began shearing stays on until its wool is collected)."
   [c]
   (let [{:keys [shorn given-up phase]} (ctx/mem c)
-        adults (filterv #(not (true? (.-baby %))) (sheep-in-radius c))]
+        adults (filterv #(not (true? (.-baby %))) (shearable-in-radius c))]
     (if (and (empty? shorn) (empty? given-up) (nil? phase) (seq adults) (every? #(true? (.-sheared %)) adults))
       (contract/ok :all-sheared "every sheep in reach is sheared"
                    :result {:reason :all-sheared :shorn [] :given-up {} :collected 0})
@@ -152,7 +156,7 @@
   (cond
     (some #{:unreachable} (vals (:given-up (ctx/mem c)))) :unreachable
     (animals/refusal c) (animals/refusal c)
-    (some #(not (true? (.-baby %))) (sheep-in-radius c)) :all-sheared
+    (some #(not (true? (.-baby %))) (shearable-in-radius c)) :all-sheared
     :else :none))
 
 (defn out-of-sheep!

@@ -473,8 +473,8 @@
         (let [{:keys [eng p seen]} (setup {:inventory (same "coal" 36 5) :entities [diamond-on-ground]})]
           (await (run-reflex eng {} {}))
           (is (= [["coal" 5]] (mapv (juxt #(arg-of "item" %) #(arg-of "count" %)) (calls p "toss"))) "one coal stack")
-          (is (= [70] (mapv #(arg-of "id" %) (calls p "collect"))))
-          (is (some #(= :collect (:slot %)) (of-kind seen :child_started)) "an items.collect-drops child took it")
+          (is (some #{70} (mapv #(arg-of "id" %) (calls p "collect"))) "the diamond was collected")
+          (is (some #(= :collect (:slot %)) (of-kind seen :child_started)) "an items.pick-up-loose child took it")
           (is (= 1 (get (inv p) "diamond")))
           (is (= 36 (stack-count p)) "35 coal stacks and the diamond")
           (is (not (declined? seen)))

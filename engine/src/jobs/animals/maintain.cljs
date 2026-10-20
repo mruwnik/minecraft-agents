@@ -162,7 +162,7 @@
     (>= (+ adults babies) target) {:skip :at-target}
     (< adults 2) {:skip :too-few-adults}
     (and (nil? food) (not (need/fetching? ways))) {:skip :no-food}
-    :else {:call {:slot :breed :job (jobs :breed) :args (cond-> {:mob mob :count 2 :radius reach :box box} (some? ways) (assoc :ways ways))}}))
+    :else {:call {:slot :breed :job (jobs :breed) :args (cond-> {:mob mob :pairs 1 :radius reach :box box} (some? ways) (assoc :ways ways))}}))
 
 (defn decide-cull
   [{:keys [mob box target]} {:keys [adults babies]}]

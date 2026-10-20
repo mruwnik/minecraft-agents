@@ -1,5 +1,7 @@
 (ns jobs.animals.cull
   (:require [jobs.lib.ready :as ready]
+            [jobs.lib.checks :as checks]
+            [jobs.lib.cond :as cond]
             [jobs.lib.work-place :as work-place]
             [engine.args :as a]
             [jobs.lib.pen-read :as pen-read]
@@ -46,7 +48,7 @@
   cull.declined once, :reason :refused, or :no-zones when no zone list was read). :ignore-zones? true skips the check.")
 
 (a/defargs args
-  {:mob {:doc "mob type name of the animals to thin" :spec a/name? :default "cow"}
+  {:mob {:doc "mob type name of the animals to thin (required: a call without it is :bad-args)" :spec a/name? :default nil}
    :keep {:doc "adults of the kind to leave alive in the bound (babies do not count)" :spec (a/int-in 0 nil) :default 2}
    :center {:doc "nil, or {:x :z}: the bound is :radius blocks (horizontal) around it" :spec (a/map-with {:x number? :z number?}) :default nil}
    :radius {:doc "animals within this many blocks of :center, or of the body when there is no :center, are the herd" :spec (a/num-in 0 nil) :default 16}
@@ -97,7 +99,9 @@
       (contract/later why (str "cull waits: every " (:mob (:args c)) " in the bound is refused by the zone rules (" (name why) ")"))
       (contract/ok :start "an adult the zone rules allow"))))
 
-(def can-start? refused)
+(def bad-args (checks/args-fit "needs a :mob" #(some? (:mob (:args %)))))
+
+(def can-start? (cond/and bad-args refused))
 
 (def can-run? refused)
 

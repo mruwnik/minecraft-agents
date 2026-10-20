@@ -15,19 +15,19 @@
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:8}]}"]]
    :act [[:summon "cow" [20.5 0 12.5]] [:summon "cow" [21.5 0 12.5]]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"]
-         [:job (jobs.animals.breed {:mob "cow" :count 2})]]
+         [:job (jobs.animals.breed {:mob "cow" :pairs 1})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 70 :of-job true}
             {:event {:source :job :kind :completed :data {:reason :fed}} :within-s 110 :of-job true}]}
   {:name "breed-nothing-fetchable-ends-no-food"
    :act [[:summon "cow" [20.5 0 12.5]] [:summon "cow" [21.5 0 12.5]]
-         [:job (jobs.animals.breed {:mob "cow" :count 2})]]
+         [:job (jobs.animals.breed {:mob "cow" :pairs 1})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :stopped}} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 80 :of-job true}]}
   {:name "breed-fetch-false-waits-no-food"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:8}]}"]]
    :act [[:summon "cow" [20.5 0 12.5]] [:summon "cow" [21.5 0 12.5]]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"]
-         [:job (jobs.animals.breed {:mob "cow" :count 2 :ways #{:carried}})]]
+         [:job (jobs.animals.breed {:mob "cow" :pairs 1 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-food}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:slot :need}} :for-s 30 :until {:source :job :kind :waiting}}
             {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :waiting}}]
@@ -39,6 +39,14 @@
          [:job (jobs.animals.shear {:count 1})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 70 :of-job true}
             {:event {:source :job :kind :completed :data {:reason :shorn}} :within-s 110 :of-job true}]}
+  ;; Should-succeed: shears on a mooshroom give mushrooms, which the call picks up.
+  {:name "shear-takes-the-mushrooms-of-a-mooshroom"
+   :body {:inventory [["shears" 1]]}
+   :act [[:summon "mooshroom" [20.5 0 12.5]]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"]
+         [:job (jobs.animals.shear {:count 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :shorn}} :within-s 90 :of-job true}]
+   :after [[:item "red_mushroom" [:>= 1]]]}
   {:name "shear-nothing-fetchable-ends-no-shears"
    :act [[:summon "sheep" [20.5 0 12.5]]
          [:job (jobs.animals.shear {:count 1})]]

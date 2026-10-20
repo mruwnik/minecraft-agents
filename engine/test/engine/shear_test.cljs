@@ -2,6 +2,7 @@
   "jobs.animals.shear against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [jobs.animals.shear :as shear]
             [engine.hostile-test :as h]
             [engine.perception :as perception]
             [engine.fake :as fake]
@@ -267,3 +268,9 @@
           (await (run-ticks s 8 700))
           (is (= :shorn (:reason (done-event s))))
           (is (= [true] (world-sheared s))))))))
+
+(deftest mooshrooms-are-shearable-and-a-colour-limits-it-to-sheep
+  (let [p (tu/seeing-all (tu/fake-on-floor {:inventory shears :entities [(assoc (sheep 1 2) :color "white") (assoc (sheep 2 3) :name "mooshroom") (assoc (sheep 3 4) :name "cow")]}))
+        names (fn [args] (mapv #(.-name %) (shear/shearable-in-radius {:primitives p :args (merge {:radius 16} args)})))]
+    (is (= #{"sheep" "mooshroom"} (set (names {}))))
+    (is (= ["sheep"] (names {:color "white"})))))

@@ -69,11 +69,11 @@
    :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
    :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}]
    :after [[:item "iron_ingot" 2]]}
-  ;; card f23d925d: smelt with no :item cooks every raw food carried
-  {:name "no-item-cooks-all-the-raw-food-carried"
+  ;; card f23d925d: an :item list cooks each raw food named
+  {:name "an-item-list-cooks-each-raw-food"
    :blocks [[:set [26 0 16] "furnace[facing=west]"]]
    :body {:inventory [["chicken" 2] ["beef" 2] ["coal" 2]]}
-   :act [[:job (jobs.items.smelt {})]]
+   :act [[:job (jobs.items.smelt {:item ["chicken" "beef"]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 130 :of-job true}]
    :after [[:item "cooked_chicken" 2] [:item "cooked_beef" 2]]
    :limit-s 150}

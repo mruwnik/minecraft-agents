@@ -157,14 +157,15 @@
                       ["iron_helmet" "diamond_helmet" "iron_chestplate" "leather_boots" "iron_boots"])))
   (is (= [] (armour/plan {"head" "diamond_helmet"} ["iron_helmet" "dirt"]))))
 
-(deftest wearing-an-iron-set-fills-every-slot
+(deftest wearing-an-iron-set-fills-every-slot-and-a-carried-shield-the-empty-off-hand
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out]} (await (equip (stacks "iron_helmet" "iron_chestplate" "iron_leggings" "iron_boots" "dirt") {}))]
+        (let [{:keys [p out]} (await (equip (stacks "iron_helmet" "iron_chestplate" "iron_leggings" "iron_boots" "shield" "dirt") {}))]
           (is (= {"head" "iron_helmet" "torso" "iron_chestplate" "legs" "iron_leggings" "feet" "iron_boots"} (worn p)))
+          (is (= "shield" (off-hand p)))
           (is (= #{"dirt"} (carried p)))
-          (is (= 4 (count (:worn @out)))))))))
+          (is (= 5 (count (:worn @out)))))))))
 
 (deftest the-best-piece-is-chosen
   (async done

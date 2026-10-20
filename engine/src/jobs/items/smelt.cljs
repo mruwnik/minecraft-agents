@@ -20,8 +20,8 @@
 
 (def doc
   "Smelt :count of an item in a furnace, blast furnace or smoker without standing by it: walk there, take any output, load input and fuel,
-  yield (:continue) until the cook is due, take the output. :item may be a list, and with :item nil and two or more raw foods or ores
-  carried every one is cooked: one child smelt per item, each with the same :count (data {:smelted n :wanted n :items {item result}},
+  yield (:continue) until the cook is due, take the output. :item may be a list, and then
+  every one is cooked: one child smelt per item, each with the same :count (data {:smelted n :wanted n :items {item result}},
   :failed the items that gave up). What is owed is kept in memory before the load, so a restart loads nothing twice.
   Needs: the input, the fuel (the :fuel item, else coal, charcoal or planks, sized by what one item smelts) and a furnace. With fetching ways
   (the call's :ways minus :carried, default all; jobs.lib.need) a furnace comes first (a seen one, a carried one put down, else one fetched), then what else is
@@ -40,7 +40,7 @@
 
 (a/defargs args
   {:furnace {:doc "furnace, blast furnace or smoker position [x y z] or {:x :y :z}; when nil the nearest one the body has seen within 32 blocks that cooks :item (or anything carried) is chosen (smelt.furnace says which), or the job ends with no-furnace-seen" :spec ::a/pos :default nil}
-   :item {:doc "what to smelt, or a list of them (an input; a product such as cooked_chicken or iron_ingot means its input, charcoal the carried log there is most of; an item no furnace cooks ends not-smeltable at once); the first smeltable thing carried when nil, or every raw food and ore carried when there are several" :spec (a/or-of a/item? (a/coll-of a/item?)) :default nil}
+   :item {:doc "what to smelt, or a list of them (an input; a product such as cooked_chicken or iron_ingot means its input, charcoal the carried log there is most of; an item no furnace cooks ends not-smeltable at once); the first smeltable thing carried when nil, " :spec (a/or-of a/item? (a/coll-of a/item?)) :default nil}
    :count {:doc "how many; all carried (at most one stack) when nil" :spec (a/int-in 0 nil) :default nil}
    :fuel {:doc "fuel item to load; the best carried when nil" :spec a/item? :default nil}
    :explore {:doc "look beyond what is seen for a missing input, fuel or furnace (passed to the fetches)" :spec boolean? :default false}
@@ -326,19 +326,12 @@
       (await (sf/fetch-stages! c (fetch-fuels) (fetch-wood-fuels)))
       (await (round-with c (furnace-of c)))))
 
-(defn raw-carried
-  "The raw foods and ores carried, by name."
-  [c]
-  (->> (carried c) (map :name) distinct (filter #(or (sp/foods %) (sp/ore? %))) vec))
-
 (defn batch-items
-  "The items of a batch job, kept in memory once chosen: the :item list, or with :item nil the raw foods and ores
-  carried when there are two or more; nil for a one-item job."
+  "The items of a batch job, kept in memory once chosen: the :item list; nil for a one-item job."
   [c]
   (let [item (:item (:args c))
         items (or (:items (ctx/mem c))
-                  (cond (coll? item) (vec (distinct item))
-                        (nil? item) (let [r (raw-carried c)] (when (> (count r) 1) r))))]
+                  (when (coll? item) (vec (distinct item))))]
     (when items (ctx/update-mem! c assoc :items items))
     items))
 
@@ -447,12 +440,10 @@
       (apply contract/later :smelting text data))))
 
 (defn quote-items
-  "The items a quote is made for: the :item list, the one item, or the raw foods and ores carried."
+  "The items a quote is made for: the :item list, or the one item (nil: the first smeltable thing carried)."
   [c]
   (let [item (:item (:args c))]
-    (cond (coll? item) item
-          item [item]
-          :else (let [r (raw-carried c)] (if (seq r) r [nil])))))
+    (if (coll? item) item [item])))
 
 (defn quote-of
   "The cook time of the items a load puts in, those items, the fuel and the product; open-ended when no furnace is given

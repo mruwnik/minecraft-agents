@@ -987,13 +987,6 @@
           (is (= {:smelted 5 :wanted 5} (select-keys r [:smelted :wanted])))
           (is (= {"beef" 2 "porkchop" 3} (into {} (map (fn [[k v]] [k (:smelted v)])) (:items r)))))))))
 
-(deftest no-item-cooks-every-raw-food-carried
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [r (await (result-of two-foods {:furnace {:x 1 :y 64 :z 0}}))]
-          (is (= {:smelted 5 :wanted 5} (select-keys r [:smelted :wanted]))))))))
-
 (deftest an-item-list-where-nothing-cooks-ends-stopped
   (async done
     (tu/run-async done

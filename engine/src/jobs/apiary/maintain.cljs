@@ -143,7 +143,7 @@
     raining {:skip :raining}
     (< adults 2) {:skip :too-few-adults}
     (and (nil? flower) (not (fetching? args))) {:skip :no-food}
-    :else {:call {:slot :breed :args {:mob "bee" :count 2 :radius reach}}}))
+    :else {:call {:slot :breed :args {:mob "bee" :pairs 1 :radius reach}}}))
 
 (defn decide-deposit
   [{:keys [chest keep]} {:keys [stored]}]

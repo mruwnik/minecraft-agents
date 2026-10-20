@@ -183,11 +183,11 @@
             false)))))
 
 (defn ^:async pick-up-swap!
-  "Collect the item a swap made room for (:swap in memory) with an items.collect-drops child, then forget the swap
+  "Collect the item a swap made room for (:swap in memory) with an items.pick-up-loose child, then forget the swap
   (kept while the child waits on the world, so the next round resumes it)."
   [c]
-  (let [{:keys [id item worth]} (:swap (ctx/mem c))
-        r (await (child/run!* c :collect 'jobs.items.collect-drops {:ids [id] :radius (swap-radius)}))]
+  (let [{:keys [item worth]} (:swap (ctx/mem c))
+        r (await (child/run!* c :collect 'jobs.items.pick-up-loose {}))]
     (when-not (= :continue r)
       (let [status (if (pos? (or (:collected (:data r)) 0)) "collected" "left")]
         (ctx/update-mem! c dissoc :swap)
@@ -250,13 +250,31 @@
     (ctx/forget-where! c :make-room-tossed (constantly true))
     r))
 
+(declare slots-short)
+
+(defn room-limit
+  "{:names :keep} for the deposit child: names in order until the stacks they empty free `short` slots, and a keep on the
+  last name that leaves its other stacks carried, so the chest gets no more than the room needs."
+  [inventory names keep short]
+  (loop [names names, left short, out [], keep keep]
+    (if (or (empty? names) (<= left 0))
+      {:names out :keep keep}
+      (let [n (first names)
+            counts (mapv :count (filter #(= n (:name %)) inventory))
+            spare (- (reduce + counts) (get keep n 0))
+            movable (count (take-while #(<= % spare) (reductions + counts)))]
+        (if (<= movable left)
+          (recur (rest names) (- left movable) (conj out n) keep)
+          (recur nil 0 (conj out n) (assoc keep n (- (reduce + counts) (reduce + (take left counts))))))))))
+
 (defn ^:async put-away!
   "One call of the deposit child with names. Once it ends (all put away, or it gave up: that chest is remembered as
   unusable for the unusable-ttl-s setting) the chest is done with for this run (run's :chest-done)."
   [c run chest names keep]
   (let [before (u/free-slots (:primitives c))
+        room (room-limit (u/inventory (:primitives c)) names keep (slots-short c))
         e (await (ctx/call c :deposit 'jobs.storage.deposit
-                           (merge (select-keys (:args c) [:ignore-zones? :free]) {:chest chest :items names :keep keep :make-chests? true :ways #{:carried}})))]
+                           (merge (select-keys (:args c) [:ignore-zones?]) {:chest chest :items (:names room) :keep (:keep room) :make-chests? true :ways #{:carried}})))]
     (when (get-in e [:data :gave-up])
       (ctx/remember! c :chest-unusable {:pos chest :reason (contract/cause-key e)} (unusable-policy)))
     (when (> (u/free-slots (:primitives c)) before)

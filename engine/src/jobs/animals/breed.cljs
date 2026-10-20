@@ -14,8 +14,8 @@
             [jobs.lib.util :as u]))
 
 (def doc
-  "Feed :count animals of type :mob (such as \"cow\") within :radius so that they breed. A one-shot order that
-  ends itself; a cut job resumes.
+  "Feed :pairs pairs (two animals each) of type :mob (such as \"cow\") within :radius so that they breed; the goal is the
+  calf. A one-shot order that ends itself; a cut job resumes.
 
   One call is the whole run. It takes the nearest adult not yet fed, refused or given up on. The body walks to within 3 blocks
   (like go-to it opens a shut gate or door on the way and shuts it behind, so a gated pen is entered and its gate
@@ -33,8 +33,9 @@
 
   The data {:reason :fed [keys]
   :refused [keys] :given-up {key reason} :food item :adults n :babies n :hand} and the ending by the reason:
-  - :done :fed: :count animals were fed. Any stop after at least :least animals were fed (default 2: a pair) is
-    done, with the stop as the data reason; :least :all is :count.
+  - :done :fed: the pairs were fed and a calf is in view that was not there at the start. Any stop after at least :least animals were fed
+    (default 2: a pair) with a calf in view is done, with the stop as the data reason; :least :all is all the animals of the pairs.
+    A pair fed with no calf seen after the calf wait ends nothing-possible :no-baby.
   - :impossible :unknown-mob (no breeding food is known for :mob, checked at the start); bees at night or in rain
     wait :bees-indoors before every round.
   - :condition-failed :no-food (none carried and none fetched, nothing fed yet; a listed call with :ways #{:carried} waits for food; a failed fetch ends with the fetch's own ending, reason :no-food, its cause naming the food), :too-few (fewer than two adults stand near before the first feeding, or no candidate is left),
@@ -62,7 +63,7 @@
 
 (a/defargs args
   {:mob {:doc "the mob type to breed, such as \"cow\"" :spec a/name? :default nil}
-   :count {:doc "animals to feed" :spec (a/int-in 1 nil) :default 2}
+   :pairs {:doc "pairs of animals to feed (two animals each)" :spec (a/int-in 1 nil) :default 1}
    :radius {:doc "animals within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :box {:doc "a known pen {:min :max} to walk to when the animals are not in view, and to leave at the end" :spec pen-read/box-arg :default nil}
    :plan {:doc "id of a plan of the body's world; with :part, the known pen is that part's :box" :spec a/name? :default nil}
@@ -98,19 +99,38 @@
       (contract/later :no-food (str "no breeding food for " mob " carried and the ways are only #{:carried}"))
       :else (contract/ok :food "food carried or fetched"))))
 
+(defn wanted
+  "Animals to feed: two for each of :pairs."
+  [c]
+  (* 2 (:pairs (:args c) 1)))
+
+(defn new-babies
+  "How many babies of the mob are in view beyond those there at the first feeding; none before it."
+  [c]
+  (let [{:keys [mob radius]} (:args c)
+        before (:babies-before (ctx/mem c))]
+    (if before (max 0 (- (count (animals/babies (:primitives c) mob radius)) before)) 0)))
+
 (defn quote-of [c]
-  {:uses {:job-time [0 (* 15 (:count (:args c) 2)) ##Inf]}})
+  {:uses {:job-time [0 (* 15 (wanted c)) ##Inf]}})
+
+(declare result)
 
 (defn done?
-  "Later with the animals fed against :count: the goal is the run's own ending, so it never holds before it."
+  "Ok once as many new babies are in view as :pairs, else later: the goal is the calf, not the feeding."
   [c]
-  (let [fed (count (:fed (ctx/mem c)))]
-    (contract/later :feeding (str fed " animals fed") :units :animals :done fed :left (max 0 (- (:count (:args c) 2) fed)))))
+  (let [fed (count (:fed (ctx/mem c)))
+        babies (new-babies c)
+        left (max 0 (- (:pairs (:args c) 1) babies))
+        data [:units :babies :done babies :left left :result (result c :fed)]]
+    (if (pos? left)
+      (apply contract/later :feeding (str fed " animals fed, " babies " new babies") data)
+      (apply contract/ok :calves (str babies " new babies") data))))
 
 (defn least-fed
-  "Animals that must be fed for the run to be done: the call's :least (:all = :count), at most :count."
+  "Animals that must be fed for the run to be done: the call's :least (:all = every animal of the pairs), at most all of them."
   [c]
-  (let [n (:count (:args c) 2)
+  (let [n (wanted c)
         l (:least (ctx/frozen-call c) 2)]
     (if (= :all l) n (min n l))))
 
@@ -121,7 +141,8 @@
    :food-out [:nothing-possible :food-out]
    :too-few [:condition-failed :too-few]
    :refused [:condition-failed :refused]
-   :no-zones [:condition-failed :no-zones]})
+   :no-zones [:condition-failed :no-zones]
+   :no-baby [:nothing-possible :no-baby]})
 
 (defn ^:async restore-hand!
   "Put the hand back as note-hand! found it. Resolves to :restored, :emptied
@@ -132,12 +153,13 @@
     (let [r (await (ctx/act c :unequip #js {}))]
       (if (= "full" (.-status r)) :full :emptied))))
 
-(declare leave-pen!)
+(declare leave-pen! mark-bred!)
 
 (defn ^:async cleanup
   "However the run ended: the hand put back as note-hand! found it, then the body walked out of the known pen to where
   the run started; done with {:hand outcome} once the hand was noted, else with no data."
   [c _]
+  (mark-bred! c)
   (when (and (:hand-noted (ctx/mem c)) (not (:hand-outcome (ctx/mem c))))
     (let [outcome (await (restore-hand! c (:hand-before (ctx/mem c))))]
       (ctx/update-mem! c assoc :hand-outcome outcome)
@@ -148,10 +170,12 @@
     (ctx/end c :done nil (if-let [h (:hand-outcome (ctx/mem c))] {:hand h} {}))))
 
 (defn note-hand!
-  "Remember what the hand holds, once per run."
+  "Remember what the hand holds and the babies in view, once per run, before the first feeding."
   [c]
   (when-not (:hand-noted (ctx/mem c))
-    (ctx/update-mem! c assoc :hand-before (.-held (.self (:primitives c))) :hand-noted true)))
+    (let [{:keys [mob radius]} (:args c)]
+      (ctx/update-mem! c assoc :hand-before (.-held (.self (:primitives c))) :hand-noted true
+                       :babies-before (count (animals/babies (:primitives c) mob radius))))))
 
 (defn mark-bred!
   "Leave one entry of kind :bred/<mob> when the run fed at least two animals, for (since :bred/cow)."
@@ -164,17 +188,16 @@
   "Whether a pair was fed and no baby is in view yet: a calf shows 1-3 s after the hearts, so for :calf-wait-s the
   count of babies would be stale. Notes the first look in mem."
   [c]
-  (let [{:keys [mob radius]} (:args c)
-        m (ctx/mem c)
+  (let [m (ctx/mem c)
         now (ctx/now c)]
-    (when (and (>= (count (:fed m)) 2) (empty? (animals/babies (:primitives c) mob radius)))
+    (when (and (>= (count (:fed m)) 2) (zero? (new-babies c)))
       (let [from (or (:calf-from m) now)]
         (ctx/update-mem! c assoc :calf-from from)
         (< (- now from) (calf-wait-ms))))))
 
-(defn finish-now!
-  "Emit the outcome and end the call; see finish!."
-  [c reason ending]
+(defn result
+  "The run's result so far: why it ended, who was fed, refused and given up on, what is in view and a text."
+  [c reason]
   (let [m (ctx/mem c)
         {:keys [mob radius]} (:args c)
         p (:primitives c)
@@ -184,13 +207,19 @@
                 :given-up (:given-up m {})
                 :food (or (animals/food-carried p mob) (:food m))
                 :adults (count (animals/adults p mob radius))
-                :babies (count (animals/babies p mob radius))}
-        result (assoc result :text (str "breed done: " (name reason) ", fed " (count (:fed m)) ", adults " (:adults result) ", babies " (:babies result)))]
-    (mark-bred! c)
-    (let [[kind cause] (if (>= (count (:fed m)) (least-fed c))
-                         [:done nil]
-                         (get ending-of reason [:nothing-possible reason]))]
-      (contract/with-because (ctx/end c kind cause result) ending))))
+                :babies (count (animals/babies p mob radius))}]
+    (assoc result :text (str "breed done: " (name reason) ", fed " (count (:fed m)) ", adults " (:adults result) ", babies " (:babies result)))))
+
+(defn finish-now!
+  "Emit the outcome and end the call; see finish!."
+  [c reason ending]
+  (let [m (ctx/mem c)
+        fed (count (:fed m))
+        [kind cause] (cond
+                       (< fed (least-fed c)) (get ending-of reason [:nothing-possible reason])
+                       (and (>= fed 2) (zero? (new-babies c))) (ending-of :no-baby)
+                       :else [:done nil])]
+    (contract/with-because (ctx/end c kind cause (result c reason)) ending)))
 
 (defn ^:async finish!
   "Emit the outcome and end the call: the ending of reason (ending-of, else nothing-possible), with ending (a failed
@@ -286,7 +315,8 @@
   "Whether breeding food is to be fetched now: none carried, animals are there to feed, :count is not reached and the call's ways
   allow it."
   [c]
-  (let [{:keys [mob radius] n :count} (:args c)
+  (let [{:keys [mob radius]} (:args c)
+        n (wanted c)
         fed (count (:fed (ctx/mem c)))
         p (:primitives c)]
     (boolean
@@ -309,8 +339,7 @@
   [c]
   (if-not (fetchable? c)
     (await (no-food! c))
-    (let [{n :count} (:args c)
-          e (await (bait/food! c (- n (count (:fed (ctx/mem c))))))]
+    (let [e (await (bait/food! c (- (wanted c) (count (:fed (ctx/mem c))))))]
       (cond
         (= :continue e) :continue
         (= :ok e) :again
@@ -350,7 +379,8 @@
 (defn ^:async step
   "One walk or feeding, or the end."
   [c]
-  (let [{:keys [mob] n :count} (:args c)
+  (let [{:keys [mob]} (:args c)
+        n (wanted c)
         m (ctx/mem c)
         food (animals/food-carried (:primitives c) mob)
         cands (candidates c)]

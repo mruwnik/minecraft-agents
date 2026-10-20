@@ -71,10 +71,10 @@
 
 (defn ^:async ready!
   "Before a gathering job sets out: when fewer than ::want-free slots are free and the known :chest place is within
-  ::max-cost of walking, run jobs.storage.deposit as a child (:free ::want-free; it keeps tools, armour and what the
+  ::max-cost of walking, run jobs.storage.make-room as a child (:free ::want-free; it keeps tools, armour and what the
   reserve register holds). Resolves nil to go on, :continue while the child waits on the world. Done once per job (:trip in the job's
   memory), so a restart does not repeat it. No chest known or a far one: info trip.no-chest or trip.far and the trip
-  goes on. A deposit that stops (its own warn says why) does not stop the trip."
+  goes on. A make-room that stops (its own warn says why) does not stop the trip."
   [c]
   (if (:trip (ctx/mem c))
     nil
@@ -83,7 +83,7 @@
         :roomy (do (ctx/update-mem! c assoc :trip :roomy) nil)
         (:no-chest :far) (do (done! c (case (:do p) :no-chest :no-chest :far) (select-keys p [:free :cost])) nil)
         :deposit
-        (let [e (await (ctx/call c child 'jobs.storage.deposit {:free (want-free)}))]
+        (let [e (await (ctx/call c child 'jobs.storage.make-room {:free (want-free)}))]
           (if (= :continue e)
             :continue
             (do (done! c :deposited (assoc (select-keys p [:free :cost]) :result (:data e))) nil)))))))

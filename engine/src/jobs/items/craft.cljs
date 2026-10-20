@@ -25,7 +25,7 @@
 
 (def doc
   "Craft until at least :count of :item are carried. 2x2 recipes work anywhere; bigger ones use a crafting table
-  (:table, else the nearest seen within :radius), put down from the bag or fetched when none is in reach.
+  (:table, else the nearest seen within the table-radius setting), put down from the bag or fetched when none is in reach.
   Needs: an item name (impossible :bad-args); a table known when the recipe needs one, else one look round first (:look :no-table). An ingredient that runs out is fetched (jobs.lib.need) from the ways the call allows (:ways #{:carried}: stops :short).
   Returns :done {:made n :item :text}. Stopping short it ends with :made, :item and :text: condition-failed
   :need (:short, :alternatives), :no-table, :not-a-table or :full; nothing-possible :unreachable, :cannot or :craft-failed.
@@ -34,8 +34,7 @@
 (a/defargs args
   {:item {:doc "item name to craft" :spec a/item? :default nil}
    :count {:doc "how many to carry at least" :spec (a/int-in 0 nil) :default 1}
-   :table {:doc "crafting table position; the nearest seen within :radius when nil and the recipe needs one" :spec ::a/pos :default nil}
-   :radius {:doc "how far to look for a crafting table, and to walk to a seen one (the seen memory reaches 64)" :spec (a/num-in 0 64) :default 64}
+   :table {:doc "crafting table position; the nearest seen within the table-radius setting when nil and the recipe needs one" :spec ::a/pos :default nil}
    :keep-table {:doc "leave a table this call put down standing; false: it is dug up again when the call ends" :spec boolean? :default false}
    :avoid {:doc "cells [x y z] a table is never put in or dug for: the dig line of a job that crafts as its child" :spec (a/coll-of a/position?) :default nil}
    :for-plan {:doc "id of the plan whose work this is: a table may stand in its own cells; nil: no plan's cells are used" :spec a/name? :default nil}})
@@ -44,11 +43,12 @@
   {::job-time-s {:default 120 :doc "Seconds a craft may take: the walk, the batches and the table." :spec (a/num-in 0 nil)}
    ::batch-s {:default 0.5 :doc "Mean seconds one batch of a craft takes, for the quote." :spec (a/num-in 0 nil)}
    ::reach {:default 3 :doc "Blocks from a crafting table within which the body crafts without walking." :spec (a/num-in 0 nil)}
-   ::seen-radius {:default 64 :doc "Blocks within which a seen table is named in the no-table text (the seen memory's reach)." :spec (a/num-in 0 nil)}})
+   ::table-radius {:default 64 :doc "How far to look for a crafting table, and to walk to a seen one (the seen memory reaches 64)." :spec (a/num-in 0 64)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 (defn batch-s [] (settings/get settings ::batch-s))
 (defn reach [] (settings/get settings ::reach))
-(defn seen-radius [] (settings/get settings ::seen-radius))
+(def seen-reach "How far the seen memory reaches, for naming a table beyond the table-radius setting." 64)
+(defn table-radius [] (settings/get settings ::table-radius))
 
 (def target [:item])
 (def ways need/fetch-ways)
@@ -77,7 +77,7 @@
   "A table handed in, chosen, carried or seen within the radius."
   [c]
   (boolean (or (:table (:args c)) (:table (ctx/mem c)) (carried-table? c)
-               (crafting-table/nearest (:primitives c) (:radius (:args c))))))
+               (crafting-table/nearest (:primitives c) (table-radius)))))
 
 (defn can-start?
   "Never without an item name. Look (once) when the recipe needs a table and none is known: the round fetches or puts one down after that."
@@ -146,7 +146,7 @@
   walk could not reach, and why a carried table was not put down."
   [c radius]
   (let [skip (unreachable-tables c)
-        far (crafting-table/nearest (:primitives c) (seen-radius) skip)
+        far (crafting-table/nearest (:primitives c) seen-reach skip)
         {:keys [x y z]} far
         from (u/self-pos c)
         why (:table-why (ctx/mem c))]
@@ -266,19 +266,19 @@
   [c made]
   (or (await (table-fetch! c))
       (finish! c made {:reason (if (seq (unreachable-tables c)) :unreachable :no-table)
-                       :text (no-table-text c (:radius (:args c)))})))
+                       :text (no-table-text c (table-radius))})))
 
 (defn ^:async reach-table!
   "The craft was unreachable: walk to the remembered or the nearest table with a go-to child. A table the walk cannot
   reach (not one handed in as :table) is dropped for this call and a carried or fetched table is put down instead.
   :again to craft again, :continue while go-to waits, :done when there is none or the walk was given up."
   [c made]
-  (let [{:keys [table radius]} (merge (:args c) (ctx/mem c))
+  (let [{:keys [table]} (merge (:args c) (ctx/mem c))
         p (:primitives c)
         handed? (some? table)
         arg? (some? (:table (:args c)))
         skip (unreachable-tables c)
-        table (or table (crafting-table/nearest p radius skip))]
+        table (or table (crafting-table/nearest p (table-radius) skip))]
     (cond
       (nil? table)
       (await (no-table! c made))
@@ -398,7 +398,7 @@
                          (cond
                            (:table (:args c)) (await (reach-table! c made))
                            (carried-table? c) (or (await (table-fetch! c)) (await (reach-table! c made)))
-                           (> (u/dist (u/self-pos c) handed) (:radius (:args c))) (await (no-table! c made))
+                           (> (u/dist (u/self-pos c) handed) (table-radius)) (await (no-table! c made))
                            :else (do (ctx/update-mem! c assoc :table handed)
                                      (await (reach-table! c made)))))
         "unreachable" (cond

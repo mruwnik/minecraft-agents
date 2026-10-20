@@ -4,6 +4,7 @@
             [clojure.string :as str]
             [engine.fake]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -65,7 +66,7 @@
 (deftest a-table-recipe-with-no-table-in-sight-looks-first
   (let [status (fn [item world & [extra]]
                  (first ((:can-start? (get registry/jobs job))
-                         {:primitives (tu/fake-on-floor world) :args (merge {:item item :radius 64} extra) :view (fn [] {:now 0 :data {}}) :root "j" :slots []})))]
+                         {:primitives (tu/fake-on-floor world) :args (merge {:item item} extra) :view (fn [] {:now 0 :data {}}) :root "j" :slots []})))]
     (is (= :look (status "chest" {})) "a 3x3 recipe, no table known")
     (is (= :ok (status "chest" {:inventory [{:name "crafting_table" :count 1}]})) "a carried table is put down")
     (is (= :ok (status "chest" {} {:table {:x 1 :y 64 :z 0}})))
@@ -103,7 +104,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"60,64,0" "crafting_table"}} {:item "bread" :ways #{:carried} :radius 40}))]
+        (let [[result p seen eng] (await (settings/with-settings {::craft/table-radius 40}
+                                          #(craft {:inventory [{:name "wheat" :count 3}] :blocks {"60,64,0" "crafting_table"}} {:item "bread" :ways #{:carried}})))]
           (is (= {:item "bread" :made 0 :status :stopped :reason :no-table} (dissoc result :text)))
           (is (empty? (tu/walked-to eng)))
           (is (str/includes? (:text result) "[60 64 0]"))
@@ -323,8 +325,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"20,64,0" "crafting_table"}}
-                                            {:item "bread" :radius 8}))]
+        (let [[result p seen eng] (await (settings/with-settings {::craft/table-radius 8}
+                                          #(craft {:inventory [{:name "wheat" :count 3}] :blocks {"20,64,0" "crafting_table"}}
+                                                  {:item "bread"})))]
           (is (= {:item "bread" :made 0 :status :stopped :reason :no-table} (dissoc result :text)))
           (is (empty? (tu/walked-to eng)))
           (is (empty? (filter #(str/starts-with? (name (:kind %)) "craft.") @seen)) "the ending carries it"))))))

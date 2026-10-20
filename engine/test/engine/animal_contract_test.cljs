@@ -4,6 +4,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
             [engine.core :as core]
+            [engine.breed-test :as bt]
             [engine.events :as events]
             [engine.hostile-test :as h]
             [engine.registry :as registry]
@@ -25,7 +26,7 @@
                       ['jobs.combat.hunt {:item "beef" :count 2}]
                       ['jobs.animals.leash {:mob "cow"}]
                       ['jobs.animals.unleash {}]
-                      ['jobs.animals.breed {:mob "cow" :count 2}]
+                      ['jobs.animals.breed {:mob "cow" :pairs 1}]
                       ['jobs.animals.pen-check {:at [2 64 2]}]
                       ['jobs.animals.cull {:mob "cow" :keep 1}]
                       ['jobs.maintenance.shut {:openings :gates}]
@@ -101,7 +102,7 @@
 
 (defn ^:async hunting-cull
   [args world]
-  (await (seek/ending-of #(tu/fake-on-floor (merge {:floor h/flight-floor} world)) (list 'jobs.animals.cull args))))
+  (await (seek/ending-of #(tu/fake-on-floor (merge {:floor h/flight-floor} world)) (list 'jobs.animals.cull (merge {:mob "cow"} args)))))
 
 (deftest a-hunt-ends-with-a-kind-and-a-cause
   (async done
@@ -148,6 +149,11 @@
   [spec world]
   (await (seek/ending-of #(tu/fake-on-floor (merge {:floor h/flight-floor} world)) spec)))
 
+(defn ^:async ending-with-calves
+  "ending where a calf appears for every pair fed."
+  [spec world]
+  (await (seek/ending-of #(doto (tu/fake-on-floor (merge {:floor h/flight-floor} world)) bt/calf-per-pair!) spec)))
+
 (deftest leashing-ends-with-a-kind-and-a-cause
   (async done
     (tu/run-async done
@@ -180,16 +186,19 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:event :completed} (select-keys (await (ending '(jobs.animals.breed {:mob "cow"}) {:inventory wheat :entities [(cow-at 1 2) (cow-at 2 3)]})) [:event])))
-        (is (= {:event :completed} (select-keys (await (ending '(jobs.animals.breed {:mob "cow" :count 6}) {:inventory wheat :entities (mapv #(cow-at % %) [1 2 3 4 5 6])})) [:event]))
+        (is (= {:event :completed} (select-keys (await (ending-with-calves '(jobs.animals.breed {:mob "cow"}) {:inventory wheat :entities [(cow-at 1 2) (cow-at 2 3)]})) [:event])))
+        (is (= {:event :completed} (select-keys (await (ending-with-calves '(jobs.animals.breed {:mob "cow" :pairs 3}) {:inventory wheat :entities (mapv #(cow-at % %) [1 2 3 4 5 6])})) [:event]))
             "the food ran out after four: done with the count fed")
         (doseq [[args world kind reason]
                 [[{} {:inventory wheat :entities [(cow-at 1 2)]} :condition-failed :too-few]
                  [{:mob "rock"} {:inventory wheat :entities []} :impossible :unknown-mob]
-                 [{:count 4} {:inventory [{:name "wheat" :count 1}] :entities (mapv #(cow-at % %) [1 2 3 4])} :nothing-possible :food-out]]]
-          (is (= {:event :stopped :kind kind :reason reason} (await (ending (list 'jobs.animals.breed (merge {:mob "cow"} args)) world)))))
+                 [{:pairs 2} {:inventory [{:name "wheat" :count 1}] :entities (mapv #(cow-at % %) [1 2 3 4])} :nothing-possible :food-out]]]
+          (is (= {:event :stopped :kind kind :reason reason} (await (ending-with-calves (list 'jobs.animals.breed (merge {:mob "cow"} args)) world)))))
+        (is (= {:event :stopped :kind :nothing-possible :reason :no-baby}
+               (await (ending '(jobs.animals.breed {:mob "cow" :settings {:jobs.animals.breed/calf-wait-s 0}}) {:inventory wheat :entities [(cow-at 1 2) (cow-at 2 3)]})))
+            "a pair fed and no calf seen is not done")
         (is (= {:event :completed}
-               (select-keys (await (ending '(jobs.animals.breed {:mob "cow" :count 4 :least 1}) {:inventory [{:name "wheat" :count 1}] :entities (mapv #(cow-at % %) [1 2 3 4])})) [:event]))
+               (select-keys (await (ending-with-calves '(jobs.animals.breed {:mob "cow" :pairs 2 :least 1}) {:inventory [{:name "wheat" :count 1}] :entities (mapv #(cow-at % %) [1 2 3 4])})) [:event]))
             "one fed meets :least 1")))))
 
 (deftest a-pen-check-answers-closed-and-a-leaky-pen-as-done-an-unbounded-fill-as-nothing-possible
@@ -235,7 +244,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:event :completed} (select-keys (await (ending (list 'jobs.animals.maintain {:mob "cow" :box pen :target 4}) {:inventory wheat :entities [(cow-at 1 2) (cow-at 2 3)]})) [:event])))
+        (is (= {:event :completed} (select-keys (await (ending-with-calves (list 'jobs.animals.maintain {:mob "cow" :box pen :target 4}) {:inventory wheat :entities [(cow-at 1 2) (cow-at 2 3)]})) [:event])))
         (is (= {:event :stopped :kind :impossible :reason :no-box}
                (await (ending '(jobs.animals.maintain {}) {:entities [(cow-at 1 2)]}))) "no box and no plan: it can never start")
         (is (= {:event :stopped :kind :impossible :reason :no-mob}

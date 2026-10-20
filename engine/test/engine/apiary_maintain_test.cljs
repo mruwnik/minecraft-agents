@@ -1,6 +1,7 @@
 (ns engine.apiary-maintain-test
   "jobs.apiary.maintain against the fake world."
   (:require [engine.contract :as contract]
+            [engine.breed-test :as bt]
             [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -44,7 +45,7 @@
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
   ([args w n] (scenario args w n identity))
   ([args w n tweak-jobs]
-   (let [s (doto (h/setup w) (-> :p tu/seeing-all))
+   (let [s (doto (h/setup w) (-> :p tu/seeing-all) (-> :p bt/calf-per-pair!))
          s (update s :eng #(update % :jobs tweak-jobs))]
      (core/submit! (:eng s) (spec args) {})
      (await (tu/run-ticks (:eng s) (:clock s) n 700))
