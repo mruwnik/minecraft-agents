@@ -39,7 +39,7 @@
   Needs nothing; the sweep is the whole job. Ends :done with data {:collected n}, the number of items that entered the
   inventory, with :left [{:pos :reason}] for those (also in :loose-left, so the :loose-items reflex leaves them); none in
   sight at all is :done with 0 (an open sweep). Drops tried, or a :search that found none, and none collected: :nothing-possible :none-collected, same data;
-  :nothing-possible :search-waited when the search was held up; 
+  :nothing-possible :search-waited when the search was held up.
   Quote: what is in sight within :radius (yields by name), time to walk to each, unbounded with :search or :dig (also the items it may yet find).")
 
 (a/defargs args
@@ -255,7 +255,7 @@
 (defn moved-item
   "item as seen now when it lies in another cell than the one it was judged in (a drop slides while the body digs to it), else nil."
   [c item]
-  (let [now (first (filter #(= (.-id item) (.-id %)) (look/seen-items (:primitives c) {:radius 16 :max 64})))]
+  (let [now (first (filter #(= (.-id item) (.-id %)) (look/seen-items (:primitives c) {:radius (radius-of c) :max 64})))]
     (when (and now (.-pos now) (not= (item-cell now) (item-cell item))) now)))
 
 (defn leave!
