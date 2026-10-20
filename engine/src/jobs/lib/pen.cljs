@@ -203,22 +203,24 @@
 
 ;; ------------------------------------------------------------------ a drop inside the gate
 
+(def level-steps
+  (to-array (for [[dx dz] orthogonal dy [0 -1 1]] #js [dx dy dz])))
+
 (defn level-region
   "The cells of inside reached from seeds by orthogonal steps of at most one block up or down."
   [inside seeds]
-  (loop [region (set seeds) queue (into cljs.core/PersistentQueue.EMPTY seeds)]
-    (if (empty? queue)
-      region
-      (let [[x y z] (peek queue)
-            [region' queue']
-            (reduce (fn [[region queue] [dx dz dy]]
-                      (let [k [(+ x dx) (+ y dy) (+ z dz)]]
-                        (if (and (contains? inside k) (not (contains? region k)))
-                          [(conj region k) (conj queue k)]
-                          [region queue])))
-                    [region (pop queue)]
-                    (for [[dx dz] orthogonal dy [0 -1 1]] [dx dz dy]))]
-        (recur region' queue')))))
+  (let [queue (to-array seeds)]
+    (loop [region (volatile! (transient (set seeds))) head 0]
+      (if (= head (.-length queue))
+        (persistent! @region)
+        (let [[x y z] (aget queue head)]
+          (dotimes [i (.-length level-steps)]
+            (let [s (aget level-steps i)
+                  k [(+ x (aget s 0)) (+ y (aget s 1)) (+ z (aget s 2))]]
+              (when (and (contains? inside k) (not (contains? @region k)))
+                (vswap! region conj! k)
+                (.push queue k))))
+          (recur region (inc head)))))))
 
 (defn gate-drop
   "{:gate :from :to :drop} for a gate whose inside side reaches fewer than half the inside cells by steps of one block
