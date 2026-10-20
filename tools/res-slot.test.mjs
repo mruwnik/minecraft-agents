@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync, spawn } from 'node:child_process'
-import { candidateSlots, capDuringSweep, decide, freeForLight, hasHeavyMarker, loadConfig, maxLoadOf, rampingLoad, reservedMb, treeRssMb, usableSlots } from './res-slot.mjs'
+import { candidateSlots, capDuringSweep, decide, freeForLight, hasHeavyMarker, heldSlots, loadConfig, lockedKeys, maxLoadOf, rampingLoad, reservedMb, treeRssMb, usableSlots } from './res-slot.mjs'
 
 const base = { freeSlots: 1, availableMb: 10000, needMb: 700, floorMb: 6144, waitedMs: 0, maxWaitMs: 540000 }
 
@@ -392,4 +392,20 @@ test('integration: the load gate holds a plain run (busy) but not a heavy one', 
   const heavy = run(['t', '--heavy', '--', 'echo', 'ran'], env)
   assert.equal(heavy.status, 0); assert.match(heavy.stdout, /ran/)
   fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('lockedKeys: reads the FLOCK entries of /proc/locks as dev:inode, ignoring POSIX locks', () => {
+  const keys = lockedKeys('1: FLOCK  ADVISORY  WRITE 3992459 00:24:3566 0 EOF\n2: POSIX  ADVISORY  WRITE 1176 08:06:2889926 0 EOF\n3: FLOCK  ADVISORY  WRITE 5 0a:6:77 0 EOF\n')
+  assert.deepEqual([...keys], ['00:24:3566', '0a:06:77'])
+})
+
+test('heldSlots: lists exactly the slots whose lock a live flock holds', async (t) => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'res-slot-held-'))
+  t.after(() => fs.rmSync(d, { recursive: true, force: true }))
+  process.env.RES_SLOT_DIR = d
+  const holder = spawn('flock', ['-n', path.join(d, 'body.2'), 'sleep', '30'])
+  t.after(() => holder.kill())
+  fs.writeFileSync(path.join(d, 'body.1'), '')
+  await new Promise((r) => setTimeout(r, 300))
+  assert.deepEqual(heldSlots('body', 4), [2])
 })

@@ -51,8 +51,17 @@ export const slotDir = () => process.env.RES_SLOT_DIR ?? '/tmp/mc-res'
 const dir = slotDir
 const lockFile = (kind, i) => path.join(dir(), `${kind}.${i}`)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-const held = (kind, i) => spawnSync('flock', ['-n', '-E', '213', lockFile(kind, i), 'true']).status === 213
-const heldSlots = (kind, max) => [...Array(max).keys()].filter((i) => held(kind, i))
+// A slot is held while /proc/locks lists a lock on its file's inode: one read answers every slot, where a `flock -n` probe per slot forked a process per slot per poll.
+const lockKey = (st) => `${(((st.dev >> 8n) & 0xfffn) | ((st.dev >> 32n) & ~0xfffn)).toString(16).padStart(2, '0')}:${((st.dev & 0xffn) | ((st.dev >> 12n) & ~0xffn)).toString(16).padStart(2, '0')}:${st.ino}`
+export const lockedKeys = (locks) => new Set(locks.split('\n').map((l) => l.match(/FLOCK .* ([0-9a-f]+):([0-9a-f]+):(\d+) /)).filter(Boolean).map((m) => `${m[1].padStart(2, '0')}:${m[2].padStart(2, '0')}:${m[3]}`))
+const probeHeld = (kind, i) => spawnSync('flock', ['-n', '-E', '213', lockFile(kind, i), 'true']).status === 213
+export const heldSlots = (kind, max) => {
+  let keys
+  try { keys = lockedKeys(fs.readFileSync(process.env.RES_SLOT_LOCKS ?? '/proc/locks', 'utf8')) } catch { return [...Array(max).keys()].filter((i) => probeHeld(kind, i)) }
+  return [...Array(max).keys()].filter((i) => {
+    try { return keys.has(lockKey(fs.statSync(lockFile(kind, i), { bigint: true }))) } catch { return false }
+  })
+}
 const lightHeldCount = (kind, max) => heldSlots(kind, max).filter((i) => !fs.existsSync(lockFile(kind, i) + '.heavy')).length
 
 // Runs cmd under slot i; resolves to its exit code, or null when the slot was taken meanwhile. The holder records pid/start/command in <slot>.info.
@@ -194,7 +203,8 @@ const main = async () => {
   let lastLine = t0, lastReason = ''
   for (;;) {
     if (heavy) fs.mkdirSync(path.dirname(heavyWaitFile(kind)), { recursive: true }), fs.writeFileSync(heavyWaitFile(kind), '')
-    const open = usableSlots([...Array(k.max).keys()].filter((i) => !held(kind, i)), k.max, k.reserve ?? 0, heavy)
+    const heldNow = heldSlots(kind, k.max)
+    const open = usableSlots([...Array(k.max).keys()].filter((i) => !heldNow.includes(i)), k.max, k.reserve ?? 0, heavy)
     let free = open
     const sweeping = !heavy && sweepActive()
     const blockers = () => free.length ? '' : sweeping && k.sweepCap !== undefined && open.length ? `; a world sweep is running: other agents' ${kind} runs are capped to ${k.sweepCap}` : open.length ? '; free slots kept for a waiting heavy run' : `; held by ${holders(kind, k.max)}`
