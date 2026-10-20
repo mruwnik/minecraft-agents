@@ -14,6 +14,7 @@
             [jobs.access.stair.step :as sstep]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.access-tool :as atool]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.child :as child]
             [jobs.lib.choose :as choose]
