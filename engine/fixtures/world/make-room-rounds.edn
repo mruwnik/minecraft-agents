@@ -30,7 +30,7 @@
    :act [[:job (jobs.storage.make-room {:free 6})]
          [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 30]
-         [:wait-s 2]
+         [:wait-s 2] ; settle: nothing the body reports to poll
          [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
             {:event {:source :job :kind :completed} :within-s 120 :of-job true}

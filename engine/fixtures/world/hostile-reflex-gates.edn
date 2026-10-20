@@ -39,7 +39,7 @@
    :act [[:summon "zombie" [26.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:time-set 23500]
          [:cli "triggers" ["$body" "--world" "$world" "put" "needs-weapon" "--trigger" "needs-weapon" "--persistence" "cooldown" "--cooldown-s" "600" "--job" "(jobs.items.obtain {:any-of [\"stone_sword\" \"wooden_sword\"] :count 1 :explore true})" "--by" "world-test"]]
-         [:wait-s 95]
+         [:wait-s 95] ; hold: time must pass here, nothing to poll
          [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :for-s 95}
             {:event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :within-s 170}]
@@ -103,7 +103,7 @@
    :act [[:summon "enderman" [20.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0}]}"]
          [:until-seen {:entity "enderman"} 10]
          [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]
-         [:wait-s 1]
+         [:wait-s 1] ; settle: nothing the body reports to poll
          [:job (jobs.survival.retreat {})]]
    :expect [{:count-event {:source :job :kind :holding :data {:reason "in water, away from the enderman"}} :for-s 45 :at-least 1 :at-most 6 :of-job true}]
    :limit-s 60}

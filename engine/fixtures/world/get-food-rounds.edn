@@ -59,7 +59,7 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:await {:source :reflex :kind :fired :context {:reflex-id :hungry}} 30]
-         [:wait-s 1]
+         [:wait-s 1] ; settle: nothing the body reports to poll
          [:rcon "execute positioned $X $Y $Z run item replace block ~60 ~ ~16 container.0 with air"]
          [:rcon "execute at $BODY run summon zombie ~3 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 20]]

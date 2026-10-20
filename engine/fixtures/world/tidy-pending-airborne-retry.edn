@@ -26,7 +26,7 @@
             [:fill [16 0 4] [16 8 4] "stone"] [:fill [17 0 4] [17 9 4] "stone"]
             [:fill [24 0 24] [24 1 24] "cobblestone"] [:set [24 0 24] "air"]]
    :memory [{:kind :tidy :data {:cell #at [24 0 24] :action :dig :was "cobblestone" :now "air" :tries 0 :plan "other"}}]
-   :act [[:job (jobs.movement.go-to {:pos #at [17 10 4] :range 0})] [:wait-s 1]
+   :act [[:job (jobs.movement.go-to {:pos #at [17 10 4] :range 0})] [:wait-s 1] ; settle: nothing the body reports to poll
          [:rcon "give $BODY cobblestone 4"]]
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :tidy-pending} :data {:kind :done}} :within-s 80}]
    :after [[:block [24 0 24] "cobblestone"]]

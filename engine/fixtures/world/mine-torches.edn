@@ -38,7 +38,7 @@
    :after [[:block [2 1 16] "wall_torch"] [:block [13 1 16] "wall_torch"]]}
   {:name "torches-in-the-off-hand-count-and-are-hung"
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16]]}
-   :act [[:rcon "item replace entity $BODY weapon.offhand with torch 16"] [:wait-s 2]
+   :act [[:rcon "item replace entity $BODY weapon.offhand with torch 16"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:offHand {:name "torch"}}}] 10]
          [:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 16 :radius 3})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 190 :of-job true}
             {:no-event {:source :job :kind :torch.no-stock} :for-s 190 :of-job true :until {:source :job :kind #{:completed :stopped}}}

@@ -46,7 +46,7 @@
                                                                 #at [19 4 16] #at [20 5 16] #at [21 6 16] #at [22 7 16]]}}]
    :body {:at [11.5 0 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [2 12 4] :range 1})]
-         [:wait-s 3]
+         [:wait-s 3] ; settle: nothing the body reports to poll
          [:summon "zombie" [6.5 0 15.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
             {:event {:source :job :kind :retreat.target :data {:target [:near #at [22 8 16] 2.5]}} :within-s 40}

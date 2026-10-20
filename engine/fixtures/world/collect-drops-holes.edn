@@ -24,7 +24,7 @@
    ;; column 17 is open to the rim so the drop is in sight (an unseen drop ends done? at once and the :holes rule would not run)
    :blocks [[:fill [16 7 16] [16 9 16] "air"] [:fill [17 6 16] [17 9 16] "air"] [:set [16 6 16] "air"]]
    :act [[:summon "item" [17.5 6.2 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
-         [:wait-s 2]
+         [:wait-s 2] ; settle: nothing the body reports to poll
          [:job (jobs.items.collect-drops {:radius 6 :holes [#at [16 9 16]]})]]
    :expect [{:event {:source :job :level :debug :kind :collect-drops.left :data {:reason :too-deep}} :within-s 60 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "collect"}} :for-s 50 :until {:source :job :kind :completed}}]

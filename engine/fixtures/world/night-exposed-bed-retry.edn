@@ -17,7 +17,7 @@
  [{:name "exposed-red-bed-given-later-placed-and-slept"
    :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0}})]
          [:await {:source :job :kind :shelter.exposed} 40]
-         [:wait-s 10]
+         [:wait-s 10] ; hold: time must pass here, nothing to poll
          [:rcon "give $BODY red_bed 1"]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 40}
             {:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 70}
@@ -26,7 +26,7 @@
   {:name "exposed-white-bed-given-later-placed-and-slept"
    :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0}})]
          [:await {:source :job :kind :shelter.exposed} 40]
-         [:wait-s 10]
+         [:wait-s 10] ; hold: time must pass here, nothing to poll
          [:rcon "give $BODY white_bed 1"]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 40}
             {:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 70}
@@ -63,7 +63,7 @@
          [:job (jobs.survival.night)]
          [:await {:source :job :kind :holding :data {:reason :monsters-near}} 60]
          [:rcon "kill @e[type=zombie,$BOX]"]
-         [:wait-s 20]
+         [:wait-s 20] ; hold: time must pass here, nothing to poll
          [:rcon "kill @e[type=spider,$BOX]"]
          [:rcon "kill @e[type=skeleton,$BOX]"]
          [:rcon "kill @e[type=creeper,$BOX]"]

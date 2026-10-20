@@ -21,7 +21,7 @@
   {:name "wet-cell-without-dirt-stays-unplanted"
    :body {:inventory [["oak_sapling" 1] ["iron_pickaxe" 1]]}
    :act [[:http :submit (jobs.forestry.prepare {:plan "$plan:wood"}) [] {:ok true}]
-         [:wait-s 25]]
+         [:wait-s 25]] ; hold: time must pass here, nothing to poll
    :expect [{:no-event {:source :job :kind :completed} :for-s 25 :of-job true}]
    :after [[:not-block [16 0 16] "oak_sapling"] [:item "oak_sapling" 1]]}
   {:name "flow-traced-to-its-source-then-planted"

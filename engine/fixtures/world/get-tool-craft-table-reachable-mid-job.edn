@@ -8,9 +8,9 @@
  [{:name "wall-removed-mid-job-table-used"
    :body {:inventory [["oak_planks" 3] ["stick" 2]]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:until-facing {:yaw 270 :pitch 0} 10]
-         [:rcon "execute as $BODY at @s run tp @s ~-10 ~ ~"] [:wait-s 2]
+         [:rcon "execute as $BODY at @s run tp @s ~-10 ~ ~"] [:until-pos {:x-max 5} 10]
          [:job (jobs.items.get-tool {:kind "pickaxe"})]
-         [:wait-s 1]
+         [:wait-s 1] ; settle: nothing the body reports to poll
          [:rcon "execute positioned $X $Y $Z run fill ~1 ~ ~13 ~7 ~3 ~19 air"]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "wooden_pickaxe" 1]]}]}

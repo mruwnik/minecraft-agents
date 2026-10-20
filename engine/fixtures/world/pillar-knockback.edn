@@ -13,7 +13,7 @@
  [{:name "zombie-hit-mid-pillar-done"
    :body {:inventory [["dirt" 12]]}
    :act [[:job (jobs.access.pillar {:height 8})]
-         [:wait-s 0.5]
+         [:wait-s 0.5] ; settle: nothing the body reports to poll
          [:summon "zombie" [17.5 0 16.5] "{}"]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 90 :until {:source :job :kind :completed}}]
@@ -22,7 +22,7 @@
   {:name "four-zombies-hit-mid-pillar-done"
    :body {:inventory [["dirt" 12]]}
    :act [[:job (jobs.access.pillar {:height 8})]
-         [:wait-s 0.5]
+         [:wait-s 0.5] ; settle: nothing the body reports to poll
          [:summon "zombie" [15.5 0 16.5] "{}"]
          [:summon "zombie" [16.5 0 18.5] "{}"]
          [:summon "zombie" [16.5 0 14.5] "{}"]
@@ -33,7 +33,7 @@
   {:name "forced-knockback-mid-pillar-done-a"
    :body {:inventory [["dirt" 12]] :effects [["resistance" 600 0]]}
    :act [[:job (jobs.access.pillar {:height 8})]
-         [:wait-s 0.5]
+         [:wait-s 0.5] ; settle: nothing the body reports to poll
          [:summon "zombie" [17.5 0 16.5] "{NoAI:1b,Tags:[\"kb\"]}"]
          [:wait-s 3] [:rcon "execute as $BODY at @s run tp @s ~0.6 ~ ~"]
          [:wait-s 3] [:rcon "execute as $BODY at @s run tp @s ~0.6 ~ ~"]]
@@ -43,7 +43,7 @@
   {:name "forced-knockback-mid-pillar-done-b"
    :body {:inventory [["dirt" 12]] :effects [["resistance" 600 0]]}
    :act [[:job (jobs.access.pillar {:height 8})]
-         [:wait-s 0.5]
+         [:wait-s 0.5] ; settle: nothing the body reports to poll
          [:summon "zombie" [16.5 0 14.5] "{NoAI:1b,Tags:[\"kb\"]}"]
          [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~0.6 ~ ~"]
          [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~0.6 ~ ~"]
@@ -54,7 +54,7 @@
   {:name "knockback-every-attempt-off-column"
    :body {:inventory [["dirt" 12]] :effects [["resistance" 600 0]]}
    :act [[:job (jobs.access.pillar {:height 12})]
-         [:wait-s 0.5]
+         [:wait-s 0.5] ; settle: nothing the body reports to poll
          [:summon "zombie" [17.5 0 16.5] "{NoAI:1b,Tags:[\"kb\"]}"]
          [:until-pos {:y-min 1} 40]
          [:rcon-until "execute as $BODY at @s run tp @s ~0.6 ~ ~"

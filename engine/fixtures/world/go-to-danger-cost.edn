@@ -48,7 +48,7 @@
    :memory [{:kind :threat :policy {:ttl 2000}
              :data {:mob "zombie" :id 99 :uuid "00000000-0000-0000-0000-000000000099" :key "00000000-0000-0000-0000-000000000099"
                     :pos #xyz [22.5 0 24.5] :ended :far}}]
-   :act [[:wait-s 6]
+   :act [[:wait-s 6] ; hold: time must pass here, nothing to poll
          [:job (jobs.movement.go-to {:pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}]
    :after [[:body-near [70.5 0 24.5] 3]]}

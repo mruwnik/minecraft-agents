@@ -90,7 +90,7 @@
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
    :body {:at [12.5 0 12.5]}
-   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [0 0 1000]}) [:now]] [:wait-s 3]
+   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [0 0 1000]}) [:now]] [:wait-s 3] ; settle: nothing the body reports to poll
          [:rcon "give $BODY red_bed 1"]]
    :expect [{:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 40}
             {:event {:source :job :kind :place.kept :data {:name :bed :kept {:x [:any] :y 150}}} :within-s 90}

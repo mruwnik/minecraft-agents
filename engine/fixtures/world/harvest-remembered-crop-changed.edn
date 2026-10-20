@@ -11,7 +11,7 @@
  :cases
  [{:name "wheat-reset-out-of-view-is-walked-to-and-found-unripe"
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"] [:until-rcon "data get entity $BODY Rotation[0]" "data: 90\\b" 10]
-         [:rcon "execute positioned $X $Y $Z run setblock ~20 ~ ~16 wheat[age=0]"] [:wait-s 1]
+         [:rcon "execute positioned $X $Y $Z run setblock ~20 ~ ~16 wheat[age=0]"] [:wait-s 1] ; settle: nothing the body reports to poll
          [:job (jobs.farm.harvest {:radius 16})]]
    :expect [{:event {:source :job :kind #{:completed :stopped :waiting}} :within-s 60 :of-job true}
             {:no-event {:source :system :kind :error} :for-s 30}]

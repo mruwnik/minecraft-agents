@@ -18,7 +18,7 @@
          [:summon "zombie" [24.5 0 24.5] "{PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :job :kind :recover-drops.decided :data {:decision :skip :retry true}} 60]
          [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 60]
-         [:wait-s 3]
+         [:wait-s 3] ; settle: nothing the body reports to poll
          [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
    :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :skip :retry true :hold-s [:<= 150]}} :within-s 60}
             {:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 90}

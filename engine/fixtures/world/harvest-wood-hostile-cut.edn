@@ -13,7 +13,7 @@
  :cases
  [{:name "logs-collected-after-the-reflex-cut"
    :act [[:job (jobs.forestry.harvest-wood {:radius 32})]
-         [:wait-s 5]
+         [:wait-s 5] ; hold: time must pass here, nothing to poll
          [:summon "zombie" [4.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
             {:event {:source :job :kind :completed :data {:status :completed}} :within-s 150 :of-job true}

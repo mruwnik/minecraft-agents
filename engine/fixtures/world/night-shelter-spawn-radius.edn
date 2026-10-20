@@ -24,7 +24,7 @@
             [:set [12 1 9] "torch"] [:set [12 1 15] "torch"]]
    :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
          [:rcon "execute positioned $X $Y $Z run fill ~9 ~-1 ~9 ~15 ~3 ~15 air replace torch"]
-         [:wait-s 2]
+         [:wait-s 2] ; settle: nothing the body reports to poll
          [:job (jobs.survival.night {})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}]
@@ -45,7 +45,7 @@
          [:job (jobs.movement.go-to {:pos #at [38 0 9] :range 0})] [:await {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} 60]
          [:job (jobs.movement.look-around)] [:await {:source :job :kind :completed :data {:name "jobs.movement.look-around"}} 30] [:job (jobs.movement.go-to {:pos #at [9 0 9] :range 0})] [:await {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} 60]
          [:rcon "execute positioned $X $Y $Z run fill ~8 ~-1 ~8 ~40 ~3 ~10 air replace torch"]
-         [:wait-s 2]
+         [:wait-s 2] ; settle: nothing the body reports to poll
          [:job (jobs.survival.night {})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 150}
             {:event {:source :action :kind :started :data {:name "place"}} :within-s 150}]

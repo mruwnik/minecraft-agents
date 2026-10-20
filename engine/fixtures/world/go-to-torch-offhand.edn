@@ -18,7 +18,7 @@
   :limit-s 120}
  :cases
  [{:name "carried-torch-lights-the-drop-without-fetching"
-   :act [[:rcon "item replace entity $BODY weapon.offhand with shield"] [:rcon "clear $BODY minecraft:torch"] [:rcon "item replace entity $BODY weapon.mainhand with minecraft:stone_pickaxe"] [:rcon "give $BODY minecraft:torch 4"] [:wait-s 2]
+   :act [[:rcon "item replace entity $BODY weapon.offhand with shield"] [:rcon "clear $BODY minecraft:torch"] [:rcon "item replace entity $BODY weapon.mainhand with minecraft:stone_pickaxe"] [:rcon "give $BODY minecraft:torch 4"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:offHand {:name "shield"} :mainHand {:name "stone_pickaxe"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [24 -2 16] :range 1 :ways #{:walk :clear-seal} :unknown true :torches :carried :ignore-zones? true})]]
    :expect [{:event {:kind :walk.torch-placed} :within-s 100 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true :spent [:any]}} :within-s 110 :of-job true}
@@ -44,7 +44,7 @@
   {:name "zone-over-the-takeoff-refuses-the-torch"
    ;; the feet and head cells of the corridor's end belong to another owner: no torch goes there
    :zones [{:name "takeoff" :min [12 3 16] :max [13 4 16] :owner "Other" :allow #{}}]
-   :act [[:rcon "item replace entity $BODY weapon.offhand with shield"] [:rcon "clear $BODY minecraft:torch"] [:rcon "item replace entity $BODY weapon.mainhand with minecraft:stone_pickaxe"] [:rcon "give $BODY minecraft:torch 4"] [:wait-s 2]
+   :act [[:rcon "item replace entity $BODY weapon.offhand with shield"] [:rcon "clear $BODY minecraft:torch"] [:rcon "item replace entity $BODY weapon.mainhand with minecraft:stone_pickaxe"] [:rcon "give $BODY minecraft:torch 4"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:offHand {:name "shield"} :mainHand {:name "stone_pickaxe"}}}] 10]
          [:job (jobs.movement.go-to {:pos #at [24 -2 16] :range 1 :ways #{:walk :clear-seal} :unknown true :torches :carried})]]
    :expect [{:event {:source :job :kind :stopped :data {:why :unseen-floor-dark}} :within-s 100 :of-job true}
             {:no-event {:kind :walk.torch-placed} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]

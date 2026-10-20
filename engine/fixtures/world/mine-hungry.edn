@@ -10,7 +10,7 @@
  [{:name "hungry-mid-mine-feeds-through-the-trigger"
    :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
    :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 14 :radius 16 :mend false})]
-         [:wait-s 4]
+         [:wait-s 4] ; settle: nothing the body reports to poll
          [:rcon "effect give $BODY minecraft:hunger 8 243 true"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 90}
             {:event {:source :reflex :kind :ended :context {:reflex-id :hungry}} :within-s 120}

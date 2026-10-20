@@ -58,7 +58,7 @@
    :blocks [[:fill [10 0 10] [22 3 22] "stone" :hollow] [:fill [11 0 11] [21 2 21] "air"]]
    :act [[:summon "zombie" [19.5 0 16.5] "{NoAI:1b,UUID:[I;7002,1,1,7002],Silent:1b,PersistenceRequired:1b,Health:100f}"]
          [:until [:cli "entities" ["$body" "--world" "$world" "--type" "zombie"] {:total 1}] 20]
-         [:wait-s 6]
+         [:wait-s 6] ; hold: time must pass here, nothing to poll
          [:cli "entities" ["$body" "--world" "$world" "--type" "zombie"] {:total 1}]]
    :expect [{:no-event {:source :job :kind :queued} :for-s 3}]
    :after [[:body-near [16.5 0 16.5] 3]]}]}

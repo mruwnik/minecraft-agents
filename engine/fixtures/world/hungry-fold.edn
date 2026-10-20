@@ -87,7 +87,7 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 100 29 true"] [:until-rcon "data get entity $BODY foodLevel" "data: 9\\b" 60]
          [:rcon "effect clear $BODY minecraft:hunger"]
          [:rcon "effect give $BODY minecraft:hunger 100 4 true"] [:until-rcon "data get entity $BODY foodLevel" "data: 7\\b" 60]
-         [:rcon "effect clear $BODY minecraft:hunger"] [:wait-s 5]
+         [:rcon "effect clear $BODY minecraft:hunger"] [:wait-s 5] ; hold: time must pass here, nothing to poll
          [:rcon "effect give $BODY minecraft:hunger 100 4 true"] [:until-rcon "data get entity $BODY foodLevel" "data: 6\\b" 60]
          [:rcon "effect clear $BODY minecraft:hunger"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 150}

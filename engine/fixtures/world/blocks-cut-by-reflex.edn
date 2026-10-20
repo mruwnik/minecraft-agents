@@ -14,10 +14,10 @@
    :blocks [[:set [27 0 16] "stone"]]
    :body {:inventory [["iron_pickaxe" 1]]}
    :act [[:job (jobs.blocks.dig {:pos #at [27 0 16]})]
-         [:wait-s 3]
+         [:wait-s 3] ; settle: nothing the body reports to poll
          [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 30]
-         [:wait-s 2]
+         [:wait-s 2] ; settle: nothing the body reports to poll
          [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
             {:event {:source :job :kind :completed :data {:reason :dug}} :within-s 140 :of-job true}]
@@ -25,10 +25,10 @@
   {:name "place-cut-then-finishes-a"
    :body {:inventory [["cobblestone" 4] ["iron_sword" 1]]}
    :act [[:job (jobs.blocks.place {:pos #at [27 0 16] :item "cobblestone"})]
-         [:wait-s 3]
+         [:wait-s 3] ; settle: nothing the body reports to poll
          [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 30]
-         [:wait-s 2]
+         [:wait-s 2] ; settle: nothing the body reports to poll
          [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
             {:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 140 :of-job true}]

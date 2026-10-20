@@ -31,7 +31,7 @@
          [:await {:source :job :kind :completed :data {:reason :arrived :in-box true}} 150]
          [:job (jobs.movement.go-to {:pos #at [10 0 16] :range 1})]
          [:until-pos {:x-max 14} 60]
-         [:wait-s 6]]
+         [:wait-s 6]] ; hold: time must pass here, nothing to poll
    :expect [{:event {:source :job :kind :completed :data {:reason :arrived :in-box true}} :within-s 150 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]]}
   {:name "penned-cow-skipped-outside-cow-led"
