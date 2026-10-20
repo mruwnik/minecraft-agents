@@ -165,16 +165,6 @@
                    (when (= 3 (swap! n inc)) (f))
                    r)))))
 
-(defn after-dig-from!
-  "Call (f) after every dig from the nth on: the drops of those digs are gone before anything picks them up."
-  [p nth f]
-  (let [n (atom 0)]
-    (.override (.-world p) "dig"
-               (fn ^:async dig [token args impl]
-                 (let [r (await (impl token args))]
-                   (when (<= nth (swap! n inc)) (f))
-                   r)))))
-
 (deftest a-body-moved-away-after-the-felling-still-collects-the-drops
   (async done
     (tu/run-async done
@@ -185,17 +175,6 @@
           (await (tu/run-until-empty eng 30))
           (is (= 3 (get (lt/inv p) "oak_log")) "the drops at the tree are fetched, not forgotten")
           (is (= [] (:list (core/state eng)))))))))
-
-(deftest nothing-collected-after-a-felling-is-not-completed
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
-          (after-dig-from! p 1 #(clear-drops! p))
-          (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
-          (await (tu/run-until-empty eng 30))
-          (is (= [:none-collected] (mapv :reason (filterv #(= :stopped (:kind %)) @seen))) "no item came in: stopped with a reason, not completed")
-          (is (zero? (get (lt/inv p) "oak_log" 0))))))))
 
 (deftest logs-picked-up-during-the-felling-count-as-collected
   (async done
@@ -232,7 +211,7 @@
           (is (= [] (filterv #(#{:error :failed} (:kind %)) @seen)) "no failure"))))))
 
 (deftest the-plant-child-gets-the-fetch-arg-only-when-given
-  (let [plant-args #(nth (some (fn [ph] (when (= :plant (first ph)) ph)) (hw/phases % nil nil)) 2)]
+  (let [plant-args #(nth (some (fn [ph] (when (= :plant (first ph)) ph)) (hw/phases % nil)) 2)]
     (is (not (contains? (plant-args {:species "oak"}) :fetch)) "unset: the child's default (true) applies")
     (is (false? (:fetch (plant-args {:species "oak" :fetch false}))))
     (is (= {:log 4} (:fetch (plant-args {:fetch {:log 4}}))))))
@@ -327,26 +306,3 @@
         (let [{:keys [eng]} (lt/setup {:blocks (merge (lt/tree 3 0 "oak" 3) {"3,63,0" "grass_block"})})
               r (await (tu/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10 :count 6} 80))]
           (is (= {:status :stopped :reason :no-tree :replant-owed 1} (select-keys r [:status :reason :replant-owed]))))))))
-
-(deftest some-logs-picked-up-and-the-rest-behind-leaves-are-searched-for
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [wall (into {} (for [x [4 5] z (range -3 4) y [64 65]] [(str x "," y "," z) "oak_leaves"]))
-              {:keys [eng p seen]} (lt/setup {:blocks (merge (lt/tree 3 0 "oak" 3) wall) :inventory [{:name "oak_sapling" :count 1}]})]
-          (after-last-dig! p #(do (clear-drops! p) (fake/add-item! p "oak_log" 1) (swap! (fake/state p) fake/spawn [7 64 0] "oak_log" 2)))
-          (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
-          (await (tu/run-until-empty eng 60))
-          (is (= 3 (get (lt/inv p) "oak_log" 0)) "the two logs behind the leaves were fetched too")
-          (is (= [] (filterv #(= :stopped (:kind %)) @seen))))))))
-
-(deftest nothing-collected-on-a-later-tree-still-reports-the-logs-carried
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (lt/setup {:blocks (merge (lt/tree 3 0 "oak" 3) (lt/tree 3 6 "oak" 3) {"3,63,0" "grass_block" "3,63,6" "grass_block"})
-                                         :inventory [{:name "oak_sapling" :count 2}]})]
-          (after-dig-from! p 4 #(clear-drops! p))
-          (let [r (await (tu/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 12 :count 6} 80))]
-            (is (= {:status :stopped :reason :none-collected :got 3} (select-keys r [:status :reason :got]))
-                "the first tree's 3 logs are carried: the stop says so")))))))

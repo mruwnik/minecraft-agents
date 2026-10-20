@@ -13,17 +13,17 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
-            [jobs.lib.trees :as trees :refer [default-radius drop-filter debts near-debt?]]))
+            [jobs.lib.trees :refer [default-radius debts near-debt?]]))
 
 (def doc
-  "Fell a tree, collect what dropped and replant. Three child jobs in turn, each called once and run to its end:
-  :fell (jobs.forestry.fell-tree), :collect (collect-drops, round the felled tree's base) and :plant (plant-sapling).
+  "Fell a tree (its logs are picked up by fell-tree) and replant. Two child jobs in turn, each called once and run to its end:
+  :fell (jobs.forestry.fell-tree) and :plant (plant-sapling).
   :center (default: where the body stands at the first round) with :radius is the area: a call waits (:outside-area, jobs.lib.area) while the body stands farther than :radius from the centre; the caller walks there first.
   Only replant debts within :radius of where the body stood when :plant began are planted; the others stay owed and the job warns harvest-wood.debts-owed with their :count and the :nearest one's :pos.
   Before the first tree it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!).
-  With :count, the three phases repeat on the next tree until that many logs are carried; done? holds at once when they are carried already (:done :already).
+  With :count, the two phases repeat on the next tree until that many logs are carried; done? holds at once when they are carried already (:done :already).
   Needs: a tree in range (a start wait :no-tree until one shows); an axe and a sapling are fetched (:fetch).
-  Ends :done (the wood is the goal) with {:replant-owed n} when near debts stay unplanted. Any other ending is the felling's, passed up with :got (the logs carried) and :replant-owed in the data: condition-failed :no-tree when no tree is left, a need, a limit, nothing-possible :tree-unreachable / :tree-blocked (data :why, :columns). Nothing-possible :none-collected when a felling brings in no item at all.")
+  Ends :done (the wood is the goal) with {:replant-owed n} when near debts stay unplanted. Any other ending is the felling's, passed up with :got (the logs carried) and :replant-owed in the data: condition-failed :no-tree when no tree is left, a need, a limit, nothing-possible :tree-unreachable / :tree-blocked (data :why, :columns).")
 
 (a/defargs args
   {:species {:doc "log species; any when nil" :spec a/name? :default nil}
@@ -44,11 +44,10 @@
     (seq avoid) (assoc :avoid avoid)))
 
 (defn phases
-  "The children in order: [phase job args]; the phase is also the slot. tree is the felled tree's base, if any."
-  [args origin tree]
+  "The children in order: [phase job args]; the phase is also the slot."
+  [args origin]
   (let [{:keys [species radius ignore-zones? fetch]} args]
     [[:fell 'jobs.forestry.fell-tree (fell-args args)]
-     [:collect 'jobs.items.collect-drops {:radius radius :items (drop-filter species) :least-items (if species [(str species "_log")] trees/log-names) :near tree :search radius}]
      [:plant 'jobs.forestry.plant-sapling (cond-> {:species species :ignore-zones? ignore-zones? :near origin :within radius}
                                             (some? fetch) (assoc :fetch fetch))]]))
 
@@ -56,7 +55,7 @@
   "The [phase job args] the job is in, from its memory."
   [c]
   (let [phase (:phase (ctx/mem c) :fell)]
-    (some #(when (= phase (first %)) %) (phases (:args c) (:origin (ctx/mem c)) (:tree (ctx/mem c))))))
+    (some #(when (= phase (first %)) %) (phases (:args c) (:origin (ctx/mem c))))))
 
 (defn warn-owed!
   "Warn once when replant debts of the species remain owed, far from here."
@@ -78,15 +77,6 @@
         n (count (filter #(and (or (nil? species) (= species (:species %))) (near-debt? here radius %)) (debts c)))]
     (when (pos? n) n)))
 
-(defn carried-count
-  "How many of the collected items the body carries: the filter's items, any item when there is no filter."
-  [c]
-  (let [names (some-> (drop-filter (:species (:args c))) set)]
-    (->> (u/inventory (:primitives c))
-         (filter #(or (nil? names) (names (:name %))))
-         (map :count)
-         (reduce + 0))))
-
 (defn logs-carried
   "How many logs of the species (any log when nil) the body carries."
   [c]
@@ -102,22 +92,20 @@
 (defn owed-data [c] (when-let [n (replant-owed c)] {:replant-owed n}))
 
 (defn end-with
-  "The felling's ending e as this job's: its kind and cause, the logs carried and the replant owed in the data."
+  "The felling's ending e as this job's: its kind, cause and data, the logs carried and the replant owed added."
   [c e]
   (warn-owed! c)
   (ctx/end c (:kind e) (:cause e)
-           (merge (select-keys (:data e) [:why :columns :unreachable])
+           (merge (:data e)
                   {:got (logs-carried c)}
                   (owed-data c))))
 
 (defn fell-ended!
-  "What the :fell child's ending e means: a tree felled goes on to collect, any other ending ends the job."
+  "What the :fell child's ending e means: a tree felled goes on to plant, any other ending ends the job."
   [c e]
   (if (not= :done (:kind e))
     (end-with c e)
-    (do (some->> (:base (:data e)) (ctx/update-mem! c assoc :tree))
-        (ctx/update-mem! c assoc :want (max 0 (- (:logs (:data e) 1) (- (logs-carried c) (:logs-before (ctx/mem c) 0)))))
-        (ctx/update-mem! c assoc :phase :collect)
+    (do (ctx/update-mem! c assoc :phase :plant :origin (u/self-pos c))
         :again)))
 
 (defn ^:async step
@@ -125,30 +113,20 @@
   world is :continue. The :plant child ending without a planting leaves the replant owed."
   [c]
   (let [_ (when-not (:origin (ctx/mem c)) (ctx/update-mem! c assoc :origin (u/self-pos c)))
-        _ (when-not (:carried-before (ctx/mem c)) (ctx/update-mem! c assoc :carried-before (carried-count c) :logs-before (logs-carried c)))
-        [phase job args] (current-phase c)
-        args (if (= :collect phase)
-                (let [want (:want (ctx/mem c) 1)]
-                  (if (pos? want) (assoc args :least want) (assoc args :search 0)))
-                args)]
+        _ (when-not (:logs-before (ctx/mem c)) (ctx/update-mem! c assoc :logs-before (logs-carried c)))
+        [phase job args] (current-phase c)]
     (let [e (await (ctx/call c phase job args))]
         (cond
           (= :continue e) :continue
           (= :fell phase) (fell-ended! c e)
-          (and (= :collect phase) (:tree (ctx/mem c)) (not (pos? (- (carried-count c) (:carried-before (ctx/mem c))))))
-          (ctx/end c :nothing-possible :none-collected {:got (logs-carried c) :text "felled a tree but no drop came into the inventory"})
           (and (= :plant phase) (more-trees? c))
-          (do (ctx/update-mem! c #(-> % (assoc :phase :fell :tree nil :carried-before nil :logs-before nil :want nil :origin nil)
+          (do (ctx/update-mem! c #(-> % (assoc :phase :fell :logs-before nil :origin nil)
                                       (update :felled (fnil inc 0))
-                                      (update :children dissoc :fell :collect :plant)))
+                                      (update :children dissoc :fell :plant)))
               :again)
           (= :plant phase) (do (warn-owed! c)
                                (ctx/update-mem! c assoc :phase :done)
-                               (ctx/end c :done nil (owed-data c)))
-          :else (let [next-phase (second (drop-while #(not= phase %) (map first (phases (:args c) nil nil))))]
-                  (ctx/update-mem! c assoc :phase next-phase)
-                  (when (= :plant next-phase) (ctx/update-mem! c assoc :origin (u/self-pos c)))
-                  :again)))))
+                               (ctx/end c :done nil (owed-data c)))))))
 
 (defn ^:async round
   [c]
@@ -187,7 +165,7 @@
   (let [m (ctx/mem c)
         got (max 0 (- (logs-carried c) (:logs-before m (logs-carried c))))
         want (:count (:args c))
-        idle? (and (= :fell (:phase m :fell)) (nil? (:tree m)) (not (checks/child-under-way? c)))
+        idle? (and (= :fell (:phase m :fell)) (not (checks/child-under-way? c)))
         data (concat [:units :logs :done got :result {:logs got}] (when want [:left (max 0 (- want (logs-carried c)))]))]
     (if (or (= :done (:phase m)) (and want idle? (not (more-trees? c))))
       (apply contract/ok :harvested (str "harvest-wood: " got " logs got") data)
