@@ -22,7 +22,7 @@
   {:name "armed-body-with-a-creeper-near-never-fights-it"
    :body {:yaw 270 :inventory [["iron_sword" 1] ["cobblestone" 20]]}
    :act [[:summon "creeper" [19.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :job :kind :child_started :data {:slot :flee}} :within-s 20}
+   :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee}} :within-s 20}
             {:no-event {:source :job :kind :child_started :data {:slot :fight}} :for-s 30}]
    :after [[:entities "type=creeper,tag=wt" [[0 0 0] [31 6 31]] 1]]}
   {:name "zombie-near-and-skeleton-in-line-takes-cover-not-a-swing"
@@ -50,5 +50,5 @@
    :after [[:body-near [16.5 0 16.5] 2.5]]}
   {:name "unarmed-full-health-body-flees-a-spider-never-fights"
    :act [[:summon "spider" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :job :kind :child_started :data {:slot :flee}} :within-s 20}
+   :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee}} :within-s 20}
             {:no-event {:source :job :kind :child_started :data {:slot :fight}} :for-s 30}]}]}
