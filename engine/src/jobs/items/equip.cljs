@@ -6,35 +6,61 @@
             [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.settings :as settings]
+            [jobs.lib.armour :as armour]
             [jobs.lib.checks :as checks]
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]))
 
 (def doc
-  "Hold a carried item in the main hand (:hand \"main\", default) or the off-hand (:hand \"off\"). Needs the item
-  carried; a missing one is fetched (jobs.lib.need) unless :fetch is false. done? holds when it is held there.
-  Ends :done {:item :hand :text}. Impossible: :bad-args (no :item), :unknown-item (no such item for the body's version). Conditions (a listed root job waits): :no-item (not carried, :fetch false). A failed fetch ends as {:reason :need} with its ending as
-  the :because. Nothing-possible :failed (the server did not take it, data :equip the primitive's status). Quote: A, a fixed time.")
+  "Put a carried item where it belongs: armour in its armour slot, a shield in the off-hand, anything else in the main hand
+  (:hand \"main\"/\"off\" overrides that for a non-armour item). Without :item, the best carried armour piece goes into
+  each slot that is empty or worn with a weaker one (leather < golden < turtle helmet < chainmail < iron < diamond < netherite);
+  a worn piece the new one replaces comes back to the pockets.
+  Needs the item carried; a missing one is fetched (jobs.lib.need) unless :fetch is false. done? holds when it is in its slot (without :item: when nothing carried beats what is worn).
+  Ends :done {:item :slot :worn [{:item :slot}] :text}. Impossible: :unknown-item (no such item for the body's version). Conditions (a listed root job waits): :no-item (not carried, :fetch false). A failed fetch ends as {:reason :need} with its ending as
+  the :because. Nothing-possible :failed (the server did not take a piece; data :equip the primitive's status, :worn the pieces done so far). Quote: a fixed time per piece to put on.")
 
 (a/defargs args
-  {:item {:doc "the item to hold" :spec a/item? :default nil}
-   :hand {:doc "\"main\" or \"off\" (a keyword works too)" :spec #{"main" "off" :main :off} :default "main"}
+  {:item {:doc "the item to put on or hold; nil puts on the best carried armour for each slot" :spec a/item? :default nil}
+   :hand {:doc "\"main\" or \"off\" (a keyword works too) for a non-armour item; nil follows from the item" :spec #{"main" "off" :main :off nil} :default nil}
    :fetch {:doc "get a missing item (jobs.lib.need): true, a set of kinds or a map of limits; false stops :no-item instead" :spec need/option? :default true}})
 
 (a/defargs settings
   {::job-time-s {:default 10 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
-   ::equip-s {:default 0.5 :doc "Seconds to put one item in hand (the quote)." :spec (a/num-in 0 nil)}})
+   ::equip-s {:default 0.5 :doc "Seconds to put one item in place (the quote)." :spec (a/num-in 0 nil)}})
 
-(def dests {"main" "hand" "off" "off-hand"})
-(def slots {"main" :mainHand "off" :offHand})
+(def hand-dests {"main" "hand" "off" "off-hand"})
+(def equipment-keys {"hand" :mainHand "off-hand" :offHand})
 
 (defn known-item? [p name]
   (.hasOwnProperty (.-itemsByName (minecraft-data (game/version-of p))) name))
 
 (defn carried? [p item] (boolean (some #(= item (:name %)) (u/inventory p))))
 
-(defn held-in [p hand]
-  (some-> (.-equipment (.self p)) (aget (name (slots (name hand)))) .-name))
+(defn in-slot
+  "The name of the item in slot (an armour slot, \"hand\" or \"off-hand\")."
+  [p slot]
+  (let [eq (.-equipment (.self p))]
+    (if-let [k (equipment-keys slot)]
+      (some-> eq (aget (name k)) .-name)
+      (get (armour/worn-of eq) slot))))
+
+(defn slot-of
+  "Where the named item goes: its armour slot, else the hand asked for, else the off-hand for a shield, else the main hand."
+  [item hand]
+  (or (:slot (armour/parse item))
+      (hand-dests (some-> hand name))
+      (if (= "shield" item) "off-hand" "hand")))
+
+(defn steps
+  "[{:item :slot}] still to do for c: the named item unless it is in its slot, else the best armour for each weaker slot."
+  [c]
+  (let [p (:primitives c)
+        {:keys [item hand]} (:args c)]
+    (if item
+      (let [slot (slot-of item hand)]
+        (if (= item (in-slot p slot)) [] [{:item item :slot slot}]))
+      (armour/plan (armour/worn-of (.-equipment (.self p))) (map :name (u/inventory p))))))
 
 (def target [:item :hand])
 
@@ -42,12 +68,6 @@
 (def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
-
-(defn problem
-  "The cause when no item is given."
-  [c]
-  (when (nil? (:item (:args c)))
-    {:reason :bad-args :why "equip needs :item"}))
 
 (defn unknown
   "The cause :unknown-item when the item is not in the body's version."
@@ -57,29 +77,30 @@
       {:reason :unknown-item :item item})))
 
 (defn lacking
-  "The cause :no-item when the item is neither carried nor held and nothing fetches it."
+  "The cause :no-item when the item is neither carried nor in its slot and nothing fetches it."
   [c]
   (let [p (:primitives c)
-        {:keys [item hand fetch]} (:args c)]
-    (when (and item (not (carried? p item)) (not= item (held-in p hand)) (not (need/parse-arg fetch)))
+        {:keys [item fetch]} (:args c)]
+    (when (and item (seq (steps c)) (not (carried? p item)) (not (need/parse-arg fetch)))
       {:reason :no-item :item item})))
 
 (defn can-start? [c]
-  (contract/all [(checks/cause-status :never (problem c)) (checks/cause-status :never (unknown c)) (checks/cause-status :later (lacking c))]))
+  (contract/all [(checks/cause-status :never (unknown c)) (checks/cause-status :later (lacking c))]))
 
 (defn done?
-  "The item is in the hand asked for and no fetch of it is under way."
+  "The item is in its slot (no item: nothing carried beats what is worn) and no fetch of it is under way."
   [c]
-  (let [{:keys [item hand]} (:args c)
-        held (and (some? item) (= item (held-in (:primitives c) hand)))
-        data [:units :items :done (if held 1 0) :left (if held 0 1) :result {:item item :hand hand}]]
+  (let [{:keys [item]} (:args c)
+        left (count (steps c))
+        data [:units :items :done (count (:worn (ctx/mem c))) :left left
+              :result (cond-> {:worn (vec (:worn (ctx/mem c)))} item (assoc :item item :slot (slot-of item (:hand (:args c)))))]]
     (cond
-      (not held) (apply contract/later :not-held (str item " is not in the " hand " hand") data)
+      (pos? left) (apply contract/later :not-held (if item (str item " is not in place") (str left " armour piece(s) to put on")) data)
       (checks/child-under-way? c) (apply contract/later :wrapping-up (str "holding " item ", the fetch wraps up") data)
-      :else (apply contract/ok :held (str "holding " item) data))))
+      :else (apply contract/ok :held (if item (str "holding " item) "nothing better to wear") data))))
 
-(defn quote-of [_c]
-  (let [t (settings/get settings ::equip-s)]
+(defn quote-of [c]
+  (let [t (* (max 1 (count (steps c))) (settings/get settings ::equip-s))]
     {:uses {:job-time [0 t t]}}))
 
 (defn fetch-opts [c] (need/opts c 'jobs.items.equip))
@@ -88,19 +109,33 @@
   [c kind reason text data]
   (ctx/end c kind reason (assoc data :text text)))
 
+(defn ^:async put-on!
+  "Equip each step in turn, booking the ones the server took in mem :worn; the failed step's primitive result, or nil."
+  [c todo]
+  (loop [todo todo]
+    (when-let [{:keys [item slot] :as step} (first todo)]
+      (let [r (await (ctx/act c :equip (clj->js {:item item :dest slot})))]
+        (if (= "equipped" (.-status r))
+          (do (ctx/update-mem! c update :worn (fnil conj []) step)
+              (recur (rest todo)))
+          (assoc step :status (.-status r)))))))
+
 (defn ^:async round
   [c]
   (let [p (:primitives c)
-        {:keys [item hand]} (:args c)
+        {:keys [item]} (:args c)
         opts (fetch-opts c)
-        e (when (and (not (carried? p item)) opts) (await (need/item! c item 1 opts)))]
+        e (when (and item (seq (steps c)) (not (carried? p item)) opts) (await (need/item! c item 1 opts)))]
     (cond
       (= :continue e) :continue
-      (and e (not= :done (:kind e))) (ctx/end c (:kind e) (:cause e) {:item item})
-      (not (carried? p item)) (refuse! c :condition-failed :no-item (str "cannot hold " item ": not carried") {:item item})
+      (and e (not= :done (:kind e))) (ctx/end c (:kind e) (:cause e) {:item item :worn []})
+      (and item (seq (steps c)) (not (carried? p item)))
+      (refuse! c :condition-failed :no-item (str "cannot hold " item ": not carried") {:item item :worn []})
       :else
-      (let [r (await (ctx/act c :equip (clj->js {:item item :dest (dests (name hand))})))
-            status (.-status r)]
-        (if (= "equipped" status)
-          (ctx/end c :done nil {:item item :hand hand :text (str "holding " item)})
-          (refuse! c :nothing-possible :failed (str "cannot hold " item ": " status) {:item item :equip status}))))))
+      (let [todo (steps c)
+            failed (await (put-on! c todo))
+            worn (vec (:worn (ctx/mem c)))
+            data {:item item :slot (:slot (first todo)) :worn worn}]
+        (if failed
+          (refuse! c :nothing-possible :failed (str "cannot hold " (:item failed) ": " (:status failed)) (assoc data :equip (:status failed)))
+          (ctx/end c :done nil (assoc data :text (if item (str "holding " item) (str "wore " (count worn) " armour piece(s)")))))))))

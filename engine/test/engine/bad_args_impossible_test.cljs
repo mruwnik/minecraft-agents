@@ -25,7 +25,6 @@
                                ['(jobs.items.give {}) :bad-args]
                                ['(jobs.items.interact {}) :bad-args]
                                ['(jobs.items.enchant {}) :bad-args]
-                               ['(jobs.items.equip {}) :bad-args]
                                ['(jobs.items.get-tool {:block "no_such_block"}) :bad-args]
                                ['(jobs.farm.plant {}) :bad-args]
                                ['(jobs.farm.till {}) :bad-args]

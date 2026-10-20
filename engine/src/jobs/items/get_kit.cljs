@@ -253,7 +253,7 @@
             raw (when partial (get (:carried st) (get smelt-plan/made-from (first need)) 0))]
         (cond
           wear
-          (let [out (wear-outcome (await (ctx/call c :wear 'jobs.items.wear {:item wear})))]
+          (let [out (wear-outcome (await (ctx/call c :wear 'jobs.items.equip {:item wear})))]
             (cond (= :continue out) :continue
                   out (finish! c items have (assoc out :item wear))
                   :else :again))

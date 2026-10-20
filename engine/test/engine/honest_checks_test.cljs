@@ -113,4 +113,4 @@
   (are [job item] (re-find #":item must be an item name \(non-empty string\)" (expr/problem registry/jobs (list job {:item item})))
     'jobs.items.enchant ""
     'jobs.items.enchant "  "
-    'jobs.items.wear 5))
+    'jobs.items.equip 5))

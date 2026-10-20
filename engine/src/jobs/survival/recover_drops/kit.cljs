@@ -54,9 +54,9 @@
     (boolean (and (seq (:top-mobs e)) (> (:value e) (+ safe-cost (cfg/margin)))))))
 
 (defn ^:async wear-kit!
-  "Put on what the kit fetch brought (jobs.items.wear), once its child has ended."
+  "Put on what the kit fetch brought (jobs.items.equip), once its child has ended."
   [c]
-  (await (child/run!* c :wear 'jobs.items.wear {})))
+  (await (child/run!* c :wear 'jobs.items.equip {})))
 
 (defn kit-minutes
   "The kit fetch's limit: the fetch option's :minutes, at most the minutes the pile's despawn window has left."

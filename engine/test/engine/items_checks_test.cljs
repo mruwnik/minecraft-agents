@@ -10,7 +10,7 @@
 
 (def area
   '[jobs.items.craft jobs.items.enchant jobs.items.equip jobs.items.get-kit jobs.items.get-tool jobs.items.interact
-    jobs.items.kitchen jobs.items.obtain jobs.items.pick-up-loose jobs.items.smelt jobs.items.wear
+    jobs.items.kitchen jobs.items.obtain jobs.items.pick-up-loose jobs.items.smelt
     jobs.storage.deposit jobs.storage.haul jobs.storage.make-room jobs.storage.withdraw
     jobs.food.fish jobs.memory.forget-place jobs.memory.remember jobs.memory.set-place])
 
@@ -41,7 +41,6 @@
 
 (deftest bad-args-are-never-at-the-start
   (are [sym args reason] (= [:never reason] (kind+reason (verdict-of :can-start? sym {} args)))
-    'jobs.items.equip {} :bad-args
     'jobs.items.equip {:item "iron_pickaxx" :hand "main"} :unknown-item
     'jobs.items.craft {} :bad-args
     'jobs.items.interact {} :bad-args
@@ -60,7 +59,7 @@
     'jobs.storage.withdraw {} {} :no-chest
     'jobs.storage.haul {} {:from [[1 64 0]]} :no-chest
     'jobs.items.equip {:inventory [{:name "dirt" :count 1}]} {:item "iron_pickaxe" :hand "main" :fetch false} :no-item
-    'jobs.items.wear {:inventory [{:name "dirt" :count 1}]} {:item "iron_helmet" :fetch false} :no-item))
+    'jobs.items.equip {:inventory [{:name "dirt" :count 1}]} {:item "iron_helmet" :fetch false} :no-item))
 
 (deftest a-started-withdraw-waits-when-its-chest-is-gone
   (is (= [:later :no-chest] (kind+reason (verdict-of :can-run? 'jobs.storage.withdraw {} {:items {"bread" 1}})))))
@@ -83,7 +82,7 @@
    'jobs.items.equip {:item "stone_pickaxe"} 'jobs.items.get-kit {:items ["iron_pickaxe"]}
    'jobs.items.get-tool {:kind "pickaxe"} 'jobs.items.interact {:id 7} 'jobs.items.give {:player "Steve" :item "bread"}
    'jobs.items.kitchen {:chest {:x 10 :y 64 :z 0}} 'jobs.items.obtain {:item "oak_log"} 'jobs.items.pick-up-loose {}
-   'jobs.items.smelt {:item "beef"} 'jobs.items.wear {} 'jobs.storage.deposit {} 'jobs.storage.haul {:from [[1 64 0]]}
+   'jobs.items.smelt {:item "beef"} 'jobs.storage.deposit {} 'jobs.storage.haul {:from [[1 64 0]]}
    'jobs.storage.make-room {} 'jobs.storage.withdraw {:items {"bread" 1}}
    'jobs.food.fish {} 'jobs.memory.forget-place {:name "home"} 'jobs.memory.remember {:kind :note}
    'jobs.memory.set-place {:name "home"}})
@@ -120,7 +119,7 @@
     'jobs.items.get-tool pickaxe {:kind "pickaxe"} {} {:tool "wooden_pickaxe"}
     'jobs.items.get-tool {} {:block "dirt"} {} {:needed false}
     'jobs.items.obtain {:inventory [{:name "oak_log" :count 2}]} {:item "oak_log"} {:start {:have 1 :target 2}} {:got 1 :item "oak_log"}
-    'jobs.items.equip {:self {:held "iron_pickaxe"}} {:item "iron_pickaxe"} {} {:item "iron_pickaxe" :hand "main"}))
+    'jobs.items.equip {:self {:held "iron_pickaxe"}} {:item "iron_pickaxe"} {} {:item "iron_pickaxe" :slot "hand" :worn []}))
 
 (deftest a-kitchen-is-done-when-the-chest-is-stocked-and-no-pass-is-under-way
   (let [stocked {:fetch/stock [{:pos [10 64 0] :items {"bread" 20}}]}
@@ -132,16 +131,16 @@
       {} short [:later :short]
       {} {} [:later :short])))
 
-(deftest wear-is-done-when-nothing-better-is-carried
-  (are [world reason] (= reason (tu/kind-reason (done-of 'jobs.items.wear world {})))
-    {:inventory [{:name "iron_helmet" :count 1}] :equipment {:head {:name "diamond_helmet" :count 1}}} [:ok :worn]
-    {:inventory [{:name "iron_helmet" :count 1}]} [:later :to-wear]
-    {:inventory [{:name "dirt" :count 1}]} [:ok :worn]))
+(deftest equip-without-item-is-done-when-nothing-better-is-carried
+  (are [world reason] (= reason (tu/kind-reason (done-of 'jobs.items.equip world {})))
+    {:inventory [{:name "iron_helmet" :count 1}] :equipment {:head {:name "diamond_helmet" :count 1}}} [:ok :held]
+    {:inventory [{:name "iron_helmet" :count 1}]} [:later :not-held]
+    {:inventory [{:name "dirt" :count 1}]} [:ok :held]))
 
-(deftest wear-result-lists-the-pieces-worn-so-far
+(deftest equip-result-lists-the-pieces-worn-so-far
   (let [helmet {:inventory [{:name "iron_helmet" :count 1}]}
         put [{:item "iron_boots" :slot :feet}]]
-    (are [world m status result] (= [status result] ((juxt first #(:result (nth % 2))) (done-of 'jobs.items.wear world {} m)))
+    (are [world m status result] (= [status result] ((juxt first #(:result (nth % 2))) (done-of 'jobs.items.equip world {} m)))
       {} {} :ok {:worn []}
       {} {:worn put} :ok {:worn put}
       helmet {:worn put} :later {:worn put}

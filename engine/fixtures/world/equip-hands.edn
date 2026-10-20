@@ -1,4 +1,4 @@
-;; Cards db7aa152, 76ce6829: jobs.items.equip holds a carried item in the main or off hand; a missing item waits :no-item, a misspelt one stops impossible :unknown-item.
+;; Cards db7aa152, 76ce6829: jobs.items.equip holds a carried item in the main or off hand (a shield in the off-hand unasked); a missing item waits :no-item, a misspelt one stops impossible :unknown-item.
 {:defaults
  {:tags [:items :equip]
   :plot {:height 8}
@@ -8,10 +8,13 @@
  :cases
  [{:name "main-hand"
    :act [[:job (jobs.items.equip {:item "iron_pickaxe"})]]
-   :expect [{:event {:source :job :kind :completed :data {:item "iron_pickaxe" :hand "main"}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:item "iron_pickaxe" :slot "hand"}} :within-s 20 :of-job true}]}
   {:name "off-hand-shield"
    :act [[:job (jobs.items.equip {:item "shield" :hand "off"})]]
-   :expect [{:event {:source :job :kind :completed :data {:item "shield" :hand "off"}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:item "shield" :slot "off-hand"}} :within-s 20 :of-job true}]}
+  {:name "shield-goes-to-off-hand-unasked"
+   :act [[:job (jobs.items.equip {:item "shield"})]]
+   :expect [{:event {:source :job :kind :completed :data {:item "shield" :slot "off-hand"}} :within-s 20 :of-job true}]}
   {:name "no-item"
    :act [[:job (jobs.items.equip {:item "diamond_pickaxe" :fetch false})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-item}} :within-s 20 :of-job true}

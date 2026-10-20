@@ -44,7 +44,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:kind :done :data {:item "iron_pickaxe" :hand "main" :text "holding iron_pickaxe"}}
+        (is (= {:kind :done :data {:item "iron_pickaxe" :slot "hand" :worn [{:item "iron_pickaxe" :slot "hand"}] :text "holding iron_pickaxe"}}
                (select-keys (await (ending-of (stacks "iron_pickaxe") 'jobs.items.equip {:item "iron_pickaxe"})) [:kind :data])))
         (is (= {:kind :done} (select-keys (await (ending-of (assoc (stacks "iron_pickaxe") :self {:held "iron_pickaxe"})
                                                              'jobs.items.equip {:item "iron_pickaxe"})) [:kind]))
@@ -146,12 +146,12 @@
           (is (true? (await (waits? (merge xp (stacks "iron_sword" "lapis_lazuli")) 'jobs.items.enchant {:item "iron_sword"}))) "no table in sight, after a look round")
           (is (true? (await (waits? {} 'jobs.items.give {:player "Steve" :item "bread"})))))))))
 
-(deftest wear-fetches-a-named-piece-by-default
+(deftest equip-fetches-a-named-piece-by-default
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= :need (:cause (kc (await (ending-of (stacks "dirt") 'jobs.items.wear {:item "iron_helmet"}))))) "no source: the fetch fails as :need")
-        (is (= :no-item (:cause (kc (await (ending-of (stacks "dirt") 'jobs.items.wear {:item "iron_helmet" :fetch false}))))))))))
+        (is (= :need (:cause (kc (await (ending-of (stacks "dirt") 'jobs.items.equip {:item "iron_helmet"}))))) "no source: the fetch fails as :need")
+        (is (= :no-item (:cause (kc (await (ending-of (stacks "dirt") 'jobs.items.equip {:item "iron_helmet" :fetch false}))))))))))
 
 (deftest enchant-fetches-the-lapis-and-the-item-by-default
   (async done
@@ -163,10 +163,9 @@
           (is (= :no-lapis (:cause (kc (await (ending-of w 'jobs.items.enchant {:item "iron_sword" :fetch false}))))))
           (is (= :no-item (:cause (kc (await (ending-of (assoc w :inventory [{:name "lapis_lazuli" :count 3}]) 'jobs.items.enchant {:item "iron_sword" :fetch false})))))))))))
 
-(deftest wear-and-pick-up-loose-facts-are-conditions-so-a-root-job-waits
+(deftest equip-and-pick-up-loose-facts-are-conditions-so-a-root-job-waits
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (false? (await (waits? (stacks "dirt") 'jobs.items.wear {:item "dirt"}))) "no armour piece is impossible, not waiting")
-        (is (true? (await (waits? (stacks "dirt") 'jobs.items.wear {:item "iron_helmet" :fetch false}))) "not carried")
+        (is (true? (await (waits? (stacks "dirt") 'jobs.items.equip {:item "iron_helmet" :fetch false}))) "not carried")
         (is (true? (await (waits? {} 'jobs.items.pick-up-loose {}))) "no loose item in sight")))))

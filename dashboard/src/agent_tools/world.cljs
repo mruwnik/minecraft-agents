@@ -16,8 +16,7 @@
        "  submit use-on <x> <y> <z> [--item <item>|none] [--face up|down|north|south|east|west]   (jobs.blocks.use-on)\n"
        "  For gates, doors, trapdoors and levers prefer jobs.mjs submit '(jobs.access.toggle {:pos [x y z] :state :open|:closed|:on|:off|:press})': it reads the state first and says why it could not change it.\n"
        "  submit interact <entity-id> [--item <item>]   (jobs.items.interact)\n"
-       "  submit wear [<item>]   (jobs.items.wear: a carried armour piece; no item: the best carried piece for each empty or weaker slot)\n"
-       "  submit equip <item> [--hand main|off]   (jobs.items.equip: hold a carried item in the main hand or off-hand; refuses a missing item)\n"
+       "  submit equip [<item>] [--hand main|off]   (jobs.items.equip: put a carried item where it belongs (armour in its slot, a shield in the off-hand, else the main hand; --hand for a non-armour item); no item: the best carried armour piece for each empty or weaker slot)\n"
        "  submit mount <entity-id|name> | submit dismount   (jobs.movement.mount: walk to a boat, raft, minecart or rideable mob (by id, or the nearest of a name) and get on; jobs.movement.leave-vehicle: get off)\n"
        "The job joins the normal list; add --exclusive to run it alone and at once: the engine is paused (no triggers, no other job) until it ends, and any ending, a yield included, returns to you.\n"
        "Submit returns at once with the job; add --wait [--timeout 60s] to block until it ends (or until anything that ends observe --wait)\n"
@@ -37,7 +36,7 @@
 
 (def allowed
   {"move-to" #{:range :doors :no-escalate} "dig" #{:ignore-zones} "place" #{:ignore-zones}
-   "use-on" #{:item :face} "interact" #{:item} "wear" #{} "equip" #{:hand} "mount" #{} "dismount" #{}})
+   "use-on" #{:item :face} "interact" #{:item} "equip" #{:hand} "mount" #{} "dismount" #{}})
 
 (def doors #{"shut" "leave-open" "never"})
 
@@ -69,11 +68,9 @@
       "dig" (list 'jobs.blocks.dig (zones (pos-args action args 3)))
       "place" (list 'jobs.blocks.place (zones (assoc (pos-args action args 4) :item (nth args 3))))
       "use-on" (list 'jobs.blocks.use-on (cond-> (pos-args action args 3) (seq item) (assoc :item item) (seq face) (assoc :face face)))
-      "wear" (do (when (> (count args) 1) (fail "wear needs at most one item"))
-                 (list 'jobs.items.wear (if (seq args) {:item (first args)} {})))
-      "equip" (do (when-not (= 1 (count args)) (fail "equip needs one item"))
+      "equip" (do (when (> (count args) 1) (fail "equip needs at most one item"))
                   (when-not (contains? #{nil "main" "off"} hand) (fail "--hand must be main or off"))
-                  (list 'jobs.items.equip (cond-> {:item (first args)} (some? hand) (assoc :hand hand))))
+                  (list 'jobs.items.equip (cond-> (if (seq args) {:item (first args)} {}) (some? hand) (assoc :hand hand))))
       "mount" (do (when-not (= 1 (count args)) (fail "mount needs one entity-id or entity name"))
                   (list 'jobs.movement.mount (if (re-matches #"[0-9]+" (first args))
                                                {:id (num (first args) "entity-id")}

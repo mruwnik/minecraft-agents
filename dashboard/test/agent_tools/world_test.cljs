@@ -27,8 +27,8 @@
     ["use-on" "1" "64" "2" "--item" "bread" "--face" "up"] '(jobs.blocks.use-on {:pos {:x 1 :y 64 :z 2} :item "bread" :face "up"})
     ["use-on" "1" "64" "2"] '(jobs.blocks.use-on {:pos {:x 1 :y 64 :z 2}})
     ["interact" "17" "--item" "lead"] '(jobs.items.interact {:id 17 :item "lead"})
-    ["wear" "iron_helmet"] '(jobs.items.wear {:item "iron_helmet"})
-    ["wear"] '(jobs.items.wear {})
+    ["equip" "iron_helmet"] '(jobs.items.equip {:item "iron_helmet"})
+    ["equip"] '(jobs.items.equip {})
     ["equip" "iron_pickaxe"] '(jobs.items.equip {:item "iron_pickaxe"})
     ["equip" "shield" "--hand" "off"] '(jobs.items.equip {:item "shield" :hand "off"})
     ["mount" "9"] '(jobs.movement.mount {:id 9})
@@ -49,12 +49,11 @@
   (doseq [[pattern argv] [[#"body name" ["--world" "w" "../etc" "submit" "dig" "1" "64" "2"]]
                           [#"not valid for dig" ["--world" "w" "Probe" "submit" "dig" "1" "64" "2" "--range" "1"]]
                           [#"not valid for move-to" ["--world" "w" "Probe" "submit" "move-to" "1" "64" "2" "--item" "bread"]]
-                          [#"not valid for wear" ["--world" "w" "Probe" "submit" "wear" "--ignore-zones"]]
-                          [#"not valid for wear" ["--world" "w" "Probe" "submit" "wear" "--hand" "off"]]
+                          [#"not valid for equip" ["--world" "w" "Probe" "submit" "equip" "--ignore-zones"]]
                           [#"--hand must be" ["--world" "w" "Probe" "submit" "equip" "shield" "--hand" "left"]]
                           [#"mount needs one entity-id or entity name" ["--world" "w" "Probe" "submit" "mount"]]
                           [#"dismount takes no arguments" ["--world" "w" "Probe" "submit" "dismount" "3"]]
-                          [#"equip needs one item" ["--world" "w" "Probe" "submit" "equip"]]
+                          [#"equip needs at most one item" ["--world" "w" "Probe" "submit" "equip" "a" "b"]]
                           [#"--doors must be" ["--world" "w" "Probe" "submit" "move-to" "1" "64" "2" "--doors" "smash"]]
                           [#"--request-id must be" ["--world" "w" "Probe" "submit" "dig" "1" "64" "2" "--request-id" "bad id"]]
                           [#"--who must be" ["--world" "w" "Probe" "submit" "dig" "1" "64" "2" "--who" ""]]]]

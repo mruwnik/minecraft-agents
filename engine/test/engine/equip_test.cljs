@@ -1,6 +1,8 @@
 (ns engine.equip-test
-  "Holding an item: jobs.items.equip against the fake world."
+  "Holding an item and wearing armour: jobs.items.equip and jobs.lib.armour against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.contract :as contract]
+            [jobs.lib.armour :as armour]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -45,7 +47,7 @@
       (fn ^:async t []
         (let [{:keys [p out]} (await (equip (stacks "stone_pickaxe" "iron_pickaxe") {:item "iron_pickaxe"}))]
           (is (= "iron_pickaxe" (held p)))
-          (is (= {:status :done :item "iron_pickaxe" :hand "main" :text "holding iron_pickaxe"} @out)))))))
+          (is (= {:status :done :item "iron_pickaxe" :slot "hand" :worn [{:item "iron_pickaxe" :slot "hand"}] :text "holding iron_pickaxe"} @out)))))))
 
 (deftest holds-a-carried-item-in-the-off-hand
   (async done
@@ -54,7 +56,14 @@
         (let [{:keys [p out]} (await (equip (stacks "shield") {:item "shield" :hand "off"}))]
           (is (= "shield" (off-hand p)))
           (is (nil? (held p)))
-          (is (= {:status :done :item "shield" :hand "off" :text "holding shield"} @out)))))))
+          (is (= {:status :done :item "shield" :slot "off-hand" :worn [{:item "shield" :slot "off-hand"}] :text "holding shield"} @out)))))))
+
+(deftest a-shield-goes-to-the-off-hand-without-being-told
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (equip (stacks "shield") {:item "shield"}))]
+          (is (= "shield" (off-hand p))))))))
 
 (deftest the-hand-takes-a-string-or-a-keyword
   (async done
@@ -69,7 +78,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (equip (assoc (stacks "iron_pickaxe") :self {:held "iron_pickaxe"}) {:item "iron_pickaxe"}))]
-          (is (= {:status :done :already? true :item "iron_pickaxe" :hand "main" :text "holding iron_pickaxe"} @out)))))))
+          (is (= {:status :done :already? true :item "iron_pickaxe" :slot "hand" :worn [] :text "holding iron_pickaxe"} @out)))))))
 
 (deftest a-missing-item-is-a-failed-condition
   (async done
@@ -86,13 +95,6 @@
         (let [{:keys [out eng]} (await (equip (stacks "dirt") {:item "iron_pickaxx"}))]
           (is (= :impossible (get-in @out [:ending :kind])))
           (is (empty? (:list (core/state eng))) "impossible: it leaves the queue"))))))
-
-(deftest no-item-given-is-refused-with-a-clear-text
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out]} (await (equip (stacks "dirt") {}))]
-          (is (= [:impossible :bad-args] [(get-in @out [:ending :kind]) (:reason @out)]) "refused before it starts"))))))
 
 (deftest a-bad-hand-is-refused-at-submit
   (is (re-find #"jobs.items.equip :hand must be one of .*\"off\".*got \"foot\""
@@ -133,3 +135,66 @@
           (is (seq (ft/chest-items s [-2 64 3])))
           (is (empty? (ft/events-of s :completed)))
           (is (seq (ft/listed s)) "the job waits on its condition"))))))
+
+(defn worn [p] (into {} (keep (fn [[k v]] (when (and v (#{"head" "torso" "legs" "feet"} k)) [k (get v "name")]))) (js->clj (.-equipment (.self p)))))
+(defn carried [p] (set (map #(.-name %) (.-inventory (.self p)))))
+
+(deftest plan-ranks-materials-and-picks-the-slot
+  (are [item slot] (= slot (:slot (armour/parse item)))
+    "iron_helmet" "head" "diamond_chestplate" "torso" "golden_leggings" "legs" "netherite_boots" "feet" "turtle_helmet" "head")
+  (are [item] (nil? (armour/parse item))
+    "dirt" "iron_pickaxe" "turtle_boots" "shield" nil)
+  (is (apply <= (map armour/rank-of ["leather_helmet" "golden_helmet" "turtle_helmet" "chainmail_helmet" "iron_helmet" "diamond_helmet" "netherite_helmet"]))
+      "by armour points, then toughness")
+  (is (= (armour/rank-of "golden_helmet") (armour/rank-of "turtle_helmet") (armour/rank-of "iron_helmet"))
+      "helmets of equal points tie: a worn one is not swapped")
+  (is (< (armour/rank-of "golden_leggings") (armour/rank-of "chainmail_leggings") (armour/rank-of "iron_leggings")))
+  (is (< (armour/rank-of "diamond_boots") (armour/rank-of "netherite_boots")) "toughness breaks the points tie"))
+
+(deftest plan-without-item-takes-the-best-for-empty-or-worse-slots
+  (is (= [{:item "diamond_helmet" :slot "head"} {:item "iron_boots" :slot "feet"}]
+         (armour/plan {"torso" "iron_chestplate" "legs" "iron_leggings"}
+                      ["iron_helmet" "diamond_helmet" "iron_chestplate" "leather_boots" "iron_boots"])))
+  (is (= [] (armour/plan {"head" "diamond_helmet"} ["iron_helmet" "dirt"]))))
+
+(deftest wearing-an-iron-set-fills-every-slot
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out]} (await (equip (stacks "iron_helmet" "iron_chestplate" "iron_leggings" "iron_boots" "dirt") {}))]
+          (is (= {"head" "iron_helmet" "torso" "iron_chestplate" "legs" "iron_leggings" "feet" "iron_boots"} (worn p)))
+          (is (= #{"dirt"} (carried p)))
+          (is (= 4 (count (:worn @out)))))))))
+
+(deftest the-best-piece-is-chosen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (equip (stacks "leather_helmet" "diamond_helmet" "iron_helmet" "golden_helmet") {}))]
+          (is (= {"head" "diamond_helmet"} (worn p)))
+          (is (= #{"leather_helmet" "iron_helmet" "golden_helmet"} (carried p))))))))
+
+(deftest a-worn-piece-goes-back-to-the-pockets-when-replaced
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (equip (assoc (stacks "diamond_helmet") :equipment {:head {:name "iron_helmet" :count 1}}) {}))]
+          (is (= {"head" "diamond_helmet"} (worn p)))
+          (is (= #{"iron_helmet"} (carried p))))))))
+
+(deftest a-named-armour-piece-goes-to-its-slot-and-a-worn-one-comes-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out]} (await (equip (assoc (stacks "iron_helmet") :equipment {:head {:name "leather_helmet" :count 1}}) {:item "iron_helmet"}))]
+          (is (= {"head" "iron_helmet"} (worn p)))
+          (is (= #{"leather_helmet"} (carried p)))
+          (is (= [{:item "iron_helmet" :slot "head"}] (:worn @out))))))))
+
+(deftest equipping-armour-quotes-a-time-per-piece
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [q (await ((:quote-of (get registry/jobs job)) {:primitives (tu/fake (stacks "iron_helmet" "iron_boots")) :args {}}))]
+          (is (nil? (contract/quote-problem q)))
+          (is (pos? (second (get-in q [:uses :job-time])))))))))

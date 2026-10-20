@@ -38,7 +38,7 @@ test('every body command uses arbitrary canonical worlds directories and preserv
       assert.equal(request.error, undefined)
       assert.equal(request.socketPath, path.join(expected, 'events.sock'))
     }
-    const submitted = world(['Bob', 'submit', 'wear', '--world', 'a', ...flags])
+    const submitted = world(['Bob', 'submit', 'equip', '--world', 'a', ...flags])
     assert.equal(submitted.error, undefined)
     assert.equal(submitted.socketPath, path.join(expected, 'events.sock'))
     const requests = [tools.mapOptions(['--world', 'a', ...flags, 'find']), tools.timeOptions(['--world', 'a', ...flags, 'clock']),

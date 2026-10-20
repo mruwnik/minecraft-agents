@@ -221,7 +221,7 @@ test('body wrappers use the bound Unix sockets; quoting reaches chat unchanged',
   const listed = await runAsync(f.workspace, 'jobs', ['list'])
   assert.equal(listed.status, 0, listed.stderr)
   assert.match(requests.at(-1).url, /^\/jobs/)
-  const submitted = await runAsync(f.workspace, 'world', ['submit', 'wear'])
+  const submitted = await runAsync(f.workspace, 'world', ['submit', 'equip'])
   assert.equal(submitted.status, 0, submitted.stdout + submitted.stderr)
   const submit = requests.findLast(request => request.url === '/jobs' && request.body.includes(':submit'))
   assert.equal(readEDN(submit.body).by, 'B')
