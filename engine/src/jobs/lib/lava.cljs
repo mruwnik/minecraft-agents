@@ -14,7 +14,6 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.sense :as sense]
-            [jobs.lib.step-off :as step-off]
             [jobs.lib.util :as u]))
 
 (defn add [[x y z] [dx dy dz]] [(+ x dx) (+ y dy) (+ z dz)])
