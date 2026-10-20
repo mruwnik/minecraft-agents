@@ -444,3 +444,8 @@
   (are [depth] (empty? (:gate-drops (check (sunk-floor depth) {:at {:x 2 :y 64 :z 0}})))
     1
     0))
+
+(deftest gates-near-lists-each-gate-once-in-position-order-with-its-open-state
+  (let [cells (assoc fence-ring [-1 64 2] ["oak_fence_gate" {:open "true"}] [5 65 3] ["oak_fence_gate" {:open "false"}])
+        r (check cells)]
+    (is (= [{:pos {:x -1 :y 64 :z 2} :open? true} {:pos {:x 5 :y 65 :z 3} :open? false}] (:gates r)))))

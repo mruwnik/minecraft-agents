@@ -188,15 +188,18 @@
 
 (defn gates-near
   "Every fence gate in or beside the cells (a step up or down too: the floor inside may be a step off the fence line), {:pos :open?}, in position order."
-  [{:keys [block]} cells]
-  (->> cells
-       (mapcat (fn [[x y z]] (for [[dx dz] (cons [0 0] orthogonal) dy [0 1 -1]] [(+ x dx) (+ y dy) (+ z dz)])))
-       distinct
-       (keep (fn [[x y z :as k]]
-               (let [b (block x y z)]
-                 (when (gate? b) {:pos {:x x :y y :z z} :open? (on? b "open")}))))
-       (sort-by (juxt (comp :x :pos) (comp :y :pos) (comp :z :pos)))
-       vec))
+  [{:keys [block store]} cells]
+  (let [seen (js/Set.)
+        found (volatile! [])]
+    (doseq [[x y z] cells
+            [dx dz] (cons [0 0] orthogonal)
+            dy [0 1 -1]
+            :let [gx (+ x dx) gy (+ y dy) gz (+ z dz) k (pack store gx gy gz)]
+            :when (not (.has seen k))]
+      (.add seen k)
+      (let [b (block gx gy gz)]
+        (when (gate? b) (vswap! found conj {:pos {:x gx :y gy :z gz} :open? (on? b "open")}))))
+    (vec (sort-by (juxt (comp :x :pos) (comp :y :pos) (comp :z :pos)) @found))))
 
 ;; ------------------------------------------------------------------ a drop inside the gate
 

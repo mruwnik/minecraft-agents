@@ -130,15 +130,17 @@
   [world x z floor]
   (let [s (swim-top world x z floor)
         at (fn [[dx dz]] (reach world (+ x dx) (+ z dz) s))
-        straight (mapv at orthogonal)
-        corners (for [i (range 4)
-                      :let [[a b] (nth diagonal-via i)]
-                      :when (and (nth straight a) (nth straight b))
-                      :let [d (nth diagonal i)
-                            r (at d)]
-                      :when r]
-                  [d r])]
-    (concat (keep-indexed (fn [i r] (when r [(nth orthogonal i) r])) straight) corners)))
+        r0 (at [1 0]) r1 (at [-1 0]) r2 (at [0 1]) r3 (at [0 -1])
+        straight [r0 r1 r2 r3]
+        add (fn [out i r] (if r (conj out [(nth orthogonal i) r]) out))
+        corner (fn [out i a b]
+                 (if (and (nth straight a) (nth straight b))
+                   (let [d (nth diagonal i) r (at d)]
+                     (if r (conj out [d r]) out))
+                   out))]
+    (-> []
+        (add 0 r0) (add 1 r1) (add 2 r2) (add 3 r3)
+        (corner 0 0 2) (corner 1 0 3) (corner 2 1 2) (corner 3 1 3))))
 ;; ------------------------------------------------------------------ where the fill starts
 
 (defn surfaces-in
