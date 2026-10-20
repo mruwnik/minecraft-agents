@@ -21,7 +21,10 @@
     :doc "How many ended reflex jobs' outcomes the engine keeps, apart from the listed jobs'."}
    :engine.core.base/stats-ms
    {:default 60000 :spec (a/int-in 1 nil)
-    :doc "How often the engine emits memory.save-stats and the body.heap sample, ms."}})
+    :doc "How often the engine emits memory.save-stats and the body.heap sample, ms."}
+   :engine.core.base/memory-save-ms
+   {:default 2000 :spec (a/int-in 0 nil)
+    :doc "Least gap between two memory.edn writes caused by acts, ms. Job start/end, stop and the housekeeping flush write at once, so a crash loses at most this much act progress."}})
 
 (def default-idle-s
   "Seconds a round may hold the body with no act in flight and no declared hold before a job.idle warn."
@@ -209,7 +212,21 @@
   "Write the memory when it changed since the last write; force? (on stop) writes anyway."
   ([eng] (save-memory! eng false))
   ([eng force?]
+   (reset! (:memory-dirty eng) false)
+   (reset! (:memory-saved-at eng) (now eng))
    (save-file! eng (mem/file (:dir eng)) #(mem/save! (:store eng) force?))))
+
+(defn memory-flush-due?
+  "True when an act skipped a save and the debounce gap has passed."
+  [eng]
+  (and @(:memory-dirty eng) (>= (- (now eng) @(:memory-saved-at eng)) (:memory-save-ms eng))))
+
+(defn save-memory-soon!
+  "save-memory! for the per-act saves: skipped within :memory-save-ms of the last write (housekeep flushes what was skipped)."
+  [eng]
+  (if (< (- (now eng) @(:memory-saved-at eng)) (:memory-save-ms eng))
+    (reset! (:memory-dirty eng) true)
+    (save-memory! eng)))
 
 (defn job-memory
   "Job id's memory, without the engine's :contract tally, :queued-t and :job."

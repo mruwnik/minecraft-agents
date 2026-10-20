@@ -1,7 +1,7 @@
 (ns engine.core.round
   "One round: the ctx a round or check receives, the act wrapper (token check, memory saves, action
   events) and ctx/call."
-  (:require [engine.core.base :refer [cut-error cut? cut-off! cut-off-dropped! distance emit! job-of exclusive-job normalize-result now offline-cut-error owner? save-memory! self-pos]]
+  (:require [engine.core.base :refer [cut-error cut? cut-off! cut-off-dropped! distance emit! job-of exclusive-job normalize-result now offline-cut-error owner? save-memory-soon! self-pos]]
             [engine.core.attention :refer [request-attention! resolve-attention!]]
             [engine.core.fruitless :refer [record-act!]]
             [engine.core.activity :refer [act-ended! act-started! body-act! close-section! hold-still! log-out-record open-section! useful-act?]]
@@ -34,7 +34,7 @@
   (own! eng base)
   (limits/check-act! eng base k args)
   (act-started! eng token root k args)
-  (save-memory! eng)
+  (save-memory-soon! eng)
   (let [useful? (useful-act? eng root k)
         action-id (.randomUUID crypto)
         fields {:level :debug :job id :chain chain :round round :reflex reflex :name (name k)
@@ -59,7 +59,7 @@
                                             (= "noPath" (.-reason r)) (assoc :no-path true))
                       mem/moved-policy))
         (tally/count-act! eng root slots before)
-        (save-memory! eng)
+        (save-memory-soon! eng)
         (record-act! eng {:root root :reflex reflex} k r (distance from to))
         (when-not quiet?
           (emit! eng (cond-> (merge fields {:source :action :kind :done :status (.-status r)})
@@ -68,7 +68,7 @@
         r)
       (catch :default e
         (tally/count-act! eng root slots before)
-        (save-memory! eng)
+        (save-memory-soon! eng)
         (emit! eng (cond-> (merge fields {:source :action :kind :done
                                           :status (if (cut? e) :cut :failed)})
                      (not (cut? e)) (assoc :error (str e))))

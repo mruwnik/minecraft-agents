@@ -1148,19 +1148,24 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen dir]} (setup)
+        (let [{:keys [eng p seen dir clock]} (setup)
               eng (assoc-in eng [:jobs 'intent] (tu/job intent-round))
               release (.hold (.-world p) "moveTo")
               release-look (.hold (.-world p) "look")]
           (core/submit! eng '(intent) {})
+          (swap! clock + 3000)
           (let [r (core/tick! eng)]
             (await (in-act (.-world p) "moveTo"))
             (is (= :walk-east (get-in (memory-on-disk dir) [:entries :job/j1 0 :data :intent]))
                 "saved before the primitive")
+            (swap! clock + 3000)
+            (swap! clock + 3000)
             (release)
             (await (js/Promise. (fn [ok] (js/setTimeout ok 0))))
+            (swap! clock + 3000)
+            (core/tick! eng)
             (is (true? (get-in (memory-on-disk dir) [:entries :job/j1 0 :data :walked]))
-                "saved before the next primitive")
+                "flushed once the save gap has passed")
             (release-look)
             (await r))
           (is (= [[:action :started "moveTo"] [:action :done "moveTo"]
@@ -1709,6 +1714,24 @@
             (is (empty? more))
             (is (= "memory.edn" (:file e)))
             (is (string? (:error e)))))))))
+
+(deftest acts-within-the-save-gap-skip-the-memory-write-and-housekeeping-flushes-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock dir]} (setup)
+              eng (assoc-in eng [:jobs 'intent] (tu/job intent-round))
+              release (.hold (.-world p) "moveTo")
+              on-disk #(get-in (memory-on-disk dir) [:entries :job/j1 0 :data :intent])]
+          (core/submit! eng '(intent) {})
+          (let [r (core/tick! eng)]
+            (await (in-act (.-world p) "moveTo"))
+            (is (nil? (on-disk)) "the act's save is skipped within the gap")
+            (swap! clock + 3000)
+            (core/tick! eng)
+            (is (= :walk-east (on-disk)) "housekeeping flushes the skipped save")
+            (release)
+            (await r)))))))
 
 (deftest a-save-stats-summary-is-emitted-once-a-minute
   (async done

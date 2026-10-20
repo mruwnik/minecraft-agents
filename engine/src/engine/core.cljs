@@ -272,6 +272,9 @@
              :last-sweep (atom (now))
              :stats-ms (or stats-ms (settings/get base/settings :engine.core.base/stats-ms))
              :last-stats (atom (now))
+             :memory-save-ms (settings/get base/settings :engine.core.base/memory-save-ms)
+             :memory-saved-at (atom 0)
+             :memory-dirty (atom false)
              :save-stats (atom empty-save-stats)}]
     (add-watch st ::persist (fn [_ _ old new]
                               (when (not= old new)
@@ -313,6 +316,7 @@
     (reset! (:running eng) nil)
     (when (:reflex h)
       (drop-reflex-job! eng (:id h) (:reflex h) :dropped {:how :dropped :by :shutdown})))
+  (save-memory! eng)
   (emit! eng {:source :system :kind :stopping :level :info :job (:current (state eng))}))
 
 (defn report-tick-failure!
