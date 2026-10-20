@@ -174,6 +174,8 @@ LIVE_TESTS_AGENT_ID=fixer-x timeout 30 "$T/main/tools/compile" engine test >/dev
 read -r LPPID LLABEL LSHARED < <(tr ' ' '\n' < "$T/main/dashboard/.shadow-cljs/launch.env" | cut -d= -f2 | paste -sd' ')
 check "shared server has no agent label" "$LLABEL" none
 check "shared server is marked shared" "$LSHARED" 1
+WPID=$(pgrep -f "$T/main/tools/compile-idle-watch" | head -1)
+check "idle watcher cwd is the checkout's dashboard dir, not the caller's" "$(readlink /proc/$WPID/cwd)" "$T/main/dashboard"
 check "shared server is not under the compile script" "$(cat /proc/$LPPID/cmdline 2>/dev/null | tr '\0' ' ' | grep -c 'tools/compile')" 0
 MSRV=$(cat "$T/main/dashboard/.shadow-cljs/server.pid")
 sleep 1; kill -0 "$MSRV" 2>/dev/null; check "main server alive right after a compile" "$?" 0

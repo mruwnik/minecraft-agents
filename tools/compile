@@ -110,10 +110,10 @@ start_server() {
     sleep 0.5
   done
   server_pid >/dev/null || { echo "tools/compile: the shadow-cljs server did not start (see $dir/.shadow-cljs/server.log)" >&2; [ -z "${MC_COMPILE_IN_POOL:-}" ] || exit 76; exit 1; }
-  # idle watcher: a server must not outlive its use (every JVM holds ~2 GB)
+  # idle watcher: a server must not outlive its use (every JVM holds ~2 GB). It runs in the checkout's dir, not the caller's cwd: a pool watcher in a fixer's worktree blocks fixer-worktree.sh --remove
   touch "$dir/.shadow-cljs/last-use"
   sp=$(server_pid)
-  ( (exec 7>&- 9>&-; exec setsid nohup env -u LIVE_TESTS_AGENT_ID COMPILE_SHARED=1 "$repo/tools/compile-idle-watch" "$sp" "$(awk '{print $22}' "/proc/$sp/stat")" "$dir/.shadow-cljs/last-use" \
+  ( (exec 7>&- 9>&-; cd "$dir" && exec setsid nohup env -u LIVE_TESTS_AGENT_ID COMPILE_SHARED=1 "$repo/tools/compile-idle-watch" "$sp" "$(awk '{print $22}' "/proc/$sp/stat")" "$dir/.shadow-cljs/last-use" \
     "${MC_COMPILE_MAIN_IDLE_S:-1800}" "${MC_COMPILE_IDLE_POLL_S:-30}" >/dev/null 2>&1 </dev/null) & )
   sleep 3
 }
