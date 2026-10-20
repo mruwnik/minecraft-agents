@@ -21,7 +21,7 @@
 (defn ^:async way-cost
   "Seconds the cheapest of the shut-in ways quotes for the night, ##Inf when none can be done here."
   [c]
-  (let [args {:for :night :use {:blocks (choose/fillers :shelter)}}]
+  (let [args {:for :night :use {:blocks (choose/filler-names c :shelter)}}]
     (loop [[job & more] (vals ways) best ##Inf]
       (if (nil? job)
         best

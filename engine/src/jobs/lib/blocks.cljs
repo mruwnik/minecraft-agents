@@ -13,6 +13,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.need :as need]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.access :as access]
             [jobs.lib.game-facts :as facts]
             [jobs.lib.pen-entry :as pen-entry]
@@ -44,10 +45,12 @@
       (some #(and (= item (:name %)) (< (:count %) facts/stack-size)) (u/inventory p))))
 
 (defn carried
-  "The carried [{:name :count}] whose name is in blocks, in the order of blocks."
+  "The carried [{:name :count}] whose name is in blocks, in the order of blocks, less what the reserve register
+  holds off limits to the fillers chooser (a reserved stack, an :avoid)."
   [c blocks]
-  (let [have (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))]
-    (vec (for [b blocks :let [n (get have b 0)] :when (pos? n)] {:name b :count n}))))
+  (let [have (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))
+        held (reserve/held c :fillers)]
+    (vec (for [b blocks :let [n (- (get have b 0) (get held b 0))] :when (pos? n)] {:name b :count n}))))
 
 (defn pick [c blocks] (:name (first (carried c blocks))))
 

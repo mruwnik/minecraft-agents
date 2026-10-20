@@ -1540,7 +1540,7 @@
     (into {} (for [x (range -1 6) y (range 62 68) z (range -2 3) :when (not (open [x y z]))] [(key-of x y z) "stone"]))))
 
 (deftest a-bare-body-in-a-closed-hut-is-boxed-in-by-a-melee-mob-in-the-room-hit-or-not
-  (let [boxed? (fn [world mob] (pick/bare-boxed-in? {:primitives (tu/fake-on-floor world) :quote-call {}} [mob]))
+  (let [boxed? (fn [world mob] (pick/bare-boxed-in? {:primitives (tu/fake-on-floor world) :quote-call {} :view (fn [] {:now 0 :data {:entries {} :policies {}}})} [mob]))
         closed {:blocks hut}]
     (is (true? (boxed? closed (mob-at "zombie" 4))) "never hurt: no hit is needed")
     (is (false? (boxed? closed (mob-at "zombie" 12))) "beyond close-radius")

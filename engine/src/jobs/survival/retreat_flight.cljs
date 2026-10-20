@@ -45,9 +45,9 @@
 (defn no-gain-steps [] (settings/get settings ::no-gain-steps))
 
 (defn blocks
-  "The block names a cornered body may place: the call's :use {:blocks}, else every :build filler, carried or not (a pit or pocket plugs with the blocks it digs)."
+  "The block names a cornered body may place: the call's :use {:blocks}, else every :build filler the body's :choose/override does not avoid, carried or not (a pit or pocket plugs with the blocks it digs). Carried counts skip the reserves (jobs.lib.blocks/carried)."
   [c]
-  (or (ctx/use c :blocks) (choose/fillers :build)))
+  (or (ctx/use c :blocks) (choose/filler-names c :build)))
 
 (defn plug-purpose
   "The ledger purpose of the blocks a seal or plug places: :shelter for the call's :for :night, else :retreat-plug (jobs.access.cleanup)."

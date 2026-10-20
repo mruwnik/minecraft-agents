@@ -26,7 +26,7 @@
 (defn blocks
   "The blocks the call may place: its :use :blocks, else (for the night) the shelter fillers, else every :build filler."
   [c]
-  (or (not-empty (ctx/use c :blocks)) (when (night? c) (choose/fillers :shelter))))
+  (or (not-empty (ctx/use c :blocks)) (when (night? c) (choose/filler-names c :shelter))))
 
 (defn failed-near
   "The :shut-in-failed entry data for way within futile-radius of the body, nil when none."

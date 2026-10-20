@@ -64,7 +64,7 @@
   "The blocks it may place: the call's :use :blocks, else (nothing carried when the call began) the shelter fillers."
   [c]
   (let [used (ctx/use c :blocks)]
-    (if (seq used) used (choose/fillers :shelter))))
+    (if (seq used) used (choose/filler-names c :shelter))))
 
 (def ray-heights "Heights above the body's feet the arrows are aimed at." [game/eye-height 0.9])
 

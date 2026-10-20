@@ -5,8 +5,10 @@
             [engine.test-util :as tu]
             [jobs.forestry.fell-from-pillar :as fell-from-pillar]
             [jobs.gather.mine.mend :as mend]
+            [jobs.lib.blocks :as lb]
             [jobs.lib.choose :as choose]
-            [jobs.lib.escape :as escape]))
+            [jobs.lib.escape :as escape]
+            [jobs.survival.retreat-flight :as flight]))
 
 (defn body
   [items & overrides]
@@ -53,6 +55,12 @@
 (deftest the-pillar-is-not-built-of-cobblestone-the-cleanup-could-not-dig-back
   (is (= ["dirt"] (fell-from-pillar/pillar-items (body [(stack "cobblestone" 4) (stack "stone_axe" 1)]))))
   (is (= ["dirt" "cobblestone"] (fell-from-pillar/pillar-items (body [(stack "stone_pickaxe" 1)])))))
+
+(deftest the-shelter-blocks-a-flight-places-skip-an-avoided-filler
+  (let [c (body [(stack "dirt" 9) (stack "cobblestone" 3)] {:chooser :fillers :avoid ["cobblestone"]})]
+    (is (not-any? #{"cobblestone"} (flight/blocks c)) "the bare list")
+    (is (nil? (lb/pick c ["cobblestone"])) "carried skips an avoided stack")
+    (is (= [{:name "dirt" :count 9}] (lb/carried c ["dirt" "cobblestone"])))))
 
 (deftest an-unknown-purpose-throws
   (is (thrown? js/Error (choose/fillers-for (body []) :wall 1))))
