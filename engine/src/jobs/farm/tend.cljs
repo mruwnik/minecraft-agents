@@ -518,11 +518,6 @@
     (await (look/survey! c))
     :else (await (work c))))
 
-(defn ^:async pass-step
-  "One step of the pass over the part in c (a child call or the look round): :again, :continue or an ending."
-  [c]
-  (await (step c)))
-
 (defn next-part
   "{:part} of the first untried part whose check passes, marking every part looked at as tried; nil when none is left."
   [c]
@@ -538,7 +533,7 @@
   "One step of the whole run: go on with the part under way, else start the next part, else hand over the result."
   [c]
   (if-let [cur (:cur (ctx/mem c))]
-    (await (pass-step (for-part c (:part cur))))
+    (await (step (for-part c (:part cur))))
     (if-let [{:keys [part]} (next-part c)]
       (do (ctx/update-mem! c assoc :cur {:part part})
           :again)

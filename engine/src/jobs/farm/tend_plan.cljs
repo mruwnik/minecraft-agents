@@ -44,7 +44,7 @@
     (let [part (:part (:args c))
           answer (known/plan c id)
           crops (fld/crop-cells answer part)
-          no-zones (when (nil? (known/zones c)) "no zone list has been read")
+          no-zones (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list has been read")
           trouble (or (fld/plan-trouble answer crops) no-zones)]
       (if-not trouble
         {:answer answer :crops crops}

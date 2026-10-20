@@ -359,6 +359,13 @@
         "no crop cells")
     (is (untouched? {:plan "mix"} spec {"mix" (plan-of)} nil) "no zone list has been read")))
 
+(deftest ignore-zones-works-a-plan-with-no-zone-list-read
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run {:plan "mix" :ignore-zones? true} (world-of farmland-all all-seed) {"mix" (plan-of)} nil 60))]
+          (is (= 4 (count (placed s)))))))))
+
 (deftest a-decline-is-warned-once-with-its-reason
   (async done
     (tu/run-async done
