@@ -4,7 +4,7 @@
   is put at its start, the act steps run, the body's event log is read until every expectation is decided, the
   :after checks ask the server, and the plot is cleaned up. The body is started once per distinct :register (the
   scenario) and restarted before every case with its engine/memory.edn, seen.bin and notes file and its leftover test plans deleted and the plot it was last left on cleared (a case with :keep-memory true keeps
-  the memory: the body goes on from the case before it). Stopped at the end. Pure parts: world-test.fixture and world-test.expect."
+  the memory: the body goes on from the case before it). The body stops when its case ends (before the plot is cleared) unless the next case keeps it. Pure parts: world-test.fixture and world-test.expect."
   (:require ["child_process" :as cp]
             ["fs" :as fs]
             ["os" :as os]
