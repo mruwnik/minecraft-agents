@@ -1,10 +1,12 @@
 ;; Card bcf0465d: the :died trigger comes before :night, so a body that respawns at night goes for a valuable pile 31 blocks away
-;; before sheltering. Needs night: run with --allow-time. No mobs. Should-succeed: the pile is collected and no dig-in seal is placed
+;; before sheltering. Needs night: run with --allow-time. The open plot spawns stray hostiles at night, so the register has the
+;; hostile reflex a real body has (a spider on the walk is dealt with, not left to decide the outcome). Should-succeed: the pile is collected and no dig-in seal is placed
 ;; until then. (The register starts before the plot is set, so the night trigger may fire once at the stale start; it is cut by :died.)
 {:defaults
  {:tags [:survival :death :night :jobs]
   :time :night
   :register [{:trigger :died :persistence :cooldown :cooldown-s 30 :args {}}
+             {:trigger :hostile-near :args {:radius 8 :ranged-radius 16} :job (jobs.survival.respond-to-hostile)}
              {:trigger :night :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}}]
   :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :effects [["resistance" 600 4]]
          :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
