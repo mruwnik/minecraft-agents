@@ -568,8 +568,8 @@
           (is (empty? (filterv #(= :shut-in.trespass-last-resort (:kind %)) @seen))))))))
 
 (deftest a-pillar-through-anothers-area-comes-after-every-other-way-and-before-a-last-fight
-  (is (= [:plug :pillar :back-off :plug-dig :plug-zone :pillar-zone :fight] (pick/with-zone-pillar (cornered/escape-order {}))))
-  (is (= [:fight :plug :pillar :plug-dig :plug-zone :pillar-zone] (pick/with-zone-pillar (cornered/escape-order {:pressed? true :faster? true}))))
+  (is (= [:plug :pillar :back-off :plug-dig :plug-zone :plug-dig-zone :pillar-zone :fight] (pick/with-zone-pillar (cornered/escape-order {}))))
+  (is (= [:fight :plug :pillar :plug-dig :plug-zone :plug-dig-zone :pillar-zone] (pick/with-zone-pillar (cornered/escape-order {:pressed? true :faster? true}))))
   (is (= [:fight] (pick/with-zone-pillar [:fight])) "no plug or pillar in the order, none added"))
 
 (deftest a-lone-melee-mob-within-ten-with-blocks-carried-is-pillared-against-before-any-flee-step

@@ -137,7 +137,7 @@
   [mem cell]
   (if (= cell (:fire-cell mem))
     mem
-    (-> mem (update :tried #(reduce disj (set %) [:plug :plug-zone :plug-dig])) (assoc :fire-cell cell))))
+    (-> mem (update :tried #(reduce disj (set %) [:plug :plug-zone :plug-dig :plug-dig-zone])) (assoc :fire-cell cell))))
 
 (defn boxed-in?
   "Whether the body stands in a closed room with a melee mob (hitters) within hit-reach and was hit this step or within
@@ -180,11 +180,11 @@
                    (hitters c hostiles)))))
 
 (defn with-zone-pillar
-  "order with :plug-zone and :pillar-zone (walls, a pillar through another's area) after every way that keeps off, before a last :fight."
+  "order with :plug-zone, :plug-dig-zone and :pillar-zone (walls, a pit or pocket, a pillar through another's area) after every way that keeps off, before a last :fight."
   [order]
   (let [order (vec order)
         fight-last? (= :fight (peek order))
-        extra (cond-> [] (some #{:plug} order) (conj :plug-zone) (some #{:pillar} order) (conj :pillar-zone))]
+        extra (cond-> [] (some #{:plug} order) (conj :plug-zone) (some #{:plug-dig} order) (conj :plug-dig-zone) (some #{:pillar} order) (conj :pillar-zone))]
     (-> (if fight-last? (pop order) order)
         (into extra)
         (cond-> fight-last? (conj :fight)))))
@@ -234,6 +234,7 @@
                   :plug (await (refuge/plug-option! c :plug #{:walls}))
                   :plug-zone (when (:zone-walls (ctx/mem c)) (await (refuge/plug-option! c :plug-zone #{:walls})))
                   :plug-dig (await (refuge/plug-option! c :plug-dig #{:pit :pocket}))
+                  :plug-dig-zone (when (flight/tried? c :plug-dig) (await (refuge/plug-option! c :plug-dig-zone #{:pit :pocket})))
                   :pillar (await (refuge/pillar! c false))
                   :pillar-zone (when-not (flight/tried? c :pillar) (await (refuge/pillar! c true)))
                   :water (await (water! c))

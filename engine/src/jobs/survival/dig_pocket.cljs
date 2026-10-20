@@ -32,6 +32,7 @@
 (a/defargs args
   {:ignore-zones? :shared
    :for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}
+   :trespass? {:doc "false: a pocket whose walls are another's zone, claim or plan is no site (the caller tries again with true as a last resort)" :spec boolean? :default true}
    :fetch {:doc "get a missing tool (jobs.lib.need): true, a set of kinds or a map of limits; false leaves a wall no carried tool harvests without a site" :spec need/option? :default false}
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pocket is dropped and the lava left" :spec #{:seal :stop} :default :seal}})
 

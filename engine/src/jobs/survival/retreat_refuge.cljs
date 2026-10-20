@@ -112,14 +112,14 @@
         radius (danger-q/radius-in (:args c))
         ranged-radius (danger-q/ranged-radius-in (:args c))
         e (await (ctx/call c option 'jobs.survival.shut-in
-                           (cond-> {:ways ways :on-lava on-lava :trespass? (not= :plug option) :settings {:jobs.lib.danger/hostile-radius radius :jobs.lib.danger/ranged-radius ranged-radius}}
+                           (cond-> {:ways ways :on-lava on-lava :trespass? (contains? #{:plug-zone :plug-dig-zone} option) :settings {:jobs.lib.danger/hostile-radius radius :jobs.lib.danger/ranged-radius ranged-radius}}
                              (ctx/use c :blocks) (assoc :use {:blocks (ctx/use c :blocks)}))))
         feet (sh-sense/feet (:primitives c))]
     (cond
       (= :continue e) (do (ctx/update-mem! c assoc :plugging {:at feet :option option :ways ways}) :again)
       (= :done (:kind e)) (do (ctx/update-mem! c dissoc :plugging)
                               (spent/absorb! c (:data e))
-                              (hide-now! c {:kind (if (= :plug-zone option) :plug option) :anchor feet :cells (plug-cells c)} (hide-texts :plug)))
+                              (hide-now! c {:kind (case option :plug-zone :plug :plug-dig-zone :plug-dig option) :anchor feet :cells (plug-cells c)} (hide-texts :plug)))
       :else (do (ctx/update-mem! c dissoc :plugging)
                 (when (= :trespass (get-in e [:data :stops :walls :reason])) (ctx/update-mem! c assoc :zone-walls true))
                 nil))))
@@ -129,7 +129,7 @@
   it failed or was tried; a pit or pocket is not dug in a body already shut in (its walls did not keep the hostile off)."
   [c option ways]
   (when-not (or (flight/tried? c option)
-                (and (= :plug-dig option) (dig-cells/sealed-in? (:primitives c) :walls sh-sense/default-roof-height)))
+                (and (#{:plug-dig :plug-dig-zone} option) (dig-cells/sealed-in? (:primitives c) :walls sh-sense/default-roof-height)))
     (or (await (plug! c option ways)) (do (flight/tried! c option) nil))))
 
 (defn plugging-here?

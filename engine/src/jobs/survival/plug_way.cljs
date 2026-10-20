@@ -20,16 +20,18 @@
 
 (defn roof-height [] (settings/get settings ::roof-height))
 
-(defn zone-penalty
-  "Seconds to add to a way's quote for the cells in {:dig :place :plug} that the zone rules refuse (a plug is placed from a
-  cell the body is not at), 0 when none."
+(defn refused?
+  "Whether the zone rules refuse a cell in {:dig :place :plug} (a plug is placed from a cell the body is not at)."
   [c {:keys [dig place plug]}]
   (let [in (access/rules-input c)]
-    (if (or (some #(access/trespass-refusal in :dig %) dig)
-            (some #(access/trespass-refusal in :place %) place)
-            (some #(access/trespass-refusal (assoc in :feet nil) :place %) plug))
-      (settings/get settings ::trespass-s)
-      0)))
+    (boolean (or (some #(access/trespass-refusal in :dig %) dig)
+                 (some #(access/trespass-refusal in :place %) place)
+                 (some #(access/trespass-refusal (assoc in :feet nil) :place %) plug)))))
+
+(defn zone-penalty
+  "Seconds to add to a way's quote for the cells in {:dig :place :plug} that the zone rules refuse, 0 when none."
+  [c cells]
+  (if (refused? c cells) (settings/get settings ::trespass-s) 0))
 
 (defn enclosed?
   "Whether the world shows the body shut in: for :night safe from the night (sh-inside/safe-from-night?); else a roof within ::roof-height over no open cell round the feet, or, with the call's

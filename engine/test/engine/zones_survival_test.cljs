@@ -127,6 +127,15 @@
           (is (= [{:x 0 :y 63 :z 0}] (mapv arg-pos (calls p "place"))))
           (is (= [] (trespass seen :shut-in.trespass-last-resort))))))))
 
+(deftest with-trespass-false-no-pit-is-dug-in-a-foreign-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup pit-world [(zone "Miles" [0 60 0] [0 63 0])])]
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:pit} :trespass? false}) {})
+          (await (run-until-empty eng 10))
+          (is (= [] (calls p "dig"))))))))
+
 (deftest dig-in-trespasses-only-when-every-way-is-foreign
   (async done
     (tu/run-async done

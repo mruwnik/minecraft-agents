@@ -271,7 +271,7 @@
         free (->> (keep #(pocket-cells c feet % by-hand?) dig-cells/sides)
                   (remove (fn [cells] (some #(access/own-keep in %) cells))))]
     (or (first (remove (fn [cells] (some #(access/trespass-refusal in :dig %) cells)) free))
-        (first free)))))
+        (when-not (false? (:trespass? (:args c))) (first free))))))
 
 (defn ^:async pocket!
   "Dig a side pocket (two cells deep, feet and head, closed on every other side), collecting the blocks, and step

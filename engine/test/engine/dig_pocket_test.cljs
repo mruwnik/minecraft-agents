@@ -127,6 +127,15 @@
           (is (= "stone" (block-at p [4 64 0])) "the owned wall is untouched")
           (is (= "air" (block-at p [-5 64 0])) "the pocket is cut in the free hill"))))))
 
+(deftest with-trespass-false-no-pocket-is-cut-in-another-zone-though-no-free-face-exists
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen] :as s} (setup [hill-zone])]
+          (await (run-job! s {:trespass? false}))
+          (is (= :no-site (get-in (failed seen) [:reason])))
+          (is (= "stone" (block-at p [4 64 0]))))))))
+
 (deftest a-pocket-is-not-cut-in-the-bodys-own-plan
   (async done
     (tu/run-async done

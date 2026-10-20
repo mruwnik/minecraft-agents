@@ -35,6 +35,7 @@
 (a/defargs args
   {:ignore-zones? :shared
    :for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}
+   :trespass? {:doc "false: a pit that would need a cell of another's zone, claim or plan fails instead (the caller tries again with true as a last resort)" :spec boolean? :default true}
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pit is dropped and the lava left" :spec #{:seal :stop} :default :seal}})
 
 (a/defargs settings
@@ -75,6 +76,13 @@
     {:stop :spared
      :text (str "the pit would cut into the body's own " (cond zone (str "zone " zone) door (str "plan " plan "'s doorstep (door " (pr-str door) ")") :else (str "plan " plan)) " at " (pr-str cell) "; not digging")}))
 
+(defn trespass-stop
+  "With :trespass? false, the stop of a pit plan that digs or plugs a cell of another's zone, claim or plan."
+  [c plan]
+  (when (and (false? (:trespass? (:args c)))
+             (way/refused? c {:dig (concat (:prep plan) (mapcat :dig (:steps plan))) :plug (conj (:plugs plan) (:roof plan))}))
+    {:stop :trespass :text "the pit needs a cell of another's area"}))
+
 (defn assess
   "{:plan p} for a pit that fits (p is nil while only a floor not yet seen rules it out: the pit looks first; not so for :night,
   which looks before it asks), else {:stop stop} (retreat-pit/stop-of, or :spared)."
@@ -82,7 +90,7 @@
   (let [feet (sh-sense/feet (:primitives c))
         blocks (flight/blocks c)
         plan (pit/pit-plan c feet blocks)
-        stop (if plan (spared-stop c plan) (pit/stop-of c blocks feet))]
+        stop (if plan (or (spared-stop c plan) (trespass-stop c plan)) (pit/stop-of c blocks feet))]
     (cond
       (and (not plan) (:unseen stop) (not= :night (:for (:args c)))) {:plan nil}
       stop {:stop stop}
@@ -133,7 +141,7 @@
   [c]
   (let [kept (:pit (ctx/mem c))
         plan (if (and kept (pit/pit-index kept (sh-sense/feet (:primitives c)))) kept (await (pit/plan! c)))]
-    (if-let [stop (or (:stop plan) (when-not kept (spared-stop c plan)))]
+    (if-let [stop (or (:stop plan) (when-not kept (or (spared-stop c plan) (trespass-stop c plan))))]
       (way/stop! c stop)
       (do (when (and (night/night? c) (not kept))
             (ctx/remember! c :shut-in-failed {:pos (sh-sense/feet (:primitives c)) :way :pit :reason :interrupted} night/failed-policy))
