@@ -28,6 +28,17 @@
                  (mapv (comp #(select-keys % [:name :pos]) second) (filter #(= 'jobs.memory.set-place (first %)) @(:calls env)))))
           (is (= [(xyz bed) old-bed] (mapv :bed (called env 'jobs.survival.set-spawn)))))))))
 
+(deftest a-site-that-ends-short-is-still-smelted-and-hauled-then-reports-its-ending
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup :results {'jobs.strip.corridor {:status :stopped :reason :refused}
+                                   'jobs.strip.seal {:status :stopped :reason :refused}})
+              r (await (start! env args))]
+          (is (= [:stopped :all-skipped] ((juxt :status :reason) r)))
+          (is (= 1 (count (called env 'jobs.storage.haul))) "the base chests are hauled")
+          (is (= ["set-place" "set-spawn"] (take-last 2 (short-names env)))))))))
+
 (deftest a-restart-after-the-base-phase-does-not-build-it-again
   (async done
     (tu/run-async done

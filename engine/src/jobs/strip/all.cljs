@@ -20,7 +20,8 @@
   Every step is a registered job run as a child, re-reading the world first. Phases:
   :base   jobs.strip.base (build the plan :base, move the respawn to its bed and :home there); the old :home and :spawn-bed are kept in :was.
   :shears items.get-tool shears, when none are carried.
-  :site   jobs.strip.site (descent, corridors, seals, trips to the base chests) with the site args.
+  :site   jobs.strip.site (descent, corridors, seals, trips to the base chests) with the site args. Ending :trips-exhausted,
+  :all-skipped or :unreachable, smelt and haul still run and the call then ends with the site's ending.
   :smelt  jobs.strip.smelt (the raw ore carried and in the base chests, smelted at the base furnaces).
   :haul   jobs.strip.haul (the loot banked in the base chests, then hauled to the main storage).
   The cleanup export puts :home and the respawn bed back to :was however the call ends (a cut included).
@@ -105,17 +106,30 @@
             (not (shears? c)) (ctx/end c :condition-failed :no-shears (merge (result-of c) {:phase :shears}))
             :else (do (save! c assoc :phase :site) :again)))))
 
+(defn short-ending?
+  "A site that gave up (:trips-exhausted :all-skipped :unreachable): the base chests and the bag still hold loot, so smelt and haul run,
+  then the call reports the ending. A failed child or a missing need (torches, food) stops at once."
+  [e]
+  (and (= :nothing-possible (:kind e)) (not= :child-failed (steps/reason-of e))))
+
+(defn ^:async site! [c]
+  (let [e (await (steps/call! c :child 'jobs.strip.site (site-args c)))]
+    (cond (= :continue e) :continue
+          (= :done (:kind e)) (do (save! c assoc :phase :smelt) :again)
+          (short-ending? e) (do (save! c assoc :phase :smelt :site-end (select-keys e [:kind :cause :data])) :again)
+          :else (end-child! c 'jobs.strip.site e))))
+
 (defn ^:async step! [c]
   (let [r (run c)]
     (case (:phase r)
       :base (await (base! c r))
       :shears (await (shears! c))
-      :site (await (child! c 'jobs.strip.site (site-args c) (fn [_] (save! c assoc :phase :smelt))))
+      :site (await (site! c))
       :smelt (await (child! c 'jobs.strip.smelt (base-args c)
                             (fn [e] (save! c assoc :phase :haul :smelted (:smelted (:data e) {}) :smelt-failed (:smelt-failed (:data e) [])))))
       :haul (await (child! c 'jobs.strip.haul (base-args c)
                            (fn [e] (save! c assoc :phase :done :hauled (:hauled (:data e) {})))))
-      :done (or (ctx/done c) :continue))))
+      :done (if-let [e (:site-end r)] (end-child! c 'jobs.strip.site e) (or (ctx/done c) :continue)))))
 
 (defn ^:async round [c]
   (when-not (run c)
@@ -157,11 +171,11 @@
           :else (contract/ok :args "site, base and at given"))))
 
 (defn done?
-  "The run is over (phase :done); the site's settled segments are the progress."
+  "The run is over (phase :done, the site ended done); the site's settled segments are the progress."
   [c]
   (let [states (map :state (vals (:segments (site/site c))))
         data [:units :segments :done (count (filter settled states)) :left (count (remove settled states)) :result (result-of c)]]
-    (if (= :done (:phase (run c)))
+    (if (and (= :done (:phase (run c))) (not (:site-end (run c))))
       (apply contract/ok :stripped (str "strip all " (:site (:args c)) " done " (pr-str (:segments (result-of c)))) data)
       (apply contract/later :stripping "strip all: segments left to strip" data))))
 

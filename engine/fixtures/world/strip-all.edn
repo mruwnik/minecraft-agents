@@ -50,6 +50,14 @@
    :act [[:job (jobs.strip.all {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false :take [:cobweb]})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:smelted [:any]}} :within-s 650 :of-job true}]
    :after [[:item "raw_iron" 0] [:item "iron_ingot" 0]]}
+  {:name "site-ending-short-still-smelts-and-hauls-the-carried-ore"
+   :time :any
+   ;; One trip allowed and a thin torch stock: the site may give up (:trips-exhausted, or :unreachable on a bad walk; the unit test pins that) or finish; either way the iron carried is smelted and hauled.
+   :body {:inventory [["stone_pickaxe" 1] ["stone_axe" 1] ["shears" 1] ["torch" 6] ["bread" 12] ["cobblestone" 64] ["oak_planks" 96] ["chest" 4]
+                      ["furnace" 2] ["crafting_table" 1] ["white_bed" 1] ["oak_door" 1] ["raw_iron" 3] ["coal" 24] ["stick" 8]]}
+   :act [[:job (jobs.strip.all {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false :settings {:jobs.strip.site/max-trips 1}})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:smelted [:any]}} :within-s 650 :of-job true}]
+   :after [[:item "raw_iron" 0] [:item "iron_ingot" 0]]}
   {:name "spawner-in-the-branch-under-seal-stops-it-and-the-mouth-is-sealed"
    :blocks [[:fill [19 0 11] [21 2 15] "air"] [:fill [20 0 11] [20 0 15] "rail"]
             [:set [19 0 12] "oak_fence"] [:set [19 1 12] "oak_fence"] [:set [21 0 12] "oak_fence"] [:set [21 1 12] "oak_fence"] [:fill [19 2 12] [21 2 12] "oak_planks"]
