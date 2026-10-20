@@ -34,7 +34,7 @@
   :no-torches) gets them again and goes on from where it stood (at most ::max-equip-rounds rounds); any other ending is passed on.
   Then, with :mend, it fills the ground under the start that the dig opened (mine.mend), and always walks back to the start cell (a go-to
   child with every way but a pillar first); the walk is the cleanup for a run cut by the limit or a cancel. Not arriving ends :not-home
-  (warn mine.not-home); a mend with nothing to fill with or six failed fills warn mine.mend-short / mine.mend-failed.
+  (a cut run's walk warns mine.not-home); a mend with nothing to fill with or six failed fills warn mine.mend-short / mine.mend-failed.
 
   Needs and impossible: those of jobs.gather.dig-for; its can-start? checks stand here too. The run's own area is :center / :radius.
 
@@ -328,8 +328,7 @@
   (let [r (await (home/home-round! c))]
     (if (= :continue r)
       :continue
-      (do (when-not r (not-home! c))
-          (finish! c r)))))
+      (finish! c r))))
 
 (defn ^:async step [c]
   (case (:phase (ctx/mem c))
