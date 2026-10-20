@@ -27,8 +27,9 @@
   "Build the fence a plan wants (:plan, optionally only its :part) and prove it holds animals.
   The pen is the bounding box of the plan's cells that want a fence, a fence gate or a wall.
   A plan with :surface true is put on the ground the body has seen (a pen on a slope follows it).
-  Phase 0 clears the trees (logs and leaves) inside the box up to the fence tops with a jobs.build.clear-box child
-  (:only), so no leaf staircase leads over the fence; trees not seen yet are left to the check.
+  Phase 0 fells each trunk seen inside the box with a jobs.forestry.fell-tree child (:at its base log), then clears
+  the logs and leaves left, up to the fence tops, with a jobs.build.clear-box child (:only), so no leaf staircase
+  leads over the fence; trees not seen yet are left to the check.
   Phase 1 runs jobs.build.from-plan on the plan. Its arg :accept passes through, and its rules
   (zones, other plans' footprints, materials, cuts) apply. Phase 2: a body still inside the box walks out through the
   gate (a jobs.movement.go-to child to the cell outside it) and jobs.animals.shut-gate shuts it. Phase 3 checks the pen
@@ -250,22 +251,40 @@
           :when (and n (some #(str/ends-with? n %) tree-endings))]
       [x y z])))
 
+(defn trunk-bases
+  "The lowest seen log of each log column among the tree cells (a log whose cell below is no log), not yet in felled."
+  [c cells felled]
+  (let [name-at (fn [x y z] (u/seen-name (:primitives c) {:x x :y y :z z}))
+        log? #(some-> % (str/ends-with? "_log"))]
+    (remove (fn [[x y z :as pos]] (or (contains? felled pos) (log? (name-at x (dec y) z))))
+            (filter (fn [[x y z]] (log? (name-at x y z))) cells))))
+
 (defn ^:async trees-step!
-  "While trees stand in the box: a clear-box child over the box clears their logs and leaves. Whatever it ends with,
-  on to the build (a tree it could not clear shows as a leak in the check)."
+  "While trees stand in the box: one jobs.forestry.fell-tree child per trunk base (each tried once), then a clear-box
+  child over the box clears the logs and leaves left. Whatever they end with, on to the build (a tree that stays shows
+  as a leak in the check)."
   [c cells]
-  (if (empty? (trees-in c cells))
-    (do (ctx/update-mem! c assoc :phase :build) :again)
-    (let [box (pen-read/barrier-box cells)
-          ys (map (comp second :pos) cells)
-          r (await (ctx/call c :trees 'jobs.build.clear-box
-                             (merge (select-keys (:args c) [:ignore-zones?])
-                                    {:from {:x (:x (:min box)) :y (apply min ys) :z (:z (:min box))}
-                                     :to {:x (:x (:max box)) :y (+ 1 (apply max ys)) :z (:z (:max box))}
-                                     :only tree-endings})))]
-      (if (= :continue r)
-        :continue
-        (do (ctx/update-mem! c assoc :phase :build) :again)))))
+  (let [trees (trees-in c cells)
+        felled (set (:felled (ctx/mem c)))]
+    (if (empty? trees)
+      (do (ctx/update-mem! c assoc :phase :build) :again)
+      (if-let [[x y z :as base] (first (trunk-bases c trees felled))]
+        (let [r (await (ctx/call c (keyword (str "fell-" x "-" y "-" z)) 'jobs.forestry.fell-tree
+                                 (merge (select-keys (:args c) [:fetch :ignore-zones?])
+                                        {:at {:x x :y y :z z} :for-plan (:plan (:args c))})))]
+          (if (= :continue r)
+            :continue
+            (do (ctx/update-mem! c update :felled (fnil conj []) base) :again)))
+        (let [box (pen-read/barrier-box cells)
+              ys (map (comp second :pos) cells)
+              r (await (ctx/call c :trees 'jobs.build.clear-box
+                                 (merge (select-keys (:args c) [:ignore-zones?])
+                                        {:from {:x (:x (:min box)) :y (apply min ys) :z (:z (:min box))}
+                                         :to {:x (:x (:max box)) :y (+ 1 (apply max ys)) :z (:z (:max box))}
+                                         :only tree-endings})))]
+          (if (= :continue r)
+            :continue
+            (do (ctx/update-mem! c assoc :phase :build) :again)))))))
 
 (defn ^:async patch-step!
   "One fence of the patch queue by a blocks.place child (its ending, placed or not, passes it on); then back to the check."

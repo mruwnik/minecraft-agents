@@ -354,8 +354,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [trees {"3,64,3" "oak_log" "3,65,3" "oak_log" "3,65,4" "oak_leaves"}
-              [result _ p] (await (build! (spec kit trees) {"pen" (ring-plan)} {}))]
+              [result seen p] (await (build! (spec kit trees) {"pen" (ring-plan)} {}))]
           (is (true? (:closed? result)))
+          (is (= 1 (count (filter #(= :forestry/replant (:memory %)) (kinds-of seen :memory_written)))) "the trunk was felled by fell-tree")
           (is (every? #{nil "air"} (map #(h/block-at p 3 % 3) [64 65])))
           (is (contains? #{nil "air"} (h/block-at p 3 65 4)))
           (is (= "stone" (h/block-at p 3 63 3))))))))
