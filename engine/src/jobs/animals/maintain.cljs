@@ -58,7 +58,7 @@
   {:plan {:doc "id of a plan of the body's world; with :part, the pen is that part (its :box, :herd {:mob :target}) and :box, :mob and :target are not used" :spec a/name? :default nil}
    :part {:doc "with :plan, the id of the pen part" :spec a/name? :default nil}
    :mob {:doc "mob type name of the animals in the pen; required without :plan" :spec a/name? :default nil}
-   :box {:doc "the pen: {:min {:x :y :z} :max {:x :y :z}}, inclusive; required without :plan" :spec a/box? :default nil}
+   :box {:doc "the pen: {:min {:x :y :z} :max {:x :y :z}}, inclusive; required without :plan" :spec pen-read/box-arg :default nil}
    :target {:doc "adult herd size wanted; babies count toward it, they grow" :spec (a/int-in 0 nil) :default 4}
    :chest {:doc "chest position {:x :y :z} for the produce; nil: do not store" :spec ::a/pos :default nil}
    :carry {:doc "{item-name count}: how many of a produce item deposit leaves carried" :spec (a/map-of string? number?) :default {}}
@@ -113,9 +113,9 @@
   "The plan's fence, gate and wall cells beside the box (one column out) that the body has seen as something its plan
   does not want there, as [x y z]; a cell never seen is no gap."
   [c]
-  (let [{:keys [plan box]} (:args c)
+  (let [{:keys [plan]} (:args c)
         cells (when plan (:cells (known/plan c plan)))
-        {:keys [min max]} box
+        {:keys [min max]} (pen-read/arg-box c)
         beside? (fn [[x _ z]] (and (<= (dec (:x min)) x (inc (:x max))) (<= (dec (:z min)) z (inc (:z max)))))
         p (:primitives c)]
     (vec (for [{:keys [pos want]} cells
@@ -249,7 +249,7 @@
   (let [{:keys [plan box mob]} (:args c)
         {:keys [trouble] :as pen} (pen-read/pen-of c)
         c (if pen (with-pen c pen) c)
-        {:keys [min max]} (:box (:args c))
+        {:keys [min max]} (pen-read/arg-box c)
         away (when min (standing/away-cause c {:x (/ (+ (:x min) (:x max)) 2) :y (:y min) :z (/ (+ (:z min) (:z max)) 2)}))]
     (cond
       (not (or plan box)) (contract/never :no-box "maintain needs a :box or a :plan")
@@ -329,7 +329,7 @@
     (not (look-due? c)) (await (step-steps c))
     (hunting/in-bound? c (u/self-pos c)) (do (await (look/survey! c)) :again)
     :else
-    (let [r (await (child/call-walk* c :look {:pos (pen-read/look-pos (:box (:args c))) :range 3}))]
+    (let [r (await (child/call-walk* c :look {:pos (pen-read/look-pos (pen-read/arg-box c)) :range 3}))]
       (when-not (= :continue r) (ctx/update-mem! c assoc :looked true))
       (if (= :continue r) :yield :again))))
 

@@ -60,8 +60,11 @@
         (is (= {:event :completed} (select-keys (await (ends guard safe-fire)) [:event])) "every fire already safe: the goal holds")
         (is (= {:event :waiting :reason :nothing-to-guard} (await (ends guard {}))))
         (is (= {:event :waiting :reason :nothing-to-guard}
-               (await (ends '(jobs.apiary.guard {:box {:from {:x 10 :y 60 :z -5} :to {:x 14 :y 70 :z 5}}})
+               (await (ends '(jobs.apiary.guard {:box {:min {:x 10 :y 60 :z -5} :max {:x 14 :y 70 :z 5}}})
                             (g/fire-world {:inventory carpet})))))
+        (is (= {:event :waiting :reason :nothing-to-guard}
+               (await (ends '(jobs.apiary.guard {:box {:min [10 60 -5] :max [14 70 5]}})
+                            (g/fire-world {:inventory carpet})))) "vector corners are a box too")
         (is (= {:event :waiting :reason :refused}
                (await (ends guard (assoc (g/fire-world {:inventory carpet}) :zones [(assoc g/zone-over-fire :owner "Miles")])))))))))
 
@@ -96,7 +99,7 @@
         (is (= {:event :waiting :reason :not-ripe} (await (ends harvest (h/world {:inventory shears :level 2})))))
         (is (= {:event :waiting :reason :not-smoked} (await (ends harvest (h/world {:inventory shears :smoke? false})))))
         (is (= {:event :waiting :reason :no-hive}
-               (await (ends '(jobs.apiary.harvest {:box {:from {:x 10 :y 60 :z -5} :to {:x 14 :y 70 :z 5}}}) (h/world {:inventory shears})))))
+               (await (ends '(jobs.apiary.harvest {:box {:min {:x 10 :y 60 :z -5} :max {:x 14 :y 70 :z 5}}}) (h/world {:inventory shears})))))
         (is (= {:event :waiting :reason :open-fire}
                (await (ends harvest (-> (h/world {:inventory shears})
                                         (update :blocks #(-> % (dissoc h/under) (assoc "2,62,0" "campfire")))

@@ -77,8 +77,8 @@
     pen-check/safe? {:box hut-box} :ok
     pen-check/safe? {:box far-box} :later
     pen-check/safe? {:at [15 64 0]} :later
-    guard/safe? {:box {:from hut-cell :to hut-cell}} :ok
-    guard/safe? {:box {:from far-cell :to far-cell}} :later
+    guard/safe? {:box {:min hut-cell :max hut-cell}} :ok
+    guard/safe? {:box {:min far-cell :max far-cell}} :later
     harvest/safe? {:center far-cell} :later
     apiary-maintain/safe? {:center hut-cell} :ok
     apiary-maintain/safe? {:center far-cell} :later

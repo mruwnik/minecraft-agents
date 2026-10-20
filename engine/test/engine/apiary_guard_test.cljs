@@ -193,7 +193,7 @@
                     (update :blocks merge (:blocks (fire-world {:x 2 :z 5})))
                     (update :states merge (:states (fire-world {:x 2 :z 5}))))
               {:keys [eng p]} (setup w)
-              result (await (child-outcome eng job {:box {:from {:x 0 :y 60 :z -2} :to {:x 4 :y 70 :z 2}}} 60))]
+              result (await (child-outcome eng job {:box {:min {:x 0 :y 60 :z -2} :max {:x 4 :y 70 :z 2}}} 60))]
           (is (= 1 (:carpeted result)))
           (is (= 1 (:fires result)))
           (is (= "white_carpet" (block-name p 2 65 0)))

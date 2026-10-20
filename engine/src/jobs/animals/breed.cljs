@@ -65,7 +65,7 @@
    :count {:doc "animals to feed" :spec (a/int-in 1 nil) :default 2}
    :radius {:doc "animals within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :fetch {:doc "get breeding food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food; a failed fetch ends :no-food because of the fetch's ending" :spec need/option? :default true}
-   :box {:doc "a known pen {:min :max} to walk to when the animals are not in view, and to leave at the end" :spec a/box? :default nil}
+   :box {:doc "a known pen {:min :max} to walk to when the animals are not in view, and to leave at the end" :spec pen-read/box-arg :default nil}
    :plan {:doc "id of a plan of the body's world; with :part, the known pen is that part's :box" :spec a/name? :default nil}
    :part {:doc "with :plan, the id of the pen part" :spec a/name? :default nil}
    :ignore-zones? :shared})
@@ -316,7 +316,7 @@
 (defn pen-box
   "The known pen's box ({:min :max}): :box, else the box of the plan part; nil when neither is known."
   [c]
-  (or (:box (:args c)) (:box (:args (pen-read/pen-of c)))))
+  (or (pen-read/arg-box c) (:box (:args (pen-read/pen-of c)))))
 
 (defn pen-cell
   "The [x z] cell of pos, as go-to takes it."

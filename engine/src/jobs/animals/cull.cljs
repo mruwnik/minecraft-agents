@@ -2,6 +2,7 @@
   (:require [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]
             [engine.args :as a]
+            [jobs.lib.pen-read :as pen-read]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
@@ -49,7 +50,7 @@
    :keep {:doc "adults of the kind to leave alive in the bound (babies do not count)" :spec (a/int-in 0 nil) :default 2}
    :center {:doc "nil, or {:x :z}: the bound is :radius blocks (horizontal) around it" :spec (a/map-with {:x number? :z number?}) :default nil}
    :radius {:doc "animals within this many blocks of :center, or of the body when there is no :center, are the herd" :spec (a/num-in 0 nil) :default 16}
-   :box {:doc "nil, or {:min {:x :y :z} :max {:x :y :z}}: inclusive bound that replaces :center and :radius" :spec a/box? :default nil}
+   :box {:doc "nil, or {:min {:x :y :z} :max {:x :y :z}}: inclusive bound that replaces :center and :radius" :spec pen-read/box-arg :default nil}
    :color {:doc "sheep only: kill only sheep of this wool colour (e.g. \"white\"); nil: any. :keep still counts every adult" :spec a/name? :default nil}
    :count {:doc "most animals to kill in one run; nil: no cap" :spec (a/int-in 1 nil) :default nil}
    :drops {:doc "item names to collect after a kill; nil: the kind's entry in the drops table, else every item" :spec (a/coll-of a/item?) :default nil}

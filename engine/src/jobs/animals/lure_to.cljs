@@ -2,6 +2,7 @@
   (:require [jobs.lib.ready :as ready]
             [clojure.string :as str]
             [engine.args :as a]
+            [jobs.lib.pen-read :as pen-read]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -57,7 +58,7 @@
 (a/defargs args
   {:mob {:doc "the animal's name, such as \"cow\"" :spec a/name? :default nil}
    :pos {:doc "where to lure it {:x :y :z}" :spec ::a/pos :default nil}
-   :box {:doc "the destination pen {:min :max} (feet cells, inclusive): animals in it are not lured, and the job arrives only when the led animal stands in it; none: the animal within 6 blocks of :pos" :spec a/box? :default nil}
+   :box {:doc "the destination pen {:min :max} (feet cells, inclusive): animals in it are not lured, and the job arrives only when the led animal stands in it; none: the animal within 6 blocks of :pos" :spec pen-read/box-arg :default nil}
    :radius {:doc "animals within this many blocks (flat, height ignored) of where the job starts are lured" :spec (a/num-in 0 nil) :default 8}
    :fetch {:doc "get the food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}
    :uuid {:doc "lead only this animal (its uuid or the start of it, as the entities tool shows; the id when it has none); nothing else takes its place. An empty or ambiguous start (more than one animal matches) never starts; one already at the destination ends the job at once (done? :ok)" :spec string? :default nil}
@@ -213,7 +214,7 @@
         ok? (= :arrived reason)
         result {:reason reason :animal (:animal m) :at (u/self-pos c)
                 :animal-at (some-> a .-pos u/pos-of)
-                :in-box (when-let [box (:box (:args c))] (boolean (and a (animals/in-box? box (u/pos-of (.-pos a))))))
+                :in-box (when-let [box (pen-read/arg-box c)] (boolean (and a (animals/in-box? box (u/pos-of (.-pos a))))))
                 :distance (some-> (or (some-> a .-pos u/pos-of) (:last-seen m)) (u/flat-dist (:pos (:args c))))
                 :near (boolean (and a (<= (u/flat-dist (u/pos-of (.-pos a)) (:pos (:args c))) (near-spot))))}]
     (let [result (cond-> result
@@ -235,7 +236,8 @@
 (defn at-destination?
   "True when the animal stands in :box, else within arrive-range plus arrive-slack of :pos, and not in a gate's cell."
   [c a]
-  (let [{:keys [box pos]} (:args c)
+  (let [{:keys [pos]} (:args c)
+        box (pen-read/arg-box c)
         there (u/pos-of (.-pos a))]
     (and (not (in-doorway? c there))
          (if box
@@ -252,7 +254,7 @@
         in-reach? (fn [e] (or (= (:key sighting) (animals/key-of e))
                               (<= (u/flat-dist origin (u/pos-of (.-pos e))) radius)))
         free? (fn [e] (and (not (animals/leashed? e)) (in-reach? e)
-                           (not (and (:box (:args c)) (animals/in-box? (:box (:args c)) (u/pos-of (.-pos e)))))
+                           (not (and (pen-read/arg-box c) (animals/in-box? (pen-read/arg-box c) (u/pos-of (.-pos e)))))
                            (not (spare/enclosed? c pens e))))]
     (->> (if uuid
            (filterv #(and (str/starts-with? (str (animals/key-of %)) uuid) (not (animals/leashed? %))) (animals/adults (:primitives c) mob (escort/watch-radius)))
@@ -344,8 +346,8 @@
         since (or (:arrive-since (ctx/mem c)) now)]
     (cond
       (and a (at-destination? c a)) (finish! c :arrived)
-      (and a (:box (:args c)) (not (:led-deeper (ctx/mem c))) (<= (u/flat-dist (u/self-pos c) (u/pos-of (.-pos a))) (escort/lead-deeper-gap)))
-      (await (escort/lead-deeper! c (:box (:args c)) (u/pos-of (.-pos a))))
+      (and a (pen-read/arg-box c) (not (:led-deeper (ctx/mem c))) (<= (u/flat-dist (u/self-pos c) (u/pos-of (.-pos a))) (escort/lead-deeper-gap)))
+      (await (escort/lead-deeper! c (pen-read/arg-box c) (u/pos-of (.-pos a))))
       (> (- now since) (escort/max-wait-ms)) (finish! c (if a :animal-outside :lost))
       :else (do (ctx/update-mem! c assoc :arrive-since since)
                 (await (escort/wait-for-animal! c))))))

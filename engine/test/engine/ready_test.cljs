@@ -377,7 +377,7 @@
    "pen-near" {:id "pen-near" :cells [] :plan {:parts [{:id "p" :box [[5 64 -1] [7 64 1]] :herd {:mob "cow"}}]}}})
 
 (def box-at (fn [x] {:min {:x (dec x) :y 64 :z -1} :max {:x (inc x) :y 64 :z 1}}))
-(def corners-at (fn [x] {:from {:x (dec x) :y 64 :z -1} :to {:x (inc x) :y 64 :z 1}}))
+(def corners-at (fn [x] {:min {:x (dec x) :y 64 :z -1} :max {:x (inc x) :y 64 :z 1}}))
 
 (deftest work-jobs-bind-the-place-their-args-name-by-night
   (with-redefs [known/plan (fn [_ id] (get plans id))

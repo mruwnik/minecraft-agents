@@ -3,6 +3,7 @@
             [jobs.lib.work-place :as work-place]
             [engine.settings :as settings]
             [engine.args :as a]
+            [jobs.lib.pen-read :as pen-read]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
@@ -14,7 +15,7 @@
             [jobs.lib.util :as u]))
 
 (def doc
-  "Keep one apiary in order. The apiary is the :box ({:from :to}), or :center (the body's position at the first
+  "Keep one apiary in order. The apiary is the :box ({:min :max}), or :center (the body's position at the first
   run) with :radius.
   One call is one pass over four steps in a fixed order. Each is a child job, called until it ends and never run
   twice in a pass (:continue only while a child waits on the world):
@@ -38,7 +39,7 @@
   :ignore-zones? is passed to guard and harvest, which check zones and claims (see their docs); with :fetch off a missing item skips the step. :fetch is passed to guard, harvest and breed.")
 
 (a/defargs args
-  {:box {:doc "the apiary: {:from pos :to pos}; overrides :center and :radius" :spec (a/map-with {:from a/position? :to a/position?}) :default nil}
+  {:box {:doc "the apiary: {:min pos :max pos}; overrides :center and :radius" :spec pen-read/box-arg :default nil}
    :center {:doc "centre of the apiary; the body's position when the job first runs when nil" :spec ::a/pos :default nil}
    :radius {:doc "hives, fires and bees within this many blocks of the centre count, when :box is nil" :spec (a/num-in 0 nil) :default 12}
    :with {:doc "harvest tool: :shears, :bottle or :either (shears first)" :spec #{:shears :bottle :either} :default :either}

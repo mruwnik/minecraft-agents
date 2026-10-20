@@ -36,7 +36,7 @@
   ([id x] (bee id x {}))
   ([id x more] (merge {:id id :uuid (str "b" id) :name "bee" :kind "passive" :pos {:x x :y 64 :z 2}} more)))
 
-(def box {:from {:x -2 :y 60 :z -6} :to {:x 6 :y 70 :z 6}})
+(def box {:min {:x -2 :y 60 :z -6} :max {:x 6 :y 70 :z 6}})
 
 (defn spec [args] (list 'jobs.apiary.maintain (merge {:box box} args)))
 

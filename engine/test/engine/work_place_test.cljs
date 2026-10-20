@@ -14,7 +14,7 @@
     {:from [4 70 8] :to [0 64 0]} {:x 2 :y 67 :z 4}
     {:center [9 64 9] :radius 3} {:x 9 :y 64 :z 9}
     {:at [3 64 5] :center [9 64 9]} {:x 3 :y 64 :z 5}
-    {:box {:from {:x 4 :y 64 :z 0} :to {:x 0 :y 66 :z 6}}} {:x 2 :y 65 :z 3}
+    {:box {:min {:x 4 :y 64 :z 0} :max {:x 0 :y 66 :z 6}}} {:x 2 :y 65 :z 3}
     {:center {:x 9 :z 7}} {:x 9 :z 7}
     {} nil))
 

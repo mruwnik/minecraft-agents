@@ -1,6 +1,7 @@
 ;; Card 6b719a5f: jobs.apiary.guard standing in the lit campfire's own cell steps off through jobs.lib.step-off (go-to to the
 ;; nearest standable non-hazard cell), not a raw moveTo x+2. Body at the fire's cell [14 0 16] with a stone wall at x+2 (case 1)
 ;; or lava at x+2 (case 2): the old hop ran into the wall or the lava.
+;; Case 3 passes the area as a :box with vector corners.
 ;; Should-succeed (case 1): the fire is sunk and carpeted (:guarded) and the body ends beside it, never on the lava cell.
 {:defaults
  {:tags [:apiary :step-off]
@@ -9,15 +10,22 @@
   :body {:at [14.5 0 16.5] :settle-s 2
          :inventory [["iron_pickaxe" 1] ["campfire" 1] ["white_carpet" 1]]
          :effects [["resistance" 600 4] ["fire_resistance" 600 0]]}
-  :act [[:job (jobs.apiary.guard {:radius 20})]]
   :limit-s 120}
  :cases
  [{:name "wall-at-x-plus-2-steps-off-to-a-free-side"
+   :act [[:job (jobs.apiary.guard {:radius 20})]]
+   :blocks [[:fill [16 0 12] [16 2 20] "stone"]]
+   :expect [{:event {:kind :completed :data {:sunk 1 :carpeted 1 :reason :guarded}} :within-s 100 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:block [14 -1 16] "campfire[lit=true]"] [:not-block [14 0 16] "campfire"]]}
+  {:name "box-with-vector-corners-guards-the-fire"
+   :act [[:job (jobs.apiary.guard {:box {:min #at [10 -2 12] :max #at [18 4 20]}})]]
    :blocks [[:fill [16 0 12] [16 2 20] "stone"]]
    :expect [{:event {:kind :completed :data {:sunk 1 :carpeted 1 :reason :guarded}} :within-s 100 :of-job true}
             {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:block [14 -1 16] "campfire[lit=true]"] [:not-block [14 0 16] "campfire"]]}
   {:name "lava-at-x-plus-2-never-ends-on-the-lava"
+   :act [[:job (jobs.apiary.guard {:radius 20})]]
    :blocks [[:set [16 0 16] "lava"]]
    ;; the lava spreads to x+1, beside the fire: the sink's dig is refused (hazard), the fire is left as it was
    :expect [{:event {:source :job :kind :stopped :data {:reason :refused}} :within-s 100 :of-job true}]

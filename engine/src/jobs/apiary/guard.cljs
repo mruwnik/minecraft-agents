@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.settings :as settings]
             [engine.args :as a]
+            [jobs.lib.pen-read :as pen-read]
             [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary :refer [survey]]
             [jobs.lib.blocks :as blocks]
@@ -43,7 +44,7 @@
   :ignore-zones? true skips the check.")
 
 (a/defargs args
-  {:box {:doc "{:from pos :to pos}, fires inside it only; overrides :center and :radius" :spec (a/map-with {:from a/position? :to a/position?}) :default nil}
+  {:box {:doc "{:min pos :max pos}, fires inside it only; overrides :center and :radius" :spec pen-read/box-arg :default nil}
    :center {:doc "centre of the search; the body's position when the job first runs when nil" :spec ::a/pos :default nil}
    :radius {:doc "fires within this many blocks of the centre count, when :box is nil" :spec (a/num-in 0 nil) :default 16}
    :ignore-zones? :shared

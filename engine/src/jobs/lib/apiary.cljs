@@ -6,6 +6,7 @@
             [jobs.lib.game-facts :as facts]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
+            [jobs.lib.pen-read :as pen-read]
             [jobs.lib.util :as u]))
 
 ;; ------------------------------------------------------------------ smoke (vanilla CampfireBlock.isSmokeyPos)
@@ -120,9 +121,12 @@
 (defn center-of [c]
   (or (:center (:args c)) (:center (ctx/mem c)) (u/self-pos c)))
 
-(defn corners [{:keys [from to]}]
-  (for [x [(:x from) (:x to)] y [(:y from) (:y to)] z [(:z from) (:z to)]]
-    {:x x :y y :z z}))
+(defn corners
+  "The eight corner cells of a box {:min :max} (corners as {:x :y :z} or [x y z])."
+  [box]
+  (let [{from :min to :max} (pen-read/norm-box box)]
+    (for [x [(:x from) (:x to)] y [(:y from) (:y to)] z [(:z from) (:z to)]]
+      {:x x :y y :z z})))
 
 (defn watched-cells
   "The cells whose never having been seen calls for a look: the corners of the box, or the centre."
@@ -130,10 +134,10 @@
   (if-let [box (:box (:args c))] (corners box) [(center-of c)]))
 
 (defn in-area?
-  "True when pos is inside the area {:box {:from :to}} or {:center :radius}."
+  "True when pos is inside the area {:box {:min :max}} or {:center :radius}."
   [{:keys [box center radius]} pos]
   (if box
-    (let [{:keys [from to]} box
+    (let [{from :min to :max} (pen-read/norm-box box)
           within (fn [k] (<= (min (k from) (k to)) (k pos) (max (k from) (k to))))]
       (and (within :x) (within :y) (within :z)))
     (<= (u/dist center pos) radius)))

@@ -158,7 +158,7 @@
   "Never without :mob or :box, or with a box no gate axis can run min-depth cells into."
   [c]
   (let [{:keys [mob gate]} (:args c)
-        box (some-> (:box (:args c)) pen-read/norm-box)]
+        box (pen-read/arg-box c)]
     (cond
       (not (and mob box)) (contract/never :no-mob-or-box "herd needs a :mob and a :box")
       (< (apply max (box-sides box gate)) min-depth)

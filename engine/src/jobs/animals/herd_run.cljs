@@ -55,7 +55,7 @@
 (defn pen-box
   "The :box arg as {:min {:x :y :z} :max {:x :y :z}}, whichever form its corners were given in."
   [c]
-  (some-> (:box (:args c)) pen-read/norm-box))
+  (pen-read/arg-box c))
 
 (defn box-centre [{:keys [min max]}]
   {:x (/ (+ (:x min) (:x max) 1) 2) :y (:y min) :z (/ (+ (:z min) (:z max) 1) 2)})

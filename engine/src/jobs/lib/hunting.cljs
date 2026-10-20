@@ -6,6 +6,7 @@
             [engine.settings :as settings]
             [jobs.lib.animals :as animals]
             [jobs.lib.look :as look]
+            [jobs.lib.pen-read :as pen-read]
             [jobs.lib.waits :as waits]
             [jobs.lib.util :as u]))
 
@@ -121,7 +122,8 @@
 (defn reach
   "How far from the body the entity query must look to cover the bound."
   [c]
-  (let [{:keys [box center radius]} (:args c)
+  (let [{:keys [center radius]} (:args c)
+        box (pen-read/arg-box c)
         here (u/self-pos c)]
     (cond
       box (apply max (map #(u/dist here %) (corners box)))
@@ -131,7 +133,8 @@
 (defn in-bound?
   "True when the position lies inside the bound (a box, else around the center, else around the body)."
   [c pos]
-  (let [{:keys [box center radius]} (:args c)
+  (let [{:keys [center radius]} (:args c)
+        box (pen-read/arg-box c)
         {:keys [x y z]} pos]
     (cond
       box (animals/in-box? box pos)

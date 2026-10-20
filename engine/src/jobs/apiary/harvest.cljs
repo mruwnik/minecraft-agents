@@ -5,6 +5,7 @@
             [engine.settings :as settings]
             [jobs.lib.game-facts :as facts]
             [engine.args :as a]
+            [jobs.lib.pen-read :as pen-read]
             [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary :refer [classify found-hives hives tool-for tool-item]]
             [jobs.lib.child :as child]
@@ -45,7 +46,7 @@
 
 (a/defargs args
   {:with {:doc ":shears, :bottle or :either (shears first when both are carried)" :spec #{:shears :bottle :either} :default :either}
-   :box {:doc "{:from pos :to pos}, hives inside it only; overrides :center and :radius" :spec (a/map-with {:from a/position? :to a/position?}) :default nil}
+   :box {:doc "{:min pos :max pos}, hives inside it only; overrides :center and :radius" :spec pen-read/box-arg :default nil}
    :center {:doc "centre of the search; the body's position when the job first runs when nil" :spec ::a/pos :default nil}
    :radius {:doc "hives within this many blocks of the centre count, when :box is nil" :spec (a/num-in 0 nil) :default 12}
    :max {:doc "hives to harvest in one run, at most" :spec (a/int-in 1 nil) :default 8}

@@ -83,6 +83,11 @@
   [{:keys [min max]}]
   {:min (a/cell min) :max (a/cell max)})
 
+(defn arg-box
+  "The :box arg of c's job as {:min {:x :y :z} :max {:x :y :z}}, whichever form its corners were given in; nil without one."
+  [c]
+  (some-> (:box (:args c)) norm-box))
+
 (defn want-blocks
   "The block names a want can place: one for a block or a state map, the choices of an :any."
   [want]

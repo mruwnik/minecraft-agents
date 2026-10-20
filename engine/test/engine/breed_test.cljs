@@ -446,6 +446,15 @@
           (is (< x 6) "back outside the pen")
           (is (false? (gate-open? s))))))))
 
+(deftest breed-takes-a-known-pen-with-vector-corners
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "cow" :box {:min [7 64 -7] :max [19 64 7]}}
+                                 {:inventory (wheat 2) :blocks (pen-blocks true) :states {"6,64,0" {:open false :facing "east"}}
+                                  :entities [(cow 1 19 {:pos {:x 19 :y 64 :z 1}}) (cow 2 19 {:pos {:x 19 :y 64 :z -1}})]} 40))]
+          (is (= :fed (:reason (done-event s)))))))))
+
 (deftest a-cancel-inside-the-known-pen-still-walks-out-of-it
   (async done
     (tu/run-async done
