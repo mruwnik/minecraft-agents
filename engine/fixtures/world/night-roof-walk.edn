@@ -1,5 +1,5 @@
 ;; Cards dcedd0f5, a9ae340d: at night a body without a bed walks to a close remembered roofed place (:roofed-places [:home], walk-radius setting 32)
-;; when go-to's planned route (a cell seen dark or unseen at night costs twice a lit one) is no dearer than the walls' quote plus shut-in's ::room-credit-s (9.5) (the :room way of survival.shut-in, survival.enter-room),
+;; when go-to's planned route (a cell seen dark or unseen at night costs twice a lit one) is no dearer than the walls' quote (the :room way of survival.shut-in, survival.enter-room),
 ;; else it digs in where it stands (dig-in.sealed; cobblestone carried). Open ground (64x32 plot,
 ;; body at x 4.5, z 16.5); home = a stone slab at y 2 over 3x3 cells (roofed within the default roof height 4), torches beside the line at z 15, the first 13+ cells from the body: a torch lights 13 cells, and a body in light is safe from the night.
 ;; The walk's success is the body at home, its open slab walled in there (a roof with open sides is no shelter, Q345); failure is the body near its start.
@@ -20,12 +20,12 @@
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 100 :of-job true}]
    :after [[:body-near [19.5 0 16.5] 2.5]]
    :limit-s 110}
-  {:name "lit-route-25-blocks-torches-every-6-walks-home"
-   :blocks [[:fill [28 2 15] [30 2 17] "stone"] [:set [17 0 15] "torch"] [:set [23 0 15] "torch"] [:set [29 0 15] "torch"]]
-   :act [[:job (jobs.memory.set-place {:name :home :pos #at [29 0 16]}) [:now]]
+  {:name "lit-route-16-blocks-torches-walks-home"
+   :blocks [[:fill [19 2 15] [21 2 17] "stone"] [:set [17 0 15] "torch"] [:set [20 0 15] "torch"]]
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [20 0 16]}) [:now]]
          [:job (jobs.survival.night)]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 100 :of-job true}]
-   :after [[:body-near [29.5 0 16.5] 2.5]]
+   :after [[:body-near [20.5 0 16.5] 2.5]]
    :limit-s 110}
   {:name "long-dark-route-digs-in-where-it-stands"
    :blocks [[:fill [33 2 15] [35 2 17] "stone"]]
