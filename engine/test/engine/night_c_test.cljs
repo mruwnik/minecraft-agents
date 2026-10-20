@@ -92,9 +92,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home (assoc lit-world :light-default [15 0]) {:x 10 :y 64 :z 0}))]
+        (let [{:keys [eng p]} (await (night-at-home (assoc lit-world :light-default [15 3]) {:x 10 :y 64 :z 0}))]
           (await (tu/run-until-empty eng 40))
-          (is (nothing-placed-at-the-start? p) "10 dark blocks cost about twice a lit walk, still under the dig-in")
+          (is (nothing-placed-at-the-start? p) "10 dim blocks cost more than a lit walk, still under the pit's quote")
           (is (= 10 (js/Math.floor (:x (st/pos-of p)))) "walked home"))))))
 
 (deftest a-home-beyond-the-walk-radius-is-not-walked-to

@@ -32,7 +32,7 @@
 (a/defargs settings
   {::job-time-s {:default 60 :doc "Seconds a walls attempt may take." :spec (a/num-in 0 nil)}
    ::place-s {:default 3 :doc "Seconds a placement is guessed to take, for the quote." :spec (a/num-in 0 nil)}
-   ::night-place-s {:default 0.1 :doc "Seconds a placement is guessed to take for a night's shelter: the dig back at dawn is daylight work, so only placing is priced." :spec (a/num-in 0 nil)}
+   ::night-place-s {:default 1 :doc "Seconds a placement (aim, place, settle) takes for a night's shelter; the dig back at dawn is daylight work, so only placing is priced." :spec (a/num-in 0 nil)}
    ::dear-s {:default 0.4 :doc "Seconds a wall block worth more than :wall-value adds per cell for the night: it is dug again at dawn." :spec (a/num-in 0 nil)}})
 
 (def target [])
