@@ -422,7 +422,10 @@
          (<= dist (:radius opts))
          (in-cone? (basis (.-yaw eye) (.-pitch eye)) (:hx grid) (:hy grid) vx vy vz)
          (when-let [prev (or (walk-cells raw sight ox oy oz (+ x 0.5) (+ y 0.5) (+ z 0.5))
-                             (some (fn [[tx ty tz]] (walk-cells raw sight ox oy oz tx ty tz)) (face-points ox oy oz x y z)))]
+                             (loop [ps (seq (face-points ox oy oz x y z))]
+                               (when ps
+                                 (let [[tx ty tz] (first ps)]
+                                   (or (walk-cells raw sight ox oy oz tx ty tz) (recur (next ps)))))))]
            (let [light (.lightAt ^js raw x y z)
                  shown (if (== 1 (aget sight id)) (max-light light prev) light)]
              (or (== 1 (aget visible shown)) (<= dist (near-of per))))))))

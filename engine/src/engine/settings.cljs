@@ -54,13 +54,21 @@
          (js->clj specs :keywordize-keys true))))
 
 (defn js-reader
-  "The reader the primitives get (key string -> live value, nil for a key not declared): it reads the state at each
-  call, so a reload reaches the JavaScript at its next use."
+  "The reader the primitives get (key string -> live value, nil for a key not declared). Answers are kept per key and
+  dropped whenever the settings state changes (not while a call's :settings override is in scope), so a reload reaches the JavaScript at its next use."
   []
-  (fn [k]
-    (let [specs (:specs @state)
-          kw (keyword k)]
-      (when (contains? specs kw) (get specs kw)))))
+  (let [cache (js/Map.)]
+    (add-watch state ::js-reader (fn [& _] (.clear cache)))
+    (fn [k]
+      (cond
+        (some? (.getStore call-scope)) (let [specs (:specs @state) kw (keyword k)]
+                                         (when (contains? specs kw) (get specs kw)))
+        (.has cache k) (.get cache k)
+        :else (let [specs (:specs @state)
+                    kw (keyword k)
+                    v (when (contains? specs kw) (get specs kw))]
+                (.set cache k v)
+                v)))))
 
 (def job-args-key :engine.settings/job-args)
 
