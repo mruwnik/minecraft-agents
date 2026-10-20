@@ -9,7 +9,7 @@
             [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.settings :as settings]
-            [jobs.lib.child :as child]
+            [jobs.lib.near :as near]
             [jobs.lib.crafting-table :as crafting-table]
             [jobs.lib.look :as look]
             [jobs.lib.access :as access]
@@ -271,10 +271,10 @@
       (do (ctx/update-mem! c assoc :table table)
           (if (u/within? (u/self-pos c) table (reach))
             (if handed? (give-up! c made :unreachable) :again)
-            (let [r (await (child/call-walk* c :walk {:pos table :range (reach) :ways #{:walk :clear-seal} :spend {:tries 1}}))]
+            (let [r (await (near/go-near! c table (reach) {:ways #{:walk :clear-seal}}))]
               (cond
-                (= :continue r) :continue
-                (:arrived (:data r)) :again
+                (= :partial r) :continue
+                (= :there r) :again
                 arg? (give-up! c made :unreachable)
                 :else (do (ctx/update-mem! c #(-> % (update :unreachable-tables (fnil conj #{}) (crafting-table/cell-vec table)) (dissoc :table)))
                           (or (await (table-fetch! c)) :again)))))))))

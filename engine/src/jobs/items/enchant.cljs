@@ -5,7 +5,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
-            [jobs.lib.child :as child]
+            [jobs.lib.near :as near]
             [jobs.lib.need :as need]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
@@ -261,13 +261,11 @@
         pos (or table (find-table (:primitives c) (table-radius)))]
     (if-not pos
       (give-up! c "no-table" {})
-      (let [r (if (u/within? (u/self-pos c) pos (reach))
-                :done
-                (await (child/call-walk* c :walk {:pos pos :range (reach) :ways #{:walk :clear-seal} :spend {:tries 1}})))]
-        (cond
-          (= :continue r) :continue
-          (not (or (u/within? (u/self-pos c) pos (reach)) (:arrived (:data r)))) (fail-up! c "unreachable")
-          :else (await (consider! c pos)))))))
+      (let [r (await (near/go-near! c pos (reach) {:ways #{:walk :clear-seal}}))]
+        (case r
+          :partial :continue
+          :blocked (fail-up! c "unreachable")
+          (await (consider! c pos)))))))
 
 (defn ^:async supply!
   "Fetch the item, then the lapis, when one is not carried and the call's ways allow: nil when both are, :continue while a

@@ -3,10 +3,9 @@
   test of a partial outcome against the call's :least."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
-            [jobs.lib.child :as child]
+            [jobs.lib.near :as near]
             [jobs.lib.places :as places]
             [jobs.lib.toll-cells :as tc]
-            [jobs.lib.util :as u]
             [jobs.lib.world :as known]))
 
 (defn enough?
@@ -38,20 +37,10 @@
     {:reason :no-zones}))
 
 (defn ^:async walk!
-  "Walk until the body's cell is within range of pos with a go-to child (slot :walk, no retry, no warn), carrying the
-  call's :ignore-zones?. opts: :tolls (go-to's). Resolves to :there, :continue (go-to waits on the world)
-  or :blocked (it gave up, or pos is no cell)."
+  "jobs.lib.near/go-near! to within range of pos (opts: :tolls): :there, :continue (go-to waits on the world) or :blocked."
   [c pos range {:keys [tolls]}]
-  (let [cell (:pos (places/parse-pos pos))]
-    (cond
-      (nil? cell) :blocked
-      (u/within? (u/self-pos c) cell range) :there
-      :else (let [e (await (child/call-walk* c :walk {:pos cell :range range :doors :shut :tolls tolls
-                                                      :one-way :closed :spend {:tries 1}
-                                                      :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-              (cond (= :continue e) :continue
-                    (and (= :done (:kind e)) (:arrived (:data e))) :there
-                    :else :blocked)))))
+  (let [w (await (near/go-near! c pos range {:tolls tolls}))]
+    (if (= :partial w) :continue w)))
 
 (defn ^:async walk-to!
   "walk! to pos with the tolls of the cell: :there, :continue or :blocked."

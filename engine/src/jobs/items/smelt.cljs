@@ -9,7 +9,6 @@
             [engine.settings :as settings]
             [jobs.items.smelt.fetch :as sf]
             [jobs.items.smelt.plan :as sp]
-            [jobs.lib.child :as child]
             [jobs.lib.furnace :as furnace]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
@@ -277,28 +276,10 @@
               (stop! c "output-gone")
               (finish! c {})))))
 
-(defn ^:async reach!
-  "Walk until the body is within 3 cells of the furnace, as a go-to child: :there, :partial (it waits on the world, or
-  got nearer: yield) or :blocked (it gave up)."
-  [c pos]
-  (let [cell (near/cell-of pos)]
-    (cond
-      (u/within? (u/self-pos c) cell 3) :there
-      :else (let [r (await (child/call-walk* c :walk {:pos cell :range 3 :doors :shut
-                                                      :one-way :closed :spend {:tries 1}
-                                                      :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
-                  res (:data r)]
-              (cond
-                (= :continue r) :partial
-                (not= :done (:kind r)) :blocked
-                (:arrived res) :there
-                (:leg res) :partial
-                :else :blocked)))))
-
 (defn ^:async round-at!
   "Reach the furnace, read it, then load (first) or collect."
   [c furnace owed?]
-  (case (await (reach! c furnace))
+  (case (await (near/go-near! c furnace 3))
     :partial :continue
     :blocked (give-up! c "unreachable")
     (let [state (await (visit! c "read" {}))]
