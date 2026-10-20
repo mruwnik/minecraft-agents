@@ -54,6 +54,15 @@
           (is (= {"wheat_seeds" 7} (:fed result)))
           (is (= 3 (carried p "wheat_seeds"))))))))
 
+(deftest bone-meal-lying-far-from-the-body-is-collected
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks {"15,63,0" "composter"}
+                                      :entities [{:id 71 :name "item" :kind "item" :pos {:x 15 :y 64 :z 0} :item {:name "bone_meal" :count 1}}]})]
+          (await (child-outcome eng job {:at {:x 15 :y 63 :z 0} :items ["wheat_seeds"]} 40))
+          (is (= 1 (carried p "bone_meal")) "the meal 15 blocks off is inside the 20-block meal search, so the pick-up child reaches it"))))))
+
 (deftest compost-is-one-call-the-whole-run
   (async done
     (tu/run-async done

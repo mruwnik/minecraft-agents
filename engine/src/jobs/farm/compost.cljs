@@ -81,7 +81,6 @@
    ::level-7-pause-s {:default 1 :doc "Seconds paused at a level-7 composter before looking again (it turns 8 within a second)." :spec (a/num-in 0 nil)}
    ::max-waits {:default 6 :doc "Pauses at a level-7 composter that count as one failure." :spec (a/int-in 1 nil)}
    ::meal-look {:default 20 :doc "Bone meal on the ground is looked for this far from the body, in blocks." :spec (a/num-in 0 nil)}
-   ::collect-radius {:default 8 :doc "How far round the body the meal child looks for the dropped bone meal, in blocks." :spec (a/num-in 0 nil)}
    ::meal-reach {:default 3 :doc "Bone meal this close to the composter counts as its own, in blocks." :spec (a/num-in 0 nil)}})
 
 (def target [:at])
@@ -154,7 +153,7 @@
 (defn ^:async take-meal!
   "An items.collect-drops child takes the meal: :continue while it waits, :collected or :left."
   [c meal]
-  (let [r (await (child/run!* c :collect 'jobs.items.collect-drops {:ids [(.-id meal)] :radius (settings/get settings ::collect-radius)}))]
+  (let [r (await (child/run!* c :collect 'jobs.items.collect-drops {:ids [(.-id meal)] :radius (settings/get settings ::meal-look)}))]
     (cond
       (= :continue r) :continue
       (pos? (or (:collected (:data r)) 0)) :collected

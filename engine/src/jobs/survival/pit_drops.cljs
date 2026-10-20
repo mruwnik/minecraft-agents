@@ -3,11 +3,19 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::pickup-reach {:default 1 :doc "How far from the body, along the ground, an item is picked up without a walk." :spec (a/int-in 0 nil)}})
+  {::collect-radius {:default 4 :doc "How far round the body an items.collect-drops child looks for the pit's drops, in blocks." :spec (a/num-in 0 nil)}
+   ::pickup-reach {:default 1 :doc "How far from the body, along the ground, an item is picked up without a walk." :spec (a/int-in 0 nil)}})
+
+(defn ^:async take-ids!
+  "An items.collect-drops child picks up the item entities ids."
+  [c ids]
+  (when (seq ids)
+    (await (child/run!* c :collect 'jobs.items.collect-drops {:ids (vec ids) :radius (settings/get settings ::collect-radius)}))))
 
 (defn pickup-reach [] (settings/get settings ::pickup-reach))
 
@@ -31,16 +39,10 @@
   [c {:keys [x y z]}]
   (let [here? (fn [{cell :cell}] (and (= x (:x cell)) (= z (:z cell)) (>= (:y cell) y)))
         drops (filter here? (:pit-drops (ctx/mem c)))]
-    (loop [[id & more] (in-reach-ids c (map :id drops))]
-      (when id
-        (await (ctx/act c :collect #js {:id id}))
-        (recur more)))
+    (await (take-ids! c (in-reach-ids c (map :id drops))))
     (ctx/update-mem! c update :pit-drops #(vec (remove here? %)))))
 
 (defn ^:async collect-drops!
   "Pick up the placeable blocks a dig dropped."
   [c blocks drops]
-  (loop [ds (filter #(some #{(.-name %)} blocks) (array-seq drops))]
-    (when (seq ds)
-      (await (ctx/act c :collect #js {:id (.-id (first ds))}))
-      (recur (rest ds)))))
+  (await (take-ids! c (keep #(when (some #{(.-name %)} blocks) (.-id %)) (array-seq drops)))))
