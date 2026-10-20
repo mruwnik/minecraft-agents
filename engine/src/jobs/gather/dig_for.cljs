@@ -38,14 +38,14 @@
   (:variants). The run's own area is :center / :radius (waits :outside-area while the body is farther; jobs.lib.area).
 
   Needs: a pickaxe carried when the block wants one (a shovel or axe block drops by hand), torches carried or craftable when a
-  tunnel or stair is lit, food carried when hungry, health (fit? waits :low-health, at the start only), and a read zone list (:no-zones unless
+  tunnel or stair is lit, health (fit? waits :low-health, at the start only), and a read zone list (:no-zones unless
   :ignore-zones?). Impossible: :no-block. :stay-level declines :on-surface in the open. Fetches only seal blocks and torch ingredients (:fetch), never the tool or food, and walks nowhere
   home: the body stays where the dig ends. Targets come only from perception (seenBlocks, never x-ray): a seen block within
   :radius with a seen air face, not beside seen lava (or water unless :wet), that the zone rules, claims and plans let it dig
   (:refused when all are barred).
 
   One call, in this order each step, until it ends:
-  0. A head in water ends :flooded; hungry with no food carried (trip/food-short?; not for soil) ends :hungry; no usable
+  0. A head in water ends :flooded; no usable
      tool carried (none that harvests the block, or every one nearly spent) ends :no-tool; no torch left to hang ends :no-torches.
      Each text says what is missing and that jobs.gather.mine gets it first.
   1. Collecting the drop of a dig (mine.targets, mine.drops): collect-drops within the collect-radius setting, one walk or cut to the dug cell, a
@@ -62,7 +62,7 @@
   Ore beside the way is picked up by jobs.lib.ore-pick (:pick-up-ores).
 
   Ends :done when :got meets :count (or the call's :least); else condition-failed for the facts :none :wet :refused :own-zone
-  :no-shaft :flooded :no-tool :no-torches, limit-reached {:line :food} for :hungry, nothing-possible for failed tries (:no-drops
+  :no-shaft :flooded :no-tool :no-torches, nothing-possible for failed tries (:no-drops
   :gave-up :tunnel-length :tunnel-stopped :no-stone-found :descent-stopped :not-back). 0 of :count is never done.
   Data {:got n :reason r} plus :descent, :tunnel, :left, :lost, :ores, :unreached, :ground (with :track-ground), :start-floor-dug (the cell under the start was dug); text says reason,
   :got, the stair and the tunnel. Quote: about ::item-s s an item, open-ended.")

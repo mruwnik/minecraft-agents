@@ -29,7 +29,7 @@
   "Mine like a player: a trip that gets what the dig needs, calls jobs.gather.dig-for, and comes back. It remembers the cell it
   starts on, deposits when the bag is nearly full (jobs.lib.trip), gets a pickaxe when none is carried that harvests the block, a spare
   for a worn last one, and torches before a descent or tunnel (all through jobs.lib.need; :fetch false skips them), walks out of an own
-  zone it stands near, walks back to the start cell, and calls jobs.gather.dig-for with the same args until it ends. Hungry or flooded
+  zone it stands near, walks back to the start cell, and calls jobs.gather.dig-for with the same args until it ends. Flooded
   at the start, or a pickaxe or torches that cannot be had, end it before the dig. A dig that stops for a pickaxe or torches (:no-tool,
   :no-torches) gets them again and goes on from where it stood (at most ::max-equip-rounds rounds); any other ending is passed on.
   Then, with :mend, it fills the ground under the start that the dig opened (mine.mend), and always walks back to the start cell (a go-to
@@ -39,7 +39,7 @@
   Needs and impossible: those of jobs.gather.dig-for; its can-start? checks stand here too. The run's own area is :center / :radius.
 
   Ends :done when :got meets :count (or the call's :least) and the body is home; else the dig's ending (condition-failed for the facts
-  :none :wet :refused :own-zone :no-shaft :flooded :no-tool :no-torches, limit-reached {:line :food} for :hungry, nothing-possible for
+  :none :wet :refused :own-zone :no-shaft :flooded :no-tool :no-torches, nothing-possible for
   failed tries) or :not-home. Data {:got n :reason r :mended n} plus the dig's data; text says reason, :got, :mended, the stair and the
   tunnel. Quote: about ::item-s s an item, open-ended.")
 

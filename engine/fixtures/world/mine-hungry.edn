@@ -1,37 +1,31 @@
-;; gather.mine stops :hungry when the body is hungry, carries no food and get-food gave up lately (card a1366037; jobs.lib.trip/food-short?).
-;; A stone mass x 2..30, z 8..30 with a 1x2 tunnel cell at the body (as mine-branch-torch); iron ore at the east end of the line.
-;; Food drained by RCON to near 0 (polled on foodLevel: the active_effects poll let the job start before the drain); a fresh :hungry entry is the give-up.
-;; Should-succeed: no food carried: the job stops :hungry and no ore is dug. Should-fail: bread carried: the mine goes on and ends done.
+;; gather.mine has no hunger stop (design D12): a hungry body is fed by the hungry trigger, and a hungry body with nothing to eat digs on.
+;; A stone mass x 2..30, z 8..30 with a 1x2 tunnel cell at the body (as mine-branch-torch); iron ore at the east end of a 12-cell line.
 {:defaults
  {:tags [:mine :hungry :jobs] :time :any
   :plot {:height 12}
-  :blocks [[:fill [2 0 8] [30 6 30] "stone"] [:fill [16 0 16] [19 1 16] "air"] [:set [20 0 16] "iron_ore"]]
-  :body {:at [16.5 0 16.5] :yaw 0 :inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8]] :effects [["resistance" 600 4]]}
-  :memory [{:kind :hungry :data {:food 2} :age-s 5 :policy {:cap 10 :ttl 3600000}}]
-  :limit-s 120}
+  :blocks [[:fill [2 0 8] [30 6 30] "stone"] [:fill [16 0 16] [19 1 16] "air"] [:set [28 0 16] "iron_ore"]]
+  :body {:at [16.5 0 16.5] :yaw 0 :inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8] ["bread" 4]] :effects [["resistance" 600 4]]}
+  :limit-s 150}
  :cases
- [{:name "hungry-with-no-food-stops-before-digging"
+ [{:name "hungry-mid-mine-feeds-through-the-trigger"
+   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 14 :radius 16 :mend false})]
+         [:wait-s 4]
+         [:rcon "effect give $BODY minecraft:hunger 8 243 true"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 90}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :hungry}} :within-s 120}
+            {:event {:source :job :kind :completed :data {:name "jobs.gather.mine"}} :within-s 140 :of-job true}]
+   :after [[:item "raw_iron" 1] [:item "bread" [:<= 3]]]}
+  {:name "hungry-with-no-food-carried-the-mine-goes-on"
+   :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8]]}
+   :memory [{:kind :hungry :data {:food 2} :age-s 5 :policy {:cap 10 :ttl 3600000}}]
    :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-rcon "data get entity $BODY foodLevel" "data: [0-3]$" 30]
-         [:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
-   :expect [{:event {:source :job :kind :stopped :data {:got 0 :reason :hungry}} :within-s 60 :of-job true}]
-   :after [[:item "raw_iron" 0]]}
-  {:name "bread-carried-the-mine-goes-on"
-   :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8] ["bread" 4]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-rcon "data get entity $BODY foodLevel" "data: [0-3]$" 30]
-         [:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
-   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 100 :of-job true}]
+         [:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 14 :radius 16 :mend false})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.gather.mine"}} :within-s 140 :of-job true}]
    :after [[:item "raw_iron" 1]]}
-  ;; 177832d8: hungry is a limit on the food line; a worn last tool is a missing tool (condition-failed), neither is the other's ending
-  {:name "hungry-ends-limit-reached-not-condition-failed"
-   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-rcon "data get entity $BODY foodLevel" "data: [0-3]$" 30]
-         [:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :limit-reached}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :stopped :data {:kind :condition-failed}} :for-s 40 :of-job true}]
-   :after [[:item "raw_iron" 0]]}
   {:name "last-pickaxe-worn-out-ends-condition-failed-no-tool"
    :blocks [[:set [21 0 16] "iron_ore"] [:set [22 0 16] "iron_ore"]]
    :body {:inventory [["cobblestone" 16] ["torch" 8] ["bread" 4]]}
-   :memory []
    :act [[:rcon "item replace entity $BODY hotbar.0 with minecraft:stone_pickaxe[minecraft:damage=130]"]
          [:job (jobs.gather.mine {:block "iron_ore" :level false :count 3 :direction :east :tunnel-length 8 :radius 16 :mend false :fetch false})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed}} :within-s 100 :of-job true}

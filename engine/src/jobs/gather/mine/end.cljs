@@ -46,14 +46,13 @@
     (if (number? least) (min n least) n)))
 
 (defn end-run
-  "The ending of a run with data {:got n :reason r ..}: :done when :got meets wanted, else by reason a kind: :hungry limit-reached on the food line, a fact (a worn last tool
+  "The ending of a run with data {:got n :reason r ..}: :done when :got meets wanted, else by reason a kind: a fact (a worn last tool
   is :no-tool) condition-failed, any other nothing-possible. The cause is {:reason r} with :tool and :why when the data has them."
   [c {:keys [got reason] :as data}]
   (ctx/update-mem! c assoc :finished true)
   (let [cause (merge {:reason reason} (select-keys data [:tool :why]))]
     (cond
       (and (not= :not-home reason) (>= got (wanted c))) (ctx/end c :done nil data)
-      (= :hungry reason) (ctx/end c :limit-reached (assoc cause :line :food) data)
       (facts reason) (ctx/end c :condition-failed cause data)
       :else (ctx/end c :nothing-possible cause data))))
 

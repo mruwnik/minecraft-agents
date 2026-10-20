@@ -183,32 +183,10 @@
     (await (m/run-ticks s 1))
     [(m/finished? s) (get (m/inv s) "sand" 0) (m/done-event s)]))
 
-(deftest mine-stops-hungry-when-get-food-gave-up-and-no-food-is-carried
+(deftest mine-goes-on-hungry-with-no-food-and-a-give-up-leaving-the-feeding-to-the-hungry-trigger
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[fin sand ev] (await (hungry-mine 2 []))]
-          (is fin)
-          (is (zero? sand) "dug nothing")
-          (is (= :hungry (:reason ev))))))))
-
-(deftest mine-goes-on-when-food-is-carried-or-plenty
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [[_ sand1 ev1] (await (hungry-mine 2 [{:name "bread" :count 2} {:name "torch" :count 10}]))
-              [_ sand2 ev2] (await (hungry-mine 20 [{:name "torch" :count 10}]))]
-          (is (= :count (:reason ev1)))
-          (is (= :count (:reason ev2)))
-          (is (>= sand1 6))
-          (is (>= sand2 6)))))))
-
-(deftest mine-of-surface-soil-goes-on-hungry
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (m/start {:world {:blocks m/floor :self {:food 2} :inventory []}})]
-          (mem/write! (:store (:eng s)) :hungry {:food 2} {:cap 10 :ttl 3600000})
-          (core/submit! (:eng s) (m/spec {:block "dirt" :count 4}) {})
-          (await (m/run-ticks s 40))
-          (is (not= :hungry (:reason (m/done-event s)))))))))
+        (let [[_ sand ev] (await (hungry-mine 2 [{:name "torch" :count 10}]))]
+          (is (= :count (:reason ev)))
+          (is (>= sand 6)))))))

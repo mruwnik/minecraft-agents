@@ -608,15 +608,14 @@
         (let [s (await (fell fenced {:radius 12} 150))]
           (is (= "exhausted" (:why (:out s))) "a walk tried and gave its reason"))))))
 
-(deftest a-hungry-body-with-no-food-and-a-failed-get-food-waits-before-the-next-tree
+(deftest a-hungry-body-with-no-food-and-a-failed-get-food-still-fells-leaving-hunger-to-the-trigger
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (fm/start (assoc tall :self {:food 2}) {})
               _ (mem/write! (:store (:eng s)) :hungry {:food 2} {:cap 10 :ttl 3600000})
-              out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 50))]
-          (is (not= :limit-reached (:kind (:ending out))) "no made-up limit")
-          (is (empty? (dug-ys (:p s))) "dug nothing"))))))
+              _ (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 50))]
+          (is (seq (dug-ys (:p s))) "felled the tree"))))))
 
 (deftest a-branch-is-felled-with-the-trunk-and-every-log-is-picked-up
   (async done

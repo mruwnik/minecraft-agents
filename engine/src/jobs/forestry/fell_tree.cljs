@@ -8,7 +8,6 @@
             [jobs.forestry.fell-tree.log :as log]
             [jobs.lib.access :as access]
             [jobs.lib.checks :as checks]
-            [jobs.lib.cond :as cond]
             [jobs.lib.choose :as choose]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
@@ -45,7 +44,7 @@
   :refused). :ignore-zones? true skips the check. Logs joined to the tree that the same rule refuses, or that lie more than
   the fell-tree.log/max-spread setting from the trunk's column, stay standing.
 
-  Conditions: :food-short (later, between trees: no food carried and get-food gave up lately); :no-tree (none in sight
+  Conditions: :no-tree (none in sight
   after one look around; data :radius, :species; with :at and no log there it is impossible, data :at).
   Its safe? is ready/safe-at-by-night :at with :at, else ready/safe-if-lit.
   Ends :done with {:base pos :logs n :axe why}: n logs dug; :axe is :carried, :skipped-fetch-off, :skipped-small-tree or
@@ -408,7 +407,7 @@
       :else (await (ground-step c radius)))))
 
 (defn ^:async round
-  "Steps until a tree is chosen, then that tree as one comfort section (ctx/atomic :tree): hunger, a full bag or
+  "Steps until a tree is chosen, then that tree as one comfort section (ctx/atomic :tree): a full bag or
   tidying waits for the tree, up to its cap. A tree given up ends its section before the next is chosen."
   [c]
   (let [step! #(step c)
@@ -450,14 +449,7 @@
   (checks/refusing #(cond (:at (:args %)) :never (look/surveyed? % :near) :later :else :look)
                    :tree-found "a tree to fell" tree-missing))
 
-(def not-hungry
-  "Later :food-short between trees while no food is carried and get-food found none: a hungry trigger gets its try first."
-  (checks/refusing :food "food to eat or none needed"
-                   (fn [c] (when (and (not (:column (ctx/mem c))) (trip/food-short? c)) :food-short))))
-
-(def can-start? (cond/and no-tree not-hungry))
-
-(def can-run? not-hungry)
+(def can-start? no-tree)
 
 (defn done?
   "Ok once the chosen tree is down: logs were dug, every log last seen of it is seen gone, none of its column is left and the body is off the canopy, no child

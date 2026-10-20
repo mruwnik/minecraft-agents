@@ -467,14 +467,6 @@
     (is (= [0 3 3] (get-in q [:yields :items "sand"])))
     (is (fn? (:done? def)))))
 
-(deftest hunger-ends-limit-reached-on-the-food-line
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out]} (await (as-child {:block "sand" :count 6} {:blocks (merge floor sand-patch) :self {:food 2}} nil 5
-                                             {:before #(mem/write! (:store (:eng %)) :hungry {:food 2} {:cap 10 :ttl 3600000})}))]
-          (is (= [:limit-reached :food :hungry] [(:kind out) (:line (:cause out)) (contract/cause-key out)]) (pr-str out)))))))
-
 (deftest a-run-that-got-its-count-but-not-home-ends-nothing-possible-not-home
   (async done
     (tu/run-async done
