@@ -60,6 +60,7 @@
    ::vehicle-gap-ms {:default 150 :doc "Least time between swings at a minecart or boat: its damage drains 1 a tick and each hit adds only 10, so slower hits never break it." :spec (a/int-in 0 nil)}
    ::reach {:default 3 :doc "How near the target the body stands to swing, in blocks." :spec (a/int-in 0 nil)}
    ::no-damage-hits {:default 16 :doc "Swings in a row that do no damage before a target is given up on (a lagging server drops many swings at the cooldown, so it is many)." :spec (a/int-in 1 nil)}
+   ::seen-memory-s {:default 5 :doc "Seconds a hostile seen and then out of sight (round a corner) still counts as a target, walked to at its last place; one only ever heard never does." :spec (a/num-in 0 nil)}
    ::walk-timeout-s {:default 5 :doc "Seconds one walk towards a target may take." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds from the first round before a fight gives up." :spec (a/num-in 0 nil)}})
 (defn max-hits [] (settings/get settings ::max-hits))
@@ -98,10 +99,17 @@
       (and player? (or (= self-name (.-username e)) (= self-name (.-name e)))) false
       :else (boolean (some match targets)))))
 
+(defn lost?
+  "Whether hostile e is out of mind: not in sight and never seen, or not sensed for ::seen-memory-s."
+  [e]
+  (and (= "hostile" (.-kind e))
+       (not (.-visible e))
+       (not (and (.-seen e) (<= (.-ageMs e) (* 1000 (settings/get settings ::seen-memory-s)))))))
+
 (defn present
   "The entities matching :targets within :radius, nearest first; ones already
-  killed (their id stays after a respawn) are left out, and so is a hostile only heard (it is turned toward, never
-  walked to). Name and id targets filter before the 64 cap of the sense."
+  killed (their id stays after a respawn) are left out, and so is a hostile only heard or not seen for ::seen-memory-s (it
+  is turned toward, never walked to). Name and id targets filter before the 64 cap of the sense."
   [c]
   (let [p (:primitives c)
         {:keys [targets radius]} (:args c)
@@ -113,7 +121,7 @@
         ids (when (and (seq wanted) (every? number? wanted)) {:ids (vec wanted)})]
     (->> (combat/sensed p (merge {:radius radius :max 64} names ids))
          (remove #(contains? dead-ids (.-id %)))
-         (remove #(and (= "hostile" (.-kind %)) (not (.-visible %))))
+         (remove lost?)
          (filterv #(matches? wanted self-name (set killed-players) %)))))
 
 (defn candidates

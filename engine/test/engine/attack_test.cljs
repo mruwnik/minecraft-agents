@@ -158,6 +158,15 @@
           (is (= {} (:given-up d)))
           (is (some #(= 8 (:id %)) (fake/entities p)) "the unseen zombie is left"))))))
 
+(deftest a-mob-type-seen-a-moment-ago-behind-a-corner-is-still-a-target
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (await (scenario {:targets ["zombie"]}
+                                                 {:inventory h/sword :entities [(ent 8 "zombie" "hostile" 3 {:visible false :seen true :ageMs 1000})]} 9))]
+          (is (= #{8} (set (attacked s))) "walked to its last place and killed")
+          (is (not-any? #(= 8 (:id %)) (fake/entities p))))))))
+
 (deftest a-mixed-list-takes-nearest-first-and-moves-on-when-one-dies
   (async done
     (tu/run-async done
