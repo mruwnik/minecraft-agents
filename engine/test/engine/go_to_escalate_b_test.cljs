@@ -442,3 +442,20 @@
             (is (= false (:arrived @out)) (str "sight " sight))
             (is (= {:step :none :why :own-pen} (:escalation @out)) (str "sight " sight " " (pr-str @out)))
             (is (empty? (calls p "dig")) (str "sight " sight))))))))
+
+(deftest go-to-takes-back-the-own-blocks-that-shut-the-body-in-when-the-goal-is-farther-than-the-clear-radius
+  ;; a seal beside the feet, the goal 6 blocks past it: the cleanup takes back every own block near the feet, also the one behind
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [tunnel (merge (apply dissoc (box -8 62 -2 8 67 2 "stone") (for [x (range -6 7) y [64 65]] (str x "," y ",0")))
+                            (into {} (for [x [-2 2] y [64 65]] [(str x "," y ",0") "cobblestone"])))
+              own (for [x [-2 2] y [64 65]] {:cell [x y 0] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed})
+              {:keys [eng p]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks tunnel :inventory [{:name "stone_pickaxe" :count 1}]})
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [6 64 0] :range 1})))]
+          (ledger/write! (:store eng) own)
+          (core/submit! eng '(recording-parent) {})
+          (await (tick-out! eng 1000))
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (= "air" (block p [-2 64 0])) "the seal behind the body is taken back too"))))))
