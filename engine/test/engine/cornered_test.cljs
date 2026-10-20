@@ -593,10 +593,28 @@
                      (fn [_token _args _impl] (js/Promise.resolve #js {:status "failed" :placed 0 :reason "not-raised"})))
           (core/submit! eng retreat {})
           (await (core/tick! eng))
-          (is (= 3 (count (calls p "jumpPlace"))) "the one-call pillar tried and gave up")
+          (is (= 6 (count (calls p "jumpPlace"))) "the pillar tried, tried once more, and gave up")
           (is (empty? (pillar-entries eng)) "no block went in")
           (is (not (hiding? seen)) "built under 2: not hidden")
           (is (pos? (count (calls p "attack"))) "hit while sealed: it stops hiding and hits back"))))))
+
+(deftest a-pillar-refused-once-is-tried-once-more-and-then-hides
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen while-hidden]}
+              (await (hidden-round retreat {:blocks doorway :inventory [{:name "cobblestone" :count 20}]
+                                            :entities [(zombie 0 64 1)]}
+                                   1000 (fn [{:keys [p]}] (js/Math.floor (second (:pos (fake/self p)))))
+                                   [] (fn [p]
+                                        (.override (.-world p) "jumpPlace"
+                                                   (fn [token args impl]
+                                                     (if (< (count (calls p "jumpPlace")) 3)
+                                                       (js/Promise.resolve #js {:status "failed" :placed 0 :reason "place-failed: the block is still air"})
+                                                       (impl token args)))))))]
+          (is (= 67 while-hidden) "the second try raised the whole pillar")
+          (is (hiding? seen))
+          (is (zero? (count (calls p "attack")))))))))
 
 (deftest a-pillar-that-stops-at-two-high-still-hides
   (async done

@@ -88,7 +88,7 @@
    :act [[:summon "zombie" [17.5 3 17.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
             {:no-event {:source :body :kind :died} :for-s 60}
-            {:count-event {:source :body :kind :hurt :data {:causes [:has "zombie"]}} :for-s 60 :at-most 6}]
+            {:no-event {:source :body :kind :hurt :data {:health [:< 10]}} :for-s 60}]
    :limit-s 70}
   {:name "zombie-coming-at-a-body-in-a-pit-with-4-dirt-seals-it"
    :blocks [[:fill [0 0 0] [31 2 31] "stone"] [:fill [16 1 16] [16 2 16] "air"]]

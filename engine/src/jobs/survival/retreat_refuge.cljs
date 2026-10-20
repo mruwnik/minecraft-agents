@@ -52,13 +52,15 @@
     :again))
 
 (defn ^:async refuge-round!
-  "A step in a refuge: building the pillar, or hidden in it (to the end of the flight)."
+  "A step in a refuge: building the pillar (one more try after a refusal, which a hit or knockback can cause), or hidden in it (to the end of the flight)."
   [c]
   (let [{:keys [kind hidden] :as refuge} (:refuge (ctx/mem c))]
     (if hidden
       (await (hide-hold! c))
       (case (await (pillar/step! c refuge))
-        :failed (await (abandon-refuge! c))
+        :failed (if (or (not= :pillar kind) (:retried refuge))
+                  (await (abandon-refuge! c))
+                  (do (ctx/update-mem! c assoc-in [:refuge :retried] true) :again))
         :hidden (hide-now! c refuge (hide-texts kind))
         :again))))
 
