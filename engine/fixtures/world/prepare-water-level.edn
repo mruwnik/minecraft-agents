@@ -1,0 +1,23 @@
+;; forestry.prepare reads the level of the water in a planned cell (perception gives it as a string): a source in the cell
+;; is filled with the carried dirt and the sapling planted on it; with no dirt carried the cell stays wet and nothing is planted.
+;; Should-succeed: water-source-filled-with-dirt-then-planted. Should-fail: wet-cell-without-dirt-stays-unplanted.
+{:defaults
+ {:tags [:forestry :prepare :jobs]
+  :time :any
+  :plot {:height 12 :floor "grass_block"}
+  :blocks [[:set [2 0 2] "torch"] [:set [2 0 30] "torch"] [:set [30 0 2] "torch"] [:set [30 0 30] "torch"]
+           [:set [16 0 16] "water"]]
+  :plans [{:id "wood" :metadata {:by "$body"} :parts [{:id "t" :cells [#at [16 0 16]] :want {:tree "oak"}}]}]
+  :body {:at [16.5 0 12.5] :yaw 0 :inventory [["oak_sapling" 1] ["dirt" 2] ["iron_pickaxe" 1]] :effects [["resistance" 600 4]] :settle-s 2}
+  :limit-s 120}
+ :cases
+ [{:name "water-source-filled-with-dirt-then-planted"
+   :act [[:http :submit (jobs.forestry.prepare {:plan "$plan:wood"}) [] {:ok true}]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:block [16 0 16] "oak_sapling"]]}
+  {:name "wet-cell-without-dirt-stays-unplanted"
+   :body {:inventory [["oak_sapling" 1] ["iron_pickaxe" 1]]}
+   :act [[:http :submit (jobs.forestry.prepare {:plan "$plan:wood"}) [] {:ok true}]
+         [:wait-s 25]]
+   :expect [{:no-event {:source :job :kind :completed} :for-s 25 :of-job true}]
+   :after [[:not-block [16 0 16] "oak_sapling"] [:item "oak_sapling" 1]]}]}
