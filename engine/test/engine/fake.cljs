@@ -159,7 +159,16 @@
 
 ;; ---- the initial world
 
-(defn parse-cell [k] (mapv js/Number (str/split (key-name k) #",")))
+(def parsed-cells (js/Map.))
+
+(defn parse-cell
+  "The [x y z] of a \"x,y,z\" key; kept in a table, since tests rebuild the same floors of thousands of keys."
+  [k]
+  (let [s (key-name k)]
+    (or (.get parsed-cells s)
+        (let [v (mapv js/Number (str/split s #","))]
+          (.set parsed-cells s v)
+          v))))
 (defn cells [m f] (into {} (map (fn [[k v]] [(parse-cell k) (f v)])) m))
 (defn cell-set [coll] (into #{} (map parse-cell) coll))
 (defn string-keys [m] (into {} (map (fn [[k v]] [(key-name k) v])) m))

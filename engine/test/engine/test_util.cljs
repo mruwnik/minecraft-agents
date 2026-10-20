@@ -121,16 +121,17 @@
   "The :floor rectangle most go-to callers' tests use: every spot they walk between."
   [-30 -10 40 10])
 
+(def ground-of
+  "The stone (or floor-block) map of a floor rectangle, built once per rectangle and block: the same immutable data for every test."
+  (memoize (fn [rect block] (into {} (map (fn [[k _]] [k block])) (apply floor rect)))))
+
 (defn fake-on-floor
   "fake with stone at y 63 under the walk-floor rectangle (or the spec's :floor), in the columns the spec's :blocks leave
   empty: the ground the walks of jobs that use jobs.lib.near/go-near! need, without touching ground a test built.
   The spec's :floor-block lays another block than stone (a test that digs stone needs a floor it does not dig)."
   [spec]
-  (let [built (into #{} (map (fn [k] (let [[x _ z] (.split (name k) ",")] [x z]))) (keys (:blocks spec)))
-        block (:floor-block spec "stone")
-        ground (into {} (comp (remove (fn [[k _]] (let [[x _ z] (.split k ",")] (built [x z]))))
-                              (map (fn [[k _]] [k block])))
-                     (apply floor (:floor spec walk-floor)))]
+  (let [built (into #{} (map (fn [k] (let [[x _ z] (.split (name k) ",")] (str x ",63," z)))) (keys (:blocks spec)))
+        ground (reduce dissoc (ground-of (:floor spec walk-floor) (:floor-block spec "stone")) built)]
     (fake (-> spec (dissoc :floor :floor-block) (assoc :blocks (merge ground (:blocks spec)))))))
 
 (defn act-clock
