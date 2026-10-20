@@ -27,7 +27,7 @@
             [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early night-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-with-raw-beef furnace-ops held-starving cow zombie]]))
 
 (deftest a-roof-over-a-breached-room-does-not-end-the-night
-  (run-night-in {:blocks breached-room}
+  (run-night-in {:blocks breached-room :inventory st/wall-stack}
                 (fn [{:keys [p seen]}]
                   (is (seq (st/calls p "place")) "the body walled itself in under the roof instead of calling a hole in the wall roofed"))))
 
@@ -42,8 +42,13 @@
                   (is (empty? (st/calls p "place")) "shut in: nothing to do")
                   (is (empty? (tu/walk-calls p))))))
 
-(deftest a-breached-room-is-said
+(deftest a-breached-room-without-blocks-to-wall-in-gives-up-instead-of-retrying
   (run-night-in {:blocks breached-room}
+                (fn [{:keys [seen]}]
+                  (is (seq (st/emitted seen :shelter.room_open))))))
+
+(deftest a-breached-room-is-said
+  (run-night-in {:blocks breached-room :inventory st/wall-stack}
                 (fn [{:keys [seen]}]
                   (let [e (first (st/emitted seen :shelter.room_open))]
                     (is (re-find #"not shut in" (str (:text e))))

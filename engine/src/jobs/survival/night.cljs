@@ -262,6 +262,7 @@
         (if (= :continue d)
           :again
           (do (ctx/update-mem! c dissoc :enclose)
+              (when (= :nothing-possible (:kind d)) (ctx/update-mem! c assoc :enclose-failed true))
               (if (and (= :done (:kind d)) (dig-cells/sealed-in? p :walls roof-height))
                 (hold/sheltered! c :dug-in))
               :again))))))
@@ -418,7 +419,7 @@
         (when (and bed-way home-near (:roof-walk-failed (ctx/mem c)) (not bed)) (note-bed-kept! c))
         (when breached
           (note-room-open! c)
-          (when-not (or door (:enclose (ctx/mem c)) (pit-site/failed-here? c) (not (ctx/way? c :shelter)))
+          (when-not (or door (:enclose (ctx/mem c)) (:enclose-failed (ctx/mem c)) (pit-site/failed-here? c) (not (ctx/way? c :shelter)))
             (ctx/update-mem! c assoc :enclose (sh-sense/feet p))))
         (cond
           door (await (enter-room! c nil))
