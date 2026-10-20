@@ -1,4 +1,4 @@
-;; jobs.maintenance.shut-doors on a hut door (cards 4acd8c53, 927dcb2f). Door at [16 0 16] (oak, open), body 4 south looking north.
+;; jobs.maintenance.shut on a hut door (cards 4acd8c53, 927dcb2f). Door at [16 0 16] (oak, open), body 4 south looking north.
 ;; Should-succeed: the unrecorded? setting shuts an open door of the body's own plan footprint that no walk recorded; a recorded door held by a cow is
 ;; not given up: the door-left reflex shuts it on a later run once the cow is gone.
 ;; Should-fail (left open): the default run never touches a door no walk of this body opened; a door outside any own plan stays open even
@@ -16,24 +16,24 @@
  [{:name "unrecorded-own-door-shut"
    :plans [{:id "hut" :metadata {:by "$body"} :parts [{:id "wall" :cells [#at [14 0 16] #at [15 0 16] #at [17 0 16] #at [18 0 16]] :want [:any "oak_planks"]}
                                                        {:id "door" :cells [#at [16 0 16]] :want [:any "oak_door"]}]}]
-   :act [[:job (jobs.maintenance.shut-doors {:settings {:jobs.maintenance.shut-doors/unrecorded? true}})]]
+   :act [[:job (jobs.maintenance.shut {:settings {:jobs.maintenance.shut/unrecorded? true}})]]
    :expect [{:event {:source :job :kind :completed :data {:shut 1 :left []}} :within-s 70 :of-job true}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=false]"]]}
   {:name "default-run-leaves-an-unrecorded-door"
    :plans [{:id "hut" :metadata {:by "$body"} :parts [{:id "door" :cells [#at [16 0 16]] :want [:any "oak_door"]}]}]
-   :act [[:job (jobs.maintenance.shut-doors)]]
+   :act [[:job (jobs.maintenance.shut)]]
    :expect [{:event {:source :job :kind :completed :data {:shut 0 :left []}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=true]"]]
    :limit-s 60}
   {:name "unrecorded-door-outside-own-plans-left-open"
-   :act [[:job (jobs.maintenance.shut-doors {:settings {:jobs.maintenance.shut-doors/unrecorded? true}})]]
+   :act [[:job (jobs.maintenance.shut {:settings {:jobs.maintenance.shut/unrecorded? true}})]]
    :expect [{:event {:source :job :kind :completed :data {:shut 0 :left []}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=true]"]]
    :limit-s 60}
   ;; a recorded open door with a cow stuck in its cell: the run stops (animal in the way) but keeps the entry; once the cow is gone the
   ;; reflex's next run shuts the door. The body starts in the door's column (the trigger does not hold there) and steps out once the cow stands in the cell.
   {:name "door-held-by-a-cow-shut-once-it-is-gone"
-   :register [{:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut-doors)}]
+   :register [{:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut)}]
    :memory [{:kind :opened :data {:cell #xyz [16 0 16] :by "j0" :shut? true}}]
    :body {:at [16.5 0 16.5]}
    :act [[:summon "cow" [16.5 0 16.5] "{NoAI:1b}"]
@@ -48,7 +48,7 @@
   ;; looks, finds it shut, and drops the entry: the reflex fires once or twice, not nine times with :already. :open-s 12 gives the
   ;; body time to see the open door, turn away and have it shut before the trigger first holds.
   {:name "door-shut-out-of-sight-is-looked-at-once-then-dropped"
-   :register [{:trigger :door-left :args {:open-s 12} :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut-doors)}]
+   :register [{:trigger :door-left :args {:open-s 12} :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut)}]
    :memory [{:kind :opened :data {:cell #xyz [16 0 16] :by "j0" :shut? true}}]
    :act [[:wait-s 4]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 0"]

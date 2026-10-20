@@ -16,7 +16,7 @@
   Every block the walker opens gets an :opened memory entry {:cell {:x :y :z} :by job-id :t ms :shut? bool} before the
   click (:shut? false: the policy leaves it open). The entry is dropped when the block is shut.
   A walk cut between the open and the shut leaves the entry. The next round of the same job shuts it
-  (shut-leftovers!), or the door-left trigger (triggers.maintenance.door-left) does, with jobs.maintenance.shut-doors.
+  (shut-leftovers!), or the door-left trigger (triggers.maintenance.door-left) does, with jobs.maintenance.shut.
   A block that stays open (an animal stands in its cell, so the walker waits and tries again but never pushes; or the
   click did nothing) keeps its entry and gets one :door-left-open warn."
   (:require [clojure.string :as str]

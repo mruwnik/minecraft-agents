@@ -1,4 +1,4 @@
-;; jobs.animals.shut-gate :plan with a gate the body has not seen (cards 2339e024, df1fd137): it walks there, looks, and shuts it if open; a gate
+;; jobs.maintenance.shut :plan with a gate the body has not seen (cards 2339e024, df1fd137): it walks there, looks, and shuts it if open; a gate
 ;; it still cannot read is left (:unseen), never ended :done with 0 shut. Plot 32 square: the body at [16.5 0 28.5] faces south, the planned gate
 ;; at [16 0 4] is behind it.
 ;; Should-succeed: the open gate behind the body is shut by a plan run. Should-fail: a gate walled into a stone box is left (stopped :left, 0 shut).
@@ -13,13 +13,13 @@
  :cases
  [{:name "open-gate-behind-the-body-found-and-shut"
    :blocks [[:set [16 0 4] "oak_fence_gate[facing=south,open=true]"]]
-   :act [[:job (jobs.animals.shut-gate {:plan "$plan:pen"})]]
+   :act [[:job (jobs.maintenance.shut {:openings :gates :plan "$plan:pen"})]]
    :expect [{:event {:source :job :kind :completed :data {:shut 1 :left []}} :within-s 80 :of-job true}]
    :after [[:block [16 0 4] "oak_fence_gate[open=false]"]]}
   {:name "gate-behind-a-wall-is-left-unseen"
    :blocks [[:set [16 0 4] "oak_fence_gate[facing=south,open=true]"]
             [:fill [10 0 8] [22 4 8] "stone"] [:fill [10 0 2] [22 4 2] "stone"] [:fill [10 0 3] [10 4 7] "stone"] [:fill [22 0 3] [22 4 7] "stone"]
             [:fill [10 5 2] [22 5 8] "stone"]]
-   :act [[:job (jobs.animals.shut-gate {:plan "$plan:pen"})]]
+   :act [[:job (jobs.maintenance.shut {:openings :gates :plan "$plan:pen"})]]
    :expect [{:event {:source :job :kind :stopped :data {:shut 0 :left [[:any]]}} :within-s 80 :of-job true}]
    :after [[:block [16 0 4] "oak_fence_gate[open=true]"]]}]}

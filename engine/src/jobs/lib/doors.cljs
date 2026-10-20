@@ -1,5 +1,5 @@
 (ns jobs.lib.doors
-  "Reading of doors, gates and trapdoors a walk left open, shared by the door-left trigger and jobs.maintenance.shut-doors.
+  "Reading of doors, gates and trapdoors a walk left open, shared by the door-left trigger and jobs.maintenance.shut.
 
   A walk (jobs.lib.pass) writes an :opened entry for each door, gate or trapdoor it opens and drops it when it shuts
   the block behind the body, a moment later. An entry that is older than :open-s (10 s) for a block that still stands

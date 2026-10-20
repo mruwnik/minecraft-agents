@@ -31,7 +31,7 @@
             [jobs.storage.withdraw :as withdraw]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.danger :as danger]
-            [jobs.maintenance.shut-doors :as shut-doors]
+            [jobs.maintenance.shut :as shut]
             [jobs.survival.eat :as eat]
             [jobs.survival.get-food :as get-food]
             [jobs.survival.log-out :as log-out]
@@ -352,13 +352,13 @@
       recover-drops/safe? by-day-hostile :ok
       recover-drops/safe? open-night :ok
       get-food/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 5}} :ok
-      shut-doors/safe? by-day-hostile :later
-      shut-doors/safe? open-night :ok)))
+      shut/safe? by-day-hostile :later
+      shut/safe? open-night :ok)))
 
 (deftest jobs-with-nothing-to-check-are-ok-at-night-with-a-hostile-and-hurt
   (let [world (assoc open-night :entities [zombie] :self {:pos {:x 0 :y 64 :z 0} :health 5})]
     (doseq [check [log-out/safe? log-out/fit? eat/safe? eat/fit? noop/safe? noop/fit? wait-for-light/safe? wait-for-light/fit?
-                   shut-doors/fit?]]
+                   shut/fit?]]
       (is (= :ok (kind check world))))))
 
 (deftest the-work-jobs-bind-their-place-by-night

@@ -7,7 +7,7 @@
  {:tags [:triggers :doors]
   :time :any
   :plot {:floor "grass_block"}
-  :register [{:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut-doors)}]
+  :register [{:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut)}]
   :blocks [[:fill [10 0 0] [10 0 31] "oak_fence"] [:fill [16 0 0] [16 0 31] "oak_fence"]
            [:set [10 0 16] "oak_fence_gate[facing=east,open=true]"] [:set [16 0 16] "oak_fence_gate[facing=east,open=true]"]]
   :memory [{:kind :opened :data {:cell #xyz [10 0 16] :by "j0" :shut? true}}

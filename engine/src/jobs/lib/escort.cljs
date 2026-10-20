@@ -24,7 +24,7 @@
   (filterv #(str/starts-with? (str (:by %)) (str (:id c) "/")) (map :data (mem/entries (ctx/view c) :opened))))
 
 (defn shut-radius
-  "Blocks from the body at self that cover every entry's cell (the floor is shut-doors' own default radius)."
+  "Blocks from the body at self that cover every entry's cell (the floor is the :walked radius)."
   [self entries]
   (->> entries
        (map #(js/Math.ceil (doors/distance self (:cell %))))
@@ -32,8 +32,8 @@
 
 (defn ^:async close-up!
   "Shut the gates the :leave-open legs left open (the animal followed through them): their entries become shut-able and a
-  jobs.maintenance.shut-doors child shuts them. :yield while that child waits, else (conclude! c reason) ends the job
-  (a shut-doors child that ended short of done is told in a warn escort.shut-failed)."
+  jobs.maintenance.shut child shuts them. :yield while that child waits, else (conclude! c reason) ends the job
+  (a shut child that ended short of done is told in a warn escort.shut-failed)."
   [c conclude!]
   (let [mine (walk-entries c)]
     (doseq [e mine :when (false? (:shut? e))]
@@ -41,7 +41,7 @@
       (ctx/remember! c :opened (assoc e :shut? true) pass/opened-policy))
     (if (empty? mine)
       (conclude! c (:ending (ctx/mem c)))
-      (let [e (await (ctx/call c :shut 'jobs.maintenance.shut-doors {:radius (shut-radius (doors/self-pos (:primitives c)) mine)}))]
+      (let [e (await (ctx/call c :shut 'jobs.maintenance.shut {:radius (shut-radius (doors/self-pos (:primitives c)) mine)}))]
         (if (= :continue e)
           :yield
           (do (when-not (= :done (:kind e))

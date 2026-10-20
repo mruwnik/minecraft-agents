@@ -1,5 +1,5 @@
 (ns engine.pen-gate-test
-  "The pen-gate trigger (triggers.animals.pen-gate) and jobs.animals.shut-gate against the fake world."
+  "The pen-gate trigger (triggers.animals.pen-gate) and jobs.maintenance.shut against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -9,7 +9,7 @@
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.animals.shut-gate :as shut-gate]
+            [jobs.maintenance.shut :as shut-gate]
             [jobs.lib.pen-gate :as pg]
             [triggers.animals.pen-gate :as trigger]
             [jobs.lib.world-files :as world]))
@@ -159,7 +159,7 @@
 
 (deftest the-trigger-is-registered-with-the-job-that-shuts-the-gate
   (is (= trigger/pen-gate (:when (:pen-gate triggers/all))))
-  (is (= '(jobs.animals.shut-gate) (:job (:pen-gate triggers/all))))
+  (is (= '(jobs.maintenance.shut {:openings :gates}) (:job (:pen-gate triggers/all))))
   (is (= :cooldown (:persistence (:pen-gate triggers/all)))))
 
 ;; ------------------------------------------------------------------ the job
@@ -179,7 +179,7 @@
   "Submit the job with args (the open-s setting 0 unless given: no grace) and tick up to n times until the list is empty; {:eng :p :seen :ticks}."
   [spec plans args n & [extra-jobs]]
   (let [s (start spec plans extra-jobs)]
-    (core/submit! (:eng s) (list 'jobs.animals.shut-gate (merge {:settings {:jobs.animals.shut-gate/open-s 0}} args)) {})
+    (core/submit! (:eng s) (list 'jobs.maintenance.shut (merge {:openings :gates :settings {:jobs.maintenance.shut/open-s 0}} args)) {})
     (loop [i 0]
       (if (or (>= i n) (empty? (:list (core/state (:eng s)))))
         (assoc s :ticks i)
@@ -236,7 +236,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:settings {:jobs.animals.shut-gate/open-s 0}} 30))]
+        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:settings {:jobs.maintenance.shut/open-s 0}} 30))]
           (is (< (waited-ms-before-click s) 1000) "open-s 0: no grace")
           (is (not (gate-open? (:p s) 2 64 0))))
         (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:plan "pen-a"} 30))]
@@ -252,7 +252,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:settings {:jobs.animals.shut-gate/open-s 4}} 3))]
+        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:settings {:jobs.maintenance.shut/open-s 4}} 3))]
           (is (seq (:list (core/state (:eng s)))) "the run waits, it does not end")
           (is (gate-open? (:p s) 2 64 0))
           (is (zero? (clicks s)) "no click inside the grace")
@@ -265,7 +265,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:settings {:jobs.animals.shut-gate/open-s 4}} 3))]
+        (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {:settings {:jobs.maintenance.shut/open-s 4}} 3))]
           (swap! (fake/state (:p s)) assoc-in [:states [2 64 0] :open] false)
           (await (tick-n s 30))
           (is (empty? (:list (core/state (:eng s)))))
@@ -370,7 +370,7 @@
       (fn ^:async t []
         (let [s (start (pen-world true 2 7 {:unreachable ["2,64,0"]}) {"pen-a" pen-a})
               p (:p s)]
-          (core/submit! (:eng s) '(jobs.animals.shut-gate {:settings {:jobs.animals.shut-gate/open-s 0}}) {})
+          (core/submit! (:eng s) '(jobs.maintenance.shut {:openings :gates :settings {:jobs.maintenance.shut/open-s 0}}) {})
           (dotimes [_ 12]
             (swap! clock + 700)
             (await (core/tick! (:eng s))))
@@ -455,7 +455,7 @@
   [never? n]
   (let [s (start (pen-world true 2 -9) {"pen-a" pen-a} nil)]
     (unseen-from-afar (:p s) [2 64 0] 4 never?)
-    (core/submit! (:eng s) (list 'jobs.animals.shut-gate {:plan "pen-a"}) {})
+    (core/submit! (:eng s) (list 'jobs.maintenance.shut {:openings :gates :plan "pen-a"}) {})
     (js/Promise.resolve s)))
 
 (deftest a-planned-gate-aged-out-is-walked-to-looked-at-and-shut

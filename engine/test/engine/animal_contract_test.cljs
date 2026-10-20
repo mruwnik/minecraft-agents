@@ -28,7 +28,7 @@
                       ['jobs.animals.breed {:mob "cow" :count 2}]
                       ['jobs.animals.pen-check {:at [2 64 2]}]
                       ['jobs.animals.cull {:mob "cow" :keep 1}]
-                      ['jobs.animals.shut-gate {}]
+                      ['jobs.maintenance.shut {:openings :gates}]
                       ['jobs.animals.maintain {:mob "cow" :box {:min {:x 0 :y 60 :z 0} :max {:x 4 :y 70 :z 4}}}]
                       ['jobs.animals.lead-to {:mob "cow" :pos {:x 5 :y 64 :z 0}}]
                       ['jobs.animals.lure-to {:mob "cow" :pos {:x 5 :y 64 :z 0}}]

@@ -32,7 +32,7 @@
   leads over the fence; trees not seen yet are left to the check.
   Phase 1 runs jobs.build.from-plan on the plan. Its arg :accept passes through, and its rules
   (zones, other plans' footprints, materials, cuts) apply. Phase 2: a body still inside the box walks out through the
-  gate (a jobs.movement.go-to child to the cell outside it) and jobs.animals.shut-gate shuts it. Phase 3 checks the pen
+  gate (a jobs.movement.go-to child to the cell outside it) and jobs.maintenance.shut shuts it. Phase 3 checks the pen
   over that box with jobs.lib.pen (see jobs.animals.pen-check): a step out of the box is a leak.
   A leak left after the build (a hole in the plan, or a cell the build refused, gave up on or lacked material for) is
   patched once unless the call's :ways (:build, :patch) leaves :patch out: a jobs.blocks.place child puts one fence of the plan's kind in each
@@ -331,7 +331,7 @@
 (defn ^:async shut-step!
   "Shut the plan's gates the walk out left open, then on to the check."
   [c]
-  (let [r (await (ctx/call c :shut 'jobs.animals.shut-gate {:plan (:plan (:args c))}))]
+  (let [r (await (ctx/call c :shut 'jobs.maintenance.shut {:plan (:plan (:args c))}))]
     (if (= :continue r)
       :continue
       (do (ctx/update-mem! c #(cond-> (assoc % :phase :check)

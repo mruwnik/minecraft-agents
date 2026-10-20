@@ -56,7 +56,7 @@
   :gather-radius, or tied.
 
   Cleanup (however the job ends, the engine's limit and a cancel included): an animal still on this body's lead is let
-  go (jobs.animals.unleash), then a jobs.maintenance.shut-doors child shuts the doors and gates the legs left open for
+  go (jobs.animals.unleash), then a jobs.maintenance.shut child shuts the doors and gates the legs left open for
   the animal; the ending's :still-led is then false.
 
   Result

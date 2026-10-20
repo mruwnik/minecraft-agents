@@ -12,7 +12,7 @@
             [jobs.animals.lure-to :as lure-to]
             [jobs.animals.pen-check :as pen-check]
             [jobs.animals.shear :as shear]
-            [jobs.animals.shut-gate :as shut-gate]
+            [jobs.maintenance.shut :as shut-gate]
             [jobs.animals.maintain :as maintain]
             [jobs.animals.unleash :as unleash]
             [jobs.apiary.guard :as guard]

@@ -7,7 +7,7 @@
   The trigger holds when a planned gate was last seen open (perception's memory, never through a wall), within :radius
   (64) of the body and farther than :min-dist (2). It keeps no state: a gate a job opened on purpose is hidden by memory
   entries, three kinds:
-    :gate-gave-up  written by jobs.animals.shut-gate; the cell is skipped for :quiet-s (10 min)
+    :gate-gave-up  written by jobs.maintenance.shut; the cell is skipped for :quiet-s (10 min)
     :gate-held     written by a job leading animals through, dropped after it shuts the gate; skipped while
                    younger than :held-s (30)
     :opened        written by a walk (jobs.lib.pass) that opened it; the shut-doors job owns that gate"

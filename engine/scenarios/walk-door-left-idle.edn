@@ -1,3 +1,3 @@
 ;; ProbeS6 walk live test (S6): idle (look-around) with only the door-left reflex; no survival reflexes.
-{:register [{:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut-doors)}]
+{:register [{:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut)}]
  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}

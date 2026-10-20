@@ -1,4 +1,4 @@
-;; jobs.animals.shut-gate (card 85e1dd07): an animal standing in the gate is waited out, never pushed.
+;; jobs.maintenance.shut (card 85e1dd07): an animal standing in the gate is waited out, never pushed.
 ;; Should-succeed: a cow that is free to walk leaves the gate cell -> gate shut, run done.
 ;; Should-fail: a cow that never moves (NoAI) -> run stopped :left :animal-in-the-way, gate left open.
 {:defaults

@@ -2,7 +2,7 @@
   "The door-left trigger (the reading is jobs.lib.doors).
 
   It holds while a block a walk left open lies within :radius (16) of the body and the body is out of its column; its
-  job (jobs.maintenance.shut-doors) walks back and shuts it (jobs tidy up after themselves)."
+  job (jobs.maintenance.shut) walks back and shuts it (jobs tidy up after themselves)."
   (:require [jobs.lib.body :as body]
             [jobs.lib.doors :as doors]))
 

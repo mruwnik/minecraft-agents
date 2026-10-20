@@ -27,7 +27,7 @@
              :job (jobs.survival.get-food {:food 6})}
             {:trigger :needs-bed :persistence :cooldown :cooldown-s 600}
             {:trigger :needs-weapon :persistence :cooldown :cooldown-s 600}
-            {:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut-doors)}
+            {:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut)}
             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
              :job (jobs.storage.make-room {:free 4})}
             {:trigger :scaffold-left :persistence :stop}

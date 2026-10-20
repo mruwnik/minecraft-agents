@@ -1,5 +1,5 @@
 (ns engine.door-left-test
-  "The door-left trigger (triggers.maintenance.door-left) and jobs.maintenance.shut-doors: a door or gate a walk opened and
+  "The door-left trigger (triggers.maintenance.door-left) and jobs.maintenance.shut: a door or gate a walk opened and
   left open (the walk was cut or cancelled between the open and the shut) is shut again."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
@@ -91,7 +91,7 @@
 
 (deftest the-trigger-is-registered-with-the-job-that-shuts-doors
   (is (= dl/door-left (:when (:door-left triggers/all))))
-  (is (= '(jobs.maintenance.shut-doors) (:job (:door-left triggers/all)))))
+  (is (= '(jobs.maintenance.shut) (:job (:door-left triggers/all)))))
 
 ;; ---------------------------------------------------------------- a walk cut in the gate
 
@@ -157,7 +157,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup (gate-world true 14 0))]
           (remember-opened! s)
-          (core/submit! eng '(jobs.maintenance.shut-doors) {})
+          (core/submit! eng '(jobs.maintenance.shut) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 20))
           (is (not (open? p gate-cell)))
           (is (seq (tu/walked-to eng)) "it walked back")
@@ -174,7 +174,7 @@
                                             (live pos)
                                             #js {:name "oak_fence_gate" :properties #js {:open "true"} :pos pos :age-ms 5000})))
           (remember-opened! s)
-          (core/submit! eng '(jobs.maintenance.shut-doors) {})
+          (core/submit! eng '(jobs.maintenance.shut) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 20))
           (is (seq (tu/walked-to eng)) "it walked to the gate the body last saw open")
           (is (= [] (opened eng)) "the entry dropped once it saw the gate shut")
@@ -189,7 +189,7 @@
           (aset p "seenBlockAt" (fn [pos] #js {:unknown true :pos pos}))
           (aset p "sensedAt" (fn [_] #js {:unknown true}))
           (remember-opened! s)
-          (core/submit! eng '(jobs.maintenance.shut-doors) {})
+          (core/submit! eng '(jobs.maintenance.shut) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 10))
           (is (nil? (first (filter #(= :completed (:kind %)) @seen))) "an unseen gate is not already shut")
           (is (= [{:cell [5 64 0] :reason :unseen}]
@@ -201,7 +201,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup (gate-world true 8 0))]
-          (core/submit! eng '(jobs.maintenance.shut-doors) {})
+          (core/submit! eng '(jobs.maintenance.shut) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 5))
           (is (open? p gate-cell))
           (is (= :already (:cause (first (filter #(= :completed (:kind %)) @seen)))) "nothing left open: done before any round"))))))
@@ -212,7 +212,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup (assoc (gate-world true 14 0) :unreachable ["5,64,0"]))]
           (remember-opened! s)
-          (core/submit! eng '(jobs.maintenance.shut-doors) {})
+          (core/submit! eng '(jobs.maintenance.shut) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 30))
           (is (empty? (:list (core/state eng))) "the job ended")
           (is (open? p gate-cell))
@@ -226,7 +226,7 @@
         (let [{:keys [eng p seen] :as s} (setup (gate-world true 8 0))
               gave-up #(filter (fn [e] (= :shut-doors.gave-up (:kind e))) @seen)
               run! (fn ^:async f []
-                     (core/submit! eng '(jobs.maintenance.shut-doors) {})
+                     (core/submit! eng '(jobs.maintenance.shut) {})
                      (await (tick-until s #(empty? (:list (core/state eng))) 80)))]
           (remember-opened! s)
           (.override (.-world p) "useOn" (fn ^:async f [_token _args _impl] #js {:status "unchanged"}))
@@ -249,7 +249,7 @@
         (let [cow {:id 7 :name "cow" :kind "passive" :pos {:x 5 :y 64 :z 0}}
               {:keys [eng p] :as s} (setup (gate-world true 8 0 {:entities [cow]}))
               run! (fn ^:async f []
-                     (core/submit! eng '(jobs.maintenance.shut-doors) {})
+                     (core/submit! eng '(jobs.maintenance.shut) {})
                      (await (tick-until s #(empty? (:list (core/state eng))) 80)))]
           (remember-opened! s)
           (doseq [_ (range 7)] (await (run!)))
@@ -263,7 +263,7 @@
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (setup (gate-world true 8 0))
               run! (fn ^:async f []
-                     (core/submit! eng '(jobs.maintenance.shut-doors) {})
+                     (core/submit! eng '(jobs.maintenance.shut) {})
                      (await (tick-until s #(empty? (:list (core/state eng))) 80)))]
           (remember-opened! s)
           (.override (.-world p) "useOn" (fn ^:async f [_token _args _impl] #js {:status "unchanged"}))
@@ -304,7 +304,7 @@
         (let [{:keys [eng p seen] :as s} (setup (two-gates-world 9 2 {}))]
           (remember-opened-at! s gate-cell)
           (remember-opened-at! s gate2-cell)
-          (core/submit! eng '(jobs.maintenance.shut-doors) {})
+          (core/submit! eng '(jobs.maintenance.shut) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 1))
           (is (empty? (:list (core/state eng))) "one tick: the job ended")
           (is (not (open? p gate-cell)))
@@ -318,7 +318,7 @@
         (let [{:keys [eng p seen] :as s} (setup (two-gates-world 14 2 {:unreachable ["5,64,0"]}))]
           (remember-opened-at! s gate-cell)
           (remember-opened-at! s gate2-cell)
-          (core/submit! eng '(jobs.maintenance.shut-doors) {})
+          (core/submit! eng '(jobs.maintenance.shut) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 3))
           (is (empty? (:list (core/state eng))))
           (is (open? p gate-cell))
@@ -340,7 +340,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup (gate-world true 5 0))]
           (remember-opened! s)
-          (core/submit! eng '(jobs.maintenance.shut-doors) {})
+          (core/submit! eng '(jobs.maintenance.shut) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 3))
           (is (open? p gate-cell))
           (is (= [[[5 64 0] :standing-in]] (mapv (juxt :cell :reason) (:left (first (filter #(= :stopped (:kind %)) @seen))))))
@@ -352,7 +352,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen] :as s} (setup (gate-world true 14 0) [{:x 10 :y 64 :z 0} 0] continuing-go-to)]
           (remember-opened! s)
-          (core/submit! eng '(jobs.maintenance.shut-doors) {})
+          (core/submit! eng '(jobs.maintenance.shut) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 3))
           (is (seq (:list (core/state eng))) "the job yields and stays listed; it did not end")
           (is (empty? (filter #(= :stopped (:kind %)) @seen)) "no ending, no :left")
@@ -366,7 +366,7 @@
         (let [{:keys [eng p] :as s} (setup (gate-world true 5 0))]
           (core/register-reflex! eng {:trigger :door-left})
           (remember-opened! s)
-          (core/submit! eng '(jobs.maintenance.shut-doors) {})
+          (core/submit! eng '(jobs.maintenance.shut) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 3))
           (is (open? p gate-cell))
           (swap! (fake/state p) assoc-in [:self :pos] [8.5 64 0.5])
@@ -376,11 +376,11 @@
 (defn done-event [seen] (first (filter #(= :completed (:kind %)) @seen)))
 
 (defn run-shut! [{:keys [eng] :as s} args ticks]
-  (core/submit! eng (list 'jobs.maintenance.shut-doors args) {})
+  (core/submit! eng (list 'jobs.maintenance.shut args) {})
   (tick-until s #(empty? (:list (core/state eng))) ticks))
 
 (defn run-unrecorded! [s ticks]
-  (settings/with-settings {:jobs.maintenance.shut-doors/unrecorded? true} #(run-shut! s {} ticks)))
+  (settings/with-settings {:jobs.maintenance.shut/unrecorded? true} #(run-shut! s {} ticks)))
 
 (defn hut-setup [home?]
   (let [{:keys [eng] :as s} (setup (assoc (hs/hut-world {:x 5.5 :y 64 :z 1.5} {}) :states hd/open-door-states))]

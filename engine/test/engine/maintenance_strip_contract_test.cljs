@@ -1,5 +1,5 @@
 (ns engine.maintenance-strip-contract-test
-  "survival.restore-broken, maintenance.shut-doors, strip.loot-cart and strip.seal as contract jobs: they export the
+  "survival.restore-broken, maintenance.shut, strip.loot-cart and strip.seal as contract jobs: they export the
   contract, quote validly, and end with a kind and a cause."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.blocks-dig-test :as bd]
@@ -13,7 +13,7 @@
 
 (deftest each-job-exports-the-contract-and-quotes-validly
   (doseq [[sym args] [['jobs.survival.restore-broken {}]
-                      ['jobs.maintenance.shut-doors {}]
+                      ['jobs.maintenance.shut {}]
                       ['jobs.strip.loot-cart {:id 5}]
                       ['jobs.strip.seal {:at [0 64 0] :axis :x :side :from :width 3 :height 3}]]]
     (is (nil? (:check (job sym))) (str sym " is a contract job"))
