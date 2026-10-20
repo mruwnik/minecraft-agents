@@ -25,11 +25,10 @@
   - With :plan: every open gate of that plan, wherever it is. A gate the body has not seen lately is walked to and
     looked at, never taken for shut; one that still cannot be read is left (:unseen).
 
-  One run shuts them all, nearest first. For each it walks within :reach (a jobs.movement.go-to child, doors :never, :ways #{:walk}),
-  waits a few moments (pass/shut-waits) when an animal stands in the gate (never pushes it), clicks it with an empty hand and reads
-  the block again. A gate the body stands in is left (reason :standing-in), as is one an animal never left
+  One run shuts them all, nearest first. For each it walks within the reach setting (3) (a jobs.movement.go-to child, doors :never, :ways #{:walk}),
+  waits a few moments (pass/shut-waits) when an animal stands in the gate (never pushes it), and shuts it with a jobs.access.toggle child. A gate the body stands in is left (reason :standing-in), as is one an animal never left
   (:animal-in-the-way); both get a 30 s :gate-gave-up entry, no warn. A walk that goes on or waits (go-to :continue)
-  yields the round with :continue; the gate is not given up. A gate that could not be reached or did not shut after the tries setting (3) clicks is given up with one warn
+  yields the round with :continue; the gate is not given up. A gate that could not be reached or did not shut after the tries setting (3) toggles is given up with one warn
   shut-gate.gave-up and a :gate-gave-up memory entry, which keeps the trigger away from it for 10 minutes.
 
   Ends :done with the data {:shut n :left []} when every open gate was shut; a call that finds none open (or unread) at its start ends done at once, with no event (done?); with any left, :nothing-possible :left with {:shut n :left [{:cell [x y z] :reason r}]}.
@@ -37,17 +36,20 @@
 
 (a/defargs args
   {:plan {:doc "id of a plan whose open gates are all shut; nil: the open planned gates of every active plan within :radius" :spec a/name? :default nil}
-   :radius {:doc "without :plan, how far from the body a gate is looked for, in blocks" :spec (a/num-in 0 nil) :default 64}
-   :reach {:doc "walk until within this many cells of the gate (the click reaches 4.5 from the eye)" :spec (a/num-in 0 nil) :default 3}})
+   :radius {:doc "without :plan, how far from the body a gate is looked for, in blocks" :spec (a/num-in 0 nil) :default 64}})
 
 (def quiet-ttl-ms (* 1000 (:quiet-s pg/defaults)))
 
 (a/defargs settings
   {::open-s {:default 4 :doc "Without :plan, seconds to wait before shutting a gate that stands open (0: shut at once)." :spec (a/num-in 0 nil)}
    ::tries {:default 3 :doc "Failed clicks on one gate before it is given up." :spec (a/int-in 1 nil)}
+   ::reach {:default 3 :doc "Walk until within this many cells of the gate (the click reaches 4.5 from the eye)." :spec (a/num-in 0 nil)}
+   ::graced-ttl-ms {:default 60000 :doc "How long a gate's grace is remembered, in ms: the round that finds it open after the grace shuts it." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds a shut-gate run may take." :spec (a/num-in 0 nil)}
    ::pause-ttl-ms {:default 30000 :doc "How long a gate stays paused after a failed shut, in ms." :spec (a/int-in 0 nil)}
    ::unreachable-ttl-ms {:default 120000 :doc "How long the trigger leaves a gate the walk could not reach, in ms (the body may be shut in; it tries again then)." :spec (a/int-in 0 nil)}})
+(defn reach [] (settings/get settings ::reach))
+(defn graced-ttl-ms [] (settings/get settings ::graced-ttl-ms))
 (defn open-s [] (settings/get settings ::open-s))
 (defn tries [] (settings/get settings ::tries))
 (defn unreachable-ttl-ms [] (settings/get settings ::unreachable-ttl-ms))
@@ -133,7 +135,7 @@
 (defn ^:async walk!
   "nil when the body stands within reach, else why not: :continue (the walk goes on or waits) or :unreachable."
   [c cell]
-  (let [e (await (child/call-walk* c :walk {:pos (u/cell-pos cell) :range (:reach (:args c)) :doors :never :ways #{:walk}}))
+  (let [e (await (child/call-walk* c :walk {:pos (u/cell-pos cell) :range (reach) :doors :never :ways #{:walk}}))
         res (:data e)]
     (ctx/update-mem! c dissoc :blocker)
     (cond
@@ -153,12 +155,14 @@
         :else (do (await (ctx/act c :wait #js {:ms (pass/shut-wait-ms)})) (recur (inc n)))))))
 
 (defn ^:async click!
-  "Click the gate at cell once the body is in reach, then read it again: nil when shut, else the reason."
+  "Shut the gate at cell with a jobs.access.toggle child (the body is in reach): nil when shut, :continue while it waits
+  on the world, else the reason (:unreachable or :refused)."
   [c cell]
-  (let [r (await (ctx/act c :useOn (clj->js {:pos (u/cell-pos cell)})))]
+  (let [e (await (ctx/call c :gate 'jobs.access.toggle {:pos (u/cell-pos cell) :state :closed}))]
     (cond
-      (empty? (pg/open-cells (apiary/seen-block-at-fn (:primitives c)) [cell])) nil
-      (= "unreachable" (.-status r)) :unreachable
+      (= :continue e) :continue
+      (= :done (:kind e)) nil
+      (= :unreachable (contract/cause-key e)) :unreachable
       :else :refused)))
 
 (defn ^:async read-gate!
@@ -182,6 +186,7 @@
         (loop [n 1]
           (let [reason (await (click! c cell))]
             (cond
+              (= :continue reason) :continue
               (nil? reason) (do (ctx/emit! c :gate.shut :info {:cell cell :text (str "gate " cell " shut")}) nil)
               (< n (tries)) (recur (inc n))
               :else reason)))))))
@@ -235,10 +240,6 @@
 (defn quote-of [_c]
   {:uses {:job-time [0 15 120]}})
 
-(def graced-ttl-ms
-  "How long a gate's grace is remembered: the round that finds it open after the grace shuts it."
-  60000)
-
 (defn grace!
   "Without :plan, a watched gate that stands open and was not graced yet is remembered as graced; can-run? then waits
   open-s seconds before the round shuts it. The cells newly graced, or nil."
@@ -248,7 +249,7 @@
         fresh (when (and (not plan) (pos? (open-s))) (vec (remove graced (open-now c cells []))))]
     (when (seq fresh)
       (doseq [cell fresh]
-        (ctx/remember! c :gate-graced {:cell cell} {:cap 50 :ttl graced-ttl-ms}))
+        (ctx/remember! c :gate-graced {:cell cell} {:cap 50 :ttl (graced-ttl-ms)}))
       fresh)))
 
 (defn ^:async step

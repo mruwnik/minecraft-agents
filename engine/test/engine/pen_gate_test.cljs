@@ -2,6 +2,7 @@
   "The pen-gate trigger (triggers.animals.pen-gate) and jobs.animals.shut-gate against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
@@ -494,6 +495,18 @@
           (let [s (await (run-job world plans args 20))
                 e (first (filter #(#{:completed :stopped} (:kind %)) @(:seen s)))]
             (is (= [event reason] [(:kind e) (:reason e)]) (pr-str args reason))))))))
+
+(deftest a-gate-the-toggle-child-cannot-shut-is-left-refused-after-the-tries
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom 0)
+              toggle (tu/job (fn [c] (swap! calls inc) (ctx/end c :condition-failed :refused {:text "no"})))
+              s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {} 30 {'jobs.access.toggle toggle}))
+              e (first (filter #(#{:completed :stopped} (:kind %)) @(:seen s)))]
+          (is (= 3 @calls))
+          (is (= [:stopped :left] [(:kind e) (:reason e)]))
+          (is (= [:refused] (mapv :reason (:left e)))))))))
 
 (deftest shut-gate-waits-without-a-readable-plan
   (async done
