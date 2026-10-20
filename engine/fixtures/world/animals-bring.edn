@@ -1,0 +1,33 @@
+;; jobs.animals.bring picks lead-to or lure-to and ends as it does, with :method and :end added.
+;; Should-succeed: a cow led (lead carried) and let go at the spot; a pig lured with carrots (no lead carried) to the spot; a cow
+;; tied to a fence post. Should-fail: lure with no pig near ends :no-animal.
+{:defaults
+ {:tags [:animals :jobs]
+  :time :any
+  :plot {:floor "grass_block" :length 48 :width 32 :height 8}
+  :body {:at [4.5 0 16.5] :effects [["resistance" 900 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "cow-led-and-let-go"
+   :body {:at [4.5 0 16.5] :inventory [["lead" 2]] :effects [["resistance" 900 4]]}
+   :act [[:summon "cow" [6.5 0 18.5]]
+         [:job (jobs.animals.bring {:mob "cow" :pos #xyz [30 0 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:method :lead :end :free}} :within-s 100 :of-job true}]
+   :after [[:item "lead" 2]]}
+  {:name "pig-lured-with-carrots"
+   :body {:at [4.5 0 16.5] :inventory [["carrot" 4]] :effects [["resistance" 900 4]]}
+   :act [[:summon "pig" [6.5 0 18.5]]
+         [:job (jobs.animals.bring {:mob "pig" :pos #xyz [30 0 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:method :lure :end :led}} :within-s 100 :of-job true}]
+   :after [[:entities "type=pig,tag=wt" [[24 0 10] [36 3 22]] 1]
+           [:item "carrot" [:>= 4]]]}
+  {:name "cow-tied-to-a-fence-post"
+   :body {:at [4.5 0 16.5] :inventory [["lead" 2]] :effects [["resistance" 900 4]]}
+   :blocks [[:set [30 0 16] "oak_fence"]]
+   :act [[:summon "cow" [6.5 0 18.5]]
+         [:job (jobs.animals.bring {:mob "cow" :fence #xyz [30 0 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:method :lead :end :tie}} :within-s 100 :of-job true}]}
+  {:name "lure-with-no-pig-near-stops"
+   :body {:at [4.5 0 16.5] :inventory [["carrot" 4]] :effects [["resistance" 900 4]]}
+   :act [[:job (jobs.animals.bring {:mob "pig" :pos #xyz [30 0 16]})]]
+   :expect [{:event {:source :job :kind :stopped :data {:method :lure :reason :no-animal}} :within-s 100 :of-job true}]}]}

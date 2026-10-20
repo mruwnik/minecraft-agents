@@ -40,7 +40,7 @@
   ending :no-animal; a sound is a direction, never a place. Each round
   the food is checked in hand and held again if not (a cut, another job's equip); none left ends :no-food.
 
-  Result {:reason :animal key
+  Result {:reason :end (:led when arrived) :animal key
   :near bool (the animal is within 6 blocks of :pos) :at pos (the body) :animal-at pos (the animal, nil unseen) :in-box bool (with :box)
   :lost / :stalled detail for those reasons}. Reasons:
   - :arrived: the body stands within ::arrive-range of :pos and the animal is seen in :box (none: within ::arrive-range + ::arrive-slack blocks of :pos) and not in the cell of a planned gate, else the
@@ -138,9 +138,10 @@
   (let [arrived? (= :arrived (:ending (ctx/mem c)))]
     (if-let [a (named-there c)]
       (contract/ok :arrived "the named animal is already at the destination" :units :animals :done 1 :left 0
-                   :result {:animal (animals/key-of a)})
+                   :result {:animal (animals/key-of a) :end :led :animal-at (u/pos-of (.-pos a))})
       (contract/later :luring (if arrived? "the animal arrived" "the animal is on its way") :units :animals
-                      :done (if arrived? 1 0) :left (if arrived? 0 1) :result {:animal (:animal (ctx/mem c))}))))
+                      :done (if arrived? 1 0) :left (if arrived? 0 1)
+                      :result (cond-> {:animal (:animal (ctx/mem c))} arrived? (assoc :end :led))))))
 
 (defn skipped-text
   "What kept the animals seen within radius from being lured: babies, those on a lead, the zone rules."
@@ -212,7 +213,7 @@
   (let [m (ctx/mem c)
         a (escort/animal-now c)
         ok? (= :arrived reason)
-        result {:reason reason :animal (:animal m) :at (u/self-pos c)
+        result {:reason reason :animal (:animal m) :at (u/self-pos c) :end (escort/end-of reason)
                 :animal-at (some-> a .-pos u/pos-of)
                 :in-box (when-let [box (pen-read/arg-box c)] (boolean (and a (animals/in-box? box (u/pos-of (.-pos a))))))
                 :distance (some-> (or (some-> a .-pos u/pos-of) (:last-seen m)) (u/flat-dist (:pos (:args c))))

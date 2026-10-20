@@ -68,6 +68,7 @@
           (is (finished? s))
           (is (= :unleashed (:reason (done-event s))))
           (is (= "u1" (:animal (done-event s))))
+          (is (= :free (:end (done-event s))))
           (is (<= (js/Math.abs (- 30 (first (:pos c)))) 4) "the cow stands at the spot: the body stops within 2 and the cow is led 2 behind it")
           (is (not (true? (:leashed c))))
           (is (= 1 (count-of s "lead")) "the lead is back in the inventory"))))))

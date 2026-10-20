@@ -183,6 +183,20 @@
 (defn lead-carried? [c]
   (some #(= "lead" (:name %)) (u/inventory (:primitives c))))
 
+(defn lead-possible?
+  "True when the body carries a lead or what makes one (a slime ball)."
+  [c]
+  (let [have (into #{} (map :name) (u/inventory (:primitives c)))]
+    (boolean (or (have "lead") (have "slime_ball")))))
+
+(defn resolve-method
+  "A bring method :lead or :lure as given; :auto leads when a lead can be had or the mob has no breeding food, else lures."
+  [c method mob]
+  (cond
+    (not= :auto method) method
+    (or (lead-possible? c) (not (contains? breeding-food mob))) :lead
+    :else :lure))
+
 (args/defargs settings
   {::knot-margin {:default 12 :doc "Blocks around the knot searched for the animal." :spec (args/int-in 0 nil)}})
 

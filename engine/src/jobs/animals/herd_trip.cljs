@@ -76,20 +76,10 @@
           :else (finish! c :no-leash {:because (select-keys e [:kind :cause])})))
       :else (finish! c nil))))
 
-(defn lead-possible?
-  "True when the body carries a lead or what makes one (a slime ball)."
-  [c]
-  (let [have (into #{} (map :name) (u/inventory (:primitives c)))]
-    (boolean (or (have "lead") (have "slime_ball")))))
-
 (defn resolve-method
   "The :method of the run: :lead or :lure as given; :auto leads when a lead can be had, else lures with the mob's food."
   [c]
-  (let [{:keys [method mob]} (:args c)]
-    (cond
-      (not= :auto method) method
-      (or (lead-possible? c) (not (contains? animals/breeding-food mob))) :lead
-      :else :lure)))
+  (animals/resolve-method c (:method (:args c)) (:mob (:args c))))
 
 (defn lure-candidates
   "The adults within radius outside the pen, not on a lead, not skipped, the zone rules allowing, nearest first."

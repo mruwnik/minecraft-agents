@@ -81,6 +81,10 @@
 (defn stall-ms [] (* 1000 (settings/get settings ::stall-s)))
 (defn back-blocks [] (settings/get settings ::back-blocks))
 
+(def end-of
+  "The :end a bring result names for a lead-to or lure-to reason: :tie (tied to the post), :free (let go at the spot), :led (it stands at the spot, still following)."
+  {:tied :tie :unleashed :free :arrived :led})
+
 (defn animal-now
   "The led animal as the sensing shows it, or nil when it is not seen."
   [c]

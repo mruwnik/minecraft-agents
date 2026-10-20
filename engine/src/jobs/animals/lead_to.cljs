@@ -60,8 +60,8 @@
   the animal; the ending's :still-led is then false.
 
   Result
-  {:reason :animal key :still-led bool (false: the cleanup let the animal go) :at pos :gathered bool :text}. Reasons
-  and endings:
+  {:reason :end (:tie or :free on success) :animal key :still-led bool (false: the cleanup let the animal go) :at pos
+  :animal-at pos (nil unseen) :gathered bool :text}. Reasons and endings:
   - :tied, :unleashed: done.
   - :none (no animal seen within :radius), :lead-broke, :lost, :animal-stalled: as above.
   - :unreachable: the walk gave up.
@@ -140,11 +140,13 @@
   "The result of a leading that ended for reason."
   [c reason]
   (let [m (ctx/mem c)]
-    {:reason reason
-     :animal (:animal m)
-     :still-led (boolean (:still-led m))
-     :gathered (boolean (:gathered m))
-     :at (u/self-pos c)}))
+    (cond-> {:reason reason
+             :animal (:animal m)
+             :still-led (boolean (:still-led m))
+             :gathered (boolean (:gathered m))
+             :at (u/self-pos c)
+             :animal-at (some-> (escort/animal-now c) .-pos u/pos-of)}
+      (escort/end-of reason) (assoc :end (escort/end-of reason)))))
 
 (defn conclude!
   "Hand the outcome to the parent and end the job."

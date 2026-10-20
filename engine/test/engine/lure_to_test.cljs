@@ -70,6 +70,7 @@
               c (cow-of s 1)]
           (is (finished? s))
           (is (= :arrived (:reason (done-event s))))
+          (is (= :led (:end (done-event s))))
           (is (= "u1" (:animal (done-event s))))
           (is (<= (js/Math.abs (- 30 (first (:pos c)))) 5) "the cow stands near the spot")
           (is (<= (js/Math.abs (- 30 (:x (:animal-at (done-event s))))) 5) "the result says where the animal stands")
