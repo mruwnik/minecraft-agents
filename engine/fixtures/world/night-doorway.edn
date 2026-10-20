@@ -29,7 +29,8 @@
    :act [[:job (jobs.survival.night)]
          [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 120]
          ;; the server skips the night only when enough players sleep; with other bodies on it the clock is set to the morning
-         [:time-set 1000]]
+         [:time-set 1000]
+         [:job (jobs.survival.leave-shelter)]]
    :expect [{:event {:source :job :kind :night.bed-placed} :within-s 120 :of-job true}
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 120}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.leave-shelter"}} :within-s 300}]
