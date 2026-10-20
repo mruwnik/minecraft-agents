@@ -69,7 +69,7 @@
    ;; the pit (3 s of digging) quotes under 14+ walls, so the placing is priced down to make the walls the cheaper way
    ;; dirt, not cobblestone: the pit digs stone and roofs with its drops, which the clear must not take
    :body {:inventory [["dirt" 20] ["stone_pickaxe" 1]]}
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night :settings {:jobs.survival.retreat-seal/max-places 2 :jobs.survival.wall-in/night-place-s 0.1}})]
+   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night :settings {:jobs.survival.retreat-seal/max-places 2 :jobs.survival.plug-way/night-place-s 0.1}})]
          [:await {:source :action :kind :done :data {:name "place"}} 30]
          [:rcon "clear $BODY dirt"]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 90 :of-job true}

@@ -222,7 +222,7 @@
     (tu/run-async done
       (fn ^:async t []
         (with-redefs [way/walls-step! (fn ^:async fail [_] nil)]
-          (let [{:keys [digs-at-first]} (await (plug! {:blocks ct/dead-end :inventory (into cobble pick) :entities [(ct/zombie 1 64 0)]} {:ways #{:walls :pocket}}))]
+          (let [{:keys [digs-at-first]} (await (plug! {:blocks ct/dead-end :inventory (into cobble pick) :entities [(ct/zombie 1 64 0)]} {:ways #{:walls :pocket} :settings {:jobs.survival.plug-way/place-s 0.1}}))]
             (is (= 0 digs-at-first) "the round ended :continue before the pocket dug")))))))
 
 (deftest a-torch-in-an-off-limits-cell-is-not-dug-over

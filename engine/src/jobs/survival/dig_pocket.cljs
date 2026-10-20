@@ -11,6 +11,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
+            [jobs.survival.dig-pit :as pit-quote]
             [jobs.survival.plug-way :as way]
             [jobs.survival.retreat-pit :as pit]))
 
@@ -40,7 +41,6 @@
   {::walk-radius {:default 6 :doc "Blocks, to either side and 3 up or down, within which the body walks to a standing cell with a wall to pocket when none fits where it stands (0: never walks; at most 32, the body sees no farther and the scan reads every cell of the square)." :spec (a/num-in 0 32)}
    ::job-time-s {:default 60 :doc "Seconds a pocket attempt may take." :spec (a/num-in 0 nil)}
    ::walk-s-per-block {:default 0.3 :doc "Seconds a block of walk to a pocket's standing cell is guessed to take, for the quote." :spec (a/num-in 0 nil)}
-   ::pocket-s {:default 10 :doc "Seconds a pocket is guessed to take, for the quote." :spec (a/num-in 0 nil)}
    ::fetch-s {:default 60 :doc "Seconds fetching a tool is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
 
 (def target [])
@@ -89,11 +89,18 @@
           (if (fetch-tool? c) (assoc s :fetch? true) {:no-tool? true}))
         {})))
 
-(defn quote-of [c]
-  (let [feet (sh-sense/feet (:primitives c))
+(defn quote-of
+  "Walk to the standing cell, the dig of the pocket's two cells by the best carried tool (the hand when a tool is to be fetched), one block to seal the way in."
+  [c]
+  (let [p (:primitives c)
+        feet (sh-sense/feet p)
         {:keys [stand fetch?]} (site c)
-        seconds (if stand
-                  (+ (* (u/dist feet stand) (settings/get settings ::walk-s-per-block)) (settings/get settings ::pocket-s)
+        cells (when stand (pit/pocket-site c stand (boolean fetch?)))
+        seconds (if (and stand cells)
+                  (+ (* (u/dist feet stand) (settings/get settings ::walk-s-per-block))
+                     (/ (reduce + (map #(tools/clear-ms p (pit-quote/priced-name p %)) cells)) 1000)
+                     (way/place-s c)
+                     (way/zone-penalty c {:dig cells :plug [feet]})
                      (if fetch? (settings/get settings ::fetch-s) 0))
                   ##Inf)]
     (way/quote-of c seconds (settings/get settings ::job-time-s))))

@@ -28,8 +28,6 @@
 (a/defargs settings
   {::wall-value {:default 3 :doc ":night: a block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85, stone 2.85, planks 3.4, log 12.8) is taken back at dawn, which the quote counts" :spec (a/num-in 0 nil)}
    ::job-time-s {:default 60 :doc "Seconds a walls attempt may take." :spec (a/num-in 0 nil)}
-   ::place-s {:default 3 :doc "Seconds a placement is guessed to take, for the quote." :spec (a/num-in 0 nil)}
-   ::night-place-s {:default 1 :doc "Seconds a placement (aim, place, settle) takes for a night's shelter; the dig back at dawn is daylight work, so only placing is priced." :spec (a/num-in 0 nil)}
    ::dear-s {:default 0.4 :doc "Seconds a wall block worth more than ::wall-value adds per cell for the night: it is dug again at dawn." :spec (a/num-in 0 nil)}})
 
 (def target [])
@@ -43,10 +41,10 @@
   ::wall-value when the carried cheap ones do not cover every open cell."
   [c open]
   (if-not (= :night (:for (:args c)))
-    (settings/get settings ::place-s)
+    (way/place-s c)
     (let [cheap (choose/cheap-blocks (flight/blocks c) (settings/get settings ::wall-value))
           have (reduce + (map :count (lb/carried c cheap)))]
-      (+ (settings/get settings ::night-place-s) (if (>= have open) 0 (settings/get settings ::dear-s))))))
+      (+ (way/place-s c) (if (>= have open) 0 (settings/get settings ::dear-s))))))
 
 (defn why-not
   "The stop {:stop :no-blocks :text} when too few blocks are carried: none, or for the night fewer than open cells; nil otherwise."

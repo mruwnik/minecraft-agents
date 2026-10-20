@@ -42,7 +42,7 @@
 (defn walls-cheap
   "Run f (a test body) with the night walls priced low enough that the quote picks them over a pit: these tests are about the walls."
   [f]
-  (settings/with-settings {:jobs.survival.wall-in/night-place-s 0.1} f))
+  (settings/with-settings {:jobs.survival.plug-way/night-place-s 0.1} f))
 
 (defn setup [world]
   (let [clock (atom 1000000)

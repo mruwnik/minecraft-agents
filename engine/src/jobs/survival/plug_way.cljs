@@ -16,6 +16,8 @@
 
 (a/defargs settings
   {::roof-height {:default sh-sense/default-roof-height :doc "A solid block within this many blocks above counts as a roof (the ways, enter-room and the enclosed test; a call overrides it with :settings)." :spec (a/int-in 0 nil)}
+   ::place-s {:default 3 :doc "Seconds a placement is guessed to take, for a way's quote." :spec (a/num-in 0 nil)}
+   ::night-place-s {:default 1 :doc "Seconds a placement (aim, place, settle) takes for a night's shelter; the dig back at dawn is daylight work, so only placing is priced." :spec (a/num-in 0 nil)}
    ::trespass-s {:default 1000 :doc "Seconds a way's quote adds when a cell it digs or fills is another's (zone, claim or plan): a last resort, after every way that keeps off." :spec (a/num-in 0 nil)}})
 
 (defn roof-height [] (settings/get settings ::roof-height))
@@ -27,6 +29,11 @@
     (boolean (or (some #(access/trespass-refusal in :dig %) dig)
                  (some #(access/trespass-refusal in :place %) place)
                  (some #(access/trespass-refusal (assoc in :feet nil) :place %) plug)))))
+
+(defn place-s
+  "Seconds a placement is priced at in a way's quote: only the placing for a night's shelter."
+  [c]
+  (settings/get settings (if (= :night (:for (:args c))) ::night-place-s ::place-s)))
 
 (defn zone-penalty
   "Seconds to add to a way's quote for the cells in {:dig :place :plug} that the zone rules refuse, 0 when none."

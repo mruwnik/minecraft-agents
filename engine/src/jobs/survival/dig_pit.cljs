@@ -131,7 +131,9 @@
                     (settings/get settings ::job-time-s))
     (way/quote-of c (if stop
                       ##Inf
-                      (+ (if plan (dig-seconds c plan) (settings/get settings ::pit-s))
+                      (+ (if plan
+                           (+ (dig-seconds c plan) (* (way/place-s c) (inc (count (:plugs plan)))))
+                           (settings/get settings ::pit-s))
                          (if plan (way/zone-penalty c {:dig (concat (:prep plan) (mapcat :dig (:steps plan))) :plug (conj (:plugs plan) (:roof plan))}) 0)))
                   (settings/get settings ::job-time-s)))))
 

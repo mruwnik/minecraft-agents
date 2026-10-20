@@ -231,3 +231,11 @@
           (is (= 1 @n) "one fetch round per scheduler round, no busy loop")
           (is (nil? (failed seen)))
           (is (= 1 (count (:list (core/state eng)))) "the job yielded and is still there"))))))
+
+(deftest the-quote-prices-the-digs-and-the-seal-not-a-flat-guess
+  (let [hill (blocks "stone" [1 8] [64 66] [-3 3])
+        seconds #(get-in (pocket/quote-of (world hill %)) [:uses :job-time 1])
+        with-pick (seconds iron)
+        by-hand (seconds [{:name "cobblestone" :count 4}])]
+    (is (< 3 with-pick 10) "two stone cells with a pickaxe and one placement")
+    (is (> by-hand with-pick) "the hand digs stone slower")))
