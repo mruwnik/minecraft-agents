@@ -112,6 +112,19 @@
           (await (run-until-empty eng 6))
           (is (= {"bread" 3} (inv p))))))))
 
+(deftest withdraw-digs-the-block-off-a-chest-that-would-not-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:containers {"10,64,0" [{:name "bread" :count 5}]} :blocks {"10,65,0" "dirt"}})
+              block-at #(.-name (.blockAt p #js {:x 10 :y 65 :z 0}))]
+          (.override (.-world p) "inspectContainer"
+                     (fn [token a impl] (if (= "dirt" (block-at)) #js {:status "timeout"} (impl token a))))
+          (let [result (await (ending-of eng job {:chest chest :items {"bread" 3}} 20))]
+            (is (not= "dirt" (block-at)) "the lid was dug, as obtain does")
+            (is (= 3 (get (inv p) "bread")))
+            (is (= :done (:kind result)))))))))
+
 (deftest withdraw-gives-up-on-an-unreachable-chest
   (async done
     (tu/run-async done

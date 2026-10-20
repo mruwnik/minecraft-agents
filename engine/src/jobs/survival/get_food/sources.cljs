@@ -7,6 +7,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.child :as child]
+            [jobs.lib.chests :as chests]
             [jobs.lib.crops :as crops]
             [jobs.lib.stock :as stock]
             [jobs.lib.foods :as foods]
@@ -217,16 +218,17 @@
 (defn ^:async chest!
   "Look in the chest (the inventory may have changed since it was learned) and withdraw its best food, or wheat."
   [c {:keys [pos]}]
-  (case (await (go-near! c pos))
-    :continue :continue
-    :far (bury-source! c pos)
-    (let [seen (await (ctx/act c :inspectContainer (clj->js {:pos pos})))
-          status (.-status seen)
-          items (when (= "ok" status) (array-seq (.-items seen)))
-          best (best-in-chest items)
-          wheat (wheat-to-take c (chest-wheat items))]
-      (cond
-        (not (#{"ok" "missing"} status)) (do (pass-over! c pos) :again)
-        best (await (withdraw! c pos (.-name best) (min (.-count best) (settings/get settings ::take))))
-        (pos? wheat) (await (withdraw! c pos "wheat" wheat))
-        :else (bury-source! c pos)))))
+  (let [seen (await (chests/look-in! c pos))
+        status (:status seen)]
+    (cond
+      (= :continue seen) :continue
+      (= "unreachable" status) (bury-source! c pos)
+      (not (#{"ok" "missing"} status)) (do (pass-over! c pos) :again)
+      :else
+      (let [items (when (= "ok" status) (array-seq (:items seen)))
+            best (best-in-chest items)
+            wheat (wheat-to-take c (chest-wheat items))]
+        (cond
+          best (await (withdraw! c pos (.-name best) (min (.-count best) (settings/get settings ::take))))
+          (pos? wheat) (await (withdraw! c pos "wheat" wheat))
+          :else (bury-source! c pos))))))

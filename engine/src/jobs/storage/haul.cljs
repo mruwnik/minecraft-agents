@@ -9,6 +9,7 @@
             [jobs.lib.storage :as storage]
             [jobs.lib.least :as least]
             [jobs.lib.util :as u]
+            [jobs.lib.chests :as chests]
             [jobs.storage.deposit :as deposit]
             [jobs.storage.withdraw]))
 
@@ -52,7 +53,7 @@
     {:reason :no-chest}))
 
 (defn sources-left [c]
-  (map deposit/cell-pos (remove (set (:empty (ctx/mem c))) (map storage/cell-of (:from (:args c))))))
+  (map chests/cell-pos (remove (set (:empty (ctx/mem c))) (map storage/cell-of (:from (:args c))))))
 
 (defn can-start? [c]
   (contract/all [((checks/args-fit "haul: no :from chest to empty" #(seq (:from (:args %)))) c)
@@ -152,28 +153,26 @@
 (defn ^:async look!
   "Walk to the chest and size one bag load from what it holds: saves the intent, or marks the chest empty."
   [c cell inv free]
-  (let [chest (deposit/cell-pos cell)
-        w (await (deposit/walk! c chest))]
+  (let [seen (await (chests/look-in! c (chests/cell-pos cell)))
+        status (:status seen)]
     (cond
-      (= :unreachable w) (stop! c :nothing-possible :unreachable)
-      w w
+      (= :continue seen) :continue
+      (= "unreachable" status) (stop! c :nothing-possible :unreachable)
+      (= "missing" status) (stop! c :condition-failed :missing)
+      (not= "ok" status) (if (u/count-fail! c) (stop! c :nothing-possible (keyword status)) :again)
       :else
-      (let [seen (await (ctx/act c :inspectContainer (clj->js {:pos chest})))
-            status (.-status seen)
-            stacks (map (fn [s] {:name (.-name s) :count (.-count s)}) (array-seq (.-items seen)))
+      (let [stacks (map (fn [s] {:name (.-name s) :count (.-count s)}) (array-seq (:items seen)))
             targets (load-plan stacks (:keep (:args c)) (dec free) inv)]
-        (cond
-          (= "missing" status) (stop! c :condition-failed :missing)
-          (not= "ok" status) (if (u/count-fail! c) (stop! c :nothing-possible (keyword status)) :again)
-          (empty? targets) (do (ctx/update-mem! c update :empty (fnil conj []) cell) :again)
-          :else (do (ctx/update-mem! c assoc :intent {:chest cell :targets targets :taken (apply merge-with + (map (fn [{:keys [name count]}] {name count}) (load-stacks stacks (:keep (:args c)) (dec free))))}) :again))))))
+        (if (empty? targets)
+          (do (ctx/update-mem! c update :empty (fnil conj []) cell) :again)
+          (do (ctx/update-mem! c assoc :intent {:chest cell :targets targets :taken (apply merge-with + (map (fn [{:keys [name count]}] {name count}) (load-stacks stacks (:keep (:args c)) (dec free))))}) :again))))))
 
 (defn ^:async take!
   "Take the saved load; the intent goes once the take is done. A chest that lacks part of it (:chest-lacks) is not a stop:
   the load is what the chest still held."
   [c {:keys [chest taken] :as intent}]
   (let [e (await (ctx/call c :take 'jobs.storage.withdraw
-                           {:chest (deposit/cell-pos chest) :items (:targets intent) :ignore-zones? (:ignore-zones? (:args c))}))]
+                           {:chest (chests/cell-pos chest) :items (:targets intent) :ignore-zones? (:ignore-zones? (:args c))}))]
     (cond
       (= :continue e) :continue
       (not (or (= :done (:kind e)) (false? (get-in e [:data :gave-up])))) (child-stop! c e)

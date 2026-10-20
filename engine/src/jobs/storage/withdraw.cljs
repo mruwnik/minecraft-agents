@@ -9,7 +9,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
-            [jobs.storage.deposit :as deposit]
+            [jobs.lib.chests :as chests]
             [jobs.lib.least :as least]
             [jobs.lib.storage :as storage]))
 
@@ -60,7 +60,7 @@
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
 (defn can-start? [c]
-  (contract/all [(checks/chest-known c) ((checks/container-refused every? :take (deposit/pool-positions :take)) c)]))
+  (contract/all [(checks/chest-known c) ((checks/container-refused every? :take (chests/pool-positions :take)) c)]))
 (def can-run? can-start?)
 
 (def carried-text "withdraw: everything wanted is carried")
@@ -131,22 +131,24 @@
             "; no more " (str/join ", " names) " in the chests (the last " holds ")")))))
 
 (defn ^:async take!
-  "Inspect the chest in reach and take the first short name the chest holds: :again, or :done."
+  "Look into the chest (walking into reach) and take the first short name the chest holds: :again, :continue, or the ending."
   [c chest short]
-  (let [seen (await (ctx/act c :inspectContainer (clj->js {:pos chest})))]
-    (if (not= "ok" (.-status seen))
-      (if (deposit/retracted? c chest (.-status seen))
-        (status-stop! c (.-status seen) short)
-        (give-up! c (.-status seen) short))
-      (let [_ (stock/note-stock! c chest (.-items seen))
-            pick (some (fn [[name n]] (let [held (held-in (.-items seen) name)]
+  (let [seen (await (chests/look-in! c chest))]
+    (cond
+      (= :continue seen) :continue
+      (not= "ok" (:status seen))
+      (if (:retracted? seen)
+        (status-stop! c (:status seen) short)
+        (give-up! c (:status seen) short))
+      :else
+      (let [pick (some (fn [[name n]] (let [held (held-in (:items seen) name)]
                                         (when (pos? held) [name (min n held)])))
                        short)]
         (cond
-          (nil? pick) (let [held (held-items (.-items seen))
+          (nil? pick) (let [held (held-items (:items seen))
                             lacking (into {} short)
-                            others (rest (:open (deposit/chests c :take)))]
-                        (when (seq others) (deposit/mark-full! c chest))
+                            others (rest (:open (chests/chests c :take)))]
+                        (when (seq others) (chests/mark-full! c chest))
                         (if (seq others)
                           :again
                           (let [text (lacks-text (map first short) held (:taken (ctx/mem c)))]
@@ -156,7 +158,7 @@
                 before (u/inventory (:primitives c))
                 r (await (ctx/act c :transfer (clj->js {:pos chest :direction "withdraw" :item name :count n})))]
             (cond
-              (not= "ok" (.-status r)) (if (deposit/retracted? c chest (.-status r))
+              (not= "ok" (.-status r)) (if (chests/retracted? c chest (.-status r))
                                            (status-stop! c (.-status r) short)
                                            (give-up! c (.-status r) short))
               (or (zero? (.-moved r))
@@ -172,16 +174,12 @@
   holds none of what is short, or it stopped. The shortfall is read at the start of the step."
   [c]
   (let [{:keys [items]} (:args c)
-        chest (some-> (first (:open (deposit/chests c :take))) deposit/cell-pos)
+        chest (some-> (first (:open (chests/chests c :take))) chests/cell-pos)
         short (shortfall (u/inventory (:primitives c)) items)]
     (cond
       (empty? short) (ctx/end c :done nil {:text carried-text})
       :else
-      (let [w (await (deposit/walk! c chest))]
-        (cond
-          (= :unreachable w) (give-up! c "unreachable" short)
-          w w
-          :else (await (take! c chest short)))))))
+      (await (take! c chest short)))))
 
 (defn ^:async round
   "The whole take in one call, a name after another until nothing is short or it stops. :continue only while go-to

@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.child :as child]
+            [jobs.lib.chests :refer [retracted? cell-pos chests pool-positions mark-full! walk!]]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.reserve :as reserve]
@@ -144,36 +145,6 @@
   [c cause]
   (if (u/count-fail! c) (status-stop! c (name cause)) :again))
 
-(defn retracted?
-  "retract-if-missing!, forget a missing chest as storage, and true when status is \"missing\" at the recorded chest place (so the job ends at once)."
-  [c chest status]
-  (let [recorded (mem/place (ctx/view c) :chest)]
-    (when (= "missing" status) (storage/drop-from-group! c chest))
-    (places/retract-if-missing! c :chest chest status)
-    (and (= "missing" status) (some? recorded) (= chest recorded))))
-
-(defn cell-pos [cell] (zipmap [:x :y :z] cell))
-
-(defn chests
-  "{:pool cells :open cells :group? bool}: the chests to try. group? when the body's storage group is in play (no :chest
-  argument, or one in the group): the :chest argument or place first, then the group nearest first. Else only the
-  argument. open is the pool without the ones found full this call."
-  ([c] (chests c :put))
-  ([c action]
-  (let [view (ctx/view c)
-        args (:args c)
-        main (some-> (storage/chest-of view args) storage/cell-of)
-        members (storage/group view)
-        group? (or (nil? (:chest args)) (some? (some #{main} members)))
-        here (u/self-pos c)
-        near (sort-by (fn [[x y z]] (+ (js/Math.abs (- x (:x here))) (js/Math.abs (- y (:y here))) (js/Math.abs (- z (:z here))))) members)
-        pool (vec (if group? (distinct (concat (when main [main]) near)) (when main [main])))
-        full (:full (ctx/mem c) #{})
-        refused? (fn [cell] (access/container-refusal c action (cell-pos cell)))]
-    {:pool pool :open (vec (remove #(or (full %) (refused? %)) pool)) :group? group?})))
-
-(defn pool-positions [action] (fn [c] (map cell-pos (:pool (chests c action)))))
-
 (def can-start? (fn [c] (contract/all [(checks/chest-known c) ((checks/container-refused every? :put (pool-positions :put)) c)])))
 (def can-run? can-start?)
 
@@ -235,24 +206,6 @@
               (if (= :need why)
                 (stop! c :condition-failed :no-chest-item)
                 (spot-failed! c pool spot)))))))))
-
-(defn mark-full!
-  "The chest took nothing more: skip it for the rest of the call. :again."
-  [c chest]
-  (ctx/update-mem! c update :full (fnil conj #{}) (storage/cell-of chest))
-  :again)
-
-(defn ^:async walk!
-  "Within 3 of the chest: nil. Else one go-to call: :continue while it waits on the world, :again once there,
-  :unreachable when it gave up."
-  [c chest]
-  (if (u/within? (u/self-pos c) chest 3)
-    nil
-    (let [e (await (child/call-walk* c :walk {:pos chest :range 3 :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-      (cond
-        (= :continue e) :continue
-        (:arrived (:data e)) :again
-        :else :unreachable))))
 
 (defn found-here!
   "{item pick-up} of the carried found goods (jobs.lib.found), which stay carried; one goods.found notice each, once per call."

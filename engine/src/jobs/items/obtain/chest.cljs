@@ -4,8 +4,7 @@
             [clojure.string]
             [jobs.items.obtain.base :refer [holds names-of]]
             [jobs.lib.waits :as waits]
-            [jobs.lib.child :as child]
-            [jobs.lib.solid :as solid]
+            [jobs.lib.chests :as chests]
             [jobs.lib.stock :as stock]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]))
@@ -43,37 +42,20 @@
           :again))))
 
 (defn ^:async inspect!
-  "Walk to within 3 of the chest (a go-to child), look into it and book its stock. A chest that will not open under a
-  seen solid block gets the block dug (a jobs.blocks.dig child, which keeps to zones and claims) and is looked into once
-  more. A chest that timed out is looked into once more before it is given up. :continue while a child waits, else :again."
+  "Look into the chest (chests/look-in!) and book its stock; one that cannot be reached or opened is given up
+  (:blocked-chests). :continue while a child waits, else :again."
   [c pos]
   (say-chest! c pos (str "looking for " (clojure.string/join "/" (names-of (:args c))) " in the"))
-  (let [cell (stock/cell-of pos)
-        above (update pos :y inc)
-        mark! (fn [why]
-                (ctx/update-mem! c (fn [m] (-> m (update :done-chests (fnil conj #{}) cell) (update :inspected (fnil inc 0))
-                                               (assoc-in [:blocked-chests pos] why)))))
-        w (when-not (u/within? (u/self-pos c) pos 3)
-            (await (child/call-walk* c :walk {:pos pos :range 3 :ways #{:walk :clear-seal} :spend {:tries 1}})))]
-    (cond
-      (= :continue w) :continue
-      (and w (not (:arrived (:data w)))) (do (mark! "unreachable") :again)
-      (= :clearing (get-in (ctx/mem c) [:lid cell]))
-      (let [e (waits/waiting-out c (await (ctx/call c :clear 'jobs.blocks.dig {:pos above})))]
-        (when-not (= :continue e) (ctx/update-mem! c assoc-in [:lid cell] :cleared))
-        (if (= :continue e) :continue :again))
-      :else
-      (let [seen (await (ctx/act c :inspectContainer (clj->js {:pos pos})))]
-        (cond
-          (= "ok" (.-status seen))
-          (do (stock/note-stock! c pos (.-items seen))
-              (ctx/update-mem! c update :inspected (fnil inc 0)))
-          (and (nil? (get-in (ctx/mem c) [:lid cell])) (solid/solid? (u/seen-name (:primitives c) above)))
-          (ctx/update-mem! c assoc-in [:lid cell] :clearing)
-          (and (= "timeout" (.-status seen)) (not (contains? (:timed-out (ctx/mem c)) cell)))
-          (ctx/update-mem! c update :timed-out (fnil conj #{}) cell)
-          :else (mark! (str (.-status seen))))
-        :again))))
+  (let [seen (await (chests/look-in! c pos))]
+    (if (= :continue seen)
+      :continue
+      (do (ctx/update-mem! c
+                           (fn [m] (let [m (update m :inspected (fnil inc 0))]
+                                     (if (= "ok" (:status seen))
+                                       m
+                                       (-> m (update :done-chests (fnil conj #{}) (stock/cell-of pos))
+                                           (assoc-in [:blocked-chests pos] (:status seen)))))))
+          :again))))
 
 (defn blocked-text
   "\"; chest at x y z could not be opened (status)\" for each chest given up unopened, or nil."
