@@ -4,9 +4,12 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import vec3 from 'vec3'
 import prismarineRegistry from 'prismarine-registry'
-import { installLazyChunks } from './lazy-chunk.mjs'
+import mc from 'minecraft-protocol'
+import minecraftData from 'minecraft-data'
+import { installLazyChunks, bufferLightArrays } from './lazy-chunk.mjs'
 
 const { Vec3 } = vec3
+const { createSerializer, createDeserializer, states } = mc
 const require = createRequire(import.meta.url)
 const registry = prismarineRegistry('26.1')
 const EagerClass = require('prismarine-chunk')(registry)
@@ -101,4 +104,31 @@ test('truncated chunk data fails at load, as an eager load does', () => {
 test('dump of a lazily loaded column equals the data it was loaded from', () => {
   const source = sourceColumn()
   assert.deepEqual(load(LazyClass, source).dump(), source.dump())
+})
+
+test('after bufferLightArrays the light packets carry each light section as a Buffer', () => {
+  bufferLightArrays('26.1')
+  const light = Buffer.alloc(2048, 7)
+  const packets = {
+    update_light: { chunkX: 1, chunkZ: -2, skyLightMask: [1n], blockLightMask: [1n], emptySkyLightMask: [0n], emptyBlockLightMask: [0n], skyLight: [light], blockLight: [light] }
+  }
+  const roundTrip = (name, packet) => {
+    const options = { state: states.PLAY, isServer: true, version: '26.1' }
+    const buffer = createSerializer(options).createPacketBuffer({ name, params: packet })
+    return createDeserializer({ ...options, isServer: false }).parsePacketBuffer(buffer).data.params
+  }
+  const parsed = roundTrip('update_light', packets.update_light)
+  assert.ok(Buffer.isBuffer(parsed.skyLight[0]))
+  assert.deepEqual(parsed.skyLight[0], light)
+  assert.deepEqual(parsed.blockLight[0], light)
+})
+
+test('every light field of the protocol is read as a Buffer, in map_chunk too', () => {
+  bufferLightArrays('26.1')
+  const types = minecraftData('26.1').protocol.play.toClient.types
+  const lightFields = Object.entries(types)
+    .filter(([, type]) => type[0] === 'container')
+    .flatMap(([name, type]) => type[1].filter(f => f.name === 'skyLight' || f.name === 'blockLight').map(f => [name, f.type[1].type[0]]))
+  assert.deepEqual(lightFields.map(([name]) => name).sort(), ['packet_map_chunk', 'packet_map_chunk', 'packet_update_light', 'packet_update_light'])
+  assert.ok(lightFields.every(([, kind]) => kind === 'buffer'))
 })

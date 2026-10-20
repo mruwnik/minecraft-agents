@@ -6,6 +6,7 @@
 import { createRequire } from 'node:module'
 import prismarineBlock from 'prismarine-block'
 import prismarineRegistry from 'prismarine-registry'
+import minecraftData from 'minecraft-data'
 
 const require = createRequire(import.meta.url)
 const chunkModule = createRequire(require.resolve('prismarine-chunk'))
@@ -166,7 +167,7 @@ function patchClass (C, registry) {
         if (!incomingLightMask.get(y) && !isEmpty) continue
         emptyMask.set(y, isEmpty)
         lightMask.set(y, 1 - isEmpty)
-        const bytes = isEmpty ? null : Buffer.from(data[current++])
+        const bytes = isEmpty ? null : Buffer.from(data[current++]) // a copy: the packet buffer is not kept alive by a light section
         sections[y] = placeholder(lightProto, () => unpackLight(BitArray, bytes))
       }
     }
@@ -204,6 +205,22 @@ function unpackLight (BitArray, bytes) {
     words[i] = bytes.readUInt32BE(at + 4)
   }
   return array
+}
+
+// The protocol reads each light section as an array of 2048 numbers; read it as a Buffer instead. Must run before the
+// protocol is compiled (the first createClient), and changes the mcData the compiler reads, so its cache key changes too.
+export function bufferLightArrays (version) {
+  const toClient = minecraftData(version)?.protocol?.play?.toClient?.types
+  if (!toClient) return
+  const isByteArray = t => Array.isArray(t) && t[0] === 'array' && t[1]?.type === 'u8'
+  for (const type of Object.values(toClient)) {
+    if (!Array.isArray(type) || type[0] !== 'container') continue
+    for (const field of type[1]) {
+      if (field.name !== 'skyLight' && field.name !== 'blockLight') continue
+      const outer = field.type?.[1]
+      if (isByteArray(outer?.type)) outer.type = ['buffer', { countType: outer.type[1].countType }]
+    }
+  }
 }
 
 let installed = false
