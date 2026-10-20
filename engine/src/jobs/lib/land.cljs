@@ -5,12 +5,17 @@
 
 (def unsafe-below (into (into bs/fluids bs/bad-floor) #{"seagrass" "tall_seagrass" "kelp" "kelp_plant"}))
 
+(defn floor?
+  "Whether a block name can be stood on: not air, a fluid, a plant or a hazard."
+  [below]
+  (boolean (and below (not (b/air below)) (not (b/fluids below)) (not (b/clearable below))
+                (not (contains? unsafe-below below)))))
+
 (defn land-cell?
-  "Whether cell is a stand cell by name-at (a fn cell -> block name or nil; nil, an unloaded or unknown cell, is not land)."
+  "Whether cell is a stand cell by name-at (a fn cell -> block name or nil; nil, an unloaded or unknown cell, is not land).
+  The block below is read first: a known non-floor there settles it without reading the feet and head cells."
   [name-at {:keys [x y z]}]
-  (let [feet (name-at {:x x :y y :z z})
-        head (name-at {:x x :y (inc y) :z z})
-        below (name-at {:x x :y (dec y) :z z})]
-    (boolean (and feet head below (bs/passable? feet) (bs/passable? head)
-                  (not (b/air below)) (not (b/fluids below)) (not (b/clearable below))
-                  (not (contains? unsafe-below below))))))
+  (and (floor? (name-at {:x x :y (dec y) :z z}))
+       (let [feet (name-at {:x x :y y :z z})
+             head (name-at {:x x :y (inc y) :z z})]
+         (boolean (and feet head (bs/passable? feet) (bs/passable? head))))))

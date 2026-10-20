@@ -1,6 +1,6 @@
 ;; Card 40ac095a: jobs.movement.cross-water crosses a lake by boat (boat-launch, boat-drive, boat-land) and takes the boat back.
 ;; Should-succeed: a given far-shore land cell (completed, boat recovered); an auto-chosen far shore; :recover false leaves the boat afloat.
-;; Also a boat fetched from a seen chest, then the crossing. Should-fail: no boat anywhere (:no-boat); a given cell that is no shore (:no-far-shore: not made out at the start so the call begins, the first look finds no shore, a condition lost midway stops); no shore :min-cross away (:no-far-shore: false from the start, a listed call waits); no water within :radius of the body (:not-water).
+;; Also a boat fetched from a seen chest, then the crossing. Should-fail: no boat anywhere (:no-boat); a given cell that is no shore (:no-far-shore: false from the start, a listed call waits); no shore :min-cross setting away (:no-far-shore: false from the start, a listed call waits); no water within the ::radius setting of the body (:not-water).
 ;; The lake is x 12..22, z 4..28 (11 wide); the body starts on the west bank.
 {:defaults
  {:tags [:boats :movement :cross-water] :time :any
@@ -19,14 +19,14 @@
    :act [[:job (jobs.movement.cross-water {:pos #at [23 0 16] :recover false})]]
    :expect [{:event {:source :job :kind :completed :data {:recovered false}} :within-s 150 :of-job true}]}
   {:name "given-cell-is-no-shore"
-   ;; the cell is not made out at the start, so the call starts; the first look finds it no shore: lost midway, stopped (end-statuses rule 1)
+   ;; the cell is air over water: seen to be no shore at the start, so a listed call waits like any false start fact
    :act [[:job (jobs.movement.cross-water {:pos #at [17 0 16]})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-far-shore}} :within-s 30 :of-job true}]}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-far-shore}} :within-s 30 :of-job true}]}
   {:name "no-shore-far-enough"
-   :act [[:job (jobs.movement.cross-water {:min-cross 60})]]
+   :act [[:job (jobs.movement.cross-water {:settings {:jobs.movement.cross-water/min-cross 60}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-far-shore}} :within-s 30 :of-job true}]}
   {:name "no-water-within-radius"
-   :act [[:job (jobs.movement.cross-water {:pos #at [23 0 16] :radius 1})]]
+   :act [[:job (jobs.movement.cross-water {:pos #at [23 0 16] :settings {:jobs.movement.cross-water/radius 1}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-water}} :within-s 30 :of-job true}]}
   {:name "boat-in-a-chest-is-fetched-then-crossed"
    :body {:inventory []}

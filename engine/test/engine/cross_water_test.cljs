@@ -5,7 +5,9 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.fake :as fake]
+            [engine.boat-unseen-test :as unseen]
             [engine.library-test :as lt]
+            [engine.settings :as settings]
             [engine.seek-contract-test :as seek]
             [engine.test-util :as tu]
             [jobs.movement.cross-water :as cw]))
@@ -64,7 +66,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [res]} (await (run world {:min-cross 4 :recover false}))]
+        (let [{:keys [res]} (await (run world {:settings {::cw/min-cross 4} :recover false}))]
           (is (= :done (:status res)) (pr-str res))
           (is (= 7 (:x (:land res))) "a cell on the far side"))))))
 
@@ -79,10 +81,21 @@
       (fn ^:async t []
         (doseq [[label w args expected]
                 [["a given cell that is no shore" world {:pos [9 64 0]} {:event :waiting :reason :no-far-shore}]
-                 ["no shore far enough" world {:min-cross 60} {:event :waiting :reason :no-far-shore}]
-                 ["no water within :radius of the body" world {:pos [7 64 0] :radius 1} {:event :waiting :reason :not-water}]
+                 ["no shore far enough" world {:settings {::cw/min-cross 60}} {:event :waiting :reason :no-far-shore}]
+                 ["no water within :radius of the body" world {:pos [7 64 0] :settings {::cw/radius 1}} {:event :waiting :reason :not-water}]
                  ["an item that is no boat" world {:pos [7 64 0] :item "stick"} {:event :stopped :kind :impossible :reason :bad-args}]]]
           (is (= expected (await (waits-on w args))) label))))))
+
+(deftest a-given-cell-over-seen-water-is-no-shore-though-its-air-is-not-made-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:event :waiting :reason :no-far-shore}
+               (await (seek/ending-of #(let [p (:p (lt/setup world))]
+                                         (unseen/unseen-beyond! p [5 64 0] 0)
+                                         (unseen/unseen-beyond! p [5 65 0] 0)
+                                         p)
+                                      (list 'jobs.movement.cross-water {:pos [5 64 0]})))))))))
 
 (deftest no-boat-and-none-to-fetch-is-condition-failed-no-boat
   (async done
@@ -104,9 +117,15 @@
           (is (= :no-shore (:reason (last (filterv #(and (= :stopped (:kind %)) (= ["j1"] (:chain %))) @seen))))
               (pr-str (mapv #(select-keys % [:kind :reason :chain]) (filterv #(= :stopped (:kind %)) @seen)))))))))
 
+(defn spot
+  "cw/far-spot from the world origin with ::min-cross min-cross, and the goal cell when given."
+  ([p min-cross] (spot p min-cross nil))
+  ([p min-cross goal]
+   (settings/with-settings {::cw/min-cross min-cross} #(cw/far-spot p {:x 0 :y 64 :z 0} {:goal goal}))))
+
 (deftest far-shore-prefers-the-far-side
   (let [{:keys [p]} (lt/setup world)]
-    (is (= 7 (:x (:land (cw/far-spot p {:x 0 :y 64 :z 0} {:radius 24 :min-cross 4})))))))
+    (is (= 7 (:x (:land (spot p 4)))))))
 
 (def two-channels
   "Water at x 4 and x 9, z -3..3: land at x 5..8 between them, a far bank at x 10."
@@ -116,17 +135,17 @@
 
 (deftest far-spot-takes-the-farthest-across-water-not-the-nearest
   (let [{:keys [p]} (lt/setup {:blocks two-channels})]
-    (is (= 10 (land-x (cw/far-spot p {:x 0 :y 64 :z 0} {:radius 24 :min-cross 4}))))))
+    (is (= 10 (land-x (spot p 4))))))
 
 (deftest far-spot-excludes-the-start-bank
   (let [{:keys [p]} (lt/setup {:blocks two-channels})]
-    (is (= 5 (land-x (cw/far-spot p {:x 0 :y 64 :z 0} {:radius 24 :min-cross 1 :goal {:x 0 :y 64 :z 0}})))
+    (is (= 5 (land-x (spot p 1 {:x 0 :y 64 :z 0})))
         "nearest the goal, but the start bank (x 3) has no water between")))
 
 (deftest far-spot-with-a-goal-takes-the-spot-nearest-it
   (let [{:keys [p]} (lt/setup {:blocks two-channels})]
-    (is (= 8 (land-x (cw/far-spot p {:x 0 :y 64 :z 0} {:radius 24 :min-cross 4 :goal {:x 8 :y 64 :z 0}}))))
-    (is (= 10 (land-x (cw/far-spot p {:x 0 :y 64 :z 0} {:radius 24 :min-cross 4 :goal {:x 12 :y 64 :z 0}}))))))
+    (is (= 8 (land-x (spot p 4 {:x 8 :y 64 :z 0}))))
+    (is (= 10 (land-x (spot p 4 {:x 12 :y 64 :z 0}))))))
 
 (defn ^:async run-saved
   "Run cross-water as the child of a parent that first saved a crossing to `land`: a restart after the launch."
@@ -206,7 +225,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup world)
               _ (tu/seeing-after-look p)
-              res (await (tu/child-outcome eng 'jobs.movement.cross-water {:min-cross 4 :recover false} 200))]
+              res (await (tu/child-outcome eng 'jobs.movement.cross-water {:settings {::cw/min-cross 4} :recover false} 200))]
           (is (some #(= "look" (.-name %)) (.-calls (.-world p))))
           (is (= :done (:status res)) (pr-str res)))))))
 

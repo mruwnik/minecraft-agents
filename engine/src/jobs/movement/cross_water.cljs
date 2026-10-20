@@ -8,6 +8,7 @@
             [jobs.lib.blocks :as b]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
+            [jobs.lib.land :as land]
             [jobs.lib.look :as look]
             [jobs.lib.sense :as sense]
             [jobs.lib.shore :as shore]
@@ -18,7 +19,7 @@
   "Cross a lake or river by boat, from where the body stands (or floats) to a far shore it has seen. A choice for a caller or a travel job to make: go-to never boats.
   Children: jobs.movement.boat-launch (put a boat on the water and board it; a boat not carried is fetched), then jobs.movement.boat-land (drive to the water beside
   the far shore, step off facing the land, and with :recover take the boat back). A body already aboard skips the launch.
-  The far shore is :pos (a land cell: it must be a seen shore), else a seen shore within :radius of the body, at least :min-cross blocks away, with water between it and the body
+  The far shore is :pos (a land cell: it must be a seen shore), else a seen shore within ::radius of the body, at least ::min-cross blocks away, with water between it and the body
   (not the start bank): the one nearest :goal when given, else the farthest.
   A given :pos is looked at first; one the body still cannot make out is crossed toward all the same (boat-land drives nearer to it).
   Impossible: :bad-args (:pos names no cell, :item is no boat). Conditions, asked before every round (a listed call waits on them; the engine looks round once first): :no-far-shore (:pos is no shore,
@@ -35,8 +36,6 @@
 (a/defargs args
   {:pos {:doc "the far-shore land cell to step onto, [x y z] or {:x :y :z}; nil: choose one (see :goal)" :spec ::a/pos :default nil}
    :goal {:doc "with no :pos: pick the seen far shore nearest this cell; nil: the farthest" :spec ::a/pos :default nil}
-   :radius {:doc "how far from the body to look for the far shore" :spec (a/num-in 1 nil) :default 24}
-   :min-cross {:doc "an auto-chosen far shore is at least this many blocks from the start" :spec (a/num-in 1 nil) :default 6}
    :item {:doc "the boat item to launch; nil: the first carried boat or raft, else one is fetched" :spec a/item? :default nil}
    :recover {:doc "take the boat back after landing" :spec boolean? :default true}})
 
@@ -49,8 +48,13 @@
 
 (a/defargs settings
   {::job-time-s {:default 600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
+   ::radius {:default 24 :doc "How far from the body to look for the far shore." :spec (a/num-in 1 nil)}
+   ::min-cross {:default 6 :doc "An auto-chosen far shore is at least this many blocks from the start." :spec (a/num-in 1 nil)}
    ::boat-speed {:default 5 :doc "Blocks a second the boat covers, for the quote." :spec (a/num-in 0 nil)}
    ::launch-s {:default 24 :doc "Seconds the launch and the landing take besides the drive, for the quote." :spec (a/num-in 0 nil)}})
+
+(defn radius [] (settings/get settings ::radius))
+(defn min-cross [] (settings/get settings ::min-cross))
 
 (defn water-between?
   "Whether a seen water cell lies on the straight line from `from` to the spot's land cell, at the spot's water level."
@@ -66,25 +70,24 @@
           (range 1 n))))
 
 (defn far-spot
-  "The shore spot {:land :water} within :radius of `from`, at least :min-cross away and across water from it (not the start bank), or nil:
+  "The shore spot {:land :water} within ::radius of `from`, at least ::min-cross away and across water from it (not the start bank), or nil:
   the one nearest :goal when given, else the farthest."
-  [p from {:keys [radius min-cross goal]}]
-  (->> (shore/spots p from {:radius radius})
+  [p from {:keys [goal]}]
+  (->> (shore/spots p from {:radius (radius)})
        (map #(assoc % :d (u/dist from (vehicle/centre (:land %)))))
-       (filter #(and (>= (:d %) min-cross) (water-between? p from %)))
+       (filter #(and (>= (:d %) (min-cross)) (water-between? p from %)))
        (sort-by (if goal #(u/dist goal (vehicle/centre (:land %))) #(- (:d %))))
        first))
 
 (defn target-spot [c]
   (let [p (:primitives c)
-        {:keys [radius min-cross goal]} (:args c)]
+        {:keys [goal]} (:args c)]
     (if-let [cell (given-pos c)]
       (shore/spot-at p cell)
-      (far-spot p (u/self-pos c) {:radius radius :min-cross min-cross
-                                                  :goal (when goal (:pos (b/parse {:pos goal})))}))))
+      (far-spot p (u/self-pos c) {:goal (when goal (:pos (b/parse {:pos goal})))}))))
 
 (defn water-in-sight? [c]
-  (boolean (seq (look/seen-blocks (:primitives c) {:names ["water"] :radius (:radius (:args c)) :max 1 :live? true}))))
+  (boolean (seq (look/seen-blocks (:primitives c) {:names ["water"] :radius (radius) :max 1 :live? true}))))
 
 (defn crossing [c]
   (some #(when (= (:root c) (:job (:data %))) (:data %)) (ctx/entries c crossing-kind)))
@@ -137,7 +140,11 @@
   "The far-shore spot the body would cross to now: {:land :water}, a given cell still not made out ({:land cell}), or nil."
   [c]
   (let [[spot reads] (sense/decide #(target-spot c))]
-    (or spot (when (and (given-pos c) (or (seq (:cells reads)) (nil? (u/seen-name (:primitives c) (given-pos c)))))
+    (or spot (when (and (given-pos c)
+                        (or (seq (:cells reads))
+                            (and (nil? (u/seen-name (:primitives c) (given-pos c)))
+                                 (let [below (u/seen-name (:primitives c) (update (given-pos c) :y dec))]
+                                   (or (nil? below) (land/floor? below))))))
                {:land (given-pos c)}))))
 
 (def bad-args
@@ -180,7 +187,7 @@
 
 (defn quote-of [c]
   (let [land (or (given-pos c) (:land (spot-of c)))
-        d (if land (u/dist (u/self-pos c) (vehicle/centre land)) (:radius (:args c)))
+        d (if land (u/dist (u/self-pos c) (vehicle/centre land)) (radius))
         s (+ (settings/get settings ::launch-s) (/ d (settings/get settings ::boat-speed)))]
     {:uses {:job-time [s s (* 3 s)]}}))
 
