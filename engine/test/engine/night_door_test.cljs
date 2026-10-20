@@ -80,7 +80,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {"5,67,0" "air"}) {:inventory st/dirt-stack}))]
+        (let [{:keys [eng p]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {"5,67,0" "air"}) {:inventory st/wall-stack}))]
           (core/submit! eng '(jobs.survival.night) {})
           (await (tu/run-until-empty eng 8))
           (is (seq (st/calls p "place")) "dug in: the room cannot be closed"))))))
@@ -107,7 +107,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen] :as s} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {}) {:inventory st/dirt-stack}))]
+        (let [{:keys [eng p seen] :as s} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {}) {:inventory st/wall-stack}))]
           (.override (.-world p) "useOn" (fn [token a impl] (impl token (clj->js {:pos {:x 3 :y 64 :z 0}}))))
           (core/submit! eng '(jobs.survival.night) {})
           (await (tu/run-until-empty eng 12))
@@ -121,7 +121,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {"5,64,2" "iron_door" "5,65,2" "iron_door"}) {:inventory st/dirt-stack}))]
+        (let [{:keys [eng p seen]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {"5,64,2" "iron_door" "5,65,2" "iron_door"}) {:inventory st/wall-stack}))]
           (core/submit! eng '(jobs.survival.night) {})
           (await (tu/run-until-empty eng 12))
           (is (= 1 (count (st/entries eng :night-door-failed))) "the open iron door is named")

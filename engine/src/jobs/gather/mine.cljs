@@ -10,7 +10,7 @@
             [jobs.gather.mine.end :as end :refer [end-run wanted]]
             [jobs.gather.mine.home :as home]
             [jobs.gather.mine.mend :as mend]
-            [jobs.gather.mine.targets :refer [owed carried got had zone-margin within-keep-clear]]
+            [jobs.gather.mine.targets :refer [owed carried got had zone-margin within-keep-clear scan]]
                         [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.child :as child]
@@ -114,9 +114,9 @@
     (boolean (and (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) kind))))))
 
 (defn stair-start?
-  "Whether the dig starts with a stair of its own (not by a mineshaft): the start keeps clear of buildings."
+  "Whether the dig starts with a stair of its own (not by a mineshaft, and no wanted block in sight to walk to instead): the start keeps clear of buildings."
   [c]
-  (and (descent-wanted? c) (or (false? (:shaft (:args c))) (boolean (:none (pick-shaft c))))))
+  (and (descent-wanted? c) (or (false? (:shaft (:args c))) (boolean (:none (pick-shaft c)))) (empty? (:targets (scan c)))))
 
 (defn ^:async leave-zone!
   "Before the first dig: a go-to child to a cell zone-margin outside the own zone (or, for a stair, building) zn the body stands near (the start moves with it).
