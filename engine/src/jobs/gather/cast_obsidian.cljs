@@ -172,12 +172,12 @@
       (await (dig-look/look-at! c (vec (first (or (seq (:lava entry)) (:cells entry)))))))))
 
 (defn ^:async visit-breach!
-  "No lava is seen: walk to within 4 of the nearest remembered breach lava cell and dig the seal the mine placed there, so the lava is
-  seen; then forget the entry, whatever the walk did (remembered lava is stale; if it is still there the next step sees it).
-  :again, or :continue while the walk waits."
+  "No lava is seen: walk to within 4 of the seal the mine placed at the nearest remembered breach, on the side the eye sees it from (the lava
+  may lie behind rock that a stand within 4 of it shares), and dig it, so the lava is seen; then forget the entry, whatever the walk did
+  (remembered lava is stale; if it is still there the next step sees it). :again, or :continue while the walk waits."
   [c entry]
-  (let [target (cell-of (first (or (seq (:lava entry)) (:cells entry))))
-        w (await (walk! c target 4))]
+  (let [target (cell-of (or (first (:seals entry)) (:at entry) (first (or (seq (:lava entry)) (:cells entry)))))
+        w (let [w (await (near/go-near! c target 4 {:see true}))] (if (= :partial w) :continue w))]
     (if (= :continue w)
       :continue
       (do (when (= :there w) (await (open-seal! c entry)))
