@@ -179,7 +179,7 @@
           (is (seq (tu/walked-to eng)) "it walked to the gate the body last saw open")
           (is (= [] (opened eng)) "the entry dropped once it saw the gate shut")
           (is (not (open? p gate-cell)))
-          (is (empty? (filter #(= :shut-doors.gave-up (:kind %)) @seen))))))))
+          (is (empty? (filter #(= :shut.gave-up (:kind %)) @seen))))))))
 
 (deftest a-recorded-gate-the-body-has-not-seen-is-left-unseen-not-ended-already
   (async done
@@ -216,7 +216,7 @@
           (await (tick-until s #(empty? (:list (core/state eng))) 30))
           (is (empty? (:list (core/state eng))) "the job ended")
           (is (open? p gate-cell))
-          (is (= 1 (count (filter #(= :shut-doors.gave-up (:kind %)) @seen))))
+          (is (= 1 (count (filter #(= :shut.gave-up (:kind %)) @seen))))
           (is (= [] (opened eng)) "the entry is dropped, so the trigger does not fire for it again"))))))
 
 (deftest a-gate-whose-clicks-fail-keeps-its-entry-and-is-retried-then-dropped-after-the-last-try
@@ -224,7 +224,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup (gate-world true 8 0))
-              gave-up #(filter (fn [e] (= :shut-doors.gave-up (:kind e))) @seen)
+              gave-up #(filter (fn [e] (= :shut.gave-up (:kind e))) @seen)
               run! (fn ^:async f []
                      (core/submit! eng '(jobs.maintenance.shut) {})
                      (await (tick-until s #(empty? (:list (core/state eng))) 80)))]
@@ -380,7 +380,7 @@
   (tick-until s #(empty? (:list (core/state eng))) ticks))
 
 (defn run-unrecorded! [s ticks]
-  (settings/with-settings {:jobs.maintenance.shut/unrecorded? true} #(run-shut! s {} ticks)))
+  (settings/with-settings {:jobs.lib.shut-walked/unrecorded? true} #(run-shut! s {} ticks)))
 
 (defn hut-setup [home?]
   (let [{:keys [eng] :as s} (setup (assoc (hs/hut-world {:x 5.5 :y 64 :z 1.5} {}) :states hd/open-door-states))]

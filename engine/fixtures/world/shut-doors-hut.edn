@@ -16,7 +16,7 @@
  [{:name "unrecorded-own-door-shut"
    :plans [{:id "hut" :metadata {:by "$body"} :parts [{:id "wall" :cells [#at [14 0 16] #at [15 0 16] #at [17 0 16] #at [18 0 16]] :want [:any "oak_planks"]}
                                                        {:id "door" :cells [#at [16 0 16]] :want [:any "oak_door"]}]}]
-   :act [[:job (jobs.maintenance.shut {:settings {:jobs.maintenance.shut/unrecorded? true}})]]
+   :act [[:job (jobs.maintenance.shut {:settings {:jobs.lib.shut-walked/unrecorded? true}})]]
    :expect [{:event {:source :job :kind :completed :data {:shut 1 :left []}} :within-s 70 :of-job true}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=false]"]]}
   {:name "default-run-leaves-an-unrecorded-door"
@@ -26,7 +26,7 @@
    :after [[:block [16 0 16] "oak_door[half=lower,open=true]"]]
    :limit-s 60}
   {:name "unrecorded-door-outside-own-plans-left-open"
-   :act [[:job (jobs.maintenance.shut {:settings {:jobs.maintenance.shut/unrecorded? true}})]]
+   :act [[:job (jobs.maintenance.shut {:settings {:jobs.lib.shut-walked/unrecorded? true}})]]
    :expect [{:event {:source :job :kind :completed :data {:shut 0 :left []}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=true]"]]
    :limit-s 60}

@@ -8,7 +8,7 @@
             ["path" :as path]))
 
 (def legit
-  {"items/use.cljs" [1 "re-finds the one entity the call already named by id"]
+  {"lib/use_entity.cljs" [1 "re-finds the one entity the call already named by id"]
    "items/give.cljs" [1 "finds the player the order names"]
    "movement/stay_near.cljs" [1 "finds the player the order names"]
    "movement/chase.cljs" [1 "finds the entity or player the order names"]

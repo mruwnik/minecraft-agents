@@ -53,12 +53,12 @@
             [:fill [14 0 2] [18 3 9] "glass"]
             [:set [16 0 4] "oak_fence_gate[facing=south,open=true]"]]
    :body {:at [16.5 0 10.5]}
-   :expect [{:event {:source :job :kind :shut-gate.gave-up :data {:cell #at [16 0 4]}} :within-s 50}]
+   :expect [{:event {:source :job :kind :shut.gave-up :data {:cell #at [16 0 4]}} :within-s 50}]
    :after [[:block [16 0 4] "oak_fence_gate[open=true]"]]}
   {:name "gate-out-of-reach-of-a-sealed-body-names-the-blocker"
    :plans [{:id "pen" :parts [{:id "gate" :cells [#at [16 0 3]] :want [:any "oak_fence_gate"]}]}]
    :blocks [[:fill [14 0 8] [18 3 12] "glass"] [:fill [15 0 9] [17 2 11] "air"]
             [:set [16 0 3] "oak_fence_gate[facing=south,open=true]"]]
    :body {:at [16.5 0 10.5]}
-   :expect [{:event {:source :job :kind :shut-gate.gave-up :message [:contains "stays open: unreachable ("] :data {:cell #at [16 0 3] :blocker [:any]}} :within-s 50}]
+   :expect [{:event {:source :job :kind :shut.gave-up :message [:contains "stays open: unreachable ("] :data {:cell #at [16 0 3] :blocker [:any]}} :within-s 50}]
    :after [[:block [16 0 3] "oak_fence_gate[open=true]"]]}]}
