@@ -609,7 +609,7 @@
           (is (= [] (tu/walk-calls p)))
           (is (= [] (entries eng :hungry)) "not a fruitless search: no rest written")
           (is (= 1 (count (entries eng :food-too-dangerous))))
-          (is (= [] (filterv #(= :stopped (:kind %)) @seen)) "a danger that can pass yields instead of ending"))))))
+          (is (re-find #":reason :too-dangerous" (stop-text seen))))))))
 
 (deftest a-body-on-low-health-searches-on-a-calm-day
   (async done
@@ -631,7 +631,7 @@
           (know-source! eng {:x 60 :y 64 :z 0} :chest)
           (await (one-round! eng {:explore false}))
           (is (= [] (calls p "transfer")))
-          (is (re-find #"passes creeper" (pr-str (entries eng :food-too-dangerous)))))))))
+          (is (re-find #"passes creeper" (stop-text seen))))))))
 
 (deftest a-body-on-low-health-looks-around-before-walking-out-and-refuses-a-creeper-it-finds
   (async done
@@ -647,7 +647,7 @@
           (know-source! eng {:x 60 :y 64 :z 0} :chest)
           (await (one-round! eng {:explore false}))
           (is (= [] (calls p "transfer")))
-          (is (re-find #"passes creeper" (pr-str (entries eng :food-too-dangerous)))))))))
+          (is (re-find #"passes creeper" (stop-text seen))))))))
 
 (deftest a-body-at-food-zero-does-not-rest-after-a-too-dangerous-ending
   (async done

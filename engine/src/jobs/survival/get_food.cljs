@@ -59,8 +59,8 @@
   Ready: safe? and fit? always ok: it eats carried food whatever is near. Its walks and searches run under :checks (job-safe-or-starving); a merely hungry body waits for dawn in the open (intended).
   Fragile (health at or below foods/::fragile-health, 6) with no food carried, it walks out (a search, a source, its pen,
   an animal, a furnace to cook at) only on a calm day (jobs.lib.dawn/calm?) and not past known hostiles whose route
-  danger (jobs.lib.cost/route-danger) is its health or more; with nothing else to try it writes a :food-too-dangerous entry (no :hungry) and yields (a reflex ends condition-failed
-  :too-dangerous); the hungry trigger then rests (its :rest-s) while the body stays fragile
+  danger (jobs.lib.cost/route-danger) is its health or more; with nothing else to try it writes a :food-too-dangerous entry (no :hungry) and ends condition-failed
+  :too-dangerous; the hungry trigger then rests (its :rest-s) while the body stays fragile
   (jobs.survival.get-food.risk). Not shut in a shelter, it first looks around from where it stands (once per place) so hostiles outside its view count.
   Wheat is cut only by :field, in a zone or plan of its own. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own (but for the :pen way) or inside a closed enclosure (:spare-pens, default true), kinds in :off-limits (default the jobs.lib.animal-spare setting), and the last :keep-adults (2) adults of a kind in sight (for breeding; never hunted, even when starving, unless ::kept-lifted-below lifts it) are never hunted (:ignore-zones? lifts the others' zone only). Each animal attacked is a food.killed info with its name, cell, adults counted, :keep-adults, food and the rule that allowed it; the data carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
   (one get-food.skipped warning). A crop in another's zone or claim is dug only when no other is (one
@@ -437,7 +437,5 @@
                   (:too-dangerous (ctx/mem c))
                   (let [why (str "hungry (food " (food-level c) "), " (:too-dangerous (ctx/mem c)))]
                     (ctx/remember! c :food-too-dangerous {:why why} danger-policy)
-                    (if (:reflex c)
-                      (ctx/end c :condition-failed {:reason :too-dangerous :why why} {:food (food-level c)})
-                      :continue))
+                    (ctx/end c :condition-failed {:reason :too-dangerous :why why} {:food (food-level c)}))
                   :else (none! c)))))))
