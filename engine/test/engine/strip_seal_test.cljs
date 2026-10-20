@@ -74,7 +74,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [env (world :inventory (into [{:name "cobblestone" :count 4}] tools))
-              r (await (run! env (assoc args :fetch false)))]
+              r (await (run! env (assoc args :ways #{:carried})))]
           (is (= {:status :stopped :reason :no-blocks :placed 4 :short 5} (select-keys r [:status :reason :placed :short]))))))))
 
 (deftest with-no-blocks-carried-they-are-fetched-by-default-before-any-work
@@ -88,12 +88,12 @@
           (is (not-any? #(= :walk (:slot %)) started) "no walk to the stand first")
           (is (empty? (bd/calls (:p env) "dig"))))))))
 
-(deftest with-no-blocks-carried-and-fetch-off-it-stops-no-blocks-before-any-work
+(deftest with-no-blocks-carried-and-only-carried-ways-it-stops-no-blocks-before-any-work
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [env (world :inventory tools)
-              r (await (run! env (assoc args :fetch false)))]
+              r (await (run! env (assoc args :ways #{:carried})))]
           (is (= {:status :stopped :reason :no-blocks :placed 0 :short 9} (select-keys r [:status :reason :placed :short])))
           (is (empty? (bd/calls (:p env) "dig")) "nothing dug")
           (is (= -3 (feet-x (:p env))) "the body did not walk to the stand"))))))

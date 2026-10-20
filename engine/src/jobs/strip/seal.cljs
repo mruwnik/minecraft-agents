@@ -28,8 +28,8 @@
   torches, fences, ladders ...) are dug first and the drops picked up (torches come back). The rows go up from the bottom, the centre
   bottom cell last, so the body keeps its view. A container in the section is never dug (:blocked). Zones, claims and plans are the
   place rules'.
-  With none of the blocks carried they are fetched first (jobs.lib.need, :fetch; a failed fetch ends the call with its
-  ending as the :because), before the walk to the stand; with :fetch off for items it stops :no-blocks at once.
+  With none of the blocks carried they are fetched first (jobs.lib.need, from the call's :ways; a failed fetch ends the call with its
+  ending as the :because), before the walk to the stand; with :ways #{:carried} it stops :no-blocks at once.
 
   done? is :ok when the section is shut, its drops picked up and no child under way: ends :done {:placed n} (0 =
   already shut). Else it ends with data {:placed n
@@ -49,13 +49,14 @@
 
 (def fit? ready/ok)
 
+(def ways need/fetch-ways)
+
 (a/defargs args
   {:at {:doc "the bottom centre cell of the section, [x y z]" :spec ::a/pos :default nil}
    :axis {:doc "the way the corridor runs" :spec #{:x :z} :default nil}
    :side {:doc "the side the body ends on: :from (lower coordinate) or :to" :spec #{:from :to} :default nil}
    :width {:doc "cells across the corridor" :spec (a/int-in 1 9) :default 3}
    :height {:doc "cells up the corridor" :spec (a/int-in 1 9) :default 3}
-   :fetch {:doc "get the blocks to close with (jobs.lib.need): true, a set of kinds or a map of limits; false (or without :item) stops :no-blocks" :spec need/option? :default true}
    :ignore-zones? :shared})
 
 (defn kind
@@ -127,14 +128,14 @@
   (ctx/use c :blocks))
 
 (defn fetch-opts
-  "The limits {:how :explore :minutes} for fetching blocks, nil when :fetch does not allow items."
+  "The limits {:how} for fetching blocks, nil when the call's ways leave only :carried."
   [c]
-  (when-let [o (need/opts c 'jobs.strip.seal)]
-    (when (contains? (:what o) :item) (select-keys o [:how :explore :minutes]))))
+  (when-let [how (seq (need/fetch-how c))]
+    {:how (set how)}))
 
 (defn ^:async fetch-blocks!
   "With none of the blocks carried: :continue while the fetch waits, :again once got, the :no-blocks stop (the failed fetch's
-  ending as its :because), also with :fetch off. nil when one is carried."
+  ending as its :because), also with :ways #{:carried}. nil when one is carried."
   [c open]
   (when-not (b/chosen c (blocks c))
     (if-let [o (fetch-opts c)]

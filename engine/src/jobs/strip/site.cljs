@@ -36,7 +36,7 @@
           :skipped :unlinked. A segment the far end shows longer than it was read is stripped again. The segment holding :at is never
           sealed. A segment that stops ::stop-limit (3) times for one reason is :skipped with the reason. A stop for
           :bag-full :food-short :no-torches :no-tool, or low torches or free slots, is a trip: deposit into the base chests
-          (storage.deposit), obtain torches, get the tool, get food (survival.get-food, once per trip; still hungry with none: :food-short; :fetch false skips the try), then back down; at most ::max-trips (12).
+          (storage.deposit), obtain torches, get the tool, get food (survival.get-food, once per trip; still hungry with none: :food-short; :ways #{:carried} skips the try), then back down; at most ::max-trips (12).
   Each time at the base, before the deposit, the raw ore the base chests are known to hold (body memory stock) is withdrawn (storage.withdraw,
           up to 64 a free furnace; a failed withdraw is not a stop), then the raw ore carried (raw_iron raw_gold raw_copper) is loaded into the base
           furnaces (items.smelt, :ways #{:carried :chest}; one kind split over both furnaces, several one kind each) and
@@ -63,7 +63,6 @@
    :shaft {:doc "id of a mineshaft plan down from the base; nil: the nearest usable one; false: walk" :spec (a/or-of a/name? boolean?) :default nil}
    :take {:doc "classes stripped" :spec (a/coll-of #{:wood :cobweb :rail :ore}) :default [:wood :cobweb :rail :ore]}
    :spawner {:doc "a spawner in a segment: :light lights its spawn box and leaves it, :break lights and digs it, :seal seals the segment's mouth at once (its subtree skipped), :skip leaves it unlit" :spec #{:light :break :seal :skip} :default :light}
-   :fetch {:doc "get what a trip lacks: food (jobs.survival.get-food, tried once per trip) and, passed to strip.seal, the blocks to seal with; true, a set of kinds or a map of limits; false stops :food-short and :no-blocks" :spec need/option? :default true}
    :smelt {:doc "false leaves the raw ore carried to the base raw" :spec boolean? :default true}
    :haul {:doc "false leaves the loot in the base chests" :spec boolean? :default true}
    :ignore-zones? :shared})
@@ -274,7 +273,7 @@
                        :else :again))
       :tool (let [f (await (run-all! c [[:tool 'jobs.items.get-tool {:kind tool}]]))]
               (cond (= :continue f) :continue f (child-stop! c f) :else (do (save! c assoc-in [:trip :tool-done] true) :again)))
-      :food (if (or (:food-done (:trip s)) (not (need/opts c 'jobs.strip.site)))
+      :food (if (or (:food-done (:trip s)) (empty? (need/fetch-how c)))
               (stop! c :food-short {})
               (let [f (await (run-all! c [[:food 'jobs.survival.get-food {}]]))]
                 (if (= :continue f)
@@ -287,7 +286,8 @@
 (defn ^:async seal! [c s t id]
   (let [seg (get (:segments s) id)
         {:keys [at side]} (mouth s t seg)
-        f (await (run-all! c [[:seal 'jobs.strip.seal {:at at :axis (:axis seg) :side side :ignore-zones? (:ignore-zones? (:args c)) :fetch (:fetch (:args c))}]]))]
+        f (await (run-all! c [[:seal 'jobs.strip.seal (cond-> {:at at :axis (:axis seg) :side side :ignore-zones? (:ignore-zones? (:args c))}
+                                                (some? (:ways (:args c))) (assoc :ways (:ways (:args c))))]]))]
     (cond (= :continue f) :continue
           f (child-stop! c f)
           :else (do (save! c assoc-in [:segments id :state] :sealed) :again))))
@@ -422,6 +422,8 @@
 (def safe? (ready/safe-at-by-night #(a/cell (or (:at (:args %)) (:at (site %))))))
 
 (def fit? ready/fit?)
+
+(def ways need/fetch-ways)
 
 (defn bad-args
   "Never :bad-args: no :site or :base, and a new site without :at (the site is saved after the start)."

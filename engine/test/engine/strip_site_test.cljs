@@ -327,22 +327,22 @@
           (is (= {:status :stopped :reason :food-short} (select-keys r [:status :reason])))
           (is (= 1 (count (called env 'jobs.survival.get-food)))))))))
 
-(deftest a-food-trip-with-fetch-off-stops-food-short-without-get-food
+(deftest a-food-trip-with-only-carried-ways-stops-food-short-without-get-food
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [env (hungry-env)
-              r (await (start! env (assoc args :fetch false)))]
+              r (await (start! env (assoc args :ways #{:carried})))]
           (is (= {:status :stopped :reason :food-short} (select-keys r [:status :reason])))
           (is (empty? (called env 'jobs.survival.get-food))))))))
 
-(deftest the-seal-child-gets-the-fetch-arg
+(deftest the-seal-child-gets-the-ways
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [env (setup)
-              _ (await (start! env (assoc args :fetch #{:tool})))]
-          (is (= [#{:tool}] (distinct (map :fetch (called env 'jobs.strip.seal))))))))))
+              _ (await (start! env (assoc args :ways #{:carried :chest})))]
+          (is (= [#{:carried :chest}] (distinct (map :ways (called env 'jobs.strip.seal))))))))))
 
 (deftest a-body-inside-the-radius-but-far-from-at-walks-to-at-before-reading-the-site
   (async done

@@ -19,13 +19,13 @@
   {:name "no-blocks-stops-short-and-leaves-the-rail"
    :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [6 0 15] [26 2 17] "air"] [:set [16 0 16] "rail"]]
    :body {:inventory []}
-   :act [[:job (jobs.strip.seal {:at #at [16 0 16] :axis :x :side :from :fetch false})]]
+   :act [[:job (jobs.strip.seal {:at #at [16 0 16] :axis :x :side :from :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:short [:>= 1]}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]}
   {:name "failed-block-fetch-stops-no-blocks"
    :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [6 0 15] [26 2 17] "air"]]
    :body {:inventory []}
-   :act [[:job (jobs.strip.seal {:at #at [16 0 16] :axis :x :side :from :fetch {:what #{:item} :minutes 1 :fail-minutes 1}})]]
+   :act [[:job (jobs.strip.seal {:at #at [16 0 16] :axis :x :side :from :ways #{:carried :chest}})]]
    :expect [{:event {:source :job :kind :stopped :data {:short [:>= 1]}} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 10 :of-job true}]
    :limit-s 200}
