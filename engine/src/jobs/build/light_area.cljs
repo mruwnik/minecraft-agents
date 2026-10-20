@@ -77,9 +77,15 @@
               :open? #(let [n (block-at %)] (and n (not (solid/solid? n))))
               :spots spots :sources torches})))
 
+(defn half-seen?
+  "An open cell whose floor or head cell the body has not seen yet: whether it is spawn ground is undecided."
+  [p [x y z]]
+  (let [open? (some-> (u/seen-name p {:x x :y y :z z}) solid/solid? not)]
+    (boolean (and open? (some #(nil? (u/seen-name p {:x x :y (+ y %) :z z})) [-1 1])))))
+
 (defn frontier
   "The nearest cell of the area not walked to yet whose light is unread (a seen spawnable cell), or that is unseen and touches
-  a seen open cell: where the room goes on out of sight. Cells inside rock never qualify."
+  a seen open cell, or is open with its floor or head unseen: where the room goes on out of sight. Cells inside rock never qualify."
   [c]
   (let [p (:primitives c)
         block-at (access/seen-at p)
@@ -88,7 +94,8 @@
         open? #(let [n (block-at %)] (and n (not (solid/solid? n))))]
     (->> (area c)
          (filter #(and (not (looked %))
-                       (or (and (nil? (block-at %)) (some (fn [d] (open? (mapv + % d))) tp/neighbours))
+                       (or (half-seen? p %)
+                           (and (nil? (block-at %)) (some (fn [d] (open? (mapv + % d))) tp/neighbours))
                            (and (sh-sense/spawnable? p (zipmap [:x :y :z] %))
                                 (nil? (sh-sense/light-at p (zipmap [:x :y :z] %)))))))
          (sort-by #(u/dist here (zipmap [:x :y :z] %)))

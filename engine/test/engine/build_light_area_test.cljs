@@ -2,7 +2,9 @@
   "jobs.build.light-area against the seeing fake world: dark rooms and corridors are lit with the fewest torches."
   (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.build.light-area :as light-area]
+            [jobs.lib.util :as u]))
 
 (def job 'jobs.build.light-area)
 (def torches [{:name "torch" :count 16}])
@@ -74,3 +76,12 @@
           (is (= :done (:status r)) (pr-str r))
           (is (seq (torch-cells p corridor)) "the dark far end got a torch, not an instant done")
           (is (every? (fn [[x _ _]] (> x 30)) (torch-cells p corridor))))))))
+
+(deftest an-open-cell-with-its-head-or-floor-unseen-is-not-decided-yet
+  (let [seen (fn [known] (fn [_ {:keys [y]}] (known y)))
+        half? #(with-redefs [u/seen-name (seen %)] (light-area/half-seen? nil [0 64 0]))]
+    (is (true? (half? {64 "air" 65 nil 63 "stone"})) "head unseen")
+    (is (true? (half? {64 "air" 65 "air" 63 nil})) "floor unseen")
+    (is (false? (half? {64 "air" 65 "air" 63 "stone"})))
+    (is (false? (half? {64 "stone" 65 nil 63 nil})) "rock is not a room cell")
+    (is (false? (half? {})) "an unseen cell is the other frontier clause")))
