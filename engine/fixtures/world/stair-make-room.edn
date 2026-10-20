@@ -1,10 +1,11 @@
 ;; Cards 275c66b0 (and 8397ad3f in access-pickaxe-tools.edn): a stair that digs with a full pack supplies its own room. A pack of 35 stacks
 ;; of junk (tuff, dirt) and the pickaxe: the stair calls make-room (make-room.tossed) and goes on to its 6 steps. Should-fail: a
 ;; pack of diamonds only has nothing to toss and waits :no-free-slot (does not end); with the make-room? setting false the junk pack waits too, nothing is tossed.
+;; Dark plot: a lit one puts invisible light blocks in the carved air, and the stair cannot dig the one above the body.
 ;; Rock x 10..30, z 12..20, y 0..10 (deepslate); the body in a 1x3 cell at [16 0 16] with a stone pickaxe, an open tunnel running west from it (make-room throws nothing walled in).
 {:defaults
  {:tags [:access :storage :jobs] :time :any
-  :plot {:height 14}
+  :plot {:height 14 :light :dark}
   :blocks [[:fill [10 0 12] [30 10 20] "deepslate"] [:fill [12 0 16] [16 2 16] "air"]]
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}
   :limit-s 200}
