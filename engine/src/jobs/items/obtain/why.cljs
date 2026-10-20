@@ -7,6 +7,7 @@
             [jobs.items.obtain.seen :refer [seen-blocks-of seen-of]]
             [jobs.items.obtain.table :refer [animal? gather-needs material-blocks]]
             [jobs.items.recipes :as recipes]
+            [jobs.items.smelt.plan :as smelt-plan]
             [jobs.lib.look :as look]
             [jobs.lib.storage :as storage]
             [jobs.lib.trees :as trees]
@@ -51,6 +52,13 @@
              (not-any? (fn [[k v]] (and (pos? v) (clojure.string/ends-with? k "_pickaxe"))) have))
     (str "mining it needs a pickaxe, none carried; " (recipes/lacking version have "wooden_pickaxe" 1))))
 
+(defn make-why
+  "Why item cannot be made: a smelted product (iron_ingot) lacks its input, whatever packed-block recipe also makes it."
+  [c version have item n]
+  (if-let [input (and (way? c :smelt) (smelt-plan/made-from item))]
+    (str "smelting " item " needs " input ", have " (get have input 0))
+    (recipes/lacking version have item n)))
+
 (defn no-source-why
   "Text for the no-source wait: what each allowed source lacks."
   [c names n]
@@ -59,7 +67,7 @@
     (clojure.string/join
      "; "
      (concat (when (way? c :chest) [(str "no seen chest that may hold " (clojure.string/join "/" names))])
-             (when (makes? c) [(recipes/lacking version have (first names) n)])
+             (when (makes? c) [(make-why c version have (first names) n)])
              (when (gathers? c) [(unseen-why c names n)])
              (when-let [w (and (gathers? c) (pickaxe-why version have names))] [w])))))
 

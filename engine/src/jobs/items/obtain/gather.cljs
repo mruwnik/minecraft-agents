@@ -12,6 +12,7 @@
             [jobs.lib.waits :as waits]
             [jobs.lib.child :as child]
             [jobs.lib.need :as fetch-need]
+            [jobs.lib.torch-stock :as torch-stock]
             [jobs.lib.reserve :as reserve]))
 
 (defn keep-crafting-items!
@@ -113,13 +114,23 @@
                               (:why res) (assoc :why (:why res))
                               (:coverage res) (assoc :legs (:legs (:coverage res)) :farthest (:farthest (:coverage res))))))))))
 
+(defn ^:async torch-step!
+  "Before a mine that must stair or tunnel down to an ore not seen starts (its own ways lack :gather, so it cannot stock torches itself): get the
+  torches here with an obtain child, as jobs.lib.torch-stock does for a mine called alone. :continue while it runs, else nil."
+  [c need]
+  (when (and (:tunnel? need) (= 'jobs.gather.mine (:job need)) (not (seen-of c need)) (not (get-in (ctx/mem c) [:gather :before])))
+    (or (await (fetch-need/return! c))
+        (await (torch-stock/torches! c)))))
+
 (defn ^:async gather-step!
   "One round of the gather source: the child for the first raw item the chain lacks, until it ends."
   [c names have target]
   (let [p (:primitives c)
         pl (gather-plan c names (- target have))
-        need (some->> (some-> pl :gather (gather-need (game/version-of p))) (with-block c) (with-count p) (with-avoid c))]
+        need (some->> (some-> pl :gather (gather-need (game/version-of p))) (with-block c) (with-count p) (with-avoid c))
+        stocking (await (torch-step! c need))]
     (cond
+      stocking stocking
       (nil? need) (tried! c :gather :no-plan)
       (and (not (get-in (ctx/mem c) [:gather :before])) (pickaxe-first? c names need) (or (explore-opts c) (seen-of c need)))
       (await (pickaxe-step! c names need))

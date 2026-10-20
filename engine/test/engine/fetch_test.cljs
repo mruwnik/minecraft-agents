@@ -1178,8 +1178,8 @@
     (is (= (child/max-fruitless) (gather/fruitless-limit sapling {:kind :condition-failed :cause :no-source})) "a child that could not start broke no leaves")))
 
 (deftest gather-mines-fetch-a-pickaxe-without-gathering
-  (is (= table/mine-fetch (get-in (table/gather-need {"cobblestone" 1}) [:args :fetch])))
-  (is (= table/mine-fetch (get-in (table/gather-need {"coal" 1}) [:args :fetch]))))
+  (is (= table/mine-fetch (get-in (table/gather-need {"cobblestone" 1}) [:args :ways])))
+  (is (= table/mine-fetch (get-in (table/gather-need {"coal" 1}) [:args :ways]))))
 
 (deftest gather-needs-mine-the-block-that-drops-the-material
   (is (= #{"stone"} (:seen (table/gather-need {"cobblestone" 1}))))

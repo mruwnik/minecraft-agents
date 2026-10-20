@@ -221,9 +221,11 @@
                          (some->> (get-in m [:gather :why]) (str ": ")))]
             (ctx/end c :nothing-possible (merge {:reason k :why why} (wanted-fields a)) (assoc data :tried (:tried m) :why why)))
           :else
-          (let [why (str "no source for " (clojure.string/join "/" names) ": " (no-source-why c names (shortfall c names))
-                         (blocked-text (:blocked-chests m))
-                         (tried-text (:tried m) (get-in m [:gather :why]) (get-in m [:craft :detail])))]
+          (let [tried (tried-text (:tried m) (get-in m [:gather :why]) (get-in m [:craft :detail]))
+                why (str "no source for " (clojure.string/join "/" names) ": "
+                         (some-> tried (subs 2) (str "; "))
+                         (no-source-why c names (shortfall c names))
+                         (blocked-text (:blocked-chests m)))]
             (ctx/end c :nothing-possible (merge {:reason :no-source :why why} (wanted-fields a))
                      (assoc data :tried (:tried m) :why why))))))))
 

@@ -128,6 +128,26 @@
           (is (empty? (f/events-of s :waiting)) "no silent wait")
           (is (seq (mine-events s)) "the mine child ran"))))))
 
+(deftest an-unseen-ore-gets-torches-before-the-mine-goes-down
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (assoc (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "stick" :count 2} {:name "coal" :count 2} {:name "crafting_table" :count 1}])
+                                :floor [-30 -30 40 30]) [f/own-zone])]
+          (await (obtain! s {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true} 60))
+          (is (seq (f/events-of s :torch.stocked)) "the torches were fetched by obtain, since the mine's ways cannot gather")
+          (is (< 0 (get (f/inv s) "torch" 0))))))))
+
+(deftest a-smelted-product-without-its-input-names-the-smelt-not-a-block-recipe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (ore-world {} [{:name "stone_pickaxe" :count 1}]) [f/own-zone])]
+          (await (obtain! s {:item "iron_ingot" :count 31 :ways #{:craft :smelt :gather} :explore false} 6))
+          (let [w (str (:text (first (filter #(= :no-source (:reason %)) (f/events-of s :waiting)))))]
+            (is (re-find #"smelting iron_ingot needs raw_iron, have 0" w))
+            (is (not (re-find #"iron_block" w)))))))))
+
 (deftest cobblestone-unseen-with-explore-goes-to-the-mine-not-a-surface-walk
   (async done
     (tu/run-async done
