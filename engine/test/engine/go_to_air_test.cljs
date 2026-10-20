@@ -80,18 +80,18 @@
                                                {:pos goal :range 1 :ways #{:walk :clear-seal}}))]
             (is (true? (:arrived @out)) (str "to " goal " at oxygen " oxygen ": result " @out " at " (gt/at p)))))))))
 
-;; should fail: the only way on is a 32 cell sealed tunnel (16 s) to a shaft at x 37, the land cut by a bedrock ridge (x 11):
+;; should fail: the only way on is a 64 cell sealed tunnel (16 s of sprint-swimming) to a shaft at x 69, the land cut by a bedrock ridge (x 11):
 ;; it swims up for air, and with the air back no way fits it still
 (def long-tunnel
-  (merge (box -4 60 -4 45 69 63 "stone") (box 4 64 8 4 69 8 "water")
-         (box 5 64 8 36 65 8 "water") (box 37 64 8 37 69 8 "water") (box 11 70 -4 11 73 63 "bedrock")))
+  (merge (box -4 60 -4 77 69 63 "stone") (box 4 64 8 4 69 8 "water")
+         (box 5 64 8 68 65 8 "water") (box 69 64 8 69 69 8 "water") (box 11 70 -4 11 73 63 "bedrock")))
 
 (deftest a-body-short-of-air-swims-up-and-gives-up-air-when-no-way-fits-a-breath
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen 6 :pitch 0} :blocks long-tunnel :light [15 15]}
-                                             {:pos [38 70 8] :range 1 :ways #{:walk :clear-seal}}))]
+                                             {:pos [70 70 8] :range 1 :ways #{:walk :clear-seal}}))]
           (is (= :air (:why @out)) (str "result " @out))
           (is (<= 69 (second (gt/at p))) (str "it swam up for air: at " (gt/at p))))))))
 

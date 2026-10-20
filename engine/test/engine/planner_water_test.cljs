@@ -24,9 +24,13 @@
 (defn near
   ([x y z] (near x y z 1))
   ([x y z range] {:kind "near" :x x :y y :z z :range range}))
+(def paddle-costs
+  "The air tests' geometries are sized for 0.5 s a swum cell, submerged too (the default sprint-swim price is the one test below)."
+  {:swimSubH 0.5})
+
 (defn run
   ([snapshot from goal] (run snapshot from goal {}))
-  ([snapshot from goal options] (pf/plan snapshot {:from from :goal goal} options)))
+  ([snapshot from goal options] (pf/plan snapshot {:from from :goal goal} (update options :costs #(merge paddle-costs %)))))
 (defn found? [r] (= "found" (:status r)))
 (defn steps [r] (get-in r [:path :steps]))
 (defn last-step [r] (peek (steps r)))
@@ -917,3 +921,9 @@
     (is (found? r))
     (is (re-find #"magma column down" (summary r)))
     (is (= [2 64 16] (xyz (last-step r))))))
+
+(deftest a-submerged-swim-is-priced-at-the-sprint-swim-speed
+  (let [plan (fn [options] (cost (pf/plan drown-tunnel {:from drown-start :goal (near 21 64 1 0)} options) :waterSeconds))
+        sprinting (plan {:goalFlood 0})
+        paddling (plan {:goalFlood 0 :costs paddle-costs})]
+    (is (< sprinting (* 0.6 paddling)) (str sprinting " vs " paddling))))

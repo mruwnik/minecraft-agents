@@ -58,6 +58,7 @@
      refused (not at options.health 20, the default: a body at full health climbs any shaft).
    - options.costs.dropFactor (1): scales the fall seconds and fall damage of every drop on land (0: free); options.maxDrop
      (3) refuses a drop of more than that many blocks (1: none of 2 or 3). go-to's :drop-cost sets them.
+   - options.costs.swimSubH (0.26, at most swimH): seconds a sideways swim cell takes with the head under water, the walker sprint-swimming ~3.9 b/s (gait :walk and :sneak price it at swimH; Depth Strider scales it).
    - options.costs.airUsed (0): seconds of air the body has used at the start (a plan made mid-dive); go-to's body-policy
      sets it from the oxygen when the head is under water. Such a plan to a goal whose head cell breathes, with a breathing
      head cell seen within the goal's range (at most TO-AIR-REACH blocks; options.airSeen, fn x y z: the body has seen or felt
@@ -327,7 +328,7 @@
      ;; costs
      (unchecked-get costs "climbUp") (unchecked-get costs "climbDown") (unchecked-get costs "jumpClimb") (unchecked-get costs "open")
      (unchecked-get costs "openRedstone") (unchecked-get costs "openLever") (unchecked-get costs "openPlate") (unchecked-get costs "besideMagmaColumn")
-     (unchecked-get costs "swimH") (unchecked-get costs "swimUp") (unchecked-get costs "swimDown")
+     (unchecked-get costs "swimH") (js/Math.min (unchecked-get costs "swimSubH") (unchecked-get costs "swimH")) (unchecked-get costs "swimUp") (unchecked-get costs "swimDown")
      (unchecked-get costs "exit") (unchecked-get costs "current") (unchecked-get costs "bubbleUp") (unchecked-get costs "bubbleDown")
      (unchecked-get costs "airSupply") (air-limit costs) (+ (unchecked-get costs "airSupply") (air-grace costs)) (unchecked-get costs "airDrain") (unchecked-get costs "maxWaterDrop")
      (unchecked-get costs "dripleaf") (unchecked-get costs "dripleafRisk") (to-air? snapshot query options) (unchecked-get costs "dropFactor")

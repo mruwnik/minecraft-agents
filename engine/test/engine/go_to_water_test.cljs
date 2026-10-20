@@ -208,19 +208,24 @@
               (is (true? (:arrived @out)) (str "result " @out))
               (is (= [:searching] (mapv :reason (gt/events-of s :holding)))))))))))
 
-;; a sealed tunnel (water y 58..59, x 2..31) from a shaft that reaches the air at x 1, to an air pocket at x 32: about 13 s
-;; of swimming for a body with 7 s of air left (oxygen 10). It does not dive in: it is at air when the call ends.
+;; a sealed tunnel (water y 58..59, x 2..31) from a shaft that reaches the air at x 1, to an air pocket at x 32: about 8 s
+;; of sprint-swimming, which a body with its air full dives (below), and a 70 cell one (18 s) no air fits: it does not dive in, it is at air when the call ends.
 (def sealed-tunnel
   (merge (box -2 55 -4 40 66 4 "stone")
          (box 1 58 0 1 64 0 "water") (box 1 65 0 1 66 0 "air")
          (box 2 58 0 31 59 0 "water") (box 32 58 0 32 59 0 "air")))
 
+(def long-sealed-tunnel
+  (merge (box -2 55 -4 80 66 4 "stone")
+         (box 1 58 0 1 64 0 "water") (box 1 65 0 1 66 0 "air")
+         (box 2 58 0 71 59 0 "water") (box 72 58 0 72 59 0 "air")))
+
 (deftest a-dive-longer-than-the-air-left-is-not-taken
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p] :as s} (await (gt/go! {:self {:pos [1.5 58 0.5] :inWater true :oxygen 10} :blocks sealed-tunnel}
-                                                   {:pos [32 58 0] :range 0 :ways #{:walk :clear-seal}}))
+        (let [{:keys [out p] :as s} (await (gt/go! {:self {:pos [1.5 58 0.5] :inWater true :oxygen 10} :blocks long-sealed-tunnel}
+                                                   {:pos [72 58 0] :range 0 :ways #{:walk :clear-seal}}))
               [x y z] (gt/at p)]
           (is (< x 6) (str "not far into the tunnel: " [x y z] " result " @out))
           (is (not (and (<= y 60) (< 6 x))) (str "not under water in the tunnel: " [x y z])))))))

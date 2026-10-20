@@ -225,7 +225,7 @@
   (swimSideways [s i x y z region c x2 z2 ^boolean tight-src ^boolean src-sub]
     (let [risk (.swimRisk s x2 y z2)
           tight (or tight-src ^boolean (.tightAt s x2 y z2))
-          base (.-c-swim-h s)
+          base (if src-sub (.-c-swim-sub-h s) (.-c-swim-h s))
           extra (.currentAt s x2 y z2)
           sec (+ base extra)]
       (when ^boolean (.swimBegin s i true x2 y z2 base extra src-sub)
@@ -268,7 +268,7 @@
           (when-not (or (== sa 2) (== sb 2) (and (== sa 1) (== sb 1)) ^boolean (.dragAt s x2 y z) ^boolean (.dragAt s x y z2))
             (let [slide (+ sa sb)
                   risk (.swimRisk s x2 y z2)
-                  base (+ (* (.-c-swim-h s) SQRT2) (* slide CORNER-S))
+                  base (+ (* (if src-sub (.-c-swim-sub-h s) (.-c-swim-h s)) SQRT2) (* slide CORNER-S))
                   extra (.currentAt s x2 y z2)]
               (when ^boolean (.swimBegin s i true x2 y z2 base extra src-sub)
                 (.edge s x2 y z2 0 (if (zero? slide) MOVE-SWIM MOVE-CORNER) i (+ base extra) risk 0 slide 0)

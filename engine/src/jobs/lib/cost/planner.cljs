@@ -16,11 +16,11 @@
 
 (def floored
   "The :costs keys that stand in for a block of horizontal walking and may not go under walk-floor."
-  #{:swim-h :exit})
+  #{:swim-h :swim-sub-h :exit})
 
 (def planner-names
   "The :costs keys and the planner cost each sets."
-  {:climb-up "climbUp" :climb-down "climbDown" :jump-climb "jumpClimb" :open "open" :swim-h "swimH" :swim-up "swimUp"
+  {:climb-up "climbUp" :climb-down "climbDown" :jump-climb "jumpClimb" :open "open" :swim-h "swimH" :swim-sub-h "swimSubH" :swim-up "swimUp"
    :swim-down "swimDown" :exit "exit" :current "current" :bubble-up "bubbleUp" :bubble-down "bubbleDown"
    :open-redstone "openRedstone" :open-lever "openLever" :open-plate "openPlate" :beside-magma-column "besideMagmaColumn"
    :max-water-drop "maxWaterDrop" :dripleaf "dripleaf" :dripleaf-risk "dripleafRisk" :lethal-air "lethalAir"
@@ -56,13 +56,15 @@
     (/ (- 1 inertia) (* 0.98 20 accel))))
 
 (defn swim-profile
-  "{:swim-h} for Depth Strider on the boots (none: {}): the planner's swimH scaled as the surface swim speeds up, about
+  "{:swim-h :swim-sub-h} for Depth Strider on the boots (none: {}): the planner's swimH and swimSubH (the sprint swim with the head under water) scaled as the surface swim speeds up, about
   0.73 at level 1, 0.61 at 2 and 0.55 at 3, never under walk-floor. equipment: self's :equipment (cljs or JS)."
   [equipment]
   (let [level (->> (:enchants (get (armour/equipment-of equipment) "feet"))
                    (some #(when (= "depth_strider" (:name %)) (:level %))))]
     (if (pos? (or level 0))
-      {:swim-h (max walk-floor (* (unchecked-get base/DEFAULT-COSTS "swimH") (/ (swim-s level) (swim-s 0))))}
+      (let [scale (/ (swim-s level) (swim-s 0))]
+        {:swim-h (max walk-floor (* (unchecked-get base/DEFAULT-COSTS "swimH") scale))
+         :swim-sub-h (max walk-floor (* (unchecked-get base/DEFAULT-COSTS "swimSubH") scale))})
       {})))
 
 (defn swim-factor
@@ -83,6 +85,7 @@
   [policy]
   (let [o #js {}]
     (when-some [h (:swim-h policy)] (unchecked-set o "swimH" h))
+    (when-some [h (:swim-sub-h policy)] (unchecked-set o "swimSubH" h))
     (when-some [d (:air-drain policy)]
       (unchecked-set o "airDrain" d)
       ;; the planner's 3 s margin under the supply is seconds of time, so Respiration shrinks it with the drain
@@ -128,8 +131,8 @@
   body runs a gap jump at walking speed, a sneaking one walks at sneak speed; :auto: the planner's defaults."
   [gait]
   (case gait
-    :walk #js {:sprintS base/WALK-S}
-    :sneak #js {:walkS base/SNEAK-S :sprintS base/SNEAK-S}
+    :walk #js {:sprintS base/WALK-S :swimSubH js/Infinity}
+    :sneak #js {:walkS base/SNEAK-S :sprintS base/SNEAK-S :swimSubH js/Infinity}
     #js {}))
 
 (def default-landing
