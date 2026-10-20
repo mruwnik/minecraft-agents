@@ -266,11 +266,15 @@
           (set! (.-lazy st) #js {:stamp (.-markStamp st) :sections sections})
           sections)))))
 
+(def ^:private dirs-buffer (atom (js/Float64Array. 0)))
+
 (defn slice-dirs
-  "The unit directions of rays [from, to) of the pass as a Float64Array of triples (NaN x: a ground ray outside the cone now)."
+  "The unit directions of rays [from, to) of the pass as a Float64Array of triples (NaN x: a ground ray outside the cone now).
+  The array is a shared buffer, longer than the slice maybe, valid until the next call."
   [{:keys [grid]} ^js pass ^js eye from to]
   (let [yaw (.-yaw eye)
-        out (js/Float64Array. (* 3 (- to from)))]
+        need (* 3 (- to from))
+        out (if (>= (.-length ^js @dirs-buffer) need) @dirs-buffer (reset! dirs-buffer (js/Float64Array. need)))]
     (.sliceDirs ^js (kernel) out from to
                 #js {:b (basis yaw (.-pitch eye)) :hx (:hx grid) :hy (:hy grid) :cols (.-cols pass) :rows (.-rows pass)
                      :jx (.-jx pass) :jy (.-jy pass) :ground (.-ground pass) :tiles (.-tiles pass) :stride (.-stride pass)

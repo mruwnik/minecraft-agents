@@ -233,13 +233,18 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
     return tables
   }
 
+  let range = { minY: NaN, sections: NaN }
   return {
     stateAt,
     lightAt,
     sectionStates: sectionStatesAt,
     sectionLight: sectionLightAt,
     // {minY, sections}: the world's lowest y and its number of 16-high sections
-    sectionRange: () => { const bot = follow(); return { minY: bot ? minYOf(bot) : -64, sections: bot ? heightOf(bot) >> 4 : 0 } },
+    sectionRange: () => {
+      const bot = follow()
+      const minY = bot ? minYOf(bot) : -64; const sections = bot ? heightOf(bot) >> 4 : 0
+      return range.minY === minY && range.sections === sections ? range : (range = { minY, sections })
+    },
     // {x, y, z, yaw, pitch, dimension}: the eye, mineflayer radians (yaw 0 faces -z, pitch up is positive); null offline
     eye: () => {
       const bot = follow()

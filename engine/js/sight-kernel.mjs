@@ -14,11 +14,12 @@ const DARK = 4 // a clear cell too dark to make out: recorded only within near o
 
 // Sections filled cell by cell from raw.stateAt / raw.lightAt as the rays reach them, for raw worlds that have no
 // section arrays (the test fakes). Valid while the world does not change; the perception drops it with its marks.
+const LAZY_RANGE = { minY: -1024, sections: 128 }
 export function lazySections () {
   const states = new Map()
   const lights = new Map()
   return {
-    sectionRange: () => ({ minY: -1024, sections: 128 }),
+    sectionRange: () => LAZY_RANGE,
     sectionStates: (cx, s, cz) => {
       const key = (cx * 65536 + cz) * 256 + s
       let a = states.get(key)
@@ -32,6 +33,15 @@ export function lazySections () {
       return a
     }
   }
+}
+
+// The three section caches of a call, reused across calls (castRays is synchronous, so none runs inside another):
+// cleared to undefined, the "not fetched yet" value, instead of allocated per call.
+const caches = [[], [], []]
+function scratch (k, size) {
+  const a = caches[k]
+  if (a.length < size) a.length = size
+  return a.fill(undefined, 0, size)
 }
 
 // ctx: {raw (stateAt, lightAt), sections (sectionRange, sectionStates, sectionLight: the raw world's own or lazySections), sight, visible, radius, near, marksOf(cx, cy, cz), record(x, y, z, id), markKind(id), thin(id, x, y, z, ox, oy, oz, ex, ey, ez)}
@@ -50,9 +60,9 @@ export function castRays (ctx, ox, oy, oz, dirs, count) {
   const R = ((radius + 2) >> 4) + 2
   const W = 2 * R + 1
   const ecx = Math.floor(ox) >> 4; const ecy = Math.floor(oy) >> 4; const ecz = Math.floor(oz) >> 4
-  const marksC = new Array(W * W * W)
-  const idsC = new Array(W * W * W)
-  const lightC = new Array(W * W * W)
+  const marksC = scratch(0, W * W * W)
+  const idsC = scratch(1, W * W * W)
+  const lightC = scratch(2, W * W * W)
   let cx = ecx; let cy = ecy; let cz = ecz
   let slot = (R * W + R) * W + R
   let marks = marksC[slot] = marksOf(cx, cy, cz)
