@@ -4,7 +4,11 @@
 (def ordered [:seen :descend-stair :descend-shaft :strip-tunnel])
 (def all (set ordered))
 
-(defn ways [args] (or (:ways args) all))
+(defn ways
+  "The dig ways of the call's :ways, all when it names none (it may hold only fetch ways such as #{:carried})."
+  [args]
+  (let [named (filter all (:ways args))]
+    (if (seq named) (set named) all)))
 
 (defn seen? [args] (contains? (ways args) :seen))
 (defn stair? [args] (contains? (ways args) :descend-stair))
