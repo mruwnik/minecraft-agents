@@ -1681,3 +1681,26 @@
                    (is (= (first @argvs) (second @argvs)) "the repeat is the same request")
                    (is (some #{"--request-id"} (first @argvs)))
                    (done)))))))
+
+(deftest a-probe-body-runs-without-the-view-dump-unless-asked
+  (are [opts view] (= view (aget (r/body-env opts) "BODY_VIEW"))
+    {:body "B"} "0"
+    {:body "B" :view true} (aget js/process.env "BODY_VIEW")))
+
+(deftest setup-plot-builds-while-a-body-starts-but-parks-first-for-a-body-that-is-up
+  (let [c {:plot {:height 4 :floor "stone"} :blocks []}
+        run (fn [starting]
+              (let [sent (atom [])
+                    io {:send (fn [cmds] (swap! sent into (map #(first (.split % " ")) cmds))
+                                (js/Promise.resolve (mapv (constantly "ok") cmds)))
+                        :sleep (fn [_] (js/Promise.resolve nil))}]
+                (.then (r/setup-plot! io {:body "B"} f/default-grid [20000 150 20000] c starting)
+                       (fn [_] @sent))))]
+    (async done
+      (-> (run nil)
+          (.then (fn [sent] (is (= "gamemode" (first sent)) "a body that is up is parked before the build")))
+          (.then #(run (js/Promise.resolve nil)))
+          (.then (fn [sent]
+                   (is (= "gamemode" (peek sent)) "a starting body is parked after the build")
+                   (is (not= "gamemode" (first sent)))
+                   (done)))))))

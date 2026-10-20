@@ -34,6 +34,7 @@
        "--check only loads and validates the fixtures (no body, no server): one result per case, exit 1 on a parse error or problem.\n"
        "A job case (no :register, no :wait-full true, only :event expectations pending) ends :idle-grace-s (default 3) s after every job it submitted has ended, failed or parked (\"no job active: ...\", :ended-early-s and :idle-grace-s in the result).\n"
        "Runs world fixtures (default dir engine/fixtures/world) by default in sealed underground cells (y -40), with :plot :light :sky on the surface plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
+       "--view keeps the view dump on for the probe body (off by default: it costs CPU and no run reads it).\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
        "such a case is skipped, and a case with no :time still gets day (logged to a default file in the temp dir). While a world sweep runs, a run outside it fails every case that needs a time lock at once (only :time :any cases run). A case that depends on the time of day (with --allow-time, every case) holds a time lock shared by phase (day cases together,\n"
        "night cases together; the other phase waits; the first holder sets the time) for its whole run; a manual `time set` takes it too: node tools/time-set.mjs <ticks|day|noon|night|midnight>. A failed case whose day time jumped meanwhile (a foreign `time set`) is INCONCLUSIVE. "
@@ -79,6 +80,7 @@
       (= a "--trace-attempt") (recur more (assoc opts :trace-attempt (js/Number b)))
       (= a "--stop-on-fail") (recur (rest all) (assoc opts :stop-on-fail true))
       (= a "--allow-time") (recur (rest all) (assoc opts :allow-time true))
+      (= a "--view") (recur (rest all) (assoc opts :view true))
       (= a "--list") (recur (rest all) (assoc opts :list true))
       (= a "--check") (recur (rest all) (assoc opts :check true))
       (str/starts-with? a "--") (throw (js/Error. (str "unknown option " a)))
@@ -469,6 +471,13 @@
   "A restoring start logs :restored instead of :started (engine core)."
   {:source :system :kind #{:started :restored}})
 
+(defn body-env
+  "The environment of a probe body: no view dump (it costs CPU every physics tick and no run reads it) unless --view."
+  [opts]
+  (js/Object.assign #js {} js/process.env
+                    (when-not (:view opts) #js {:BODY_VIEW "0"})
+                    (when (:trace-dir opts) #js {:MC_STEP_TRACE (steps-file opts)})))
+
 (defn start-body!
   "Starts the body with a scenario holding register, --fresh; resolves once it logged :system :started. The body's own
   engine/memory.edn is deleted first unless keep-memory? (--fresh only drops engine.edn), then written from
@@ -496,9 +505,7 @@
     (let [fd (fs/openSync out "a")
           child (cp/spawn "node" (body-argv opts scenario restore?)
                           #js {:cwd (repo-path "engine") :stdio #js ["ignore" fd fd]
-                               :env (if (:trace-dir opts)
-                                      (js/Object.assign #js {} js/process.env #js {:MC_STEP_TRACE (steps-file opts)})
-                                      js/process.env)})]
+                               :env (body-env opts)})]
       (swap! bodies assoc (:body opts) child)
       (.then (await-event opts offset started-event since 90000 #{})
              (fn [ev]
@@ -1714,6 +1721,20 @@
     opts
     (assoc opts :allow-time true :time-log (or (:time-log opts) default-time-log))))
 
+(defn setup-plot!
+  "Parks the body and builds the plot; resolves once both are done (throws the failure message). A body that is starting
+  (starting: its start promise) logs in far from the plots as a spectator, so the plot is built while it starts and it is
+  parked after; a body that is already up is parked first, as the build could suffocate it."
+  [io opts grid origin rc starting]
+  (let [check (fn [why] (when why (throw (js/Error. why))))
+        park (fn [] (.then (park! io (:body opts)) check))
+        build (fn [] (.then (build-plot! io grid origin rc) check))]
+    (if starting
+      (let [built (build)]
+        (.catch starting (fn [_] nil))
+        (.then (js/Promise.all #js [built starting]) park))
+      (.then (park) build))))
+
 (defn run-case!
   "One run of case c on plot i (leased by the caller); stop! (a thunk to a promise) stops the previous body before the
   time lock is waited for, start! starts or keeps the body once the lock is held. Resolves to a result map. register: the entries to put on the body once it stands in
@@ -1733,6 +1754,7 @@
         pre-register (atom nil)
         setup-cursor (atom nil)
         parked-at (atom nil)
+        starting (atom nil)
         start-cursor (log-cursor (events-file opts))
         weather (atom nil)
         result (fn [m] (cond-> (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m)
@@ -1777,7 +1799,10 @@
                             :set-ticks! (fn [ticks why] (set-time! opts ticks why))
                             :day-limit (:day-limit opts default-day-limit)}
                            phase (:id c))))
-            :start! start!}))
+            :start! (fn [] (let [p (start!)]
+                                      (some-> p (.catch (fn [_] nil)))
+                                      (reset! starting p)
+                                      (js/Promise.resolve nil)))}))
         (.then (fn [ok] (note-last-plot! opts i origin grid) ok))
         (.then (fn [ok]
                  (if-not ok
@@ -1786,11 +1811,8 @@
                               (fn [[reply]] (reset! t-start {:ticks (daytime (or reply "")) :ms (js/Date.now)})))
                        (.then #(read-weather! rcon!))
                        (.then #(reset! weather %))
-                       (.then (fn [] (ev/emit! (ev/phase :setup)) (park! {:send rcon! :sleep sleep} (:body opts))))
-                       (.then (fn [why] (when why (throw (js/Error. why)))))
+                       (.then (fn [] (ev/emit! (ev/phase :setup)) (setup-plot! {:send rcon! :sleep sleep} opts grid origin rc @starting)))
                        (.then #(reset! parked-at (js/Date.now)))
-                       (.then (fn [] (build-plot! {:send rcon! :sleep sleep} grid origin rc)))
-                       (.then (fn [why] (when why (throw (js/Error. why)))))
                        (.then #(write-plans-settled! opts rc))
                        (.then #(reset! plan-files %))
                        (.then #(seed-shared! opts origin c))
@@ -2096,7 +2118,7 @@
                                                                          (fn [] (cond
                                                                                   (and (= :keep plan) @left) (do (reset! left false) (write-body-settings! opts c) (start-body! opts register true memory false))
                                                                                   (= :keep plan)
-                                                                                  (js/Promise.resolve nil)
+                                                                                  nil
                                                                                   :else
                                                                                   (-> (if (= :restart-keep plan) (js/Promise.resolve nil) (reset-last-plot! opts))
                                                                                       (.then (fn [] (write-body-settings! opts c) (start-body! opts register (= :restart-keep plan) memory false))))))
