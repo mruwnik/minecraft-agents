@@ -79,7 +79,17 @@
   then look-around!."
   [c cells]
   (await (look-at-unknown! c (targets (:primitives c) (u/self-pos c) cells #{}) (max-looks)))
-  (await (look/look-around! c)))
+  (await (look/look-around! c))
+  (ctx/update-mem! c (fn [m] (let [here (look/cell-of (u/self-pos c))
+                                   kept (if (= here (:at (::round-looked m))) (:cells (::round-looked m)) #{})]
+                               (assoc m ::round-looked {:at here :cells (into kept cells)})))))
+
+(defn round-looked
+  "The cells [x y z] a look round of c's frame already looked at from the body's cell: a :look status asks for them once,
+  then the wall they hide counts as open (Q345)."
+  [c]
+  (let [m (::round-looked (ctx/mem c))]
+    (if (= (:at m) (look/cell-of (u/self-pos c))) (:cells m) #{})))
 
 (defn step-ms
   "[total max] ms perception's sight steps have taken so far, nil without a perception."

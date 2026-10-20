@@ -7,6 +7,7 @@
             [engine.shelter-support :as st]
             [engine.sky-perception :as sky]
             [engine.test-util :as tu]
+            [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.explore.look :as look]
             [jobs.movement.go-to :as go-to]
@@ -100,6 +101,13 @@
       (let [s (status)]
         (is (= :look (first s)))
         (is (= [[3 64 0]] (:look-at (nth s 2))))))))
+
+(deftest a-wall-a-look-round-did-not-show-counts-as-open-not-looked-at-again
+  (let [seen-block u/seen-block
+        hide (fn [pos] (fn [p cell] (when-not (= pos [(:x cell) (:y cell) (:z cell)]) (seen-block p cell))))]
+    (with-redefs [u/seen-block (hide [3 64 0])
+                  sense/round-looked (constantly #{[3 64 0]})]
+      (is (not= :look (first ((ready/safe-at (constantly outside)) (ctx-of night-hut))))))))
 
 (deftest go-to-keeps-a-look-at-the-walls-of-its-room
   (let [seen-block u/seen-block

@@ -15,6 +15,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger]
             [jobs.lib.look-edge :as look-edge]
+            [jobs.lib.sense :as sense]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.storage :as storage]
@@ -60,7 +61,7 @@
         {:keys [chance lowered-by look-at light-in]} (cost/exposure p to shelter)
         patience (settings/get settings ::light-patience-s)
         where (place-text to)
-        unseen-sides (delay (when (and (sh-sense/dark-outside? p) (not (u/within? (sh-sense/feet p) to 1))) (look-edge/pending c #{} 0)))]
+        unseen-sides (delay (when (and (sh-sense/dark-outside? p) (not (u/within? (sh-sense/feet p) to 1))) (look-edge/pending c (sense/round-looked c) 0)))]
     (cond
       (and (sh-sense/dark-outside? p) (sh-inside/safe-from-night? p) (not (sh-inside/walk-leaves-shelter? p shelter to 1)))
       (contract/ok :sheltered (str "sheltered at " where))
@@ -81,7 +82,7 @@
   [c to]
   (let [p (:primitives c)
         to (update-vals (or to (sh-sense/feet p)) js/Math.floor)]
-    (check-cache/cached c [::exposed to] #(at-status c to))))
+    (check-cache/cached c [::exposed to (sense/round-looked c)] #(at-status c to))))
 
 (defn trigger-args
   "The args of the register's hostile-near entry (muted or not), {} when it has none."
