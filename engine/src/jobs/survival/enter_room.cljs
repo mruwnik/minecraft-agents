@@ -164,11 +164,14 @@
 
 (defn unclosable?
   "Whether the room seen at pos can be closed by nothing the job does: a seen room that is no closed room, with an
-  unroofed cell (no roof cell over it unseen: that one is walked to and looked at) and no doorway that shuts it (a roof on open sides). Read-only."
+  unroofed cell and no doorway that shuts it (a roof on open sides). An unroofed cell whose roof column is unseen is
+  walked to and looked at, but only while the room is closed: a flood that leaks through seen open cells is a roof on open
+  sides, whatever its unseen roof. Read-only."
   [p pos]
-  (let [cell (:cell (reach-room/unroofed-cell p pos))]
+  (let [{:keys [cell closed?]} (reach-room/unroofed-cell p pos)
+        hidden? (and cell (look-edge/unseen-roof? p cell) closed?)]
     (boolean (and (not (room-lib/refuge-room? p pos)) (not (reach-room/unseen-room? p pos))
-                  cell (not (look-edge/unseen-roof? p cell)) (nil? (room-lib/shut-by p pos cell any?))))))
+                  cell (not hidden?) (nil? (room-lib/shut-by p pos cell any?))))))
 
 (defn can-start?
   "A room to enter: a place, the home or a closed room seen, or the body already in one."

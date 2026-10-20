@@ -140,9 +140,16 @@
               {:keys [eng p]} (st/setup {:floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 12}} :inventory stones
                                          :blocks (tu/box 3 67 -2 7 67 2 "cobblestone")})
               _ (mem/write! (:store eng) :home {:pos {:x 5 :y 64 :z 0}} mem/place-policy)
-              q (await (quote-of {:primitives p :args {} :view (fn [] (mem/view (:store eng)))
-                                  :quote-call {:use {:blocks ["dirt"]}}}))]
-          (is (= ##Inf (get-in q [:uses :job-time 1]))))))))
+              at (.-sensedAt p)
+              mean (fn ^:async mean-of [] (get-in (await (quote-of {:primitives p :args {} :view (fn [] (mem/view (:store eng)))
+                                                              :quote-call {:use {:blocks ["dirt"]}}}))
+                                           [:uses :job-time 1]))]
+          (is (= ##Inf (await (mean))))
+          ;; the dark hides the sky beside the slab; the slab over the home is still seen
+          (aset p "sensedAt" (fn [pos] (if (and (> (.-z pos) 2) (>= (.-y pos) 66))
+                                         #js {:unknown true :pos pos}
+                                         (.call at p pos))))
+          (is (= ##Inf (await (mean))) "an unseen sky beside a seen roof on open sides is no reason to walk"))))))
 
 (deftest a-home-in-anothers-zone-is-not-walked-into
   (async done
