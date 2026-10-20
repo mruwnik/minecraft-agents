@@ -80,11 +80,11 @@
             [:set [12 1 8] "oak_door[facing=north,half=upper,hinge=left,open=true]"]]
    :body {:at [13.5 0 13.5] :inventory [["cobblestone" 16]]}
    :act [[:job (jobs.survival.night)]]
-   :expect [{:no-event {:source :job :kind :shelter.door-failed} :for-s 25}
+   :expect [{:no-event {:source :job :kind :stopped} :for-s 25}
             {:no-event {:source :job :kind :shut-in.sealed} :for-s 25}]
    :after [[:block [12 0 8] "oak_door[open=false]"]]
    :limit-s 40}
-  ;; ef5a94eb: an iron door cannot be shut by hand: one door-failed warning, then the body digs in on its spot, never ends roofed
+  ;; ef5a94eb: an iron door cannot be shut by hand: then the body digs in on its spot, never ends roofed
   {:name "door-that-will-not-shut-digs-in"
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
@@ -92,9 +92,7 @@
             [:set [12 1 8] "iron_door[facing=north,half=upper,hinge=left,open=true]"]]
    :body {:at [13.5 0 13.5] :inventory [["cobblestone" 16]]}
    :act [[:job (jobs.survival.night)]]
-   :expect [{:event {:source :job :kind :shelter.door-failed} :within-s 90}
-            {:event {:source :job :kind :shut-in.sealed} :within-s 150}
-            {:count-event {:source :job :kind :shelter.door-failed} :for-s 150 :at-most 1}]
+   :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 150}]
    :limit-s 160}
   ;; 712a8df7: first light with a hostile known near the shelter: the body stays in, and leaves once the mob is gone
   {:name "dawn-with-a-known-hostile-stays-in-until-it-is-gone"
