@@ -9,7 +9,7 @@ import { fixDigMaterials } from './dig-materials.mjs'
 import { MC_VERSION } from './path/snapshot.mjs'
 import { tickRatePhysics } from './tick-rate-physics.mjs'
 import { installLazyChunks, bufferLightArrays } from './lazy-chunk.mjs'
-import { installFastBlockUpdates } from './block-updates.mjs'
+import { installFastBlockUpdatesOnInject } from './block-updates.mjs'
 
 const { pathfinder } = pf
 
@@ -36,7 +36,7 @@ export function connectBot (params, { timeoutMs = SPAWN_TIMEOUT_MS, create = min
     installLazyChunks()
     bufferLightArrays(params.version ?? DEFAULTS.version)
     const bot = create(botOptions(params))
-    if (bot._client?.removeAllListeners) installFastBlockUpdates(bot)
+    if (bot._client?.removeAllListeners) installFastBlockUpdatesOnInject(bot)
     params.gameClock?.attach(bot._client)
     bot.loadPlugin(pathfinder)
     // Mineflayer does not keep the damage_type registry; primitives names a damage packet's type from it.

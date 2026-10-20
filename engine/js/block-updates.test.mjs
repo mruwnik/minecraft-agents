@@ -7,7 +7,7 @@ import vec3 from 'vec3'
 import prismarineRegistry from 'prismarine-registry'
 import prismarineWorld from 'prismarine-world'
 import mineflayer from 'mineflayer'
-import { installFastBlockUpdates } from './block-updates.mjs'
+import { installFastBlockUpdates, installFastBlockUpdatesOnInject } from './block-updates.mjs'
 
 const { Vec3 } = vec3
 const require = createRequire(import.meta.url)
@@ -49,4 +49,14 @@ test('an update for a column that has not arrived is ignored', () => {
   const { client, updates } = fakeBot()
   client.emit('block_change', { location: { x: 99, y: 70, z: 5 }, type: id('stone') })
   assert.deepEqual(updates, [])
+})
+
+test('after Mineflayer injects its plugins only the fast handlers listen for block updates', async () => {
+  const bot = mineflayer.createBot({ host: '127.0.0.1', port: 1, username: 'Dup', auth: 'offline', version: '26.1' })
+  bot.on('error', () => {})
+  installFastBlockUpdatesOnInject(bot)
+  await new Promise(resolve => bot.once('inject_allowed', () => setImmediate(resolve)))
+  const counts = [bot._client.listenerCount('block_change'), bot._client.listenerCount('multi_block_change')]
+  bot.end()
+  assert.deepEqual(counts, [1, 1])
 })

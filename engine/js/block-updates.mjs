@@ -12,7 +12,7 @@ const require = createRequire(import.meta.url)
 
 const posInChunk = pos => new Vec3(Math.floor(pos.x) & 15, Math.floor(pos.y), Math.floor(pos.z) & 15)
 
-// `bot` is a Mineflayer bot whose plugins are loaded (createBot did that); bot.world exists from the login packet on.
+// `bot` is a Mineflayer bot whose plugins are loaded; bot.world exists from the login packet on.
 export function installFastBlockUpdates (bot) {
   const Block = prismarineBlock(bot.registry ?? require('prismarine-registry')(bot.version))
   const client = bot._client
@@ -40,4 +40,10 @@ export function installFastBlockUpdates (bot) {
       else update(origin.offset((record.horizontalPos >> 4) & 0x0f, record.y, record.horizontalPos & 0x0f), record.blockId)
     }
   })
+}
+
+// Mineflayer injects its plugins on 'inject_allowed' (after createBot returns), so only a listener registered
+// after createBot runs after blocks.js has added its own block_change handlers, which this must remove.
+export function installFastBlockUpdatesOnInject (bot) {
+  bot.once('inject_allowed', () => installFastBlockUpdates(bot))
 }
