@@ -17,6 +17,7 @@
             [jobs.lib.util :as u]
             [jobs.access.stair :as stair]
             [jobs.access.stair.judge :as judge]
+            [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.child :as child]
             [jobs.access.tunnel.line :as ln]
@@ -34,7 +35,7 @@
   dug and the entry dropped once the cell is air. A cell still holding the torch is left :dig-failed. The drops
   are then collected (jobs.items.collect-drops, radius 3).
 
-  Then it walks to the entry and seals the mouth. The mouth is the dug cells at or above the entry's floor that
+  Then it walks to the entry (after a look round when the way there is unseen) and seals the mouth. The mouth is the dug cells at or above the entry's floor that
   are open now and touch an open cell the tunnel did not dig (flat ground, a stair down, a hill face). Deeper
   cells are under rock and left. One cell per round, the lowest first, then the farthest from the body. Each
   asks may-place? right before. A refusal (:zone :footprint :own-body) books the cell open with its reason and
@@ -124,6 +125,8 @@
         (first (filter #(and (have? %) (placeable? %)) spare)))))
 
 (defn cell-pos [[x y z]] {:x x :y y :z z})
+
+(def look-turns "Most looks along the way back before the walk to the entry." 16)
 
 (defn left-cells [m] (set (map :cell (:left m))))
 
@@ -365,6 +368,23 @@
                 (and n (not (bs/replaceable n))) (do (ctx/update-mem! c update :filled (fnil conj []) cell) :again)
                 :else (book-open! c cell :place-failed))))))
 
+(defn way-cells
+  "The cells a walk back to the entry needs seen, nearest the body first: each cell of the way and the floor under it."
+  [entry tunnel]
+  (mapcat (fn [[x y z :as cell]] [cell [x (dec y) z]]) (reverse (cons entry (map :cell (:dug tunnel))))))
+
+(defn ^:async look-along!
+  "Turn to each of cells ([x y z], nearest first) the body has not seen, with a sight pass after each look, at most look-turns looks."
+  [c cells]
+  (loop [todo (seq cells) n 0]
+    (when (and todo (< n look-turns))
+      (if (look/unseen? (:primitives c) [(cell-pos (first todo))])
+        (let [[x y z] (first todo)]
+          (await (ctx/act c :look (clj->js {:pos {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}})))
+          (look/see! c)
+          (recur (next todo) (inc n)))
+        (recur (next todo) n)))))
+
 (defn ^:async seal!
   "At the entry: fill the next mouth cell, lowest first, then the farthest; none left ends the job."
   [c]
@@ -376,6 +396,11 @@
         body (u/self-pos c)
         todo (remove booked (mouth (:dug tunnel) entry (:block-at in)))]
     (cond
+      (and (not (:way-looked m)) (not= entry (reach/standing-vec (:primitives c)))
+           (look/unseen? (:primitives c) (map cell-pos (way-cells entry tunnel))))
+      (do (ctx/update-mem! c assoc :way-looked true)
+          (await (look-along! c (way-cells entry tunnel)))
+          :again)
       (not= entry (reach/standing-vec (:primitives c))) (await (walk-to! c entry #(open! c {:escaped true :walk %})))
       (and (empty? todo) (seq (:open m))) (open! c {})
       (empty? todo) (finish! c :done :sealed {})

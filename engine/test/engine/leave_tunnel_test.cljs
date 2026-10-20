@@ -512,3 +512,18 @@
           (swap! clock + 500)
           (await (core/tick! eng))
           (is (= :sealed (:reason @out)) "one round takes every torch and seals the mouth"))))))
+
+(deftest a-way-back-the-body-has-not-seen-is-looked-at-before-the-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [looks (fn [p] (count (filter #(= "look" (.-name %)) (.-calls (.-world p)))))
+              before (atom nil)
+              blind-until-looked (fn [p]
+                                   (let [omniscient (.-sensedAt p)]
+                                     (reset! before (looks p))
+                                     (aset p "sensedAt" (fn [pos] (if (> (looks p) @before) (omniscient pos) #js {:unknown true})))))
+              {:keys [p out]} (await (run-out! (setup {:blocks eight-down :inventory (inventory)} {:target [6 57 0]} {} :between blind-until-looked)))]
+          (is (< @before (looks p)) "the body looked round after the tunnel")
+          (is (= :sealed (:reason @out)))
+          (is (= entry (feet p))))))))
