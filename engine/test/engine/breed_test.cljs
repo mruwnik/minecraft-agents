@@ -24,18 +24,8 @@
   [{:keys [eng clock]} n step]
   (await (tu/run-ticks eng clock n step)))
 
-(defn ^:async scenario-waiting
-  "Submit (jobs.animals.breed args) in a world; run n ticks 700 ms apart, running mid-run (f setup) after the second; the setup map."
-  [args world n f]
-  (let [s (h/setup world)]
-    (core/submit! (:eng s) (list 'jobs.animals.breed args) {})
-    (await (run-ticks s 2 700))
-    (f s)
-    (await (run-ticks s (- n 2) 700))
-    s))
-
 (defn ^:async scenario
-  "As scenario-waiting with no calf wait, so a fed pair ends at once."
+  "Submit (jobs.animals.breed args) in a world with no calf wait, so a fed pair ends at once; run n ticks 700 ms apart; the setup map."
   [args world n]
   (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 0}
            #(let [s (h/setup world)]
@@ -53,16 +43,21 @@
 (defn count-of [{:keys [p]} item]
   (reduce + (map :count (filter #(= item (:name %)) (js->clj (.-inventory (.self p)) :keywordize-keys true)))))
 
-(deftest a-fed-pair-waits-for-the-calf-before-the-babies-are-counted
+(deftest a-fed-pair-pauses-for-the-calf-before-the-babies-are-counted
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[label calf? babies] [["calf appears" true 1] ["no calf" false 0]]]
-          (let [s (await (scenario-waiting {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]} 12
-                                           #(when calf? (fake/add-entity! (:p %) (cow 3 4 {:baby true})))))]
-            (is (= babies (:babies (done-event s))) label)))
-        (let [s (await (scenario-waiting {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]} 4 identity))]
-          (is (not (finished? s)) "still waiting for a calf"))))))
+        (doseq [[label calf? babies paused?] [["calf appears" true 1 false] ["no calf" false 0 true]]]
+          (let [s (h/setup {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]})
+                fed (atom 0)]
+            (.override (.-world (:p s)) "interact"
+                       (fn [token args impl]
+                         (when (and calf? (= 2 (swap! fed inc))) (fake/add-entity! (:p s) (cow 3 4 {:baby true})))
+                         (impl token args)))
+            (core/submit! (:eng s) (list 'jobs.animals.breed {:mob "cow"}) {})
+            (await (run-ticks s 12 700))
+            (is (= babies (:babies (done-event s))) label)
+            (is (= paused? (boolean (seq (events-of s :holding)))) "a wait for a calf is a pause child holding still")))))))
 
 ;; ------------------------------------------------------------ pure helpers
 
@@ -450,6 +445,25 @@
           (is (= 2 (count (interacts s))))
           (is (< x 6) "back outside the pen")
           (is (false? (gate-open? s))))))))
+
+(deftest a-cancel-inside-the-known-pen-still-walks-out-of-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory (wheat 2) :blocks (pen-blocks true) :states {"6,64,0" {:open false :facing "east"}}
+                          :entities [(cow 1 19 {:pos {:x 19 :y 64 :z 1}}) (cow 2 19 {:pos {:x 19 :y 64 :z -1}})]})
+              inside-at-cancel (atom nil)]
+          (.override (.-world (:p s)) "interact"
+                     (fn [token args impl]
+                       (when-not @inside-at-cancel
+                         (reset! inside-at-cancel (.-x (.-pos (.self (:p s)))))
+                         (core/cancel! (:eng s) (first (:list (core/state (:eng s))))))
+                       (impl token args)))
+          (core/submit! (:eng s) (list 'jobs.animals.breed {:mob "cow" :box known-pen}) {})
+          (await (run-ticks s 40 700))
+          (is (<= 8 @inside-at-cancel) "cancelled with the body inside the pen")
+          (is (< (.-x (.-pos (.self (:p s)))) 6) "back outside the pen")
+          (is (finished? s)))))))
 
 (deftest breed-declines-when-the-pen-has-no-gate
   (async done

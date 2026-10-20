@@ -33,7 +33,7 @@
   The data {:reason :fed [keys]
   :refused [keys] :given-up {key reason} :food item :adults n :babies n :hand} and the ending by the reason:
   - :done :fed: :count animals were fed. Any stop after at least :least animals were fed (default 2: a pair) is
-    done, with the stop as the data reason (warn breed.gave-up); :least :all is :count.
+    done, with the stop as the data reason; :least :all is :count.
   - :impossible :unknown-mob (no breeding food is known for :mob, checked at the start); bees at night or in rain
     wait :bees-indoors before every round.
   - :condition-failed :no-food (none carried and none fetched, nothing fed yet; a listed call with :fetch false waits for food; a failed fetch ends with the fetch's own ending, reason :need, its cause naming the food), :too-few (fewer than two adults stand near before the first feeding, or no candidate is left),
@@ -42,15 +42,15 @@
     or :unpaired (an odd number fed), when no candidate is left. The same after three fruitless animals in a row.
 
   With :box (or :plan and :part, the pen of a plan part as tend reads it) the body knows a pen: when fewer than two adults
-  stand near it first walks to the middle of the box (once), and when it ends inside the box it walks back out to where it
-  started (go-to shuts the gate behind it).
+  stand near it first walks to the middle of the box (once), and when it ends inside the box, however it ends (the
+  cleanup, after the hand is put back), it walks back out to where it started (go-to shuts the gate behind it).
 
   Animals follow a body holding their food, so the hand is given back. Before the first feeding the job notes
   what the hand holds. When it ends, however (the cleanup), it equips that item again if still carried, else empties the hand. :hand is
   :restored, :emptied or :full (no free slot: the food stays in hand, warn breed.hand-full). There is no :hand
   when nothing was fed. A cancel or the engine's limit restores it too.
 
-  After a pair was fed with no baby in view, the run waits (yielding :continue) up to the setting calf-wait-s for the
+  After a pair was fed with no baby in view, the run pauses (a jobs.time.noop child) the setting calf-wait-s for the
   calf before it counts the babies, so :babies is what the body sees.
 
   A run that fed at least two animals writes one memory entry of kind :bred/<mob> (data {:fed [uuids]}, default
@@ -132,17 +132,20 @@
     (let [r (await (ctx/act c :unequip #js {}))]
       (if (= "full" (.-status r)) :full :emptied))))
 
+(declare leave-pen!)
+
 (defn ^:async cleanup
-  "However the run ended: the hand put back as note-hand! found it; done with {:hand outcome} once the hand was noted,
-  else with no data."
+  "However the run ended: the hand put back as note-hand! found it, then the body walked out of the known pen to where
+  the run started; done with {:hand outcome} once the hand was noted, else with no data."
   [c _]
-  (let [m (ctx/mem c)]
-    (if-not (:hand-noted m)
-      (ctx/end c :done nil {})
-      (let [outcome (await (restore-hand! c (:hand-before m)))]
-        (when (= :full outcome)
-          (ctx/emit! c :breed.hand-full :warn {:text "no free slot: the food stays in hand"}))
-        (ctx/end c :done nil {:hand outcome})))))
+  (when (and (:hand-noted (ctx/mem c)) (not (:hand-outcome (ctx/mem c))))
+    (let [outcome (await (restore-hand! c (:hand-before (ctx/mem c))))]
+      (ctx/update-mem! c assoc :hand-outcome outcome)
+      (when (= :full outcome)
+        (ctx/emit! c :breed.hand-full :warn {:text "no free slot: the food stays in hand"}))))
+  (if (= :continue (await (leave-pen! c)))
+    :continue
+    (ctx/end c :done nil (if-let [h (:hand-outcome (ctx/mem c))] {:hand h} {}))))
 
 (defn note-hand!
   "Remember what the hand holds, once per run."
@@ -191,13 +194,14 @@
                            (get ending-of reason [:nothing-possible reason]))]
         (ctx/end c kind cause result)))))
 
-(defn finish!
+(defn ^:async finish!
   "Emit the outcome and end the call: the ending of reason (ending-of, else nothing-possible), or ending when given
-  (a failed fetch's). The hand is put back by cleanup. Resolves to :continue while a calf is awaited."
+  (a failed fetch's). The hand is put back by cleanup. Resolves to :continue while a calf is awaited (a pause child)."
   [c reason & [ending]]
-  (if (calf-pending? c)
-    :continue
-    (finish-now! c reason ending)))
+  (if-not (calf-pending? c)
+    (finish-now! c reason ending)
+    (let [e (await (child/pause! c (/ (calf-wait-ms) 1000) :calf-wait))]
+      (if (= :continue e) :continue (finish-now! c reason ending)))))
 
 (defn candidates
   "The adults within radius not fed, refused or given up on, nearest first."
@@ -341,14 +345,13 @@
 
 (defn ^:async leave-pen!
   "Walk back to where the run started when it ends with the body inside the known pen. Resolves to :continue while the
-  walk goes on, else the ending r."
-  [c r]
+  walk goes on, else nil."
+  [c]
   (let [box (pen-box c)
         from (:from (ctx/mem c))]
-    (if-not (and box from (animals/in-box? box (u/self-pos c)))
-      r
-      (let [w (await (child/call-walk* c :leave {:pos from :range 1}))]
-        (if (= :continue w) :continue r)))))
+    (when (and box from (animals/in-box? box (u/self-pos c)))
+      (when (= :continue (await (child/call-walk* c :leave {:pos from :range 1})))
+        :continue))))
 
 (defn ^:async step
   "One walk or feeding, or the end."
@@ -370,10 +373,4 @@
   "The whole attempt: steps (a pace between; can-run? is asked between them) until the job ends."
   [c]
   (animals/reserve-bait! c (:mob (:args c)))
-  (if-let [r (:ending (ctx/mem c))]
-    (await (leave-pen! c r))
-    (let [r (await (pace/steps! c #(step c)))]
-      (if (contract/ending? r)
-        (do (ctx/update-mem! c assoc :ending r)
-            (await (leave-pen! c r)))
-        r))))
+  (await (pace/steps! c #(step c))))
