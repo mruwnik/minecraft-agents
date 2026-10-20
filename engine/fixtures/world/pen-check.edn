@@ -137,8 +137,7 @@
   ;; cards fc15d57c, c0097f43: the pen given as a plan, leaks listed by cell, animals seen on the pen cells recorded
   {:name "plan-form-closed-lists-the-cow-inside"
    :plans [{:id "pen" :metadata {:by "$body"} :parts [{:id "fence" :outline [#at [2 0 2] #at [8 0 8]] :want [:any "oak_fence"]}]}]
-   :act [[:summon "cow" [4.5 0 6.5]]
-         [:wait-s 2]
+   :act [[:summon "cow" [4.5 0 6.5]] [:until-seen {:entity "cow"} 10]
          [:job (jobs.animals.pen-check {:plan "$plan:pen" :at #at [5 0 5]})]]
    :expect [{:event {:source :job :kind :completed :data {:closed? true :cells 25 :animals [[:any]]}} :within-s 20 :of-job true}]}
   ;; card 66df9d05: an L-shaped pen (x 3..7 z 3..5 plus x 3..4 z 6..7), the plan lists its fence cells; the notch of its bounding box is open ground
@@ -170,8 +169,7 @@
   {:name "animals-listed-inside-only"
    :act [[:summon "cow" [4.5 0 6.5] "{NoAI:1b}"]
          [:summon "sheep" [6.5 0 4.5] "{NoAI:1b}"]
-         [:summon "cow" [11.5 0 5.5] "{NoAI:1b}"]
-         [:wait-s 2]
+         [:summon "cow" [11.5 0 5.5] "{NoAI:1b}"] [:until-seen {:entity "cow" :min 2} 10]
          [:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
    :expect [{:event {:source :job :kind :completed :data {:closed? true :animals-in 2}} :within-s 20 :of-job true}]}
   ;; card 3547b880: no :at, :box or :plan ends impossible :no-pen

@@ -35,8 +35,7 @@
   ;; chests), not :cart-failed. 34 stacks of cobblestone, bread and torches fill all 36 slots; want-free 0 lets the corridor reach the cart.
   {:name "full-bag-at-a-chest-minecart-stops-bag-full"
    :body {:inventory [["cobblestone" 2176] ["torch" 8] ["bread" 8]]}
-   :act [[:summon "chest_minecart" [12.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"]
-         [:wait-s 2]
+   :act [[:summon "chest_minecart" [12.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"] [:until-seen {:entity "chest_minecart"} 10]
          [:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:rail] :settings {:jobs.lib.trip/want-free 0}})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :bag-full}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :cart-failed}} :for-s 100 :until {:source :job :kind :stopped}}]
@@ -78,9 +77,7 @@
    :after [[:block [16 1 18] "spawner"]]}
   ;; a seen zombie (NoAI, helmeted) in the corridor can reach the body: the job waits :hostile-near, and takes the rails once it is gone
   {:name "hostile-in-the-corridor-waits-then-strips-once-it-is-gone"
-   :act [[:summon "zombie" [12.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 2]
-         [:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:rail]})]
+   :act [[:summon "zombie" [12.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"] [:wait-s 2] [:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:rail]})]
          [:await {:source :job :kind :waiting :data {:reason :hostile-near}} 40]
          [:rcon "kill @e[type=zombie,$BOX]"]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:taken {:rail [:>= 10]}}} :within-s 140 :of-job true}]

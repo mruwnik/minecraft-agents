@@ -36,8 +36,7 @@
   {:name "hungry-reflex-mid-pillar-then-the-same-tree-is-finished"
    :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}]
    :body {:inventory [["iron_axe" 1] ["dirt" 20] ["bread" 8]]}
-   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]
-         [:wait-s 10]
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})] [:until-pos {:y-min 3} 40]
          [:rcon "effect give $BODY minecraft:hunger 7 255 true"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 80}
             {:event {:source :job :kind :completed} :within-s 190 :of-job true}]

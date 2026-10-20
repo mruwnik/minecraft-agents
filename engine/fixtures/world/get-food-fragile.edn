@@ -33,7 +33,7 @@
    :memory [{:kind :food-source :data {:pos #xyz [28 0 16] :kind :chest}}]
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile)}]
-   :act [[:summon "creeper" [16.5 0 16.5] "{NoAI:1b,Silent:1b}"] [:wait-s 2]
+   :act [[:summon "creeper" [16.5 0 16.5] "{NoAI:1b,Silent:1b}"] [:until-seen {:entity "creeper"} 10]
          [:job (jobs.survival.get-food {})]]
    ;; called by hand or by the hungry reflex, the call ends condition-failed :too-dangerous
    :expect [{:event {:source :job :kind :stopped :data {:reason :too-dangerous}} :within-s 60 :of-job true}]
@@ -51,7 +51,7 @@
    ;; the job is submitted below, after the damage: the hungry trigger would fire at food 8, before the damage lands, and call it as a healthy body; the 2 s wait lets the body see the hp 2 and the creeper before the call
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile)}]
-   :act [[:summon "creeper" [26.5 0 18.5] "{NoAI:1b,Silent:1b}"] [:wait-s 2]
+   :act [[:summon "creeper" [26.5 0 18.5] "{NoAI:1b,Silent:1b}"] [:until-seen {:entity "creeper"} 10]
          [:job (jobs.survival.get-food {})]]
    :expect [{:no-event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :for-s 40}]
    :after [[:item "beef" [:<= 1]] [:body-far [28.5 0 16.5] 6]]}]}

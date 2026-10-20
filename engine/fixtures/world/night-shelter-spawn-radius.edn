@@ -43,8 +43,7 @@
    :body {:at [9.5 0 9.5] :inventory [["torch" 16]]}
    :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
          [:job (jobs.movement.go-to {:pos #at [38 0 9] :range 0})] [:await {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} 60]
-         [:job (jobs.movement.look-around)] [:wait-s 6]
-         [:job (jobs.movement.go-to {:pos #at [9 0 9] :range 0})] [:wait-s 14]
+         [:job (jobs.movement.look-around)] [:await {:source :job :kind :completed :data {:name "jobs.movement.look-around"}} 30] [:job (jobs.movement.go-to {:pos #at [9 0 9] :range 0})] [:await {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} 60]
          [:rcon "execute positioned $X $Y $Z run fill ~8 ~-1 ~8 ~40 ~3 ~10 air replace torch"]
          [:wait-s 2]
          [:job (jobs.survival.night {})]]
