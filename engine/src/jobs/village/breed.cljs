@@ -12,7 +12,7 @@
 
 (def doc
   "Grow the villagers seen within :radius to :target (adults and babies count). One call is the whole attempt. Each
-  attempt takes the two nearest adults not yet tried in this call, feeds each enough to be willing (jobs.village.feed
+  attempt takes the two nearest adults not yet tried in this call (else the nearest two again, not fed again while the food they took is unspent), feeds each enough to be willing (jobs.village.feed
   child, fetched unless :fetch is off: 3 bread, else 12 of carrot, potato or beetroot), then stays near them for
   the ::wait-s setting (jobs.movement.linger-near child) and counts again. A rise in the baby villagers in sight is a birth
   (an adult walking into view is not).
@@ -24,7 +24,7 @@
   Ends with the data {:population n :target t :births b}: done when the target is met (done? holds; an already
   met target is done with 0 births), else with the cause:
   - condition-failed :no-food: a feed child ended without food.
-  - nothing-possible :no-births: 3 attempts in a row without a birth, or no untried pair left after an attempt.
+  - nothing-possible :no-births: 3 attempts in a row without a birth (untried pairs first; with none left the nearest pair is tried again, as a birth is chance).
   A pair a feed could not complete (villager gone, unreachable, would not take food) counts as an attempt without a
   birth. What was tried, the birth baseline and the wait are kept in job memory, so a cut and restart re-checks the
   count and goes on. It yields :continue while a feed, walk or the wait is under way.")
@@ -154,16 +154,18 @@
   (ctx/end c kind reason (data-of c seen)))
 
 (defn choose!
-  "Pick the two nearest untried adults and book them with the baseline count; none left after an attempt ends :no-births, none at all yields (can-run? answers). :again, :continue or an ending."
+  "Pick the two nearest untried adults (none left after an attempt: the nearest two again) and book them with the baseline count; fewer than two adults after an attempt ends :no-births, none at all yields (can-run? answers). :again, :continue or an ending."
   [c vs seen]
   (let [m (ctx/mem c)
         me (u/self-pos c)
         tried (set (:tried m))
-        pair (->> vs (filter adult?) (remove #(tried (.-uuid %)))
-                  (sort-by #(u/dist me (u/pos-of (.-pos %)))) (take 2))]
+        nearest (fn [es] (->> es (sort-by #(u/dist me (u/pos-of (.-pos %)))) (take 2)))
+        adults (filter adult? vs)
+        fresh (nearest (remove #(tried (.-uuid %)) adults))
+        pair (if (and (< (count fresh) 2) (seq tried)) (nearest adults) fresh)]
     (cond
       (< (count pair) 2) (if (seq tried) (child/give-up c :pair :no-births (data-of c seen)) :continue)
-      :else (do (ctx/update-mem! c #(assoc % :pair (mapv (fn [e] (.-uuid e)) pair) :fed [] :baseline (:kids seen)
+      :else (do (ctx/update-mem! c #(assoc % :pair (mapv (fn [e] (.-uuid e)) pair) :fed (filterv (set (:stocked %)) (map (fn [e] (.-uuid e)) pair)) :baseline (:kids seen)
                                            :tried (into (vec (:tried %)) (map (fn [e] (.-uuid e))) pair)))
                 :again))))
 
@@ -191,7 +193,7 @@
           (= :continue r) :continue
           (= :no-food (contract/cause-key r)) (stop! c seen :condition-failed :no-food)
           (not= :done (:kind r)) (failed-pair! c r)
-          :else (do (ctx/update-mem! c update :fed conj next) :again))))))
+          :else (do (ctx/update-mem! c #(-> % (update :fed conj next) (update :stocked (fnil conj []) next))) :again))))))
 
 (defn ^:async wait!
   "Stay near the fed pair; when the wait ends (however it ends) count the births. :again or :continue."
@@ -201,7 +203,7 @@
     (if (= :continue r)
       :continue
       (let [born (born c seen)]
-        (ctx/update-mem! c #(-> % (dissoc :waiting :pair :fed :at) (update :births (fnil + 0) born)))
+        (ctx/update-mem! c #(-> % (dissoc :waiting :pair :fed :at) (cond-> (pos? born) (dissoc :stocked)) (update :births (fnil + 0) born)))
         (if (pos? born) (child/progress! c :pair) (child/fruitless! c :pair))
         :again))))
 

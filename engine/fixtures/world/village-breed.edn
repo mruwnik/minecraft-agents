@@ -21,7 +21,8 @@
    :act [[:summon "villager" [16.5 0 16.5] "{CanPickUpLoot:1b,UUID:[I;20264,7,2,1]}"]
          [:summon "villager" [16.5 0 18.5] "{CanPickUpLoot:1b,UUID:[I;20264,7,2,2]}"]
          [:job (jobs.village.breed {:target 3 :settings {:jobs.village.breed/wait-s 60}})]]
-   :expect [{:event {:source :job :kind :completed} :within-s 200 :of-job true}]}
+   :limit-s 330
+   :expect [{:event {:source :job :kind :completed} :within-s 300 :of-job true}]}
   ;; should fail: a single adult has nobody to pair with; a start condition: the call queued by the agent stays listed and waits on :no-pair
   {:name "one-adult-is-no-pair"
    :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20264,7,3,1]}"]

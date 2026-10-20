@@ -106,6 +106,14 @@
           (is (= 0 (:births @out)))
           (is (not (gave? s :breed.gave-up)) "the ending carries it"))))))
 
+(deftest the-only-pair-is-tried-again-without-more-food
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out]} (await (breed {:entities pair :inventory bread} args 200 #(feeding % 0)))]
+          (is (= :no-births (:reason @out)) "three attempts on the one pair, not the no-food of a second feeding")
+          (is (= 2 (count (tosses p))) "the food they took stays unspent"))))))
+
 (deftest fewer-than-two-adults-or-no-food-never-starts
   (async done
     (tu/run-async done
