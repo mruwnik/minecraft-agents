@@ -2,6 +2,7 @@
 ;; ~3.9 b/s, far past the 15 s of plain air) is the only way past a bedrock ridge; shaft down at x 4, shaft up at x 115, goal on the far surface.
 ;; Should-succeed: with Water Breathing (120 s) the body takes the tunnel and arrives unhurt.
 ;; Should-fail: with no effect the plan would drown the body, so go-to ends unarrived (refused :air-lethal) and the body is not hurt.
+;; A potion drunk earlier leaves part of its time: 5 s left plus the air does not cover the tunnel (the plan prices the time left).
 {:defaults
  {:tags [:movement :water :air :go-to]
   :time :any
@@ -19,6 +20,13 @@
             {:no-event {:source :body :kind :hurt} :for-s 70 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [116.5 6 8.5] 3]]}
   {:name "plain-air-refuses-the-long-submerged-tunnel"
+   :act [[:job (jobs.movement.go-to {:pos #at [116 6 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-far [116.5 6 8.5] 20]]
+   :limit-s 70}
+  {:name "water-breathing-with-5-s-left-refuses-the-tunnel"
+   :body {:effects [["water_breathing" 5 0]]}
    :act [[:job (jobs.movement.go-to {:pos #at [116 6 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
