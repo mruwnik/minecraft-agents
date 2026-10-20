@@ -460,12 +460,32 @@
               pick [{:name "stone_pickaxe" :count 1}]
               run #(dig-route-run! below-pocket pick sense)
               walked (await (run))
-              capped (await (settings/with-settings {:jobs.movement.go-to.tuning/max-route-replans 0} run))]
+              capped (await (settings/with-settings {:jobs.movement.go-to.tuning/max-route-replans 0} run))
+              one (await (settings/with-settings {:jobs.movement.go-to.tuning/max-route-replans 1} run))]
           (is (true? (:arrived @(:out walked))) (pr-str @(:out walked)))
           (is (= [3 60 0] (feet (:p walked))))
           (is (empty? (events-of (:seen walked) :go-to.escalation-stopped)))
           (is (some #(= [:dig-route :no-route] ((juxt :step :reason) %)) (events-of (:seen capped) :go-to.escalation-stopped))
-              "the walk on is a replan, so no replan left ends it"))))))
+              "the walk on is a replan, so no replan left ends it")
+          (is (true? (:arrived @(:out one))) "one replan is enough for the one walk on"))))))
+
+(deftest a-dig-route-walk-on-never-stands-in-a-pocket-whose-unseen-floor-is-void-or-lava
+  ;; as the test above, but the floor [3 59 0] is a void (air over lava, or lava): the body never ends in the pocket
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [floor ["air" "lava"]]
+          (let [blocks (cond-> (dissoc below-pocket "3,59,0") (= "lava" floor) (assoc "3,59,0" "lava") (= "air" floor) (assoc "3,58,0" "lava"))
+                sense (fn [p]
+                        (let [sensed (.-sensedAt p)]
+                          (aset p "sensedAt" (fn [q] (let [cell [(.-x q) (.-y q) (.-z q)]]
+                                                       (if (or (= [3 59 0] cell) (and (#{[3 60 0] [3 61 0]} cell) (not= "air" (block p [3 62 0]))))
+                                                         #js {:unknown true}
+                                                         (sensed q)))))))
+                {:keys [out p]} (await (dig-route-run! blocks [{:name "stone_pickaxe" :count 1}] sense))]
+            (is (not (true? (:arrived @out))) (str floor " " (pr-str @out)))
+            (is (not= [3 60 0] (feet p)) floor)
+            (is (> (second (feet p)) 59) (str floor " feet " (feet p)))))))))
 
 (deftest every-escalation-child-runs-hurt
   (doseq [e [{:step :pillar :height 2} {:step :stair :heading :east :steps 2} {:step :clear-path :heading :east} {:step :approach :pos [1 64 0]}]]
