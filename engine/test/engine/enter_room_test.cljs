@@ -67,7 +67,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (st/setup (assoc (hut-world {:x 5 :y 64 :z 6} {}) :time st/night
-                                                  :entities [{:id 8 :name "zombie" :kind "hostile" :pos {:x 5 :y 64 :z 8} :health 20}]))]
+                                                  :entities [{:id 8 :name "zombie" :kind "hostile" :pos {:x 5 :y 64 :z 3} :health 20}]))]
           (mem/write! (:store eng) :home {:pos {:x 5 :y 64 :z 0}} mem/place-policy)
           (core/submit! eng '(jobs.survival.enter-room {}) {})
           (await (tu/run-until-empty eng 5))
