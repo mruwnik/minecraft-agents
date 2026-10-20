@@ -10,6 +10,7 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.memory :as mem]
             [engine.perception :as perception]
+            [engine.perception.rays :as rays]
             [engine.settings :as settings]
             [engine.registry :as registry]
             [engine.scenario :as scenario]
@@ -147,7 +148,9 @@
       (aset p "seenBlockAt" (fn [pos] #js {:name (.-name (.blockAt raw-p pos)) :pos pos :age-ms 0}))
       (doseq [yaw [0 90 180 270]] ; what the body has seen by now (reads are sensed: felt, in view or remembered)
         (swap! (fake/state raw-p) assoc :yaw yaw)
-        (perception/pass! per)))
+        (perception/pass! per))
+      (doseq [x (range (- (:x pos) 3) (+ (:x pos) 4)) y (range 62 68) z (range (- (:z pos) 3) (+ (:z pos) 4))] ; the inside of the home it has lived in, which no ray from outside reaches
+        (rays/touch! per [x y z])))
     (swap! (fake/state raw-p) assoc :yaw 0)
     (st/dawn-after! p st/default-dawn)
     (know-home! eng pos)

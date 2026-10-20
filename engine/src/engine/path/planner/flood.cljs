@@ -1,6 +1,6 @@
 (ns engine.path.planner.flood
   "Search methods: the goal flood (is the goal walled in?), and the late flood kept over the searches of one goal."
-  (:require [engine.path.planner.base :refer [BODY FLOOD-MEMO FLOOD-TABLE HALF REGIONS SPAN UNLOADED WATER]]
+  (:require [engine.path.planner.base :refer [BODY FLOOD-MEMO FLOOD-TABLE HALF REGIONS SPAN UNLOADED WATER WHOLE]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -109,19 +109,38 @@
               (set! (.-open-mode s) false)
               opened)))))
 
-  ;; can a gap jump in direction c from a takeoff dy above the flood's current cell come over the column beside it (free at
-  ;; body height over the takeoff)?
-  (jumpOver [s c dy]
+  ;; can a gap jump in direction c from a takeoff at x z, dy above the flood's current cell, come over every column between
+  ;; (free at body height over the takeoff)?
+  (jumpOver [s c dy x z]
     (let [lo (* (+ (.-fy s) dy) 16)]
-      (.clear s (+ (.-fx s) (aget (.-adx s) c)) (+ (.-fz s) (aget (.-adz s) c)) lo (+ lo BODY))))
+      (loop [k 1]
+        (let [cx (+ (.-fx s) (* k (aget (.-adx s) c)))
+              cz (+ (.-fz s) (* k (aget (.-adz s) c)))]
+          (cond
+            (and (== cx x) (== cz z)) true
+            (not ^boolean (.clear s cx cz lo (+ lo BODY))) false
+            :else (recur (inc k)))))))
+
+  ;; a drop into the flood's current cell from the unseen cell x y z above it falls through the column over it
+  (dropOver [s y]
+    (.clear s (.-fx s) (.-fz s) (* (inc (.-fy s)) 16) (+ (* y 16) BODY)))
 
   ;; Adds the cell when it is standable and a forward move of it reaches the flood's current cell. True when it is
   ;; the start. A cell the flood cannot see is a way in it does not know, so it marks the flood leaked. That counts
   ;; for a cell beside the current one (jump -1), and for a gap jump's takeoff in direction jump only when the jump
   ;; can come over the column between.
+  ;; a whole block the body has seen fills its cell: nothing stands there whatever lies under it or over it, so the cells
+  ;; round it that it has not seen (the underside of a floor, the top of a roof) do not leak the flood
+  (solidSeen [s x y z]
+    (let [id (.stateAt ^js (.-snapshot s) x y z)]
+      (and (not (== id UNLOADED)) (not ^boolean (.isUnknown s id)) (>= (aget (.-tbl-top s) id) WHOLE) (zero? (aget (.-tbl-base s) id)))))
+
   (floodVisit [s ^js seen ^js queue start-key x y z jump]
-    (if ^boolean (.unseen s x y z)
-      (do (when (or (neg? jump) ^boolean (.jumpOver s jump (- y (.-fy s)))) (set! (.-leaked s) true))
+    (if (and ^boolean (.unseen s x y z) (not ^boolean (.solidSeen s x y z)))
+      (do (when (if (neg? jump)
+                    (or (<= y (.-fy s)) ^boolean (.dropOver s y))
+                    ^boolean (.jumpOver s jump (- y (.-fy s)) x z))
+            (set! (.-leaked s) true))
           false)
       (let [h (.floodH s x y z)]
         (cond
@@ -207,6 +226,7 @@
       (cond
         (> dy (inc (.-max-drop s))) false
         (zero? dy) (recur (inc dy))
+        (and (pos? dy) ^boolean (.solidSeen s (.-fx s) (+ (.-fy s) dy) (.-fz s))) false ; a roof ends the climb
         ^boolean (.floodVisit s seen queue start-key (.-fx s) (+ (.-fy s) dy) (.-fz s) -1) true
         :else (recur (inc dy)))))
 
