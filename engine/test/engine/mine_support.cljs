@@ -243,11 +243,11 @@
     s))
 
 (defn ^:async side-ore-run
-  "A stay-level mine east with :ore-reach reach in rock with ore at (1 65 -2) beside a pocket of air that the body sees through a one-cell window of its own earlier tunnel (no breach)."
+  "A stay-level mine east with :settings {:jobs.gather.mine-stay/ore-reach reach} in rock with ore at (1 65 -2) beside a pocket of air that the body sees through a one-cell window of its own earlier tunnel (no breach)."
   [reach]
   (let [s (start {:world (update (rock-world {"0,65,-1" "air" "0,65,-2" "air" "1,65,-2" "iron_ore"}) :inventory into [{:name "cobblestone" :count 5}])})]
     (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
-    (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :ore-reach reach}) {})
+    (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :settings {:jobs.gather.mine-stay/ore-reach reach}}) {})
     (await (run-ticks s 500))
     s))
 

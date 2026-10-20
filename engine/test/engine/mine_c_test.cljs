@@ -47,7 +47,7 @@
       (fn ^:async t []
         (let [s (start {:world (update (rock-world {"0,65,-1" "glass" "0,65,-2" "glass" "1,65,-2" "iron_ore"}) :inventory into [{:name "cobblestone" :count 5}])})]
           (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
-          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :ore-reach 2}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :settings {:jobs.gather.mine-stay/ore-reach 2}}) {})
           (await (run-ticks s 500))
           (is (= 1 (get (inv s) "raw_iron")) (pr-str (keep :text @(:seen s)))))))))
 
@@ -60,7 +60,7 @@
                         :dir dir})]
           (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
           (let [cut? (shutdown-at-cell! s #{[1 64 -1] [1 65 -1]})]
-            (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :ore-reach 2}) {})
+            (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :settings {:jobs.gather.mine-stay/ore-reach 2}}) {})
             (await (run-until! s cut? 500)))
           (let [again (start {:p (:p s) :dir dir})]
             (is (:side-cut (core/job-memory (:eng again) "j1")) "cut in the side cut")

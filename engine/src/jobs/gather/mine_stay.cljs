@@ -1,11 +1,15 @@
 (ns jobs.gather.mine-stay
   "The :stay-level option of jobs.gather.dig-for: ore only beside the body, and a cut that opens into a cave sealed again."
-  (:require [jobs.lib.choose :as choose]
+  (:require [engine.args :as a]
+            [jobs.lib.choose :as choose]
             [engine.ctx :as ctx]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.bridge :as bridge]
             [jobs.lib.ledger :as ledger]))
+
+(a/defargs settings
+  {::ore-reach {:default 2 :doc "With :stay-level: seen ore this many blocks into the wall beside the tunnel is taken by a short side cut (a child dig run), shut behind with a carried block; 0 or 1: only ore beside the body." :spec (a/int-in 0 nil)}})
 
 (defn record-tunnel!
   "jobs.lib.ledger/record-tunnel! for the tunnel map of a strip run."

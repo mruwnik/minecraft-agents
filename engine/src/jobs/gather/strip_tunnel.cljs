@@ -3,6 +3,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.access.stair :as stair]
             [jobs.gather.mine-stay :as stay]
             [jobs.gather.mine.cause :as cause]
@@ -46,7 +47,6 @@
    :stay-level {:doc "only cut; seal a cut that opens into air beyond the tunnel" :spec boolean? :default false}
    :fetch {:doc "get missing torch ingredients and seal blocks (jobs.lib.need)" :spec need/option? :default true}
    :block {:doc "the block the dig is for (the tool, hunger and water checks of each step)" :spec string?}
-   :ore-reach {:doc "stay-level: a watched block this many blocks out in the wall ends the call when the body is level with it" :spec (a/int-in 0 nil) :default 2}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -72,10 +72,10 @@
 (defn side-ore?
   "Whether a seen watched block lies in the wall to the side of the body's cell, level with it, for a stay-level side cut."
   [c]
-  (let [{:keys [watch-kinds radius stay-level ore-reach heading]} (:args c)
+  (let [{:keys [watch-kinds radius stay-level heading]} (:args c)
         here (cell-of (u/self-pos c))]
     (boolean (and stay-level (seq watch-kinds)
-                  (some #(stay/side-cut here (headings heading) ore-reach %)
+                  (some #(stay/side-cut here (headings heading) (settings/get stay/settings ::stay/ore-reach) %)
                         (map :pos (look/seen-blocks (:primitives c) {:names (vec watch-kinds) :radius radius :max 128 :live? true})))))))
 
 (defn watch-hit?

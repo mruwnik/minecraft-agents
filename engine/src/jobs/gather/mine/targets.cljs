@@ -138,7 +138,7 @@
         side (when (and stay? heading)
                (->> seen
                     (remove #(stay/beside-body? (cell-of here) %))
-                    (keep (fn [pos] (when-let [cut (stay/side-cut (cell-of here) heading (:ore-reach (:args c)) pos)] (assoc cut :pos pos))))
+                    (keep (fn [pos] (when-let [cut (stay/side-cut (cell-of here) heading (settings/get stay/settings ::stay/ore-reach) pos)] (assoc cut :pos pos))))
                     (filter #(not-any? (comp rules/air (fn [cell] (u/seen-name p cell))) (stay/side-cells (cell-of here) %)))
                     (filter #(and (= :ok (classify c wet (:pos %) (stay/side-face (cell-of here) %))) (= :ok (access/judge (access/may-dig? (rules-in c) (:pos %)) accept))))
                     (sort-by #(u/dist here (:pos %)))
