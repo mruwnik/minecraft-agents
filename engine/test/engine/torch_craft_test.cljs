@@ -11,7 +11,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (mt/start {:world (mt/torch-world [{:name "iron_pickaxe" :count 1} {:name "coal" :count 2} {:name "stick" :count 4}])})
+        (let [s (mt/start-lit (mt/torch-world [{:name "iron_pickaxe" :count 1} {:name "coal" :count 2} {:name "stick" :count 4}]) [0 0])
               id (core/submit! (:eng s) (mt/spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 12 :trip true :fetch false}) {})]
           (mem/update-job! (:store (:eng s)) id [] assoc-in [:children :torches]
                            {:args {:item "torch" :count 16} :children {} :start {:have 0 :target 16}})
