@@ -1,8 +1,8 @@
 ;; Readiness live cases L1-L6 (docs/readiness-checks-design.md): jobs.debug.ready-probe binds safe-at (:at) or safe-if-lit (:lit?) and only emits
 ;; job.ready-probe once started. Register empty (no hostile reflex, no night trigger) unless a case says so; no bed anywhere.
-;; Night cases need --allow-time --time-log <the shared time log>. A stone hut x 8..16, z 8..16 with a doorway at [8 0..1 12]; the :at cell [12 0 20]
-;; lies outside it. No light may reach it (a lit cell is not exposed): the hut torches sit behind walls, and the cell is 16+ blocks from any torch the
-;; neighbouring plots place near their edges (night-whole-attempt has torches at x 4 and 28, z 4, 16 and 28; light reaches 13 blocks).
+;; Night cases need --allow-time --time-log <the shared time log>. A stone hut x 8..16, z 8..16 with a doorway at [8 0..1 12]; the :at cell [4 0 12]
+;; lies outside it, in line with the doorway so the body in the hut sees its light (an unseen cell reads as exposed whatever the hour). No light may reach
+;; it (a lit cell is not exposed): the hut torches sit at its east side, and plots are 96 blocks apart.
 ;; L3 (the probe run exclusive ends in one round with the reason) has no case: the runner has no exclusive step; hand probe, the engine side is run-checks-test.
 {:defaults
  {:tags [:readiness :survival :night]
@@ -16,7 +16,7 @@
  [;; L1: queued at night from the hut to open ground the probe waits :exposed, the body stays in, and starts once the day comes
   {:name "l1-queued-at-night-waits-exposed-then-starts-at-day"
    :time-why :dawn-decision
-   :act [[:job (jobs.debug.ready-probe {:at #at [12 0 20]})]
+   :act [[:job (jobs.debug.ready-probe {:at #at [4 0 12]})]
          [:await {:source :job :kind :waiting :data {:reason :exposed}} 30]
          [:wait-s 10]
          [:time-set 1000]]
@@ -38,7 +38,7 @@
    :limit-s 150}
   {:name "l1-stays-queued-all-night"
    :time-why :dawn-decision
-   :act [[:job (jobs.debug.ready-probe {:at #at [12 0 20]})]]
+   :act [[:job (jobs.debug.ready-probe {:at #at [4 0 12]})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :job.ready-probe} :for-s 25}]
    :after [[:body-near [10.5 0 12.5] 5]]
@@ -46,13 +46,13 @@
   ;; L2: a call's :checks {:safe? (not (threatened))} replaces the exposure check: it starts at night
   {:name "l2-override-without-the-exposure-check-starts-at-night"
    :time-why :night-light
-   :act [[:job (jobs.debug.ready-probe {:at #at [12 0 20] :checks {:safe? (not (threatened))}})]]
+   :act [[:job (jobs.debug.ready-probe {:at #at [4 0 12] :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :job.ready-probe} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 20}]
    :limit-s 60}
   {:name "l2-override-keeping-the-jobs-own-check-still-waits"
    :time-why :dawn-decision
-   :act [[:job (jobs.debug.ready-probe {:at #at [12 0 20] :checks {:safe? (job-safe)}})]]
+   :act [[:job (jobs.debug.ready-probe {:at #at [4 0 12] :checks {:safe? (job-safe)}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :job.ready-probe} :for-s 25}]
    :limit-s 60}
@@ -100,7 +100,7 @@
    :tags [:readiness :survival :night :hostile]
    :mobs :keep
    :act [[:summon "zombie" [4.5 0 12.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.debug.ready-probe {:at #at [12 0 20] :checks {:safe? (not (threatened))}})]
+         [:job (jobs.debug.ready-probe {:at #at [4 0 12] :checks {:safe? (not (threatened))}})]
          [:await {:source :job :kind :waiting :data {:reason :hostile-near}} 30]
          [:restart-body]
          [:wait-s 8]
@@ -114,7 +114,7 @@
    :tags [:readiness :survival :night :hostile]
    :mobs :keep
    :act [[:summon "zombie" [4.5 0 12.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.debug.ready-probe {:at #at [12 0 20] :checks {:safe? (not (threatened))}})]
+         [:job (jobs.debug.ready-probe {:at #at [4 0 12] :checks {:safe? (not (threatened))}})]
          [:await {:source :job :kind :waiting :data {:reason :hostile-near}} 30]
          [:restart-body]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :hostile-near}} :within-s 30 :of-job true}
