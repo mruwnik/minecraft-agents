@@ -12,7 +12,7 @@ import prismarineRegistry from 'prismarine-registry'
 import {
   encodeColumn, decodeColumnFile, restoreColumn, columnFile,
   poseSnapshot, poseKey, hudSnapshot, createView, watchFile, poseFile, WATCH_FRESH_MS, viewModeFromEnv, poseHzFromEnv, coalescedWriter, STATS_MS, POSE_REFRESH_MS, POSE_BODY_MS,
-  packNibbles, decodeColumnLight, mergeOverlapping, columnLightSection, columnStateSection
+  packNibbles, decodeColumnLight, mergeOverlapping, columnLightSection, columnStateSection, nearestK
 } from './view.mjs'
 import { poseEntities } from './view-pose.mjs'
 import { writeAtomic } from './write-atomic.mjs'
@@ -1551,4 +1551,18 @@ test('the pose carries the names held in the main hand and the off hand, null wh
   bot.inventory = { slots: [] }
   const empty = poseSnapshot(bot, { world: 'w', now: 1 })
   assert.deepEqual([empty.held, empty.offHand], [null, null])
+})
+
+test('nearestK returns the k nearest by distance, nearest first, for any mix of ties and sizes', () => {
+  const at = { x: 3, y: 5, z: -2 }
+  let seed = 7
+  const rnd = n => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % n }
+  for (const [n, k] of [[0, 3], [5, 0], [5, 9], [200, 17], [1000, 1000], [3000, 64], [500, 499]]) {
+    const points = Array.from({ length: n }, () => ({ x: rnd(9) - 4, y: rnd(9) - 4, z: rnd(40) - 20 }))
+    const d = p => (p.x - at.x) ** 2 + (p.y - at.y) ** 2 + (p.z - at.z) ** 2
+    const want = points.map(d).sort((a, b) => a - b).slice(0, k)
+    const got = nearestK(points, at, k)
+    assert.deepEqual(got.map(d), want)
+    assert.equal(new Set(got).size, got.length)
+  }
 })

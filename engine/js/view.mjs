@@ -99,28 +99,58 @@ export function poseHzFromEnv (env = process.env) {
 }
 
 
+// One number per cell inside +-2^20 blocks (a Map of numbers is far cheaper than template strings); beyond that, a string.
+const cellKey = p => {
+  const { x, y, z } = p
+  return x >= -1048576 && x < 1048576 && z >= -1048576 && z < 1048576 && y >= -1024 && y < 1024
+    ? ((x + 1048576) * 2097152 + (z + 1048576)) * 2048 + (y + 1024)
+    : `${x},${y},${z}`
+}
 const distSq = (p, at) => (p.x - at.x) ** 2 + (p.y - at.y) ** 2 + (p.z - at.z) ** 2
 
-// The k points nearest `at`, nearest first, by a bounded max-heap: O(n log k), never a sort of all n.
-export function nearestK (points, at, k) {
-  const heap = [] // [distance, point], farthest at the root
-  const up = i => {
-    for (let j = (i - 1) >> 1; i > 0 && heap[i][0] > heap[j][0]; i = j, j = (i - 1) >> 1) [heap[i], heap[j]] = [heap[j], heap[i]]
-  }
-  const down = () => {
-    for (let i = 0; ;) {
-      let m = i
-      for (const c of [2 * i + 1, 2 * i + 2]) if (c < heap.length && heap[c][0] > heap[m][0]) m = c
-      if (m === i) return
-      ;[heap[i], heap[m]] = [heap[m], heap[i]]
-      i = m
+// The value at sorted position `k` of a Float64Array, found in place by quickselect (3-way, so runs of equal distances stay linear).
+function kthSmallest (a, k) {
+  let lo = 0
+  let hi = a.length - 1
+  while (lo < hi) {
+    const pivot = a[(lo + hi) >> 1]
+    let lt = lo
+    let i = lo
+    let gt = hi
+    while (i <= gt) {
+      const v = a[i]
+      if (v < pivot) { a[i++] = a[lt]; a[lt++] = v } else if (v > pivot) { a[i] = a[gt]; a[gt--] = v } else i++
     }
+    if (k < lt) hi = lt - 1
+    else if (k > gt) lo = gt + 1
+    else return pivot
   }
-  for (const p of points) {
-    const d = distSq(p, at)
-    if (heap.length < k) { heap.push([d, p]); up(heap.length - 1) } else if (d < heap[0][0]) { heap[0] = [d, p]; down() }
-  }
-  return heap.sort((a, b) => a[0] - b[0]).map(([, p]) => p)
+  return a[k]
+}
+
+// Flags (1 = kept) for the k points nearest `at`; ties at the cutoff go to the earliest in iteration order. O(n), no per-point objects.
+export function nearestFlags (points, at, k) {
+  const d = new Float64Array(points.length)
+  let n = 0
+  for (const p of points) d[n++] = distSq(p, at)
+  const flags = new Uint8Array(n)
+  if (k >= n) return { flags: flags.fill(1), d }
+  if (k <= 0) return { flags, d }
+  const cut = kthSmallest(d.slice(), k - 1)
+  let below = 0
+  for (let i = 0; i < n; i++) if (d[i] < cut) { flags[i] = 1; below++ }
+  let ties = k - below
+  for (let i = 0; i < n && ties > 0; i++) if (d[i] === cut) { flags[i] = 1; ties-- }
+  return { flags, d }
+}
+
+// The k points nearest `at`, nearest first.
+export function nearestK (points, at, k) {
+  const list = Array.isArray(points) ? points : [...points]
+  const { flags, d } = nearestFlags(list, at, k)
+  const idx = []
+  for (let i = 0; i < flags.length; i++) if (flags[i]) idx.push(i)
+  return idx.sort((i, j) => d[i] - d[j] || i - j).map(i => list[i])
 }
 
 export function createView ({ stateDir, agent, world, onEvent = () => {}, now = Date.now, mode = viewModeFromEnv(), poseHz = poseHzFromEnv(), relightBudgetMs = RELIGHT_BUDGET_MS, relightMaxPoints = RELIGHT_MAX_POINTS, relightRange, relightBacklogMax, dirtyColumnsMax, dirtyPointsMax }) {
@@ -186,15 +216,16 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     if (oldBlock?.stateId === newBlock?.stateId) return
     const at = bot?.entity?.position
     if (at && distSq(p, at) > (relightRange ?? setting('view/relight-range')) ** 2) return defer(p) // far changes feed the column dump, and are relit when the body comes near
-    changes.set(`${p.x},${p.y},${p.z}`, { x: p.x, y: p.y, z: p.z })
+    changes.set(cellKey(p), p)
     // bounded memory: when the backlog doubles its cap, cut it back to the nearest points
     const cap = relightBacklogMax ?? setting('view/relight-backlog-max')
-    if (at && changes.size > cap * 2) {
-      const all = [...changes.values()]
-      const kept = nearestK(all, at, cap)
-      const keptSet = new Set(kept)
-      changes = new Map(kept.map(q => [`${q.x},${q.y},${q.z}`, q]))
-      for (const q of all) if (!keptSet.has(q)) defer(q)
+    if (!at || changes.size <= cap * 2) return
+    const { flags } = nearestFlags(changes.values(), at, cap)
+    let i = 0
+    for (const [key, q] of changes) {
+      if (flags[i++]) continue
+      changes.delete(key)
+      defer(q)
     }
   })
 
@@ -211,7 +242,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
       forgetFarthest(key)
     }
     const mine = dirty.get(key)
-    mine.set(`${p.x},${p.y},${p.z}`, { x: p.x, y: p.y, z: p.z })
+    mine.set(cellKey(p), { x: p.x, y: p.y, z: p.z })
     if (mine.size > (dirtyPointsMax ?? setting('view/dirty-points-max'))) dirty.set(key, new Set([...mine.values()].map(q => q.y >> 4)))
   }
   const forgetFarthest = keep => {
@@ -232,7 +263,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
       const [cx, cz] = key.split(',').map(Number)
       if ((cx * 16 + 8 - at.x) ** 2 + (cz * 16 + 8 - at.z) ** 2 > range ** 2) continue
       dirty.delete(key)
-      for (const p of points instanceof Set ? sectionPoints(cx, cz, points) : points.values()) changes.set(`${p.x},${p.y},${p.z}`, p)
+      for (const p of points instanceof Set ? sectionPoints(cx, cz, points) : points.values()) changes.set(cellKey(p), p)
     }
   }
 
@@ -249,13 +280,13 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     const kept = at ? nearestK([...changes.values()], at, cap) : [...changes.values()].slice(0, cap)
     const queued = kept.slice(0, relightMaxPoints)
     if (kept.length < changes.size) {
-      const keptKeys = new Set(kept.map(q => `${q.x},${q.y},${q.z}`))
+      const keptKeys = new Set(kept.map(q => cellKey(q)))
       for (const [k, q] of changes) if (!keptKeys.has(k)) defer(q)
     }
     changes = new Map()
     // a huge backlog is not boxed in one go (boxFor and the merge cost grow with it): the rest waits for the next flush
     for (const p of kept.slice(relightMaxPoints)) {
-      changes.set(`${p.x},${p.y},${p.z}`, p)
+      changes.set(cellKey(p), p)
       blocked.add(`${p.x >> 4},${p.z >> 4}`)
       stats.relightCarried++
     }
@@ -403,7 +434,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     boxes.forEach((box, n) => {
       if (n > 0 && performance.now() - start >= relightBudgetMs) {
         for (const p of box.changes) {
-          changes.set(`${p.x},${p.y},${p.z}`, p)
+          changes.set(cellKey(p), p)
           blocked.add(`${p.x >> 4},${p.z >> 4}`)
           stats.relightCarried++
         }
