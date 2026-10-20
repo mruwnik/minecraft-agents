@@ -22,8 +22,6 @@
    ::max-cap-digs {:default 3 :doc "Cap digs one run makes at most." :spec (a/int-in 0 nil)}
    ::cap-dig-share {:default 0.5 :doc "Share of the air left (oxygen, then health) a cap dig may take; a slower dig is not started and the dig gives up at it." :spec (a/num-in 0 1)}})
 (defn radius [] (settings/get settings ::radius))
-(def reach swim/reach)
-(def air-radius swim/air-radius)
 (def status swim/status)
 (defn depth [] (settings/get settings ::depth))
 (defn max-cap-digs [] (settings/get settings ::max-cap-digs))
@@ -103,8 +101,8 @@
   (let [p (:primitives c)
         pos (u/self-pos c)
         failed (:failed-air (ctx/mem c))
-        surface (breath/nearest-air p pos (air-radius) (reach) failed false)
-        pocket (when-not surface (breath/nearest-pocket p pos (air-radius) (depth) failed))
+        surface (breath/nearest-air p pos (swim/air-radius) (swim/reach) failed false)
+        pocket (when-not surface (breath/nearest-pocket p pos (swim/air-radius) (depth) failed))
         swim-ms (* (:steps pocket 0) (breath/swim-ms))
         pocket? (and pocket
                      (< swim-ms (breath/air-left-ms (.self p)))
@@ -186,7 +184,7 @@
   with those spent a footing block for the pocket, then a cap dig that fits all the air left. True on progress; nil
   after a failed try, the pocket's and the cap's reasons kept for the stop."
   [c]
-  (let [target (await (breath/find-air! c (u/self-pos c) (radius) (reach)))
+  (let [target (await (breath/find-air! c (u/self-pos c) (radius) (swim/reach)))
         site (when (or (nil? target) (pos? (:failures (ctx/mem c) 0))) (await (pocket/site! c)))
         _ (when (:why site) (ctx/update-mem! c assoc :pocket (:why site)))
         far (when (:cells site) (await (go-air! c)))

@@ -96,7 +96,7 @@
    ::held-near {:default 4 :doc "Blocks from where a leg failed within which its way still holds others back." :spec (a/num-in 0 nil)}
    ::near-sight {:default 6 :doc "Within this many blocks a look misses no animal: a noted animal not seen there is taken as gone." :spec (a/num-in 0 nil)}
    ::stand-cap {:default 48 :doc "Stand cells one choice reads; past it :more says candidates are left for the next step." :spec (a/int-in 0 nil)}})
-(defn max-distance [] (settings/get settings ::max-distance))
+(defn distance-limit [] (settings/get settings ::max-distance))
 (defn time-s [] (settings/get settings ::job-time-s))
 (defn max-failed-in-row [] (settings/get settings ::max-failed-in-row))
 (defn wait-ms [] (settings/get settings ::wait-ms))
@@ -326,7 +326,7 @@
 
 (defn candidates [c m]
   (let [{:keys [pattern heading]} (:args c)
-        max-distance (max-distance)
+        max-distance (distance-limit)
         spacing (leg-spacing)
         [ox _ oz] (:origin m)
         [x _ z] (here c)]
@@ -371,7 +371,7 @@
   points passed over for now (held?, m's :blocked)}; an unloaded column is not tried, so a later round looks again (m's
   :deferred ones are kept out of this sweep)."
   [c m names ns]
-  (let [max-distance (max-distance)
+  (let [max-distance (distance-limit)
         [ox y oz] (here c)
         origin [((:origin m) 0) ((:origin m) 2)]
         tried (into (set (:tried m)) (map (fn [{[x _ z] :pos}] [x z])) (:deferred m))
@@ -474,7 +474,7 @@
   "Look round; end when enough is found or the legs are used up, else start the next leg."
   [c]
   (let [{:keys [use-notes] want :count} (:args c)
-        max-distance (max-distance)
+        max-distance (distance-limit)
         names (targets c)
         resumed (:choosing (ctx/mem c))
         _ (when-not (or resumed (breath/in-water? (:primitives c))) (await (scan! c names)))

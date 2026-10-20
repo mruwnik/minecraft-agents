@@ -15,6 +15,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.sense :as sense]
             [jobs.lib.shore :as shore]
+            [jobs.lib.swim :as swim]
             [jobs.lib.util :as u]
             [jobs.survival.breathe.air :as air]))
 
@@ -220,7 +221,7 @@
   (let [fx (js/Math.floor (:x pos)) fy (js/Math.floor (:y pos)) fz (js/Math.floor (:z pos))]
     (some (fn [k]
             (let [x (+ fx (* hx k)) z (+ fz (* hz k))
-                  cell (when (<= (hdist {:x x :z z} start) (swim-range)) (breath/surface-in-column p x z fy (air/reach)))]
+                  cell (when (<= (hdist {:x x :z z} start) (swim-range)) (breath/surface-in-column p x z fy (swim/reach)))]
               (when (and cell (= "water" (u/seen-name p cell))) cell)))
           (range (leg-length) (dec (min-leg)) -1))))
 
@@ -303,7 +304,7 @@
   go-to onto land within the search-radius setting, a swim leg, then stopped :no_land_in_range. :done when out of the water."
   [c]
   (let [p (:primitives c)
-        pos (surface-pos p (u/self-pos c) (air/reach))
+        pos (surface-pos p (u/self-pos c) (swim/reach))
         _ (when-not (:start (ctx/mem c))
             (let [{:keys [start failed]} (initial-search (ctx/entries c :breathe-afloat) pos)]
               (ctx/update-mem! c assoc :start (or start (u/self-pos c)) :failed-headings failed)))
@@ -355,7 +356,7 @@
 (defn air-stop-fields
   "The :no-air data from the run's memory m: a cap or pocket the run never reached is :not-tried, not :no-cap."
   [m]
-  {:air-radius (air/air-radius) :cap (:cap m :not-tried) :pocket (:pocket m :not-tried)})
+  {:air-radius (swim/air-radius) :cap (:cap m :not-tried) :pocket (:pocket m :not-tried)})
 
 (defn fail-air!
   "fail! for :no-air: the stop says how far air was searched and why no pocket and no cap gave air."
