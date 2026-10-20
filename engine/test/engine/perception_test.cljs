@@ -170,6 +170,12 @@
       (perception/step! per))
     (is (every? #(= "stone" (seen-name per %)) ahead))))
 
+(deftest a-pass-casts-the-ground-ahead-before-the-grid
+  (let [{:keys [per]} (rig (tu/box -15 63 -15 15 63 15 "stone") {:pass-ms 1000 :step-ms 50})
+        _ (perception/step! per)
+        floor (for [z (range 4 13) x [-1 0 1]] [x 63 z])]
+    (is (>= (count (filter #(seen-name per %) floor)) 10) "the first twentieth of a pass already shows much of the floor ahead")))
+
 (deftest a-forced-look-drops-the-pass-in-flight
   (let [{:keys [p per]} (rig {} {:pass-ms 1000 :step-ms 50})]
     (perception/step! per)

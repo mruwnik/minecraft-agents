@@ -211,10 +211,10 @@
           ground (ground-rays opts hx hy (.-yaw eye) (.-pitch eye) jx jy)]
       (set! (.-pass st) #js {:next 0 :jx jx :jy jy :cols cols :rows rows :ground ground
                              :total (+ (* cols rows) (/ (.-length ground) 2)) :why why})
-      (let [^js pass (.-pass st) tiles (js/Math.ceil (/ (.-total pass) tile-rays))]
+      (let [^js pass (.-pass st) tiles (js/Math.ceil (/ (* cols rows) tile-rays))]
         (set! (.-tiles pass) tiles)
         (set! (.-stride pass) (stride-of tiles))
-        (set! (.-span pass) (* tiles tile-rays)))
+        (set! (.-span pass) (+ (/ (.-length ground) 2) (* tiles tile-rays))))
       (count-why! st why :passes 1)
       (set! (.-passRays st) (.-span (.-pass st))))))
 
@@ -267,7 +267,7 @@
   [{:keys [grid]} ^js pass ^js eye from to]
   (let [{:keys [hx hy]} grid
         cols (.-cols pass) n-grid (* cols (.-rows pass))
-        ^js ground (.-ground pass)
+        ^js ground (.-ground pass) n-ground (/ (.-length ground) 2)
         yaw (.-yaw eye)
         b (basis yaw (.-pitch eye))
         fx (- (js/Math.sin yaw)) fz (- (js/Math.cos yaw)) rx (js/Math.cos yaw) rz (- (js/Math.sin yaw))
@@ -279,25 +279,26 @@
     (loop [q from]
       (when (< q to)
         (let [j (- q from)
-              k (+ (* tile-rays (mod (* (quot q tile-rays) (.-stride pass)) (.-tiles pass))) (mod q tile-rays))]
+              g (- q n-ground)
+              k (+ (* tile-rays (mod (* (quot g tile-rays) (.-stride pass)) (.-tiles pass))) (mod g tile-rays))]
           (cond
-            (>= k (.-total pass)) (aset out (* 3 j) js/NaN)
-            (< k n-grid)
+            (and (>= g 0) (>= k n-grid)) (aset out (* 3 j) js/NaN)
+            (>= g 0)
             (let [a (+ (- hx) (* du (+ (mod k cols) (.-jx pass))))
                   v (+ (- hy) (* dv (+ (js/Math.floor (/ k cols)) (.-jy pass))))]
               (put! j (+ (aget b 0) (* a (aget b 3)) (* v (aget b 6)))
                     (+ (aget b 1) (* v (aget b 7)))
                     (+ (aget b 2) (* a (aget b 5)) (* v (aget b 8)))))
             :else
-            (let [i (* 2 (- k n-grid)) d (aget ground i) l (aget ground (inc i))
+            (let [i (* 2 q) d (aget ground i) l (aget ground (inc i))
                   dx (+ (* d fx) (* l rx)) dy (- game/eye-height) dz (+ (* d fz) (* l rz))]
               (if (in-cone? b hx hy dx dy dz) (put! j dx dy dz) (aset out (* 3 j) js/NaN)))))
         (recur (inc q))))
     out))
 
 (defn cast-slice!
-  "Casts rays [from, to) of the pass from the eye's current place and look: the grid, then the ground rows (along the
-  eye's yaw now, and only those still inside the view cone). Returns the cells entered."
+  "Casts rays [from, to) of the pass from the eye's current place and look: the ground rows first (along the
+  eye's yaw now, and only those still inside the view cone), then the grid in tiles. Returns the cells entered."
   [{:keys [raw opts] :as per} ^js st ^js pass ^js eye from to now]
   (let [^js sight (.-sight st)
         store (store-of st (.-dimension eye))]
