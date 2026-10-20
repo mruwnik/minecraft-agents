@@ -33,7 +33,7 @@
   A body more than 16 blocks from the pen first walks within 12 of it.
   The adults listed within :radius of the body before that walk are remembered; once the body stands at the pen and none is listed any
   more (a server loads animals only near the body), it walks back to within 12 of each remembered spot to see it again.
-  A lured animal follows the food only within about 10 blocks: from where it was met the body walks to the pen in short legs,
+  A lured or led animal follows only within about 10 blocks: from where it was met the body walks to the pen in short legs,
   holding still while the animal trails more than 7 behind, and gives it up (given-up :lost unseen 3 s after a walk back to where it was last seen, :animal-stalled when it stops coming nearer for 10 s) rather than outrun it.
 
   The pen checks. At the start the pen as the body sees and remembers it is judged (a start condition, the setting herd-pen/precheck? false
@@ -195,22 +195,22 @@
   {:uses {:job-time [0 (* 60 (max 1 (:target (:args c) 2))) ##Inf]}})
 
 (defn lure-lost!
-  "The lured animal is given up (reason :lost, unseen; :animal-stalled, seen but not coming; :unreachable); the run goes on as when nobody is led."
+  "The led or lured animal is given up (reason :lost, unseen; :lead-broke; :animal-stalled, seen but not coming; :unreachable); the run goes on as when nobody is led."
   [c reason]
   (let [k (:animal (ctx/mem c))]
-    (ctx/emit! c :herd.lure-lost :info {:animal k :reason reason :text (str "herd gives up the lured " (:mob (:args c)) ": " (if (= :animal-stalled reason) "it stopped following" (name reason)))})
+    (ctx/emit! c :herd.lure-lost :info {:animal k :reason reason :text (str "herd gives up the " (if (lure? c) "lured " "led ") (:mob (:args c)) ": " (if (= :animal-stalled reason) "it stopped following" (name reason)))})
     (ctx/update-mem! c #(-> % (assoc :led []) (update :given-up assoc k reason) (dissoc :unseen-since :progress :waiting :back-to :search-rounds)))
     (regather-or-lose! c)))
 
 (defn ^:async lure-approach!
-  "The walk to the pen's first cell with a lured animal: an animal follows the food only within follow-range, so the body
+  "The walk to the pen's first cell with a led or lured animal: an animal follows the food only within follow-range (a lead is 10 long), so the body
   goes in short go-to legs and, by escort/follow-verdict, holds still (or walks back toward the last sighting) while the
   animal trails more than (escort/safe-gap); unseen long, or seen and not coming nearer, it is given up. The last leg is settle-at!'s."
   [c]
   (let [m (ctx/mem c)
         a (animal-now c (:animal m))
         target (u/cell-pos (nth (:axis m) 0))
-        verdict (escort/follow-verdict c a true (escort/safe-gap))]
+        verdict (escort/follow-verdict c a (or (lure? c) (nil? a) (animals/led-by-me? a)) (escort/safe-gap))]
     (if verdict
       (if (= :wait verdict)
         (do (await (escort/wait-for-animal! c :never)) :continue)
@@ -234,7 +234,7 @@
                       (await (survey! c))))
       :regather (await (regather! c))
       :leash (await (leash-next! c))
-      :approach (if (and (lure? c) (not (:walked m)))
+      :approach (if-not (:walked m)
                   (await (lure-approach! c))
                   (await (settle-at! c 0 (settle-out-ms) #(set-phase! c :clear-out))))
       :clear-out (await (wait-clear! c (crowded-near? c (axis-cell in-1) (crowd-out-radius)) (crowd-ms) :out
@@ -294,7 +294,7 @@
         lead-phase? (contains? leading phase)]
     (when (and gate (gate-open? c)) (hold-gate! c))
     (cond
-      (and lead-phase? (not (and (= :approach phase) (lure? c) (not (:walked (ctx/mem c))))) (pos? (prune-led! c)) (empty? (:led (ctx/mem c)))) (regather-or-lose! c)
+      (and lead-phase? (not (and (= :approach phase) (not (:walked (ctx/mem c))))) (pos? (prune-led! c)) (empty? (:led (ctx/mem c)))) (regather-or-lose! c)
       :else (do (when lead-phase? (await (watch/watch! c {})))
                 (await (step! c phase))))))
 

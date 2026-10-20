@@ -1480,3 +1480,27 @@
             (is (= 1 (:inside e)) "the cow in the pen counts though the pen is out of sight")
             (is (re-find #"1 of 2" (:text e)))
 ))))))
+
+(deftest a-led-cow-that-drops-out-of-sight-on-the-way-is-waited-for-not-given-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (setup (world {:entities [(cow 1 -40 3)] :blocks far-ground})) {:target 1 :radius 60})
+              phase (atom :before)]
+          (doseq [act ["steer" "wait"]]
+            (.override (.-world (:p s)) act
+                       (fn [token a impl]
+                         (when (= "wait" act) (swap! (:clock s) + (or (.-ms a) 0)))
+                         (.then (impl token a)
+                                (fn [r]
+                                  (when (and (= :before @phase) (seq (on-lead s)))
+                                    (reset! phase :hidden)
+                                    (set-x! s 1 -500))
+                                  (when (and (= :hidden @phase) (= "wait" act))
+                                    (reset! phase :back)
+                                    (set-x! s 1 (- (self-x s) 2)))
+                                  r)))))
+          (await (run-ticks s 900))
+          (let [e (done-event s)]
+            (is (= :brought (:reason e)) (pr-str (select-keys e [:reason :given-up])))
+            (is (empty? (:given-up e)))))))))
