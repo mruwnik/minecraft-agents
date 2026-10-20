@@ -12,6 +12,7 @@
             [jobs.lib.world-files :as world-files]
             [jobs.lib.breath :as breath]
             [jobs.lib.shore :as shore]
+            [jobs.lib.swim :as swim]
             [jobs.survival.breathe :as b]
             [jobs.survival.breathe.air :as air]
             [engine.fake :as fake]
@@ -40,7 +41,7 @@
 (def defaults {})
 
 (def knobs
-  {:radius :jobs.survival.breathe.air/radius :air-radius :jobs.survival.breathe.air/air-radius :reach :jobs.survival.breathe.air/reach
+  {:radius :jobs.survival.breathe.air/radius :air-radius :jobs.lib.swim/air-radius :reach :jobs.lib.swim/reach
    :shore-radius :jobs.survival.breathe/shore-radius :search-radius :jobs.survival.breathe/search-radius
    :leg-length :jobs.survival.breathe/leg-length :swim-range :jobs.survival.breathe/swim-range
    :max-legs :jobs.survival.breathe/max-legs})
@@ -1373,11 +1374,11 @@
       (is (nil? (breath/side-cell p (.self p))) below))))
 
 (deftest a-swim-is-progress-only-above-the-best-height-reached
-  (is (air/rose? nil 64 65) "first rise")
-  (is (not (air/rose? 65 64 65)) "pushed back down, back to the best: no progress")
-  (is (air/rose? 65 64 66) "above the best")
-  (is (air/rose? 65 66 67) "carried up between passes, then a block more")
-  (is (not (air/rose? nil 64 64)) "no rise"))
+  (is (swim/rose? nil 64 65) "first rise")
+  (is (not (swim/rose? 65 64 65)) "pushed back down, back to the best: no progress")
+  (is (swim/rose? 65 64 66) "above the best")
+  (is (swim/rose? 65 66 67) "carried up between passes, then a block more")
+  (is (not (swim/rose? nil 64 64)) "no rise"))
 
 (defn drag-tunnel
   "A water tunnel x 0..9, z -1..1 (feet y 64, head y 65) under a stone ceiling at y 66, a glass cap over the body (never

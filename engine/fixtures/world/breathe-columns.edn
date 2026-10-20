@@ -100,7 +100,7 @@
             [:set [19 4 16] "glowstone"]]
    ;; the pocket (x 18..21) is 12+ from the body: past the default air-radius setting 8
    :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
-               :job (jobs.survival.breathe {:settings {:jobs.survival.breathe.air/air-radius 16}})}]
+               :job (jobs.survival.breathe {:settings {:jobs.lib.swim/air-radius 16}})}]
    :body {:at [6.5 1 16.5] :yaw 270}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :job :kind :child_started :data {:slot :air}} :within-s 40}

@@ -25,7 +25,7 @@
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.movement.go-to.column :as column]
-            [jobs.survival.breathe.air :as breathe-air]
+            [jobs.lib.swim :as swim]
             [jobs.movement.go-to.tuning :as tuning]))
 
 (def max-surfacings "Walks to air one go-to call makes at most." 3)
@@ -108,19 +108,19 @@
   "Look for air (up the own column first, then the columns beside it, breath/find-air!), else read seen air within
   the air-radius setting of survival.breathe, and walk one round (near/walk-round! with walk-opts) to that surface cell, range 0: a way to air, whose
   drowning is priced, not refused; why starts its go-to.surfacing info. With no air known and the own column open, swims
-  up it blind (breathe.air/swim-up!); with the column not open (a block seen over it), look-again! toward goal. counted is called
+  up it blind (swim/swim-up!); with the column not open (a block seen over it), look-again! toward goal. counted is called
   when it swims. True when it walked there or on (the caller plans again); nil when no air is known and nothing is left
   to look at."
   [c walk-opts goal why counted]
   (let [p (:primitives c)
         pos (u/self-pos c)
         target (or (await (breath/find-air! c pos (:radius look-args) (:reach look-args)))
-                   (breath/nearest-air p pos (breathe-air/air-radius) (:reach look-args) nil false))]
+                   (breath/nearest-air p pos (swim/air-radius) (:reach look-args) nil false))]
     (if-not target
       (if (breath/column-open? p (js/Math.floor (:x pos)) (js/Math.floor (:z pos)) (js/Math.floor (:y pos)) (:reach look-args))
         (do (counted)
             (ctx/emit! c :go-to.surfacing :info {:text (str why ", nothing seen above: swimming up blind")})
-            (true? (await (breathe-air/swim-up! c nil))))
+            (true? (await (swim/swim-up! c nil))))
         (await (look-again! c pos goal)))
       (do
         (counted)
