@@ -179,10 +179,12 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (h/setup {:entities [(led 1 3)]})
-              waits (atom 0)]
+              waits (atom 0)
+              whys (atom [])]
           (.override (.-world p) "interact" (fn [_token _args _impl] #js {:status "no-effect" :consumed 0 :worn 0 :love false :leash nil :changed #js {}}))
           (.override (.-world p) "wait"
                      (fn [token args impl]
+                       (swap! whys conj (some-> (.-why args) name))
                        (when (= 2 (swap! waits inc))
                          (swap! (fake/state p) update :entities (partial mapv #(assoc % :leashed false :leashed-to-me false))))
                        (impl token args)))
@@ -190,7 +192,8 @@
           (await (run-ticks s 8 700))
           (is (finished? s))
           (is (= :unleashed (:reason (done-event s))))
-          (is (<= 2 @waits)))))))
+          (is (<= 2 @waits))
+          (is (some #{"unleash-settling"} @whys) "the settle poll is a noop pause child"))))))
 
 (deftest unleash-follows-zones-and-claims
   (async done

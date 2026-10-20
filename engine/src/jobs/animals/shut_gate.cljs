@@ -147,12 +147,9 @@
 (defn ^:async clear-of-animals?
   "Whether no animal stands in the gate's cell, after waiting out one for pass/shut-waits waits of pass/shut-wait-ms."
   [c cell]
-  (let [col (pass/column-of (u/cell-pos cell) {})]
-    (loop [n 0]
-      (cond
-        (empty? (pass/animals-in c col)) true
-        (>= n (pass/shut-waits)) false
-        :else (do (await (ctx/act c :wait #js {:ms (pass/shut-wait-ms)})) (recur (inc n)))))))
+  (let [col (pass/column-of (u/cell-pos cell) {})
+        r (await (child/poll! c #(empty? (pass/animals-in c col)) (pass/shut-wait-ms) (pass/shut-waits) :animal-in-the-gate))]
+    (if (= :continue r) :continue (boolean r))))
 
 (defn ^:async click!
   "Shut the gate at cell with a jobs.access.toggle child (the body is in reach): nil when shut, :continue while it waits
@@ -181,8 +178,9 @@
     (case (await (read-gate! c cell))
       :shut :was-shut
       :unknown :unseen
-      (if-not (await (clear-of-animals? c cell))
-        :animal-in-the-way
+      (case (await (clear-of-animals? c cell))
+        :continue :continue
+        false :animal-in-the-way
         (loop [n 1]
           (let [reason (await (click! c cell))]
             (cond

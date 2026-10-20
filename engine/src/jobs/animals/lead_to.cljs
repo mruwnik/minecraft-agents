@@ -5,6 +5,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
+            [jobs.lib.child :as child]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
@@ -365,11 +366,8 @@
   "True once the animal is held by something else than this body, looking tries more times a beat apart: the
   state lands a tick or two after the click."
   [c tries]
-  (cond
-    (tied? c) true
-    (zero? tries) false
-    :else (do (await (ctx/act c :wait #js {:ms (tie-settle-ms)}))
-              (await (await-tied! c (dec tries))))))
+  (let [r (await (child/poll! c #(tied? c) (tie-settle-ms) tries :tie-settling))]
+    (if (= :continue r) :continue (boolean r))))
 
 (defn ^:async tie! [c]
   (let [fence (:fence (:args c))
@@ -379,11 +377,13 @@
       (let [r (await (ctx/act c :useOn (clj->js {:pos fence})))
             tries (inc (:ties (ctx/mem c) 0))]
         (ctx/update-mem! c assoc :ties tries)
-        (cond
-          (await (await-tied! c (tie-settle-tries))) (do (ctx/update-mem! c assoc :still-led false :gathered true) (finish! c :tied))
-          (>= tries (max-ties)) (finish! c :tie-failed)
-          :else (do (ctx/emit! c :lead-to.tie-retry :info {:status (.-status r) :text "the post did not take the animal, trying once more"})
-                    :again))))))
+        (let [tied (await (await-tied! c (tie-settle-tries)))]
+          (cond
+            (= :continue tied) :continue
+            tied (do (ctx/update-mem! c assoc :still-led false :gathered true) (finish! c :tied))
+            (>= tries (max-ties)) (finish! c :tie-failed)
+            :else (do (ctx/emit! c :lead-to.tie-retry :info {:status (.-status r) :text "the post did not take the animal, trying once more"})
+                      :again)))))))
 
 (defn ^:async arrive! [c]
   (let [{:keys [gathered gather-dist]} (ctx/mem c)

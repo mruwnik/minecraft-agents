@@ -21,6 +21,18 @@
   [c seconds why]
   (ctx/call c :pause 'jobs.time.noop {:seconds seconds :why why}))
 
+(defn ^:async poll!
+  "Read (look) now and again after each pause of ms, tries pauses at most: the first truthy reading, nil when none
+  came, :continue when a pause was cut (the caller yields and polls again on resume)."
+  [c look ms tries why]
+  (loop [n tries]
+    (let [v (look)]
+      (cond
+        v v
+        (zero? n) nil
+        :else (let [e (await (pause! c (/ ms 1000) why))]
+                (if (= :continue e) :continue (recur (dec n))))))))
+
 (defn fruitless
   "Rounds in a row of slot's child that brought nothing (counted with fruitless!), kept in job memory."
   [c slot]

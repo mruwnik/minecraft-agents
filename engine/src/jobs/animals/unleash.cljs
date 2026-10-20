@@ -175,12 +175,10 @@
   :handed when knot? and it is on this body's lead, else :unchanged. A removed knot lets go a tick or two after
   the click."
   [c k knot? tries]
-  (cond
-    (freed? c k) :freed
-    (and knot? (handed-over? c k)) :handed
-    (zero? tries) :unchanged
-    :else (do (await (ctx/act c :wait #js {:ms (settle-ms)}))
-              (await (await-state! c k knot? (dec tries))))))
+  (or (await (child/poll! c #(cond (freed? c k) :freed
+                                   (and knot? (handed-over? c k)) :handed)
+                          (settle-ms) tries :unleash-settling))
+      :unchanged))
 
 (defn ^:async click!
   "Click target with an empty hand and book what became of animal."
@@ -190,6 +188,7 @@
     (cond
       (= :continue r) :continue
       (#{:used :no-effect} (:status r)) (case (await (await-state! c k (not (animals/led-by-me? animal)) (settle-tries)))
+                                          :continue :continue
                                           :freed (ctx/update-mem! c #(-> % (update :freed (fnil conj []) k) (assoc :in-row 0)))
                                           :handed (ctx/update-mem! c assoc :in-row 0)
                                           (do (animals/give-up! c k :no-effect) (animals/bump-row! c)))
