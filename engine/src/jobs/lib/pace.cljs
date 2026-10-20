@@ -1,7 +1,8 @@
 (ns jobs.lib.pace
   "The timer a job's loop awaits between steps."
   (:require [engine.contract :as contract]
-            [engine.ctx :as ctx]))
+            [engine.ctx :as ctx]
+            [jobs.lib.waits :as waits]))
 
 (def pace-ms "The timer awaited between two steps, so a loop with no act never starves the event loop." 50)
 
@@ -14,10 +15,12 @@
   "A whole attempt made of steps: call (step) again, a pace! between, while it resolves to :again, the job's goal does
   not hold (ctx/done) and its can-run? holds (ctx/can-run); then resolve to what it gave. Between steps a goal that
   holds ends the job :done, a :never impossible, a :later or :look yields a listed root job (:continue); a reflex or a called child ends condition-failed.
-  A cut round resolves to :continue."
+  A cut round resolves to :continue. A reflex never gives :continue: a step's :continue is another step, or, when a
+  child waits on the world (child-wait), the condition-failed ending with that reason, as stepping on would spin."
   [c step]
   (loop []
-    (let [r (await (step))]
+    (let [r (await (step))
+          r (if (and (= :continue r) (:reflex c) (ctx/alive? c)) (or (waits/reflex-wait-end c) :again) r)]
       (if (or (not= :again r) (not (ctx/alive? c)))
         (if (= :again r) :continue r)
         (if-let [e (ctx/done c)]
