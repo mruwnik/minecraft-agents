@@ -8,7 +8,7 @@
 (defn floor?
   "Whether a block name can be stood on: not air, a fluid, a plant or a hazard."
   [below]
-  (boolean (and below (not (b/air below)) (not (b/fluids below)) (not (b/clearable below))
+  (boolean (and below (not (bs/air below)) (not (bs/fluids below)) (not (b/clearable below))
                 (not (contains? unsafe-below below)))))
 
 (defn land-cell?
