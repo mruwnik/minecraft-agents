@@ -1063,7 +1063,7 @@
                                       :entities [(assoc (enderman -2.5 64 0.5) :angry true)]})]
           (.override (.-world p) "steer"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (fake/swap-self! p assoc :pos [3.5 64 1.5])
-                                                                        (swap! (fake/state p) assoc :entities [(enderman -2.5 64 0.5)]) r)))))
+                                                                        (swap! (fake/state p) assoc :entities [(enderman -14.5 64 0.5)]) r)))))
           (core/submit! eng retreat {})
           (await (core/tick! eng))
           (is (= 1 (count (calls p "steer"))) "the one step into the water, no flee step out of it once the enderman looks calm")
