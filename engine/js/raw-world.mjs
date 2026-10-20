@@ -233,6 +233,7 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
     return tables
   }
 
+  let lastEye = null // eye() hands out the same object while the body has not moved or turned
   let range = { minY: NaN, sections: NaN }
   return {
     stateAt,
@@ -250,7 +251,10 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
       const bot = follow()
       const e = bot?.entity
       if (!e?.position || isOffline()) return null
-      return { x: e.position.x, y: e.position.y + EYE_HEIGHT, z: e.position.z, yaw: e.yaw ?? 0, pitch: e.pitch ?? 0, dimension: bot.game?.dimension ?? 'overworld' }
+      const y = e.position.y + EYE_HEIGHT; const yaw = e.yaw ?? 0; const pitch = e.pitch ?? 0; const dimension = bot.game?.dimension ?? 'overworld'
+      const l = lastEye
+      if (l && l.x === e.position.x && l.y === y && l.z === e.position.z && l.yaw === yaw && l.pitch === pitch && l.dimension === dimension) return l
+      return (lastEye = { x: e.position.x, y, z: e.position.z, yaw, pitch, dimension })
     },
     // collision boxes of the cell, local coordinates (0..1 across it): a solid block's shapes (a full box when it lists none), none for an unloaded or non-solid cell
     shapesAt: (x, y, z) => {

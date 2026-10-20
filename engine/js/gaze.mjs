@@ -32,13 +32,23 @@ const seen = (bot, eye, target) => {
   return true
 }
 
+const NONE = []
 const eyesInSight = bot => {
-  const eye = bot.entity.position.offset(0, bot.entity.eyeHeight ?? constants.eyeHeight, 0)
-  return Object.values(bot.entities ?? {})
-    .filter(e => e?.name === 'enderman' && e.position && e.position.distanceTo(eye) <= RANGE)
-    .map(e => e.position.offset(0, ENDERMAN_EYE, 0))
-    .filter(t => seen(bot, eye, t))
-    .map(target => ({ eye, target }))
+  const entities = bot.entities
+  if (!entities) return NONE
+  let eye = null
+  let out = NONE
+  for (const id in entities) {
+    const e = entities[id]
+    if (e?.name !== 'enderman' || !e.position) continue
+    eye ??= bot.entity.position.offset(0, bot.entity.eyeHeight ?? constants.eyeHeight, 0)
+    if (e.position.distanceTo(eye) > RANGE) continue
+    const target = e.position.offset(0, ENDERMAN_EYE, 0)
+    if (!seen(bot, eye, target)) continue
+    if (out === NONE) out = []
+    out.push({ eye, target })
+  }
+  return out
 }
 
 export const safePitch = (bot, yaw, pitch) => {

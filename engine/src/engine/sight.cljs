@@ -11,8 +11,8 @@
         step (fn [d] (js/Math.sign d))
         t-delta (fn [d] (if (zero? d) js/Infinity (js/Math.abs (/ 1 d))))
         t-max (fn [d c f td] (cond (zero? d) js/Infinity (pos? d) (* (- (inc c) f) td) :else (* (- f c) td)))
-        [sx sy sz] [(step dx) (step dy) (step dz)]
-        [tdx tdy tdz] [(t-delta dx) (t-delta dy) (t-delta dz)]
+        sx (step dx) sy (step dy) sz (step dz)
+        tdx (t-delta dx) tdy (t-delta dy) tdz (t-delta dz)
         budget (+ (js/Math.abs (- ex cx)) (js/Math.abs (- ey cy)) (js/Math.abs (- ez cz)))]
     (loop [i 0 cx cx cy cy cz cz mx (t-max dx cx fx tdx) my (t-max dy cy fy tdy) mz (t-max dz cz fz tdz)]
       (if (>= i budget)

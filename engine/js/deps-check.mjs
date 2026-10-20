@@ -10,6 +10,7 @@ export const PATCHES = Object.freeze([
   ['node_modules/prismarine-physics/index.js', 'patched by bot/patch-deps.mjs: open trapdoor over a ladder', 'trapdoor over a ladder'],
   ['node_modules/prismarine-physics/index.js', 'patched by bot/patch-deps.mjs: depth strider from the item', 'depth strider'],
   ['node_modules/prismarine-physics/index.js', 'patched by bot/patch-deps.mjs: vanilla swimming', 'swimming'],
+  ['node_modules/prismarine-physics/index.js', 'patched by bot/patch-deps.mjs: no Version per tick', 'shared registry'],
   ['node_modules/mineflayer/lib/plugins/entities.js', 'patched by bot/patch-deps.mjs: my own air', 'own air only'],
   ['node_modules/mineflayer-pathfinder/lib/physics.js', 'patched by bot/patch-deps.mjs: scaffold descent preview', 'scaffold descent preview'],
   ['node_modules/mineflayer-pathfinder/index.js', 'patched by bot/patch-deps.mjs: scaffold descent driver', 'scaffold descent driver'],
