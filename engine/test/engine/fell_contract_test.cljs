@@ -119,7 +119,7 @@
       (fn ^:async t []
         (let [{:keys [end p]} (await (fell-ending (assoc ft/tall :inventory [] :lose-logs? true) 'jobs.forestry.fell-tree {:radius 10 :fetch false} 100))]
           (is (= {:kind :condition-failed :cause :need} (kc end)))
-          (is (= ["dirt" "cobblestone"] (get-in end [:cause :any-of])))
+          (is (= ["dirt"] (get-in end [:cause :any-of])))
           (is (pos? (get-in end [:cause :count])))
           (is (= [] (filter #(= "jumpPlace" (.-name %)) (.-calls (.-world p))))))))))
 

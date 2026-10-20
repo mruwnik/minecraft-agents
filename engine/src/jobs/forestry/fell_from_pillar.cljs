@@ -15,6 +15,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.pillar :as pl]
             [jobs.lib.sense :as sense]
+            [jobs.lib.tools :as tools]
             [jobs.lib.trees :as trees :refer [dig-reach default-radius log-name? log-names]]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]))
@@ -26,7 +27,7 @@
   every block in the scaffold ledger), digs the logs in reach top-down (jobs.blocks.dig) and the cleanup export
   (jobs.access.cleanup) takes the pillar back however the call ends, a cut included (and when the call starts with
   this job's scaffold still open).
-  The pillar is built of dirt, cobblestone and the logs cut so far; with too few of those carried it gets the height in
+  The pillar is built of dirt, cobblestone (only with a pickaxe carried: the cleanup digs it back with one) and the logs cut so far; with too few of those carried it gets the height in
   blocks with jobs.lib.need unless :fetch is false.
   The build and dig, and the cleanup's take-back, are urgent sections (ctx/atomic): reflexes at or below that level wait for them, up to their caps.
   Zones: a pillar a zone, claim or footprint refuses ends :condition-failed :refused.
@@ -67,9 +68,10 @@
 (def fit? ready/fit?)
 
 (defn pillar-items
-  "The dirt and cobblestone names to build the pillar from, less any a :choose/override avoids."
+  "The dirt and cobblestone names to build the pillar from, less any a :choose/override avoids and any the body could
+  not take back (cobblestone without a pickaxe: the cleanup holds it :no-tool)."
   [c]
-  (choose/filler-names c :pillar))
+  (filterv #(not (tools/needs-tool-to-clear? (:primitives c) %)) (choose/filler-names c :pillar)))
 
 (defn base [c] (:base (:args c)))
 

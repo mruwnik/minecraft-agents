@@ -46,9 +46,13 @@
     (is (= {:item "cobblestone" :count 3} (escape/pillar-item c)))))
 
 (deftest the-pillar-and-mend-block-lists-skip-an-avoided-filler
-  (let [c (assoc (body [] {:chooser :fillers :avoid ["dirt"]}) :args {:block "stone"})]
+  (let [c (assoc (body [(stack "stone_pickaxe" 1)] {:chooser :fillers :avoid ["dirt"]}) :args {:block "stone"})]
     (is (= ["cobblestone"] (fell-from-pillar/pillar-items c)))
     (is (not-any? #{"dirt"} (mend/fillers c)))))
+
+(deftest the-pillar-is-not-built-of-cobblestone-the-cleanup-could-not-dig-back
+  (is (= ["dirt"] (fell-from-pillar/pillar-items (body [(stack "cobblestone" 4) (stack "stone_axe" 1)]))))
+  (is (= ["dirt" "cobblestone"] (fell-from-pillar/pillar-items (body [(stack "stone_pickaxe" 1)])))))
 
 (deftest an-unknown-purpose-throws
   (is (thrown? js/Error (choose/fillers-for (body []) :wall 1))))
