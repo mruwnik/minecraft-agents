@@ -108,7 +108,7 @@
      (let [p (fake-world/create spec)]
        (aset p "sensedAt" (sensed-by p))
        (cond (not (contains? spec :time)) p
-             (:light spec) (do (swap! (fake-world/state p) assoc :light (:light spec)) (aset p "rawWorld" (fake-raw/create p)) (seeing-all p))
+             (:light spec) (do (swap! (fake-world/state p) assoc :light (:light spec) :light-default (:light-default spec)) (aset p "rawWorld" (fake-raw/create p)) (seeing-all p))
              :else (with-sky-only p))))))
 
 (defn with-light-data

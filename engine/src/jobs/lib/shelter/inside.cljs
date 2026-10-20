@@ -1,6 +1,7 @@
 (ns jobs.lib.shelter.inside
   "Whether the body is shut in its shelter, safe from the night where it stands, and what a walk would leave."
   (:require [engine.ctx :as ctx]
+            [jobs.lib.click :as click]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]
             [jobs.lib.shelter.sense :as sh-sense]))
@@ -28,6 +29,12 @@
   [c]
   (in-own-shelter (:primitives c) (:data (ctx/latest c :shelter))))
 
+(defn open-door?
+  "Whether the {:cell} door entry stands open (a door or gate seen open)."
+  [p {:keys [cell]}]
+  (let [b (u/seen-block p cell)]
+    (and b (#{:openable :iron} (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))))
+
 (def tiny-room-cells
   "A closed room of at most this many cells is small enough to need no light: no mob spawns in it beside the body."
   2)
@@ -41,14 +48,15 @@
 
 (defn safe-from-night?
   "Whether the body is safe from the night where it stands (owner Q345): shut in a closed room under a roof
-  (sh-sense/shut-in-room?, so no way in for a walking mob) that is tiny (at most tiny-room-cells cells) or has no dark
+  (sh-sense/shut-in-room?) with no open door, so no way in for a walking mob, that is tiny (at most tiny-room-cells cells) or has no dark
   spawnable cell. A roof with open sides, a buried tunnel, a dark cave or a big dark room is not. The one test the night
   trigger, night-sheltered, walk-leaves-shelter?, the night job's end and the hold share."
   [p]
   (boolean
    (and (not (sh-sense/head-in-block? p)) (sh-sense/shut-in-room? p)
         (let [room (reach/room p (sh-sense/feet p))]
-          (or (<= (count (:cells room)) tiny-room-cells) (not (dark-spawn-inside? p room)))))))
+          (and (not-any? #(open-door? p %) (:doors room))
+               (or (<= (count (:cells room)) tiny-room-cells) (not (dark-spawn-inside? p room))))))))
 
 (defn night-sheltered
   "At night, awake and safe from it (safe-from-night?), the kind of shelter the body is in (:dug-in the one shelter says

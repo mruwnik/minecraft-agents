@@ -31,8 +31,13 @@
                 (fn [{:keys [p seen]}]
                   (is (seq (st/calls p "place")) "the body walled itself in under the roof instead of calling a hole in the wall roofed"))))
 
+(defn nothing-placed-at-the-start?
+  "No block was placed near the start (x below 5): a bare roof is no shelter, so the body may wall itself in at the home it walked to."
+  [p]
+  (not-any? #(< (:x (st/arg-pos %)) 5) (st/calls p "place")))
+
 (deftest a-closed-room-with-a-stale-bed-open-entry-ends-the-night-roofed
-  (run-night-in {:blocks st/bed-room}
+  (run-night-in {:blocks st/bed-room :light {} :light-default [15 14]}
                 (fn [{:keys [p]}]
                   (is (empty? (st/calls p "place")) "shut in: nothing to do")
                   (is (empty? (tu/walk-calls p))))))
@@ -51,8 +56,8 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (await (night-at-home lit-world {:x 10 :y 64 :z 0}))]
           (await (tu/run-until-empty eng 40))
-          (is (= [] (st/calls p "place")) "no pit dug")
-          (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z]))))))))
+          (is (nothing-placed-at-the-start? p) "no pit dug")
+          (is (= 10 (js/Math.floor (:x (st/pos-of p)))) "walked home"))))))
 
 (deftest a-lit-route-the-body-has-not-looked-at-yet-is-looked-at-before-digging-in
   (async done
@@ -60,8 +65,8 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (await (night-at-home lit-world {:x 10 :y 64 :z 0} {} {:unseen true}))]
           (await (tu/run-until-empty eng 40))
-          (is (= [] (st/calls p "place")) "no pit dug: the route was looked at, found lit, and walked")
-          (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z]))))))))
+          (is (nothing-placed-at-the-start? p) "no pit dug: the route was looked at, found lit, and walked")
+          (is (= 10 (js/Math.floor (:x (st/pos-of p)))) "walked home"))))))
 
 (deftest a-long-unlit-route-is-dug-in-where-the-body-is
   (async done
@@ -80,8 +85,8 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (await (night-at-home (update lit-world :light assoc [5 64 0] [15 0]) {:x 10 :y 64 :z 0}))]
           (await (tu/run-until-empty eng 40))
-          (is (= [] (st/calls p "place")) "one dark cell costs a little more, not a refusal: walked")
-          (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z]))))))))
+          (is (nothing-placed-at-the-start? p) "one dark cell costs a little more, not a refusal: walked")
+          (is (= 10 (js/Math.floor (:x (st/pos-of p)))) "walked home"))))))
 
 (deftest a-short-unlit-route-costs-less-than-digging-in-and-is-walked
   (async done
@@ -89,8 +94,8 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (await (night-at-home (assoc lit-world :light-default [15 0]) {:x 10 :y 64 :z 0}))]
           (await (tu/run-until-empty eng 40))
-          (is (= [] (st/calls p "place")) "10 dark blocks cost about twice a lit walk, still under the dig-in")
-          (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z]))))))))
+          (is (nothing-placed-at-the-start? p) "10 dark blocks cost about twice a lit walk, still under the dig-in")
+          (is (= 10 (js/Math.floor (:x (st/pos-of p)))) "walked home"))))))
 
 (deftest a-home-beyond-the-walk-radius-is-not-walked-to
   (async done
@@ -121,8 +126,8 @@
                                          #js {:unknown true :pos pos}
                                          (.call at p pos))))
           (await (tu/run-until-empty eng 40))
-          (is (= [] (st/calls p "place")) "no pit dug: walked home")
-          (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z]))))))))
+          (is (nothing-placed-at-the-start? p) "no pit dug: walked home")
+          (is (= 10 (js/Math.floor (:x (st/pos-of p)))) "walked home"))))))
 
 (deftest a-roofed-home-go-to-finds-no-way-to-is-not-walked-to
   (async done
@@ -324,6 +329,6 @@
         (let [{:keys [eng p seen]} (await (flee-home-night (update dark-world :blocks merge {"10,66,0" "stone"}) {}))]
           (await (tu/run-until-empty eng 80))
           (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z])) "walked to the roofed home")
-          (is (empty? (st/emitted seen :shelter.exposed)))
+          (is (seq (st/emitted seen :shelter.exposed)) "a bare roof is no shelter: the body holds exposed under it")
           (let [fled (st/emitted seen :shelter.fled)]
             (is (= [:roofed-place] (mapv :target fled)))))))))

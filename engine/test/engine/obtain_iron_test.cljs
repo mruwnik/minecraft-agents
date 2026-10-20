@@ -146,11 +146,15 @@
           (is (empty? (tu/walk-calls (:p s))) "no search walk at 0.5 hp")
           (is (= [:low-health] (distinct (map :reason (f/events-of s :waiting))))))))))
 
+(def st-pit
+  "A one-cell pit round the body at the origin: stone on its four sides at feet and head height and over it."
+  (into {"0,66,0" "stone"} (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] y [64 65]] [(str dx "," y "," dz) "stone"])))
+
 (deftest a-tree-seen-while-sheltered-at-night-waits-dark-not-no-source
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (assoc (ore-world (merge f/tree-blocks {"0,66,0" "stone"}) []) :time st/night) [f/own-zone])]
+        (let [s (f/start (assoc (ore-world (merge f/tree-blocks st-pit) []) :time st/night) [f/own-zone])]
           (doseq [pitch [-80 80 0]]
             (swap! (fake/state (:p s)) assoc :pitch pitch)
             (perception/pass! (aget (:p s) "perception")))
@@ -163,7 +167,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (assoc (ore-world (merge f/tree-blocks {"0,66,0" "stone" "1,64,4" "stone"}) []) :time st/night) [f/own-zone])]
+        (let [s (f/start (assoc (ore-world (merge f/tree-blocks (assoc st-pit "1,64,4" "stone")) []) :time st/night) [f/own-zone])]
           (doseq [pitch [-80 80 0]]
             (swap! (fake/state (:p s)) assoc :pitch pitch)
             (perception/pass! (aget (:p s) "perception")))

@@ -247,9 +247,10 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time night :blocks st/floor})
               call ctx/call]
-          ;; the dig-in leaves the body roofed some other way (a passer-by built over it), the night then ends :roofed
+          ;; the dig-in leaves the body roofed some other way (a passer-by walled and roofed it), the night then ends :roofed
           (set! ctx/call (fn ^:async f [c k sym a]
-                           (swap! (.-state (.-world p)) assoc-in [:blocks [0 66 0]] "stone")
+                           (doseq [cell [[0 66 0] [1 64 0] [-1 64 0] [0 64 1] [0 64 -1] [1 65 0] [-1 65 0] [0 65 1] [0 65 -1]]]
+                             (swap! (.-state (.-world p)) assoc-in [:blocks cell] "stone"))
                            (contract/ending :condition-failed :declined nil)))
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))

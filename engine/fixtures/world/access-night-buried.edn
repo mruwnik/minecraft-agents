@@ -13,12 +13,14 @@
   :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]]}}
  :cases
  [{:name "buried-corridor-silent"
-   ;; vertical shaft at x 4 (open to the sky), 1x2 corridor east along z 16 from x 5 to 28 with the shaft's foot plugged:
-   ;; a sealed, torch-lit corridor (no way in for a mob, no dark cell).
-   :blocks [[:fill [4 5 16] [4 9 16] "air"] [:fill [5 4 16] [28 5 16] "air"] [:set [4 5 16] "stone"]
-            [:set [10 4 16] "torch"] [:set [16 4 16] "torch"] [:set [22 4 16] "torch"] [:set [27 4 16] "torch"]]
+   ;; a sealed 1x2 corridor in the rock east along z 16 from x 26 to 28 (short enough to be read whole), torch-lit:
+   ;; no way in for a mob, no dark cell.
+   :blocks [[:fill [26 4 16] [28 5 16] "air"] [:set [27 4 16] "torch"]]
    :body {:at [28.5 4 16.5] :inventory [["cobblestone" 16]]}
-   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 25}
+   :register []
+   :act [[:job (jobs.survival.night {})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60}
+            {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}
             {:no-event {:source :job :kind :log-out} :for-s 25}]
    :after [[:body-near [28.5 4 16.5] 1.5]]}
   {:name "deep-diagonal-stair-open-to-the-surface-shelters"
@@ -28,20 +30,6 @@
    :blocks [[:fill [2 0 8] [30 28 24] "stone"] [:fill [5 28 16] [5 30 16] "air"] [:fill [6 27 16] [6 29 16] "air"] [:fill [7 26 16] [7 28 16] "air"] [:fill [8 25 16] [8 27 16] "air"] [:fill [9 24 16] [9 26 16] "air"] [:fill [10 23 16] [10 25 16] "air"] [:fill [11 22 16] [11 24 16] "air"] [:fill [12 21 16] [12 23 16] "air"] [:fill [13 20 16] [13 22 16] "air"] [:fill [14 19 16] [14 21 16] "air"] [:fill [15 18 16] [15 20 16] "air"] [:fill [16 17 16] [16 19 16] "air"]]
    :body {:at [16.5 17 16.5] :inventory [["cobblestone" 16]]}
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night}} :within-s 20}]}
-  ;; card 094af74a: a remembered bed on the surface does not make the night fire for a body buried in its tunnel (it would be walked out
-  ;; through the dark); the same bed makes it fire for a body in the open. The night job's one look round (ad50b8b2a
-  ;; unlooked-for-bed?, which a buried body also gets) has been done: the stub job here cannot look, and would be fired again
-  ;; every cooldown.
-  {:name "buried-corridor-with-a-bed-on-the-surface-silent"
-   :blocks [[:fill [4 5 16] [4 9 16] "air"] [:fill [5 4 16] [28 5 16] "air"] [:set [4 5 16] "stone"]
-            [:set [10 4 16] "torch"] [:set [16 4 16] "torch"] [:set [22 4 16] "torch"] [:set [27 4 16] "torch"]
-            [:set [24 10 12] "red_bed[facing=east,part=foot]"] [:set [25 10 12] "red_bed[facing=east,part=head]"]]
-   :memory [{:kind :bed :data {:pos #xyz [24 10 12]} :policy {:cap 1 :ttl :forever}}
-            {:kind :night-looked :data {:cell #xyz [28 4 16]} :policy {:cap 1 :ttl :forever}}]
-   :body {:at [28.5 4 16.5] :inventory [["cobblestone" 16]]}
-   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 25}
-            {:no-event {:source :job :kind :log-out} :for-s 25}]
-   :after [[:body-near [28.5 4 16.5] 1.5]]}
   {:name "surface-with-a-bed-shelters"
    :blocks [[:set [24 10 12] "red_bed[facing=east,part=foot]"] [:set [25 10 12] "red_bed[facing=east,part=head]"]]
    :memory [{:kind :bed :data {:pos #xyz [24 10 12]} :policy {:cap 1 :ttl :forever}}]

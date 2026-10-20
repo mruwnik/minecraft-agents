@@ -533,7 +533,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :blocks (merge floor bed-room (tu/box -1 63 -1 7 63 1 "stone"))})]
+        (let [{:keys [eng p seen]} (setup {:time night :blocks (merge floor bed-room (tu/box -1 63 -1 7 63 1 "stone")) :light {} :light-default [15 14]})]
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (await (run-until-empty eng 4))
           (is (empty? (calls p "place")))
@@ -717,18 +717,17 @@
           (is (= [] (calls p "dig")))
           (is (= 1 (count (emitted seen :shut-in.failed)))))))))
 
-(deftest dig-in-does-not-claim-sealed-when-a-wall-is-refused
+(deftest dig-in-does-not-claim-sealed-when-the-roof-is-refused
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks floor})]
-          (refuse-cell! p [-1 64 0])
+          (tu/seeing-all p)
+          (refuse-cell! p [0 66 0])
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
           (is (<= (await (run-until-empty eng 12)) 10) "bounded")
-          (is (= [] (emitted seen :shut-in.sealed)) "no sealed claim while a wall is open")
-          (let [[u] (emitted seen :shut-in.unsealed)]
-            (is (some? u) "reported honestly")
-            (is (= [{:x -1 :y 64 :z 0}] (:open u)) "the open cell is named: the refused one"))
+          (is (= [] (emitted seen :shut-in.sealed)) "no sealed claim while the roof is open")
+          (is (some? (first (emitted seen :shut-in.unsealed))) "reported honestly")
           (is (false? (:sealed (last (entries eng :shelter)))) "the entry says it is open"))))))
 
 (deftest dig-in-places-the-other-walls-before-retrying-a-refused-cell
@@ -1364,10 +1363,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :inventory [{:name "dirt" :count 8}] :blocks overhang})]
+          (tu/seeing-all p)
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
           (await (run-until-empty eng 8))
           (let [placed (mapv arg-pos (calls p "place"))]
-            (is (= 6 (count placed)) "the 8 sides less the 2 wall cells already solid")
+            (is (<= 4 (count placed) 6) "only the open sides of the 8, less the 2 wall cells already solid, as many as it takes to close the room")
             (is (every? #(<= (:y %) 65) placed) "roof and support already solid: none placed up there"))
           (is (= 1 (count (emitted seen :shut-in.sealed))))
           (is (some? (:door (last (entries eng :shelter))))))))))

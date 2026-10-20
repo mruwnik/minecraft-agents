@@ -8,6 +8,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.pace :as pace]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spent :as spent]
             [jobs.survival.dig-in-cells :as dig-cells]
@@ -28,14 +29,16 @@
       0)))
 
 (defn enclosed?
-  "Whether the world shows the body shut in: a roof within :roof-height over no open cell round the feet, or, with the call's
+  "Whether the world shows the body shut in: for :night safe from the night (sh-inside/safe-from-night?); else a roof within :roof-height over no open cell round the feet, or, with the call's
   :room way, a roof over a room that is not breached, with no open door."
   [c]
   (let [p (:primitives c)
         roof-height (:roof-height (:args c))]
-    (boolean (and (not (sh-sense/head-in-block? p))
-                  (or (dig-cells/sealed-in? p :walls roof-height)
-                      (and (ctx/way? c :room) (sh-sense/roofed? p roof-height) (not (sh/breached-home? p (ctx/view c))) (empty? (sh/open-room-doors p))))))))
+    (boolean (if (= :night (:for (:args c)))
+               (sh-inside/safe-from-night? p)
+               (and (not (sh-sense/head-in-block? p))
+                    (or (dig-cells/sealed-in? p :walls roof-height)
+                        (and (ctx/way? c :room) (sh-sense/roofed? p roof-height) (not (sh/breached-home? p (ctx/view c))) (empty? (sh/open-room-doors p)))))))))
 
 (defn placed
   "The spent summary and the blocks placed so far ({:cell [x y z] :item name}), for an ending's data."

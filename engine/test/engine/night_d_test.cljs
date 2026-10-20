@@ -249,11 +249,14 @@
           (is (> (.-food (.self p)) 5) "and eaten"))))))
 
 (defn roofed-carrier
-  "A held body with a carried furnace and a stone pickaxe; when roofed?, a roof over it, its own shelter and a bed to hold for."
+  "A held body with a carried furnace and a stone pickaxe; when roofed?, a lit walled and roofed room of two cells and the bed, its own shelter and a bed to hold for."
   [roofed?]
   (let [r (held-with-raw-beef nil [{:name "furnace" :count 1} {:name "stone_pickaxe" :count 1}])]
     (when roofed?
-      (fake/set-block! (:p r) [0 66 0] "stone")
+      (doseq [cell [[0 66 0] [-1 66 0] [-2 64 0] [-2 65 0] [-1 64 1] [-1 65 1] [-1 64 -1] [-1 65 -1] [0 64 1] [0 65 1] [0 64 -1] [0 65 -1] [1 65 0]]]
+        (fake/set-block! (:p r) cell "stone"))
+      (swap! (fake/state (:p r)) assoc :light {} :light-default [15 14])
+      (tu/with-light-data (:p r))
       (fake/set-block! (:p r) [1 64 0] "red_bed")
       (mem/write! (:store (:eng r)) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} {:cap 10 :ttl 1200000}))
     r))

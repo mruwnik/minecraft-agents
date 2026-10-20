@@ -97,7 +97,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z -7} long-hut-extra) {:inventory st/dirt-stack}))]
+        (let [{:keys [eng p]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z -7} long-hut-extra) {:inventory st/dirt-stack :light-default [15 14]}))]
           (core/submit! eng '(jobs.survival.night) {})
           (await (tu/run-until-empty eng 12))
           (is (false? (door-open? p)) "the door is shut")

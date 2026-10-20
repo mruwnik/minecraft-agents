@@ -4,7 +4,6 @@
   (:require [engine.args :as a]
             [engine.memory :as mem]
             [engine.settings :as settings]
-            [jobs.lib.click :as click]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]
@@ -81,19 +80,13 @@
 
 (defn door-key [{:keys [x y z]}] [x y z])
 
-(defn open-door?
-  "Whether the {:cell} door entry stands open (a door or gate seen open)."
-  [p {:keys [cell]}]
-  (let [b (u/seen-block p cell)]
-    (and b (#{:openable :iron} (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))))
-
 (defn open-room-doors
   "[{:cell :inside} ...]: the doors and gates standing open in the closed room around the body, the nearest first."
   [p]
   (when (sh-sense/roofed? p (sh-sense/room-roof-height))
     (let [self (u/self-pos {:primitives p})]
       (->> (:doors (reach/room p (sh-sense/feet p)))
-           (filter #(open-door? p %))
+           (filter #(sh-inside/open-door? p %))
            (sort-by #(u/dist self (:cell %)))))))
 
 (def breach-door-reach
@@ -108,7 +101,7 @@
       (when (breached-home? p view)
         (let [{:keys [x y z] :as self} (sh-sense/feet p)
               r (range (- breach-door-reach) (inc breach-door-reach))]
-          (->> (for [dx r dz r :let [e {:cell {:x (+ x dx) :y y :z (+ z dz)} :inside self}] :when (open-door? p e)] e)
+          (->> (for [dx r dz r :let [e {:cell {:x (+ x dx) :y y :z (+ z dz)} :inside self}] :when (sh-inside/open-door? p e)] e)
                (sort-by #(u/dist (u/self-pos {:primitives p}) (:cell %))))))))
 
 (defn open-room-door

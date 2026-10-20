@@ -58,13 +58,13 @@
           (is (every? #(contains? #{nil "air"} (some-> (.blockAt p (clj->js %)) .-name)) [{:x 1 :y 63 :z 0} {:x 1 :y 62 :z 0} {:x 0 :y 63 :z 1} {:x -1 :y 63 :z 0}])
               "nothing is placed under the wall cells inside the zone"))))))
 
-(deftest walls-under-a-leaf-roof-count-as-sealed
+(deftest walls-under-a-leaf-roof-do-not-count-as-sealed
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen]} (await (run-walls! {:inventory [{:name "dirt" :count 40}] :blocks (assoc pillar "0,66,0" "oak_leaves") :floor [0 0 0 0]}))]
-          (is (empty? (st/emitted seen :shut-in.unsealed)) "leaves stop a mob: the roof the wall cells already count")
-          (is (= 1 (count (st/emitted seen :shut-in.sealed)))))))))
+          (is (seq (st/emitted seen :shut-in.unsealed)) "leaves are no roof: rain and sky light come through")
+          (is (empty? (st/emitted seen :shut-in.sealed))))))))
 
 (defn refuses-under-the-body!
   "Make place fail for a cell the body's 0.62 wide, 1.8 high box overlaps, as the server does."

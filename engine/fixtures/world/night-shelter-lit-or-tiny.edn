@@ -1,31 +1,32 @@
 ;; Owner Q345: a closed room is shelter from the night only when no cell where a mob could spawn is dark, or when it is
-;; tiny; a roof with open sides is none. Stone hut x 8..16, z 8..16, y 0..3, room 9..15, body inside, at night (the
-;; night trigger reads the clock for "night" and the light of the room's cells for "safe"). The register holds :night -> a
-;; notify job: only whether the trigger fires is judged.
+;; tiny; a roof with open sides is none. Stone hut x 8..16, z 8..16, y 0..3, room 9..15, body inside, at night. The night
+;; job judges the room after its look round: in a shelter it ends :completed placing nothing; otherwise it walls the body in.
 ;; Needs night: run with --allow-time --time-log <the shared time log>.
 {:defaults
  {:tags [:night :survival :shelter]
   :time :night
   :time-why :night-light
-  :register [{:trigger :night :persistence :cooldown :cooldown-s 2 :args {:roof-height 4}
-              :job (jobs.debug.notify {:text "night fired"})}]
   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]]
-  :body {:at [13.5 0 13.5] :effects [["resistance" 600 4]] :settle-s 2}}
+  :body {:at [13.5 0 13.5] :effects [["resistance" 600 4]] :inventory [["cobblestone" 24]] :settle-s 2}
+  :act [[:job (jobs.survival.night {})]]
+  :limit-s 90}
  :cases
  [{:name "lit-closed-room-is-shelter"
    :blocks [[:set [9 1 9] "torch"] [:set [15 1 9] "torch"] [:set [9 1 15] "torch"] [:set [15 1 15] "torch"]
             [:set [12 1 9] "torch"] [:set [12 1 15] "torch"]]
-   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 25}]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60}
+            {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}]
    :after [[:body-near [13.5 0 13.5] 1.5]]}
   {:name "dark-closed-room-is-no-shelter"
-   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night}} :within-s 20}]}
+   :expect [{:event {:source :action :kind :started :data {:name "place"}} :within-s 60}]}
   {:name "tiny-dark-cell-is-shelter"
    :blocks [[:fill [8 0 8] [16 3 16] "air"] [:fill [10 0 10] [12 3 13] "stone" :hollow] [:fill [11 0 11] [11 2 12] "air"]]
    :body {:at [11.5 0 11.5]}
-   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 25}]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60}
+            {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}]
    :after [[:body-near [11.5 0 11.5] 1.5]]}
   {:name "lit-roof-with-open-sides-is-no-shelter"
    :blocks [[:fill [8 0 8] [16 3 16] "air"] [:fill [10 3 10] [16 3 16] "stone"]
             [:fill [10 0 10] [10 2 10] "stone"] [:fill [16 0 10] [16 2 10] "stone"] [:fill [10 0 16] [10 2 16] "stone"] [:fill [16 0 16] [16 2 16] "stone"]
             [:set [12 1 12] "torch"] [:set [14 1 14] "torch"] [:set [12 1 14] "torch"] [:set [14 1 12] "torch"]]
-   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night}} :within-s 20}]}]}
+   :expect [{:event {:source :action :kind :started :data {:name "place"}} :within-s 60}]}]}

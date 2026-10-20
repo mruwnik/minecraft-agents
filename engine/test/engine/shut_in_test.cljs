@@ -61,7 +61,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (await (plug! {:blocks ct/dead-end :inventory cobble} {:for :night}))]
+        (let [{:keys [eng]} (await (plug! {:blocks ct/dead-end :inventory cobble :time 18000} {:for :night} tu/seeing-all))]
           (is (= #{:shelter} (purposes eng))))))))
 
 (deftest walls-beside-an-open-iron-door-step-away-from-it-and-wall-the-cell-between

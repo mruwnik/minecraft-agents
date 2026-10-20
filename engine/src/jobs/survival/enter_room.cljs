@@ -84,13 +84,12 @@
                           (some? (dig-cells/room-plug p (sh-sense/feet p) (:roof-height (:args c))))))))))
 
 (defn shut?
-  "Whether the body is in a closed room (sh-sense/shut-in-room?), or under a roof of a room that is not breached, with no open door."
+  "Whether the body is in a closed room (sh-sense/shut-in-room?) with no open door."
   [c]
   (let [p (:primitives c)]
     (boolean (and (not (sh-sense/head-in-block? p))
                   (empty? (sh/open-room-doors p))
-                  (or (sh-sense/shut-in-room? p)
-                      (and (sh-sense/roofed? p (:roof-height (:args c))) (not (sh/breached-home? p (ctx/view c)))))))))
+                  (sh-sense/shut-in-room? p)))))
 
 (defn judge
   "What the world asks next: {:walk target} {:door d} {:gap cells} {:plug cell} {:done true} or {:stop cause :text}."
