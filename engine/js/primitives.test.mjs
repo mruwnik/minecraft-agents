@@ -301,6 +301,27 @@ test('attack reports killed when the death status follows the hurt one a moment 
   assert.equal((await p.attack('t1', { id: 8 })).status, 'killed')
 })
 
+test('attack reports killed when the death status follows the hurt one 300 ms later (a loaded machine)', async () => {
+  const { bot, p } = rig(ownWorld())
+  bot.attack = async () => {
+    bot.emit('entityHurt', bot.entities[8])
+    setTimeout(() => bot.emit('entityDead', bot.entities[8]), 300 * SCALE)
+  }
+  assert.equal((await p.attack('t1', { id: 8 })).status, 'killed')
+})
+
+test('attack reports hit at once when the hurt target shows lowered health above 0', async () => {
+  const { bot, p } = rig(ownWorld())
+  bot.entities[8] = { ...bot.entities[8], health: 20 }
+  bot.attack = async () => {
+    bot.entities[8].health = 11
+    bot.emit('entityHurt', bot.entities[8])
+  }
+  const t0 = Date.now()
+  assert.equal((await p.attack('t1', { id: 8 })).status, 'hit')
+  assert.ok(Date.now() - t0 < 300 * SCALE)
+})
+
 test('attack resolves early when entityHurt arrives after a delay', async () => {
   const { bot, p } = rig(ownWorld())
   bot.attack = async () => { setTimeout(() => bot.emit('entityHurt', bot.entities[8]), 20 * SCALE) }

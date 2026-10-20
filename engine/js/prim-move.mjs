@@ -210,6 +210,7 @@ export function createMove (env) {
       const target = env.bot.entities[a.id]
       if (!target) return { status: 'gone' }
       if (dist(eye(), { x: target.position.x, y: target.position.y + (target.height ?? 1) / 2, z: target.position.z }) > setting('prim/attack-reach')) return { status: 'out-of-reach' }
+      const healthBefore = typeof target.health === 'number' ? target.health : -1
       let hurtSeen = false
       const onHurt = entity => { if (entity?.id === a.id) hurtSeen = true }
       let deadSeen = false
@@ -226,7 +227,8 @@ export function createMove (env) {
         }
         // a lethal hit's hurt and death statuses can arrive in separate reads: give the death one poll
         const deathDeadline = Date.now() + setting('prim/death-wait-ms') * timeScale
-        while (hurtSeen && !deadSeen && env.bot.entities[a.id] && Date.now() < deathDeadline) {
+        const survived = () => { const h = env.bot.entities[a.id]?.health; return typeof h === 'number' && h > 0 && h < healthBefore }
+        while (hurtSeen && !deadSeen && env.bot.entities[a.id] && !survived() && Date.now() < deathDeadline) {
           await sleepMs(setting('prim/poll-ms') * timeScale)
           ctx.alive()
         }
