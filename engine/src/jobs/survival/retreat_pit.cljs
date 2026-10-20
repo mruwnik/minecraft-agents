@@ -151,17 +151,17 @@
   "Why no pit fits at feet: a stop. Water where the body stands, a pit that fits only with no hostile in the way (:hostile-near), no roof to place against (:no-roof-support), no pit whose
   floor the body can see solid (:no-floor), else what rules out the first pit the shapes allow (shape-stop)."
   [c blocks feet]
-  (let [p (:primitives c)
-        plan (dig-cells/dig-plan p feet)
-        shape (or (when plan (refused-column p feet plan)) (first (candidates c feet)))
-        mobless (pit-plan (assoc-in c [:args :radius] 0) feet blocks)]
-    (cond
-      (here-stop p feet) (here-stop p feet)
-      mobless (stop :hostile-near "a hostile stands in the way of the pit; not digging down")
-      (nil? shape) (if plan
-                     (stop :no-floor "no floor the body sees solid under a pit; not digging down")
-                     (stop :no-roof-support "nothing solid beside the roof cell to place against; not digging a pit"))
-      :else (or (shape-stop c blocks shape) (stop :no-floor "no pit fits here")))))
+  (let [p (:primitives c)]
+    (or
+      (here-stop p feet)
+      (let [plan (dig-cells/dig-plan p feet)
+            shape (or (when plan (refused-column p feet plan)) (first (candidates c feet)))]
+        (cond
+          (pit-plan (assoc-in c [:args :radius] 0) feet blocks) (stop :hostile-near "a hostile stands in the way of the pit; not digging down")
+          (nil? shape) (if plan
+                         (stop :no-floor "no floor the body sees solid under a pit; not digging down")
+                         (stop :no-roof-support "nothing solid beside the roof cell to place against; not digging a pit"))
+          :else (or (shape-stop c blocks shape) (stop :no-floor "no pit fits here")))))))
 
 (defn ^:async plan-of!
   "The pit that fits at the feet (pit-plan with blocks, default the call's, after a look at the roof's surroundings and at the

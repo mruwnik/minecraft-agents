@@ -36,9 +36,9 @@
           (ctx/entries c :shut-in-failed))))
 
 (defn fail!
-  "A way ended other than :done on this site: remembered for the night, except for a lack of blocks or tool (its quote says so). :start is the top of the pit the body is in, if any."
+  "A way ended other than :done on this site: remembered for the night, except for a lack of blocks or tool (its quote says so) or a passing hostile (the site is not at fault). :start is the top of the pit the body is in, if any."
   [c way reason & [start]]
-  (when (and (night? c) (not (#{:no-blocks :no-tool} reason)))
+  (when (and (night? c) (not (#{:no-blocks :no-tool :hostile-near} reason)))
     (ctx/remember! c :shut-in-failed (cond-> {:pos (sh-sense/feet (:primitives c)) :way way :reason reason} start (assoc :start start)) failed-policy)))
 
 (defn near-gate?

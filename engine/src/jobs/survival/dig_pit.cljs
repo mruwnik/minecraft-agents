@@ -41,7 +41,7 @@
 (a/defargs settings
   {::job-time-s {:default 90 :doc "Seconds a pit attempt may take." :spec (a/num-in 0 nil)}
    ::walk-s-per-block {:default 0.3 :doc "Seconds a block of walk to a night pit's site is guessed to take, for the quote." :spec (a/num-in 0 nil)}
-   ::pit-s {:default 12 :doc "Seconds a pit is guessed to take, for the quote, while a floor under it is not yet seen (with :for :night a pit that fits is priced by its digging)." :spec (a/num-in 0 nil)}})
+   ::pit-s {:default 12 :doc "Seconds a pit is guessed to take, for the quote, while a floor under it is not yet seen (a pit that fits is priced by its digging)." :spec (a/num-in 0 nil)}})
 
 (def target [])
 
@@ -131,7 +131,7 @@
                     (settings/get settings ::job-time-s))
     (way/quote-of c (if stop
                       ##Inf
-                      (+ (if (and plan (= :night (:for (:args c)))) (dig-seconds c plan) (settings/get settings ::pit-s))
+                      (+ (if plan (dig-seconds c plan) (settings/get settings ::pit-s))
                          (if plan (way/zone-penalty c {:dig (concat (:prep plan) (mapcat :dig (:steps plan))) :plug (conj (:plugs plan) (:roof plan))}) 0)))
                   (settings/get settings ::job-time-s)))))
 

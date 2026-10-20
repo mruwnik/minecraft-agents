@@ -708,7 +708,7 @@
   "pit-floor with water beside the straight pit's bottom and the three other zigzag columns: only a zigzag towards +x fits."
   (assoc pit-floor "-1,61,0" "water" "0,61,1" "water" "0,61,-1" "water"))
 
-(deftest dig-in-does-not-dig-a-pit-through-the-only-open-side-column-with-a-hostile-in-it
+(deftest dig-in-does-not-dig-a-pit-through-the-only-open-side-column-with-a-hostile-in-it-and-keeps-the-site
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -718,7 +718,7 @@
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (await (run-until-empty eng 8))
           (is (= [] (calls p "dig")) "no pit towards the hostile")
-          (is (= [:hostile-near] (mapv :reason (entries eng :shut-in-failed))) "the reason names the hostile, not a floor"))))))
+          (is (= [] (entries eng :shut-in-failed)) "a passing hostile does not make the site futile"))))))
 
 (deftest dig-in-will-not-dig-through-a-thin-floor-into-water
   (async done

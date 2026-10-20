@@ -34,7 +34,7 @@
   again by day), :room true; a shelter sealed again where the latest entry stood keeps its :start and :door); the event
   shut-in.sealed (when it placed blocks and the world shows the body shut in, with :spent; a warning when :resealed) or shut-in.unsealed (warning, naming the open
   cells); and for a way that failed on the site a :shut-in-failed {:pos :way :reason} entry (cap 5, ten
-  minutes; none for a lack of blocks or of a tool), after which that way is dropped within ::futile-radius of it (jobs.survival.shut-in-night), except the pit, which walks to another site (jobs.survival.dig-pit-site).
+  minutes; none for a lack of blocks or of a tool, or a hostile near), after which that way is dropped within ::futile-radius of it (jobs.survival.shut-in-night), except the pit, which walks to another site (jobs.survival.dig-pit-site).
   Quote: time.")
 
 (a/defargs args
