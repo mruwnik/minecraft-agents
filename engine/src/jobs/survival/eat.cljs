@@ -142,7 +142,7 @@
   nothing edible is left or a bite fails."
   [c]
   (let [{:keys [until max-bites]} (:args c)]
-    (loop [bites 0]
+    (loop [bites 0 slow? false]
       (let [best (carried-best c)]
         (cond
           (not (ctx/alive? c)) :continue
@@ -153,13 +153,16 @@
                                                          {:eat false :stock (max 1 (- until (food-of c)))}))]
                                              (cond
                                                (= :continue e) :continue
-                                               (carried-best c) (recur bites)
+                                               (carried-best c) (recur bites false)
                                                :else (contract/with-because (ctx/end c :condition-failed :no-food {:ate 0}) e)))
                         :else (ctx/end c :condition-failed :no-food {:ate 0}))
           :else
           (let [_ (await (ctx/act c :equip #js {:item best}))
                 r (await (ctx/act c :eat #js {:item best}))]
-            (if (not= "ate" (.-status r))
-              (ctx/end c :nothing-possible :eat-failed {:ate bites})
+            (cond
+              (= "ate" (.-status r))
               (do (ctx/remember! c :fed {:item best :food (.-food r)} fed-policy)
-                  (recur (inc bites))))))))))
+                  (recur (inc bites) false))
+              ;; the inventory read can still show the item just eaten; look again once before calling the bite failed
+              (not slow?) (do (await (ctx/act c :wait #js {:ms 400 :why "the last bite to settle"})) (recur bites true))
+              :else (ctx/end c :nothing-possible :eat-failed {:ate bites :bite (.-status r) :item best}))))))))

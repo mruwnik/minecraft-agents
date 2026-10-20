@@ -246,7 +246,7 @@
               eng (assoc eng :jobs (assoc (:jobs eng) 'eat-parent parent))]
           (core/submit! eng '(eat-parent) {})
           (await (core/tick! eng))
-          (is (= 1 (count (calls p "eat"))))
+          (is (= 2 (count (calls p "eat"))) "a failed bite is tried once more after a short wait (the inventory may lag)")
           (is (= {:ate 0 :reason :eat-failed} (select-keys @out [:ate :reason])))
           (is (= :nothing-possible (:kind (:ending @out))) "a failed bite is no done"))))))
 
