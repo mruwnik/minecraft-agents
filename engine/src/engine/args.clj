@@ -10,7 +10,7 @@
    :radius {:doc "seen blocks within this many blocks of the body count" :spec '(a/num-in 0 nil) :default 16}
    :center {:doc "the centre of the area the job works, a cell [x y z] or {:x :y :z}; nil: where the body stands when the job first runs (jobs.lib.area)" :spec 'a/position? :default nil}
    :wet {:doc "dig blocks that touch water, and tunnel beside water" :spec 'boolean? :default false}
-   :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach of where it stands; false: none; or the ore block names to dig" :spec '(a/or-of boolean? (a/coll-of a/name?)) :default true}
+   :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach of where it stands (an ore below the feet only over a seen solid cell); false: none; or the ore block names to dig" :spec '(a/or-of boolean? (a/coll-of a/name?)) :default true}
    :heading {:doc "the strip tunnel's heading, over :direction: north, south, east or west (n/s/e/w), or a cell [x y z] (the dominant axis from the start toward it); nil: :direction" :spec '(a/pred "a heading name or a cell [x y z]" #(or (and (or (string? %) (keyword? %)) (heading-name %)) (and (sequential? %) (= 3 (count %)) (every? number? %)))) :default nil}
    :direction {:doc "the strip tunnel's heading: north, south, east or west (n/s/e/w); nil: the way the body faces when the job starts" :spec '(a/pred "north, south, east or west (n/s/e/w), a string or keyword" #(and (or (string? %) (keyword? %)) (heading-name %))) :default nil}
    :tunnel-length {:doc "the most blocks the strip tunnel runs in this job, at the body's level; 0: no tunnel, seen blocks only" :spec '(a/int-in 0 nil) :default 32}
