@@ -40,7 +40,7 @@
   Ends with data {:cut :replanted :bare :lost :gave-up :spent :spent-at}: cells not replanted, or no longer a crop, are in :bare
   and :lost. Done when it cut or replanted some and the number meets :least (cells, default 1; :all wants every ripe crop it
   found); no crop seen: condition-failed :no-crop-seen; crops given up on: nothing-possible :gave-up; fewer than :least cut with
-  nothing left: nothing-possible :partial; none cut: condition-failed :nothing-to-do. done? holds once no ripe crop, owed seed,
+  nothing left: nothing-possible :partial; none cut: condition-failed :nothing-to-do; a field the body could not walk to (:max-home-fails walks) with none cut: nothing-possible :unreachable {:center}. done? holds once no ripe crop, owed seed,
   sweep or given-up cell is left (and :least is met): a field with nothing ripe at the start ends :done :already.")
 
 (a/defargs args
@@ -411,7 +411,7 @@
     (when (and (or (seq (:replant m)) (:collect m) (zero? (:cut m 0)))
                (or shut-in? (> (u/dist (u/self-pos c) center) radius)))
       (if (>= (:home-fails m 0) (max-home-fails))
-        :finish
+        (do (ctx/update-mem! c assoc :unreachable true) :finish)
         (case (await (common/walk-to! c center (if shut-in? (settings/get settings ::shut-in-walk-range) (quot radius 2))))
           :there (do (ctx/update-mem! c assoc :left-pit true) :again)
           :continue :continue
@@ -444,6 +444,7 @@
         worked (max (:cut result) (:replanted result))
         left (count (:skipped m))]
     (cond
+      (and (:unreachable m) (zero? worked) (zero? left)) (ctx/end c :nothing-possible :unreachable (assoc result :center (center-of c)))
       no-crop? (ctx/end c :condition-failed :no-crop-seen result)
       (and (pos? worked) (common/enough? c worked (+ worked left))) (ctx/end c :done nil (assoc result :text done-text))
       (pos? left) (ctx/end c :nothing-possible :gave-up result)

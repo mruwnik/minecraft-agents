@@ -470,6 +470,23 @@
             (is (= 3 (count (filterv #(zero? (:x %)) (tu/walked-to eng)))))
             (is (= {:cut 1 :replanted 0 :bare [cell] :lost [] :gave-up false} (dissoc result :text :spent :spent-at)))))))))
 
+(deftest a-field-it-cannot-walk-to-is-unreachable-not-nothing-to-do
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake-on-floor (assoc one-cell :floor [-30 -10 90 10]))
+              near? #(< (js/Math.abs (- (:x (u/self-pos {:primitives p})) 3)) 15)
+              _ (tu/blind p)
+              _ (aset p "seenBlocks" (fn [q] (if (near?) (.blocks p q) #js [])))
+              _ (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})))
+              _ (aset p "sensedAt" (fn [pos] (if (near?) (.blockAt p pos) #js {:unknown true})))
+              {:keys [eng]} (start {:p p})]
+          (fake/swap-self! p assoc :pos [75 64 0])
+          (tu/short-walks! p 1)
+          (let [result (await (child-outcome eng job {:center {:x 3 :y 64 :z 0}} 200))]
+            (is (= [:stopped :unreachable] ((juxt :status :reason) result)))
+            (is (= {:x 3 :y 64 :z 0} (:center result)))))))))
+
 ;; ------------------------------------------------------------------ zones and claims
 
 (def zoned-world
