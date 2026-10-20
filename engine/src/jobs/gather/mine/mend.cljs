@@ -40,19 +40,19 @@
 
 (defn ^:async mend-round!
   "The permitted owed cells are filled by a blocks.fill-cells child. :continue while it works, :again after a fill (the cells are
-  looked at again), nil when nothing is owed or the mend gave up (warn mine.mend-short / mine.mend-failed)."
+  looked at again; a fill that mended nothing is a failure, or the cells would be offered for ever), nil when nothing is owed or the mend gave up (warn mine.mend-short / mine.mend-failed)."
   [c]
   (let [cells (mend-permitted c (owed c))]
     (if (empty? cells)
       nil
       (let [e (waits/waiting-out c (await (ctx/call c :fill 'jobs.blocks.fill-cells {:cells (mapv :pos cells) :use {:blocks (fillers c)} :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
             {:keys [mended left]} (when (map? e) (:data e))
-            left (or left (map :pos cells))]
+            left (if (seq left) left (map :pos cells))]
         (when (map? e)
           (ctx/update-mem! c update :mended (fnil + 0) (or mended 0)))
         (cond
           (= :continue e) :continue
-          (= :done (:kind e)) :again
+          (and (= :done (:kind e)) (pos? (or mended 0))) :again
           (and (= :condition-failed (:kind e)) (= :need (get-in e [:cause :reason])))
           (do (ctx/emit! c :mine.mend-short :warn {:owed (vec left) :text (str "mine has nothing to mend with: " (cells-text left))})
               nil)

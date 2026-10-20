@@ -294,7 +294,7 @@
           (is (= "dirt" (block-at s 0 63 0)))
           (is (finished? s)))))))
 
-(deftest six-failed-fills-warn-mend-failed-and-end
+(deftest refused-fill-warns-mend-failed-and-ends
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -311,7 +311,7 @@
                                 r))))
           (core/submit! (:eng s) (spec {:block "dirt" :count 1 :trip true :mend true}) {})
           (await (run-ticks s 80))
-          (is (= 6 (count (calls s "place"))) "bounded at max-mend-failures")
+          (is (= 2 (count (calls s "place"))) "fill-cells gives the cell up after its max-refusals, the mend does not retry")
           (is (= 1 (count (events-of s :mine.mend-failed))))
           (is (= :warn (:level (first (events-of s :mine.mend-failed)))))
           (is (empty? (events-of s :mine.mend-short)))
