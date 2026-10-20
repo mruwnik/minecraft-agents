@@ -6,7 +6,7 @@
     no cleanup held in the last 10 minutes
     within :within (32) blocks of the body (cleanup's :within), so a far scaffold never drags the body back to it
     not deeper below the feet than jobs.lib.ledger/max-below: cleanup would only hold it again
-  It holds only in the light, past the dawn grace and with no known hostile near (jobs.lib.dawn/calm?), and not within
+  It holds only in the light (a retreat plug is taken back in the dark too: the body sits inside it), past the dawn grace and with no known hostile near (jobs.lib.dawn/calm?), and not within
   jobs.lib.threats/fled-memory-ms of a flight, unless ::at-night / ::with-hostile are set: the night's seal is scaffold
   too, and the body is inside it.
   Runs jobs.access.cleanup, which takes exactly those entries.
@@ -41,11 +41,12 @@
 
 (defn scaffold-left
   [p memory args kn]
-  (boolean (and (not (body/recovery-pending? memory :scaffold-left))
-                (some? (world/zones kn))
-                (or (settings/get settings ::at-night) (not (look/dark-here? p)))
-                (or (settings/get settings ::with-hostile)
-                    (and (dawn/calm? p) (not (threats/fled-recently? p memory))))
-                (some (complement #(too-deep? p %))
-                      (ledger/offered memory (block-at-of p) nil
-                                      (ledger/near-of-args {:primitives p} args))))))
+  (let [dark-ok? (or (settings/get settings ::at-night) (not (look/dark-here? p)))]
+    (boolean (and (not (body/recovery-pending? memory :scaffold-left))
+                  (some? (world/zones kn))
+                  (or (settings/get settings ::with-hostile)
+                      (and (dawn/calm? p) (not (threats/fled-recently? p memory))))
+                  (some #(and (not (too-deep? p %))
+                              (or dark-ok? (= :retreat-plug (:purpose %))))
+                        (ledger/offered memory (block-at-of p) nil
+                                        (ledger/near-of-args {:primitives p} args)))))))

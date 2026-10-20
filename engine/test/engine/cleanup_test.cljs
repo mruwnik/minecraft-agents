@@ -216,6 +216,7 @@
         hostile (fn [] (doto (tu/fake {:blocks {"0,64,0" "dirt"}})
                          (fake/add-entity! {:id 9 :name "zombie" :kind "hostile" :pos {:x 4 :y 64 :z 0} :health 20})))]
     (is (false? (fires? (night) dirt [])) "dark")
+    (is (true? (fires? (night) (trigger-store [(entry [0 64 0] :purpose :retreat-plug)] []) [])) "a retreat plug: the body sits inside it, dark or not")
     (is (false? (fires? (hostile) dirt [])) "a hostile near")
     (settings/with-settings {:triggers.access.scaffold-left/at-night true :triggers.access.scaffold-left/with-hostile true}
       (fn []
