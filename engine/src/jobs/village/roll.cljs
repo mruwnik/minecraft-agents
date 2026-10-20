@@ -35,7 +35,7 @@
    :item {:doc "the workstation block item name, e.g. lectern; nil: the one of :profession" :spec a/item? :default nil}
    :profession {:doc "villager profession whose workstation :item defaults to" :spec string? :default nil}
    :want {:doc "item name an offer is to give" :spec a/item? :default nil}
-   :radius {:doc "how far to look for a villager" :spec (a/int-in 1 96) :default 48}
+   :radius {:doc "how far to look for a villager when :villager is nil (a named one is found wherever it is seen)" :spec (a/int-in 1 96) :default 48}
    :max-price {:doc "highest price (first cost stack); nil for no limit" :spec (a/int-in 0 nil) :default nil}})
 
 (def workstations
