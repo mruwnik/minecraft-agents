@@ -111,6 +111,12 @@
     tunnel :ok
     (assoc open-night :time st/noon) :ok))
 
+(deftest safe-if-lit-does-not-wait-for-a-day-that-cannot-light-the-cell
+  (are [sky time expected] (= expected (lit 0 sky #(kind ready/safe-if-lit (assoc open-night :time time))))
+    15 st/night :later
+    5 st/noon :ok
+    5 st/night :ok))
+
 (deftest a-job-that-goes-to-its-place-binds-safe-at-that-place
   (are [check args] (= :later (lit 0 15 #(first (check (assoc (ctx-of open-night) :args args)))))
     deposit/safe? {:chest outside}

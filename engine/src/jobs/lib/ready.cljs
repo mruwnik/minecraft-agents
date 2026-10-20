@@ -158,11 +158,19 @@
   "safe-at-by-night for a job that works where the body stood at submit (:submitted-at), here with none or with :here."
   (safe-at-by-night (fn [c] (let [args (:args c)] (when-not (:here args) (a/cell (:submitted-at args)))))))
 
+(defn day-would-light?
+  "Whether the day (weather aside) brings the feet cell enough light: false in a dim shaft or pit whose sky light never reaches
+  the spawn limit, where waiting for light waits for ever."
+  [p]
+  (let [sky (sh-sense/sky-state p)
+        lvl (sh-sense/sky-light-at p (sh-sense/feet p))]
+    (or (nil? sky) (nil? lvl) (some? (sh-sense/light-in-s lvl (:t sky) 0 0)))))
+
 (defn dark-sky
-  "Later :dark while the light at the feet is dark above ground (not sh-sense/lit-here?)."
+  "Later :dark while the light at the feet is dark above ground (not sh-sense/lit-here?) and the day would lift it."
   [c]
   (let [p (:primitives c)]
-    (if (and (not (sh-sense/lit-here? p (sh-sense/feet p))) (not (sh-sense/buried? p)))
+    (if (and (not (sh-sense/lit-here? p (sh-sense/feet p))) (not (sh-sense/buried? p)) (day-would-light? p))
       (contract/later :dark "dark sky above ground, waits for light")
       (contract/ok :lit "lit or underground"))))
 
