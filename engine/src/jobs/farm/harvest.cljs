@@ -145,6 +145,11 @@
   [c skipped]
   (permitted c (cut-action c) (ripe-raw c skipped)))
 
+(defn ripe-warned
+  "As ripe-of, with the gate's decline warn when it refuses a ripe crop: for the round, which acts on the rest."
+  [c skipped]
+  (gate/allowed c :harvest.declined "harvest" (cut-action c) (ripe-raw c skipped) {:except (:plan (:args c)) :own-plans-ok? true}))
+
 (defn planned
   "Without :plan nil; else {:cells {pos crop}}, or {:trouble text} when the plan
   cannot be worked."
@@ -356,7 +361,7 @@
         m (ctx/mem c)
         _ (when (and (cutting? c) (empty? (ripe-of c (:skipped m))))
             (await (look/survey! c :cell)))
-        ripe (when (cutting? c) (ripe-of c (:skipped m)))]
+        ripe (when (cutting? c) (ripe-warned c (:skipped m)))]
     (when (seq ripe)
       (let [here (u/self-pos c)
             shut-in? (reach-room/enclosed? p)

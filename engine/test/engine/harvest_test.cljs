@@ -508,6 +508,17 @@
             (is (= cut (count (calls p "dig"))) (pr-str [owner extra]))
             (is (empty? (events-of seen :harvest.declined)) "a condition does not warn")))))))
 
+(deftest the-round-warns-once-when-it-cuts-past-a-refused-crop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (start {:world (assoc zoned-world :blocks (field "wheat" 7 [2 3] [2]) :ages (ages 7 [2 3] [2]))
+                                           :shared (ew/of-data {} {} [(zone-over-crop "Miles")])})]
+          (core/submit! eng (list job {:radius 6}) {})
+          (await (run-until-empty eng 60))
+          (is (= 1 (count (calls p "dig"))) "the free crop is cut")
+          (is (= 1 (count (events-of seen :harvest.declined))) "the refused one is named once"))))))
+
 (deftest no-zone-list-declines-the-harvest
   (async done
     (tu/run-async done
