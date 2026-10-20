@@ -68,17 +68,17 @@
          [:rcon "damage $BODY 15 minecraft:generic"]
          [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1})]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
-            {:event {:source :job :kind :child_ended :data {:ending {:data {:arrived true}}}} :within-s 50 :of-job true}
-            {:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 30 :until {:source :job :kind :child_ended :data {:ending {:data {:arrived true}}}}}]
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 50 :of-job true}
+            {:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 30 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [28.5 0 16.5] 2]]
    :limit-s 80}
   {:name "hurt-hp5-full-bar-no-food-keeps-working"
    :act [[:job (jobs.memory.set-place {:name :bed :pos #at [8 0 16]})]
          [:rcon "damage $BODY 15 minecraft:generic"]
          [:job (jobs.movement.go-to {:pos #at [28 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :child_ended :data {:ending {:data {:arrived true}}}} :within-s 40 :of-job true}
-            {:no-event {:source :reflex :kind :fired} :for-s 15 :until {:source :job :kind :child_ended :data {:ending {:data {:arrived true}}}}}
-            {:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 40 :until {:source :job :kind :child_ended :data {:ending {:data {:arrived true}}}}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
+            {:no-event {:source :reflex :kind :fired} :for-s 15 :until {:source :job :kind :completed :data {:arrived true}}}
+            {:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 40 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [28.5 0 16.5] 2]]}
   ;; 988e909e: food 6 is the no-sprint floor, so a full-health idle body eats carried bread at 6 and not at 7. Food is driven down by hunger
   ;; and read back by foodLevel (the drain takes about a minute, and :within-s counts from the act's start, so the deadlines allow for it).
