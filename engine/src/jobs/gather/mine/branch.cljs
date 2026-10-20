@@ -44,7 +44,7 @@
         junction (step-cell tunnel at)
         args (-> (:args c)
                  (dissoc :direction :submitted-at :mend)
-                 (assoc :heading side :tunnel-length (settings/get stay/settings ::stay/branch-length) :branches false :shaft false :stay-level true :track-ground false))
+                 (assoc :heading side :tunnel-length (settings/get stay/settings ::stay/branch-length) :branches false :ways #{:seen :strip-tunnel} :track-ground false))
         r (or (:branch-end (ctx/mem c))
               (let [r (waits/waiting-out c (await (ctx/call c :branch 'jobs.gather.dig-for args)))]
                 (when-not (= :continue r) (ctx/update-mem! c assoc :branch-end true))

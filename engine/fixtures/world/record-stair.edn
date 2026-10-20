@@ -15,7 +15,7 @@
  :cases
  [{:name "a-recorded-stair-is-not-undercut-by-a-level-run-back-over-it"
    :act [[:job (jobs.access.record-stair {})]
-         [:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :direction :west :stay-level true :tunnel-length 5 :mend false}) [:alongside]]]
+         [:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :direction :west :ways #{:seen :strip-tunnel} :tunnel-length 5 :mend false}) [:alongside]]]
    :expect [{:event {:source :job :kind :completed :data {:steps [:>= 2]}} :within-s 30 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:stop [:any]}} :within-s 180 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:stop #{:breach-sealed :breach-open}}} :for-s 120 :until {:source :job :kind #{:completed :stopped} :data {:name "jobs.gather.mine"}}}]

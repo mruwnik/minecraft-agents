@@ -70,10 +70,18 @@
   (a/pred "true, false, a set of kinds (:tool :item) or a map of limits {:what :how :minutes :fail-minutes :explore}"
           #(nil? (:error (parse-arg %)))))
 
-(defn call-ways
-  "The ways the call of the job running in c allows: the frozen call's, before it starts the args', else all."
+(def dig-ways "The :ways of jobs.gather.mine and dig-for; they say nothing about fetching." #{:seen :descend-stair :descend-shaft :strip-tunnel})
+
+(defn given-ways
+  "The fetch ways the call of the job running in c names (the frozen call's, before it starts the args'), without dig ways; nil for none."
   [c]
-  (set (or (:ways (when (:view c) (ctx/frozen-call c))) (:ways (:args c)) fetch-ways)))
+  (let [ws (set/difference (set (or (:ways (when (:view c) (ctx/frozen-call c))) (:ways (:args c)))) dig-ways)]
+    (when (seq ws) ws)))
+
+(defn call-ways
+  "The ways the call of the job running in c allows: its fetch ways, else all."
+  [c]
+  (or (given-ways c) (set fetch-ways)))
 
 (defn args-with-ways
   "The args of the job running in c with the call's ways in :ways, for a decide over args."
@@ -132,7 +140,7 @@
   "Whether the job running in c may fetch things of kind (:tool or :item): its call's ways when it has some, else its
   old :fetch arg."
   [c kind]
-  (if (contains? (ctx/frozen-call c) :ways)
+  (if (given-ways c)
     (boolean (seq (fetch-how c)))
     (allows? (:fetch (:args c)) kind)))
 

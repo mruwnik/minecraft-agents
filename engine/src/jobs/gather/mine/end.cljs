@@ -1,6 +1,7 @@
 (ns jobs.gather.mine.end
   "How jobs.gather.dig-for and jobs.gather.mine end: the end texts, finish! and stop! (the dig), end-run (both)."
-  (:require [clojure.string :as str]
+  (:require [jobs.gather.mine.way-set :as ways]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.shafts :as shafts]
@@ -10,10 +11,10 @@
 
 (defn shaft-suggest
   "{:at :heading :to-y} of the stair this run cut with no shaft (the top step's feet cell, the stair's heading, the feet y at
-  its bottom), when it could be declared as a mineshaft: not when a shaft was used or :shaft is false."
+  its bottom), when it could be declared as a mineshaft: not when a shaft was used or :descend-shaft is not a way."
   [{:keys [descent shaft]} args]
   (let [{:keys [top top-heading bottom-y]} descent]
-    (when (and top bottom-y (not (false? (:shaft args))) (not= :used (:state shaft)) (< bottom-y (second top)))
+    (when (and top bottom-y (ways/shaft? args) (not= :used (:state shaft)) (< bottom-y (second top)))
       {:at top :heading top-heading :to-y bottom-y})))
 
 (defn suggest-text [{:keys [at heading to-y]}]

@@ -16,7 +16,7 @@
    :after [[:item "cobblestone" [:>= 6]]]}
   {:name "forty-five-from-a-few-stones-stops-never-completes"
    :blocks [[:fill [8 -1 8] [24 -1 24] "dirt"] [:fill [8 0 8] [24 5 24] "air"] [:fill [14 0 14] [18 0 14] "stone"]]
-   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 45 :tunnel-length 0 :descend-limit 0 :radius 6})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 45 :ways #{:seen} :radius 6})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :stopped}}]
    :after [[:item "cobblestone" [:< 45]]]}

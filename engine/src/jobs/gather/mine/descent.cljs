@@ -14,6 +14,7 @@
             [jobs.lib.look :refer [cell-of]]
             [jobs.gather.mine.targets :refer [base-ore main-block step-cell within-own-zone]]
             [jobs.gather.mine.end :refer [stop!]]
+            [jobs.gather.mine.way-set :as ways]
             [jobs.gather.mine.torches :refer [mouth-torch-due? stair-torch-due? torch-step!]]
             [jobs.gather.mine.tunnel :refer [heading-stops turn-heading! result-of]]))
 
@@ -29,9 +30,9 @@
 (defn level-slack [] (settings/get settings ::level-slack))
 
 (defn tunnel-level
-  "The feet height the strip tunnel should run at (args a): :level, else the ore's ::ore-levels entry; nil for none (:level false)."
-  [{:keys [level stay-level] :as args}]
-  (cond (or stay-level (false? level)) nil
+  "The feet height the strip tunnel should run at (args a): :level, else the ore's ::ore-levels entry; nil for none (:level false, or no descending way)."
+  [{:keys [level] :as args}]
+  (cond (or (not (ways/descends? args)) (false? level)) nil
         (sequential? level) (second level)
         (map? level) (:y level)
         (some? level) level
@@ -45,7 +46,7 @@
   [c]
   (let [level (tunnel-level (:args c))
         m (ctx/mem c)]
-    (boolean (and level (pos? (:tunnel-length (:args c))) (nil? (:tunnel m)) (nil? (:stop (:descent m)))
+    (boolean (and level (ways/tunnel? (:args c)) (nil? (:tunnel m)) (nil? (:stop (:descent m)))
                   (> (:y (cell-of (u/self-pos c))) level)))))
 
 (defn descent-wanted?
@@ -53,7 +54,7 @@
   (let [{:keys [descend-limit]} (:args c)
         block (main-block (:args c))]
     (or (to-level? c)
-        (and (nil? (tunnel-level (:args c))) (not (:stay-level (:args c))) (contains? stone-types block) (pos? descend-limit) (nil? (:tunnel (ctx/mem c)))))))
+        (and (nil? (tunnel-level (:args c))) (ways/descends? (:args c)) (contains? stone-types block) (pos? descend-limit) (nil? (:tunnel (ctx/mem c)))))))
 
 (defn shaft-state [c] (:state (:shaft (ctx/mem c))))
 
@@ -66,12 +67,12 @@
 (defn shaft-under-way?
   "Whether the shaft child has been called and has not ended."
   [c]
-  (and (not (false? (:shaft (:args c)))) (= :calling (shaft-state c))))
+  (and (ways/shaft? (:args c)) (= :calling (shaft-state c))))
 
 (defn shaft-due?
   "Whether the descent goes by a mineshaft: it is due and :shaft is not false, or a shaft descent is under way."
   [c]
-  (and (not (false? (:shaft (:args c))))
+  (and (ways/shaft? (:args c))
        (or (shaft-under-way? c)
            (and (nil? (shaft-state c)) (descent-wanted? c)))))
 
@@ -104,7 +105,7 @@
 (defn shaft-top-here?
   "Whether the body stands at the top of the shaft it would use."
   [c]
-  (let [{:keys [top none]} (when-not (false? (:shaft (:args c))) (pick-shaft c))]
+  (let [{:keys [top none]} (when (ways/shaft? (:args c)) (pick-shaft c))]
     (boolean (and (not none) (u/within? (u/self-pos c) (cell-of (xyz top)) 1)))))
 
 (defn shaft-none!
@@ -115,9 +116,9 @@
                                                         (when shaft (str "; name it with :shaft \"" shaft "\" to try it again")))}
                                       shaft (assoc :shaft shaft)))
   (ctx/update-mem! c #(-> % (assoc-in [:descent :steps] (or steps 0)) (assoc :shaft {:state :none :reason reason})))
-  (if (= :required (:shaft (:args c)))
-    (stop! c :no-shaft)
-    :again))
+  (if (ways/stair? (:args c))
+    :again
+    (stop! c :no-shaft)))
 
 (defn shaft-used!
   "The shaft child ended :done (res): remember the shaft used, the tunnel's heading is the branch's."

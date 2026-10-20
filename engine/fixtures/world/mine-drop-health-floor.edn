@@ -10,13 +10,13 @@
  :cases
  [{:name "thirteen-block-drop-to-a-seen-ore-is-not-taken"
    :blocks [[:fill [12 0 12] [16 12 20] "stone"]]
-   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :radius 16 :tunnel-length 0 :descend-limit 0 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :radius 16 :ways #{:seen} :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :go-to.over-budget} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [16.5 13 16.5] 5] [:block [22 0 16] "iron_ore"] [:item "raw_iron" 0]]}
   {:name "five-block-drop-to-a-seen-ore-is-taken"
    :body {:at [16.5 5 16.5]}
    :blocks [[:fill [12 0 12] [16 4 20] "stone"]]
-   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :radius 12 :tunnel-length 0 :descend-limit 0 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :radius 12 :ways #{:seen} :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 120 :of-job true}]
    :after [[:item "raw_iron" 1]]}]}

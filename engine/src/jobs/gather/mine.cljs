@@ -9,6 +9,7 @@
             [jobs.gather.shaft-descent :refer [pick-shaft]]
             [jobs.gather.mine.end :as end :refer [end-run wanted]]
             [jobs.gather.mine.mend :as mend]
+            [jobs.gather.mine.way-set :as mw]
             [jobs.gather.mine.targets :refer [owed carried got had zone-margin within-keep-clear scan items main-block]]
                         [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
@@ -55,8 +56,7 @@
    :heading :shared
    :direction :shared
    :tunnel-length :shared
-   :stay-level :shared
-   :branches {:doc "with :stay-level: cut a side branch to each side of the tunnel every few blocks (mine-stay ::branch-every, ::branch-length), more rock in view per block walked" :spec boolean? :default false}
+   :branches {:doc "on a level-keeping tunnel (no descending way): cut a side branch to each side of the tunnel every few blocks (mine-stay ::branch-every, ::branch-length), more rock in view per block walked" :spec boolean? :default false}
    :level :shared
    :shaft :shared
    :descend-limit :shared
@@ -70,6 +70,10 @@
    ::max-equip-rounds {:default 3 :doc "Times the trip gets a pickaxe or torches again for a dig that stopped without them before it ends with the dig's ending." :spec (a/int-in 0 nil)}})
 
 (def target [:item :block :heading :center])
+
+(def ways
+  "The ways the dig may use (the call's :ways, default all): :seen (dig what is in view), :descend-stair (stair down to the ore's level, or through soil to stone; :descend-limit steps), :descend-shaft (down a mineshaft plan, :shaft names it; with no :descend-stair and no usable shaft the run ends :no-shaft before anything is dug), :strip-tunnel (a tunnel at the start level, :tunnel-length blocks). With :strip-tunnel and no descent the tunnel keeps its level: seen ore only beside it (or by a short side cut), and a cut that opens into air beyond it is sealed with a carried block."
+  (into mw/ordered need/fetch-ways))
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
@@ -114,7 +118,7 @@
 (defn stair-start?
   "Whether the dig starts with a stair of its own (not by a mineshaft, and no wanted block in sight to walk to instead): the start keeps clear of buildings."
   [c]
-  (and (descent-wanted? c) (or (false? (:shaft (:args c))) (boolean (:none (pick-shaft c)))) (empty? (:targets (scan c)))))
+  (and (descent-wanted? c) (or (not (mw/shaft? (:args c))) (boolean (:none (pick-shaft c)))) (empty? (:targets (scan c)))))
 
 (defn ^:async leave-zone!
   "Before the first dig: a go-to child to a cell zone-margin outside the own zone (or, for a stair, building) zn the body stands near (the start moves with it).
@@ -178,7 +182,7 @@
   (or (await (trip/ready! c))
       (await (fetch-pickaxe! c))
       (await (trip/tool-ready! c (main-block (:args c)) (digs-left c)))
-      (await (when (and (:torches (:args c)) (nil? (:tunnel (ctx/mem c))) (or (pos? (:tunnel-length (:args c))) (descent-wanted? c)))
+      (await (when (and (:torches (:args c)) (nil? (:tunnel (ctx/mem c))) (or (mw/tunnel? (:args c)) (descent-wanted? c)))
                (stock/torches! c)))))
 
 (defn stop-cause

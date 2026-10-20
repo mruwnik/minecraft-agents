@@ -87,7 +87,7 @@
         (let [corridor (-> (m/cells "air" (range 1 7) [64 65] [0]) (assoc "7,64,0" "chest"))
               world (-> (m/rock-world corridor)
                         (assoc :inventory [worn] :containers {"7,64,0" [{:name "stone_pickaxe" :count 1}]}))
-              s (await (m/scenario {:block "iron_ore" :level false :count 5 :tunnel-length 0 :trip true} world 60))]
+              s (await (m/scenario {:block "iron_ore" :level false :count 5 :ways #{:seen} :trip true} world 60))]
           (is (contains? (kinds s) :tool.spare))
           (is (= [0 64 0] (m/feet s))))))))
 

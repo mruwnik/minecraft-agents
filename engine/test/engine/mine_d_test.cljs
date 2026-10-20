@@ -44,11 +44,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [lit (await (scenario {:block "iron_ore" :level false :count 1 :tunnel-length 0} (rock-world {"1,64,0" "iron_ore"}) 20))
+        (let [lit (await (scenario {:block "iron_ore" :level false :count 1 :ways #{:seen}} (rock-world {"1,64,0" "iron_ore"}) 20))
               p (tu/fake-on-floor (assoc (rock-world {"1,64,0" "iron_ore"}) :floor-block floor-block))
               _ (swap! (fake/state p) assoc :light-default [0 0])
               dark (start {:p p})]
-          (core/submit! (:eng dark) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0}) {})
+          (core/submit! (:eng dark) (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}}) {})
           (await (run-ticks dark 20))
           (is (= [[1 64 0]] (dug-cells lit)))
           (is (empty? (watched lit)))
@@ -250,7 +250,7 @@
         (let [s (start {:world {:blocks (merge (cells "dirt" (range 0 6) [63] [0]) (cells "dirt" (range 1 6) [64 65] [0]))
                                 :inventory [{:name "stone_pickaxe" :count 1}]}})]
           (fake/swap-self! (:p s) assoc :held "stone_pickaxe")
-          (core/submit! (:eng s) (spec {:block "stone" :count 1 :direction "east" :tunnel-length 3 :descend-limit 0}) {})
+          (core/submit! (:eng s) (spec {:block "stone" :count 1 :direction "east" :tunnel-length 3 :ways #{:seen :strip-tunnel}}) {})
           (await (run-ticks s 60))
           (is (pos? (dig-count s)) "it did dig the soil")
           (is (nil? (.-held (.self (:p s)))) "by hand")
@@ -338,7 +338,7 @@
       (fn ^:async t []
         (let [s (start {:world {:blocks {"1,63,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe}})]
           (doseq [c [[-1 63 0] [0 63 1] [0 63 -1]]] (fake/set-block! (:p s) c "air"))
-          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}}) {})
           (await (run-ticks s 40))
           (is (= "iron_ore" (block-at s 1 63 0)) "the only floor to step onto is left")
           (is (seq (events-of s :mine.spared-exit))))))))
@@ -372,7 +372,7 @@
       (fn ^:async t []
         (doseq [[kind extra n] [[nil {} 0] [nil {:settings {:jobs.lib.access/spare-own-builds false}} 1] [:mineshaft {} 1]]]
           (let [own (ew/of-data {"pad" (cond-> (shape/with-author pad-plan "Fake") kind (assoc :kind kind))} {} [])
-                s (await (zoned (merge {:block "sand" :count 1 :tunnel-length 0} extra) {:blocks {"6,64,0" "sand"}} own 20))]
+                s (await (zoned (merge {:block "sand" :count 1 :ways #{:seen}} extra) {:blocks {"6,64,0" "sand"}} own 20))]
             (is (= n (count (dug-cells s))) (pr-str kind extra))))))))
 
 (deftest the-mend-leaves-the-stair-cells-below-the-start-level

@@ -79,7 +79,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (zoned {:block "sand" :count 4 :tunnel-length 0} {:blocks two-in-two-out}
+        (let [s (await (zoned {:block "sand" :count 4 :ways #{:seen}} {:blocks two-in-two-out}
                               (ew/of-data {} {} [farm-zone]) 40))]
           (is (= #{[6 64 0] [6 64 1]} (set (dug-cells s))))
           (is (= :refused (:reason (done-event s))))
@@ -103,7 +103,7 @@
         (doseq [[w blocks expected] [[(ew/of-data {} {} [farm-zone]) {"3,64,0" "sand"} {:zones ["farm"] :plans []}]
                                      [(ew/of-data {"pad" pad-plan} {} []) {"6,64,0" "sand"} {:zones [] :plans ["pad"]}]
                                      [(ew/of-data {"pad" (shape/with-author pad-plan "Fake")} {} []) {"6,64,0" "sand"} {:zones [] :plans ["pad"]}]]]
-          (let [s (await (zoned {:block "sand" :tunnel-length 0} {:blocks blocks :yaw 270} w 5))]
+          (let [s (await (zoned {:block "sand" :ways #{:seen}} {:blocks blocks :yaw 270} w 5))]
             (is (zero? (count (.-calls (.-world (:p s))))))
             (is (not (finished? s)))
             (is (= (assoc expected :reason :refused)
@@ -137,7 +137,7 @@
                            (fn [token args impl] (ew/set-zones! w [(assoc farm-zone :min [5 60 -2] :max [7 70 2])])
                              (impl token args)))
               s (start {:p p :shared w})]
-          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0}) {})
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}}) {})
           (await (run-ticks s 20))
           (is (= 1 (count (moved s))) "one walk, then the zone refuses the dig")
           (is (empty? (calls s "dig")))
@@ -153,7 +153,7 @@
                            (fn [token args impl] (ew/set-area-claims! w [their-claim])
                              (impl token args)))
               s (start {:p p :shared w})]
-          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0}) {})
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}}) {})
           (await (run-ticks s 20))
           (is (empty? (calls s "dig")))
           (is (= [{:reason :claim :claim "c9" :owner "Miles"}]
@@ -164,7 +164,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world {:blocks {"3,64,0" "sand" "6,64,0" "sand" "6,64,1" "water"}}
-              s (await (scenario {:block "sand" :count 2 :wet true :accept #{} :tunnel-length 0} world 30))]
+              s (await (scenario {:block "sand" :count 2 :wet true :accept #{} :ways #{:seen}} world 30))]
           (is (= [[3 64 0]] (dug-cells s)))
           (is (= #{:fluid-adjacent :falling-block} (:default (:accept mine/args)))))))))
 
@@ -173,7 +173,7 @@
     (tu/run-async done
       (fn ^:async t []
         ;; buried ore one block past the pocket's wall, and exposed ore in a sealed cave: neither can be seen
-        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :tunnel-length 0}
+        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :ways #{:seen}}
                                  (rock-world {"2,64,0" "iron_ore" "-4,64,0" "iron_ore" "-4,65,0" "air"}) 20))]
           (is (empty? (calls s "dig")))
           (is (= :none (:reason (done-event s))))
@@ -183,7 +183,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :tunnel-length 0} (rock-world {"1,64,0" "iron_ore"}) 20))]
+        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :ways #{:seen}} (rock-world {"1,64,0" "iron_ore"}) 20))]
           (is (= [[1 64 0]] (dug-cells s)))
           (is (= 1 (get (inv s) "raw_iron")))
           (is (= :count (:reason (done-event s)))))))))
@@ -192,7 +192,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :tunnel-length 0} (rock-world {"1,64,0" "iron_ore"}) 0))]
+        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :ways #{:seen}} (rock-world {"1,64,0" "iron_ore"}) 0))]
           (.override (.-world (:p s)) "collect" (fn [_ _ _] #js {:status "unreachable" :reason "no-path" :gained #js []}))
           (await (run-ticks s 80))
           (is (nil? (get (inv s) "raw_iron")))
@@ -382,7 +382,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :tunnel-length 0}
+        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :ways #{:seen}}
                                  (assoc-in (rock-world {"1,64,0" "deepslate_iron_ore"}) [:drops "deepslate_iron_ore"] "raw_iron") 20))]
           (is (= [[1 64 0]] (dug-cells s)))
           (is (= 1 (get (inv s) "raw_iron")))
@@ -393,7 +393,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 3 :stay-level true}
+        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 3 :ways #{:seen :strip-tunnel}}
                                  (deep-rock {}) 120))]
           (is (seq (dug-cells s)))
           (is (every? #(#{64 65} (second %)) (dug-cells s)) "no cell below the start level")
@@ -403,7 +403,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :tunnel-length 0 :stay-level true}
+        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :ways #{:seen :strip-tunnel} :tunnel-length 0}
                                  (rock-world far-cave) 40))]
           (is (empty? (calls s "dig")))
           (is (= :none (:reason (done-event s)))))))))
@@ -412,7 +412,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "iron_ore" :direction "east" :tunnel-length 6 :stay-level true}
+        (let [s (await (scenario {:block "iron_ore" :direction "east" :tunnel-length 6 :ways #{:seen :strip-tunnel}}
                                  (update (rock-world side-cave) :inventory into [{:name "cobblestone" :count 5}]) 120))]
           (is (= :breach-sealed (:reason (first (tunnel-ends s)))) (pr-str (map :text (tunnel-ends s))))
           (is (= "cobblestone" (block-at s 2 64 0)))
@@ -461,7 +461,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [air ["air" "cave_air"]]
-          (let [s (await (scenario {:block "iron_ore" :direction "east" :tunnel-length 6 :stay-level true}
+          (let [s (await (scenario {:block "iron_ore" :direction "east" :tunnel-length 6 :ways #{:seen :strip-tunnel}}
                                    (update (rock-world {"2,64,1" air "2,65,1" air}) :inventory into [{:name "cobblestone" :count 5}]) 120))
                 behind {:names [air] :cells [[2 64 1] [2 65 1]]}]
             (is (= behind (:behind (first (tunnel-ends s)))))

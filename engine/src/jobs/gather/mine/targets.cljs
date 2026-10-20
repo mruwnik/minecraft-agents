@@ -1,6 +1,7 @@
 (ns jobs.gather.mine.targets
   "Seen-block targets of jobs.gather.dig-for: how a block would be dug (classify), the scan for targets and the choice of the next, the ground snapshot and the guards that skip a target, own-zone tests, drops lying near."
-  (:require [engine.settings :as settings]
+  (:require [jobs.gather.mine.way-set :as ways]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.game :as game]
             [jobs.lib.blocks :as blocks]
@@ -143,8 +144,8 @@
         skipped (set (:skipped (ctx/mem c)))
         ground (into #{} (map :pos) (:ground (ctx/mem c)))
         here (u/self-pos c)
-        stay? (:stay-level (:args c))
-        seen (->> (look/seen-blocks p {:names (vec (kinds (:args c))) :radius radius :max 128 :live? true})
+        stay? (ways/stay-level? (:args c))
+        seen (->> (if (ways/seen? (:args c)) (look/seen-blocks p {:names (vec (kinds (:args c))) :radius radius :max 128 :live? true}) [])
                   (map :pos)
                   (remove skipped)
                   (remove #(too-deep? c %)))

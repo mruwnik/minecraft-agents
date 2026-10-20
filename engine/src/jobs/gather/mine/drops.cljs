@@ -1,7 +1,8 @@
 (ns jobs.gather.mine.drops
   "The drops of jobs.gather.dig-for: digging one cell, then collecting what it dropped (a look down the column, a
   collect-drops child, a walk or a short cut beside the dug cell) and telling what was left or lost."
-  (:require [jobs.lib.block-sets :as bs]
+  (:require [jobs.gather.mine.way-set :as ways]
+            [jobs.lib.block-sets :as bs]
             [clojure.string :as str]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -152,7 +153,7 @@
 (defn ^:async walk-to-drop!
   "A dig whose drop did not come in: once per dug cell, walk within 1 of it (near/go-near!, no escalation), where a drop
   out of sight or out of reach from the dig spot is seen and picked up; a dug cell no walk gets beside (dug from a
-  distance over a wall) is cut to first (cut-to-drop!; not with :stay-level). :walked (look and collect again), :partial
+  distance over a wall) is cut to first (cut-to-drop!; not on a level-keeping tunnel). :walked (look and collect again), :partial
   (go-to or a dig waits) or nil (no walk: it came in, the cell was walked to already, or the walk was blocked)."
   [c]
   (let [{:keys [dug-at drop-walked last-carried]} (ctx/mem c)]
@@ -161,7 +162,7 @@
             go! #(near/go-near! c pos 1 {:ways #{:walk :clear-seal}})
             w (await (go!))
             w (if (and (= :blocked w) (await (look-floor-toward! c dug-at))) (await (go!)) w)
-            cut (when (and (= :blocked w) (not (:stay-level (:args c))) (let [res (near/last-walk c)] (or (result/unreachable-walk? res) (= :detour (result/why res)))))
+            cut (when (and (= :blocked w) (not (ways/stay-level? (:args c))) (let [res (near/last-walk c)] (or (result/unreachable-walk? res) (= :detour (result/why res)))))
                   (await (cut-to-drop! c dug-at)))
             w (case cut :cut (await (go!)) :partial :partial w)]
         (when (= :there w) (await (peek-over-lip! c dug-at)))

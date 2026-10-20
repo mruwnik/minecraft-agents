@@ -235,7 +235,7 @@
   "A stay-level mine with no heading argument, the body facing west, over rock-world extra with cobblestone carried."
   [extra length ticks]
   (let [s (start {:world (-> (rock-world extra) (assoc :yaw 90) (update :inventory into [{:name "cobblestone" :count 5}]))})]
-    (core/submit! (:eng s) (spec {:block "iron_ore" :count 30 :tunnel-length length :stay-level true}) {})
+    (core/submit! (:eng s) (spec {:block "iron_ore" :count 30 :tunnel-length length :ways #{:seen :strip-tunnel}}) {})
     (await (run-ticks s ticks))
     s))
 
@@ -244,7 +244,7 @@
   [extra memory]
   (let [s (start {:world (update (rock-world extra) :inventory into [{:name "cobblestone" :count 5}])})]
     (doseq [[kind data] memory] (mem/write! (:store (:eng s)) kind data))
-    (core/submit! (:eng s) (spec {:block "iron_ore" :direction "east" :tunnel-length 4 :stay-level true}) {})
+    (core/submit! (:eng s) (spec {:block "iron_ore" :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel}}) {})
     (await (run-ticks s 120))
     s))
 
@@ -253,7 +253,7 @@
   [reach]
   (let [s (start {:world (update (rock-world {"0,65,-1" "air" "0,65,-2" "air" "1,65,-2" "iron_ore"}) :inventory into [{:name "cobblestone" :count 5}])})]
     (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
-    (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :settings {:jobs.gather.mine-stay/ore-reach reach}}) {})
+    (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel} :settings {:jobs.gather.mine-stay/ore-reach reach}}) {})
     (await (run-ticks s 500))
     s))
 
@@ -286,7 +286,7 @@
                              (assoc :drops drops)
                              (update :inventory into [{:name "cobblestone" :count 5}]))})]
     (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
-    (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 3 :stay-level true}) {})
+    (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 3 :ways #{:seen :strip-tunnel}}) {})
     (await (run-ticks s 400))
     s))
 
@@ -364,7 +364,7 @@
         _ (swap! (fake/state p) update :self merge self)
         _ (swap! (fake/state p) assoc :light-default [0 0])
         s (start {:p p})]
-    (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 0}) {})
+    (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :ways #{:seen}}) {})
     (await (run-ticks s 120))
     (dug-cells s)))
 
@@ -479,7 +479,7 @@
         opts (atom [])]
     (some->> stair-way (mem/write! (:store (:eng s)) :stair-way))
     (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
-             (fn ^:async b [] (core/submit! (:eng s) (spec {:block "sand" :tunnel-length 0}) {})
+             (fn ^:async b [] (core/submit! (:eng s) (spec {:block "sand" :ways #{:seen}}) {})
                (await (run-ticks s 6)))))
     @opts))
 

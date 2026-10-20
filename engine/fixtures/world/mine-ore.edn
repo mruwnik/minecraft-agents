@@ -47,7 +47,7 @@
   {:name "stay-level-takes-seen-ore-two-off-the-tunnel"
    :blocks [[:set [18 1 15] "glass"] [:set [18 1 14] "diamond_ore"]]
    :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
-   :act [[:job (jobs.gather.mine {:torches false :block "diamond_ore" :count 1 :direction :east :stay-level true :tunnel-length 8 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "diamond_ore" :count 1 :direction :east :ways #{:seen :strip-tunnel} :tunnel-length 8 :mend false})]]
    :expect [{:event {:source :job :kind :mine.side} :within-s 100 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 120 :of-job true}]
    :after [[:item "diamond" [:>= 1]] [:not-block [18 1 14] "diamond_ore"]]
@@ -57,7 +57,7 @@
    :blocks [[:fill [15 0 14] [17 2 15] "glass"] [:fill [15 0 13] [17 2 13] "diamond_ore"]]
    :body {:at [16.5 0 16.5] :yaw 180 :settle-s 3 :inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
    :act [[:until [:cli "observe" ["$body" "--world" "$world" "seen" "--names" "diamond_ore"] {:ok true :blocks [:has {:name "diamond_ore"}]}] 30]
-         [:job (jobs.gather.mine {:torches false :block "diamond_ore" :count 1 :direction :east :stay-level true :tunnel-length 8 :mend false})]]
+         [:job (jobs.gather.mine {:torches false :block "diamond_ore" :count 1 :direction :east :ways #{:seen :strip-tunnel} :tunnel-length 8 :mend false})]]
    :expect [{:event {:source :job :kind :mine.side} :within-s 120 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 140 :of-job true}]
    :after [[:item "diamond" [:>= 1]]]
@@ -65,7 +65,7 @@
   {:name "ore-reach-0-leaves-the-side-ore"
    :blocks [[:set [18 1 15] "glass"] [:set [18 1 14] "diamond_ore"]]
    :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
-   :act [[:job (jobs.gather.mine {:torches false :block "diamond_ore" :count 1 :direction :east :stay-level true :tunnel-length 8 :mend false :settings {:jobs.gather.mine-stay/ore-reach 0}})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "diamond_ore" :count 1 :direction :east :ways #{:seen :strip-tunnel} :tunnel-length 8 :mend false :settings {:jobs.gather.mine-stay/ore-reach 0}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :mine.side} :for-s 60}]
    :after [[:block [18 1 14] "diamond_ore"] [:item "diamond" 0]]
@@ -74,7 +74,7 @@
   {:name "stay-level-takes-seen-side-ore-eight-blocks-from-the-start"
    :blocks [[:set [24 1 15] "glass"] [:set [24 1 14] "diamond_ore"]]
    :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
-   :act [[:job (jobs.gather.mine {:torches false :block "diamond_ore" :count 1 :direction :east :stay-level true :tunnel-length 12 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "diamond_ore" :count 1 :direction :east :ways #{:seen :strip-tunnel} :tunnel-length 12 :mend false})]]
    :expect [{:event {:source :job :kind :mine.side :level :info :data {:shut true}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :mine.side :level :warn} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "diamond" [:>= 1]] [:not-block [24 1 14] "diamond_ore"]]
@@ -83,7 +83,7 @@
   {:name "branches-find-ore-buried-beside-the-tunnel"
    :blocks [[:set [19 0 11] "diamond_ore"]]
    :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
-   :act [[:job (jobs.gather.mine {:torches false :block "diamond_ore" :count 1 :direction :east :stay-level true :branches true :tunnel-length 8 :mend false :settings {:jobs.gather.mine-stay/branch-length 5}})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "diamond_ore" :count 1 :direction :east :ways #{:seen :strip-tunnel} :branches true :tunnel-length 8 :mend false :settings {:jobs.gather.mine-stay/branch-length 5}})]]
    :expect [{:event {:source :job :kind :mine.branch :level :info} :within-s 150 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 200 :of-job true}]
    :after [[:item "diamond" [:>= 1]] [:not-block [19 0 11] "diamond_ore"] [:not-block [19 0 15] "stone"]]

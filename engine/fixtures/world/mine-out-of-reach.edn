@@ -14,7 +14,7 @@
             [:fill [16 0 13] [16 6 13] "bedrock"] [:set [16 7 13] "stone"]
             [:fill [16 0 19] [16 6 19] "bedrock"] [:set [16 7 19] "stone"]]
    :body {:at [16.5 0 16.5]}
-   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 3 :radius 10 :tunnel-length 0 :descend-limit 0})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 3 :radius 10 :ways #{:seen}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :text [:contains "seen ore out of reach"]}} :within-s 130 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:unreached [:any]}} :within-s 130 :of-job true}]
    :after [[:block [13 7 16] "stone"] [:block [16 7 19] "stone"]]}]}

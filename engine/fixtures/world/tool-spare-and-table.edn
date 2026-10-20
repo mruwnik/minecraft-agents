@@ -68,7 +68,7 @@
    :blocks [[:set [12 9 16] "iron_ore"] [:set [12 9 17] "iron_ore"]
             [:set [28 10 22] "chest{Items:[{Slot:0b,id:\"minecraft:stone_pickaxe\",count:1}]}"]]
    :body {:inventory [["stone_pickaxe[damage=130]" 1] ["torch" 8] ["cobblestone" 8]]}
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 2 :tunnel-length 0 :radius 6})]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 2 :ways #{:seen} :radius 6})]]
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:got 2}} :within-s 190 :of-job true}]
    :after [[:item "raw_iron" 2] [:body-near [10.5 10 16.5] 6]]}]}

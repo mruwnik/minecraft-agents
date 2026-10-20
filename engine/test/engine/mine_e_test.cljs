@@ -27,6 +27,7 @@
             [jobs.gather.mine.end :as mine-end]
             [jobs.gather.mine.targets :as mine-targets]
             [jobs.gather.mine.torches :as mine-torches]
+            [jobs.gather.mine.way-set :as way-set]
             [jobs.gather.mine.tunnel :as mine-tunnel]
             [jobs.gather.mine-stay :as stay]
             [jobs.access.stair :as stair]
@@ -48,7 +49,7 @@
         (let [s (start {:world {:blocks {"15,64,0" "sand"}}})
               opts (atom [])]
           (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
-            (fn ^:async b [] (core/submit! (:eng s) (spec {:block "sand" :tunnel-length 0}) {})
+            (fn ^:async b [] (core/submit! (:eng s) (spec {:block "sand" :ways #{:seen}}) {})
             (await (run-ticks s 6)))))
           (is (seq @opts))
           (is (zero? (:failures (job-mem s) 0)) "a waiting walk is no failure")
@@ -86,7 +87,7 @@
                                 :inventory [{:name "cobblestone" :count 2}]}})
               ys (atom [])]
           (add-watch (fake/state (:p s)) ::ys (fn [_ _ _ w] (swap! ys conj (second (get-in w [:self :pos])))))
-          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0 :trip true :mend true}) {})
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :ways #{:seen} :trip true :mend true}) {})
           (await (run-ticks s 30))
           (is (= "cobblestone" (block-at s 0 62 0)) "the lava the dig laid open is sealed from the rim")
           (is (= [[0 63 0]] (dug-cells s)) "the sand is dug, from beside")
@@ -100,7 +101,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "sand" :count 1 :tunnel-length 0 :settings {:jobs.gather.dig-for/max-failures 1}}
+        (let [s (await (scenario {:block "sand" :count 1 :ways #{:seen} :settings {:jobs.gather.dig-for/max-failures 1}}
                                  {:floor [0 0 0 0] :blocks {"0,63,0" "sand" "0,62,0" "stone"}} 20))]
           (is (empty? (dug-cells s)) "a pillar top is never dug from on top")
           (is (= [{:x 0 :y 63 :z 0}] (mapv :pos (events-of s :mine.refused))))
@@ -194,7 +195,7 @@
         (doseq [why [:off-plan :needs-health]]
           (let [stub {:round (fn [c] (ctx/end c :nothing-possible {:reason :unreachable :why why} {:arrived false}))}
                 s (start {:world {:blocks (cells "sand" [15] [64] [-1 0 1 2])} :jobs (assoc registry/jobs 'jobs.movement.go-to stub)})]
-            (core/submit! (:eng s) (spec {:block "sand" :count 4 :tunnel-length 0}) {})
+            (core/submit! (:eng s) (spec {:block "sand" :count 4 :ways #{:seen}}) {})
             (await (run-ticks s 60))
             (is (= 4 (count (events-of s :mine.unreachable))) (str why))))))))
 
@@ -205,7 +206,7 @@
       (fn ^:async t []
         (let [waiting {:round (fn ^:async w [_] :continue)}
               s (start {:world {:blocks {"15,64,0" "sand"}} :jobs (assoc registry/jobs 'jobs.movement.go-to waiting)})]
-          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0}) {})
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}}) {})
           (await (run-ticks s 60))
           (is (= 1 (count (events-of s :mine.stalled))))
           (is (finished? s)))))))
@@ -246,7 +247,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [w (ew/of-data {} {} [home-zone])
-              s (await (zoned {:block "sand" :count 2 :tunnel-length 0 :trip true} {:floor [-30 -30 40 30] :blocks {"6,64,11" "sand" "7,64,11" "sand"}} w 60))
+              s (await (zoned {:block "sand" :count 2 :ways #{:seen} :trip true} {:floor [-30 -30 40 30] :blocks {"6,64,11" "sand" "7,64,11" "sand"}} w 60))
               left (first (events-of s :mine.left-zone))
               first-dig (first (dug-cells s))]
           (is (= "home" (:zone left)))
@@ -259,7 +260,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [w (ew/of-data {"pad" pad-plan} {} [])
-              s (await (zoned {:block "stone" :count 1 :tunnel-length 0 :direction "east" :trip true :torches false}
+              s (await (zoned {:block "stone" :count 1 :ways #{:seen :descend-stair :descend-shaft} :direction "east" :trip true :torches false}
                               {:blocks (soil-over-stone 63 59) :drops {"stone" "cobblestone"} :inventory pickaxe} w 60))
               left (first (events-of s :mine.left-zone))]
           (is (= "pad" (:zone left)))
@@ -269,7 +270,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (zoned {:block "stone" :count 1 :tunnel-length 0 :direction "east" :trip true :torches false}
+        (let [s (await (zoned {:block "stone" :count 1 :ways #{:seen :descend-stair :descend-shaft} :direction "east" :trip true :torches false}
                               {:blocks (soil-over-stone 63 59) :drops {"stone" "cobblestone"} :inventory pickaxe}
                               (ew/of-data {} {} [(assoc farm-zone :min [6 60 -2] :max [8 70 2])]) 60))]
           (is (= "farm" (:zone (first (events-of s :mine.left-zone))))))))))
@@ -292,7 +293,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [w (ew/of-data {"pad" pad-plan} {} [])
-              s (await (zoned {:block "sand" :count 1 :tunnel-length 0 :trip true} {:blocks {"2,64,0" "sand"}} w 20))]
+              s (await (zoned {:block "sand" :count 1 :ways #{:seen} :trip true} {:blocks {"2,64,0" "sand"}} w 20))]
           (is (empty? (events-of s :mine.left-zone)))
           (is (= 1 (count (dug-cells s)))))))))
 
@@ -301,7 +302,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [w (ew/of-data {} {} [home-zone])
-              s (await (zoned {:block "sand" :count 1 :tunnel-length 0 :ignore-zones? true} {:blocks {"2,64,0" "sand"}} w 20))]
+              s (await (zoned {:block "sand" :count 1 :ways #{:seen} :ignore-zones? true} {:blocks {"2,64,0" "sand"}} w 20))]
           (is (empty? (events-of s :mine.left-zone)))
           (is (= 1 (count (dug-cells s)))))))))
 
@@ -333,7 +334,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [used (await (shafted via-shaft ore-east [] 400))
-              off (await (scenario (assoc no-shaft-args :shaft false) deep-ore 400))]
+              off (await (scenario (assoc no-shaft-args :ways #{:seen :descend-stair :strip-tunnel}) deep-ore 400))]
           (is (nil? (:shaft-suggest (done-event used))))
           (is (nil? (:shaft-suggest (done-event off))))
           (is (empty? (events-of off :mine.no-shaft)) "false never looks a shaft up"))))))
@@ -342,7 +343,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario (assoc no-shaft-args :shaft :required) deep-ore 400))
+        (let [s (await (scenario (assoc no-shaft-args :ways #{:seen :descend-shaft :strip-tunnel}) deep-ore 400))
               e (done-event s)]
           (is (= :no-shaft (:reason e)))
           (is (= 0 (:got e)))
@@ -354,17 +355,33 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (shafted (assoc via-shaft :shaft :required) ore-east [] 400))]
+        (let [s (await (shafted (assoc via-shaft :ways #{:seen :descend-shaft :strip-tunnel}) ore-east [] 400))]
           (is (= :count (:reason (done-event s)))))))))
 
 (deftest stay-level-declines-on-the-surface-and-says-what-to-do
-  (let [stay {:stay-level true}]
+  (let [stay {:ways #{:seen :strip-tunnel}}]
     (is (= :on-surface (:reason (mine/surface-cause stay 15))))
     (is (re-find #"access.stair" (:text (mine/surface-cause stay 15))))
     (is (nil? (mine/surface-cause stay 12)) "a cave mouth or overhang keeps spilled sky light")
     (is (nil? (mine/surface-cause stay 0)) "sealed from the sky")
     (is (nil? (mine/surface-cause stay nil)) "no light data")
-    (is (nil? (mine/surface-cause {} 15)) "only :stay-level declines")))
+    (is (nil? (mine/surface-cause {} 15)) "only a run without a descending way declines")))
+
+(deftest the-ways-set-decides-what-a-dig-may-use
+  (is (every? #(% {:tunnel-length 4}) [way-set/seen? way-set/stair? way-set/shaft? way-set/tunnel?]) "no :ways: all four")
+  (is (not (way-set/tunnel? {:ways #{:seen} :tunnel-length 4})))
+  (is (not (way-set/tunnel? {:tunnel-length 0})) "a tunnel of no blocks is no way")
+  (is (not (way-set/stay-level? {})))
+  (is (way-set/stay-level? {:ways #{:seen :strip-tunnel}}))
+  (is (not (way-set/stay-level? {:ways #{:seen :strip-tunnel :descend-shaft}}))))
+
+(deftest ore-in-view-is-left-when-seen-is-not-a-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :ways #{:descend-stair}} (rock-world {"1,64,0" "iron_ore"}) 40))]
+          (is (empty? (dug-cells s)))
+          (is (= :none (:reason (done-event s)))))))))
 
 (deftest the-end-text-names-why-a-run-with-no-tunnel-blocks-stopped
   (is (= "; stair stopped: undercuts-way; tunnel stopped: way-out"
@@ -409,12 +426,12 @@
       (fn ^:async t []
         (let [s (start {:world (update (rock-world {"0,65,-1" "air" "0,65,-2" "air" "1,65,-2" "iron_ore"}) :inventory into [{:name "cobblestone" :count 5}])})]
           (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
-          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :settings {:jobs.gather.mine-stay/ore-reach 2} :submitted-at [-6 64 0]}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel} :settings {:jobs.gather.mine-stay/ore-reach 2} :submitted-at [-6 64 0]}) {})
           (await (run-ticks s 500))
           (is (= 1 (get (inv s) "raw_iron")) (pr-str (keep :text @(:seen s)))))))))
 
 (deftest a-stay-level-walk-to-ore-plans-no-way-over-the-ground
-  (is (= 8 (:y-margin (mine/dig-walk-opts {:stay-level true} false nil))) "a way round over a hill is no way for a run that stays level")
+  (is (= 8 (:y-margin (mine/dig-walk-opts {:ways #{:seen :strip-tunnel}} false nil))) "a way round over a hill is no way for a run that stays level")
   (is (nil? (:y-margin (mine/dig-walk-opts {} false nil))))
-  (is (= #{:walk :clear-seal} (:ways (mine/dig-walk-opts {:stay-level true} true nil))))
+  (is (= #{:walk :clear-seal} (:ways (mine/dig-walk-opts {:ways #{:seen :strip-tunnel}} true nil))))
   (is (= {:safe? '(not (threatened))} (:checks (mine/dig-walk-opts {} false {:safe? '(not (threatened))})))))

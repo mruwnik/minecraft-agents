@@ -10,17 +10,21 @@
   :limit-s 120}
  :cases
  [{:name "dig-for-stays-where-the-dig-ends"
-   :act [[:job (jobs.gather.dig-for {:torches false :block "iron_ore" :level false :count 1 :tunnel-length 0 :descend-limit 0 :radius 10})]]
+   :act [[:job (jobs.gather.dig-for {:torches false :block "iron_ore" :level false :count 1 :ways #{:seen} :radius 10})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1 :reason :count}} :within-s 100 :of-job true}]
    :after [[:item "raw_iron" 1] [:not-block [24 0 16] "iron_ore"] [:body-far [16.5 0 16.5] 2]]}
+  {:name "dig-for-without-seen-as-a-way-leaves-the-ore-in-view"
+   :act [[:job (jobs.gather.dig-for {:torches false :block "iron_ore" :level false :count 1 :ways #{:descend-stair} :radius 10})]]
+   :expect [{:event {:source :job :kind :stopped :data {:got 0 :reason :none}} :within-s 60 :of-job true}]
+   :after [[:block [24 0 16] "iron_ore"] [:item "raw_iron" 0]]}
   {:name "dig-for-without-a-pickaxe-ends-no-tool-and-stays"
    :body {:inventory [["torch" 8]]}
-   :act [[:job (jobs.gather.dig-for {:block "iron_ore" :level false :count 1 :tunnel-length 0 :descend-limit 0 :radius 10})]]
+   :act [[:job (jobs.gather.dig-for {:block "iron_ore" :level false :count 1 :ways #{:seen} :radius 10})]]
    :expect [{:event {:source :job :kind :stopped :data {:got 0 :reason :no-tool :kind :condition-failed :text [:contains "jobs.gather.mine"]}} :within-s 60 :of-job true}]
    :after [[:block [24 0 16] "iron_ore"] [:item "raw_iron" 0] [:body-near [16.5 0 16.5] 1]]}
   {:name "dig-for-with-a-spent-last-pickaxe-ends-no-tool"
    :body {:inventory [["stone_pickaxe[damage=129]" 1] ["torch" 8]]}
-   :act [[:job (jobs.gather.dig-for {:block "iron_ore" :level false :count 1 :tunnel-length 0 :descend-limit 0 :radius 10})]]
+   :act [[:job (jobs.gather.dig-for {:block "iron_ore" :level false :count 1 :ways #{:seen} :radius 10})]]
    :expect [{:event {:source :job :kind :stopped :data {:got 0 :reason :no-tool :text [:contains "nearly spent"]}} :within-s 60 :of-job true}]
    :after [[:block [24 0 16] "iron_ore"] [:item "raw_iron" 0] [:body-near [16.5 0 16.5] 1]]}
   {:name "dig-for-with-no-torch-to-hang-ends-no-torches"
@@ -37,18 +41,18 @@
    :after [[:item "raw_iron" 1] [:not-block [18 0 16] "wall_torch"]]}
   {:name "dig-for-an-item-takes-any-block-that-drops-it"
    :blocks [[:set [24 0 16] "deepslate_iron_ore"]]
-   :act [[:job (jobs.gather.dig-for {:torches false :item "raw_iron" :level false :count 1 :tunnel-length 0 :descend-limit 0 :radius 10})]]
+   :act [[:job (jobs.gather.dig-for {:torches false :item "raw_iron" :level false :count 1 :ways #{:seen} :radius 10})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1 :reason :count}} :within-s 100 :of-job true}]
    :after [[:item "raw_iron" 1] [:not-block [24 0 16] "deepslate_iron_ore"]]}
   {:name "dig-for-several-items-counts-any-of-them"
    :blocks [[:set [24 0 16] "coal_ore"]]
-   :act [[:job (jobs.gather.dig-for {:torches false :item ["raw_iron" "coal"] :level false :count 1 :tunnel-length 0 :descend-limit 0 :radius 10})]]
+   :act [[:job (jobs.gather.dig-for {:torches false :item ["raw_iron" "coal"] :level false :count 1 :ways #{:seen} :radius 10})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1 :reason :count}} :within-s 100 :of-job true}]
    :after [[:item "coal" 1] [:not-block [24 0 16] "coal_ore"]]}
   {:name "mine-trip-crafts-a-pickaxe-and-digs"
    :blocks [[:fill [20 0 14] [26 2 18] "stone"]]
    :body {:inventory [["oak_planks" 4] ["stick" 2] ["crafting_table" 1]]}
-   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 1 :tunnel-length 0 :descend-limit 0 :radius 10})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 1 :ways #{:seen} :radius 10})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 1] :reason :count}} :within-s 110 :of-job true}]
    :after [[:item "cobblestone" [:>= 1]]]
    :limit-s 130}]}

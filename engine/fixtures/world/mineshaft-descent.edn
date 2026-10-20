@@ -1,10 +1,10 @@
 ;; Cards a50ce32a/1b7f6a3e (mine :shaft: a declared mineshaft is descended and branched from), 644a840a (its cells stay open: the
-;; mine's own tidy and mend do not refill them), e609bad0 (no usable shaft: the stair is suggested, :shaft :required refuses).
+;; mine's own tidy and mend do not refill them), e609bad0 (no usable shaft: the stair is suggested, :ways without :descend-stair refuses).
 ;; Soil 4 deep over stone (the plot walled in dirt so neighbours' stone is not walked to); body at [16.5 0 16.5] with a stone pickaxe.
 ;; A mineshaft plan "s" by the body: stair from [16 0 16] east down to y -4 (4 steps; the stone starts at y -5).
 ;; Should-succeed: with the plan the run says "via shaft s", the stair cells stay air; without it the end text suggests plans.mjs mineshaft.
 ;; Cards 1b7f6a3e/5ee1bdc0: foreign-zone shaft unused (used with :ignore-zones?), unreachable top, a stair that stops is marked failed.
-;; Should-fail: :shaft :required with no plan ends :no-shaft, got 0, nothing dug.
+;; Should-fail: :ways #{:seen :descend-shaft :strip-tunnel} with no plan ends :no-shaft, got 0, nothing dug.
 {:defaults
  {:tags [:mine :mineshaft :stair :jobs] :time :any
   :plot {:height 12 :floor "dirt"}
@@ -26,7 +26,7 @@
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4] :shaft-suggest {:to-y [:any]} :text [:contains "plans.mjs mineshaft"]}} :within-s 130 :of-job true}]
    :after [[:item "cobblestone" [:>= 4]]]}
   {:name "shaft-required-without-a-shaft-digs-nothing"
-   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8 :shaft :required})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8 :ways #{:seen :descend-shaft :strip-tunnel}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :reason :no-shaft}} :within-s 60 :of-job true}]
    :after [[:block [17 -1 16] "dirt"] [:block [16 -1 16] "dirt"] [:item "cobblestone" 0]]}
   ;; Card 65ac2209: a body standing on a step of a half-dug shaft (steps 1-2 cut) continues the stair from there: 2 steps, not 4 from the top.

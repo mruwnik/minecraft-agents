@@ -1,7 +1,8 @@
 (ns jobs.gather.mine.tunnel
   "The strip tunnel of jobs.gather.dig-for: where it starts, the stretches cut by jobs.gather.strip-tunnel children, turning to
   another heading, and its end."
-  (:require [clojure.string :as str]
+  (:require [jobs.gather.mine.way-set :as ways]
+            [clojure.string :as str]
             [jobs.lib.waits :as waits]
             [jobs.lib.block-sets :as bs]
             [engine.args :as a]
@@ -88,7 +89,7 @@
   (let [{:keys [tunnel]} (ctx/mem c)
         {:keys [heading steps]} tunnel
         fluid (when (and at (= :fluid-in-cut stop)) (u/seen-name (:primitives c) at))]
-    (if (and (if (:stay-level (:args c)) (leg-stops stop) (and (zero? steps) (heading-stops stop)))
+    (if (and (if (ways/stay-level? (:args c)) (leg-stops stop) (and (zero? steps) (heading-stops stop)))
              (< (+ steps (:spent (ctx/mem c) 0)) (:tunnel-length (:args c)))
              (turn-heading! c stop))
       :again
@@ -154,7 +155,7 @@
             r (waits/waiting-out c (await (ctx/call c :tunnel 'jobs.gather.strip-tunnel
                                {:heading (:heading m) :origin (:origin t) :steps (or steps 0) :limit (branch/segment-limit c (or steps 0) (- (:tunnel-length args) (:spent m 0)))
                                 :hung (vec (:hung m)) :torches (:torches args) :watch-kinds (vec (watch-kinds c))
-                                :radius (:radius args) :wet (boolean (:wet args)) :accept (vec (:accept args)) :stay-level (boolean (:stay-level args))
+                                :radius (:radius args) :wet (boolean (:wet args)) :accept (vec (:accept args)) :stay-level (ways/stay-level? args)
                                 :fetch (:fetch args) :ignore-zones? (:ignore-zones? args)
                                 :block (:block args) :item (:item args)})))]
         (if (= :continue r)

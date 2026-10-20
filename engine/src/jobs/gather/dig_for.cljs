@@ -15,6 +15,7 @@
             [jobs.gather.mine.targets :as targets :refer [owed reach kinds items main-block carried rules-in scan snapshot way-floor last-exit? skip! skip-failed! skip-unreachable! stalled! drop-in-line? next-target!]]
             [jobs.gather.mine.torches :as torches]
             [jobs.gather.mine.tunnel :as tunnel]
+            [jobs.gather.mine.way-set :as mw]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.area :as area]
@@ -40,7 +41,7 @@
 
   Needs: a pickaxe carried when the block wants one (a shovel or axe block drops by hand), torches carried or craftable when a
   tunnel or stair is lit, health (fit? waits :low-health, at the start only), and a read zone list (:no-zones unless
-  :ignore-zones?). Impossible: :no-target. :stay-level declines :on-surface in the open. Fetches only seal blocks and torch ingredients (:fetch), never the tool or food, and walks nowhere
+  :ignore-zones?). Impossible: :no-target. :ways without a descent decline :on-surface in the open. Fetches only seal blocks and torch ingredients (:fetch), never the tool or food, and walks nowhere
   home: the body stays where the dig ends. Targets come only from perception (seenBlocks, never x-ray): a seen block within
   :radius with a seen air face, not beside seen lava (or water unless :wet), that the zone rules, claims and plans let it dig
   (:refused when all are barred).
@@ -53,11 +54,11 @@
      drop still lying is mine.left-behind, a dig that brought nothing and shows no drop is mine.drop-lost. The count is the inventory's.
   2. Carrying the goal ends :count; max-failures digs failed in a row end :gave-up; :dry-digs (setting) digs that raised no count end :no-drops.
   3. Dig the nearest target (the 5x5x2 ground under the start last with :track-ground; a walk within reach first; mine.targets).
-  4. No target: look round once per cell, then by a mineshaft (:shaft, mine.descent) or a stair down (:descend-limit, to the ore's :level) to
+  4. No target: look round once per cell, then by a mineshaft (:descend-shaft, mine.descent) or a stair down (:descend-stair, :descend-limit, to the ore's :level) to
      find stone or the tunnel level; a stair that finds no stone ends :no-stone-found.
   5. Else the strip tunnel (mine.tunnel): 1-wide 2-high at the start level along :heading / :direction, :tunnel-length blocks, torches where the planner says (jobs.lib.torch-plan;
      :torches); any stop ends the dig :tunnel-stopped with :stop :length :at :next :walk :fluid :behind.
-  :stay-level (jobs.gather.mine-stay, mine.side) keeps the start height and seals a cut that opens into air; seen ore out of reach is
+  a level-keeping tunnel (no descending way; jobs.gather.mine-stay, mine.side) keeps the start height and seals a cut that opens into air; seen ore out of reach is
   :unreached in the result.
 
   It marks itself for the :ore-seen trigger (jobs.lib.ore-pick): ore beside the way is dug, except the block it digs.
@@ -81,8 +82,7 @@
    :heading :shared
    :direction :shared
    :tunnel-length :shared
-   :stay-level :shared
-   :branches {:doc "with :stay-level: cut a side branch to each side of the tunnel every few blocks (mine-stay ::branch-every, ::branch-length), more rock in view per block walked" :spec boolean? :default false}
+   :branches {:doc "on a level-keeping tunnel (no descending way): cut a side branch to each side of the tunnel every few blocks (mine-stay ::branch-every, ::branch-length), more rock in view per block walked" :spec boolean? :default false}
    :level :shared
    :shaft :shared
    :descend-limit :shared
@@ -93,10 +93,14 @@
   {::dry-digs {:default 3 :doc "Digs in a row after which the carried count of the item did not rise before giving up (:no-drops)." :spec (a/int-in 1 nil)}
    ::max-failures {:default 3 :doc "Dig failures in a row before giving up." :spec (a/int-in 1 nil)}
    ::job-time-s {:default 1800 :doc "Seconds a mine call may take by default (its :spend :job-time)." :spec (a/num-in 0 nil)}
-   ::stay-margin {:default 8 :doc "Blocks over the higher or under the lower of body and ore that a :stay-level walk to ore may plan through (go-to :y-margin): a body a reflex took far off does not climb a hill to get back." :spec (a/num-in 0 nil)}
+   ::stay-margin {:default 8 :doc "Blocks over the higher or under the lower of body and ore that a level-keeping walk to ore may plan through (go-to :y-margin): a body a reflex took far off does not climb a hill to get back." :spec (a/num-in 0 nil)}
    ::item-s {:default 6 :doc "Mean seconds one item takes (walk, dig, collect), for the quote." :spec (a/num-in 0 nil)}})
 
 (def target [:item :block :heading :center])
+
+(def ways
+  "The ways the dig may use (the call's :ways, default all): :seen (dig what is in view), :descend-stair (stair down to the ore's level, or through soil to stone; :descend-limit steps), :descend-shaft (down a mineshaft plan, :shaft names it; with no :descend-stair and no usable shaft the run ends :no-shaft before anything is dug), :strip-tunnel (a tunnel at the start level, :tunnel-length blocks). With :strip-tunnel and no descent the tunnel keeps its level: seen ore only beside it (or by a short side cut), and a cut that opens into air beyond it is sealed with a carried block."
+  (into mw/ordered need/fetch-ways))
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
@@ -130,9 +134,9 @@
   "{:reason :on-surface :text ..} for a :stay-level run whose head cell has full sky light (head-light 15, as loaded): it stands in
   the open and its tunnel would breach open at the first cell. Less light is a cave mouth or an overhang (spilled light): nil, as without light data."
   [args head-light]
-  (when (and (:stay-level args) (= 15 head-light))
+  (when (and (mw/stay-level? args) (= 15 head-light))
     {:reason :on-surface
-     :text "mine :stay-level declined: the body stands in the open; cut a stair down first (access.stair {:dir :down :y 16}) or run it without :stay-level with a :level"}))
+     :text "mine without a descending way declined: the body stands in the open; cut a stair down first (access.stair {:dir :down :y 16}) or allow a descending way with a :level"}))
 
 (defn on-surface
   "surface-cause of the body's head cell, before the run has begun (a resumed run stands where it dug)."
@@ -184,7 +188,7 @@
   "Book a dig of the mined block at pos: drops to collect, a look round at the next cell."
   [c pos]
   (ctx/update-mem! c #(cond-> (-> % (dissoc :digging) (assoc :failures 0 :collecting true :looked :dug :dug-at (access/cell pos)))
-                        (:stay-level (:args c)) (update :holes (fnil conj []) (access/cell pos)))))
+                        (mw/stay-level? (:args c)) (update :holes (fnil conj []) (access/cell pos)))))
 
 (defn settle-dig!
   "A round cut during a dig of the mined block (:digging written before it) books the dig when the cell is air now."
@@ -230,7 +234,7 @@
   (cond-> {}
     in-reach? (assoc :ways #{:walk :clear-seal})
     (seq checks) (assoc :checks checks)
-    (:stay-level args) (assoc :y-margin (settings/get settings ::stay-margin))))
+    (mw/stay-level? args) (assoc :y-margin (settings/get settings ::stay-margin))))
 
 (defn ^:async walk-to-dig!
   "Walk toward pos until the body is within reach of it, and close enough to see its drop (range 1) when the line to it
@@ -238,7 +242,7 @@
   (jobs.lib.near/go-near!)."
   [c pos]
   (let [in-reach? (u/within? (u/self-pos c) (cell-of pos) (reach))
-        walked (await (near/go-near! c pos (if (or (:stay-level (:args c)) (drop-in-line? c pos)) (reach) 1)
+        walked (await (near/go-near! c pos (if (or (mw/stay-level? (:args c)) (drop-in-line? c pos)) (reach) 1)
                                      (dig-walk-opts (:args c) in-reach? (when (underground? c) (ready/unforced c {:safe? '(not (threatened))})))))]
     (if (and (not= :there walked) (u/within? (u/self-pos c) (cell-of pos) (reach)))
       :there
@@ -247,7 +251,7 @@
 
 (defn ^:async dig-round-1! [c]
   (let [{:keys [goal failures dry looked]} (ctx/mem c)
-        {:keys [wet tunnel-length]} (:args c)
+        {:keys [wet]} (:args c)
         dry-digs (settings/get settings ::dry-digs)
         {:keys [targets refused wet? wet-n side far]} (scan c)
         ready? (and (< (carried c) goal) (< (or dry 0) dry-digs) (< failures (settings/get settings ::max-failures)) (some? looked))
@@ -279,7 +283,7 @@
                   (and (empty? refused) (not (and wet? (not wet))) (shaft-due? c)) (await (shaft-round! c))
                   (and (empty? refused) (not (and wet? (not wet))) (descend-due? c)) (await (descend-round! c))
                   (and (seq side) (< (carried c) goal)) (await (wall/side-round! c (first side)))
-                  (pos? tunnel-length) (await (tunnel/tunnel-round! c))
+                  (mw/tunnel? (:args c)) (await (tunnel/tunnel-round! c))
                   (seq refused) (stop! c :refused)
                   :else (stop! c (if (and wet? (not wet)) :wet :none)))))))
 

@@ -24,7 +24,7 @@
   (let [from (:side-from (ctx/mem c))
         args (-> (:args c)
                  (dissoc :direction :submitted-at)
-                 (assoc :heading heading :tunnel-length steps :count (need/carry-count c :side (items (:args c)) 1) :shaft false :stay-level true :track-ground false))
+                 (assoc :heading heading :tunnel-length steps :count (need/carry-count c :side (items (:args c)) 1) :ways #{:seen :strip-tunnel} :track-ground false))
         r (or (:side-end (ctx/mem c))
               (let [r (await (ctx/call c :side 'jobs.gather.dig-for (assoc args :settings {::stay/ore-reach 0})))]
                 (when-not (= :continue r) (ctx/update-mem! c assoc :side-end (dissoc r :report)))

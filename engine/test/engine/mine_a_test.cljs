@@ -67,7 +67,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [pillar (merge (cells "stone" [5] (range 63 68) [0]) {"5,68,0" "sand"})
-              s (await (scenario {:block "sand" :count 1 :tunnel-length 0} {:blocks (merge floor pillar {"12,64,4" "sand"})} 30))]
+              s (await (scenario {:block "sand" :count 1 :ways #{:seen}} {:blocks (merge floor pillar {"12,64,4" "sand"})} 30))]
           (is (= [12 64 4] (first (dug-cells s))))
           (is (= {:x 12 :y 64 :z 4} (:target (first (moved s)))) "the first walk is to the floor sand")
           (is (not-any? #(= {:x 5 :y 68 :z 0} (:target %)) (moved s)) "no walk toward the pillar")
@@ -77,7 +77,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "dirt" :count 40 :tunnel-length 0 :descend-limit 0} {:blocks floor} 120))]
+        (let [s (await (scenario {:block "dirt" :count 40 :ways #{:seen}} {:blocks floor} 120))]
           (is (seq (dug-cells s)))
           (is (every? #(>= (second %) 63) (dug-cells s)) "no dig below the ground the body started on")
           (is (finished? s)))))))
@@ -139,9 +139,9 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[args world note]
-                [[{:block "sand" :tunnel-length 0} {} "nothing at all"]
-                 [{:block "sand" :tunnel-length 0} {:blocks {"2,64,0" "dirt"}} "other blocks"]
-                 [{:block "sand" :tunnel-length 0 :radius 5} {:blocks {"9,64,0" "sand"}} "outside the radius"]]]
+                [[{:block "sand" :ways #{:seen}} {} "nothing at all"]
+                 [{:block "sand" :ways #{:seen}} {:blocks {"2,64,0" "dirt"}} "other blocks"]
+                 [{:block "sand" :ways #{:seen} :radius 5} {:blocks {"9,64,0" "sand"}} "outside the radius"]]]
           (let [s (await (scenario args world 6))]
             (is (= :none (:reason (done-event s))) note)
             (is (empty? (calls s "dig")) note)
@@ -152,7 +152,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world {:blocks {"3,64,0" "sand" "6,64,0" "sand" "6,64,1" "water"}}
-              dry (await (scenario {:block "sand" :count 2 :tunnel-length 0} world 30))
+              dry (await (scenario {:block "sand" :count 2 :ways #{:seen}} world 30))
               wet (await (scenario {:block "sand" :count 2 :wet true} world 30))]
           (is (= :wet (:reason (done-event dry))))
           (is (= 1 (:wet-skipped (done-event dry))))
@@ -166,7 +166,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world {:blocks {"3,64,0" "stone" "3,64,1" "water"} :inventory [{:name "iron_pickaxe" :count 1}]}
-              s (await (scenario {:block "stone" :count 1 :tunnel-length 0} world 30))]
+              s (await (scenario {:block "stone" :count 1 :ways #{:seen :descend-stair :descend-shaft}} world 30))]
           (is (= :wet (:reason (done-event s))))
           (is (= 1 (:wet-skipped (done-event s))))
           (is (zero? (dig-count s))))))))
@@ -185,7 +185,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:block "sand" :count 2 :wet true :tunnel-length 0}
+        (let [s (await (scenario {:block "sand" :count 2 :wet true :ways #{:seen}}
                                  {:blocks {"3,64,0" "sand" "6,64,0" "sand" "6,64,1" "lava"}} 30))]
           (is (= 1 (dig-count s)))
           (is (= :none (:reason (done-event s)))))))))
@@ -196,7 +196,7 @@
       (fn ^:async t []
         (let [s (start {:world {:blocks (cells "sand" [3 4 5 6 7 8] [64] [0])}})]
           (.override (.-world (:p s)) "dig" (fn ^:async f [_ _ _] #js {:status "cannot"}))
-          (core/submit! (:eng s) (spec {:block "sand" :settings {:jobs.gather.dig-for/max-failures 2} :tunnel-length 0}) {})
+          (core/submit! (:eng s) (spec {:block "sand" :settings {:jobs.gather.dig-for/max-failures 2} :ways #{:seen}}) {})
           (await (run-ticks s 30))
           (is (= :none (:reason (done-event s))))
           (is (zero? (:failures (job-mem s) 0)))
@@ -221,7 +221,7 @@
       (fn ^:async t []
         (let [s (start {:world {:blocks {"15,64,0" "sand"}}})]
           (tu/short-walks! (:p s) 7)
-          (core/submit! (:eng s) (spec {:block "sand" :tunnel-length 0}) {})
+          (core/submit! (:eng s) (spec {:block "sand" :ways #{:seen}}) {})
           (await (run-ticks s 1))
           (await (run-ticks s 20))
           (is (= "partial" (:status (first (moved s)))) "the first walk is cut short")
@@ -494,7 +494,7 @@
         (let [stones [[-3 0] [3 0] [0 -3] [0 3]]
               pillars (into {} (for [[x z] stones]
                                  (into {(str x ",71," z) "stone"} (cells "bedrock" [x] (range 62 71) [z]))))
-              s (await (scenario {:block "stone" :count 3 :radius 10 :tunnel-length 0 :descend-limit 0}
+              s (await (scenario {:block "stone" :count 3 :radius 10 :ways #{:seen}}
                                  {:blocks (merge floor pillars) :inventory pickaxe} 60))
               e (done-event s)]
           (is (= [:stopped 0] ((juxt :status :got) e)))
@@ -509,7 +509,7 @@
                   :sight {:radius 24}})]
     (dotimes [_ 20] (perception/pass! (aget (:p s) "perception")))
     (set-pos! s 0.5 top 0.5)
-    (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :radius 16 :tunnel-length 0 :descend-limit 0}) {})
+    (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :radius 16 :ways #{:seen}}) {})
     (await (run-ticks s 120))
     s))
 
