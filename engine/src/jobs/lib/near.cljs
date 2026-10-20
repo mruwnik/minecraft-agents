@@ -93,9 +93,11 @@
 
 (defn with-sight
   "result with what a masked plan says of unseen floors: :dark-best (dark-best) and :unseen-floors true when the plan's steps
-  check unseen floors (:unseen-floor)."
+  check unseen floors (:unseen-floor). A partial plan walked to its end (:off-plan) keeps the plan's :damage-refused, so go-to
+  names the health cost, not the walk, as why the goal was not reached."
   [result plan to]
   (cond-> result
+    (and (= :off-plan (:status result)) (:partial result) (true? (some-> (:r plan) .-damageRefused))) (assoc :damage-refused true)
     (dark-best plan to) (assoc :dark-best (dark-best plan to))
     (some :unseen-floor (:steps plan)) (assoc :unseen-floors true)))
 

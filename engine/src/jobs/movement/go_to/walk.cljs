@@ -409,7 +409,7 @@
           :else
           (let [handled (when (health/refused? c result) (await (health/heal-or-drop! c pos range)))]
            (or (when (= :again handled) :again)
-          (let [result (cond-> result (:needs-health handled) (-> (assoc :reason :needs-health) (merge (select-keys handled [:heal :health :hp-cost :hp-budget]))))
+          (let [result (cond-> result (:needs-health handled) (-> (assoc :status :no-path :reason :needs-health) (merge (select-keys handled [:heal :health :hp-cost :hp-budget]))))
                 _ (note-fault! c walked)
                 unstuck? (await (unstick/swim-out! c pos walked))
                 progress? (or (< left (dec best)) explored? nearer?)
