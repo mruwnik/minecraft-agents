@@ -30,17 +30,20 @@
     :loading {:nogl? true} :still))
 
 (deftest card-plan
-  (are [flags status expected] (= expected (lc/card-plan flags status))
-    {:allive? false} :working :last-image
-    {:allive? false} :idle :last-image
-    {:allive? false} :offline :last-image
-    {:allive? true} :offline :last-image
-    {:allive? true} :working :live))
+  (are [flags status visible? expected] (= expected (lc/card-plan flags status visible?))
+    {:allive? false} :working true :live
+    {:allive? false} :idle true :live
+    {:allive? false} :trouble true :live
+    {:allive? false} :offline true :last-image
+    {:allive? true} :offline true :live
+    {:allive? true} :working true :live
+    {:allive? true} :working false :last-image
+    {:allive? false} :working false :last-image))
 
 (deftest transition-plans
   ;; a body going offline swaps its live canvas (which closes its scene on unmount) for the server's image; the reverse opens a live scene
-  (are [from to expected] (= expected [(lc/card-view :hub (lc/card-plan {:allive? true} from) true)
-                                       (lc/card-view :hub (lc/card-plan {:allive? true} to) true)])
+  (are [from to expected] (= expected [(lc/card-view :hub (lc/card-plan {:allive? false} from true) true)
+                                       (lc/card-view :hub (lc/card-plan {:allive? false} to true) true)])
     :working :offline [:live :img]
     :trouble :offline [:live :img]
     :offline :working [:img :live]
@@ -93,7 +96,7 @@
 (deftest card-view-follows-the-body-going-offline-and-back
   ;; the preview element type is chosen by card-view; a different one remounts the component (live-canvas closes its scene
   ;; on unmount), so the transition is exactly a change of this value
-  (are [status expected] (= expected (lc/card-view :hub (lc/card-plan {:allive? true} status) true))
+  (are [status expected] (= expected (lc/card-view :hub (lc/card-plan {:allive? false} status true) true))
     :working :live
     :offline :img
     :idle :live))

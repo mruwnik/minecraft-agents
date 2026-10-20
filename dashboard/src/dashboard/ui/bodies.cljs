@@ -27,7 +27,7 @@
 (defn preview [{:keys [name world thumb thumb-age status offline]}]
   (let [flags (page-flags)
         mode (live/current-mode flags)
-        view (live/card-view mode (live/card-plan flags status) (some? thumb))]
+        view (live/card-view mode (live/card-plan flags status @live/tab-visible) (some? thumb))]
     [:div.preview
      (case view
        :blank nil

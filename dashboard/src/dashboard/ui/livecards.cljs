@@ -1,5 +1,6 @@
 (ns dashboard.ui.livecards
-  "Previews on the body cards: the server's still images; ?allive=1 uses the view hub's textured WebGL scenes (live for online bodies); the server's PNGs for all cards when the hub cannot draw (no WebGL2, ?nogl=1).
+  "Previews on the body cards from the view hub's textured WebGL scenes: live scenes for online bodies while the tab is visible, the server's still
+  image for offline ones and for a hidden tab (no scene); the server's PNGs for all cards when the hub cannot draw (no WebGL2, ?nogl=1).
   The pure decisions (flags, hub status, mode, plan, what a card shows, the fps label) come first; the
   reagent components with the hub lifecycle are below. The hub comes from window.getViewHub, defined by the module script in index.html."
   (:require [reagent.core :as r]
@@ -37,10 +38,10 @@
     :else :still))
 
 (defn card-plan
-  "In hub mode: :last-image (the server's still, no scene) for every card, so an unwatched body is never asked to dump its view;
-  the selected body's popup opens the live view. ?allive=1 gives every card a live scene (online ones dump while it is open)."
-  [{:keys [allive?]} status]
-  (if (and allive? (not= status :offline)) :live :last-image))
+  "In hub mode: :live (a scene kept open) for online bodies while the tab is visible, :last-image (the server's still, no scene)
+  otherwise: a hidden tab closes its scenes, so no body is asked to dump its view for it; ?allive=1 makes offline ones live too."
+  [{:keys [allive?]} status visible?]
+  (if (and visible? (or allive? (not= status :offline))) :live :last-image))
 
 (defn card-view
   "What a card's preview shows: :blank, :img (the server's PNG), :noview or :live (hub canvas). A :last-image card needs no hub,
@@ -94,6 +95,12 @@
                     (when-not (= status :loading) (js/clearInterval @timer))))]
       (reset! timer (js/setInterval check 100))
       (check))))
+
+(defn- visible-now? [] (not= "hidden" (some-> js/globalThis .-document .-visibilityState)))
+
+(defonce tab-visible (r/atom (visible-now?)))
+(defonce visibility-listener
+  (some-> js/globalThis .-document (.addEventListener "visibilitychange" #(reset! tab-visible (visible-now?)))))
 
 (defn current-mode
   "The render mode of the page, starting the hub check on first use; reactive."

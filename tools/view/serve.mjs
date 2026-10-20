@@ -336,18 +336,19 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
   const streamAgents = async (req, res, keys, radius) => {
     const releases = keys.map(key => watchBody(bodyOfKey(key)))
     let ping = null
-    let stops = []
+    const stops = []
     req.on('close', () => {
       clearInterval(ping)
       stops.forEach(stop => stop())
       releases.forEach(release => release())
     })
-    const firsts = await Promise.all(keys.map(async key => [key, await firstPose(bodyOfKey(key))]))
-    if (req.destroyed) return
     sseHead(res)
-    stops = firsts.filter(([, first]) => first).map(([key, first]) => {
+    // each body streams from its own first pose, so one that is slow to start dumping holds back no other
+    keys.forEach(async key => {
+      const first = await firstPose(bodyOfKey(key))
+      if (!first || req.destroyed) return
       trackStreamed(first.world)
-      return watchAgent(bodyOfKey(key), first, radius, (event, data) => sseWrite(res, event, { agent: key, ...data }))
+      stops.push(watchAgent(bodyOfKey(key), first, radius, (event, data) => sseWrite(res, event, { agent: key, ...data })))
     })
     ping = setInterval(() => res.write(': ping\n\n'), PING_MS)
   }
