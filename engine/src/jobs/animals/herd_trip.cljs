@@ -173,11 +173,11 @@
            first))))
 
 (defn ^:async look-back!
-  "Walk to within look-back-range of where the animal was last listed, so it is loaded and listed again; turns round there
+  "Walk to where the eye sees the animal's last spot from within look-back-range (a wall between hides it), so it is loaded and listed again; turns round there
   (animals count only while in view, and the run's one survey was at the start); then it is booked looked-for.
   :continue while the walk or the look goes on."
   [c {:keys [key pos]}]
-  (let [r (await (near/go-near! c pos (look-back-range) {:doors :never :ways #{:walk :clear-seal}}))]
+  (let [r (await (near/go-near! c pos (look-back-range) {:doors :never :ways #{:walk :clear-seal} :see true}))]
     (cond
       (= :partial r) :continue
       (await (look/survey! c :near)) :continue

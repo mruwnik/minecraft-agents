@@ -66,8 +66,10 @@
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :for-s 240 :until {:source :job :kind :completed}}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:block [18 0 16] "oak_fence_gate[open=false]"]]}
-  ;; the cow stands behind the start (seen on the first look round); the run walks to the pen first, so the cow is out of sight when leashing begins: the herd walks back to where it stood and looks (79d7a22f)
+  ;; the cow stands behind the start (seen on the first look round); a stone wall at x 8 with a one-block gap at z 16 hides it from the pen side, so the cow is out of sight when leashing begins: the herd walks back to where it stood and looks (79d7a22f)
   {:name "cow-left-behind-at-the-start-is-looked-for"
+   :blocks [[:fill [8 0 0] [8 3 31] "stone_bricks"]
+            [:fill [8 0 16] [8 3 16] "air"]]
    :body {:at [2.5 0 16.5] :yaw 270 :inventory [["lead" 4]] :effects [["resistance" 900 4]]}
    :act [[:summon "cow" [0.5 0 20.5]]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1 :radius 30})]]
