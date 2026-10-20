@@ -108,8 +108,6 @@
   (when (:ids (:args c))
     (ctx/update-mem! c update :last-cells #(into (or % {}) (keep (fn [e] (when (.-pos e) [(.-id e) (item-cell e)]))) items))))
 
-(def fluids #{"water" "lava" "bubble_column"})
-
 (defn feet-y [c] (js/Math.floor (:y (u/self-pos c))))
 
 (defn below-feet? [c item] (boolean (and (.-pos item) (< (second (item-cell item)) (feet-y c)))))
@@ -157,7 +155,7 @@
           (seq unseen) :unseen-cell
           (or (not (reach/standable-cell? p (at 0 0 0)))
               (some #(bs/harms-in-cell (u/seen-name p %)) [(at 0 0 0) (at 0 1 0)])
-              (some #(fluids (u/seen-name p %)) (concat [(at 0 0 0) (at 0 -1 0)] sides)))
+              (some #(bs/fluids (u/seen-name p %)) (concat [(at 0 0 0) (at 0 -1 0)] sides)))
           :unsafe-floor)))))
 
 (defn ^:async hole-problem!

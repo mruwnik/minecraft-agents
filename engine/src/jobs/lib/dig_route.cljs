@@ -12,7 +12,6 @@
    ::margin {:default 3 :doc "How far (blocks) round the two ends a route may stray." :spec (a/int-in 0 nil)}
    ::max-fall {:default 3 :doc "The longest fall (blocks) a route's step may drop." :spec (a/int-in 0 nil)}})
 
-(def fluids #{"water" "lava" "bubble_column"})
 (def falling #{"sand" "red_sand" "gravel"})
 
 (defn open? [n] (boolean (and n (or (bs/air n) (re-find reach/arrow-passes n)))))
@@ -24,10 +23,10 @@
   (cond
     (open? n) 0
     (nil? n) 1
-    (or (fluids n) (bs/harms-in-cell n) (rules/unbreakable n) (falling n)) nil
+    (or (bs/fluids n) (bs/harms-in-cell n) (rules/unbreakable n) (falling n)) nil
     :else 1))
 
-(defn floor-ok? [n] (boolean (and n (not (open? n)) (not (fluids n)) (not (bs/harms-in-cell n)))))
+(defn floor-ok? [n] (boolean (and n (not (open? n)) (not (bs/fluids n)) (not (bs/harms-in-cell n)))))
 
 (defn neighbours [[x y z] max-fall]
   (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy (cons 1 (map - (range max-fall -1 -1)))] [(+ x dx) (+ y dy) (+ z dz)]))

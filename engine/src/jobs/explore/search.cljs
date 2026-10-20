@@ -1,5 +1,6 @@
 (ns jobs.explore.search
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.ready :as ready]
             [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
@@ -139,15 +140,11 @@
                        (js/Math.floor (+ z (* spacing (+ (* dz f) (* sz a)))))])
           outward-offsets)))
 
-(def open-names #{"air" "cave_air" "void_air" "short_grass" "grass" "tall_grass" "fern" "large_fern" "dead_bush"
-                  "snow" "dandelion" "poppy" "blue_orchid" "allium" "azure_bluet" "oxeye_daisy" "cornflower"
-                  "lily_of_the_valley" "torch" "leaf_litter" "short_dry_grass" "tall_dry_grass" "bush" "firefly_bush"})
-
 (defn open? [n]
-  (boolean (and n (or (open-names n) (str/ends-with? n "_sapling") (str/ends-with? n "_tulip")))))
+  (bs/passable? n))
 
 (defn leaves? [n] (str/ends-with? n "_leaves"))
-(def wet-names #{"water" "lava" "bubble_column"})
+(def wet-names bs/fluids)
 
 (defn seen-at
   "The block-at of stand-cell for primitives p: [x y z] -> the name seen or remembered, :unseen for a loaded cell

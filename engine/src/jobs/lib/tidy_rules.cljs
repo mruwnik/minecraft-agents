@@ -1,7 +1,8 @@
 (ns jobs.lib.tidy-rules
   "The rule the tidy-style jobs (jobs.farm.tidy, jobs.forestry.prepare-field and -rule) share: the blocks never dug, and the
   verdict of the access rules for a cell, judged against the accepted hazards."
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.block-sets :as bs]
+            [clojure.string :as str]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.util :as u]))
@@ -13,8 +14,6 @@
   (access/zone-input c {:except (:plan (:args c)) :ignore-zones? (:ignore-zones? (:args c))}))
 
 ;; ------------------------------------------------------------------ the rule, pure
-
-(def fluids #{"water" "lava" "bubble_column"})
 
 (def lights
   #"(^|_)(torch|lantern|candle)$|^(campfire|soul_campfire|end_rod|sea_lantern|glowstone|shroomlight|jack_o_lantern)$")
@@ -32,7 +31,7 @@
   "Why a block is never dug (:fluid :light :container :owned), or nil."
   [n]
   (cond
-    (fluids n) :fluid
+    (bs/fluids n) :fluid
     (re-find lights n) :light
     (containers n) :container
     (or (re-find owned n) (str/ends-with? n "_shulker_box")) :owned))

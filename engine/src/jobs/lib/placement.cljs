@@ -15,6 +15,7 @@
   Anything else is placed plainly. A usable neighbour (chest, table, door ...) is clicked only when nothing else
   gives the state, and then sneaking. Directions are mineflayer's: yaw 0 looks north, pi/2 west; pitch -pi/2 down."
   (:require [engine.game :as game]
+            [jobs.lib.block-sets :as bs]
             [clojure.string :as str]
             [jobs.lib.util :as u]
             [shadow.resource :as rc]))
@@ -32,8 +33,7 @@
 
 (def loose
   "Cells a click cannot be made on: nothing there, a fluid, or what the game replaces."
-  #{"air" "cave_air" "void_air" "water" "lava" "bubble_column" "fire" "soul_fire" "short_grass" "tall_grass" "grass"
-    "fern" "large_fern" "snow" "vine" "dead_bush" "seagrass" "tall_seagrass" "light" "leaf_litter" "glow_lichen" "hanging_roots"})
+  (into bs/replaceable #{"fire" "soul_fire" "grass" "seagrass" "tall_seagrass"}))
 
 (def usable
   "Blocks a right-click works (opens, toggles, uses). The table is interactable_blocks.txt, also read by engine/js/blocks.mjs."

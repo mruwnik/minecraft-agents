@@ -1,5 +1,6 @@
 (ns jobs.blocks.fill-cells
   (:require [engine.args :as a]
+            [jobs.lib.block-sets :as bs]
             [engine.settings :as settings]
             [jobs.lib.ready :as ready]
             [engine.ctx :as ctx]
@@ -51,10 +52,10 @@
   (mapv #(cell-of (a/cell %)) (:cells (:args c))))
 
 (defn owed
-  "The cells that still read air, cave_air or water (an unloaded cell is not owed)."
+  "The cells that still read air or water (an unloaded cell is not owed)."
   [c]
   (filterv #(let [n (u/seen-name (:primitives c) %)]
-              (contains? #{"air" "cave_air" "water"} n))
+              (or (bs/air n) (= "water" n)))
            (cells-of c)))
 
 (defn next-cell

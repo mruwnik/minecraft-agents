@@ -3,7 +3,8 @@
   forgetting the least recently seen section; and reading it back (seen-block, seen-blocks).
   A cell holding a mutable state (fluid, door, gate, trapdoor, fire: `mutable-id?`) also keeps its seen time to the ms,
   in the section's :fine Float32Array (ms after its base, NaN: none; off the V8 heap; not saved to file)."
-  (:require [engine.game :as game]))
+  (:require [engine.game :as game]
+            [plan.shape :as shape]))
 
 (def section-bytes 12288) ; ids (8192) and per-cell seen times (4096)
 (def minute-ms 60000)
@@ -144,7 +145,6 @@
         (properties-of info) (assoc :properties (properties-of info))))
     {:unknown true :pos pos}))
 
-(def air-names #{"air" "cave_air" "void_air"})
 
 (defn seen-blocks
   "Remembered blocks within radius (at most max-seen-radius) of the body's feet, nearest first:
@@ -155,7 +155,7 @@
       []
       (let [radius (min radius max-seen-radius)
             fx (.-x eye) fy (- (.-y eye) game/eye-height) fz (.-z eye)
-            wanted? (cond names (set names) match match :else (complement air-names))
+            wanted? (cond names (set names) match match :else (complement shape/air-names))
             by-id (js/Map.)
             ok? (fn [id] (if (.has by-id id)
                            (.get by-id id)

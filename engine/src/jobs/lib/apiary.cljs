@@ -1,7 +1,8 @@
 (ns jobs.lib.apiary
   "Helpers for the apiary jobs: reading the smoke and fire under a hive, and
   the fires that stand under the hives."
-  (:require [engine.ctx :as ctx]
+  (:require [jobs.lib.block-sets :as bs]
+            [engine.ctx :as ctx]
             [jobs.lib.game-facts :as facts]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
@@ -10,8 +11,9 @@
 ;; ------------------------------------------------------------------ smoke (vanilla CampfireBlock.isSmokeyPos)
 
 (def passes
-  "Blocks without a collision box: smoke goes through them. Anything not listed counts as in the way, which can only make a hive look unsmoked."
-  #{"air" "cave_air" "void_air" "water" "short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "torch" "wall_torch"})
+  "Blocks smoke goes through: open cells, water and the plants and torches with no full face. Carpets, signs and rails
+  are walk-through but stop smoke. Anything not listed counts as in the way, which can only make a hive look unsmoked."
+  (into (conj bs/air "water") #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "torch" "wall_torch"}))
 
 (defn campfire? [b] (contains? #{"campfire" "soul_campfire"} (some-> b .-name)))
 

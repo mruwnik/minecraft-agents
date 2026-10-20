@@ -2,6 +2,7 @@
   "The cells a shelter fills and the placing of blocks into them (read from the world, placed, shut): jobs.survival.dig-in
   and jobs.survival.retreat use them."
   (:require [engine.args :as a]
+            [jobs.lib.block-sets :as bs]
             [clojure.string :as string]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
@@ -22,7 +23,7 @@
 
 (def hazards
   "Blocks that are or hold a fluid: a cell opened beside or under one fills."
-  #{"lava" "water" "bubble_column" "kelp" "kelp_plant" "seagrass" "tall_seagrass"})
+  (into bs/fluids #{"kelp" "kelp_plant" "seagrass" "tall_seagrass"}))
 
 (defn wet?
   "Whether the cell holds a fluid: a hazards block, or a waterlogged one."

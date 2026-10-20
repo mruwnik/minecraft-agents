@@ -1,0 +1,23 @@
+;; Card 762c0f6e: a zombie closes on a body standing at the edge of a meadow (poppies, cornflowers, short grass, with a band of signs on
+;; the body's line). Flowers, grass and signs have no collision, so the retreat walks west straight through them to get away.
+;; Open plot 64 long; mob NoAI with a helmet (no sun burn).
+{:defaults
+ {:tags [:hostile :survival :flee]
+  :time :any
+  :mobs :keep
+  :plot {:length 64 :width 32 :height 8 :floor "grass_block"}
+  :register [{:trigger :hostile-near :args {:radius 12 :ranged-radius 20}
+              :job (jobs.survival.respond-to-hostile {:radius 12 :ranged-radius 20})}]
+  :body {:at [30.5 0 16.5] :effects [["resistance" 600 3]]}
+  :limit-s 90}
+ :cases
+ [{:name "unarmed-body-flees-west-through-flowers"
+   :blocks [[:fill [4 0 0] [28 0 31] "short_grass"]
+            [:fill [6 0 4] [26 0 10] "poppy"]
+            [:fill [6 0 22] [26 0 28] "cornflower"]
+            [:fill [6 0 13] [26 0 19] "oak_sign"]]
+   :act [[:summon "zombie" [36.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee}} :within-s 30}
+            {:no-event {:source :body :kind :died} :for-s 30}]
+   :after [[:body-far [36.5 0 16.5] 14]]
+   :limit-s 50}]}

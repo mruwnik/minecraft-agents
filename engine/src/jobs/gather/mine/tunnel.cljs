@@ -2,6 +2,7 @@
   "The strip tunnel of jobs.gather.dig-for: where it starts, the stretches cut by jobs.gather.strip-tunnel children, turning to
   another heading, and its end."
   (:require [clojure.string :as str]
+            [jobs.lib.block-sets :as bs]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -21,7 +22,7 @@
   {::max-open-skip {:default 64 :doc "The most open cells the strip tunnel skips along its line before it starts." :spec (a/int-in 0 nil)}
    ::open-skip-drop {:default 3 :doc "The most blocks the strip tunnel's start steps down while it skips open cells on its line (a stair); the tunnel then runs at that level." :spec (a/int-in 0 nil)}})
 
-(def passable "Blocks a body walks through in a tunnel cell: air and torches (never dug)." #{"air" "cave_air" "torch" "wall_torch"})
+(def passable "Blocks a body walks through in a tunnel cell: air and torches (never dug)." (into bs/air #{"torch" "wall_torch"}))
 
 (defn max-open-skip [] (settings/get settings ::max-open-skip))
 

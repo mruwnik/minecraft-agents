@@ -2,9 +2,10 @@
   "The named sets of block names every job reads, each defined once. They differ on purpose: air is only open
   cells; replaceable is what a placement overwrites; passable? is what a body walks through; harms-in-cell and
   bad-floor are what hurts to stand in or on."
-  (:require [jobs.lib.solid :as solid]))
+  (:require [jobs.lib.solid :as solid]
+            [plan.shape :as shape]))
 
-(def air "Open cells; the invisible light block counts: a body walks through it." #{"air" "cave_air" "void_air" "light"})
+(def air "Open cells (plan.shape/air-names); the invisible light block counts: a body walks through it." (conj shape/air-names "light"))
 
 (def fluids #{"water" "lava" "bubble_column"})
 
