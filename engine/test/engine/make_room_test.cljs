@@ -8,11 +8,13 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.world-files :as ew]
-            [jobs.storage.make-room :as mr]))
+            [jobs.storage.make-room :as mr]
+            [jobs.storage.make-room.order :as ord]))
 
 (def t0 1000000)
 
@@ -116,7 +118,7 @@
 ;; ------------------------------------------------------------------ pure
 
 (deftest protected-names
-  (are [name expected] (= expected (mr/protected? name))
+  (are [name expected] (= expected (ord/protected? name))
     "iron_pickaxe" true
     "diamond_sword" true
     "iron_chestplate" true
@@ -147,31 +149,31 @@
             "dirt" 30 "cobblestone" 64 "oak_planks" 64 "diorite" 0
             "wheat_seeds" 16 "poppy" 0
             "stick" 0}
-           (mr/keep-counts inventory {:keep-food 16 :keep-blocks 64 :keep-seeds 16} nil))
+           (ord/keep-counts inventory {:keep-food 16 :keep-blocks 64 :keep-seeds 16} nil))
         "beef (8 points) keeps its 12, bread (5) the 4 left of 16; cobblestone, dirt and planks each keep up to 64, other blocks none")))
 
 (deftest keep-counts-without-keep-food-uses-the-food-reserve
   (is (= {"bread" 12 "apple" 0 "golden_apple" 2 "dirt" 0}
-         (mr/keep-counts [{:name "bread" :count 20} {:name "apple" :count 5} {:name "golden_apple" :count 2} {:name "dirt" :count 9}]
+         (ord/keep-counts [{:name "bread" :count 20} {:name "apple" :count 5} {:name "golden_apple" :count 2} {:name "dirt" :count 9}]
                          {:keep-food nil :keep-blocks 0} nil))
       "the 60-point reserve is 12 bread; golden apples are kept whole, outside the reserve")
   (is (= {"golden_apple" 2 "bread" 0}
-         (mr/keep-counts [{:name "golden_apple" :count 2} {:name "bread" :count 3}] {:keep-food 0 :keep-blocks 0} nil))))
+         (ord/keep-counts [{:name "golden_apple" :count 2} {:name "bread" :count 3}] {:keep-food 0 :keep-blocks 0} nil))))
 
 (deftest keep-counts-keep-the-held-units-up-to-the-carried-total
   (is (= {"diamond" 3 "bread" 0 "emerald" 0 "dirt" 2}
-         (mr/keep-counts [{:name "diamond" :count 5} {:name "bread" :count 2} {:name "emerald" :count 1} {:name "dirt" :count 2}]
+         (ord/keep-counts [{:name "diamond" :count 5} {:name "bread" :count 2} {:name "emerald" :count 1} {:name "dirt" :count 2}]
                          {:keep-food 0 :keep-blocks 0}
                          {"diamond" 3 "dirt" 9 "elytra" 1}))
       "held raises a floor, never above what is carried or for what is not carried"))
 
 (deftest keep-counts-with-zero-budgets-keep-only-the-protected
   (is (= {"iron_axe" 1 "bread" 0 "dirt" 0 "stick" 0}
-         (mr/keep-counts [{:name "iron_axe" :count 1} {:name "bread" :count 3} {:name "dirt" :count 9} {:name "stick" :count 2}]
+         (ord/keep-counts [{:name "iron_axe" :count 1} {:name "bread" :count 3} {:name "dirt" :count 9} {:name "stick" :count 2}]
                          {:keep-food 0 :keep-blocks 0} nil))))
 
 (deftest keep-counts-keep-the-named-items-whole
-  (are [keep-items expected] (= expected (mr/keep-counts [{:name "stick" :count 40} {:name "stick" :count 40} {:name "poppy" :count 2}]
+  (are [keep-items expected] (= expected (ord/keep-counts [{:name "stick" :count 40} {:name "stick" :count 40} {:name "poppy" :count 2}]
                                                           {:keep-food 0 :keep-blocks 0 :keep-items keep-items} nil))
     ["stick"] {"stick" 80 "poppy" 0}
     ["stick" "poppy"] {"stick" 80 "poppy" 2}
@@ -182,8 +184,8 @@
   (let [view {:now t0 :data {:entries {:picked-up [{:t 5 :data {:item "stick" :count 1}}
                                                    {:t 9 :data {:item "dirt" :count 1}}
                                                    {:t 7 :data {:item "stick" :count 2}}]}}}]
-    (is (= {"stick" 7 "dirt" 9} (mr/recency view)))
-    (is (= {} (mr/recency {:now t0 :data {}})))))
+    (is (= {"stick" 7 "dirt" 9} (ord/recency view)))
+    (is (= {} (ord/recency {:now t0 :data {}})))))
 
 (defn names-of [order] (mapv :name order))
 
@@ -193,7 +195,7 @@
                    {:name "gravel" :count 9 :slot 2}
                    {:name "stick" :count 3 :slot 3}
                    {:name "poppy" :count 3 :slot 4}]
-        order (fn [recency] (names-of (mr/toss-order inventory {} recency 20)))]
+        order (fn [recency] (names-of (ord/toss-order inventory {} recency 20)))]
     (is (= ["dirt" "gravel" "stick" "poppy" "oak_log"] (order {})) "junk blocks first (bigger stack first), then by worth: stick and poppy equal (3, 3 by slot), the log dearer")
     (is (= ["dirt" "gravel" "poppy" "stick" "oak_log"] (order {"stick" 100})) "the one picked up most recently goes last of its worth")
     (is (= ["dirt" "gravel" "stick" "poppy" "oak_log"] (order {"poppy" 100 "gravel" 50 "dirt" 50}))
@@ -208,10 +210,10 @@
                    {:name "iron_ore" :count 5 :slot 5}
                    {:name "diamond" :count 2 :slot 6}]]
     (is (= ["cobbled_deepslate" "granite" "tuff"]
-           (names-of (mr/toss-order inventory {} {} 3)))
+           (names-of (ord/toss-order inventory {} {} 3)))
         "junk blocks first, whole stacks before partial; coal and raw copper are worth keeping")
     (is (= ["cobbled_deepslate" "granite" "tuff" "iron_ore" "raw_copper" "coal"]
-           (names-of (mr/toss-order inventory {} {} 25)))
+           (names-of (ord/toss-order inventory {} {} 25)))
         "raised :toss-below lets the stacks of raw copper and coal go")))
 
 (def linden-bag
@@ -221,21 +223,21 @@
    {:name "wheat_seeds" :count 63 :slot 9} {:name "diorite" :count 48 :slot 10}])
 
 (deftest toss-order-spares-the-shelter-materials-of-a-full-bag
-  (let [keep (mr/keep-counts linden-bag {:keep-food 16 :keep-blocks 64 :keep-seeds 16} nil)
-        order (names-of (mr/toss-order linden-bag keep {} 3.2))]
+  (let [keep (ord/keep-counts linden-bag {:keep-food 16 :keep-blocks 64 :keep-seeds 16} nil)
+        order (names-of (ord/toss-order linden-bag keep {} 3.2))]
     (is (= #{"dandelion" "cornflower" "poppy" "oxeye_daisy" "leaf_litter" "granite" "oak_sapling" "diorite"} (set order)))
     (is (not-any? #{"dirt" "cobblestone" "wheat_seeds"} order))))
 
 (deftest toss-order-throws-surplus-of-kept-materials-after-everything-without-a-keep
   (let [inventory [{:name "cobblestone" :count 64 :slot 0} {:name "cobblestone" :count 64 :slot 1}
                    {:name "poppy" :count 2 :slot 2} {:name "granite" :count 3 :slot 3}]
-        keep (mr/keep-counts inventory {:keep-food 16 :keep-blocks 64 :keep-seeds 16} nil)]
-    (is (= ["granite" "poppy" "cobblestone"] (names-of (mr/toss-order inventory keep {} 3.2))))))
+        keep (ord/keep-counts inventory {:keep-food 16 :keep-blocks 64 :keep-seeds 16} nil)]
+    (is (= ["granite" "poppy" "cobblestone"] (names-of (ord/toss-order inventory keep {} 3.2))))))
 
 (deftest toss-order-orders-by-recency-before-count
   (let [inventory [{:name "item_b" :count 9 :slot 0} {:name "item_a" :count 3 :slot 1}]]
-    (is (= ["item_b" "item_a"] (names-of (mr/toss-order inventory {} {"item_b" 1 "item_a" 2} 5))))
-    (is (= ["item_a" "item_b"] (names-of (mr/toss-order inventory {} {"item_b" 2 "item_a" 1} 5))))))
+    (is (= ["item_b" "item_a"] (names-of (ord/toss-order inventory {} {"item_b" 1 "item_a" 2} 5))))
+    (is (= ["item_a" "item_b"] (names-of (ord/toss-order inventory {} {"item_b" 2 "item_a" 1} 5))))))
 
 (deftest toss-order-skips-protected-food-and-stacks-worth-max-or-more
   (let [inventory [{:name "iron_pickaxe" :count 1 :slot 0}
@@ -243,15 +245,15 @@
                    {:name "oak_log" :count 4 :slot 2}
                    {:name "diamond" :count 1 :slot 3}
                    {:name "dirt" :count 4 :slot 4}]]
-    (is (= ["dirt"] (names-of (mr/toss-order inventory {} {} 0.5))))
-    (is (= ["dirt"] (names-of (mr/toss-order inventory {} {} 2))) "a log is worth a walk to a tree, not tossed at 2")
-    (is (= ["dirt" "oak_log"] (names-of (mr/toss-order inventory {} {} 20))))
-    (is (= [] (names-of (mr/toss-order inventory {} {} 0))))
-    (is (= ["dirt" "oak_log" "diamond"] (names-of (mr/toss-order inventory {} {} 1000))))))
+    (is (= ["dirt"] (names-of (ord/toss-order inventory {} {} 0.5))))
+    (is (= ["dirt"] (names-of (ord/toss-order inventory {} {} 2))) "a log is worth a walk to a tree, not tossed at 2")
+    (is (= ["dirt" "oak_log"] (names-of (ord/toss-order inventory {} {} 20))))
+    (is (= [] (names-of (ord/toss-order inventory {} {} 0))))
+    (is (= ["dirt" "oak_log" "diamond"] (names-of (ord/toss-order inventory {} {} 1000))))))
 
 (deftest toss-order-never-cuts-into-a-floor
   (let [stacks (fn [& counts] (vec (map-indexed (fn [i c] {:name "cobblestone" :count c :slot i}) counts)))]
-    (are [counts floor expected] (= expected (mapv :slot (mr/toss-order (apply stacks counts) {"cobblestone" floor} {} 1)))
+    (are [counts floor expected] (= expected (mapv :slot (ord/toss-order (apply stacks counts) {"cobblestone" floor} {} 1)))
       [64 64 64] 64 [0 1]
       [64 64 64] 0 [0 1 2]
       [64 64 64] 192 []
@@ -267,7 +269,7 @@
                    {:name "cobblestone" :count 64}
                    {:name "dirt" :count 3}
                    {:name "water_bucket" :count 1}]]
-    (are [keep expected] (= expected (mr/deposit-names inventory keep {}))
+    (are [keep expected] (= expected (ord/deposit-names inventory keep {}))
       {"bread" 16 "cobblestone" 64 "dirt" 0 "iron_pickaxe" 1} ["dirt" "cobblestone" "bread"]
       {"bread" 20 "cobblestone" 128 "dirt" 0} ["dirt"]
       {"bread" 20 "cobblestone" 128 "dirt" 3} [])))
@@ -275,7 +277,7 @@
 (deftest deposit-names-puts-the-older-pick-up-first-among-equal-worth
   (let [inventory [{:name "gravel" :count 64} {:name "sand" :count 64} {:name "dirt" :count 64}]
         keep {"gravel" 0 "sand" 0 "dirt" 0}]
-    (are [recency expected] (= expected (mr/deposit-names inventory keep recency))
+    (are [recency expected] (= expected (ord/deposit-names inventory keep recency))
       {} ["gravel" "sand" "dirt"]
       {"gravel" 5} ["sand" "dirt" "gravel"]
       {"gravel" 5 "sand" 3 "dirt" 9} ["sand" "gravel" "dirt"])))
@@ -377,7 +379,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory (many "junk" 35) :containers {"10,64,0" []}})]
           (know-chest! eng chest-pos)
-          (mem/write! (:store eng) :chest-unusable {:pos chest-pos :reason "full"} mr/unusable-policy)
+          (mem/write! (:store eng) :chest-unusable {:pos chest-pos :reason "full"} (mr/unusable-policy))
           (await (run-reflex eng {} {}))
           (is (= 0 (count (calls p "transfer"))))
           (is (= 3 (count (calls p "toss")))))))))
@@ -387,7 +389,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:inventory (vec (concat [{:name "coal" :count 5}] (same "diamond_pickaxe" 31 1) [{:name "item_a" :count 1} {:name "item_b" :count 1}]))})]
-          (await (run-reflex eng {:toss-below 2} {}))
+          (await (settings/with-settings {::mr/toss-below 2} #(run-reflex eng {} {})))
           (is (= ["item_a" "item_b"] (mapv #(arg-of "item" %) (calls p "toss"))) "the coal is kept; stops at 4 free")
           (is (= 32 (stack-count p)))
           (is (>= 1 (Math/abs (- -4 (:x (feet p))))) "then it walks 4 blocks back from where it threw, against the throw direction")
@@ -415,7 +417,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:inventory (vec (concat (same "iron_pickaxe" 20 1) (same "bread" 10 3) (same "shield" 4 1)))})]
-          (await (run-reflex eng {:toss-below 1000} {}))
+          (await (settings/with-settings {::mr/toss-below 1000} #(run-reflex eng {} {})))
           (is (= 0 (count (calls p "toss"))))
           (is (= [:nothing-to-go] (mapv :reason (of-kind seen :stopped)))))))))
 
@@ -424,7 +426,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory (vec (concat (same "water_bucket" 12 1) (same "bucket" 12 1) (same "lava_bucket" 12 1)))})]
-          (await (run-reflex eng {:toss-below 1000} {}))
+          (await (settings/with-settings {::mr/toss-below 1000} #(run-reflex eng {} {})))
           (is (= 0 (count (calls p "toss")))))))))
 
 (deftest building-blocks-keep-their-floor
@@ -494,7 +496,7 @@
         (doseq [ground ["dirt" "stick"]]
           (let [{:keys [eng p]} (setup {:inventory (vec (concat (same "oak_log" 35 5) [{:name "stick" :count 1}]))
                                         :entities [(assoc-in diamond-on-ground [:item :name] ground)]})]
-            (await (run-reflex eng {:toss-below 0} {}))
+            (await (settings/with-settings {::mr/toss-below 0} #(run-reflex eng {} {})))
             (is (= 0 (count (calls p "toss"))) ground)
             (is (= 0 (count (calls p "collect"))) ground)))))))
 
@@ -566,7 +568,7 @@
 
 (deftest torches-are-never-tossed
   (let [inventory [{:name "torch" :count 16 :slot 0} {:name "poppy" :count 3 :slot 1}]]
-    (is (= ["poppy"] (names-of (mr/toss-order inventory {} {} 2))))))
+    (is (= ["poppy"] (names-of (ord/toss-order inventory {} {} 2))))))
 
 ;; ------------------------------------------------------------------ one round is one whole attempt
 
@@ -658,9 +660,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (run-child {:inventory (same "oak_log" 35 5) :entities [diamond-on-ground]}
-                                            {:free 2 :toss-below 0}
-                                            {:acted true :swap {:id 70 :item "diamond" :worth 10}}))]
+        (let [{:keys [p]} (await (settings/with-settings {::mr/toss-below 0}
+                                    #(run-child {:inventory (same "oak_log" 35 5) :entities [diamond-on-ground]}
+                                                {:free 2}
+                                                {:acted true :swap {:id 70 :item "diamond" :worth 10}})))]
           (is (= [70] (mapv #(arg-of "id" %) (calls p "collect"))))
           (is (= 0 (count (calls p "toss"))))
           (is (= 1 (get (inv p) "diamond"))))))))
@@ -741,6 +744,17 @@
           (await (run-reflex eng {} {}))
           (is (empty? (of-kind seen :stopped)) "a failure between successes does not add up")
           (is (= 1 (count (reflex-done seen)))))))))
+
+(deftest the-toss-fails-setting-ends-the-call-after-that-many-failed-tosses
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:inventory (many "junk" 35)})
+              n (atom 0)]
+          (.override (.-world p) "toss" (fn ^:async f [_token _a _impl] (swap! n inc) #js {:status "failed"}))
+          (await (settings/with-settings {::mr/toss-fails 2} #(run-reflex eng {} {})))
+          (is (= 2 @n))
+          (is (= [:toss-failed] (mapv :reason (of-kind seen :stopped)))))))))
 
 ;; ------------------------------------------------------------------ zones
 

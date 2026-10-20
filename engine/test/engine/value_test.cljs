@@ -1,12 +1,13 @@
 (ns engine.value-test
   "make-room's item worth (jobs.lib.cost.value/item-value per item) against its :toss-below default."
   (:require [cljs.test :refer [deftest is are]]
-            [jobs.storage.make-room :as mr]))
+            [jobs.storage.make-room :as mr]
+            [jobs.storage.make-room.order :as ord]))
 
-(def toss-below (get-in mr/args [:toss-below :default]))
+(def toss-below (get-in mr/settings [::mr/toss-below :default]))
 
 (deftest everyday-junk-is-below-the-toss-line
-  (are [item] (< (mr/item-worth item) toss-below)
+  (are [item] (< (ord/item-worth item) toss-below)
     {:name "dirt" :count 64}
     {:name "cobblestone" :count 64}
     {:name "gravel" :count 10}
@@ -17,7 +18,7 @@
     {:name "mystery_thing" :count 1}))
 
 (deftest ores-metals-tools-and-food-are-kept
-  (are [item] (>= (mr/item-worth item) toss-below)
+  (are [item] (>= (ord/item-worth item) toss-below)
     {:name "coal" :count 30}
     {:name "charcoal" :count 30}
     {:name "raw_copper" :count 12}
@@ -39,5 +40,5 @@
     {:name "stick" :count 1 :enchants [{:id "sharpness" :lvl 1}]}))
 
 (deftest worth-is-per-item-and-a-missing-count-is-one
-  (is (= (mr/item-worth {:name "iron_ingot" :count 8}) (mr/item-worth {:name "iron_ingot"})))
-  (is (> (mr/item-worth {:name "diamond"}) (mr/item-worth {:name "iron_ingot"}) (mr/item-worth {:name "dirt"}))))
+  (is (= (ord/item-worth {:name "iron_ingot" :count 8}) (ord/item-worth {:name "iron_ingot"})))
+  (is (> (ord/item-worth {:name "diamond"}) (ord/item-worth {:name "iron_ingot"}) (ord/item-worth {:name "dirt"}))))
