@@ -15,7 +15,10 @@
     "mangrove" ["stick" "mangrove_propagule"] "mangrove_propagule"
     "mangrove" ["oak_sapling"] nil
     "oak" ["mangrove_propagule" "oak_sapling"] "oak_sapling"
-    nil ["stick" "mangrove_propagule"] "mangrove_propagule"))
+    nil ["stick" "mangrove_propagule"] "mangrove_propagule"
+    nil ["crimson_fungus" "oak_sapling"] "oak_sapling"
+    nil ["warped_fungus"] nil
+    "warped" ["warped_fungus"] "warped_fungus"))
 
 (deftest drop-filter-keeps-the-planting-item-of-the-species
   (is (= ["mangrove_log" "mangrove_propagule" "stick" "apple"] (trees/drop-filter "mangrove")))

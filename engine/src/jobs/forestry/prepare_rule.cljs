@@ -50,7 +50,7 @@
   (first (filter #(and (carried %) ((lib/soil-for species) %)) soil-preference)))
 
 (defn plant-like? [n]
-  (boolean (re-find #"(_sapling|_propagule|_fungus)$" n)))
+  (forestry/sapling-name? n))
 
 (defn own-cell
   "{:state ...} when the block in the planned cell settles it (unloaded, growing, grown, wrong), else nil."

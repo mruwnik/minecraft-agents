@@ -161,12 +161,12 @@
   (boolean (and n (or (str/ends-with? n "_sapling") (= "mangrove_propagule" n) (str/ends-with? n "_fungus")))))
 
 (defn sapling-for
-  "The name of a sapling carried, of species when given."
+  "The name of a sapling carried, of species when given. Without a species a fungus is not taken: it grows only on nylium."
   [items species]
   (let [want (when species (sapling-of species))]
     (->> items
          (map :name)
-         (filter #(if want (= want %) (sapling-name? %)))
+         (filter #(if want (= want %) (and (sapling-name? %) (not (str/ends-with? % "_fungus")))))
          first)))
 
 (def all-drops
