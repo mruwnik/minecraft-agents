@@ -353,7 +353,7 @@
         (bs/passable? n) :open
         (or (escape/protected? n) (not (escape/diggable? block-at (may-dig-fn c) (own-placed-fn c) cell))) :not-diggable
         :else
-        (let [o (await (b/dig-cell! c (zipmap [:x :y :z] cell) {:ignore-zones? (boolean (:ignore-zones? (:args c))) :fetch (fetch-tool? c)}))
+        (let [o (await (b/dig-cell! c (zipmap [:x :y :z] cell) {:ignore-zones? (boolean (:ignore-zones? (:args c))) :fetch (fetch-tool? c) :accept #{:lava-adjacent}}))
               dug (assoc planned :block n)]
           (when (= :dug o)
             (forget-dug-own! c [dug])

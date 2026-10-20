@@ -27,14 +27,15 @@
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:block [19 4 16] "bedrock"] [:body-near [19.5 2 16.5] 1.5]]}
-  ;; lava buried beside the second shaft cell is unseen until that cell is dug: the dig child covers what it opens and the walk goes on
+  ;; lava buried beside the dug cells is unseen until a cell is dug: the dig child covers what it opens and the walk goes on. The route among equal-cost
+  ;; ones is the planner's pick (it varies with what the body glimpsed), so lava lies beside the one height-4 cell it digs, whichever of x 16..22 that is
   {:name "lava-beside-a-dug-cell-is-sealed"
-   :blocks [[:set [20 4 16] "lava"]]
+   :blocks [[:fill [16 4 17] [22 4 17] "lava"]]
    :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
             {:event {:source :job :kind :blocks.dig.sealed} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}]
-   :after [[:not-block [20 4 16] "lava"] [:body-near [19.5 2 16.5] 1.5]]}
+   :after [[:body-near [19.5 2 16.5] 1.5]]}
   ;; should fail: the pocket's floor is lava, so its goal cell is no place to stand: go-to refuses at once (goal-not-standable), digs nothing and never steps in
   {:name "pocket-over-lava-is-refused"
    :blocks [[:set [19 1 16] "lava"]]
