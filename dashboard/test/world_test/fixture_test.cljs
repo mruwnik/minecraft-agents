@@ -454,6 +454,13 @@
 (deftest plan-files-carry-the-runner-prefix
   (is (= "{:id \"test-probefixture-pen\", :parts []}" (f/plan-file-text {:id "pen" :parts []} "test-probefixture-"))))
 
+(deftest a-plan-part-on-the-plot-is-found
+  (let [plan (fn [box] (pr-str {:id "p" :parts [{:id "a" :box box}]}))]
+    (is (f/plan-on-plot? (plan [[20014 -40 20014] [20018 -39 20018]]) [20000 -40 20000] [32 32]))
+    (is (not (f/plan-on-plot? (plan [[20040 -40 20014] [20044 -39 20018]]) [20000 -40 20000] [32 32])))
+    (is (not (f/plan-on-plot? (plan [[20014 100 20014] [20018 101 20018]]) [20000 -40 20000] [32 32])))
+    (is (not (f/plan-on-plot? (pr-str {:id "p" :parts []}) [20000 -40 20000] [32 32])))))
+
 (deftest plan-refs-resolve-to-the-runner-prefix
   (is (= '(jobs.forestry.prepare {:plan "test-probex-wood"})
          (f/resolve-plan-refs '(jobs.forestry.prepare {:plan "$plan:wood"}) "test-probex-")))

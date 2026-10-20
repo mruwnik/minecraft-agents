@@ -1103,6 +1103,16 @@
                       (str/ends-with? name (str "-" (f/shared-tag (:body opts)) ".edn")))]
       (fs/rmSync (path/join (plans-dir opts) name) #js {:force true}))))
 
+(defn clear-plans-on-plot!
+  "Deletes any runner plan file (test-*.edn, any body) with a part on the case's plot: plots are exclusive while a case
+  runs, so such a plan is a killed run's leftover, and it would make the body's blocks here refuse as another's."
+  [opts grid origin]
+  (doseq [name (array-seq (fs/readdirSync (plans-dir opts)))
+          :let [file (path/join (plans-dir opts) name)]
+          :when (and (str/starts-with? name "test-") (str/ends-with? name ".edn")
+                     (f/plan-on-plot? (str (fs/readFileSync file "utf8")) origin (f/dims grid)))]
+    (fs/rmSync file #js {:force true})))
+
 (defn write-plans! [opts c]
   (doall (for [plan (:plans c)]
            (let [file (path/join (plans-dir opts) (str (plan-prefix opts) (:id plan) ".edn"))]
@@ -1826,7 +1836,7 @@
                        (.then #(reset! weather %))
                        (.then (fn [] (ev/emit! (ev/phase :setup)) (setup-plot! {:send rcon! :sleep sleep} opts grid origin rc @starting)))
                        (.then #(reset! parked-at (js/Date.now)))
-                       (.then #(write-plans-settled! opts rc))
+                       (.then #(do (clear-plans-on-plot! opts grid origin) (write-plans-settled! opts rc)))
                        (.then #(reset! plan-files %))
                        (.then #(seed-shared! opts origin c))
                        (.then #(reset! setup-cursor (log-cursor (events-file opts))))
