@@ -45,8 +45,9 @@
              :until {:source :job :kind :mine.tunnel-end}}]
    :after [[:block [17 10 16] "crafting_table"]]}
   {:name "foreign-zone-east-turns-the-stair-to-another-heading"
+   ;; zone-margin 1: the default keeps a stair's start 7 blocks clear of the zone, so it would never face it
    :zones [{:name "far" :min [17 2 12] :max [22 11 20] :owner "SomeoneElse"}]
-   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false})]]
+   :act [[:job (jobs.gather.mine {:settings {:jobs.gather.mine.targets/zone-margin 1} :torches false :block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false})]]
    :expect [{:event {:source :job :kind :mine.turned :data {:from "east"}} :within-s 120 :of-job true}
             {:event {:source :job :kind :mine.tunnel-end :data {:reason :tunnel-length}} :within-s 220 :of-job true}]
    :after [[:block [17 9 16] "stone"]]}
