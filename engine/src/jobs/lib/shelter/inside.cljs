@@ -49,20 +49,28 @@
     (boolean (some #(and (far? %) (not (sh-sense/lit-here? p %)))
                    (sh-sense/spawnable-cells p (map (fn [[x y z]] {:x x :y y :z z}) (:cells room)))))))
 
-(defn safe-room-at?
-  "Whether a body at `at` ({:x :y :z}) would be safe from the night (owner Q345): in a closed room under a roof
-  (sh-sense/shut-in-room?) with no open door, no way in for a walking mob or a spider (reach-room/enterable?,
-  reach-room/spider-gap?), and no dark spawnable cell in it farther than spawn-free-radius from `at` (a dark 5x5 room is
-  safe, a dark hall reaching 30 blocks is not). A roof with open sides is not, nor is a pit a walker on its rim steps
-  down into."
+(defn walled-off-at?
+  "Whether a body at `at` ({:x :y :z}) has no dark spawnable cell a mob could walk from to it (owner Q345 for work exposure:
+  nothing spawns within spawn-free-radius, so only dark cells beyond it that a mob reaches on foot count): `at` lies in a
+  closed, fully seen region (reach-room/room) with no open door, no way in for a walking mob or a spider
+  (reach-room/enterable?, reach-room/spider-gap?), and no dark spawnable cell in it farther than spawn-free-radius from
+  `at`. A region too big to flood (an unroofed one over reach-room/yard-cells) or with an unseen edge is not: unseen is never safe."
   [p at]
   (boolean
-   (and (sh-sense/shut-in-room? p at)
-        (let [room (reach-room/room p at)]
-          (and (not-any? #(open-door? p %) (:doors room))
-               (not (reach-room/enterable? p room))
-               (not (reach-room/spider-gap? p room))
-               (not (dark-spawn-beyond? p room at)))))))
+   (let [room (and (or (sh-sense/shut-in-room? p at) (reach-room/small-region? p at))
+                   (reach-room/room p at))]
+     (and room
+          (not-any? #(open-door? p %) (:doors room))
+          (not (reach-room/enterable? p room))
+          (not (reach-room/spider-gap? p room))
+          (not (dark-spawn-beyond? p room at))))))
+
+(defn safe-room-at?
+  "Whether a body at `at` would be safe from the night (owner Q345): walled-off-at? in a room under a roof
+  (sh-sense/shut-in-room?). A dark 5x5 room is safe, a dark hall reaching 30 blocks is not, nor is a roof with open
+  sides or a pit a walker on its rim steps down into."
+  [p at]
+  (boolean (and (sh-sense/shut-in-room? p at) (walled-off-at? p at))))
 
 (defn safe-from-night?
   "Whether the body is safe from the night where it stands: safe-room-at? its feet, its head not inside a block. The one

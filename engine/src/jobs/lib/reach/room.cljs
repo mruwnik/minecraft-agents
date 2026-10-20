@@ -201,13 +201,13 @@
   or unloaded cell, unseen-edge?). {:cells #{[x y
   z]} feet cells, :doors [{:cell {:x :y :z} :inside {:x :y :z}}] each door or gate beside a room cell at its feet, with
   that room cell}; nil when it is no closed room. A door or gate cell is the room's boundary whether open or shut, so
-  a pos in one is judged by the first closed room beside it."
-  [p {:keys [x y z]}]
-  (let [kind-at (shut-kind-at p)
-        in-door? (some-> (u/seen-block p {:x x :y y :z z}) .-name openable?)]
-    (if in-door?
-      (some (fn [[dx dz]] (room-from p kind-at (+ x dx) y (+ z dz))) [[1 0] [-1 0] [0 1] [0 -1]])
-      (room-from p kind-at x y z))))
+  a pos in one is judged by the first closed room beside it. `kind-at`: shut-kind-at p, or one kept for a while."
+  ([p pos] (room* p pos (shut-kind-at p)))
+  ([p {:keys [x y z]} kind-at]
+   (let [in-door? (some-> (u/seen-block p {:x x :y y :z z}) .-name openable?)]
+     (if in-door?
+       (some (fn [[dx dz]] (room-from p kind-at (+ x dx) y (+ z dz))) [[1 0] [-1 0] [0 1] [0 -1]])
+       (room-from p kind-at x y z)))))
 
 (defn enterable?
   "Whether a walker on seen ground outside the room (room*'s answer) steps into one of its cells: a pit under a roof is open
@@ -303,20 +303,37 @@
     (str (js/Math.floor (/ ((:now opts)) room-memo-ms)) "|" (rays/epoch-of raw) "|" (.-dimension eye) "|"
          (.-x eye) "|" (.-y eye) "|" (.-z eye) "|" (.-yaw eye) "|" (.-pitch eye))))
 
-(defn room
-  "room* kept per body (in its perception store) for room-memo-ms while its eye and the world stay the same; not kept without a perception."
-  [p pos]
+(defn kept
+  "(f kind-at) for the key `ck`, kept in the body's perception store for room-memo-ms while its eye and the world stay the same
+  (the same shared kind-at serves every cell); not kept without a perception."
+  [p ck f]
   (let [per (aget p "perception") k (some-> per steady-key)]
     (if-not k
-      (room* p pos)
+      (f (room-kind-at p (shut-kind-at p)))
       (let [^js st (:st per)]
         (when-not (= k (.-roomKey st))
           (set! (.-roomKey st) k)
-          (set! (.-roomMemo st) (js/Map.)))
-        (let [^js m (.-roomMemo st) ck (str (:x pos) "|" (:y pos) "|" (:z pos))]
+          (set! (.-roomMemo st) (js/Map.))
+          (set! (.-roomKind st) (room-kind-at p (shut-kind-at p))))
+        (let [^js m (.-roomMemo st)]
           (if (.has m ck)
             (.get m ck)
-            (let [v (room* p pos)] (.set m ck v) v)))))))
+            (let [v (f (.-roomKind st))] (.set m ck v) v)))))))
+
+(defn room
+  "room* kept per body (kept) for room-memo-ms; not kept without a perception."
+  [p {:keys [x y z] :as pos}]
+  (kept p (str x "|" y "|" z) (partial room* p pos)))
+
+(def yard-cells
+  "Cells an unroofed region may hold to be judged for walls (a yard); a bigger one is open without flooding to room-cells."
+  100)
+
+(defn small-region?
+  "Whether the walkers' flood from cell {:x :y :z} (doors shut) closes within yard-cells: the cheap test before room's full flood."
+  [p {:keys [x y z]}]
+  (kept p (str "yard|" x "|" y "|" z)
+        (fn [kind-at] (boolean (:closed? (flood-visit (partial forward kind-at) [x y z] yard-cells))))))
 
 (defn walk-steps
   "The steps of a walk (search-steps) from cell from to a cell next to cell to ({:x :y :z} each) over the blocks the

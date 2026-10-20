@@ -127,7 +127,7 @@
   other the spawn-chance at `to` from the light p has seen; :light lowers a chance that darkness alone puts there and light-in says waiting lifts, but only
   at a cell the sky reaches down its column (under leaves too): a roofed dark cell (a stair, a cave) is no exposure on its own, only threats count. A cell p
   has no light data of is guessed dark and lowered by #{:look}, with :look-at [[x y z]]. A solid seen `to` is judged by the air cell over it (a solid cell has no light that night changes). Lava and the like are not spawn
-  chance. A cell in a room safe from the night (sh-inside/safe-room-at?: shut, no dark spawnable cell beyond the spawn-free radius of it) has none. A crude stub."
+  chance. A dark cell has none when no dark spawnable cell beyond the spawn-free radius of it is reachable on foot (sh-inside/walled-off-at?: a closed seen region without a way in). A crude stub."
   ([p to] (exposure p to nil))
   ([p to shelter]
    (let [to (update-vals (assoc to :y (or (:y to) (:y (sh-sense/feet p)))) js/Math.floor)
@@ -145,7 +145,7 @@
          darkening (sh-sense/sky-subtract-now p)
          at {:x (nth cell 0) :y (nth cell 1) :z (nth cell 2)}
          dark-chance (spawn-chance cell {:light (lit-by raw darkening)})
-         chance (if (and (pos? dark-chance) (not leaves?) (sh-inside/safe-room-at? p at)) 0 dark-chance)]
+         chance (if (and (pos? dark-chance) (not leaves?) (raw cell) (sh-inside/walled-off-at? p at)) 0 dark-chance)]
      (if (and (not leaves?) (nil? (raw cell)))
        {:chance chance :lowered-by #{:look} :look-at [cell]}
        (let [open-sky? (or leaves? (sh-sense/sky-reaches-from-above? p {:x (nth cell 0) :y (nth cell 1) :z (nth cell 2)}))

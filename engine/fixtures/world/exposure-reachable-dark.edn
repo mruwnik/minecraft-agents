@@ -1,0 +1,20 @@
+;; Owner Q345 (work exposure): a dark spawnable cell counts only farther than 24 blocks from the body and reachable on foot.
+;; A hungry body cooks in a walled yard open to the night sky: stone x 12..20, z 12..20, walls y 0..5, air x/z 13..19 (7x7,
+;; no dark cell beyond 24 blocks, no way in).
+{:defaults
+ {:tags [:light :survival]
+  :time :night
+  :time-why :night-light
+  :plot {:height 8}
+  :blocks [[:fill [12 0 12] [20 5 20] "stone"] [:fill [13 0 13] [19 5 19] "air"]]
+  :body {:at [16.5 0 16.5] :inventory [["furnace" 1] ["porkchop" 2] ["coal" 2]] :effects [] :settle-s 2}
+  :limit-s 170}
+ :cases
+ [{:name "cooks-in-a-walled-yard-open-to-the-night-sky"
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore false})]]
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :cook}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.get-food"}} :within-s 150}]
+   :after [[:item "porkchop" 0]]}]}

@@ -110,6 +110,16 @@
     (is (zero? (chance 1 25 {:x 0 :y 64 :z 12})))
     (is (pos? (chance 1 40 {:x 0 :y 64 :z 39})) "the room reaches a dark spawnable cell beyond 24 blocks of it")))
 
+(deftest the-exposure-of-a-dark-cell-counts-only-far-dark-cells-a-mob-reaches-on-foot
+  (let [unroofed (fn [w d] (into (into {} (remove (fn [[k _]] (let [[x y z] (map js/parseInt (.split k ","))] (= y 66)))) (box w d false))
+                                 (for [x (range -1 (inc w)) z (range -1 (inc d)) y [66 67 68 69]
+                                       :when (not (and (<= 0 x (dec w)) (<= 0 z (dec d))))]
+                                   [(str x "," y "," z) "stone"])))
+        chance (fn [blocks at] (:chance (cost/exposure (seen-box blocks [0 0]) at)))]
+    (is (zero? (chance (unroofed 5 5) {:x 2 :y 64 :z 2})) "walled yard open to the sky: no dark cell beyond 24 blocks")
+    (is (pos? (chance (unroofed 1 40) {:x 0 :y 64 :z 39})) "the walled yard reaches a far dark cell")
+    (is (pos? (chance (box 5 5 true) {:x 2 :y 64 :z 2})) "open sides: a flood too big to close is never safe")))
+
 (deftest a-leaf-roof-keeps-mobs-out-like-stone
   (let [leaf-roof (into {} (map (fn [[k v]] [k (if (= k "0,66,0") "oak_leaves" v)])) (box 3 3 false))]
     (is (true? (sh-inside/safe-from-night? (seen-box leaf-roof [0 0]))))))
