@@ -48,6 +48,7 @@ export const SPECS = {
   'prim/craft-max-s': { default: 60, spec: ['num-in', 0, null], doc: "The most time one craft act may take (4 s plus 6 s per item, up to this), in seconds." },
   'prim/bucket-wait-s': { default: 2, spec: ['int-in', 0, null], doc: "How long a bucket use waits for the world to change, in seconds." },
   'prim/place-consume-wait-ms': { default: 300, spec: ['int-in', 0, null], doc: "How long place waits for the carried count to drop after the block is placed (slot updates can lag), in ms." },
+  'prim/eat-settle-ms': { default: 400, spec: ['int-in', 0, null], doc: "How long eat waits for the carried count to drop after the bite (slot updates can lag), in ms." },
   'use-on/reach': { default: 4.5, spec: ['num-in', 0, null], doc: "Reach for using an item on a block, in blocks." },
   'use-on/poll-ms': { default: 50, spec: ['int-in', 1, null], doc: "How often use-on polls the world, in ms." },
   'use-on/wait-ms': { default: 1000, spec: ['int-in', 0, null], doc: "How long use-on waits for the block change, in ms." },

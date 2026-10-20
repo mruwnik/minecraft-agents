@@ -200,7 +200,15 @@ export function createItems (env) {
       ctx.onAbort(() => env.bot.deactivateItem())
       await env.bot.equip(item, 'hand')
       ctx.alive()
+      const carried = () => inventory().filter(i => i.name === item.name).reduce((sum, i) => sum + i.count, 0)
+      const before = carried()
       await env.bot.consume()
+      // The slot update for the eaten item can trail the food change; the next read must not still list it.
+      const deadline = Date.now() + setting('prim/eat-settle-ms') * timeScale
+      while (carried() >= before && Date.now() < deadline) {
+        await sleepMs(setting('prim/poll-ms') * timeScale)
+        ctx.alive()
+      }
       return { status: 'ate', item: item.name, food: env.bot.food }
     })
   }

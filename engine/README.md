@@ -148,7 +148,7 @@ Statuses below are the common ones; `reason` and extra fields are in `js/primiti
 | `enchant` | `{pos, op: offers/enchant, item, choice?, levelCost?}` | `ok`, `enchanted`, `cannot`, `no-item`, `no-lapis`, `no-levels`, `full`, `failed` |
 | `fish` | `{pos, timeoutS?}` | `caught` (`item`, `count`), `timeout`, `nothing`, `no-rod`, `no-water`, `unreachable`: casts the carried fishing rod at the water cell `pos`, waits for a bite (`prim/fish-wait-s` 45), reels in; the catch is the inventory gain. The fake bites per `{:fish {:catch [...] :misses n}}` |
 | `chat` | `{message, to?}` validated by `engine.chat/validate` | `sent`, `gone`, `cannot` (`bad-name`, `empty`, `command`, `too-long`), `blocked` (rate), `failed` |
-| `eat` | `{item}` | `ate`, `no-food`, `full` |
+| `eat` | `{item}` | `ate` (once the carried count has dropped), `no-food`, `full` |
 | `attack` | `{id}` (one swing) | `hit`, `killed`, `gone`, `out-of-reach` |
 | `interact` | `{id, item?}` use item on entity | `used`, `no-effect`, `gone`, `out-of-reach`, `no-item`, `full`, `cannot`, `failed` |
 | `trade` | `{villager uuid, op: offers/buy, offer?, times?}` | `ok`, `bought`, `gone`, `out-of-reach`, `no-item`, `full`, `cannot`, `failed`; `bought` ends `stopped: window-closed` if the window closed mid-run |

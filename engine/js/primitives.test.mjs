@@ -3292,3 +3292,15 @@ test('picked-up is marked own after the body digs nearby, and not for a pile it 
   bot.emit('playerCollect', bot.entity, { id: 21, ...pile })
   assert.deepEqual(seen.filter(e => e.kind === 'picked-up').map(e => e.own), [undefined, true])
 })
+
+test('eat returns only once the eaten item has left the bag, even when the slot update trails the bite', async () => {
+  const items = [{ name: 'bread', count: 2, slot: 36 }]
+  const bot = stubBot({ items, food: 10 })
+  bot.consume = async () => { setTimeout(() => { items[0].count-- }, 150) }
+  const primitives = createPrimitivesFromBot(bot)
+  try {
+    primitives.setOwner('t')
+    assert.equal((await primitives.eat('t', { item: 'bread' })).status, 'ate')
+    assert.equal(items[0].count, 1)
+  } finally { await primitives.close() }
+})
