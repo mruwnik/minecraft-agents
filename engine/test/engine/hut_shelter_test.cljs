@@ -84,6 +84,24 @@
             (is (= [{:pos pos :roof {:x 5 :y 67 :z 0} :state :built :room true}]
                    (st/entries eng :shelter)))))))))
 
+(defn big-hut-world
+  "A 10x10 room (x 1..10, z 1..10, y 64..66: 300 cells, over the old 256 cap), roof y 67 with a hole over the body at 2,64,2, a shut door in the south wall."
+  []
+  (let [shell (into {} (remove (fn [[k _]] (let [[x y z] (map js/Number (.split k ","))] (and (<= 1 x 10) (<= 1 z 10) (<= 64 y 66)))))
+                    (box 0 64 0 11 67 11 "cobblestone"))]
+    {:floor tu/walk-floor :self {:pos {:x 2 :y 64 :z 2}}
+     :light (into {} (for [x (range 1 11) y [64 65 66] z (range 1 11)] [[x y z] [15 14]]))
+     :states {"5,64,11" {:open false :half "lower" :facing "south"} "5,65,11" {:open false :half "upper" :facing "south"}}
+     :blocks (-> shell (dissoc "2,67,2") (assoc "5,64,11" "oak_door" "5,65,11" "oak_door"))}))
+
+(deftest dig-in-in-a-room-bigger-than-the-old-cap-mends-the-roof-hole
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (dig-in! (big-hut-world)))]
+          (is (= [{:x 2 :y 67 :z 2}] (mapv st/arg-pos (st/calls p "place"))) "the hole is mended, no walls built")
+          (is (= [] (st/calls p "dig"))))))))
+
 (deftest dig-in-in-a-room-that-is-open-or-has-no-door-walls-the-body-in-as-before
   (async done
     (tu/run-async done
