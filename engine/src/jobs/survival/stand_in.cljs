@@ -16,8 +16,8 @@
   "Walk to the nearest seen place of one kind within :reach (blocks; the settings give each kind's default) and stand there:
   :water (in water, which an enderman keeps away from), :roof (a 2-high gap on a solid floor under a solid roof, which a
   3-tall enderman cannot enter; a gap with unseen cells over it counts once looked at) or :dry (a dry standing cell, to swim
-  out of water: past a mob if that is the only way). A cell not seen reads as rock, so the body looks round once (jobs.lib.look/look-around-until!) when
-  none is found at first. Each round is one jobs.movement.run-away leg of :leg-s seconds, then :continue; the caller holds still
+  out of water: past a mob if that is the only way). A cell not seen reads as rock, so for :water and :roof the body looks round once (jobs.lib.look/look-around-until!) when
+  none is found at first (:dry never: a swimmer's every second counts). Each round is one jobs.movement.run-away leg of :leg-s seconds, then :continue; the caller holds still
   once it is done.
   Done {:where :pos} when the body stands in such a place (at once when it does). Nothing-possible :no-place (none within reach) or :blocked (a leg got no nearer or
   was declined). Quote: one leg of job time; ##Inf when no place is seen. Called by the flight (jobs.survival.respond-flight) for
@@ -132,7 +132,7 @@
   "The place, else once a call after a look round (a cell not seen reads as rock) the first one that follows a look."
   [c block-at]
   (or (place-of c block-at)
-      (when-not (:glanced (ctx/mem c))
+      (when-not (or (= :dry (:where (:args c))) (:glanced (ctx/mem c)))
         (ctx/update-mem! c assoc :glanced true)
         (await (look/look-around-until! c #(place-of c block-at))))))
 
