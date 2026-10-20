@@ -17,10 +17,10 @@
   Holds the vehicle (jobs.lib.vehicle) while the job lives, so the :mounted trigger does not step the body off:
   the body stays aboard only during an exclusive run, otherwise the hold ends with the job and the trigger steps it off ~30 s later.
   By :name it prefers a vehicle with no rider.
-  Impossible: :bad-args. Conditions, asked before every round: :no-vehicle while none is in sight and :aboard-other while on another vehicle (a listed call waits, a called one ends condition-failed with that cause). The round yields :continue only when the walk waits on the world.
+  Impossible: :bad-args, :not-mountable (an entity the body cannot ride). Conditions, asked before every round: :no-vehicle while none is in sight, :aboard-other while on another vehicle, :occupied while every seat is taken (a listed call waits, a called one ends condition-failed with that cause). The round yields :continue only when the walk waits on the world.
 
   Ends done (data {:id :vehicle name}, plus :already true when aboard it already and the root job did not yet hold it; cause :already when it did), or
-  condition-failed: :gone (the server found no such entity), :not-mountable, :occupied, :hand-full
+  condition-failed: the conditions' causes above, :hand-full
   (a mob, with an item in hand that cannot be put away), or
   nothing-possible: :timeout (the server never seated the body), :unreachable (the walk failed ::max-walks (2) times),
   :failed (any other status, data :mount the primitive's).")
@@ -98,14 +98,32 @@
       (contract/later :aboard-other (str "aboard another vehicle, " (:name v)) :vehicle (:name v))
       (contract/ok :vehicle "not aboard another vehicle"))))
 
+(defn wanted-entity
+  "The sensed entity the call would mount (:id, else the nearest of :name), or nil."
+  [c]
+  (let [{:keys [id name]} (:args c)
+        id (if (and (nil? id) (string? name)) (nearest-named c name) id)]
+    (when id (entity-of (:primitives c) id))))
+
+(defn refusal
+  "Never :not-mountable when the wanted vehicle is nothing the body can ride; later :occupied when all its seats are taken."
+  [c]
+  (let [e (wanted-entity c)
+        seats (some-> e .-name vehicle/seats-of)]
+    (cond
+      (nil? e) (contract/ok :vehicle "no vehicle to refuse")
+      (zero? seats) (contract/never :not-mountable (str (.-name e) " cannot be ridden"))
+      (>= (count (.-passengers e)) seats) (contract/later :occupied "every seat of the vehicle is taken")
+      :else (contract/ok :vehicle "a seat is free"))))
+
 (def safe? ready/safe-here-by-night)
 (def fit? ready/fit?)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def can-start? (cond/and bad-args no-vehicle aboard-other))
+(def can-start? (cond/and bad-args no-vehicle aboard-other refusal))
 
-(def can-run? (cond/and no-vehicle aboard-other))
+(def can-run? (cond/and no-vehicle aboard-other refusal))
 
 (defn quote-of [c]
   (let [p (:primitives c)
@@ -153,9 +171,7 @@
                   (case status
                     "mounted" (done! c {:id id :vehicle (.-name (.-vehicle r))})
                     "already-mounted" (done! c {:id id :vehicle (.-name (.-vehicle r)) :already true})
-                    "gone" (stop! c id :condition-failed :gone)
-                    "not-mountable" (stop! c id :condition-failed :not-mountable)
-                    "occupied" (stop! c id :condition-failed :occupied)
+                    ("gone" "not-mountable" "occupied") :continue ; the world changed since can-run? looked: it asks again
                     "hand-full" (stop! c id :condition-failed :hand-full)
                     "timeout" (stop! c id :nothing-possible :timeout {:seen (js->clj (.-vehicle r) :keywordize-keys true)})
                     "out-of-reach" (if (>= (inc fails) (max-walks)) (stop! c id :nothing-possible :unreachable) (recur (inc fails)))

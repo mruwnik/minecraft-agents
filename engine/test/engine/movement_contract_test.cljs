@@ -107,7 +107,7 @@
       (fn ^:async t []
         (is (= {:event :completed}
                (select-keys (await (ending-of {:entities [boat]} '(jobs.movement.mount {:id 9}))) [:event])))
-        (is (= {:event :stopped :kind :condition-failed :reason :not-mountable}
+        (is (= {:event :stopped :kind :impossible :reason :not-mountable}
                (await (ending-of {:entities [(assoc boat :name "cow")]} '(jobs.movement.mount {:id 9})))))
         (is (= {:event :stopped :kind :nothing-possible :reason :timeout}
                (await (ending-of {:entities [boat] :mountFails true} '(jobs.movement.mount {:id 9})))))))))

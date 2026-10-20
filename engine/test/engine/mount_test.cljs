@@ -67,8 +67,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label spec reason]
-                [["not-mountable" {:entities [(assoc boat :name "cow" :id 9)]} :not-mountable]
-                 ["timeout" {:entities [boat] :mountFails true} :timeout]]]
+                [["timeout" {:entities [boat] :mountFails true} :timeout]]]
           (let [o (await (run spec {:id 9}))]
             (is (= {:status :stopped :reason reason} (select-keys (result-of o) [:status :reason])) label)
             (is (nil? (vehicle/vehicle-of (.self (:p o)))) label)))))))
@@ -107,12 +106,20 @@
               o (await (run {:entities [(assoc taken :pos {:x 1.5 :y 64 :z 0.5}) free]} {:name "minecart"}))]
           (is (= 6 (:id (result-of o)))))))))
 
-(deftest an-occupied-vehicle-by-id-is-occupied
+(deftest a-vehicle-the-body-cannot-ride-or-with-every-seat-taken-is-refused-by-can-run
+  (are [spec args expected] (= expected (tu/kind-reason (mount/can-run? (bare-ctx (tu/fake spec) args))))
+    {:entities [(assoc boat :name "cow")]} {:id 9} [:never :not-mountable]
+    {:entities [(assoc boat :name "oak_chest_boat" :passengers [77])]} {:id 9} [:later :occupied]
+    {:entities [(assoc boat :passengers [77 78])]} {:id 9} [:later :occupied]
+    {:entities [(assoc boat :passengers [77 78])]} {:name "oak_boat"} [:later :occupied]
+    {:entities [(assoc boat :passengers [77])]} {:id 9} [:ok :vehicle]))
+
+(deftest a-mount-the-server-refuses-after-can-run-looked-continues
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [o (await (run {:entities [(assoc boat :passengers [77 78])]} {:id 9}))]
-          (is (= :occupied (:reason (result-of o)))))))))
+        (doseq [status ["gone" "occupied" "not-mountable"]]
+          (is (= :continue (:r (await (run {:entities [boat]} {:id 9} status)))) status))))))
 
 (deftest mount-statuses-map-to-reasons
   (async done

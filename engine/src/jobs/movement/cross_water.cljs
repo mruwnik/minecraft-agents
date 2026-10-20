@@ -39,10 +39,9 @@
    :item {:doc "the boat item to launch; nil: the first carried boat or raft, else one is fetched" :spec a/item? :default nil}
    :recover {:doc "take the boat back after landing" :spec boolean? :default true}})
 
-(def crossing-kind :cross-water)
-(def crossing-policy {:cap 4 :ttl :forever})
-
 (defn given-pos [c] (when (:pos (:args c)) (:pos (b/parse (:args c)))))
+
+(defn goal-pos [c] (when (:goal (:args c)) (:pos (b/parse {:pos (:goal (:args c))}))))
 
 (def target [:pos :goal])
 
@@ -80,24 +79,27 @@
        first))
 
 (defn target-spot [c]
-  (let [p (:primitives c)
-        {:keys [goal]} (:args c)]
+  (let [p (:primitives c)]
     (if-let [cell (given-pos c)]
       (shore/spot-at p cell)
-      (far-spot p (u/self-pos c) {:goal (when goal (:pos (b/parse {:pos goal})))}))))
+      (far-spot p (u/self-pos c) {:goal (goal-pos c)}))))
 
 (defn water-in-sight? [c]
   (boolean (seq (look/seen-blocks (:primitives c) {:names ["water"] :radius (radius) :max 1 :live? true}))))
 
-(defn crossing [c]
-  (some #(when (= (:root c) (:job (:data %))) (:data %)) (ctx/entries c crossing-kind)))
+(defn crossing
+  "The crossing under way, {:land cell}, from job memory; nil before the launch."
+  [c]
+  (:crossing (ctx/mem c)))
 
 (def launch-stops {:need :no-boat :no-boat :boat-not-seen})
 
 (defn on-shore?
-  "Whether the body stands on or next to the landing cell."
+  "Whether the body stands dry on or next to the landing cell: a swimmer beside it is not ashore."
   [c land]
-  (<= (u/dist (u/self-pos c) (vehicle/centre land)) 1.5))
+  (let [me (u/self-pos c)]
+    (and (<= (u/dist me (vehicle/centre land)) 1.5)
+         (land/land-cell? #(u/seen-name (:primitives c) %) (u/cell-pos (u/cell-vec me))))))
 
 (defn failure
   "This call's ending for a child's ending r that is no :done: its kind (an impossible one is nothing-possible here) and
@@ -113,17 +115,17 @@
     (cond
       (= :continue r) :continue
       (= :done (:kind r))
-      (do (ctx/forget-where! c crossing-kind #(= (:root c) (:job %)))
+      (do (ctx/update-mem! c dissoc :crossing)
           (ctx/end c :done nil (merge {:land land :recovered false} (select-keys (:data r) [:land :boat :recovered]))))
       ;; on foot after the launch with the landing already done: done only if the body is on the far shore
       (and (crossing c) (= :not-aboard (contract/cause-key r)) (on-shore? c land))
-      (do (ctx/forget-where! c crossing-kind #(= (:root c) (:job %)))
+      (do (ctx/update-mem! c dissoc :crossing)
           (ctx/end c :done nil {:land land :recovered false}))
       (and (crossing c) (= :not-aboard (contract/cause-key r)))
-      (do (ctx/forget-where! c crossing-kind #(= (:root c) (:job %)))
+      (do (ctx/update-mem! c dissoc :crossing)
           (ctx/end c :nothing-possible :not-landed {:land land}))
       :else
-      (do (ctx/forget-where! c crossing-kind #(= (:root c) (:job %)))
+      (do (ctx/update-mem! c dissoc :crossing)
           (failure c r {})))))
 
 (defn ^:async launch! [c spot]
@@ -132,7 +134,7 @@
     (cond
       (= :continue r) :continue
       (= :done (:kind r))
-      (do (ctx/remember! c crossing-kind {:job (:root c) :land (:land spot)} crossing-policy)
+      (do (ctx/update-mem! c assoc :crossing {:land (:land spot)})
           (await (land! c (:land spot))))
       :else (failure c (if (= :place-failed (contract/cause-key r)) (:because r) r) launch-stops))))
 
@@ -201,10 +203,6 @@
             ;; a given far shore still not made out after the look: cross toward it, the landing drives nearer
             spot (or spot (spot-of c))]
         (cond
-          (and (or (nil? spot) (not (water-in-sight? c))) (not (look/surveyed? c)))
-          (await (look/survey! c)) ; a shore or water behind the body is not seen until it looks
-
-          (nil? spot) :continue ; can-run? asks again
+          (nil? spot) :continue ; can-run? asks again, and looks round first when it must
           mounted (await (land! c (:land spot)))
-          (not (water-in-sight? c)) :continue
           :else (await (launch! c spot)))))))

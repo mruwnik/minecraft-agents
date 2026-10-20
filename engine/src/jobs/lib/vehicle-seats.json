@@ -1,0 +1,19 @@
+{
+  "boatSeats": 2,
+  "chestBoatSeats": 1,
+  "mountSeats": {
+    "minecart": 1,
+    "pig": 1,
+    "strider": 1,
+    "horse": 1,
+    "donkey": 1,
+    "mule": 1,
+    "skeleton_horse": 1,
+    "zombie_horse": 1,
+    "camel": 2,
+    "camel_husk": 2,
+    "llama": 1,
+    "trader_llama": 1,
+    "happy_ghast": 4
+  }
+}

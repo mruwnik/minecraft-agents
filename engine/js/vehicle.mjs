@@ -12,19 +12,17 @@ import { emptyHand } from './unequip.mjs'
 import { setting } from './settings.mjs'
 import { safePitch } from './gaze.mjs'
 import constants from '../src/engine/constants.json' with { type: 'json' }
+import seats from '../src/jobs/lib/vehicle-seats.json' with { type: 'json' }
 
 
 const BOAT = /_(boat|raft)$/
 const CHEST_BOAT = /_chest_(boat|raft)$/
-const RIDEABLE = ['minecart', 'pig', 'strider', 'horse', 'donkey', 'mule', 'skeleton_horse', 'zombie_horse', 'camel', 'camel_husk', 'llama', 'trader_llama', 'happy_ghast']
-const SEATS = { camel: 2, camel_husk: 2, happy_ghast: 4 }
 
 // seats of a mountable entity by name; 0 when the body cannot ride it
 export const seatsOf = name => {
-  if (CHEST_BOAT.test(name)) return 1
-  if (BOAT.test(name)) return 2
-  if (RIDEABLE.includes(name)) return SEATS[name] ?? 1
-  return 0
+  if (CHEST_BOAT.test(name)) return seats.chestBoatSeats
+  if (BOAT.test(name)) return seats.boatSeats
+  return seats.mountSeats[name] ?? 0
 }
 
 // A boat or minecart takes the body with anything in hand; a mob would be leashed or fed by a held lead or food.

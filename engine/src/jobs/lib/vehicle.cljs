@@ -11,7 +11,10 @@
             [engine.settings :as settings]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
-            [jobs.lib.land :as land]))
+            [jobs.lib.land :as land]
+            [shadow.resource :as rc]))
+
+(def ^:private seat-table (js/JSON.parse (rc/inline "jobs/lib/vehicle-seats.json")))
 
 (def hold-kind :vehicle-hold)
 
@@ -28,6 +31,14 @@
     {:id (.-id v) :uuid (.-uuid v) :name (.-name v)}))
 
 (defn mounted? [p] (some? (vehicle-of (.self p))))
+
+(defn seats-of
+  "Riders the entity named name takes; 0 when the body cannot ride it (js/vehicle.mjs seatsOf, the same constants)."
+  [name]
+  (cond
+    (re-find #"_chest_(boat|raft)$" name) (unchecked-get seat-table "chestBoatSeats")
+    (re-find #"_(boat|raft)$" name) (unchecked-get seat-table "boatSeats")
+    :else (or (unchecked-get (unchecked-get seat-table "mountSeats") name) 0)))
 
 (defn live-job? [view id] (boolean (seq (mem/entries view (mem/job-kind id)))))
 

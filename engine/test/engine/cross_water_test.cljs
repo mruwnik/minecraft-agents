@@ -153,8 +153,8 @@
   (let [{:keys [eng p seen]} (lt/setup world)
         out (atom :not-done)
         parent {:round (fn ^:async saving-round [c]
-                         (when-not (seq (ctx/entries c cw/crossing-kind))
-                           (ctx/remember! c cw/crossing-kind {:job (:root c) :land land} cw/crossing-policy))
+                         (when-not (get-in (ctx/mem c) [:children :kid :crossing])
+                           (ctx/update-mem! c assoc-in [:children :kid :crossing] {:land land}))
                          (await ((:round (tu/recording-parent 'jobs.movement.cross-water {} out)) c)))}
         eng (assoc eng :jobs (assoc (:jobs eng) 'saving-parent parent))]
     (core/submit! eng '(saving-parent) {})
@@ -245,5 +245,8 @@
     (is (= {:spots 2 :drive :blocked} (:data (cw/failure {} r {}))))
     (is (= :no-boat (contract/cause-key (cw/failure {} {:kind :condition-failed :cause :need} {:need :no-boat}))))))
 
-(deftest the-crossing-record-never-expires
-  (is (= :forever (:ttl cw/crossing-policy))))
+(deftest only-a-body-standing-dry-at-the-landing-is-ashore
+  (doseq [[label pos ashore] [["on the landing" [7.5 64 0.5] true]
+                              ["a swimmer within reach of it" [6.5 63 0.5] false]]]
+    (let [{:keys [p]} (lt/setup (assoc world :self {:pos pos}))]
+      (is (= ashore (cw/on-shore? {:primitives p} far)) label))))
