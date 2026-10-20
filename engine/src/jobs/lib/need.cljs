@@ -5,9 +5,7 @@
   what was wanted, the child's ending as its :because, the kind kept (a limit stays a limit). A duplicate call is
   the engine's refusal. Options {:slot :how :explore} pass on to the fetch job.
 
-  The :fetch arg of a job: false/nil (off), true (all kinds, all sources), a set of kinds (#{:tool :item}), or a map of
-  limits {:what :how :minutes :fail-minutes :explore}. Limits merge, later wins: built-in, the job's code
-  default, the call's arg.
+  What a job may fetch is its call's :ways (fetch-ways minus :carried are the sources); fetch-opts reads them.
 
   A fetch that ended :done, asked again with nothing of what it got used up since, ends condition-failed
   {:why :not-solved}: the child does not cure the caller's need. :return? true keeps the cell the body stood on when
@@ -21,14 +19,14 @@
             [jobs.lib.waits :as waits]
             [jobs.lib.util :as u]))
 
-;; ------------------------------------------------------------------ the :fetch arg and its limits
+;; ------------------------------------------------------------------ the fetch ways and limits
 
 (def kinds #{:tool :item})
 (def fetch-ways "The ways of a job whose missing things are fetched: :carried is the job's own stock." [:carried :chest :craft :gather])
 (def sources #{:chest :craft :gather})
 
 (def built-in
-  "The limits of :fetch true."
+  "The limits of a fetch with every source."
   {:what kinds :how sources :minutes 10 :fail-minutes 10})
 
 (defn child-limits
@@ -38,37 +36,6 @@
   (cond-> {}
     how (assoc :ways (set (cond-> how (and (= job 'jobs.items.obtain) (contains? how :craft)) (conj :smelt))))
     minutes (assoc :spend {:job-time (* 60 minutes)})))
-
-(def limit-keys [:what :how :minutes :fail-minutes :explore])
-
-(defn limit-error
-  "Why a limits map is bad, or nil."
-  [m]
-  (let [{:keys [what how minutes fail-minutes explore]} m
-        pos-num? #(and (number? %) (js/isFinite %) (pos? %))]
-    (cond
-      (not (map? m)) "limits are a map"
-      (seq (remove (set limit-keys) (keys m))) (str "unknown keys " (pr-str (vec (remove (set limit-keys) (keys m)))))
-      (and (some? what) (not (and (set? what) (every? kinds what)))) (str ":what is a set of " (pr-str kinds))
-      (and (some? how) (not (and (set? how) (every? sources how)))) (str ":how is a set of " (pr-str sources))
-      (and (some? minutes) (not (pos-num? minutes))) ":minutes is a positive number"
-      (and (some? fail-minutes) (not (pos-num? fail-minutes))) ":fail-minutes is a positive number"
-      (and (some? explore) (not (boolean? explore))) ":explore is true or false")))
-
-(defn parse-arg
-  "The :fetch arg as a limits map ({} for true), nil when off, or {:error text}."
-  [v]
-  (cond
-    (or (nil? v) (false? v)) nil
-    (true? v) {}
-    (set? v) (if (every? kinds v) {:what v} {:error (str ":fetch set holds kinds of " (pr-str kinds))})
-    (map? v) (if-let [e (limit-error v)] {:error (str ":fetch " e)} v)
-    :else {:error ":fetch is true, false, a set of kinds or a map of limits"}))
-
-(def option?
-  "The spec of a job's :fetch arg."
-  (a/pred "true, false, a set of kinds (:tool :item) or a map of limits {:what :how :minutes :fail-minutes :explore}"
-          #(nil? (:error (parse-arg %)))))
 
 (def dig-ways "The :ways of jobs.gather.mine and dig-for; they say nothing about fetching." #{:seen :descend-stair :descend-shaft :strip-tunnel})
 
@@ -108,41 +75,6 @@
   "The fetch ways of the call running in c as a :ways set for a child: :carried plus the sources the call allows."
   [c]
   (into #{:carried} (filter #(ctx/way? c %)) sources))
-
-(defn ways-of-fetch
-  "The call ways for a job still on the old :fetch arg v: :carried alone when it is off, else its :how sources too."
-  [v]
-  (let [arg (parse-arg v)]
-    (if (:error arg) (set fetch-ways) (into #{:carried} (when arg (or (:how arg) sources))))))
-
-(defn merge-limits
-  "Limits: built-in, then job-default, then call."
-  [job-default call]
-  (let [clean #(into {} (remove (comp nil? val)) (select-keys % limit-keys))]
-    (merge built-in (clean job-default) (clean call))))
-
-(defn opts
-  "The fetch limits of the job running in c (job: its namespace symbol), nil when :fetch is off."
-  ([c job] (opts c job nil))
-  ([c job job-default]
-   (let [arg (parse-arg (:fetch (:args c)))]
-     (cond
-       (nil? arg) nil
-       :else (merge-limits job-default arg)))))
-
-(defn allows?
-  "Whether a job's :fetch arg v lets it fetch things of kind (:tool or :item)."
-  [v kind]
-  (let [arg (parse-arg v)]
-    (boolean (and arg (not (:error arg)) (contains? (:what (merge-limits nil arg)) kind)))))
-
-(defn fetch-allowed?
-  "Whether the job running in c may fetch things of kind (:tool or :item): its call's ways when it has some, else its
-  old :fetch arg."
-  [c kind]
-  (if (given-ways c)
-    (boolean (seq (fetch-how c)))
-    (allows? (:fetch (:args c)) kind)))
 
 (defn tighten
   "Limits o tightened by a wait's limits l: the sources both allow, the shorter :minutes; other keys of l fill in."

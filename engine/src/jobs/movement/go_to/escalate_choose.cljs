@@ -74,7 +74,7 @@
                 (nil? (dig-leave/leave-unsafe (:primitives c))))))
 
 (defn fetch-tool?
-  "Whether the escalation may fetch a pickaxe (stair :fetch, a :dig-route dig's): the body is free (a shut-in body
+  "Whether the escalation may fetch a pickaxe (the stair's and a :dig-route dig's ways): the body is free (a shut-in body
   cannot walk to one; by-hand is its fallback) and carries one pickaxe or none, so the last one breaking is no stop."
   [c]
   (let [p (:primitives c)]

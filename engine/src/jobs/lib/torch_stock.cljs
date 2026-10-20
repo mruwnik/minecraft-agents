@@ -8,12 +8,10 @@
             [jobs.lib.trip :as trip]))
 
 (defn fetch-allows?
-  "Whether the call lets it get a thing of kind (:item or :tool). Torches need coal, so an item is fetched only when the ways
-  include :gather (a mine run by obtain never starts a gather of its own)."
-  [c kind]
-  (if (= :item kind)
-    (contains? (need/fetch-how c) :gather)
-    (need/fetch-allowed? c kind)))
+  "Whether the call lets it get torches. They need coal, so only when the ways include :gather (a mine run by obtain never
+  starts a gather of its own)."
+  [c]
+  (contains? (need/fetch-how c) :gather))
 
 (defn no-stock-text [held e]
   (let [tried (get-in e [:data :tried])]
@@ -29,14 +27,14 @@
   with a jobs.items.obtain child (slot :torches; chest, craft from coal or charcoal, charcoal by smelt, gather), and with
   coal or charcoal carried only what that fuel makes (4 each). Resolves nil to go on, :continue while the get waits.
   Once per call (:torches-tried): info torch.stocked, or warn torch.no-stock with the get's cause. The body walks back to
-  where it began (need :return?). Skipped when :fetch lacks :item."
+  where it began (need :return?). Skipped without :gather in the call's ways."
   [c]
   (let [p (:primitives c)
         held (torch/torches-held p)
         fuel (torch/fuel-held p)
         want (- (trip/torch-stock) held)
         n (if (pos? fuel) (min want (* 4 fuel)) want)]
-    (when (and (fetch-allows? c :item) (< held (trip/torch-low)) (not (:torches-tried (ctx/mem c))))
+    (when (and (fetch-allows? c) (< held (trip/torch-low)) (not (:torches-tried (ctx/mem c))))
       (let [e (await (need/fetch! c 'jobs.items.obtain {:item "torch" :count n :avoid (trip/line-ahead c)} :need {:item "torch" :count n}
                                   {:slot :torches :return? true}))]
         (if (= :continue e)

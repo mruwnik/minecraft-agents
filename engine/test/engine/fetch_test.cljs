@@ -90,28 +90,13 @@
 
 ;; ------------------------------------------------------------------ the option
 
-(deftest fetch-arg-shapes-parse
-  (is (nil? (need/parse-arg nil)))
-  (is (nil? (need/parse-arg false)))
-  (is (= {} (need/parse-arg true)))
-  (is (= {:what #{:tool}} (need/parse-arg #{:tool})))
-  (is (= {:how #{:chest} :minutes 2} (need/parse-arg {:how #{:chest} :minutes 2})))
-  (is (:error (need/parse-arg "yes")))
-  (is (:error (need/parse-arg {:minutes -1})))
-  (is (:error (need/parse-arg {:what #{:tools}}))))
-
-(deftest limits-precedence-call-over-job-default-over-built-in
-  (is (= 10 (:minutes (need/merge-limits nil nil))))
-  (is (= 6 (:minutes (need/merge-limits {:minutes 6} nil))) "job code default over the built-in")
-  (is (= 1 (:minutes (need/merge-limits {:minutes 6} {:minutes 1}))) "the call wins"))
-
 (deftest a-need-above-64-is-fetched-whole
-  (let [o (need/merge-limits nil nil)]
+  (let [o need/built-in]
     (is (= {:item "cobblestone" :count 100 :explore false} (:args (need/plan-for {:reason :need :item "cobblestone" :count 100} o))) "no 64 cap on one fetch")
     (is (= {:any-of ["dirt"] :count 100 :explore false} (:args (need/plan-for {:reason :need :any-of ["dirt"] :count 100} o))))))
 
 (deftest a-wait-maps-to-a-fetch-only-for-wanted-kinds
-  (let [o (need/merge-limits nil nil)]
+  (let [o need/built-in]
     (is (= 'jobs.items.get-tool (:job (need/plan-for {:reason :no-tool :needs "wooden_pickaxe" :block "stone"} o))))
     (is (= {:block "stone" :explore false} (:args (need/plan-for {:reason :no-tool :needs "wooden_pickaxe" :block "stone"} o))))
     (is (= {:item "oak_planks" :count 1 :explore false} (:args (need/plan-for {:reason :need :item "oak_planks" :pos {}} o))))
@@ -1360,14 +1345,9 @@
           (is (= 1 (get (inv s) "stone_pickaxe")) (pr-str (inv s) (last (events-of s :stopped)))))))))
 
 (deftest explore-is-a-fetch-limit-passed-to-the-fetch-jobs
-  (let [o (assoc (need/merge-limits nil {:explore true}) :explore true)]
-    (is (true? (:explore (need/merge-limits nil {:explore true}))))
-    (is (false? (:explore (need/merge-limits {:explore true} {:explore false}))) "the call wins")
+  (let [o (assoc need/built-in :explore true)]
     (is (= {:item "oak_log" :count 2 :explore true} (:args (need/plan-for {:reason :need :item "oak_log" :count 2} o))))
-    (is (= {:block "stone" :explore true} (:args (need/plan-for {:reason :no-tool :block "stone"} o))))
-    (is (nil? (need/limit-error {:explore false})))
-    (is (some? (need/limit-error {:explore {:max-distance 10}})))
-    (is (some? (need/limit-error {:explore "yes"})))))
+    (is (= {:block "stone" :explore true} (:args (need/plan-for {:reason :no-tool :block "stone"} o))))))
 
 (deftest obtain-craft-keeps-the-short-detail-of-a-need-stop
   (is (= {:short {"stick" 2} :alternatives {"oak_log" ["birch_log"]}}

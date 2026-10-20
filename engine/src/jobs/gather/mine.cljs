@@ -247,7 +247,7 @@
   (and (< (:rounds (ctx/mem c) 0) (settings/get settings ::max-equip-rounds))
        (case reason
          :no-tool (some? (need/fetch-opts c))
-         :no-torches (and (:stocked? (ctx/mem c)) (stock/fetch-allows? c :item))
+         :no-torches (and (:stocked? (ctx/mem c)) (stock/fetch-allows? c))
          false)))
 
 (defn ^:async dig-step!

@@ -2,7 +2,7 @@
   "Choosers: what a body may use for a purpose, in order. (tools-for c [:dig block] amount) answers
   {:list [{:item name :uses-left n}] :short n}: the carried tools that harvest block and are not reserved, cheapest
   material first (opts {:fast true}: best first; [:attack] always best first, swords over axes), and the uses the amount still lacks once the list is used up (the
-  caller's :fetch). `reserved` is the register's held units (jobs.lib.reserve) and a body's :choose/override entries {:chooser :tools :avoid [names] :prefer [names]}.
+  caller's ways). `reserved` is the register's held units (jobs.lib.reserve) and a body's :choose/override entries {:chooser :tools :avoid [names] :prefer [names]}.
   (fillers-for c purpose amount) answers {:list [{:item name :count n}] :short n} the same way for the blocks a
   purpose places (:build :shelter :pillar :climb :cover :seal), in the purpose's order (common first). Zones judge cells, not items: the caller asks them for the cell it digs."
   (:require [jobs.lib.blocks :as blocks]
