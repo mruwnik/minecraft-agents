@@ -122,6 +122,8 @@
                               (hide-now! c {:kind (case option :plug-zone :plug :plug-dig-zone :plug-dig option) :anchor feet :cells (plug-cells c)} (hide-texts :plug)))
       :else (do (ctx/update-mem! c dissoc :plugging)
                 (when (= :trespass (get-in e [:data :stops :walls :reason])) (ctx/update-mem! c assoc :zone-walls true))
+                (when (some (comp #{:trespass :no-site} :reason) (vals (select-keys (get-in e [:data :stops]) [:pit :pocket])))
+                  (ctx/update-mem! c assoc :zone-dig true))
                 nil))))
 
 (defn ^:async plug-option!

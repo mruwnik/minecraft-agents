@@ -254,7 +254,7 @@
                   :plug (await (refuge/plug-option! c :plug #{:walls}))
                   :plug-zone (when (:zone-walls (ctx/mem c)) (await (refuge/plug-option! c :plug-zone #{:walls})))
                   :plug-dig (await (refuge/plug-option! c :plug-dig #{:pit :pocket}))
-                  :plug-dig-zone (when (flight/tried? c :plug-dig) (await (refuge/plug-option! c :plug-dig-zone #{:pit :pocket})))
+                  :plug-dig-zone (when (and (flight/tried? c :plug-dig) (:zone-dig (ctx/mem c))) (await (refuge/plug-option! c :plug-dig-zone #{:pit :pocket})))
                   :pillar (await (refuge/pillar! c false))
                   :pillar-zone (when-not (flight/tried? c :pillar) (await (refuge/pillar! c true)))
                   :water (await (water! c))
