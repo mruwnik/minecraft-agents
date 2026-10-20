@@ -287,7 +287,7 @@
         cells (for [{:keys [x y z]} (take look-ahead-steps (rest steps)) y' [y (inc y)]] [x y' z])
         unseen (filter #(sense/unknown? p %) cells)]
     (await (look/survey! c :near))
-    (await (sense/look-at-unknown! c (sort-by #(u/eye-dist (u/self-pos c) %) unseen) look-ahead-steps))
+    (await (sense/look-at-unknown! c (u/nearest-first (u/self-pos c) identity unseen) look-ahead-steps))
     (let [hidden (filter #(and (sense/unknown? p %) (occluded? c %)) cells)
           solid (filter #(true? (some-> (u/sensed p (zipmap [:x :y :z] %)) .-fullCube)) cells)]
       (doseq [[x y z] (concat hidden solid)] (.add ^js (.-blocked ^js (:unknown c)) (str x "," y "," z)))

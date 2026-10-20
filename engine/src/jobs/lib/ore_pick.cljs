@@ -106,7 +106,7 @@
                             (tools/can-harvest? p name)
                             (blocks/room-for? p (blocks/item-name {:block name}))
                             (or (nil? in) (= :ok (access/judge (access/may-dig? in pos) #{})))))))
-           (sort-by #(u/eye-dist here (:pos %)))))))
+           (u/nearest-first here :pos)))))
 
 (defn book! [c f & args] (apply ctx/update-mem! c update :ore-pick f args))
 

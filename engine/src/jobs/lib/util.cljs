@@ -160,8 +160,19 @@
 (defn eye-dist
   "Distance from the eye of a body at feet position here to the centre of cell (a [x y z] vector or an {:x :y :z} map)."
   [here cell]
-  (let [[x y z] (if (vector? cell) cell [(:x cell) (:y cell) (:z cell)])]
-    (dist {:x (:x here) :y (+ (:y here) game/eye-height) :z (:z here)} {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)})))
+  (let [v? (vector? cell)
+        x (if v? (nth cell 0) (:x cell))
+        y (if v? (nth cell 1) (:y cell))
+        z (if v? (nth cell 2) (:z cell))]
+    (js/Math.hypot (- (:x here) (+ x 0.5)) (- (+ (:y here) game/eye-height) (+ y 0.5)) (- (:z here) (+ z 0.5)))))
+
+(defn nearest-first
+  "coll ordered by eye-dist from here to (pos-of item); each distance is computed once, ties keep their order."
+  [here pos-of coll]
+  (->> coll
+       (mapv (fn [item] [(eye-dist here (pos-of item)) item]))
+       (sort-by first)
+       (mapv second)))
 
 (defn within?
   "True when the floored cells of a and b are within range, the measure moveTo's arrival uses."

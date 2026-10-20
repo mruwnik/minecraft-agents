@@ -89,7 +89,7 @@
   "The :remembered cells of answer nearest to the body at here, as {:x :y :z}, at most pen/max-listed, plus
   :remembered-total when more."
   [answer here]
-  (let [cells (sort-by #(u/eye-dist here %) (:remembered answer))
+  (let [cells (u/nearest-first here identity (:remembered answer))
         shown (mapv u/cell-pos (take (pen/max-listed) cells))]
     (cond-> {:remembered shown}
       (> (count cells) (count shown)) (assoc :remembered-total (count cells)))))

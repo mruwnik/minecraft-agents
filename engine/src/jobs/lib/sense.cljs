@@ -49,7 +49,7 @@
   (->> cells
        (remove looked)
        (filter #(<= (u/eye-dist here %) (radius p)))
-       (sort-by #(u/eye-dist here %))))
+       (u/nearest-first here identity)))
 
 (defn unknown? [p [x y z]] (true? (some-> (u/sensed p {:x x :y y :z z}) .-unknown)))
 
