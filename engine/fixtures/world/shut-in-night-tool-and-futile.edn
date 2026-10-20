@@ -13,7 +13,6 @@
    ;; a thick stone pad under the plot floor (the floor is one block over void; shut-in will not dig through it)
    :blocks [[:fill [2 -6 2] [9 -1 9] "stone"]]
    :body {:at [5.5 0 5.5] :inventory [["stick" 1] ["stone_pickaxe" 1]]}
-   :plot {:height 12 :light :sky}
    :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
    ;; no equip is asked when the pooled body's held slot already holds the pickaxe: the stone it digs and the roof it places
    ;; from the dug cobblestone show the pickaxe was in hand

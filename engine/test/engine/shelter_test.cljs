@@ -1490,22 +1490,61 @@
     (perception/pass! per)
     p))
 
-(deftest a-lit-dead-end-tunnel-is-shelter-though-its-sides-were-not-looked-at
-  (is (true? (sh-inside/safe-from-night? (sight-of-tunnel false)))))
+(def lit-tunnel-box
+  "Stone x -3..60, z -3..12, y 62..67 with a lit 1-wide tunnel x 0..19 (y 64-65); a branch at x 12 (z 1..) leads to a hall x 8..40, z 1..12.
+  The tunnel is lit 14 all along, the branch cell by the tunnel 13, the hall dark."
+  (fn [branch?]
+    (let [open? (fn [x y z] (and (#{64 65} y)
+                                 (or (and (zero? z) (<= 0 x 19))
+                                     (and branch? (= 12 x) (<= 1 z 12))
+                                     (and branch? (<= 8 x 40) (<= 1 z 12)))))]
+      {:blocks (into {} (for [x (range -3 61) z (range -3 13) y (range 62 68) :when (not (open? x y z))] [(str x "," y "," z) "stone"]))
+       :light (into {} (for [x (range 0 20) y [64 65]] [[x y 0] [0 14]]))})))
 
-(deftest a-tunnel-open-into-a-dark-cave-is-no-shelter
-  (is (false? (sh-inside/safe-from-night? (sight-of-tunnel true)))))
+(defn lit-tunnel-body [branch? seen]
+  (let [{:keys [blocks light]} (lit-tunnel-box branch?)
+        raw-p (tu/fake {:time night :yaw -90 :blocks blocks})
+        _ (swap! (fake/state raw-p) assoc :light-default [0 0] :light (cond-> light branch? (assoc [12 64 1] [0 13] [12 65 1] [0 13])))]
+    (if-not (= :perceived seen)
+      raw-p
+      (let [per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})
+            p (perception/wrap raw-p per)]
+        (perception/pass! per)
+        p))))
 
+(deftest a-lit-dead-end-tunnel-whose-walls-are-seen-is-shelter
+  (is (true? (sh-inside/safe-from-night? (lit-tunnel-body false :all)))))
 
+(deftest a-lit-tunnel-with-a-side-branch-to-a-dark-hall-is-no-shelter-until-the-branch-is-seen-closed
+  (are [seen] (false? (sh-inside/safe-from-night? (lit-tunnel-body true seen)))
+    :perceived
+    :all))
 
-(deftest a-long-lit-tunnel-with-torches-is-shelter-though-far-walls-were-not-seen
-  (let [raw-p (tu/fake {:time night :yaw -90 :blocks (into {} (for [x (range -3 53) z (range -3 4) y (range 62 68)
-                                                                 :when (not (and (<= 0 x 49) (zero? z) (#{64 65} y)))]
-                                                             [(str x "," y "," z) "stone"]))})
-        _ (swap! (fake/state raw-p) assoc :light-default [0 0]
-                 :light (into {} (for [x (range 0 50) y [64 65]]
-                                   [[x y 0] [0 (max 0 (- 14 (apply min (map #(js/Math.abs (- x %)) (range 0 50 6)))))]])))
-        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})
-        p (perception/wrap raw-p per)]
-    (perception/pass! per)
-    (is (true? (sh-inside/safe-from-night? p)))))
+(deftest the-night-looks-at-the-unseen-sides-of-a-lit-tunnel-and-is-done-without-digging
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [blocks light]} (lit-tunnel-box false)
+              {:keys [eng p seen]} (setup {:time night :yaw -90 :blocks blocks})
+              _ (swap! (fake/state p) assoc :light-default [0 0] :light light)
+              _ (tu/seeing-after-look p)]
+          (is (false? (sh-inside/safe-from-night? p)) "nothing seen: not yet known shut")
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tick-n eng 6))
+          (is (seq (calls p "look")) "it looked at the unseen sides")
+          (is (empty? (calls p "place")) "a region seen closed is no reason to dig in")
+          (is (true? (sh-inside/safe-from-night? p))))))))
+
+(deftest an-open-topped-pit-under-a-distant-roof-is-no-shelter-a-ringed-one-is
+  (let [world (fn [ring?]
+                (let [raw-p (tu/fake {:time night
+                                      :blocks (into {} (concat
+                                                        (for [x (range -6 7) z (range -6 7) y (range 55 64)
+                                                              :when (not (and (zero? x) (zero? z) (>= y 62)))] [(str x "," y "," z) "stone"])
+                                                        (for [x (range -6 7) z (range -6 7)] [(str x ",70," z) "stone"])
+                                                        (when ring? (for [x [-1 0 1] z [-1 0 1] y [64 65] :when (not (and (zero? x) (zero? z)))] [(str x "," y "," z) "stone"]))))})]
+                  (swap! (fake/state raw-p) assoc :light-default [0 0])
+                  (fake/swap-self! raw-p assoc :pos [0.5 62 0.5])
+                  raw-p))]
+    (is (false? (sh-inside/safe-from-night? (world false))) "a mob on the rim steps down into the pit")
+    (is (true? (sh-inside/safe-from-night? (world true))))))

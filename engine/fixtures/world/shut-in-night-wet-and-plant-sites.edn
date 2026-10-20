@@ -4,7 +4,6 @@
 {:defaults
  {:tags [:survival :shut-in]
   :time :any
-  :plot {:height 12 :light :sky}
   :blocks [[:fill [8 -6 8] [24 -1 24] "dirt"]
            [:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
            [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]

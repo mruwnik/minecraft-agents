@@ -149,21 +149,6 @@
   [p]
   (and (or (roofed? p (room-roof-height)) (leaf-roofed? p (room-roof-height)) (buried? p)) (reach/closed-room? p (feet p))))
 
-(defn bright-cell?
-  "Whether an unseen side of the flood cell #js [x y z] is a wall not yet looked at, not a dark opening (reach/room's
-  lit-cell?): an open cell beside it would have block light one less than this cell's, bright enough for perception to make
-  it out (look/lit-enough-to-see-fn). False without a perception."
-  [p c]
-  (boolean (when-let [visible? (look/lit-enough-to-see-fn p)]
-             (visible? (dec (or (block-light-at p {:x (aget c 0) :y (aget c 1) :z (aget c 2)}) 0))))))
-
-(defn shut-in-region?
-  "shut-in-room? for the night's shelter test: the walls beside lit cells need not have been looked at, so a lit tunnel
-  the body walked in (its sides unseen from the middle) is a closed room too. Returns the room, else nil."
-  [p]
-  (when (or (roofed? p (room-roof-height)) (leaf-roofed? p (room-roof-height)) (buried? p))
-    (reach/room p (feet p) (partial bright-cell? p))))
-
 (defn shut-in-hut?
   "shut-in-room? and wide: a hut, not a one-wide tunnel the body dug."
   [p]

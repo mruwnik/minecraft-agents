@@ -9,6 +9,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]
             [jobs.lib.dig-in-leave :as dig-leave]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
@@ -43,6 +44,7 @@
   Each pass chooses again from the world as it is, the first that applies:
   - day: the morning (night.morning): a doorway the night filled is dug again, a dug-in or exposed night leaves the shelter (:no-way-out ends nothing-possible), a bed put down outside its own zones is picked up (not the respawn bed); a dug-in body stays while a known hostile is near and the dawn grace lasts (night.dawn-hold). Then done? ends it done {:night :slept|:dug-in|:logged-out|:roofed :fled n}, or the morning ends nothing-possible :exposed after a night with no shelter.
   - asleep: hold (:sleeping).
+  - roofed or buried in a closed region with sides never seen: a look at them, nearest first, at most 15 a night (an unseen side is open until seen: a lit tunnel with its walls seen is shelter, one with an unseen branch is not).
   - sheltered (slept, dug in, shut in): log out for a stint while someone else sleeps, else hold (:sheltered) while a bed to use or a sleeper keeps the trigger firing, else end so the queue runs.
   - a roofed :roofed-places place within the night.sites ::home-radius setting, a bed to use or carry and the body not roofed: jobs.survival.enter-room walks in (one try tonight); a carried bed is not put down in the open while one is close (night.bed-kept).
   - an open door of the closed room the body stands in is shut; the room's doorway is filled before a carried bed goes down (:doorway-tried, :doorway-filled).
@@ -54,7 +56,7 @@
   Fleeing (the night.sites ::flee-radius setting, 0 never; at most max-flees walks): to the not-yet-tried candidate go-to reaches soonest (jobs.lib.targets/nearest!): a known bed, a :roofed-places place, a seen cave or overhang cell (walled in on arrival), or seen natural ground the carried tools dig. shelter.fled on arrival, shelter.flee_failed otherwise.
   Every hold is declared (ctx/hold-still!), waits hold-ms, and (night.hold) cooks, eats or runs get-food first.
   An overdue body warns needs_bed once a day; a respawn bed seen gone is written :spawn-lost (warn spawn_lost once).
-  Memory: job memory :enclose, :enclose-failed (feet cells where walling in failed), :sheltered, :log-out-failed, :no-site, :shut-ins, :digging, :bed-down, :pit-trapped, :roof-walk-failed, :left; body memory :doorway-tried and shut-in's :shut-in-failed (forgotten when the night ends, at most ten minutes).
+  Memory: job memory :edge-looked, :enclose, :enclose-failed (feet cells where walling in failed), :sheltered, :log-out-failed, :no-site, :shut-ins, :digging, :bed-down, :pit-trapped, :roof-walk-failed, :left; body memory :doorway-tried and shut-in's :shut-in-failed (forgotten when the night ends, at most ten minutes).
   Muting :night does not end a running night job: cancel it too.")
 
 (a/defargs args
@@ -390,6 +392,33 @@
     (when (sh-spawn/seen-not-bed? (:primitives c) pos)
       (places/retract-if-missing! c :bed pos "missing"))))
 
+(def max-edge-looks
+  "Most cells of a closed region's unseen edge the night looks at in a night, nearest first."
+  15)
+
+(defn edge-looks
+  "The cells [x y z] to look at before the body's region is judged: unseen cells beside the closed region the body stands in
+  under a roof, nearest first, not looked at tonight (a look shows its neighbours too, so look-edges! skips what an earlier look showed). A dark cell stays unseen after a look and is not looked at twice."
+  [c]
+  (let [p (:primitives c)
+        looked (:edge-looked (ctx/mem c) #{})
+        feet (sh-sense/feet p)]
+    (when (and (< (count looked) max-edge-looks)
+               (or (sh-sense/roofed? p (sh-sense/room-roof-height)) (sh-sense/leaf-roofed? p (sh-sense/room-roof-height)) (sh-sense/buried? p)))
+      (->> (reach/unseen-sides p feet)
+           (remove looked)
+           (sort-by (fn [[x y z]] (u/dist feet {:x x :y y :z z})))
+           (take (- max-edge-looks (count looked)))))))
+
+(defn ^:async look-edges!
+  "A closed region with sides never seen is not yet known shut (an unseen cell may be an opening): look at them, nearest first."
+  [c cells]
+  (hold/busy! c)
+  (doseq [cell cells]
+    (when (dig-look/unknown? (:primitives c) cell) (await (dig-look/look-at! c cell)))
+    (ctx/update-mem! c update :edge-looked (fnil conj #{}) cell))
+  :again)
+
 (defn ^:async pass
   "One choice of the night (see doc): :again, or the round's end."
   [c]
@@ -409,6 +438,7 @@
           :again)
       (not (sh-sense/dark-outside? p)) (await (morning/morning! c))
       (sh-sense/sleeping? p) (do (when-not (= :slept sheltered) (hold/sheltered! c :slept)) (await (hold/hold! c :sleeping)))
+      (and (not sheltered) (seq (edge-looks c))) (await (look-edges! c (edge-looks c)))
       (and roofed (or (#{:slept :dug-in} sheltered) (dig-leave/sheltered-in c)))
       (do (when-not sheltered (hold/sheltered! c :dug-in))
           (cond

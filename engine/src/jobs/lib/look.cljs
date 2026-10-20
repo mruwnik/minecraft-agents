@@ -385,15 +385,6 @@
       (let [visible (light/table-now raw (:seeing-min (:opts per)))]
         (fn [x y z] (aget visible (.lightAt raw x y z)))))))
 
-(defn lit-enough-to-see-fn
-  "(fn [block-light]) true when a cell with that block light (no sky light) is bright enough for perception to make out
-  (see-lit-fn's table); nil without a perception."
-  [p]
-  (when-let [per (aget p "perception")]
-    (when-let [^js raw (:raw per)]
-      (let [visible (light/table-now raw (:seeing-min (:opts per)))]
-        (fn [block] (== 1 (aget visible (max 0 (min 15 block)))))))))
-
 (defn near-of
   "How close a dark cell must be for the body of primitives p to see it (more with a torch in a hand); nil without a perception."
   [p]
