@@ -925,6 +925,16 @@
           (is (empty? (call-args p "eat" "item")) "a fed body eats nothing")
           (is (= [:completed] (mapv :kind (ended seen)))))))))
 
+(deftest eat-false-gathers-food-points-and-eats-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:food 2} :entities herd})]
+          (await (one-round! eng {:eat false :stock 3 :settings {:jobs.lib.combat/attack-gap-ms 0}}))
+          (is (= [7 7 7 7] (call-args p "attack" "id")) "the cow is hunted")
+          (is (empty? (call-args p "eat" "item")) "the caller eats, not get-food")
+          (is (= [:completed] (mapv :kind (ended seen)))))))))
+
 (deftest stock-already-carried-does-nothing
   (async done
     (tu/run-async done

@@ -52,6 +52,7 @@
   ::explore setting; not while the search would wait (dark sky, danger near) nor while the night handler holds) and goes on if it found some; at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it ends nothing-possible :no-food (the text says what was searched, the nearest known source) and writes
   :hungry, which widens the next search; the hungry trigger rests after that ending (its :rest-s).
+  :eat false: only gathers, done when the pack holds :stock food points (jobs.survival.eat fetches this way; a job cannot call its own caller).
   :stock n: a fed body also takes the ways until the pack holds n food points, else ends nothing-possible :no-stock.
   A fed body (not hungry, nothing to top up with, no :stock short) is done at once.
   A go-to that waits on the world, or a child still going after jobs.lib.child's call cap, yields :continue; a reflex
@@ -75,6 +76,7 @@
    :health {:doc "below this health eat up to a full bar" :spec (a/num-in 0 20) :default foods/default-health}
    :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms; not underground unless starving): false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}
    :stock {:doc "also carry food worth this many hunger points: a fed body takes the ways below until the pack holds it (0: only feed)" :spec (a/num-in 0 nil) :default 0}
+   :eat {:doc "eat what is carried and what the ways bring: false only gathers (the way jobs.survival.eat fetches: it is the caller, and a job cannot call its own caller), done when the pack holds :stock food points" :spec boolean? :default true}
    :ignore-zones? :shared})
 
 (def harvest-items
@@ -130,7 +132,9 @@
   [c]
   (< (foods/stock-points (u/inventory (:primitives c))) (:stock (:args c))))
 
-(defn wants-food? [c] (or (hungry-now? c) (stock-short? c)))
+(defn eats? [c] (not (false? (:eat (:args c)))))
+
+(defn wants-food? [c] (or (and (eats? c) (hungry-now? c)) (stock-short? c)))
 
 (defn starving?
   "Food 0, or health at or below 6 and hungry: the rest after a fruitless search is only foods/::starving-rest-ms."
@@ -238,9 +242,11 @@
   "Neither hungry, nor topping up, nor short of :stock."
   [c]
   (let [self (.self (:primitives c))]
-    (not (or (wants-food? c)
+    (if-not (eats? c)
+      (not (stock-short? c))
+      (not (or (wants-food? c)
              (foods/top-up? (.-food self) (.-health self) (foods/carried-names self (reserve/spared (ctx/view c) self)))
-             (foods/eat-now? self (:args c) (reserve/spared (ctx/view c) self))))))
+             (foods/eat-now? self (:args c) (reserve/spared (ctx/view c) self)))))))
 
 (def danger-policy {:cap 1 :ttl (* 60 60 1000)})
 
@@ -387,7 +393,8 @@
   "Last resort when food is at or below the ::eat-bad-food line: eat what hurts (rotten flesh) with :allow-bad.
   :again when the food level rose, else nil."
   [c]
-  (when (and (<= (food-level c) (eat-bad-food))
+  (when (and (eats? c)
+             (<= (food-level c) (eat-bad-food))
              (some #(contains? foods/harmful (:name %)) (u/inventory (:primitives c))))
     (let [before (food-level c)
           e (await (child/run!* c :eat-bad 'jobs.survival.eat {:until foods/top-up-food :allow-bad true :fetch false}))]
@@ -397,9 +404,10 @@
   "Eat what is carried (the eat job) up to 18, or 20 below the :health line: :continue when the eat job is still
   going after the call cap, else nil."
   [c]
-  (let [low? (< (.-health (.self (:primitives c))) (:health (:args c)))
-        e (await (child/run!* c :eat 'jobs.survival.eat {:until (if low? 20 foods/top-up-food) :fetch false}))]
-    (when (= :continue e) :continue)))
+  (when (eats? c)
+    (let [low? (< (.-health (.self (:primitives c))) (:health (:args c)))
+          e (await (child/run!* c :eat 'jobs.survival.eat {:until (if low? 20 foods/top-up-food) :fetch false}))]
+      (when (= :continue e) :continue))))
 
 
 (defn stop!

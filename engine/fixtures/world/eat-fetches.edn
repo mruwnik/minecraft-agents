@@ -1,7 +1,7 @@
 ;; survival.eat with no food carried fetches through get-food: it hunts and eats, where it used to end :no-food.
 ;; Hunger is drained by RCON (food 9-10), hp 15; only a sword is carried.
 ;; Should-succeed: 3 cows in the open: one is killed as surplus and eaten (eat completes).
-;; Should-fail: :fetch false: eat ends :no-food, all 3 cows stay.
+;; Should-fail: :fetch false: eat waits (:no-food, a listed job waits), nothing is hunted, all 3 cows stay.
 {:defaults
  {:tags [:survival :eat :get-food]
   :plot {:height 6}
@@ -18,5 +18,5 @@
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}
   {:name "eat-fetch-false-ends-no-food"
    :act [[:job (jobs.survival.eat {:fetch false})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 30}]
+   :expect [{:no-event {:source :job :kind :food.killed} :for-s 25}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 3]]}]}
