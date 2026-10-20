@@ -3,7 +3,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { createGameClock } from './game-clock.mjs'
-import { connectBot } from './connect.mjs'
+import prismarineRegistry from 'prismarine-registry'
+import { connectBot, DEFAULTS } from './connect.mjs'
 
 test('without a packet the rate is 20, unfrozen, assumed', () => {
   const clock = createGameClock()
@@ -36,7 +37,7 @@ test('a clock attached to a second client (a reconnect) keeps listening', () => 
 test('connectBot attaches the clock before spawn: a packet sent at join, then a drop, is still caught', async () => {
   const clock = createGameClock()
   const client = new EventEmitter()
-  const bot = Object.assign(new EventEmitter(), { _client: client, loadPlugin () {}, end () {} })
+  const bot = Object.assign(new EventEmitter(), { _client: client, registry: prismarineRegistry(DEFAULTS.version), supportFeature: () => false, loadPlugin () {}, end () {} })
   const create = () => {
     setImmediate(() => { client.emit('set_ticking_state', { tick_rate: 40, is_frozen: false }); bot.emit('end', 'closed') })
     return bot
