@@ -423,7 +423,7 @@
               _ (await (tu/with-near-spy calls* (fn ^:async b [] (await (first-round-ms '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 6}) {:inventory sword :entities [(zombie 5 0)]} 20)))))
               opts (map #(nth % 2) @calls*)]
           (is (seq opts))
-          (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (= 10 (get-in % [:spend :job-time])) (false? (:look-round %)) (false? (:dangers %))) opts)
+          (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (= 10 (:leg-s %)) (false? (:look-round %)) (false? (:dangers %))) opts)
               "a moving mob is chased in legs, never dug or pillared toward"))))))
 
 (deftest hostile-attack-is-already-done-when-nothing-is-near
@@ -855,7 +855,7 @@
         (let [{:keys [eng p seen]} (setup-flight {:inventory sword :entities [(zombie 6 0)] :unreachable ["6,64,0"]})]
           (core/submit! eng respond {})
           (await (core/tick! eng))
-          (is (= 3 (count (filter #(= :unreachable (get-in % [:ending :cause :reason])) @seen))) "three go-to walks towards the zombie gave up, never more")
+          (is (= 3 (count (filter #(and (= :unreachable (get-in % [:ending :cause :reason])) (nil? (get-in % [:ending :because]))) @seen))) "three go-to walks towards the zombie gave up, never more")
           (is (= 3 (walks-to {:p p :eng eng} {:x 6 :z 0})) "one blocked walk per go-to call: any y re-aim comes before the walk")
           (is (< (:x (last-move eng)) 0) "then it walks away instead")
           (is (zero? (count (calls p "attack")))))))))
