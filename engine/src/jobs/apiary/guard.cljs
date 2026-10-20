@@ -27,10 +27,10 @@
   One call works every fire (:continue only while a walk or the carpet pick-up waits on the world). Fires are
   worked nearest first, until none is left (the job-time spend bounds the run). A fire that cannot be reached or refuses is
   skipped for the rest of the run. The body never stands in a fire's cell.
-  A carpet or campfire the work needs and the body lacks is fetched (jobs.lib.need) unless :fetch is false; a
+  A carpet or campfire the work needs and the body lacks is fetched (jobs.lib.need) unless the ways leave only :carried; a
   failed fetch ends nothing-possible or condition-failed with :reason :need.
   Start facts, found after a quiet look around, make it wait (a skipped job): :nothing-to-guard (no fire in reach; fires
-  that all need nothing end done :already), :no-carpet or :no-campfire (the body carries what the work needs, :fetch false), :refused or :no-zones
+  that all need nothing end done :already), :no-carpet or :no-campfire (the body carries what the work needs, ways #{:carried}), :refused or :no-zones
   (the zone rules refuse every fire).
   Result: {:sunk n :carpeted n :reason r :left {pos reason} :skipped {pos reason} :fires n}. :reason is
   :guarded (work done, nothing left), :safe, :no-fire, :no-carpet, :no-campfire, :need, a skip
@@ -48,8 +48,7 @@
   {:box {:doc "{:min pos :max pos}, fires inside it only; overrides :center and :radius" :spec pen-read/box-arg :default nil}
    :center {:doc "centre of the search; the body's position when the job first runs when nil" :spec ::a/pos :default nil}
    :radius {:doc "fires within this many blocks of the centre count, when :box is nil" :spec (a/num-in 0 nil) :default 16}
-   :ignore-zones? :shared
-   :fetch {:doc "get a carpet or campfire that is not carried (jobs.lib.need): true, a set of kinds or a map of limits; false waits with :no-carpet / :no-campfire" :spec need/option? :default true}})
+   :ignore-zones? :shared})
 
 (defn permitted?
   "Whether the job may do action (:dig or :place) at pos (one warn per job when refused)."
@@ -274,6 +273,8 @@
         (await (sink! c))
         (do (abandon! c fire :on-fire) :again)))))
 
+(def ways need/fetch-ways)
+
 (def target [:box :center])
 
 (def meta {:category :phase :part-of '[jobs.apiary.maintain]})
@@ -294,7 +295,7 @@
         seen (survey c center true)
         reason (cond
                  (seq (:todo seen)) nil
-                 (and (seq (:left seen)) (nil? (need/parse-arg (:fetch (:args c))))) (first (vals (:left seen)))
+                 (and (seq (:left seen)) (nil? (need/fetch-opts c))) (first (vals (:left seen)))
                  (seq (:left seen)) nil
                  (and (seq fires) (zero? (:fires seen))) (or (:refusal (gate/look c :dig (map :pos fires) {})) :refused)
                  :else :nothing-to-guard)]
@@ -321,10 +322,10 @@
 (def lacked-item {:no-carpet "white_carpet" :no-campfire "campfire"})
 
 (defn ^:async supply!
-  "Fetch what the fires left lack when :fetch allows: :again once fetched, :continue while the fetch waits, else the
-  ending of the run (reason :need, the fetch's ending as its cause); nil when nothing is lacking or :fetch is off."
+  "Fetch what the fires left lack when the ways allow: :again once fetched, :continue while the fetch waits, else the
+  ending of the run (reason :need, the fetch's ending as its cause); nil when nothing is lacking or the ways leave only :carried."
   [c seen]
-  (let [opts (need/opts c 'jobs.apiary.guard)
+  (let [opts (need/fetch-opts c)
         lacks (some lacked-item (vals (:left seen)))]
     (when (and opts lacks)
       (let [e (await (need/item! c lacks 1 opts))]

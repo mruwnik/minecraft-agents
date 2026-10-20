@@ -44,7 +44,7 @@
         {:event (when wt :waiting) :reason (:reason (:data wt))}))))
 
 (def guard '(jobs.apiary.guard {}))
-(def no-fetch-guard '(jobs.apiary.guard {:fetch false}))
+(def no-fetch-guard '(jobs.apiary.guard {:ways #{:carried}}))
 (def carpet (g/inv "white_carpet" 2))
 (def safe-fire (assoc-in (g/fire-world {}) [:blocks "2,65,0"] "white_carpet"))
 
@@ -87,7 +87,7 @@
                             (assoc (g/fire-world {:inventory carpet}) :self {:pos {:x 20 :y 64 :z 0}} :unreachable ["2,64,0"])))))))))
 
 (def harvest '(jobs.apiary.harvest {}))
-(def no-fetch-harvest '(jobs.apiary.harvest {:fetch false}))
+(def no-fetch-harvest '(jobs.apiary.harvest {:ways #{:carried}}))
 (def shears (h/inv "shears" 1))
 
 (deftest harvest-waits-on-its-start-facts
@@ -104,7 +104,7 @@
                (await (ends harvest (-> (h/world {:inventory shears})
                                         (update :blocks #(-> % (dissoc h/under) (assoc "2,62,0" "campfire")))
                                         (update :states #(-> % (dissoc h/under) (assoc "2,62,0" {:lit true}))))))))
-        (is (= {:event :waiting :reason :no-tool} (await (ends '(jobs.apiary.harvest {:with :bottle :fetch false}) (h/world {:inventory shears})))))
+        (is (= {:event :waiting :reason :no-tool} (await (ends '(jobs.apiary.harvest {:with :bottle :ways #{:carried}}) (h/world {:inventory shears})))))
         (is (= {:event :waiting :reason :no-zones} (await (ends harvest (assoc (h/world {:inventory shears}) :zones nil)))))
         (is (= {:event :waiting :reason :refused}
                (await (ends harvest (assoc (h/world {:inventory shears}) :zones [{:name "bees" :min [2 60 0] :max [2 70 0] :owner "Miles"}])))))))))

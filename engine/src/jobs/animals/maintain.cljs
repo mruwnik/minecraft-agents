@@ -233,7 +233,7 @@
 (defn pen-fact
   "ok when some step would run (or the body is to look at the box first), else the later :nothing-to-do with the census."
   [c]
-  (let [{:keys [target] :as args} (:args c)]
+  (let [{:keys [target] :as args} (need/args-with-ways c)]
     (if (look-due? c)
       (contract/ok :look-due "the box is looked at first")
       (let [f (facts c)
@@ -281,7 +281,7 @@
   "Ok when the pen holds the goal: the box is not waiting for a look, no step would run and the herd is at :target
   (before the start: already), with the census as data; else later with the steps that would still run."
   [c]
-  (let [{:keys [target] :as args} (:args c)
+  (let [{:keys [target] :as args} (need/args-with-ways c)
         f (facts c)
         left (count (filter #(:call (decide % args f)) steps))]
     (if (or (look-due? c) (pos? left) (< (+ (:adults f) (:babies f)) target))

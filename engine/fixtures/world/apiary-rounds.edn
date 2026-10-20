@@ -2,7 +2,7 @@
 ;; Should-succeed: two raised fires (one under a carpet, one open) with campfires and a carpet carried are both sunk and
 ;; carpeted in one guard call, the dug carpet picked up and put back; two ripe smoked hives both harvested with the comb
 ;; collected in one harvest call; nothing ripe -> maintain does not act.
-;; Should-fail: an unsmoked ripe hive waits :not-smoked (untouched); with :fetch false, no shears or bottle waits :no-tool, hive untouched.
+;; Should-fail: an unsmoked ripe hive waits :not-smoked (untouched); with :ways #{:carried}, no shears or bottle waits :no-tool, hive untouched.
 {:defaults
  {:tags [:apiary :rounds]
   :plot {:height 8}
@@ -51,7 +51,7 @@
   {:name "harvest-without-a-tool-stops"
    :blocks [[:set [14 0 10] "campfire[lit=true]"] [:set [14 1 10] "beehive[honey_level=5]"]]
    :body {:inventory [["stick" 1]]}
-   :act [[:job (jobs.apiary.harvest {:radius 20 :fetch false})]]
+   :act [[:job (jobs.apiary.harvest {:radius 20 :ways #{:carried}})]]
    :expect [{:event {:kind :waiting :data {:reason :no-tool}} :within-s 60 :of-job true}
             {:no-event {:kind :completed} :for-s 20}]
    :after [[:block [14 1 10] "beehive[honey_level=5]"] [:item "honeycomb" 0]]}]}

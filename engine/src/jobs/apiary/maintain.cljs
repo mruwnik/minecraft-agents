@@ -24,7 +24,7 @@
     stands over a fire that is still unsafe. The harvest child cannot leave one hive out, so one unsafe fire holds
     the whole step back.
   - :breed (jobs.animals.breed, 2 bees): :target is given, the bees in the area (adults and babies) are below it,
-    there are 2 adults, it is day, it is not raining and a flower is carried (breed fetches one unless :fetch is off).
+    there are 2 adults, it is day, it is not raining and a flower is carried (breed fetches one unless the ways leave only :carried).
   - :deposit (jobs.storage.deposit): a :chest is given and honeycomb or honey bottles above their :keep entry are
     carried. Only produce is deposited; tools, bottles, carpet, campfires and flowers stay carried.
   A step whose conditions do not hold is booked {:skipped reason} (:safe, :no-fire, :no-carpet, :no-campfire,
@@ -36,7 +36,7 @@
   It ends :done with {:target :bees :steps {step summary}} when some step ran to its end; else nothing-possible
   :failed-steps when one stopped, else condition-failed :nothing-to-do (every step skipped). Summaries: guard {:sunk :carpeted :reason :left}, harvest {:harvested :reason :declined}, breed {:fed
   :reason}, deposit {:gave-up :reason}.
-  :ignore-zones? is passed to guard and harvest, which check zones and claims (see their docs); with :fetch off a missing item skips the step. :fetch is passed to guard, harvest and breed.")
+  :ignore-zones? is passed to guard and harvest, which check zones and claims (see their docs); with ways #{:carried} a missing item skips the step. :ways pass to guard, harvest and breed.")
 
 (a/defargs args
   {:box {:doc "the apiary: {:min pos :max pos}; overrides :center and :radius" :spec pen-read/box-arg :default nil}
@@ -46,8 +46,7 @@
    :target {:doc "bees wanted in the area (babies count); nil: no breeding" :spec (a/int-in 0 nil) :default nil}
    :chest {:doc "chest position {:x :y :z} for the produce; nil: do not store" :spec ::a/pos :default nil}
    :keep {:doc "{item-name count}: how many of honeycomb or honey_bottle deposit leaves carried" :spec (a/map-of a/item? (a/int-in 0 nil)) :default {}}
-   :ignore-zones? :shared
-   :fetch {:doc "get a carpet, campfire or harvest tool that is not carried (passed to guard and harvest, jobs.lib.need): true, a set of kinds or a map of limits; false skips the step" :spec need/option? :default true}})
+   :ignore-zones? :shared})
 
 (def steps [:guard :harvest :breed :deposit])
 
@@ -115,7 +114,7 @@
 
 ;; ------------------------------------------------------------------ what is decided
 
-(defn fetching? [{:keys [fetch]}] (boolean (some #(need/allows? fetch %) need/kinds)))
+(defn fetching? [{:keys [ways]}] (need/fetching? ways))
 
 (defn decide-guard
   [args {{:keys [fires todo left]} :fires}]
@@ -132,7 +131,7 @@
     (zero? ripe) {:skip :not-ripe}
     (seq unsafe) {:skip :unsafe-fire}
     (empty? todo) {:skip (or (first (vals declined)) :not-ripe)}
-    (and (nil? tool) (not (need/allows? (:fetch args) :tool))) {:skip :no-tool}
+    (and (nil? tool) (not (fetching? args))) {:skip :no-tool}
     :else {:call {:slot :harvest :args {}}}))
 
 (defn decide-breed
@@ -143,7 +142,7 @@
     (not day) {:skip :night}
     raining {:skip :raining}
     (< adults 2) {:skip :too-few-adults}
-    (and (nil? flower) (not (need/allows? (:fetch args) :item))) {:skip :no-food}
+    (and (nil? flower) (not (fetching? args))) {:skip :no-food}
     :else {:call {:slot :breed :args {:mob "bee" :count 2 :radius reach}}}))
 
 (defn decide-deposit
@@ -162,20 +161,22 @@
     :breed (decide-breed args facts)
     :deposit (decide-deposit args facts)))
 
+(defn ways-arg [c] (when-let [w (:ways (:args c))] {:ways w}))
+
 (defn child-args
   "The args a child gets: the area for guard and harvest, as decided for the rest."
   [c step center decided]
   (case step
-    (:guard :harvest) (merge (area c center) {:fetch (:fetch (:args c))} (when (= :harvest step) {:with (:with (:args c))})
+    (:guard :harvest) (merge (area c center) (ways-arg c) (when (= :harvest step) {:with (:with (:args c))})
                              (when (:ignore-zones? (:args c)) {:ignore-zones? true}))
-    :breed (assoc (:args decided) :fetch (:fetch (:args c)))
+    :breed (merge (:args decided) (ways-arg c))
     (:args decided)))
 
 (defn would-run?
   "Whether some step would call a child over the facts read now."
   [c]
   (let [f (facts c)]
-    (boolean (some #(:call (decide % (:args c) f)) steps))))
+    (boolean (some #(:call (decide % (need/args-with-ways c) f)) steps))))
 
 (defn can-start?
   "Later :nothing-to-do when nothing would run, with a look first while part of the area was never seen."
@@ -253,6 +254,8 @@
 
 ;; ------------------------------------------------------------------ the contract
 
+(def ways need/fetch-ways)
+
 (def target [:box :center])
 
 (def safe? (ready/safe-at-by-night work-place/spot))
@@ -275,7 +278,7 @@
   "The report so far with the steps not reached booked as the skip that holds them."
   [c facts]
   (let [report (or (:report (ctx/mem c)) {})]
-    (into report (for [st steps :when (not (contains? report st))] [st {:skipped (:skip (decide st (:args c) facts))}]))))
+    (into report (for [st steps :when (not (contains? report st))] [st {:skipped (:skip (decide st (need/args-with-ways c) facts))}]))))
 
 (defn done?
   "Ok when the apiary is in order, wrap-up included (no fire unsafe or lacking a carpet, nothing ripe, bees at :target
@@ -286,7 +289,7 @@
         left (count (:todo (ctx/mem c)))
         facts (facts c)]
     (cond
-      (not (in-order? (:args c) facts))
+      (not (in-order? (need/args-with-ways c) facts))
       (contract/later :steps (str ran " steps run") :units :steps :done ran :left left)
 
       (and (look/unseen? (:primitives c) (apiary/watched-cells c)) (not (look/surveyed? c :near)))

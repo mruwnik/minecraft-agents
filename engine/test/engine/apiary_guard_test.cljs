@@ -180,7 +180,7 @@
                     (update :blocks merge (:blocks (fire-world {:x 2 :z 5})))
                     (update :states merge (:states (fire-world {:x 2 :z 5}))))
               {:keys [eng p]} (setup w)
-              result (await (child-outcome eng job {:fetch false} 60))]
+              result (await (child-outcome eng job {:ways #{:carried}} 60))]
           (is (= 1 (:carpeted result)))
           (is (= :no-carpet (:reason result)))
           (is (= 1 (count (:left result)))))))))

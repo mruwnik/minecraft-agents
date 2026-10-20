@@ -75,6 +75,11 @@
   [c]
   (set (or (:ways (when (:view c) (ctx/frozen-call c))) (:ways (:args c)) fetch-ways)))
 
+(defn args-with-ways
+  "The args of the job running in c with the call's ways in :ways, for a decide over args."
+  [c]
+  (assoc (:args c) :ways (call-ways c)))
+
 (defn fetch-how
   "The sources a fetch of the job running in c may use: its call's ways but :carried."
   [c]

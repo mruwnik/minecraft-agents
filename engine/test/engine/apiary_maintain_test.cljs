@@ -83,7 +83,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:fetch false} (world {:inventory kit :raised? true}) 40))]
+        (let [s (await (scenario {:ways #{:carried}} (world {:inventory kit :raised? true}) 40))]
           (is (= 1 (:carpeted (step s :guard))))
           (is (= :no-campfire (:reason (step s :guard))))
           (is (= 1 (:harvested (step s :harvest))))
@@ -93,7 +93,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:fetch false} (world {:inventory (inv "shears" 1) :raised? true}) 10))]
+        (let [s (await (scenario {:ways #{:carried}} (world {:inventory (inv "shears" 1) :raised? true}) 10))]
           (is (nil? (done-event s)))
           (is (empty? (calls s "moveTo")))
           (is (empty? (calls s "useOn"))))))))
@@ -164,7 +164,7 @@
                  ["at target" {:target 2} {:inventory carpet-and-flowers :entities bees} :at-target]
                  ["night" {:target 4 :checks {:safe? '(always)}} {:inventory carpet-and-flowers :entities bees :time 15000} :night]
                  ["rain" {:target 4} {:inventory carpet-and-flowers :entities bees :raining true} :raining]
-                 ["no flowers" {:target 4 :fetch false} {:inventory (inv "white_carpet" 1) :entities bees} :no-food]
+                 ["no flowers" {:target 4 :ways #{:carried}} {:inventory (inv "white_carpet" 1) :entities bees} :no-food]
                  ["one bee" {:target 4} {:inventory carpet-and-flowers :entities [(bee 1 3)]} :too-few-adults]]]
           (let [s (await (scenario args (world (assoc w :level 2)) 12))]
             (is (empty? (calls s "interact")) label)
@@ -190,7 +190,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:fetch false} (world {:inventory (inv "white_carpet" 1)}) 30))]
+        (let [s (await (scenario {:ways #{:carried}} (world {:inventory (inv "white_carpet" 1)}) 30))]
           (is (= {:skipped :no-tool} (step s :harvest)))
           (is (= 5 (honey s)))
           (is (true? (finished? s))))))))
@@ -211,7 +211,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true})) (-> :p tu/seeing-after-look))]
-          (core/submit! (:eng s) (spec {:fetch false}) {})
+          (core/submit! (:eng s) (spec {:ways #{:carried}}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 10 700))
           (is (= 8 (count (calls s "look"))) "one look around")
           (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
@@ -223,7 +223,7 @@
       (fn ^:async t []
         (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true}))
                   (-> :p (doto tu/blind (aset "sensedAt" (fn [_] #js {:unknown true})))))]
-          (core/submit! (:eng s) (spec {:fetch false}) {})
+          (core/submit! (:eng s) (spec {:ways #{:carried}}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 10 700))
           (is (= 12 (count (calls s "look"))) "one look around, not one per run")
           (is (= :already (:cause (done-event s)))))))))
@@ -233,7 +233,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true})) (-> :p tu/seeing-all))]
-          (core/submit! (:eng s) (spec {:fetch false}) {})
+          (core/submit! (:eng s) (spec {:ways #{:carried}}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 10 700))
           (is (empty? (calls s "look")) "every cell of the area is already seen")
           (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting))))))))))
@@ -246,23 +246,23 @@
               s (await (scenario {} (world {:inventory kit}) 30 waits))]
           (is (= {:skipped :declined :reason :boom} (step s :harvest))))))))
 
-;; the tool of a harvest is fetched unless :fetch is false; the children get the caller's :fetch
-(deftest the-children-get-the-callers-fetch-and-a-missing-tool-is-fetched-by-default
+;; the tool of a harvest is fetched unless the ways are only :carried; the children get the caller's ways
+(deftest the-children-get-the-callers-ways-and-a-missing-tool-is-fetched-by-default
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [got (atom {})
               spy (fn [jobs] (reduce (fn [jobs k]
                                        (assoc jobs (symbol (str "jobs.apiary." (name k)))
-                                              {:round (fn [c] (swap! got assoc k (:fetch (:args c))) (ctx/end c :done nil))}))
+                                              {:round (fn [c] (swap! got assoc k (:ways (:args c))) (ctx/end c :done nil))}))
                                      jobs [:guard :harvest]))
               w (quiet-world (world {:inventory (inv "stick" 1)}))
               _ (await (scenario {} w 10 spy))
               default @got
               _ (reset! got {})
-              _ (await (scenario {:fetch false} w 10 spy))]
-          (is (true? (:harvest default)) (pr-str default))
-          (is (= {} @got) "with :fetch false no step is called for a missing item"))))))
+              _ (await (scenario {:ways #{:carried}} w 10 spy))]
+          (is (= {:harvest nil} default) "the harvest step ran with no ways of its own")
+          (is (= {} @got) "with ways #{:carried} no step is called for a missing item"))))))
 
 (deftest a-declined-child-is-booked-with-the-reason-of-the-ending-it-gave
   (async done
@@ -308,10 +308,10 @@
 
 (deftest the-fetch-kinds-allowed-decide-whether-a-missing-tool-or-flower-is-fetched
   (let [facts {:bees 2 :adults 2 :day true :raining false :flower nil :reach 5 :tool nil :hives {:ripe 1 :todo [1]}}]
-    (is (= :no-food (:skip (maintain/decide :breed {:target 4 :fetch #{:tool}} facts))))
-    (is (= :no-tool (:skip (maintain/decide :harvest {:fetch #{:item}} facts))))
-    (is (some? (:call (maintain/decide :breed {:target 4 :fetch #{:item}} facts))))
-    (is (some? (:call (maintain/decide :harvest {:fetch #{:tool}} facts))))))
+    (is (= :no-food (:skip (maintain/decide :breed {:target 4 :ways #{:carried}} facts))))
+    (is (= :no-tool (:skip (maintain/decide :harvest {:ways #{:carried}} facts))))
+    (is (some? (:call (maintain/decide :breed {:target 4 :ways #{:carried :chest}} facts))))
+    (is (some? (:call (maintain/decide :harvest {:ways #{:carried :chest}} facts))))))
 
 (def tidy-facts
   {:fires {:fires 1 :todo [] :left {}} :hives {:ripe 0 :todo [] :declined {}} :unsafe []
