@@ -104,6 +104,7 @@
     (cond
       (= :continue r) :continue
       (= :done (:kind r)) (do (when (:full (:data r)) (ctx/update-mem! c assoc :full true)) "ok")
+      (= :bag-full (contract/cause-key r)) (do (ctx/update-mem! c assoc :full true) "ok")
       :else (name (contract/cause-key r)))))
 
 (defn ^:async break-cart!

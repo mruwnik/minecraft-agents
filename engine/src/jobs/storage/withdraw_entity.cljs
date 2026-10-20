@@ -13,8 +13,8 @@
   jobs.storage.withdraw. The caller walks within reach.
   Needs (can-start? and can-run?): an :id, else never :bad-args; the entity, when in sight, not in a zone or claim of another that refuses :take,
   else waits :refused {:zones :claims} (:ignore-zones? skips it).
-  Ends done {:full bool}: :full true when a transfer moved nothing for lack of room, what fitted is taken.
-  Else condition-failed :missing (the entity is gone) or nothing-possible with the inspect or transfer status as the cause
+  Ends done {:full bool}: :full true when a later transfer moved nothing for lack of room, what fitted is taken.
+  Else condition-failed :bag-full (the first transfer found no room) or :missing (the entity is gone), or nothing-possible with the inspect or transfer status as the cause
   (:unreachable, ..). Spends :job-time (default ::job-time-s).")
 
 (a/defargs args
@@ -52,18 +52,21 @@
   {:uses {:job-time [1 5 (settings/get settings ::job-time-s)]}})
 
 (defn ^:async round
-  "Inspect the container and move its stacks one after another; a transfer that moves nothing ends it :full, any other failure nothing-possible."
+  "Inspect the container and move its stacks one after another; a transfer that moves nothing ends it done :full once something moved, else :bag-full or nothing-possible; any other failure nothing-possible."
   [c]
   (let [id (:id (:args c))
         seen (await (ctx/act c :inspectContainer (clj->js {:entity id})))
         status (.-status seen)]
     (if (not= "ok" status)
       (ctx/end c (if (= "missing" status) :condition-failed :nothing-possible) (keyword status))
-      (loop [stacks (vec (stock/stacks->items (.-items seen)))]
+      (loop [stacks (vec (stock/stacks->items (.-items seen))) moved? false]
         (if-let [[name n] (first stacks)]
-          (let [r (await (ctx/act c :transfer (clj->js {:entity id :direction "withdraw" :item name :count n})))]
+          (let [r (await (ctx/act c :transfer (clj->js {:entity id :direction "withdraw" :item name :count n})))
+                status (.-status r)]
             (cond
-              (and (= "ok" (.-status r)) (pos? (.-moved r))) (recur (rest stacks))
-              (contains? #{"ok" "full"} (.-status r)) (do (ctx/update-mem! c assoc :emptied true) (ctx/end c :done nil {:full true}))
-              :else (ctx/end c :nothing-possible (keyword (.-status r)))))
+              (and (= "ok" status) (pos? (.-moved r))) (recur (rest stacks) true)
+              (and moved? (contains? #{"ok" "full"} status)) (do (ctx/update-mem! c assoc :emptied true) (ctx/end c :done nil {:full true}))
+              (= "full" status) (ctx/end c :condition-failed :bag-full)
+              (= "ok" status) (ctx/end c :nothing-possible :nothing-moved)
+              :else (ctx/end c :nothing-possible (keyword status))))
           (do (ctx/update-mem! c assoc :emptied true) (ctx/end c :done nil {:full false})))))))

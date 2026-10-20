@@ -33,12 +33,23 @@
               r (await (child-outcome eng job {:id 50} 12))]
           (is (= {:kind :nothing-possible :cause :timeout} (select-keys (:ending r) [:kind :cause]))))))))
 
-(deftest a-transfer-with-no-room-ends-done-full
+(deftest a-transfer-with-no-room-from-the-start-is-bag-full-not-done
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (lc/setup {:entities [(lc/cart 50 [2 64 0])]})
               _ (.override (.-world p) "transfer" (fn [_ _ _] #js {:status "full" :moved 0}))
+              r (await (child-outcome eng job {:id 50} 12))]
+          (is (= {:kind :condition-failed :cause :bag-full} (select-keys (:ending r) [:kind :cause]))))))))
+
+(deftest a-transfer-with-no-room-after-others-moved-ends-done-full
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lc/setup {:entities [(lc/cart 50 [2 64 0])]})
+              calls (atom 0)
+              _ (.override (.-world p) "transfer"
+                           (fn [_ _ _] (if (= 1 (swap! calls inc)) #js {:status "ok" :moved 3} #js {:status "full" :moved 0})))
               r (await (child-outcome eng job {:id 50} 12))]
           (is (= [:done true] [(:status r) (:full r)])))))))
 
