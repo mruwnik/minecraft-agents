@@ -1153,7 +1153,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (assoc (update (world {}) :blocks merge {"1,63,5" "grass_block" "2,63,5" "grass_block" "3,63,5" "grass_block"})
+        (let [s (start (assoc (update (world {}) :blocks merge {"1,63,5" "grass_block" "2,63,5" "grass_block" "3,63,5" "grass_block"
+                                               "1,62,5" "stone" "2,62,5" "stone" "3,62,5" "stone"})
                               :drops {"grass_block" "dirt"}
                               :inventory []) [])]
           (core/submit! (:eng s) (list 'jobs.items.obtain {:any-of ["dirt" "cobblestone"] :count 2}) {})
