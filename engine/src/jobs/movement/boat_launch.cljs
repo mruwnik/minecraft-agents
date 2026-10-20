@@ -17,7 +17,7 @@
 (def doc
   "Put a boat on the water and get in it.
 
-  The boat item is :item, else the first carried boat or raft; none carried is fetched (jobs.blocks.place :fetch, oak_boat).
+  The boat item is :item, else the first carried boat or raft; none carried is fetched (jobs.blocks.place, oak_boat).
   The water cell is :pos, else the nearest water in sight (::radius) that has air above it and room round it for the boat (no bank block within a cell).
   jobs.blocks.place puts the boat down (it walks into reach); then, with :board, jobs.movement.mount boards it. The placed boat is
   remembered, so a restart boards it rather than placing another; a remembered boat seen gone is replaced by a new one.
@@ -205,7 +205,7 @@
           :else (await (board! c boat cell))))
       (vehicle/mounted? p) (ctx/end c :condition-failed {:reason :aboard :hint "get off the vehicle first"})
       :else
-      (let [e (await (ctx/call c :place 'jobs.blocks.place {:pos cell :item item :fetch true}))]
+      (let [e (await (ctx/call c :place 'jobs.blocks.place {:pos cell :item item}))]
         (cond
           (= :continue e) :continue
           (not= :done (:kind e)) (ctx/end c (if (= :condition-failed (:kind e)) :condition-failed :nothing-possible) :place-failed {:pos cell})

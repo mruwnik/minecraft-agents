@@ -184,7 +184,7 @@
           (is (empty? (listed s)))
           (is (= "air" (block-at s 2 64 3))))
         (let [s (start (world {chest-at [{:name "cobblestone" :count 5}]}) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.blocks.place {:pos [1 64 1] :item "cobblestone" :fetch true}) {})
+          (core/submit! (:eng s) (list 'jobs.blocks.place {:pos [1 64 1] :item "cobblestone"}) {})
           (swap! (:clock s) + 700)
           (await (core/tick! (:eng s)))
           (is (empty? (listed s)))
@@ -271,7 +271,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {chest-at [{:name "cobblestone" :count 5}]}) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.blocks.place {:pos [1 64 1] :item "cobblestone" :fetch true}) {})
+          (core/submit! (:eng s) (list 'jobs.blocks.place {:pos [1 64 1] :item "cobblestone"}) {})
           (await (run-ticks s 40))
           (is (= "cobblestone" (block-at s 1 64 1)))
           (is (empty? (listed s))))))))

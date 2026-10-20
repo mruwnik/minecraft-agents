@@ -23,7 +23,7 @@
   The job warns plant-sapling.declined once, with :reason :refused (or :no-zones when no zone list was read).
   :ignore-zones? true skips the check.
 
-  The planting is a jobs.blocks.place child (fetch off: the sapling is got here). Bone meal for it is jobs.farm.fertilize's.
+  The planting is a jobs.blocks.place child (:ways #{:carried}: the sapling is got here). Bone meal for it is jobs.farm.fertilize's.
 
   Start conditions: :refused or :no-zones (the spot may not be planted; the debt stays owed), :no-sapling (none carried and
   :fetch off for items; data :species); a log on the spot (data :pos) is waited out. A spot that holds its sapling, or no debt owed, is done at once. Ends :done with data
@@ -151,7 +151,7 @@
 (defn ^:async place!
   "Plant the sapling at the target's spot with a blocks.place child: :again (more debts) or the ending."
   [c t sapling]
-  (let [e (await (child! c :place 'jobs.blocks.place {:pos (:pos t) :item sapling :fetch false :for-plan (:for-plan (:args c))}))]
+  (let [e (await (child! c :place 'jobs.blocks.place {:pos (:pos t) :item sapling :ways #{:carried} :for-plan (:for-plan (:args c))}))]
     (if (not= :done e)
       e
       (do (ctx/forget-where! c replant-kind (fn [d] (= (:pos t) (:pos d))))

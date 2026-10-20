@@ -3,6 +3,7 @@
   jobs.blocks.place child), and stepping off when it cannot be sealed. Shared by jobs.blocks.dig and jobs.access.stair.
   Cells are [x y z]."
   (:require [jobs.lib.choose :as choose]
+            [jobs.lib.need :as need]
             [jobs.lib.child :as child]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -84,7 +85,7 @@
 (def max-seals "Places per lava cell (a seal and one reseal) before the seal counts as failed." 2)
 
 (defn ^:async seal!
-  "Fill lava cell with a building block (a jobs.blocks.place child in slot :place, fetching one as opts :fetch allows,
+  "Fill lava cell with a building block (a jobs.blocks.place child in slot :place, fetching one as opts :fetch (the old switch) allows,
   zones as opts :ignore-zones?). Memory :seals counts places per cell, :sealing the cell in hand. :again once placed
   (event kind, info), :continue while the child waits on the world, else the stop {:reason :lava-unsealed :cell}
   with the place outcome (:place; :need when no block is carried) or :tries."
@@ -98,7 +99,7 @@
         (ctx/update-mem! c #(cond-> (assoc % :sealing cell)
                               (not= cell (:sealing %)) (update-in [:seals cell] (fnil inc 0))))
         (let [outcome (await (blocks/place-cell! c {:x x :y y :z z} nil
-                                                 {:use {:blocks (choose/filler-names c :build)} :fetch fetch
+                                                 {:use {:blocks (choose/filler-names c :build)} :ways (need/ways-of-fetch fetch)
                                                   :ignore-zones? (boolean ignore-zones?)}))]
           (if (= :continue outcome)
             :continue

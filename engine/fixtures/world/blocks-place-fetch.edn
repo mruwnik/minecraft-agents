@@ -1,5 +1,5 @@
-;; Card a5ca4ed3: jobs.blocks.place with no item carried. :fetch true gets the item first (a seen chest, as in fetch-f1);
-;; without :fetch the job waits :need; with nothing fetchable it ends condition-failed :need; either way it places nothing. Zone and footprint refusals: own-plan-footprint.edn and blocks-place-zone.edn.
+;; Card a5ca4ed3: jobs.blocks.place with no item carried. the default :ways gets the item first (a seen chest, as in fetch-f1);
+;; with :ways #{:carried} the job waits :need; with nothing fetchable it ends condition-failed :need; either way it places nothing. Zone and footprint refusals: own-plan-footprint.edn and blocks-place-zone.edn.
 {:defaults
  {:tags [:blocks :fetch]
   :plot {:height 12}
@@ -9,12 +9,12 @@
  [{:name "no-fetch-waits-need"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:8}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
-         [:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone" :fetch false})]]
+         [:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :need :item "cobblestone"}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:placed [:any]}} :for-s 20}]
    :after [[:not-block [20 0 14] "cobblestone"] [:item "cobblestone" 0]]}
   {:name "fetch-nothing-fetchable-fails-clearly"
-   :act [[:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone" :fetch {:how #{:chest}}})]]
+   :act [[:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone" :ways #{:carried :chest}})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :need}} :within-s 50 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:placed [:any]}} :for-s 30}]
    :after [[:not-block [20 0 14] "cobblestone"] [:item "cobblestone" 0]]}]}

@@ -324,7 +324,7 @@
   "Place a cover block on the lava cell (a jobs.blocks.place child, slot :cover): true when placed, else false (a reflex
   never yields: a child that waits is no cover this pass)."
   [c lava]
-  (let [r (await (child/run!* c :cover 'jobs.blocks.place {:pos lava :item (cover-item c) :fetch false :clear false}))]
+  (let [r (await (child/run!* c :cover 'jobs.blocks.place {:pos lava :item (cover-item c) :ways #{:carried} :clear false}))]
     (and (not= :continue r) (= :done (:kind r)))))
 
 (defn ^:async pour-last-resort!

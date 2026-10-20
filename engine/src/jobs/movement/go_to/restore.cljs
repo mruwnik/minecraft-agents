@@ -62,7 +62,7 @@
     (if (nil? e)
       (do (restore-done! c) :again)
       (let [{:keys [cell was any-of]} e
-            args (cond-> {:pos cell :fetch false :ignore-zones? true} (seq any-of) (assoc :use {:blocks (vec any-of)}))
+            args (cond-> {:pos cell :ways #{:carried} :ignore-zones? true} (seq any-of) (assoc :use {:blocks (vec any-of)}))
             done! (fn [k entry]
                     (ctx/update-mem! c #(-> % (update :restore-seen (fnil conj #{}) cell) (update k (fnil conj []) entry)))
                     :again)

@@ -145,9 +145,9 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:reason :need :item "cobblestone" :pos at}
-               (bd/wait-cause (await (bd/waiting-after (bd/setup {:self body}) (list job {:pos at :item "cobblestone" :fetch false}) 3)))))
+               (bd/wait-cause (await (bd/waiting-after (bd/setup {:self body}) (list job {:pos at :item "cobblestone" :ways #{:carried}}) 3)))))
         (is (= {:reason :need :any-of ["cobblestone" "dirt"] :pos at}
-               (bd/wait-cause (await (bd/waiting-after (bd/setup {:self body}) (list job {:pos at :use {:blocks ["cobblestone" "dirt"]} :fetch false}) 3)))))))))
+               (bd/wait-cause (await (bd/waiting-after (bd/setup {:self body}) (list job {:pos at :use {:blocks ["cobblestone" "dirt"]} :ways #{:carried}}) 3)))))))))
 
 (deftest a-solid-block-in-the-cell-ends-occupied
   (async done

@@ -11,6 +11,7 @@
             [jobs.lib.blocks :as b]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.found :as found]
+            [jobs.lib.need :as need]
             [jobs.lib.stock :as stock]
             [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]
@@ -37,7 +38,7 @@
   event; jobs.memory.set-place moves it).
   Storage group: with no :chest, or a :chest that is the :chest place or one of the group (memory :storage/chests,
   jobs.lib.storage/group), chests are tried in turn; one that answers full or takes nothing is skipped. When all are
-  full and :make-chests? is true, a chest (jobs.blocks.place child, fetching or crafting it by default; :fetch-chests? false only a carried one) goes down
+  full and :make-chests? is true, a chest (jobs.blocks.place child, fetched or crafted by the call's :ways; #{:carried} only a carried one) goes down
   beside a full one and joins the group. A place that ends for a reason of the cell (a zone, the body in it, nothing to place against,
   unreachable, occupied) tries the next free spot (warn deposit.no-chest); a place that ends :need (no chest to be had) ends condition-failed
   :no-chest-item, no free cell beside (or none left to try), or :make-chests? false, nothing-possible :all-chests-full; a chest that cannot be placed after 3 tries nothing-possible :no-chest-spot. Any other :chest is used alone.
@@ -50,8 +51,7 @@
    :items {:doc "item names to put away, in this order (the first name with something to spare goes first); everything but tools and armour when nil" :spec (a/coll-of (a/or-of string? keyword?)) :default nil}
    :keep {:doc "{item-name count}: leave at least this many of the name carried" :spec (a/map-of string? number?) :default {}}
    :free {:doc "stop once this many inventory slots are free; all of it when nil" :spec (a/int-in 0 nil) :default nil}
-   :make-chests? {:doc "when every storage chest is full, put a new one beside them (carried, else fetched and crafted); false stops with reason all-chests-full" :spec boolean? :default true}
-   :fetch-chests? {:doc "a new chest may be fetched or crafted when none is carried; false places only a carried one (no-chest-item otherwise)" :spec boolean? :default true}
+   :make-chests? {:doc "when every storage chest is full, put a new one beside them (carried, else fetched or crafted by the call's :ways; #{:carried} places only a carried one, no-chest-item otherwise); false stops with reason all-chests-full" :spec boolean? :default true}
    :ignore-zones? :shared})
 
 (defn to-deposit
@@ -75,6 +75,8 @@
    ::take-s {:default 1 :doc "Seconds a quote counts for one transfer." :spec (a/num-in 0 nil)}
    ::walk-speed {:default 4 :doc "Blocks a second a quote counts for the walk to the chest." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
+
+(def ways need/fetch-ways)
 
 (def target [:chest])
 
@@ -187,7 +189,7 @@
             (u/progress! c)
             :again)
         :else
-        (let [pargs (merge (select-keys (:args c) [:ignore-zones?]) {:pos spot :item "chest"} (when-not (:fetch-chests? (:args c)) {:fetch false}))
+        (let [pargs (merge (select-keys (:args c) [:ignore-zones?]) {:pos spot :item "chest" :ways (need/call-ways c)})
               _ (ctx/update-mem! c assoc :chest-spot spot)
               e (await (ctx/call c :place 'jobs.blocks.place pargs))]
           (cond

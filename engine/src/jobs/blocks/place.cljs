@@ -21,13 +21,13 @@
 
 (def doc
   "Place one block at :pos ([x y z] or {:x :y :z}): :item, or the first carried of :use {:blocks [names]} (default: the
-  carried building blocks, jobs.lib.choose :build). One call is the whole attempt: fetch a missing item (:fetch), clear
+  carried building blocks, jobs.lib.choose :build). One call is the whole attempt: fetch a missing item (the call's :ways), clear
   the cell, walk into reach (one jobs.movement.go-to call), step off the cell it stands in (jobs.lib.step-off; not for
   seeds, carpets and the like: no collision), place. It yields :continue only when a child waits on the world.
 
-  Needs: the item carried (or fetchable, :fetch). Conditions (can-start? and can-run?: a listed call waits on them, a called one ends condition-failed with the cause)
+  Needs: the item carried (or fetchable by the call's :ways, jobs.lib.need). Conditions (can-start? and can-run?: a listed call waits on them, a called one ends condition-failed with the cause)
   and place nothing when:
-  - {:reason :need :item name :pos} or {:reason :need :any-of [names] :pos}: not carried and :fetch is off.
+  - {:reason :need :item name :pos} or {:reason :need :any-of [names] :pos}: not carried and the call's :ways is #{:carried}.
   - {:reason :not-allowed :pos :by :zone|:claim|:footprint|:no-zones ...}: zones, claims or another plan's
     footprint refuse the place. :for-plan's own footprint does not. :ignore-zones? skips the rule.
   - {:reason :no-support :pos}: no solid neighbour to place against (not for boats).
@@ -46,7 +46,7 @@
   nothing-possible: :clear-failed (the plant could not be dug) or :failed (the primitive refused twice in one call: :primitive its status,
   :why its reason text, else one from its status). The caller decides whether to try again.
 
-  :fetch (default true; jobs.lib.need limits): a missing item is fetched with jobs.items.obtain (one of it); false
+  :ways (default all): a missing item is fetched with jobs.items.obtain (one of it) from the ways but :carried; #{:carried}
   waits :need.")
 
 (a/defargs args
@@ -57,8 +57,9 @@
    :clear {:doc "dig a plant, flower or snow layer out of the cell first; false places into what a placement overwrites" :spec boolean? :default true}
    :click {:doc "how to place it ({:against [x y z] :cursor [x y z] :yaw :pitch :sneak}, jobs.lib.placement/click); nil: plainly" :spec map? :default nil}
    :facing {:doc "north, south, east or west: the way a facing block (bed head, gate, door, stairs) is oriented; the body looks that way as it places (jobs.lib.placement); not with :click; nil: as the body stands" :spec (a/pred "north, south, east or west" #{"north" "south" "east" "west"}) :default nil}
-   :see {:doc "true: place only from where the eye sees the cell (jobs.lib.aim: nothing seen solid in the way, as a player aims at the face it places against), walking to such a stand first (go-to :see; none: :unreachable :out-of-sight); false: within reach is enough" :spec boolean? :default true}
-   :fetch {:doc "get the missing block item instead of waiting :need (jobs.lib.need): true, a set of kinds or a map of limits" :spec need/option? :default true}})
+   :see {:doc "true: place only from where the eye sees the cell (jobs.lib.aim: nothing seen solid in the way, as a player aims at the face it places against), walking to such a stand first (go-to :see; none: :unreachable :out-of-sight); false: within reach is enough" :spec boolean? :default true}})
+
+(def ways need/fetch-ways)
 
 (def safe? (ready/safe-at-by-night (ready/near-unseen-here (fn [c] (a/cell (:pos (:args c)))))))
 
@@ -96,9 +97,9 @@
       (if (= 1 (count items)) {:item (first items)} {:any-of items}))))
 
 (defn fetching?
-  "Whether a missing item is fetched (the :fetch arg allows items)."
+  "Whether a missing item is fetched (the call's ways hold more than :carried)."
   [c]
-  (some-> (need/opts c 'jobs.blocks.place) :what (contains? :item)))
+  (boolean (seq (need/fetch-how c))))
 
 (defn clear-args
   "The jobs.blocks.dig args for clearing the plant at pos."
@@ -263,9 +264,9 @@
              walk-text (assoc :walk-text walk-text))))
 
 (defn ^:async fetch!
-  "Get one of the missing items with the fetch limits of the call: :continue, :done (got it) or the ending."
+  "Get one of the missing items from the ways of the call: :continue, :done (got it) or the ending."
   [c items]
-  (let [o (select-keys (need/opts c 'jobs.blocks.place) [:how :explore])
+  (let [o {:how (need/fetch-how c)}
         e (await (if (= 1 (count items)) (need/item! c (first items) 1 o) (need/blocks! c items 1 o)))]
     (cond (= :continue e) :continue
           (= :done (:kind e)) :done

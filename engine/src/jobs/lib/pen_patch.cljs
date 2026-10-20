@@ -1,7 +1,8 @@
 (ns jobs.lib.pen-patch
   "Patching a pen's leaks, shared by jobs.animals.pen-check and jobs.build.pen: a :gap is filled with a fence, a :climb
   fence gets one on top, each by a jobs.blocks.place child. Only the choice of the fence item differs between the jobs."
-  (:require [engine.ctx :as ctx]))
+  (:require [engine.ctx :as ctx]
+            [jobs.lib.need :as need]))
 
 (def patchable #{:gap :climb})
 
@@ -17,7 +18,7 @@
   (vec (distinct (keep patch-cell leaks))))
 
 (defn ^:async place-fence!
-  "One fence at pos by a blocks.place child (phase :patch); its result, or :continue while it runs. Args pass :ignore-zones? and :fetch; extra is merged into the child's args."
+  "One fence at pos by a blocks.place child (phase :patch); its result, or :continue while it runs. Args pass :ignore-zones? and :fetch (as :ways); extra is merged into the child's args."
   [c pos item extra]
   (await (ctx/call c :patch 'jobs.blocks.place
-                   (merge (select-keys (:args c) [:ignore-zones? :fetch]) extra {:pos pos :item item}))))
+                   (merge (select-keys (:args c) [:ignore-zones?]) (when (contains? (:args c) :fetch) {:ways (need/ways-of-fetch (:fetch (:args c)))}) extra {:pos pos :item item}))))

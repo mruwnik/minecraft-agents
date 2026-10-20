@@ -14,7 +14,7 @@
             {:no-event {:source :job :kind #{:completed :stopped} :data {:placed [:any]}} :for-s 20}]
    :after [[:not-block [20 0 14] "cobblestone"] [:item "cobblestone" 8]]}
   {:name "other-bodys-plan-refuses-b"
-   :act [[:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone" :fetch true})]]
+   :act [[:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone"})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-allowed :by :footprint}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:placed [:any]}} :for-s 20}]
    :after [[:not-block [20 0 14] "cobblestone"] [:item "cobblestone" 8]]}

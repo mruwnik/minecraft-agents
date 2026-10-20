@@ -71,6 +71,6 @@
   {:name "place-fetches-block-from-seen-chest"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:5}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
-         [:job (jobs.blocks.place {:pos #at [16 0 19] :item "cobblestone" :fetch true})]]
+         [:job (jobs.blocks.place {:pos #at [16 0 19] :item "cobblestone"})]]
    :expect [{:event {:source :job :kind :completed :data {:placed true}} :within-s 80 :of-job true}]
    :after [[:block [16 0 19] "cobblestone"]]}]}

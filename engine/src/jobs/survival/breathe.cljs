@@ -264,7 +264,7 @@
         block-at (escape/block-at-of p)
         at [(:x cell) (:y cell) (:z cell)]
         fillers (choose/filler-names c :climb)
-        args {:pos at :use {:blocks fillers} :fetch false}
+        args {:pos at :use {:blocks fillers} :ways #{:carried}}
         item (blocks/chosen c fillers)
         l (ledger/reconcile (ledger/open-entries (ctx/view c)) block-at)
         intended (ledger/intend l {:cell at :item item :before (block-at at) :job (:id c) :purpose :breathe-step})

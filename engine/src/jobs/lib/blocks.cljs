@@ -329,7 +329,7 @@
   "Place item at pos with a jobs.blocks.place child in slot :place (args merged over: no fetch): :continue or its ending
   (its :data has the placed :block)."
   [c pos item args]
-  (await (ctx/call c :place 'jobs.blocks.place (merge {:fetch false} args {:pos pos :item item}))))
+  (await (ctx/call c :place 'jobs.blocks.place (merge {:ways #{:carried}} args {:pos pos :item item}))))
 
 (defn ^:async place-cell!
   "place-call!, said as what came of it (place-outcome)."

@@ -342,7 +342,7 @@
         (let [{:keys [eng p]} (setup-far (assoc one-chest-world :inventory [{:name "dirt" :count 5} {:name "oak_planks" :count 8}]))]
           (wt/know-place! eng :chest chest)
           (full-at p [10 64 0])
-          (let [result (await (wt/ending-of eng job {:items ["dirt"] :fetch-chests? false} 60))]
+          (let [result (await (wt/ending-of eng job {:items ["dirt"] :ways #{:carried}} 60))]
             (is (= :no-chest-item (:cause result)))
             (is (empty? (wt/calls p "craft")) "no crafting")
             (is (= #{[10 64 0]} (chests-in p)))))))))

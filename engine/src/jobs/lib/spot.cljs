@@ -131,7 +131,7 @@
       (if (= :continue spot)
         :continue
         (do (ctx/update-mem! c assoc-in spot-path spot)
-            (let [call #(ctx/call c :place 'jobs.blocks.place (merge {:item item :pos spot :fetch false} args))
+            (let [call #(ctx/call c :place 'jobs.blocks.place (merge {:item item :pos spot :ways #{:carried}} args))
                   e (await (if wrap (wrap call) (call)))]
               (if (= :continue e)
                 :continue

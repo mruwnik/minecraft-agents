@@ -252,7 +252,7 @@
   [c run chest names keep]
   (let [before (u/free-slots (:primitives c))
         e (await (ctx/call c :deposit 'jobs.storage.deposit
-                           (merge (select-keys (:args c) [:ignore-zones? :free]) {:chest chest :items names :keep keep :make-chests? true :fetch-chests? false})))]
+                           (merge (select-keys (:args c) [:ignore-zones? :free]) {:chest chest :items names :keep keep :make-chests? true :ways #{:carried}})))]
     (when (get-in e [:data :gave-up])
       (ctx/remember! c :chest-unusable {:pos chest :reason (contract/cause-key e)} (unusable-policy)))
     (when (> (u/free-slots (:primitives c)) before)

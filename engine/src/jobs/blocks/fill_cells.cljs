@@ -15,7 +15,7 @@
   "Fill cells that are air, cave_air or water with the first carried block of the call's :use {:blocks} (default: the
   carried building blocks, in that order). The caller has judged the cells (zones, claims); the job does not ask the rules
   again. Per step: the lowest cell that is not the body's feet or head (then the nearest) is placed by a jobs.blocks.place
-  child (:fetch false, :ignore-zones? true; it walks into reach itself); when only the feet or head cell is left, the body
+  child (:ways #{:carried}, :ignore-zones? true; it walks into reach itself); when only the feet or head cell is left, the body
   jump-places (a bare act, not access.pillar: the block is meant to stay, so no scaffold ledger entry, and the pillar's ceiling and zone checks do not apply). Cells that no longer read air or water are done. It yields :continue only
   when a child waits on the world.
 
@@ -76,7 +76,7 @@
 (defn ^:async place!
   "One cell: resolves to :placed, :failed, or :partial (the place child waits on the world)."
   [c pos item]
-  (let [e (await (ctx/call c :place 'jobs.blocks.place {:pos pos :item item :fetch false :ignore-zones? true}))]
+  (let [e (await (ctx/call c :place 'jobs.blocks.place {:pos pos :item item :ways #{:carried} :ignore-zones? true}))]
     (cond (= :continue e) :partial
           (= :done (:kind e)) :placed
           :else :failed)))
