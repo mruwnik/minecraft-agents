@@ -1,81 +1,25 @@
-;; Cards 0d3cca8f (jobs.strip.site: field base, shears, corridors, seals leaf-first, haul, home restored; :bad-plan :no-torches
-;; :no-shears), 88927c30 (ore carried to the base is smelted between trips), dcf21aec (site :spawner :seal), and with it the mouth
-;; seal of strip.seal that 7a7381b9 leaves to the site.
+;; Card e249a2da (jobs.strip.site alone, the corridor part of jobs.strip.all: no base, shears, smelt or haul).
 ;; Plot 32 x 32, floor stone. A stone mass x 2..30, y 0..4, z 10..22 holds a corridor along x 2..26 (y 0..2, z 15..17; its west end
-;; opens to the air at x 1), rails x 3..25 at z 16, two supports (fences + planks) at x 8 and 14, a cobweb at [12 1 16]. The base
-;; (blueprint field-base, plan "base") goes at [18 -1 2], a main storage chest at [28 0 4] (the body's :chest memory). The site is named
-;; by :at, a rail at [10 0 16]; :shaft false walks in from the west mouth.
-;; The "branch" cases add a second corridor along z at x 20 (z 11..15, y 0..2, x 19..21) with rails x 20 z 11..15, a support at
-;; z 12 and a cobweb at [20 1 13]; it hangs on the main corridor at z 16 and is sealed at [20 0..2 15] when stripped.
-;; Should-succeed: the full strip ends done, rails and cobwebs gone, the branch sealed with cobblestone, the loot hauled
-;; to the main chest (nothing of it left in the bag); carried raw iron is smelted and hauled; a spawner in the branch under :seal
-;; stops that segment and the branch is sealed with the spawner left.
-;; The two chest cases pre-place the base's left double chest at [19 0 3]/[20 0 3] (chest-1/2) so the base build finds it; the first holds
-;; raw iron and the body's memory books it (:fetch/stock), as an earlier look or deposit would have.
-;; Should-fail: an unknown base plan stops :bad-plan; the base is built first (it takes torches: 3 carried), then fewer torches than a
-;; strip needs, with no source for more (stone under the floor: no coal to see), stops :child-failed (items.obtain :no-source) before any digging.
+;; opens to the air at x 1), rails x 3..25 at z 16, two supports (fences + planks) at x 8 and 14, a cobweb at [12 1 16]. A second
+;; corridor along z at x 20 (z 11..15, y 0..2, x 19..21) has rails x 20 z 11..15, a support at z 12 and a cobweb at [20 1 13]; it hangs
+;; on the main corridor at z 16 and is sealed at [20 0..2 15] when stripped. The site is named by :at, a rail at [10 0 16]; :shaft false
+;; walks in from the west mouth.
+;; Should-succeed: the strip ends done, rails and cobwebs gone, the branch sealed with cobblestone (the loot stays in the bag).
 {:defaults
- {:tags [:strip :site :mineshaft :build :storage :jobs]
-  :time :day :time-why :sleep
+ {:tags [:strip :site :mineshaft :jobs]
+  :time :any
   :plot {:height 8 :floor "stone"}
   :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [2 0 15] [26 2 17] "air"] [:fill [3 0 16] [25 0 16] "rail"] [:set [12 1 16] "cobweb"]
            [:set [8 0 15] "oak_fence"] [:set [8 1 15] "oak_fence"] [:set [8 0 17] "oak_fence"] [:set [8 1 17] "oak_fence"] [:fill [8 2 15] [8 2 17] "oak_planks"]
            [:set [14 0 15] "oak_fence"] [:set [14 1 15] "oak_fence"] [:set [14 0 17] "oak_fence"] [:set [14 1 17] "oak_fence"] [:fill [14 2 15] [14 2 17] "oak_planks"]
-           [:fill [18 -1 2] [24 -1 6] "grass_block"] [:set [28 0 4] "chest"]]
-  :memory [{:kind :chest :data {:pos #xyz [28 0 4]}}]
-  :plans [{:id "base" :metadata {:by "$body"} :parts [{:id "base" :blueprint "field-base" :at #at [18 -1 2]}]}]
+           [:fill [19 0 11] [21 2 15] "air"] [:fill [20 0 11] [20 0 15] "rail"] [:set [20 1 13] "cobweb"]
+           [:set [19 0 12] "oak_fence"] [:set [19 1 12] "oak_fence"] [:set [21 0 12] "oak_fence"] [:set [21 1 12] "oak_fence"] [:fill [19 2 12] [21 2 12] "oak_planks"]]
   :body {:at [12.5 0 8.5] :yaw 180 :settle-s 2 :effects [["resistance" 600 4]]
-         :inventory [["stone_pickaxe" 1] ["stone_axe" 1] ["shears" 1] ["torch" 16] ["bread" 12] ["cobblestone" 64] ["oak_planks" 96] ["chest" 4]
-                     ["furnace" 2] ["crafting_table" 1] ["white_bed" 1] ["oak_door" 1]]}
+         :inventory [["stone_pickaxe" 1] ["stone_axe" 1] ["shears" 1] ["torch" 16] ["bread" 12] ["cobblestone" 64]]}
   :limit-s 700}
  :cases
- [{:name "branch-stripped-and-sealed-leaf-first-then-hauled"
-   :blocks [[:fill [19 0 11] [21 2 15] "air"] [:fill [20 0 11] [20 0 15] "rail"] [:set [20 1 13] "cobweb"]
-            [:set [19 0 12] "oak_fence"] [:set [19 1 12] "oak_fence"] [:set [21 0 12] "oak_fence"] [:set [21 1 12] "oak_fence"] [:fill [19 2 12] [21 2 12] "oak_planks"]]
-   :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false})]]
-   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:segments [:any] :taken [:any] :hauled [:any]}} :within-s 650 :of-job true}]
+ [{:name "branch-stripped-and-sealed-leaf-first-without-a-base"
+   :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :shaft false})]]
+   :expect [{:event {:source :job :kind :completed :data {:segments [:any] :taken [:any]}} :within-s 650 :of-job true}]
    :after [[:not-block [10 0 16] "rail"] [:not-block [20 0 12] "rail"] [:not-block [12 1 16] "cobweb"] [:not-block [20 1 13] "cobweb"]
-           [:block [20 1 15] "cobblestone"] [:item "cobweb" 0] [:item "rail" 0]]}
-  {:name "carried-raw-iron-is-smelted-at-the-base-and-hauled"
-   :body {:inventory [["stone_pickaxe" 1] ["stone_axe" 1] ["shears" 1] ["torch" 6] ["bread" 12] ["cobblestone" 64] ["oak_planks" 96] ["chest" 4]
-                      ["furnace" 2] ["crafting_table" 1] ["white_bed" 1] ["oak_door" 1] ["raw_iron" 3] ["coal" 24] ["stick" 8]]}
-   :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false :take [:cobweb]})]]
-   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:smelted [:any]}} :within-s 650 :of-job true}]
-   :after [[:item "raw_iron" 0] [:item "iron_ingot" 0]]}
-  {:name "raw-iron-the-base-chest-holds-is-withdrawn-and-smelted"
-   :blocks [[:set [19 0 3] "chest[facing=south,type=left]{Items:[{Slot:0b,id:\"minecraft:raw_iron\",count:3}]}"] [:set [20 0 3] "chest[facing=south,type=right]"]]
-   :memory [{:kind :fetch/stock :data {:pos #at [19 0 3] :items {"raw_iron" 3}} :policy {:cap 64 :ttl :forever}}]
-   :body {:inventory [["stone_pickaxe" 1] ["stone_axe" 1] ["shears" 1] ["torch" 6] ["bread" 12] ["cobblestone" 64] ["oak_planks" 96] ["chest" 4]
-                      ["furnace" 2] ["crafting_table" 1] ["white_bed" 1] ["oak_door" 1] ["coal" 24] ["stick" 8]]}
-   :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false :take [:cobweb]})]]
-   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:smelted [:any]}} :within-s 650 :of-job true}]
-   :after [[:item "raw_iron" 0] [:item "iron_ingot" 0]]}
-  {:name "haul-false-still-collects-the-smelted-output-into-the-base-chest"
-   :body {:inventory [["stone_pickaxe" 1] ["stone_axe" 1] ["shears" 1] ["torch" 6] ["bread" 12] ["cobblestone" 64] ["oak_planks" 96] ["chest" 4]
-                      ["furnace" 2] ["crafting_table" 1] ["white_bed" 1] ["oak_door" 1] ["raw_iron" 3] ["coal" 24] ["stick" 8]]}
-   :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false :take [:cobweb] :haul false})]]
-   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:smelted [:any]}} :within-s 650 :of-job true}]
-   :after [[:item "raw_iron" 0] [:item "iron_ingot" 0] [:block [19 0 3] "chest{Items:[{id:\"minecraft:iron_ingot\"}]}"]]}
-  {:name "spawner-in-the-branch-under-seal-stops-it-and-the-mouth-is-sealed"
-   :blocks [[:fill [19 0 11] [21 2 15] "air"] [:fill [20 0 11] [20 0 15] "rail"]
-            [:set [19 0 12] "oak_fence"] [:set [19 1 12] "oak_fence"] [:set [21 0 12] "oak_fence"] [:set [21 1 12] "oak_fence"] [:fill [19 2 12] [21 2 12] "oak_planks"]
-            [:set [22 1 12] "spawner{RequiredPlayerRange:0s}"]]
-   :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false :spawner :seal})]]
-   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 650 :of-job true}]
-   :after [[:block [22 1 12] "spawner"] [:block [20 1 15] "cobblestone"] [:not-block [10 0 16] "rail"]]}
-  {:name "unknown-base-plan-stops-bad-plan"
-   :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :base "no-such-base" :shaft false})]]
-   :expect [{:event {:source :job :kind :strip.site.stopped :data {:reason :bad-plan}} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 20}]
-   :after [[:block [10 0 16] "rail"]]
-   :limit-s 200}
-  {:name "no-torches-and-none-to-get-stops-child-failed-before-digging"
-   ;; The surface plot lies on natural ground: a cave or ore under the 1-thick floor shows through the hole the base build makes in it,
-   ;; and a body with coal in sight rightly mines it. Solid stone below the floor leaves no coal for a player to find either.
-   :blocks [[:fill [0 -9 0] [31 -2 31] "stone"]]
-   :body {:inventory [["stone_pickaxe" 1] ["stone_axe" 1] ["shears" 1] ["torch" 3] ["bread" 12] ["cobblestone" 64] ["oak_planks" 96] ["chest" 4]
-                      ["furnace" 2] ["crafting_table" 1] ["white_bed" 1] ["oak_door" 1]]}
-   :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false})]]
-   :expect [{:event {:source :job :kind :strip.site.stopped :data {:reason :child-failed :child "jobs.items.obtain" :because :no-source}} :within-s 500 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 20}]
-   :after [[:block [10 0 16] "rail"] [:block [12 1 16] "cobweb"]]}]}
+           [:block [20 1 15] "cobblestone"]]}]}

@@ -59,7 +59,7 @@
 
 (defn smelt-stub
   "jobs.items.smelt over a furnaces atom {furnace {:phase :cooking|:ready :item :count}}: the first call loads and yields, the
-  call yields (and is not booked) until the furnace is :ready, then the next call gives the ingots; :fail makes it stop with that reason."
+  call yields once more (the furnace is :ready by then, and the yield is not booked), then the next call gives the ingots; :fail makes it stop with that reason."
   [p calls furnaces fail]
   (let [key-of (comp pr-str :furnace :args)]
     (assoc (dissoc (get registry/jobs 'jobs.items.smelt) :target :done? :quote-of)
@@ -70,7 +70,7 @@
                           state (get @furnaces (key-of c))]
                       (cond
                         fail (ctx/end c :nothing-possible fail)
-                        (= :cooking (:phase state)) :continue
+                        (= :cooking (:phase state)) (do (swap! furnaces assoc-in [(key-of c) :phase] :ready) :continue)
                         (nil? state)
  (do (swap! (fake/state p) update :inventory (fn [inv] (mapv #(if (= item (:name %)) (update % :count - count) %) inv)))
                                          (swap! furnaces assoc (key-of c) {:phase :cooking :item item :count count})
@@ -78,8 +78,6 @@
                         :else (do (fake/add-item! p "iron_ingot" (:count state))
                                   (swap! furnaces dissoc (key-of c))
                                   (ctx/end c :done nil {:smelted (:count state) :wanted (:count state)}))))))))
-
-(defn ready! [furnaces] (swap! furnaces update-vals #(assoc % :phase :ready)))
 
 (defn setup
   "An engine over the site with every child of the job stubbed. results: job symbol -> (fn [ctx]) giving the child's result,
@@ -129,11 +127,12 @@
     (mem/write! (:store eng) :spawn-bed {:pos old-bed} {:cap 1 :ttl :forever})
     {:eng eng :p p :calls calls :results results :seen seen :furnaces furnaces :clock clock}))
 
-(defn start! [{:keys [eng]} a] (tu/child-outcome eng job a 600))
+(defn start-job! [{:keys [eng]} sym a] (tu/child-outcome eng sym a 600))
+(defn start! [env a] (start-job! env job a))
 (defn names [{:keys [calls]}] (mapv (comp name first) @calls))
 (defn called [{:keys [calls]} sym] (mapv second (filter #(= sym (first %)) @calls)))
 
-(deftest strips-every-segment-seals-leaf-first-and-hauls-the-base-chests
+(deftest strips-every-segment-and-seals-leaf-first
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -145,44 +144,17 @@
           (is (= ["z-27-0:0..20" "x-27-20:-20..0" "x-27-20:0..20"] seg-ids) "the stem next to the entry first, then its branches")
           (is (= [{:at (xyz [-1 -27 20]) :axis :x :side :to} {:at (xyz [1 -27 20]) :axis :x :side :from}]
                  (mapv #(select-keys % [:at :axis :side]) (called env 'jobs.strip.seal))))
-          (is (= ["from-plan" "set-spawn" "set-place" "get-tool" "corridor" "corridor" "seal" "corridor" "seal" "deposit" "haul" "set-place" "set-spawn"]
-                 (mapv #(last (re-find #"\.([a-z-]+)$" %)) (names env))) "the order of the children, home and spawn restored last")
-          (is (= {:from [chest-1 chest-3] :to nil} (select-keys (first (called env 'jobs.storage.haul)) [:from :to]))))))))
+          (is (= ["corridor" "corridor" "seal" "corridor" "seal"]
+                 (mapv #(last (re-find #"\.([a-z-]+)$" %)) (names env))) "the order of the children: no base, shears, smelt, haul or home here"))))))
 
-(deftest home-and-spawn-sit-at-the-base-while-stripping-and-come-back-after-the-haul
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [env (setup)
-              _ (await (start! env args))
-              places (filterv #(= 'jobs.memory.set-place (first %)) @(:calls env))
-              spawns (called env 'jobs.survival.set-spawn)]
-          (is (= [{:name "home" :pos (xyz bed)} {:name "home" :pos old-home}] (mapv (comp #(select-keys % [:name :pos]) second) places)))
-          (is (= [(xyz bed) old-bed] (mapv :bed spawns))))))))
-
-(deftest a-restart-after-the-base-phase-does-not-build-it-again
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [env (setup :results {'jobs.items.get-tool {:status :stopped :reason :no-source}})
-              first-run (await (start! env args))
-              _ (reset! (:calls env) [])
-              _ (swap! (fake/state (:p env)) update :inventory conj {:name "shears" :count 1})
-              second-run (await (start! env args))]
-          (is (= :stopped (:status first-run)))
-          (is (= :done (:status second-run)))
-          (is (empty? (called env 'jobs.build.from-plan)) "the saved phase says the base stands")
-          (is (empty? (called env 'jobs.items.get-tool)) "shears are carried"))))))
-
-(deftest a-child-failure-stops-with-its-reason-and-puts-home-and-spawn-back
+(deftest a-child-failure-stops-with-its-reason
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [env (setup :results {'jobs.strip.seal {:status :stopped :reason :no-blocks}})
               r (await (start! env args))]
           (is (= {:status :stopped :reason :child-failed :child "jobs.strip.seal" :because :no-blocks :phase :strip}
-                 (select-keys r [:status :reason :child :because :phase])))
-          (is (= ["set-place" "set-spawn"] (mapv #(last (re-find #"\.([a-z-]+)$" %)) (take-last 2 (names env)))) "restored on the stop"))))))
+                 (select-keys r [:status :reason :child :because :phase]))))))))
 
 (deftest a-relisted-site-resumes-at-the-segment-it-stopped-on
   (async done
@@ -195,8 +167,7 @@
               r (await (start! env args))]
           (is (= :done (:status r)))
           (is (= {:sealed 2 :stripped 1} (:segments r)))
-          (is (= ["x-27-20:0..20"] (mapv (comp :id :segment) (called env 'jobs.strip.corridor))) "only the segment not yet stripped")
-          (is (empty? (called env 'jobs.build.from-plan))))))))
+          (is (= ["x-27-20:0..20"] (mapv (comp :id :segment) (called env 'jobs.strip.corridor))) "only the segment not yet stripped"))))))
 
 (deftest a-segment-that-stops-three-times-for-one-reason-is-skipped
   (async done
@@ -208,22 +179,6 @@
           (is (= :done (:status r)))
           (is (= {:stripped 1 :sealed 1 :skipped 1} (:segments r)))
           (is (= 3 (count (filter #(= "x-27-20:0..20" (:id (:segment %))) (called env 'jobs.strip.corridor))))))))))
-
-(deftest a-night-set-spawn-is-waited-out-not-a-child-failure
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [env (setup :ending-jobs {'jobs.survival.set-spawn (ending-job 'jobs.survival.set-spawn :condition-failed {:reason :night})})]
-          (is (= :not-done (await (start! env args))) "the base phase yields while it is night")
-          (is (empty? (called env 'jobs.strip.corridor))))))))
-
-(deftest a-haul-that-waits-for-light-is-waited-out-not-a-child-failure
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [env (setup :ending-jobs {'jobs.storage.haul (ending-job 'jobs.storage.haul :condition-failed {:reason :exposed})})
-              r (await (start! env args))]
-          (is (= :not-done r) "the haul phase yields while the chest is in the dark"))))))
 
 (deftest the-stop-limit-and-trip-limit-are-settings
   (async done
@@ -285,7 +240,7 @@
           (is (= :done (:status r)))
           (is (= {:wood 10} (:taken r)))
           (is (= ["z-27-0:0..20" "z-27-0:0..20" "x-27-20:-20..0" "x-27-20:0..20"] ids))
-          (is (= (repeat 2 {:chest (xyz chest-1) :keep {"torch" 64}}) (mapv #(select-keys % [:chest :keep]) (called env 'jobs.storage.deposit)))))))))
+          (is (= [{:chest (xyz chest-1) :keep {"torch" 64}}] (mapv #(select-keys % [:chest :keep]) (called env 'jobs.storage.deposit)))))))))
 
 (deftest no-torches-and-none-to-be-had-stops-no-torches
   (async done
@@ -363,16 +318,6 @@
           (is (= :done (:status r)))
           (is (= [{:dir :down :heading :east :y 60 :through "shaft"}] (mapv #(select-keys % [:dir :heading :y :through]) (called env 'jobs.access.stair)))))))))
 
-(deftest haul-false-leaves-the-loot-in-the-base-chests
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [env (setup)
-              r (await (start! env (assoc args :haul false)))]
-          (is (= :done (:status r)))
-          (is (empty? (called env 'jobs.storage.haul)))
-          (is (= ["set-place" "set-spawn"] (mapv #(last (re-find #"\.([a-z-]+)$" %)) (take-last 2 (names env))))))))))
-
 (deftest a-spawner-stop-seals-the-segment-at-once-and-skips-what-hangs-beyond-it
   (async done
     (tu/run-async done
@@ -385,81 +330,6 @@
           (is (= [:seal] (distinct (map :spawner (called env 'jobs.strip.corridor)))) "the policy goes to the corridor")
           (is (= 1 (count (filter #(= "x-27-20:-20..0" (:id (:segment %))) (called env 'jobs.strip.corridor)))) "not retried")
           (is (= 2 (count (called env 'jobs.strip.seal)))))))))
-
-(def ore-bag [{:name "torch" :count 32} {:name "iron_pickaxe" :count 1} {:name "raw_iron" :count 16} {:name "coal" :count 4}])
-
-(defn full-then [env after]
-  (let [n (atom 0)]
-    (fn [_] (case (swap! n inc)
-              1 {:status :stopped :reason :bag-full :taken {}}
-              (do (after env) {:status :done :taken {}})))))
-
-(deftest a-return-loads-both-furnaces-and-goes-back-down-and-the-next-visit-deposits-the-ingots-before-the-haul
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [env (setup :inventory ore-bag)
-              _ (swap! (:results env) assoc 'jobs.strip.corridor (full-then env #(ready! (:furnaces %))))
-              r (await (start! env args))
-              smelts (called env 'jobs.items.smelt)
-              short-names (mapv #(last (re-find #"\.([a-z-]+)$" %)) (names env))]
-          (is (= :done (:status r)))
-          (is (= [{:furnace (xyz furnace-1) :item "raw_iron" :count 8} {:furnace (xyz furnace-2) :item "raw_iron" :count 8}]
-                 (mapv #(select-keys % [:furnace :item :count]) (take 2 smelts))) "both furnaces loaded, half each")
-          (is (= ["corridor" "smelt" "smelt" "deposit" "corridor"] (subvec short-names 4 9)) "back down without waiting")
-          (is (= ["smelt" "smelt" "deposit" "haul"] (take 4 (take-last 6 short-names))) "ingots collected and banked before the haul")
-          (is (= (take 2 smelts) (drop 2 smelts)) "the same args resume the same children")
-          (is (= {"raw_iron" 16} (:smelted r))))))))
-
-(deftest haul-false-still-collects-the-output-still-cooking
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [env (setup :inventory ore-bag)
-              _ (swap! (:results env) assoc 'jobs.strip.corridor (full-then env #(ready! (:furnaces %))))
-              r (await (start! env (assoc args :haul false)))]
-          (is (= :done (:status r)))
-          (is (empty? (called env 'jobs.storage.haul)))
-          (is (= ["smelt" "smelt" "deposit"] (take 3 (take-last 5 (mapv #(last (re-find #"\.([a-z-]+)$" %)) (names env))))) "ingots collected and banked before the cleanup")
-          (is (= {"raw_iron" 16} (:smelted r))))))))
-
-(deftest raw-ore-the-base-chests-hold-is-withdrawn-before-it-is-loaded
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [env (setup)
-              _ (mem/write! (:store (:eng env)) stock/stock-kind {:pos chest-1 :items {"raw_iron" 20 "stone" 9}} stock/stock-policy)
-              _ (swap! (:results env) assoc
-                       'jobs.strip.corridor (full-then env #(ready! (:furnaces %)))
-                       'jobs.storage.withdraw (fn [_] (fake/add-item! (:p env) "raw_iron" 20) {:gave-up false}))
-              r (await (start! env args))
-              short-names (mapv #(last (re-find #"\.([a-z-]+)$" %)) (names env))]
-          (is (= :done (:status r)))
-          (is (= [{:chest (xyz chest-1) :items {"raw_iron" 20}}] (mapv #(select-keys % [:chest :items]) (called env 'jobs.storage.withdraw))))
-          (is (= ["withdraw" "smelt" "smelt"] (subvec short-names 5 8)) "taken out, then loaded in both furnaces")
-          (is (= [10 10] (mapv :count (take 2 (called env 'jobs.items.smelt))))))))))
-
-(deftest smelt-false-leaves-the-ore-raw
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [env (setup :inventory ore-bag)
-              _ (swap! (:results env) assoc 'jobs.strip.corridor (full-then env (constantly nil)))
-              r (await (start! env (assoc args :smelt false)))]
-          (is (= :done (:status r)))
-          (is (empty? (called env 'jobs.items.smelt)))
-          (is (= 1 (count (called env 'jobs.storage.deposit)))))))))
-
-(deftest a-smelt-that-gives-up-does-not-stop-the-strip-and-is-reported
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [env (setup :inventory ore-bag :fail-smelt "no-fuel")
-              _ (swap! (:results env) assoc 'jobs.strip.corridor (full-then env (constantly nil)))
-              r (await (start! env args))]
-          (is (= :done (:status r)))
-          (is (= ["no-fuel" "no-fuel"] (mapv :reason (:smelt-failed r))))
-          (is (= 2 (count (called env 'jobs.items.smelt))) "once per furnace, no retry loop"))))))
 
 (defn ends [r] [(:kind (:ending r)) (:cause (:ending r))])
 
@@ -508,15 +378,14 @@
           (is (= [:condition-failed :child-failed] (ends blocked)))
           (is (= {:child "jobs.movement.go-to" :because :no-path} (select-keys blocked [:child :because]))))))))
 
-(deftest a-call-without-site-or-base-or-at-for-a-new-site-is-impossible
+(deftest a-call-without-site-or-at-for-a-new-site-is-impossible
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [no-site (await (start! (setup) (dissoc args :site)))
-              no-base (await (start! (setup) (dissoc args :base)))
               no-at (await (start! (setup) (dissoc args :at)))]
-          (is (= [[:impossible :bad-args] [:impossible :bad-args] [:impossible :bad-args]]
-                 (mapv (juxt (comp :kind :ending) :reason) [no-site no-base no-at]))))))))
+          (is (= [[:impossible :bad-args] [:impossible :bad-args]]
+                 (mapv (juxt (comp :kind :ending) :reason) [no-site no-at]))))))))
 
 (deftest a-danger-near-holds-the-site-back-from-the-start
   (async done
@@ -547,14 +416,3 @@
           (is (= 1 (count (called env 'jobs.strip.corridor))) "no corridor ran with the hostile near")
           (is (= :hostile-near (:reason (last (filter #(= :waiting (:kind %)) @(:seen env)))))))))))
 
-(deftest a-cut-site-puts-home-and-spawn-back-in-its-cleanup
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [eng-at (atom nil)
-              env (setup :results {'jobs.strip.corridor (fn [_] (core/cancel! @eng-at (first (:list (core/state @eng-at)))) {:status :done :taken {} :new-segments []})})
-              _ (reset! eng-at (:eng env))]
-          (core/submit! (:eng env) (list job args) {})
-          (await (tu/run-until-empty (:eng env) 600))
-          (is (= ["set-place" "set-spawn"] (mapv #(last (re-find #"\.([a-z-]+)$" %)) (take-last 2 (names env)))) "restored on the cut")
-          (is (= [(xyz bed) old-bed] (mapv :bed (called env 'jobs.survival.set-spawn)))))))))

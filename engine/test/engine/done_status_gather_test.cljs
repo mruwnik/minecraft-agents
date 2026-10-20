@@ -45,6 +45,10 @@
    'jobs.strip.seal {:at [0 64 0] :axis :x :side :from}
    'jobs.strip.corridor {:segment "s"}
    'jobs.strip.site {}
+   'jobs.strip.all {}
+   'jobs.strip.base {}
+   'jobs.strip.smelt {}
+   'jobs.strip.haul {}
    'jobs.strip.loot-cart {}})
 
 (deftest every-done-of-the-area-is-a-status-on-a-fresh-frame
@@ -141,16 +145,18 @@
     {:before {} :broken true} [:later :looting]
     {} [:later :looting]))
 
-(defn site-done [phase]
-  (let [c (ctx-of 'jobs.strip.site {} {:site "s" :base "b" :at [0 64 0]} {})]
-    ((:done? (get registry/jobs 'jobs.strip.site))
-     (assoc c :view (fn [] {:now 1000 :data {:entries {:strip/sites [{:t 1000 :data {"s" {:phase phase :segments {"a" {:state :stripped}}}}}]}}})))))
+(defn strip-done [sym phase]
+  (let [c (ctx-of sym {} {:site "s" :base "b" :at [0 64 0]} {})]
+    ((:done? (get registry/jobs sym))
+     (assoc c :view (fn [] {:now 1000 :data {:entries {:strip/sites [{:t 1000 :data {"s" {:phase phase :segments {"a" {:state :stripped}}}}}]
+                                                       :strip/runs [{:t 1000 :data {"s" {:phase phase}}}]}}})))))
 
-(deftest strip-site-is-done-once-the-home-is-restored
-  (are [phase reason] (= reason (tu/kind-reason (site-done phase)))
-    :done [:ok :stripped]
-    :restore [:later :stripping]
-    :strip [:later :stripping]))
+(deftest strip-site-and-all-are-done-once-their-phase-is
+  (are [sym phase reason] (= reason (tu/kind-reason (strip-done sym phase)))
+    'jobs.strip.site :done [:ok :stripped]
+    'jobs.strip.site :strip [:later :stripping]
+    'jobs.strip.all :done [:ok :stripped]
+    'jobs.strip.all :haul [:later :stripping]))
 
 (defn field-of
   "Farmland at y 63 and a wheat crop of age over the xs of z 0."

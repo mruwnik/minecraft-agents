@@ -416,6 +416,10 @@
       'jobs.village.maintain {:plan "near"} night-hut :ok
       'jobs.village.maintain {:plan "gone"} night-hut :ok
       'jobs.strip.site {:site "t" :base "b"} night-hut :later
+      'jobs.strip.all {:site "t" :base "b"} night-hut :later
+      'jobs.strip.base {:base "far"} night-hut :later
+      'jobs.strip.smelt {:base "near"} night-hut :ok
+      'jobs.strip.haul {:base "far"} night-hut :later
       'jobs.food.fish {:pos [15 64 0]} night-hut :later
       'jobs.food.fish {:pos [6 64 0]} night-hut :ok)))
 

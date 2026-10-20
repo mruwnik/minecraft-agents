@@ -1,10 +1,8 @@
 (ns jobs.strip.site
   (:require [jobs.lib.ready :as ready]
-            [jobs.lib.waits :as waits]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
@@ -12,45 +10,33 @@
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.shafts :as shafts]
-            [jobs.lib.shelter.spawn :as sh-spawn]
-            [jobs.lib.stock :as stock]
             [jobs.lib.strip :as strip]
             [jobs.lib.torch :as torch]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
-            [jobs.strip.site-plan :refer [chests furnaces loads ores plan-of shears? smelt-saved spot]]
-            [jobs.strip.site-tree :refer [beyond counts mouth next-open seal-ready settled tree unlinked vec3]]))
+            [jobs.strip.site-plan :refer [chests]]
+            [jobs.strip.site-tree :refer [beyond counts mouth next-open seal-ready settled tree unlinked vec3]]
+            [jobs.strip.steps :as steps :refer [reason-of run-all!]]))
 
 (def doc
-  "Strip one abandoned mineshaft (a site) of its wood, cobwebs, rails, ore and chest-minecart loot, from a field base, and
-  leave it sealed behind. Submit it listed with :survive-death? true: the site's state lives in body memory
-  :strip/sites {site {:at :base :shaft :was :segments :stops :phase :trip ..}}, so a restart, a stop or a death resumes
+  "Strip one abandoned mineshaft (a site) of its wood, cobwebs, rails, ore and chest-minecart loot and leave it sealed behind.
+  The corridor part of jobs.strip.all, usable alone with any base: it does not build the base, hold shears, smelt or haul.
+  Submit it listed with :survive-death? true: the site's state lives in body memory
+  :strip/sites {site {:at :shaft :segments :stops :phase :trip ..}}, so a restart, a stop or a death resumes
   where it was. Every step is a registered job run as a child, re-reading the world first; a child that fails ends
   this job stopped. Phases:
-  :base   build the plan :base (build.from-plan), move the respawn to its bed (survival.set-spawn) and :home to the same
-          bed (memory.set-place); the old :home and :spawn-bed are kept in :was. :shears  items.get-tool shears.
   :strip  go down (the :shaft plan with access.stair :through, nil = the nearest usable mineshaft plan, false = walk), read the
           site's corridors from the seen blocks (jobs.lib.strip), then repeat: strip.corridor on the next open segment
           (a branch only after the segment it hangs on; one with an unseen end first), strip.seal at the mouth of a
           segment once it and every segment beyond it are stripped, sealed or skipped. A segment no stripped one reaches is
           :skipped :unlinked. A segment the far end shows longer than it was read is stripped again. The segment holding :at is never
           sealed. A segment that stops ::stop-limit (3) times for one reason is :skipped with the reason. A stop for
-          :bag-full :food-short :no-torches :no-tool, or low torches or free slots, is a trip: deposit into the base chests
+          :bag-full :food-short :no-torches :no-tool, or low torches or free slots, is a trip: deposit into the :base plan's chests
           (storage.deposit), obtain torches, get the tool, get food (survival.get-food, once per trip; still hungry with none: :food-short; :ways #{:carried} skips the try), then back down; at most ::max-trips (12).
-  Each time at the base, before the deposit, the raw ore the base chests are known to hold (body memory stock) is withdrawn (storage.withdraw,
-          up to 64 a free furnace; a failed withdraw is not a stop), then the raw ore carried (raw_iron raw_gold raw_copper) is loaded into the base
-          furnaces (items.smelt, :ways #{:carried :chest}; one kind split over both furnaces, several one kind each) and
-          the body goes back down; the furnaces and their args are kept in :cooking. The next visit replays those
-          children to collect the output, which is deposited with the rest. A smelt that gives up is listed in
-          :smelt-failed and the ore stays raw (not with :smelt false).
-  :haul   first collects the output still in the furnaces (waits while it cooks, also with :haul false) and banks it and the loot still carried in the first base chest, then
-          storage.haul from the base chests to the main storage (not with :haul false).
-  The cleanup export puts :home and the respawn bed back to :was however the call ends (a cut included). The torches the
-  corridor took back are carried.
-  A child that waits on the night or the light (set-spawn :night, haul :exposed) is waited out with :continue, not a child failure.
-  Needs :site and :base (a new site also :at), else impossible :bad-args. Its safe? is ready/safe-at-by-night :at.
-  Ends :done with data {:segments {state n} :taken {class n} :hauled {item n} :smelted {raw-item n} :smelt-failed [{:furnace :reason}]},
-  or condition-failed (:bad-plan :no-site :no-shears :no-torches :food-short :base-full, or :child-failed), nothing-possible
+  The loot still carried at the end is left to jobs.strip.haul. A child that waits on the night or the light is waited out with :continue, not a child failure.
+  Needs :site (a new site also :at), else impossible :bad-args. Its safe? is ready/safe-at-by-night :at.
+  Ends :done with data {:segments {state n} :taken {class n}},
+  or condition-failed (:no-site :no-torches :food-short :base-full, or :child-failed), nothing-possible
   (:unreachable when the walk down found no way, :trips-exhausted, :all-skipped with :skipped {reason n} when no segment was
   stripped or sealed, :child-failed), or :child-failed ending with the kind of a
   child that ended condition-failed, limit-reached or impossible, with the same data and
@@ -59,12 +45,10 @@
 (a/defargs args
   {:site {:doc "the site's name, the key of its memory" :spec a/name? :default nil}
    :at {:doc "[x y z] of a rail, plank or fence of the site the body has seen; kept once given" :spec ::a/pos :default nil}
-   :base {:doc "id of the field-base plan (blueprint field-base)" :spec a/name? :default nil}
+   :base {:doc "id of the field-base plan whose chests take a trip's deposits; nil: a trip that must deposit stops :base-full" :spec a/name? :default nil}
    :shaft {:doc "id of a mineshaft plan down from the base; nil: the nearest usable one; false: walk" :spec (a/or-of a/name? boolean?) :default nil}
    :take {:doc "classes stripped" :spec (a/coll-of #{:wood :cobweb :rail :ore}) :default [:wood :cobweb :rail :ore]}
    :spawner {:doc "a spawner in a segment: :light lights its spawn box and leaves it, :break lights and digs it, :seal seals the segment's mouth at once (its subtree skipped), :skip leaves it unlit" :spec #{:light :break :seal :skip} :default :light}
-   :smelt {:doc "false leaves the raw ore carried to the base raw" :spec boolean? :default true}
-   :haul {:doc "false leaves the loot in the base chests" :spec boolean? :default true}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -78,7 +62,7 @@
 (def policy {:cap 1 :ttl :forever})
 (def trip-reasons #{:bag-full :food-short :no-torches :no-tool})
 (def condition-reasons "Stop reasons that end condition-failed: a fact of the base, the bag or the site. The rest are nothing-possible."
-  #{:bad-plan :no-site :no-shears :no-torches :food-short :base-full})
+  #{:no-site :no-torches :food-short :base-full})
 (defn sites [c] (or (:data (ctx/latest c kind)) {}))
 (defn site [c] (get (sites c) (:site (:args c))))
 
@@ -90,42 +74,6 @@
         old (take (- (count all) (settings/get settings ::max-sites)) (filter #(= :done (:phase (all %))) (remove #{id} (keys all))))]
     (ctx/remember! c kind (apply dissoc all old) policy)))
 
-(defn reason-of
-  "The reason a child's ending reads as: its cause (a string for the smelt's), a map cause's key."
-  [e]
-  (if (map? (:cause e)) (contract/cause-key e) (or (:cause e) (:kind e))))
-
-(defn wait-night
-  "e, a child's ending, but :continue (the world is waited out, as a player waits for day to set the spawn or for light to
-  walk to a chest) when it ended condition-failed :night or for a reason of waits/wait-reasons."
-  [c e]
-  (if (and (= :condition-failed (:kind e)) (= :night (:reason (:cause e))))
-    (do (some-> (:child-wait c) (reset! (:cause e))) :continue)
-    (waits/waiting-out c e)))
-
-(defn ^:async run-all!
-  "The steps [[slot job args] ..] in order: nil when all ended :done, :continue while one waits (also for the night), else {:child job :ending e} of the first that did not."
-  [c steps]
-  (loop [[[slot job args] & more] steps]
-    (if-not slot
-      nil
-      (let [e (wait-night c (await (ctx/call c slot job args)))]
-        (cond (= :continue e) :continue
-              (not= :done (:kind e)) {:child (str job) :ending e}
-              :else (recur more))))))
-
-(defn ^:async smelt-run!
-  "Each [slot args] smelt child once: {:cooking {slot args} :smelted {item n} :failed [{:furnace :reason}]}. One that waits on its
-  cooking (or on a danger) stays in :cooking; one that gave up is dropped."
-  [c entries]
-  (loop [[[slot args] & more] entries acc {:cooking {} :smelted {} :failed []}]
-    (if-not slot
-      acc
-      (let [e (waits/waiting-out c (await (ctx/call c slot 'jobs.items.smelt args)))]
-        (recur more (cond (= :continue e) (assoc-in acc [:cooking slot] args)
-                          (not= :done (:kind e)) (update acc :failed conj {:furnace (:furnace args) :reason (reason-of e)})
-                          :else (update acc :smelted #(merge-with + % {(:item args) (:smelted (:data e) 0)}))))))))
-
 (defn stop!
   "Stop with reason and fields."
   [c reason fields]
@@ -136,30 +84,6 @@
 (defn child-stop! [c failure]
   (let [e (:ending failure)]
     (stop! c :child-failed {:child (:child failure) :because (reason-of e) :child-kind (:kind e)})))
-
-(defn ^:async base!
-  [c s]
-  (let [plan (plan-of c s)
-        bed (spot plan "bed")
-        zones (select-keys (:args c) [:ignore-zones?])]
-    (cond
-      (or (nil? plan) (:broken plan) (nil? bed)) (stop! c :bad-plan {:base (:base s)})
-      (nil? (:was s)) (do (save! c assoc :was {:home (mem/place (ctx/view c) :home)
-                                               :spawn-bed (:pos (:data (sh-spawn/spawn-bed-live (ctx/view c))))})
-                          :again)
-      :else (let [f (await (run-all! c [[:build 'jobs.build.from-plan (merge {:plan (:base s)} zones)]
-                                        [:spawn 'jobs.survival.set-spawn {:bed bed}]
-                                        [:home 'jobs.memory.set-place {:name "home" :pos bed}]]))]
-              (cond (= :continue f) :continue
-                    f (child-stop! c f)
-                    :else (do (save! c assoc :phase :shears) :again))))))
-
-(defn ^:async shears! [c s]
-  (let [f (when-not (shears? c) (await (run-all! c [[:shears 'jobs.items.get-tool {:kind "shears"}]])))]
-    (cond (= :continue f) :continue
-          f (child-stop! c f)
-          (not (shears? c)) (stop! c :no-shears {})
-          :else (do (save! c assoc :phase :strip) :again))))
 
 (defn in-site? [c s]
   (let [{:keys [x y z]} (u/self-pos c)
@@ -208,65 +132,31 @@
   (let [p (:primitives c)]
     (or (:trip s) (< (torch/torches-held p) (trip/torch-low)) (< (u/free-slots p) (trip/want-free)))))
 
-(defn ^:async deposit! [c s i]
-  (await (run-all! c [[:deposit 'jobs.storage.deposit (merge {:chest (nth (chests c s) i) :keep {"torch" 64} :make-chests? false}
+(defn base-chests [c] (chests c (:base (:args c))))
+
+(defn ^:async deposit! [c i]
+  (await (run-all! c [[:deposit 'jobs.storage.deposit (merge {:chest (nth (base-chests c) i) :keep {"torch" 64} :make-chests? false}
                                                              (select-keys (:args c) [:ignore-zones?]))]])))
 
-(defn load-plan [c s]
-  (let [cooking (:cooking s)
-        free (remove #(contains? cooking (first %)) (furnaces c s))]
-    (loads free (into {} (map (juxt :name :count)) (u/inventory (:primitives c))) (:ignore-zones? (:args c)))))
-
-(defn withdraw-plan
-  "[[slot job args] ..] taking the raw ore the base chests are known to hold (body memory :fetch/stock) into the bag, up to
-  what the free furnaces take (64 each), the kinds in one call per chest."
-  [c s]
-  (let [free (- (count (furnaces c s)) (count (:cooking s)))
-        held (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))
-        stock (stock/stock-of (ctx/view c))]
-    (when (pos? free)
-      (loop [[chest & more] (chests c s) want (select-keys held ores) out []]
-        (if-not chest
-          out
-          (let [have (select-keys (get stock (stock/cell-of chest)) ores)
-                want' (reduce (fn [m [k n]] (update m k #(min (* 64 free) (+ (or % 0) n)))) want have)]
-            (recur more want' (cond-> out (seq have) (conj [(keyword (str "withdraw-" (count out))) 'jobs.storage.withdraw
-                                                           (merge {:chest chest :items (select-keys want' (keys have))}
-                                                                  (select-keys (:args c) [:ignore-zones?]))])))))))))
-
 (defn ^:async trip!
-  "At the base: deposit into the next base chest while the bag is short of room, obtain torches, get the lost tool; then back down."
+  "At the base: deposit into the next base chest while the bag is short of room, obtain torches, get the lost tool, food; then back down."
   [c s]
   (let [p (:primitives c)
         {:keys [reason tool deposits] :or {deposits 0}} (:trip s)
-        cs (chests c s)
+        cs (base-chests c)
         short? (< (u/free-slots p) (trip/want-free))
         step (cond
-               (and (seq (:cooking s)) (not (:collected (:trip s)))) :collect
-               (and (:smelt (:args c)) (not (:withdrawn (:trip s))) (seq (withdraw-plan c s))) :withdraw
-               (and (:smelt (:args c)) (not (:loaded (:trip s))) (seq (load-plan c s))) :load
-               (or (:bank s)
-                   short? (and (= :bag-full reason) (zero? deposits))) :deposit
+               (or short? (and (= :bag-full reason) (zero? deposits))) :deposit
                (< (torch/torches-held p) (trip/torch-low)) :torches
                (and (= :no-tool reason) (not (:tool-done (:trip s)))) :tool
                (trip/food-short? c) :food)]
     (case step
-      :collect (let [r (await (smelt-run! c (:cooking s)))]
-                 (save! c #(-> (smelt-saved % r {}) (assoc-in [:trip :collected] true)))
-                 :again)
-      :withdraw (let [f (await (run-all! c (withdraw-plan c s)))]
-                  (if (= :continue f)
-                    :continue
-                    (do (save! c assoc-in [:trip :withdrawn] true) :again)))
-      :load (let [r (await (smelt-run! c (load-plan c s)))]
-              (save! c #(-> (smelt-saved % r (:cooking %)) (assoc-in [:trip :loaded] true)))
-              :again)
       :deposit (if (>= deposits (count cs))
                  (stop! c :base-full {})
-                 (let [f (await (deposit! c s deposits))]
+                 (let [f (await (deposit! c deposits))]
                    (cond (= :continue f) :continue
                          f (child-stop! c f)
-                         :else (do (save! c #(-> % (update-in [:trip :deposits] (fnil inc 0)) (dissoc :bank))) :again))))
+                         :else (do (save! c update-in [:trip :deposits] (fnil inc 0)) :again))))
       :torches (let [f (await (run-all! c [[:torches 'jobs.items.obtain {:item "torch" :count (need/carry-count c :torches ["torch"] (- (trip/torch-stock) (torch/torches-held p))) :explore false}]]))]
                  (cond (= :continue f) :continue f (child-stop! c f)
                        (< (torch/torches-held p) (trip/torch-low)) (stop! c :no-torches {})
@@ -339,40 +229,12 @@
       seg (await (corridor! c s t seg))
       (seq (unlinked s t)) (do (save! c update :segments #(reduce (fn [m k] (assoc m k (assoc (get m k) :state :skipped :why :unlinked))) % (unlinked s t))) :again)
       (all-skipped s) (stop! c :all-skipped {:skipped (all-skipped s)})
-      :else (do (save! c #(cond-> (assoc % :phase :haul) (some pos? (vals (:taken %))) (assoc :bank true))) :again))))
-
-(defn ^:async haul-chests! [c s]
-  (let [e (wait-night c (await (ctx/call c :haul 'jobs.storage.haul (merge {:from (chests c s)} (select-keys (:args c) [:ignore-zones?])))))]
-    (cond (= :continue e) :continue
-          (not= :done (:kind e)) (child-stop! c {:child "jobs.storage.haul" :ending e})
-          :else (do (save! c assoc :phase :done :hauled (:moved (:data e) {})) :again))))
-
-(defn ^:async haul! [c s]
-  (cond
-    (seq (:cooking s)) (let [r (await (smelt-run! c (:cooking s)))]
-                         (save! c smelt-saved r {})
-                         (if (seq (:cooking r)) :continue :again))
-    (:bank s) (if (empty? (chests c s))
-                (stop! c :base-full {})
-                (let [f (await (deposit! c s 0))]
-                  (cond (= :continue f) :continue
-                        f (child-stop! c f)
-                        :else (do (save! c dissoc :bank) :again))))
-    (:haul (:args c)) (await (haul-chests! c s))
-    :else (do (save! c assoc :phase :done) :again)))
-
-(defn restore-steps [{:keys [home spawn-bed]}]
-  (cond-> [(if home
-             [:home 'jobs.memory.set-place {:name "home" :pos (vec3 home)}]
-             [:home 'jobs.memory.forget-place {:name "home"}])]
-    spawn-bed (conj [:spawn 'jobs.survival.set-spawn {:bed (vec3 spawn-bed)}])))
-
-(def passed-kinds "Child ending kinds a :child-failed stop ends with as its own." #{:condition-failed :limit-reached :impossible})
+      :else (do (save! c assoc :phase :done) :again))))
 
 (defn result-of
-  "What the call reports: the segments by state, what was taken, hauled and smelted."
+  "What the call reports: the segments by state and what was taken."
   [s]
-  {:segments (counts s) :taken (:taken s {}) :hauled (:hauled s {}) :smelted (:smelted s {}) :smelt-failed (:smelt-failed s [])})
+  {:segments (counts s) :taken (:taken s {})})
 
 (defn stop-with!
   "End the call stopped, with fields whose :reason is the cause."
@@ -381,36 +243,23 @@
         data (merge (result-of (site c)) (dissoc fields :reason :child-kind))]
     (ctx/emit! c :strip.site.stopped :warn (assoc (merge data (select-keys fields [:reason]))
                                                   :text (str "strip site " (:site (:args c)) " stopped " (pr-str (:segments data)))))
-    (ctx/end c (cond (and (= :child-failed reason) (passed-kinds child-kind)) child-kind
+    (ctx/end c (cond (and (= :child-failed reason) (steps/passed-kinds child-kind)) child-kind
                      (condition-reasons reason) :condition-failed
                      :else :nothing-possible)
           reason data)))
-
-(defn ^:async cleanup
-  "However the call ends: :home and the respawn bed go back to :was. Done, or nothing-possible with the failed child's
-  reason."
-  [c _]
-  (let [s (site c)
-        f (when (:was s) (await (run-all! c (restore-steps (:was s)))))]
-    (cond (= :continue f) :continue
-          f (ctx/end c :nothing-possible (reason-of (:ending f)) (select-keys f [:child]))
-          :else (ctx/end c :done nil))))
 
 (defn ^:async step! [c]
   (let [s (site c)]
     (if-let [why (:stopping (ctx/mem c))]
       (stop-with! c why)
       (case (:phase s)
-        :base (await (base! c s))
-        :shears (await (shears! c s))
         :strip (await (strip-step! c s))
-        :haul (await (haul! c s))
         :done (or (ctx/done c) :continue)))))
 
 (defn ^:async round [c]
   (when-not (site c)
-    (let [{:keys [at base shaft]} (:args c)]
-      (save! c (constantly {:at at :base base :shaft shaft :phase :base :segments {} :trips 0 :smelt-failed []}))))
+    (let [{:keys [at shaft]} (:args c)]
+      (save! c (constantly {:at at :shaft shaft :phase :strip :segments {} :trips 0}))))
   (await (pace/steps! c #(step! c))))
 
 ;; ------------------------------------------------------------------ the contract
@@ -426,12 +275,12 @@
 (def ways need/fetch-ways)
 
 (defn bad-args
-  "Never :bad-args: no :site or :base, and a new site without :at (the site is saved after the start)."
+  "Never :bad-args: no :site, and a new site without :at (the site is saved after the start)."
   [c]
-  (let [{:keys [at base] id :site} (:args c)]
-    (cond (not (and id base)) (contract/never :bad-args "needs :site and :base")
+  (let [{:keys [at] id :site} (:args c)]
+    (cond (not id) (contract/never :bad-args "needs :site")
           (and (nil? at) (nil? (site c))) (contract/never :bad-args "a new site needs :at")
-          :else (contract/ok :args "site, base and at given"))))
+          :else (contract/ok :args "site and at given"))))
 
 (def can-start? bad-args)
 
