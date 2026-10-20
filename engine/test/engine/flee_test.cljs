@@ -324,7 +324,7 @@
     (with-redefs [near/walk-round! (fn [c _ _ _]
                                      (swap! searches inc)
                                      (swap! (:clock s) + 1000)
-                                     (when (.endsWith (:id c) "/step") (swap! longest max (* 1000 (- (:leg-s (:args c)) (get-in (ctx/left c) [:spend :job-time])))))
+                                     (when (.endsWith (:id c) "/step/walk") (swap! longest max (* 1000 (- (get-in (ctx/frozen-call c) [:spend :job-time]) (get-in (ctx/left c) [:spend :job-time])))))
                                      (act (fake/state p) @searches)
                                      (js/Promise.resolve {:result {:status :searching :fresh false} :status "searching"
                                                           :from (:pos c) :to (:pos c)}))]
@@ -363,20 +363,6 @@
         (let [{:keys [longest-ms]} (await (settings/with-settings {:jobs.survival.retreat-cornered/close-radius 4}
                                           #(searches-in-flee-leg {:entities [(zombie 7 6 {})]} {} clear-after-6)))]
           (is (>= longest-ms 4000) "a zombie at 6 is outside a close radius of 4"))))))
-
-(deftest a-leg-started-with-the-hostile-far-ends-once-it-comes-close
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [longest-ms]} (await (searches-in-flee-leg {:entities [(zombie 7 11 {})]} {:settings {:jobs.lib.danger/hostile-radius 14}} (first-search-then-clear close-in)))]
-          (is (<= longest-ms 2000) "searching from 11 blocks off, the zombie reaches the body: within a second"))))))
-
-(deftest a-leg-started-with-the-hostile-far-ends-once-the-body-is-hit
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [longest-ms]} (await (searches-in-flee-leg {:entities [(zombie 7 11 {})]} {:settings {:jobs.lib.danger/hostile-radius 14}} (first-search-then-clear hurt)))]
-          (is (<= longest-ms 2000) "a hit taken in the search bounds the leg"))))))
 
 (deftest an-armed-body-whose-search-runs-while-the-zombie-closes-in-fights
   (async done
@@ -810,14 +796,22 @@
 
 (defn scripted-go-to
   "s with a go-to that walks nowhere: each call's args go to calls and the call ends with the result
-  (script state-atom n) gives, n the count of calls so far."
+  (script state-atom n) gives, n the count of calls so far; a result with :leg true moves the body 1.5 blocks toward the
+  goal (the mobs with it) and ends as the engine ends a call whose seconds ran out."
   [s calls script]
   (let [real (get registry/jobs 'jobs.movement.go-to)
         st (fake/state (or (:raw s) (:p s)))]
     (assoc-in s [:eng :jobs 'jobs.movement.go-to]
               (assoc real :round (fn ^:async stub [c]
                                    (swap! calls conj (:args c))
-                                   (end/finish! c (script st (count @calls))))))))
+                                   (let [r (script st (count @calls))]
+                                     (if-not (:leg r)
+                                       (end/finish! c r)
+                                       (let [to (:pos (:args c))
+                                             x (nth (:pos (:self @st)) 0)]
+                                         (swap! st update-in [:self :pos] assoc 0 (+ x (* 1.5 (js/Math.sign (- (:x to) x)))))
+                                         (swap! st update :entities (fn [es] (mapv #(update-in % [:pos 0] + (* 1.5 (js/Math.sign (- (:x to) x)))) es)))
+                                         (ctx/end c :limit-reached {:reason :unreachable :why :search-spent :line :job-time} {:arrived false})))))))))
 
 (defn stub-go-to
   "scripted-go-to of one step: (move state-atom) runs, the hostiles vanish (so the flight ends after one step) and the
@@ -1017,7 +1011,7 @@
                 script (fn [st n]
                          (swap! (:clock s) + 10000)
                          (swap! st update :entities #(vec (take (- 8 n) %)))
-                         {:arrived false :leg (> n 1)})]
+                         {:arrived false :leg (and (> n 1) (not= west-goal (:pos (last @calls))))})]
             (await (settings/with-settings {:jobs.survival.retreat-goal/retry-s retry-s}
                      #(run-job! (scripted-go-to s calls script) 'jobs.survival.retreat {:goal west-goal})))
             (is (= west-goal (:pos (first @calls))) "the first leg, which fails, goes to the goal")

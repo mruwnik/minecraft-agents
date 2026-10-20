@@ -250,8 +250,8 @@
   [c]
   (merge {:dangers false :ways #{:walk :clear-seal} :look-round false}
          (if (hostile/hostiles? c)
-           {:spend {:job-time (hostile/chase-timeout-s)}}
-           {:doors :shut :spend {:job-time (settings/get settings ::walk-timeout-s)}})))
+           {:leg-s (hostile/chase-timeout-s)}
+           {:doors :shut :leg-s (settings/get settings ::walk-timeout-s)})))
 
 (def chase-gap-ms "How long a held body waits for a mob to come before it looks again." 200)
 

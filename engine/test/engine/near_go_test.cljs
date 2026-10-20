@@ -3,6 +3,8 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.fake :as fake]
+            [engine.registry :as registry]
             [engine.go-to-escalate-support :as e :refer [in-pit pit stone-pit]]
             [engine.test-util :refer [floor]]
             [jobs.lib.near :as near]))
@@ -57,20 +59,36 @@
          (is (= :there @out) "no blocks and no pickaxe: the stair is dug by hand")
          (done))))))
 
+(defn leg-cut-go-to
+  "A go-to that moves the body to x, then ends as the engine ends a call whose :spend :job-time ran out."
+  [x]
+  (assoc (get registry/jobs 'jobs.movement.go-to)
+         :round (fn ^:async cut-round [c]
+                  (fake/swap-self! (:primitives c) assoc :pos [x 64 0])
+                  (ctx/end c :limit-reached {:reason :unreachable :why :search-spent :line :job-time} {:arrived false}))))
+
+(defn ^:async leg-probe [x]
+  (let [{:keys [eng p]} (e/setup {:blocks (floor -2 -3 60 3)})
+        firsts (atom [])
+        job {:round (fn ^:async leg-round [c]
+                      (swap! firsts conj (await (near/go-near! c {:x 35 :y 64 :z 0} 0 {:leg-s 1 :ways #{:walk :clear-seal}})))
+                      (ctx/end c :done nil))}
+        eng (update eng :jobs assoc 'leg-probe job 'jobs.movement.go-to (leg-cut-go-to x))]
+    (core/submit! eng '(leg-probe) {})
+    (await (e/tick-out! eng 1000))
+    @firsts))
+
 (deftest a-leg-that-got-nearer-is-partial
   (async done
     ((fn ^:async t []
-       (let [{:keys [eng p]} (e/setup {:blocks (floor -2 -3 60 3)})
-             firsts (atom [])
-             job {:round (fn ^:async leg-round [c]
-                           (swap! firsts conj (await (near/go-near! c {:x 35 :y 64 :z 0} 0 {:spend {:job-time 1} :ways #{:walk :clear-seal}})))
-                           (ctx/end c :done nil))}
-             eng (assoc eng :jobs (assoc (:jobs eng) 'leg-probe job))]
-         (core/submit! eng '(leg-probe) {})
-         (await (e/tick-out! eng 1000))
-         (is (= [:partial] @firsts) "a leg is partial, not blocked")
-         (is (< 1 (first (e/feet p)) 35) "walked a leg toward the target")
-         (done))))))
+       (is (= [:partial] (await (leg-probe 20))) "a leg is partial, not blocked")
+       (done)))))
+
+(deftest a-leg-that-got-no-nearer-is-blocked
+  (async done
+    ((fn ^:async t []
+       (is (= [:blocked] (await (leg-probe 0.5))))
+       (done)))))
 
 (deftest go-near-takes-no-drop-it-cannot-climb-back
   (async done

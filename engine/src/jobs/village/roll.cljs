@@ -170,11 +170,11 @@
 (defn ^:async walk!
   "One go-to leg toward the villager at pos. :again, :continue or the stop."
   [c pos]
-  (let [r (await (child/call-walk* c :walk
-                                  {:pos pos :range (reach) :spend {:job-time (leg-s)} :ways #{:walk :clear-seal}}))]
+  (let [r (await (child/call-chase* c :walk
+                                   {:pos pos :range (reach) :leg-s (leg-s) :walk {:ways #{:walk :clear-seal}}}))]
     (cond
       (= :continue r) :continue
-      (let [res (:data r)] (or (:arrived res) (:leg res))) :again
+      (let [res (:data r)] (or (:arrived res) (:nearer res))) :again
       :else (stop! c :unreachable))))
 
 (defn ^:async approach!

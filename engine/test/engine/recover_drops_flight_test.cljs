@@ -71,13 +71,14 @@
           (is (= {:decision :abandoned :reason :danger} (select-keys (recovered eng) [:decision :reason]))))))))
 
 (defn on-first-leg!
-  "Cut the first walk step short (2 s, a few blocks) and run (f) as it is taken."
-  [p f]
+  "Cut the first walk step short (2 s, a few blocks, the clock moved on by them so the leg's seconds are used) and run (f) as it is taken."
+  [p clock f]
   (let [n (atom 0)]
     (.override (.-world p) "steer"
                (fn [token args impl]
                  (when (= 1 (swap! n inc))
                    (set! (.-timeoutS args) 2)
+                   (swap! clock + 2000)
                    (f))
                  (impl token args)))))
 
@@ -89,7 +90,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [zombie {:id 8 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
-              {:keys [eng p seen]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
+              {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds})
           (core/submit! eng dear-zombie {})
           (await (run-until-empty eng 5))
@@ -116,9 +117,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [zombie {:id 8 :name "zombie" :kind "hostile" :pos {:x 20 :y 64 :z -40}}
-              {:keys [eng p seen]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
+              {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds})
-          (on-first-leg! p #(place-entity! p 8 (update (fake/body-pos @(fake/state p)) 0 + 3)))
+          (on-first-leg! p clock #(place-entity! p 8 (update (fake/body-pos @(fake/state p)) 0 + 3)))
           (core/submit! eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/leg-s 1} :danger-overrides {"zombie" 1000}}) {})
           (await (run-until-empty eng 30))
           (is (true? (:retry (last (emitted seen :recover-drops.decided)))) "the trip turned dear: it backs off")
@@ -129,9 +130,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [zombie {:id 8 :name "zombie" :kind "hostile" :pos {:x 20 :y 64 :z 9}}
-              {:keys [eng p seen]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
+              {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds})
-          (on-first-leg! p (fn []
+          (on-first-leg! p clock (fn []
                              (swap! (fake/state p) assoc-in [:self :health] 2)
                              (mem/write! (:store eng) :hurt {:amount 18 :health 2 :attacker {:id 8 :name "zombie"}} {:cap 50 :ttl 60000})))
           (core/submit! eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/leg-s 1}}) {})

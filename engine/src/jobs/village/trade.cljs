@@ -266,11 +266,12 @@
       (nil? e) (give-up! c :gone)
       (in-reach? c e) (await (trade! c))
       :else
-      (let [r (await (child/call-walk* c :walk
-                                      {:pos (zipmap [:x :y :z] (cell-of e)) :see true :range (reach) :spend {:job-time (chase-timeout-s)} :ways #{:walk :clear-seal}}))]
+      (let [r (await (child/call-chase* c :walk
+                                       {:pos (zipmap [:x :y :z] (cell-of e)) :entity (.-id e) :range (reach) :leg-s (chase-timeout-s)
+                                        :walk {:see true :ways #{:walk :clear-seal}}}))]
         (cond
           (= :continue r) :continue
-          (let [res (:data r)] (or (:arrived res) (:leg res))) :again
+          (let [res (:data r)] (or (:arrived res) (:nearer res))) :again
           :else (give-up! c :unreachable))))))
 
 (defn ^:async round

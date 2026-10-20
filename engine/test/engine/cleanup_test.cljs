@@ -804,7 +804,7 @@
     (gave-up :stuck) false false
     (gave-up :no-progress) false false
     (gave-up :moved-while-searching) false false
-    (gave-up :leg-search-spent) false false
+    (gave-up :search-spent) false false
     {:status :stopped :reason :unreachable :leg true} false false
     {:status :done :arrived true} false false))
 
@@ -836,7 +836,7 @@
       (fn ^:async t []
         (let [{:keys [calls]} (await (walk-run {:status :stopped :arrived false :reason :unreachable :why :door-stuck}))]
           (is (seq calls))
-          (is (every? #(= {:pos [9 64 0] :range 3 :ways #{:walk}} (select-keys % [:pos :range :ways])) calls)))))))
+          (is (every? #(= {:pos {:x 9 :y 64 :z 0} :range 3 :ways #{:walk}} (select-keys % [:pos :range :ways])) calls)))))))
 
 (deftest a-permanent-go-to-failure-holds-the-cell-unreachable-after-one-walk
   (async done

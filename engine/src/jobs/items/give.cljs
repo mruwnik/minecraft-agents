@@ -150,17 +150,17 @@
   :continue)
 
 (defn ^:async walk!
-  "Walk to pos within the reach setting (a go-to child, a leg of walk-leg-s so a moving player is aimed at again). An arrival or a
+  "Walk to pos within the reach setting (a chase leg of walk-leg-s so a moving player is aimed at again). An arrival or a
   leg resets the blocked count; any other end counts, and the third in a row ends the job. An arrival that leaves the
   body not u/within? reach counts in :out-of-range (reset when within), the third in a row ends as out-of-range.
   :again, :continue (go-to waits) or :done."
   [c pos]
-  (let [r (await (child/call-walk* c :walk {:pos pos :range (reach) :doors :shut :spend {:job-time (walk-leg-s) :tries 1}
-                                                               :ways #{:walk :clear-seal}}))
+  (let [r (await (child/call-chase* c :walk {:pos pos :range (reach) :leg-s (walk-leg-s)
+                                                               :walk {:doors :shut :ways #{:walk :clear-seal}}}))
         res (when-not (= :continue r) (:data r))]
     (if (= :continue r)
       :continue
-      (let [blocked (if (or (:arrived res) (:leg res)) 0 (inc (:blocked (ctx/mem c) 0)))
+      (let [blocked (if (or (:arrived res) (:nearer res)) 0 (inc (:blocked (ctx/mem c) 0)))
             out (if (or (> blocked 0) (u/within? (u/self-pos c) pos (reach))) 0 (inc (:out-of-range (ctx/mem c) 0)))]
         (ctx/update-mem! c assoc :blocked blocked :out-of-range out)
         (cond

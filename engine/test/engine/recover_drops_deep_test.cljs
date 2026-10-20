@@ -106,7 +106,7 @@
 (defn walk-script
   "A deep-ground run whose first walks to the pile are scripted (later ones and the stair's are real): walk n moves the
   body to (get at n) and ends as a leg that did not arrive."
-  ([at pile-at] (walk-script at pile-at #(end/finish! % {:arrived false :leg true})))
+  ([at pile-at] (walk-script at pile-at #(ctx/end % :limit-reached {:reason :unreachable :why :search-spent :line :job-time} {:arrived false})))
   ([at pile-at finish!]
   (fn ^:async t []
     (let [calls (atom [])

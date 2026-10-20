@@ -121,7 +121,6 @@
               (cond
                 (= :continue e) :partial
                 (and (= :done (:kind e)) (:arrived (:data e))) :there
-                (and (= :done (:kind e)) (:leg (:data e))) :partial
                 :else (do (ctx/update-mem! c assoc :walk-why (some-> (:why (:data e)) name))
                           :blocked))))))
 

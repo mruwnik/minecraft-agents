@@ -83,6 +83,12 @@
   [c slot args]
   (waits/waiting-out c (await (ctx/call c slot 'jobs.movement.go-to args))))
 
+(defn ^:async call-chase*
+  "A jobs.movement.chase child in slot (one leg toward a moving thing; args as chase's, the go-to call under :walk):
+  :continue while it waits, else its ending, a leg {:leg true} included."
+  [c slot args]
+  (waits/waiting-out c (await (ctx/call c slot 'jobs.movement.chase args))))
+
 (defn ^:async run-with
   "run!* with the child call fn. A child that waits on a check (child-wait) gives the round back at once."
   [call c slot job args max-calls]

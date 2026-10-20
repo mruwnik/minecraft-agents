@@ -7,9 +7,7 @@
     longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
   - Setting go-to.tuning/goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
   - Setting jobs.lib.walk.world/dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). A
-    :spend :job-time of n walks one leg of at most n s and, when it got more than 1 block nearer, ends limit-reached
-    {:reason :leg :line :job-time}, data {:arrived false :leg true}, for a caller chasing a moving target to call again; a
-    leg that got no nearer goes on as any round, and a search that goes on past n s gives up :leg-search-spent.
+    Each steer is bounded by the call's :spend :job-time left (a caller's short leg), and the engine cuts the call at that limit; a search that goes on past it gives up :search-spent (the engine only notices at an act, and a search makes none).
   - A call starts afresh from the world: its walk counters are per call (the cut count carries over only a cut of this run's call to the same goal), and a saved escalation is dropped when the body
     is already there (a cut call's memory is a hint).
   - A walk that gets more than 1 block nearer is progress. Three walks in a row without progress give up (or escalate, below), and so
@@ -144,7 +142,7 @@
     {:doors doors :explore (not closed?)
      :dangers (wworld/dangers?)
      :dark (wworld/dark?)
-     :timeout-s (or (:leg-s (:args c)) near/walk-timeout-s)
+     :timeout-s (min near/walk-timeout-s (max 0.1 (get-in (ctx/left c) [:spend :job-time] ##Inf)))
      :one-way (when-not closed? :open)
      :shut-also (shut-foreign c)
      :budget wsearch/round-budget
@@ -274,24 +272,10 @@
           (ctx/update-mem! c assoc :wall-walked true))
         true))))
 
-(defn leg-alert?
-  "Whether :leg-alert-within is set and a close-range attacker is within it, or the body lost health since start-attempt!."
+(defn search-spent?
+  "Whether the call's :spend :job-time is gone."
   [c]
-  (let [{:keys [leg-alert-within leg-alert-s]} (:args c)
-        p (:primitives c)]
-    (boolean (and leg-alert-within leg-alert-s
-                  (or (< (.-health (.self p)) (:leg-hp (ctx/mem c) js/Infinity))
-                      (some #(not (or (combat/ranged? %) (combat/enderman? %)))
-                            (danger-q/known-hostiles p leg-alert-within {:ranged-radius 0})))))))
-
-(defn leg-search-spent?
-  "Whether a call with :leg-s has used its seconds: its :spend :job-time is gone (the engine only notices at the next
-  act or round, and a search makes none), or, while leg-alert? holds, :leg-alert-s of it."
-  [c]
-  (let [{:keys [leg-s leg-alert-s]} (:args c)
-        left (get-in (ctx/left c) [:spend :job-time])]
-    (boolean (and leg-s left
-                  (or (<= left 0) (and (leg-alert? c) (>= (- leg-s left) leg-alert-s)))))))
+  (some-> (get-in (ctx/left c) [:spend :job-time]) (<= 0)))
 
 (defn retrying!
   "A fruitless round that plans again: an info go-to.retrying says why (the result's reason, which try), so the gap before the
@@ -379,9 +363,6 @@
           (= "stair" status)
           (do (ctx/update-mem! c assoc :stair-tried true :escalate-now true) :again)
 
-          (and (:leg-s (:args c)) (< left (dec d)))
-          (end/finish! c {:arrived false :leg true})
-
           (and frontier (tour-spent? c))
           (end/give-up! c pos {:status :no-path :reason :explore-spent}
                         (update (tour c) :explored js/Math.round))
@@ -414,8 +395,8 @@
                                                     {:surface-air (surface-air) :restarts (wet-restarts)})))
           :again
 
-          (and (= "searching" status) (leg-search-spent? c))
-          (end/give-up! c pos {:status :no-path :reason :leg-search-spent})
+          (and (= "searching" status) (search-spent? c))
+          (end/give-up! c pos {:status :no-path :reason :search-spent})
 
           (= "searching" status)
           (let [n (cond-> (:searching (ctx/mem c) 0) (:fresh walked) inc)]

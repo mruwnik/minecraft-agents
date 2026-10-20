@@ -50,7 +50,7 @@
    ::glance-reach {:default 3 :doc "Blocks along a direction to the feet cell a glance looks at." :spec (a/int-in 0 nil)}
    ::glance-memory {:default 24 :doc "Most glanced cells a flight remembers." :spec (a/int-in 0 nil)}
    ::cover-gap {:default 5 :doc "Blocks within which a melee chaser keeps a low body from taking cover where it stands." :spec (a/num-in 0 nil)}
-   ::close-radius {:default 8 :doc "Blocks within which a hostile that attacks at close range (a creeper too, not a ranged mob or an enderman) bounds a flee step to close-leg-s, at its start and again during its search." :spec (a/num-in 0 nil)}
+   ::close-radius {:default 8 :doc "Blocks within which a hostile that attacks at close range (a creeper too, not a ranged mob or an enderman) bounds a flee step to close-leg-s, decided at the step's start." :spec (a/num-in 0 nil)}
    ::close-leg-s {:default 1 :doc "Seconds a flee step may search or walk while a close-range hostile is within close-radius, or the body was hurt: a body that stands searching there is hit for the whole leg." :spec (a/num-in 0 nil)}
    ::hurt-window-s {:default 5 :doc "Seconds after the body lost health in which a flee step is bounded to close-leg-s, even with no hostile seen in reach (an unseen attacker hits as hard)." :spec (a/num-in 0 nil)}
    ::fire-hits {:default 1 :doc "Hits by a ranged mob (the damage's attacker, or an arrow) within hurt-window-s that put a cornered body under fire: cover comes before any fight, and a shooter it has not seen is never weighed as beaten. 0: never." :spec (a/int-in 0 nil)}
@@ -240,11 +240,12 @@
   (let [from (u/self-pos c)
         t0 (ctx/now c)
         health0 (.-health (.self (:primitives c)))
-        r (await (ctx/call c slot 'jobs.movement.go-to {:pos target :range range :ways #{:walk :clear-seal}
-                                                              :settings (cond-> {:jobs.movement.go-to.tuning/look-round false}
-                                                                          y-margin (assoc :jobs.lib.walk.world/y-margin y-margin)) :spend {:job-time leg-s :tries 1}
-                                                              :leg-alert-within (close-radius) :leg-alert-s (close-leg-s)
-                                                              :floor {:health 1}}))
+        r (await (ctx/call c slot 'jobs.movement.chase
+                           {:pos target :range range :leg-s leg-s
+                            :walk {:ways #{:walk :clear-seal}
+                                   :settings (cond-> {:jobs.movement.go-to.tuning/look-round false}
+                                               y-margin (assoc :jobs.lib.walk.world/y-margin y-margin))
+                                   :floor {:health 1}}}))
         res (when (contract/ending? r) (:data r))
         _ (when (= :goal-not-standable (result/why r)) (ctx/update-mem! c update :refused (fnil conj #{}) (mapv target [:x :y :z])))
         s (/ (- (ctx/now c) t0) 1000)
@@ -252,7 +253,7 @@
         _ (ctx/update-mem! c assoc :leg-timed-out (and (= :limit-reached (:kind r)) (>= (.-health (.self (:primitives c))) health0)))]
     (ctx/emit! c :retreat.step-speed :debug {:slot slot :blocks (/ (js/Math.round (* 10 d)) 10) :seconds (/ (js/Math.round (* 10 s)) 10)
                                              :bps (when (pos? s) (/ (js/Math.round (* 10 (/ d s))) 10))})
-    (boolean (or (:arrived res) (:leg res))))))
+    (boolean (or (:arrived res) (:nearer res))))))
 
 (defn step! [c slot target range] (leg-step! c slot target range (flight-timeout-s)))
 

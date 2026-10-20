@@ -150,7 +150,7 @@
     {:floor {:health 1}} {:floor {:health 6}} {:min-health 6}
     {} {:floor {:health 6}} {}
     {} {:floor {:health 15}} {:min-health 15}
-    {:spend {:health 2 :job-time 4}} {:spend {:health 1 :job-time 0}} {:max-damage 2 :leg-s 4}))
+    {:spend {:health 2 :job-time 4}} {:spend {:health 1 :job-time 0}} {:max-damage 2}))
 
 (deftest go-to-endings
   (async done

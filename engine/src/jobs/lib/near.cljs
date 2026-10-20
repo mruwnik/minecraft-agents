@@ -228,13 +228,13 @@
   "Walk until the body's cell is within range cells of pos's cell (u/within?), as a jobs.movement.go-to child in slot :walk,
   so a body shut in escalates (pillar, stair, dig a way out and put back). Resolves to :there, :partial (the child waits on the world: yield and call
   again; also a :spend :job-time leg that got nearer) or :blocked (it gave up or declined). opts: :doors (jobs.lib.pass policy, default :shut; a job that works gates itself passes :never), :dangers (false: plan
-  straight past known dangers, the setting jobs.lib.walk.world/dangers for this walk), :tolls (cells the plan prices), :ways (go-to's), :spend (go-to's; {:job-time s} is a leg of at most that many s, :partial when it got nearer, for a
-  caller chasing something that moves; default one 60 s steer), :look-round (default true; false for a caller that keeps moving, the go-to.tuning setting for this walk),
+  straight past known dangers, the setting jobs.lib.walk.world/dangers for this walk), :tolls (cells the plan prices), :ways (go-to's), :spend (go-to's), :leg-s (a jobs.movement.chase leg of at most that many s, :partial when it ended as a leg, for a
+  caller chasing something that moves; default one 60 s go-to steer), :look-round (default true; false for a caller that keeps moving, the go-to.tuning setting for this walk),
   :one-way (go-to's arg, default :closed here: no drop the body cannot climb back; not the :one-way key of a give-up
   result), :see (go-to's: in range only where the eye sees the block at pos), always one try (the job counts its own
   tries), :checks (go-to's call key), :y-margin (the walk.world setting for this walk); :ignore-zones? comes from the job's args."
   ([c pos range] (go-near! c pos range nil))
-  ([c pos range {:keys [doors dangers tolls ways spend look-round one-way see checks y-margin] :or {doors :shut dangers true look-round true one-way :closed}}]
+  ([c pos range {:keys [doors dangers tolls ways spend leg-s look-round one-way see checks y-margin] :or {doors :shut dangers true look-round true one-way :closed}}]
    (let [cell (cell-of pos)
          walk-settings (cond-> {} (false? dangers) (assoc :jobs.lib.walk.world/dangers false)
                                   (false? look-round) (assoc :jobs.movement.go-to.tuning/look-round false)
@@ -243,15 +243,17 @@
        (nil? cell) (do (ctx/emit! c :refused :warn {:reason :bad-pos :text (:message (places/parse-pos pos))})
                        :blocked)
        (and (u/within? (u/self-pos c) cell range) (or (not see) (aim/body-sees? c [(:x cell) (:y cell) (:z cell)]))) :there
-       :else (let [e (await (child/call-walk* c :walk
-                                              (cond-> {:pos cell :range range :doors doors :tolls tolls
-                                                       :one-way one-way :see (boolean see) :spend (merge {:tries 1} spend) :ignore-zones? (boolean (:ignore-zones? (:args c)))}
-                                                checks (assoc :checks checks)
-                                                (seq walk-settings) (assoc :settings walk-settings)
-                                                ways (assoc :ways ways))))]
+       :else (let [walk (cond-> {:pos cell :range range :doors doors :tolls tolls
+                                 :one-way one-way :see (boolean see) :spend (merge {:tries 1} spend) :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+                          checks (assoc :checks checks)
+                          (seq walk-settings) (assoc :settings walk-settings)
+                          ways (assoc :ways ways))
+                   e (await (if leg-s
+                              (child/call-chase* c :walk {:pos cell :range range :leg-s leg-s :walk (dissoc walk :pos :range :spend)})
+                              (child/call-walk* c :walk walk)))]
                (if (= :continue e)
                  :partial
                  (do (ctx/update-mem! c assoc :near-walk e)
                      (cond (:arrived (:data e)) :there
-                           (:leg (:data e)) :partial
+                           (:nearer (:data e)) :partial
                            :else :blocked))))))))

@@ -286,12 +286,11 @@
     (await (no-way? c cell))
     (do (ctx/update-mem! c assoc-in [:held cell] {:reason :no-way}) :again)
     :else
-    (let [e (await (child/call-walk* c :walk {:pos cell :range (walk-range) :ways #{:walk}
-                                              :ignore-zones? (boolean (:ignore-zones? (:args c)))
-                                              :spend {:job-time (leg-s)}}))
+    (let [e (await (child/call-chase* c :walk {:pos cell :range (walk-range) :leg-s (leg-s)
+                                               :walk {:ways #{:walk} :ignore-zones? (boolean (:ignore-zones? (:args c)))}}))
           status (if (= :done (:kind e)) :done :stopped)]
       (cond
-        (:leg (:data e)) nil
+        (:nearer (:data e)) nil
         (result/permanent-walk? e)
         (ctx/update-mem! c assoc-in [:held cell] {:reason :unreachable :walk status})
         (or (= :continue e) (= :stopped status) (> (distance (eye-of c) (centre cell)) (dig-reach)))

@@ -134,7 +134,7 @@
       (= :done (:kind e)) :again
       :else (assoc-in e [:data :got] (got c)))))
 
-(defn arrived? "A go-to ending :done can still be short of the bank ({:arrived false :leg true})." [r]
+(defn arrived? "A go-to ending :done is an arrival." [r]
   (and (= :done (:kind r)) (boolean (:arrived (:data r)))))
 
 (defn ^:async walk! [c {:keys [land]}]

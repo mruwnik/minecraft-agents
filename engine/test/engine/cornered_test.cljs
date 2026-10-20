@@ -1047,7 +1047,7 @@
         (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :blocks {(key-of 3 64 1) "water"}
                                       :entities [(enderman 2.5 64 0.5)]})]
           (.override (.-world p) "steer"
-                     (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
+                     (fn [token a impl] (-> (impl token a) (.then (fn [r] (fake/swap-self! p assoc :pos [3.5 64 1.5]) (swap! (fake/state p) assoc :entities []) r)))))
           (core/submit! eng retreat {})
           (await (core/tick! eng))
           (is (= {:x 3 :y 64 :z 1} (first (tu/walked-to eng))) "walks to the water, not away")
