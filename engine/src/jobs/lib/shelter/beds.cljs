@@ -18,7 +18,7 @@
   {::seen-bed-radius {:default 6 :spec (a/int-in 1 nil)
                       :doc "Blocks (square) within which a bed in the body's room counts as seen."}
    ::default-bed-radius {:default 48 :spec (a/num-in 0 nil)
-                         :doc "Blocks within which a remembered bed may be used, ."}
+                         :doc "Blocks within which a remembered bed may be used."}
    ::urgent-bed-radius {:default 128 :spec (a/num-in 0 nil)
                         :doc "The bed radius once the body is overdue for sleep or displaced."}
    ::max-days-awake {:default 3 :spec (a/num-in 0 nil)

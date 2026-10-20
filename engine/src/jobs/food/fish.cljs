@@ -17,7 +17,7 @@
 
 (def doc
   "Carry :count fish, caught with a fishing rod from a bank beside seen water.
-  The bank is a land cell with seen water (two deep) beside it at the level below, within the bank-radius setting (24) of the body (:pos names the water cell
+  The bank is a land cell with seen water (two deep) beside it at the level below, within the bank-radius setting (48) of the body (:pos names the water cell
   to cast at instead). The body walks there (go-to), holds the rod and casts: one cast waits for a bite up to the cast-s setting (45), then reels.
   A body with no rod gets one first (jobs.lib.need, unless :fetch is false).
   Ends with the data {:got n :text}, info fish.caught per fish, and the ending:
@@ -39,7 +39,7 @@
 (a/defargs settings
   {::cast-s {:default 45 :doc "Seconds one cast waits for a bite." :spec (a/num-in 1 nil)}
    ::max-misses {:default 8 :doc "Casts in a row without a catch before the job gives up :no-bite." :spec (a/int-in 1 nil)}
-   ::bank-radius {:default 24 :doc "Blocks from the body within which a bank beside seen water is looked for." :spec (a/num-in 1 nil)}
+   ::bank-radius {:default 48 :doc "Blocks from the body within which a bank beside seen water is looked for." :spec (a/num-in 1 nil)}
    ::fish-s {:default 30 :doc "Seconds one fish is quoted to take." :spec (a/num-in 1 nil)}
    ::job-time-s {:default 600 :doc "Seconds from the first round before fishing gives up." :spec (a/num-in 1 nil)}})
 (defn cast-s [] (settings/get settings ::cast-s))

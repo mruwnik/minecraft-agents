@@ -37,7 +37,7 @@
     done, with the stop as the data reason; :least :all is :count.
   - :impossible :unknown-mob (no breeding food is known for :mob, checked at the start); bees at night or in rain
     wait :bees-indoors before every round.
-  - :condition-failed :no-food (none carried and none fetched, nothing fed yet; a listed call with :fetch false waits for food; a failed fetch ends with the fetch's own ending, reason :need, its cause naming the food), :too-few (fewer than two adults stand near before the first feeding, or no candidate is left),
+  - :condition-failed :no-food (none carried and none fetched, nothing fed yet; a listed call with :fetch false waits for food; a failed fetch ends with the fetch's own ending, reason :no-food, its cause naming the food), :too-few (fewer than two adults stand near before the first feeding, or no candidate is left),
     :refused (some refused, none ate) or :no-zones (the zone rules refused the adults).
   - :nothing-possible :food-out (the food ran out below :least fed), :unreachable (one was given up as unreachable)
     or :unpaired (an odd number fed), when no candidate is left. The same after three fruitless animals in a row.
