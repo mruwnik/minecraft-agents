@@ -114,10 +114,11 @@
             {} [:use :ways :spend :floor :deadline :least])))
 
 (defn with-call
-  "own (gen-args) and gen-call's keys, from a second rng of seed so the job's own args and world stay as they were."
+  "own (gen-args) and gen-call's keys, from a second rng of seed so the job's own args and world stay as they were. A call
+  key replaces an own arg of the same name (:ways), and so its wrong-typed mark."
   [own seed entry]
   (let [call (gen-call (rng (+ seed 104729)) entry)]
-    (with-meta (merge own call) {:wrong-typed (into (set (:wrong-typed (meta own))) (:wrong-typed (meta call)))})))
+    (with-meta (merge own call) {:wrong-typed (into (set (remove (set (keys call)) (:wrong-typed (meta own)))) (:wrong-typed (meta call)))})))
 
 (def ore-ish ["oak_log" "stone" "dirt" "wheat" "water" "grass_block" "iron_ore" "chest" "oak_leaves" "farmland" "sand"])
 
@@ -409,6 +410,15 @@
     (is (every? #(some % calls) [:use :ways :spend :floor :deadline :least]))
     (is (some #(seq (:wrong-typed (meta %))) calls))
     (is (not-any? :ways (map #(gen-call (rng %) {}) (range 100))) "no :ways for a job without ways")))
+
+(deftest a-call-key-replaces-the-wrong-mark-of-an-own-arg
+  (let [own (with-meta {:ways :bad :x 1} {:wrong-typed #{:ways :x}})
+        entry {:ways [:a :b]}
+        valid-ways? (fn [seed] (let [c (gen-call (rng (+ seed 104729)) entry)] (and (contains? c :ways) (not (contains? (:wrong-typed (meta c)) :ways)))))
+        seed (first (filter valid-ways? (range 200)))
+        args (with-call own seed entry)]
+    (is (some? seed))
+    (is (= #{:x} (:wrong-typed (meta args))) "the replaced :ways is valid now; the own :x stays marked")))
 
 (deftest case-seeds-do-not-depend-on-the-job-filter
   (let [all (job-cases {:n 3 :base 1})
