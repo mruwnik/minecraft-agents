@@ -107,7 +107,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [plan {:id "hut" :metadata {:by "Other"} :parts [{:id "p" :box [[0 60 -5] [8 70 5]] :want "air"}]}
-              {:keys [eng p]} (setup {:entities [(cart 50 [2 64 0])]} (ew/of-data {"hut" plan} {} []))
+              {:keys [eng p]} (setup {:entities [(cart 50 [2.5 64 0.5])]} (ew/of-data {"hut" plan} {} []))
               result (await (child-outcome eng job {:id 50} 12))]
           (is (= [:stopped :refused ["hut"] 0] ((juxt :status :reason :plans :collected) result)))
           (is (= #{50} (cart-ids p))))))))

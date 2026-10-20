@@ -19,6 +19,11 @@
 
 (defn cell [{:keys [x y z]}] [x y z])
 
+(defn block-cell
+  "The block cell [x y z] holding pos ({:x :y :z}, floats ok), the key the rules and footprints use."
+  [{:keys [x y z]}]
+  (mapv #(js/Math.floor %) [x y z]))
+
 (defn own-plans
   "The ids of the plans this body made (plan :metadata :by names it)."
   [c]
@@ -109,7 +114,7 @@
 (defn may-dig?
   "The rules' dig verdict for pos ({:x :y :z}) over input in."
   [in pos]
-  (rules/may-dig? (assoc in :cell (cell pos))))
+  (rules/may-dig? (assoc in :cell (block-cell pos))))
 
 (defn may?
   "Whether action (:dig :place :sow :harvest :take :put) at pos ({:x :y :z} or [x y z]) is permitted, over a ctx
@@ -119,7 +124,7 @@
   Returns {:ok true :hazards [..]} or {:ok false :reason kw ...detail}."
   [c-or-in action pos]
   (let [in (if (:primitives c-or-in) (rules-input c-or-in) c-or-in)
-        in (assoc in :cell (if (vector? pos) pos (cell pos)))]
+        in (assoc in :cell (if (vector? pos) pos (block-cell pos)))]
     (case action
       :dig (rules/may-dig? in)
       :place (rules/may-place? in)
@@ -215,7 +220,7 @@
   builds; the rest of its own zone may be dug (and refilled)."
   [in pos]
   (when (:spare-own? in)
-    (let [c (cell pos)
+    (let [c (block-cell pos)
           plan (get (:footprints in) c)]
       (when (and plan (contains? (:own-plans in) plan))
         {:ok false :reason :footprint :plan plan :own true :cell c}))))
