@@ -16,6 +16,22 @@
     (is (= ["--agent" "B" "--world" "w" "--scenario" "/tmp/s.edn" "--fresh"]
            (vec (drop (inc script) argv))))))
 
+(deftest a-body-starts-from-the-snapshot-only-when-it-is-not-older-than-the-bundle
+  (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "snap-argv-"))
+        blob (path/join dir "b.blob")
+        bundle (path/join dir "b.cjs")
+        argv #js ["--max-old-space-size=160" "out/body-release.cjs" "--agent" "B"]
+        launch #(vec (r/snapshot-argv argv blob bundle))]
+    (fs/writeFileSync bundle "x")
+    (is (= (vec argv) (launch)) "no blob: the plain launch")
+    (fs/writeFileSync blob "x")
+    (fs/utimesSync bundle 100 100)
+    (fs/utimesSync blob 200 200)
+    (is (= ["--max-old-space-size=160" "--snapshot-blob" blob "out/body-release.cjs" "--agent" "B"] (launch)))
+    (fs/utimesSync blob 50 50)
+    (is (= (vec argv) (launch)) "a blob older than the bundle is ignored")
+    (fs/rmSync dir #js {:recursive true :force true})))
+
 (deftest a-restoring-launch-keeps-engine-edn-by-leaving-out-fresh
   (is (not-any? #{"--fresh"} (r/body-argv {:body "B" :world "w"} "/tmp/s.edn" true))))
 
