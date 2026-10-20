@@ -3,6 +3,7 @@
 ;; Stone mass x 2..30, z 8..24, y 0..6; body in a 1x2 cell at [16 0 16] facing east, stone pickaxe.
 {:defaults
  {:tags [:mine :jobs :triggers] :time :any
+  :register [{:trigger :ore-seen}]
   :plot {:height 12}
   :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
   :body {:at [16.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4]]}}
