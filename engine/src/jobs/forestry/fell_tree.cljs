@@ -359,7 +359,8 @@
       (and (not chosen) (seq (:unreachable (ctx/mem c))))
       (let [why (:unreachable-why (ctx/mem c))
             data (cond-> {:unreachable (count (:unreachable (ctx/mem c))) :columns (vec (:unreachable (ctx/mem c)))} why (assoc :why why))]
-        (ctx/end c :nothing-possible :tree-unreachable data))
+        (do (doseq [col (:columns data)] (ctx/remember! c trees/unreachable-kind {:column col} trees/unreachable-policy))
+            (ctx/end c :nothing-possible :tree-unreachable data)))
 
       (not chosen) (ctx/end c :condition-failed (no-tree-cause c) nil)
 

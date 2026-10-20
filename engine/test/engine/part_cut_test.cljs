@@ -95,6 +95,11 @@
     (is (false? (holds pct/part-cut-tree blocks [] nil (zone "Someone"))) "refused up front, so no walk and no refire")
     (is (true? (holds pct/part-cut-tree blocks [] nil (zone self))) "own zone")))
 
+(deftest the-part-cut-tree-trigger-leaves-a-column-fell-tree-gave-up-on
+  (let [blocks (merge (fm/ground [[6 0]]) (part-cut 6))]
+    (is (false? (holds pct/part-cut-tree blocks [[trees/unreachable-kind {:column [6 0]}]])) "no refire on the failed column")
+    (is (true? (holds pct/part-cut-tree blocks [[trees/unreachable-kind {:column [9 9]}]])) "another column")))
+
 (deftest the-replant-owed-trigger-holds-while-a-debt-s-sapling-is-carried
   (let [debt [[:forestry/replant {:pos {:x 6 :y 64 :z 0} :species "oak"}]]]
     (is (true? (holds ro/replant-owed {} debt [sapling])))

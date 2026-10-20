@@ -163,12 +163,12 @@
 
 (defn ^:async heal-or-drop!
   "A walk whose search found no way and met the damage budget (:damage-refused): nil when a way with all but 1 hp spent
-  does not exist either (the budget is not why); else :again after going over the budget (only a call with a :floor :health
+  does not exist either, or costs no more than the budget (the budget is not why); else :again after going over the budget (only a call with a :floor :health
   of 1 or less), or {:needs-health true :heal :health :hp-cost :hp-budget}: healing is the caller's or the reflexes'."
   [c pos range]
   (let [planned (await (probe! c pos range))]
     (cond
-      (not planned) nil
+      (or (not planned) (<= planned (wworld/damage-budget c))) nil
       (await (look-at-drops! c)) :again
       :else
       (let [{:keys [min-health]} (wworld/walk-settings c)

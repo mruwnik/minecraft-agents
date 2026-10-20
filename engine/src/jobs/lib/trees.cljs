@@ -5,6 +5,7 @@
             [engine.settings :as settings]
             [clojure.string :as str]
             [engine.ctx :as ctx]
+            [engine.memory :as mem]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]))
@@ -120,6 +121,17 @@
   :forestry/replant)
 
 (def replant-policy {:cap 50 :ttl :forever})
+
+(def unreachable-kind
+  "Entries {:column [x z]} a fell-tree ending :tree-unreachable writes: the part-cut-tree trigger leaves those columns alone while they last."
+  :forestry/tree-unreachable)
+
+(def unreachable-policy {:cap 20 :ttl (* 10 60 1000)})
+
+(defn recently-unreachable
+  "The set of [x z] columns fell-tree gave up on lately, read from memory (a view or the body's)."
+  [memory]
+  (into #{} (map (comp :column :data)) (mem/entries memory unreachable-kind)))
 
 (defn debts [c]
   (mapv :data (ctx/entries c replant-kind)))
