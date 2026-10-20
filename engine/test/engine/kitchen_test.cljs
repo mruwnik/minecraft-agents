@@ -77,6 +77,15 @@
             (is (= bread (get (chest-items s) "bread" 0)) (pr-str reserve))
             (is (= left (get (inv s) "wheat" 0)) (pr-str reserve))))))))
 
+(deftest the-default-reserve-keeps-sixteen-potatoes-to-sow
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[carried baked] [[16 0] [18 2]]]
+          (let [s (await (run (list job (-> args (dissoc :reserve) (assoc :stock {"baked_potato" 8}))) {:inventory [(item "potato" carried) (item "coal" 2)] :containers {"10,64,0" []}} 40))]
+            (is (= baked (get (chest-items s) "baked_potato" 0)) (str carried))
+            (is (= (- carried baked) (get (inv s) "potato" 0)) (str carried))))))))
+
 (deftest the-reserve-also-holds-back-wheat-in-the-chest
   (async done
     (tu/run-async done

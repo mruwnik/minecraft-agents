@@ -31,7 +31,7 @@
     shortfall. The table is the craft's: a seen one, else a carried one put down, else one fetched (the call's ways allow no fetch: none).
   - :deposit (jobs.storage.deposit) of the cooked food and bread this pass made, and wheat taken and not used, into
     :chest; food the body brought or withdrew stays carried. Bread is never withdrawn: carrying food is get-food's.
-  :reserve is never used, carried or in the chest (wheat for bait and seed: the default keeps a breeding pair's).
+  :reserve is never used, carried or in the chest (wheat for bait and seed: the default keeps a breeding pair's; 16 potatoes to sow).
   A step with nothing to do is skipped and booked {:skipped reason}: :no-food, :no-wheat, :no-table (none seen or carried, the call's :ways #{:carried}), :no-chest, :stocked,
   :nothing-to-store. A step whose child stops is booked with its summary and the stop as :reason; the pass goes on.
   Needs (can-start?, a listed job waits): a step that would run (raw food carried above the
@@ -49,8 +49,8 @@
    :foods {:doc "raw foods to smelt, in this order" :spec (a/coll-of a/item?) :default foods/raw-meals}
    :stock {:doc "{item count}: what the chest should hold of ready food and bread" :spec (a/map-of string? number?)
            :default (into {"bread" 16} (map (fn [f] [f 8])) foods/cooked-meals)}
-   :reserve {:doc "{item count}: never used, carried or in the chest (wheat for bait, seed)" :spec (a/map-of string? number?)
-             :default {"wheat" 2}}
+   :reserve {:doc "{item count}: never used, carried or in the chest (wheat for bait, seed; potatoes to sow)" :spec (a/map-of string? number?)
+             :default {"wheat" 2 "potato" 16}}
    :ignore-zones? :shared})
 
 (a/defargs settings
