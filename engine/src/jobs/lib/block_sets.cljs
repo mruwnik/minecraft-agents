@@ -26,7 +26,7 @@
 
 (def bad-floor
   "Names that are no floor to stand on: the harmful blocks and the ones a body sinks into or is held by."
-  (into harms-in-cell #{"powder_snow" "cobweb"}))
+  (into harms-in-cell #{"powder_snow" "cobweb" "tripwire"}))
 
 (def passable-pattern
   "Blocks without a collision box besides the named sets: torches, saplings, tulips, orchids and the solid.cljs walk-through list."

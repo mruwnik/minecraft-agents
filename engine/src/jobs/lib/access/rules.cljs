@@ -44,7 +44,6 @@
             [jobs.lib.access.zones :as zones]
             [jobs.lib.block-sets :as bs]))
 
-
 (def item-block
   "Items whose placed block is not the block of the same name: seeds and root crops place a crop block, and the
   wheat item is no block (nil) though a wheat crop block exists."

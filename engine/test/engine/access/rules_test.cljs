@@ -181,7 +181,10 @@
     "stone_pressure_plate" false
     "stone_button" false
     "oak_sign" false
-    "torch" false))
+    "torch" false
+    "cobweb" false
+    "powder_snow" false
+    "tripwire" false))
 
 (deftest accepts-checks-ok-and-every-hazard
   (are [v accepted expected] (= expected (rules/accepts? v accepted))
