@@ -5,7 +5,7 @@
 ;; Tree: 10 logs at x 16, z 16 (y 0..9), persistent oak leaves round the top and two leaves beside the trunk at y 6 and 7.
 ;; The body carries no blocks unless a case says; the top logs are out of reach from the ground, so every felling pillars.
 ;; A same-species log wall touching the trunk in another owner's zone is left standing.
-;; Should-succeed: whole tree felled with nothing carried but an axe; harvest-wood replants on the ground; the axe comes from a chest;
+;; Should-succeed: whole tree felled with nothing carried but an axe; harvest-wood's replant trigger plants on the ground; the axe comes from a chest;
 ;; the own plan's birch is spared and the oak felled; part-cut fell-tree fells a part-cut trunk. Should-fail: it leaves a leafless log wall.
 {:defaults
  {:tags [:forestry :fell-tree :harvest-wood :part-cut :pillar]
@@ -34,19 +34,23 @@
    :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
    :after [[:not-block [16 0 16] "oak_log"] [:not-block [16 9 16] "oak_log"] [:block [17 1 16] "oak_log"] [:block [18 3 16] "oak_log"]]}
-  {:name "harvest-wood-replants-the-sapling-on-the-ground"
+  {:name "harvest-wood-with-the-replant-trigger-plants-the-sapling-on-the-ground"
+   :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 10}]
    :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 16})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
-            {:no-event {:source :job :kind #{:stopped}} :for-s 150 :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind #{:stopped}} :for-s 150 :until {:source :job :kind :completed}}
+           {:event {:source :reflex :kind :ended :context {:reflex-id :replant-owed} :data {:kind :done}} :within-s 120}]
    :after [[:block [16 0 16] "oak_sapling"] [:item "oak_log" [:>= 9]] [:item "oak_sapling" 0]]}
-  {:name "harvest-wood-replants-a-2x2-dark-oak-trunk-with-four-saplings"
+  {:name "harvest-wood-with-the-replant-trigger-plants-a-2x2-dark-oak-trunk-with-four-saplings"
+   :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 10}]
    :blocks [[:fill [14 0 14] [18 10 18] "air"]
             [:fill [16 0 16] [17 3 17] "dark_oak_log"]
             [:fill [15 4 15] [18 5 18] "dark_oak_leaves[persistent=true]"]]
    :body {:inventory [["iron_axe" 1] ["dark_oak_sapling" 4]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 16})]]
-   :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
+   :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
+ {:event {:source :reflex :kind :ended :context {:reflex-id :replant-owed} :data {:kind :done}} :within-s 120}]
    :after [[:block [16 0 16] "dark_oak_sapling"] [:block [17 0 16] "dark_oak_sapling"]
            [:block [16 0 17] "dark_oak_sapling"] [:block [17 0 17] "dark_oak_sapling"] [:item "dark_oak_sapling" 0]]}
   {:name "no-axe-carried-one-is-fetched-from-a-seen-chest"
@@ -61,7 +65,7 @@
   {:name "fetch-false-chops-by-hand-and-fetches-no-axe"
    :blocks [[:set [14 0 20] "chest{Items:[{Slot:0b,id:\"minecraft:iron_axe\",count:1}]}"]]
    :body {:inventory []}
-   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16] :ways #{:carried}})]]
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16] :ways #{:carried :pillar}})]]
    :expect [{:event {:source :job :kind #{:completed :waiting :stopped}} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 40}]
    :after [[:item "iron_axe" 0]]
