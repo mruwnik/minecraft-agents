@@ -22,6 +22,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [jobs.gather.dig-for :as mine]
+            [jobs.gather.mine :as mine-job]
             [jobs.gather.mine.descent :as mine-descent]
             [jobs.gather.mine.end :as mine-end]
             [jobs.gather.mine.home :as mine-home]
@@ -448,6 +449,10 @@
                                              {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270} nil 300
                                              {:jobs {'jobs.movement.go-to no-walk} :before #(reset! setup %)}))]
           (is (= [:nothing-possible :not-home 1] [(:kind out) (contract/cause-key out) (:got (:data out))]) (pr-str out)))))))
+
+(deftest a-dig-of-the-start-floor-drops-the-floor-felt-at-the-start
+  (is (nil? (:start-floor (mine-job/booked {:start-floor "dirt"} {:data {:start-floor-dug true}}))))
+  (is (= "dirt" (:start-floor (mine-job/booked {:start-floor "dirt"} {:data {}})))))
 
 (deftest the-walk-home-tries-pillar-and-fill-gap-only-after-the-other-ways-fail
   (async done

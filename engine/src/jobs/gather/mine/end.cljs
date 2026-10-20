@@ -109,6 +109,7 @@
         wet-text (when (= :wet reason) (str "; " (or wet-skipped 0) " seen blocks beside water skipped, pass :wet true to dig them"))
         why (cond-> {} dig-reason (assoc :dig-reason dig-reason) (or (= :no-stone-found reason) (pos? (:steps descent 0))) (assoc :descent descent) (= :wet reason) (assoc :wet-skipped (or wet-skipped 0)) suggest (assoc :shaft-suggest suggest) (seq unreached) (assoc :unreached unreached) (seq (:holes-open m)) (assoc :holes-open (:holes-open m))
               (pos? (:steps tunnel 0)) (assoc :tunnel (-> tunnel (select-keys [:origin :heading :steps :stop :end]) (update :origin access/cell)))
+              (:start-floor-dug m) (assoc :start-floor-dug true)
               (seq (:legs m)) (assoc :legs (:legs m))
               (seq (ore-pick/picked c)) (assoc :ores (ore-pick/picked c))
               (seq left) (assoc :left (mapv (fn [[pos n]] {:pos pos :count n}) (:left (ctx/mem c))))

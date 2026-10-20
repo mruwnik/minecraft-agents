@@ -240,6 +240,7 @@
   "A walk home that did not arrive: warn mine.not-home."
   [c]
   (ctx/emit! c :mine.not-home :warn {:to (access/cell (:start (ctx/mem c))) :at (access/cell (cell-of (u/self-pos c)))
+                                     :goal (let [g (:home-goal (ctx/mem c))] (cond-> g (:cell g) (update :cell access/cell)))
                                      :text (str "mine did not get back to " (str/join "," (access/cell (:start (ctx/mem c)))))}))
 
 ;; ------------------------------------------------------------------ the steps
@@ -260,6 +261,7 @@
         known (into #{} (map :pos) (:ground m))]
     (-> m
         (assoc :dig-end d)
+        (cond-> (:start-floor-dug d) (dissoc :start-floor))
         (update :ground (fnil into []) (remove #(known (:pos %))) (:ground d))
         (update-in [:descent :steps] #(max (or % 0) (get-in d [:descent :steps] 0)))
         (cond-> (get-in d [:tunnel :heading]) (assoc :dug-heading (get-in d [:tunnel :heading]))))))

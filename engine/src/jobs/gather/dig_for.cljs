@@ -64,7 +64,7 @@
   Ends :done when :got meets :count (or the call's :least); else condition-failed for the facts :none :wet :refused :own-zone
   :no-shaft :flooded :no-tool :no-torches, limit-reached {:line :food} for :hungry, nothing-possible for failed tries (:no-drops
   :gave-up :tunnel-length :tunnel-stopped :no-stone-found :descent-stopped :not-back). 0 of :count is never done.
-  Data {:got n :reason r} plus :descent, :tunnel, :left, :lost, :ores, :unreached, :ground (with :track-ground); text says reason,
+  Data {:got n :reason r} plus :descent, :tunnel, :left, :lost, :ores, :unreached, :ground (with :track-ground), :start-floor-dug (the cell under the start was dug); text says reason,
   :got, the stair and the tunnel. Quote: about ::item-s s an item, open-ended.")
 
 (a/defargs args
@@ -210,7 +210,7 @@
     (if (not= :ok verdict)
       (do (refused! c pos v verdict) :again)
       (let [_ (ctx/update-mem! c #(cond-> (assoc % :digging pos)
-                                   (= (access/cell pos) (when-let [{:keys [x y z]} (:start %)] [x (dec y) z])) (dissoc :start-floor)))
+                                   (= (access/cell pos) (when-let [{:keys [x y z]} (:start %)] [x (dec y) z])) (-> (dissoc :start-floor) (assoc :start-floor-dug true))))
             outcome (await (dig-cell! c pos))]
         (when-not (= :continue outcome) (ctx/update-mem! c dissoc :digging))
         (case outcome
