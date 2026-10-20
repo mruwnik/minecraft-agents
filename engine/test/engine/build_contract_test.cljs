@@ -1,10 +1,10 @@
 (ns engine.build-contract-test
-  "jobs.build.clear-box and jobs.build.path as contract jobs: they export the contract and end with a kind and a cause
+  "jobs.blocks.clear-cells and jobs.build.path as contract jobs: they export the contract and end with a kind and a cause
   (0 of N is never done; a partial run carries its counts)."
   (:require [cljs.test :refer [deftest is async]]
             [engine.build-from-plan-test :as bfp]
             [engine.harvest-test :as h]
-            [engine.clear-box-test :as cbt]
+            [engine.clear-cells-test :as cbt]
             [engine.contract :as contract]
             [engine.farm-contract-test :as fct :refer [ending-of kc]]
             [engine.path-test :as pt]
@@ -20,11 +20,11 @@
 
 (def from-plan 'jobs.build.from-plan)
 
-(def jobs '[jobs.build.clear-box jobs.build.path jobs.build.from-plan])
+(def jobs '[jobs.blocks.clear-cells jobs.build.path jobs.build.from-plan])
 
 (deftest every-build-job-exports-the-contract-and-quotes-validly
   (let [p (tu/fake {:inventory pt/shovel})
-        args {'jobs.build.clear-box cbt/box 'jobs.build.path pt/box 'jobs.build.from-plan {:plan "pen"}}]
+        args {'jobs.blocks.clear-cells cbt/box 'jobs.build.path pt/box 'jobs.build.from-plan {:plan "pen"}}]
     (doseq [sym jobs
             :let [job (get registry/jobs sym)]]
       (is (some? (:can-run? job)) (str sym " has can-run?"))
@@ -33,9 +33,9 @@
       (when (not= sym from-plan) ; its quote reads the judged plan: the ending tests run it
         (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :view (constantly {:now 0 :data {:entries {}}}) :args (get args sym)}))) (str sym))))))
 
-;; ------------------------------------------------------------------ clear-box
+;; ------------------------------------------------------------------ clear-cells
 
-(deftest clear-box-endings
+(deftest clear-cells-endings
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -46,16 +46,16 @@
         (let [e (await (ending-of (cbt/setup {:blocks {"1,64,1" "bedrock"}}) cbt/job cbt/one 10))]
           (is (= {:kind :condition-failed :cause :cannot} (kc e)) "nothing dug, the cell can never be dug")
           (is (= 0 (get-in e [:data :dug]))))
-        (let [e (await (ending-of (cbt/setup {:blocks {"9,55,1" "dirt"}}) cbt/job {:from {:x 9 :y 55 :z 1} :to {:x 9 :y 55 :z 1}} 20))]
+        (let [e (await (ending-of (cbt/setup {:blocks {"9,55,1" "dirt"}}) cbt/job cbt/one-cell 20))]
           (is (= {:kind :nothing-possible :cause :unreachable} (kc e))))))))
 
-(deftest clear-box-start-facts
+(deftest clear-cells-start-facts
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= [:impossible :bad-args] (bad-args (await (ending-of (cbt/setup {}) cbt/job {:from {:x 0 :y 0 :z 0}} 5)))))
+        (is (= [:impossible :bad-args] (bad-args (await (ending-of (cbt/setup {}) cbt/job {} 5)))))
         (is (= [:impossible :bad-args]
-               (bad-args (await (ending-of (cbt/setup {}) cbt/job {:from {:x 0 :y 0 :z 0} :to {:x 7 :y 7 :z 7}} 5)))) "over 400 cells")
+               (bad-args (await (ending-of (cbt/setup {}) cbt/job {:area {:min {:x 0 :y 0 :z 0} :max {:x 7 :y 7 :z 7}}} 5)))) "over 400 cells")
         (is (= [:condition-failed :no-zones]
                (bad-args (await (ending-of (cbt/setup {:blocks cbt/eight} (ew/of-data {} {} nil)) cbt/job cbt/box 5)))))
         (is (= :refused (get-in (await (ending-of (cbt/setup {:blocks cbt/eight} (ew/of-data {"pad" cbt/pad-plan} {} [cbt/farm-zone]))
@@ -192,10 +192,10 @@
               items (get-in q [:uses :items])]
           (is (= {"oak_fence" 7 "oak_fence_gate" 1 "torch" 1} (update-vals items second))))))))
 
-(deftest clear-box-quotes-the-wear-of-the-tool-it-digs-with
+(deftest clear-cells-quotes-the-wear-of-the-tool-it-digs-with
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (cbt/setup {:blocks cbt/eight :inventory [{:name "iron_shovel" :count 1} {:name "stone_pickaxe" :count 1}]})
-              q (:quote (await (event-api/quote-view eng "jobs.build.clear-box" (pr-str cbt/box))))]
+              q (:quote (await (event-api/quote-view eng "jobs.blocks.clear-cells" (pr-str cbt/box))))]
           (is (= {"iron_shovel" [4 4 4] "stone_pickaxe" [4 4 4]} (get-in q [:uses :wear]))))))))

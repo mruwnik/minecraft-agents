@@ -9,8 +9,8 @@
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 2}
   :limit-s 40}
  :cases
- [  {:name "clear-box-bad-args-is-impossible"
-   :act [[:job (jobs.build.clear-box {})]]
+ [  {:name "clear-cells-bad-args-is-impossible"
+   :act [[:job (jobs.blocks.clear-cells {})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :bad-args}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :waiting} :for-s 3 :until {:source :job :kind :stopped} :of-job true}]}
   {:name "mine-no-block-is-impossible"

@@ -1,4 +1,4 @@
-;; Card 01d88c8f (Q98 C5): build.clear-box reads its box cells through what the body has seen. A box 10 blocks behind the body
+;; Card 01d88c8f (Q98 C5): build.clear-cells reads its box cells through what the body has seen. A box 10 blocks behind the body
 ;; (body at [16.5 0 16.5] faces south, yaw 0; box at z 6..7) starts unknown: the job walks within 3 of it, looks, then digs.
 ;; Should-succeed: the two dirt cells behind the body are dug (air) and the job completes.
 {:defaults
@@ -9,6 +9,6 @@
  :cases
  [{:name "box-behind-the-body-is-walked-to-looked-at-and-dug"
    :blocks [[:fill [16 0 6] [17 1 6] "dirt"]]
-   :act [[:job (jobs.build.clear-box {:from #at [16 0 6] :to #at [17 1 6]})]]
+   :act [[:job (jobs.blocks.clear-cells {:area {:min #at [16 0 6] :max #at [17 1 6]}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:block [16 0 6] "air"] [:block [17 1 6] "air"]]}]}

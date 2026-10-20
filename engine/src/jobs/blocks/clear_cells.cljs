@@ -1,4 +1,4 @@
-(ns jobs.build.clear-box
+(ns jobs.blocks.clear-cells
   (:require [clojure.string :as str]
             [engine.settings :as settings]
             [engine.args :as a]
@@ -21,13 +21,14 @@
 
 (def doc
   "Dig out a box from the top down (site levelling, demolition). Beds, containers and fluids are kept (:keep adds
-  more block names). The box is :from and :to, each {:x :y :z} or [x y z], at most 400 cells.
+  more block names). The cells are :area: a box {:min :max} (each corner {:x :y :z} or [x y z], any order) or
+  {:cells [...]}, at most 400 cells.
   Each cell is dug by a jobs.blocks.dig child: it walks in reach, holds the best carried tool and picks up the
   drop. No tool is needed (a block whose tool is missing is dug and its drop lost). While the child waits on
   the body (:inventory-full) the job yields :continue.
   Zones and plans: loaded cells that a zone or an active plan's footprint refuses are skipped for good (reason
-  :zone or :footprint, one clear-box.refused info per round). The chosen cell is checked again before the dig.
-  A cell that is the wall of an own pen holding livestock is skipped for good (reason :own-pen, one clear-box.refused
+  :zone or :footprint, one clear-cells.refused info per round). The chosen cell is checked again before the dig.
+  A cell that is the wall of an own pen holding livestock is skipped for good (reason :own-pen, one clear-cells.refused
   info) unless :open-pens?.
   A dig hazard not in :accept counts a try (reason :hazard after two). A cell reached but still unseen counts a try (reason :unloaded after two).
   Refused before it starts: {:reason :bad-args :why} (impossible: a missing corner or too many cells), as can-start?
@@ -40,8 +41,8 @@
   cells left. With :only, blocks not ending in one of its names stay (a tree-clearing keeps the ground).")
 
 (a/defargs args
-  {:from {:doc "box corner (inclusive); any order; [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
-   :to {:doc "opposite box corner (inclusive); at most 400 cells" :spec ::a/pos :default nil}
+  {:area {:doc "the cells to clear: a box {:min :max} (corners inclusive, any order, each [x y z] or {:x :y :z}) or {:cells [[x y z] ...]}; at most 400 cells"
+           :spec (a/or-of (a/map-with {:min a/position? :max a/position?}) (a/map-with {:cells (a/coll-of a/position?)})) :default nil}
    :keep {:doc "extra block names to leave alone" :spec (a/coll-of a/name?) :default []}
    :only {:doc "block name endings to clear, e.g. [\"_log\" \"_leaves\"]; other blocks are left as they are; none = every block" :spec (a/coll-of a/name?) :default []}
    :ignore-zones? :shared
@@ -63,23 +64,34 @@
       (and (seq only) (not-any? #(str/ends-with? n %) only))))
 (defn span [a b] (range (min a b) (inc (max a b))))
 
+(defn corners
+  "[min max] of the box area, as cells, or nil for a cell list or no area."
+  [{:keys [area]}]
+  (when-let [lo (some-> (:min area) a/cell)]
+    (when-let [hi (some-> (:max area) a/cell)] [lo hi])))
+
+(defn area-count
+  "How many cells :area names, or nil when it names none."
+  [{:keys [area] :as args}]
+  (if-let [[a b] (corners args)]
+    (* (count (span (:x a) (:x b))) (count (span (:y a) (:y b))) (count (span (:z a) (:z b))))
+    (when (seq (:cells area)) (count (:cells area)))))
+
 (defn box-error
-  "Why the box :from/:to cannot be cleared, or nil."
-  [{:keys [from to]}]
-  (cond
-    (not (and from to)) "clear-box needs :from and :to"
-    :else (let [[a b] [from to]
-                n (* (count (span (:x a) (:x b))) (count (span (:y a) (:y b))) (count (span (:z a) (:z b))))]
-            (when (> n (max-cells))
-              (str "clear-box covers " n " cells, at most " (max-cells))))))
+  "Why :area cannot be cleared, or nil."
+  [args]
+  (let [n (area-count args)]
+    (cond
+      (nil? n) "clear-cells needs :area"
+      (> n (max-cells)) (str "clear-cells covers " n " cells, at most " (max-cells)))))
 
 (defn cells
-  "The cells [{:x :y :z} ...] of the box :from/:to. Throws ex-info for a
-  missing corner or over max-cells cells."
-  [{:keys [from to] :as args}]
+  "The cells [{:x :y :z} ...] of :area. Throws ex-info for no area or over max-cells cells."
+  [{:keys [area] :as args}]
   (when-let [e (box-error args)] (throw (ex-info e {})))
-  (let [[a b] [from to]]
-    (vec (for [x (span (:x a) (:x b)) y (span (:y a) (:y b)) z (span (:z a) (:z b))] {:x x :y y :z z}))))
+  (if-let [[a b] (corners args)]
+    (vec (for [x (span (:x a) (:x b)) y (span (:y a) (:y b)) z (span (:z a) (:z b))] {:x x :y y :z z}))
+    (into [] (comp (map a/cell) (distinct)) (:cells area))))
 
 (defn dig-args
   "The jobs.blocks.dig args for the cell at pos: no tool needed, the drop picked up, the job's :accept and opt-out."
@@ -152,7 +164,7 @@
          (when (and (empty? allowed) (seq refused))
            (assoc (access/refusal-fields (map second refused)) :reason :refused)))))))
 
-(def target [:from :to])
+(def target [:area])
 (def defaults {:spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
@@ -181,7 +193,7 @@
 
 (defn skip! [c pos reason]
   (ctx/update-mem! c update :skipped assoc pos reason)
-  (ctx/emit! c :clear-box.skipped :info {:pos pos :reason reason
+  (ctx/emit! c :clear-cells.skipped :info {:pos pos :reason reason
                                          :text (str "skipped " (pr-str pos) ": " (name reason))}))
 
 (defn skip-refused!
@@ -189,14 +201,14 @@
   [c refused]
   (let [fields (access/refusal-fields (map second refused))]
     (ctx/update-mem! c update :skipped merge (into {} (map (fn [[pos v]] [pos (:reason v)])) refused))
-    (ctx/emit! c :clear-box.refused :info (assoc fields :cells (count refused)
+    (ctx/emit! c :clear-cells.refused :info (assoc fields :cells (count refused)
                                                  :text (str "left " (count refused) " cells: " (access/refusal-text fields))))))
 
 (defn skip-pen-walls!
   "Skip the cells that are the wall of an own pen holding livestock for good (reason :own-pen), with one info."
   [c poss]
   (ctx/update-mem! c update :skipped merge (zipmap poss (repeat :own-pen)))
-  (ctx/emit! c :clear-box.refused :info {:reason :own-pen :cells (count poss)
+  (ctx/emit! c :clear-cells.refused :info {:reason :own-pen :cells (count poss)
                                          :text (str "left " (count poss) " cells: the wall of a pen with animals in it (:open-pens? true digs it)")}))
 
 (defn bump! [c pos reason]

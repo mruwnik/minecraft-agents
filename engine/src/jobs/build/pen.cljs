@@ -28,7 +28,7 @@
   The pen is the bounding box of the plan's cells that want a fence, a fence gate or a wall.
   A plan with :surface true is put on the ground the body has seen (a pen on a slope follows it).
   Phase 0 fells each trunk seen inside the box with a jobs.forestry.fell-tree child (:at its base log), then clears
-  the logs and leaves left, up to the fence tops, with a jobs.build.clear-box child (:only), so no leaf staircase
+  the logs and leaves left, up to the fence tops, with a jobs.blocks.clear-cells child (:only), so no leaf staircase
   leads over the fence; trees not seen yet are left to the check.
   Phase 1 runs jobs.build.from-plan on the plan. Its arg :accept passes through, and its rules
   (zones, other plans' footprints, materials, cuts) apply. Phase 2: a body still inside the box walks out through the
@@ -253,7 +253,7 @@
             (filter (fn [[x y z]] (log? (name-at x y z))) cells))))
 
 (defn ^:async trees-step!
-  "While trees stand in the box: one jobs.forestry.fell-tree child per trunk base (each tried once), then a clear-box
+  "While trees stand in the box: one jobs.forestry.fell-tree child per trunk base (each tried once), then a clear-cells
   child over the box clears the logs and leaves left. Whatever they end with, on to the build (a tree that stays shows
   as a leak in the check)."
   [c cells]
@@ -270,10 +270,10 @@
             (do (ctx/update-mem! c update :felled (fnil conj []) base) :again)))
         (let [box (pen-read/barrier-box cells)
               ys (map (comp second :pos) cells)
-              r (await (ctx/call c :trees 'jobs.build.clear-box
+              r (await (ctx/call c :trees 'jobs.blocks.clear-cells
                                  (merge (select-keys (:args c) [:ignore-zones?])
-                                        {:from {:x (:x (:min box)) :y (apply min ys) :z (:z (:min box))}
-                                         :to {:x (:x (:max box)) :y (+ 1 (apply max ys)) :z (:z (:max box))}
+                                        {:area {:min {:x (:x (:min box)) :y (apply min ys) :z (:z (:min box))}
+                                                 :max {:x (:x (:max box)) :y (+ 1 (apply max ys)) :z (:z (:max box))}}
                                          :only tree-endings})))]
           (if (= :continue r)
             :continue

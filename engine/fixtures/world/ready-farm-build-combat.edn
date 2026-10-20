@@ -1,6 +1,6 @@
 ;; Card 07571160 (readiness sweep H): farm, build and combat jobs bind safe?/fit? (jobs.lib.work-place, ready/safe-if-lit). Queued at night in the open
 ;; each waits (the open ground is dark); at day each runs. Needs --allow-time --time-log. Ground is open stone, no hut, no hostiles (the runner kills them).
-;; Should-succeed: plant, build.path, build.clear-box, hunt and attack all hold at night (no completion for ~10 s after the first wait) and finish once the day comes.
+;; Should-succeed: plant, build.path, build.clear-cells, hunt and attack all hold at night (no completion for ~10 s after the first wait) and finish once the day comes.
 ;; Should-fail (old code): attack/hunt ran at night; plant walked out to its field.
 {:defaults
  {:tags [:readiness :night :farm :build :combat]
@@ -27,9 +27,9 @@
    :expect [{:no-event {:source :job :kind :completed :data {:pathed 9}} :for-s 10}
             {:event {:source :job :kind :completed :data {:pathed 9}} :within-s 90 :of-job true}]
    :after [[:block [11 -1 21] "dirt_path"]]}
-  {:name "clear-box-of-dirt-queued-at-night-waits-then-digs-at-day"
+  {:name "clear-cells-of-dirt-queued-at-night-waits-then-digs-at-day"
    :blocks [[:fill [10 0 20] [12 0 22] "dirt"]]
-   :act [[:job (jobs.build.clear-box {:from #at [10 0 20] :to #at [12 0 22]})]
+   :act [[:job (jobs.blocks.clear-cells {:area {:min #at [10 0 20] :max #at [12 0 22]}})]
          [:await {:source :job :kind :waiting} 30]
          [:wait-s 10]
          [:time-set 1000]]

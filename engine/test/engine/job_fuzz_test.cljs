@@ -183,9 +183,9 @@
 (defn event-reason [e] (or (:reason e) (get-in e [:data :reason])))
 
 (defn declared-failure?
-  "A round that threw one of the jobs' own ex-info on purpose (README: a throw is a failure): the messages of clear-box/cells and till/cells, not a library error or a stray JS error."
+  "A round that threw one of the jobs' own ex-info on purpose (README: a throw is a failure): the messages of clear-cells/cells and till/cells, not a library error or a stray JS error."
   [text]
-  (boolean (re-find #"^#error \{:message \"(clear-box (needs|covers)|till (needs|covers))" (str text))))
+  (boolean (re-find #"^#error \{:message \"(clear-cells (needs|covers)|till (needs|covers))" (str text))))
 
 (defn act-cap? [text] (str/includes? (str text) "(runaway job)"))
 
@@ -458,7 +458,7 @@
     (is (declared-wait? [{:source :job :kind :waiting :reason :x} other] 2) "a :waiting reason counts anywhere")))
 
 (deftest only-the-jobs-own-ex-info-shapes-are-declared-failures
-  (is (declared-failure? "#error {:message \"clear-box needs :from and :to\", :data {}}"))
+  (is (declared-failure? "#error {:message \"clear-cells needs :from and :to\", :data {}}"))
   (is (declared-failure? "#error {:message \"till covers 9 cells, at most 4\", :data {:cells 9}}"))
   (is (not (declared-failure? "#error {:message \"No matching clause: :x\", :data {}}")))
   (is (not (declared-failure? "TypeError: x is not a function"))))

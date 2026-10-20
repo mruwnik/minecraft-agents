@@ -1,6 +1,6 @@
 (ns jobs.lib.own-pen
   "The wall of the pen the body stands shut in: a closed enclosure (jobs.lib.pen/check from its feet) in the body's own
-  area (zone or plan) with livestock inside. A dig out of it frees the animals, so go-to's escalation and clear-box spare its wall."
+  area (zone or plan) with livestock inside. A dig out of it frees the animals, so go-to's escalation and clear-cells spare its wall."
   (:require [jobs.lib.block-sets :as bs]
             [engine.args :as a]
             [engine.settings :as settings]

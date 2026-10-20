@@ -121,7 +121,7 @@
  "pen-gate-night/reflex-shuts-an-open-gate-inside-the-room-at-night"
  "pen-gate-night/use-on-with-a-checks-override-walks-out-and-opens-the-gate"
  "ready-farm-build-combat/attack-zombie-in-reach-at-night-waits-dark-then-kills-at-day"
- "ready-farm-build-combat/clear-box-of-dirt-queued-at-night-waits-then-digs-at-day"
+ "ready-farm-build-combat/clear-cells-of-dirt-queued-at-night-waits-then-digs-at-day"
  "ready-farm-build-combat/hunt-queued-at-night-in-the-open-waits-dark-then-hunts-at-day"
  "ready-farm-build-combat/path-box-queued-at-night-waits-then-paths-at-day"
  "ready-farm-build-combat/plant-field-queued-at-night-waits-then-sows-at-day"

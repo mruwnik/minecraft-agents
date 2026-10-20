@@ -549,7 +549,7 @@
           (is (= [{:x 0 :y 65 :z 0}] (filterv #(= 0 (:x %)) (mapv zs/arg-pos (zs/calls p "place")))) "put back once carried")
           (is (= [] (tidy-entries eng))))))))
 
-(def dirt-box {:from {:x 1 :y 65 :z 1} :to {:x 2 :y 65 :z 2}})
+(def dirt-box {:area {:min {:x 1 :y 65 :z 1} :max {:x 2 :y 65 :z 2}}})
 (def dirt-world
   "Four dirt cells at y 65 on a stone floor at y 64 (the ground the body walks on once they are dug, and steps out of the pit onto)."
   {:blocks (merge (tu/box -4 64 -4 6 64 6 "stone")
@@ -557,27 +557,27 @@
 (def miles-zone {:name "farm" :min [1 60 1] :max [2 70 2] :owner "Miles"})
 
 (defn ^:async clear-in-foreign-zone!
-  "clear-box with :ignore-zones? in Miles's zone, the tidy-pending reflex registered; [world-dug-while-running seen
+  "clear-cells with :ignore-zones? in Miles's zone, the tidy-pending reflex registered; [world-dug-while-running seen
   eng p] once the job and the restore have ended. Records how many places happened before the box job ended."
   [world]
   (let [{:keys [eng p seen]} (setup world [miles-zone])
         placed-while-live (atom 0)]
     (core/register-reflex! eng {:trigger :tidy-pending})
-    (core/submit! eng (list 'jobs.build.clear-box (assoc dirt-box :ignore-zones? true)) {})
+    (core/submit! eng (list 'jobs.blocks.clear-cells (assoc dirt-box :ignore-zones? true)) {})
     (loop [i 0]
       (when (< i 80)
-        (let [live? (some #(= 'jobs.build.clear-box (:def (get-in (core/state eng) [:instances %]))) (:list (core/state eng)))]
+        (let [live? (some #(= 'jobs.blocks.clear-cells (:def (get-in (core/state eng) [:instances %]))) (:list (core/state eng)))]
           (when live? (reset! placed-while-live (count (zs/calls p "place")))))
         (await (core/tick! eng))
         (recur (inc i))))
     {:placed-while-live @placed-while-live :seen seen :eng eng :p p}))
 
-(deftest a-trespassing-clear-box-is-not-undone-while-it-runs
+(deftest a-trespassing-clear-cells-is-not-undone-while-it-runs
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [placed-while-live seen eng p]} (await (clear-in-foreign-zone! (assoc dirt-world :inventory [{:name "dirt" :count 4}])))]
-          (is (= 0 placed-while-live) "nothing placed while clear-box was live")
+          (is (= 0 placed-while-live) "nothing placed while clear-cells was live")
           (is (= 4 (count (zs/calls p "dig"))) "each dirt dug exactly once")
           (is (= 4 (count (zs/calls p "place"))) "restored once after the job ended")
           (is (= [] (tidy-entries eng)))

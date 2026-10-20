@@ -17,7 +17,7 @@
      jobs.combat.attack jobs.animals.breed jobs.animals.shear jobs.animals.cull jobs.animals.maintain jobs.animals.pen-check jobs.animals.leash jobs.animals.unleash jobs.animals.lead-to jobs.animals.lure-to jobs.survival.recover-drops jobs.survival.restore-broken jobs.maintenance.shut jobs.storage.make-room
      jobs.animals.herd
      jobs.forestry.fell-tree jobs.forestry.fell-from-pillar jobs.items.collect-drops jobs.forestry.plant-sapling jobs.forestry.tidy
-     jobs.forestry.harvest-wood jobs.forestry.maintain jobs.forestry.prepare jobs.storage.deposit jobs.storage.withdraw jobs.storage.haul jobs.strip.loot-cart jobs.items.craft jobs.items.give jobs.items.pick-up-loose jobs.items.equip jobs.items.kitchen jobs.farm.till jobs.farm.irrigate jobs.farm.fertilize jobs.farm.compost jobs.build.clear-box jobs.build.path jobs.farm.find-spot jobs.farm.harvest jobs.farm.plant jobs.farm.tend
+     jobs.forestry.harvest-wood jobs.forestry.maintain jobs.forestry.prepare jobs.storage.deposit jobs.storage.withdraw jobs.storage.haul jobs.strip.loot-cart jobs.items.craft jobs.items.give jobs.items.pick-up-loose jobs.items.equip jobs.items.kitchen jobs.farm.till jobs.farm.irrigate jobs.farm.fertilize jobs.farm.compost jobs.blocks.clear-cells jobs.build.path jobs.farm.find-spot jobs.farm.harvest jobs.farm.plant jobs.farm.tend
      jobs.apiary.harvest
      jobs.apiary.guard
      jobs.apiary.maintain
