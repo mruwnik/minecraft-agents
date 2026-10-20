@@ -49,7 +49,7 @@
   :field Last: it walks to the nearest zone or plan of its own it has not visited in this job and cuts and replants the ripe wheat there
          (jobs.farm.harvest); the wheat is baked next (:bake).
   Then, once per job (:explore, default on; a starving body again after foods/::starving-rest-ms) it searches for food animals and crops (jobs.explore.search, the
-  ::explore setting; not while the search would wait (dark sky, danger near) nor while the night handler holds) and goes on if it found some; at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
+  ::explore setting; not while the search would wait (dark sky, danger near)) and goes on if it found some; at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it ends nothing-possible :no-food (the text says what was searched, the nearest known source) and writes
   :hungry, which widens the next search; the hungry trigger rests after that ending (its :rest-s).
   :eat false: only gathers, done when the pack holds :stock food points (jobs.survival.eat fetches this way; a job cannot call its own caller).
@@ -322,13 +322,9 @@
         (when (ctx/way? c :field) (await (field! c))))))
 
 (defn search-waits?
-  "Whether the search would wait: the search child's own safe-if-lit under the children's default (ready/or-starving) is not ok, or the night handler holds and the body is not starving with no
-  danger near. Asked here so a child's :later does not end this job."
+  "Whether the search would wait: the search child's own safe-if-lit under the children's default (ready/or-starving) is not ok. Asked here so a child's :later does not end this job."
   [c]
-  (let [calm? (= :ok (first (ready/threatened c)))]
-    (boolean
-     (or (and (cook/night-holds? c) (not (and (starving? c) calm?)))
-         (not= :ok (first (ready/or-starving ready/safe-if-lit c)))))))
+  (not= :ok (first (ready/or-starving ready/safe-if-lit c))))
 
 (defn explore-done?
   "Whether this job's search is over: it ran, and a starving body's foods/::starving-rest-ms has not passed since."
@@ -342,8 +338,7 @@
 
 (defn ^:async explore!
   "Once per job, with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore),
-  not in a dark sky (a body sheltered for the night stays in) nor while the night handler holds, unless starving with no
-  danger near (jobs.lib.danger/danger-near?), nor underground (sh-sense/buried?) unless starving and not fragile, nor when risk refuses it. :again when the search found something to hunt or dig, else nil with what it
+  not in a dark sky (a body sheltered for the night stays in) nor in the dark or with danger near unless starving (safe-if-lit), nor underground (sh-sense/buried?) unless starving and not fragile, nor when risk refuses it. :again when the search found something to hunt or dig, else nil with what it
   covered remembered."
   [c]
   (let [e (:explore (:args c))]
@@ -352,7 +347,7 @@
       (risk/refused? c nil)
       (do (ctx/update-mem! c assoc :explored (str "not searched: " (:too-dangerous (ctx/mem c)))) nil)
       (search-waits? c)
-      (do (ctx/update-mem! c assoc :explored "not searched: dark sky, danger near or the night handler holds") nil)
+      (do (ctx/update-mem! c assoc :explored "not searched: dark or danger near") nil)
       (and (sh-sense/buried? (:primitives c)) (or (not (starving? c)) (foods/fragile? (.self (:primitives c)))))
       (do (ctx/update-mem! c assoc :explored "not searched underground: the caves are dark and full of mobs; surface or eat first") nil)
       :else

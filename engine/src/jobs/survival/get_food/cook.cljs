@@ -11,8 +11,6 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
-            [jobs.lib.shelter :as sh]
-            [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.survival.get-food.risk :as risk]))
@@ -63,11 +61,6 @@
     #(get factors % 1)))
 
 (defn food-level [c] (.-food (.self (:primitives c))))
-
-(defn night-holds?
-  "Whether the night handler would take the body now (jobs.lib.shelter/night-holds?)."
-  [c]
-  (boolean (sh/night-holds? (:primitives c) (ctx/view c) {} (sh-beds/bed-permit (:primitives c) (:world (:engine c))))))
 
 (defn raw-carried
   "The cookable raw foods carried, as {:name :count}."

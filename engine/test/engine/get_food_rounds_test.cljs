@@ -541,7 +541,15 @@
         (let [{:keys [eng seen]} (setup {:self {:food 1} :time 15000} :step-ms 5)]
           (await (one-round! eng {}))
           (is (= [] (searches seen)))
-          (is (re-find #"night" (str (:text (first (none-endings seen)))))))))))
+          (is (re-find #"dark" (str (:text (first (none-endings seen)))))))))))
+
+(deftest the-search-waits-for-light-not-for-the-hour
+  (let [waits? (fn [light]
+                 (let [p (tu/with-light-data (tu/fake {:time 15000 :self {:food 8}}))]
+                   (swap! (fake/state p) assoc :light-default light)
+                   (get-food/search-waits? {:primitives p :engine {:warned (js-obj)} :id "t" :view (fn [] {:data {} :now 0}) :args {} :now (constantly 0)})))]
+    (is (false? (waits? [15 15])) "night, lit place: the search goes on")
+    (is (true? (waits? [15 0])) "night, dark place: it waits")))
 
 (deftest hungry-underground-does-not-explore-the-caves
   (async done
@@ -577,7 +585,7 @@
                                         :step-ms 5)]
           (await (one-round! eng {}))
           (is (= [] (searches seen)) "a hostile near: no search")
-          (is (re-find #"night" (str (:text (first (none-endings seen)))))))))))
+          (is (re-find #"dark" (str (:text (first (none-endings seen)))))))))))
 
 (deftest carried-bread-is-eaten-at-night-with-a-hostile-near
   (async done
@@ -680,8 +688,7 @@
                                                                                        :time 15000})
                                         :step-ms 5)]
           (await (one-round! eng {}))
-          (is (= [] (searches seen)) "no search out of the hut at night")
-          (is (re-find #"night" (str (:text (first (none-endings seen)))))))))))
+          (is (= [] (searches seen)) "no search out of the hut at night"))))))
 
 ;; ---------------------------------------------------------------- cooking raw food
 
