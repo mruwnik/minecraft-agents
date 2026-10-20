@@ -83,6 +83,16 @@
           (is (empty? (filter #(= :need (:slot %)) (kinds seen :child_started))) "fetch false: no fetch child")
           (is (empty? (calls p "useOn"))))))))
 
+(deftest path-does-not-use-a-worn-out-shovel
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:inventory [{:name "stone_shovel" :count 1 :durability 0 :max-durability 131}] :blocks four})]
+          (core/submit! eng (list job (assoc box :fetch false)) {})
+          (is (nil? (core/tick! eng)) "check false: nothing runs")
+          (is (= [:no-tool] (map :reason (kinds seen :waiting))))
+          (is (empty? (calls p "useOn"))))))))
+
 (deftest path-bad-args-end-impossible-instead-of-throwing
   (async done
     (tu/run-async done

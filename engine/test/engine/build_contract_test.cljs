@@ -31,7 +31,7 @@
       (is (some? (:can-start? job)) (str sym " has can-start?"))
       (is (vector? (:target job)) (str sym " has a target"))
       (when (not= sym from-plan) ; its quote reads the judged plan: the ending tests run it
-        (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args (get args sym)}))) (str sym))))))
+        (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :view (constantly {:now 0 :data {:entries {}}}) :args (get args sym)}))) (str sym))))))
 
 ;; ------------------------------------------------------------------ clear-box
 

@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.choose :as choose]
             [jobs.lib.access :as access]
             [jobs.lib.job-common :as common]
             [jobs.lib.access.rules :as rules]
@@ -50,7 +51,7 @@
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::max-cells {:default 256 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}
+  {::max-cells {:default 256 :doc "Most cells the box may hold; a bigger box is impossible (:bad-args)." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds one call may take." :spec (a/int-in 1 nil)}
    ::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}})
 (defn max-cells [] (settings/get settings ::max-cells))
@@ -90,7 +91,7 @@
   "The name of a carried shovel the call may use, or nil."
   [c]
   (let [only (listed c)]
-    (some #(when (and (.endsWith (:name %) "_shovel") (or (nil? only) (only (:name %)))) (:name %)) (u/inventory (:primitives c)))))
+    (some #(when (or (nil? only) (only (:item %))) (:item %)) (:list (choose/tools-for c [:shovel] 1)))))
 
 (defn fetch-opts
   "The limits {:how :explore} for fetching a shovel, nil when :fetch does not allow tools."
@@ -226,11 +227,11 @@
   "Use the shovel on target and book the outcome."
   [c target tool]
   (let [res (await (child/use-on! c target tool "up"))
-        {:keys [status raw]} res]
+        {:keys [status]} res]
     (if (= :continue res)
       :continue
       (do (cond
-            (and (= :used status) (= "dirt_path" (some-> (.-after raw) .-name)))
+            (and (= :used status) (= "dirt_path" (u/seen-name (:primitives c) target)))
             (ctx/update-mem! c #(-> % (update :pathed (fnil conj #{}) target) (update :cell-tries dissoc target)))
 
             (= :missing status) (skip! c [target] :gone)
