@@ -6,7 +6,6 @@
             [clojure.string :as str]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.lib.child :as child]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.shelter.sense :as sh-sense]

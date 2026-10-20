@@ -102,8 +102,7 @@
                              {:targets :hostiles :radius radius :ranged-radius ranged-radius :use {:tools (mapv name weapons)}
                               :skip (flight/dead-ids c) :prior (:fight-prior (ctx/mem c)) :checks {:safe? '(always) :fit? '(always)}}))
           ended (when (contract/ending? r) r)]
-      (ctx/update-mem! c update :dead #(into (vec %) (concat (get-in (ctx/mem c) [:children :cornered :killed])
-                                                             (:killed (:data ended)))))
+      (ctx/update-mem! c update :dead #(into (vec %) (:killed (:data ended))))
       (if (and ended (not= :done (:kind ended)))
         (do (when (:struck (:data ended)) (ctx/update-mem! c assoc :fight-prior (select-keys (:data ended) [:killed :given-up :names :struck])))
             (flight/tried! c :fight)
