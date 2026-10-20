@@ -60,3 +60,8 @@
   "A bounded search of the shared markers: {:text :kind :near {:x :y :z} :limit} (see jobs.lib.world-files/find-markers)."
   [ctx query]
   (world/find-markers (markers ctx) query))
+
+(defn memo
+  "(f) kept under key k until the plans or claims change (jobs.lib.world-files/memo): derived plan data a job asks per call."
+  [ctx k f]
+  (world/memo (:world (:engine ctx)) k f))

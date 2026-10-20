@@ -27,7 +27,9 @@
 (defn own-plans
   "The ids of the plans this body made (plan :metadata :by names it)."
   [c]
-  (into #{} (keep (fn [[id by]] (when (zones/same-owner? by (ctx/self-name c)) id))) (known/plan-authors c)))
+  (let [self (ctx/self-name c)]
+    (known/memo c [:own-plans self]
+                #(into #{} (keep (fn [[id by]] (when (zones/same-owner? by self) id))) (known/plan-authors c)))))
 
 (defn zone-input
   "The social half of the rules' input: {:zones :footprints :shafts :plan-cells :claims :self :own-plans :now :ignore-zones?}.
@@ -40,11 +42,15 @@
   ([c] (zone-input c {}))
   ([c {:keys [except own-plans-ok?] :as opts}]
    {:zones (known/zones c)
-    :footprints (cond->> (known/footprints c {:except except})
-                  own-plans-ok? (into {} (remove (comp (own-plans c) val))))
+    :footprints (if own-plans-ok?
+                  (known/memo c [:foreign-footprints except (ctx/self-name c)]
+                              #(let [mine (own-plans c)]
+                                 (into {} (remove (comp mine val)) (known/footprints c {:except except}))))
+                  (known/footprints c {:except except}))
    :plan-cells (if (nil? except)
                  #{}
-                 (into #{} (keep (fn [[cell id]] (when (= id except) cell))) (known/footprints c)))
+                 (known/memo c [:plan-cells except]
+                             #(into #{} (keep (fn [[cell id]] (when (= id except) cell))) (known/footprints c))))
     :shafts (known/shafts c)
     :claims (known/claims c)
     :self (ctx/self-name c)

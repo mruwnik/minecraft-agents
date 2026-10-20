@@ -369,6 +369,23 @@
                 (swap! (:derived w) assoc k {:plans plans :expanded expanded :value value})
                 value)))))
 
+(defn memo
+  "(f) kept under key k until the plans or claims change (f must read only those and k's own inputs): for readers asked
+  many times per round. (f) is called without a world's state when w is nil."
+  [w k f]
+  (if-not w
+    (f)
+    (do (refresh! w)
+        (let [{:keys [plans claims]} @(:state w)
+              kept (get @(:derived w) k)]
+          (cond
+            (and kept (identical? plans (:plans kept)) (identical? claims (:claims kept))) (:value kept)
+            (and kept (= plans (:plans kept)) (= claims (:claims kept)))
+            (do (swap! (:derived w) assoc k (assoc kept :plans plans :claims claims)) (:value kept))
+            :else (let [value (f)]
+                    (swap! (:derived w) assoc k {:plans plans :claims claims :value value})
+                    value))))))
+
 (defn zones
   "The world's zone list, or nil when the zone file is missing or was never readable (nil for a nil world)."
   [w]
@@ -385,7 +402,7 @@
     (do (refresh! w)
         (let [{:keys [claims footprints]} @(:state w)]
           (if (contains? claims except)
-            (footprint-index (dissoc claims except))
+            (memo w [:footprints-except except] #(footprint-index (dissoc (:claims @(:state w)) except)))
             (or footprints {}))))))
 
 (defn shaft-ids
@@ -394,7 +411,7 @@
   (if-not w
     #{}
     (do (refresh! w)
-        (into #{} (keep (fn [[id e]] (when (= :mineshaft (:kind (:value e))) id))) (:plans @(:state w))))))
+        (memo w :shaft-ids #(into #{} (keep (fn [[id e]] (when (= :mineshaft (:kind (:value e))) id))) (:plans @(:state w)))))))
 
 (defn plan-authors
   "{plan-id by}: the :metadata :by (the body that made the plan) of each plan that names one; {} for a nil world."
@@ -402,7 +419,7 @@
   (if-not w
     {}
     (do (refresh! w)
-        (into {} (keep (fn [[id e]] (when-let [by (shape/author (:value e))] [id by]))) (:plans @(:state w))))))
+        (memo w :plan-authors #(into {} (keep (fn [[id e]] (when-let [by (shape/author (:value e))] [id by]))) (:plans @(:state w)))))))
 
 (defn area-claims
   "The world's area claims as read from claims.edn ([] when there is no file or no world; the last good copy when it is

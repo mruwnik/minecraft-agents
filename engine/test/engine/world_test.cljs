@@ -463,3 +463,15 @@
            (world/close! w)
            (done))
          400)))))
+
+(deftest kept-derived-readers-follow-a-plan-change-at-once
+  (let [w (world/of-data {"pad" pad} {})
+        calls (atom 0)
+        read #(world/memo w :k (fn [] (swap! calls inc) (count (world/footprints w nil))))]
+    (is (= 2 (read)))
+    (is (= 2 (read)))
+    (is (= 1 @calls))
+    (is (= 0 (count (world/footprints w "pad"))))
+    (world/set-data! w {"pad" pad "wall" wall} {})
+    (is (= 3 (read)))
+    (is (= 2 (count (world/footprints w "pad"))))))

@@ -274,7 +274,13 @@
     (when-not (contains? old k)
       (emit! ctx kind :warn fields))))
 
+(def ^:private self-names (js/WeakMap.))
+
 (defn self-name
-  "The body's own username, the owner name zones and claims are compared with."
+  "The body's own username, the owner name zones and claims are compared with (read once per primitives: it never changes)."
   [ctx]
-  (.-username (.self (:primitives ctx))))
+  (let [p (:primitives ctx)]
+    (or (when (object? p) (.get self-names p))
+        (let [n (.-username (.self p))]
+          (when (and n (object? p)) (.set self-names p n))
+          n))))
