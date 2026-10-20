@@ -4,6 +4,7 @@
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.fake :as fake]
+            [engine.memory :as mem]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.test-util :as tu]
@@ -54,6 +55,16 @@
               r (await (child-outcome eng job {} 1))]
           (is (= 4 (:used r)))
           (is (= 7 (age p "2,64,0"))))))))
+
+(deftest fertilize-leaves-bone-meal-an-agent-reserve-entry-holds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup two-wheat)
+              _ (mem/write! (:store eng) :reserve {:id "meal" :item "bone_meal" :count :all} {:cap 100 :ttl :forever})
+              _ (await (child-outcome eng job {} 20))]
+          (is (empty? (calls p "useOn")))
+          (is (= 3 (age p "2,64,0"))))))))
 
 (deftest fertilize-never-targets-a-ripe-crop
   (async done

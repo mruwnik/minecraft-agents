@@ -2,8 +2,8 @@
   "Helpers the farm jobs share: which cells are bare, which seeds may be sown, and the hoe and bone meal a body carries."
   (:require [engine.args :as a]
             [engine.settings :as settings]
-            [jobs.lib.cost :as cost]
             [jobs.lib.crops :as crops]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.util :as u]))
 
 (declare settings)
@@ -42,18 +42,16 @@
                        (= "air" (u/seen-name p (update % :y inc))))))))
 
 (defn sowable
-  "{name count} of the carried items that may be sown: food crops (carrots, potatoes) only above the food reserve,
-  everything else in full. A cell just harvested is replanted by jobs.farm.harvest and ignores the reserve."
-  [inventory]
-  (let [kept (cost/food-reserve inventory)
-        totals (reduce (fn [acc {:keys [name count]}] (update acc name (fnil + 0) count)) {} inventory)]
-    (reduce-kv (fn [acc name n] (assoc acc name (- n (get kept name 0)))) {} totals)))
+  "{name count} of the carried items that may be sown: what the reserve register leaves for :sow (food crops only
+  above the food reserve, nothing an agent entry holds). A cell just harvested is replanted by jobs.farm.harvest and ignores the reserve."
+  [c]
+  (reduce (fn [acc {:keys [name count]}] (update acc name (fnil + 0) count)) {} (reserve/free c :sow)))
 
 (defn pick-seed
   "The seed to sow given the inventory: seed when it may be sown, else the largest sowable stack of a known seed;
-  nil when none. Food crops count only above the food reserve."
-  [seed inventory]
-  (let [counts (sowable inventory)
+  nil when none. Only what sowable leaves counts."
+  [seed c]
+  (let [counts (sowable c)
         carried #(get counts % 0)]
     (if seed
       (when (pos? (carried seed)) seed)
@@ -67,5 +65,7 @@
   [p]
   (some #(when (.endsWith (:name %) "_hoe") (:name %)) (u/inventory p)))
 
-(defn has-meal? [p]
-  (some #(= "bone_meal" (:name %)) (u/inventory p)))
+(defn has-meal?
+  "Whether bone meal is carried that the reserve register leaves for :fertilize."
+  [c]
+  (some #(= "bone_meal" (:name %)) (reserve/free c :fertilize)))

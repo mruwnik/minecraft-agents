@@ -11,6 +11,7 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.lib.ready :as ready]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
@@ -164,7 +165,7 @@
   to give (level 7 or 8, or meal lying by it)."
   [c]
   (if-let [pos (composter-at c)]
-    (when (and (empty? (feedable (u/inventory (:primitives c)) (:args c)))
+    (when (and (empty? (feedable (reserve/free c :compost) (:args c)))
                (< (level-of (u/seen-block (:primitives c) pos)) 7)
                (nil? (meal-near c pos)))
       {:reason :nothing-to-feed})
@@ -207,7 +208,7 @@
   the first feedable item. ::max-strikes failures in a row give up."
   [c]
   (let [p (:primitives c)
-        {:keys [times items] reserve :keep} (:args c)
+        {:keys [times items] kept :keep} (:args c)
         mem (ctx/mem c)
         pos (composter-at c)
         block (when pos (u/seen-block p pos))]
@@ -224,7 +225,7 @@
         (let [meal (meal-near c pos)
               taken (:taken mem 0)
               level (level-of block)
-              todo (feedable (u/inventory p) {:items items :keep reserve})]
+              todo (feedable (reserve/free c :compost) {:items items :keep kept})]
           (cond
             meal
             (let [r (await (ctx/act c :collect #js {:id (.-id meal)}))]

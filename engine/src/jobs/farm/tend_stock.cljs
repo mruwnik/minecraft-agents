@@ -5,7 +5,6 @@
             [engine.args :as a]
             [jobs.lib.block-sets :as bs]
             [engine.settings :as settings]
-            [jobs.lib.cost :as cost]
             [jobs.lib.storage :as storage]
             [jobs.farm.till :as till]))
 
@@ -25,10 +24,10 @@
     (filterv #(> (get have % 0) (get keep % 0)) names)))
 
 (defn keeps
-  "{name count} kept carried: the sowing reserve, a backup stack of each seed type, the body's 3-day food
-  (cost/food-reserve) and the :keep entries, whichever is largest for a name."
-  [sow inventory keep]
-  (merge-with max sow (zipmap waste-seeds (repeat (seed-backup))) (cost/food-reserve inventory) keep))
+  "{name count} kept carried: the sowing reserve, a backup stack of each seed type, the units the reserve register
+  holds (held: jobs.lib.reserve/held) and the :keep entries, whichever is largest for a name."
+  [sow held keep]
+  (merge-with max sow (zipmap waste-seeds (repeat (seed-backup))) held keep))
 
 (defn untilled?
   "A ground cell {:name :above} of dirt or grass with nothing but air or ground cover over it."

@@ -2,6 +2,7 @@
   "jobs.farm.till, fertilize, compost, find-spot, plant and harvest as contract jobs: they export the contract and end with a kind and a
   cause (0 of N is never done; a partial run carries its counts)."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.memory :as mem]
             [engine.compost-test :as ct]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -25,7 +26,7 @@
     (doseq [sym jobs
             :let [job (get registry/jobs sym)]]
       (is (vector? (:target job)) (str sym " has a target"))
-      (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :args (get args sym)}))) (str sym)))))
+      (is (nil? (contract/quote-problem ((:quote-of job) {:primitives p :view (fn [] {:data mem/empty-data :now 0}) :args (get args sym)}))) (str sym)))))
 
 (deftest farm-jobs-default-a-time-spend
   (doseq [sym '[jobs.farm.till jobs.farm.plant jobs.farm.fertilize jobs.farm.compost jobs.farm.find-spot jobs.farm.tend]]

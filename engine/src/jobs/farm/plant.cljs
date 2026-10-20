@@ -10,6 +10,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.cost :as cost]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.crops :as crops]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
@@ -27,7 +28,7 @@
 (def doc
   "Sow the bare farmland of a :box (a cell is bare when (x, min.y, z) is farmland and the block above is air).
   The seed is :seed, else the carried seed with the largest stack, kept while carried (one run sows one crop). Carrots
-  and potatoes are sown only above the food reserve (jobs.lib.cost/food-reserve); harvest replants whatever the reserve.
+  and potatoes are sown only above what the reserve register holds (jobs.lib.reserve: the food reserve, agent entries); harvest replants whatever the reserve.
   A missing seed is fetched before the run starts (jobs.lib.need, :fetch; a failed fetch ends the call with its ending as
   the :because), unless :fetch is false.
   One call plants the bare cells within the reach setting (eye reach), walking to the nearest (a go-to child) when none is. A cell whose place is
@@ -73,12 +74,12 @@
            pos))))
 
 (defn held-back
-  "{:seed :held :kept :reserve-points} when no seed may be sown but a food-crop seed (seed, else any) is carried and the
-  food reserve keeps it; else nil."
-  [seed inventory]
-  (when-not (pick-seed seed inventory)
-    (let [carried (into {} (map (juxt :name :count)) inventory)
-          kept (cost/food-reserve inventory)
+  "{:seed :held :kept :reserve-points} when no seed may be sown but a seed (seed, else any) is carried and the
+  reserve register keeps it; else nil."
+  [seed c]
+  (when-not (pick-seed seed c)
+    (let [carried (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))
+          kept (reserve/held c :sow)
           names (if seed [seed] (vals crops/seed-of))]
       (when-let [n (->> names (filter #(and (pos? (get carried % 0)) (pos? (get kept % 0))))
                         (sort-by #(- (carried %))) first)]
@@ -140,7 +141,7 @@
             (when (and (empty? ready) (seq short))
               (need-of short (count (fld/planned-bare p cells))))))
         (let [bare (when box (bare-cells p box (:skipped (ctx/mem c))))]
-          (when (and (seq bare) (not (pick-seed seed inventory)) (not (held-back seed inventory)))
+          (when (and (seq bare) (not (pick-seed seed c)) (not (held-back seed c)))
             (seed-need seed (count bare))))))))
 
 (defn fetch-opts
@@ -168,8 +169,8 @@
         untilled (untilled-cells p box)]
     (cond
       (empty? bare) (cond-> {:reason :nothing-to-do} (seq untilled) (assoc :untilled (count untilled)))
-      (held-back seed inventory) (assoc (held-back seed inventory) :reason :food-reserve)
-      (not (pick-seed seed inventory)) (when (nil? (fetch-opts c)) (seed-need seed (count bare)))
+      (held-back seed c) (assoc (held-back seed c) :reason :food-reserve)
+      (not (pick-seed seed c)) (when (nil? (fetch-opts c)) (seed-need seed (count bare)))
       (empty? (sowable-cells c bare)) {:reason :refused})))
 
 (defn problem
@@ -220,7 +221,7 @@
 
 (defn quote-of [c]
   (let [n (count (unsown c))
-        seed (pick-seed (:seed (:args c)) (u/inventory (:primitives c)))]
+        seed (pick-seed (:seed (:args c)) c)]
     {:uses (cond-> {:job-time [(* 0.5 n) (* 2 n) (* 10 n)]} (and seed (pos? n)) (assoc :items {seed [0 n n]}))
      :done [0 n n]}))
 
@@ -238,7 +239,7 @@
   (carried none) :refused [{:pos :reason}]}. One plant.declined warn names what refuses the refused cells."
   [c cells]
   (let [plan (:plan (:args c))
-        have (set (map key (filter (comp pos? val) (sowable (u/inventory (:primitives c))))))
+        have (set (map key (filter (comp pos? val) (sowable c))))
         skipped (set (:skipped (ctx/mem c)))
         {:keys [short seeded]} (reduce (fn [acc {:keys [pos seed] :as debt}]
                                          (cond
@@ -295,7 +296,7 @@
 (defn ^:async plan-round [c field]
   (when-not (:started (ctx/mem c))
     (ctx/update-mem! c assoc :started true))
-  (let [{:keys [ready short refused]} (update (sowing c (:cells field)) :ready #(fld/above-reserve (u/inventory (:primitives c)) %))]
+  (let [{:keys [ready short refused]} (update (sowing c (:cells field)) :ready #(fld/above-reserve c %))]
     (if (empty? ready)
       (conclude! c (cond (seq (:skipped (ctx/mem c))) :gave-up
                          (seq short) (need-of short (count (fld/planned-bare (:primitives c) (:cells field))))
@@ -345,10 +346,10 @@
         cells (sowable-cells c (bare-cells p (:box (:args c)) (:skipped m)))
         inventory (u/inventory p)
         kept (:sowing m)                ; the seed picked first is kept while carried: one run, one crop
-        seed (if (and (nil? (:seed (:args c))) kept (pick-seed kept inventory))
+        seed (if (and (nil? (:seed (:args c))) kept (pick-seed kept c))
                kept
-               (pick-seed (:seed (:args c)) inventory))
-        no-seed-cause #(if-let [held (held-back (:seed (:args c)) inventory)]
+               (pick-seed (:seed (:args c)) c))
+        no-seed-cause #(if-let [held (held-back (:seed (:args c)) c)]
                          (assoc held :reason :food-reserve)
                          (seed-need (:seed (:args c)) (count cells)))]
     (when (and seed (not= seed kept))
@@ -364,7 +365,7 @@
         (case walked
           :continue :continue
           :blocked (do (ctx/update-mem! c count-fail :walk-fails target) :again)
-          (case (await (plant-all! c (vec (take (max 1 (get (sowable inventory) seed 0)) (if (seq near) near [target]))) seed))
+          (case (await (plant-all! c (vec (take (max 1 (get (sowable c) seed 0)) (if (seq near) near [target]))) seed))
             :no-seed (conclude! c (no-seed-cause) nil)
             :continue :continue
             :again))))))

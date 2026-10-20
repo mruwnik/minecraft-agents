@@ -9,6 +9,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]
+            [engine.memory :as mem]
             [jobs.farm.compost :as compost]))
 
 (defn setup [world & [shared]]
@@ -80,6 +81,16 @@
           (is (= 1 (:bone-meal result)))
           (is (= 5 (carried p "wheat_seeds")))
           (is (= 3 (carried p "bread"))))))))
+
+(deftest compost-leaves-what-an-agent-reserve-entry-holds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory (inv "wheat_seeds" 10 "oak_leaves" 2) :blocks comp-block})
+              _ (mem/write! (:store eng) :reserve {:id "seed" :item "wheat_seeds" :count :all} {:cap 100 :ttl :forever})
+              result (await (child-outcome eng job {:at at :items ["wheat_seeds" "oak_leaves"]} 40))]
+          (is (= {"oak_leaves" 2} (:fed result)))
+          (is (= 10 (carried p "wheat_seeds"))))))))
 
 (deftest compost-keep-reserves
   (async done

@@ -53,10 +53,10 @@
         cells))
 
 (defn above-reserve
-  "The debts of bare cells without those whose seed is carried but held back by the food reserve."
-  [inventory debts]
-  (let [carried (into {} (map (juxt :name :count)) inventory)
-        left (volatile! (farm/sowable inventory))]
+  "The debts of bare cells without those whose seed is carried but held back by the reserve register."
+  [c debts]
+  (let [carried (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))
+        left (volatile! (farm/sowable c))]
     (filterv (fn [{:keys [seed]}]
                (or (not (pos? (get carried seed 0)))
                    (when (pos? (get @left seed 0))

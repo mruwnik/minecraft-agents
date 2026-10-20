@@ -8,6 +8,7 @@
             [jobs.farm.field :as fld]
             [jobs.farm.irrigate :as irrigate]
             [jobs.lib.farm :as farm]
+            [jobs.lib.reserve :as rsv]
             [jobs.farm.tend-stock :as stock]
             [engine.ctx :as ctx]))
 
@@ -107,7 +108,7 @@
         dry (if (:irrigate (:args c)) (irrigate-need c (ground-box box)) 0)
         raw-untilled (->> ground (filter stock/untilled?) (map :pos) (remove tried))
         bare (count (box-permitted c :sow (farm/bare-cells p box [])))
-        keep-of (stock/keeps (reserve (beds ground) inventory) inventory keep)]
+        keep-of (stock/keeps (reserve (beds ground) inventory) (rsv/held c :tend) keep)]
     {:mid mid
      :radius R
      :ripe (count (box-permitted c :harvest (filter #(in-box? box %) (fld/ripe-crops p {:radius R :crops nil} mid []))))
@@ -124,9 +125,9 @@
      :refused (- (count raw-untilled) (count (box-permitted c :dig raw-untilled)))
      :covered (count (filter stock/covered? ground))
      :bare bare
-     :seeds (transduce (map #(get (farm/sowable inventory) % 0)) + 0 seed-items)
-     :seed (some? (farm/pick-seed nil inventory))
-     :meal (boolean (farm/has-meal? p))
+     :seeds (transduce (map #(get (farm/sowable c) % 0)) + 0 seed-items)
+     :seed (some? (farm/pick-seed nil c))
+     :meal (boolean (farm/has-meal? c))
      :bones (boolean (some #(= "bone" (:name %)) inventory))
      :unripe (if fertilize (count (unripe-in-box p box mid R)) 0)
      :keep keep-of

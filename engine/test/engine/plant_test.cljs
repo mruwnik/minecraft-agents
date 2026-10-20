@@ -15,6 +15,8 @@
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]
             [jobs.farm.plant :as plant]
+            [engine.memory :as mem]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.farm :as farm]))
 
 (def clock (atom 1000000))
@@ -95,8 +97,26 @@
   (let [p (tu/fake {:blocks {"0,63,0" "farmland" "1,63,0" "farmland"} :unloaded ["1,64,0"]})]
     (is (= [0] (mapv :x (farm/bare-cells p (box 0 0 1 0) []))))))
 
+(defn carrying
+  "A ctx over an inventory and a reserve register holding entries."
+  [inventory & entries]
+  (let [data (reduce #(mem/add-entry %1 :reserve {:t 0 :data %2} reserve/policy) mem/empty-data entries)]
+    {:primitives (tu/fake {:inventory inventory}) :view (fn [] {:data data :now 1000})}))
+
+(deftest an-agent-reserve-entry-keeps-its-seed-from-sowing
+  (are [entry seed expected] (= expected (farm/pick-seed seed (carrying (inv "wheat_seeds" 4 "beetroot_seeds" 2) entry)))
+    {:item "wheat_seeds" :count :all} nil "beetroot_seeds"
+    {:item "wheat_seeds" :count :all} "wheat_seeds" nil
+    {:item "wheat_seeds" :count 1} nil "wheat_seeds"
+    {:item "wheat_seeds" :count :all :not #{:sow}} nil "wheat_seeds"))
+
+(deftest a-reserved-seed-is-reported-held-back
+  (is (= {:seed "wheat_seeds" :held 4 :kept 4}
+         (select-keys (plant/held-back "wheat_seeds" (carrying (inv "wheat_seeds" 4) {:item "wheat_seeds" :count :all}))
+                      [:seed :held :kept]))))
+
 (deftest pick-seed-takes-the-named-seed-or-the-largest-carried-stack
-  (are [seed carried expected] (= expected (farm/pick-seed seed (apply inv carried)))
+  (are [seed carried expected] (= expected (farm/pick-seed seed (carrying (apply inv carried))))
     nil ["wheat_seeds" 4] "wheat_seeds"
     nil ["wheat_seeds" 4 "carrot" 30 "potato" 1 "bread" 8] "carrot"
     nil ["dirt" 64 "beetroot_seeds" 2] "beetroot_seeds"
@@ -106,7 +126,7 @@
     nil [] nil))
 
 (deftest pick-seed-sows-food-crops-only-above-the-reserve
-  (are [seed carried expected] (= expected (farm/pick-seed seed (apply inv carried)))
+  (are [seed carried expected] (= expected (farm/pick-seed seed (carrying (apply inv carried))))
     nil ["carrot" 1] nil
     nil ["carrot" 12] nil
     nil ["carrot" 21] "carrot"

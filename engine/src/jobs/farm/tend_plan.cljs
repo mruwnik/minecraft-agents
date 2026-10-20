@@ -12,6 +12,7 @@
             [jobs.farm.plant :as plant]
             [jobs.farm.till :as till]
             [jobs.lib.farm :as farm]
+            [jobs.lib.reserve :as reserve]
             [jobs.farm.tidy :as tidy]
             [jobs.farm.tend-stock :as stock]
             [jobs.farm.tend-box :as box]
@@ -87,9 +88,9 @@
 (defn reserve-held
   "What the food reserve keeps of the seeds of the crops of cells {pos crop}: {:seed :held :kept :reserve-points :cells}
   for the first seed carried but kept, else nil."
-  [inventory cells]
+  [c cells]
   (some (fn [seed]
-          (when-let [h (plant/held-back seed inventory)]
+          (when-let [h (plant/held-back seed c)]
             (assoc h :cells (count (filter #(= seed (crops/seed-of (val %))) cells)))))
         (distinct (map (comp crops/seed-of val) cells))))
 
@@ -127,13 +128,13 @@
         {:keys [plan fertilize keep]} (:args c)
         {:keys [answer crops]} (planned c)
         inventory (u/inventory p)
-        have (farm/sowable inventory)
+        have (farm/sowable c)
         me (u/self-pos c)
         bare (fld/planned-bare p crops)
         bare-of (frequencies (map :seed bare))
         sowing (plant/sowing c crops)
         [mid R] (fld/plan-field crops)
-        keep (stock/keeps (seed-reserve crops) inventory keep)
+        keep (stock/keeps (seed-reserve crops) (reserve/held c :tend) keep)
         untilled (untilled-cells c)
         tillable (filter (fn [[pos _]] (permit/ok? c plan :dig pos)) untilled)
         seeded (filter (fn [[_ crop]] (let [seed (crops/seed-of crop)] (> (get have seed 0) (get bare-of seed 0)))) tillable)
@@ -151,12 +152,12 @@
      :hoe (some? (farm/hoe-of p))
      :untilled (->> tilled-cells (map key) (sort-by #(u/dist me %)) vec)
      :till-short (count dry)
-     :till-held (reserve-held inventory dry)
+     :till-held (reserve-held c dry)
      :refusers (refusers c plan (map key untilled))
      :bare (- (count bare) (count (:refused sowing)))
      :seed (boolean (seq (:ready sowing)))
      :short (:short sowing)
-     :meal (boolean (farm/has-meal? p))
+     :meal (boolean (farm/has-meal? c))
      :unripe (if fertilize (count (unripe-planned p crops)) 0)
      :keep keep
      :waste (stock/surplus inventory keep stock/waste-seeds)

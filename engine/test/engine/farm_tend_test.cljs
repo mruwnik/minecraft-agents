@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.fake :as fake]
+            [engine.memory :as mem]
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -270,6 +271,17 @@
           (is (= {:gave-up false} (select-keys (step s :deposit) [:gave-up])))
           (is (true? (finished? s))))))))
 
+(deftest goods-an-agent-reserve-entry-holds-are-not-stored
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup goods-world)
+              _ (mem/write! (:store (:eng s)) :reserve {:id "wheat" :item "wheat" :count :all} {:cap 100 :ttl :forever})
+              _ (core/submit! (:eng s) (list 'jobs.farm.tend {:box box :chest chest}) {})
+              _ (await (tu/run-ticks (:eng s) (:clock s) 40 700))]
+          (is (= {} (chest-items s)))
+          (is (= 5 (get (inv s) "wheat"))))))))
+
 (deftest keep-is-honoured-above-the-reserve
   (async done
     (tu/run-async done
@@ -375,13 +387,13 @@
     {"wheat_seeds" 3} 5 [(item "wheat_seeds" 1) (item "wheat_seeds" 2)]
     {} 4 [(item "bread" 5) (item "melon_seeds" 3)]))
 
-(deftest the-keep-holds-sowing-seed-a-backup-stack-per-seed-and-the-food-reserve
-  (are [expected sow inventory keep] (= expected (stock/keeps sow inventory keep))
-    {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64} {} [] {}
-    {"wheat_seeds" 100 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64} {"wheat_seeds" 100} [] {}
+(deftest the-keep-holds-sowing-seed-a-backup-stack-per-seed-and-the-held-units
+  (are [expected sow held keep] (= expected (stock/keeps sow held keep))
+    {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64} {} {} {}
+    {"wheat_seeds" 100 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64} {"wheat_seeds" 100} {} {}
     {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64 "bread" 4 "carrot" 9}
-    {"carrot" 2} [(item "bread" 4) (item "carrot" 9)] {}
-    {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 70} {} [] {"pumpkin_seeds" 70}))
+    {"carrot" 2} {"bread" 4 "carrot" 9} {}
+    {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 70} {} {} {"pumpkin_seeds" 70}))
 
 (deftest crops-are-stored-down-to-the-food-reserve
   (async done

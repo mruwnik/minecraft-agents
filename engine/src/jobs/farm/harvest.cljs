@@ -176,7 +176,7 @@
           given-up (set (:bare (ctx/mem c)))]
       (->> (fld/planned-bare (:primitives c) (:plan-cells c))
            (filter #(and (have (:seed %)) (not (given-up (:pos %)))))
-           (fld/above-reserve (u/inventory (:primitives c)))
+           (fld/above-reserve c)
            (permitted-debts c)))))
 
 (defn gave-up? [c]
@@ -441,7 +441,7 @@
   (when (and (:plan-cells c) (:replant (:args c)))
     (let [m (ctx/mem c)
           bare (when (:replant-bare (:args c))
-                 (fld/above-reserve (u/inventory (:primitives c)) (fld/planned-bare (:primitives c) (:plan-cells c))))
+                 (fld/above-reserve c (fld/planned-bare (:primitives c) (:plan-cells c))))
           synced (fld/sync-debts m bare)]
       (when (not= (:replant m) (:replant synced))
         (ctx/update-mem! c assoc :replant (:replant synced))))))
