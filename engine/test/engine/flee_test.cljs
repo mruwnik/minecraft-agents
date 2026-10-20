@@ -994,10 +994,12 @@
               world {:time 18000 :light-default [15 0] :light lit}
               out (await (target-after world [] {}))
               off (await (target-after world [] {:jobs.survival.retreat-flight/prefer-lit? false}))
-              day (await (target-after (assoc world :time 1000) [] {}))]
+              day (await (target-after (assoc world :time 1000) [] {}))
+              day-dark (await (target-after (assoc world :time 1000 :light-default [0 0]) [] {}))]
           (is (neg? (:z out)) (str "west is dark, north-west is lit: " (pr-str out)))
           (is (= {:x -6 :y 64 :z 0} off) "prefer-lit? false: straight west")
-          (is (= {:x -6 :y 64 :z 0} day) "by day above ground light is no reason to turn"))))))
+          (is (= {:x -6 :y 64 :z 0} day) "by day with every seen cell lit there is no reason to turn")
+          (is (neg? (:z day-dark)) (str "dark is a light check, not the clock: dark seen ground by day is left out too " (pr-str day-dark))))))))
 
 ;; ------------------------------------------------------------------ a goal given up comes back
 

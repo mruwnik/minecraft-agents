@@ -10,7 +10,6 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
-            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shot :as shot]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
@@ -84,13 +83,11 @@
   (boolean (some #(<= (u/dist % pos) (settings/get settings ::died-radius)) spots)))
 
 (defn dark-end?
-  "A fn of a feet cell: whether it is dark (look/dark-fn) when it is night or the body is under ground and ::prefer-lit?
-  holds, else nil."
+  "A fn of a feet cell: whether it is dark (look/dark-fn) when ::prefer-lit? holds, else nil."
   [p]
   (when (settings/get settings ::prefer-lit?)
-    (when-let [{:keys [night? at]} (look/dark-fn p)]
-      (when (or night? (sh-sense/buried? p))
-        (fn [{:keys [x y z]}] (= 1 (at x y z)))))))
+    (when-let [{:keys [at]} (look/dark-fn p)]
+      (fn [{:keys [x y z]}] (= 1 (at x y z))))))
 
 (defn avoid-ends
   "walk/choose-target's :avoid fns for a step of the flight: near a death first, then dark ground."
