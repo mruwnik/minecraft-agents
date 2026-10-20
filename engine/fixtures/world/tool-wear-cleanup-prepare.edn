@@ -22,8 +22,8 @@
    :act [[:job (jobs.access.pillar {:height 2 :use {:blocks ["cobblestone"]} :ignore-zones? true})]
          [:await {:source :job :kind :completed} 60]
          [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
-   :expect [{:event {:source :job :kind :cleanup.done} :within-s 60}
-            {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 60 :until {:source :job :kind :cleanup.done}}]
+   :expect [{:event {:source :job :kind :completed :data {:open [:any]}} :within-s 60}
+            {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 60 :until {:source :job :kind :completed :data {:open [:any]}}}]
    :after [[:item "iron_pickaxe" 1]]}
   {:name "cleanup-no-pick-no-tool-event"
    :body {:inventory [["cobblestone" 4] ["iron_sword" 1]]}

@@ -14,7 +14,7 @@
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}]}}]
    :body {:at [96.5 0 8.5] :inventory [["iron_pickaxe" 1] ["iron_sword" 1]] :effects [["resistance" 600 4]]}
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :for-s 40}
-            {:no-event {:source :job :kind :cleanup.done} :for-s 40}]
+            {:no-event {:source :reflex :kind :ended :data {:open [:any]}} :for-s 40}]
    :after [[:block [6 0 8] "cobblestone"] [:body-near [96.5 0 8.5] 4]]
    :limit-s 50}
   {:name "scaffold-left-near-entry-is-taken-back"
@@ -23,7 +23,7 @@
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}]}}]
    :body {:at [20.5 0 8.5] :inventory [["iron_pickaxe" 1] ["iron_sword" 1]] :effects [["resistance" 600 4]]}
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :within-s 30}
-            {:event {:source :job :kind :cleanup.done :data {:removed 1}} :within-s 70}]
+            {:event {:source :reflex :kind :ended :data {:removed [[:any]]}} :within-s 70}]
    :after [[:not-block [6 0 8] "cobblestone"]]}
   {:name "tidy-pending-far-entry-is-left-alone"
    :register [{:trigger :tidy-pending :persistence :cooldown :cooldown-s 10}]
@@ -58,6 +58,6 @@
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}]}}]
    :body {:at [21.5 3 8.5] :inventory [["iron_pickaxe" 1] ["iron_sword" 1]] :effects [["resistance" 600 4]]}
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :within-s 30}
-            {:event {:source :job :kind :cleanup.done :data {:removed 1}} :within-s 80}]
+            {:event {:source :reflex :kind :ended :data {:removed [[:any]]}} :within-s 80}]
    :after [[:not-block [6 0 8] "cobblestone"]]
    :limit-s 100}]}

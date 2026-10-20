@@ -406,7 +406,7 @@ Each tick the engine fires the first entry whose `:when` holds, which is not mut
 - **Persistence**, when the trigger still holds as the job ends: `:retry` fires again next tick; `:cooldown` waits
   `:cooldown-s` counted from the job end; `:stop` waits until the condition has been false once. An entry's own values
   override the trigger's. A contract job ending `:impossible` stops the entry as `:stop` does, whatever its persistence;
-  `reflex.ended` carries the ending's `:kind`. An entry's `:job` may carry call keys (`:spend`, `:ways`).
+  `reflex.ended` carries the ending's `:kind` and its data. An entry's `:job` may carry call keys (`:spend`, `:ways`).
 - **Settling**: after a login, reconnect, respawn or teleport (a forced move over 16 blocks) no trigger is evaluated until
   `settleMs` (1 s) after the column under the body loads. A reflex that ends meanwhile is judged on the first ready tick.
 - Agent-only edits (`engine.core`): `register-reflex!`, `remove-reflex!` (not built-ins), `mute!` (with TTL; TTLs run on wall time minus host suspends, `core/ttl-now`, lag saved as state `:clock-lag`), `move!`

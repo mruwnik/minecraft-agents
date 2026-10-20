@@ -560,7 +560,7 @@
 
 (def refusing-jobs
   {'never {:round (fn [c] (ctx/end c :impossible {:reason :not-smeltable :item "diamond" :text "diamond"}))}
-   'gives-up {:round (fn [c] (swap! world assoc :call (ctx/frozen-call c)) (ctx/end c :nothing-possible :gave-up))}})
+   'gives-up {:round (fn [c] (swap! world assoc :call (ctx/frozen-call c)) (ctx/end c :nothing-possible :gave-up {:left 3}))}})
 
 (def refusing-triggers
   (into {} (for [k [:never :gives-up]]
@@ -585,6 +585,7 @@
           (swap! world assoc :fire #{:gives-up})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= 3 (fired :gives-up)) "nothing-possible: tried again as its persistence says")
+          (is (= 3 (get-in (last (ev seen :reflex :ended)) [:data :left])) "the reflex ending carries the job's result")
           (swap! world assoc :fire #{:never})
           (await (core/tick! eng))
           (is (= 2 (fired :never)) "the trigger let go and holds again: a new cause"))))))

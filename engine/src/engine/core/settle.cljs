@@ -150,7 +150,7 @@
   "Classify a reflex end now and apply the entry's persistence when its trigger
   still holds, the cooldown counted from the end's :ended-at; an :impossible ending stops the entry as :stop does,
   whatever its persistence, until the trigger lets go. Emit its one reflex.ended with extra fields."
-  [eng {:keys [reflex job outcome kind reason ended-at text report]} extra]
+  [eng {:keys [reflex job outcome kind reason ended-at text report result]} extra]
   (let [entry (some #(when (= reflex (:id %)) %) (:register (state eng)))
         still? (and entry (trigger-holds? eng entry (:primitives eng) (mem/view (:store eng))))]
     (when still?
@@ -162,7 +162,7 @@
     (emit! eng (merge {:source :reflex :kind :ended :level :info :reflex reflex :job job
                        :outcome outcome :text (str text ": " (name outcome))
                        :how (if still? :completed_not_cleared :cleared)}
-                      (when kind {:data {:kind kind}})
+                      (when kind {:data (assoc result :kind kind)})
                       (when reason {:reason reason})
                       (when report {:report report})
                       extra))))
@@ -177,7 +177,7 @@
                      :text (reflex-text reflex (get-in (state eng) [:instances id :spec]))
                      :report (tally/end-root! eng id (#{:done :stopped} outcome) e)}
               reason (assoc :reason reason)
-              e (assoc :kind (:kind e)))]
+              e (assoc :kind (:kind e) :result (:data e)))]
     (drop-instance! eng id :ended)
     (if (paused? eng)
       (swap! (:state eng) update :deferred-ends conj end)

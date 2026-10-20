@@ -15,7 +15,7 @@
          [:await {:source :job :kind :completed} 60]
          [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:built 5}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :cleanup.done :data {:removed 5}} :within-s 100}]
+            {:event {:source :job :kind :completed :data {:removed [[:any] [:any] [:any] [:any] [:any]]}} :within-s 100}]
    :after [[:not-block [9 -1 16] "dirt"] [:not-block [11 -1 16] "dirt"] [:not-block [13 -1 16] "dirt"]
            [:body-near [11.5 0 16.5] 6]]}
   {:name "foreign-footprint-on-the-row-waits-places-nothing"

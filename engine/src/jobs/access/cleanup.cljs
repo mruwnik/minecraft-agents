@@ -88,7 +88,7 @@
 
   Ends by collecting the removed items' drops (jobs.items.collect-drops, filtered to the items they drop;
   a wall torch gives the torch). Data {:removed [{:cell :item}] :dropped [{:cell :item :found}] :open [{:cell
-  :item :reason}] :collected n}, info cleanup.done after a :done ending, and warn cleanup.left (with the counts) instead while :open is not empty. Open cells
+  :item :reason}] :collected n} (the ending carries it, a reflex run's too), and warn cleanup.left (with the counts) while :open is not empty. Open cells
   are held (:scaffold-held, 10 minutes) so the conditions and the scaffold-left trigger do not offer them again at
   once. Ends :done when nothing is left open, else nothing-possible :left-open (what could be taken back, was);
   :too-many-passes (nothing-possible) after ::max-passes steps.
@@ -339,21 +339,6 @@
       (ledger/remember-held! c held))))
 
 (defn cell-text [{:keys [cell reason]}] (str (pr-str cell) " " (name reason)))
-
-(defn done-event!
-  "Tell cleanup.done for a result."
-  [c result]
-  (ctx/emit! c :cleanup.done :info {:removed (count (:removed result)) :dropped (count (:dropped result))
-                                    :open (count (:open result)) :collected (:collected result)
-                                    :text (str "cleanup removed " (count (:removed result)) ", dropped "
-                                               (count (:dropped result)) " not ours, " (count (:open result)) " left")}))
-
-(defn ^:async cleanup
-  "After a cleanup that did its round and ended :done: cleanup.done is told."
-  [c ending]
-  (when (and (= :done (:kind ending)) (:started (ctx/mem c)))
-    (done-event! c (:data ending)))
-  (ctx/end c :done nil {}))
 
 (defn finish! [c open]
   (let [result (result-of c open)]

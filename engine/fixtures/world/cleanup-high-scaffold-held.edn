@@ -17,13 +17,13 @@
                                               {:cell #at [10 6 3] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}
                                               {:cell #at [10 7 3] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}
                                               {:cell #at [10 8 3] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}]}}]
-   :expect [{:event {:source :job :kind :cleanup.done :data {:removed 1 :open [:>= 3]}} :within-s 70}]
+   :expect [{:event {:source :reflex :kind :ended :data {:removed [[:any]] :open [[:any] [:any] [:any]]}} :within-s 70}]
    :after [[:not-block [6 0 8] "cobblestone"] [:block [10 6 3] "cobblestone"] [:block [10 8 3] "cobblestone"] [:body-near [8.5 0 8.5] 5]]}
   {:name "high-scaffold-only-is-never-walked-to"
    :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [10 6 3] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}
                                               {:cell #at [10 7 3] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}
                                               {:cell #at [10 8 3] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}]}}]
-   :expect [{:no-event {:source :job :kind :cleanup.done :data {:removed [:>= 1]}} :for-s 40}]
+   :expect [{:no-event {:source :reflex :kind :ended :data {:removed [:has [:any]]}} :for-s 40}]
    :after [[:block [10 6 3] "cobblestone"] [:block [10 7 3] "cobblestone"] [:block [10 8 3] "cobblestone"] [:body-near [14.5 0 8.5] 5]]
    :limit-s 50}]}

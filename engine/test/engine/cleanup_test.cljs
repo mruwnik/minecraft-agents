@@ -404,8 +404,7 @@
           (is (= (mapv (fn [c] {:cell c :item "dirt"}) (reverse cells)) (:removed @out)))
           (is (= [] (:open @out)))
           (is (= 6 (:collected @out)))
-          (is (= :done (:status @out)))
-          (is (= 1 (count (of-kind seen :cleanup.done)))))))))
+          (is (= :done (:status @out))))))))
 
 (deftest every-removal-goes-through-the-dig-job
   (async done
@@ -544,7 +543,6 @@
           (is (= [[0 65 0]] (mapv :cell (the-ledger eng))))
           (is (= [{:cell [0 65 0] :item "dirt" :reason :zone :zone "keep"}] (:open @out)))
           (is (= 1 (count (of-kind seen :cleanup.left))))
-          (is (empty? (of-kind seen :cleanup.done)) "a left-open ending does not restate itself")
           (is (= #{[0 65 0]} (ledger/held-cells (mem/view (:store eng))))))))))
 
 (deftest only-the-named-instance-and-its-children
@@ -598,8 +596,7 @@
           (core/submit! eng (list job) {})
           (await (ticks s eng 20))
           (is (empty? (:list (core/state eng))) "ended at once: the goal already holds")
-          (is (= 0 (.-length (.-calls (.-world p)))))
-          (is (empty? (of-kind seen :cleanup.done))))))))
+          (is (= 0 (.-length (.-calls (.-world p))))))))))
 
 (defn done-of
   "The kind and reason of cleanup's done? for a started job with memory m over an empty ledger."
