@@ -115,6 +115,12 @@
   (doseq [bad ["" "ab" "x y" "Avi\nstop" "Avi;op Claude" (apply str (repeat 17 "a")) "remove Steve" "../x"]]
     (is (thrown-with-msg? js/Error #"not a valid player name" (tools/whitelist-command bad)))))
 
+(deftest case-clash-finds-an-entry-of-other-case
+  (let [entries #js [#js {:name "ProbeFb83c2d0"} #js {:name "Aviendha"}]]
+    (is (= "ProbeFb83c2d0" (tools/case-clash entries "Probefb83c2d0")))
+    (is (nil? (tools/case-clash entries "ProbeFb83c2d0")))
+    (is (nil? (tools/case-clash entries "Other")))))
+
 (deftest build-raw-command
   (are [argv expected] (= expected (tools/build-raw-command (clj->js argv)))
     ["list"] "list"

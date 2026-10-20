@@ -40,6 +40,19 @@
 
 (defn whitelist-command [value] (str "whitelist add " (valid-name value)))
 
+(defn case-clash
+  "The whitelist entry naming `value` in a different case, or nil. The server matches names without case on
+  `whitelist add` (so it answers 'already whitelisted') but admits a login by the offline UUID, which is
+  derived from the exact-case name, so the entry does not admit `value`."
+  [entries value]
+  (->> entries
+       (map #(.-name %))
+       (some #(when (and (not= % value) (= (str/lower-case %) (str/lower-case value))) %))))
+
+(defn clash-message [value other]
+  (str value " is not admitted: the whitelist holds " other " (other case, other login UUID). Use the name "
+       other " or ask the lead to run `whitelist remove " other "` and add " value " again."))
+
 ;; ---- rcon-raw.mjs: any command ----
 
 (defn build-raw-command
@@ -186,6 +199,7 @@
   (or (not-empty (.-MINECRAFT_SERVER_PROPERTIES env))
       (path/join home "minecraft" "test" "server.properties")))
 (def server-properties (server-properties-path js/process.env (os/homedir)))
+(def whitelist-file (path/join (path/dirname server-properties) "whitelist.json"))
 
 (defn exit-code-after
   "Resolves to 0 after (run!) succeeds, to 1 after printing `label failed: message` when it rejects."
@@ -200,7 +214,10 @@
    (-> (js/Promise.resolve nil)
        (.then #(whitelist-command (or (aget argv 0) "")))
        (.then #(rcon/send-commands! {:port (read-port server-properties)} [%]))
-       (.then #(js/console.log (first %))))))
+       (.then #(js/console.log (first %)))
+       (.then #(let [other (when (.existsSync fs whitelist-file)
+                             (case-clash (js/JSON.parse (.readFileSync fs whitelist-file "utf8")) (aget argv 0)))]
+                 (when other (fail (clash-message (aget argv 0) other))))))))
 
 (defn raw-main [argv]
   (let [command (try (build-raw-command argv) (catch :default e (js/console.error (.-message e)) nil))]
