@@ -1,7 +1,7 @@
 (ns jobs.lib.pen-gate
   "What the pen-gate trigger and the shut-gate job share: the index of planned gates, reading them open, and the memory
   entries that hide a gate from the trigger (see triggers.animals.pen-gate)."
-  (:require [jobs.lib.pen :as pen]
+  (:require [jobs.lib.pen-blocks :as pen]
             [jobs.lib.click :as click]
             [jobs.lib.look :as look]
             [engine.memory :as mem]

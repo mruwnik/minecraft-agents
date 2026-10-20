@@ -1,7 +1,6 @@
 (ns jobs.strip.site
   (:require [jobs.lib.ready :as ready]
             [jobs.lib.waits :as waits]
-            [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -19,7 +18,8 @@
             [jobs.lib.torch :as torch]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
-            [jobs.lib.world :as known]))
+            [jobs.strip.site-plan :refer [chests furnaces loads ores plan-of shears? smelt-saved spot]]
+            [jobs.strip.site-tree :refer [beyond counts mouth next-open seal-ready settled tree unlinked vec3]]))
 
 (def doc
   "Strip one abandoned mineshaft (a site) of its wood, cobwebs, rails, ore and chest-minecart loot, from a field base, and
@@ -78,10 +78,8 @@
 (def kind :strip/sites)
 (def policy {:cap 1 :ttl :forever})
 (def trip-reasons #{:bag-full :food-short :no-torches :no-tool})
-(def settled #{:stripped :sealed :skipped})
 (def condition-reasons "Stop reasons that end condition-failed: a fact of the base, the bag or the site. The rest are nothing-possible."
   #{:bad-plan :no-site :no-shears :no-torches :food-short :base-full})
-
 (defn sites [c] (or (:data (ctx/latest c kind)) {}))
 (defn site [c] (get (sites c) (:site (:args c))))
 
@@ -92,10 +90,6 @@
         all (update (sites c) id #(apply f % xs))
         old (take (- (count all) (settings/get settings ::max-sites)) (filter #(= :done (:phase (all %))) (remove #{id} (keys all))))]
     (ctx/remember! c kind (apply dissoc all old) policy)))
-
-(defn vec3 [v] (let [{:keys [x y z]} (a/cell v)] [x y z]))
-
-(defn counts [s] (frequencies (map :state (vals (:segments s)))))
 
 (defn reason-of
   "The reason a child's ending reads as: its cause (a string for the smelt's), a map cause's key."
@@ -133,15 +127,6 @@
                           (not= :done (:kind e)) (update acc :failed conj {:furnace (:furnace args) :reason (reason-of e)})
                           :else (update acc :smelted #(merge-with + % {(:item args) (:smelted (:data e) 0)}))))))))
 
-(defn smelt-saved
-  "The site state after smelt-run! result r: cooking replaced by what still cooks plus what was loaded, the output counted."
-  [s r kept]
-  (cond-> (-> s
-              (assoc :cooking (merge kept (:cooking r)))
-              (update :smelted #(merge-with + (or % {}) (:smelted r)))
-              (update :smelt-failed (fnil into []) (:failed r)))
-    (some pos? (vals (:smelted r))) (assoc :bank true)))
-
 (defn stop!
   "Stop with reason and fields."
   [c reason fields]
@@ -152,29 +137,6 @@
 (defn child-stop! [c failure]
   (let [e (:ending failure)]
     (stop! c :child-failed {:child (:child failure) :because (reason-of e) :child-kind (:kind e)})))
-
-(defn spot [plan name]
-  (some (fn [[k v]] (when (str/ends-with? k (str "/" name)) v)) (:spots plan)))
-
-(defn plan-of [c s] (known/plan c (:base s)))
-(defn chests [c s] (let [plan (plan-of c s)] (vec (keep #(spot plan %) ["chest-1" "chest-3"]))))
-(def ores ["raw_iron" "raw_gold" "raw_copper"])
-(defn furnaces
-  "[[slot furnace-cell] ..] of the plan's furnaces."
-  [c s] (let [plan (plan-of c s)] (vec (keep-indexed (fn [i k] (when-let [f (spot plan k)] [(keyword (str "smelt-" i)) f])) ["furnace-1" "furnace-2"]))))
-
-(defn loads
-  "[[slot args] ..] smelting the carried ore {item n} in the free furnaces fs [[slot cell] ..]: one kind split over them, several one kind each, most first."
-  [fs carried ignore-zones?]
-  (let [kinds (sort-by (comp - val) (filter (comp pos? val) (select-keys carried ores)))
-        k (count fs)
-        one (fn [[slot f] item n] [slot {:furnace f :item item :count (min 64 n) :fetch {:what #{:item} :how #{:chest}} :ignore-zones? ignore-zones?}])]
-    (cond (or (zero? k) (empty? kinds)) []
-          (= 1 (count kinds)) (let [[item n] (first kinds)]
-                                (vec (keep-indexed (fn [i fs1] (let [share (+ (quot n k) (if (< i (rem n k)) 1 0))] (when (pos? share) (one fs1 item share)))) fs)))
-          :else (mapv (fn [fs1 [item n]] (one fs1 item n)) fs kinds))))
-
-(defn shears? [c] (boolean (some #(= "shears" (:name %)) (u/inventory (:primitives c)))))
 
 (defn ^:async base!
   [c s]
@@ -199,42 +161,6 @@
           f (child-stop! c f)
           (not (shears? c)) (stop! c :no-shears {})
           :else (do (save! c assoc :phase :strip) :again))))
-
-(defn tree [s] (strip/order (vals (:segments s)) (vec3 (:at s))))
-
-(defn beyond [t id] (mapcat (fn [k] (cons k (beyond t k))) (get-in t [:children id])))
-
-(defn seal-ready
-  "The segment to seal next, deepest first: stripped, not the root, everything beyond it settled."
-  [s t]
-  (let [state #(get-in s [:segments % :state])]
-    (->> (reverse (:order t))
-         (filter #(and (= :stripped (state %)) (not= % (:root t)) (every? settled (map state (beyond t %)))))
-         first)))
-
-(defn next-open
-  "The next segment to strip: open, its parent settled, one with an unseen end first."
-  [s t]
-  (let [open (filter #(and (= :open (get-in s [:segments % :state]))
-                           (settled (get-in s [:segments (get-in t [:parent %]) :state] :stripped)))
-                     (:order t))]
-    (get (:segments s) (or (first (filter #(seq (get-in s [:segments % :open-ends])) open)) (first open)))))
-
-(defn unlinked
-  "Open segments the tree does not reach: no stripped segment touches them, so they are passed on, not stripped."
-  [s t]
-  (filter #(= :open (get-in s [:segments % :state])) (:unreached t)))
-
-(defn mouth
-  "{:at :side :entry} of seg on the side of its parent: the cell one step inside the segment from where the parent meets it."
-  [s t seg]
-  (let [parent (get (:segments s) (get-in t [:parent (:id seg)]))
-        {:keys [axis y line from to]} seg
-        j (cond (nil? parent) from
-                (= axis (:axis parent)) (if (<= (:to parent) from) from to)
-                :else (:line parent))
-        side (if (<= j from) :from :to)]
-    {:side side :at (strip/at axis y line (if (= side :from) (inc j) (dec j))) :entry (if parent (strip/at axis y line j) (vec3 (:at s)))}))
 
 (defn in-site? [c s]
   (let [{:keys [x y z]} (u/self-pos c)

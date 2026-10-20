@@ -7,6 +7,7 @@
             [jobs.lib.apiary :as apiary]
             [jobs.lib.combat :as combat]
             [jobs.lib.pen :as pen]
+            [jobs.lib.pen-blocks :as pb]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [engine.ctx :as ctx]
@@ -81,7 +82,7 @@
     (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy [0 1 -1 2]
           :let [cell {:x (+ x dx) :y (+ y dy) :z (+ z dz)}
                 b (block-at cell)]
-          :when (and (pen/gate? b) (pen/on? b "open"))]
+          :when (and (pb/gate? b) (pb/on? b "open"))]
       cell)))
 
 (defn ^:async warn-left-open!

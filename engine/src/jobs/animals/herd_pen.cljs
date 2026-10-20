@@ -7,7 +7,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.near :as near]
-            [jobs.lib.pen :as pen]
+            [jobs.lib.pen-blocks :as pen]
             [jobs.lib.util :as u]
             [jobs.animals.herd-run :refer [adults animal-now approach-range box-centre cell detail-text pen-box drop-gate! end! finish! gate-cell gate-index gate-open? hold-gate! in-pen-adults max-reopens near-pen orthogonal out-1 pause! pen-opts read-pen set-phase! shut-failed!]]))
 
