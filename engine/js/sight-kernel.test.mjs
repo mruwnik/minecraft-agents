@@ -1,7 +1,7 @@
 // Why JavaScript: tests sight-kernel.mjs.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { castRays, cellLight, lazySections } from './sight-kernel.mjs'
+import { castRays, cellLight, lazySections, MARKS_LENGTH } from './sight-kernel.mjs'
 
 // a world of cells given by `at(x, y, z)`: state id (1 blocks sight, 0 air, -1 unloaded) and light (sky << 4 | block)
 const rig = (at, lightOf = () => 0xF0, { near = 0 } = {}) => {
@@ -12,12 +12,11 @@ const rig = (at, lightOf = () => 0xF0, { near = 0 } = {}) => {
     sections: lazySections(),
     sight: Uint8Array.from([0, 1]),
     visible: Uint8Array.from({ length: 256 }, (_, l) => l >= 16 ? 1 : 0),
-    base: 4,
     radius: 8,
     near,
     marksOf: (cx, cy, cz) => {
       const k = `${cx},${cy},${cz}`
-      if (!marks.has(k)) marks.set(k, new Uint32Array(4096))
+      if (!marks.has(k)) marks.set(k, new Uint8Array(MARKS_LENGTH))
       return marks.get(k)
     },
     record: (x, y, z, id) => records.push([x, y, z, id]),

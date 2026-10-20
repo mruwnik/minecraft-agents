@@ -115,18 +115,23 @@
 (def max-mark-sections 600)
 
 (defn marks-of
-  "The slice marks of section `key`: a Uint32Array of the slice stamp that last recorded each cell, kept in st.marks
-  (dropped past max-mark-sections) with the last one asked for cached."
-  [^js st key]
-  (if (== key (.-markKey st))
-    (.-markArr st)
-    (let [^js m (or (.-marks st) (set! (.-marks st) (js/Map.)))
-          arr (or (.get m key)
-                  (do (when (>= (.-size m) max-mark-sections) (.clear m))
-                      (let [a (js/Uint32Array. 4096)] (.set m key a) a)))]
-      (set! (.-markKey st) key)
-      (set! (.-markArr st) arr)
-      arr)))
+  "The slice marks of section `key` for the current mark stamp: the kernel's Uint8Array (MARKS_LENGTH), zeroed when the
+  stamp is new to it. Kept in st.marks (dropped past max-mark-sections) with the last one asked for cached."
+  [^js st key marks-length]
+  (let [stamp (.-markStamp st)]
+    (if (and (== key (.-markKey st)) (== stamp (.-markArrStamp st)))
+      (.-markArr st)
+      (let [^js m (or (.-marks st) (set! (.-marks st) (js/Map.)))
+            ^js arr (or (.get m key)
+                        (do (when (>= (.-size m) max-mark-sections) (.clear m))
+                            (let [a (js/Uint8Array. marks-length)] (set! (.-stamp a) stamp) (.set m key a) a)))]
+        (when-not (== (.-stamp arr) stamp)
+          (.fill arr 0)
+          (set! (.-stamp arr) stamp))
+        (set! (.-markKey st) key)
+        (set! (.-markArrStamp st) stamp)
+        (set! (.-markArr st) arr)
+        arr))))
 
 (defn mark-kind
   "How a recorded cell of state id stops sight, stored with its slice mark: 1 never, 2 for every line (a full cube),
@@ -299,9 +304,9 @@
     (set! (.-near st) (near-of per))
     (renew-marks! per st eye now)
     (.castRays ^js (kernel)
-               #js {:raw raw :sections (sections-of raw st) :sight sight :visible (.-visible st) :base (* 4 (.-markStamp st))
+               #js {:raw raw :sections (sections-of raw st) :sight sight :visible (.-visible st)
                     :radius (:radius opts) :near (.-near st)
-                    :marksOf (fn [cx cy cz] (marks-of st (section-key cx cy cz)))
+                    :marksOf (fn [cx cy cz] (marks-of st (section-key cx cy cz) (.-MARKS_LENGTH ^js (kernel))))
                     :record (fn [x y z id] (record! st store x y z id now))
                     :markKind (fn [id] (mark-kind raw sight id))
                     :thin (fn [id x y z ox oy oz ex ey ez] (blocks-line? raw sight id x y z ox oy oz ex ey ez))}

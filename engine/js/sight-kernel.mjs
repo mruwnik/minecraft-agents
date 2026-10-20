@@ -7,6 +7,9 @@
 const UNSET = 0xFFFE // a cell of a lazy section not read yet
 const UNLOADED = 0xFFFF
 const LIGHT_UNSET = 255 // block-light nibbles are 0..15
+// A marks array is a Uint8Array of MARKS_LENGTH for the current mark stamp (marksOf hands out zeroed ones for a new
+// stamp): the mark kind of each cell of the section, 0 while not recorded, else markKind.
+export const MARKS_LENGTH = 4096
 
 // Sections filled cell by cell from raw.stateAt / raw.lightAt as the rays reach them, for raw worlds that have no
 // section arrays (the test fakes). Valid while the world does not change; the perception drops it with its marks.
@@ -30,10 +33,10 @@ export function lazySections () {
   }
 }
 
-// ctx: {raw (stateAt, lightAt), sections (sectionRange, sectionStates, sectionLight: the raw world's own or lazySections), sight, visible, base, radius, near, marksOf(cx, cy, cz), record(x, y, z, id), markKind(id), thin(id, x, y, z, ox, oy, oz, ex, ey, ez)}
+// ctx: {raw (stateAt, lightAt), sections (sectionRange, sectionStates, sectionLight: the raw world's own or lazySections), sight, visible, radius, near, marksOf(cx, cy, cz), record(x, y, z, id), markKind(id), thin(id, x, y, z, ox, oy, oz, ex, ey, ez)}
 // dirs: Float64Array of unit vectors (3 per ray), NaN x = skip the ray. Returns the number of cells entered.
 export function castRays (ctx, ox, oy, oz, dirs, count) {
-  const { raw, sections: src, sight, visible, base, radius, near, marksOf, record } = ctx
+  const { raw, sections: src, sight, visible, radius, near, marksOf, record } = ctx
   const kinds = ctx.kinds ?? (ctx.kinds = new Uint8Array(sight.length))
   const { minY, sections } = src.sectionRange()
   const sectionStates = src.sectionStates
@@ -41,47 +44,20 @@ export function castRays (ctx, ox, oy, oz, dirs, count) {
   const s0 = minY >> 4 // world section index of section 0
   let total = 0
 
-  // the section of the cell the ray is in: its marks and state ids (null: unloaded), its light when first needed
-  let cx = 0; let cy = 0; let cz = 0
-  let marks = null
-  let ids = null
-  let lightSec
-
-  const kindOf = id => kinds[id] || (kinds[id] = ctx.markKind(id))
-  const enter = () => {
-    marks = marksOf(cx, cy, cz)
-    const s = cy - s0
-    ids = s < 0 || s >= sections ? null : sectionStates(cx, s, cz)
-    lightSec = undefined
-  }
-  const lightAt = (x, y, z) => {
-    const px = x >> 4; const py = y >> 4; const pz = z >> 4
-    let sec
-    if (px === cx && py === cy && pz === cz) sec = lightSec === undefined ? (lightSec = sectionLight(cx, cy - s0, cz)) : lightSec
-    else sec = sectionLight(px, py - s0, pz)
-    if (sec === null) return 0
-    const i = (((y & 15) << 8) | ((z & 15) << 4) | (x & 15))
-    if (sec.block[i] === LIGHT_UNSET) {
-      const v = raw.lightAt(x, y, z)
-      sec.sky[i] = v >> 4
-      sec.block[i] = v & 15
-    }
-    return (sec.sky[i] << 4) | sec.block[i]
-  }
-  const stateAt = (x, y, z, i) => {
-    if (ids === null) return -1
-    let v = ids[i]
-    if (v >= UNSET) {
-      if (v === UNSET) { const r = raw.stateAt(x, y, z); ids[i] = v = r < 0 ? UNLOADED : r }
-      if (v === UNLOADED) return -1
-    }
-    return v
-  }
-
+  // The sections around the eye by offset, fetched on first entry: a ray crossing a section boundary finds its marks,
+  // state ids and light by index, not by hashing. Plain locals for the section the ray is in: the hot loop reads them every step.
+  const R = ((radius + 2) >> 4) + 2
+  const W = 2 * R + 1
   const ecx = Math.floor(ox) >> 4; const ecy = Math.floor(oy) >> 4; const ecz = Math.floor(oz) >> 4
-  cx = ecx; cy = ecy; cz = ecz
-  enter()
-  const eyeMarks = marks; const eyeIds = ids
+  const marksC = new Array(W * W * W)
+  const idsC = new Array(W * W * W)
+  const lightC = new Array(W * W * W)
+  let cx = ecx; let cy = ecy; let cz = ecz
+  let slot = (R * W + R) * W + R
+  let marks = marksC[slot] = marksOf(cx, cy, cz)
+  let ids = idsC[slot] = cy - s0 < 0 || cy - s0 >= sections ? null : sectionStates(cx, cy - s0, cz)
+  let lightSec = lightC[slot]
+  const eyeSlot = slot
 
   for (let r = 0; r < count; r++) {
     const dx = dirs[3 * r]; const dy = dirs[3 * r + 1]; const dz = dirs[3 * r + 2]
@@ -91,68 +67,90 @@ export function castRays (ctx, ox, oy, oz, dirs, count) {
     const tdx = dx === 0 ? Infinity : Math.abs(1 / dx)
     const tdy = dy === 0 ? Infinity : Math.abs(1 / dy)
     const tdz = dz === 0 ? Infinity : Math.abs(1 / dz)
-    let x = Math.floor(ox); let y = Math.floor(oy); let z = Math.floor(oz)
+    let x = Math.floor(ox) | 0; let y = Math.floor(oy) | 0; let z = Math.floor(oz) | 0
     let tmx = dx === 0 ? Infinity : tdx * (dx > 0 ? (x + 1 - ox) : (ox - x))
     let tmy = dy === 0 ? Infinity : tdy * (dy > 0 ? (y + 1 - oy) : (oy - y))
     let tmz = dz === 0 ? Infinity : tdz * (dz > 0 ? (z + 1 - oz) : (oz - z))
     let n = 1
     let prev = -1 // light of the cell the ray came from; -1: not read yet
-    if (cx !== ecx || cy !== ecy || cz !== ecz) { cx = ecx; cy = ecy; cz = ecz; marks = eyeMarks; ids = eyeIds; lightSec = undefined }
+    if (slot !== eyeSlot) { cx = ecx; cy = ecy; cz = ecz; slot = eyeSlot; marks = marksC[slot]; ids = idsC[slot]; lightSec = lightC[slot] }
 
     // the cell the eye is in
     let i = ((y & 15) << 8) | ((z & 15) << 4) | (x & 15)
-    const kind0 = marks[i] - base
+    const kind0 = marks[i]
     if (kind0 !== 1) {
-      const id0 = kind0 === 2 ? 0 : stateAt(x, y, z, i)
+      const id0 = kind0 === 2 ? 0 : stateIn(raw, ids, x, y, z, i)
       if (kind0 < 1 || kind0 > 3) {
         if (id0 >= 0) {
           record(x, y, z, id0)
-          marks[i] = base + kindOf(id0)
+          const k0 = kinds[id0] || (kinds[id0] = ctx.markKind(id0))
+          marks[i] = k0
         }
       }
       if (kind0 === 2 || id0 < 0) { total += n; continue }
-      const k = kindOf(id0)
+      const k = kinds[id0] || (kinds[id0] = ctx.markKind(id0))
       if (k === 2 || (k === 3 && ctx.thin(id0, x, y, z, ox, oy, oz, ex, ey, ez))) { total += n; continue }
     }
 
+    // The walk keeps the cell's index in its section (i) beside its world cell: a step is an add on one axis, and the
+    // section changes where that add runs off the section (a carry into the next field of i).
+    const wrapx = sx > 0 ? 0 : 15; const wrapz = sz > 0 ? 0 : 15
+    const stepx = sx << 4; const stepz = sz << 8
     for (;;) {
       const t = tmx < tmy ? (tmx < tmz ? tmx : tmz) : (tmy < tmz ? tmy : tmz)
       if (t > radius) break
       const px = x; const py = y; const pz = z
+      let moved = false
       if (t === tmx) {
-        x += sx; tmx += tdx
-        if ((x >> 4) !== cx) { cx = x >> 4; enter() }
+        x += sx; tmx += tdx; i += sx
+        if ((i & 15) === wrapx) { i -= stepx; cx += sx; moved = true }
       } else if (t === tmy) {
-        y += sy; tmy += tdy
-        if ((y >> 4) !== cy) { cy = y >> 4; enter() }
+        y += sy; tmy += tdy; i += sy << 8
+        if (i < 0 || i > 4095) { i -= sy << 12; cy += sy; moved = true }
       } else {
-        z += sz; tmz += tdz
-        if ((z >> 4) !== cz) { cz = z >> 4; enter() }
+        z += sz; tmz += tdz; i += sz << 4
+        if (((i >> 4) & 15) === wrapz) { i -= stepz; cz += sz; moved = true }
       }
-      i = ((y & 15) << 8) | ((z & 15) << 4) | (x & 15)
-      const kind = marks[i] - base
+      if (moved) {
+        lightC[slot] = lightSec
+        slot = (((cx - ecx + R) * W) + (cz - ecz + R)) * W + (cy - ecy + R)
+        marks = marksC[slot]
+        if (marks === undefined) {
+          marks = marksC[slot] = marksOf(cx, cy, cz)
+          ids = idsC[slot] = cy - s0 < 0 || cy - s0 >= sections ? null : sectionStates(cx, cy - s0, cz)
+        } else ids = idsC[slot]
+        lightSec = lightC[slot]
+      }
+      const kind = marks[i]
       if (kind === 1) { n++; prev = -1; continue }
       if (kind === 2) { n++; break }
-      const id = stateAt(x, y, z, i)
+      const id = stateIn(raw, ids, x, y, z, i)
       if (id < 0) break
       n++
-      const k = kindOf(id)
+      const k = kinds[id] || (kinds[id] = ctx.markKind(id))
       const blocks = k === 2 || (k === 3 && ctx.thin(id, x, y, z, ox, oy, oz, ex, ey, ez))
       if (kind === 3) {
         if (blocks) break
         prev = -1
         continue
       }
-      const light = lightAt(x, y, z)
+      if (lightSec === undefined) lightSec = sectionLight(cx, cy - s0, cz)
+      const light = lightIn(raw, lightSec, x, y, z, i)
       let shown = light
       if (blocks) {
-        const p = prev < 0 ? lightAt(px, py, pz) : prev
+        let p = prev
+        if (p < 0) {
+          const pi = ((py & 15) << 8) | ((pz & 15) << 4) | (px & 15)
+          p = (px >> 4) === cx && (py >> 4) === cy && (pz >> 4) === cz
+            ? lightIn(raw, lightSec, px, py, pz, pi)
+            : lightIn(raw, sectionLight(px >> 4, (py >> 4) - s0, pz >> 4), px, py, pz, pi)
+        }
         const a = light & 0xF0; const b = p & 0xF0; const c = light & 15; const d = p & 15
         shown = ((a > b ? a : b) | (c > d ? c : d))
       }
       if (visible[shown] === 1 || t <= near) {
         record(x, y, z, id)
-        marks[i] = base + k
+        marks[i] = k
       }
       if (blocks) break
       prev = light
@@ -160,6 +158,28 @@ export function castRays (ctx, ox, oy, oz, dirs, count) {
     total += n
   }
   return total
+}
+
+// the light (sky << 4 | block) of the cell at index i of its section's light arrays, read from raw on first use; 0 where unloaded
+function lightIn (raw, sec, x, y, z, i) {
+  if (sec === null) return 0
+  if (sec.block[i] === LIGHT_UNSET) {
+    const v = raw.lightAt(x, y, z)
+    sec.sky[i] = v >> 4
+    sec.block[i] = v & 15
+  }
+  return (sec.sky[i] << 4) | sec.block[i]
+}
+
+// the state id of the cell at index i of the section ids (read from raw on first use), -1 where unloaded
+function stateIn (raw, ids, x, y, z, i) {
+  if (ids === null) return -1
+  let v = ids[i]
+  if (v >= UNSET) {
+    if (v === UNSET) { const r = raw.stateAt(x, y, z); ids[i] = v = r < 0 ? UNLOADED : r }
+    if (v === UNLOADED) return -1
+  }
+  return v
 }
 
 const FACE_INSET = 0.15
