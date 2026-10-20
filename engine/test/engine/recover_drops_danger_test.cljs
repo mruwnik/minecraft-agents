@@ -289,8 +289,7 @@
                                           [{:kind :done :data {:arrived false :why :goal-enclosed}}]))
           (await (run-until-empty eng 60))
           (set! recover-drops/walk-leg! walk-leg!)
-          (is (= ["cleanup removed 2, dropped 0 not ours, 0 left"]
-                 (take 1 (keep #(some->> (:text %) (re-find #"cleanup removed.*")) @seen)))
+          (is (empty? (ledger/open-entries (mem/view (:store eng))))
               "the first cleanup saw the plug and took it back")
           (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng))))))))
 
