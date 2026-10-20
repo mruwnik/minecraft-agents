@@ -25,7 +25,7 @@
    ::light-patience-s {:default 1200 :spec (a/num-in 0 nil)
                        :doc "Seconds readiness waits for light (jobs.lib.shelter.sense/light-in) before it calls the darkness unfixable; 1200 is a whole day, so a full night is waited for."}
    ::hidden-below-depth {:default 2 :spec (a/num-in 0 nil)
-                         :doc "Blocks under the feet from which an unseen place counts as underground: no look asks for it and waiting for dawn does not light it."}
+                         :doc "Blocks under the feet from which an unseen place with a seen roof over it counts as underground: no look asks for it and waiting for dawn does not light it."}
    ::unseen-judged-here-within {:default 6 :spec (a/num-in 0 nil)
                                 :doc "Blocks: an unseen place this near the feet is judged where the body stands (no look shows a cell behind a wall)."}})
 
@@ -38,11 +38,12 @@
 (defn place-text [{:keys [x y z]}] (str/join " " (remove nil? [x y z])))
 
 (defn hidden-below?
-  "Whether `to` is an unseen cell at least ::hidden-below-depth under the feet: terrain hides it (a pit or cliff foot seen from its rim is seen), so it is underground (Q279)."
+  "Whether `to` is an unseen cell at least ::hidden-below-depth under the feet with a seen solid block over it in its column (within 32): terrain hides it (a pit or cliff foot seen from its rim is seen), so it is underground (Q279). A valley behind a ridge has no seen roof and stays open surface."
   [p to]
   (and (:y to)
        (>= (- (:y (sh-sense/feet p)) (:y to)) (settings/get settings ::hidden-below-depth))
-       (not (sh-sense/seen-cell? p to))))
+       (not (sh-sense/seen-cell? p to))
+       (boolean (some #(sh-sense/solid-at? p (update to :y + %)) (range 1 33)))))
 
 (defn at-status
   "The status of the exposure of the walk of c's body to `to`: ok while sheltered or the chance is within ::risk-limit,

@@ -212,11 +212,20 @@
     (is (= :look (first s)))
     (is (= [[15 64 0]] (:look-at (nth s 2))))))
 
-(deftest an-unseen-cell-well-below-the-feet-is-underground-and-asks-no-look-or-dawn
-  (are [to expected] (= expected (with-redefs [sh-sense/seen-cell? (constantly false)] (kind (ready/safe-at (constantly to)) open-night)))
+(deftest an-unseen-cell-well-below-the-feet-under-a-seen-roof-is-underground-and-asks-no-look-or-dawn
+  (are [to expected] (= expected (with-redefs [sh-sense/seen-cell? (constantly false)
+                                               sh-sense/solid-at? (fn [_ c] (= 66 (:y c)))]
+                                   (kind (ready/safe-at (constantly to)) open-night)))
     {:x 15 :y 40 :z 0} :ok
+    {:x 15 :y 62 :z 0} :ok
     {:x 15 :y 63 :z 0} :look
     {:x 15 :y 64 :z 0} :look))
+
+(deftest an-unseen-cell-below-the-feet-with-no-seen-roof-is-a-valley-and-asks-a-look
+  (are [y] (= :look (with-redefs [sh-sense/seen-cell? (constantly false)
+                                  sh-sense/solid-at? (constantly false)]
+                      (kind (ready/safe-at (constantly {:x 15 :y y :z 0})) open-night)))
+    62 40))
 
 (def escapes
   '[respond-to-hostile block-arrow-gap unwedge breathe extinguish night dig-pocket retreat shut-in])
