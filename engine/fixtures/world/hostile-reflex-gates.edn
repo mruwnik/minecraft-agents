@@ -49,7 +49,7 @@
    :body {:inventory [["iron_sword" 1]] :effects [["resistance" 600 4]] :yaw 270}
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "zombie"} 10]
-         [:job (jobs.combat.attack {:targets :hostiles :radius 8 :leash 3})]]
+         [:job (jobs.combat.attack {:targets :hostiles :radius 8 :settings {:jobs.lib.hostile-fight/leash 3}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-target}} :within-s 20 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "attack"}} :for-s 20}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 6 31]] 1] [:body-near [16.5 0 16.5] 3]]

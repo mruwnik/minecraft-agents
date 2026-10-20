@@ -19,59 +19,48 @@
 
 (def doc
   "Attack the entities :targets names until none is left within :radius.
-  A target is an entity id (a number), a player's username, or a mob type such as \"zombie\"
-  (every mob of that name within :radius). Players match only by username. Items never match. The body never targets itself.
-  One call is the whole fight: it takes the nearest target not given up on, holds the first of the call's :use :tools
-  carried (default the best weapons carried, swords over axes; each entry is an item name or a part of one), walks within
-  reach (jobs.lib.near/go-near!, doors :shut, each leg bounded by :walk-timeout-s) and swings, again and again until
-  it ends. Swings at most once per :attack-gap-ms (nil: the held weapon's cooldown); the rest of the gap is spent looking
-  round and waiting.
-  It does not swing when the entity's `hittable` sensing is false (no clear line to its hitbox, for example glass), except in a :hostiles fight.
-  It walks closer instead, and counts that as a blocked walk.
-  A target is given up on, with a :reason:
-  - :unreachable: three blocked walks or out-of-reach swings in a row. A landed hit resets the count.
-    An out-of-reach swing right after a walk that arrived (the target moved on) does not count.
-  - :no-damage: :no-damage-hits swings in a row that did no damage.
-  - :too-many-hits: the max-hits setting (40) hits without a kill.
-  A kill counts only when the attack reports killed. A killed target or player is not attacked again in this run,
-  even after respawning.
-  Ends with the data {:reason :killed [ids] :given-up {id reason} :names {id name} :text}, plus the
-  shelter hint when a target was given up as :unreachable from inside the body's own shelter; the ending is
-  - :done (:cleared): every target seen was killed and none is within :radius.
-  - :nothing-possible :gave-up: every target seen was killed or given up on, and one was given up on.
-  - :nothing-possible :lost: some target was neither killed nor given up on.
-  - :limit-reached: the engine's limit (default :spend :job-time ::job-time-s) ends it, with the same data (done?'s :data).
-  - :condition-failed :absent: no target was present after a look round and, for a target heard but not seen, up to four steps toward the sound (jobs.lib.vantage).
-  :absent :done (the default) lets the job start and end with :absent, so {:targets [123 \"zombie\"]} is a one-shot order.
-  :absent :wait makes the call wait (can-start? :no-target) until a target is present, so {:targets \"zombie\" :absent :wait} repeated is a standing guard.
-  Creepers get no special handling. The job does not guard the body's health: the survival register sits above it and cuts it.
-  {:targets :hostiles} is the reflex fight (respond-to-hostile, retreat-cornered): the dangers near are the targets, hostiles within :radius
-  (ranged ones within :ranged-radius, default :radius), except the ids in :skip. Only a hostile the body has seen is fought: one only heard is judged
-  by its direction and band (jobs.lib.danger), never walked to or hit, and the job does not start with only heard ones in range (:no-target);
-  one that goes unseen mid-fight is turned toward and the job ends :nothing-possible :heard-only. A hostile more than :leash (default 20, setting
-  hostile-fight/::leash) blocks from where the fight began is not chased (with none other in range: not started; one that falls past it mid-fight: :given-up).
-  With :hold the body stays where it is: a melee hostile beyond reach is waited for, until hostile-fight/::hold-s (15) seconds pass with no swing
-  (:nothing-possible :hold-timeout); a ranged one is still walked up to. A ranged hostile farther than hostile-fight/::ranged-chase (6) is not
-  walked to while another is in range (:nothing-possible :too-far). Done (:cleared, even before the start) when no hostile is in range. When the body
-  lost health since the call began the job yields (:continue) so the parent decides again. A walk that is blocked counts again from 1 when the body lost
-  health since the last one. Every ending but :done is a decline whose data also carry :struck {id {:name :hits :health}} and the job :memory.")
+  A target is an entity id, a player's username (players match only by username) or a mob type such as \"zombie\".
+  Items never match; the body never targets itself.
+  One call is the whole fight: it takes the nearest target not given up on, holds the first of :use :tools carried (default
+  the best weapon), walks within reach (jobs.lib.near/go-near!) and swings once per weapon cooldown until it ends.
+  It does not swing at an entity whose `hittable` sensing is false (glass in the way) except in a :hostiles fight: it
+  walks closer and counts a blocked walk.
+  A target is given up on, with a :reason: :unreachable (three blocked walks or out-of-reach swings in a row; a landed
+  hit resets the count, an out-of-reach swing right after an arrived walk does not count), :no-damage (::no-damage-hits
+  swings in a row that did none) or :too-many-hits (::max-hits hits without a kill). A killed target or player is not attacked
+  again in this run, even after respawning.
+  Returns {:reason :killed [ids] :given-up {id reason} :names {id name} :text}, plus the shelter hint when a target was
+  given up as :unreachable from inside the body's own shelter. Ends
+  - :done :cleared: every target seen was killed and none is within :radius.
+  - :nothing-possible :gave-up / :lost: every target seen was killed or given up on and one was given up on / some target
+    was neither.
+  - :condition-failed :absent: no target after a look round and, for one heard but not seen, up to four steps toward the
+    sound (jobs.lib.vantage). :absent :wait makes the call wait (can-start? :no-target) until one is present: a standing guard.
+  - :limit-reached: the engine's limit (default :spend :job-time ::job-time-s), with the same data.
+  The job does not guard the body's health: the survival register above it cuts it.
+  {:targets :hostiles} is the reflex fight (respond-to-hostile, retreat-cornered): hostiles within :radius (ranged ones
+  within :ranged-radius), except the ids in :skip. Only a hostile the body has seen is fought; one only heard is turned
+  toward (:nothing-possible :heard-only), never walked to. One beyond hostile-fight/::leash of where the fight began is not
+  chased. With :hold a melee hostile beyond reach is waited for (:nothing-possible :hold-timeout after hostile-fight/::hold-s
+  without a swing); a ranged one farther than hostile-fight/::ranged-chase while another is in range ends :too-far. No
+  hostile in range: :done :cleared. When the body lost health since the call began the job yields (:continue). Every ending
+  but :done also carries :struck {id {:name :hits :health ...}}; a caller passes that ending's data back as :prior.")
 
 (a/defargs args
   {:targets {:doc "entity ids, player usernames and mob types to kill; a single one may be given bare" :spec (a/or-of number? string? #{:hostiles} (a/coll-of (a/or-of number? string?))) :default []}
    :radius {:doc "targets within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :ranged-radius {:doc "with :hostiles, ranged hostiles (skeletons and the like) within this many blocks count; nil: :radius" :spec (a/num-in 0 nil) :default nil}
-   :leash {:doc "with :hostiles, hostiles farther than this from where the fight began are not chased; nil: the setting" :spec (a/num-in 0 nil) :default nil}
    :hold {:doc "true: never walk toward a melee mob; strike one that comes within reach" :spec boolean? :default false}
+   :prior {:doc "with :hostiles, the data of an earlier call's declined ending (:killed :given-up :names :struck): the fight goes on from its counts" :spec map? :default nil}
    :skip {:doc "with :hostiles, entity ids already dead: not fought" :spec (a/coll-of number?) :default []}
-   :attack-gap-ms {:doc "least time between swings; nil: the held weapon's cooldown" :spec (a/num-in 0 nil) :default nil}
-   :no-damage-hits {:doc "swings in a row that do no damage before a target is given up on (a lagging server drops many swings at the cooldown, so it is many)" :spec (a/int-in 1 nil) :default 16}
-   :walk-timeout-s {:doc "bound of one walk towards a target" :spec (a/num-in 0 nil) :default 5}
    :absent {:doc ":done ends the job with reason :absent when no target is present after a 2 s grace; :wait makes the check decline until one is" :spec #{:done :wait} :default :done}})
 
 (a/defargs settings
   {::max-hits {:default 40 :doc "Hits without a kill before a target is given up on." :spec (a/int-in 1 nil)}
    ::vehicle-gap-ms {:default 150 :doc "Least time between swings at a minecart or boat: its damage drains 1 a tick and each hit adds only 10, so slower hits never break it." :spec (a/int-in 0 nil)}
    ::reach {:default 3 :doc "How near the target the body stands to swing, in blocks." :spec (a/int-in 0 nil)}
+   ::no-damage-hits {:default 16 :doc "Swings in a row that do no damage before a target is given up on (a lagging server drops many swings at the cooldown, so it is many)." :spec (a/int-in 1 nil)}
+   ::walk-timeout-s {:default 5 :doc "Seconds one walk towards a target may take." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds from the first round before a fight gives up." :spec (a/num-in 0 nil)}})
 (defn max-hits [] (settings/get settings ::max-hits))
 (defn reach [] (settings/get settings ::reach))
@@ -241,7 +230,7 @@
                                      (assoc-in [:quiet id] (if quiet? (inc (get-in m [:quiet id] 0)) 0)))
                            (number? h) (assoc-in [:health id] h))))
     (let [{:keys [hits quiet]} (ctx/mem c)
-          no-damage-hits (:no-damage-hits (:args c))]
+          no-damage-hits (settings/get settings ::no-damage-hits)]
       (cond
         (>= (get quiet id 0) no-damage-hits) (give-up! c target :no-damage)
         (>= (get hits id 0) (max-hits)) (give-up! c target :too-many-hits)))))
@@ -252,13 +241,13 @@
   (merge {:dangers false :ways #{:walk :clear-seal} :look-round false}
          (if (hostile/hostiles? c)
            {:spend {:job-time (hostile/chase-timeout-s)}}
-           {:doors :shut :spend {:job-time (:walk-timeout-s (:args c))}})))
+           {:doors :shut :spend {:job-time (settings/get settings ::walk-timeout-s)}})))
 
 (def chase-gap-ms "How long a held body waits for a mob to come before it looks again." 200)
 
 (defn ^:async walk!
   "Walk within reach of target when further than reach (near/go-near! range 2, doors :shut, each leg bounded by
-  :walk-timeout-s). Resolves to :there (no walk needed), :arrived (the walk got within range), :partial or :blocked."
+  ::walk-timeout-s). Resolves to :there (no walk needed), :arrived (the walk got within range), :partial or :blocked."
   [c target]
   (let [tpos (u/pos-of (.-pos target))]
     (cond
@@ -356,11 +345,10 @@
       (when (pos? left) (await (ctx/act c :wait #js {:ms left}))))))
 
 (defn declined
-  "The ending of a :hostiles fight that stops with hostiles left, for the retreat to take over: cause, the fight's data,
-  the hits that landed (:struck) and the job :memory."
+  "The ending of a :hostiles fight that stops with hostiles left, for the retreat to take over: cause, the fight's data
+  and the hits that landed (:struck)."
   [c cause]
-  (let [m (dissoc (ctx/mem c) :contract)]
-    (ctx/end c :nothing-possible cause (assoc (fight-data c cause) :struck (hostile/struck m) :memory m))))
+  (ctx/end c :nothing-possible cause (assoc (fight-data c cause) :struck (hostile/struck (ctx/mem c)))))
 
 (defn ^:async hostile-step
   "One step of a :hostiles fight: decline (hold ran out, ranged mob too far, only heard, all given up), yield when the body was hurt,
@@ -408,7 +396,9 @@
   "The whole fight: steps until the job finishes (cleared, gave up, lost, absent) or the engine's limit ends it."
   [c]
   (if (hostile/hostiles? c)
-    (do (ctx/update-mem! c assoc :health0 (.-health (.self (:primitives c))))
+    (do (when-not (:primed (ctx/mem c))
+          (ctx/update-mem! c merge (hostile/carry-over (:prior (:args c))) {:primed true}))
+        (ctx/update-mem! c assoc :health0 (.-health (.self (:primitives c))))
         (await (pace/steps! c #(hostile-step c))))
     (await (pace/steps! c #(step c)))))
 

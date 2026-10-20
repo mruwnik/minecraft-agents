@@ -11,7 +11,7 @@
   {::hold-s {:default 15 :doc "Seconds a held fight waits without a swing for a mob to come within reach before it declines." :spec (a/num-in 0 nil)}
    ::ranged-chase {:default 6 :doc "Farthest a ranged mob may be for the body to cross open ground to it while another hostile is in range; beyond it the fight declines." :spec (a/num-in 0 nil)}
    ::chase-timeout-s {:default 10 :doc "Seconds one walk toward a hostile may take: it moves, so the walk aims again at where it is now this often." :spec (a/num-in 0 nil)}
-   ::leash {:default 20 :doc "Blocks from where a hostile fight started beyond which a hostile is not chased, when the call gives no :leash." :spec (a/num-in 0 nil)}})
+   ::leash {:default 20 :doc "Blocks from where a hostile fight started beyond which a hostile is not chased." :spec (a/num-in 0 nil)}})
 
 (defn hostiles? [c] (= :hostiles (:targets (:args c))))
 
@@ -19,7 +19,6 @@
 
 (defn hold-ms [] (* 1000 (settings/get settings ::hold-s)))
 
-(defn leash [c] (or (:leash (:args c)) (settings/get settings ::leash)))
 
 (defn start-of
   "Where the fight started: the first step's position (the current one before it)."
@@ -29,7 +28,7 @@
 (defn in-leash?
   "Whether hostile e stands within the leash of the start point."
   [c e]
-  (<= (u/dist (start-of c) (u/pos-of (.-pos e))) (leash c)))
+  (<= (u/dist (start-of c) (u/pos-of (.-pos e))) (settings/get settings ::leash)))
 
 (defn in-range
   "The hostiles within :radius (ranged ones within :ranged-radius, a heard one by its band): the visible ones nearest
@@ -70,8 +69,21 @@
          (> (- (ctx/now c) (or (:last-attack m) (:started-at m))) (hold-ms)))))
 
 (defn struck
-  "The hits that landed, as {id {:name :hits :health}}, for a parent that weighs how near each mob is to dying."
+  "What the fight counted per mob, as {id {:name :hits :health :blocked :blocked-health :quiet}} (the last three only
+  when set), for a parent that weighs how near each mob is to dying and for the next call's carry-over."
   [m]
-  (into {} (for [[id n] (:hits m)]
-             [id (cond-> {:name (get-in m [:names id]) :hits n}
-                   (number? (get-in m [:health id])) (assoc :health (get-in m [:health id])))])))
+  (into {} (for [id (distinct (concat (keys (:hits m)) (keys (:fails m)) (keys (:quiet m))))]
+             [id (cond-> {:name (get-in m [:names id]) :hits (get-in m [:hits id] 0)}
+                   (number? (get-in m [:health id])) (assoc :health (get-in m [:health id]))
+                   (pos? (get-in m [:fails id] 0)) (assoc :blocked (get-in m [:fails id]) :blocked-health (get-in m [:fail-health id]))
+                   (pos? (get-in m [:quiet id] 0)) (assoc :quiet (get-in m [:quiet id])))])))
+
+(defn carry-over
+  "The attack memory that seeds a caller's next call after a fight that ended with hostiles left: the ending data's
+  kills, given-up ids, names and per-mob counts (:struck); nil for an ending without :struck (a refused start)."
+  [data]
+  (when-let [struck (:struck data)]
+    (let [pick (fn [k] (into {} (for [[id e] struck :when (some? (get e k))] [id (get e k)])))]
+      {:killed (:killed data) :given-up (:given-up data) :names (:names data)
+       :hits (pick :hits) :health (pick :health) :quiet (pick :quiet)
+       :fails (pick :blocked) :fail-health (pick :blocked-health)})))

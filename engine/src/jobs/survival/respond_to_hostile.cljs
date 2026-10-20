@@ -118,14 +118,14 @@
   [c decision args hold]
   (let [child-args (case decision
                      :fight {:targets :hostiles :radius (danger-q/radius-in args) :ranged-radius (danger-q/ranged-radius-in args)
-                             :use {:tools (weapons c)} :hold (or hold (hold? c))
+                             :use {:tools (weapons c)} :hold (or hold (hold? c)) :prior (:fight-prior (ctx/mem c))
                              :checks {:safe? '(always) :fit? '(always)} :settings (scoped-settings args)}
                      :flee {:use {:tools (weapons c)} :goal (:goal (ctx/mem c)) :settings (scoped-settings args)})
         e (await (ctx/call c decision (child-jobs decision) child-args))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) :done
-      (= :fight decision) (do (when-let [m (:memory (:data e))] (ctx/update-mem! c assoc-in [:children :fight] m))
+      (= :fight decision) (do (when (:struck (:data e)) (ctx/update-mem! c assoc :fight-prior (select-keys (:data e) [:killed :given-up :names :struck])))
                               :declined)
       (= :condition-failed (:kind e)) :declined
       :else e)))
@@ -163,6 +163,7 @@
   "The :struck entry of mob id: the fight child's own, else the one an earlier round left in memory (:struck-hits)."
   [c id]
   (or (get (hostile/struck (get-in (ctx/mem c) [:children :fight])) id)
+      (get-in (ctx/mem c) [:fight-prior :struck id])
       (get-in (mem/latest (ctx/view c) :struck-hits) [:data id])))
 
 (defn keep-struck!

@@ -2,7 +2,9 @@
   "Helpers the survival jobs share: reading hostiles off sensing and ranking
   the weapons carried."
   (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
@@ -73,11 +75,14 @@
   (when (and weapon (not= weapon (.-held (.self (:primitives c)))))
     (await (ctx/act c :equip #js {:item weapon :dest "hand"}))))
 
+(a/defargs settings
+  {::attack-gap-ms {:default :cooldown :doc "Least time between swings, in ms; :cooldown: the held weapon's, so a swing lands at full strength." :spec (a/or-of #{:cooldown} (a/num-in 0 nil))}})
+
 (defn gap-ms
-  "The least time between swings: the call's :attack-gap-ms, else the held weapon's cooldown, so a swing lands at full strength."
+  "The least time between swings: ::attack-gap-ms, else the held weapon's cooldown."
   [c]
-  (or (:attack-gap-ms (:args c))
-      (weapon/attack-gap-ms (.-held (.self (:primitives c))))))
+  (let [gap (settings/get settings ::attack-gap-ms)]
+    (if (number? gap) gap (weapon/attack-gap-ms (.-held (.self (:primitives c)))))))
 
 (defn within-gap?
   "Whether the job memory's :last-attack swing was less than gap (default gap-ms) ago."

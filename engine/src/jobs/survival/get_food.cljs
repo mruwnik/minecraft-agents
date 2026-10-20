@@ -75,7 +75,6 @@
    :source-radius {:doc "how far away a remembered food source still counts, in blocks" :spec (a/num-in 0 nil) :default 64}
    :hunt-radius {:doc "how far to look for animals and wild crops, in blocks" :spec (a/num-in 0 nil) :default 24}
    :take {:doc "most items to withdraw from a chest in one go" :spec (a/int-in 1 nil) :default 16}
-   :attack-gap-ms {:doc "least time between two swings at an animal; nil: the held weapon's cooldown" :spec (a/num-in 0 nil) :default nil}
    :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms; not underground unless starving): false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}
    :stock {:doc "also carry food worth this many hunger points: a fed body takes the ways below until the pack holds it (0: only feed)" :spec (a/num-in 0 nil) :default 0}
    :spare-pens {:doc "never hunt animals in a closed enclosure, nor those in a zone or plan of the body's own but by the :pen way (false: a job asked to get food may take them all)" :spec boolean? :default true}
@@ -188,7 +187,7 @@
       (risk/refused? c (u/pos-of (.-pos animal))) nil
       :else
       (let [e (await (child/run!* c :attack 'jobs.combat.attack
-                                  {:targets [(.-id animal)] :radius (hunt-radius c) :attack-gap-ms (:attack-gap-ms (:args c))
+                                  {:targets [(.-id animal)] :radius (hunt-radius c)
                                    :spend {:job-time 60}
                                    :checks {:safe? '(job-safe-or-starving)}}))]
         (if (= :continue e)

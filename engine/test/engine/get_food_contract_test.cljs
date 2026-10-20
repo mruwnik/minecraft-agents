@@ -82,6 +82,6 @@
       (fn ^:async t []
         (doseq [ways [#{:hunt} nil]]
           (let [{:keys [eng p]} (setup {:self {:food 3} :entities herd :inventory [{:name "wheat" :count 3}]})
-                e (await (ending-of eng (cond-> {:attack-gap-ms 0} ways (assoc :ways ways))))]
+                e (await (ending-of eng (cond-> {:settings {:jobs.lib.combat/attack-gap-ms 0}} ways (assoc :ways ways))))]
             (is (= :done (:kind e)) (pr-str ways))
             (is (seq (gr/calls p "attack")) (pr-str ways))))))))

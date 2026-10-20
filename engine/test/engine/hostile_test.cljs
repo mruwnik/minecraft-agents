@@ -9,6 +9,7 @@
             [jobs.lib.body :as body]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.hostile-fight :as hostile-fight]
             [jobs.combat.attack :as attack]
             [jobs.lib.util :as u]
             [jobs.survival.recover-drops :as recover-drops]
@@ -313,7 +314,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (await (first-round-seeing '(jobs.combat.attack {:targets :hostiles :radius 4 :ranged-radius 16 :attack-gap-ms 3000}) {:inventory sword :entities [(zombie 7 3 0)]} 20))]
+        (let [{:keys [eng]} (await (first-round-seeing '(jobs.combat.attack {:targets :hostiles :radius 4 :ranged-radius 16 :settings {:jobs.lib.combat/attack-gap-ms 3000}}) {:inventory sword :entities [(zombie 7 3 0)]} 20))]
           (is (seq (mem/entries (mem/view (:store eng)) :watched)) "the call waits out the gap and looks round"))))))
 
 (deftest hostile-attack-walks-up-to-a-mob-beyond-reach
@@ -434,15 +435,32 @@
           (is (= [] (:list (core/state eng))) "6 blocks is beyond range 4: already done")
           (is (empty? (concat (calls p "attack") (calls p "equip"))) "no swing, nothing equipped"))))))
 
+(deftest a-declined-fight-ending-carries-over-into-the-next-calls-memory
+  (let [m {:killed [3] :given-up {7 :unreachable} :names {7 "zombie"} :hits {7 2} :health {7 9}
+           :fails {7 2 8 1} :fail-health {7 12 8 12} :quiet {7 3}}
+        data (assoc (select-keys m [:killed :given-up :names]) :struck (hostile-fight/struck m))]
+    (is (= {7 {:name "zombie" :hits 2 :health 9 :blocked 2 :blocked-health 12 :quiet 3} 8 {:name nil :hits 0 :blocked 1 :blocked-health 12}}
+           (:struck data)))
+    (is (= (assoc m :hits {7 2 8 0}) (hostile-fight/carry-over data)))
+    (is (nil? (hostile-fight/carry-over {:reason :no-target})) "a refused start has nothing to carry")))
+
+(deftest hostile-attack-goes-on-from-the-prior-calls-give-ups
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (first-round-ms '(jobs.combat.attack {:targets :hostiles :radius 12 :prior {:given-up {7 :unreachable} :struck {7 {:name "zombie" :hits 0 :blocked 2}}}})
+                                                 {:inventory sword :entities [(zombie 7 3 0)]} 20))]
+          (is (empty? (calls p "attack")) "the zombie the earlier call gave up on is not fought again"))))))
+
 (deftest hostile-attack-leaves-a-mob-beyond-its-leash-from-the-start
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory sword :entities [(zombie 8 0)]})]
-          (core/submit! eng '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 12 :leash 5}) {})
+          (core/submit! eng '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 12 :settings {:jobs.lib.hostile-fight/leash 5}}) {})
           (is (nil? (core/tick! eng)) "8 blocks from the start is past the leash of 5: not chased, the job declines")
           (is (zero? (count (calls p "attack")))))
-        (let [{:keys [p]} (await (first-round-ms '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 12 :leash 10}) {:inventory sword :entities [(zombie 8 0)]} 20))]
+        (let [{:keys [p]} (await (first-round-ms '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 12 :settings {:jobs.lib.hostile-fight/leash 10}}) {:inventory sword :entities [(zombie 8 0)]} 20))]
           (is (pos? (count (calls p "attack"))) "inside the leash it is fought"))))))
 
 (deftest hostile-attack-keeps-its-leash-anchor-when-resumed-after-a-hurt-yield
@@ -457,7 +475,7 @@
                          (reset! hurt true)
                          (swap! (fake/state p) update-in [:self :health] - 1))
                        (impl token a)))
-          (core/submit! eng '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 8 :leash 5}) {})
+          (core/submit! eng '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 8 :settings {:jobs.lib.hostile-fight/leash 5}}) {})
           (await (core/tick! eng))
           (swap! (fake/state p) assoc-in [:self :pos] [30.5 64 0])
           (set-entities! p [(zombie 33 0)])
@@ -1230,9 +1248,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory sword
-                                      :entities [(zombie 7 -10 0) (assoc (zombie 8 3 0) :visible false)]})
+                                      :entities [(zombie 7 -25 0) (assoc (zombie 8 3 0) :visible false)]})
               looks (atom [])
-              args {:targets :hostiles :radius 12 :ranged-radius 16 :leash 0 :skip [] :attack-gap-ms 600}
+              args {:targets :hostiles :radius 30 :ranged-radius 30 :skip []}
               c {:primitives p :args args :view #(mem/view (:store eng)) :root nil :slots []
                  :now (constantly 0) :update-mem (fn [_ _] nil)
                  :act (fn [k a] (when (= :look k) (swap! looks conj a)) (js/Promise.resolve nil))}

@@ -258,7 +258,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:targets [7] :spend {:job-time 3} :no-damage-hits 100 :settings {:jobs.combat.attack/max-hits 1000}}
+        (let [s (await (scenario {:targets [7] :spend {:job-time 3} :settings {:jobs.combat.attack/no-damage-hits 100 :jobs.combat.attack/max-hits 1000}}
                                  {:inventory h/sword :entities [(ent 7 "zombie" "hostile" 2 {:invulnerable true})]} 7))]
           (is (finished? s))
           (is (= [:job-time] (mapv :reason (events-of s :stopped))) "the engine's limit ends it")
@@ -307,7 +307,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as s} (await (h/first-round-ms (spec {:targets [7] :attack-gap-ms 100}) {:inventory h/sword :entities [(zed 7 2)]} 10))]
+        (let [{:keys [p] :as s} (await (h/first-round-ms (spec {:targets [7] :settings {:jobs.lib.combat/attack-gap-ms 100}}) {:inventory h/sword :entities [(zed 7 2)]} 10))]
           (is (= 4 (count (attacked s))))
           (is (every? #(<= 80 % 100) (h/waited-between-swings p)) "100 ms, not the sword's 625 nor the 500 floor"))))))
 
@@ -431,7 +431,7 @@
                                             (.then (impl t a) (fn [r]
                                                                 (when (= 4 (swap! n inc)) (swap! (fake/state p) assoc-in [:entities 0 :pos] [0 64 40]))
                                                                 r))))
-          (core/submit! (:eng s) (spec {:targets [7] :no-damage-hits 4}) {})
+          (core/submit! (:eng s) (spec {:targets [7] :settings {:jobs.combat.attack/no-damage-hits 4}}) {})
           (await (core/tick! (:eng s)))
           (is (= :gave-up (:reason (done-event s))))
           (is (= {7 :no-damage} (:given-up (done-event s)))))))))
@@ -489,7 +489,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario-seeing {:targets [7] :attack-gap-ms 3000} {:inventory h/sword :entities [(zed 7 3)]} 3))]
+        (let [s (await (scenario-seeing {:targets [7] :settings {:jobs.lib.combat/attack-gap-ms 3000}} {:inventory h/sword :entities [(zed 7 3)]} 3))]
           (is (seq (watched s)) "a hostile known near: alert, so the cooldown is spent looking round")
           (is (= [7] (distinct (attacked s)))))))))
 
@@ -497,7 +497,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario-seeing {:targets ["cow"] :attack-gap-ms 3000}
+        (let [s (await (scenario-seeing {:targets ["cow"] :settings {:jobs.lib.combat/attack-gap-ms 3000}}
                                  {:inventory h/sword :entities [(ent 8 "cow" "passive" 3)]} 3))]
           (is (empty? (watched s)))
           (is (= [8] (distinct (attacked s)))))))))

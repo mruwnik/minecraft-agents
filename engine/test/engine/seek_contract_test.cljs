@@ -67,7 +67,7 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :stopped :kind :nothing-possible :reason :gave-up}
-               (await (fight {:targets [7] :no-damage-hits 2}
+               (await (fight {:targets [7] :settings {:jobs.combat.attack/no-damage-hits 2}}
                              {:inventory h/sword :entities [(zed 7 2 {:invulnerable true})]}))))))))
 
 (deftest no-target-at-all-is-a-failed-condition
@@ -82,7 +82,7 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :stopped :kind :limit-reached :reason :job-time}
-               (await (fight {:targets [7] :spend {:job-time 3} :no-damage-hits 100 :settings {:jobs.combat.attack/max-hits 1000}}
+               (await (fight {:targets [7] :spend {:job-time 3} :settings {:jobs.combat.attack/no-damage-hits 100 :jobs.combat.attack/max-hits 1000}}
                              {:inventory h/sword :entities [(zed 7 2 {:invulnerable true})]}))))))))
 
 (defn ^:async equipped

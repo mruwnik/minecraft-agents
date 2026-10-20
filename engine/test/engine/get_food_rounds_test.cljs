@@ -121,7 +121,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:food 2} :entities herd})]
-          (await (one-round! eng {:attack-gap-ms 0}))
+          (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0}}))
           (is (= [] (:list (core/state eng))) "one round")
           (is (= [7 7 7 7] (call-args p "attack" "id")))
           (is (= ["beef"] (call-args p "eat" "item")))
@@ -137,7 +137,7 @@
           (set! (.-look p) (fn [& args]
                              (when (compare-and-set! added false true) (run! #(fake/add-entity! p %) herd))
                              (.apply look p (to-array args))))
-          (await (one-round! eng {:attack-gap-ms 0}))
+          (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0}}))
           (is (= [] (:list (core/state eng))) "one round")
           (is (= [7 7 7 7] (call-args p "attack" "id")) "it looked around before giving up")
           (is (= 7 (food p))))))))
@@ -156,7 +156,7 @@
           (set! (.-entities p) (fn [& args]
                                  (when (= 3 @looks) (reset! spotted true))
                                  (if @spotted (.apply entities p (to-array args)) #js [])))
-          (await (one-round! eng {:attack-gap-ms 0}))
+          (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0}}))
           (is (= [7 7 7 7] (call-args p "attack" "id")) "the cow seen in the middle of the look-around is hunted")
           (is (= 7 (food p))))))))
 
@@ -168,7 +168,7 @@
           (let [{:keys [eng p clock]} (setup {:self {:food 2} :entities herd} :step-ms 5)
                 swings (atom [])]
             (.override (.-world p) "attack" (fn [token args impl] (swap! swings conj @clock) (impl token args)))
-            (await (one-round! eng {:attack-gap-ms gap}))
+            (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms gap}}))
             (is (= ["beef"] (call-args p "eat" "item")) (str "gap " gap ": the cow died and was eaten"))
             (is (= 4 (count @swings)) (str "gap " gap))
             (is (every? #(>= % gap) (map - (rest @swings) @swings)) (str "gap " gap ": swings spaced by the gap " @swings))))))))
@@ -236,7 +236,7 @@
         (let [{:keys [eng p]} (setup {:self {:food 0} :entities herd
                                       :containers {"20,64,0" [{:name "cobblestone" :count 3}]}})]
           (know-source! eng {:x 20 :y 64 :z 0} :chest)
-          (await (one-round! eng {:attack-gap-ms 0}))
+          (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0}}))
           (is (= [] (:list (core/state eng))) "one round")
           (is (= [] (entries eng :food-source)) "the empty chest is forgotten")
           (is (= ["beef"] (call-args p "eat" "item")) "then it hunted"))))))
@@ -920,7 +920,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:food 20} :entities herd})]
-          (await (one-round! eng {:stock 3 :attack-gap-ms 0}))
+          (await (one-round! eng {:stock 3 :settings {:jobs.lib.combat/attack-gap-ms 0}}))
           (is (= [7 7 7 7] (call-args p "attack" "id")))
           (is (empty? (call-args p "eat" "item")) "a fed body eats nothing")
           (is (= [:completed] (mapv :kind (ended seen)))))))))
@@ -1015,7 +1015,7 @@
           (await (settings/with-settings {:jobs.survival.get-food/kept-lifted-below lift}
                    (fn ^:async t2 []
                      (let [{:keys [eng p]} (setup {:self {:food food} :entities [cow (assoc cow :id 8 :pos {:x 8 :y 64 :z 0})]})]
-                       (await (one-round! eng {:attack-gap-ms 0 :explore false :food 6}))
+                       (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0} :explore false :food 6}))
                        (is (= n (boolean (seq (calls p "attack")))) (str "lift " lift " food " food)))))))))))
 
 (deftest the-hungry-reflex-cooks-raw-food-and-eats-it

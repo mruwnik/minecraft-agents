@@ -13,7 +13,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.escape :as escape]
-            [jobs.lib.look :as look]
+                        [jobs.lib.look :as look]
             [jobs.lib.result :as result]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.step-off :as step-off]
@@ -89,12 +89,12 @@
     (let [hits-before (hits-total (get-in (ctx/mem c) [:children :cornered :hits]))
           r (await (ctx/call c :cornered 'jobs.combat.attack
                              {:targets :hostiles :radius radius :ranged-radius ranged-radius :use {:tools (mapv name weapons)}
-                              :skip (flight/dead-ids c) :checks {:safe? '(always) :fit? '(always)}}))
+                              :skip (flight/dead-ids c) :prior (:fight-prior (ctx/mem c)) :checks {:safe? '(always) :fit? '(always)}}))
           ended (when (contract/ending? r) r)]
       (ctx/update-mem! c update :dead #(into (vec %) (concat (get-in (ctx/mem c) [:children :cornered :killed])
                                                              (:killed (:data ended)))))
       (if (and ended (not= :done (:kind ended)))
-        (do (when-let [m (:memory (:data ended))] (ctx/update-mem! c assoc-in [:children :cornered] (dissoc m :start)))
+        (do (when (:struck (:data ended)) (ctx/update-mem! c assoc :fight-prior (select-keys (:data ended) [:killed :given-up :names :struck])))
             (flight/tried! c :fight)
             (when (> (hits-total (:hits (:memory (:data ended)))) hits-before)
               (ctx/update-mem! c assoc :sweeps 0))

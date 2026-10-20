@@ -34,7 +34,7 @@
                 '(jobs.blocks.dig {:pos [1 64 1] :on-fluid :sideways})
                 '(jobs.combat.attack {:radius "text"})
                 '(jobs.combat.attack {:absent :never})
-                '(jobs.combat.attack {:no-damage-hits -7})
+                '(jobs.combat.attack {:hold "yes"})
                 '(jobs.farm.tend {:till 3})
                 '(jobs.movement.boat-drive {:pos [1 63 1] :range "text"})
                 '(jobs.movement.boat-drive {:pos [1 63 1] :spend {:job-time "120"}})
