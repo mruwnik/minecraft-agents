@@ -432,6 +432,23 @@
           (is (= "cobblestone" (block p [4 62 0])) "the lava it laid open is sealed")
           (is (seq (events-of seen :blocks.dig.sealed))))))))
 
+(deftest a-dig-route-cell-whose-floor-is-unseen-is-dug-on-top-and-one-with-a-seen-floor-is-not-asked-to
+  ;; the floor of the shaft's last cell shows only once the cell is dug and the body cannot step off a shaft of rock
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [hide (fn [p]
+                     (let [sensed (.-sensedAt p)]
+                       (aset p "sensedAt" (fn [q] (if (and (= [3 61 0] [(.-x q) (.-y q) (.-z q)]) (not= "air" (block p [3 62 0])))
+                                                    #js {:unknown true}
+                                                    (sensed q))))))
+              pick [{:name "stone_pickaxe" :count 1}]
+              seen-floors (await (dig-route-run! below-pocket pick nil))
+              unseen-floor (await (dig-route-run! below-pocket pick hide))
+              under-feet #(set (map (fn [d] (contains? (:accept d) :under-feet)) @(:digs %)))]
+          (is (= #{false} (under-feet seen-floors)))
+          (is (contains? (under-feet unseen-floor) true)))))))
+
 (defn hiding-with-pickaxe [blocks hidden?]
   (let [p (tu/fake {:blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]})]
     (aset p "sensedAt" (fn [pos] (if (hidden? [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
