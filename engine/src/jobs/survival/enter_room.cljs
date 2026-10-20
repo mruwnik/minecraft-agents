@@ -12,6 +12,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
             [jobs.lib.look :as look]
+            [jobs.lib.look-edge :as look-edge]
             [jobs.lib.reach :as reach]
             [jobs.lib.rooms :as room-lib]
             [jobs.lib.sense :as sense]
@@ -163,11 +164,11 @@
 
 (defn unclosable?
   "Whether the room seen at pos can be closed by nothing the job does: a seen room that is no closed room, with an
-  unroofed cell and no doorway that shuts it (a roof on open sides). Read-only."
+  unroofed cell (no roof cell over it unseen: that one is walked to and looked at) and no doorway that shuts it (a roof on open sides). Read-only."
   [p pos]
   (let [cell (:cell (reach/unroofed-cell p pos))]
     (boolean (and (not (room-lib/refuge-room? p pos)) (not (reach/unseen-room? p pos))
-                  cell (nil? (room-lib/shut-by p pos cell any?))))))
+                  cell (not (look-edge/unseen-roof? p cell)) (nil? (room-lib/shut-by p pos cell any?))))))
 
 (defn can-start?
   "A room to enter: a place, the home or a closed room seen, or the body already in one."

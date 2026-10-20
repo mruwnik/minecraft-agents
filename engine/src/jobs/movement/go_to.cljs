@@ -164,9 +164,10 @@
 
 (defn unseen-goal-ok
   "A :look for the goal's light becomes ok: the walk is what brings the goal into sight (a cell inside a mound is seen
-  only from near), so waiting for a look from here would never end."
-  [[kind :as status]]
-  (if (= :look kind) (contract/ok :unseen-goal "the goal's light is seen on the way") status))
+  only from near), so waiting for a look from here would never end. A look at the walls of the room the body stands in
+  (:room-sides) is kept: it is made from here."
+  [[kind _ data :as status]]
+  (if (and (= :look kind) (not (:room-sides data))) (contract/ok :unseen-goal "the goal's light is seen on the way") status))
 
 (def safe?
   "Safe at the goal (ready/safe-at-by-night; its light unseen is no reason to wait). Always ok with the head under water:

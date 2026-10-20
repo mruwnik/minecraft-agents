@@ -9,8 +9,8 @@
             [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]
             [jobs.lib.dig-in-leave :as dig-leave]
-            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
+            [jobs.lib.look-edge :as look-edge]
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
             [jobs.lib.rooms :as room-lib]
@@ -392,73 +392,6 @@
     (when (sh-spawn/seen-not-bed? (:primitives c) pos)
       (places/retract-if-missing! c :bed pos "missing"))))
 
-(def max-edge-looks
-  "Most cells of a closed region's unseen edge the night walks to in a night after a look failed to show them, nearest first."
-  15)
-
-(def max-edge-steps "Most looks and walks of the edge in a night." 200)
-
-(defn lit-side?
-  "A predicate on an unseen side cell [x y z]: some flood cell beside it is bright enough to be seen, so a look or a walk can
-  show it. A side of a dark stretch is never shown (a dark cell is not recorded), so the region stays open there."
-  [p feet]
-  (let [see-lit (look/see-lit-fn p)
-        cells (set (map vec (:cells (reach/room-flood p (reach/shut-kind-at p) (:x feet) (:y feet) (:z feet)))))]
-    (fn [[x y z]]
-      (or (nil? see-lit)
-          (some (fn [[dx dz]] (and (contains? cells [(+ x dx) y (+ z dz)]) (== 1 (see-lit (+ x dx) y (+ z dz)))))
-                [[1 0] [-1 0] [0 1] [0 -1]])))))
-
-(defn edge-looks
-  "The cells [x y z] to look at before the body's region is judged: unseen cells beside the closed region the body stands in
-  under a roof, nearest first, not looked at tonight. A dark cell stays unseen after a look and is not looked at twice."
-  [c]
-  (let [p (:primitives c)
-        looked (:edge-looked (ctx/mem c) #{})
-        feet (sh-sense/feet p)]
-    (when (and (< (count looked) max-edge-looks) (< (:edge-steps (ctx/mem c) 0) max-edge-steps)
-               (or (sh-sense/roofed? p (sh-sense/room-roof-height)) (sh-sense/leaf-roofed? p (sh-sense/room-roof-height)) (sh-sense/buried? p)))
-      (->> (reach/unseen-sides p feet)
-           (remove looked)
-           (filter (lit-side? p feet))
-           (sort-by (fn [[x y z]] (u/dist feet {:x x :y y :z z})))
-           vec))))
-
-(defn walkable-near
-  "The cell {:x :y :z} the body can walk to (the real ground, doors opened) nearest cell [x y z], or nil."
-  [p [x y z]]
-  (let [kind-at (reach/lookup p reach/body-kind-of)
-        {:keys [x0 y0 z0]} (let [f (sh-sense/feet p)] {:x0 (:x f) :y0 (:y f) :z0 (:z f)})
-        cells (:cells (reach/flood-visit (partial reach/forward kind-at) [x0 y0 z0] reach/room-cells))
-        best (first (sort-by (fn [c] (+ (js/Math.abs (- (aget c 0) x)) (js/Math.abs (- (aget c 1) y)) (js/Math.abs (- (aget c 2) z)))) cells))]
-    (when best {:x (aget best 0) :y (aget best 1) :z (aget best 2)})))
-
-(def edge-stride
-  "How far past the nearest unseen cell one walk of the edge may reach, in blocks: the ground nearest the farthest unseen cell
-  within this of the nearest, so a long tunnel is seen in a few strides."
-  6)
-
-(defn ^:async look-edge!
-  "A closed region with sides never seen is not yet known shut (an unseen cell may be an opening). The nearest one is
-  looked at; what the look shows is read on the next pass, once the sight has settled. A side it did not show (a far wall
-  of a long tunnel) is walked towards, on foot (walkable-near, edge-stride) and looked at again, as a player would; :again.
-  The cell counts as tried when that second look has been read and the cell is still unseen."
-  [c cells]
-  (hold/busy! c)
-  (ctx/update-mem! c update :edge-steps (fnil inc 0))
-  (let [cell (first cells)
-        phase (get-in (ctx/mem c) [:edge-phase cell] 0)
-        advance! #(ctx/update-mem! c assoc-in [:edge-phase cell] %)]
-    (case phase
-      0 (do (advance! 1) (await (dig-look/look-at! c cell)))
-      1 (let [reach-to (last (take-while #(<= (u/dist {:x (first cell) :y (second cell) :z (nth cell 2)} {:x (first %) :y (second %) :z (nth % 2)}) edge-stride) cells))
-              near (walkable-near (:primitives c) reach-to)
-              w (if near (await (ctx/call c :edge-walk 'jobs.movement.go-to {:pos near :range 0 :ways #{:walk} :floor {:health 1}})) :none)]
-          (when (not= :continue w) (advance! 2)))
-      2 (do (advance! 3) (await (dig-look/look-at! c cell)))
-      (ctx/update-mem! c update :edge-looked (fnil conj #{}) cell))
-    :again))
-
 (defn ^:async pass
   "One choice of the night (see doc): :again, or the round's end."
   [c]
@@ -478,7 +411,7 @@
           :again)
       (not (sh-sense/dark-outside? p)) (await (morning/morning! c))
       (sh-sense/sleeping? p) (do (when-not (= :slept sheltered) (hold/sheltered! c :slept)) (await (hold/hold! c :sleeping)))
-      (and (not sheltered) (seq (edge-looks c))) (await (look-edge! c (edge-looks c)))
+      (and (not sheltered) (seq (look-edge/pending c))) (do (hold/busy! c) (await (look-edge/look! c (look-edge/pending c))))
       (and roofed (or (#{:slept :dug-in} sheltered) (dig-leave/sheltered-in c)))
       (do (when-not sheltered (hold/sheltered! c :dug-in))
           (cond

@@ -14,6 +14,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger]
+            [jobs.lib.look-edge :as look-edge]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.storage :as storage]
@@ -58,11 +59,14 @@
         shelter (:data (ctx/latest c :shelter))
         {:keys [chance lowered-by look-at light-in]} (cost/exposure p to shelter)
         patience (settings/get settings ::light-patience-s)
-        where (place-text to)]
+        where (place-text to)
+        unseen-sides (delay (when (and (sh-sense/dark-outside? p) (not (u/within? (sh-sense/feet p) to 1))) (look-edge/pending c #{} 0)))]
     (cond
       (and (sh-sense/dark-outside? p) (sh-inside/safe-from-night? p) (not (sh-inside/walk-leaves-shelter? p shelter to 1)))
       (contract/ok :sheltered (str "sheltered at " where))
       (<= chance (settings/get settings ::risk-limit)) (contract/ok :unexposed (str "no spawn risk at " where))
+      (seq @unseen-sides)
+      (contract/look :exposed (str "walls of the room round the body not all seen; at " where) :look-at @unseen-sides :room-sides true)
       (and (contains? lowered-by :look) (hidden-below? p to))
       (contract/ok :sealed (str "unseen below at " where ": underground, no look shows it and dawn does not light it; only threats count"))
       (contains? lowered-by :look) (contract/look :exposed (str "light at " where " not seen") :look-at look-at)

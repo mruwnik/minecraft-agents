@@ -7,7 +7,9 @@
             [engine.shelter-support :as st]
             [engine.sky-perception :as sky]
             [engine.test-util :as tu]
+            [jobs.lib.util :as u]
             [jobs.explore.look :as look]
+            [jobs.movement.go-to :as go-to]
             [jobs.explore.search :as search]
             [jobs.movement.look-around :as look-around]
             [jobs.access.stair :as stair]
@@ -88,6 +90,22 @@
     (assoc night-hut :blocks (merge (:blocks night-hut) barn-roof)) outside :later
     tunnel {:x 4 :y 64 :z 0} :ok
     (assoc open-night :time st/noon) {:x 4 :y 64 :z 0} :look))
+
+(deftest a-body-in-a-hut-with-a-wall-never-seen-looks-at-it-before-it-judges-a-walk-out
+  (let [seen-block u/seen-block
+        hide (fn [pos] (fn [p cell] (when-not (= pos [(:x cell) (:y cell) (:z cell)]) (seen-block p cell))))
+        status #((ready/safe-at (constantly outside)) (ctx-of night-hut))]
+    (is (= :later (first (status))))
+    (with-redefs [u/seen-block (hide [3 64 0])]
+      (let [s (status)]
+        (is (= :look (first s)))
+        (is (= [[3 64 0]] (:look-at (nth s 2))))))))
+
+(deftest go-to-keeps-a-look-at-the-walls-of-its-room
+  (let [seen-block u/seen-block
+        hide (fn [pos] (fn [p cell] (when-not (= pos [(:x cell) (:y cell) (:z cell)]) (seen-block p cell))))]
+    (with-redefs [u/seen-block (hide [3 64 0])]
+      (is (= :look (first (go-to/safe? (assoc (ctx-of (assoc night-hut :self {:pos inside})) :args {:pos outside}))))))))
 
 (deftest safe-at-open-ground-by-day-is-ok-where-the-light-is-seen
   (is (= :ok (lit 0 15 #(kind (ready/safe-at (constantly outside)) (assoc open-night :time st/noon))))))
