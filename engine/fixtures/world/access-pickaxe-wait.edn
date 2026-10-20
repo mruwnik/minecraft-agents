@@ -1,5 +1,6 @@
 ;; Cards 555ea732 / e4b3ebe2 (a child's wait reason reaches the parent), 64d48391 (stair stops :crop), 901196ce (cheapest
-;; pickaxe held, tool.* events), 820b2869 (dig-in walls run out of blocks). Stone mass x 8..24, z 8..24, y 0..9; the body
+;; pickaxe held, tool.* events), 820b2869 (dig-in walls run out of blocks). The crop cases hydrate the farmland (water beside it): dry
+;; farmland lost its wheat before the job started. Stone mass x 8..24, z 8..24, y 0..9; the body
 ;; stands on top (feet y 10). Zones: the plot is outside every box.
 {:defaults
  {:tags [:access :mining]
@@ -29,13 +30,13 @@
             {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}}}]
    :after [[:not-block [16 9 16] "air"]]}
   {:name "stair-stops-at-crop"
-   :blocks [[:set [17 9 16] "farmland[moisture=7]"] [:set [17 10 16] "wheat[age=7]"]]
+   :blocks [[:set [17 9 16] "farmland[moisture=7]"] [:set [17 10 16] "wheat[age=7]"] [:set [18 9 16] "water"]]
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :crop}} :within-s 40 :of-job true}]
    :after [[:block [17 10 16] "wheat"] [:block [17 9 16] "farmland"]]}
   {:name "stair-heading-away-digs"
-   :blocks [[:set [17 9 16] "farmland[moisture=7]"] [:set [17 10 16] "wheat[age=7]"]]
+   :blocks [[:set [17 9 16] "farmland[moisture=7]"] [:set [17 10 16] "wheat[age=7]"] [:set [18 9 16] "water"]]
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :west :steps 2})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
