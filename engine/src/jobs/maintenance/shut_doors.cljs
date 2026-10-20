@@ -27,8 +27,8 @@
   out, never pushed. A recorded block the body still has not seen after the look is left as :unseen (entry untouched). A block that cannot be reached, that the body stands in the column of, or that is not shut after
   the tries setting (3) clicks fails this run (shut-doors.gave-up, warn the first time); its entry is kept with a fail counted (the
   trigger waits :open-s per fail) and a later run tries again, until the attempts setting (5) runs have failed: then it is dropped with a last
-  warn. A block that cannot be reached is dropped at once. A block the body stands in the column of, or whose walk was
-  interrupted (:walk-interrupted, info only), is left and keeps its entry the same way. A block an animal stands in
+  warn. A block that cannot be reached is dropped at once. A block the body stands in the column of is left and keeps its entry the same way. A walk that
+  goes on or waits (go-to :continue) yields the round with :continue; the block is not given up. A block an animal stands in
   (:animal-in-the-way, info only) keeps its entry untouched and no failure counts, so the trigger tries again at once.
   Needs nothing. Ends :done with {:shut n :left []} when every block was shut (or none stood
   open); with any left, nothing-possible :left, data {:shut n :left [{:cell :reason}]}.
@@ -81,11 +81,11 @@
                     (when (settings/get settings ::unrecorded?) (doors/unrecorded-open (:primitives c) (ctx/view c) (assoc (:args c) :own? #(own-door? c %))))))))
 
 (defn ^:async walk!
-  "nil when the body stands within reach, else why not: :walk-interrupted (the walk ended :continue) or :unreachable."
+  "nil when the body stands within reach, else why not: :continue (the walk goes on or waits on the world) or :unreachable."
   [c {:keys [cell]}]
   (let [r (await (child/call-walk* c :walk {:pos cell :range (reach) :doors :never :ways #{:walk :clear-seal}}))]
     (cond
-      (= :continue r) :walk-interrupted
+      (= :continue r) :continue
       (and (= :done (:kind r)) (:arrived (:data r))) nil
       :else :unreachable)))
 
@@ -105,21 +105,20 @@
           :else :shut-failed)))))
 
 (defn give-up!
-  "Record why the target stays open. :standing-in, :walk-interrupted and a first few :shut-failed keep the entry,
-  with its opening time (a failed shut counts in :fails; the trigger waits :open-s per fail before it tries again). A walk that was interrupted is not a
-  failure, so it only gets an info, as does a repeat failure that keeps its entry."
+  "Record why the target stays open. :standing-in and a first few :shut-failed keep the entry,
+  with its opening time (a failed shut counts in :fails; the trigger waits :open-s per fail before it tries again). A repeat failure that keeps its entry only gets an info."
   [c {:keys [cell by fails t]} reason]
   (let [k (cell-key cell)
         fails' (if (= :shut-failed reason) (inc fails) fails)
         keep? (case reason
-                (:standing-in :walk-interrupted) true
+                :standing-in true
                 :shut-failed (< fails' (attempts))
                 false)]
     (when-not (= :animal-in-the-way reason)
       (ctx/forget-where! c :opened #(= cell (:cell %)))
       (when keep?
         (ctx/remember! c :opened {:cell cell :by by :t (or t (ctx/now c)) :shut? true :fails fails'} pass/opened-policy)))
-    (ctx/emit! c :shut-doors.gave-up (if (or (#{:walk-interrupted :animal-in-the-way} reason) (and keep? (pos? fails))) :info :warn)
+    (ctx/emit! c :shut-doors.gave-up (if (or (= :animal-in-the-way reason) (and keep? (pos? fails))) :info :warn)
                {:cell k :reason reason :text (str "the block at " k " stays open: " (name reason)
                                                   (when (and (= :shut-failed reason) keep?) ", will try again later"))})
     {:cell k :reason reason}))
@@ -132,7 +131,7 @@
                (assoc result :text (str "shut " shut " left open by a walk, gave up on " (count left)))))))
 
 (defn done?
-  "Ok when no block seen left open stands within :radius and none was given up on; a :look at the recorded blocks never
+  "Ok when no block seen left open stands within :radius and none was given up on; later with the recorded blocks never
   seen; else later, with the doors shut so far and the blocks left."
   [c]
   (let [open (targets c [])
@@ -140,7 +139,7 @@
         unseen (when (and (empty? open) (zero? given-up)) (doors/unseen-recorded (:primitives c) (ctx/view c) (:args c)))
         shut (:shut (ctx/mem c) 0)]
     (if (seq unseen)
-      (contract/look :gate-unseen "a block a walk opened was never seen" :look-at (vec unseen))
+      (contract/later :gate-unseen "a block a walk opened was never seen" :look-at (vec unseen))
       (checks/goal (and (empty? open) (zero? given-up)) [:shut (str "shut " shut " left open by a walk")]
                    [:open (str (+ (count open) given-up) " blocks stand open")]
                    {:units :doors :done shut :left (+ (count open) given-up) :result {:shut shut :left []}}))))
@@ -155,9 +154,11 @@
   (let [m (ctx/mem c)
         left (:left m [])]
     (if-let [target (first (targets c left))]
-      (if-let [reason (await (shut-once! c target))]
-        (do (ctx/update-mem! c assoc :left (conj left (give-up! c target reason))) :again)
-        (do (ctx/update-mem! c update :shut (fnil inc 0)) :again))
+      (let [reason (await (shut-once! c target))]
+        (case reason
+          :continue :continue
+          nil (do (ctx/update-mem! c update :shut (fnil inc 0)) :again)
+          (do (ctx/update-mem! c assoc :left (conj left (give-up! c target reason))) :again)))
       (finish! c (:shut m 0) (into left (map (fn [cell] {:cell (cell-key cell) :reason :unseen})
                                              (doors/unseen-recorded (:primitives c) (ctx/view c) (:args c))))))))
 

@@ -346,7 +346,7 @@
           (is (= [[[5 64 0] :standing-in]] (mapv (juxt :cell :reason) (:left (first (filter #(= :stopped (:kind %)) @seen))))))
           (is (= [gate-cell] (mapv :cell (opened eng))) "the entry stays, so a later run shuts it"))))))
 
-(deftest a-walk-that-ends-continue-is-not-read-as-unreachable
+(deftest a-walk-that-ends-continue-yields-and-gives-the-block-up-nowhere
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -354,11 +354,10 @@
           (remember-opened! s)
           (core/submit! eng '(jobs.maintenance.shut-doors) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 3))
-          (is (= [:walk-interrupted] (mapv :reason (:left (first (filter #(= :stopped (:kind %)) @seen))))))
-          (is (= [gate-cell] (mapv :cell (opened eng))) "the entry stays for a later run")
-          (is (empty? (filter #(and (= :warn (:level %)) (= :job (:source %)) (not= :stopped (:kind %))) @seen)) "the job adds no warn of its own for an interrupted walk")
+          (is (seq (:list (core/state eng))) "the job yields and stays listed; it did not end")
+          (is (empty? (filter #(= :stopped (:kind %)) @seen)) "no ending, no :left")
           (is (= [1000000] (mapv (comp :t :data) (mem/entries (mem/view (:store eng)) :opened)))
-              "the entry keeps the time the block was opened; the trigger paces the retry"))))))
+              "the entry is untouched"))))))
 
 (deftest a-gate-left-while-standing-in-is-shut-by-the-reflex-once-the-body-steps-off
   (async done
