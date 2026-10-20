@@ -2281,10 +2281,12 @@ test('jumpPlace reports place-failed when the server refuses the block, and rele
   assert.deepEqual(controls(bot).at(-1), ['jump', false])
 }))
 
-test('jumpPlace: a cut mid-jump releases jump and rejects with cut', async () => {
+test('jumpPlace: a cut mid-jump releases jump and rejects with cut', async t => {
+  mockClock(t)
   const { bot, p } = pillarRig({ hang: ['_placeBlockWithOptions'] })
   const call = p.jumpPlace('t1', { item: 'dirt' })
-  await new Promise(resolve => setTimeout(resolve, 15))
+  call.catch(() => {})
+  await driveUntil(t, () => names(bot).includes('_placeBlockWithOptions'))
   p.setOwner('t2')
   await assert.rejects(call, cutError)
   assert.deepEqual(controls(bot).at(-1), ['jump', false])
