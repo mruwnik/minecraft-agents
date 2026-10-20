@@ -542,10 +542,23 @@
           (is (= 3 (count (calls p "jumpPlace"))) "nothing else was left, so the pillar went up")
           (is (= 1 (count (filterv #(= :retreat.trespass-last-resort (:kind %)) @seen))) "and said it trespassed"))))))
 
+(deftest walls-that-need-anothers-zone-wait-for-a-pillar-that-keeps-off-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]}
+              (await (hidden-round retreat {:blocks doorway :inventory [{:name "cobblestone" :count 20}]
+                                            :entities [(zombie 0 64 3)]
+                                            :zones [{:name "vault" :min [0 64 1] :max [0 66 1] :owner "Miles"}]}
+                                   1000 (constantly nil)))]
+          (is (zero? (count (calls p "place"))) "no wall block went into the zone")
+          (is (= 3 (count (calls p "jumpPlace"))) "the pillar, which keeps off the zone, went up instead")
+          (is (empty? (filterv #(= :shut-in.trespass-last-resort (:kind %)) @seen))))))))
+
 (deftest a-pillar-through-anothers-area-comes-after-every-other-way-and-before-a-last-fight
-  (is (= [:plug :pillar :back-off :plug-dig :pillar-zone :fight] (pick/with-zone-pillar (cornered/escape-order {}))))
-  (is (= [:fight :plug :pillar :plug-dig :pillar-zone] (pick/with-zone-pillar (cornered/escape-order {:pressed? true :faster? true}))))
-  (is (= [:fight] (pick/with-zone-pillar [:fight])) "no pillar in the order, none added"))
+  (is (= [:plug :pillar :back-off :plug-dig :plug-zone :pillar-zone :fight] (pick/with-zone-pillar (cornered/escape-order {}))))
+  (is (= [:fight :plug :pillar :plug-dig :plug-zone :pillar-zone] (pick/with-zone-pillar (cornered/escape-order {:pressed? true :faster? true}))))
+  (is (= [:fight] (pick/with-zone-pillar [:fight])) "no plug or pillar in the order, none added"))
 
 (deftest a-lone-melee-mob-within-ten-with-blocks-carried-is-pillared-against-before-any-flee-step
   (async done

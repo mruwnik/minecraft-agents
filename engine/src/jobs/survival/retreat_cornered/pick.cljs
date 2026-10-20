@@ -130,7 +130,7 @@
   [mem cell]
   (if (= cell (:fire-cell mem))
     mem
-    (-> mem (update :tried #(reduce disj (set %) [:plug :plug-dig])) (assoc :fire-cell cell))))
+    (-> mem (update :tried #(reduce disj (set %) [:plug :plug-zone :plug-dig])) (assoc :fire-cell cell))))
 
 (defn boxed-in?
   "Whether the body stands in a closed room with a melee mob (hitters) within hit-reach and was hit this step or within
@@ -173,15 +173,14 @@
                    (hitters c hostiles)))))
 
 (defn with-zone-pillar
-  "order with :pillar-zone (a pillar through another's area) after every way that keeps off, before a last :fight."
+  "order with :plug-zone and :pillar-zone (walls, a pillar through another's area) after every way that keeps off, before a last :fight."
   [order]
-  (if-not (some #{:pillar} order)
-    order
-    (let [order (vec order)
-          fight-last? (= :fight (peek order))]
-      (-> (if fight-last? (pop order) order)
-          (conj :pillar-zone)
-          (cond-> fight-last? (conj :fight))))))
+  (let [order (vec order)
+        fight-last? (= :fight (peek order))
+        extra (cond-> [] (some #{:plug} order) (conj :plug-zone) (some #{:pillar} order) (conj :pillar-zone))]
+    (-> (if fight-last? (pop order) order)
+        (into extra)
+        (cond-> fight-last? (conj :fight)))))
 
 (defn ^:async cornered!
   "Nowhere worth walking to: the first option of escape-order that it can take and has not failed since the last
@@ -226,6 +225,7 @@
                            (await (fist-look! c))
                            (await (fight! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons)) blind?)))
                   :plug (await (refuge/plug-option! c :plug #{:walls}))
+                  :plug-zone (when (:zone-walls (ctx/mem c)) (await (refuge/plug-option! c :plug-zone #{:walls})))
                   :plug-dig (await (refuge/plug-option! c :plug-dig #{:pit :pocket}))
                   :pillar (await (refuge/pillar! c false))
                   :pillar-zone (when-not (flight/tried? c :pillar) (await (refuge/pillar! c true)))

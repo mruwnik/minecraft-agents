@@ -2,7 +2,7 @@
 ;; An unarmed body in a one-wide stone doorway (x 9 and 11, z 15..19, closed at z 15) with a zombie in the cell in front of it: no wall
 ;; can be placed there, so the pillar is the way. A foreign plan footprint on the pillar's top cell stands in for the zone (as in
 ;; go-to-zone-pit). Should-succeed: with the footprint the pillar still goes up as the last resort and says so
-;; (retreat.trespass-last-resort). Control: without the footprint it pillars and says nothing.
+;; (retreat.trespass-last-resort). Walls case: the wall cell in front is another's footprint and the zombie is two cells off, so the walls would trespass: the pillar keeps off it and no shut-in trespass is said. Control: without the footprint it pillars and says nothing.
 {:defaults
  {:tags [:hostile :survival :cornered :zones]
   :time :any
@@ -22,4 +22,10 @@
   {:name "no-footprint-pillars-without-a-warning"
    :expect [{:event {:source :job :kind :child_ended :data {:slot :pillar :status :done}} :within-s 40}
             {:no-event {:source :job :kind :retreat.trespass-last-resort} :for-s 30}]
+   :after [[:body-near [10.5 3 16.5] 3]]},
+  {:name "walls-would-cross-a-footprint-so-the-pillar-keeps-off-it"
+   :act [[:summon "zombie" [10.5 0 19.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [10 0 17] #at [10 1 17]] :want "stone"}]}]
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :pillar :status :done}} :within-s 40}
+            {:no-event {:source :job :kind :shut-in.trespass-last-resort} :for-s 30}]
    :after [[:body-near [10.5 3 16.5] 3]]}]}

@@ -109,15 +109,17 @@
         radius (danger-q/radius-in (:args c))
         ranged-radius (danger-q/ranged-radius-in (:args c))
         e (await (ctx/call c option 'jobs.survival.shut-in
-                           (cond-> {:ways ways :on-lava on-lava :settings {:jobs.lib.danger/hostile-radius radius :jobs.lib.danger/ranged-radius ranged-radius}}
+                           (cond-> {:ways ways :on-lava on-lava :trespass? (not= :plug option) :settings {:jobs.lib.danger/hostile-radius radius :jobs.lib.danger/ranged-radius ranged-radius}}
                              (ctx/use c :blocks) (assoc :use {:blocks (ctx/use c :blocks)}))))
         feet (sh-sense/feet (:primitives c))]
     (cond
       (= :continue e) (do (ctx/update-mem! c assoc :plugging {:at feet :option option :ways ways}) :again)
       (= :done (:kind e)) (do (ctx/update-mem! c dissoc :plugging)
                               (spent/absorb! c (:data e))
-                              (hide-now! c {:kind option :anchor feet :cells (plug-cells c)} (hide-texts :plug)))
-      :else (do (ctx/update-mem! c dissoc :plugging) nil))))
+                              (hide-now! c {:kind (if (= :plug-zone option) :plug option) :anchor feet :cells (plug-cells c)} (hide-texts :plug)))
+      :else (do (ctx/update-mem! c dissoc :plugging)
+                (when (= :trespass (get-in e [:data :stops :walls :reason])) (ctx/update-mem! c assoc :zone-walls true))
+                nil))))
 
 (defn ^:async plug-option!
   "A plug option of a cornered body (:plug: the walls, :plug-dig: pit or pocket), once a flight: plug!'s result, nil when

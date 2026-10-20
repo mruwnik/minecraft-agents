@@ -186,6 +186,8 @@
       (empty? open) (do (forget!) :sealed)
       (empty? cells) (unfillable)
       (and (not= :night (:for (:args c))) (some (seal/hostile-cells p radius) cells)) (do (forget!) :failed)
+      (and (false? (:trespass? (:args c))) (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
+      (do (forget!) (ctx/update-mem! c assoc :stop {:reason :trespass :text "the walls need a cell of another's area"}) :failed)
       (nil? (lb/pick c blocks)) (do (forget!) :failed)
       :else
       (do (when (seal/off-centre? p) (await (seal/centre! c)))

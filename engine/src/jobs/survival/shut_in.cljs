@@ -40,6 +40,7 @@
 (a/defargs args
   {:ignore-zones? :shared
    :ways {:doc "the ways to enclose the body, tried by quote and, at a tie, in the order :room, :walls, :pit, :pocket (:room only when named)" :spec (a/set-of #{:room :walls :pit :pocket}) :default #{:walls :pit :pocket}}
+   :trespass? {:doc "false: the walls way fails rather than use a cell of another's zone, claim or plan (the caller tries again with true as a last resort)" :spec boolean? :default true}
    :for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}
    :place {:doc "the :room way: the room to enter, a remembered place name (default the home)" :spec (a/or-of keyword? string?) :default nil}
    :fetch {:doc "dig-pocket: get a missing tool (jobs.lib.need): true, a set of kinds or a map of limits" :spec need/option? :default false}
@@ -62,7 +63,7 @@
 (def children
   "Each way's job and the args of this call it takes."
   {:room ['jobs.survival.enter-room [:place]]
-   :walls ['jobs.survival.wall-in [:for :ignore-zones?]]
+   :walls ['jobs.survival.wall-in [:for :ignore-zones? :trespass?]]
    :pit ['jobs.survival.dig-pit [:for :ignore-zones? :on-lava]]
    :pocket ['jobs.survival.dig-pocket [:for :ignore-zones? :fetch :on-lava]]})
 
