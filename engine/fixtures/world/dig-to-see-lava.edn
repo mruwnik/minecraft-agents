@@ -41,7 +41,7 @@
    ;; the cut is clay (drops clay balls, no building block), the body carries no block and may not fetch one
    :blocks [[:fill [11 6 15] [14 10 17] "clay"] [:set [13 8 16] "lava"]]
    :body {:inventory [["iron_pickaxe" 1]]}
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3 :fetch false})]]
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :lava-unsealed :backed-off true}} :within-s 100 :of-job true}]
    :after [[:block [13 7 16] "clay"]]}
   {:name "stair-water-behind-stone-stops-fluid-in-cut"

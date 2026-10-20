@@ -40,7 +40,7 @@
   variant is not used: the body stands at the block's centre, so it does not step off the edge.
 
   Blocks missing (:too-few-blocks, with :short) are got with jobs.items.obtain (jobs.lib.need, then the body walks back
-  to the cell it stood on) unless :fetch is false; a cell ahead still unsensed after the look ends :unseen.
+  to the cell it stood on) unless the call's :ways are only #{:carried}; a cell ahead still unsensed after the look ends :unseen.
 
   Ends :done with data {:placed [[x y z] ...] :built n :length n :spent {item n} :spent-at [cell ...]}; :placed are this job's confirmed blocks, nearest
   first. A give-up is condition-failed with the cause :too-few-blocks (the fetch ending as its :because), :not-on-solid,
@@ -53,8 +53,7 @@
   {:heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
    :length {:doc "blocks in the row, 1 to 64" :spec (a/int-in 1 64) :default 1}
    :item {:doc "the block to bridge with; nil: dirt while any is carried, then cobblestone" :spec a/item? :default nil}
-   :ignore-zones? :shared
-   :fetch {:doc "get missing blocks with jobs.items.obtain instead of ending :too-few-blocks (false: end); a set of kinds or a map of limits counts as true" :spec need/option? :default true}})
+   :ignore-zones? :shared})
 
 (a/defargs settings
   {::job-time-s {:default 600 :doc "Seconds a bridge may take." :spec (a/num-in 0 nil)}
@@ -66,6 +65,8 @@
 (def safe? ready/safe-at-from)
 
 (def fit? ready/fit?)
+
+(def ways need/fetch-ways)
 
 (def target [:heading])
 
@@ -268,15 +269,15 @@
 
 (defn ^:async fetch-blocks!
   "Get the blocks step lacks with jobs.items.obtain: :continue while it works, :again once it is done, else the bridge's
-  give-up (:too-few-blocks, the fetch's ending its :because). Without :fetch the give-up at once."
+  give-up (:too-few-blocks, the fetch's ending its :because). With the call's :ways only #{:carried} the give-up at once."
   [c l step]
-  (if-not (:fetch (:args c))
+  (if (empty? (need/fetch-how c))
     (finish! c l step)
     (let [item (:item (:args c))
           n (:short step)
           e (await (if item
-                     (need/item! c item n {:return? true})
-                     (need/blocks! c (choose/filler-names c :pillar) n {:return? true})))]
+                     (need/item! c item n {:return? true :how (need/fetch-how c)})
+                     (need/blocks! c (choose/filler-names c :pillar) n {:return? true :how (need/fetch-how c)})))]
       (cond
         (= :continue e) :continue
         (= :done (:kind e)) :again

@@ -188,7 +188,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (setup {:inventory []})
-              id (core/submit! eng (list job {:height 6 :fetch false}) {})]
+              id (core/submit! eng (list job {:height 6 :ways #{:carried}}) {})]
           (await (ticks s eng 3))
           (is (not (finished? eng)) "still listed: it waits for blocks")
           (is (empty? (calls p "jumpPlace")))

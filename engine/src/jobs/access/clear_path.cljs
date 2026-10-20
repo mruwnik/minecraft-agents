@@ -38,12 +38,11 @@
   (the walk through did not arrive). Data {:dug [{:cell :block}] :at [x y z] :through [x y z]}.
   It does not put the blocks back: jobs.movement.go-to does that once through.
   :need-drop false: a block no carried tool harvests is dug bare-handed (slow, the drop is lost) instead of stopping :dig-waits
-  :no-tool; go-to's last resort when it has no pickaxe. A tool the dig lacks is fetched (:fetch, jobs.lib.need) unless :fetch is off.")
+  :no-tool; go-to's last resort when it has no pickaxe. A tool the dig lacks is fetched (jobs.lib.need, from the call's :ways) unless they are only #{:carried}.")
 
 (a/defargs args
   {:heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
    :ignore-zones? :shared
-   :fetch {:doc "get a missing tool for the dig children with jobs.lib.need: true, a set of kinds or a map of limits; false waits :dig-waits" :spec need/option? :default true}
    :need-drop {:doc "false: dig a block no carried tool harvests bare-handed (slow, the drop is lost)" :spec boolean? :default true}})
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
@@ -59,6 +58,8 @@
 (def safe? ready/safe-here-by-night)
 
 (def fit? ready/fit?)
+
+(def ways need/fetch-ways)
 
 (def target [:heading])
 
@@ -159,7 +160,7 @@
   call goes on with it). :again, :continue while the child waits on the world, or the ending."
   [c {:keys [cell block collect]}]
   (let [hand? (and (false? (:need-drop (:args c))) (not (tools/can-harvest? (:primitives c) block)))
-        args {:pos cell :collect (and collect (not hand?)) :need-drop (not hand?) :ways (need/ways-of-fetch (:fetch (:args c)))
+        args {:pos cell :collect (and collect (not hand?)) :need-drop (not hand?) :ways (need/call-ways c)
               :ignore-zones? (:ignore-zones? (:args c))}
         done! (fn [] (ctx/update-mem! c dissoc :digging))]
     (cond

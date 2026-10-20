@@ -48,11 +48,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (run-door wall nil {:heading :east :fetch false}))]
+        (let [r (await (run-door wall nil {:heading :east :ways #{:carried}}))]
           (is (= [:stopped :dig-waits] [(:status r) (:reason r)]) (pr-str r))
           (is (= [1 65 0] (:cell r)) "the top layer first"))))))
 
-(deftest the-dig-child-gets-the-ways-of-the-fetch-arg
+(deftest the-dig-child-gets-the-call-ways
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -62,7 +62,7 @@
                      (ctx/end c :nothing-possible :failed {:dug false}))
               w (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}])
               _ (await (run-door w stub))
-              _ (await (run-door w stub {:heading :east :fetch false}))]
+              _ (await (run-door w stub {:heading :east :ways #{:carried}}))]
           (is (= [#{:carried :chest :craft :gather} #{:carried}] @seen)))))))
 
 (deftest by-hand-digs-the-door-with-no-pickaxe

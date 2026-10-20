@@ -194,7 +194,7 @@
       (let [slot (keyword (str "dig-out-" i))
             _ (update-leave! c assoc :heading (:heading attempt))
             e (waits/waiting-out c (await (ctx/call c slot 'jobs.access.stair
-                                     (merge {:dir :up :checks (ready/unforced c {:fit? '(always)}) :heading (:heading attempt) :fetch false :ignore-zones? (or (:ignore-zones? attempt) (:ignore-zones? (:args c)))}
+                                     (merge {:dir :up :checks (ready/unforced c {:fit? '(always)}) :heading (:heading attempt) :ways #{:carried} :ignore-zones? (or (:ignore-zones? attempt) (:ignore-zones? (:args c)))}
                                             (if start {:y (:y start)} {:steps 1})))))
             data (:data e)]
         (when (and (not= :continue e) (:ignore-zones? attempt)) (note-trespass! c (:dug data)))

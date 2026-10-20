@@ -1,6 +1,7 @@
 (ns jobs.gather.mine.descent
   "The descent of jobs.gather.dig-for: whether and how it goes down (tunnel level, stair-or-shaft tests, the pick and the walk down a mineshaft)."
   (:require [clojure.string :as str]
+            [jobs.lib.need :as need]
             [jobs.lib.waits :as waits]
             [jobs.lib.child :as child]
             [engine.settings :as settings]
@@ -204,7 +205,7 @@
   (let [_ (when-not (get-in (ctx/mem c) [:descent :top])
             (ctx/update-mem! c update :descent assoc :top (access/cell (cell-of (u/self-pos c))) :top-heading (keyword (:heading (ctx/mem c)))))
         r (waits/waiting-out c (await (ctx/call c :stair 'jobs.access.stair
-                                 {:dir :down :heading (keyword (:heading (ctx/mem c))) :steps 1 :fetch (if level? (:fetch (:args c)) true)
+                                 {:dir :down :heading (keyword (:heading (ctx/mem c))) :steps 1 :ways (if level? (need/ways-of-fetch (:fetch (:args c))) (set need/fetch-ways))
                                   :accept (filterv #{:falling-block} (:accept (:args c)))
                                   :ignore-zones? (:ignore-zones? (:args c))})))
         res (result-of r)]

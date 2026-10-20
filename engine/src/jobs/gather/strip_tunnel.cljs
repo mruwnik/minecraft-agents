@@ -138,7 +138,7 @@
         _ (await (watch/watch! c {:risky? true :before-dig (first (remove #(passable (name-at %)) cut))}))
         _ (ctx/update-mem! c assoc :stepping true)
         r (waits/waiting-out c (await (ctx/call c :step 'jobs.access.stair
-                                 {:dir :level :heading (keyword heading) :steps 1 :accept (step-accept args) :fetch (:fetch args)
+                                 {:dir :level :heading (keyword heading) :steps 1 :accept (step-accept args) :ways (need/ways-of-fetch (:fetch args))
                                   :ignore-zones? (:ignore-zones? args)
                                   :cut-only (boolean (:stay-level args))})))
         res (result-of r)]

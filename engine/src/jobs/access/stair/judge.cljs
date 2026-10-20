@@ -31,16 +31,15 @@
           :plugs (if (limits/dig-plugs?) #{} (smem/plugs-of c))}
          (access-world c)))
 
-(defn fetch-limits
-  "The limits map of :fetch when it allows a tool, else nil."
+(defn fetch?
+  "Whether the call's ways let it fetch a missing pickaxe."
   [c]
-  (let [o (need/opts c 'jobs.access.stair)]
-    (when (and o (contains? (:what o) :tool)) o)))
+  (boolean (seq (need/fetch-how c))))
 
 (defn fetchable?
-  "Whether lack is a missing pickaxe that :fetch lets the call get."
+  "Whether lack is a missing pickaxe that the call's ways let it get."
   [c lack]
-  (and (= :no-tool (:reason lack)) (some? (fetch-limits c))))
+  (and (= :no-tool (:reason lack)) (fetch? c)))
 
 (defn next-cut
   "The cells the next step cuts when it is judged from the feet (the body is at the stair's start or on it), else nil."

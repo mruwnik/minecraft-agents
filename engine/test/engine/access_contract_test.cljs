@@ -78,7 +78,7 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :stopped :kind :condition-failed :reason :too-few-blocks}
-               (await (ending-of '(jobs.access.bridge {:heading :east :length 3 :fetch false :ignore-zones? true})
+               (await (ending-of '(jobs.access.bridge {:heading :east :length 3 :ways #{:carried} :ignore-zones? true})
                                  {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks {"0,63,0" "stone"} :inventory []}))))))))
 
 (deftest a-bridge-over-a-gap-ends-done

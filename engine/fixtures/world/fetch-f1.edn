@@ -63,7 +63,7 @@
             [:set [18 10 16] "chest{Items:[{Slot:0b,id:\"minecraft:wooden_pickaxe\",count:1}]}"]]
    :body {:at [10.5 10 16.5]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 20"] [:until-seen {:block "chest"} 10]
-         [:job (jobs.access.stair {:dir :down :heading :east :steps 6 :fetch true})]]
+         [:job (jobs.access.stair {:dir :down :heading :east :steps 6})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 90 :of-job true}
             {:event {:source :job :kind :completed :data {:steps 6}} :within-s 150 :of-job true}]
    :limit-s 160

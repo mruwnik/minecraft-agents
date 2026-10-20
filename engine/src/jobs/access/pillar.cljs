@@ -32,7 +32,7 @@
 
   Needs: blocks for the :use {:blocks [...]} list of the call (default: the carried fillers for a pillar, dirt then
   cobblestone, jobs.lib.choose). A call starts only with some of them
-  carried unless :fetch is false (then condition :too-few-blocks, with :short; a fetch that fails ends the same, the
+  carried unless the call's :ways are only #{:carried} (then condition :too-few-blocks, with :short; a fetch that fails ends the same, the
   fetch's ending its :because) (checked at the call's start only). Quote: height x the time of a block, that many
   blocks of the first carried one, ending height up.
 
@@ -60,8 +60,7 @@
   :at :block :zone :short :detail :mob.")
 
 (a/defargs args
-  {:fetch {:doc "get the blocks with jobs.items.obtain when none is carried at the start, and walk back (false: end :too-few-blocks); a set of kinds or a map of limits counts as true" :spec need/option? :default true}
-   :height {:doc "blocks to rise, 1 to 64 (the short form of :y: the feet's y at the start plus this)" :spec (a/int-in 1 64) :default 1}
+  {:height {:doc "blocks to rise, 1 to 64 (the short form of :y: the feet's y at the start plus this)" :spec (a/int-in 1 64) :default 1}
    :y {:doc "the y the feet end at; nil: the start's y plus :height" :spec (a/int-in -64 320) :default nil}
    :ignore-zones? :shared})
 
@@ -82,6 +81,8 @@
 (def safe? ready/safe-here-by-night)
 
 (def fit? ready/fit?)
+
+(def ways need/fetch-ways)
 
 (def target [])
 
@@ -219,11 +220,11 @@
   (when-not (item-to-use nil carried items) height))
 
 (defn too-few-blocks
-  "Later :too-few-blocks (:short blocks missing) when no listed block is carried and the call does not :fetch. Run short
+  "Later :too-few-blocks (:short blocks missing) when no listed block is carried and the call's ways allow no fetch. Run short
   part way, the round gives up with its pillar and ledger settled."
   [c]
   (let [items (blocks-of c)
-        short (when-not (:fetch (:args c)) (blocks-short (pl/carried (:primitives c)) items (height-of c)))]
+        short (when (empty? (need/fetch-how c)) (blocks-short (pl/carried (:primitives c)) items (height-of c)))]
     (if short
       (contract/later :too-few-blocks (str short " blocks short") :short short :items items)
       (contract/ok :blocks "blocks enough or fetched"))))
@@ -395,12 +396,12 @@
   them (jobs.lib.need). :continue while that goes on, the give-up when it fails, else nil. Cut mid-pillar it is skipped."
   [c]
   (let [back (await (need/return! c))
-        short (when (and (:fetch (:args c)) (not (:base (ctx/mem c))))
+        short (when (and (seq (need/fetch-how c)) (not (:base (ctx/mem c))))
                 (blocks-short (pl/carried (:primitives c)) (blocks-of c) (height-of c)))]
     (cond
       back back
       (nil? short) nil
-      :else (let [e (await (need/blocks! c (or (seq (blocks-of c)) (choose/filler-names c :pillar)) short {:return? true}))]
+      :else (let [e (await (need/blocks! c (or (seq (blocks-of c)) (choose/filler-names c :pillar)) short {:return? true :how (need/fetch-how c)}))]
               (cond
                 (= :continue e) :continue
                 (= :done (:kind e)) nil

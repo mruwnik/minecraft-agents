@@ -490,7 +490,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [torches (atom :none)
-              child {:round (fn [c] (reset! torches (reduce + (map :count (filter #(= "torch" (:name %)) (u/inventory (:primitives c))))))
+              child {:ways [:carried :chest :craft :gather] :round (fn [c] (reset! torches (reduce + (map :count (filter #(= "torch" (:name %)) (u/inventory (:primitives c))))))
                               (ctx/end c :done nil))}
               parent {:round (fn ^:async r [c]
                                (let [c (assoc c :unknown true)]

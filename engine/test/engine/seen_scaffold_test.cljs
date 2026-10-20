@@ -91,7 +91,7 @@
       (fn ^:async t []
         (let [gap (apply dissoc d/ground (for [x (range 1 4)] (str x ",64,0")))
               p (d/sensing {:blocks gap :inventory []})
-              {:keys [eng] :as s} (d/setup p 'jobs.access.bridge {:heading :east :length 3 :fetch false :ignore-zones? true})]
+              {:keys [eng] :as s} (d/setup p 'jobs.access.bridge {:heading :east :length 3 :ways #{:carried} :ignore-zones? true})]
           (is (true? (look/unknown? p [1 65 0])) "the cells ahead are unsensed at the start")
           (loop [i 0]
             (when (< i 20)

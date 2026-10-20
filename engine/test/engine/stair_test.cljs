@@ -343,7 +343,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [snow (update-vals ground (constantly "snow_block"))]
-          (doseq [args [(assoc east :fetch false) east]]
+          (doseq [args [(assoc east :ways #{:carried}) east]]
             (let [s (await (stair! {:blocks snow :inventory []} args (fn [_])))]
               (is (= :done (:status @(:out s))))
               (is (= 3 (:steps @(:out s))))
@@ -520,7 +520,7 @@
                                       (when (= 1 (swap! n inc))
                                         (swap! (.. world -state) assoc :inventory []))
                                       r)))))
-              s (await (stair! {:blocks ground} (assoc east :fetch false) prep))]
+              s (await (stair! {:blocks ground} (assoc east :ways #{:carried}) prep))]
           (is (= [:stopped :no-tool "pickaxe"] ((juxt :status :reason :tool) @(:out s))))
           (is (nil? (waiting s))))))))
 
@@ -602,7 +602,7 @@
                                       (swap! (.. world -state) assoc-in [:blocks [1 64 1]] "water")
                                       (swap! (.. world -state) assoc :inventory pick)
                                       r)))))
-              {:keys [out]} (await (stair! {:blocks ground} (assoc east :fetch false) prep))]
+              {:keys [out]} (await (stair! {:blocks ground} (assoc east :ways #{:carried}) prep))]
           (is (= :water-unplugged (:reason @out)))
           (is (= [1 64 0] (:cell @out))))))))
 
@@ -892,7 +892,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (stair! {:blocks ground :inventory []} (assoc east :fetch false) (fn [_])))]
+        (let [{:keys [out p]} (await (stair! {:blocks ground :inventory []} (assoc east :ways #{:carried}) (fn [_])))]
           (is (= [:condition-failed :no-tool] ((juxt :kind contract/cause-key) (:ending @out))))
           (is (= "pickaxe" (:tool (:cause (:ending @out)))))
           (is (empty? (digs p))))))))
@@ -1199,7 +1199,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p] :as s} (await (stair! {:blocks ground :inventory []} (assoc east :fetch false :need-drop false) (fn [_])))]
+        (let [{:keys [out p] :as s} (await (stair! {:blocks ground :inventory []} (assoc east :ways #{:carried} :need-drop false) (fn [_])))]
           (is (= :done (:status @out)) (pr-str @out))
           (is (nil? (waiting s)))
           (is (seq (digs p)) "dug bare-handed"))))))
@@ -1258,8 +1258,8 @@
               unseen (fn [p]
                        (aset p "sensedAt" (fn [pos] (if @shown (.blockAt p pos) #js {:unknown true})))
                        (.override (.-world p) "look" (fn [token a impl] (reset! shown true) (impl token a))))
-              {:keys [eng clock p]} (setup {:blocks ground :inventory []} (assoc east :fetch false) unseen)
-              id (core/submit! eng (list job (assoc east :fetch false)) {})]
+              {:keys [eng clock p]} (setup {:blocks ground :inventory []} (assoc east :ways #{:carried}) unseen)
+              id (core/submit! eng (list job (assoc east :ways #{:carried})) {})]
           (dotimes [_ 6]
             (swap! clock + 700)
             (await (core/tick! eng)))
@@ -1357,7 +1357,7 @@
           (is (= [:condition-failed :base-block] (await (run {:blocks (assoc ground "1,65,0" "chest")} east (fn [_])))))
           (is (= [:condition-failed :no-zones] (await (run {:blocks ground :zones nil} east (fn [_])))))
           (is (= [:impossible :bad-args] (await (run {:blocks ground} {:dir :down} (fn [_])))))
-          (is (= [:condition-failed :no-tool] (await (run {:blocks ground :inventory []} (assoc east :fetch false) (fn [_])))))
+          (is (= [:condition-failed :no-tool] (await (run {:blocks ground :inventory []} (assoc east :ways #{:carried}) (fn [_])))))
           (is (= [:condition-failed :no-free-slot]
                  (await (run {:blocks ground :inventory (into pick (repeat 35 {:name "dirt" :count 64}))} east (fn [_])))))
           (is (= [:condition-failed :refused]

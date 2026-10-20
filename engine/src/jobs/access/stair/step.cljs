@@ -115,7 +115,7 @@
       (when-let [cell (first (cells/exposed-lava block-at feet cut))]
         (if (= :stop (:on-lava (:args c)))
           {:reason :lava-exposed :cell cell :fluid "lava"}
-          (let [r (await (lava/seal! c kind block-at cell {:ways (need/ways-of-fetch (:fetch (:args c))) :ignore-zones? (:ignore-zones? (:args c))}))]
+          (let [r (await (lava/seal! c kind block-at cell {:ways (need/call-ways c) :ignore-zones? (:ignore-zones? (:args c))}))]
             (when (= :again r) (ctx/update-mem! c assoc :sealed-at (ctx/now c)))
             r))))))
 
@@ -145,7 +145,7 @@
   place child waits; the stop {:reason :hazard :cell :plugged :hazards} once plugged, else {:reason :water-unplugged}."
   [c block-at accept cut]
   (when-let [[cell w] (first (cells/exposed-water block-at (:dug (ctx/mem c)) accept cut))]
-    (let [r (await (lava/seal! c :stair.plugged block-at cell {:ways (need/ways-of-fetch (:fetch (:args c))) :ignore-zones? (:ignore-zones? (:args c))}))]
+    (let [r (await (lava/seal! c :stair.plugged block-at cell {:ways (need/call-ways c) :ignore-zones? (:ignore-zones? (:args c))}))]
       (cond
         (= :continue r) :continue
         (= :again r) (do (mem/plug! c cell) {:reason :hazard :cell cell :plugged cell :hazards [{:reason :fluid-adjacent :fluid "water" :at w}]})
@@ -163,9 +163,9 @@
   (and (not (by-hand? c block)) (tools/needs-tool-to-clear? (:primitives c) block)))
 
 (defn fetch-tool?
-  "Whether the job's :fetch lets the dig child get a missing pickaxe (it fetches inside the dig, so a missing tool is no stop)."
+  "Whether the call's ways let the dig child get a missing pickaxe (it fetches inside the dig, so a missing tool is no stop)."
   [c]
-  (need/allows? (:fetch (:args c)) :tool))
+  (seq (need/fetch-how c)))
 
 (defn drop-room?
   "Room for block's drop, or no drop to keep: a :need-drop false dig with no tool that harvests it loses it."
@@ -211,7 +211,7 @@
                     fetch? (and (fetch-tool? c) (lacks-tool? c block))
                     e (await (blocks/dig-cell-ending! c {:x x :y y :z z}
                                                       (cond-> {:accept #{:fluid-adjacent :lava-adjacent :falling-block} :on-lava :leave :ignore-zones? true}
-                                                        fetch? (assoc :ways (need/ways-of-fetch (:fetch (:args c))) :need-drop (not (false? (:need-drop (:args c))))))))
+                                                        fetch? (assoc :ways (need/call-ways c) :need-drop (not (false? (:need-drop (:args c))))))))
                     outcome (blocks/dig-outcome e)]
                 (if (= :continue outcome)
                   :yield

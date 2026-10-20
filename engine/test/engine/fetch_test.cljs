@@ -272,7 +272,7 @@
                         :containers {"-3,64,2" [{:name "wooden_pickaxe" :count 1}]}
                         :drops {"stone" "cobblestone"}}
                        [own-zone])
-              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :fetch true}) {})]
+              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1}) {})]
           (await (run-ticks s 60))
           (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (core/waiting (:eng s) id)))
           (is (= "air" (block-at s 0 64 1)))
@@ -331,7 +331,7 @@
                         :containers {"-3,64,2" [{:name "wooden_pickaxe" :count 1}]}
                         :drops {"stone" "cobblestone"}}
                        [own-zone])
-              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :fetch true}) {})]
+              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1}) {})]
           (await (with-waiting-fetch-child
                    (fn ^:async waiting-round [n]
                      (await (run-ticks s 1))
@@ -350,7 +350,7 @@
                         :containers {"-3,64,2" [{:name "dirt" :count 1}]}
                         :drops {"stone" "cobblestone"}}
                        [own-zone])
-              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :fetch true}) {})]
+              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1}) {})]
           (await (run-ticks s 40))
           (is (nil? (:need/return (core/job-memory (:eng s) id))) (pr-str (core/job-memory (:eng s) id))))))))
 
@@ -368,7 +368,7 @@
                              (do (swap! n inc) (js/Promise.resolve (contract/ending :done nil nil)))
                              (orig c slot job args))))
           (try
-            (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :fetch true}) {})
+            (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1}) {})
             (await (run-ticks s 6))
             (finally (set! ctx/call orig)))
           (is (< @n 5) (str "tool fetches asked " @n)))))))
@@ -383,7 +383,7 @@
                         :containers {"-3,64,2" [{:name "wooden_pickaxe" :count 1}]}
                         :drops {"stone" "cobblestone"}}
                        [own-zone])
-              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :fetch false}) {})]
+              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :ways #{:carried}}) {})]
           (await (run-ticks s 10))
           (is (= :no-tool (:reason (core/waiting (:eng s) id))))
           (is (empty? (inspects s))))))))

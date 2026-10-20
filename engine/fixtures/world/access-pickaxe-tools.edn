@@ -12,7 +12,7 @@
    ;; 14 uses left (low after one dig); a 10-step stair from the west edge of the mass digs well over 14 blocks
    :body {:at [8.5 10 16.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=117]"]
-         [:job (jobs.access.stair {:dir :down :heading :east :steps 10 :fetch false})]]
+         [:job (jobs.access.stair {:dir :down :heading :east :steps 10 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :tool.low} :within-s 40}
             {:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :tool-spent}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :stopped}}]}
@@ -21,7 +21,7 @@
    :blocks [[:fill [8 0 8] [24 9 24] "dirt"]]
    :body {:at [8.5 10 16.5] :inventory [["stone_pickaxe" 1] ["stone_shovel" 1]]}
    :act [[:rcon "item replace entity $BODY container.1 with minecraft:stone_shovel[minecraft:damage=128]"]
-         [:job (jobs.access.stair {:dir :down :heading :east :steps 4 :fetch false})]]
+         [:job (jobs.access.stair {:dir :down :heading :east :steps 4 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :tool-spent}} :for-s 60 :until {:source :job :kind :completed}}]}
   {:name "pickaxe-already-low-at-first-hold"
@@ -32,7 +32,7 @@
   {:name "pickaxe-breaks-mid-stair"
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=130]"]
-         [:job (jobs.access.stair {:dir :down :heading :east :steps 3 :fetch false :settings {:jobs.lib.trip/spent-uses 0}})]]
+         [:job (jobs.access.stair {:dir :down :heading :east :steps 3 :ways #{:carried} :settings {:jobs.lib.trip/spent-uses 0}})]]
    :expect [{:event {:source :job :kind :tool.broke} :within-s 30}
             {:event {:source :job :kind :tool.none} :within-s 30}
             {:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} :within-s 40 :of-job true}]}

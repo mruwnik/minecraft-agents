@@ -91,7 +91,7 @@
   plus detail. :inside is true when the body is off the entry, on the way in. 
 
   Every carried pickaxe down to jobs.lib.trip's ::spent-uses (3) uses stops the tunnel {:reason :tool-spent} before the last breaks (jobs.access.stair; the call's :settings {:jobs.lib.trip/spent-uses 0} digs on).
-  :fetch (default true; false ends :no-tool; jobs.lib.need): a missing pickaxe is got inside the jobs.blocks.dig child of the dig
+  The call's :ways (jobs.lib.need; only #{:carried} ends :no-tool): a missing pickaxe is got inside the jobs.blocks.dig child of the dig
   (the stair's and the run's own), then the body walks back and goes on; a fetch that fails or cures nothing ends :no-tool with its reason as :because. :need-drop false digs a block no carried tool clears
   bare-handed (slow, no drop) instead.")
 
@@ -106,12 +106,13 @@
    :accept {:doc "dig hazards taken (jobs.lib.access.rules): #{:fluid-adjacent :lava-adjacent :falling-block}" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{}}
    :ignore-zones? :shared
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop (jobs.access.stair)" :spec #{:seal :stop} :default :seal}
-   :fetch {:doc "get a missing pickaxe instead of ending :no-tool (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-tool" :spec need/option? :default true}
    :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of fetching a tool; a failed fetch ends :no-tool either way" :spec boolean? :default true}})
 
 (def safe? (ready/safe-at-by-night (fn [c] (a/cell (:target (:args c)))) false true))
 
 (def fit? ready/fit?)
+
+(def ways need/fetch-ways)
 
 (def target [:target])
 
@@ -270,7 +271,7 @@
   [c {:keys [heading dir] :as plan}]
   (let [cells (ln/line-cells plan)
         e (waits/waiting-out c (await (ctx/call c :stair 'jobs.access.stair
-                           {:dir dir :heading heading :fetch (:fetch (:args c)) :need-drop (:need-drop (:args c)) :y ((cells (:steps plan)) 1) :on-lava (:on-lava (:args c) :seal)
+                           {:dir dir :heading heading :ways (need/call-ways c) :need-drop (:need-drop (:args c)) :y ((cells (:steps plan)) 1) :on-lava (:on-lava (:args c) :seal)
                             :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
     (if (= :continue e)
       :continue
@@ -345,11 +346,11 @@
   "The first leg of a diagonal target: a kept tunnel child to the waypoint (its stand is in the target's column), then
   the plan is chosen again from there. :again or :continue; else the job ends with the leg's stop."
   [c w]
-  (let [{:keys [fetch accept ignore-zones? on-lava max-length need-drop]} (:args c)
+  (let [{:keys [ways accept ignore-zones? on-lava max-length need-drop]} (:args c)
         e (waits/waiting-out c (await (ctx/call c :leg 'jobs.access.tunnel
                            (cond-> {:target w :max-length max-length :accept accept :need-drop need-drop
                                     :ignore-zones? ignore-zones? :on-lava on-lava}
-                             (some? fetch) (assoc :fetch fetch)))))]
+                             (some? ways) (assoc :ways ways)))))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (ctx/update-mem! c dissoc :leg) :again)

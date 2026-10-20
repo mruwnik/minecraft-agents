@@ -429,7 +429,7 @@
       (fn ^:async t []
         (let [leaves (update-vals (assoc ground "6,57,0" "iron_ore") (constantly "oak_leaves"))
               {:keys [out p] :as s} (await (tunnel! {:blocks (assoc leaves "6,57,0" "iron_ore") :inventory []}
-                                                    {:target [6 57 0] :fetch false} (fn [_])))]
+                                                    {:target [6 57 0] :ways #{:carried}} (fn [_])))]
           (is (= :reached (:reason @out)))
           (is (seq (digs p)) "dug by hand")
           (is (empty? (filter #(= :need (:slot %)) (events-of s :child_started))))
@@ -439,7 +439,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (tunnel! {:blocks eight-down :inventory []} {:target [6 57 0] :fetch false} (fn [_])))]
+        (let [{:keys [out p]} (await (tunnel! {:blocks eight-down :inventory []} {:target [6 57 0] :ways #{:carried}} (fn [_])))]
           (is (= [:stopped :no-tool "pickaxe"] ((juxt :status :reason :tool) @out)))
           (is (empty? (digs p))))))))
 
@@ -480,7 +480,7 @@
 (defn ^:async fetching-tunnel! [give fetch prep & [extra]]
   (let [calls (atom [])
         p (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :inventory [] :blocks ground})
-        s (setup {} (cond-> (merge {:target [6 57 0]} extra) (not= :default fetch) (assoc :fetch fetch)) prep :p p
+        s (setup {} (cond-> (merge {:target [6 57 0]} extra) (false? fetch) (assoc :ways #{:carried})) prep :p p
                  :jobs {'jobs.items.get-tool (get-tool-stub calls p give)})
         s (assoc s :id (core/submit! (:eng s) '(recording-parent) {}))]
     (await (tick-out! s))
@@ -699,7 +699,7 @@
                  (await (run {:blocks eight-down :zones [{:name "z" :min [6 57 0] :max [6 57 0]}]} target (fn [_])))))
           (is (= [:condition-failed :no-zones] (await (run {:blocks eight-down :zones nil} target (fn [_])))))
           (is (= [:impossible :bad-args] (await (run {:blocks eight-down} {:heading :east} (fn [_])))) "a call with no target never starts")
-          (is (= [:condition-failed :no-tool] (await (run {:blocks eight-down :inventory []} (assoc target :fetch false) (fn [_])))))
+          (is (= [:condition-failed :no-tool] (await (run {:blocks eight-down :inventory []} (assoc target :ways #{:carried}) (fn [_])))))
           (is (= [:condition-failed :hazard] (await (run {:blocks eight-down :inventory with-cobble} target lava-ahead))))
           (is (= [:condition-failed :tool-spent]
                  (await (run {:blocks eight-down :inventory [{:name "iron_pickaxe" :count 1 :durability 3}]} target (fn [_]))))))))))

@@ -62,7 +62,7 @@
    :expect [{:event {:source :job :kind :stopped :data {:reason :off-column}} :within-s 120 :of-job true}]
    :limit-s 130}
   {:name "no-blocks-waits-too-few"
-   :act [[:job (jobs.access.pillar {:height 5 :fetch false})]]
+   :act [[:job (jobs.access.pillar {:height 5 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :too-few-blocks}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :waiting}}]
    :limit-s 40}

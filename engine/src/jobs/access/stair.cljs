@@ -44,7 +44,7 @@
   gap is shut with a carried block, :sealed, else :open-to). A lava or water floor is never bridged. A go-to stair (:note) writes its
   floors to the scaffold ledger for jobs.access.cleanup (setting take-back-floors?).
 
-  Hazards: exposed lava is filled with a building block (a jobs.blocks.place child, fetched when :fetch allows; :on-lava :stop stops
+  Hazards: exposed lava is filled with a building block (a jobs.blocks.place child, fetched when the call's :ways allow; :on-lava :stop stops
   :lava-exposed instead); after a seal it waits half a second, looking, before it digs or steps on; a failed seal, or lava flowing back after a reseal, backs the body off and stops :lava-unsealed. A cut that
   now touches seen water is plugged the same way (stops :hazard with :plugged; :water-unplugged if it cannot). :accept
   (#{:fluid-adjacent :lava-adjacent :falling-block}, default #{}) takes those hazards. A falling block over the body's own column is
@@ -54,7 +54,7 @@
   Needs a pickaxe and room for the drops. A call starts only when the first step is not refused, the args give a length and the next
   dig lacks nothing this call cannot get (:refused, :no-tool, :no-free-slot). Quote: steps x cells of the step x the time of a cell.
   - A pack without room waits :no-free-slot until it changes (the make-room reflex or the caller clears it).
-  - A missing pickaxe is got by the jobs.blocks.dig child (:fetch), then the body walks back onto the line and goes on; a fetch that fails ends :no-tool with its reason as :because. :fetch off ends :no-tool.
+  - A missing pickaxe is got by the jobs.blocks.dig child (the call's :ways), then the body walks back onto the line and goes on; a fetch that fails ends :no-tool with its reason as :because. :ways #{:carried} end :no-tool.
   - A root stair marks itself for the :ore-seen trigger (jobs.lib.ore-pick): exposed ore within reach is dug.
 
   One call cuts the whole stair; it yields :continue while a fetch or walk child waits on the world. The
@@ -81,7 +81,6 @@
    :accept {:doc "dig hazards taken (jobs.lib.access.rules): #{:fluid-adjacent :lava-adjacent :falling-block}" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{}}
    :ignore-zones? :shared
    :note {:doc "a map (go-to's escalation): each cell dug in another's zone, claim or plan is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!), each floor placed to the scaffold ledger (take-back-floor?)" :spec map? :default nil}
-   :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.need), and a block to seal lava with: true, a set of kinds or a map of limits" :spec need/option? :default true}
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :spec #{:seal :stop} :default :seal}
    :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool" :spec boolean? :default true}
    :through {:doc "the id of a mineshaft plan the stair runs down: its footprint is no obstacle (jobs.lib.shafts)" :spec string? :default nil}})
@@ -96,6 +95,8 @@
 (def safe? ready/safe-at-from)
 
 (def fit? ready/fit?)
+
+(def ways need/fetch-ways)
 
 (def target [:dir :heading :y])
 
@@ -147,7 +148,7 @@
     (checks/cause-status :later lack (str "lacks " (name (:reason lack))))
     (let [p (:primitives c)
           unseen (filterv #(and (unknown? p %) (some bs/air (ore-pick/face-names p %))) (judge/next-cut c))]
-      (if (and (seq unseen) (:need-drop (:args c)) (not (judge/fetch-limits c)) (sstep/lacks-tool? c blocks/hidden-guess))
+      (if (and (seq unseen) (:need-drop (:args c)) (not (judge/fetch? c)) (sstep/lacks-tool? c blocks/hidden-guess))
         (contract/look :unseen "the cells to cut were not seen" :look-at unseen)
         (contract/ok :supplied "nothing lacking")))))
 

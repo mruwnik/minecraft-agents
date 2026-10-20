@@ -178,7 +178,7 @@
 
 (defn ^:async pillar-build!
   [c {:keys [plan]}]
-  (let [e (waits/waiting-out c (await (ctx/call c :build 'jobs.access.pillar {:height (:height plan) :use {:blocks (pillar-blocks c)} :fetch false
+  (let [e (waits/waiting-out c (await (ctx/call c :build 'jobs.access.pillar {:height (:height plan) :use {:blocks (pillar-blocks c)} :ways #{:carried}
                                                           :ignore-zones? (:ignore-zones? (:args c)) :checks (ready/unforced c {:safe? '(not (exposed))})})))]
     (cond
       (= :continue e) :continue

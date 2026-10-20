@@ -39,6 +39,9 @@
             [jobs.movement.go-to.tuning :as tuning]
             [jobs.movement.go-to.way-steps :as ways]))
 
+(defn ways-for "The :ways of an access child that may fetch a pickaxe when fetch? is true." [fetch?]
+  (if fetch? #{:carried :chest :craft :gather} #{:carried}))
+
 (defn escalation-job
   "[job args] of the child that carries out escalation e (jobs.lib.escape/choose); tag marks the holes it digs;
   by-hand? digs what no carried tool clears bare-handed;
@@ -46,9 +49,9 @@
   stays open."
   [{:keys [step] :as e} tag ignore-zones? by-hand? fetch?]
   (case step
-    :pillar ['jobs.access.pillar (cond-> {:height (:height e) :fetch false :ignore-zones? ignore-zones? :checks {:safe? '(not (exposed)) :fit? '(always)}} (:item e) (assoc :use {:blocks [(:item e)]}))]
-    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :checks {:fit? '(always)} :accept #{:falling-block} :fetch fetch? :settings {:jobs.lib.trip/spent-uses 0} :ignore-zones? ignore-zones? :need-drop (not by-hand?)}]
-    :clear-path ['jobs.access.clear-path {:checks {:fit? '(always)} :heading (:heading e) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :fetch false}]
+    :pillar ['jobs.access.pillar (cond-> {:height (:height e) :ways #{:carried} :ignore-zones? ignore-zones? :checks {:safe? '(not (exposed)) :fit? '(always)}} (:item e) (assoc :use {:blocks [(:item e)]}))]
+    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :checks {:fit? '(always)} :accept #{:falling-block} :ways (ways-for fetch?) :settings {:jobs.lib.trip/spent-uses 0} :ignore-zones? ignore-zones? :need-drop (not by-hand?)}]
+    :clear-path ['jobs.access.clear-path {:checks {:fit? '(always)} :heading (:heading e) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :ways #{:carried}}]
     :approach ['jobs.movement.go-to {:checks {:fit? '(always)} :pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk :clear-seal}}]
     :fill-gap ['jobs.blocks.place {:pos (zipmap [:x :y :z] (:cell e)) :use {:blocks [(:item e)]} :ways #{:carried} :ignore-zones? ignore-zones?}]))
 
@@ -355,7 +358,7 @@
         (bs/passable? n) :open
         (or (escape/protected? n) (not (escape/diggable? block-at (may-dig-fn c) (own-placed-fn c) cell))) :not-diggable
         :else
-        (let [args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (need/ways-of-fetch (fetch-tool? c)) :need-drop (fetch-tool? c) :accept #{:lava-adjacent}}
+        (let [args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (ways-for (fetch-tool? c)) :need-drop (fetch-tool? c) :accept #{:lava-adjacent}}
               pos (zipmap [:x :y :z] cell)
               e (await (b/dig-cell-ending! c pos args))
               boxed? (and (not= :continue e) (= :no-side-stand (:why (:cause e))))

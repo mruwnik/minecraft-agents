@@ -169,7 +169,7 @@
       (fn ^:async t []
         (let [got (atom [])
               {:keys [eng p seen] :as s} (setup {:inventory [] :jobs {'jobs.items.obtain (obtain-stub got)}})]
-          (core/submit! eng (list job {:heading :east :length 5 :fetch false}) {})
+          (core/submit! eng (list job {:heading :east :length 5 :ways #{:carried}}) {})
           (await (ticks s eng 3))
           (is (finished? eng))
           (is (empty? (calls p "place")))
@@ -181,7 +181,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:inventory [{:name "dirt" :count 2}]})]
-          (core/submit! eng (list job {:heading :east :length 5 :fetch false}) {})
+          (core/submit! eng (list job {:heading :east :length 5 :ways #{:carried}}) {})
           (await (ticks s eng 30))
           (is (finished? eng))
           (is (= [2 64 0] (feet p)))

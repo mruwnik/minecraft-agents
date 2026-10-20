@@ -109,7 +109,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (run! {:blocks (assoc ground "3,63,0" "lava") :inventory [{:name "iron_pickaxe" :count 1}]}
-                                           'jobs.access.stair (assoc stair-east :fetch false)))]
+                                           'jobs.access.stair (assoc stair-east :ways #{:carried})))]
           (is (= :stopped (:status @out)))
           (is (= :lava-unsealed (:reason @out)))
           (is (= [3 63 0] (:cell @out)))
@@ -321,7 +321,7 @@
       (fn ^:async t []
         (let [{:keys [out p]} (await (run! {:blocks (assoc trench "0,62,0" "lava") :self {:pos {:x -2 :y 61 :z 0}}
                                             :inventory [{:name "iron_pickaxe" :count 1}]}
-                                           'jobs.access.tunnel {:target [0 61 0] :fetch false}))]
+                                           'jobs.access.tunnel {:target [0 61 0] :ways #{:carried}}))]
           (is (= :lava-unsealed (:reason @out)))
           (is (not= [-1 61 0] (feet p)) "stepped back from the stand beside the lava")
           (is (= "lava" (block-at p [0 62 0]))))))))
@@ -360,7 +360,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (run! {:blocks dirt-ground :inventory []}
-                                           'jobs.access.stair (assoc stair-east :fetch false)))]
+                                           'jobs.access.stair (assoc stair-east :ways #{:carried})))]
           (is (not= :no-tool (:reason @out)) (pr-str @out))
           (is (= :done (:status @out)) (pr-str @out))
           (is (= [3 62 0] (feet p))))))))
@@ -371,7 +371,7 @@
       (fn ^:async t []
         (let [{:keys [out p]} (await (run! {:blocks (into {} (for [[k _] trench] [k "dirt"]))
                                             :inventory [] :self {:pos {:x -2 :y 61 :z 0}}}
-                                           'jobs.access.tunnel {:target [6 57 0] :fetch false}))]
+                                           'jobs.access.tunnel {:target [6 57 0] :ways #{:carried}}))]
           (is (not= :no-tool (:reason @out)) (pr-str @out))
           (is (= :reached (:reason @out)) (pr-str @out))
           (is (<= (second (feet p)) 58)))))))
@@ -382,6 +382,6 @@
       (fn ^:async t []
         (let [p (sensing {:blocks dirt-ground :inventory []})
               _ (set! (.-look p) (fn [_] (js/Promise.resolve #js {:status "ok"})))
-              {:keys [out]} (await (tick-out! (setup p 'jobs.access.stair (assoc stair-east :fetch false)) 30))]
+              {:keys [out]} (await (tick-out! (setup p 'jobs.access.stair (assoc stair-east :ways #{:carried})) 30))]
           (is (not= :no-tool (:reason @out)) (pr-str @out))
           (is (= :unseen (:reason @out)) (str "a called stair ends at once for cells it has not seen: " (pr-str @out))))))))

@@ -190,7 +190,7 @@
     (if-not heading
       nil
       (let [e (await (ctx/call c (keyword (str "dig-out-" i)) 'jobs.access.stair
-                               {:dir :up :heading heading :steps (settings/get settings ::dig-out-steps) :fetch false
+                               {:dir :up :heading heading :steps (settings/get settings ::dig-out-steps) :ways #{:carried}
                                 :checks (ready/unforced c {:fit? '(always)})}))]
         (cond
           (= :continue e) :again

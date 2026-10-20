@@ -54,21 +54,21 @@
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 4})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-floor :filler :none}} :within-s 90 :of-job true}]
    :after [[:block [11 8 16] "air"]]}
-  ;; a stair up whose second floor [12 6 16] is air with air under it (a cave pocket x 12, y 5..6, side walls in sight): with :fetch false and
+  ;; a stair up whose second floor [12 6 16] is air with air under it (a cave pocket x 12, y 5..6, side walls in sight): with :ways #{:carried} and
   ;; cobblestone and dirt carried it places a carried block against the wall and climbs on, not :no-support-floor "nothing to place"
   {:name "stair-up-over-a-missing-floor-places-a-carried-block"
    :blocks [[:fill [10 5 16] [10 6 16] "air"] [:fill [12 5 16] [12 6 16] "air"]]
    :body {:at [10.5 5 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 16] ["dirt" 8]]}
-   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4 :fetch false})]]
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed :data {:steps 4}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 120 :until {:source :job :kind :completed}}]
    :after [[:not-block [12 6 16] "air"] [:body-near [14.5 9 16.5] 2.5]]}
   ;; a stair up into open air (x 12..16, y 5..12, z 13..19 all air): the only solid cell near the second floor [12 6 16] is the first floor
-  ;; [11 5 16], diagonal to it; with :fetch false the stair places the cell under the floor against that one, then the floor on it, and climbs on
+  ;; [11 5 16], diagonal to it; with :ways #{:carried} the stair places the cell under the floor against that one, then the floor on it, and climbs on
   {:name "stair-up-into-open-air-with-no-side-wall-bridges-from-the-previous-floor"
    :blocks [[:fill [10 5 16] [10 6 16] "air"] [:fill [12 5 13] [16 12 19] "air"]]
    :body {:at [10.5 5 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
-   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4 :fetch false})]]
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed :data {:steps 4}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 120 :until {:source :job :kind :completed}}]
    :after [[:not-block [12 6 16] "air"] [:not-block [13 7 16] "air"] [:not-block [14 8 16] "air"] [:body-near [14.5 9 16.5] 2.5]]}
