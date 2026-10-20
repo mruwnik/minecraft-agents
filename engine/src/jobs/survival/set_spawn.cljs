@@ -15,7 +15,7 @@
   "Set the respawn point at a bed without sleeping: by day, click the bed (jobs.blocks.use-on walks to within 2 cells where the eye sees it (the server sets the point only within 3 blocks), through the door of a hut) and the
   server answers \"respawn point set\".
   Needs a bed: the :bed argument, else the remembered :bed within :bed-radius (forgotten when its block is seen to be gone), else a bed the body sees.
-  Conditions (at the start only): not night (at night the sleep job sets it), else it waits :night; a bed, else condition-failed :no-bed.
+  Conditions (at the start only): not night (at night the sleep job sets it), else it waits :night; a bed: with none the start check looks round first, then waits (:later); with none found it ends condition-failed :no-bed.
   Done at once (:already) when the :spawn-bed it writes is recorded at the bed. Done {:spawn pos} when the server set the point, or at once with :why :unchanged when the spawn is already
   known at that bed (jobs.lib.shelter.spawn/spawn-known?: :spawn-bed or :spawn-set near it, not reset since). A click that reached the bed
   and changed nothing means the server already has the spawn there (it answers only when the point moves): done :why :unchanged. Any other click that did not set it
