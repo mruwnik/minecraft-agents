@@ -23,7 +23,7 @@
   The item entities of that name within 10 blocks of the toss spot that were not there before are the drop.
   After the toss:
   - The drop is gone once seen: done {:given n :text}.
-  - The drop is never seen within 3 s: done {:given tossed :unconfirmed true}.
+  - The drop is never seen within the wait-s setting: nothing-possible :unconfirmed {:given 0 :tossed n} (a drop never seen is no proof the player took it).
   - The drop still lies after the wait-s setting (6): it is collected back, never left as litter. Done {:given (tossed - back)
     :returned back} when some was taken (the call's :least, default 1), else nothing-possible :not-taken. The same happens if the body picks it up on its own.
   A toss refused three times in a row, or three collects in a row that change nothing, end nothing-possible with the status or :litter as the cause.
@@ -45,7 +45,6 @@
    ::idle-ms {:default 500 :doc "Wait while there is nothing to do, in ms." :spec (a/int-in 0 nil)}
    ::walk-leg-s {:default 5 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
    ::max-blocked {:default 3 :doc "Blocked attempts before the job gives up." :spec (a/int-in 0 nil)}
-   ::unseen-ms {:default 3000 :doc "How long a target may stay unseen before it counts as gone, in ms." :spec (a/int-in 0 nil)}
    ::head-height {:default 1.6 :doc "Height of a player's head above its position, in blocks." :spec (a/num-in 0 nil)}
    ::walk-s {:default 10 :doc "Seconds the walk to the player takes (the quote)." :spec (a/num-in 0 nil)}
    ::toss-s {:default 2 :doc "Seconds the toss and the confirmation take (the quote)." :spec (a/num-in 0 nil)}})
@@ -55,7 +54,6 @@
 (defn idle-ms [] (settings/get settings ::idle-ms))
 (defn walk-leg-s [] (settings/get settings ::walk-leg-s))
 (defn max-blocked [] (settings/get settings ::max-blocked))
-(defn unseen-ms [] (settings/get settings ::unseen-ms))
 (defn head-height [] (settings/get settings ::head-height))
 
 (def target [:player :item :count])
@@ -215,7 +213,7 @@
 (defn ^:async after-toss!
   "The item was thrown: see whether it was taken, wait, or take it back. An
   empty view only means taken once the drop has been seen (its spawn may not
-  have arrived yet); a drop never seen within unseen-ms ends as unconfirmed."
+  have arrived yet); a drop never seen within wait-s ends nothing-possible :unconfirmed."
   [c]
   (let [{:keys [item]} (:args c)
         {:keys [tossed tossed-t toss-at before had collecting seen-drop]} (ctx/mem c)
@@ -229,11 +227,11 @@
       (and (pos? back) (not collecting))
       (returned! c given back)
 
-      (and (empty? lying) (not seen-drop) (< since (unseen-ms)))
+      (and (empty? lying) (not seen-drop) (< since (* 1000 (wait-s))))
       (await (idle! c))
 
       (and (empty? lying) (not seen-drop))
-      (gave! c tossed :unconfirmed {:unconfirmed true :text (str "never saw the drop of " item)})
+      (finish! c :nothing-possible :unconfirmed {:given 0 :tossed tossed :text (str "never saw the drop of " item)})
 
       (empty? lying)
       (if collecting

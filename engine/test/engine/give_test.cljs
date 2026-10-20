@@ -215,7 +215,7 @@
           (is (= {:given 0 :reason :not-taken :returned 5 :text "gave 0 bread (not-taken)"} @out) "waited for the drop, then took it back")
           (is (= 1 (count (calls p "collect")))))))))
 
-(deftest a-drop-that-never-appears-is-unconfirmed-after-three-seconds
+(deftest a-drop-that-never-appears-is-unconfirmed-not-given-after-the-wait
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -223,8 +223,8 @@
               {:keys [out clock] :as s} (await (give (assoc bread :entities [(steve 10)])
                                                     {:player "Steve" :item "bread" :count 5} 30 false
                                                     #(late-drop % held)))]
-          (is (= {:given 5 :unconfirmed true :text "never saw the drop of bread"} @out))
-          (is (<= 3000 (- @clock 1000000))))))))
+          (is (= {:given 0 :tossed 5 :reason :unconfirmed :text "never saw the drop of bread"} @out))
+          (is (<= 6000 (- @clock 1000000))))))))
 
 (defn stray-bread-and-player-takes-the-drop
   "A hook: the tick after the toss a bread entity far away appears, the tick after that the player takes the
