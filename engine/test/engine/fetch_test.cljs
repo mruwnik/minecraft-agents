@@ -1130,7 +1130,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (assoc (update (bare []) :blocks merge tree-blocks) :unreachable (vec (keys tree-blocks))) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe"}) {})
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :explore false}) {})
           (await (run-ticks s 200))
           (is (empty? (listed s)))
           (is (nil? (get (inv s) "wooden_pickaxe")))
