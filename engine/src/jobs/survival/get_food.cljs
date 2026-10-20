@@ -152,11 +152,6 @@
 
 (def fit? ready/ok)
 
-(defn way?
-  "Whether the call allows way k."
-  [c k]
-  (contains? (set (or (:ways (ctx/frozen-call c)) (:ways (:args c)) (:ways defaults))) k))
-
 ;; ------------------------------------------------------------------ gathering and hunting
 
 (defn ^:async collect-drops!
@@ -289,17 +284,17 @@
   "The first allowed way with something to do: :again (try eating, then the ways, again), :continue (yield), or nil when
   none is left."
   [c]
-  (let [source (when (way? c :source) (sources/known-source c))]
+  (let [source (when (ctx/way? c :source) (sources/known-source c))]
     (when (and (foods/fragile? (.self (:primitives c))) (not (sh-inside/sheltered-in c)))
       (await (look/survey-until! c :near (constantly nil))))
-    (or (when (and (way? c :bake) (can-bake? c)) (await (bake! c)))
-        (when (and (way? c :cook) (cook/can-cook? c)) (await (cook/cook! c)))
+    (or (when (and (ctx/way? c :bake) (can-bake? c)) (await (bake! c)))
+        (when (and (ctx/way? c :cook) (cook/can-cook? c)) (await (cook/cook! c)))
         (when source (await (use-source! c source)))
-        (when (way? c :collect) (await (collect-drops! c (drop-radius))))
-        (when (way? c :hunt) (await (hunt! c false)))
-        (when (way? c :crops) (await (sources/dig-ripe! c (merge sources/ripe-age sources/wild-food) (u/self-pos c) (hunt-radius c))))
-        (when (way? c :pen) (await (pen! c)))
-        (when (way? c :field) (await (field! c))))))
+        (when (ctx/way? c :collect) (await (collect-drops! c (drop-radius))))
+        (when (ctx/way? c :hunt) (await (hunt! c false)))
+        (when (ctx/way? c :crops) (await (sources/dig-ripe! c (merge sources/ripe-age sources/wild-food) (u/self-pos c) (hunt-radius c))))
+        (when (ctx/way? c :pen) (await (pen! c)))
+        (when (ctx/way? c :field) (await (field! c))))))
 
 (defn search-waits?
   "Whether the search would wait: the search child's own safe-if-lit under the children's default (ready/or-starving) is not ok, or the night handler holds and the body is not starving with no
@@ -417,7 +412,7 @@
   [c]
   (ctx/update-mem! c dissoc :too-dangerous)
   (loop [n 0]
-    (let [cooked (when (and (way? c :cook) (cook/cook-first? c)) (await (cook/cook! c)))
+    (let [cooked (when (and (ctx/way? c :cook) (cook/cook-first? c)) (await (cook/cook! c)))
           eaten (if (or (= :continue cooked) (= :again cooked)) cooked (await (eat-carried! c)))
           way (when-not (or (= :continue eaten) (= :again cooked))
                 (cond
