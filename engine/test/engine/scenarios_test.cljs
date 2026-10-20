@@ -182,7 +182,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen clock]} (boot "scenarios/survival.edn"
                                                {:time 14000
-                                                :inventory [{:name "dirt" :count 16} {:name "stone_sword" :count 1}]})]
+                                                :inventory [{:name "dirt" :count 32} {:name "stone_sword" :count 1}]})]
           ;; the night is one round until morning: day comes at its first hold
           (.override (.-world p) "wait" (fn ^:async g [token a impl]
                                           (when (= 5000 (.-ms a)) (.setTime (.-world p) 1000))
