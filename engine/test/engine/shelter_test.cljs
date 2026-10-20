@@ -9,6 +9,9 @@
             [engine.memory :as mem]
             [engine.scenario :as scenario]
             [engine.fake :as fake]
+            [engine.ctx :as ctx]
+            [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.look-edge :as look-edge]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -1519,6 +1522,70 @@
   (are [seen] (false? (sh-inside/safe-from-night? (lit-tunnel-body true seen)))
     :perceived
     :all))
+
+(defn tunnel-edge-body
+  "The lit dead-end tunnel after one sight pass, with its light replaced by `light` when given."
+  [light]
+  (let [{:keys [blocks] :as box} (lit-tunnel-box false)
+        raw-p (tu/fake {:time night :yaw -90 :blocks blocks})
+        _ (swap! (fake/state raw-p) assoc :light-default [0 0] :light (or light (:light box)))
+        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})
+        p (perception/wrap raw-p per)]
+    (perception/pass! per)
+    p))
+
+(deftest the-edge-of-a-lit-region-is-looked-at-but-a-side-of-only-dark-cells-is-skipped
+  (let [lit (look-edge/pending {:primitives (tunnel-edge-body nil)} #{} 0)]
+    (is (seq lit) "an unseen side beside lit cells is looked at")
+    (is (= lit (sort-by (fn [[x]] x) lit)) "nearest first")
+    (is (empty? (look-edge/pending {:primitives (tunnel-edge-body {})} #{} 0)) "dark cells are never shown by a look: the region stays open")))
+
+(deftest the-edge-walk-stops-after-fifteen-cells-or-two-hundred-steps
+  (let [c {:primitives (tunnel-edge-body nil)}
+        some-cell (first (look-edge/pending c #{} 0))
+        fifteen (set (map (fn [i] [i 100 100]) (range look-edge/max-edge-looks)))]
+    (is (seq (look-edge/pending c (disj fifteen [0 100 100]) 0)) "14 tried: more to do")
+    (is (empty? (look-edge/pending c fifteen 0)) "15 tried cells")
+    (is (seq (look-edge/pending c #{} (dec look-edge/max-edge-steps))))
+    (is (empty? (look-edge/pending c #{} look-edge/max-edge-steps)) "200 steps")
+    (is (some? some-cell))))
+
+(deftest walkable-near-is-the-reachable-ground-nearest-the-cell
+  (let [p (tunnel-edge-body nil)]
+    (is (= {:x 19 :y 64 :z 0} (look-edge/walkable-near p [23 64 0])) "the dead end, past it is rock")
+    (is (= {:x 5 :y 64 :z 0} (look-edge/walkable-near p [5 64 3])))))
+
+(deftest an-edge-cell-is-looked-at-walked-towards-looked-at-again-then-counted-tried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tunnel-edge-body nil)
+              mem* (atom {})
+              c {:primitives p :id "edge-stub" :root "edge-stub" :slots []
+                 :view (fn [] {:now 1000000 :data {:entries {(mem/job-kind "edge-stub") [{:t 1000000 :data @mem*}]}
+                                                    :policies {(mem/job-kind "edge-stub") mem/job-policy}}})
+                 :update-mem (fn [f more] (apply swap! mem* f more))}
+              cells [[20 64 0] [23 64 0] [30 64 0]]
+              log (atom [])
+              walk-result (atom :done)]
+          (with-redefs [dig-look/look-at! (fn [_ cell] (swap! log conj [:look cell]) (js/Promise.resolve true))
+                        ctx/call (fn [_ _ job args] (swap! log conj [:walk job (:pos args)]) (js/Promise.resolve @walk-result))]
+            (reset! walk-result :continue)
+            (await (look-edge/look! c cells))
+            (await (look-edge/look! c cells))
+            (reset! walk-result :done)
+            (await (look-edge/look! c cells))
+            (await (look-edge/look! c cells))
+            (is (empty? (:edge-looked @mem*)) "not yet tried")
+            (await (look-edge/look! c cells)))
+          (is (= [[:look [20 64 0]]
+                  [:walk 'jobs.movement.go-to {:x 19 :y 64 :z 0}]
+                  [:walk 'jobs.movement.go-to {:x 19 :y 64 :z 0}]
+                  [:look [20 64 0]]]
+                 @log)
+              "look, walk (still walking: again), walk done, look again; the stride reaches the cell 3 away, not the one 10 away")
+          (is (= #{[20 64 0]} (:edge-looked @mem*)))
+          (is (= 5 (:edge-steps @mem*))))))))
 
 (deftest the-night-looks-at-the-unseen-sides-of-a-lit-tunnel-and-is-done-without-digging
   (async done

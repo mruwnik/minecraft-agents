@@ -399,7 +399,8 @@
         breached (sh/breached-home? p (ctx/view c))
         roofed (and (sh-sense/roofed? p (:roof-height (:args c))) (not breached))
         sheltered (:sheltered (ctx/mem c))
-        bed-way (ctx/way? c :bed)]
+        bed-way (ctx/way? c :bed)
+        edge (delay (look-edge/pending c))]
     (when (and (sh-sense/night? p) (bed-down/overdue? c)) (note-needs-bed! c))
     (note-spawn-lost! c)
     (retract-gone-bed! c)
@@ -411,7 +412,7 @@
           :again)
       (not (sh-sense/dark-outside? p)) (await (morning/morning! c))
       (sh-sense/sleeping? p) (do (when-not (= :slept sheltered) (hold/sheltered! c :slept)) (await (hold/hold! c :sleeping)))
-      (and (not sheltered) (seq (look-edge/pending c))) (do (hold/busy! c) (await (look-edge/look! c (look-edge/pending c))))
+      (and (not sheltered) (seq @edge)) (do (hold/busy! c) (await (look-edge/look! c @edge)))
       (and roofed (or (#{:slept :dug-in} sheltered) (dig-leave/sheltered-in c)))
       (do (when-not sheltered (hold/sheltered! c :dug-in))
           (cond
