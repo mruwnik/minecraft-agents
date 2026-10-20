@@ -81,6 +81,18 @@
                   (await (look-at! c cell))
                   (recur (rest tries)))))))
 
+(defn ^:async judge-after-lava!
+  "judge!, but a lava hazard that shows only now (lava poured in after this round's seal check) gives :again, so the
+  next round seals it instead of stopping."
+  [c in cells accept cut feet]
+  (let [stop (await (judge! c in cells accept))]
+    (if (and (= :hazard (:reason stop))
+             (not= :stop (:on-lava (:args c)))
+             (some #(= "lava" (:fluid %)) (:hazards stop))
+             (seq (cells/exposed-lava (:block-at in) feet cut)))
+      :again
+      stop)))
+
 (defn ^:async peek!
   "Before digging cell: when it is still unknown, look at it once (memory :peeked) and give :again so the step is
   judged on what shows; else nil."
@@ -98,6 +110,15 @@
     (if (= :stop (:on-lava (:args c)))
       {:reason :lava-exposed :cell cell :fluid "lava"}
       (await (lava/seal! c kind block-at cell {:fetch (:fetch (:args c)) :ignore-zones? (:ignore-zones? (:args c))})))))
+
+(defn ^:async look-at-lava!
+  "Once per lava cell (memory :lava-looked), look at the first exposed lava: cells between the eye and it never sensed
+  count as clear to body-sees?, and the seal's place child finds them solid only after its own look."
+  [c block-at feet cut]
+  (when-let [lava (first (cells/exposed-lava block-at feet cut))]
+    (when (not= lava (:lava-looked (ctx/mem c)))
+      (ctx/update-mem! c assoc :lava-looked lava)
+      (await (look-at! c lava)))))
 
 (defn blind-cell
   "The first cut cell still solid when the body does not see the first exposed lava cell and the cell does not touch it:

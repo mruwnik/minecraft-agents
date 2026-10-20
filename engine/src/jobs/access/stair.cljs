@@ -295,6 +295,7 @@
                                                                  :bridged? (contains? (:bridged (ctx/mem c)) (:floor cs))
                                                                  :filler? (some? (choose/filler c :build)))))
                     _ (await (sstep/look-ahead! c feet next cut))
+                    _ (when-not (= :stop (:on-lava (:args c))) (await (sstep/look-at-lava! c (:block-at in) feet cut)))
                     blind (when-not (= :stop (:on-lava (:args c))) (sstep/blind-cell c (:block-at in) feet cut))
                     stop (or (when blind
                                (or (await (sstep/peek! c blind))
@@ -302,7 +303,7 @@
                              (await (sstep/lava-step! c :stair.sealed (:block-at in) feet cut))
                              (when-let [r (await (sstep/clear-own-cell! c in feet accept))] (case r :continue :again :yield :continue r))
                              (await (sstep/water-step! c (:block-at in) accept cut))
-                             (await (sstep/judge! c in step-cells accept)))]
+                             (await (sstep/judge-after-lava! c in step-cells accept cut feet)))]
                 (if (and (= :no-floor (:reason stop)) (bs/air (:block stop)))
                   (await (sstep/bridge! c in step-cells))
                   (or stop
