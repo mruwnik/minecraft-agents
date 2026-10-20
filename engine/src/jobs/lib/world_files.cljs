@@ -58,13 +58,21 @@
 
 (defn expand-all
   "state with :expanded rebuilt (each plan's last good copy expanded over the blueprints' last good copies), and the
-  :claims and :footprints of the active plans with it."
-  [state]
-  (let [blueprints (into {} (keep (fn [[id e]] (when (:value e) [id (:value e)]))) (:blueprints state))
-        state (assoc state :expanded (into {} (keep (fn [[id e]] (when (:value e) [id (shape/expand (:value e) blueprints)])))
-                                           (:plans state)))
-        cs (claims state)]
-    (assoc state :claims cs :footprints (footprint-index cs))))
+  :claims and :footprints of the active plans with it. With prior (the state before), a plan whose entry is unchanged
+  keeps its expansion and claim, unless a blueprint changed."
+  ([state] (expand-all state nil))
+  ([state prior]
+   (let [blueprints (into {} (keep (fn [[id e]] (when (:value e) [id (:value e)]))) (:blueprints state))
+         reuse? (and prior (= (:blueprints prior) (:blueprints state)))
+         same? (fn [id e] (and reuse? (= e (get-in prior [:plans id])) (contains? (:expanded prior) id)))
+         expand (fn [id e] (if (same? id e) (get-in prior [:expanded id]) (shape/expand (:value e) blueprints)))
+         state (assoc state :expanded (into {} (keep (fn [[id e]] (when (:value e) [id (expand id e)])))
+                                            (:plans state)))
+         cell-set (fn [id] (into #{} (map :pos) (get-in state [:expanded id :cells])))
+         cs (into {} (keep (fn [[id e]] (when (:value e)
+                                          [id (if (same? id e) (get-in prior [:claims id]) (cell-set id))])))
+                  (:plans state))]
+     (assoc state :claims cs :footprints (footprint-index cs)))))
 
 (defn answer
   "What a job gets for plan id: nil (no such file), {:id :broken text} (never readable), or
@@ -249,7 +257,7 @@
                                            [(:area-claims old) nil])]
           (reset! state (cond-> (assoc old :checked-at now :plans plans :blueprints blueprints :zones zone-entry
                                        :area-claims claims-entry :markers markers-entry)
-                          (or (not= (:plans old) plans) (not= (:blueprints old) blueprints)) expand-all))
+                          (or (not= (:plans old) plans) (not= (:blueprints old) blueprints)) (expand-all old)))
           (doseq [[kind [_ warns]] results
                   warn warns]
             ((:emit opts) (warn-event (get kinds kind) warn)))
