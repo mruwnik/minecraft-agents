@@ -67,8 +67,8 @@
    :after [[:body-near [18.5 0 12.5] 4]]
    :limit-s 70}
   {:name "tunnel-miner-remembered-bed-60-away-not-walked-to-no-room-no-place"
-   :blocks [[:fill [4 0 4] [26 4 20] "stone"] [:fill [10 0 12] [16 1 12] "air"]
-            [:fill [17 0 11] [19 2 13] "air"] [:set [18 1 12] "torch"] [:set [11 1 12] "torch"]]
+   ;; the tunnel is one wide to its end: the night walks it to see its walls, and a 3x3 end room would take the carried bed
+   :blocks [[:fill [4 0 4] [26 4 20] "stone"] [:fill [10 0 12] [19 1 12] "air"] [:set [18 1 12] "torch"] [:set [11 1 12] "torch"]]
    :body {:at [10.5 0 12.5] :inventory [["red_bed" 1]]}
    :memory [{:kind :bed :data {:pos #xyz [70 0 12]} :policy {:cap 1 :ttl :forever}}]
    :expect [{:event {:source :reflex :kind :fired} :within-s 20}
