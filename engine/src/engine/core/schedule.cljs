@@ -93,10 +93,12 @@
 
 (defn cut!
   "Take the body from holder h for entry; cause is the seq of the firing. A reflex job is dropped, unless it is in its
-  cleanup: a pause is not an ending, so it stays (paused-reflex) and resumes."
+  cleanup: a pause is not an ending, so it stays (paused-reflex) and resumes. Writes the memory at once: the cut round
+  can write no more, and a restart after it must see what it did."
   [eng h by cause]
   (free-owner! eng)
   (reset! (:running eng) nil)
+  (save-memory! eng)
   (let [paused? (or (not (:reflex h)) (cleanup/closing? eng (:id h) []))]
     (cond
       (not (:reflex h)) (swap! (:state eng) assoc :resume (:id h) :current nil)
