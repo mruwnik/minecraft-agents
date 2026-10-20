@@ -10,7 +10,8 @@
             [jobs.lib.world :as known]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.util :as u]
-            [jobs.lib.pace :as pace]))
+            [jobs.lib.pace :as pace]
+            [jobs.lib.farm :as farm]))
 
 (def doc
   "Pick where a :w x :h farm would go. Ranks patches by flatness first, then water within 4,
@@ -39,7 +40,6 @@
   {::depth {:default 12 :doc "How far above and below the centre's y to look for ground." :spec (a/int-in 1 16)}
    ::limit {:default 3 :doc "How many spots to keep; the scan stops once that many good ones are found." :spec (a/int-in 1 8)}
    ::job-time-s {:default 30 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
-   ::water-reach {:default 4 :doc "Blocks from water within which farmland is hydrated." :spec (a/int-in 0 nil)}
    ::sky-extra {:default 8 :doc "Extra blocks of sky checked above a spot." :spec (a/int-in 0 nil)}
    ::read-budget {:default 4096 :doc "blockAt reads after which a round stops scanning (at the end of the row it is in)." :spec (a/int-in 1 nil)}
    ::max-reads {:default 45000 :doc "blockAt reads one attempt may spend on scanning (a cut and restart keeps the count); then it settles for the best spots found." :spec (a/int-in 1 nil)}
@@ -48,7 +48,6 @@
    ::work-cap {:default 40 :doc "Most score points the earthwork (blocks the cells are off the commonest height) costs." :spec (a/num-in 0 nil)}
    ::away-cap {:default 30 :doc "Most score points the distance from the centre costs." :spec (a/num-in 0 nil)}
    ::farmable-weight {:default 40 :doc "Score points lost when no cell of a patch can be made farmland." :spec (a/num-in 0 nil)}})
-(defn water-reach [] (settings/get settings ::water-reach))
 
 (defn commonest
   "The most frequent value of xs; ties go to the lowest."
@@ -95,16 +94,6 @@
 (def farmable-ground
   "The grounds that are farmland or a hoe makes farmland of (coarse and rooted dirt in two passes)."
   (conj till/tillable "farmland"))
-
-(defn hydrated?
-  "True when a water cell of water-set (a set of [x y z]) lies within ::water-reach in x and
-  z of the farmland at x y z, at its y or one above."
-  [water-set x y z]
-  (boolean (some (fn [[wx wy wz]]
-                   (and (<= (js/Math.abs (- wx x)) (water-reach))
-                        (<= (js/Math.abs (- wz z)) (water-reach))
-                        (or (= wy y) (= wy (inc y)))))
-                 water-set)))
 
 (defn read-budget [] (settings/get settings ::read-budget))
 
@@ -167,7 +156,7 @@
                            (let [r (apply f k)] (vswap! store assoc k r) r))))
         top-of (memo tops (fn [x z] (surface/column-top name-fn x z (:y from) depth)))
         sky-of (memo skies (fn [x z t] (sky-above? name-fn x z t (:y from) depth)))
-        wet? (fn [x z y] (hydrated? waters x y z))
+        wet? (fn [x z y] (farm/hydrated? waters x y z))
         fx (:x from) fz (:z from)
         by-ring (corners-by-ring a from)
         rings (sort (keys by-ring))

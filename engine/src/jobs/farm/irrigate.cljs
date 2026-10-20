@@ -3,7 +3,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.farm.find-spot :as find-spot]
+            [jobs.lib.farm :as farm]
             [jobs.farm.till :as till]
             [jobs.lib.blocks :as b]
             [jobs.lib.checks :as checks]
@@ -73,7 +73,7 @@
   "The seen water as a set of [x y z] near the cells; a cell poured is water only once it is seen as such."
   [c cs]
   (let [me (u/self-pos c)
-        reach (min 64 (+ (find-spot/water-reach) 1 (apply max 0 (map #(u/dist me %) cs))))]
+        reach (min 64 (+ (farm/water-reach) 1 (apply max 0 (map #(u/dist me %) cs))))]
     (into #{}
           (map (fn [{:keys [x y z]}] [x y z]))
           (map :pos (look/seen-blocks (:primitives c) {:names ["water"] :radius reach :max 4096 :live? true})))))
@@ -81,7 +81,7 @@
 (defn reach-seen?
   "Whether every block a water source could wet the cell from is seen."
   [p {:keys [x y z]}]
-  (let [r (find-spot/water-reach)]
+  (let [r (farm/water-reach)]
     (every? #(u/seen-name p %)
             (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy [0 1]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)}))))
 
@@ -92,7 +92,7 @@
         ws (waters c cs)
         p (:primitives c)]
     (group-by (fn [{:keys [x y z] :as cell}]
-                (cond (find-spot/hydrated? ws x y z) :wet
+                (cond (farm/hydrated? ws x y z) :wet
                       (reach-seen? p cell) :dry
                       :else :unknown))
               cs)))
@@ -108,7 +108,7 @@
   "How many of dry a water cell at spot wets."
   [dry spot]
   (let [ws #{[(:x spot) (:y spot) (:z spot)]}]
-    (count (filter (fn [{:keys [x y z]}] (find-spot/hydrated? ws x y z)) dry))))
+    (count (filter (fn [{:keys [x y z]}] (farm/hydrated? ws x y z)) dry))))
 
 (defn permitted? [c pos]
   (gate/allowed? c :irrigate.declined "irrigate" :dig pos {:except (:for-plan (:args c))}))

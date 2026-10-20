@@ -8,7 +8,8 @@
   \"what may this chooser not use\". (price c name n) the extra cost of using n units of name: the units over the free
   surplus, lowest strength first, each (cost/reserve-cost value strength); ##Inf when one is strength 1.
   (free c chooser) the inventory with the held units taken out: what a job may spend without weighing a price."
-  (:require [engine.ctx :as ctx]
+  (:require [jobs.lib.crops :as crops]
+            [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.register :as register]
             [jobs.lib.cost :as cost]
@@ -27,7 +28,7 @@
    :ore #(or (str/ends-with? % "_ore") (str/starts-with? % "raw_") (= "ancient_debris" %))
    :metal #(boolean (re-find #"_ingot$|^netherite_scrap$" %))
    :bed #(str/ends-with? % "_bed")
-   :seeds #(boolean (re-find #"_seeds$|^(carrot|potato)$" %))})
+   :seeds crops/seed-item?})
 
 (def live? register/live?)
 

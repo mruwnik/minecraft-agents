@@ -84,12 +84,6 @@
       {:refused (count vs) :zones (vec (distinct (keep :zone vs))) :claims (vec (distinct (keep :claim vs)))
        :plans (vec (distinct (keep :plan vs))) :owners (vec (distinct (keep :owner vs)))})))
 
-(defn wet?
-  "Whether a ground cell is hydrated: seen water within 4 blocks horizontally, at its level or one up."
-  [p {:keys [x y z]}]
-  (boolean (some (fn [[dx dy dz]] (= "water" (u/seen-name p {:x (+ x dx) :y (+ y dy) :z (+ z dz)})))
-                 (for [dx (range -4 5) dz (range -4 5) dy [0 1]] [dx dy dz]))))
-
 (defn reserve-held
   "What the food reserve keeps of the seeds of the crops of cells {pos crop}: {:seed :held :kept :reserve-points :cells}
   for the first seed carried but kept, else nil."
@@ -145,7 +139,7 @@
         seeded (filter (fn [[_ crop]] (let [seed (crops/seed-of crop)] (> (get have seed 0) (get bare-of seed 0)))) tillable)
         seeded-set (set (map key seeded))
         unseeded (remove (comp seeded-set key) tillable)
-        wet (filter (fn [[pos _]] (wet? p pos)) unseeded)
+        wet (filter (fn [[pos _]] (farm/wet? p pos)) unseeded)
         dry (remove (set wet) unseeded)
         tilled-cells (concat seeded wet)
         [ground-box dry-n] (when (:irrigate (:args c)) (dry-box c answer crops))]

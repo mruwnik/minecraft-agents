@@ -1,5 +1,6 @@
 (ns jobs.farm.compost
-  (:require [engine.args :as a]
+  (:require [jobs.lib.crops :as crops]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
@@ -38,22 +39,23 @@
 
 (def compostable
   "Everything a composter accepts, any chance."
-  #{"wheat_seeds" "beetroot_seeds" "melon_seeds" "pumpkin_seeds" "torchflower_seeds" "pitcher_pod" "short_grass"
+  (into #{"torchflower_seeds" "pitcher_pod" "short_grass"
     "tall_grass" "fern" "large_fern" "seagrass" "kelp" "dried_kelp" "oak_leaves" "birch_leaves" "spruce_leaves"
     "jungle_leaves" "acacia_leaves" "dark_oak_leaves" "cherry_leaves" "mangrove_leaves" "azalea_leaves" "oak_sapling"
     "birch_sapling" "spruce_sapling" "jungle_sapling" "acacia_sapling" "dark_oak_sapling" "cherry_sapling"
     "mangrove_propagule" "sweet_berries" "glow_berries" "hanging_roots" "moss_carpet" "small_dripleaf" "dead_bush"
     "sugar_cane" "cactus" "vine" "melon_slice" "pumpkin" "carved_pumpkin" "nether_wart" "glow_lichen" "tall_seagrass"
-    "big_dripleaf" "lily_pad" "apple" "beetroot" "carrot" "potato" "wheat" "cocoa_beans" "melon" "brown_mushroom"
+    "big_dripleaf" "lily_pad" "apple" "cocoa_beans" "melon" "brown_mushroom"
     "red_mushroom" "sea_pickle" "moss_block" "pink_petals" "bamboo" "nether_sprouts" "bread" "cookie" "baked_potato"
     "hay_block" "brown_mushroom_block" "red_mushroom_block" "nether_wart_block" "warped_wart_block"
-    "cake" "pumpkin_pie"})
+    "cake" "pumpkin_pie"}
+        (concat crops/field-seeds crops/other-seeds (remove #{"poisonous_potato"} crops/produce-items))))
 
 (def held-back
   "Kept when no :items is given: seeds to sow again and the body's own food."
-  #{"wheat_seeds" "beetroot_seeds" "melon_seeds" "pumpkin_seeds" "carrot" "potato" "sugar_cane" "bamboo"
-    "bread" "cookie" "baked_potato" "apple" "sweet_berries" "glow_berries" "melon_slice" "cake" "pumpkin_pie"
-    "beetroot"})
+  (into #{"sugar_cane" "bamboo" "bread" "cookie" "baked_potato" "apple" "sweet_berries" "glow_berries" "melon_slice"
+          "cake" "pumpkin_pie" "beetroot"}
+        (concat crops/field-seeds crops/other-seeds)))
 
 (defn feedable
   "What to feed: [[name n] ...] from the inventory ([{:name :count}]) and args

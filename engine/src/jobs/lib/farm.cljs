@@ -1,8 +1,34 @@
 (ns jobs.lib.farm
   "Helpers the farm jobs share: which cells are bare, which seeds may be sown, and the hoe and bone meal a body carries."
-  (:require [jobs.lib.cost :as cost]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
+            [jobs.lib.cost :as cost]
             [jobs.lib.crops :as crops]
             [jobs.lib.util :as u]))
+
+(declare settings)
+
+(a/defargs settings
+  {::water-reach {:default 4 :doc "Blocks from water within which farmland is hydrated." :spec (a/int-in 0 nil)}})
+
+(defn water-reach [] (settings/get settings ::water-reach))
+
+(defn hydrated?
+  "True when a water cell of water-set (a set of [x y z]) lies within ::water-reach in x and
+  z of the farmland at x y z, at its y or one above."
+  [water-set x y z]
+  (boolean (some (fn [[wx wy wz]]
+                   (and (<= (js/Math.abs (- wx x)) (water-reach))
+                        (<= (js/Math.abs (- wz z)) (water-reach))
+                        (or (= wy y) (= wy (inc y)))))
+                 water-set)))
+
+(defn wet?
+  "Whether the farmland at {:x :y :z} is hydrated by water the body has seen (see hydrated?)."
+  [p {:keys [x y z]}]
+  (let [r (water-reach)]
+    (boolean (some #(= "water" (u/seen-name p %))
+                   (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy [0 1]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})))))
 
 (defn bare-cells
   "The bare cells of box (farmland with air above, ground layer y = min y) not in skipped, in x then z order."

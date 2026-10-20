@@ -12,6 +12,7 @@
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.farm.find-spot :as fs]
+            [jobs.lib.farm :as farm]
             [jobs.lib.surface :as surface]))
 
 (defn setup [world]
@@ -97,7 +98,7 @@
     {:tops [63 nil] :water-share 0 :sky true :away 0} nil))
 
 (deftest hydrated-table
-  (are [ws x y z expected] (= expected (fs/hydrated? ws x y z))
+  (are [ws x y z expected] (= expected (farm/hydrated? ws x y z))
     #{[4 63 0]} 0 63 0 true
     #{[4 64 0]} 0 63 0 true
     #{[4 62 0]} 0 63 0 false

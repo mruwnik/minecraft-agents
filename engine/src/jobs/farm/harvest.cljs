@@ -58,7 +58,7 @@
 
 (def seed-of crops/seed-of)
 
-(def collect-items ["wheat" "wheat_seeds" "carrot" "potato" "poisonous_potato" "beetroot" "beetroot_seeds"])
+(def collect-items crops/produce-items)
 
 ;; ------------------------------------------------------------------ pure helpers
 

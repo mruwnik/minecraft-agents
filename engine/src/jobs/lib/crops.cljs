@@ -13,7 +13,25 @@
   "The field crops: farm jobs plant, tend and cut these; nether wart, berries and cocoa need other handling."
   (select-keys constants/crop-ripe-age ["wheat" "carrots" "potatoes" "beetroots"]))
 
-(def seed-of {"wheat" "wheat_seeds" "carrots" "carrot" "potatoes" "potato" "beetroots" "beetroot_seeds"})
+(def field-items
+  "Per field crop: the seed that sows it and the items its harvest drops (the one place these lists live)."
+  {"wheat" {:seed "wheat_seeds" :produce ["wheat" "wheat_seeds"]}
+   "carrots" {:seed "carrot" :produce ["carrot"]}
+   "potatoes" {:seed "potato" :produce ["potato" "poisonous_potato"]}
+   "beetroots" {:seed "beetroot_seeds" :produce ["beetroot" "beetroot_seeds"]}})
+
+(def seed-of (update-vals field-items :seed))
+
+(def field-seeds "The items that sow a field crop." (vec (vals seed-of)))
+
+(def other-seeds "Seeds of crops the farm jobs do not sow (they stay carried or are composted)." ["melon_seeds" "pumpkin_seeds"])
+
+(def produce-items "Everything a field harvest drops." (vec (distinct (mapcat :produce (vals field-items)))))
+
+(defn seed-item?
+  "Whether an item name is a seed or a seed-like crop item (carrot, potato) a body keeps to sow."
+  [name]
+  (boolean (or (.endsWith name "_seeds") (some #{name} field-seeds))))
 
 (defn inc-in [m k] (update m k (fnil inc 0)))
 

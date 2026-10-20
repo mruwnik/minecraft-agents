@@ -1,5 +1,6 @@
 (ns jobs.farm.tidy
-  (:require [engine.args :as a]
+  (:require [jobs.lib.crops :as crops]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -66,9 +67,10 @@
 ;; ------------------------------------------------------------------ access
 
 (def crop-blocks
-  #{"wheat" "carrots" "potatoes" "beetroots" "melon_stem" "pumpkin_stem" "attached_melon_stem" "attached_pumpkin_stem"
+  (into (set (keys crops/ripe-age))
+        #{"melon_stem" "pumpkin_stem" "attached_melon_stem" "attached_pumpkin_stem"
     "melon" "pumpkin" "sugar_cane" "bamboo" "bamboo_sapling" "sweet_berry_bush" "nether_wart" "cocoa" "torchflower_crop"
-    "pitcher_crop"})
+    "pitcher_crop"}))
 
 (defn crop-want? [want] (and (map? want) (contains? want :crop)))
 (defn tree-want? [want] (and (map? want) (contains? want :tree)))

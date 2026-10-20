@@ -1,22 +1,22 @@
 (ns jobs.farm.tend-stock
   "What jobs.farm.tend keeps carried and what it stores or composts: the lists of seeds and farm goods, the keep map,
   the surplus over it, and whether a ground cell wants tilling."
-  (:require [engine.args :as a]
+  (:require [jobs.lib.crops :as crops]
+            [engine.args :as a]
             [jobs.lib.block-sets :as bs]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
             [jobs.lib.storage :as storage]
             [jobs.farm.till :as till]))
 
-(def waste-seeds ["wheat_seeds" "beetroot_seeds" "melon_seeds" "pumpkin_seeds"])
+(def waste-seeds (into (filterv #(.endsWith % "_seeds") crops/field-seeds) crops/other-seeds))
 
 (a/defargs settings
   {::seed-backup {:default 64 :doc "A stack of each seed type stays carried; the rest is composted." :spec (a/int-in 0 nil)}})
 (defn seed-backup [] (settings/get settings ::seed-backup))
 
 (def farm-goods
-  ["wheat_seeds" "beetroot_seeds" "melon_seeds" "pumpkin_seeds" "carrot" "potato" "wheat" "beetroot" "melon_slice"
-   "melon" "pumpkin" "poisonous_potato" "hay_block" "cocoa_beans"])
+  (vec (distinct (concat waste-seeds crops/produce-items ["melon_slice" "melon" "pumpkin" "hay_block" "cocoa_beans"]))))
 
 (defn surplus
   "The names (in the order of names) of which more is carried than the keep map holds back."

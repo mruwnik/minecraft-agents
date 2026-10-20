@@ -11,7 +11,7 @@
             [jobs.farm.tend-stock :as stock]
             [engine.ctx :as ctx]))
 
-(def seed-items ["wheat_seeds" "carrot" "potato" "beetroot_seeds"])
+(def seed-items crops/field-seeds)
 
 (def crop-names (set (keys crops/ripe-age)))
 
