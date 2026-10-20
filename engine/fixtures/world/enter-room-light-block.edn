@@ -1,0 +1,23 @@
+;; Card 59e5071d: the invisible light block is air to a walker, so it neither opens a closed room (inside) nor shuts a doorway (in the wall).
+;; Hut: stone x 8..16, z 8..16, y 0..2, room 9..15 x 0..1, torches; the body stands in it. The body looks all round first (a cell unseen is open).
+{:defaults
+ {:tags [:survival :shelter]
+  :time :any
+  :body {:at [13.5 0 13.5] :inventory [["cobblestone" 8]] :effects [["resistance" 600 4]] :settle-s 2}}
+ :cases
+ [{:name "light-block-inside-a-closed-room-places-nothing"
+   :blocks [[:fill [8 0 8] [16 2 16] "stone" :hollow] [:fill [9 0 9] [15 1 15] "air"]
+           [:set [9 1 9] "torch"] [:set [15 1 15] "torch"] [:set [9 1 15] "torch"] [:set [15 1 9] "torch"]
+            [:set [11 0 11] "light"] [:set [11 1 11] "light"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 0"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 0"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 40"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 40"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 40"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 40"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 -90"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 -90"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 -90"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 -90"] [:job (jobs.survival.enter-room {})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}]
+   :after [[:block [11 0 11] "light"] [:item "cobblestone" 8]]
+   :limit-s 40}
+  {:name "light-block-in-the-doorway-is-filled"
+   :blocks [[:fill [8 0 8] [16 2 16] "stone" :hollow] [:fill [9 0 9] [15 1 15] "air"]
+           [:set [9 1 9] "torch"] [:set [15 1 15] "torch"] [:set [9 1 15] "torch"] [:set [15 1 9] "torch"]
+            [:set [12 0 16] "light"] [:set [12 1 16] "light"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 0"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 0"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 40"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 40"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 40"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 40"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 -90"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 -90"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 -90"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 -90"] [:job (jobs.survival.enter-room {})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:block [12 0 16] "cobblestone"] [:block [12 1 16] "cobblestone"]]
+   :limit-s 80}]}

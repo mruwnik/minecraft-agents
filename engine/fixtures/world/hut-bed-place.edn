@@ -19,6 +19,15 @@
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}]
    :after [[:body-near [12.5 0 12.5] 3] [:item "red_bed" 0]]
    :limit-s 80}
+  ;; 59e5071d: the invisible light block is air, so a 3x2 room whose every row of three holds light blocks still takes the bed
+  {:name "bed-put-down-over-light-blocks" :time-why :sleep
+   :blocks [[:fill [10 0 10] [14 3 13] "stone" :hollow] [:fill [11 0 11] [13 2 12] "air"] [:set [11 2 10] "glowstone"]
+            [:set [12 0 11] "light"] [:set [13 0 11] "light"] [:set [12 0 12] "light"] [:set [13 0 12] "light"]]
+   :body {:at [11.5 0 11.5]}
+   :act [[:rcon "give $BODY red_bed 1"]]
+   :expect [{:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 30}]
+   :after [[:item "red_bed" 0]]
+   :limit-s 60}
   {:name "no-room-2x2-bed-place-failed-once"
    :blocks [[:fill [10 0 10] [13 3 13] "stone" :hollow] [:fill [11 0 11] [12 2 12] "air"] [:set [11 2 10] "glowstone"]]
    :body {:at [11.5 0 11.5]}
