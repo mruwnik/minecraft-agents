@@ -80,7 +80,7 @@
    :act [[:summon "zombie" [23.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]}
   ;; Card 876c2ac8 (fix 5aea0a88, owner Q78): a ranged mob only heard counts as a danger in the open, not in a tunnel.
-  ;; Heard only = a clear arrow line but unseen: a sealed dark stone box (light 0) puts a skeleton beyond dark-sight (4) out of
+  ;; Heard only = a clear arrow line but unseen: a sealed dark stone box (light 0) puts a skeleton beyond near (4) out of
   ;; sight while it is in the near hearing band (8; a heard ranged mob further off is no danger). The tunnel cases are a 1x2
   ;; passage along x in solid stone, the body 7 from the mob (the lit one 10).
   {:name "heard-skeleton-in-the-dark-open-fires"

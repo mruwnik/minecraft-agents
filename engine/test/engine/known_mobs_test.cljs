@@ -196,6 +196,13 @@
     (is (= [1] (danger-ids p)))
     (is (true? (.-seen (first (known p)))))))
 
+(deftest a-creeper-in-the-dark-is-seen-to-seven-blocks-with-a-torch-in-hand
+  (let [{:keys [p]} (rig {:entities [(mob 1 "creeper" 0 6)]})]
+    (dark-around! p 0 6)
+    (is (= [] (danger-ids p)))
+    (swap! (fake/state p) update :self merge {:offhand "torch"})
+    (is (= [1] (danger-ids p)))))
+
 (deftest a-creeper-lit-by-a-torch-in-the-dark-is-seen-far
   (let [{:keys [p]} (rig {:entities [(mob 1 "creeper" 0 8)]})]
     (dark! p {[0 64 8] [0 14] [0 65 8] [0 14]})

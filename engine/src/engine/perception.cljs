@@ -8,7 +8,7 @@
   along the body's real yaw and pitch, out to `:radius` (48).
     A ray records every cell it enters that the light rule lets the body make out.
     It stops at the first cell that blocks sight (recorded too) or that is not loaded.
-    Light rule: vanilla's lightmap brightness `seeing` of the cell's light is at least 0.2, or the cell is within 2 blocks.
+    Light rule: vanilla's lightmap brightness `seeing` of the cell's light is at least 0.2, or the cell is within `:near` (4; `:near-torch` 7 with a torch in either hand) blocks.
     A sight-blocking cell is lit by the brighter of itself and the cell the ray came from.
     A dark cell is not recorded and the ray goes on, so a lit room is seen across a dark gap.
     Ground rows: besides the grid, one row of rays per block of ground distance from `:ground-from` (8) to `:ground-to`
@@ -33,7 +33,7 @@
     heard  within `:hearing` (16) of the eye, unless the mob makes no sound while it stalks (`silent-mobs`: creeper).
     seen   all of: a clear line from the eye to its middle (the entity's `visible` field), within `:radius`,
            lit (the cell of its feet or head is bright enough by the block light rule; a mob in the dark is seen
-           only within `:dark-sight` (4)), and inside the view cone or heard.
+           only within the same near distance), and inside the view cone or heard.
   A sensed mob's entry takes its place and time (seen-at when seen).
   An entry not sensed now stays at its last place while the mob could not have drifted `:mob-drift` (16) blocks
   (time x `mob-speed`): about 6 s for a zombie.
@@ -105,7 +105,6 @@
    :engine.perception/mob-ms {:default 250 :spec (a/int-in 1 nil) :doc "A mob sample is taken this often, ms."}
    :engine.perception/mob-scan {:default 64 :spec (a/num-in 0 nil) :doc "Hostiles within this many blocks of the body are sampled."}
    :engine.perception/hearing {:default 16 :spec (a/num-in 0 nil) :doc "A mob within this many blocks of the eye is heard."}
-   :engine.perception/dark-sight {:default 4 :spec (a/num-in 0 nil) :doc "A mob standing in the dark is seen only within this many blocks."}
    :engine.perception/mob-drift {:default 16 :spec (a/num-in 0 nil) :doc "A mob not sensed is forgotten once it could have walked this many blocks."}
    :engine.perception/mutable-max-ms {:default 10000 :spec (a/int-in 1 nil) :doc "A remembered fluid, door, gate, trapdoor or fire older than this reads unknown, ms."}})
 

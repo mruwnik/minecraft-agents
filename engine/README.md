@@ -55,7 +55,7 @@ Layout:
 - `src/engine/` the engine core only: `core` (API and lifecycle; parts in `core.*`: list edits, register, scheduler, round with act wrapper and ctx/call, settling, backoff, restart), `memory`, `events`,
   `ctx`, `expr`, `composite`, `registry` (compile-time registries), `triggers` (the trigger registry), `hooks` (job code
   the engine calls), `condition`, `scenario`, `perception` (+ `perception.light|store|rays|mobs|persist`), `main`; `engine.path.*` is the planner.
-  Perception sees dark cells within `:near` (4) blocks, within `:near-torch` (7) with a torch in either hand.
+  Perception sees dark cells and dark mobs within `:near` (4) blocks, within `:near-torch` (7) with a torch in either hand.
   A sight line passes a block that does not fill its cell (door, trapdoor, slab, stairs) except where it meets its collision boxes, from inside its cell too.
   One cell: `sensedAt`/`perception/sensed` answers felt, visible (one-ray glance, view cone), remembered (`ageMs`; fluids, doors, gates, trapdoors, fire, and non-solid cells beside a remembered fluid, older than 10 s read unknown) or `{unknown}`; `feel`, `glance`; the wrapped `look` glances where it turned. `blockAt` is `sensedAt`.
   A still body in an unchanged world looks again every `:still-ms` (30 s); unchanged means no block or chunk update within 50 blocks, same daylight, and same torch in hand.

@@ -1,6 +1,6 @@
 ;; Card 8005f9b9 (fixes 5ce6ca10, e48be483; owner Q82): a :hostiles attack swings only at a SEEN mob; a heard-only mob is never walked to or hit at its
 ;; exact cell (the body may turn toward it, the retreat path handles it). Heard only = a sealed dark stone box (light 0), the zombie
-;; beyond dark-sight (4) but within the near band (8, the trigger radius; a heard mob farther is :far, 16), NoAI and helmeted (never hurts, no sun burn). The control lights the box (glowstone
+;; beyond near (4) but within the near band (8, the trigger radius; a heard mob farther is :far, 16), NoAI and helmeted (never hurts, no sun burn). The control lights the box (glowstone
 ;; roof): the same zombie is seen and killed. The recover-drops decline-danger log of a heard danger is unit-only (needs a death pile).
 {:defaults
  {:tags [:hostile :combat :sensing]

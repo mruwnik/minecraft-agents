@@ -1,7 +1,7 @@
 (ns engine.perception.mobs
   "Mob memory: the hostiles the body has seen or heard (see engine.perception)."
   (:require [engine.perception.light :refer [table-now]]
-            [engine.perception.rays :refer [basis in-cone?]]
+            [engine.perception.rays :refer [basis in-cone? near-of]]
             [engine.constants :as constants]
             [engine.game :as game]))
 
@@ -35,7 +35,7 @@
         heard? (and (<= d (:hearing opts)) (not silent?))
         seen? (and visible?
                    (<= d (:radius opts))
-                   (or (<= d (:dark-sight opts)) (mob-lit? per pos))
+                   (or (<= d (near-of per)) (mob-lit? per pos))
                    (or heard? (in-cone? (basis (.-yaw eye) (.-pitch eye)) (:hx grid) (:hy grid) vx vy vz)))]
     (cond seen? :seen heard? :heard :else nil)))
 
