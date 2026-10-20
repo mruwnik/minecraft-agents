@@ -308,11 +308,14 @@
     :deposit (assoc (select-keys r [:reason]) :gave-up (boolean (:gave-up r)))))
 
 (defn finish!
+  "End the pass: done unless a step ended short of done and none ran to its end, then nothing-possible :failed-steps."
   [c report]
   (let [{:keys [mob target]} (:args c)
         {:keys [adults babies]} (hunting/census c)
         out {:mob mob :target target :adults (count adults) :babies (count babies) :steps report}]
-    (ctx/end c :done nil (assoc out :text (str "tend done: " (count adults) " adults, " (count babies) " babies")))))
+    (if (and (some :ended (vals report)) (not-any? #(not (or (:ended %) (:skipped %))) (vals report)))
+      (ctx/end c :nothing-possible :failed-steps out)
+      (ctx/end c :done nil (assoc out :text (str "tend done: " (count adults) " adults, " (count babies) " babies"))))))
 
 (defn ^:async step-steps
   "One step: finish, or one call of the next step's child. :again after it ended (a failed child is booked with its kind and cause), :yield while it waits on the world, :done at the end."

@@ -126,13 +126,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (h/setup {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3) leather-on-the-ground]} 50)]
+        (let [s (h/setup {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3)]} 50)]
           (.override (.-world (:p s)) "interact"
                      (fn [_token _args _impl] (js/Promise.resolve #js {:status "out-of-reach"})))
           (core/submit! (:eng s) (spec {:target 4}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 30 700))
           (is (= {:ended :nothing-possible :cause :unreachable :fed 0 :reason :unreachable}
                  (get-in (done-event s) [:steps :breed])))
+          (is (= :stopped (:kind (done-event s))))
+          (is (= :failed-steps (or (:cause (done-event s)) (get-in (done-event s) [:data :cause]))))
           (is (true? (finished? s))))))))
 
 (deftest one-adult-cannot-breed
@@ -385,8 +387,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (plan-scenario (list 'repeat (list 'jobs.animals.tend {:plan "pen" :part "cows"})) {"pen" pen-plan}
-                                      {:inventory [(wheat 8)] :entities [(cow 1 2) (cow 2 3)]} 60))]
-          (is (< 1 (passes s)) "the next pass starts without a 10-minute rest")
+                                      {:inventory [(wheat 8)] :entities [(cow 1 2) (cow 2 3) leather-on-the-ground]} 60))]
+          (is (< 1 (count (filter #(= 2 (count (:chain %))) (events-of s :child_ended)))) "the next pass starts without a 10-minute rest")
           (is (empty? (filter :backed-off (events-of s :waiting)))))))))
 
 (def far-box {:min {:x 200 :y 60 :z -5} :max {:x 208 :y 70 :z 5}})
