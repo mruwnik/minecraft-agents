@@ -74,6 +74,7 @@
         s (lit 0 15 #(check (ctx-of open-night)))]
     (is (= :later (first s)))
     (is (= #{:light} (:lowered-by (nth s 2))))
+    (is (pos? (:recheck-after-ms (nth s 2))) "a trigger held on it waits for the light")
     (is (re-find #"15 64 0" (second s)) "names the place")
     (is (re-find #"until light" (second s)) "and what helps")))
 

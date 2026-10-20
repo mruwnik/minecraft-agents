@@ -79,7 +79,7 @@
       (at-status c (sh-sense/feet p))
       (contains? lowered-by :look) (contract/look :exposed (str "light at " where " not seen") :look-at look-at)
       (and (contains? lowered-by :light) (<= light-in patience))
-      (contract/later :exposed (str "dark at " where " until light") :lowered-by lowered-by :chance chance)
+      (contract/later :exposed (str "dark at " where " until light") :lowered-by lowered-by :chance chance :recheck-after-ms (* 1000 light-in))
       (contains? lowered-by :light)
       (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits") :chance chance)
       :else (contract/ok :sealed (str "dark at " where ", no sky light reaches it: waiting never lights it, only threats count")))))

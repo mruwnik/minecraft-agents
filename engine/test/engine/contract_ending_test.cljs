@@ -359,6 +359,22 @@
           (is (= 1 (count (ev seen :reflex :fired))) "held, not fired on every tick")
           (is (= [:dark] (mapv #(:reason (:data %)) (ev seen :reflex :held)))))))))
 
+(deftest a-held-reason-with-recheck-after-ms-is-not-asked-again-before-then
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [late {:round (fn [c] (ctx/end c :condition-failed {:reason :exposed :text "dark" :recheck-after-ms 600000}))}
+              {:keys [eng seen clock]} (setup {'late late}
+                                              {:late {:name :late :job '(late) :persistence :retry :when (fn [_ _ _] true)}})]
+          (core/register-reflex! eng {:trigger :late})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (swap! clock + 300000)
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= 1 (count (ev seen :reflex :fired))) "still held long after held-recheck-ms")
+          (swap! clock + 400000)
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= 2 (count (ev seen :reflex :fired))) "asked again once the time is up"))))))
+
 (deftest a-condition-that-needs-a-look-looks-once-then-the-job-waits-unstarted
   (async done
     (tu/run-async done

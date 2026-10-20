@@ -24,7 +24,7 @@
    ::comfort-wait-s {:default 90 :spec (a/num-in 0 nil)
                      :doc "Seconds a comfort reflex (hunger, a full bag, tidying, doors, loose items) waits for the running job's section (ctx/atomic) before it cuts it."}
    ::held-recheck-ms {:default 2000 :spec (a/num-in 0 nil)
-                      :doc "How long a held trigger's job checks are not asked again, in ms of body clock."}})
+                      :doc "How long a held trigger's job checks are not asked again, in ms of body clock, unless the hold reason names its own :recheck-after-ms."}})
 
 (defn note-waiting!
   "Listed job id's check declined with reason (or none): emit job.waiting when the reason is new for this wait, and
@@ -139,7 +139,7 @@
   (let [id (:id entry)
         t (now eng)
         before (get @(:held-triggers eng) id)]
-    (if (and before (< (- t (:t (meta before))) (settings/get settings ::held-recheck-ms)))
+    (if (and before (< (- t (:t (meta before))) (or (:recheck-after-ms before) (settings/get settings ::held-recheck-ms))))
       false
       (let [[kind :as s] (trigger-status eng entry)
             ok? (not (#{:later :never} kind))
