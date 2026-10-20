@@ -237,8 +237,8 @@
 
 (defn ^:async pillar-build!
   [c {:keys [plan]}]
-  (let [e (await (ctx/call c :pillar 'jobs.access.pillar {:height (:height plan) :use {:blocks (pillar-blocks c)} :fetch false
-                                                          :ignore-zones? (:ignore-zones? (:args c)) :checks (ready/unforced c {:safe? '(not (exposed))})}))]
+  (let [e (waits/waiting-out c (await (ctx/call c :pillar 'jobs.access.pillar {:height (:height plan) :use {:blocks (pillar-blocks c)} :fetch false
+                                                          :ignore-zones? (:ignore-zones? (:args c)) :checks (ready/unforced c {:safe? '(not (exposed))})})))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (ctx/update-mem! c assoc-in [:pillar :phase] :dig) :again)

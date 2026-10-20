@@ -9,6 +9,7 @@
             [jobs.gather.mine.targets :as targets :refer [rules-in step-cell within-own-zone]]
             [jobs.gather.mine.torches :as torches]
             [jobs.gather.mine.tunnel :as tunnel :refer [passable open-start result-of walk-of back-on-line!]]
+            [jobs.lib.waits :as waits]
             [jobs.lib.access :as access]
             [jobs.lib.access-tool :as atool]
             [jobs.lib.ledger :as ledger]
@@ -136,10 +137,10 @@
         name-at #(u/seen-name (:primitives c) %)
         _ (await (watch/watch! c {:risky? true :before-dig (first (remove #(passable (name-at %)) cut))}))
         _ (ctx/update-mem! c assoc :stepping true)
-        r (await (ctx/call c :step 'jobs.access.stair
+        r (waits/waiting-out c (await (ctx/call c :step 'jobs.access.stair
                                  {:dir :level :heading (keyword heading) :steps 1 :accept (step-accept args) :fetch (:fetch args)
                                   :pick-up-ores false :ignore-zones? (:ignore-zones? args)
-                                  :cut-only (boolean (:stay-level args))}))
+                                  :cut-only (boolean (:stay-level args))})))
         res (result-of r)]
     (when-not (= :continue r) (ctx/update-mem! c dissoc :stepping))
     (when-not (= :continue r) (ctx/update-mem! c update :dug into (:dug res)))

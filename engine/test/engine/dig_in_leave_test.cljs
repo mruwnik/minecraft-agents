@@ -189,6 +189,22 @@
             (is (= 64 (second (feet p))) (str label ": up and out"))
             (is (= [] (emitted seen :dig-in.staying)) (str label ": never unsafe"))))))))
 
+(deftest a-climb-child-that-waits-out-a-hostile-is-waited-for-not-counted-a-failed-heading
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out] :as s} (setup {})
+              orig ctx/call
+              asked (atom 0)
+              hostile-near {:kind :condition-failed :cause {:reason :hostile-near :text "a hostile is near"}}]
+          (await (dig-in! s))
+          (set! ctx/call (fn [c slot job & more] (if (= 'jobs.access.stair job) (do (swap! asked inc) (js/Promise.resolve hostile-near)) (apply orig c slot job more))))
+          (await (leave-at-dawn! s))
+          (set! ctx/call orig)
+          (is (< 1 @asked) "the climb child was asked again, not given up on")
+          (is (nil? @out) "leave! is still waiting, no heading was given up")
+          (is (< (second (feet p)) 64) "still in the pit"))))))
+
 (deftest away-from-the-shelter-leave-is-out-at-once
   (async done
     (tu/run-async done

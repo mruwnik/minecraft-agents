@@ -1,6 +1,7 @@
 (ns jobs.access.tunnel
   (:require [jobs.lib.block-sets :as bs]
             [engine.args :as a]
+            [jobs.lib.waits :as waits]
             [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -301,10 +302,10 @@
   :no-tool reaches the fetch). :stair-done once the body stands at the stair's end."
   [c {:keys [heading dir] :as plan} k]
   (let [cells (ln/line-cells plan)
-        e (await (ctx/call c :stair 'jobs.access.stair
+        e (waits/waiting-out c (await (ctx/call c :stair 'jobs.access.stair
                            {:dir dir :heading heading :fetch (:fetch (:args c)) :need-drop (:need-drop (:args c)) :y ((cells (segment-end plan k)) 1) :on-lava (:on-lava (:args c) :seal)
                             :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))
-                            :pick-up-ores (:pick-up-ores (:args c))}))]
+                            :pick-up-ores (:pick-up-ores (:args c))})))]
     (if (= :continue e)
       :continue
       (let [res (:data e)
@@ -363,9 +364,9 @@
         keep? (:keep (:args c))
         e (if keep?
             (await (child/walk-into!* c :out (:entry plan)))
-            (await (ctx/call c :out 'jobs.access.leave-tunnel
+            (waits/waiting-out c (await (ctx/call c :out 'jobs.access.leave-tunnel
                              (cond-> {:tunnel way-out :ignore-zones? (boolean (:ignore-zones? (:args c)))}
-                               (some? (:fetch (:args c))) (assoc :fetch (:fetch (:args c)))))))]
+                               (some? (:fetch (:args c))) (assoc :fetch (:fetch (:args c))))))))]
     (if (= :continue e)
       :continue
       (finish! c (:reason stop)
@@ -407,10 +408,10 @@
   the plan is chosen again from there. :again or :continue; else the job ends with the leg's stop."
   [c w]
   (let [{:keys [fetch accept ignore-zones? on-lava max-length need-drop]} (:args c)
-        e (await (ctx/call c :leg 'jobs.access.tunnel
+        e (waits/waiting-out c (await (ctx/call c :leg 'jobs.access.tunnel
                            (cond-> {:target w :keep true :max-length max-length :accept accept :need-drop need-drop
                                     :ignore-zones? ignore-zones? :on-lava on-lava}
-                             (some? fetch) (assoc :fetch fetch))))]
+                             (some? fetch) (assoc :fetch fetch)))))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (ctx/update-mem! c dissoc :leg) :again)

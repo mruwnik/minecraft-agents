@@ -2,6 +2,7 @@
   "The strip tunnel of jobs.gather.dig-for: where it starts, the stretches cut by jobs.gather.strip-tunnel children, turning to
   another heading, and its end."
   (:require [clojure.string :as str]
+            [jobs.lib.waits :as waits]
             [jobs.lib.block-sets :as bs]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -149,12 +150,12 @@
     (if stop
       (stop! c (tunnel-reason stop))
       (let [_ (ctx/update-mem! c assoc :stepping true)
-            r (await (ctx/call c :tunnel 'jobs.gather.strip-tunnel
+            r (waits/waiting-out c (await (ctx/call c :tunnel 'jobs.gather.strip-tunnel
                                {:heading (:heading m) :origin (:origin t) :steps (or steps 0) :limit (- (:tunnel-length args) (:spent m 0))
                                 :hung (vec (:hung m)) :torches (:torches args) :watch-kinds (vec (watch-kinds c))
                                 :radius (:radius args) :wet (boolean (:wet args)) :accept (vec (:accept args)) :stay-level (boolean (:stay-level args))
                                 :fetch (:fetch args) :ignore-zones? (:ignore-zones? args)
-                                :block (:block args)}))]
+                                :block (:block args)})))]
         (if (= :continue r)
           :continue
           (let [res (:data r)

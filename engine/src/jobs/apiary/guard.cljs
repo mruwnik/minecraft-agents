@@ -7,6 +7,7 @@
             [jobs.lib.pen-read :as pen-read]
             [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary :refer [survey]]
+            [jobs.lib.waits :as waits]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
@@ -188,7 +189,7 @@
 (defn ^:async collect-carpet!
   "Pick up the carpet that was dug up."
   [c carpet]
-  (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (collect-radius) :items [carpet]})))
+  (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (collect-radius) :items [carpet]}))))
 
 (defn abandon!
   "Give up the sink: clear it and skip the fire."

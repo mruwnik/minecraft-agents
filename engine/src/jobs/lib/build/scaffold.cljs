@@ -5,6 +5,7 @@
   cells in reach are placed, or however the call ends, so a scaffold block is never a plan block. Job memory :scaffold is
   {:phase :walk|:build|:bridge|:up|:clean :cell pos :plan {:base :height :stand :bridge row} :failed true}."
   (:require [engine.ctx :as ctx]
+            [jobs.lib.waits :as waits]
             [jobs.lib.access :as access]
             [jobs.lib.access.approach :as approach]
             [jobs.lib.build.plan :as plan]
@@ -112,9 +113,9 @@
 
 (defn ^:async build!
   [c {:keys [plan]}]
-  (let [e (await (ctx/call c :pillar 'jobs.access.pillar {:height (:height plan) :use {:blocks (blocks c)} :fetch false
+  (let [e (waits/waiting-out c (await (ctx/call c :pillar 'jobs.access.pillar {:height (:height plan) :use {:blocks (blocks c)} :fetch false
                                                           :ignore-zones? (:ignore-zones? (:args c))
-                                                          :checks (ready/unforced c {:safe? '(not (exposed))})}))]
+                                                          :checks (ready/unforced c {:safe? '(not (exposed))})})))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (set-phase! c :up) :again)
@@ -124,9 +125,9 @@
   "Lay the planned bridge row (jobs.access.bridge) from the stand the body walked to; the stand is then the row's end."
   [c {:keys [plan]}]
   (let [{:keys [heading length]} (:bridge plan)
-        e (await (ctx/call c :bridge 'jobs.access.bridge {:heading heading :length length :item (bridge-block c) :fetch false
+        e (waits/waiting-out c (await (ctx/call c :bridge 'jobs.access.bridge {:heading heading :length length :item (bridge-block c) :fetch false
                                                           :ignore-zones? (:ignore-zones? (:args c))
-                                                          :checks (ready/unforced c {:safe? '(not (exposed))})}))]
+                                                          :checks (ready/unforced c {:safe? '(not (exposed))})})))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (set-phase! c :up) :again)

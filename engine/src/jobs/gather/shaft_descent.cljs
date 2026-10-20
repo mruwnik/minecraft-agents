@@ -3,6 +3,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.waits :as waits]
             [jobs.lib.access-tool :as atool]
             [jobs.lib.child :as child]
             [jobs.lib.look :refer [cell-of]]
@@ -95,9 +96,9 @@
                  (= :continue r) :continue
                  (u/within? (u/self-pos c) (cell-of (xyz top)) 1) (do (ctx/update-mem! c assoc-in [:shaft :state] :down) :again)
                  :else (fail! c :unreachable id 0)))
-      :down (let [r (await (ctx/call c :shaft-stair 'jobs.access.stair
+      :down (let [r (waits/waiting-out c (await (ctx/call c :shaft-stair 'jobs.access.stair
                                      {:dir :down :heading heading :y to-y :fetch true :through id
-                                      :ignore-zones? (:ignore-zones? (:args c))}))
+                                      :ignore-zones? (:ignore-zones? (:args c))})))
                   e (when (map? r) (assoc (:data r) :status (if (= :done (:kind r)) :done :stopped) :reason (contract/cause-key r)))]
               (cond
                 (= :continue r) :continue
