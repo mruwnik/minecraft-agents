@@ -1447,3 +1447,11 @@
         "arrows merged into one loss with a blow")
     (is (shot-on-run? [(assoc-in arrow [:data :hits] 2)] [:cobblestone]))
     (is (not (shot-on-run? [arrow arrow] [])) "no blocks, no cover to take")))
+
+(deftest a-pressed-body-under-fire-builds-cover-first-then-fights
+  (are [fire? pressed? tries fights?] (= fights? (cornered/press-fights? {:fire? fire? :pressed? pressed? :tries tries :limit 2}))
+    false true 1 true
+    true true 1 false
+    true true 2 false
+    true true 3 true
+    true false 9 false))
