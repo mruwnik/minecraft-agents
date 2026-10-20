@@ -11,7 +11,7 @@
             [engine.triggers :as triggers]
             [engine.fake :as fake]))
 
-(def shut-in-trigger :night)
+(def shut-in-trigger :dawn)
 
 (defn fires? [world memory]
   (boolean ((:when (get triggers/all shut-in-trigger)) (tu/fake world) memory {})))
@@ -29,7 +29,7 @@
     (.setTime (.-world (:p s)) st/noon)
     s))
 
-(deftest the-night-trigger-holds-a-body-in-its-recorded-shelter
+(deftest the-dawn-trigger-fires-by-day-in-its-recorded-shelter
   (let [{:keys [eng]} (st/setup {})
         write! (fn [e] (mem/write! (:store eng) :shelter e {:cap 10 :ttl st/day-ms}))
         _ (write! (shelter-entry :built))
@@ -151,7 +151,7 @@
 (def far-zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 2}})
 
 (defn ^:async held-in-then-out
-  "A dug-in body at first light with the given mobs near, the night trigger registered, the dawn grace over at the
+  "A dug-in body at first light with the given mobs near, the dawn trigger registered, the dawn grace over at the
   fourth hold: [whether the body was still sealed in at the third hold (nil: no hold made), whether it ended outside]."
   [entities]
   (let [{:keys [eng p]} (await (dug-in-world {:entities entities}))
