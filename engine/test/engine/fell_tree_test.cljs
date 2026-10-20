@@ -3,6 +3,7 @@
   taken back (jobs.access.pillar, jobs.access.cleanup) before the job ends."
   (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.forest-maintain-test :as fm]
@@ -17,6 +18,8 @@
             [jobs.lib.need :as need]
             [jobs.forestry.fell-tree :as fell-tree]
             [jobs.forestry.fell-tree.log :as log]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.targets :as targets]
             [jobs.lib.trees :refer [axe-fetch-limits]]
             [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]))
@@ -731,6 +734,22 @@
                                    (apply call! c k job more))]
             (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 10 :at {:x 6 :y 64 :z 0}} 60)))
           (is (= [{:safe? '(not (threatened))}] (distinct @checks)) "no dark-sky wait for drops lying at the tree"))))))
+
+(deftest a-walk-held-by-a-hostile-chooses-the-other-tree
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (fm/start {:blocks (merge (lt/tree 6 0 "oak" 3) (lt/tree -9 0 "oak" 3)) :inventory [{:name "stone_axe" :count 1}]} {})
+              bases (atom [])
+              searches (atom 0)
+              dig! log/dig-log!]
+          (with-redefs [targets/nearest! (fn ([c ts r] (targets/nearest! c ts r nil))
+                                                   ([_ ts _ _] (js/Promise.resolve {:status :found :index (if (= 1 (swap! searches inc)) 0 (dec (count ts)))})))
+                        ready/threatened (fn [_] (if (empty? @bases) (contract/ok :no-hostile-near "none") (contract/later :hostile-near "a hostile is near")))
+                        log/dig-log! (fn [c l o] (swap! bases conj (get-in o [:base :x]))
+                                       (if (= 1 (count @bases)) (js/Promise.resolve :partial) (dig! c l o)))]
+            (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 12} 300)))
+          (is (= [6 -9] (take 2 @bases)) "the walk to the near tree was held by a hostile: the body turned to the other tree"))))))
 
 (deftest a-pick-up-that-stopped-short-leaves-the-tree-condition-failed-with-the-logs-left
   (async done

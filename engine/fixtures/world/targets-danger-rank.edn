@@ -1,6 +1,6 @@
 ;; Card 9ce04add: jobs.lib.targets ranks candidates with go-to's own prices (damage weight, health scale): fell-tree with two trees picks the one
 ;; whose walk is not past a hostile. Tree A is nearer (9.5 east) with a zombie (NoAI, helmeted) at its foot; tree B is farther (10.5 west), clear. The body stands 9 off the zombie, outside the hostile-near radius, else fell-tree waits.
-;; The body must have seen the zombie before the job starts, else it ranks the trees without it and walks to tree A.
+;; The job starts at once, before the zombie is sensed: it walks toward tree A, and when the zombie holds that walk it chooses again and takes tree B.
 ;; Should-succeed: tree B is felled first (its base log gone), tree A stands. The live risk is the margin between the prices.
 {:defaults
  {:tags [:forestry :fell-tree :planner]
@@ -15,7 +15,6 @@
  [{:name "tree-past-a-zombie-is-felled-after-the-clear-one"
    :body {:yaw 270}
    :act [[:summon "zombie" [21.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:until-seen {:entity "zombie"} 10]
          [:job (jobs.forestry.fell-tree {:radius 20})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:not-block [2 0 16] "oak_log"] [:block [22 0 16] "oak_log"]]}]}

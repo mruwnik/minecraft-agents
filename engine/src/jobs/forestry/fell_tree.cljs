@@ -169,11 +169,13 @@
   "Remember the chosen column as unreachable and forget the choice; why (the walk's give-up reason) is kept for the end."
   ([c] (mark-unreachable! c nil))
   ([c why]
+   (let [held? (= :later (first (ready/threatened c)))]
    (ctx/update-mem! c (fn [m] (-> m
                              (cond-> why (assoc :unreachable-why why))
                              (update :unreachable (fnil conj []) [(get-in m [:column :x]) (get-in m [:column :z])])
                              (dissoc :column :species :base :pillar :logs-seen)
-                             (assoc :partials 0))))))
+                             (assoc :partials 0)
+                             (cond-> held? (assoc :rerouted true))))))))
 
 ;; ------------------------------------------------------------------ the pillar
 
@@ -209,14 +211,30 @@
                       :again)
       :else (do (mark-unreachable! c) :again))))
 
-(defn walk-failed!
-  "Book a walk result of :blocked or :partial against the chosen tree: :again once the tree is given up, :continue
-  while the walk (its child) waits."
+(defn ^:async rerank-while-threatened!
+  "While a hostile holds the job off its chosen tree before a log is dug, choose again with what the body senses now
+  (the search prices known dangers): true once another tree is committed, and its walks then go on though the hostile is near (they lead away from it). The same tree again is kept as it was."
+  [c]
+  (when (and (zero? (:dug (ctx/mem c) 0)) (= :later (first (ready/threatened c))))
+    (let [{:keys [radius species]} (:args c)
+          before (ctx/mem c)]
+      (loop [n 0]
+        (let [t (await (choose-tree! c radius species))]
+          (cond
+            (and (= :searching t) (< n 20)) (do (await (pace/pace!)) (recur (inc n)))
+            (not (map? t)) false
+            (= (:column t) (:column before)) (do (ctx/update-mem! c assoc :partials (:partials before 0)) false)
+            :else (do (ctx/update-mem! c assoc :rerouted true) true)))))))
+
+(defn ^:async walk-failed!
+  "Book a walk result of :blocked or :partial against the chosen tree: :again once the tree is given up, or another
+  tree is chosen because a hostile holds the walk, :continue while the walk (its child) waits."
   [c r]
   (let [partials (inc (:partials (ctx/mem c) 0))]
-    (if (or (= :blocked r) (>= partials max-partials))
-      (do (mark-unreachable! c (:walk-why (ctx/mem c))) :again)
-      (do (ctx/update-mem! c assoc :partials partials) :continue))))
+    (cond
+      (and (= :partial r) (await (rerank-while-threatened! c))) :again
+      (or (= :blocked r) (>= partials max-partials)) (do (mark-unreachable! c (:walk-why (ctx/mem c))) :again)
+      :else (do (ctx/update-mem! c assoc :partials partials) :continue))))
 
 (defn axe-carried? [c]
   (boolean (some #(str/ends-with? (:name %) "_axe") (u/inventory (:primitives c)))))
@@ -352,7 +370,7 @@
                   m (ctx/mem c)
                   r (await (log/dig-log! c (first logs) {:base (:base m) :species (:species m)}))]
               (case r
-                :ok (do (ctx/update-mem! c assoc :partials 0)
+                :ok (do (ctx/update-mem! c #(-> % (assoc :partials 0) (dissoc :rerouted)))
                         (u/progress! c)
                         :again)
                 :high (do (ctx/update-mem! c assoc :pillar true) :again)

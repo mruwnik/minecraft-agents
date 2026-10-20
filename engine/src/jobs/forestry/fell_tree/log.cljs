@@ -114,9 +114,10 @@
     (cond
       (nil? cell) :blocked
       (u/within? (u/self-pos c) cell range) :there
-      :else (let [e (await (child/call-walk* c :walk {:pos cell :range range :doors :shut
+      :else (let [e (await (child/call-walk* c :walk (merge {:pos cell :range range :doors :shut
                                                       :one-way :closed :see false :spend {:tries 1}
-                                                      :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+                                                      :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+                                                     (when (:rerouted (ctx/mem c)) {:checks (ready/unforced c {:safe? '(always)})}))))]
               (cond
                 (= :continue e) :partial
                 (and (= :done (:kind e)) (:arrived (:data e))) :there
