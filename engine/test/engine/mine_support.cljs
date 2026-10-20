@@ -135,7 +135,9 @@
   "The floor out to x 12, for walks home from the far end of a patch."
   (cells "dirt" (range -2 13) [62 63] (range -3 4)))
 
-(def sand-patch (cells "sand" (range 4 7) [64] (range -1 2)))
+(def sand-patch
+  "Sand on two layers of dirt: a drop of it rests on the ground, not falling."
+  (merge (cells "dirt" (range 4 7) [62 63] (range -1 2)) (cells "sand" (range 4 7) [64] (range -1 2))))
 
 ;; ------------------------------------------------------------------ mend branches
 (defn set-pos! [{:keys [p]} x y z] (fake/swap-self! p assoc :pos [x y z]))

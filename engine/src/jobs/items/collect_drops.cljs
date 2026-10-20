@@ -136,6 +136,13 @@
 
 (defn max-settle-waits [] (settings/get settings ::max-settle-waits))
 
+(defn nothing-under?
+  "Whether the cell under item is air or not seen: a drop resting on a seen solid cell is not falling."
+  [c item]
+  (let [[x y z] (item-cell item)
+        under (u/seen-name (:primitives c) {:x x :y (dec y) :z z})]
+    (or (nil? under) (boolean (bs/air under)))))
+
 (defn settling?
   "Whether a hole drop is still moving: its cell differs from the one noted for its id in job memory (noted now, at most
   ::max-settle-waits times); judged where it comes to rest, not mid-fall."
@@ -395,7 +402,7 @@
         held (fn [] (transduce (comp (filter #(= item-name (:name %))) (map :count)) + 0 (u/inventory (:primitives c))))
         start-held (held)
         hole? (in-hole? c item)
-        moving? (and (at-hole? c item) (settling? c item))
+        moving? (and (at-hole? c item) (nothing-under? c item) (settling? c item))
         why (when (and hole? (not moving?)) (await (hole-problem! c item)))
         walk (when (and (not hole?) (deep? c item)) (await (walk-down! c item)))
         dig? (and (:dig (:args c)) (or (= :unreachable walk) (= :too-deep why)))

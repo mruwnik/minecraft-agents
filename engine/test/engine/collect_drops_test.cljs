@@ -409,7 +409,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (bd/setup {:self body :blocks {"0,62,0" "stone"}})
+        (let [{:keys [eng p]} (bd/setup {:self body :blocks {"0,62,0" "air"}})
               held #(mem/entries (mem/view (:store eng)) loose/hold-kind)]
           (drop! p [0 63 0] "dirt")
           (core/submit! eng '(jobs.items.collect-drops {:radius 6 :holes [[0 63 0]]}) {})
