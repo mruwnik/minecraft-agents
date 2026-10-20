@@ -1,0 +1,11 @@
+;; compost meal pick-up (card f6bc78e5): bone meal lying beside the composter, 15 blocks from the body, is inside the 20-block meal
+;; search, so the items.collect-drops child collects it (a shorter child reach found it and struck). Should-succeed: the meal is carried.
+;; Should-fail: none. Composter [25 0 16]; the body starts at [10.5 0 14.5].
+{:defaults {:tags [:farm :compost :jobs] :time :any :body {:at [10.5 0 14.5] :effects [["resistance" 600 4]]} :limit-s 90}
+ :cases
+ [{:name "meal-15-blocks-off-is-collected"
+   :blocks [[:set [25 0 16] "composter"]]
+   :act [[:summon "item" [24.5 0 16.5] "{Item:{id:\"minecraft:bone_meal\",count:1}}"]
+         [:job (jobs.farm.compost {:at #xyz [25 0 16] :items ["oak_leaves"]})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped :waiting} :data {:name "jobs.farm.compost"}} :within-s 70 :of-job true}]
+   :after [[:item "bone_meal" 1]]}]}

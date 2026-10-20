@@ -1,0 +1,12 @@
+;; make-room swap (card f6bc78e5): with every slot full, a better item on the ground is swapped in: a junk stack is tossed and an
+;; items.collect-drops child picks the item up (make-room.swapped, status "collected"). Should-succeed: the emerald is carried after.
+;; Should-fail: none (a swap that picks nothing up ends the case red on the :after row).
+{:defaults {:tags [:make-room :jobs] :time :any :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "better-ground-item-is-swapped-in-and-collected"
+   :body {:inventory [["wooden_pickaxe" 1] ["stone_pickaxe" 1] ["iron_pickaxe" 1] ["golden_pickaxe" 1] ["diamond_pickaxe" 1] ["netherite_pickaxe" 1] ["wooden_axe" 1] ["stone_axe" 1] ["iron_axe" 1] ["golden_axe" 1] ["diamond_axe" 1] ["netherite_axe" 1] ["wooden_shovel" 1] ["stone_shovel" 1] ["iron_shovel" 1] ["golden_shovel" 1] ["diamond_shovel" 1] ["netherite_shovel" 1] ["wooden_hoe" 1] ["stone_hoe" 1] ["iron_hoe" 1] ["golden_hoe" 1] ["diamond_hoe" 1] ["netherite_hoe" 1] ["wooden_sword" 1] ["stone_sword" 1] ["iron_sword" 1] ["golden_sword" 1] ["diamond_sword" 1] ["netherite_sword" 1] ["bucket" 1] ["water_bucket" 1] ["lava_bucket" 1] ["gravel" 64] ["sand" 64] ["cobblestone" 64]]}
+   :act [[:summon "item" [19.5 0 16.5] "{Item:{id:\"minecraft:emerald\",count:1}}"]
+         [:job (jobs.storage.make-room {:free 1})]]
+   :expect [{:event {:source :job :kind :make-room.swapped :data {:status "collected"}} :within-s 60 :of-job true}]
+   :after [[:item "emerald" 1]]
+   :limit-s 90}]}
