@@ -106,11 +106,16 @@
              cells)))
 
 (defn nearer-end
-  "The end of the chain ps the body is nearer to: :first or :last."
+  "The end of the chain ps the build goes on from: the end with a rail standing when only one has (a restock after a
+  stretch was built), else the one the body is nearer to: :first or :last."
   [c ps]
   (let [body (u/self-pos c)
-        d (fn [[x y z]] (u/dist body {:x x :y y :z z}))]
-    (if (<= (d (first ps)) (d (peek ps))) :first :last)))
+        d (fn [[x y z]] (u/dist body {:x x :y y :z z}))
+        laid? #(rail/rail-name? (:name (plan/world-block (:primitives c) %)))]
+    (cond
+      (and (laid? (first ps)) (not (laid? (peek ps)))) :first
+      (and (laid? (peek ps)) (not (laid? (first ps)))) :last
+      :else (if (<= (d (first ps)) (d (peek ps))) :first :last))))
 
 ;; ------------------------------------------------------------------ shapes
 

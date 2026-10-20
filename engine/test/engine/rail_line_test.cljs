@@ -10,6 +10,7 @@
             [jobs.blocks.dig :as dig]
             [jobs.build.rail :as builder]
             [jobs.build.rail-line :as rail-line]
+            [jobs.build.rail-stock :as stock]
             [engine.fake :as fake]
             [engine.settings :as settings]
             [engine.test-util :as tu]
@@ -706,3 +707,33 @@
           (is (= "rail" (h/block-at p 15 64 0)))
           (is (= "stone" (h/block-at p 15 67 0)) "the hill above the tunnel stands")
           (is (some #(and (= :child_started (:kind %)) (re-find #"/span$" (:job %))) @seen) "the span phase ran a child"))))))
+
+(deftest a-share-of-every-need-is-fetched-so-the-bag-room-is-kept
+  (are [shortages free expected] (= expected (stock/shares shortages free))
+    [["rail" 80 ["rail"]] ["cobblestone" 100 ["cobblestone"]]] 8 [["rail" 80 ["rail"]] ["cobblestone" 100 ["cobblestone"]]]
+    [["rail" 160 ["rail"]] ["cobblestone" 320 ["cobblestone"]]] 2 [["rail" 32 ["rail"]] ["cobblestone" 64 ["cobblestone"]]]
+    [["rail" 600 ["rail"]]] 0 [["rail" 64 ["rail"]]]
+    [["rail" 1 ["rail"]] ["cobblestone" 1000 ["cobblestone"]]] 2 [["rail" 1 ["rail"]] ["cobblestone" 64 ["cobblestone"]]]))
+
+(deftest a-line-longer-than-the-bag-holds-is-restocked-from-the-chest-and-built-whole
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far [99 64 0]
+              laid (rail/layout from far {})
+              {:keys [items fill]} (:materials laid)
+              plan {:id "line" :parts (:parts laid)}
+              junk (mapv (fn [i] {:name (str "junk_" i) :count 1}) (range 32))
+              chest "-2,64,3"
+              needs (mapv (fn [[name n]] {:name name :count n}) (assoc items "cobblestone" fill))
+              wide (into {} (for [x (range -5 105) z (range -4 5)] [(h/cell-key x 63 z) "stone"]))
+              {:keys [eng p seen]} (b/start {:inventory junk :blocks (assoc wide chest "chest") :containers {chest needs}
+                                             :self {:pos {:x 0 :y 64 :z 3}}}
+                                            {"line" plan} [])
+              e (await (ending-of {:eng eng} job {:plan "line"} 4000))]
+          (is (= :done (:kind e)))
+          (is (true? (:ok? (:data e))))
+          (is (<= (reduce + (vals items)) (:placed (:built (:data e))) (+ fill (reduce + (vals items)))) "the placed count adds up over the restocks")
+          (is (every? #(<= (.-count (.-args %)) stock/stack) (h/calls p "transfer")) "no take is more than a stack, so the bag room holds")
+          (is (< (count items) (count (h/calls p "transfer"))) "the rest comes in later trips")
+          (is (= "powered_rail" (h/block-at p 3 64 0))))))))

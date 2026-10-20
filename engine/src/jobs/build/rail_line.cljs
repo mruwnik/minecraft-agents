@@ -13,6 +13,8 @@
             [jobs.lib.pace :as pace]
             [jobs.build.rail :as builder]
             [jobs.build.rail-spans :as spans]
+            [jobs.build.rail-restock :as restock]
+            [jobs.build.rail-stock :as stock]
             [jobs.lib.placement :as placement]
             [jobs.lib.build.plan :as plan]
             [plan.rail :as rail]
@@ -39,7 +41,9 @@
      places. A rail that settled in the wrong shape is dug and placed again (jobs.build.rail's ::fix-times), then given up as
      :shape. Placing, zones, other plans' footprints, refusals, give-ups and the build.* events are
      jobs.build.from-plan's (its arg :accept applies).
-     With nothing left to build the builder is skipped and the line goes straight to the proof.
+     With nothing left to build the builder is skipped and the line goes straight to the proof. A line longer than the bag
+     holds is fetched a share of every item at a time (jobs.build.rail-stock); when the builder runs out of carried items
+     having placed some, the next share is fetched (restock) and the builder called again, from the end it has laid.
   2. :switch turns on every planned lever that is off (jobs.access.toggle as a child, once per lever).
   3. :check runs plan.rail/judge-line over the world. A powered rail found unlit (or lit) only in the body's memory is
      first walked to once, to read its power as it is now; a line broken only by power states is re-read for a short while before it counts as broken. A sturdy block where the plan wants bed or buffer fill is
@@ -235,6 +239,13 @@
 
 (def builder-args [:plan :part :accept :ignore-zones?])
 
+(defn restock?
+  "Whether the builder's ending e is only a carried stock run out, with more to fetch: it placed something, gave nothing up
+  and is short of items, and the call may fetch them whole."
+  [c e]
+  (let [{:keys [placed short given-up]} (:data e)]
+    (boolean (and (whole? c) (fetch-opts c) (pos? (or placed 0)) (seq short) (empty? given-up)))))
+
 (defn ^:async build-step!
   "One round of the head-first builder (jobs.build.rail child); its result is kept when it ends and the phase moves on. A
   builder not yet begun with nothing to do is skipped: the proof says what is missing."
@@ -250,7 +261,11 @@
         (let [e (await (ctx/call c :build 'jobs.build.rail (select-keys (:args c) builder-args)))]
           (cond
             (or (= :continue e) (= :cut-off (:kind e))) :continue
-            (or (= :done (:kind e)) (contains? (:data e) :missing)) (do (ctx/update-mem! c assoc :phase :switch :built (:data e)) :again)
+            (restock? c e) (do (ctx/update-mem! c #(-> (assoc % :building false :placed-before (+ (:placed-before % 0) (:placed (:data e))))
+                                                       (update :children dissoc :build)))
+                               :again)
+            (or (= :done (:kind e)) (contains? (:data e) :missing))
+            (do (ctx/update-mem! c #(assoc % :phase :switch :built (update (:data e) :placed + (:placed-before % 0)))) :again)
             :else (ctx/end c (:kind e) (:cause e)))))))
 
 (defn unlit-levers
@@ -346,17 +361,21 @@
                                  (when (seq left) (str "; " left))))))))
 
 (defn ^:async fetch-step!
-  "Before the build is begun with :least :all, fetch the first item certainly lacking (jobs.lib.need): :continue while
-  the child waits, :again once got, the failed ending, nil when nothing is due."
+  "Before the build is begun with :least :all, fetch a share of what is certainly lacking (jobs.build.rail-stock): from a
+  chest already looked into with one withdraw child (jobs.build.rail-restock), else the first item with jobs.lib.need.
+  :continue while the child waits, :again once got, the failed ending, nil when nothing is due."
   [c cells]
-  (when-let [[_ n names] (and (whole? c) (not (:building (ctx/mem c))) (fetch-opts c)
-                              (first (shortages (filter #(= :missing (:answer %)) (plan/owed cells))
-                                                (storage/carried-totals (u/inventory (:primitives c))))))]
-    (let [o (fetch-opts c)
-          e (await (if (= 1 (count names)) (need/item! c (first names) n o) (need/blocks! c names n o)))]
-      (cond (= :continue e) :continue
-            (= :done (:kind e)) :again
-            :else e))))
+  (when-let [shares (and (whole? c) (not (:building (ctx/mem c))) (fetch-opts c)
+                         (seq (stock/shares (shortages (filter #(= :missing (:answer %)) (plan/owed cells))
+                                                       (storage/carried-totals (u/inventory (:primitives c))))
+                                            (u/free-slots (:primitives c)))))]
+    (or (and (contains? (:how (fetch-opts c)) :chest) (await (restock/step! c shares)))
+        (let [[_ n names] (first shares)
+              o (fetch-opts c)
+              e (await (if (= 1 (count names)) (need/item! c (first names) n o) (need/blocks! c names n o)))]
+          (cond (= :continue e) :continue
+                (= :done (:kind e)) :again
+                :else e)))))
 
 (defn ^:async step [c]
   (let [{:keys [cells trouble]} (planned c)
