@@ -25,22 +25,17 @@
 (def doc
   "A hostile is near: fight it (jobs.combat.attack) when the odds are fair, else retreat (jobs.survival.retreat); one whole attempt
   per round, deciding afresh before each call of the child (the choice is jobs.lib.cost, see the README row).
-  Needs: a real danger (as the hostile-near trigger, jobs.lib.danger, in sight) within :radius (:ranged-radius for ranged mobs);
-  none near is done at once. The call's :use :tools are the weapons, handed to both children; its radii reach the retreat as settings.
+  Needs: a real danger (as the hostile-near trigger, jobs.lib.danger, in sight) within the danger ::hostile-radius setting (::ranged-radius for ranged mobs);
+  none near is done at once. The call's :use :tools are the weapons, handed to both children.
   Returns: :done when no danger is near and the retreat holds no refuge, or when every danger is only heard and the fight declined
   (they are muted, the ending names the mob); :nothing-possible :retreat-failed (the retreat's ending is the :because) when the
   retreat ends so; :nothing-possible :no-response after ::max-unchanged calls in a row that change nothing; :limit-reached on its
   time budget. Never :continue. Writes one :hostile memory entry per encounter. A danger reflex: never backed off.")
 
-(a/defargs args
-  {:radius {:doc "hostiles within this many blocks count; nil: the jobs.lib.danger ::hostile-radius setting" :spec (a/num-in 0 nil) :default nil}
-   :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks count; nil: the ::ranged-radius setting" :spec (a/num-in 0 nil) :default nil}
-   :goal {:doc "passed to the retreat: where the flight leans; nil: the destination of the walk this reflex interrupted (jobs.lib.goal), read once" :spec goal/pos-spec :default nil}})
-
 (a/defargs settings
-  {::stay-inside {:default true :doc "At night a body shut in a closed room or its own shelter fights from there and never steps out toward a mob; under any roof it does not flee for mobs it only hears (false: it may)." :spec boolean?}
+  {::stay-inside {:default true :doc "A body shut in a closed room or its own shelter fights from there and never steps out toward a mob; under any roof it does not flee for mobs it only hears (false: it may)." :spec boolean?}
    ::job-time-s {:default 480 :doc "Seconds a response to a hostile may take: above retreat's (a hide runs long)." :spec (a/num-in 0 nil)}
-   ::hold-radius {:default 16 :doc "Hostiles known within this many blocks count for holding position at night." :spec (a/num-in 0 nil)}
+   ::hold-radius {:default 16 :doc "Hostiles known within this many blocks count for holding position in the dark." :spec (a/num-in 0 nil)}
    ::hit-window-s {:default 5 :doc "A flight hit twice within this long is failing: the body fights. Also how recent a hurt keeps a fight from leaving heard mobs, and makes a round look once more." :spec (a/num-in 0 nil)}
    ::max-unchanged {:default 3 :doc "Calls of a child in a row that leave the body and the dangers as they were before the reflex stops :no-response." :spec (a/int-in 1 nil)}
    ::struck-s {:default 30 :doc "Seconds the hits the fight landed outlive the round (:struck-hits), so a refired reflex still counts them." :spec (a/num-in 0 nil)}
@@ -76,9 +71,7 @@
   it is left alone, as is one with no walkable way to the body (jobs.lib.danger),
   as the hostile-near trigger does."
   [c]
-  (let [radius (danger-q/radius-in (:args c))
-        ranged-radius (danger-q/ranged-radius-in (:args c))]
-    (danger-q/dangers (:primitives c) radius {:ranged-radius ranged-radius} {})))
+  (danger-q/dangers (:primitives c) (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)} {}))
 
 
 (def other {:fight :flee :flee :fight})
@@ -95,33 +88,25 @@
                       (and (stay-inside?) (or (sh-sense/shut-in-room? p) (sh-inside/sheltered-in c))))))))
 
 (defn stay-under-roof?
-  "Whether the body keeps its roof: ::stay-inside on, night, a roof over the feet, and every danger near either only heard
+  "Whether the body keeps its roof: ::stay-inside on, a roof over the feet, and every danger near either only heard
   or a flyer (a phantom cannot get under a roof), none a creeper or an enderman. The fight then holds and the retreat does not run."
   [c hs]
   (let [p (:primitives c)]
     (boolean (and (stay-inside?)
                   (seq hs)
-                  (sh-sense/night? p)
                   (sh-sense/roofed? p sh-sense/default-roof-height)
                   (every? #(or (combat/flyer? %) (not (danger-q/seen-only? %))) hs)
                   (not-any? #(or (combat/creeper? %) (combat/enderman? %)) hs)))))
 
-(defn scoped-settings
-  "The :settings of a child call for the radii this call was given as args, so the child reads them like the setting."
-  [args]
-  (cond-> {}
-    (:radius args) (assoc ::danger-q/hostile-radius (:radius args))
-    (:ranged-radius args) (assoc ::danger-q/ranged-radius (:ranged-radius args))))
-
 (defn ^:async run-child
   "One call of the child for decision: :continue, :done, :declined (a fight that ended otherwise, its memory put back,
   or a retreat that ended :condition-failed: the other child may run), or the ending of a retreat that ended otherwise."
-  [c decision args hold]
+  [c decision hold]
   (let [child-args (case decision
-                     :fight {:targets :hostiles :radius (danger-q/radius-in args) :ranged-radius (danger-q/ranged-radius-in args)
+                     :fight {:targets :hostiles :radius (danger-q/hostile-radius) :ranged-radius (danger-q/ranged-radius)
                              :use {:tools (weapons c)} :hold (or hold (hold? c)) :prior (:fight-prior (ctx/mem c))
                              :checks {:safe? '(always) :fit? '(always)}}
-                     :flee {:use {:tools (weapons c)} :goal (:goal (ctx/mem c)) :settings (scoped-settings args)})
+                     :flee {:use {:tools (weapons c)} :goal (:goal (ctx/mem c))})
         _ (when (and (= :fight decision) (not= :fight (:last-run (ctx/mem c))))
             (ctx/update-mem! c #(cond-> % (:fight (:children %)) (update-in [:children :fight] dissoc :start))))
         _ (ctx/update-mem! c assoc :last-run decision)
@@ -239,8 +224,7 @@
                     (* 1000 (settings/get settings ::struck-s)))))
 
 (defn ^:async respond [c near]
-  (let [a (:args c)
-        reserve (danger-q/fight-reserve)
+  (let [reserve (danger-q/fight-reserve)
         p (:primitives c)
         self (.self p)
         m (ctx/mem c)
@@ -265,14 +249,14 @@
     (log-encounter! c (first near) decision)
     (when (and stay? (not (:stay-noted (ctx/mem c))))
       (ctx/update-mem! c assoc :stay-noted true)
-      (ctx/emit! c :hostile.sealed-hold :info {:text "under a roof at night: the mobs near are heard only or flyers, so the body stays in" :mobs (mapv #(.-name %) near)}))
+      (ctx/emit! c :hostile.sealed-hold :info {:text "under a roof: the mobs near are heard only or flyers, so the body stays in" :mobs (mapv #(.-name %) near)}))
     (ctx/update-mem! c assoc :decision decision)
-    (let [result (await (run-child c decision a stay?))]
+    (let [result (await (run-child c decision stay?))]
       (keep-struck! c)
       (cond
         (or (not= :declined result) stay?) result
         (and (= :fight decision) (leave-heard? c near)) (leave-heard! c near)
-        :else (await (run-child c (other decision) a false))))))
+        :else (await (run-child c (other decision) false))))))
 
 (def cover-sides
   "Of the four sides of the body's cell, how many must be walled (feet and head cell solid) for it to hold cover: a
@@ -311,7 +295,7 @@
   "One call of block-arrow-gap (never fetching): :continue or its ending's kind; nothing placed lets the round decide as usual.
   Tried once it has ended; a :continue (its look around) calls it again."
   [c]
-  (let [e (await (ctx/call c :gap 'jobs.survival.block-arrow-gap {:fetch false :settings (scoped-settings (:args c))}))]
+  (let [e (await (ctx/call c :gap 'jobs.survival.block-arrow-gap {:fetch false}))]
     (when-not (= :continue e) (ctx/update-mem! c assoc :gap-tried true))
     (if (= :continue e) :continue (:kind e))))
 
@@ -357,13 +341,13 @@
   danger stays."
   [c]
   (when-not (contains? (ctx/mem c) :goal)
-    (ctx/update-mem! c assoc :goal (or (:goal (:args c)) (goal/interrupted-goal (ctx/view c) (:root c)))))
+    (ctx/update-mem! c assoc :goal (goal/interrupted-goal (ctx/view c) (:root c))))
   (loop [unchanged 0 looked? false]
     (let [hs (near c)
           before (signature c hs)
           outcome (cond
-                    (hiding? c) (await (run-child c :flee (:args c) false))
-                    (empty? hs) (when (shot/open? (:primitives c) (ctx/view c)) (await (run-child c :flee (:args c) false)))
+                    (hiding? c) (await (run-child c :flee false))
+                    (empty? hs) (when (shot/open? (:primitives c) (ctx/view c)) (await (run-child c :flee false)))
                     (gap-wanted? c hs (:gap-tried (ctx/mem c))) (await (gap! c))
                     (cover-unseen? c hs (:gap-tried (ctx/mem c))) (await (look/look-around! c))
                     :else (await (respond c hs)))

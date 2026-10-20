@@ -372,7 +372,7 @@
   "The breached room with a hole in its west wall too: roofed, but walled two ways only, so no closed quarters (a groan counts)."
   (dissoc breached-room "-2,64,0" "-2,65,0"))
 
-(deftest a-roofed-body-at-night-does-not-flee-for-a-mob-it-only-hears
+(deftest a-roofed-body-does-not-flee-for-a-mob-it-only-hears
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -382,7 +382,7 @@
                   [[{:time 14000 :entities [heard]} respond :flee false "no roof: it flees"]
                    [{:time 14000 :blocks roofed-passage :entities [heard]} respond :fight true "roofed, heard only: it stays"]
                    [{:time 14000 :blocks roofed-passage :entities [heard]} stay :flee false "stay-inside off: it flees"]
-                   [{:time 1000 :blocks roofed-passage :entities [heard]} respond :flee false "day: it flees"]]]
+                   [{:time 1000 :blocks roofed-passage :entities [heard]} respond :fight true "day: it stays too (the roof, not the clock)"]]]
             (let [{:keys [eng p seen]} (setup-seeing (assoc world :self {:health 5} :inventory sword :pitch -80) nil 1000)]
               (perception/pass! (aget p "perception"))
               (swap! (fake/state p) assoc :pitch 0)
@@ -407,7 +407,7 @@
             (perception/pass! (aget p "perception"))
             (is (not (danger-q/danger-near? p 8 16 {})) (str "heard through the wall at time " time))))))))
 
-(deftest a-roofed-body-at-night-stays-in-for-a-phantom-it-sees-but-not-for-a-seen-zombie
+(deftest a-roofed-body-stays-in-for-a-phantom-it-sees-but-not-for-a-seen-zombie
   (are [entity stays?] (= stays? (let [p (tu/fake {:time 14000 :blocks breached-room :entities [entity]})]
                                    (respond-to-hostile/stay-under-roof? {:primitives p :args {}}
                                                                         (danger-q/known-hostiles p 16 {}))))
@@ -580,7 +580,7 @@
               runner {:defaults {:checks {:safe? '(always) :fit? '(always)}}
                       :round (fn ^:async r [c]
                                (ctx/update-mem! c assoc :last-run :flee :children {:fight {:start {:x 0 :y 64 :z 0}}})
-                               (await (respond-to-hostile/run-child c :fight {} false))
+                               (await (respond-to-hostile/run-child c :fight false))
                                (ctx/end c :done nil))}
               eng (-> eng
                       (assoc-in [:jobs 'runner] runner)
@@ -1253,7 +1253,7 @@
           (let [{:keys [eng seen clock]} (setup {:inventory sword
                                                  :entities [(assoc (zombie 1 3 0) :health 5 :visible true)
                                                             (assoc (zombie 2 0 7) :visible true)]})]
-            (core/register-reflex! eng (assoc entry :job '(jobs.survival.respond-to-hostile {:radius 4})))
+            (core/register-reflex! eng (assoc entry :job '(jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 4}})))
             (await (core/tick! eng))
             (is (= [:done] (mapv :outcome (reflex-ended seen))) (str why ": the near zombie killed, the one at 7 is beyond the job's 4"))
             (swap! clock + 1000)

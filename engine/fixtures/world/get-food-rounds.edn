@@ -6,7 +6,7 @@
  {:tags [:survival :hungry :get-food :rounds]
   :plot {:height 6}
   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}
+              :job (jobs.survival.respond-to-hostile)}
              {:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}]
   :body {:at [4.5 0 16.5] :settle-s 2}
   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
@@ -55,7 +55,7 @@
   ;; :explore false: with nothing known get-food first searches (120 s of job time) before :no-food; these cases check the stop itself.
   {:name "f1-no-food-stops-no-food-then-declines-quietly"
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}
+               :job (jobs.survival.respond-to-hostile)}
               {:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"] [:wait-s 75]] ; hold: the declined round must stay quiet past the 60 s window
@@ -67,7 +67,7 @@
   {:name "f2-cut-while-walking-chest-emptied"
    :mobs :keep
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}
+               :job (jobs.survival.respond-to-hostile)}
               {:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
    :plot {:height 6 :length 80 :width 32}
    :body {:at [2.5 0 16.5] :inventory [["iron_sword" 1]]} ; armed: the body fights the zombie; unarmed it fled east off the plot half the runs

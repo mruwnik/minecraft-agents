@@ -61,7 +61,7 @@
   {:name "respond-to-hostile-runs-when-a-zombie-is-near"
    :mobs :keep
    :act [[:summon "zombie" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"] [:until-seen {:entity "zombie"} 10]
-         [:job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})]]
+         [:job (jobs.survival.respond-to-hostile)]]
    :expect [{:event {:source :job :kind :round_started} :within-s 40 :of-job true}]}
   ;; card 1a708c35: the state goals that already hold end done, not condition-failed or waiting (eat, block-arrow-gap, night)
   {:name "eat-fed-with-food-carried-is-done-already-and-eats-nothing"

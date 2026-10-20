@@ -24,7 +24,7 @@
    :limit-s 120}
   {:name "default-holds-about-30s"
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+               :job (jobs.survival.respond-to-hostile)}]
    :expect [{:no-event {:source :reflex :kind :ended} :from-event {:source :job :kind :retreat_sealed} :for-s 20}
             {:event {:source :reflex :kind :ended :data {:outcome :done}} :within-s 90}]
    :limit-s 130}]}

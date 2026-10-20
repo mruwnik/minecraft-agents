@@ -7,7 +7,7 @@
   :time :any
   :mobs :keep
   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+              :job (jobs.survival.respond-to-hostile)}]
   :blocks [[:fill [10 0 18] [22 2 18] "stone"]]
   :body {:at [16.5 0 12.5] :yaw 0 :inventory [["iron_sword" 1]] :effects [["resistance" 600 2]]}
   :limit-s 90}

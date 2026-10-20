@@ -5,7 +5,7 @@
  {:tags [:hostile :movement]
   :mobs :keep
   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+              :job (jobs.survival.respond-to-hostile)}]
   :plot {:height 12 :length 64 :width 64}
   :body {:at [4.5 0 32.5] :effects [["resistance" 900 4]]}
   :limit-s 100}

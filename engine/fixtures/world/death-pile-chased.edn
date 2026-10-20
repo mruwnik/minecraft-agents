@@ -6,7 +6,7 @@
  {:tags [:survival :death :jobs :hostile]
   :register [{:trigger :died :job (jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}})}
              {:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+              :job (jobs.survival.respond-to-hostile)}]
   :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :effects [["resistance" 600 4]]
          :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
   :mobs :keep

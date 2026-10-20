@@ -25,7 +25,7 @@
   {:name "hostile-due-at-respawn-died-fires-first"
    :register [{:trigger :died :persistence :cooldown :cooldown-s 30 :args {}}
               {:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+               :job (jobs.survival.respond-to-hostile)}]
    :act [[:summon "zombie" [8.5 0 4.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:wait-s 1]
          [:kill-body]

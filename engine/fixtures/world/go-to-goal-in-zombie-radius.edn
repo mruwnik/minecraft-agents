@@ -5,7 +5,7 @@
  :tags [:movement :hostile]
  :mobs :keep
  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-             :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+             :job (jobs.survival.respond-to-hostile)}]
  :body {:at [4.5 0 16.5] :effects [["resistance" 900 4]]}
  :act [[:summon "zombie" [24.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
        [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :ways #{:walk :clear-seal}})]]

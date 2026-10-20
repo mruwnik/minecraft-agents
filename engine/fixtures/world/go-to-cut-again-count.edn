@@ -8,7 +8,7 @@
  {:tags [:movement :hostile :large]
   :mobs :keep
   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+              :job (jobs.survival.respond-to-hostile)}]
   :body {:at [4.5 0 16.5] :effects [["resistance" 900 4]]}}
  :cases
  [{:name "goal-beside-zombie-gives-up-cut-again"
