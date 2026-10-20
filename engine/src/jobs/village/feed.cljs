@@ -13,9 +13,9 @@
 
 (def doc
   "Toss :count food to the villager with uuid :villager and confirm that villager took it. One call is the whole
-  feeding: find the villager within :radius, walk to a cell 2 to 3 blocks from it (jobs.movement.go-to legs of 5 s, it
-  wanders; nearer, the body's own pickup reach takes the drop back before the villager's does), look at its feet and
-  toss with a pickup receipt (the toss primitive's :watchS reports who collected the drop, by uuid). Only what that
+  feeding: find the villager within :radius, walk to a cell 2.5 to 3.5 blocks from it (jobs.movement.go-to legs of 5 s, it
+  wanders), look level toward it and toss, so the drop flies about that far and lands within the villager's pickup reach but outside the body's own (a
+  drop in both is taken back by the body when the pickup delay ends), with a pickup receipt (the toss primitive's :watchS reports who collected the drop, by uuid). Only what that
   villager collected counts as fed; the rest of the drop lying near the toss is collected back (a jobs.items.collect-drops child), never left as litter.
   :item is the food to give (carried), nil for the first carried of bread, carrot, potato, beetroot. Villagers pick
   up only bread, potato, carrot, wheat, beetroot and seeds: any other :item is impossible (:bad-args).
@@ -24,6 +24,7 @@
   (default :all) when it gave up after that many. Otherwise with the cause:
   - condition-failed :no-food: none carried and none fetched (a listed call with :fetch off waits for food).
   - condition-failed :gone: the villager is not seen within :radius (also a non-villager under the uuid).
+  - nothing-possible :crowded: another villager stood within ::crowd-gap of it for ::crowd-s (it would take the drop).
   - nothing-possible :unreachable: three blocked walks in a row, or eight legs without getting within reach.
   - nothing-possible :not-taken: three tosses in a row that the villager did not collect (full inventory, not
     wanted), or the toss status as a keyword when the toss is refused three times, or :litter when the drop
@@ -44,22 +45,25 @@
 (def foods ["bread" "carrot" "potato" "beetroot"])
 (def wanted (into (set foods) ["wheat" "wheat_seeds" "beetroot_seeds" "torchflower_seeds" "pitcher_pod"]))
 (a/defargs settings
-  {::min-gap {:default 2 :doc "Fewest blocks along x or z between body and villager at a toss: nearer, the drop at the villager's feet is in the body's own pickup reach." :spec (a/num-in 0 nil)}
-   ::max-gap {:default 3 :doc "Most blocks along x and z between body and villager at a toss." :spec (a/num-in 0 nil)}
+  {::min-gap {:default 2.5 :doc "Fewest blocks along x or z between body and villager at a toss: a level toss lands about 2.5 to 3 ahead; nearer, the drop is in the body's own pickup reach." :spec (a/num-in 0 nil)}
+   ::max-gap {:default 3.5 :doc "Most blocks along x and z between body and villager at a toss: farther, the drop falls short of the villager's pickup reach." :spec (a/num-in 0 nil)}
+   ::crowd-gap {:default 3 :doc "Blocks around the villager that must hold no other villager at a toss: one nearer takes the drop, and it is not counted." :spec (a/num-in 0 nil)}
+   ::crowd-s {:default 30 :doc "Seconds to wait for other villagers to move off before the call stops :crowded." :spec (a/int-in 0 nil)}
    ::leg-s {:default 5 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
    ::max-refused {:default 3 :doc "Refusals before the job gives up on the animal." :spec (a/int-in 0 nil)}
    ::max-walks {:default 8 :doc "Failed walks of one call before it stops :unreachable." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds one feeding may take." :spec (a/int-in 1 nil)}
    ::watch-s {:default 4 :doc "Seconds the body watches the animal after acting." :spec (a/int-in 0 nil)}
-   ::foot-height {:default 0.3 :doc "Height of an animal's feet above its position, in blocks." :spec (a/num-in 0 nil)}
    ::settle-reach {:default 4 :doc "Reach once the animal has settled, in blocks." :spec (a/int-in 0 nil)}})
+(def eye-height 1.62)
 (defn min-gap [] (settings/get settings ::min-gap))
 (defn max-gap [] (settings/get settings ::max-gap))
+(defn crowd-gap [] (settings/get settings ::crowd-gap))
+(defn crowd-s [] (settings/get settings ::crowd-s))
 (defn leg-s [] (settings/get settings ::leg-s))
 (defn max-refused [] (settings/get settings ::max-refused))
 (defn max-walks [] (settings/get settings ::max-walks))
 (defn watch-s [] (settings/get settings ::watch-s))
-(defn foot-height [] (settings/get settings ::foot-height))
 (defn settle-reach [] (settings/get settings ::settle-reach))
 (def job 'jobs.village.feed)
 
@@ -190,6 +194,24 @@
         out (/ (+ (min-gap) (max-gap)) 2)]
     {:x (js/Math.floor (+ (:x v) (* sx out))) :y (js/Math.floor (:y v)) :z (js/Math.floor (+ (:z v) (* sz out)))}))
 
+(defn crowded?
+  "Whether another villager than e stands within crowd-gap of it: it would take the drop."
+  [c e]
+  (let [v (u/pos-of (.-pos e))]
+    (boolean (some #(and (not= (.-uuid e) (.-uuid %)) (<= (gap v (u/pos-of (.-pos %))) (crowd-gap)))
+                   (look/seen-objs (:primitives c) {:radius (+ 8 (crowd-gap)) :names ["villager"]})))))
+
+(defn ^:async wait-room!
+  "Hold 0.5 s for the crowd round the villager to move off; the held time is booked, and the call stops :crowded after
+  crowd-s. :again, :continue or the stop."
+  [c]
+  (if (>= (:crowded-ms (ctx/mem c) 0) (* 1000 (crowd-s)))
+    (stop! c :crowded)
+    (let [r (await (child/pause! c 0.5 :waiting-for-room))]
+      (ctx/update-mem! c dissoc :walks) ; it got within reach
+      (when (= :done (:kind r)) (ctx/update-mem! c update :crowded-ms (fnil + 0) 500))
+      (if (= :continue r) :continue :again))))
+
 (defn ^:async walk!
   "One go-to leg to within range of pos. A leg or arrival resets the blocked count, anything else counts (the third in a
   row ends unreachable); the legs since the last toss are bounded by max-walks. :again, :continue or :done."
@@ -254,7 +276,7 @@
         got (min n (get by (.-uuid e) 0))
         {:keys [at skip]} (:tossing (ctx/mem c))]
     (ctx/update-mem! c #(-> %
-                            (dissoc :tossing :walks)
+                            (dissoc :tossing :walks :crowded-ms)
                             (assoc :item item)
                             (update :fed (fnil + 0) got)
                             (assoc :refused (if (pos? got) 0 (inc (:refused % 0))))
@@ -272,7 +294,7 @@
     (ctx/update-mem! c assoc :tossing {:item item :at (u/self-pos c) :before (held c item)
                                        :t (ctx/now c)
                                        :skip (into {} (map (juxt :id :count)) (lying c item (u/self-pos c) {}))})
-    (await (ctx/act c :look (clj->js {:pos (update pos :y + (foot-height))})))
+    (await (ctx/act c :look (clj->js {:pos (assoc pos :y (+ (:y (u/self-pos c)) eye-height))})))
     (let [r (await (ctx/act c :toss (clj->js {:item item :count n :watchS (watch-s)})))
           status (.-status r)]
       (if (= "tossed" status)
@@ -312,6 +334,7 @@
       (and (nil? e) (not (look/surveyed? c))) (await (look/survey! c)) ; villagers count only while in view
       (nil? e) (stop! c :gone)
       (nil? item) (await (fetch-food! c))
+      (and (tossing-gap? (u/self-pos c) (u/pos-of (.-pos e))) (crowded? c e)) (await (wait-room! c))
       (tossing-gap? (u/self-pos c) (u/pos-of (.-pos e))) (await (toss! c e item))
       :else (await (walk! c (stand (u/self-pos c) (u/pos-of (.-pos e)) (:blocked m 0)) 0)))))
 

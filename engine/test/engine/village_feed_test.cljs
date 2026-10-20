@@ -82,7 +82,7 @@
           (is (gave? s :completed)))))))
 
 (deftest it-tosses-from-out-of-its-own-pickup-reach
-  ;; Live, a toss from 1.5 away was collected back by the body itself when the pickup delay ran out.
+  ;; Live, a drop within the body's own pickup reach was collected back by the body when the pickup delay ran out.
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -95,7 +95,7 @@
                                                        {"v-1" n})))))]
           (is (= {:fed 1 :status :done} (select-keys @out [:fed :status])))
           (is (= 1 (count @gaps)))
-          (is (<= 2 (first @gaps) 3) "out of its own pickup reach, within the villager's"))))))
+          (is (<= 2.5 (first @gaps) 3.5) "a level toss lands outside the body's own pickup reach, inside the villager's"))))))
 
 (deftest the-receipt-is-asked-for-with-the-toss
   (async done
@@ -140,6 +140,17 @@
         (let [{:keys [out]} (await (feed {:entities [(villager 2)] :inventory bread} {:villager "v-1"} 60
                                          #(-> % ls/entities-after-look (taking (all-taken "v-1")))))]
           (is (= {:fed 1 :status :done} (select-keys @out [:fed :status]))))))))
+
+(deftest a-villager-crowded-by-another-is-not-tossed-to
+  ;; Live, the neighbour of the villager took the drop and the toss was not counted.
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out]} (await (feed {:entities [(villager 6) (villager 7 {:id 2 :uuid "v-2"})] :inventory bread}
+                                           {:villager "v-1"} 200 #(taking % (all-taken "v-1"))))]
+          (is (= :crowded (:reason @out)))
+          (is (= 0 (:fed @out)))
+          (is (empty? (tosses p))))))))
 
 (deftest a-blocked-walk-is-unreachable
   (async done
@@ -276,8 +287,8 @@
 
 (deftest a-body-that-drifted-a-little-inside-the-stand-cell-is-at-the-tossing-gap
   (are [x ok?] (= ok? (feed/tossing-gap? {:x x :z 0.5} {:x 16.5 :z 0.5}))
-    14.55 true
-    14.5 true
+    14.0 true
     13.5 true
-    15.5 false
+    12.75 true
+    14.5 false
     12.5 false))

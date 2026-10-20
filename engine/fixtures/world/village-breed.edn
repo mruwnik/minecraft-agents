@@ -13,9 +13,11 @@
          [:job (jobs.village.breed {:target 2})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 30 :of-job true}]
    :after [[:item "bread" 8]]}
-  ;; should succeed: two fed adults with beds make a child (needs AI villagers, CanPickUpLoot:1b so they take the bread; beds are placed by the setup)
+  ;; should succeed: two fed adults make a child (needs AI villagers, CanPickUpLoot:1b so they take the bread; each claims a bed and the child needs a third, free one)
   {:name "pair-with-beds-breeds"
-   :blocks [[:set [14 0 14] "red_bed[part=foot,facing=north]"] [:set [14 0 13] "red_bed[part=head,facing=north]"] [:set [18 0 14] "red_bed[part=foot,facing=north]"] [:set [18 0 13] "red_bed[part=head,facing=north]"]]
+   :time :day :time-why :villager-schedule
+   :body {:inventory [["bread" 16]]}
+   :blocks [[:set [14 0 14] "red_bed[part=foot,facing=north]"] [:set [14 0 13] "red_bed[part=head,facing=north]"] [:set [18 0 14] "red_bed[part=foot,facing=north]"] [:set [18 0 13] "red_bed[part=head,facing=north]"] [:set [22 0 14] "red_bed[part=foot,facing=north]"] [:set [22 0 13] "red_bed[part=head,facing=north]"]]
    :act [[:summon "villager" [16.5 0 16.5] "{CanPickUpLoot:1b,UUID:[I;20264,7,2,1]}"]
          [:summon "villager" [16.5 0 18.5] "{CanPickUpLoot:1b,UUID:[I;20264,7,2,2]}"]
          [:job (jobs.village.breed {:target 3 :settings {:jobs.village.breed/wait-s 60}})]]

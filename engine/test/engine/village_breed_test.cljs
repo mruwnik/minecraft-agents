@@ -13,9 +13,9 @@
 (def job 'jobs.village.breed)
 
 (defn villager
-  "A villager at x along the row the body stands on; :baby true for a child."
+  "A villager at x along the row the body stands on, 4 blocks from the next id: a neighbour within feed's crowd gap would hold feeding back; :baby true for a child."
   [id x & [extra]]
-  (merge {:id id :name "villager" :kind "passive" :uuid (str "v-" id) :pos {:x x :y 64 :z 0}} extra))
+  (merge {:id id :name "villager" :kind "passive" :uuid (str "v-" id) :pos {:x x :y 64 :z (* 4 id)}} extra))
 
 (def bread [{:name "bread" :count 8}])
 
