@@ -12,7 +12,8 @@
             [jobs.lib.cond :as cond]
             [jobs.animals.escort :as escort]
             [jobs.lib.watch :as watch]
-            [jobs.animals.herd-run :as hr :refer [adults after-shut! pen-box pen-count-text cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now out-1 pause! read-pen release-step! set-phase! settle-out-ms shut-failed! shut-look-ms transient-keys]]
+            [jobs.lib.bait :as bait]
+            [jobs.animals.herd-run :refer [adults after-shut! pen-box pen-count-text cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now out-1 pause! read-pen release-step! set-phase! settle-out-ms shut-failed! shut-look-ms transient-keys]]
             [jobs.lib.pace :as pace]
             [jobs.animals.herd-survey :refer [pen-refusal survey!]]
             [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! go-then! let-go-cell look-wait! max-leaves min-depth on-gate? set-gate! settle-at! shut-side! shut-when-clear! wait-clear! waited-ms]]
@@ -204,12 +205,12 @@
 (defn ^:async lure-approach!
   "The walk to the pen's first cell with a lured animal: an animal follows the food only within follow-range, so the body
   goes in short go-to legs and, by escort/follow-verdict, holds still (or walks back toward the last sighting) while the
-  animal trails more than escort/safe-gap; unseen long, or seen and not coming nearer, it is given up. The last leg is settle-at!'s."
+  animal trails more than (escort/safe-gap); unseen long, or seen and not coming nearer, it is given up. The last leg is settle-at!'s."
   [c]
   (let [m (ctx/mem c)
         a (animal-now c (:animal m))
         target (u/cell-pos (nth (:axis m) 0))
-        verdict (escort/follow-verdict c a true escort/safe-gap)]
+        verdict (escort/follow-verdict c a true (escort/safe-gap))]
     (if verdict
       (if (= :wait verdict)
         (do (await (escort/wait-for-animal! c :never)) :continue)
@@ -218,7 +219,7 @@
             n (inc (:search-rounds m 0))]
         (ctx/update-mem! c assoc :search-rounds (if searching n 0))
         (cond
-          (and searching (<= n escort/max-search-rounds)) :continue
+          (and searching (<= n (escort/max-search-rounds))) :continue
           searching (lure-lost! c :unreachable)
           (not leg) (await (settle-at! c 0 (settle-out-ms) #(set-phase! c :clear-out)))
           :else (do (await (child/call-walk* c :walk {:pos leg :range 1 :doors :never :ways #{:walk :clear-seal}}))
@@ -260,7 +261,7 @@
       :shut-click (await (shut-when-clear! c 4 (shut-look-ms) :deep nil #(set-phase! c :shut-behind)))
       :deep (await (go-then! c (let-go-cell (:inside (read-pen c)) (gate-cell c) (cell (:inside-cell m))) :deep-release))
       :deep-release (await (release-step! c #(released! c :deep-unequip)))
-      :deep-unequip (do (await (ctx/act c :unequip #js {})) (await (hr/put-food-away! c)) (set-phase! c :exit))
+      :deep-unequip (do (await (ctx/act c :unequip #js {})) (await (bait/put-food-away! c)) (set-phase! c :exit))
       :exit (await (go-then! c (axis-cell in-1) :clear-in))
       :clear-in (await (wait-clear! c (or (crowded-near? c (axis-cell in-1) (crowd-in-radius)) (on-gate? c)) (crowd-ms) :in
                                     #(set-phase! c :exit-dash {:pen-before (count (in-pen-adults c (read-pen c))) :dash-tries 0 :reopens 0})))

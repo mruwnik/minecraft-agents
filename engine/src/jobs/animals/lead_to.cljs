@@ -25,9 +25,9 @@
   - :leash: jobs.animals.leash (radius :radius).
   - :walk: jobs.movement.go-to to :pos (the :fence cell when no :pos), range :range, in legs of a few blocks along
     the planned path. One call is the whole run; it yields only while a child waits on the world. After each leg the animal is looked at: off the lead
-    :lead-broke; unseen or more than 7 blocks behind, the body holds still (:waiting-for-animal) for it to come into sight or
-    catch up; unseen for 3 s (a ledge or tree can hide it) the body walks back toward where it was last seen (up to 12 blocks), then :lost;
-    still more than 7 behind and not closing in for 10 s (escort/::stall-s), :animal-stalled.
+    :lead-broke; unseen or beyond the escort safe gap behind, the body holds still (:waiting-for-animal) for it to come into
+    sight or catch up; unseen past the escort unseen-lost time (a ledge or tree can hide it) the body walks back toward where it was last seen, then :lost;
+    still beyond the gap and not closing in for the escort stall time, :animal-stalled.
   - :gather (no :fence only): see below.
   - :arrive: with :fence, walk within 2 of the post and click it with an empty hand (useOn), tried twice.
     Without :fence, jobs.animals.unleash lets the animal go and picks the lead up.
@@ -36,7 +36,7 @@
   A tie counts only when the sensing then shows the animal held by something else than this body.
 
   Before each walking round the animal is looked up (within the escort watch-radius setting, 64). Seen off this body's lead: ends
-  :lead-broke. Not seen: ends :lost after 3 s unseen (see :walk), in every phase.
+  :lead-broke. Not seen: ends :lost after the unseen time (see :walk), in every phase.
 
   The legs and the pull-reach check are planned here (jobs.animals.escort/leg-plan) to choose where each leg ends and to
   keep the animal within the lead; the go-to child of a leg plans its own walk again, as it must for doors and danger.
@@ -46,9 +46,9 @@
 
   Gather: a led animal trails about a lead length behind the body. On arrival, if the animal is farther than
   :gather-radius from :pos, the body walks on past :pos (range 1) so the lead pulls it in. It waits for the
-  animal to settle between pulls, at most the gather-tries setting (3) pulls. A pull stays within 11 blocks of the animal (the
-  lead breaks past 12). A pull walks in the same legs, aiming a block past the point that would just gather; it is given up before it starts when the planned walk strays more than 11
-  blocks from the animal (a wall in the way). An animal 10 or more blocks from :pos is never pulled. None of
+  animal to settle between pulls, at most the gather-tries setting pulls (waiting at most max-settles looks before each). A pull stays within the path-reach setting of the animal (the
+  lead breaks past 12). A pull walks in the same legs, aiming pull-slack blocks past the point that would just gather; it is given up before it starts when the planned walk strays beyond path-reach
+  from the animal (a wall in the way). An animal max-reach or more blocks from :pos is never pulled. None of
   this is a failure: the animal is let go where it is, with a warn
   lead-to.gather-short (:distance from :pos) and :gathered false. :gathered is true when the animal was within
   :gather-radius, or tied.
@@ -57,7 +57,7 @@
   go (jobs.animals.unleash), then a jobs.maintenance.shut-doors child shuts the doors and gates the legs left open for
   the animal; the ending's :still-led is then false.
 
-  Ends with a warn lead-to.gave-up unless the reason is :tied or :unleashed. Result
+  Result
   {:reason :animal key :still-led bool (false: the cleanup let the animal go) :at pos :gathered bool :text}. Reasons
   and endings:
   - :tied, :unleashed: done.
@@ -89,10 +89,22 @@
   {::gather-tries {:default 3 :doc "Without :fence how many times the body walks on to pull a trailing animal nearer." :spec (a/int-in 0 nil)}
    ::timeout-s {:default 180 :doc "Seconds from the first round before the leading gives up." :spec (a/num-in 0 nil)}
    ::max-ties {:default 2 :doc "Ties tried before the job gives up." :spec (a/int-in 0 nil)}
+   ::moved-eps {:default 0.25 :doc "An animal that moved less than this many blocks between two looks has settled." :spec (a/num-in 0 nil)}
+   ::max-settles {:default 20 :doc "Looks spent waiting for the animal to settle before a pull." :spec (a/int-in 0 nil)}
+   ::max-reach {:default 10 :doc "The farthest a pull's target lies from the animal. The lead breaks past 12 blocks, so 10 leaves a block to spare." :spec (a/num-in 0 nil)}
+   ::path-reach {:default 11 :doc "How far from the animal any point of a pull's walk may lie; a path that strays farther (a detour round a wall) would break the lead." :spec (a/num-in 0 nil)}
+   ::pull-range {:default 1 :doc "How close to the pull target the walk must get." :spec (a/num-in 0 nil)}
+   ::pull-slack {:default 1 :doc "Blocks a pull aims farther than the lead's length strictly needs: the animal comes to a little over it." :spec (a/num-in 0 nil)}
    ::tie-settle-ms {:default 250 :doc "How long to wait between looks at the animal after the click on the post." :spec (a/int-in 0 nil)}
    ::tie-settle-tries {:default 6 :doc "How often the animal is looked at again after the click before the tie counts as not taken." :spec (a/int-in 0 nil)}})
 (defn gather-tries [] (settings/get settings ::gather-tries))
 (defn max-ties [] (settings/get settings ::max-ties))
+(defn moved-eps [] (settings/get settings ::moved-eps))
+(defn max-settles [] (settings/get settings ::max-settles))
+(defn max-reach [] (settings/get settings ::max-reach))
+(defn path-reach [] (settings/get settings ::path-reach))
+(defn pull-range [] (settings/get settings ::pull-range))
+(defn pull-slack [] (settings/get settings ::pull-slack))
 
 (defn stop-text
   "The words for a leading that ended without success."
@@ -133,12 +145,10 @@
      :at (u/self-pos c)}))
 
 (defn conclude!
-  "Emit the outcome, hand it to the parent and end the job."
+  "Hand the outcome to the parent and end the job."
   [c reason]
   (let [ok? (#{:tied :unleashed} reason)
         result (result-of c reason)]
-    (when-not ok?
-      (ctx/emit! c :lead-to.gave-up :warn {:reason reason :text (stop-text c reason)}))
     (end! c reason (assoc result :text (if ok? (str "lead-to done: " (name reason)) (stop-text c reason))))))
 
 (defn finish!
@@ -249,27 +259,6 @@
   "How far behind a walking body a led animal trails."
   6)
 
-(def moved-eps
-  "An animal that moved less than this between two looks has settled."
-  0.25)
-
-(def max-settles
-  "Looks spent waiting for the animal to settle before a pull."
-  20)
-
-(def max-reach
-  "The farthest a pull's target lies from the animal. The lead breaks past 12 blocks, and a pull walks with
-  range 1, so 10 leaves a block to spare."
-  10)
-
-(def pull-range
-  "How close to the pull target the walk must get."
-  1)
-
-(def pull-slack
-  "Blocks a pull aims farther than the lead's length strictly needs: the animal comes to a little over it."
-  1)
-
 (defn pull-point
   "Where the body walks to pull the animal to within radius of pos: past pos, on the line from the
   animal through pos, by the lead length less radius plus the walk's range and a block of slack (flat, pos's y: a body that
@@ -277,17 +266,12 @@
   than max-reach from the animal, or nil when the animal is at pos or too far out for any pull."
   [animal-pos pos radius]
   (let [d (u/flat-dist animal-pos pos)
-        extra (min (+ (- lead-length radius) pull-range pull-slack) (- max-reach d))
+        extra (min (+ (- lead-length radius) (pull-range) (pull-slack)) (- (max-reach) d))
         k (/ extra d)]
     (when (and (pos? d) (pos? extra))
       (assoc pos
              :x (+ (:x pos) (* k (- (:x pos) (:x animal-pos))))
              :z (+ (:z pos) (* k (- (:z pos) (:z animal-pos))))))))
-
-(def path-reach
-  "How far from the animal any point of a pull's walk may lie. A path that strays farther (a detour round a wall
-  the animal is jammed at) would break the lead."
-  11)
 
 (defn ^:async path-leaves-reach?
   "True when the walk the body would now take to target passes farther than path-reach from the animal. A body
@@ -296,11 +280,11 @@
   (let [pw (wworld/path-world (:primitives c))
         plan (when pw (await (escort/plan-or-nil c pw target)))]
     (boolean
-     (some #(> (js/Math.hypot (- (:px %) (:x animal-pos)) (- (:pz %) (:z animal-pos))) path-reach)
+     (some #(> (js/Math.hypot (- (:px %) (:x animal-pos)) (- (:pz %) (:z animal-pos))) (path-reach))
            (:steps plan)))))
 
 (defn ^:async walk! [c]
-  (let [r (await (escort/walk-legs! c :walk (destination c) (:range (:args c)) escort/safe-gap))]
+  (let [r (await (escort/walk-legs! c :walk (destination c) (:range (:args c)) (escort/safe-gap)))]
     (cond
       (= :waiting r) :yield
       (#{:searching :stopped} r) :again
@@ -323,7 +307,7 @@
   (let [d (u/flat-dist animal-pos (:pos (:args c)))]
     (if (await (path-leaves-reach? c target animal-pos))
       (stop-gathering! c d)
-      (let [r (await (escort/walk-legs! c :pull target pull-range escort/follow-reach))]
+      (let [r (await (escort/walk-legs! c :pull target (pull-range) escort/follow-reach))]
         (cond
           (= :waiting r) :yield
           (#{:searching :stopped} r) :again
@@ -347,7 +331,7 @@
       pull-target (await (pull! c pull-target animal-pos))
       (<= d gather-radius) (do (ctx/update-mem! c assoc :gathered true) (set-phase! c :arrive) :again)
       (>= pulls (gather-tries)) (stop-gathering! c d)
-      (and (< settles max-settles) (or (nil? gather-seen) (> (u/flat-dist gather-seen animal-pos) moved-eps)))
+      (and (< settles (max-settles)) (or (nil? gather-seen) (> (u/flat-dist gather-seen animal-pos) (moved-eps))))
       (do (ctx/update-mem! c assoc :gather-seen animal-pos :settles (inc settles))
           (await (escort/wait-for-animal! c)))
       :else (let [target (pull-point animal-pos pos gather-radius)]
@@ -424,7 +408,7 @@
                          (set-phase! c (if (animals/lead-carried? c) :leash :get-lead)) :again)
         (= :get-lead phase) (await (get-lead! c))
         (= :leash phase) (await (leash! c))
-        (and (#{:gather :arrive} phase) (nil? a)) (if (= :lost (escort/escort-problem c escort/safe-gap))
+        (and (#{:gather :arrive} phase) (nil? a)) (if (= :lost (escort/escort-problem c (escort/safe-gap)))
                                                     (do (ctx/update-mem! c assoc :still-led false) (finish! c :lost))
                                                     (await (escort/wait-for-animal! c)))
         (and (#{:walk :gather :arrive} phase) a (not (animals/led-by-me? a))) (do (ctx/update-mem! c assoc :still-led false) (finish! c :lead-broke))

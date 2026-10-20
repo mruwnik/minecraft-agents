@@ -12,7 +12,8 @@
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
-            [jobs.animals.herd-run :refer [animal-now deepest end! finish! gate-open? held-by-me? holds-food? in-pen-adults lure? near-pen out-1 read-pen regather-radius set-phase!]]
+            [jobs.lib.bait :as bait]
+            [jobs.animals.herd-run :refer [animal-now deepest end! finish! gate-open? held-by-me? in-pen-adults lure? near-pen out-1 read-pen regather-radius set-phase!]]
             [jobs.animals.herd-pen :refer [animal-pos pinned-ms settle-at! step-in-step]]))
 
 
@@ -203,7 +204,7 @@
   how many were dropped. A lured animal seen beyond follow-range while the gate stands open and the food is in hand
   stays: shutting the gate on it is the pinned steps' call, not a drop's."
   [c]
-  (let [waiting? (and (lure? c) (holds-food? c) (gate-open? c))
+  (let [waiting? (and (lure? c) (bait/holds-food? c) (gate-open? c))
         gone (keep (fn [k] (let [a (animal-now c k)]
                              (cond (nil? a) [k :lost]
                                    (and (not waiting?) (not (held-by-me? c a))) [k :lead-broke])))

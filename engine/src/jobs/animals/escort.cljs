@@ -6,8 +6,8 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [clojure.string :as str]
-            [jobs.animals.herd-run :as hr]
             [jobs.lib.animals :as animals]
+            [jobs.lib.bait :as bait]
             [jobs.lib.child :as child]
             [jobs.lib.doors :as doors]
             [jobs.lib.pass :as pass]
@@ -52,7 +52,21 @@
 (a/defargs settings
   {::watch-radius {:default 64 :doc "Blocks from the body within which the lured or led animal is looked for." :spec (a/num-in 0 nil)}
    ::stall-s {:default 10 :doc "Seconds a seen animal beyond the safe gap may make no progress toward the body before the walk ends :animal-stalled." :spec (a/num-in 0 nil)}
+   ::safe-gap {:default 7 :doc "The body does not walk on while a seen animal trails it by more than this many blocks: the lead breaks past 10." :spec (a/num-in 0 nil)}
+   ::max-wait-s {:default 10 :doc "Seconds spent waiting for an animal to come into sight at the destination before the job gives it up." :spec (a/num-in 0 nil)}
+   ::unseen-lost-s {:default 3 :doc "Seconds the animal must stay out of sight, from the first look that missed it, before it counts as lost (a ledge or tree can hide a led animal)." :spec (a/num-in 0 nil)}
+   ::back-limit-s {:default 15 :doc "Seconds from the first miss after which the walk back toward the last sighting gives up and the animal is lost." :spec (a/num-in 0 nil)}
+   ::back-near {:default 4 :doc "Blocks from the last sighting at which the body counts as back there." :spec (a/num-in 0 nil)}
+   ::closing-blocks {:default 0.2 :doc "Blocks nearer the body an animal must come to count as making progress (a cow swimming in covers a block in 20-30 s)." :spec (a/num-in 0 nil)}
+   ::max-search-rounds {:default 40 :doc "Calls in a row a walk may spend on the plan search of its next leg (about 80 ms each) before it counts as failed." :spec (a/int-in 0 nil)}
    ::back-blocks {:default 12 :doc "An animal out of sight for unseen-lost-ms is looked for by walking back toward where it was last seen, when that is no farther from the body than this." :spec (a/num-in 0 nil)}})
+(defn safe-gap [] (settings/get settings ::safe-gap))
+(defn max-wait-ms [] (* 1000 (settings/get settings ::max-wait-s)))
+(defn unseen-lost-ms [] (* 1000 (settings/get settings ::unseen-lost-s)))
+(defn back-limit-ms [] (* 1000 (settings/get settings ::back-limit-s)))
+(defn back-near [] (settings/get settings ::back-near))
+(defn closing-blocks [] (settings/get settings ::closing-blocks))
+(defn max-search-rounds [] (settings/get settings ::max-search-rounds))
 (defn watch-radius [] (settings/get settings ::watch-radius))
 (defn stall-ms [] (* 1000 (settings/get settings ::stall-s)))
 (defn back-blocks [] (settings/get settings ::back-blocks))
@@ -114,36 +128,16 @@
   [c target range]
   (:leg (await (leg-plan c target range))))
 
-(def safe-gap
-  "The body does not walk on while a seen animal trails it by more than this many blocks: the lead breaks past 10."
-  7)
-
-(def max-wait-ms
-  "Time spent waiting for an animal to catch up or come into sight before the job gives it up (also lure-to's arrival wait)."
-  10000)
-
 (def wait-look-ms
   "One look's wait while the body holds still for the animal."
   250)
-
-(def unseen-lost-ms
-  "Time the animal must stay out of sight, from the first look that missed it, before it counts as :lost. A led animal
-  behind a ledge or a tree is not in the sensing, though it is still on the lead; rounds can come within ms, so time
-  rather than looks decides."
-  3000)
 
 (defn following?
   "True when the animal is on this body's lead, or (a lure-to run, memory :method :lure) the body still holds its food."
   [c a]
   (if (= :lure (:method (ctx/mem c)))
-    (hr/holds-food? c)
+    (bait/holds-food? c)
     (animals/led-by-me? a)))
-
-(def back-near "Blocks from the last sighting at which the body counts as back there." 4)
-
-(def back-limit-ms "Time from the first miss after which the walk back gives up and the animal is :lost." 15000)
-
-(def closing-blocks "Blocks nearer the body an animal must come to count as making progress (a cow swimming in covers a block in 20-30 s)." 0.2)
 
 (defn waiting-detail [c a me]
   (let [pos (some-> a .-pos u/pos-of)]
@@ -176,11 +170,11 @@
             elapsed (- now since)
             seen (:last-seen m)
             away (some->> seen (u/flat-dist me))
-            back? (and away (< back-near away (inc (back-blocks))) (< elapsed back-limit-ms))]
+            back? (and away (< (back-near) away (inc (back-blocks))) (< elapsed (back-limit-ms)))]
         (ctx/update-mem! c #(-> % (assoc :unseen-since since) (dissoc :progress)
-                                (assoc :back-to (when (and back? (<= unseen-lost-ms elapsed)) seen))))
+                                (assoc :back-to (when (and back? (<= (unseen-lost-ms) elapsed)) seen))))
         (cond
-          (< elapsed unseen-lost-ms) (do (note-wait! c nil me) :wait)
+          (< elapsed (unseen-lost-ms)) (do (note-wait! c nil me) :wait)
           back? (do (note-wait! c nil me) :wait)
           :else :lost))
       (let [pos (u/pos-of (.-pos a))
@@ -190,7 +184,7 @@
           (not following?) :lead-broke
           (<= d gap) (do (ctx/update-mem! c dissoc :progress :waiting) nil)
           :else (let [{:keys [best]} (:progress m)
-                      prog (if (or (nil? best) (< d (- best closing-blocks))) {:best d :at now} (:progress m))]
+                      prog (if (or (nil? best) (< d (- best (closing-blocks)))) {:best d :at now} (:progress m))]
                   (ctx/update-mem! c assoc :progress prog)
                   (note-wait! c a me)
                   (if (> (- now (:at prog)) (stall-ms)) :animal-stalled :wait)))))))
@@ -234,10 +228,6 @@
     :yield
     (do (ctx/update-mem! c assoc :led-deeper true) :again)))
 
-(def max-search-rounds
-  "Calls in a row a walk may spend on the plan search of its next leg (about 80 ms each) before it counts as :failed."
-  40)
-
 (defn ^:async walk-legs!
   "Walk to target (within range) in short go-to legs in child slot, looking at the animal after each (a pull passes
   follow-reach as gap: it strains the lead on purpose; a plain walk safe-gap). The body does not
@@ -263,7 +253,7 @@
             (cond
               searching (let [n (inc (:search-rounds (ctx/mem c) 0))]
                           (ctx/update-mem! c assoc :search-rounds n)
-                          (if (< max-search-rounds n) :failed :searching))
+                          (if (< (max-search-rounds) n) :failed :searching))
               (= :continue r) :waiting
               (not (and (= :done (:kind r)) (:arrived (:data r)))) :failed
               :else (let [problem (escort-problem c gap)]

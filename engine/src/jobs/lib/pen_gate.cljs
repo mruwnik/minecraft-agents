@@ -103,6 +103,8 @@
 
 ;; ------------------------------------------------------------------ memory hiding a gate
 
+(def held-policy "Memory policy of the :gate-held entries." {:cap 4 :ttl 60000})
+
 (defn held-cells
   "The gates a job holds open on purpose, by a :gate-held entry younger than held-ms: a set of [x y z]."
   [view held-ms]

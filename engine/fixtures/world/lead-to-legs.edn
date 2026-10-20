@@ -29,8 +29,7 @@
          [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [70 0 16]})]
          [:wait-s 4]
          [:rcon "execute as @e[type=cow,tag=wt,$BOX] run tp @s ~ ~ ~-13"]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :lost}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :lead-to.gave-up :data {:reason :lost} :message "leading stopped: lost"} :within-s 60 :of-job true}]}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :lost}} :within-s 60 :of-job true}]}
   {:name "jammed-cow-stalled"
    :blocks [[:fill [5 0 17] [7 0 19] "oak_fence" :outline]]
    :act [[:summon "cow" [6.5 0 18.5]]

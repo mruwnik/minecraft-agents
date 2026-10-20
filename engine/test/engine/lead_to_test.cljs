@@ -70,8 +70,7 @@
           (is (= "u1" (:animal (done-event s))))
           (is (<= (js/Math.abs (- 30 (first (:pos c)))) 4) "the cow stands at the spot: the body stops within 2 and the cow is led 2 behind it")
           (is (not (true? (:leashed c))))
-          (is (= 1 (count-of s "lead")) "the lead is back in the inventory")
-          (is (empty? (events-of s :lead-to.gave-up))))))))
+          (is (= 1 (count-of s "lead")) "the lead is back in the inventory"))))))
 
 ;; one call is the whole attempt
 (deftest one-call-leads-the-cow-and-lets-it-go
@@ -118,8 +117,8 @@
               waited (- (now) t0)]
           (is (= :animal-stalled (:reason (done-event s))))
           (is (seq holds) "the wait is a declared hold")
-          (is (<= escort/max-wait-ms waited) "the cow was waited for the whole bound")
-          (is (< waited (+ escort/max-wait-ms 3000)) "and given up soon after it"))))))
+          (is (<= (escort/max-wait-ms) waited) "the cow was waited for the whole bound")
+          (is (< waited (+ (escort/max-wait-ms) 3000)) "and given up soon after it"))))))
 
 (deftest a-tie-walk-that-cannot-arrive-ends-unreachable-and-its-cleanup-lets-the-cow-go
   (async done
@@ -142,8 +141,7 @@
           (is (finished? s))
           (is (= :unleashed (:reason (done-event s))))
           (is (<= (js/Math.abs (- 30 (first (:pos c)))) 4) "the body walked on until the cow was within the gather radius")
-          (is (< 1 (count (tu/walked-to (:eng s)))) "at least one pull after the walk to the spot")
-          (is (empty? (events-of s :lead-to.gave-up))))))))
+          (is (< 1 (count (tu/walked-to (:eng s)))) "at least one pull after the walk to the spot"))))))
 
 (deftest pulls-a-trailing-cow-by-walking-past-the-spot
   (async done
@@ -337,8 +335,7 @@
           (is (= :tied (:reason (done-event s))))
           (is (true? (:leashed c)))
           (is (not (true? (:leashed-to-me c))) "held by the post, not by the body")
-          (is (= 0 (count-of s "lead")) "the lead stays on the cow")
-          (is (empty? (events-of s :lead-to.gave-up))))))))
+          (is (= 0 (count-of s "lead")) "the lead stays on the cow"))))))
 
 (deftest a-fence-never-seen-is-walked-to-not-refused
   (async done
@@ -385,8 +382,7 @@
           (let [s (await (scenario args world 5))]
             (is (finished? s) label)
             (is (= reason (:reason (done-event s))) label)
-            (is (empty? (tu/walk-calls (:p s))) label)
-            (is (= [:lead-to.gave-up] (mapv :kind (events-of s :lead-to.gave-up))) label)))))))
+            (is (empty? (tu/walk-calls (:p s))) label)))))))
 
 (deftest a-fence-cell-seen-as-another-block-waits-and-touches-nothing
   (async done
@@ -407,8 +403,7 @@
           (is (= :lead-broke (:reason (done-event s))))
           (is (= "u1" (:animal (done-event s))))
           (is (not (true? (:leashed c))))
-          (is (empty? (calls-of s "useOn")) "no tie was tried")
-          (is (= [:lead-to.gave-up] (mapv :kind (events-of s :lead-to.gave-up)))))))))
+          (is (empty? (calls-of s "useOn")) "no tie was tried"))))))
 
 (deftest a-cow-that-is-gone-after-the-walk-is-lost
   (async done
@@ -653,20 +648,17 @@
           (core/submit! (:eng s) (list 'jobs.animals.lead-to {:mob "cow" :pos goal}) {})
           (await (fetch-test/run-ticks s 60))
           (is (empty? (fetch-test/listed s)))
-          (is (= 2 (get (fetch-test/inv s) "lead")) "the crafted pair is carried, the cow let go")
-          (is (empty? (fetch-test/events-of s :lead-to.gave-up))))))))
+          (is (= 2 (get (fetch-test/inv s) "lead")) "the crafted pair is carried, the cow let go"))))))
 
 (deftest no-lead-and-no-way-to-get-one-stops-no-lead-at-once
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {} {:inventory [] :entities [(cow 1 3)]} 6))
-              r (done-event s)
-              [gave-up] (events-of s :lead-to.gave-up)]
+              r (done-event s)]
           (is (finished? s))
           (is (= :no-lead (:reason r)))
-          (is (re-find #"no lead carried and none could be got" (:text gave-up)))
-          (is (= [:no-lead] (mapv :reason (events-of s :lead-to.gave-up))))
+          (is (re-find #"no lead carried and none could be got" (:text r)))
           (is (some? (:because (first (events-of s :stopped)))) "the failed fetch's ending is the because")
           (is (empty? (tu/walked-to (:eng s))) "the body did not move"))))))
 

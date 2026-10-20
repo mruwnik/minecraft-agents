@@ -96,8 +96,7 @@
    :body {:at [4.5 0 16.5]}
    :act [[:summon "cow" [6.5 0 18.5]]
          [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [26 0 16]})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :no-lead}} :within-s 80 :of-job true}
-            {:event {:source :job :kind :lead-to.gave-up :data {:reason :no-lead}} :within-s 80 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-lead}} :within-s 80 :of-job true}]
    :limit-s 100}
   {:name "lead-to-no-mob-is-impossible"
    :act [[:job (jobs.animals.lead-to {:pos #xyz [26 0 16]})]]

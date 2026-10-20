@@ -5,7 +5,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.animals.herd-run :as hr]
+            [jobs.lib.bait :as bait]
             [jobs.animals.escort :as escort]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.animals :as animals]
@@ -356,19 +356,19 @@
       (and a (at-destination? c a)) (finish! c :arrived)
       (and a (:box (:args c)) (not (:led-deeper (ctx/mem c))) (<= (u/flat-dist (u/self-pos c) (u/pos-of (.-pos a))) escort/lead-deeper-gap))
       (await (escort/lead-deeper! c (:box (:args c)) (u/pos-of (.-pos a))))
-      (> (- now since) escort/max-wait-ms) (finish! c (if a :animal-outside :lost))
+      (> (- now since) (escort/max-wait-ms)) (finish! c (if a :animal-outside :lost))
       :else (do (ctx/update-mem! c assoc :arrive-since since)
                 (await (escort/wait-for-animal! c))))))
 
 (defn ^:async walk-legs-to-pos! [c]
-  (let [r (await (escort/walk-legs! c :walk (:pos (:args c)) (:range (:args c)) escort/safe-gap))]
+  (let [r (await (escort/walk-legs! c :walk (:pos (:args c)) (:range (:args c)) (escort/safe-gap)))]
     (cond
       (= :waiting r) :yield
       (= :searching r) :again
       (= :catching-up r) (await (escort/wait-for-animal! c))
       (= :arrived r) (await (arrive! c))
       (= :failed r) (finish! c :unreachable)
-      (and (= :lead-broke (:problem r)) (not (hr/holds-food? c))) :again
+      (and (= :lead-broke (:problem r)) (not (bait/holds-food? c))) :again
       :else (finish! c (:problem r)))))
 
 (defn ^:async walk-legs! [c]
@@ -377,7 +377,7 @@
     (await (walk-legs-to-pos! c))))
 
 (defn ^:async walk! [c]
-  (if-not (hr/holds-food? c)
+  (if-not (bait/holds-food? c)
     (await (rehold! c))
     (do (child/progress! c :equip)
         (await (walk-legs! c)))))
@@ -390,7 +390,7 @@
                      (keys (pg/gate-index (:world (:engine c)))))]
     (doseq [cell (pg/seen-open-cells (:primitives c) near)]
       (ctx/forget-where! c :gate-held #(= cell (some-> (:cell %) vec)))
-      (ctx/remember! c :gate-held {:cell cell :by (:id c)} hr/held-policy))))
+      (ctx/remember! c :gate-held {:cell cell :by (:id c)} pg/held-policy))))
 
 (defn ^:async step [c]
   (hold-gates! c)
@@ -403,7 +403,7 @@
       (= :start phase) (await (u/untimed! c #(start! c)))
       (nil? a) (if-let [next-one (successor c)]
                  (do (ctx/update-mem! c #(-> % (assoc :animal (animals/key-of next-one)) (dissoc :unseen-since))) :again)
-                 (if (= :lost (escort/escort-problem c escort/safe-gap))
+                 (if (= :lost (escort/escort-problem c (escort/safe-gap)))
                    (finish! c :lost)
                    (await (escort/wait-for-animal! c))))
       :else (do (await (watch/watch! c {})) (await (walk! c))))))
@@ -422,6 +422,6 @@
 (defn ^:async cleanup
   "However the lure ended: the food is put away, then the gates the legs left open are shut (escort/close-up!). Done."
   [c _]
-  (await (hr/put-food-away! c))
+  (await (bait/put-food-away! c))
   (let [r (await (escort/close-up! c (fn [c _] (ctx/end c :done nil))))]
     (if (= :yield r) :continue r)))

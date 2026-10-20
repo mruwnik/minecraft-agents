@@ -50,7 +50,6 @@
 (defn exit-shut-ms [] (settings/get settings ::exit-shut-ms))
 (defn crowd-out-radius [] (settings/get settings ::crowd-out-radius))
 (defn crowd-in-radius [] (settings/get settings ::crowd-in-radius))
-(def held-policy {:cap 4 :ttl 60000})
 
 (defn cell [{:keys [x y z]}] [x y z])
 
@@ -87,21 +86,11 @@
 
 (defn lure? [c] (= :lure (:method (ctx/mem c))))
 
-(defn holds-food?
-  "True when the body holds the breeding food of :mob in hand."
-  [c]
-  (boolean (some #{(.-held (.self (:primitives c)))} (get animals/breeding-food (:mob (:args c))))))
-
-(defn ^:async put-food-away!
-  "Empty the hand of the lure food (jobs.lib.bait/put-away!)."
-  [c]
-  (await (bait/put-away! c (get animals/breeding-food (:mob (:args c))))))
-
 (defn held-by-me?
   "True when the animal is on this body's lead, or in a lure run follows the food held in hand (within follow-range)."
   [c e]
   (if (lure? c)
-    (and (holds-food? c)
+    (and (bait/holds-food? c)
          (<= (u/dist (u/self-pos c) (u/pos-of (.-pos e))) (follow-range)))
     (animals/led-by-me? e)))
 
@@ -154,7 +143,7 @@
   (let [g (gate-cell c)]
     (ctx/update-mem! c dissoc :gate-closed)
     (ctx/forget-where! c :gate-held #(same-cell? g (:cell %)))
-    (ctx/remember! c :gate-held {:cell g :by (:id c)} held-policy)))
+    (ctx/remember! c :gate-held {:cell g :by (:id c)} pg/held-policy)))
 
 (defn drop-gate! [c]
   (let [g (gate-cell c)]
@@ -296,7 +285,7 @@
         k (or (:releasing m) (first (remove (set (:release-tried m)) (led-now c))))]
     (cond
       (not k) (on-done)
-      (lure? c) (do (await (put-food-away! c)) (on-done))
+      (lure? c) (do (await (bait/put-food-away! c)) (on-done))
       :else
       (do (ctx/update-mem! c assoc :releasing k)
           (let [e (await (ctx/call c :unleash 'jobs.animals.unleash

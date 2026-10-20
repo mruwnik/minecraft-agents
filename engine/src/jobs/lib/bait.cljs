@@ -22,6 +22,11 @@
 
 (defn held [c] (.-held (.self (:primitives c))))
 
+(defn holds-food?
+  "True when the body holds the breeding food of :mob in hand."
+  [c]
+  (boolean (some #{(held c)} (get breeding-food (:mob (:args c))))))
+
 (defn ^:async put-away!
   "Empty the hand when it holds one of foods; with no free slot to put it in, take another carried item in hand, so no
   animal follows the body out."
@@ -39,3 +44,8 @@
         mobs (vec (for [[mob foods] breeding-food :when (some #{(held c)} foods)] mob))]
     (when (and (seq mobs) (seq (look/seen-objs p {:radius near-range :names mobs :max 1})))
       (await (put-away! c (into [] (mapcat breeding-food) mobs))))))
+
+(defn ^:async put-food-away!
+  "Empty the hand of the breeding food of :mob (put-away!)."
+  [c]
+  (await (put-away! c (get breeding-food (:mob (:args c))))))
