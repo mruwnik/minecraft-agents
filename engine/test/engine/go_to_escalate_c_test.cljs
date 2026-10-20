@@ -6,7 +6,6 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.go-to-test :as gt]
-            [engine.go-to-support :refer [hiding]]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
@@ -433,15 +432,26 @@
           (is (= "cobblestone" (block p [4 62 0])) "the lava it laid open is sealed")
           (is (seq (events-of seen :blocks.dig.sealed))))))))
 
+(defn hiding-with-pickaxe [blocks hidden?]
+  (let [p (tu/fake {:blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]})]
+    (aset p "sensedAt" (fn [pos] (if (hidden? [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
+    p))
+
 (deftest a-dig-route-does-not-step-on-a-floor-the-body-has-not-seen-under-seen-air
   (let [world (apply dissoc (box 0 60 -1 6 70 1 "stone") (for [x (range 3) y [64 65]] (str x "," y ",0")))
-        p (hiding world #(= [2 63 0] %))
+        p (hiding-with-pickaxe world #(= [2 63 0] %))
         cells (choose/route-cells p [0 64 0] [3 64 0] (constantly true) (constantly false))]
     (is (some #(= 1 (nth (:cell %) 2)) cells) "it digs round the seen-open cell whose floor is unseen")))
 
+(deftest a-dig-route-that-takes-longer-than-the-body-would-dig-is-not-planned
+  (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air")
+        route (fn [inventory] (choose/route-cells (tu/fake {:blocks world :inventory inventory}) [0 64 0] [8 64 0] (constantly true) (constantly false)))]
+    (is (nil? (route [])) "8 stones by hand take minutes")
+    (is (seq (route [{:name "stone_pickaxe" :count 1}])) "the same take seconds with a pickaxe")))
+
 (deftest a-pocket-floor-seen-only-from-inside-is-no-bar-when-floors-unseen-are-ok
   (let [world (apply dissoc (box 0 60 -1 6 70 1 "stone") (for [x (range 3) y [64 65]] (str x "," y ",0")))
-        p (hiding world #(= [2 63 0] %))
+        p (hiding-with-pickaxe world #(= [2 63 0] %))
         cells #(choose/route-cells p [0 64 0] [3 64 0] (constantly true) (constantly false) %)]
     (is (some #(= 1 (nth (:cell %) 2)) (cells false)))
     (is (not-any? #(= 1 (nth (:cell %) 2)) (cells true)) "it goes straight over the unseen floor")))

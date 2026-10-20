@@ -14,12 +14,13 @@
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.tidy :as tidy]
+            [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.holes :refer [may-dig-fn own-placed-fn]]
             [jobs.movement.go-to.result :as end]
-            [jobs.movement.go-to.tuning :refer [max-blocked]]
+            [jobs.movement.go-to.tuning :refer [max-blocked max-route-s]]
             [jobs.movement.go-to.way-steps :as ways]))
 
 (defn skips
@@ -111,7 +112,8 @@
   "[{:cell :block :guess}]: the cheapest cells to dig for a walk from feet cell from down or across into goal
   (jobs.lib.dig-route priced by jobs.lib.cost: a block's walk and dig-cost; at most the dig-route settings' digs and fall),
   in walking order, every one escape/diggable?, :guess on a cell not seen (read as rock); [] when nothing is left to
-  dig, nil when no such route. A floor never seen under a cell seen open may be a void: dig-route reads it as no floor,
+  dig, nil when no such route or when its digging takes the body longer than max-route-s, with what it carries or
+  bare-handed (a player does not punch a tunnel through rock). A floor never seen under a cell seen open may be a void: dig-route reads it as no floor,
   unless floors-unseen-ok? (a pocket's floor shows only from inside it)."
   ([p from goal may-dig? own?] (route-cells p from goal may-dig? own? false))
   ([p from goal may-dig? own? floors-unseen-ok?]
@@ -122,7 +124,8 @@
                        (block-at cell)))
         cells (:dig (dig-route/route seen-floor from goal {:dig-s cost/dig-cost
                                                          :step-s (:cost (cost/walk-cost {:distance 1}))}))]
-    (when (and cells (every? #(escape/diggable? block-at may-dig? own? %) cells))
+    (when (and cells (every? #(escape/diggable? block-at may-dig? own? %) cells)
+               (<= (transduce (map #(/ (tools/clear-ms p (block-at %)) 1000)) + 0 cells) (max-route-s)))
       (mapv (fn [cell] {:cell cell :block (block-at cell) :guess (dig-look/unknown? p cell)}) cells)))))
 
 (defn dig-way
