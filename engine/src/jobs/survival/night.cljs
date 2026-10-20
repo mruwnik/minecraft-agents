@@ -54,7 +54,7 @@
   Fleeing (the night.sites ::flee-radius setting, 0 never; at most max-flees walks): to the not-yet-tried candidate go-to reaches soonest (jobs.lib.targets/nearest!): a known bed, a :roofed-places place, a seen cave or overhang cell (walled in on arrival), or seen natural ground the carried tools dig. shelter.fled on arrival, shelter.flee_failed otherwise.
   Every hold is declared (ctx/hold-still!), waits hold-ms, and (night.hold) cooks, eats or runs get-food first.
   An overdue body warns needs_bed once a day; a respawn bed seen gone is written :spawn-lost (warn spawn_lost once).
-  Memory: job memory :enclose, :sheltered, :log-out-failed, :no-site, :shut-ins, :digging, :bed-down, :pit-trapped, :roof-walk-failed, :left; body memory :doorway-tried and shut-in's :shut-in-failed (forgotten when the night ends, at most ten minutes).
+  Memory: job memory :enclose, :enclose-failed (feet cells where walling in failed), :sheltered, :log-out-failed, :no-site, :shut-ins, :digging, :bed-down, :pit-trapped, :roof-walk-failed, :left; body memory :doorway-tried and shut-in's :shut-in-failed (forgotten when the night ends, at most ten minutes).
   Muting :night does not end a running night job: cancel it too.")
 
 (a/defargs args
@@ -247,6 +247,11 @@
 
 ;; ------------------------------------------------------------------ somewhere safer
 
+(defn may-enclose?
+  "Whether a wall-in may be started at feet cell f: none is under way, and none failed at f."
+  [mem f]
+  (not (or (:enclose mem) (contains? (:enclose-failed mem) f))))
+
 (defn ^:async enclose!
   "At a cave target (:enclose is its feet cell): wall in with shut-in's walls way, one call. Sealed in: :dug-in, held until
   morning (dig-in-leave/leave! opens the door). Stopped or declined: shut-in has marked the site failed, and the
@@ -262,7 +267,7 @@
         (if (= :continue d)
           :again
           (do (ctx/update-mem! c dissoc :enclose)
-              (when (= :nothing-possible (:kind d)) (ctx/update-mem! c assoc :enclose-failed true))
+              (when (= :nothing-possible (:kind d)) (ctx/update-mem! c update :enclose-failed (fnil conj #{}) pos))
               (if (and (= :done (:kind d)) (dig-cells/sealed-in? p :walls roof-height))
                 (hold/sheltered! c :dug-in))
               :again))))))
@@ -419,7 +424,7 @@
         (when (and bed-way home-near (:roof-walk-failed (ctx/mem c)) (not bed)) (note-bed-kept! c))
         (when breached
           (note-room-open! c)
-          (when-not (or door (:enclose (ctx/mem c)) (:enclose-failed (ctx/mem c)) (pit-site/failed-here? c) (not (ctx/way? c :shelter)))
+          (when-not (or door (not (may-enclose? (ctx/mem c) (sh-sense/feet p))) (pit-site/failed-here? c) (not (ctx/way? c :shelter)))
             (ctx/update-mem! c assoc :enclose (sh-sense/feet p))))
         (cond
           door (await (enter-room! c nil))

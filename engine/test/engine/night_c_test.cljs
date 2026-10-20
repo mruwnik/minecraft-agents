@@ -47,6 +47,13 @@
                 (fn [{:keys [seen]}]
                   (is (seq (st/emitted seen :shelter.room_open))))))
 
+(deftest a-failed-wall-in-blocks-walling-at-that-site-only
+  (let [mem {:enclose-failed #{{:x 4 :y 64 :z 0}}}]
+    (is (not (night/may-enclose? mem {:x 4 :y 64 :z 0})) "the site that failed")
+    (is (night/may-enclose? mem {:x 44 :y 64 :z 0}) "another site")
+    (is (night/may-enclose? {} {:x 4 :y 64 :z 0}))
+    (is (not (night/may-enclose? {:enclose {:x 4 :y 64 :z 0}} {:x 44 :y 64 :z 0})) "a wall-in already under way")))
+
 (deftest a-breached-room-is-said
   (run-night-in {:blocks breached-room :inventory st/wall-stack}
                 (fn [{:keys [seen]}]
