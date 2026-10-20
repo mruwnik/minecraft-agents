@@ -167,6 +167,27 @@
     (is (= {:name "oak_log" :pos [0 65 3] :properties {:axis "y"} :age-ms 700}
            (dissoc (perception/seen-block per [0 65 3]) :state-id)))))
 
+(deftest passes-from-one-spot-do-not-read-recorded-cells-again-until-the-view-changes
+  (let [clock (atom 0) reads (atom 0)
+        p (tu/blind (tu/fake {:blocks (wall 5 8 [] {})}))
+        raw (fake-raw/create p)
+        w (js/Object.assign #js {} raw)
+        at (.-stateAt raw)
+        _ (set! (.-stateAt w) (fn [x y z] (swap! reads inc) (at x y z)))
+        per (perception/create w {:now #(deref clock)})
+        pass-reads (fn [] (reset! reads 0) (perception/pass! per) @reads)
+        _ (pass-reads)
+        _ (swap! clock + 3000)
+        first-pass (pass-reads)
+        again (pass-reads)
+        _ (fake/set-block! p [0 70 0] "iron_block")
+        after-change (pass-reads)
+        _ (swap! clock + 3000)
+        after-wait (pass-reads)]
+    (is (< (* 5 again) first-pass))
+    (is (< first-pass (* 2 after-change)))
+    (is (< first-pass (* 2 after-wait)))))
+
 (deftest seen-blocks-lists-remembered-blocks-by-name-nearest-first
   (let [{:keys [per]} (rig {"0,65,3" "gold_block" "3,65,8" "gold_block" "-2,65,5" "stone"})]
     (perception/pass! per)

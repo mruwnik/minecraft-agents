@@ -151,16 +151,17 @@
         x0 (js/Math.floor ox) y0 (js/Math.floor oy) z0 (js/Math.floor oz)
         ex (+ ox (* dx radius)) ey (+ oy (* dy radius)) ez (+ oz (* dz radius))
         stops? (fn [id x y z] (blocks-line? raw sight id x y z ox oy oz ex ey ez))
-        first-id (.stateAt ^js raw x0 y0 z0)
-        first-light (.lightAt ^js raw x0 y0 z0)
         cx0 (bit-shift-right x0 4) cy0 (bit-shift-right y0 4) cz0 (bit-shift-right z0 4)
-        ^js marks0 (marks-of st (section-key cx0 cy0 cz0))]
-    (when (>= first-id 0)
-      (let [i (cell-index x0 y0 z0)]
-        (when-not (< 0 (- (aget marks0 i) base) 4)
-          (record! st store x0 y0 z0 first-id now)
-          (aset marks0 i (+ base (mark-kind raw sight first-id))))))
-    (if (or (< first-id 0) (stops? first-id x0 y0 z0))
+        ^js marks0 (marks-of st (section-key cx0 cy0 cz0))
+        i0 (cell-index x0 y0 z0)
+        kind0 (- (aget marks0 i0) base)
+        known? (< 0 kind0 4)
+        first-id (if (== kind0 1) 0 (.stateAt ^js raw x0 y0 z0))
+        first-light (if (== kind0 1) -1 (.lightAt ^js raw x0 y0 z0))]
+    (when (and (>= first-id 0) (not known?))
+      (record! st store x0 y0 z0 first-id now)
+      (aset marks0 i0 (+ base (mark-kind raw sight first-id))))
+    (if (or (== kind0 2) (and (not= kind0 1) (or (< first-id 0) (stops? first-id x0 y0 z0))))
       1
       (loop [x x0 y y0 z z0
              tmx (if (zero? dx) js/Infinity (* tdx (if (pos? dx) (- (inc x0) ox) (- ox x0))))
@@ -263,6 +264,27 @@
       (count-why! st why :passes 1)
       (set! (.-passRays st) (.-total (.-pass st))))))
 
+(def mark-gen-ms
+  "How long a view generation (the mark stamp) lasts: a cell it marked keeps its recorded time that long."
+  2000)
+
+(defn renew-marks!
+  "Gives the next slice a new mark stamp unless it can share the last slice's: same eye cell, dimension, raw-world epoch,
+  darkness and near, at most mark-gen-ms old. Then the cells marked so far are still recorded as they are in the world,
+  and the look-around and turn passes from one spot do not read them again. No epoch counter: a new stamp every slice."
+  [per ^js st ^js eye now]
+  (let [raw (:raw per) epoch (epoch-of raw) darken (darken-now raw) near (near-of per)
+        ^js g (.-gen st)]
+    (when-not (and g epoch (some? (.-markStamp st))
+                   (== (.-epoch g) epoch) (== (.-darken g) darken) (== (.-near g) near)
+                   (= (.-dim g) (.-dimension eye))
+                   (== (.-cx g) (js/Math.floor (.-x eye))) (== (.-cy g) (js/Math.floor (.-y eye)))
+                   (== (.-cz g) (js/Math.floor (.-z eye)))
+                   (< (- now (.-at g)) mark-gen-ms))
+      (set! (.-markStamp st) (inc (or (.-markStamp st) 0)))
+      (set! (.-gen st) #js {:epoch epoch :darken darken :near near :dim (.-dimension eye) :at now
+                            :cx (js/Math.floor (.-x eye)) :cy (js/Math.floor (.-y eye)) :cz (js/Math.floor (.-z eye))}))))
+
 (defn cast-slice!
   "Casts rays [from, to) of the pass from the eye's current place and look: the grid, then the ground rows (along the
   eye's yaw now, and only those still inside the view cone)."
@@ -280,7 +302,7 @@
                    (let [len (js/Math.hypot dx dy dz)]
                      (cast! per st store ox oy oz (/ dx len) (/ dy len) (/ dz len) now)))]
     (set! (.-near st) (near-of per))
-    (set! (.-markStamp st) (inc (or (.-markStamp st) 0)))
+    (renew-marks! per st eye now)
     (loop [k from cells 0]
       (cond
         (>= k to) cells

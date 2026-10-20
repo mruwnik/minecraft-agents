@@ -15,6 +15,7 @@
     (32), aimed at the ground an eye height below the eye, `:ground-across` (0.7) blocks apart, inside the cone only.
     `:effort` (0-1) scales the grid: a pass casts effort-min (0.15) to all of a `:ray-deg` grid; ground rows always.
     A pass is spread over `:pass-ms` (1.5 s) in slices of `:step-ms` (one game tick).
+    Slices share one mark stamp while the eye cell, raw-world epoch, darkness and near stay and for 2 s at most: a cell recorded in it is not read again, so its recorded time is up to 2 s old (a thin block is read every time).
     A new pass starts when the eye moved or turned, every `:idle-ms` if the world changed (a block or chunk update, the
     daylight, a torch in hand), else every `:still-ms`.
     What is behind the body is seen only once it turns.
