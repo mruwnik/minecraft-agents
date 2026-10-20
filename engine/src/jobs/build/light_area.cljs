@@ -35,7 +35,7 @@
 (a/defargs settings
   {::job-time-s {:default 600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
-(def target [:cells])
+(def target [:cells :boxes])
 (def defaults {:spend {:job-time ::job-time-s}})
 
 (defn box-cells [box]
@@ -136,11 +136,11 @@
 (def fit? ready/ok)
 
 (defn done?
-  "Ok when no spawnable cell of the area is dark; else later with the torches hung."
+  "Ok when no spawnable cell of the area is dark and none is left to look at; else later with the torches hung."
   [c]
   (let [{:keys [spots uncovered]} (lighting c)
         hung (count (:torches (ctx/mem c)))]
-    (if (and (empty? spots) (empty? uncovered))
+    (if (and (empty? spots) (empty? uncovered) (nil? (frontier c)))
       (contract/ok :lit "no spawnable cell of the area is dark" :units :torches :done hung
                    :result {:torches (:torches (ctx/mem c) []) :uncovered []})
       (contract/later :dark (str (count spots) " torches to hang") :units :torches :done hung))))

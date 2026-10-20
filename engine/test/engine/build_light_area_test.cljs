@@ -64,3 +64,13 @@
         (let [[{:keys [p]} r] (await (run room (constantly false) {:boxes [[[0 64 0] [8 64 8]]]} []))]
           (is (not= :done (:status r)) (pr-str r))
           (is (empty? (torch-cells p room))))))))
+
+(deftest a-lit-seen-part-with-an-unseen-dark-part-is-looked-at-before-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [corridor (for [x (range 0 41)] [x 0])
+              [{:keys [p]} r] (await (run corridor (fn [[x _ _]] (<= x 30)) {:boxes [[[0 64 0] [40 64 0]]]}))]
+          (is (= :done (:status r)) (pr-str r))
+          (is (seq (torch-cells p corridor)) "the dark far end got a torch, not an instant done")
+          (is (every? (fn [[x _ _]] (> x 30)) (torch-cells p corridor))))))))
