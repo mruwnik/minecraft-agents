@@ -10,6 +10,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]))
@@ -89,7 +90,7 @@
   [c]
   (let [p (:primitives c)]
     {:kind-at (reach/lookup p)
-     :enclosed (delay (reach/enclosed? p))
+     :enclosed (delay (reach-room/enclosed? p))
      :reaches (volatile! {})
      :seals (volatile! {})
      :cells-left (volatile! (max-search-cells))}))
@@ -157,7 +158,7 @@
   (and (= :dig action)
        (let [p (:primitives c)]
          (and (not @(:enclosed pr))
-              (reach/enclosed? p #{(vec cell)} (reach/lookup p reach/body-kind-of) reach/shut-room-cells)))))
+              (reach-room/enclosed? p #{(vec cell)} (reach/lookup p reach-room/body-kind-of) reach-room/shut-room-cells)))))
 
 (def target [])
 

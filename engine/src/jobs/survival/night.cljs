@@ -12,7 +12,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.look-edge :as look-edge]
             [jobs.lib.places :as places]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.rooms :as room-lib]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
@@ -370,7 +370,7 @@
   (when-not (:room-open-noted (ctx/mem c))
     (ctx/update-mem! c assoc :room-open-noted true)
     (let [feet (sh-sense/feet (:primitives c))
-          escape (reach/escape-cell (:primitives c) feet)]
+          escape (reach-room/escape-cell (:primitives c) feet)]
       (ctx/emit! c :shelter.room_open :warn (cond-> {:pos feet
                                                      :text (str "the room around the bed is not shut in (a hole in its walls" (when escape (str ", open to " (pr-str escape))) "); walling in under the roof at " (pr-str feet))}
                                               escape (assoc :escape escape))))))

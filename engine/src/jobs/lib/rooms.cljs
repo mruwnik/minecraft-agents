@@ -1,5 +1,5 @@
 (ns jobs.lib.rooms
-  "Closed rooms, for a flight and for shutting in: the body's home or any closed room it has seen (jobs.lib.reach/room: walls, a
+  "Closed rooms, for a flight and for shutting in: the body's home or any closed room it has seen (jobs.lib.reach.room/room: walls, a
   roof or none needed, doors that shut) that it gets into before every melee chaser reaches a door of it
   (jobs.lib.cost/reach-first?). Shared by jobs.survival.retreat and jobs.survival.enter-room."
   (:require [jobs.lib.block-sets :as bs]
@@ -15,6 +15,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.pillar :as pillar]
             [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
@@ -41,7 +42,7 @@
 (defn door-sides
   "The cells on either side of the lower half of a seen wooden door or gate {:pos :properties}, along its facing."
   [{:keys [pos properties]}]
-  (when-let [[dx dz] (reach/door-panel-step (:facing properties))]
+  (when-let [[dx dz] (reach-room/door-panel-step (:facing properties))]
     [(-> pos (update :x + dx) (update :z + dz)) (-> pos (update :x - dx) (update :z - dz))]))
 
 (defn starts
@@ -69,10 +70,10 @@
 
 (defn closed-past-sight?
   "Whether room's walls hold past the edge of sight: a flood from it (doors shut) that also steps onto any column free
-  at feet and head over a floor not sensed stays within reach/room-cells. Unseen floor inside walls changes nothing; past
+  at feet and head over a floor not sensed stays within reach-room/room-cells. Unseen floor inside walls changes nothing; past
   a gap the flood runs on over ground not seen, which no wall is known to bound."
   [p {:keys [cells]}]
-  (let [kind-at (reach/shut-kind-at p)
+  (let [kind-at (reach-room/shut-kind-at p)
         next-cells (fn [x y z]
                      (let [out (reach/forward kind-at x y z)]
                        (doseq [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
@@ -81,17 +82,17 @@
                                           (nil? (u/seen-block p {:x nx :y (dec y) :z nz})))]
                          (.push out #js [nx y nz]))
                        out))]
-    (some? (reach/flood-cells next-cells (first cells) reach/room-cells))))
+    (some? (reach-room/flood-cells next-cells (first cells) reach-room/room-cells))))
 
 (defn refuge-room?
-  "Whether cell pos holds a closed room (jobs.lib.reach/room) that stays closed past the edge of sight (closed-past-sight?)."
+  "Whether cell pos holds a closed room (jobs.lib.reach.room/room) that stays closed past the edge of sight (closed-past-sight?)."
   [p pos]
-  (boolean (some->> (reach/room p pos) (closed-past-sight? p))))
+  (boolean (some->> (reach-room/room p pos) (closed-past-sight? p))))
 
 (defn closed?
   "Whether cell pos holds a closed room (refuge-room?), kept in mem :refuge-rooms for the job; no closed room at all
-  (reach/room nil) also in body memory (known-open?) for a while. :unseen, kept nowhere, when a cell of the room is not
-  seen yet (reach/unseen-room?): judged again at the next look."
+  (reach-room/room nil) also in body memory (known-open?) for a while. :unseen, kept nowhere, when a cell of the room is not
+  seen yet (reach-room/unseen-room?): judged again at the next look."
   [c pos]
   (let [k (cell-key pos)
         known (get (:refuge-rooms (ctx/mem c)) k)]
@@ -99,14 +100,14 @@
       (some? known) known
       (known-open? c pos) false
       :else (let [p (:primitives c) v (refuge-room? p pos)]
-              (if (and (not v) (reach/unseen-room? p pos))
+              (if (and (not v) (reach-room/unseen-room? p pos))
                 :unseen
                 (do (ctx/update-mem! c assoc-in [:refuge-rooms k] v)
-                    (when-not (or v (reach/room p pos)) (mem/write! (:store (:engine c)) :refuge-open {:cell k} open-policy))
+                    (when-not (or v (reach-room/room p pos)) (mem/write! (:store (:engine c)) :refuge-open {:cell k} open-policy))
                     v))))))
 
 (defn survey
-  "The closed rooms to flee to, {:rooms [...]} (jobs.lib.reach/room plus :start and :home?): the home's (home
+  "The closed rooms to flee to, {:rooms [...]} (jobs.lib.reach.room/room plus :start and :home?): the home's (home
   {:x :y :z} or nil) and those behind the doors the body has seen (starts), at most max-rooms, the home first then the
   nearest; and {:dropped [{:at [x y z] :own? :why}]}, the cells that are none: :run-failed (a run to it failed this
   flight), :not-closed, :unseen (a cell of the room not seen yet), or :unjudged (a door side not judged this flight beyond the fresh ones
@@ -131,7 +132,7 @@
       :rooms (->> judged
                   (remove :why)
                   (sort-by (fn [{:keys [pos home?]}] [(if home? 0 1) (u/dist me (mid pos))]))
-                  (keep (fn [{:keys [pos home?]}] (some-> (reach/room p pos) (assoc :start pos :home? home?))))
+                  (keep (fn [{:keys [pos home?]}] (some-> (reach-room/room p pos) (assoc :start pos :home? home?))))
                   (reduce (fn [acc r] (if (some #(contains? (:cells %) (mapv (:start r) [:x :y :z])) acc) acc (conj acc r))) [])
                   (take (max-rooms))
                   vec)})))
@@ -170,7 +171,7 @@
             look-at-sides! (fn ^:async l [n looked]
                              (loop [n n looked looked]
                                (let [me (u/self-pos c)
-                                     target (->> (reach/unseen-sides p (:pos at))
+                                     target (->> (reach-room/unseen-sides p (:pos at))
                                                  (remove looked)
                                                  (sort-by #(u/dist me {:x (% 0) :y (% 1) :z (% 2)}))
                                                  first)]
@@ -181,7 +182,7 @@
             beyond (when d (let [{:keys [x y z]} (:pos at)] {:x (- (* 2 (:x d)) x) :y y :z (- (* 2 (:z d)) z)}))]
         (when d (await (walk-to! d)))
         (let [[n _] (await (look-at-sides! 0 #{}))
-              inner (when (and beyond (reach/unseen-room? p (:pos at)))
+              inner (when (and beyond (reach-room/unseen-room? p (:pos at)))
                       (if (> (u/dist me beyond) (u/dist me (:pos at))) beyond (:pos at)))]
           (if-not inner
             (pos? n)
@@ -195,7 +196,7 @@
   (:rooms (survey c home)))
 
 (defn inside?
-  "Whether the body is in room (jobs.lib.reach/room): its feet cell or the cell it stands on (as go-to arrives) is one of
+  "Whether the body is in room (jobs.lib.reach.room/room): its feet cell or the cell it stands on (as go-to arrives) is one of
   the room's cells."
   [p {:keys [cells]}]
   (boolean (some #(contains? cells (mapv % [:x :y :z])) [(sh-sense/feet p) (reach/standing-cell p)])))
@@ -205,14 +206,14 @@
   [c home]
   (let [p (:primitives c)]
     (boolean (when (and home (true? (closed? c home)))
-               (some->> (reach/room p home) (inside? p))))))
+               (some->> (reach-room/room p home) (inside? p))))))
 
 (defn way-in
-  "The door of room the body walks to in fewest steps over the blocks it has seen (jobs.lib.reach/walk-steps to the room
+  "The door of room the body walks to in fewest steps over the blocks it has seen (jobs.lib.reach.room/walk-steps to the room
   cell inside it): {:cell :inside :steps}, nil when it finds no walk to any."
   [p room]
   (->> (:doors room)
-       (keep (fn [d] (when-let [n (reach/walk-steps p (sh-sense/feet p) (:inside d))] (assoc d :steps n))))
+       (keep (fn [d] (when-let [n (reach-room/walk-steps p (sh-sense/feet p) (:inside d))] (assoc d :steps n))))
        (sort-by :steps)
        first))
 
@@ -272,7 +273,7 @@
   room: the flood from the feet has no unroofed cell once they are solid. An overhang beside a gap has one."
   [p feet e ok?]
   (first (filter #(and (not= feet %) (sh-sense/doorway? p %) (ok? %)
-                       (nil? (:cell (reach/unroofed-cell p feet #{[(:x %) (:y %) (:z %)] [(:x %) (inc (:y %)) (:z %)]}))))
+                       (nil? (:cell (reach-room/unroofed-cell p feet #{[(:x %) (:y %) (:z %)] [(:x %) (inc (:y %)) (:z %)]}))))
                  (around e))))
 
 (defn closed-home?
@@ -280,7 +281,7 @@
   doorway (sh-sense/doorway?) shuts it so that every cell is (shut-by). Under an overhang or a lone roof: false."
   [p]
   (let [feet (sh-sense/feet p)
-        cell (:cell (reach/unroofed-cell p feet))]
+        cell (:cell (reach-room/unroofed-cell p feet))]
     (or (nil? cell) (some? (shut-by p feet cell any?)))))
 
 (def doorway-tried-policy
@@ -289,7 +290,7 @@
 
 (defn gap
   "The cells [feet head] that shut the room around the body: the doorway where the room's flood first leaves the roof
-  (reach/unroofed-cell, closed flood or not: a walled yard is open to the night too) or beside that cell that shuts the
+  (reach-room/unroofed-cell, closed flood or not: a walled yard is open to the night too) or beside that cell that shuts the
   room (shut-by), those still free; nil when the room is shut, no doorway shuts it (open ground), the body or a seen
   animal or mob stands in it, the place is refused, or this doorway was tried tonight (body memory :doorway-tried, doorway-tried-policy)."
   [c]
@@ -298,7 +299,7 @@
         seen (delay (look/seen-entities p {:radius 8}))
         free? (fn [{:keys [x y z] :as cell}]
                 (and (bs/air (u/seen-name p cell)) (not (pillar/mob-in @seen [x y z]))))]
-    (when-let [e (:cell (reach/unroofed-cell p feet))]
+    (when-let [e (:cell (reach-room/unroofed-cell p feet))]
       (when-let [d (shut-by p feet e free?)]
         (when-not (or (some #(= d (:data %)) (ctx/entries c :doorway-tried))
                       (access/trespass-refusal (access/rules-input c) :place d))

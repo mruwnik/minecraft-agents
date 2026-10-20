@@ -19,6 +19,7 @@
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]))
@@ -131,17 +132,17 @@
 (def usable-door #"^(?!iron_door$)[a-z_]+_door$|_fence_gate$")
 
 (defn enclosed?
-  "reach/enclosed?, with every shut door, gate and trapdoor a wall when doors is :never (the walk will not open them),
+  "reach-room/enclosed?, with every shut door, gate and trapdoor a wall when doors is :never (the walk will not open them),
   read from the planner's snapshot as the walk's plans are, seen or not."
   [p doors]
   (if (not= :never doors)
-    (reach/enclosed? p)
-    (reach/shut-in? p (reach/lookup p reach/kind-of))))
+    (reach-room/enclosed? p)
+    (reach-room/shut-in? p (reach/lookup p reach/kind-of))))
 
 (defn open-door-beside?
   "door-beside? without the :doors check."
   [p [fx fy fz]]
-  (let [kind-at (reach/lookup p reach/body-kind-of)
+  (let [kind-at (reach/lookup p reach-room/body-kind-of)
         block-at (block-at-of p)
         door? (fn [[x y z]] (some (fn [[dx dz]] (some #(some->> (block-at [(+ x dx) (+ y %) (+ z dz)]) (re-find usable-door))
                                                      [0 1]))
@@ -151,14 +152,14 @@
         (if (door? cell)
           true
           (let [nbrs (->> (apply reach/forward kind-at cell) (map vec) (remove seen))]
-            (if (>= (count seen) reach/room-cells)
+            (if (>= (count seen) reach-room/room-cells)
               false
               (recur (into (pop queue) nbrs) (into seen nbrs)))))
         false))))
 
 (defn door-beside?
   "Whether a door or gate the body can open is beside, at feet or head height, a cell the body can walk to from feet
-  (jobs.lib.reach/forward, at most reach/room-cells cells): the body's enclosure has a way out go-to opens or a
+  (jobs.lib.reach/forward, at most reach-room/room-cells cells): the body's enclosure has a way out go-to opens or a
   player would, never one to dig round. Iron doors are walls, and so is every door when doors is :never."
   ([p feet] (door-beside? p feet :shut))
   ([p [fx fy fz] doors]
@@ -294,7 +295,7 @@
   ([p cell] (door-back p cell #{}))
   ([p [x y z] visited]
   (let [kind-at (reach/lookup p)]
-    (when-let [[dx dz] (reach/panel-step p kind-at {:x x :y y :z z})]
+    (when-let [[dx dz] (reach-room/panel-step p kind-at {:x x :y y :z z})]
       (let [back [(- x dx) y (- z dz)]]
         (when (let [unseen? (unseen-of p)
                     ok? (fn [cell good?] (or (unseen? cell) (good? kind-at (cell 0) (cell 1) (cell 2))))]

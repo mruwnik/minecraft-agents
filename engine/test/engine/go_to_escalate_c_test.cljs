@@ -155,7 +155,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; 29x29 top 6 above a floor: fewer cells than reach/room-cells, so the body counts as shut in
+        ;; 29x29 top 6 above a floor: fewer cells than reach-room/room-cells, so the body counts as shut in
         (let [blocks (apply dissoc (merge (box -40 57 -40 40 57 40 "stone") (box -14 58 -14 14 63 14 "stone")) ["3,60,0" "3,61,0"])
               {:keys [out p seen]} (await (run-job! {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks blocks
                                                      :inventory [{:name "stone_pickaxe" :count 1}]}

@@ -60,7 +60,7 @@
 
 
 (defn home-door
-  "The door of the home room (jobs.lib.reach/room) that stands open and has not been clicked this flight, or nil."
+  "The door of the home room (jobs.lib.reach.room/room) that stands open and has not been clicked this flight, or nil."
   [c room]
   (let [clicked (:doors-clicked (ctx/mem c) #{})]
     (->> (:doors room)

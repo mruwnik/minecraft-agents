@@ -185,7 +185,7 @@
 
 (def pocket
   "A 1x2 air pocket at [8 64 0] inside a stone block (x 6..10, y 64..66, z -2..2) on a stone floor wide enough not to read as
-  enclosed (reach/room-cells): open land round it."
+  enclosed (reach-room/room-cells): open land round it."
   (apply dissoc (merge (box -20 63 -20 20 63 20 "stone") (box 6 64 -2 10 66 2 "stone")) ["8,64,0" "8,65,0"]))
 
 (def free-by-pocket {:self {:pos {:x 0 :y 64 :z 0}} :blocks pocket :inventory [{:name "stone_pickaxe" :count 1}]})

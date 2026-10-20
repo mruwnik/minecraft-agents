@@ -38,7 +38,7 @@
      with a creeper within blast reach no room is looked for, and the one the body stands in is no refuge: it steps away
      or takes the cornered options): the latest :bed or :home within retreat-cover/home-range (64), or a room behind a wooden door or
      gate the body has seen (jobs.lib.rooms/rooms, bounded by its settings), that is a closed room (walls,
-     doors that shut: jobs.lib.reach/room) whose door it walks to (over seen blocks, at its own speed) ahead of every
+     doors that shut: jobs.lib.reach.room/room) whose door it walks to (over seen blocks, at its own speed) ahead of every
      melee chaser (jobs.lib.cost/reach-first?), the fewest steps of those, with a go-to child to the room cell inside
      that door (retreat.home info, once a flight); a building dropped only for unseen cells, with its door side within 6 blocks, is looked into once a flight from its doorway (then from one cell beyond it), up to ::door-looks (4) looks at its unseen sides (room-lib/glance-in!; never with a creeper chasing) before the choice; a step that gets no nearer drops that room for the flight. Not while
      low in a ranged chaser's line of fire (the cover step below comes first). Any cell of the room counts as home:

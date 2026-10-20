@@ -3,14 +3,15 @@
   triggers and survival jobs run (jobs.lib.reach) over a primitives object the bench builds on a recorded world.
   Compiled by `tools/compile engine search-bench`."
   (:require [jobs.lib.danger :as danger-q]
-  [jobs.lib.reach :as reach]))
+  [jobs.lib.reach :as reach]
+  [jobs.lib.reach.room :as reach-room]))
 
 (defn walkable-way
   "reach/walkable-way? from mob {x y z} to body {x y z} over primitives p."
   [p mob body]
   (reach/walkable-way? p (js->clj mob :keywordize-keys true) (js->clj body :keywordize-keys true)))
 
-(defn enclosed [p] (reach/enclosed? p))
+(defn enclosed [p] (reach-room/enclosed? p))
 
 (defn nearest-danger
   "The id of jobs.lib.danger/nearest-danger within radius (ranged mobs within ranged-radius), sight ignored, or nil."

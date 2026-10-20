@@ -13,7 +13,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.world-files :as world]
             [jobs.build.from-plan :as build]
             [jobs.build.from-plan.book :as fp-book]
@@ -694,7 +694,7 @@
                 pos (.-pos (.self p))]
             (is (= 40 (:placed result)))
             (is (< (.indexOf (mapv first (places p)) [2 66 2]) (.indexOf (mapv first (places p)) [3 65 1])) "the interior roof goes up from inside before the last wall cell shuts the room")
-            (is (not (reach/enclosed? p)))
+            (is (not (reach-room/enclosed? p)))
             (is (not (and (<= 1 (js/Math.floor (.-x pos)) 4) (<= 1 (js/Math.floor (.-z pos)) 4))))))))))
 
 (deftest a-box-built-in-a-pit-gets-its-interior-roof-before-the-last-wall-cell
@@ -819,7 +819,7 @@
                                  :when (or (= y 63) (not (and (<= 3 x 6) (<= 3 z 6))))]
                              [(h/cell-key x y z) "stone"]))
               {:keys [p]} (start {:blocks pit :self {:pos {:x 4.5 :y 64 :z 4.5}}} {} [])]
-          (is (reach/enclosed? p))
+          (is (reach-room/enclosed? p))
           (is (not (fp-cells/seals? {:primitives p} [4 65 4])))
           (is (not (fp-cells/seals? {:primitives p} [4 64 3]))))))))
 
@@ -1337,7 +1337,7 @@
                     (concat (for [x (range 10 14) z (range 10 14)] [x 66 z])
                             (for [x (range 10 14) y [64 65] z [10 13]] [x y z])
                             (for [z (range 11 13) y [64 65] x [10 13]] [x y z]))))
-          (is (not (reach/enclosed? p))))))))
+          (is (not (reach-room/enclosed? p))))))))
 
 (def tall-wall-plan
   "A stone wall 3 wide and 5 high at z 6, its lowest row at y 64 over the floor."
@@ -1461,4 +1461,4 @@
               result (await (child-outcome eng job {:plan "box"} 400))
               order (mapv first (places p))]
           (is (= 6 (:placed result)) (pr-str order (:given-up result)))
-          (is (not (reach/enclosed? p))))))))
+          (is (not (reach-room/enclosed? p))))))))

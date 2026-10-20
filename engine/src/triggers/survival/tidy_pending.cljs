@@ -17,7 +17,7 @@
   (:require [jobs.lib.body :as body]
             [engine.args :as a]
             [engine.settings :as settings]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
             [engine.memory :as mem]))
@@ -75,7 +75,7 @@
         now (:now view)
         h (u/self-pos {:primitives p})
         here {:x (:x h) :y (:y h) :z (:z h)}
-        enclosed (delay (reach/enclosed? p))
+        enclosed (delay (reach-room/enclosed? p))
         pending (when-not (or (body/recovery-pending? view :tidy-pending) (airborne? p))
                   (holds? p view args live enclosed here))]
     (boolean (some #(not (tried-lately? args now here (tidy/restorable? p % enclosed) %)) pending))))

@@ -9,6 +9,7 @@
             [engine.events :as events]
             [engine.ctx :as ctx]
             [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.tidy :as tidy]
             [jobs.survival.restore-broken :as restore-broken]
             [engine.memory :as mem]
@@ -611,8 +612,8 @@
       (fn ^:async t []
         (let [world (assoc-in (assoc with-hitbox :floor [-25 -25 25 25] :blocks (dissoc walled-cube "2,64,0" "2,65,0")) [:self :pos] [0 64 0])
               {:keys [eng p seen]} (restore! world [(zs/whole-zone "Miles")] [(dug-cell [2 64 0])])]
-          (is (not (reach/enclosed? p)) "the hut has a doorway")
-          (is (reach/enclosed? p #{[2 64 0]}) "filling it would shut the body in")
+          (is (not (reach-room/enclosed? p)) "the hut has a doorway")
+          (is (reach-room/enclosed? p #{[2 64 0]}) "filling it would shut the body in")
           (await (zs/run-until-empty eng 30))
           (is (= [] (zs/calls p "place")) "the doorway is not filled")
           (is (= 1 (count (tidy-entries eng))) "kept for when the body is out")
@@ -624,8 +625,8 @@
       (fn ^:async t []
         (let [world (assoc-in (assoc with-hitbox :floor [-12 -20 12 20] :blocks {"2,66,0" "stone"}) [:self :pos] [0 64 0])
               {:keys [eng p]} (restore! world [(zs/whole-zone "Miles")] [(dug-cell [2 65 0])])]
-          (is (not (reach/enclosed? p)) "the floor is room: exactly room-cells walkable cells")
-          (is (reach/enclosed? p #{[2 65 0]}) "one cell less floods as closed at room-cells")
+          (is (not (reach-room/enclosed? p)) "the floor is room: exactly room-cells walkable cells")
+          (is (reach-room/enclosed? p #{[2 65 0]}) "one cell less floods as closed at room-cells")
           (await (zs/run-until-empty eng 30))
           (is (= [{:x 2 :y 65 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))) "the body keeps the rest of the floor"))))))
 
@@ -643,14 +644,14 @@
       (fn ^:async t []
         (let [world (assoc with-hitbox :floor [-25 -25 25 25] :blocks mid-shaft :self {:pos [0 65 0]})
               {:keys [eng p seen]} (restore! world [(zs/whole-zone "Miles")] [escalation-hole])]
-          (is (reach/enclosed? p) "the body is shut in the shaft")
+          (is (reach-room/enclosed? p) "the body is shut in the shaft")
           (is (not (tidy/in-body? p [0 67 0])) "the hole is clear of the hitbox")
           (await (zs/run-until-empty eng 30))
           (is (= [] (zs/calls p "place")) "the hole is the body's way on: not filled")
           (is (= 1 (count (tidy-entries eng))) "kept for when the body is out")
           (is (= [[{:cell [0 67 0] :was "stone" :why :shut-in}]] (mapv :cells (not-restored-runs seen))))
           (fake/swap-self! p assoc :pos [2 64 1])
-          (is (not (reach/enclosed? p)) "out on open ground")
+          (is (not (reach-room/enclosed? p)) "out on open ground")
           (is (nil? (tidy/why-not p escalation-hole)) "nothing holds the hole back once the body is out"))))))
 
 (def own-hole
@@ -768,9 +769,9 @@
         searches (atom 0)
         floods (atom 0)
         search reach/search
-        flood reach/flood
+        flood reach-room/flood
         verdict (with-redefs [reach/search (fn [& xs] (swap! searches inc) (apply search xs))
-                              reach/flood (fn [& xs] (swap! floods inc) (apply flood xs))]
+                              reach-room/flood (fn [& xs] (swap! floods inc) (apply flood xs))]
                   (first (restore-broken/decide {:primitives p} (holes n))))]
     {:verdict verdict :searches @searches :floods @floods}))
 

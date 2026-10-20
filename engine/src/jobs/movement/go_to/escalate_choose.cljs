@@ -11,6 +11,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.tidy :as tidy]
@@ -136,15 +137,15 @@
       {:step :dig-route :cells (vec cells)})))
 
 (defn nearest-stand
-  "A cell [x y z] the body can walk to (a flood of at most reach/room-cells cells) nearest goal: of the cells no farther
+  "A cell [x y z] the body can walk to (a flood of at most reach-room/room-cells cells) nearest goal: of the cells no farther
   than slack (default 0) beyond the nearest, in the whole distance and in the distance along the ground, the first the
   flood reaches (the shortest walk)."
   ([p goal] (nearest-stand p goal 0))
   ([p goal slack]
-   (let [kind-at (reach/lookup p reach/body-kind-of)
+   (let [kind-at (reach/lookup p reach-room/body-kind-of)
          to-goal #(u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] goal))
          across #(u/flat-dist {:x (% 0) :z (% 2)} {:x (goal 0) :z (goal 2)})
-         cells (->> (:cells (reach/flood-visit #(reach/forward kind-at %1 %2 %3) (reach/standing-vec p) reach/room-cells))
+         cells (->> (:cells (reach-room/flood-visit #(reach/forward kind-at %1 %2 %3) (reach/standing-vec p) reach-room/room-cells))
                     (map vec))
          best (reduce (fn [a b] (if (< (to-goal b) (to-goal a)) b a)) cells)]
      (first (filter #(and (<= (to-goal %) (+ (to-goal best) slack)) (<= (across %) (+ (across best) slack))) cells)))))
@@ -231,7 +232,7 @@
             (and first? cheaper? (= "found" status) (number? seconds) @stair (> seconds (* 3 (stair-step-s-here c) (:steps @stair)))) :cheaper))))))
 
 (defn escalate?
-  "Whether a give-up after tries fruitless walks with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), its only way dives (dive?), the goal is walled in (goal-walled?), or the walker failed max-blocked walks running (walker-fault?; one stuck walk of a :tries 1 caller is no proof) or the body is shut in (reach/enclosed?), and no door or
+  "Whether a give-up after tries fruitless walks with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), its only way dives (dive?), the goal is walled in (goal-walled?), or the walker failed max-blocked walks running (walker-fault?; one stuck walk of a :tries 1 caller is no proof) or the body is shut in (reach-room/enclosed?), and no door or
   gate borders where it can walk (escape/door-beside?: that is its way out; an iron door, or any door under :doors :never,
   is a wall). Never out of
   the body's own shelter: it is shut in on purpose."

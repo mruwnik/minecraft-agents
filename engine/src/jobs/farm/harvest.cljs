@@ -12,7 +12,7 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
-            [jobs.lib.reach :as rch]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.ready :as ready]
             [jobs.lib.spent :as spent]
             [jobs.lib.work-place :as work-place]
@@ -359,7 +359,7 @@
         ripe (when (cutting? c) (ripe-of c (:skipped m)))]
     (when (seq ripe)
       (let [here (u/self-pos c)
-            shut-in? (rch/enclosed? p)
+            shut-in? (reach-room/enclosed? p)
             near (when-not shut-in? (filterv #(<= (u/eye-dist here %) (reach)) ripe))
             walked (when (empty? near) (await (common/walk-to! c (first ripe) (if shut-in? (settings/get settings ::shut-in-walk-range) (settings/get settings ::walk-range)))))
             targets (if (seq near) near [(first ripe)])
@@ -391,7 +391,7 @@
   (let [m (ctx/mem c)
         center (center-of c)
         radius (:radius (:args c))
-        shut-in? (and (not (:left-pit m)) (zero? (:cut m 0)) (rch/enclosed? (:primitives c)))]
+        shut-in? (and (not (:left-pit m)) (zero? (:cut m 0)) (reach-room/enclosed? (:primitives c)))]
     (when (and (or (seq (:replant m)) (:collect m) (zero? (:cut m 0)))
                (or shut-in? (> (u/dist (u/self-pos c) center) radius)))
       (if (>= (:home-fails m 0) (max-home-fails))

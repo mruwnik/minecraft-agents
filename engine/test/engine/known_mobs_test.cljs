@@ -9,6 +9,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.reach.proofs :as proofs]
             [engine.perception :as perception]
             [engine.memory :as mem]
@@ -145,7 +146,7 @@
         [sealed-p sealed-calls] (with-raw-world (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks sealed :entities mobs}))]
     (is (= [1 2] (sort (map #(.-id %) (danger-q/dangers open-p 8 {} {:sight? false})))))
     (is (= [] (danger-q/dangers sealed-p 8 {} {:sight? false})))
-    (is (false? (reach/enclosed? open-p)))
+    (is (false? (reach-room/enclosed? open-p)))
     (is (= 0 @open-calls @sealed-calls) "no blockAt")))
 
 ;; ---- proofs shared between the mobs of one query

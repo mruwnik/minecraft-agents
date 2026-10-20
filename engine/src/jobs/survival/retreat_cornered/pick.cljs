@@ -16,7 +16,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.look :as look]
             [jobs.lib.pillar :as pl]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.result :as result]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.step-off :as step-off]
@@ -148,7 +148,7 @@
         close (filter #(and (not (combat/ranged? %)) (not (combat/creeper? %)) (not (combat/enderman? %))
                             (<= (danger-q/mob-distance p %) (close-radius)))
                       hostiles)
-        in-room? (fn [] (let [cells (:cells (reach/room p (sh-sense/feet p)))]
+        in-room? (fn [] (let [cells (:cells (reach-room/room p (sh-sense/feet p)))]
                           (some (fn [e] (let [{:keys [x y z]} (danger-q/mob-pos p e)]
                                           (contains? cells [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)])))
                                 close)))]

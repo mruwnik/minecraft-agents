@@ -3,6 +3,7 @@
   two above it, so a body stepping onto it would hit its head."
   (:require [clojure.string :as str]
             [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.util :as u]))
 
 (def low-block #"_bed$|_slab$")
@@ -15,8 +16,8 @@
   "The low block a body walled in round goal {:x :y :z} would have to step over to leave, whose cell two above is solid:
   {:block name :at [x y z] :under [x y z]} (the first found), else nil. Walks the cells the goal reaches over the blocks seen."
   [p {:keys [x y z]}]
-  (let [kind-at (reach/lookup p reach/body-kind-of)]
-    (when-let [cells (reach/flood-cells (partial reach/forward kind-at) [x y z] reach/node-budget)]
+  (let [kind-at (reach/lookup p reach-room/body-kind-of)]
+    (when-let [cells (reach-room/flood-cells (partial reach/forward kind-at) [x y z] reach/node-budget)]
       (first
         (for [c cells
               :let [cx (aget c 0) cy (aget c 1) cz (aget c 2)]

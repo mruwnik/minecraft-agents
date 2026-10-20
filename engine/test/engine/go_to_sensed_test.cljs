@@ -23,6 +23,7 @@
             [jobs.lib.world-files :as world-files]
             [jobs.lib.pass :as pass]
             [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.vehicle :as vehicle]
             [jobs.lib.walk.plan :as wplan]
@@ -145,7 +146,7 @@
 (deftest reach-reads-the-door-the-body-stands-in-and-the-floor-it-sees
   (let [{:keys [w]} (sensed-only {:self {:pos {:x 0.5 :y 64 :z 0.3}} :yaw 0 :pitch 40
                                   :blocks (merge ground {"0,64,0" "iron_door" "0,65,0" "iron_door"})})]
-    (is (= [0 1] (reach/panel-step w (constantly :solid) {:x 0 :y 64 :z 0})) "a shut door facing north (its default state)")
+    (is (= [0 1] (reach-room/panel-step w (constantly :solid) {:x 0 :y 64 :z 0})) "a shut door facing north (its default state)")
     (is (true? (reach/standable-cell? w {:x 0 :y 64 :z 2} (fn [_ y _] (if (= y 63) :solid :open))))
         "kind-at decides feet and head; the floor read only for hazards")))
 

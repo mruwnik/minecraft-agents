@@ -5,7 +5,7 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.look :as look]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.util :as u]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -33,7 +33,7 @@
         {:keys [cell]} (:data (mem/latest view :night-looked))]
     (boolean (and cell
                   (or (<= (u/dist self cell) 2)
-                      (contains? (:cells (reach/room p self)) [(:x cell) (:y cell) (:z cell)]))))))
+                      (contains? (:cells (reach-room/room p self)) [(:x cell) (:y cell) (:z cell)]))))))
 
 (defn unlooked-for-bed?
   "Night, awake, not looked from here (looked-here?), and either a bed carried or remembered with a cell beside the feet
@@ -85,7 +85,7 @@
   [p]
   (when (sh-sense/roofed? p (sh-sense/room-roof-height))
     (let [self (u/self-pos {:primitives p})]
-      (->> (:doors (reach/room p (sh-sense/feet p)))
+      (->> (:doors (reach-room/room p (sh-sense/feet p)))
            (filter #(sh-inside/open-door? p %))
            (sort-by #(u/dist self (:cell %)))))))
 

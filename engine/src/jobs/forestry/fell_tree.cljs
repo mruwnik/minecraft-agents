@@ -14,7 +14,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.sense :as sense]
             [jobs.lib.targets :as targets]
             [jobs.lib.trees :as trees :refer [log-name? axe-worth-fetching? axe-fetch-limits trees-near tree-near tree-at unreachable-set debts replant-kind
@@ -161,7 +161,7 @@
         (case (:status a)
           :found (commit-tree! c (nth ts (:index a)))
           :searching :searching
-          (if (and (:proved a) (not (reach/enclosed? (:primitives c))))
+          (if (and (:proved a) (not (reach-room/enclosed? (:primitives c))))
             (do (mark-all-unreachable! c ts) nil)
             (commit-tree! c (first ts))))))))
 

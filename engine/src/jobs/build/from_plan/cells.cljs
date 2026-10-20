@@ -3,6 +3,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.tools :as tools]
             [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.util :as u]
             [plan.shape :as shape]
             [jobs.lib.build.plan :as plan :refer [body-cells facing-ok? facing-of]]))
@@ -40,13 +41,13 @@
 
 (defn seals?
   "Whether placing at cell would shut the body in: it has room now and would have too little with the cell solid
-  (jobs.lib.reach/closes-in?). Only a cell at the body's own height band (feet to a block above the head) can."
+  (jobs.lib.reach.room/closes-in?). Only a cell at the body's own height band (feet to a block above the head) can."
   [c cell]
   (let [p (:primitives c)
         by (js/Math.floor (:y (u/self-pos c)))
         cy (second cell)]
     (boolean (and (<= by cy (+ by 2))
-                  (reach/closes-in? p cell)))))
+                  (reach-room/closes-in? p cell)))))
 
 (defn shuts-out?
   "Whether placing cell would wall in the floor under another cell still owed at its height or above, which can then only
@@ -56,7 +57,7 @@
         [cx _ cz] (:pos cell)
         close? #(and (>= (get (:pos %) 1) y) (not= (:pos %) (:pos cell)) (<= (js/Math.abs (- cx (nth (:pos %) 0))) 4) (<= (js/Math.abs (- cz (nth (:pos %) 2))) 4))
         above (vals (into {} (map (fn [o] [[(nth (:pos o) 0) (nth (:pos o) 2)] (:pos o)])) (filter close? owed)))]
-    (boolean (some #(reach/walls-in? (:primitives c) % (:pos cell)) above))))
+    (boolean (some #(reach-room/walls-in? (:primitives c) % (:pos cell)) above))))
 
 (defn exit-point
   "A cell two blocks outside the box of the planned cells, on the side nearest the body, at its feet height."

@@ -2,7 +2,7 @@
   "Whether the body is shut in its shelter, safe from the night where it stands, and what a walk would leave."
   (:require [engine.ctx :as ctx]
             [jobs.lib.click :as click]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.util :as u]
             [jobs.lib.shelter.sense :as sh-sense]))
 
@@ -14,7 +14,7 @@
   [p {:keys [start door room sealed]}]
   (cond
     (or room (false? sealed)) false
-    start (and (< (:y (sh-sense/feet p)) (:y start)) (reach/enclosed? p))
+    start (and (< (:y (sh-sense/feet p)) (:y start)) (reach-room/enclosed? p))
     door (boolean (some #(sh-sense/solid-at? p %) door))
     :else (sh-sense/roofed? p sh-sense/default-roof-height)))
 
@@ -54,13 +54,13 @@
   "Whether the body is safe from the night where it stands (owner Q345): shut in a closed room under a roof
   (sh-sense/shut-in-room?) with no open door, so no way in for a walking mob, and no dark spawnable cell in it farther
   than spawn-free-radius from the body (a dark 5x5 room is safe, a dark hall reaching 30 blocks is not). A roof with open
-  sides is not, nor is a pit a walker on its rim steps down into (reach/enterable?). The one test the night trigger, night-sheltered, walk-leaves-shelter?, the night job's end and the hold share."
+  sides is not, nor is a pit a walker on its rim steps down into (reach-room/enterable?). The one test the night trigger, night-sheltered, walk-leaves-shelter?, the night job's end and the hold share."
   [p]
   (boolean
    (and (not (sh-sense/head-in-block? p)) (sh-sense/shut-in-room? p)
-        (let [room (reach/room p (sh-sense/feet p))]
+        (let [room (reach-room/room p (sh-sense/feet p))]
           (and (not-any? #(open-door? p %) (:doors room))
-               (not (reach/enterable? p room))
+               (not (reach-room/enterable? p room))
                (not (dark-spawn-beyond? p room)))))))
 
 (defn night-sheltered
@@ -81,7 +81,7 @@
       (cond
         (near? (sh-sense/feet p)) nil
         (in-own-shelter p shelter) :dug-in
-        :else (when-not (some (fn [[x y z]] (near? {:x x :y y :z z})) (:cells (reach/room p (sh-sense/feet p)))) :room)))))
+        :else (when-not (some (fn [[x y z]] (near? {:x x :y y :z z})) (:cells (reach-room/room p (sh-sense/feet p)))) :room)))))
 
 (def trapped-policy
   "Policy of the :shelter-trapped entries written when leave! found no way out: up to 3, five minutes."

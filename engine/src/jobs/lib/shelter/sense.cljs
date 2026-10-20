@@ -4,7 +4,7 @@
             [engine.settings :as settings]
             [jobs.lib.breath :as breath]
             [jobs.lib.look :as look]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]))
@@ -143,16 +143,16 @@
     (boolean (some #(some-> (u/seen-name p {:x x :y (+ y %) :z z}) (.endsWith "_leaves")) (range 1 (inc height))))))
 
 (defn shut-in-room?
-  "Whether the body stands in a closed room (reach/closed-room?) with a roof (solid or leaves) over it within
+  "Whether the body stands in a closed room (reach-room/closed-room?) with a roof (solid or leaves) over it within
   room-roof-height blocks: safe from the night though the roof is above :roof-height. Sealed from the sky (buried?)
   counts as roofed: the roof over the feet cannot be looked at from inside."
   [p]
-  (and (or (roofed? p (room-roof-height)) (leaf-roofed? p (room-roof-height)) (buried? p)) (reach/closed-room? p (feet p))))
+  (and (or (roofed? p (room-roof-height)) (leaf-roofed? p (room-roof-height)) (buried? p)) (reach-room/closed-room? p (feet p))))
 
 (defn shut-in-hut?
   "shut-in-room? and wide: a hut, not a one-wide tunnel the body dug."
   [p]
-  (and (shut-in-room? p) (wide-room? (reach/room p (feet p)))))
+  (and (shut-in-room? p) (wide-room? (reach-room/room p (feet p)))))
 
 (defn sky-in
   "Seconds until the open sky is bright enough (light-in-s of full sky light now): 0 by day, the time left of the night

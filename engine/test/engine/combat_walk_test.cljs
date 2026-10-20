@@ -5,7 +5,7 @@
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.hut-shelter-test :as hut]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.threats :as threats]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
@@ -55,12 +55,12 @@
 ;; ------------------------------------------------------------------ enclosed, and the :moved entries of a walk with no path
 
 (deftest enclosed-is-a-pit-or-a-doorless-room-not-open-ground-or-a-doored-hut
-  (is (true? (reach/enclosed? (tu/fake {:self {:pos ut/at5} :blocks ut/deep-pit}))) "a 3-deep pit")
-  (is (false? (reach/enclosed? (tu/fake {:self {:pos ut/at5} :floor tu/walk-floor}))) "open ground")
-  (is (false? (reach/enclosed? (tu/fake (hut/hut-world {:x 5 :y 64 :z 0} {})))) "a hut with a shut wooden door")
-  (is (true? (reach/enclosed? (tu/fake (hut/hut-world {:x 5 :y 64 :z 0} {"5,64,2" "cobblestone" "5,65,2" "cobblestone"}))))
+  (is (true? (reach-room/enclosed? (tu/fake {:self {:pos ut/at5} :blocks ut/deep-pit}))) "a 3-deep pit")
+  (is (false? (reach-room/enclosed? (tu/fake {:self {:pos ut/at5} :floor tu/walk-floor}))) "open ground")
+  (is (false? (reach-room/enclosed? (tu/fake (hut/hut-world {:x 5 :y 64 :z 0} {})))) "a hut with a shut wooden door")
+  (is (true? (reach-room/enclosed? (tu/fake (hut/hut-world {:x 5 :y 64 :z 0} {"5,64,2" "cobblestone" "5,65,2" "cobblestone"}))))
       "the same hut with its door walled up")
-  (is (true? (reach/enclosed? (tu/fake (hut/hut-world {:x 5 :y 64 :z 0} {"5,64,2" "iron_door" "5,65,2" "iron_door"}))))
+  (is (true? (reach-room/enclosed? (tu/fake (hut/hut-world {:x 5 :y 64 :z 0} {"5,64,2" "iron_door" "5,65,2" "iron_door"}))))
       "an iron door a hand cannot open"))
 
 (deftest moved-entries-mark-a-walk-that-found-no-path

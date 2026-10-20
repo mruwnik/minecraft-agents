@@ -5,7 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.ledger :as ledger]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
             [jobs.movement.go-to.holes :refer [note-placed! own-holes]]
@@ -46,7 +46,7 @@
       (changed? p cell) :changed
       (and (:dive-climb (ctx/mem c)) (contains? (ledger/own-cells c) cell)) :kept
       (tidy/in-body? p cell) :occupied
-      (reach/closes-in? p cell) :needed
+      (reach-room/closes-in? p cell) :needed
       (and (not (b/in-reach? c cell)) (deep-below? c cell)) :away)))
 
 (defn ^:async restore-round!

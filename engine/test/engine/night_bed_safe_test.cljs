@@ -14,7 +14,7 @@
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.rooms :as room-lib]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.beds :as sh-beds]
@@ -256,8 +256,8 @@
         _ (mem/forget-where! (:store eng) :bed (constantly true))
         v (mem/view (:store eng))
         unseen-east (seeing (js/Object.assign #js {} p) seen-from-the-start)]
-    (is (nil? (reach/room* unseen-east {:x 13 :y 64 :z 13})) "walls never seen behind the body: no closed room")
-    (is (contains? (:cells (reach/room* (seeing p seen-after-a-look) {:x 13 :y 64 :z 13})) [11 64 11])
+    (is (nil? (reach-room/room* unseen-east {:x 13 :y 64 :z 13})) "walls never seen behind the body: no closed room")
+    (is (contains? (:cells (reach-room/room* (seeing p seen-after-a-look) {:x 13 :y 64 :z 13})) [11 64 11])
         "a seen-free cell beside the feet over an unseen floor is a room cell, and the room goes on from it")
     (is (= {:x 11 :y 64 :z 12} (sh-beds/bed-to-use unseen-east v 48 (constantly true))))
     (is (true? (sh/night-holds? unseen-east v {} (constantly true))))))

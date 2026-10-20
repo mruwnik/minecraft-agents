@@ -13,7 +13,7 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.look :as look]
             [jobs.lib.look-edge :as look-edge]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.rooms :as room-lib]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
@@ -81,7 +81,7 @@
         refused-door? (fn [door] (some #(refused? c (:pos %)) (filter #(= door (:door %)) starts)))]
     (->> starts
          (remove #(refused-door? (:door %)))
-         (keep (fn [{:keys [pos]}] (when (or (room-lib/refuge-room? p pos) (reach/unseen-room? p pos)) {:pos pos})))
+         (keep (fn [{:keys [pos]}] (when (or (room-lib/refuge-room? p pos) (reach-room/unseen-room? p pos)) {:pos pos})))
          first)))
 
 (defn target-of
@@ -100,7 +100,7 @@
   [c {:keys [pos]}]
   (let [p (:primitives c)]
     (boolean (or (<= (u/dist (u/self-pos c) (room-lib/mid pos)) 1.5)
-                 (some->> (reach/room p pos) (room-lib/inside? p))))))
+                 (some->> (reach-room/room p pos) (room-lib/inside? p))))))
 
 (defn here?
   "Whether the body is where it enters: at the target, or, with no :place, under a roof or in a closed room whose roof has a hole."
@@ -156,7 +156,7 @@
   [c t]
   (let [p (:primitives c)
         threats (combat/hostiles p (settings/get settings ::race-radius))
-        room (reach/room p (:pos t))
+        room (reach-room/room p (:pos t))
         way (when room (room-lib/way-in p room))]
     (boolean (and (seq threats)
                   (or (some combat/creeper? threats)
@@ -166,8 +166,8 @@
   "Whether the room seen at pos can be closed by nothing the job does: a seen room that is no closed room, with an
   unroofed cell (no roof cell over it unseen: that one is walked to and looked at) and no doorway that shuts it (a roof on open sides). Read-only."
   [p pos]
-  (let [cell (:cell (reach/unroofed-cell p pos))]
-    (boolean (and (not (room-lib/refuge-room? p pos)) (not (reach/unseen-room? p pos))
+  (let [cell (:cell (reach-room/unroofed-cell p pos))]
+    (boolean (and (not (room-lib/refuge-room? p pos)) (not (reach-room/unseen-room? p pos))
                   cell (not (look-edge/unseen-roof? p cell)) (nil? (room-lib/shut-by p pos cell any?))))))
 
 (defn can-start?
@@ -290,7 +290,7 @@
       (when-not (= roof (:roof-looked (ctx/mem c)))
         (ctx/update-mem! c assoc :roof-looked roof)
         (await (sense/look-at! c roof)))))
-  (if (and (here? c (target-of c)) (not (look/surveyed? c :cell)) (reach/unseen-room? (:primitives c) (sh-sense/feet (:primitives c))))
+  (if (and (here? c (target-of c)) (not (look/surveyed? c :cell)) (reach-room/unseen-room? (:primitives c) (sh-sense/feet (:primitives c))))
     (await (look/look-around! c))
     (await (step-judged! c))))
 

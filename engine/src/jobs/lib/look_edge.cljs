@@ -6,6 +6,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
@@ -25,7 +26,7 @@
   show it. A side of a dark stretch is never shown (a dark cell is not recorded), so the region stays open there."
   [p feet]
   (let [see-lit (look/see-lit-fn p)
-        cells (set (map vec (:cells (reach/room-flood p (reach/shut-kind-at p) (:x feet) (:y feet) (:z feet)))))]
+        cells (set (map vec (:cells (reach-room/room-flood p (reach-room/shut-kind-at p) (:x feet) (:y feet) (:z feet)))))]
     (fn [[x y z]]
       (or (nil? see-lit)
           (some (fn [[dx dz]] (and (contains? cells [(+ x dx) y (+ z dz)]) (== 1 (see-lit (+ x dx) y (+ z dz)))))
@@ -58,7 +59,7 @@
    (let [p (:primitives c)
          feet (sh-sense/feet p)]
      (when (and (< (count looked) max-edge-looks) (< steps max-edge-steps) (covered? p))
-       (->> (reach/unseen-sides p feet)
+       (->> (reach-room/unseen-sides p feet)
             (remove looked)
             (filter (lit-side? p feet))
             (sort-by (fn [[x y z]] (u/dist feet {:x x :y y :z z})))
@@ -67,9 +68,9 @@
 (defn walkable-near
   "The cell {:x :y :z} the body can walk to (the real ground, doors opened) nearest cell [x y z], or nil."
   [p [x y z]]
-  (let [kind-at (reach/lookup p reach/body-kind-of)
+  (let [kind-at (reach/lookup p reach-room/body-kind-of)
         {:keys [x0 y0 z0]} (let [f (sh-sense/feet p)] {:x0 (:x f) :y0 (:y f) :z0 (:z f)})
-        cells (:cells (reach/flood-visit (partial reach/forward kind-at) [x0 y0 z0] reach/room-cells))
+        cells (:cells (reach-room/flood-visit (partial reach/forward kind-at) [x0 y0 z0] reach-room/room-cells))
         best (first (sort-by (fn [c] (+ (js/Math.abs (- (aget c 0) x)) (js/Math.abs (- (aget c 1) y)) (js/Math.abs (- (aget c 2) z)))) cells))]
     (when best {:x (aget best 0) :y (aget best 1) :z (aget best 2)})))
 

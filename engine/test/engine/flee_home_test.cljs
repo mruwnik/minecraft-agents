@@ -12,7 +12,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.cost :as cost]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.survival.retreat :as retreat]
             [jobs.survival.retreat-cornered :as cornered]
             [jobs.lib.rooms :as rooms]))
@@ -87,11 +87,11 @@
 
 (deftest a-hut-is-a-closed-room-once-its-doors-are-shut-and-open-ground-is-not
   (let [p (tu/seeing-all (tu/fake-on-floor (hut {:x 5.5 :y 64 :z 0.5} open-door [])))]
-    (is (true? (reach/closed-room? p home)) "an open door counts as one that can be shut")
-    (is (false? (reach/closed-room? p {:x 15 :y 64 :z 0})) "the open field outside")
-    (is (true? (reach/closed-room? p {:x 5 :y 64 :z 2})) "standing in the open door's own cell: judged by the room it belongs to")
-    (is (= #{[5 64 0]} (set (filter #{[5 64 0]} (:cells (reach/room* p {:x 5 :y 64 :z 2}))))) "the room of a doorway holds the room cells")
-    (is (false? (reach/closed-room? (tu/seeing-all (tu/fake-on-floor (hut {:x 5.5 :y 64 :z 0.5} {} []
+    (is (true? (reach-room/closed-room? p home)) "an open door counts as one that can be shut")
+    (is (false? (reach-room/closed-room? p {:x 15 :y 64 :z 0})) "the open field outside")
+    (is (true? (reach-room/closed-room? p {:x 5 :y 64 :z 2})) "standing in the open door's own cell: judged by the room it belongs to")
+    (is (= #{[5 64 0]} (set (filter #{[5 64 0]} (:cells (reach-room/room* p {:x 5 :y 64 :z 2}))))) "the room of a doorway holds the room cells")
+    (is (false? (reach-room/closed-room? (tu/seeing-all (tu/fake-on-floor (hut {:x 5.5 :y 64 :z 0.5} {} []
                                                                           {"5,64,2" "air" "5,65,2" "air"})))
                                     home))
         "a doorway with no door")))
@@ -163,7 +163,7 @@
 
 (deftest any-cell-of-the-room-is-home
   (let [p (tu/seeing-all (tu/fake-on-floor (hut {:x 4.5 :y 64 :z -0.5} open-door [])))
-        room (reach/room p home)]
+        room (reach-room/room p home)]
     (is (rooms/inside? p room) "a room cell other than the home cell")
     (swap! (fake/state p) assoc-in [:self :pos] [5.5 64 6.5])
     (is (not (rooms/inside? p room)) "outside the hut")))
@@ -342,8 +342,8 @@
       (fn ^:async t []
         (let [counts (atom {})
               restores [(counting! counts :closed-room #(identity rooms/refuge-room?) #(set! rooms/refuge-room? %))
-                        (counting! counts :room #(identity reach/room) #(set! reach/room %))
-                        (counting! counts :walk-steps #(identity reach/walk-steps) #(set! reach/walk-steps %))
+                        (counting! counts :room #(identity reach-room/room) #(set! reach-room/room %))
+                        (counting! counts :walk-steps #(identity reach-room/walk-steps) #(set! reach-room/walk-steps %))
                         (counting! counts :steps #(identity retreat/flight-step!) #(set! retreat/flight-step! %))]
               {:keys [p]} (try (await (flee! (assoc (hut {:x 5.5 :y 64 :z 6.5} (merge hs/door-states lone-door-states)
                                                          [(zombie 5.5 13.5 0.4)] lone-doors)
@@ -378,7 +378,7 @@
           (core/submit! eng '(jobs.survival.retreat) {})
           (try (await (tu/run-until-empty eng 2))
                (finally (set! retreat/flight-step! step)))
-          (let [flood (let [before @reads] (reach/closed-room? p {:x -6 :y 64 :z 5}) (- @reads before))]
+          (let [flood (let [before @reads] (reach-room/closed-room? p {:x -6 :y 64 :z 5}) (- @reads before))]
             (is (seq @per-step))
             (is (< (first @per-step) flood) (str "cells read by the first step, fewer than one open room flood (" flood "): " @per-step))))))))
 
