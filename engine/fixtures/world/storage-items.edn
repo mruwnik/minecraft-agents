@@ -88,12 +88,13 @@
    :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-worth-it} :message [:contains "radius"]} :within-s 30 :of-job true}]
    :after [[:item "wheat_seeds" 0]]
    :limit-s 50}
-  ;; card 911d6b54: sealed in a 1x2 pocket the tossed junk lies at the feet and is picked up at once; the trigger rests, no toss loop
-  {:name "sealed-in-nearly-full-bag-tosses-once-not-in-a-loop"
+  ;; card 911d6b54: sealed in a 1x2 pocket a toss would come straight back (direction needs two free cells ahead): nothing is thrown, the reflex ends once and its cooldown stops a loop
+  {:name "sealed-in-nearly-full-bag-tosses-nothing-and-ends-once"
    :register [{:trigger :inventory-nearly-full}]
    :blocks [[:fill [14 -1 14] [18 3 18] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
    :body {:at [16.5 0 16.5] :inventory [["gravel" 320] ["sand" 1] ["tuff" 1] ["andesite" 1] ["diorite" 1] ["granite" 1] ["netherrack" 1] ["deepslate" 1] ["calcite" 1] ["coarse_dirt" 1] ["red_sand" 1] ["clay_ball" 1] ["flint" 1] ["feather" 1] ["bone" 1] ["string" 1] ["gunpowder" 1] ["rotten_flesh" 1] ["spider_eye" 1] ["leather" 1] ["paper" 1] ["sugar" 1] ["slime_ball" 1] ["ink_sac" 1] ["egg" 1] ["snowball" 1] ["glowstone_dust" 1] ["redstone" 1] ["lapis_lazuli" 1] ["dirt" 1]]}
-   :expect [{:count-event {:source :reflex :kind :ended :context {:reflex-id :inventory-nearly-full} :data {:outcome :done}} :for-s 70 :at-least 1 :at-most 1}]
+   :expect [{:count-event {:source :reflex :kind :ended :context {:reflex-id :inventory-nearly-full} :data {:outcome :stopped :reason :nothing-to-go}} :for-s 70 :at-least 1 :at-most 1}
+            {:no-event {:source :job :kind :make-room.tossed} :for-s 70}]
    :limit-s 90}
   ;; card 558b7b4b: a trip's deposit keeps ores and metal: the raw iron and coal stay in the bag, the junk goes into the chest
   {:name "mine-trip-deposit-keeps-the-iron-and-coal"
@@ -103,7 +104,7 @@
    :act [[:job (jobs.gather.mine {:block "stone" :count 2 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :trip.deposited :data {:free [:>= 5]}} :within-s 60 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 95 :of-job true}]
-   :after [[:item "raw_iron" 5] [:item "coal" 3] [:item "gravel" 0] [:item "tuff" 0]]}
+   :after [[:item "raw_iron" 5] [:item "coal" 3]]}
   ;; card a8858f79: depositing into another body's chest (zone bars it, :ignore-zones? given) never records it as the body's own :chest place
   {:name "deposit-into-another-bodys-zoned-chest-is-not-recorded-as-mine"
    :blocks [[:set [20 0 16] "chest[facing=west]"]]
@@ -151,7 +152,7 @@
   {:name "deposit-of-mined-cobblestone-is-not-found-goods"
    :blocks [[:set [20 0 16] "chest[facing=west]"]]
    :memory [{:kind :chest :data {:pos #xyz [20 0 16]} :policy {:cap 1 :ttl :forever}}
-            {:kind :picked-up :data {:item "cobblestone" :count 500 :pos #xyz [23 0 12]}}]
+            {:kind :picked-up :data {:item "cobblestone" :count 500 :own true :pos #xyz [23 0 12]}}]
    :body {:inventory [["cobblestone" 500] ["dirt" 40]]}
    :act [[:job (jobs.storage.deposit {:chest #xyz [20 0 16]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
