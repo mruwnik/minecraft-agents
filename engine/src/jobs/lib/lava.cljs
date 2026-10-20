@@ -9,7 +9,10 @@
             [jobs.lib.access.rules :as rules]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.aim :as aim]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.reach :as reach]
+            [jobs.lib.step-off :as step-off]
             [jobs.lib.sense :as sense]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.util :as u]))
@@ -23,11 +26,61 @@
   [p cell]
   (filterv #(seen-lava? p %) (map #(add cell %) rules/neighbour-deltas)))
 
+(defn face-aim
+  "The point just inside neighbour n of the dug cell on the face towards it (d is the step from the cell to n)."
+  [n d]
+  (mapv #(+ %1 0.5 (* -0.45 %2)) n d))
+
 (defn ^:async look-round!
   "Look at each unsensed neighbour of the dug cell, the cell below first, with a sight pass after each look
-  (jobs.lib.sense), so lava the dig laid open is seen before exposed reads."
+  (jobs.lib.sense), so lava the dig laid open is seen before exposed reads. The look aims at the neighbour's face on
+  the dug cell: from the top of a 1-wide shaft the line to its centre runs through the rock over it."
   [c cell]
-  (await (sense/look-at-unknown! c (map #(add cell %) (cons [0 -1 0] rules/neighbour-deltas)) dig-look/max-floor-looks)))
+  (let [p (:primitives c)]
+    (loop [[d & more] (cons [0 -1 0] rules/neighbour-deltas) looks 0]
+      (when (and d (< looks dig-look/max-floor-looks))
+        (let [n (add cell d)]
+          (if (dig-look/unknown? p n)
+            (do (await (sense/look-at! c n (face-aim n d)))
+                (recur more (inc looks)))
+            (recur more looks)))))))
+
+(def peek-height "Blocks above a cell's column a peek stance may stand." 3)
+
+(defn peek-stance
+  "The cell to stand on to see the neighbours of the dug cell still unseen, or nil when the body sees as many from where
+  it stands: of the cells within step-off reach of the column over the dug cell, the first with the most clear lines
+  from its eye to the faces on the dug cell."
+  [p feet ok? cell unknown-ds]
+  (let [kind-at (aim/seen-kind-at p)
+        targets (map (fn [d] (face-aim (add cell d) d)) unknown-ds)
+        clear-count (fn [[ex ey ez]] (count (filter #(reach/ray-clear? kind-at [ex ey ez] %) targets)))
+        here (clear-count [(:x feet) (+ (:y feet) 1.62) (:z feet)])
+        stands (distinct (mapcat #(step-off/candidates p {:x (first cell) :y (+ (second cell) %) :z (nth cell 2)}
+                                                       {:avoid #{cell} :ok? ok?})
+                                 (range 0 (inc peek-height))))
+        scored (map (fn [{:keys [x y z] :as st}] [(clear-count [(+ x 0.5) (+ y 1.62) (+ z 0.5)]) st]) stands)
+        best (when (seq scored) (apply max (map first scored)))]
+    (when (and best (> best here))
+      (some (fn [[n st]] (when (= n best) st)) scored))))
+
+(defn ^:async peek!
+  "After a dig, when a neighbour of the dug cell is still unseen (the body dug it from a spot whose line to that face
+  runs through rock), walk to a standing cell that sees the faces on the dug cell and look again, once per cell.
+  :continue while the walk goes on, else nil. Memory :peek-to is the stance in hand, :peeked the cell done."
+  [c cell]
+  (let [p (:primitives c)
+        {:keys [peek-to peeked]} (ctx/mem c)
+        unknown-ds (filterv #(dig-look/unknown? p (add cell %)) rules/neighbour-deltas)
+        to (or peek-to (when (and (seq unknown-ds) (not= cell peeked)) (peek-stance p (u/self-pos c) (step-off/zone-ok (access/rules-input c)) cell unknown-ds)))]
+    (when to
+      (ctx/update-mem! c assoc :peek-to to)
+      (let [e (await (child/call-walk* c :peek {:pos to :range 0 :ways #{:walk}}))]
+        (if (= :continue e)
+          :continue
+          (do (ctx/update-mem! c #(-> % (dissoc :peek-to) (assoc :peeked cell)))
+              (await (look-round! c cell))
+              nil))))))
 
 (def max-seals "Places per lava cell (a seal and one reseal) before the seal counts as failed." 2)
 

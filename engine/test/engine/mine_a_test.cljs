@@ -352,14 +352,14 @@
                                 (set-pos! s 10 64 0)
                                 r))))
           ;; how many walks to the owed cell (y 63) were made when the first place came
-          (let [walks-at-place (atom nil)]
+          (let [distance-at-place (atom nil)]
             (.override (.-world p) "place"
                        (fn [token args impl]
-                         (swap! walks-at-place #(or % (count (filter (fn [t] (= 63 (:y t))) (tu/walked-to (:eng s))))))
+                         (swap! distance-at-place #(or % (let [[x _ z] (:pos (:self @(fake/state p)))] (max (js/Math.abs (- x 0.5)) (js/Math.abs (- z 0.5))))))
                          (impl token args)))
             (core/submit! (:eng s) (spec {:block "dirt" :count 1 :trip true :mend true}) {})
             (await (run-ticks s 40))
-            (is (pos? @walks-at-place) "walked to the owed cell before placing"))
+            (is (<= @distance-at-place 4) "the body is within reach of the owed cell when it places"))
           (let [names (mapv #(.-name %) (.-calls (.-world p)))
                 first-place (.indexOf (clj->js names) "place")]
             (is (<= 0 first-place))

@@ -299,12 +299,18 @@
                                     (when (map? r) (select-keys r [:unreachable :walk]))))))
       (not= :seal (:on-lava (:args c))) nil
       :else
-      (when-let [lavas (seq (do (await (lava/look-round! c cell)) (lava/exposed (:primitives c) cell)))]
+      (let [_ (await (lava/look-round! c cell))
+            peeking (await (lava/peek! c cell))
+            lavas (when-not peeking (seq (lava/exposed (:primitives c) cell)))]
+        (cond
+          peeking peeking
+          (not lavas) nil
+          :else
         (let [r (await (lava/seal! c :blocks.dig.sealed #(u/seen-name (:primitives c) (zipmap [:x :y :z] %)) (first lavas)
                                    {:fetch (settings/get b/settings ::b/seal-fetch) :ignore-zones? (:ignore-zones? (:args c))}))]
           (if (map? r)
             (do (ctx/update-mem! c assoc-in [:dug :unsealed] (assoc r :lavas (vec lavas))) :again)
-            r))))))
+            r)))))))
 
 (defn ^:async dig!
   "Hold the best tool and dig; book the outcome. Resolves to :done (finished), :collect (dug: lava to seal, drops to

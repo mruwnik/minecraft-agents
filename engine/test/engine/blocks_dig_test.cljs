@@ -16,6 +16,7 @@
             [engine.triggers :as triggers]
             [jobs.blocks.dig :as dig]
             [jobs.lib.blocks :as b]
+            [jobs.lib.lava :as lava]
             [jobs.lib.world-files :as world]
             [plan.shape :as shape]))
 
@@ -739,14 +740,14 @@
                                          #js {:unknown true}
                                          (.blockAt p pos))))
           (.override (.-world p) "look" (fn [token a impl]
-                                          (when (< (js/Math.abs (- 62.5 (.. a -pos -y))) 0.1) (reset! shown true))
+                                          (when (<= 62 (.. a -pos -y) 63) (reset! shown true))
                                           (impl token a)))
           (let [result (await (tu/child-outcome eng job {:pos under-feet} 40))]
             (is (= {:dug true :reason :dug} (select-keys result [:dug :reason])))
             (is (= "cobblestone" (block-at p lava-under)) "the lava the dig laid open was looked for and sealed")
             (is (= [{:cell [0 62 0]}] (mapv #(select-keys % [:cell]) (sealed-events seen))))))))))
 
-(deftest lava-beside-the-dug-cell-shows-only-when-looked-at-and-is-then-sealed
+(deftest lava-beside-the-dug-cell-shows-only-when-looked-at-on-its-face-and-is-then-sealed
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -757,7 +758,7 @@
                                          #js {:unknown true}
                                          (.blockAt p pos))))
           (.override (.-world p) "look" (fn [token a impl]
-                                          (when (< (js/Math.abs (- 1.5 (.. a -pos -x))) 0.1) (reset! shown true))
+                                          (when (< (js/Math.abs (- 1.05 (.. a -pos -x))) 0.1) (reset! shown true))
                                           (impl token a)))
           (let [result (await (tu/child-outcome eng job {:pos under-feet :accept #{:lava-adjacent}} 40))]
             (is (= {:dug true :reason :dug} (select-keys result [:dug :reason])))
@@ -1046,3 +1047,13 @@
         (let [[r p] (await (cleanup-of-a-cut-dig []))]
           (is (= {:kind :nothing-possible :cause :lava-unsealed} (select-keys r [:kind :cause])) (pr-str r))
           (is (= "lava" (block-at p lava-under))))))))
+
+(deftest a-side-wall-hidden-from-the-spot-a-shaft-was-dug-from-is-seen-from-the-far-edge
+  (let [mass (into {} (for [x (range -3 4) y (range 55 62) z (range -3 4)
+                            :when (not (and (zero? x) (zero? z) (>= y 59)))]
+                        [(str x "," y "," z) "stone"]))
+        p (tu/fake {:self {:pos {:x 3.5 :y 62 :z 1.5}} :blocks mass})
+        far {:x 3.5 :y 62 :z 1.5}
+        stance (lava/peek-stance p far (constantly true) [0 59 0] [[0 0 1]])]
+    (is (and (zero? (:x stance)) (neg? (:z stance))) "over the column on the side away from the wall, where the line runs down the shaft")
+    (is (nil? (lava/peek-stance p {:x 0.5 :y 62 :z -0.5} (constantly true) [0 59 0] [[0 0 1]])) "none better than where the body already sees")))
