@@ -34,15 +34,14 @@
 
 (deftest feedable-cases
   (are [inventory args expected] (= expected (compost/feedable inventory args))
-    (inv "wheat_seeds" 5 "oak_leaves" 3) {:items nil :keep {}} [["oak_leaves" 3]]
-    (inv "bread" 2 "cookie" 1 "oak_leaves" 1 "stick" 4) {:items nil :keep {}} [["oak_leaves" 1]]
-    (inv "oak_leaves" 3 "oak_leaves" 2) {:items nil :keep {}} [["oak_leaves" 5]]
-    (inv "wheat_seeds" 5 "oak_leaves" 3) {:items ["wheat_seeds"] :keep {}} [["wheat_seeds" 5]]
+    (inv "wheat_seeds" 5 "oak_leaves" 3) {:items nil} [["oak_leaves" 3]]
+    (inv "bread" 2 "cookie" 1 "oak_leaves" 1 "stick" 4) {:items nil} [["oak_leaves" 1]]
+    (inv "oak_leaves" 3 "oak_leaves" 2) {:items nil} [["oak_leaves" 5]]
+    (inv "wheat_seeds" 5 "oak_leaves" 3) {:items ["wheat_seeds"]} [["wheat_seeds" 5]]
     (inv "wheat_seeds" 5 "oak_leaves" 3) {:items ["wheat_seeds" "oak_leaves"] :keep {"wheat_seeds" 2}} [["wheat_seeds" 3] ["oak_leaves" 3]]
     (inv "oak_leaves" 3) {:items nil :keep {"oak_leaves" 3}} []
-    (inv "oak_leaves" 3) {:items nil :keep {"oak_leaves" 9}} []
-    (inv "stick" 3) {:items ["stick"] :keep {}} []
-    (inv "oak_leaves" 3) {:items ["wheat_seeds"] :keep {}} []))
+    (inv "stick" 3) {:items ["stick"]} []
+    (inv "oak_leaves" 3) {:items ["wheat_seeds"]} []))
 
 (deftest compost-feeds-asked-items-and-takes-the-bone-meal
   (async done
@@ -102,14 +101,14 @@
           (is (= {} (:fed result)))
           (is (= 1 (count (calls p "useOn")))))))))
 
-;; the body never idles in the round: a level-7 composter is waited out by yielding, and a stuck one is given up on
-(deftest compost-waits-out-level-7-by-yielding
+;; a level-7 composter is waited out with pause children (not bare yields), and a stuck one is given up on
+(deftest compost-waits-out-level-7-by-pausing
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory (inv "oak_leaves" 4) :blocks comp-block :states {pos-key {:level 7}}})
               result (await (child-outcome eng job {:at at} 60))]
-          (is (empty? (calls p "wait")))
+          (is (seq (calls p "wait")) "the wait is a time.noop pause")
           (is (= :gave-up (:reason result))))))))
 
 (deftest compost-no-composter

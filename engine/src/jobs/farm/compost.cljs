@@ -23,15 +23,14 @@
   :harvest), with a compost.declined warn once (:reason :refused). :ignore-zones? true skips the check.
   Waits before it starts (a listed call waits with the reason): {:reason :no-zones} (no zone list read, unless
   :ignore-zones?), :nothing-to-feed (nothing carried to feed), :no-composter (none seen and allowed; a :look first).
-  A composter at level 7 is waited out by yielding.
-  Ends when :times bone meal is taken (done), nothing is left to feed, there is no composter, or three failures in a row.
+  A composter at level 7 is waited out with short pauses (a jobs.time.noop child).
+  Ends when :times bone meal is taken (done), nothing is left to feed, there is no composter, or ::max-strikes failures in a row.
   Data {:fed {name n} :bone-meal n :level}, plus :reason when it stopped early. Stopped early with at least :least bone meal
   taken (default 1) it is done; with less it is condition-failed :no-composter or :nothing-to-feed, or nothing-possible
   :gave-up. done? counts the bone meal taken.")
 
 (a/defargs args
   {:at {:doc "the composter position; the nearest composter within :radius when nil" :spec ::a/pos :default nil}
-   :radius {:doc "how far to look for a composter, when :at is nil" :spec (a/num-in 0 nil) :default 16}
    :items {:doc "item names to feed; every compostable thing carried except seeds and food when nil" :spec (a/coll-of a/item?) :default nil}
    :keep {:doc "{item count} reserves never fed" :spec (a/map-of string? number?) :default {}}
    :times {:doc "bone meal to take before done" :spec (a/int-in 1 nil) :default 1}
@@ -47,7 +46,7 @@
     "sugar_cane" "cactus" "vine" "melon_slice" "pumpkin" "carved_pumpkin" "nether_wart" "glow_lichen" "tall_seagrass"
     "big_dripleaf" "lily_pad" "apple" "beetroot" "carrot" "potato" "wheat" "cocoa_beans" "melon" "brown_mushroom"
     "red_mushroom" "sea_pickle" "moss_block" "pink_petals" "bamboo" "nether_sprouts" "bread" "cookie" "baked_potato"
-    "hay_block" "brown_mushroom_block" "red_mushroom_block" "nether_wart_block" "warped_wart_block" "waterlily"
+    "hay_block" "brown_mushroom_block" "red_mushroom_block" "nether_wart_block" "warped_wart_block"
     "cake" "pumpkin_pie"})
 
 (def held-back
@@ -75,7 +74,9 @@
   {::job-time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::max-strikes {:default 3 :doc "Failures in a row before the job gives up." :spec (a/int-in 1 nil)}
    ::meal-looks {:default 5 :doc "Looks at the composter right after a take for the meal it dropped." :spec (a/int-in 0 nil)}
-   ::max-waits {:default 6 :doc "Yields on a level-7 composter that count as one failure." :spec (a/int-in 1 nil)}
+   ::radius {:default 16 :doc "How far to look for a composter when no :at is given, in blocks." :spec (a/num-in 0 nil)}
+   ::level-7-pause-s {:default 1 :doc "Seconds paused at a level-7 composter before looking again (it turns 8 within a second)." :spec (a/num-in 0 nil)}
+   ::max-waits {:default 6 :doc "Pauses at a level-7 composter that count as one failure." :spec (a/int-in 1 nil)}
    ::meal-look {:default 20 :doc "Bone meal on the ground is looked for this far from the body, in blocks." :spec (a/num-in 0 nil)}
    ::meal-reach {:default 3 :doc "Bone meal this close to the composter counts as its own, in blocks." :spec (a/num-in 0 nil)}})
 
@@ -124,7 +125,7 @@
   [c]
   (let [me (u/self-pos c)]
     (->> (gate/allowed c :compost.declined "compost" :harvest
-                       (map :pos (look/seen-blocks (:primitives c) {:names ["composter"] :radius (:radius (:args c)) :live? true}))
+                       (map :pos (look/seen-blocks (:primitives c) {:names ["composter"] :radius (settings/get settings ::radius) :live? true}))
                        {:own-plans-ok? true})
          (sort-by #(u/dist me %))
          first)))
@@ -201,10 +202,10 @@
 (defn ^:async step
   "One step: collect bone meal lying by the composter, finish when enough
   is taken, else walk up, empty a full composter, wait out level 7, or feed it
-  the first feedable item. Three failures in a row give up."
+  the first feedable item. ::max-strikes failures in a row give up."
   [c]
   (let [p (:primitives c)
-        {:keys [times items at] reserve :keep} (:args c)
+        {:keys [times items] reserve :keep} (:args c)
         mem (ctx/mem c)
         pos (composter-at c)
         block (when pos (u/seen-block p pos))]
@@ -256,7 +257,9 @@
                       (do (ctx/update-mem! c assoc :waits 0)
                           (strike! c level))
                       (do (ctx/update-mem! c assoc :waits waits)
-                          :continue)))
+                          (if (= :continue (await (child/pause! c (settings/get settings ::level-7-pause-s) :composter-filling)))
+                            :continue
+                            :again))))
 
                   (empty? todo)
                   (finish! c {:level level :reason :nothing-to-feed})

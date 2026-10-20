@@ -151,7 +151,7 @@
 (deftest compost-composter-needs-sight
   (let [blocks {"0,64,4" "composter"}
         at (fn [w args] (with-redefs [compost/composter-allowed? (constantly true)]
-                          (compost/composter-at (job-ctx w (assoc args :radius 8)))))]
+                          (compost/composter-at (job-ctx w args))))]
     (is (nil? (at (wrapped blocks true) {:at cell})) "behind stone: not seen as a composter")
     (is (= cell (at (wrapped blocks false) {:at cell})) "in view: used")))
 
