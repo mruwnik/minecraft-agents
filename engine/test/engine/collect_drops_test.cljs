@@ -399,3 +399,23 @@
     (is (nil? (:problem r)))
     (is (not-any? (fn [[x y z]] (and (<= 20 x 22) (neg? y) (= z 16))) (:dig r))
         "the trench floor is deeper than the fall the route planned, so the route goes round it")))
+
+(deftest a-drop-that-slid-to-another-cell-while-the-body-went-to-it-is-tried-again-there
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body})
+              slid (atom false)]
+          (drop! p [3 64 0] "iron_ingot")
+          (seen-from-above! p)
+          (.override (.-world p) "collect"
+                     (fn [token args impl]
+                       (if @slid
+                         (impl token args)
+                         (do (reset! slid true)
+                             (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [1 64 0]) es)))
+                             #js {:status "unreachable" :reason "no-path" :gained #js []}))))
+          (let [result (await (tu/child-outcome eng job {:radius 6 :items ["iron_ingot"] :dig true} 30))]
+            (is (= 1 (:collected result)))
+            (is (= 1 (bd/carried p "iron_ingot")))
+            (is (empty? (:left result)))))))))

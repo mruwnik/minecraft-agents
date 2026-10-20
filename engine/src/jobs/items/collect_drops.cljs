@@ -21,7 +21,8 @@
 (def doc
   "Collect the nearest matching dropped item, in one call, until none is left within :radius of where the job began (the work area: a walk to an item
   does not move it, so drops far away, e.g. other bodies', are never chased).
-  An item is tried once; one that is gone, cannot be reached or picked up is skipped.
+  An item is tried once; one that is gone, cannot be reached or picked up is skipped. A drop that slid to another cell while the body
+  walked or dug to it is judged again there (at most ::max-moves times).
   An item more than a block lower than the feet is walked to first (a jobs.movement.go-to child, range 1, which prices
   falls and dangers); one it cannot reach is left, with a debug collect-drops.left {:reason :unreachable}.
   An item lower than the feet in a hole the caller dug (:holes) is walked to only when it lies one block down at most and
@@ -67,9 +68,12 @@
    ::dig-max-cells {:default 16 :doc "The most cells :dig digs to reach one drop; a dearer route leaves it." :spec (a/int-in 0 nil)}
    ::dig-margin {:default 3 :doc "How far outside the box round the body and the drop the dig route may wander, in blocks." :spec (a/int-in 0 nil)}
    ::dig-max-fall {:default 3 :doc "The longest fall, in blocks, the dig route plans." :spec (a/int-in 0 nil)}
+   ::max-moves {:default 2 :doc "How often a drop that slid to another cell while the body went to it is tried again, after a walk or dig that did not reach it." :spec (a/int-in 0 nil)}
    ::search-waits {:default 5 :doc "How many calls in a row a :search walk may wait on go-to (the night, a danger) before the search is given up." :spec (a/int-in 1 nil)}})
 
 (defn search-waits [] (settings/get settings ::search-waits))
+
+(defn max-moves [] (settings/get settings ::max-moves))
 
 (defn walk-args
   "go-to args for a walk of this job: underground it ignores the dark (not (threatened) only), like the digs that made the hole."
@@ -207,6 +211,12 @@
               (#{:dug :missing} o) (recur (rest cells))
               :else o))
           :dug)))))
+
+(defn moved-item
+  "item as seen now when it lies in another cell than the one it was judged in (a drop slides while the body digs to it), else nil."
+  [c item]
+  (let [now (first (filter #(= (.-id item) (.-id %)) (look/seen-items (:primitives c) {:radius 16 :max 64})))]
+    (when (and now (.-pos now) (not= (item-cell now) (item-cell item))) now)))
 
 (defn leave!
   "Leave item where it lies: why is the hole-problem. Its id is remembered (loose/left!), so the :loose-items reflex does not fetch it after."
@@ -380,13 +390,18 @@
         r2-stuck? (and r2 (= "unreachable" (.-status r2)))]
     (if (or moving? (= :continue walk) (= :continue dug) (= :continue dug2) (= :continue walk2))
       :continue
-      (do (cond
-            dig-why (leave! c item dig-why)
-            why (leave! c item why)
-            (= :unreachable walk) (leave! c item :unreachable)
-            dig2-why (leave! c item dig2-why)
-            (and stuck? (not= :dug dug2)) (leave! c item :unreachable)
-            r2-stuck? (leave! c item :unreachable))
+      (let [retry? (and (not why) (< (get-in (ctx/mem c) [:moves (.-id item)] 0) (max-moves))
+                        (or dig-why (= :unreachable walk) dig2-why stuck? r2-stuck?)
+                        (not (and r2 (not r2-stuck?)))
+                        (boolean (moved-item c item)))]
+        (cond
+          retry? nil
+          dig-why (leave! c item dig-why)
+          why (leave! c item why)
+          (= :unreachable walk) (leave! c item :unreachable)
+          dig2-why (leave! c item dig2-why)
+          (and stuck? (not= :dug dug2)) (leave! c item :unreachable)
+          r2-stuck? (leave! c item :unreachable))
           ;; the walk down can pick the drop up before the collect act runs
           (let [acts (reduce + 0 (map gained-count (remove nil? [r r2])))
                 extra (max 0 (- (held) start-held acts))
@@ -396,7 +411,9 @@
                                                (cond-> (update m :collected (fnil + 0) extra)
                                                  wants? (update :wanted (fnil + 0) extra))
                                                (remove nil? [r r2])))))
-          (ctx/update-mem! c update :skipped (fnil conj []) (.-id item))
+          (if retry?
+            (ctx/update-mem! c update-in [:moves (.-id item)] (fnil inc 0))
+            (ctx/update-mem! c update :skipped (fnil conj []) (.-id item)))
           :again))))
 
 (defn ^:async step!
