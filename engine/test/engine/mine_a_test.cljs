@@ -504,13 +504,17 @@
           (is (= (set (map (fn [[x z]] [x 71 z]) stones)) (set (:unreached e))))
           (is (re-find #"seen ore out of reach" (:text e))))))))
 
-;; The ore is seen over the platform's rim (radius 16: it is 14.6 away from a platform 13 high), so only go-to's health floor decides the drop.
+;; The ore and the floor under the drop were seen from over the floor first (the platform's wall hides its foot from the rim, and go-to drops no deeper than 5 onto a floor it has not seen), so only go-to's health floor decides the drop.
 (defn ^:async drop-to-ore [top]
-  (await (scenario {:block "iron_ore" :count 1 :radius 16 :tunnel-length 0 :descend-limit 0}
-                   {:blocks (assoc (merge (cells "stone" (range -4 1) (range 64 top) (range -4 5)) (cells "stone" (range 1 13) [62] (range -4 5)))
-                                   "6,63,0" "iron_ore")
-                    :bodyHitbox true :drops {"iron_ore" "raw_iron"} :self {:pos [0.5 top 0.5]} :inventory pickaxe}
-                   120)))
+  (let [s (start {:world {:blocks (assoc (merge (cells "stone" (range -4 1) (range 64 top) (range -4 5)) (cells "stone" (range 1 13) [62] (range -4 5)))
+                                         "6,63,0" "iron_ore")
+                          :yaw 90 :pitch 70 :bodyHitbox true :drops {"iron_ore" "raw_iron"} :self {:pos [6.5 (+ top 2) 0.5]} :inventory pickaxe}
+                  :sight {:radius 24}})]
+    (dotimes [_ 20] (perception/pass! (aget (:p s) "perception")))
+    (set-pos! s 0.5 top 0.5)
+    (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :radius 16 :tunnel-length 0 :descend-limit 0}) {})
+    (await (run-ticks s 120))
+    s))
 
 (defn walk-texts [s] (keep #(get-in % [:ending :data :text]) (events-of s :child_ended)))
 
@@ -523,7 +527,7 @@
           (is (= [:stopped 0] ((juxt :status :got) e)))
           (is (= [[6 63 0]] (:unreached e)))
           (is (= :needs-health (get-in e [:because :cause :why])))
-          (is (= 10 (get-in e [:because :data :hp-cost])))
+          (is (< (get-in e [:because :data :hp-budget]) (get-in e [:because :data :hp-cost])))
           (is (empty? (filter #(re-find #"stuck on drop" %) (walk-texts s))))
           (is (= "iron_ore" (block-at s 6 63 0))))))))
 

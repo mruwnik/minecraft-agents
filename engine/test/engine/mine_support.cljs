@@ -49,21 +49,21 @@
 (defn seeing
   "Fake primitives p with the body's perception over them (engine.perception/wrap), as the body runs; p as it is
   when it already has one."
-  [p & [rand]]
+  [p & [rand sight]]
   (let [[x y z] (get-in @(fake/state p) [:self :pos])
         [x y z] (mapv #(js/Math.floor %) [x y z])]
     (when-not (:light-default @(fake/state p))
       (swap! (fake/state p) update :light #(merge {[x y z] [0 15] [x (inc y) z] [0 15]} %))))
-  (if (aget p "perception") p (perception/wrap p (perception/create (fake-raw/create p) (cond-> sight-opts rand (assoc :rand rand))))))
+  (if (aget p "perception") p (perception/wrap p (perception/create (fake-raw/create p) (cond-> (merge sight-opts sight) rand (assoc :rand rand))))))
 
 (defn start
   "An engine over primitives p (made from world, on a floor-block floor, when not given) on dir, seeing through
   perception; one sight pass first (what the body sees where it faces before the job; the job's own looks do the
   rest)."
-  [{:keys [world p dir clock shared jobs rand]}]
+  [{:keys [world p dir clock shared jobs rand sight]}]
   (let [clock (or clock (atom 1000000))
         [seen sink] (tu/legacy-capture-sink)
-        p (seeing (or p (tu/fake-on-floor (-> world (assoc :floor-block floor-block) (update :inventory #(or % [{:name "torch" :count 10}]))))) rand)
+        p (seeing (or p (tu/fake-on-floor (-> world (assoc :floor-block floor-block) (update :inventory #(or % [{:name "torch" :count 10}]))))) rand sight)
         eng (core/create {:primitives p :jobs (or jobs registry/jobs) :triggers triggers/all :dir (or dir (tu/tmp-dir))
                           :now #(deref clock) :world shared
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
