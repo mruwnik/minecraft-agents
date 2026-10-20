@@ -168,11 +168,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:dry-digs 6} {:blocks (patch "short_grass" (range 2 12) [0]) :drops {"short_grass" nil}} 60))
-              warns (events-of s :get-seeds.gave-up)]
+        (let [s (await (scenario {:dry-digs 6} {:blocks (patch "short_grass" (range 2 12) [0]) :drops {"short_grass" nil}} 60))]
           (is (= :dry (:reason (done-event s))))
-          (is (= 1 (count warns)))
-          (is (= :warn (:level (first warns))))
           (is (<= 6 (dig-count s) 10))
           (is (= 0 (:got (done-event s))))
           (is (finished? s)))))))
@@ -184,10 +181,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [cells (patch "short_grass" (range 6 12) [0])
-              s (await (scenario {:settings {:jobs.gather.get-seeds/per-round 3}} {:blocks cells :drops seed-drops :unreachable (vec (keys cells))} 40))
-              warns (events-of s :get-seeds.gave-up)]
+              s (await (scenario {:settings {:jobs.gather.get-seeds/per-round 3}} {:blocks cells :drops seed-drops :unreachable (vec (keys cells))} 40))]
           (is (= :none (:reason (done-event s))))
-          (is (zero? (count warns)))
           (is (<= (count (tu/walked-to (:eng s))) 6) "each cell is tried once")
           (is (zero? (dig-count s)))
           (is (finished? s)))))))
@@ -315,7 +310,7 @@
 
 (defn dug-cells [{:keys [p]}] (mapv #(let [q (.-pos (.-args %))] [(.-x q) (.-y q) (.-z q)]) (h/calls p "dig")))
 (defn block-at [{:keys [p]} x y z] (.-name (.blockAt p (tu/pos x y z))))
-(defn gave-up-fields [s] (map #(select-keys % [:reason :zones :plans]) (events-of s :get-seeds.gave-up)))
+(defn gave-up-fields [s] (map #(select-keys % [:reason :zones :plans]) (events-of s :stopped)))
 (defn declined-reasons [s] (mapv :reason (events-of s :get-seeds.declined)))
 
 (defn stand
@@ -392,7 +387,7 @@
                 out (await (tu/child-outcome (:eng s) 'jobs.gather.get-seeds {:item "sugar_cane"} 40))]
             (is (empty? (dug-cells s)))
             (is (zero? (count (tu/walked-to (:eng s)))) "no walk to a refused cell")
-            (is (= [(assoc expected :reason :refused)] (gave-up-fields s)))
+            (is (= (assoc expected :reason :refused) (select-keys out [:reason :zones :plans])))
             (is (= :refused (:reason out)))
             (is (= :condition-failed (get-in out [:ending :kind])))
             (is (= 0 (:got out)))
@@ -406,7 +401,7 @@
               _ (ew/set-area-claims! w [{:id "c9" :owner "Miles" :status :active :until 9999999999999 :min [8 60 -2] :max [10 70 2]}])
               s (await (in-world {:item "sugar_cane"} {:blocks (stand "sugar_cane" 9 0 3)} w 20))]
           (is (empty? (dug-cells s)))
-          (is (= [["c9"]] (map :claims (events-of s :get-seeds.gave-up)))))))))
+          (is (= [["c9"]] (map :claims (events-of s :stopped)))))))))
 
 (deftest the-free-stand-is-cut-and-the-refused-one-ends-the-job
   (async done
@@ -602,7 +597,6 @@
           (let [out (await (tu/child-outcome (:eng s) 'jobs.gather.get-seeds {:count 2 :chest {:x 10 :y 64 :z 0}} 40))]
             (is (= :condition-failed (get-in out [:ending :kind])))
             (is (= :withdraw-declined (:reason out))))
-          (is (= [:withdraw-declined] (mapv :reason (events-of s :get-seeds.gave-up))))
           (is (finished? s)))))))
 
 (deftest grass-behind-the-body-is-found-after-a-look-around

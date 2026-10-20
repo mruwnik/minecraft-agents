@@ -269,7 +269,7 @@
           (await (tick-n s 30))
           (is (empty? (:list (core/state (:eng s)))))
           (is (zero? (clicks s)) "no click on the gate the player shut")
-          (is (empty? (events-of s :shut-gate.stopped))))))))
+          (is (empty? (events-of s :stopped))))))))
 
 (deftest from-the-far-side-the-job-walks-round-the-ring-and-shuts-the-gate
   (async done
@@ -289,7 +289,7 @@
           (is (<= (:ticks s) 2))
           (is (zero? (count (filter #(= "useOn" (.-name %)) (.-calls (.-world (:p s)))))))
           (is (empty? (:list (core/state (:eng s)))) "done: the goal held")
-          (is (empty? (events-of s :shut-gate.stopped))))))))
+          (is (empty? (events-of s :stopped))))))))
 
 (deftest a-gate-in-no-plan-is-left-alone
   (async done
@@ -304,7 +304,7 @@
       (fn ^:async t []
         (let [s (await (run-job (pen-world true 2 0) {"pen-a" pen-a} {} 20))]
           (is (gate-open? (:p s) 2 64 0))
-          (is (= [{:cell [2 64 0] :reason :standing-in}] (:left (first (events-of s :shut-gate.stopped)))))
+          (is (= [{:cell [2 64 0] :reason :standing-in}] (:left (first (events-of s :stopped)))))
           (is (empty? (events-of s :completed)) "a gate left open is not done"))))))
 
 (deftest with-a-plan-every-open-gate-of-that-plan-is-shut-and-other-plans-are-not
@@ -341,7 +341,7 @@
         (let [s (await (run-job (pen-world true 2 7 {:unreachable ["2,64,0"]}) {"pen-a" pen-a} {} 1))]
           (is (empty? (:list (core/state (:eng s)))) "one tick: the job ended")
           (is (empty? (events-of s :completed)))
-          (is (= [[2 64 0]] (mapv :cell (:left (first (events-of s :shut-gate.stopped)))))))))))
+          (is (= [[2 64 0]] (mapv :cell (:left (first (events-of s :stopped)))))))))))
 
 (deftest a-cow-that-stays-in-the-gate-is-waited-out-not-pushed-and-the-run-ends-stopped
   (async done
@@ -351,7 +351,7 @@
               s (await (run-job (pen-world true 2 -6 {:entities [cow]}) {"pen-a" pen-a} {} 1))]
           (is (gate-open? (:p s) 2 64 0) "the cow is not pushed")
           (is (zero? (count (filter #(= "useOn" (.-name %)) (.-calls (.-world (:p s)))))) "no click")
-          (is (= [{:cell [2 64 0] :reason :animal-in-the-way}] (:left (first (events-of s :shut-gate.stopped))))))))))
+          (is (= [{:cell [2 64 0] :reason :animal-in-the-way}] (:left (first (events-of s :stopped))))))))))
 
 (deftest without-a-plan-only-gates-within-the-radius-are-shut
   (async done
@@ -429,7 +429,7 @@
       (fn ^:async t []
         (let [stub {'jobs.movement.go-to {:args {} :ways [:walk :clear-seal] :round (fn ^:async r [_c] :continue)}}
               s (await (run-job (pen-world true 2 7) {"pen-a" pen-a} {} 1 stub))]
-          (is (empty? (events-of s :shut-gate.stopped)) "the job is not ended")
+          (is (empty? (events-of s :stopped)) "the job is not ended")
           (is (empty? (events-of s :shut-gate.gave-up)) "no warn: it is not a verdict on the gate")
           (is (empty? (gave-up-cells s)) "no entry either"))))))
 
@@ -481,7 +481,7 @@
               (await (core/tick! (:eng s)))
               (recur (inc i))))
           (is (empty? (events-of s :completed)) "not done: the gate was never read")
-          (is (= [{:cell [2 64 0] :reason :unseen}] (:left (first (events-of s :shut-gate.stopped))))))))))
+          (is (= [{:cell [2 64 0] :reason :unseen}] (:left (first (events-of s :stopped))))))))))
 
 (deftest shut-gate-ends-with-a-kind-and-a-cause
   (async done

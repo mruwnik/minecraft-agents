@@ -32,7 +32,7 @@
   yields the round with :continue; the gate is not given up. A gate that could not be reached or did not shut after the tries setting (3) clicks is given up with one warn
   shut-gate.gave-up and a :gate-gave-up memory entry, which keeps the trigger away from it for 10 minutes.
 
-  Ends :done with the data {:shut n :left []} when every open gate was shut; a call that finds none open (or unread) at its start ends done at once, with no event (done?); with any left, :nothing-possible :left with warn shut-gate.stopped and {:shut n :left [{:cell [x y z] :reason r}]}.
+  Ends :done with the data {:shut n :left []} when every open gate was shut; a call that finds none open (or unread) at its start ends done at once, with no event (done?); with any left, :nothing-possible :left with {:shut n :left [{:cell [x y z] :reason r}]}.
   A call whose :plan is missing or unreadable waits (:plan-trouble), at the start and later.")
 
 (a/defargs args
@@ -106,15 +106,14 @@
     (first (sort-by #(pg/distance here %) cells))))
 
 (defn finish!
-  "End the call: the event and the ending; nothing-possible when any gate is left."
+  "End the call; nothing-possible when any gate is left."
   [c shut left]
   (let [result {:shut shut :left left}
         _ (ctx/update-mem! c assoc :shut shut)
         text (end-text shut (count left))]
     (if (empty? left)
       (ctx/end c :done nil (assoc result :text text))
-      (do (ctx/emit! c :shut-gate.stopped :warn (assoc result :text text))
-          (ctx/end c :nothing-possible :left (assoc result :text text))))))
+      (ctx/end c :nothing-possible :left (assoc result :text text)))))
 
 (defn give-up!
   "Give up the gate: one warn, one memory entry the trigger reads; the entry for the left list."

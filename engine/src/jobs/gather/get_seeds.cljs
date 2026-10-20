@@ -33,7 +33,7 @@
   2. Chest way: the withdraw child takes the item. It ends :count when the goal is carried, else :short (warn
      get-seeds.gave-up with withdraw's reason when it gave up).
   3. After a dig batch the collect-drops child picks up the item (only it) within the collect-radius setting (8).
-  4. :dry-digs digs in a row that brought no new item end :dry (warn get-seeds.gave-up).
+  4. :dry-digs digs in a row that brought no new item end :dry (the ending says so).
   5. Otherwise a batch: the nearest source blocks within :radius not skipped (for a stand: its cut cells) are
      judged by jobs.lib.access.rules. At most the per-round setting (4) of the permitted ones are walked to (within 3) and
      dug, each judged again right before its dig.
@@ -42,9 +42,9 @@
   remembered. So is one with a hazard not in :accept, one whose walk is blocked or partial, and one whose dig
   is neither dug nor missing (tall grass takes its other half with it, so missing is fine).
 
-  No block left ends :refused (warn get-seeds.gave-up with :zones and :plans) when any was refused, else
+  No block left ends :refused (the ending carries :zones and :plans) when any was refused, else
   :none (the text names the radius and the nearest source seen beyond it). Two batches in a row where nothing was diggable (none dug, none skipped: all missing) end :barren
-  (warn get-seeds.gave-up). A batch of only skipped blocks is not barren.
+  (the ending says so). A batch of only skipped blocks is not barren.
 
   done? is :ok when the goal is carried and no child is under way: ends :done (data {:got n :reason :count}). Any
   other end is condition-failed with the cause :refused or :withdraw-declined, else nothing-possible with the cause
@@ -240,21 +240,22 @@
 (defn finish!
   "End the job: :done for :count, condition-failed for :refused and :withdraw-declined (a zone, claim
   or chest can change), else nothing-possible with the reason."
-  [c reason]
+  ([c reason] (finish! c reason {}))
+  ([c reason fields]
   (let [got (got c)
-        data {:got got :reason reason :text (str "get-seeds done: " (if (= :none reason) (none-why c) (name reason)) ", got " got)}]
+        data (merge {:got got :reason reason :text (str "get-seeds done: " (if (= :none reason) (none-why c) (name reason)) ", got " got)}
+                    fields)]
     (if (= :count reason)
       (ctx/end c :done nil data)
-      (ctx/end c (if (condition-reasons reason) :condition-failed :nothing-possible) reason data))))
+      (ctx/end c (if (condition-reasons reason) :condition-failed :nothing-possible) reason data)))))
 
 (defn give-up!
-  "Warn and end."
+  "End with the reason, the skipped count and fields in the ending."
   ([c reason] (give-up! c reason {}))
   ([c reason fields]
-   (ctx/emit! c :get-seeds.gave-up :warn (merge {:reason reason :skipped (count (:skipped (ctx/mem c)))
-                                                 :text (str "get-seeds gave up: " (name reason))}
-                                                fields))
-   (finish! c reason)))
+   (finish! c reason (merge {:skipped (count (:skipped (ctx/mem c)))
+                             :text (str "get-seeds gave up: " (name reason))}
+                            fields))))
 
 (defn refuse-up!
   "give-up! :refused, naming the zones and plans that refused."
@@ -342,9 +343,9 @@
       (>= (carried c) goal) (finish! c :count)
       (and (= :condition-failed (:kind e)) (= :refused (contract/cause-key e))) (give-up! c :refused (select-keys (:cause e) [:zones :claims]))
       (and (= :condition-failed (:kind e)) (not (contains? out :gave-up))) (give-up! c :withdraw-declined)
-      (:gave-up out) (let [why (contract/cause-key e)]
-                       (ctx/emit! c :get-seeds.gave-up :warn (merge (select-keys out [:zones :claims]) {:reason why :text (str "get-seeds: withdraw gave up: " (name why))}))
-                       (finish! c :short))
+      (:gave-up out) (finish! c :short (merge (select-keys out [:zones :claims])
+                                              {:why (contract/cause-key e)
+                                               :text (str "get-seeds: withdraw gave up: " (name (contract/cause-key e)))}))
       :else (finish! c :short))))
 
 (defn ^:async collect! [c]

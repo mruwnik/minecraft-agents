@@ -96,7 +96,7 @@
           (core/submit! eng '(jobs.gather.get-seeds {:item "carrot" :count 4 :chest {:x 10 :y 64 :z 0}}) {})
           (await (run-until-empty eng 30))
           (is (empty? (calls p "transfer")))
-          (is (= [:refused] (mapv :reason (events-of seen :get-seeds.gave-up)))))))))
+          (is (= [:refused] (mapv :reason (events-of seen :stopped)))))))))
 
 ;; ------------------------------------------------------------------ get-food
 
