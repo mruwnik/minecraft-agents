@@ -18,8 +18,9 @@
    ;; the cell has lava beside it: clear-box refuses the dig (hazard) and the body never steps onto the lava
    :expect [{:event {:source :job :kind :stopped :data {:reason :hazard}} :within-s 60 :of-job true}]
    :after [[:block [12 -1 12] "stone"] [:body-near [13.5 0 12.5] 3.5]]}
-  {:name "never-steps-onto-lava-floor-and-digs-the-cell-when-fluid-adjacent-is-accepted"
+  {:name "never-steps-onto-lava-floor-and-digs-the-cell-when-lava-adjacent-is-accepted"
    :blocks [[:fill [10 -1 10] [14 -1 14] "lava"] [:fill [12 -1 12] [15 -1 12] "stone"]]
-   :act [[:job (jobs.build.clear-box {:from #at [12 -1 12] :to #at [12 -1 12] :accept #{:fluid-adjacent}})]]
+   :body {:inventory [["cobblestone" 4]]}
+   :act [[:job (jobs.build.clear-box {:from #at [12 -1 12] :to #at [12 -1 12] :accept #{:lava-adjacent}})]]
    :expect [{:event {:source :job :kind :completed :data {:dug 1}} :within-s 60 :of-job true}]
    :after [[:not-block [12 -1 12] "stone"] [:body-near [13.5 0 12.5] 3.5]]}]}
