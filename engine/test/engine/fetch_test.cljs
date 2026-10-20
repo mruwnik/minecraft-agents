@@ -449,9 +449,21 @@
           (.override (.-world (:p s)) "inspectContainer" (fn [_ _ _] #js {:status "timeout"}))
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "dirt" :count 3 :ways #{:chest}}) {})
           (await (run-ticks s 5))
-          (is (= 1 (count (inspects s))) "asked once, not again")
+          (is (= 2 (count (inspects s))) "a timeout is asked once more, then the chest is given up")
           (is (re-find #"could not be opened.*timeout" (no-source-why s :stopped)))
           (is (re-find #"-2 64 3" (no-source-why s :stopped))))))))
+
+(deftest obtain-opens-a-chest-whose-first-look-timed-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world {chest-at [{:name "oak_log" :count 2}]}) [own-zone])
+              n (atom 0)]
+          (.override (.-world (:p s)) "inspectContainer"
+                     (fn [token a impl] (if (= 1 (swap! n inc)) #js {:status "timeout"} (impl token a))))
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_log" :count 2 :ways #{:chest}}) {})
+          (await (run-ticks s 12))
+          (is (= 2 (get (inv s) "oak_log"))))))))
 
 (defn shut-under-a-block
   "inspectContainer times out while a block sits on the chest, as the game's chest lid does."

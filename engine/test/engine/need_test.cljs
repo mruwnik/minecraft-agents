@@ -186,6 +186,18 @@
           (is (= [{:pos {:x 0 :y 64 :z 0} :range 0}] (map #(select-keys % [:pos :range]) @walks)))
           (is (= [0.5 64 0.5] (get-in @(fake/state p) [:self :pos]))))))))
 
+(deftest return!-walks-back-after-a-fetch-that-failed-too
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [obtain-step (fn [c] (swap! (fake/state (:primitives c)) assoc-in [:self :pos] [6.5 64 0.5]) :no-source)
+              {:keys [walks]} (await (run! (fn ^:async f [c]
+                                               (or (await (need/return! c))
+                                                   (let [e (await (need/item! c "coal" 1 {:return? true}))]
+                                                     (if (= :continue e) e :continue))))
+                                             {:obtain-step obtain-step} 3))]
+          (is (= [{:pos {:x 0 :y 64 :z 0} :range 0}] (map #(select-keys % [:pos :range]) (take 1 @walks)))))))))
+
 (deftest a-minutes-limit-reaches-the-fetch-child-as-a-time-spend
   (async done
     (tu/run-async done

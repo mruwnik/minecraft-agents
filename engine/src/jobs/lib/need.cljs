@@ -11,7 +11,7 @@
 
   A fetch that ended :done, asked again with nothing of what it got used up since, ends condition-failed
   {:why :not-solved}: the child does not cure the caller's need. :return? true keeps the cell the body stood on when
-  the first fetch began; return! walks back to it once a fetch is done. Both live in the caller's job memory, so a cut
+  the first fetch began; return! walks back to it once a fetch has ended, done or not. Both live in the caller's job memory, so a cut
   goes on with them."
   (:require [clojure.set :as set]
             [engine.args :as a]
@@ -208,8 +208,8 @@
         (let [total (total-of c slot job args fresh?)
               r (await (call! c slot job (cond-> args total (assoc :count total))))
               e (if (= :continue r) :continue (ending-for r cause-reason wanted))]
-          (when (= :done (:kind e))
-            (ctx/update-mem! c #(cond-> (assoc % :need/done {:want want :have (counts c (got-names wanted e))})
+          (when-not (= :continue e)
+            (ctx/update-mem! c #(cond-> (cond-> % (= :done (:kind e)) (assoc :need/done {:want want :have (counts c (got-names wanted e))}))
                                   (:need/return %) (assoc-in [:need/return :back] true))))
           e)))))
 

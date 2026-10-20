@@ -45,7 +45,7 @@
 (defn ^:async inspect!
   "Walk to within 3 of the chest (a go-to child), look into it and book its stock. A chest that will not open under a
   seen solid block gets the block dug (a jobs.blocks.dig child, which keeps to zones and claims) and is looked into once
-  more. :continue while a child waits, else :again."
+  more. A chest that timed out is looked into once more before it is given up. :continue while a child waits, else :again."
   [c pos]
   (say-chest! c pos (str "looking for " (clojure.string/join "/" (names-of (:args c))) " in the"))
   (let [cell (stock/cell-of pos)
@@ -70,6 +70,8 @@
               (ctx/update-mem! c update :inspected (fnil inc 0)))
           (and (nil? (get-in (ctx/mem c) [:lid cell])) (solid/solid? (u/seen-name (:primitives c) above)))
           (ctx/update-mem! c assoc-in [:lid cell] :clearing)
+          (and (= "timeout" (.-status seen)) (not (contains? (:timed-out (ctx/mem c)) cell)))
+          (ctx/update-mem! c update :timed-out (fnil conj #{}) cell)
           :else (mark! (str (.-status seen))))
         :again))))
 

@@ -49,13 +49,13 @@
             {:no-event {:source :job :kind :completed} :for-s 70 :until {:source :job :kind :stopped}}]
    :after [[:not-block [16 9 16] "air"]]}
   {:name "tunnel-pickaxe-lost-mid-run-is-fetched-and-the-run-goes-on"
-   ;; the pickaxe is taken away once the run has begun: the next dig stops :no-tool, which fetches (the chest was seen at the
+   ;; the pickaxe is taken away once the first dig has begun (the line is a stair down, no level run, so no tunnel.step comes): the next dig stops :no-tool, which fetches (the chest was seen at the
    ;; start), walks back and goes on
    :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:stone_pickaxe\",count:1}]}"]]
    :body {:inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
-         [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]
-         [:await {:source :job :kind :tunnel.step} 90]
+         [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true :by-hand false})]
+         [:await {:source :job :kind :child_started :data {:slot :dig}} 60]
          [:rcon "clear $BODY stone_pickaxe"]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 180 :of-job true}
             {:event {:source :job :kind :completed} :within-s 260 :of-job true}]
