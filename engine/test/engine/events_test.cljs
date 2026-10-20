@@ -146,7 +146,7 @@
 (defn disk-only
   "A copy of the stream's reader state with an empty recent buffer, so every read goes to disk."
   [stream]
-  (swap! stream assoc :recent [] :recent-byte-count 0)
+  (swap! stream assoc :recent [] :recent-sizes [] :recent-byte-count 0)
   stream)
 
 (defn without-whole-file-reads
@@ -219,6 +219,9 @@
     (emit-n! stream 1000)
     (is (<= (count (:recent @stream)) 256) "a few hundred events in memory, not thousands")
     (is (<= (:recent-byte-count @stream) (* 256 1024)))
+    (is (= (:recent-byte-count @stream)
+           (reduce + (map #(events/bytes-of (str (pr-str %) "\n")) (:recent @stream))))
+        "the byte count follows the buffer without re-serialising evicted events")
     (let [page (events/read-after stream {:stream-id sid :after 100 :limit 2000})]
       (is (false? (:gap? page)))
       (is (= (range 101 1001) (mapv :seq (:events page)))))))

@@ -258,20 +258,28 @@
   (js/Buffer.byteLength text "utf8"))
 
 (defn cap-id
-  "An id of at most max-id-chars characters: a longer one keeps its head and its tail around \"...\"."
-  [id]
-  (let [m (setting "max-id-chars")]
-    (if (and (string? id) (> (count id) m))
-      (str (subs id 0 (quot m 2)) "..." (subs id (- (count id) (quot m 2))))
-      id)))
+  "An id of at most m (default: the max-id-chars setting) characters: a longer one keeps its head and its tail around \"...\"."
+  ([id] (cap-id id (setting "max-id-chars")))
+  ([id m]
+   (if (and (string? id) (> (count id) m))
+     (str (subs id 0 (quot m 2)) "..." (subs id (- (count id) (quot m 2))))
+     id)))
 
 (defn cap-chain
   "A chain of at most max-chain elements, each capped: a longer one keeps its first two and its last elements around \"...\"."
   [chain]
-  (let [m (setting "max-chain")]
-    (if (and (sequential? chain) (> (count chain) m))
-      (mapv cap-id (concat (take 2 chain) ["..."] (take-last (- m 3) chain)))
-      (if (sequential? chain) (mapv cap-id chain) (cap-id chain)))))
+  (let [m (setting "max-chain")
+        id-chars (setting "max-id-chars")
+        cap #(cap-id % id-chars)]
+    (cond
+      (not (sequential? chain)) (cap chain)
+      (> (count chain) m) (mapv cap (concat (take 2 chain) ["..."] (take-last (- m 3) chain)))
+      :else (mapv cap chain))))
+
+(def known-keys
+  #{:seq :generation-id :run-id :time-ms :t :body :source :kind :level
+    :context :data :message :text :attention :request-id :job :round
+    :chain :reflex :action-id :cause :cause-seq :pos})
 
 (defn canonical-event
   "The canonical event for internal event map event, numbered n. :body is dropped,
@@ -288,14 +296,10 @@
                   (some? (:action-id event)) (assoc :action-id (:action-id event))
                   (number? (:cause event)) (assoc :cause-seq (:cause event))
                   (some? (:cause-seq event)) (assoc :cause-seq (:cause-seq event)))
-        known #{:seq :generation-id :run-id :time-ms :t :body :source :kind :level
-                :context :data :message :text :attention :request-id :job :round
-                :chain :reflex :action-id :cause :cause-seq :pos}
         ;; Emitters pass absent optional fields as nil: drop those.
         ;; A non-numeric :cause is the body's own datum (died/hurt: "lava"), not a cause sequence.
-        extra (into {} (remove (comp nil? val))
-                    (cond-> (apply dissoc event known)
-                      (not (number? (:cause event))) (assoc :cause (:cause event))))
+        extra (cond-> (reduce-kv (fn [m k v] (if (or (nil? v) (contains? known-keys k)) m (assoc m k v))) {} event)
+                (and (some? (:cause event)) (not (number? (:cause event)))) (assoc :cause (:cause event)))
         pos (or (:pos event) (when pos-fn (pos-fn)))
         data (cond-> (merge (or (:data event) {}) extra)
                (and pos (nil? (get (or (:data event) {}) :pos)))
@@ -362,33 +366,50 @@
     (conj (vec rotated) empty-segment)))
 
 (defn append-line!
-  "Append line to file; a failed append (disk full) cuts the partial line off again, so the next append
-  cannot glue onto it and the log stays readable."
-  [file line]
-  (let [before (.-size (fs/statSync file))]
-    (try
-      (fs/appendFileSync file line)
-      (catch :default e
-        (try (fs/truncateSync file before) (catch :default _ nil))
-        (throw e)))))
+  "Append line to file; a failed append (disk full) cuts the partial line off again (back to before bytes), so the
+  next append cannot glue onto it and the log stays readable."
+  [file line before]
+  (try
+    (fs/appendFileSync file line)
+    (catch :default e
+      (try (fs/truncateSync file before) (catch :default _ nil))
+      (throw e))))
+
+(def age-check-divisor 60)
+
+(defn aged-out-lately?
+  "True when the chain was age-checked less than max-age-ms/age-check-divisor ago: ageing out stats every segment, so
+  appends do it at that pace instead of per line."
+  [stream k max-age-ms]
+  (let [now (js/Date.now)
+        stale? (> (- now (get-in @stream [:aged-at k] 0)) (/ max-age-ms age-check-divisor))]
+    (when stale? (swap! stream assoc-in [:aged-at k] now))
+    (not stale?)))
 
 (defn append-chain!
   "Append line to the chain at chain-file (segments under key k of the stream), rotating by size and, with max-age-ms,
-  by the age of the active segment, and pruning by size and age."
+  by the age of the active segment, and pruning by size and age. Sizes come from the stream's segment index, which the
+  chain's own appends keep exact; files are only stat-ed when a prune or age-out may have changed them."
   [stream chain-file k cap max-age-ms n line line-bytes]
   (let [active (segment-file chain-file 0)
-        active-bytes (.-size (fs/statSync active))
-        born (:born (last (k @stream)))]
+        prior (last (k @stream))
+        active-bytes (or (:bytes prior) 0)
+        born (:born prior)]
     (when (and (pos? active-bytes)
                (or (> (+ active-bytes line-bytes) (segment-target cap))
                    (and max-age-ms born (> (- (js/Date.now) born) (/ max-age-ms 3)))))
       (rotate! chain-file)
       (swap! stream update k rotate-segment-index chain-file))
-    (append-line! active line)
-    (prune-segments! chain-file cap)
-    (when max-age-ms (age-out! chain-file max-age-ms))
+    (append-line! active line (or (:bytes (last (k @stream))) 0))
     (swap! stream update k update-active-segment chain-file n line-bytes)
-    (swap! stream update k existing-segment-index)))
+    (let [pruned? (when (> (reduce + 0 (map :bytes (k @stream))) cap)
+                    (prune-segments! chain-file cap)
+                    true)
+          aged? (when (and max-age-ms (not (aged-out-lately? stream k max-age-ms)))
+                  (age-out! chain-file max-age-ms)
+                  true)]
+      (when (or pruned? aged?)
+        (swap! stream update k existing-segment-index)))))
 
 (defn append-record! [stream event]
   (let [{:keys [file max-bytes debug-max-bytes debug-max-age-ms last-seq debug-seq stream-id generation-id run-id now pos-fn]} @stream
@@ -415,19 +436,26 @@
             ;; Records a rotation or prune dropped may have held the high-water mark, so only then is the metadata rewritten.
             (when (not= before (layout))
               (write-meta! file {:stream-id stream-id :last-seq n :debug-seq (if debug? n debug-seq)}))))
-        (let [r (assoc @stream :recent (conj (:recent @stream) full)
-                               :recent-byte-count (+ (:recent-byte-count @stream) line-bytes))]
-          (let [r (loop [s r]
-                    (if (or (> (count (:recent s)) (setting "recent-count"))
-                            (> (:recent-byte-count s) (setting "recent-bytes")))
-                      (let [first-event (first (:recent s))
-                            first-bytes (bytes-of (str (pr-str first-event) "\n"))]
-                        (recur (-> s
-                                   (update :recent subvec 1)
-                                   (update :recent-byte-count - first-bytes))))
-                      s))]
-            (swap! stream assoc :recent (into [] (:recent r))
-                   :recent-byte-count (:recent-byte-count r))))
+        (let [max-count (setting "recent-count")
+              byte-limit (setting "recent-bytes")
+              s @stream
+              recent (conj (:recent s) full)
+              sizes (conj (:recent-sizes s) line-bytes)
+              total (+ (:recent-byte-count s) line-bytes)
+              over? (or (> (count recent) max-count) (> total byte-limit))
+              ;; Evicting down to 3/4 copies the buffer once per quarter-buffer of events, not per event.
+              keep-count (if over? (quot (* 3 max-count) 4) max-count)
+              keep-bytes (if over? (quot (* 3 byte-limit) 4) byte-limit)
+              [drop-n kept-bytes]
+              (loop [i 0 total total]
+                (if (and (< i (count recent))
+                         (or (> (- (count recent) i) keep-count) (> total keep-bytes)))
+                  (recur (inc i) (- total (nth sizes i)))
+                  [i total]))]
+          (swap! stream assoc
+                 :recent (if (zero? drop-n) recent (into [] (subvec recent drop-n)))
+                 :recent-sizes (if (zero? drop-n) sizes (into [] (subvec sizes drop-n)))
+                 :recent-byte-count kept-bytes))
         (doseq [sink (:sinks @stream)]
           (try (sink full)
                (catch :default e
@@ -489,7 +517,7 @@
            :debug-max-bytes debug-max-bytes :debug-max-age-ms debug-max-age-ms
            :debug-seq debug-seq :debug-segments debug-segments
            :oldest-seq (some :first-seq segments) :segments segments
-           :recent [] :recent-byte-count 0 :sinks sinks :now now :pos-fn pos-fn})))
+           :recent [] :recent-sizes [] :recent-byte-count 0 :sinks sinks :now now :pos-fn pos-fn})))
 
 (defn cursor
   "The append cursor of the stream: {:stream-id :seq}."
