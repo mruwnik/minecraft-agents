@@ -468,6 +468,17 @@
           (is (seq (for [x (range 0 3) y (range 62 67) z [-1 0 1] :when (#{"torch" "wall_torch"} (block-at s x y z))] [x y z]))
               "a torch stands within two blocks of the mouth"))))))
 
+(deftest a-mouth-torch-round-that-only-crafts-still-hangs-the-torch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (soil-over-stone 63 56) :drops cobble
+                                :inventory (into bare-pickaxe [{:name "torch" :count 1} {:name "coal" :count 2} {:name "stick" :count 2}])}})]
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level 58 :heading "east" :count 1 :tunnel-length 3}) {})
+          (await (run-ticks s 200))
+          (is (seq (for [x (range 0 3) y (range 62 67) z [-1 0 1] :when (#{"torch" "wall_torch"} (block-at s x y z))] [x y z]))
+              "the round that crafted torches did not use up the mouth torch"))))))
+
 ;; Juniper j108: a tunnel run from the foot of a stair back under it would cut its lowest steps' floors.
 (deftest a-tunnel-under-the-stair-it-came-down-stops-before-it-cuts-the-way-up
   (async done

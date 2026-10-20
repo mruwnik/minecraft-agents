@@ -240,8 +240,7 @@
       (= :continue back) :continue
       back (do (ctx/emit! c :mine.not-back :warn {:cell back :text (str "mine could not walk back to its stair down at " (str/join "," back))})
                (stop! c :not-back))
-      (and level? (mouth-torch-due? c)) (do (ctx/update-mem! c assoc-in [:descent :mouth-torch] true)
-                                            (await (torch-step! c :stair)))
+      (and level? (mouth-torch-due? c)) (await (torch-step! c :stair))
       (and level? (stair-torch-due? c)) (await (torch-step! c :stair))
       (and (not level?) (>= n (:descend-limit (:args c)))) (no-stone! c)
       (stair-in-own-zone? c) (do (ctx/update-mem! c assoc-in [:descent :stop] :own-zone)

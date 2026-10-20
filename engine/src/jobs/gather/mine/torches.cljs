@@ -177,6 +177,11 @@
   (str "dig-for stopped: no torches left for the " (cond (= :stair branch) "stair" branch "branch" :else "tunnel")
        " and nothing to craft them from; jobs.gather.mine stocks torches before it digs"))
 
+(defn mouth-done!
+  "The stair's first torch is owed no more once one is hung or the cell is lit (a round that only crafted owes it still)."
+  [c branch]
+  (when (= :stair branch) (ctx/update-mem! c assoc-in [:descent :mouth-torch] true)))
+
 (defn ^:async torch-round!
   "One round of a torch (the tunnel's; a branch's when branch is true, the stair's when :stair): craft more when under 2 are carried and coal or
   charcoal and a stick are; with none to hang, leave the torch out where the cell is lit, else :no-torches; else hang one. :continue / :again."
@@ -191,11 +196,11 @@
         (if (= :continue e) :continue :again))
 
       (and (zero? n) (lit-here? c))
-      (let [{:keys [x y z]} (cell-of (u/self-pos c))] (left-out! c [x y z] [x y z] :lit) :again)
+      (let [{:keys [x y z]} (cell-of (u/self-pos c))] (left-out! c [x y z] [x y z] :lit) (mouth-done! c branch) :again)
 
       (zero? n) :no-torches
 
-      :else (do (await (hang-torch! c branch)) :again))))
+      :else (do (await (hang-torch! c branch)) (mouth-done! c branch) :again))))
 
 (defn ^:async torch-step!
   "torch-round! for the dig itself: no torch left ends the dig :no-torches."
