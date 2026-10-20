@@ -198,34 +198,35 @@
         (assoc plan :kind :pit :anchor (sh-sense/feet (:primitives c)) :cells (plan-cells plan))))))
 
 (defn pocket-cells
-  "The two cells [feet head] of a side pocket dug from feet towards [dx dz], or nil: both natural, unprotected, not falling
+  "The four cells [feet head feet2 head2] of a side pocket dug from feet towards [dx dz], two deep (the body stands in the far
+  pair and plugs the near pair, so no corner cell beside the body is open): or nil. All natural, unprotected, not falling
   and harvestable with what is carried (any, once the job is cutting by hand), with no hazard in or beside them (the way in
-  may be wet: a drowning body digs from the water), solid all round them except the way in (floor, roof, and the three far
-  sides; a cell never sensed counts as stone, the dig looks at it), the roof not a falling block, and a dug block that can seal the way in (carried or dropped).
+  may be wet: a drowning body digs from the water), solid all round them except the way in (floor, roof, both sides, the far end
+  and the far end's corners; a cell never sensed counts as stone, the dig looks at it), the roof not a falling block, and a dug block that can seal the way in (carried or dropped).
   by-hand? (default the job's :by-hand memory) ignores whether a carried tool harvests."
   ([c feet side] (pocket-cells c feet side (:by-hand (ctx/mem c))))
   ([c feet [dx dz] by-hand?]
   (let [p (:primitives c)
         blocks (flight/blocks c)
-        at (fn [dy] {:x (+ (:x feet) dx) :y (+ (:y feet) dy) :z (+ (:z feet) dz)})
-        [lo hi] [(at 0) (at 1)]
-        walls (concat [(at -1) (at 2)]
-                      (for [c [lo hi] [sx sz] dig-cells/sides :when (not= [sx sz] [(- dx) (- dz)])]
-                        (assoc c :x (+ (:x c) sx) :z (+ (:z c) sz))))
+        at (fn [dist dy [px pz]] {:x (+ (:x feet) (* dist dx) px) :y (+ (:y feet) dy) :z (+ (:z feet) (* dist dz) pz)})
+        perp (for [[sx sz] dig-cells/sides :when (zero? (+ (* sx dx) (* sz dz)))] [sx sz])
+        dug (for [dist [1 2] dy [0 1]] (at dist dy [0 0]))
+        walls (concat (for [dist [1 2] dy [-1 2]] (at dist dy [0 0]))
+                      (for [dist [1 2 3] dy [0 1] d (if (= 3 dist) (cons [0 0] perp) perp)] (at dist dy d)))
         unknown? #(some-> (u/sensed p %) .-unknown)
         entry #{feet (update feet :y inc)}
         dug-name #(dig-cells/rock-name p % entry)
         ;; a far cell never sensed reads stone: the dig looks at it and stops if it lays open a gap
         wall-name #(or (dig-cells/rock-name p %) (when (unknown? %) "stone"))
-        names (map dug-name [lo hi])]
-    (when (and (every? #(solid/solid? (dug-name %)) [lo hi])
+        names (map dug-name dug)]
+    (when (and (every? #(solid/solid? %) names)
                (every? #(solid/solid? (wall-name %)) walls)
                (not-any? dig-cells/hazards names)
                (every? #(and (rules/natural? %) (not (escape/protected? %)) (not (rules/falling? %))) names)
-               (not (rules/falling? (wall-name (at 2))))
+               (not-any? #(rules/falling? (wall-name %)) (map #(at % 2 [0 0]) [1 2]))
                (or by-hand? (every? #(tools/can-harvest? p %) names))
                (or (lb/pick c blocks) (some (set blocks) (map #(get drop-of % %) names))))
-      [lo hi]))))
+      (vec dug)))))
 
 (defn fluid-shown?
   "Whether the body sees fluid in a dug cell or beside, over or under it."
@@ -272,8 +273,8 @@
         (first free)))))
 
 (defn ^:async pocket!
-  "Dig a side pocket (feet and head cell beside the body, closed on every other side), collecting the blocks, and step
-  into it: :again, so the next step seals the way in with them. nil when no side fits or a dig fails or lays open fluid or a
+  "Dig a side pocket (two cells deep, feet and head, closed on every other side), collecting the blocks, and step
+  into its far end: :again, so the next step seals the way in with them. nil when no side fits or a dig fails or lays open fluid or a
   cave (job memory :stop says which)."
   [c]
   (let [p (:primitives c)
@@ -286,7 +287,7 @@
       (loop [[cell & more] cells]
         (if (nil? cell)
           (do ;; raw moveTo kept: a step into the body's own pocket, as the pit's drop; the planner has no standable goal there.
-              (await (ctx/act c :moveTo (clj->js {:pos (first cells) :range 0.5})))
+              (await (ctx/act c :moveTo (clj->js {:pos (nth cells 2) :range 0.5})))
               :again)
           (let [_ (await (tools/equip-for! c (dig-cells/rock-name p cell) {:fast true}))
                 r (await (tidy/dig! c cell true))]
@@ -305,7 +306,9 @@
                     (await (dig-cells/collect-drops! c (flight/blocks c) (.-drops r)))
                     (if-let [why (await (lays-open? c dug (into (set cells) [feet (update feet :y inc)])))]
                       (stop! why (str "the pocket lays open " (if (= :fluid-adjacent why) "fluid" "a gap")))
-                      (recur more))))))))))))
+                      (do ;; the far pair is dug from inside: the drops lie there and the reach is short
+                        (when (= 2 (count dug)) (await (ctx/act c :moveTo (clj->js {:pos (first cells) :range 0.5}))))
+                        (recur more)))))))))))))
 
 (defn pit-index
   "Which drop of the pit the feet are at (0 at the anchor), nil when the body is not in its column."

@@ -426,9 +426,9 @@
                                             :entities [(skeleton 4 64 0)]}
                                    120000 (fn [{:keys [eng]}] (:list (core/state eng)))))]
           (is (zero? (count (calls p "attack"))) "a pocket beats a pickaxe fight")
-          (is (= #{[-1 64 0] [-1 65 0]} (set (mapv #(let [pos (.. % -args -pos)] [(.-x pos) (.-y pos) (.-z pos)])
-                                                 (calls p "dig")))) "feet and head cell of the pocket")
-          (is (= #{[0 64 0] [0 65 0]} (set (placed-cells p))) "the dug blocks seal the way in")
+          (is (= #{[-1 64 0] [-1 65 0] [-2 64 0] [-2 65 0]} (set (mapv #(let [pos (.. % -args -pos)] [(.-x pos) (.-y pos) (.-z pos)])
+                                                 (calls p "dig")))) "two cells deep, feet and head")
+          (is (= #{[-1 64 0] [-1 65 0]} (set (placed-cells p))) "the dug blocks seal the near pair")
           (is (= ["j1"] while-hidden) "hiding in the pocket")
           (is (= [] (:list (core/state eng)))))))))
 
@@ -683,7 +683,7 @@
   "dead-end over solid rock down to y 58: a tunnel with a roof at y 66, a pickaxe digs down into it."
   (rock [-3 9] [58 67] dead-end-cells))
 
-(deftest an-unarmed-body-under-a-roof-digs-down-and-plugs-the-hole
+(deftest an-unarmed-body-with-a-zombie-at-its-heels-digs-a-pocket-and-plugs-behind-it
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -691,10 +691,9 @@
               (await (hidden-round '(jobs.survival.retreat) {:blocks deep-dead-end :inventory [{:name "stone_pickaxe" :count 1}]
                                             :entities [(zombie 1 64 0)]}
                                    1000 (fn [{:keys [p]}] (.-name (.blockAt p #js {:x -1 :y 64 :z 0})))))]
-          (is (zero? (count (calls p "attack"))) "a pickaxe and a hole beat a pickaxe fight")
-          (is (= [[-1 64 0] [-1 65 0] [-1 63 0] [-1 62 0]] (mapv #(let [pos (.. % -args -pos)] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "dig"))))
-          (is (= 62 (js/Math.floor (second (:pos (fake/self p))))) "two down")
-          (is (#{"stone" "cobblestone"} while-hidden) "plugged over the head"))))))
+          (is (zero? (count (calls p "attack"))) "a pickaxe and a pocket beat a pickaxe fight")
+          (is (= [[-1 64 0] [-1 65 0] [-2 64 0] [-2 65 0]] (mapv #(let [pos (.. % -args -pos)] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "dig"))))
+          (is (#{"stone" "cobblestone"} while-hidden) "plugged behind it"))))))
 
 (def room
   "A room three wide (z -1..1) closed at x -2 behind the body, open far towards +x."

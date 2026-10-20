@@ -1,6 +1,6 @@
 (ns jobs.survival.breathe-pocket
   "Air made where a drowning body is, for jobs.survival.breathe when it sees none. From solid ground: jobs.survival.shut-in's
-  pocket way digs the two wall cells beside the body (feet and head height), steps in and plugs the opening behind it; the
+  pocket way digs a 2-deep pocket beside the body (feet and head height), steps in and plugs the opening behind it; the
   water left inside has no source and drains (make!). Afloat: a carried block placed under the feet comes first (footing!)."
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
@@ -40,7 +40,7 @@
     (boolean (or (breath/suffocates-here? p below) (some-> (u/seen-block p below) .-fullCube)))))
 
 (defn ^:async site!
-  "Where a dry pocket can be made from where the body stands, {:cells [feet head]} (jobs.survival.retreat-pit/pocket-site), after a
+  "Where a dry pocket can be made from where the body stands, {:cells [feet head feet2 head2]} (jobs.survival.retreat-pit/pocket-site), after a
   look at the wall cells not seen and with the best tool held; else {:why kw}: :off (arg :pocket false), the
   outcome of the run's earlier pocket (one a run), :made-near (see ::near), :no-block (no pillar block carried to plug it), :afloat, :no-wall
   (no side with two natural wall cells under a roof that does not fall) or :too-slow (the digs do not fit ::dig-share
@@ -96,7 +96,7 @@
         outcome (if (= :done (:kind e)) :made :dig-failed)]
     (ctx/update-mem! c assoc :pocket outcome)
     (when (= :made outcome)
-      (ctx/remember! c :breathe-pocket {:pos (first cells)} made-policy)
+      (ctx/remember! c :breathe-pocket {:pos (nth cells 2)} made-policy)
       (loop [n (js/Math.ceil (/ (settings/ticks->ms (settings/get settings ::drain-ticks)) pace/pace-ms))]
         (when (and (pos? n) (ctx/alive? c) (breath/situation p))
           (await (pace/pace!))

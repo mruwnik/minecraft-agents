@@ -104,9 +104,9 @@
         (let [{:keys [p seen] :as s} (setup [])]
           (await (run-job! s {}))
           (is (nil? (failed seen)))
-          (is (= {"cobblestone" 6} (:spent (completed seen))) "the way in and the four corners beside it")
-          (is (= ["air" "air"] (mapv #(block-at p %) [[4 64 0] [4 65 0]])) "pocket cells dug")
-          (is (= ["cobblestone" "cobblestone"] (mapv #(block-at p %) [[3 64 0] [3 65 0]])) "way in walled with the dropped blocks"))))))
+          (is (= {"cobblestone" 2} (:spent (completed seen))) "the way in only: the body stands in the far pair, rock beside it")
+          (is (= ["air" "air"] (mapv #(block-at p %) [[5 64 0] [5 65 0]])) "far pair dug and left open for the body")
+          (is (= ["cobblestone" "cobblestone"] (mapv #(block-at p %) [[4 64 0] [4 65 0]])) "near pair walled with the dropped blocks"))))))
 
 (deftest no-block-to-wall-with-is-no-site
   (async done
@@ -125,7 +125,7 @@
           (await (run-job! s {}))
           (is (nil? (failed seen)))
           (is (= "stone" (block-at p [4 64 0])) "the owned wall is untouched")
-          (is (= "air" (block-at p [-4 64 0])) "the pocket is cut in the free hill"))))))
+          (is (= "air" (block-at p [-5 64 0])) "the pocket is cut in the free hill"))))))
 
 (deftest a-pocket-is-not-cut-in-the-bodys-own-plan
   (async done
@@ -185,7 +185,7 @@
           (await (run-job! s {:fetch true}))
           (is (some #(and (= :child_started (:kind %)) (= :need (:slot %))) @seen) "a tool is asked for")
           (is (nil? (failed seen)))
-          (is (= ["cobblestone" "cobblestone"] (mapv #(block-at p %) [[3 64 0] [3 65 0]]))))))))
+          (is (= ["cobblestone" "cobblestone"] (mapv #(block-at p %) [[4 64 0] [4 65 0]]))))))))
 
 (deftest a-hill-not-yet-seen-is-looked-for-before-no-site-then-dug
   (async done
@@ -195,7 +195,7 @@
           (await (run-job! s {}))
           (is (nil? (failed seen)))
           (is (some? (completed seen)))
-          (is (= "air" (block-at p [4 64 0]))))))))
+          (is (= "air" (block-at p [5 64 0]))))))))
 
 (deftest flat-ground-without-a-pickaxe-is-still-no-site
   (async done

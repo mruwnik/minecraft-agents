@@ -117,8 +117,8 @@
       (fn ^:async t []
         (let [{:keys [out p]} (await (plug! {:blocks ct/dead-end :inventory pick :entities [(ct/skeleton 4 64 0)]} {:ways #{:pocket}}))]
           (is (= [:done :pocket] [(:kind out) (:way (:data out))]))
-          (is (= #{[-1 64 0] [-1 65 0]} (set (cells-of p "dig"))))
-          (is (= #{[0 64 0] [0 65 0]} (set (cells-of p "place")))))))))
+          (is (= #{[-1 64 0] [-1 65 0] [-2 64 0] [-2 65 0]} (set (cells-of p "dig"))))
+          (is (= #{[-1 64 0] [-1 65 0]} (set (cells-of p "place")))))))))
 
 (def mid-room
   "A 7x7 room (x, z -3..3, y 64..65) in solid stone: no rock beside the body at its centre, the walls 4 blocks off."
@@ -134,7 +134,7 @@
               [x _ z] (mapv js/Math.floor (:pos (fake/self p)))]
           (is (= [:done :pocket] [(:kind out) (:way (:data out))]))
           (is (<= 3 (max (js/Math.abs x) (js/Math.abs z))) "a pocket in a wall 3 blocks from the room's centre")
-          (is (= 2 (count (cells-of p "dig")))))))))
+          (is (= 4 (count (cells-of p "dig")))))))))
 
 (deftest a-body-already-enclosed-is-done-before-anything-is-placed
   (async done

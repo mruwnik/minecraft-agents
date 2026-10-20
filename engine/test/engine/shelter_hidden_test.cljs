@@ -68,14 +68,14 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (await (seen-world {}))]
-          (is (= [{:x 3 :y 64 :z 0} {:x 3 :y 65 :z 0}] (pit/pocket-cells (ctx-of p) {:x 2 :y 64 :z 0} [1 0]))))))))
+          (is (= [{:x 3 :y 64 :z 0} {:x 3 :y 65 :z 0} {:x 4 :y 64 :z 0} {:x 4 :y 65 :z 0}] (pit/pocket-cells (ctx-of p) {:x 2 :y 64 :z 0} [1 0]))))))))
 
 (deftest a-pocket-site-in-the-hill-is-found-on-the-faces-seen
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [p (await (seen-world {}))]
-          (is (= [{:x 3 :y 64 :z 0} {:x 3 :y 65 :z 0}] (pit/pocket-site (ctx-of p) {:x 2 :y 64 :z 0}))))))))
+          (is (= [{:x 3 :y 64 :z 0} {:x 3 :y 65 :z 0} {:x 4 :y 64 :z 0} {:x 4 :y 65 :z 0}] (pit/pocket-site (ctx-of p) {:x 2 :y 64 :z 0}))))))))
 
 (deftest rock-with-a-seen-opening-over-it-is-no-pocket
   (async done
@@ -118,13 +118,13 @@
       (fn ^:async t []
         (let [{:keys [out p seen]} (await (run-pocket! {}))]
           (is (= :done (:status @out)))
-          (is (= 2 (count (digs p)))))))))
+          (is (= 4 (count (digs p)))))))))
 
 (deftest water-behind-the-pocket-shows-after-the-dig-and-the-pocket-stops
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (run-pocket! {"4,65,0" "water"}))]
+        (let [{:keys [out p]} (await (run-pocket! {"5,65,0" "water"}))]
           (is (= :stopped (:status @out)))
           (is (= :fluid-adjacent (get-in @out [:ending :data :reason])))
-          (is (not-any? #{[4 65 0] [4 64 0]} (digs p))))))))
+          (is (not-any? #{[5 65 0] [5 64 0]} (digs p))))))))

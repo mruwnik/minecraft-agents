@@ -47,7 +47,7 @@
                                          :drops {"stone" "cobblestone"} :inventory [{:name "iron_pickaxe" :count 1} {:name "cobblestone" :count 4}]}))
               e (await (call! p 'jobs.survival.dig-pocket {} (constantly nil)))]
           (is (= :done (:kind e)))
-          (is (= 6 (count (:placed (:data e))))))))))
+          (is (= 2 (count (:placed (:data e))))))))))
 
 (deftest flat-ground-has-no-pocket-site
   (async done
