@@ -119,7 +119,7 @@
 
 (def pos-args
   "The position-valued args of real jobs: [job arg]. go-to's :pos also takes a column (engine.go-to-column-test)."
-  [['jobs.blocks.dig :pos] ['jobs.blocks.place :pos] ['jobs.blocks.use-on :pos]
+  [['jobs.blocks.dig :pos] ['jobs.blocks.place :pos]
    ['jobs.access.toggle :pos] ['jobs.movement.leave-vehicle :toward]
    ['jobs.storage.withdraw :chest] ['jobs.storage.deposit :chest] ['jobs.items.smelt :furnace] ['jobs.items.kitchen :chest]
    ['jobs.access.tunnel :target]

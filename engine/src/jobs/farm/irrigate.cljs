@@ -23,7 +23,7 @@
   the field the body has seen, farmland or ground a hoe would till, is dry when every block within 4 in x and z of it, at its height
   and one above, is seen and none is water; a cell with an unseen block in reach and no water is unknown, never dry. For the spot
   that wets the most dry cells (one of the field's own cells under open air whose four sides are seen solid and underside not seen open, nearest
-  first) it digs the cell (a jobs.blocks.dig child) and pours a water bucket in it (a jobs.blocks.use-on child), then
+  first) it digs the cell (a jobs.blocks.dig child) and pours a water bucket in it (a jobs.items.use child), then
   looks again (a pour that fails, or a bucket gone before it, has the cell refilled with dirt (a jobs.blocks.place child); a cell that stays open is named in :holes and ends the call, a refilled one only drops that spot); one bucket wets one spot, so it ends when no cell is dry, no water bucket is left or no spot helps. A pour
   counts only once the cell is seen as water. A water bucket is fetched (jobs.lib.need, from the call's :ways) when dry cells are left and none is carried; a
   failed fetch ends the call with its ending as the :because. Zones: a spot in another owner's zone or claim, or in a
@@ -226,7 +226,7 @@
 (defn ^:async pour!
   "Pour the bucket in the dug hole. :again, or :continue while the child waits."
   [c hole]
-  (let [e (waits/waiting-out c (await (ctx/call c :pour 'jobs.blocks.use-on (merge (select-keys (:args c) [:ignore-zones?]) {:pos hole :item "water_bucket"}))))]
+  (let [e (waits/waiting-out c (await (ctx/call c :pour 'jobs.items.use (merge (select-keys (:args c) [:ignore-zones?]) {:on hole :item "water_bucket"}))))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (ctx/update-mem! c #(-> (dissoc % :hole) (update :poured (fnil conj #{}) hole))) :again)

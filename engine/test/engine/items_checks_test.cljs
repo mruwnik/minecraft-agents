@@ -9,7 +9,7 @@
             [engine.test-util :as tu]))
 
 (def area
-  '[jobs.items.craft jobs.items.enchant jobs.items.equip jobs.items.get-kit jobs.items.get-tool jobs.items.interact
+  '[jobs.items.craft jobs.items.enchant jobs.items.equip jobs.items.get-kit jobs.items.get-tool jobs.items.use
     jobs.items.kitchen jobs.items.obtain jobs.items.pick-up-loose jobs.items.smelt
     jobs.storage.deposit jobs.storage.haul jobs.storage.make-room jobs.storage.withdraw
     jobs.food.fish jobs.memory.forget-place jobs.memory.remember jobs.memory.set-place])
@@ -43,7 +43,7 @@
   (are [sym args reason] (= [:never reason] (kind+reason (verdict-of :can-start? sym {} args)))
     'jobs.items.equip {:item "iron_pickaxx" :hand "main"} :unknown-item
     'jobs.items.craft {} :bad-args
-    'jobs.items.interact {} :bad-args
+    'jobs.items.use {} :bad-args
     'jobs.items.get-kit {} :bad-args
     'jobs.items.smelt {:item "diamond"} :not-smeltable
     'jobs.memory.remember {} :bad-args))
@@ -80,7 +80,7 @@
 (def done-args
   {'jobs.items.craft {:item "oak_planks" :count 4} 'jobs.items.enchant {:item "iron_sword"}
    'jobs.items.equip {:item "stone_pickaxe"} 'jobs.items.get-kit {:items ["iron_pickaxe"]}
-   'jobs.items.get-tool {:kind "pickaxe"} 'jobs.items.interact {:id 7} 'jobs.items.give {:player "Steve" :item "bread"}
+   'jobs.items.get-tool {:kind "pickaxe"} 'jobs.items.use {:on 7} 'jobs.items.give {:player "Steve" :item "bread"}
    'jobs.items.kitchen {:chest {:x 10 :y 64 :z 0}} 'jobs.items.obtain {:item "oak_log"} 'jobs.items.pick-up-loose {}
    'jobs.items.smelt {:item "beef"} 'jobs.storage.deposit {} 'jobs.storage.haul {:from [[1 64 0]]}
    'jobs.storage.make-room {} 'jobs.storage.withdraw {:items {"bread" 1}}
@@ -147,7 +147,7 @@
       helmet {} :later {:worn []})))
 
 (deftest a-later-done-carries-a-result-map
-  (doseq [sym '[jobs.items.enchant jobs.items.interact jobs.items.get-kit jobs.storage.haul
+  (doseq [sym '[jobs.items.enchant jobs.items.use jobs.items.get-kit jobs.storage.haul
                 jobs.items.pick-up-loose jobs.storage.withdraw jobs.memory.remember jobs.items.kitchen
                 jobs.memory.set-place jobs.memory.forget-place]
           :let [s (done-of sym {} (done-args sym))]]
@@ -161,8 +161,8 @@
   (are [sym world args m reason] (= reason (tu/kind-reason (done-of sym world args m)))
     'jobs.items.enchant {} {:item "iron_sword"} {:enchanted true} [:ok :enchanted]
     'jobs.items.enchant {} {:item "iron_sword"} {} [:later :enchanting]
-    'jobs.items.interact {} {:id 7} {:used true} [:ok :used]
-    'jobs.items.interact {} {:id 7} {} [:later :not-used]
+    'jobs.items.use {} {:on 7} {:used true} [:ok :used]
+    'jobs.items.use {} {:on 7} {} [:later :not-used]
     'jobs.items.get-kit kit-world kit-args {} [:ok :kitted]
     'jobs.items.get-kit kit-world kit-args {:children {:obtain {}}} [:later :wrapping-up]
     'jobs.items.get-kit {} kit-args {} [:later :kitting]

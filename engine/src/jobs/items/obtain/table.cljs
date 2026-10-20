@@ -97,7 +97,7 @@
             {:key k :count n :job 'jobs.gather.get-seeds :seen #{k} :max-runs 1
              :args {:item k :count n}})
           (when-let [n (get gather "water_bucket")]
-            [{:key "water_bucket" :count n :job 'jobs.blocks.use-on :seen #{"water"} :args {:item "bucket"}}])
+            [{:key "water_bucket" :count n :job 'jobs.items.use :seen #{"water"} :args {:item "bucket"}}])
           (for [[k n] gather :when (mob-drops k)]
             {:key k :count n :job 'jobs.combat.hunt :mob (mob-drops k) :max-runs 1
              :args {:mob (mob-drops k) :count n :radius (animal-radius) :drops [k]}})

@@ -148,7 +148,7 @@
               (bump-row! c)
               :blocked))))))
 
-;; A click on an animal is a jobs.items.interact child (the walk into reach and the click); the job reads :raw for what
+;; A click on an animal is a jobs.items.use child (the walk into reach and the click); the job reads :raw for what
 ;; only it knows (love, a lead) and books every other outcome with book-failed!.
 (defn pick
   "The animal to work on next: the one a click child is still under way on, else the first of cands."
@@ -157,13 +157,13 @@
     (or (some #(when (= k (key-of %)) %) cands) (first cands))))
 
 (defn ^:async use-on!
-  "Use item (nil: the empty hand) on target, the entity of animal k, through an items.interact child (it walks into
+  "Use item (nil: the empty hand) on target, the entity of animal k, through an items.use child (it walks into
   reach, re-walks after the animal moves, and clicks). Resolves to :continue while the child waits on the world, else
   {:status :raw}: status :used or the child's cause (:no-effect :gone :out-of-reach :cannot :failed :no-item
   :unreachable), raw the primitive's answer."
   [c k target item]
   (ctx/update-mem! c assoc :use-on k)
-  (let [e (await (ctx/call c :use 'jobs.items.interact (cond-> {:id (.-id target)} item (assoc :item item))))]
+  (let [e (await (ctx/call c :use 'jobs.items.use (cond-> {:on (.-id target)} item (assoc :item item))))]
     (if (= :continue e)
       :continue
       (do (ctx/update-mem! c dissoc :use-on)

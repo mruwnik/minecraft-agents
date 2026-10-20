@@ -52,12 +52,12 @@
    :after [[:block [22 0 16] "cobblestone"] [:block [18 0 16] "oak_fence_gate[open=false]"]
            [:entities "type=cow,tag=wt" [[19 0 12] [25 1 20]] 2]]}
   {:name "use-on-the-gate-from-outside-does-not-enter"
-   :act [[:job (jobs.blocks.use-on {:pos #at [18 0 16]})]]
+   :act [[:job (jobs.items.use {:on #at [18 0 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:used true}} :within-s 60 :of-job true}]
    :after [[:block [18 0 16] "oak_fence_gate[open=true]"] [:body-far [21.5 0 16.5] 3]]}
   {:name "use-on-deep-in-the-pen-declines-naming-the-pen"
    :blocks [[:set [22 0 16] "lever[face=floor,facing=north,powered=false]"]]
-   :act [[:job (jobs.blocks.use-on {:pos #at [22 0 16]})]]
+   :act [[:job (jobs.items.use {:on #at [22 0 16]})]]
    :expect [{:event {:source :job :kind :blocks.pen-kept-out :level :warn} :within-s 100}]
    :after [[:block [22 0 16] "lever[powered=false]"] [:block [18 0 16] "oak_fence_gate[open=false]"]
            [:entities "type=cow,tag=wt" [[19 0 12] [25 1 20]] 2]]

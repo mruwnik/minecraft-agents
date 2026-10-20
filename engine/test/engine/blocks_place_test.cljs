@@ -428,7 +428,7 @@
               allowed (await (settings/with-settings pens-open #(tu/child-outcome eng job {:pos [9 64 0] :item "dirt"} 40)))]
           (is (= true (:placed allowed))))))))
 
-(def use-on 'jobs.blocks.use-on)
+(def use-on 'jobs.items.use)
 
 (deftest a-use-on-the-gate-or-near-the-fence-works-from-outside
   (async done
@@ -436,7 +436,7 @@
       (fn ^:async t []
         (doseq [pos [[5 64 0] [7 63 2]]]
           (let [{:keys [eng p seen]} (pen-env)
-                result (await (tu/child-outcome eng use-on {:pos pos} 40))]
+                result (await (tu/child-outcome eng use-on {:on pos} 40))]
             (is (not= :unreachable (:reason result)) (pr-str pos))
             (is (= 1 (gate-clicks p)) (pr-str pos))
             (is (empty? (filter #(= :blocks.pen-kept-out (:kind %)) @seen)) (pr-str pos))))))))
@@ -446,12 +446,12 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (pen-env)
-              declined (await (tu/child-outcome eng use-on {:pos [10 63 0]} 40))]
+              declined (await (tu/child-outcome eng use-on {:on [10 63 0]} 40))]
           (is (= :unreachable (:reason declined)))
           (is (zero? (gate-clicks p)))
           (is (some #(and (= :blocks.pen-kept-out (:kind %)) (re-find #"\[5 64 0\]" (:text %))) @seen)))
         (let [{:keys [eng]} (pen-env)
-              allowed (await (settings/with-settings pens-open #(tu/child-outcome eng use-on {:pos [10 63 0]} 40)))]
+              allowed (await (settings/with-settings pens-open #(tu/child-outcome eng use-on {:on [10 63 0]} 40)))]
           (is (not= :unreachable (:reason allowed))))))))
 
 (deftest a-use-on-ends-by-its-click-status
@@ -465,7 +465,7 @@
                 _ (.override (.-world (:p env)) "useOn" (fn ^:async f [_ _ _] #js {:status status}))
                 out (atom nil)
                 parent {:round (fn ^:async r [c]
-                                 (let [e (await (ctx/call c :kid use-on {:pos at}))]
+                                 (let [e (await (ctx/call c :kid use-on {:on at}))]
                                    (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause])) (ctx/end c :done nil)))))}
                 eng (assoc-in (:eng env) [:jobs 'recording-parent] parent)]
             (core/submit! eng '(recording-parent) {})
@@ -480,7 +480,7 @@
               out (atom [])
               parent {:round (fn ^:async r [c]
                                (doseq [[j args] [[job {:pos at :item "cobblestone"}] [job {:pos [30 64 0] :item "cobblestone"}]
-                                                 [use-on {:pos [30 64 0]}]]]
+                                                 [use-on {:on [30 64 0]}]]]
                                  (swap! out conj (await (ctx/quote c j args))))
                                (ctx/end c :done nil))}
               eng (assoc-in (:eng env) [:jobs 'recording-parent] parent)]
@@ -496,10 +496,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [env (bd/setup {:self body :inventory [{:name "water_bucket" :count 1}]})
-              poured (await (tu/child-outcome (:eng env) use-on {:pos at :item "water_bucket"} 40))]
+              poured (await (tu/child-outcome (:eng env) use-on {:on at :item "water_bucket"} 40))]
           (is (= [true :used] ((juxt :used :reason) poured)))
           (is (= "water" (.-name (.blockAt (:p env) (clj->js at)))))
-          (let [scooped (await (tu/child-outcome (:eng env) use-on {:pos at :item "bucket"} 40))]
+          (let [scooped (await (tu/child-outcome (:eng env) use-on {:on at :item "bucket"} 40))]
             (is (= [true "water_bucket"] [(:used scooped) (some #(when (= "water_bucket" (:name %)) (:name %)) (u/inventory (:p env)))]))
             (is (not= "water" (.-name (.blockAt (:p env) (clj->js at)))))))))))
 
@@ -509,13 +509,13 @@
       (fn ^:async t []
         (let [env (bd/setup {:self body :inventory [{:name "water_bucket" :count 1}] :zones [bd/farm-zone]})]
           (is (= {:reason :not-allowed :pos at :by :zone :zone "farm" :owner "Miles"}
-                 (bd/wait-cause (await (bd/waiting-after env (list use-on {:pos at :item "water_bucket"}) 3)))))
+                 (bd/wait-cause (await (bd/waiting-after env (list use-on {:on at :item "water_bucket"}) 3)))))
           (is (empty? (bd/calls (:p env) "place"))))
         (let [env (bd/setup {:self body :inventory [{:name "water_bucket" :count 1}] :zones [bd/farm-zone]})
-              result (await (tu/child-outcome (:eng env) use-on {:pos at :item "water_bucket" :ignore-zones? true} 40))]
+              result (await (tu/child-outcome (:eng env) use-on {:on at :item "water_bucket" :ignore-zones? true} 40))]
           (is (= true (:used result))))
         (let [env (bd/setup {:self body :zones [bd/farm-zone]})
-              result (await (tu/child-outcome (:eng env) use-on {:pos at} 40))]
+              result (await (tu/child-outcome (:eng env) use-on {:on at} 40))]
           (is (not= :not-allowed (:reason result))))))))
 
 (deftest a-use-on-scoop-asks-the-harvest-rule-not-the-place-rule
@@ -525,15 +525,15 @@
         (let [zone (assoc bd/farm-zone :allow #{:harvest})
               scoop (bd/setup {:self body :inventory [{:name "bucket" :count 1}] :blocks {"2,64,0" "water"} :zones [zone]})
               pour (bd/setup {:self body :inventory [{:name "water_bucket" :count 1}] :zones [zone]})]
-          (is (= true (:used (await (tu/child-outcome (:eng scoop) use-on {:pos at :item "bucket"} 40)))))
-          (is (= :not-allowed (:reason (bd/wait-cause (await (bd/waiting-after pour (list use-on {:pos at :item "water_bucket"}) 3)))))))))))
+          (is (= true (:used (await (tu/child-outcome (:eng scoop) use-on {:on at :item "bucket"} 40)))))
+          (is (= :not-allowed (:reason (bd/wait-cause (await (bd/waiting-after pour (list use-on {:on at :item "water_bucket"}) 3)))))))))))
 
 (deftest a-use-on-with-a-bucket-ends-by-the-place-status
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [env (bd/setup {:self body :inventory [{:name "bucket" :count 1}]})
-              scooped (await (tu/child-outcome (:eng env) use-on {:pos at :item "bucket"} 40))]
+              scooped (await (tu/child-outcome (:eng env) use-on {:on at :item "bucket"} 40))]
           (is (= [:stopped :missing] [(:status scooped) (:reason scooped)])))))))
 
 (deftest a-bed-with-no-facing-turns-to-the-side-its-head-has-room

@@ -302,7 +302,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (night-hut {}))
-              id (core/submit! eng '(jobs.blocks.use-on {:pos [15 64 0]}) {})]
+              id (core/submit! eng '(jobs.items.use {:on [15 64 0]}) {})]
           (await (ticks eng 6))
           (is (= inside (st/pos-of p)))
           (is (= :exposed (:reason (waiting-of eng id)))))))))

@@ -9,11 +9,11 @@
             [engine.fake :as fake]
             [engine.test-util :as tu]))
 
-(def jobs '[jobs.items.equip jobs.items.interact jobs.items.give jobs.items.enchant])
+(def jobs '[jobs.items.equip jobs.items.use jobs.items.give jobs.items.enchant])
 
 (deftest every-item-job-exports-the-contract-and-quotes-validly
   (let [p (tu/fake {})
-        args {'jobs.items.equip {:item "stone_pickaxe" :hand "main"} 'jobs.items.interact {:id 7}
+        args {'jobs.items.equip {:item "stone_pickaxe" :hand "main"} 'jobs.items.use {:on 7}
               'jobs.items.give {:player "Steve" :item "bread"} 'jobs.items.enchant {:item "iron_sword"}}]
     (doseq [sym jobs
             :let [job (get registry/jobs sym)]]
@@ -59,13 +59,13 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world (merge {:entities [(cow 7 2)]} (stacks "wheat"))]
-          (let [e (await (ending-of world 'jobs.items.interact {:id 7 :item "wheat"}))]
+          (let [e (await (ending-of world 'jobs.items.use {:on 7 :item "wheat"}))]
             (is (= {:kind :done :data {:used true :id 7 :item "wheat" :text "used wheat on entity 7"}}
                    (-> (select-keys e [:kind :data]) (update :data dissoc :raw))))
             (is (= "used" (get-in e [:data :raw :status])) "the primitive's answer rides along"))
-          (is (= {:kind :condition-failed :cause :gone} (kc (await (ending-of world 'jobs.items.interact {:id 99})))))
+          (is (= {:kind :condition-failed :cause :gone} (kc (await (ending-of world 'jobs.items.use {:on 99})))))
           (is (= {:kind :condition-failed :cause :no-item}
-                 (kc (await (ending-of world 'jobs.items.interact {:id 7 :item "lead"}))))))))))
+                 (kc (await (ending-of world 'jobs.items.use {:on 7 :item "lead"}))))))))))
 
 (deftest interact-walks-to-where-an-entity-dropped-out-of-sight
   (async done
@@ -78,7 +78,7 @@
                              p))
               out (atom nil)
               parent {:round (fn ^:async recording-round [c]
-                               (let [e (await (ctx/call c :kid 'jobs.items.interact {:id 7 :item "wheat"}))]
+                               (let [e (await (ctx/call c :kid 'jobs.items.use {:on 7 :item "wheat"}))]
                                  (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :data])) (ctx/end c :done nil)))))}
               eng (core/create {:primitives (wrap (tu/seeing-all (tu/fake-on-floor world))) :jobs (assoc registry/jobs 'recording-parent parent)
                                 :dir (tu/tmp-dir)})]
@@ -101,7 +101,7 @@
                              p))
               out (atom nil)
               parent {:round (fn ^:async recording-round [c]
-                               (let [e (await (ctx/call c :kid 'jobs.items.interact {:id 7 :item "wheat"}))]
+                               (let [e (await (ctx/call c :kid 'jobs.items.use {:on 7 :item "wheat"}))]
                                  (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :data])) (ctx/end c :done nil)))))}
               eng (core/create {:primitives (wrap (tu/seeing-all (tu/fake-on-floor world))) :jobs (assoc registry/jobs 'recording-parent parent)
                                 :dir (tu/tmp-dir)})]

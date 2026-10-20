@@ -144,7 +144,7 @@
     (when (and now (animals/led-by-me? now)) now)))
 
 (defn ^:async lead!
-  "Use the lead on the animal once (an items.interact child). :continue while it waits, [:leashed now] when the animal
+  "Use the lead on the animal once (an items.use child). :continue while it waits, [:leashed now] when the animal
   is on the lead afterwards, [:no-lead nil] when the server found none, else nil with the outcome booked."
   [c animal]
   (let [k (animals/key-of animal)

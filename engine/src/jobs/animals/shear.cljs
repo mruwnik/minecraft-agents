@@ -162,7 +162,7 @@
     (finish! c (none-reason c))))
 
 (defn ^:async shear!
-  "Use the shears on sheep once (an items.interact child) and book the outcome. :continue while the child waits."
+  "Use the shears on sheep once (an items.use child) and book the outcome. :continue while the child waits."
   [c sheep]
   (let [k (animals/key-of sheep)
         r (await (animals/use-on! c k sheep "shears"))]

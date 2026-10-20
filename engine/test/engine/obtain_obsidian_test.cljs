@@ -167,13 +167,13 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup (world lava-lake [pick {:name "water_bucket" :count 1}]))
-              real (get registry/jobs 'jobs.blocks.use-on)
+              real (get registry/jobs 'jobs.items.use)
               waited (atom false)
               wrapped (assoc real :round (fn ^:async r [c]
                                            (if (and (= "bucket" (:item (:args c))) (not @waited))
                                              (do (reset! waited true) :continue)
                                              (await ((:round real) c)))))
-              eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.blocks.use-on wrapped))
+              eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.items.use wrapped))
               res (await (tu/child-outcome eng 'jobs.gather.make-obsidian {:count 1} 300))]
           (is @waited "the scoop child waited once")
           (is (= :done (:status res)) (pr-str res))

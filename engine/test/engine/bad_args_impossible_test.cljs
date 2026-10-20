@@ -23,7 +23,7 @@
         (doseq [[spec reason] [['(jobs.items.obtain {}) :bad-args]
                                ['(jobs.items.craft {}) :bad-args]
                                ['(jobs.items.give {}) :bad-args]
-                               ['(jobs.items.interact {}) :bad-args]
+                               ['(jobs.items.use {}) :bad-args]
                                ['(jobs.items.enchant {}) :bad-args]
                                ['(jobs.items.get-tool {:block "no_such_block"}) :bad-args]
                                ['(jobs.farm.plant {}) :bad-args]

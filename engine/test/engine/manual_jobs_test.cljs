@@ -1,5 +1,5 @@
 (ns engine.manual-jobs-test
-  "jobs.blocks.use-on and jobs.items.interact (the jobs behind world.mjs use-on / interact) against the fake world."
+  "jobs.items.use (the job behind world.mjs use-on / interact) against the fake world."
   (:require [engine.child-ends :as ce]
             [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
@@ -8,7 +8,7 @@
             [engine.events :as events]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
-            [jobs.blocks.use-on :as use-on-job]
+            [jobs.items.use :as use-on-job]
             [jobs.lib.world-files :as ew]))
 
 (defn setup [world]
@@ -34,8 +34,8 @@
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn kinds [seen kind] (filterv #(= kind (:kind %)) @seen))
 
-(def use-on 'jobs.blocks.use-on)
-(def interact 'jobs.items.interact)
+(def use-on 'jobs.items.use)
+(def interact 'jobs.items.use)
 (def composter {"2,63,0" "composter"})
 (def far-composter {"14,63,0" "composter"})
 (defn cow [id x] {:id id :uuid (str "u" id) :name "cow" :kind "passive" :pos {:x x :y 64 :z 0}})
@@ -46,7 +46,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [result p seen]} (await (outcome (merge {:blocks composter} (stacks "oak_leaves")) use-on
-                                                      {:pos {:x 2 :y 63 :z 0} :item "oak_leaves"}))]
+                                                      {:on {:x 2 :y 63 :z 0} :item "oak_leaves"}))]
           (is (true? (:used result)))
           (is (= :done (:status result)))
           (is (= 1 (count (calls p "useOn"))))
@@ -57,7 +57,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [result p]} (await (outcome (merge {:blocks far-composter} (stacks "oak_leaves")) use-on
-                                                 {:pos [14 63 0] :item "oak_leaves"}))]
+                                                 {:on [14 63 0] :item "oak_leaves"}))]
           (is (true? (:used result)))
           (is (= 1 (count (calls p "useOn")))))))))
 
@@ -66,7 +66,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [result seen]} (await (outcome (merge {:blocks composter} (stacks "stick")) use-on
-                                                    {:pos [2 63 0] :item "oak_leaves"}))]
+                                                    {:on [2 63 0] :item "oak_leaves"}))]
           (is (= :stopped (:status result)))
           (is (false? (:used result)))
           (is (= :no-item (:reason result)))
@@ -75,13 +75,13 @@
 (deftest use-on-bad-args-are-never-from-can-start
   (are [args] (= [:never :bad-args] (tu/kind-reason (use-on-job/can-start? {:args args})))
     {:item "stick"}
-    {:pos [2 63 0] :face "sideways"}))
+    {:on [2 63 0] :face "sideways"}))
 
 (deftest interact-uses-the-item-on-an-entity-in-reach
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [result p]} (await (outcome (merge {:entities [(cow 7 2)]} (stacks "wheat")) interact {:id 7 :item "wheat"}))]
+        (let [{:keys [result p]} (await (outcome (merge {:entities [(cow 7 2)]} (stacks "wheat")) interact {:on 7 :item "wheat"}))]
           (is (true? (:used result)))
           (is (= :done (:status result)))
           (is (= 1 (count (calls p "interact")))))))))
@@ -90,7 +90,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [result p]} (await (outcome (merge {:entities [(cow 7 14)]} (stacks "wheat")) interact {:id 7 :item "wheat"}))]
+        (let [{:keys [result p]} (await (outcome (merge {:entities [(cow 7 14)]} (stacks "wheat")) interact {:on 7 :item "wheat"}))]
           (is (true? (:used result)))
           (is (= 1 (count (calls p "interact")))))))))
 
@@ -98,7 +98,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [result p seen]} (await (outcome {:entities [(cow 7 2)]} interact {:id 99}))]
+        (let [{:keys [result p seen]} (await (outcome {:entities [(cow 7 2)]} interact {:on 99}))]
           (is (= :stopped (:status result)))
           (is (= :gone (:reason result)))
           (is (empty? (calls p "interact")))
@@ -108,6 +108,6 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [result]} (await (outcome {:entities [(cow 7 2)]} interact {:id 7 :item "lead"}))]
+        (let [{:keys [result]} (await (outcome {:entities [(cow 7 2)]} interact {:on 7 :item "lead"}))]
           (is (= :stopped (:status result)))
           (is (= :no-item (:reason result))))))))

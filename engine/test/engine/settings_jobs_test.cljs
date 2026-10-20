@@ -12,12 +12,12 @@
             [jobs.farm.till :as till]
             [jobs.gather.mine.drops :as mine-drops]
             [jobs.items.give :as give]
-            [jobs.items.interact :as interact]
+            [jobs.items.use :as interact]
             [jobs.items.smelt :as smelt]
             [jobs.village.feed :as feed]))
 
 (deftest an-override-changes-the-value-read-at-use
-  (settings/with-settings {:jobs.items.interact/reach 4 :jobs.gather.mine.drops/pickup-grace-ms 10}
+  (settings/with-settings {:jobs.items.use/reach 4 :jobs.gather.mine.drops/pickup-grace-ms 10}
     (fn []
       (is (= 4 (interact/reach)))
       (is (= 10 (mine-drops/pickup-grace-ms)))

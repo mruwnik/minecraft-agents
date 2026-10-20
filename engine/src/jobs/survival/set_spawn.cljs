@@ -12,7 +12,7 @@
             [jobs.lib.util :as u]))
 
 (def doc
-  "Set the respawn point at a bed without sleeping: by day, click the bed (jobs.blocks.use-on walks to within 2 cells where the eye sees it (the server sets the point only within 3 blocks), through the door of a hut) and the
+  "Set the respawn point at a bed without sleeping: by day, click the bed (jobs.items.use walks to within 2 cells where the eye sees it (the server sets the point only within 3 blocks), through the door of a hut) and the
   server answers \"respawn point set\".
   Needs a bed: the :bed argument, else the remembered :bed within the default-bed-radius setting (forgotten when its block is seen to be gone), else a bed the body sees.
   Conditions (at the start only): not night (at night the sleep job sets it), else it waits :night; a bed: with none the start check looks round first, then waits (:later); with none found it ends condition-failed :no-bed.
@@ -82,7 +82,7 @@
           (places/offer! c :home bed)
           (ctx/end c :done nil {:spawn bed :why :unchanged :text "the respawn point is already at this bed"}))
       :else
-      (let [e (await (ctx/call c :use 'jobs.blocks.use-on {:pos bed :see true :range 2}))]
+      (let [e (await (ctx/call c :use 'jobs.items.use {:on bed :see true :range 2}))]
         (cond
           (= :continue e) :continue
           (or (= :done (:kind e)) (= :unchanged (get-in e [:data :reason])))

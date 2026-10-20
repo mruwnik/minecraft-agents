@@ -33,7 +33,7 @@
      jobs.time.wait-for-light jobs.time.noop jobs.debug.notify jobs.debug.ready-probe
      jobs.access.stair jobs.access.record-stair jobs.access.tunnel jobs.access.toggle jobs.farm.tidy
      jobs.access.cleanup jobs.access.leave-tunnel jobs.access.clear-path jobs.strip.seal jobs.strip.corridor jobs.strip.site
-     jobs.blocks.dig jobs.blocks.fill-cells jobs.blocks.place jobs.blocks.use-on jobs.items.interact
+     jobs.blocks.dig jobs.blocks.fill-cells jobs.blocks.place jobs.items.use
      jobs.memory.set-place jobs.memory.forget-place jobs.memory.remember jobs.memory.reserve jobs.memory.unreserve})
 
 (def primitive-names

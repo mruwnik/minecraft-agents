@@ -17,12 +17,12 @@
   :limit-s 90}
  :cases
  [{:name "by-hand-use-on-in-the-shelter-waits-naming-the-reason"
-   :act [[:job (jobs.blocks.use-on {:pos #at [24 0 16]})]]
+   :act [[:job (jobs.items.use {:on #at [24 0 16]})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 20 :of-job true}]
    :after [[:block [24 0 16] "oak_fence_gate[open=false]"] [:body-near [16.5 0 16.5] 2]]}
   {:name "use-on-with-a-checks-override-walks-out-and-opens-the-gate"
-   :act [[:job (jobs.blocks.use-on {:pos #at [24 0 16] :checks {:safe? (not (threatened))}})]]
-   :expect [{:event {:source :job :kind :completed :data {:name "jobs.blocks.use-on"}} :within-s 70 :of-job true}]
+   :act [[:job (jobs.items.use {:on #at [24 0 16] :checks {:safe? (not (threatened))}})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.items.use"}} :within-s 70 :of-job true}]
    :after [[:block [24 0 16] "oak_fence_gate[open=true]"]]}
   {:name "go-to-out-of-the-room-at-night-waits-exposed"
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]

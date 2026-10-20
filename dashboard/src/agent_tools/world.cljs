@@ -13,9 +13,9 @@
   (str "usage: world.mjs <agent> submit <action> [args] --world <world> [--worlds <dir>] [--state <legacy-parent>] [--who NAME] [--exclusive]\n"
        "  submit move-to <x> <y> <z> | <x> <z> (a column: its surface) [--range <n>] [--doors shut|leave-open|never] [--no-escalate]   (jobs.movement.go-to)\n"
        "  submit dig <x> <y> <z> [--ignore-zones] | submit place <x> <y> <z> <item> [--ignore-zones]   (jobs.blocks.dig / place)\n"
-       "  submit use-on <x> <y> <z> [--item <item>|none] [--face up|down|north|south|east|west]   (jobs.blocks.use-on)\n"
+       "  submit use-on <x> <y> <z> [--item <item>|none] [--face up|down|north|south|east|west]   (jobs.items.use)\n"
        "  For gates, doors, trapdoors and levers prefer jobs.mjs submit '(jobs.access.toggle {:pos [x y z] :state :open|:closed|:on|:off|:press})': it reads the state first and says why it could not change it.\n"
-       "  submit interact <entity-id> [--item <item>]   (jobs.items.interact)\n"
+       "  submit interact <entity-id> [--item <item>]   (jobs.items.use)\n"
        "  submit equip [<item>] [--hand main|off]   (jobs.items.equip: put a carried item where it belongs (armour in its slot, a shield in the off-hand, else the main hand; --hand for a non-armour item); no item: the best carried armour piece for each empty or weaker slot)\n"
        "  submit mount <entity-id|name> | submit dismount   (jobs.movement.mount: walk to a boat, raft, minecart or rideable mob (by id, or the nearest of a name) and get on; jobs.movement.leave-vehicle: get off)\n"
        "The job joins the normal list; add --exclusive to run it alone and at once: the engine is paused (no triggers, no other job) until it ends, and any ending, a yield included, returns to you.\n"
@@ -67,7 +67,7 @@
                         no-escalate (assoc :ways #{:walk :clear-seal})))
       "dig" (list 'jobs.blocks.dig (zones (pos-args action args 3)))
       "place" (list 'jobs.blocks.place (zones (assoc (pos-args action args 4) :item (nth args 3))))
-      "use-on" (list 'jobs.blocks.use-on (cond-> (pos-args action args 3) (seq item) (assoc :item item) (seq face) (assoc :face face)))
+      "use-on" (list 'jobs.items.use (cond-> {:on (:pos (pos-args action args 3))} (seq item) (assoc :item item) (seq face) (assoc :face face)))
       "equip" (do (when (> (count args) 1) (fail "equip needs at most one item"))
                   (when-not (contains? #{nil "main" "off"} hand) (fail "--hand must be main or off"))
                   (list 'jobs.items.equip (cond-> (if (seq args) {:item (first args)} {}) (some? hand) (assoc :hand hand))))
@@ -78,7 +78,7 @@
       "dismount" (do (when (seq args) (fail "dismount takes no arguments"))
                      (list 'jobs.movement.leave-vehicle {}))
       "interact" (do (when-not (= 1 (count args)) (fail "interact needs one entity-id"))
-                     (list 'jobs.items.interact (cond-> {:id (num (first args) "entity-id")} (seq item) (assoc :item item))))
+                     (list 'jobs.items.use (cond-> {:on (num (first args) "entity-id")} (seq item) (assoc :item item))))
       (fail (str "unknown action " (or action "undefined"))))))
 
 (defn submit-request [action args who values]

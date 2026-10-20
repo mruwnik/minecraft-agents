@@ -22,7 +22,7 @@
   "Put the body out when it is on fire or in lava. One run, re-reading the world before each pass, until the body is
   neither burning nor in lava (:done). Done at once when it is not burning and no poured water is left to scoop. Each pass, in this order:
   1. With a water bucket carried and the body not in lava, pours water at the feet and notes the cell in body memory
-     (:extinguish-pour, ten minutes; a jobs.blocks.use-on child), so a run cut before the scoop leaves it for the next run.
+     (:extinguish-pour, ten minutes; a jobs.items.use child), so a run cut before the scoop leaves it for the next run.
      A cell in another's zone or claim is skipped while another way exists. As a last resort it pours there anyway,
      with one extinguish.trespass-last-resort warning.
   2. Once the fire is out, scoops the water back up with the empty bucket so no source block stays.
@@ -255,7 +255,7 @@
   [c pos]
   ;; the zone choice is made above (trespass-refusal, last resort), and the scoop must undo the pour: the child must not refuse again
   (ctx/hold-still! c nil)
-  (let [placed (= :done (:kind (await (child/run!* c :bucket 'jobs.blocks.use-on {:pos pos :item "water_bucket" :ignore-zones? true}))))]
+  (let [placed (= :done (:kind (await (child/run!* c :bucket 'jobs.items.use {:on pos :item "water_bucket" :ignore-zones? true}))))]
     (when placed (ctx/remember! c :extinguish-pour {:pos pos} pour-policy))
     placed))
 
@@ -313,7 +313,7 @@
 
       :else
       (do (ctx/hold-still! c nil)
-          (let [r (await (child/run!* c :bucket 'jobs.blocks.use-on {:pos cell :item "bucket" :ignore-zones? true}))
+          (let [r (await (child/run!* c :bucket 'jobs.items.use {:on cell :item "bucket" :ignore-zones? true}))
                 status (if (= :continue r) "continue" (name (or (get-in r [:data :reason]) :failed)))]
             (clear-pour! c)
             (when-not (= :done (:kind r))

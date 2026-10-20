@@ -68,7 +68,7 @@
     (assoc need :job 'jobs.gather.make-obsidian :args {:count (:count need) :radius (seen-radius) :fetch #{:tool}})
 
     (= "water_bucket" (:key need))
-    (cond-> need (seen-of c need) (assoc-in [:args :pos] (:pos (seen-of c need))))
+    (cond-> need (seen-of c need) (assoc-in [:args :on] (:pos (seen-of c need))))
 
     :else
     (if-let [name (when (or (:ore? need) (= "dirt" (:key need))) (:name (seen-of c need)))]

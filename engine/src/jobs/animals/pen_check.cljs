@@ -28,7 +28,7 @@
   that finds no wall either side of a gap says that too.
 
   Patching (way :patch, on by default; :ways #{:check} only reads): a leak that is a :gap gets one fence (a jobs.blocks.place child; the kind is :item, else the fence or wall seen
-  beside the gap) and one on top of each :climb fence; an :open-gate is shut (a jobs.blocks.use-on child). Then the pen is read again, in at most ::max-passes passes
+  beside the gap) and one on top of each :climb fence; an :open-gate is shut (a jobs.items.use child). Then the pen is read again, in at most ::max-passes passes
   (a pass that put nothing right is the last). Nothing else is placed or dug. The result gains :patched {:placed :shut :failed}.
 
   Ends with the data {:closed? :reason :cells :leaks :gates}: :done when closed, or when a leak was found and :patch is not allowed (a leak is
@@ -205,7 +205,7 @@
   (let [{:keys [op pos item]} (first (:patch-queue (ctx/mem c)))
         shared (select-keys (:args c) [:ignore-zones?])
         r (await (if (= :shut op)
-                   (ctx/call c :patch 'jobs.blocks.use-on (assoc shared :pos pos :item "none"))
+                   (ctx/call c :patch 'jobs.items.use (assoc shared :on pos :item "none"))
                    (pen-patch/place-fence! c pos item nil)))]
     (if (= :continue r)
       :continue

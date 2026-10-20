@@ -232,7 +232,7 @@
   (and (not (fed? raw)) (pos? (or (:consumed raw) 0))))
 
 (defn ^:async feed!
-  "Use food on animal once through an items.interact child; book the outcome. Resolves to :continue while the child
+  "Use food on animal once through an items.use child; book the outcome. Resolves to :continue while the child
   waits, :no-food when the food is gone, else :again."
   [c animal food]
   (let [k (animals/key-of animal)

@@ -31,7 +31,7 @@
     sight or catch up; unseen past the escort unseen-lost time (a ledge or tree can hide it) the body walks back toward where it was last seen, then :lost;
     still beyond the gap and not closing in for the escort stall time, :animal-stalled.
   - :gather (no :fence only): see below.
-  - :arrive: with :fence, walk within 2 of the post and click it with an empty hand (a jobs.blocks.use-on child), tried twice.
+  - :arrive: with :fence, walk within 2 of the post and click it with an empty hand (a jobs.items.use child), tried twice.
     Without :fence, jobs.animals.unleash lets the animal go and picks the lead up.
 
   With :fence the block there must be a fence (name ends _fence), else :no-fence before anything is leashed; a post not yet seen (far off) is checked again on arrival.

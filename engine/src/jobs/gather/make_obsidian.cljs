@@ -24,7 +24,7 @@
   Takes seen obsidian first (jobs.gather.mine). Else it needs a water bucket carried (an empty bucket is filled at seen water; no bucket at all is fetched, :fetch) and a seen
   lava cell with seen air above it (with none seen, it walks to the cells a sealed mine breach showed lava at, body memory :breach-behind, digs the seal the mine placed there from at least 2 blocks off, looks again and forgets the entry), a clickable air cell to pour at (that one, or one level with it and beside it, the water then runs over) and a stand cell beside the pour cell (a standable cell with no lava beside it, never over lava):
   it walks to the stand (go-to, which keeps off lava), pours the water there, waits for the lava to turn to obsidian,
-  scoops the water back up (the fill, pour and scoop are jobs.blocks.use-on children; also in the cleanup of a cut run), and mines the obsidian (a mine child, which fetches its pickaxe from a chest or a craft).
+  scoops the water back up (the fill, pour and scoop are jobs.items.use children; also in the cleanup of a cut run), and mines the obsidian (a mine child, which fetches its pickaxe from a chest or a craft).
   Ends :done {:got n} at :count obsidian gained. Else it ends with :got n in its data: condition-failed :no-bucket (no water bucket and no bucket
   with water seen, or :fetch off); a failed bucket fetch ends with its need cause or :no-lava (no seen lava with open air above and a safe stand); nothing-possible :scoop-failed (the bucket could not be filled at the seen water), :pour-failed (failed sites in a row where
   the pour or the conversion failed: moving lava gives cobblestone) or :unreachable (the stand could not be walked to); the mine child's
@@ -182,10 +182,10 @@
           :again))))
 
 (defn ^:async use-bucket!
-  "One bucket use at pos (a jobs.blocks.use-on child in slot): :continue while it waits, else its ending."
+  "One bucket use at pos (a jobs.items.use child in slot): :continue while it waits, else its ending."
   [c slot pos item]
-  (await (child/run!* c slot 'jobs.blocks.use-on
-                      {:pos pos :item item :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
+  (await (child/run!* c slot 'jobs.items.use
+                      {:on pos :item item :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
 
 (defn ^:async fill-bucket!
   "An empty bucket carried and water seen: scoop the water (use-on walks to it). :again when filled, :continue while it waits, else the
