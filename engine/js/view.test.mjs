@@ -533,13 +533,16 @@ test('demand mode dumps only while the watch marker is fresh, and dumps the load
   const columns = { '0,0': makeColumn(), '-1,2': makeColumn() }
   const dir = tmp()
   const view = createView({ stateDir: dir, agent: 'Bob', world: 'w', onEvent: () => {}, mode: 'demand' })
-  view.attach(fakeBot({ columns, listing: true }))
+  const bot = fakeBot({ columns, listing: true })
+  view.attach(bot)
   const marker = watchFile(dir, 'w', 'Bob')
   await view.checkWatch()
   await view.flushColumns()
   await view.tickPose()
   assert.equal(view.isLive(), false)
   assert.deepEqual(fs.readdirSync(dir), [])
+  bot.emit('blockUpdate', null, { position: new Vec3(3, 70, 3), stateId: stone })
+  assert.equal(view.pendingCount(), 0) // nothing is dumped while off, so nothing is queued
 
   fs.mkdirSync(path.dirname(marker), { recursive: true })
   fs.writeFileSync(marker, '')

@@ -182,7 +182,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   const onUpdate = safely((oldBlock, newBlock) => {
     const p = (newBlock ?? oldBlock)?.position
     if (!p) return
-    markColumn(Math.floor(p.x / 16), Math.floor(p.z / 16))
+    if (live) markColumn(Math.floor(p.x / 16), Math.floor(p.z / 16)) // off: flushColumns clears pending unread, and turning on marks every column
     if (oldBlock?.stateId === newBlock?.stateId) return
     const at = bot?.entity?.position
     if (at && distSq(p, at) > (relightRange ?? setting('view/relight-range')) ** 2) return defer(p) // far changes feed the column dump, and are relit when the body comes near
@@ -192,9 +192,9 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     if (at && changes.size > cap * 2) {
       const all = [...changes.values()]
       const kept = nearestK(all, at, cap)
-      const keptKeys = new Set(kept.map(q => `${q.x},${q.y},${q.z}`))
+      const keptSet = new Set(kept)
       changes = new Map(kept.map(q => [`${q.x},${q.y},${q.z}`, q]))
-      for (const q of all) if (!keptKeys.has(`${q.x},${q.y},${q.z}`)) defer(q)
+      for (const q of all) if (!keptSet.has(q)) defer(q)
     }
   })
 
