@@ -364,6 +364,18 @@
             (is (= listed-want listed)
                 (str spec ": Juniper j655 hid a minute from a skeleton that never left; sealed and in no real danger, it hands back"))))))))
 
+(deftest a-sealed-body-with-a-melee-mob-at-its-foot-past-hide-s-digs-up-and-away-from-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]}
+              (await (hide-steps '(jobs.survival.retreat) {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20} {:name "stone_pickaxe" :count 1}]
+                                                           :entities [(zombie-at 4)]}
+                                 [[[(zombie-at 3)] 61000] [[(zombie-at 3)] 1000]]))]
+          (is (seq (calls p "dig")) "a stair is cut (the old code held on, up to :hide-max-s)")
+          (is (every? #(<= (.. % -args -pos -x) 0) (calls p "dig")) "away from the zombie at x 3, none towards it")
+          (is (= [:spent] (hidden-holds seen))))))))
+
 (deftest a-sealed-body-listens-for-a-quiet-period-after-the-last-danger
   (async done
     (tu/run-async done

@@ -1,0 +1,20 @@
+;; Card abea4cb7 (b91af0a4): a body sealed in a tunnel with a melee mob kept off at its foot digs a stair up and away from
+;; it once hide-s has passed, instead of handing back to a walk through the tunnel the mob waits in. A NoAI helmeted zombie
+;; 3 east of the closed tunnel end gets the body sealed in; the stair goes west into the rock and rises.
+{:defaults
+ {:tags [:hostile :survival :cornered]
+  :time :any
+  :plot {:height 14}
+  :blocks [[:fill [2 0 10] [30 8 22] "stone"] [:fill [12 0 16] [29 1 16] "air"]
+           [:set [16 1 16] "torch"] [:set [22 1 16] "torch"]]
+  :body {:at [12.5 0 16.5] :inventory [["cobblestone" 20] ["stone_pickaxe" 1]]}
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 8 :jobs.lib.danger/ranged-radius 16 :jobs.survival.retreat-refuge/hide-s 5}})}]
+  :act [[:summon "zombie" [15.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+        [:await {:source :job :kind :retreat_sealed} 40]
+        [:until-pos {:y-min 3 :x-max 11} 90]]}
+ :cases
+ [{:name "sealed-body-with-a-mob-at-its-foot-digs-up-and-away"
+   :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}]
+   :after [[:body-near [9.5 5 16.5] 6]]
+   :limit-s 150}]}

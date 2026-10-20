@@ -8,6 +8,8 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.pace :as pace]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.dig-in-leave :as dig-leave]
+            [jobs.lib.ready :as ready]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
             [jobs.lib.pillar :as pl]
@@ -22,6 +24,7 @@
 (a/defargs settings
   {::leave-for-breakers {:default true :doc "Whether a hidden body leaves its refuge, before it is hit, for a creeper (its blast breaks any refuge) or, on a pillar, a spider (it climbs) within :breaker-reach." :spec boolean?}
    ::foot-reach {:default 4 :doc "Blocks within which a melee hostile kept off a hidden body counts as waiting at its foot: the hide then outlasts ::hide-s, up to ::hide-max-s, since the first step off the refuge would pass it." :spec (a/num-in 0 nil)}
+   ::dig-out-steps {:default 6 :doc "Steps of the stair a body sealed in a plug or pit digs up and away from a melee hostile kept off it at its foot, once ::hide-s has passed." :spec (a/int-in 1 nil)}
    ::quiet-s {:default 30 :doc "Seconds a hidden body keeps its refuge after the last danger." :spec (a/num-in 0 nil)}
    ::hide-s {:default 60 :doc "Seconds in its refuge after which a hidden body hands back, though a danger it keeps off stays, once no real danger is on it as it stands." :spec (a/num-in 0 nil)}
    ::hide-max-s {:default 300 :doc "Seconds after which a hidden body hands back though a melee hostile still waits at its foot." :spec (a/num-in 0 nil)}
@@ -161,12 +164,39 @@
                          (reach/walkable-way? p (danger-q/mob-pos p %) anchor #{} open))
                    known))))
 
-(defn waiting-at-foot?
-  "Whether a known melee hostile stands within foot-reach of the body."
+(defn waiting-melee
+  "The known melee hostiles within foot-reach of the body."
   [c]
   (let [p (:primitives c)
         r (foot-reach)]
-    (boolean (some #(not (combat/ranged? %)) (flight/near-known p (set (flight/dead-ids c)) r r)))))
+    (remove combat/ranged? (flight/near-known p (set (flight/dead-ids c)) r r))))
+
+(defn waiting-at-foot?
+  "Whether a known melee hostile stands within foot-reach of the body."
+  [c]
+  (boolean (seq (waiting-melee c))))
+
+(defn ^:async dig-out!
+  "Sealed in a plug or pit with a melee hostile at the foot past ::hide-s: dig a stair up (jobs.access.stair, ::dig-out-steps)
+  on the heading away from that mob, the next heading when one stops. :again while it digs, :out when it is done, nil when
+  no heading is left. Progress is the :dig-out entry of job memory (heading index and the first mob's place)."
+  [c]
+  (let [p (:primitives c)
+        feet (sh-sense/feet p)
+        {:keys [i from] :or {i 0}} (:dig-out (ctx/mem c))
+        from (or from (some->> (waiting-melee c) first (danger-q/mob-pos p)))
+        order (dig-leave/heading-order feet (when from {:x (- (* 2 (:x feet)) (:x from)) :z (- (* 2 (:z feet)) (:z from))}))
+        heading (get order i)]
+    (ctx/update-mem! c assoc :dig-out {:i i :from from})
+    (if-not heading
+      nil
+      (let [e (await (ctx/call c (keyword (str "dig-out-" i)) 'jobs.access.stair
+                               {:dir :up :heading heading :steps (settings/get settings ::dig-out-steps) :fetch false
+                                :checks (ready/unforced c {:fit? '(always)})}))]
+        (cond
+          (= :continue e) :again
+          (= :done (:kind e)) :out
+          :else (do (ctx/update-mem! c assoc-in [:dig-out :i] (inc i)) :again))))))
 
 (defn breaker-of
   "The known hostile that would breach the refuge: a creeper (its blast breaks any refuge) or, against a pillar, a climber,
@@ -183,7 +213,8 @@
   "Plugged in or up the pillar: hold (a :wait, why hiding) while the refuge keeps a danger off
   (refuge-danger?) and the ::quiet-s setting after the last one, then end the flight :hidden. Past the ::hide-s setting (while a melee hostile waits at the foot, ::hide-max-s) in the refuge with no real
   danger on the body as it stands (danger-q/danger-near?, the hostile-near trigger's test) it ends :hidden at once,
-  the trigger fires again should one reach it.
+  the trigger fires again should one reach it. Sealed in a plug or pit with a melee hostile at the foot past ::hide-s it first digs a stair up
+  and away from it (dig-out!), then ends :hidden {:hold :spent :dug-out true}.
   A body hurt while hidden (a mob reaching it round a corner of the seal) leaves the refuge as failed (abandon-refuge!),
   a pillar raised once first (retreat-pillar/raise!)."
   [c]
@@ -203,18 +234,28 @@
           held-ms (- (ctx/now c) hidden-since)
           spent? (and (>= held-ms (* 1000 (hide-s)))
                       (or (>= held-ms (* 1000 (hide-max-s))) (not (waiting-at-foot? c)))
-                      (not (danger-q/danger-near? (:primitives c) radius ranged-radius)))]
+                      (not (danger-q/danger-near? (:primitives c) radius ranged-radius)))
+          dig-out? (or (:dig-out (ctx/mem c))
+                       (and (#{:plug :pit} (:kind refuge))
+                            (>= held-ms (* 1000 (hide-s)))
+                            (seq (waiting-melee c))
+                            (not (danger-q/danger-near? (:primitives c) radius ranged-radius))))]
       (cond
         hurt? (let [ids (map (fn [e] (.-id e)) (flight/near-known (:primitives c) #{} (reach-radius) (reach-radius)))]
-                (ctx/update-mem! c #(-> % (dissoc :quiet-from :hidden-since :hold-health) (update :reached (fnil into #{}) ids)))
+                (ctx/update-mem! c #(-> % (dissoc :quiet-from :hidden-since :hold-health :dig-out) (update :reached (fnil into #{}) ids)))
                 (ctx/emit! c :retreat.hide-hurt :warn {:text "hurt while hidden: the refuge does not keep the hostile off" :pos (sh-sense/feet (:primitives c))
                                                        :hostiles (hostiles-known c)})
                 (if (= :again (await (pillar/raise! c))) :again (await (abandon-refuge! c))))
         breaker (let [name (.-name breaker)]
-                  (ctx/update-mem! c #(-> % (dissoc :quiet-from :hidden-since :hold-health) (update :reached (fnil conj #{}) (.-id breaker))))
+                  (ctx/update-mem! c #(-> % (dissoc :quiet-from :hidden-since :hold-health :dig-out) (update :reached (fnil conj #{}) (.-id breaker))))
                   (ctx/emit! c :retreat.hide-breached :warn {:text (str "a " name " is near: the refuge does not keep it off, leaving before it strikes")
                                                               :mob name :pos (sh-sense/feet (:primitives c))})
                   (await (abandon-refuge! c)))
+        dig-out? (let [r (await (dig-out! c))]
+                   (if (= :again r)
+                     :again
+                     (do (ctx/update-mem! c dissoc :quiet-from :hidden-since :dig-out)
+                         (flight/end-flight! c :hidden {:hold :spent :dug-out (= :out r)}))))
         quiet? (do (ctx/update-mem! c dissoc :quiet-from :hidden-since)
                    (flight/end-flight! c :hidden {:hold :quiet}))
         spent? (do (ctx/update-mem! c dissoc :quiet-from :hidden-since)

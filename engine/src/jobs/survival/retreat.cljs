@@ -99,7 +99,8 @@
   the refuge if its own blocks were gone, and for the retreat-refuge ::quiet-s setting (30 s) more after the last such danger (a silent mob is forgotten
   after a few seconds); then the flight ends :hidden. After the ::hide-s setting (60 s) in the refuge with no real danger on the body as it
   stands (jobs.lib.danger/danger-near?, the hostile-near trigger's test) it ends :hidden even while that hostile stays;
-  the refuge stays, its plugs too while a hostile is near (jobs.access.cleanup).
+  the refuge stays, its plugs too while a hostile is near (jobs.access.cleanup). In a plug or pit with a melee hostile at its foot (::foot-reach) past ::hide-s,
+  a body digs a stair up (jobs.access.stair, ::dig-out-steps steps) on the heading away from that mob, the next heading when one stops, before it hands back.
   A chase is bounded by the call's time spend (default ::job-time-s): past it the flight ends limit-reached :job-time where it
   stands (refuge included) and the hostile trigger fires again while the danger stays. With no new best gap to the
   nearest chaser in ::no-gain-steps (20) steps it takes the cornered options instead of walking on; it ends nothing-possible
