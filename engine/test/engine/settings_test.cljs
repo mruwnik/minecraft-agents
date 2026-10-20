@@ -229,7 +229,11 @@
       (load! "{:prim/demo-ms 0}")
       (is (= 50 (read "prim/demo-ms")) "a value outside the spec keeps the default")
       (is (= 9 (settings/scoped {:prim/demo-ms 9} #(read "prim/demo-ms"))) "a scoped override beats the kept answer")
-      (is (= 50 (read "prim/demo-ms")) "and does not stay in it"))))))
+      (is (= 50 (read "prim/demo-ms")) "and does not stay in it")
+      (let [later (settings/js-reader)]
+        (is (= 50 (later "prim/demo-ms")))
+        (load! "{:prim/demo-ms 8}")
+        (is (= 8 (read "prim/demo-ms")) "a reader built earlier still sees a reload after a later js-reader call")))))))
 
 (defn load-args [dir]
   {:world-file (path/join dir "world.edn") :body-file (path/join dir "body.edn") :specs specs :body "Bob"})
