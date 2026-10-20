@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.forestry.fell-tree.log :as log]
+            [jobs.forestry.fell-tree.pillar :as pillar]
             [jobs.lib.waits :as waits]
             [jobs.lib.access :as access]
             [jobs.lib.checks :as checks]
@@ -15,6 +16,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
+            [jobs.lib.part-cut :as part-cut]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.sense :as sense]
             [jobs.lib.targets :as targets]
@@ -32,7 +34,7 @@
   a :stranded true result when it cannot). With :at it fells that one column instead (:radius and :species are then unused).
   The tree is the one the body walks to soonest among at most 32 candidates, nearest in a line first (jobs.lib.targets);
   one whose walk is blocked, or partial three times in a row, is marked unreachable. A log out of reach from the foot
-  is felled from a pillar by jobs.forestry.fell-from-pillar (unless :pillar? is false); a tree that pillar cannot reach
+  is felled from a pillar (jobs.forestry.fell-tree.pillar: built of dirt, cobblestone and the logs cut, taken back; unless :pillar? is false); a tree that pillar cannot reach
   or whose pillar digs no log counts as unreachable. Once a tree is chosen the rest of it is a comfort section
   (ctx/atomic): reflexes at or below that level wait for it, up to their caps.
   Before the third log of a tree big enough for an axe to pay (jobs.lib.trees/axe-worth-fetching?) with none carried it
@@ -40,7 +42,7 @@
   its kind and worn gets a spare (jobs.lib.trip/tool-ready!).
   Each log is dug by a jobs.blocks.dig child that leaves the drop on the ground; a leaf hiding a log from the eye is dug
   first. When the tree is down a jobs.items.collect-drops child picks up the drops of the logs dug from the ground (by
-  id: another player's logs are left); a pillar's logs are collected by fell-from-pillar.
+  id: another player's logs are left); the pillar's logs are collected by the pillar way before it comes down.
   Zones: a tree whose base log is in another owner's zone or claim, or in a plan's footprint (but :for-plan's own), is
   not a candidate; a later log that turns out refused makes the tree unreachable (warn fell-tree.declined once, :reason
   :refused). :ignore-zones? true skips the check. Logs joined to the tree that the same rule refuses, or that lie more than
@@ -53,7 +55,7 @@
   :none-found (fetch failed: chopped by hand). Condition-failed :no-tree, :gone (no log left, none dug) or :logs-left
   (cause {:left n}: the pick-up stopped short). Nothing-possible :tree-unreachable when every tree in sight proved out of
   reach (data {:unreachable n :columns :why}) and :tree-blocked when a log cannot be dug or the pillar not taken back
-  three rounds in a row. The pillar's own ending passes up when its blocks cannot be had or a limit is hit.
+  three rounds in a row. The pillar's blocks that cannot be had (condition-failed :need) or a limit hit end the call; a pillar that cannot be built or digs no log makes the tree unreachable.
   Quote: time by the walk to the nearest tree and the logs standing.")
 
 (a/defargs args
@@ -65,6 +67,7 @@
    :pillar? {:doc "fell a log out of reach of the ground from a pillar (blocks placed, then taken back); false: such a tree is left" :spec boolean? :default true}
    :avoid {:doc "columns [x z] of trees to leave alone (ones an earlier run found cut off)" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :replant? {:doc "write a :forestry/replant debt per trunk cell felled; false when the tree is only in the way (clearing a site: a player would not plant there)" :spec boolean? :default true}
+   :part-cut? {:doc "fell only part-cut trunks (jobs.lib.part-cut: the lowest log raised over air, not joined to a standing tree)" :spec boolean? :default false}
    :ignore-zones? :shared})
 
 (def ways need/fetch-ways)
@@ -98,7 +101,7 @@
 (defn rebase!
   "Move the committed base (and its replant debt) down to pos: the sapling goes on the ground, not on a stump."
   [c pos]
-  (ctx/forget-where! c replant-kind #(= (:base (ctx/mem c)) (:pos %)))
+  (ctx/forget-where! c replant-kind #(= (log/debt-pos (:primitives c) (:base (ctx/mem c))) (:pos %)))
   (ctx/update-mem! c assoc :base pos))
 
 (defn on-canopy?
@@ -127,21 +130,24 @@
 
 (defn candidates
   "The trees the job may fell, nearest in a line first (lazily): the one at :at (none once marked unreachable), else
-  those of species within radius not marked unreachable; a tree whose base log the zones refuse is left out."
+  those of species within radius not marked unreachable; a tree whose base log the zones refuse is left out, and with
+  :part-cut? one that is not a part-cut trunk."
   [c radius species]
   (let [p (:primitives c)
-        excluded (into (unreachable-set (ctx/mem c)) (map vec) (:avoid (:args c)))]
+        excluded (into (unreachable-set (ctx/mem c)) (map vec) (:avoid (:args c)))
+        logs (delay (into #{} (map :pos) (trees/scan-logs p radius nil)))
+        wanted? (fn [t] (or (not (:part-cut? (:args c))) (part-cut/part-cut? p logs t)))]
     (if-let [at (:at (:args c))]
       (when-let [t (tree-at p at)]
-        (when-not (or (excluded [(:x at) (:z at)]) (not (log/log-allowed? c (:base t)))) [t]))
+        (when-not (or (excluded [(:x at) (:z at)]) (not (log/log-allowed? c (:base t))) (not (wanted? t))) [t]))
       (let [in (access/rules-input c (log/gate-opts c))]
-        (filter #(and (not (own-spared? in (:base %))) (log/log-allowed? c (:base %)))
+        (filter #(and (not (own-spared? in (:base %))) (log/log-allowed? c (:base %)) (wanted? %))
                 (trees-near p radius species excluded))))))
 
 (defn commit-tree!
   "Commit the column, species and base of the tree t to fell."
   [c t]
-  (ctx/update-mem! c #(-> % (merge (select-keys t [:column :species :base])) (assoc :partials 0) (dissoc :logs-seen :relooked :drop-ids :collected)))
+  (ctx/update-mem! c #(-> % (merge (select-keys t [:column :species :base])) (assoc :partials 0) (dissoc :logs-seen :relooked :drop-ids :collected :stand-avoid)))
   t)
 
 (defn mark-all-unreachable!
@@ -166,49 +172,7 @@
             (do (mark-all-unreachable! c ts) nil)
             (commit-tree! c (first ts))))))))
 
-(defn mark-unreachable!
-  "Remember the chosen column as unreachable and forget the choice; why (the walk's give-up reason) is kept for the end."
-  ([c] (mark-unreachable! c nil))
-  ([c why]
-   (ctx/update-mem! c (fn [m] (-> m
-                             (cond-> why (assoc :unreachable-why why))
-                             (update :unreachable (fnil conj []) [(get-in m [:column :x]) (get-in m [:column :z])])
-                             (dissoc :column :species :base :pillar :logs-seen)
-                             (assoc :partials 0))))))
-
 ;; ------------------------------------------------------------------ the pillar
-
-(defn pillar-args
-  "The args of the fell-from-pillar child for the chosen tree."
-  [c]
-  (merge (select-keys (:args c) [:for-plan :accept :ways :ignore-zones? :replant?])
-         {:base (:base (ctx/mem c)) :species (:species (ctx/mem c))}))
-
-(defn blocked!
-  "A log that cannot be dug, or a pillar that cannot be taken back: a failed round (:continue), the ending at the third in a row."
-  [c text]
-  (if-not (u/count-fail! c)
-    :continue
-    (ctx/end c :nothing-possible :tree-blocked {:text text :logs (:dug (ctx/mem c) 0)})))
-
-(defn pillar-ended!
-  "What the fell-from-pillar child's ending e means for the tree: done (the logs it dug count, the rest of the tree is
-  read again), the fetch's or a limit's ending passes up (with a failed cleanup as data :cleanup), a cleanup that left the scaffold open (data :cleanup) is a failed round, a scaffold taken
-  back goes on with the tree, any other failure leaves the tree (the child has taken its pillar back)."
-  [c e]
-  (let [k (:kind e)
-        why (contract/cause-key e)]
-    (ctx/update-mem! c dissoc :pillar)
-    (cond
-      (or (= :limit-reached k) (#{:need :tool :free-slots} why))
-      (ctx/end c k (:cause e) (cond-> {:logs (:dug (ctx/mem c) 0)} (get-in e [:data :cleanup]) (assoc :cleanup (get-in e [:data :cleanup]))))
-      (get-in e [:data :cleanup]) (do (ctx/update-mem! c update :dug (fnil + 0) (get-in e [:data :logs] 0))
-                                      (blocked! c "cannot take the pillar back"))
-      (= :done k) (do (ctx/update-mem! c update :dug (fnil + 0) (get-in e [:data :logs] 0))
-                      (ctx/update-mem! c assoc :partials 0)
-                      (u/progress! c)
-                      :again)
-      :else (do (mark-unreachable! c) :again))))
 
 (defn ^:async rerank-while-threatened!
   "While a hostile holds the job off its chosen tree before a log is dug, choose again with what the body senses now
@@ -232,7 +196,7 @@
   (let [partials (inc (:partials (ctx/mem c) 0))]
     (cond
       (and (= :partial r) (await (rerank-while-threatened! c))) :again
-      (or (= :blocked r) (>= partials max-partials)) (do (mark-unreachable! c (:walk-why (ctx/mem c))) :again)
+      (or (= :blocked r) (>= partials max-partials)) (do (log/mark-unreachable! c (:walk-why (ctx/mem c))) :again)
       :else (do (ctx/update-mem! c assoc :partials partials) :continue))))
 
 (defn axe-carried? [c]
@@ -302,13 +266,6 @@
   (let [{:keys [radius species at]} (:args c)]
     (cond-> {:reason :no-tree :radius radius} species (assoc :species species) at (assoc :at at))))
 
-(defn ^:async fell-from-pillar!
-  "One round of the fell-from-pillar child for the chosen tree: :continue while it waits on the world, else what its
-  ending means (pillar-ended!)."
-  [c]
-  (let [e (await (ctx/call c :pillar 'jobs.forestry.fell-from-pillar (pillar-args c)))]
-    (if (= :continue e) :continue (pillar-ended! c e))))
-
 (defn tree-result [c]
   (let [m (ctx/mem c)]
     (cond-> {:base (:base m) :logs (:dug m 0) :axe (axe-status c)}
@@ -370,10 +327,10 @@
                 :ok (do (ctx/update-mem! c assoc :partials 0)
                         (u/progress! c)
                         :again)
-                :high (do (ctx/update-mem! c assoc :pillar true) :again)
+                :high (do (ctx/update-mem! c assoc :pillar {}) :again)
                 (:partial :blocked) (walk-failed! c r)
-                (:unreachable :cannot :out-of-reach :refused) (do (mark-unreachable! c) :again)
-                (blocked! c (str "cannot dig the tree: " (name r))))))))))
+                (:unreachable :cannot :out-of-reach :refused) (do (log/mark-unreachable! c) :again)
+                (log/blocked! c (str "cannot dig the tree: " (name r))))))))))
 
 (defn ^:async step
   "One piece of the felling: :again, :continue (a child waits on the world) or the ending."
@@ -382,7 +339,7 @@
         walked (when (and (not (:column (ctx/mem c))) (not (first (candidates c radius species))))
                  (or (await (walk-to-at! c)) (await (look/survey! c :cell))))
         _ (when (and (not (:pillar (ctx/mem c))) (log/open-scaffold? c))
-            (ctx/update-mem! c assoc :pillar true))
+            (ctx/update-mem! c assoc :pillar {}))
         fresh? (not (:column (ctx/mem c)))
         chosen (or (:column (ctx/mem c)) (await (choose-tree! c radius species)))]
     (cond
@@ -403,7 +360,7 @@
       ;; the tree is chosen: the round felling it runs as one section
       fresh? :again
 
-      (:pillar (ctx/mem c)) (await (fell-from-pillar! c))
+      (:pillar (ctx/mem c)) (await (pillar/round! c))
 
       :else (await (ground-step c radius)))))
 
@@ -423,6 +380,11 @@
         (if (= :switch r) (recur) r)))))
 
 ;; ------------------------------------------------------------------ the contract
+
+(defn ^:async cleanup
+  "However the call ends: take the pillar back."
+  [c e]
+  (await (pillar/cleanup c e)))
 
 (def target [:at])
 

@@ -1,5 +1,5 @@
 (ns jobs.forestry.fell-tree.log
-  "What fell-tree and fell-from-pillar share: the zone rule for a log, the logs of the chosen column, the walk within
+  "What fell-tree and its pillar way share: the zone rule for a log, the logs of the chosen column, the walk within
   reach of a log and one dig round of it."
   (:require [engine.args :as a]
             [engine.contract :as contract]
@@ -12,6 +12,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.places :as places]
             [jobs.lib.ready :as ready]
+            [jobs.lib.part-cut :as part-cut]
             [jobs.lib.trees :as trees :refer [scan-logs logs-at debts replant-kind dig-reach log-name?]]
             [jobs.lib.util :as u]))
 
@@ -86,12 +87,36 @@
                    distinct vec)]
     (if (seq seeds) (connected-logs p seeds skip (flood-allowed? c)) seeds)))
 
+(defn debt-pos
+  "Where the sapling of the log cell pos goes: the cell itself, or the ground cell under it when the log hangs over air
+  and ground is seen below."
+  [p pos]
+  (or (when (part-cut/raised? p pos) (part-cut/ground-cell p pos)) pos))
+
 (defn record-debt!
-  "Write the replant debt for the log cell pos of the tree of species, once. True when it wrote one."
+  "Write the replant debt for the log cell pos of the tree of species, once. The cell of the debt when it wrote one."
   [c pos species]
-  (when-not (some #(= pos (:pos %)) (debts c))
-    (ctx/remember! c replant-kind {:pos pos :species species} {:cap 50 :ttl :forever :durable? true})
-    true))
+  (when-let [at (debt-pos (:primitives c) pos)]
+    (when-not (some #(= at (:pos %)) (debts c))
+      (ctx/remember! c replant-kind {:pos at :species species} {:cap 50 :ttl :forever :durable? true})
+      at)))
+
+(defn mark-unreachable!
+  "Remember the chosen column as unreachable and forget the choice; why (the walk's give-up reason) is kept for the end."
+  ([c] (mark-unreachable! c nil))
+  ([c why]
+   (ctx/update-mem! c (fn [m] (-> m
+                             (cond-> why (assoc :unreachable-why why))
+                             (update :unreachable (fnil conj []) [(get-in m [:column :x]) (get-in m [:column :z])])
+                             (dissoc :column :species :base :pillar :logs-seen :stand-avoid)
+                             (assoc :partials 0))))))
+
+(defn blocked!
+  "A log that cannot be dug, or a pillar that cannot be taken back: a failed round (:continue), the ending at the third in a row."
+  [c text]
+  (if-not (u/count-fail! c)
+    :continue
+    (ctx/end c :nothing-possible :tree-blocked {:text text :logs (:dug (ctx/mem c) 0)})))
 
 (defn trunk-cell?
   "Whether pos is the base or lies beside it at its height: a cell of a 2x2 trunk (its far columns are hidden from the
@@ -178,10 +203,10 @@
   "Dig the log l of the tree at base (one blocks.dig child round), walking in reach first. Commits the replant debt of a trunk log at the base's height
   before it is dug (write-ahead; withdrawn when the log is still standing after the round). Resolves to :ok,
   :partial (the walk made progress but is not in reach yet; call again), :high (the log is out of reach from the ground
-  and a pillar is allowed) or a non-ok outcome for the round to count as a failure (:unreachable, :cannot, :refused and
+  and a pillar is allowed, and the body is not on one: climbing?) or a non-ok outcome for the round to count as a failure (:unreachable, :cannot, :refused and
   :out-of-reach mean the tree cannot be dug from here). A log the dig cannot walk to a sight of
   because leaves hide it from the eye has the leaf in the way dug instead: :ok, the log is met again next round."
-  [c l {:keys [base species]}]
+  [c l {:keys [base species climbing?]}]
   (let [pos (:pos l)
         w (await (approach! c pos (:y base)))]
     (case w
@@ -189,14 +214,14 @@
       :partial :partial
       (cond
         (not (log-allowed? c pos)) :refused
-        (and (:pillar? (:args c)) (> (u/eye-dist (u/self-pos c) pos) dig-reach)) :high
+        (and (:pillar? (:args c)) (not climbing?) (> (u/eye-dist (u/self-pos c) pos) dig-reach)) :high
         :else
         (let [wrote? (and (:replant? (:args c)) (trunk-cell? base pos) (record-debt! c pos species))
               e (await (ctx/call c :dig 'jobs.blocks.dig (log-dig-args c pos)))]
           (when (:dug (:data e))
             (ctx/update-mem! c #(-> % (update :dug (fnil inc 0)) (update :drop-ids (fnil into []) (:ids (:data e))))))
           (when (and wrote? (some-> (u/seen-name (:primitives c) pos) log-name?))
-            (ctx/forget-where! c replant-kind #(= pos (:pos %))))
+            (ctx/forget-where! c replant-kind #(= wrote? (:pos %))))
           (let [r (outcome e)
                 leaf (when (= :unreachable r) (blocking-leaf c pos))]
             (if (and leaf (log-allowed? c leaf))

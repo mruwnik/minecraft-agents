@@ -28,7 +28,6 @@
                                ['(jobs.items.get-tool {:block "no_such_block"}) :bad-args]
                                ['(jobs.farm.plant {}) :bad-args]
                                ['(jobs.farm.till {}) :bad-args]
-                               ['(jobs.forestry.fell-from-pillar {}) :bad-args]
                                ['(jobs.strip.seal {}) :bad-args]
                                ['(jobs.gather.mine {}) :no-block]]]
           (is (= [:impossible reason] (await (ended spec))) (pr-str spec)))))))

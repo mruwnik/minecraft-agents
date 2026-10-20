@@ -5,11 +5,9 @@
             [engine.ready-test :as rt]
             [engine.shelter-support :as st]
             [jobs.items.collect-drops :as collect-drops]
-            [jobs.forestry.fell-from-pillar :as fell-from-pillar]
             [jobs.forestry.fell-tree :as fell-tree]
             [jobs.forestry.harvest-wood :as harvest-wood]
             [jobs.forestry.plant-sapling :as plant-sapling]
-            [jobs.forestry.tidy :as tidy]
             [jobs.gather.get-seeds :as get-seeds]
             [jobs.gather.make-obsidian :as make-obsidian]
             [jobs.gather.mine :as mine]
@@ -27,12 +25,11 @@
 
 (deftest roaming-jobs-wait-at-night-above-ground
   (are [check] (= [:later :ok] [(kind check rt/open-night {}) (kind check rt/tunnel {})])
-    get-seeds/safe? make-obsidian/safe? mine/safe? harvest-wood/safe? tidy/safe? collect-drops/safe?))
+    get-seeds/safe? make-obsidian/safe? mine/safe? harvest-wood/safe? collect-drops/safe?))
 
 (deftest jobs-going-to-a-place-judge-that-place
   (are [check arg] (= [:ok :later] [(kind check rt/night-hut {arg inside}) (kind check rt/night-hut {arg outside})])
     fell-tree/safe? :at
-    fell-from-pillar/safe? :base
     plant-sapling/safe? :at
     seal/safe? :at
     loot-cart/safe? :near

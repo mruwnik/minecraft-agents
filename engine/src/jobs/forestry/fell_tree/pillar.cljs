@@ -1,4 +1,14 @@
-(ns jobs.forestry.fell-from-pillar
+(ns jobs.forestry.fell-tree.pillar
+  "The pillar way of fell-tree: the logs of the chosen tree that are out of reach from the ground, felled from a pillar
+  that is taken back. jobs.lib.access.approach/plan picks the stand or the pillar base for the highest logs (the logs cut
+  so far are collected first, and so are the ones lying within dig reach of the pillar top before it comes down, those
+  out of walking reach lowered by digging the leaf or log they lie on), the body walks there (go-to), builds the pillar
+  (jobs.access.pillar, every block in the scaffold ledger), digs the logs in reach top-down (jobs.blocks.dig) and takes
+  the pillar back (jobs.access.cleanup; fell-tree's cleanup export does it however the call ends).
+  The pillar is built of dirt, cobblestone (only with a pickaxe carried: the cleanup digs it back with one) and the logs
+  cut so far; with too few of those carried it gets the height in blocks with jobs.lib.need unless :ways is #{:carried}.
+  The build and dig, and the take-back, are urgent sections (ctx/atomic). State: the :pillar map of fell-tree's memory.
+  Not a job namespace."
   (:require [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.args :as a]
@@ -17,56 +27,28 @@
             [jobs.lib.pillar :as pl]
             [jobs.lib.sense :as sense]
             [jobs.lib.tools :as tools]
-            [jobs.lib.trees :as trees :refer [dig-reach default-radius log-name? log-names]]
+            [jobs.lib.trees :as trees :refer [dig-reach log-name? log-names]]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]))
 
-(def doc
-  "Fell the logs of the tree at :base that are out of reach from the ground, standing on a pillar that is taken back.
-  jobs.lib.access.approach/plan picks the stand or the pillar base for the highest logs (the logs cut so far are
-  collected first, jobs.items.collect-drops, and so are the ones lying within dig reach of the pillar top before it comes down, those out of walking reach lowered by digging the leaf or log they lie on), the body walks there (go-to), builds the pillar (jobs.access.pillar,
-  every block in the scaffold ledger), digs the logs in reach top-down (jobs.blocks.dig) and the cleanup export
-  (jobs.access.cleanup) takes the pillar back however the call ends, a cut included (and when the call starts with
-  this job's scaffold still open).
-  The pillar is built of dirt, cobblestone (only with a pickaxe carried: the cleanup digs it back with one) and the logs cut so far; with too few of those carried it gets the height in
-  blocks with jobs.lib.need unless :ways is #{:carried}.
-  The build and dig, and the cleanup's take-back, are urgent sections (ctx/atomic): reflexes at or below that level wait for them, up to their caps.
-  Zones: a pillar a zone, claim or footprint refuses ends :condition-failed :refused.
-  Done? is ok once a log was dug from a pillar, the ledger is closed and no log is left in dig reach of its stand.
-  Ends :done with {:logs n} when a log was dug (a pillar the cleanup could not take back is its :cleanup-open).
-  A scaffold of an earlier call still open when the call starts is taken back first.
-  Condition-failed {:reason :need ...} when the blocks cannot be had (the fetch's cause is the :because; with :ways #{:carried}, :any-of and :count in the cause) and
-  :refused; nothing-possible :no-stand (or the planner's reason), :walk, :build, :dig or :no-log-in-reach after the
-  pillar was taken back.
-  Quote: time by the logs standing.")
-
-(a/defargs args
-  {:base {:doc "{:x :y :z} of the tree's lowest log" :spec ::a/pos :default nil}
-   :species {:doc "log species of the tree" :spec a/name? :default nil}
-   :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
-   :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :lava-adjacent :falling-block" :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
-   :replant? {:doc "write a replant debt for a trunk-level log (see fell-tree)" :spec boolean? :default true}
-   :ignore-zones? :shared})
-
-(def ways need/fetch-ways)
-
 (a/defargs settings
   {::drop-radius {:default 6 :doc "Blocks round the base the cut logs are picked up from before a pillar is built." :spec (a/num-in 0 nil)}
-   ::job-time-s {:default 600 :doc "Seconds a pillar felling may take." :spec (a/num-in 0 nil)}
    ::settle-ms {:default 400 :doc "Milliseconds between two looks at the cut logs still falling when the top collect starts." :spec (a/int-in 1 nil)}
    ::settle-min {:default 5 :doc "Fewest looks at the cut logs before the top collect goes on: a drop may be seen a moment after it lands." :spec (a/int-in 0 nil)}
    ::settle-looks {:default 8 :doc "Most looks at the falling logs before the top collect goes on." :spec (a/int-in 0 nil)}
-   ::max-walk-fails {:default 3 :doc "Stands or bases the walk may fail to reach before the call ends :walk." :spec (a/int-in 1 nil)}
-   ::max-lowered {:default 4 :doc "Drops lowered by digging their support, per call." :spec (a/int-in 0 nil)}})
-(defn time-s [] (settings/get settings ::job-time-s))
+   ::max-walk-fails {:default 3 :doc "Stands or bases the walk may fail to reach before the tree is given up." :spec (a/int-in 1 nil)}
+   ::max-lowered {:default 4 :doc "Drops lowered by digging their support, per tree." :spec (a/int-in 0 nil)}})
 
-(def target [:base])
+(declare pass-up!)
 
-(def defaults {:spend {:job-time ::job-time-s}})
+(defn base [c] (:base (ctx/mem c)))
 
-(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:base (:args c))))))
+(defn tree-logs
+  "The logs of the chosen tree, read from its base up."
+  [c]
+  (log/tree-logs c (:radius (:args c)) (assoc (ctx/mem c) :at (base c))))
 
-(def fit? ready/fit?)
+(defn result [c] {:logs (:dug (ctx/mem c) 0)})
 
 (defn pillar-items
   "The dirt and cobblestone names to build the pillar from, less any a :choose/override avoids and any the body could
@@ -74,44 +56,6 @@
   [c]
   (filterv #(not (tools/needs-tool-to-clear? (:primitives c) %)) (choose/filler-names c :pillar)))
 
-(defn base [c] (:base (:args c)))
-
-(defn tree [c]
-  (let [{:keys [x z]} (base c)]
-    {:column {:x x :z z} :species (:species (:args c)) :at (base c)}))
-
-(defn tree-logs [c] (log/tree-logs c default-radius (tree c)))
-
-(defn bad-args [c]
-  (if (base c)
-    (contract/ok :args "a tree base given")
-    (contract/never :bad-args "no :base: the tree's lowest log")))
-
-(def can-start? bad-args)
-
-(declare result)
-
-(defn logs-left-in-reach?
-  "Whether a log of the tree is still within dig reach of the stand the pillar was planned for."
-  [c]
-  (let [[sx sy sz] (get-in (ctx/mem c) [:pillar :plan :stand])
-        here {:x (+ sx 0.5) :y sy :z (+ sz 0.5)}]
-    (boolean (some #(<= (u/eye-dist here (:pos %)) dig-reach) (tree-logs c)))))
-
-(defn done?
-  "Ok when a log was dug from a pillar, the ledger is closed and no log of the tree is left in dig reach of its stand;
-  else :later (the round ends the call once the pillar is taken back)."
-  [c]
-  (let [ok? (and (:dug (ctx/mem c)) (get-in (ctx/mem c) [:pillar :plan :stand]) (not (log/open-scaffold? c)) (not (logs-left-in-reach? c)))]
-    ((if ok? contract/ok contract/later)
-     :felling (str "fell-from-pillar: " (:dug (ctx/mem c) 0) " logs dug") :units :trees :done (if ok? 1 0) :left (if ok? 0 1)
-     :result (result c))))
-
-(defn quote-of [c]
-  (let [n (count (when (base c) (tree-logs c)))]
-    {:uses {:job-time [5 (+ 10 (* 4 n)) (time-s)]} :done [0 1 1]}))
-
-(defn result [c] {:logs (:dug (ctx/mem c) 0)})
 
 (defn set-pillar! [c m] (ctx/update-mem! c assoc :pillar m))
 
@@ -125,9 +69,9 @@
   "The walk to the planned stand or base failed: avoid that cell and plan again; the call ends :walk after
   ::max-walk-fails."
   [c plan]
-  (ctx/update-mem! c update :avoid (fnil conj #{}) (or (:base plan) (:stand plan)))
-  (if (< (count (:avoid (ctx/mem c))) (settings/get settings ::max-walk-fails))
-    (do (ctx/update-mem! c dissoc :pillar) :again)
+  (ctx/update-mem! c update :stand-avoid (fnil conj #{}) (or (:base plan) (:stand plan)))
+  (if (< (count (:stand-avoid (ctx/mem c))) (settings/get settings ::max-walk-fails))
+    (do (ctx/update-mem! c assoc :pillar {}) :again)
     (pillar-failed! c :walk)))
 
 (defn log-cell [l] (let [{:keys [x y z]} (:pos l)] [x y z]))
@@ -185,21 +129,18 @@
       (let [e (await (need/blocks! c (pillar-items c) (:count w) opts))]
         (cond (= :continue e) :continue
               (= :done (:kind e)) :again
-              :else e))
+              :else (pass-up! c e)))
       (ctx/end c :condition-failed w (result c)))))
 
 (defn ^:async start-pillar!
   "Plan a stand or a pillar for the highest logs and remember it. A refusal that read unseen floor cells is decided again
   after a look at them (jobs.lib.sense/decide!); one that stays ends the call."
   [c]
-  (let [r (await (sense/decide! c ::pillar #(pillar-plan c (tree-logs c) (:avoid (ctx/mem c))) {:retry? :reason}))]
+  (let [r (await (sense/decide! c ::pillar #(pillar-plan c (tree-logs c) (:stand-avoid (ctx/mem c))) {:retry? :reason}))]
     (cond
       (:stand r) (do (set-pillar! c {:phase :collect :plan {:stand (first (:stand r))}}) :again)
       (:pillar r) (do (set-pillar! c {:phase :collect :plan (:pillar r)}) :again)
-      (= :zone (:reason r))
-      (ctx/end c :condition-failed :refused (result c))
-      :else
-      (ctx/end c :nothing-possible (:reason r) (result c)))))
+      :else (do (log/mark-unreachable! c) :again))))
 
 (defn own-log-drop-entities
   "The logs lying within r of the centre that jobs.lib.loose lets the body take (not another player's throw, not in a
@@ -237,7 +178,7 @@
 
 (defn ^:async pillar-build!
   [c {:keys [plan]}]
-  (let [e (waits/waiting-out c (await (ctx/call c :pillar 'jobs.access.pillar {:height (:height plan) :use {:blocks (pillar-blocks c)} :fetch false
+  (let [e (waits/waiting-out c (await (ctx/call c :build 'jobs.access.pillar {:height (:height plan) :use {:blocks (pillar-blocks c)} :fetch false
                                                           :ignore-zones? (:ignore-zones? (:args c)) :checks (ready/unforced c {:safe? '(not (exposed))})})))]
     (cond
       (= :continue e) :continue
@@ -263,14 +204,14 @@
         leaf (when-not l (blocking-leaf c))]
     (cond
       leaf
-      (let [e (await (ctx/call c :dig 'jobs.blocks.dig (log/log-dig-args c leaf)))]
+      (let [e (await (ctx/call c :leafdig 'jobs.blocks.dig (log/log-dig-args c leaf)))]
         (if (or (= :continue e) (= :done (:kind e)))
           :again
           (pillar-failed! c :dig)))
       (not l)
       (do (ctx/update-mem! c update :pillar #(cond-> (assoc % :phase :clean) (not (:dug %)) (assoc :failed :no-log-in-reach))) :again)
       :else
-      (let [r (await (log/dig-log! c l {:base (base c) :species (:species (:args c))}))]
+      (let [r (await (log/dig-log! c l {:base (base c) :species (:species (ctx/mem c)) :climbing? true}))]
         (if (= :ok r)
           (do (ctx/update-mem! c assoc-in [:pillar :dug] true) (u/progress! c) :again)
           (pillar-failed! c (if (#{:unreachable :cannot :refused :blocked} r) :dig r)))))))
@@ -342,29 +283,38 @@
             :continue
             (do (ctx/update-mem! c update-in [:pillar :lowered] (fnil inc 0)) :again)))))))
 
-(defn ^:async pillar-clean!
-  "The call ends: done when a log was dug and the pillar did not fail, else nothing-possible with the failure. The
-  logs lying in reach of the top are collected first; the pillar comes down in cleanup."
-  [c {:keys [failed]}]
-  (if failed
-    (ctx/end c :nothing-possible failed (result c))
-    (or (await (top-collect! c))
-        (ctx/end c :done nil (result c)))))
-
 (defn ^:async take-back!
   "Take the pillar back (jobs.access.cleanup child for this job's blocks) when its scaffold is open: nil once the
-  ledger is closed, :continue while the child waits, else the nothing-possible :cleanup-open ending."
+  ledger is closed, :continue while the child waits, else a failed round (log/blocked!) when it stays open."
   [c]
   (when (log/open-scaffold? c)
     (let [e (await (ctx/atomic c :urgent :pillar #(ctx/call c :cleanup 'jobs.access.cleanup {:job (:id c) :checks {:fit? '(always) :safe? '(not (threatened))}})))]
       (cond
         (= :continue e) :continue
-        (log/open-scaffold? c) (ctx/end c :nothing-possible :cleanup-open (result c))))))
+        (log/open-scaffold? c) (log/blocked! c "cannot take the pillar back")))))
 
-(defn ^:async cleanup
-  "However the call ends: take the pillar back. Done when the ledger is closed, else nothing-possible :cleanup-open."
-  [c _]
-  (or (await (take-back! c)) (ctx/end c :done nil)))
+(defn finish!
+  "The tree goes on from the ground: the pillar is gone, its logs count."
+  [c]
+  (ctx/update-mem! c #(-> % (dissoc :pillar :stand-avoid) (assoc :partials 0)))
+  (u/progress! c)
+  :again)
+
+(defn ^:async pillar-clean!
+  "The pillar comes down: a failed one leaves the tree unreachable, one that dug logs goes on with the tree. The logs
+  lying in reach of the top are collected first."
+  [c {:keys [failed]}]
+  (if failed
+    (or (await (take-back! c)) (do (log/mark-unreachable! c) :again))
+    (or (await (top-collect! c)) (await (take-back! c)) (finish! c))))
+
+(defn pass-up!
+  "The ending e of the fetch for the pillar's blocks: a need, a tool, free slots or a limit ends the call, any other
+  leaves the tree."
+  [c e]
+  (if (or (= :limit-reached (:kind e)) (#{:need :tool :free-slots} (contract/cause-key e)))
+    (ctx/end c (:kind e) (:cause e) (result c))
+    (do (log/mark-unreachable! c) :again)))
 
 (defn ^:async pillar-phase!
   "One phase of the pillar: pick up the logs, walk to its base (or stand), build it, dig from it, take it back."
@@ -392,19 +342,19 @@
                                            (if (and (= :again r) (not (climbing? c))) :climbed r))))))
     (await (pillar-phase! c))))
 
-(defn ^:async step
-  "One piece of the work: :again, :continue (a child waits on the world) or the ending."
+(defn ^:async round!
+  "One piece of the pillar way: :again, :continue (a child waits on the world) or an ending of fell-tree."
   [c]
-  (cond
-    (nil? (:pillar (ctx/mem c)))
+  (if (nil? (:phase (:pillar (ctx/mem c))))
     (or (await (take-back! c)) (await (start-pillar! c)))
-
-    :else
     (or (await (blocks! c))
         (let [r (await (pillar-round! c))] (if (= :climbed r) :again r)))))
 
-(defn ^:async round
-  [c]
-  (await (pace/steps! c #(step c))))
-
-(def meta {:category :phase :part-of '[jobs.forestry.fell-tree]})
+(defn ^:async cleanup
+  "However the call ends: take the pillar back. Done when the ledger is closed, else nothing-possible :cleanup-open."
+  [c _]
+  (when (log/open-scaffold? c)
+    (await (ctx/atomic c :urgent :pillar #(ctx/call c :cleanup 'jobs.access.cleanup {:job (:id c) :checks {:fit? '(always) :safe? '(not (threatened))}}))))
+  (if (log/open-scaffold? c)
+    (ctx/end c :nothing-possible :cleanup-open (result c))
+    (ctx/end c :done nil)))

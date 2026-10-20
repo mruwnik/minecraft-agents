@@ -3,7 +3,7 @@
   (:require [cljs.test :refer [deftest is are]]
             [engine.memory :as mem]
             [engine.test-util :as tu]
-            [jobs.forestry.fell-from-pillar :as fell-from-pillar]
+            [jobs.forestry.fell-tree.pillar :as pillar]
             [jobs.gather.mine.mend :as mend]
             [jobs.lib.blocks :as lb]
             [jobs.lib.choose :as choose]
@@ -50,12 +50,12 @@
 
 (deftest the-pillar-and-mend-block-lists-skip-an-avoided-filler
   (let [c (assoc (body [(stack "stone_pickaxe" 1)] {:chooser :fillers :avoid ["dirt"]}) :args {:block "stone"})]
-    (is (= ["cobblestone"] (fell-from-pillar/pillar-items c)))
+    (is (= ["cobblestone"] (pillar/pillar-items c)))
     (is (not-any? #{"dirt"} (mend/fillers c)))))
 
 (deftest the-pillar-is-not-built-of-cobblestone-the-cleanup-could-not-dig-back
-  (is (= ["dirt"] (fell-from-pillar/pillar-items (body [(stack "cobblestone" 4) (stack "stone_axe" 1)]))))
-  (is (= ["dirt" "cobblestone"] (fell-from-pillar/pillar-items (body [(stack "stone_pickaxe" 1)])))))
+  (is (= ["dirt"] (pillar/pillar-items (body [(stack "cobblestone" 4) (stack "stone_axe" 1)]))))
+  (is (= ["dirt" "cobblestone"] (pillar/pillar-items (body [(stack "stone_pickaxe" 1)])))))
 
 (deftest the-shelter-blocks-a-flight-places-skip-an-avoided-filler
   (let [c (body [(stack "dirt" 9) (stack "cobblestone" 3)] {:chooser :fillers :avoid ["cobblestone"]})]

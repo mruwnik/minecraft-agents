@@ -16,7 +16,7 @@
      jobs.survival.sleep jobs.survival.set-spawn jobs.survival.night jobs.survival.bed-down jobs.survival.shut-in jobs.survival.wall-in jobs.survival.dig-pit jobs.survival.dig-pocket jobs.survival.enter-room jobs.survival.log-out
      jobs.combat.attack jobs.animals.breed jobs.animals.shear jobs.animals.cull jobs.animals.maintain jobs.animals.pen-check jobs.animals.leash jobs.animals.unleash jobs.animals.lead-to jobs.animals.lure-to jobs.survival.recover-drops jobs.survival.restore-broken jobs.maintenance.shut jobs.storage.make-room
      jobs.animals.herd
-     jobs.forestry.fell-tree jobs.forestry.fell-from-pillar jobs.items.collect-drops jobs.forestry.plant-sapling jobs.forestry.tidy
+     jobs.forestry.fell-tree jobs.items.collect-drops jobs.forestry.plant-sapling
      jobs.forestry.harvest-wood jobs.forestry.maintain jobs.forestry.prepare jobs.storage.deposit jobs.storage.withdraw jobs.storage.haul jobs.strip.loot-cart jobs.items.craft jobs.items.give jobs.items.pick-up-loose jobs.items.equip jobs.items.kitchen jobs.farm.till jobs.farm.irrigate jobs.farm.fertilize jobs.farm.compost jobs.blocks.clear-cells jobs.build.path jobs.farm.find-spot jobs.farm.harvest jobs.farm.plant jobs.farm.tend
      jobs.apiary.harvest
      jobs.apiary.guard
@@ -96,7 +96,7 @@
 
 (deftest the-trigger-registry-holds-the-default-trigger-set
   (is (= #{:suffocating :burning :wedged :hostile-near :poisoned :hungry :stuck-underground :needs-bed :needs-weapon :night :dusk-home :died :pen-gate :door-left
-           :inventory-nearly-full :scaffold-left :tidy-pending :mounted :loose-items}
+           :inventory-nearly-full :scaffold-left :tidy-pending :mounted :loose-items :part-cut-tree :replant-owed}
          (set (keys triggers/all))))
   (doseq [[id t] triggers/all]
     (is (= id (:name t)))

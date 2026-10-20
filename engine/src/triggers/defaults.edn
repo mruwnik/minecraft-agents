@@ -26,4 +26,6 @@
   {:id :tidy-pending :level :comfort :when triggers.survival.tidy-pending/tidy-pending :job (jobs.survival.restore-broken) :args triggers.survival.tidy-pending/defaults :persistence :cooldown :cooldown-s 10}
   {:id :pen-gate :level :comfort :when triggers.animals.pen-gate/pen-gate :job (jobs.maintenance.shut {:openings :gates}) :args triggers.animals.pen-gate/defaults :persistence :cooldown :cooldown-s 5 :backoff {:after 9}}
   {:id :mounted :level :comfort :when triggers.movement.mounted/mounted :job (jobs.movement.leave-vehicle) :args {} :persistence :cooldown :cooldown-s 30}
+  {:id :part-cut-tree :level :comfort :when triggers.forestry.part-cut-tree/part-cut-tree :job (jobs.forestry.fell-tree {:part-cut? true :ways #{:carried}}) :args triggers.forestry.part-cut-tree/defaults :persistence :cooldown :cooldown-s 60}
+  {:id :replant-owed :level :comfort :when triggers.forestry.replant-owed/replant-owed :job (jobs.forestry.plant-sapling {:ways #{:carried}}) :args triggers.forestry.replant-owed/defaults :persistence :cooldown :cooldown-s 60}
   {:id :loose-items :level :comfort :when triggers.items.loose-items/loose-items :job (jobs.items.pick-up-loose) :args triggers.items.loose-items/defaults :persistence :cooldown :cooldown-s 30}]}

@@ -173,15 +173,15 @@
           (is (= #{unreachable} (second @avoids)) "the failed stand is passed to the next plan")
           (is (= (set (range 64 72)) (set (dug-ys (:p s)))) "the tree is felled from the replanned pillar"))))))
 
-(deftest a-planner-refusal-other-than-a-zone-ends-the-pillar-with-its-reason
+(deftest a-planner-refusal-makes-the-tree-unreachable
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (fm/start tall {})
               _ (eye-reach! (:p s) nil)
               out (with-redefs [approach/plan (fn [_] {:reason :no-base})]
-                    (await (child-outcome (:eng s) 'jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak"} 120)))]
-          (is (= :no-base (:reason out)))
+                    (await (child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 120)))]
+          (is (= :tree-unreachable (:reason out)))
           (is (= [] (kinds s :fell-tree.declined))))))))
 
 (def bare "tall without the side leaf: no stand to plan on the canopy." (update tall :blocks dissoc "7,71,0"))
@@ -231,7 +231,7 @@
           (is (= [] (kinds s :fell-tree.declined)) "the zone ring is not the whole story: the floor beyond it was unseen")
           (is (pos? (count (h/calls (:p s) "jumpPlace"))) "a pillar was built from outside the ring"))))))
 
-(deftest a-floor-that-stays-unseen-after-the-looks-ends-the-pillar-with-the-reason
+(deftest a-floor-that-stays-unseen-after-the-looks-makes-the-tree-unreachable
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -240,8 +240,8 @@
               omniscient (.-sensedAt p)
               _ (eye-reach! p)
               _ (aset p "sensedAt" (fn [pos] (if (> (.-y pos) 63) (omniscient pos) #js {:unknown true})))
-              out (await (child-outcome (:eng s) 'jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak"} 200))]
-          (is (contains? #{:no-base :no-stand} (:reason out)))
+              out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 200))]
+          (is (= :tree-unreachable (:reason out)))
           (is (= [] (kinds s :fell-tree.declined))))))))
 
 (def chest-at "-2,64,3")

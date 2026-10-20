@@ -36,11 +36,9 @@
    'jobs.farm.tend {:area {:plan "p"}}
    'jobs.items.collect-drops {}
    'jobs.forestry.fell-tree {}
-   'jobs.forestry.fell-from-pillar {:base {:x 0 :y 64 :z 0}}
    'jobs.forestry.harvest-wood {}
    'jobs.forestry.maintain {:plan "p"}
    'jobs.forestry.prepare {:plan "p"}
-   'jobs.forestry.tidy {}
    'jobs.forestry.plant-sapling {:at [0 64 0]}
    'jobs.strip.seal {:at [0 64 0] :axis :x :side :from}
    'jobs.strip.corridor {:segment "s"}
@@ -102,13 +100,6 @@
     {"0,64,0" "birch_sapling"} {:at [0 64 0] :species "oak"} {} [:later :owed]
     {"0,64,0" "oak_sapling"} {:at [0 64 0]} {:children {:walk {}}} [:later :wrapping-up]
     {} {:at [0 64 0]} {} [:later :owed]))
-
-(deftest forestry-tidy-is-done-once-looked-round-with-no-trunk-and-no-child
-  (are [m reason] (= reason (tu/kind-reason (done-of 'jobs.forestry.tidy {} {} m)))
-    {:tree {:base {:x 0 :y 64 :z 0}}} [:later :tidying]
-    {} [:later :tidying]
-    {:looked {:x 0 :y 64 :z 0} :children {:fell {}}} [:later :wrapping-up]
-    {:looked {:x 0 :y 64 :z 0}} [:ok :tidied]))
 
 (def oak-plan {:id "forest" :parts [{:id "a" :cells [[3 64 0]] :want {:tree "oak"}}]})
 

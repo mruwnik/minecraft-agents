@@ -1,0 +1,36 @@
+;; Card f9455918: the part-cut-tree and replant-owed triggers. A trunk whose lowest logs were cut hangs over air with leaves on
+;; top: the trigger fells it with fell-tree :part-cut? (its logs are picked up). A replant debt whose sapling is carried is planted
+;; by the replant-owed trigger (plant-sapling, carried saplings only).
+{:defaults
+ {:tags [:forestry :triggers :part-cut-tree :replant-owed] :time :any
+  :plot {:height 24 :floor "stone"}
+  :body {:at [14.5 0 22.5] :yaw 180 :settle-s 2 :inventory [["iron_axe" 1] ["oak_sapling" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "part-cut-tree-trigger-fells-the-hanging-trunk"
+   :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
+   :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
+            [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :within-s 40}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :part-cut-tree} :data {:kind :done}} :within-s 140}]
+   :after [[:not-block [16 1 16] "oak_log"] [:not-block [16 6 16] "oak_log"] [:item "oak_log" [:>= 5]]]}
+  {:name "part-cut-tree-trigger-leaves-a-whole-tree"
+   :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
+   :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
+            [:fill [16 0 16] [16 5 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 5 16] "oak_log"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 30}]
+   :after [[:block [16 0 16] "oak_log"]]
+   :limit-s 40}
+  {:name "replant-owed-trigger-plants-the-carried-sapling"
+   :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 60}]
+   :memory [{:kind :forestry/replant :data {:pos #at [16 0 16] :species "oak"}}]
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :replant-owed} :data {:kind :done}} :within-s 90}]
+   :after [[:block [16 0 16] "oak_sapling"]]
+   :limit-s 100}
+  {:name "replant-owed-trigger-does-not-fetch-a-missing-sapling"
+   :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 60}]
+   :memory [{:kind :forestry/replant :data {:pos #at [16 0 16] :species "oak"}}]
+   :body {:inventory []}
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :replant-owed}} :for-s 30}]
+   :after [[:not-block [16 0 16] "oak_sapling"]]
+   :limit-s 40}]}

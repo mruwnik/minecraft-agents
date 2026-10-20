@@ -1,6 +1,6 @@
 (ns engine.fell-contract-test
-  "jobs.forestry.fell-tree and jobs.forestry.fell-from-pillar as contract jobs: they export the contract and end with a
-  kind and a cause (0 of N is never done); the pillar is a child of the felling."
+  "jobs.forestry.fell-tree as a contract job: it exports the contract and ends with a kind and a cause (0 of N is never
+  done); the pillar is a way of the felling."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -19,27 +19,22 @@
             [jobs.lib.trees :as trees]
             [jobs.forestry.fell-tree :as fell-tree]
             [jobs.forestry.fell-tree.log :as log]
-            [jobs.forestry.fell-from-pillar :as pillar]
+            [jobs.forestry.fell-tree.pillar :as pillar]
             [jobs.lib.access :as access]
             [engine.core.activity :as activity]
             [engine.memory :as mem]))
 
-(def jobs '[jobs.forestry.fell-tree jobs.forestry.fell-from-pillar])
-
 (defn ^:async quote-of [eng sym args]
   (:quote (await (event-api/quote-view eng (str sym) (pr-str args)))))
 
-(deftest both-jobs-export-the-contract-and-quote-validly
+(deftest fell-tree-exports-the-contract-and-quotes-validly
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (fm/start ft/tall {})
-              args {'jobs.forestry.fell-tree {:radius 10}
-                    'jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak"}}]
-          (doseq [sym jobs
-                  :let [job (get registry/jobs sym)]]
-            (is (vector? (:target job)) (str sym " has a target"))
-            (is (nil? (contract/quote-problem (await (quote-of (:eng s) sym (get args sym))))) (str sym))))))))
+              sym 'jobs.forestry.fell-tree]
+          (is (vector? (:target (get registry/jobs sym))))
+          (is (nil? (contract/quote-problem (await (quote-of (:eng s) sym {:radius 10}))))))))))
 
 (deftest fell-trees-walk-is-go-tos-quote
   (async done
@@ -131,20 +126,16 @@
               {:keys [end]} (await (fm/with-zones zones #(fell-ending ft/tall 'jobs.forestry.fell-tree {:radius 10} 120)))]
           (is (= {:kind :nothing-possible :cause :tree-unreachable} (kc end))))))))
 
-(deftest fell-from-pillar-ends-done-with-its-logs-and-a-refused-one-condition-failed
+(deftest a-tall-tree-is-felled-from-a-pillar-taken-back
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [args {:base {:x 6 :y 64 :z 0} :species "oak" :radius 10}
-              {:keys [end eng]} (await (fell-ending ft/tall 'jobs.forestry.fell-from-pillar args 200))]
+        (let [{:keys [end eng]} (await (fell-ending ft/tall 'jobs.forestry.fell-tree {:radius 10} 200))]
           (is (= :done (:kind end)))
-          (is (pos? (get-in end [:data :logs])))
           (is (= [] (ledger/open-entries (mem/view (:store eng)))) "the pillar is taken back"))
         (let [zones [{:name "grove" :min [-6 64 -9] :max [16 80 9] :allow #{:dig}}]
-              {:keys [end]} (await (fm/with-zones zones #(fell-ending ft/tall 'jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak"} 120)))]
-          (is (= {:kind :condition-failed :cause :refused} (kc end))))
-        (let [{:keys [end]} (await (fell-ending ft/tall 'jobs.forestry.fell-from-pillar {} 20))]
-          (is (= {:kind :impossible :cause :bad-args} (kc end))))))))
+              {:keys [end]} (await (fm/with-zones zones #(fell-ending ft/tall 'jobs.forestry.fell-tree {:radius 10} 120)))]
+          (is (= {:kind :nothing-possible :cause :tree-unreachable} (kc end)) "a refused pillar leaves the tree"))))))
 
 (deftest a-pillar-with-no-log-in-reach-is-taken-back-and-the-tree-left
   (async done
@@ -155,7 +146,7 @@
           (is (= {:kind :nothing-possible :cause :tree-unreachable} (kc end)))
           (is (= [] (ledger/open-entries (mem/view (:store eng))))))))))
 
-(deftest a-pillar-job-cut-on-its-pillar-takes-it-back-in-its-cleanup
+(deftest a-felling-cut-on-its-pillar-takes-it-back-in-its-cleanup
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -166,11 +157,11 @@
               dig! log/dig-log!]
           (ft/eye-reach! (:p s) (:lose-logs? ft/tall))
           (with-redefs [log/dig-log! (fn ^:async cut-first [& args]
-                                       (when-not @dug
+                                       (when (and (not @dug) (seq (open)))
                                          (reset! dug (seq (open)))
                                          (core/cancel! eng (first (:list (core/state eng)))))
                                        (await (apply dig! args)))]
-            (core/submit! eng '(jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak"}) {})
+            (core/submit! eng '(jobs.forestry.fell-tree {:radius 10}) {})
             (await (tu/run-until-empty eng 200)))
           (is (seq @dug) "the cut came while the pillar stood")
           (is (= [] (open)) "the cleanup took the pillar back"))))))
@@ -192,7 +183,7 @@
                                    (when (= :tcollect0 k)
                                      (swap! open-at-collect conj (boolean (seq (ledger/open-entries (mem/view (:store eng)))))))
                                    (apply call! c k job more))]
-            (core/submit! eng '(jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak"}) {})
+            (core/submit! eng '(jobs.forestry.fell-tree {:radius 10}) {})
             (await (tu/run-until-empty eng 200)))
           (is (= [true] @open-at-collect) "one collect, made while the pillar still stood"))))))
 
@@ -212,7 +203,7 @@
                                    (if (= :tcollect0 k)
                                      {:kind :nothing-possible :data {:left [{:pos {:x 8 :y 71 :z 2} :reason :unreachable}]}}
                                      (apply call! c k job more)))]
-            (core/submit! eng '(jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak"}) {})
+            (core/submit! eng '(jobs.forestry.fell-tree {:radius 10}) {})
             (await (tu/run-until-empty eng 200)))
           (is (= [{:x 8 :y 70 :z 2}] (distinct @lowered)) "the leaf under the drop was dug"))))))
 
@@ -227,7 +218,7 @@
               call! ctx/call]
           (ft/eye-reach! (:p s) (:lose-logs? ft/tall))
           (with-redefs [log/dig-log! (fn ^:async cut-first [& args]
-                                       (when (empty? @levels)
+                                       (when (and (empty? @levels) (seq (ledger/open-entries (mem/view (:store eng)))))
                                          (swap! levels conj :cut)
                                          (core/cancel! eng (first (:list (core/state eng)))))
                                        (await (apply dig! args)))
@@ -235,17 +226,18 @@
                                    (when (= 'jobs.access.cleanup job)
                                      (swap! levels conj (activity/section-level eng (:token c))))
                                    (apply call! c k job more))]
-            (core/submit! eng '(jobs.forestry.fell-from-pillar {:base {:x 6 :y 64 :z 0} :species "oak"}) {})
+            (core/submit! eng '(jobs.forestry.fell-tree {:radius 10}) {})
             (await (tu/run-until-empty eng 200)))
           (is (= [:cut :urgent] (take 2 @levels))))))))
 
-(deftest a-limit-or-need-ending-keeps-its-reason-when-the-pillar-cleanup-failed
+(deftest a-limit-or-need-ending-for-the-pillar-blocks-ends-the-call-and-another-leaves-the-tree
   (with-redefs [ctx/mem (constantly {:dug 2})
-                ctx/update-mem! (constantly nil)]
-    (are [e k cause] (let [r (fell-tree/pillar-ended! {} e)]
-                       (and (= k (:kind r)) (= cause (:cause r)) (= {:kind :nothing-possible :cause :cleanup-open} (get-in r [:data :cleanup]))))
-      (contract/ending :limit-reached :job-time {:cleanup {:kind :nothing-possible :cause :cleanup-open}}) :limit-reached :job-time
-      (contract/ending :condition-failed :need {:cleanup {:kind :nothing-possible :cause :cleanup-open}}) :condition-failed :need)))
+                log/mark-unreachable! (fn ([_] nil) ([_ _] nil))]
+    (are [e k cause] (let [r (pillar/pass-up! {} e)]
+                       (and (= k (:kind r)) (= cause (:cause r)) (= {:logs 2} (:data r))))
+      (contract/ending :limit-reached :job-time {}) :limit-reached :job-time
+      (contract/ending :condition-failed :need {}) :condition-failed :need)
+    (is (= :again (pillar/pass-up! {} (contract/ending :nothing-possible :no-source {}))))))
 
 (deftest the-pillar-plan-keeps-dropping-the-lowest-log-past-a-zone-refusal
   (let [logs (mapv (fn [y] {:pos {:x 0 :y y :z 0}}) [64 65 66 67 68])
@@ -257,20 +249,8 @@
       (is (= {:pillar {:height 3}} (pillar/pillar-plan {:args {}} logs #{})))
       (is (= [5 4 3 2] @asked)))))
 
-(deftest fell-from-pillar-done-is-ok-only-with-a-closed-ledger-and-no-log-in-reach-of-the-stand
-  (let [c {:args {:base {:x 0 :y 64 :z 0}}}
-        mem {:pillar {:phase :clean :plan {:stand [0 70 0]}} :dug 1}
-        near [{:pos {:x 0 :y 71 :z 1}}]
-        status (fn [m open? logs]
-                 (with-redefs [ctx/mem (constantly m) log/open-scaffold? (constantly open?) pillar/tree-logs (constantly logs)]
-                   (first (pillar/done? c))))]
-    (is (= :ok (status mem false [])))
-    (is (= :later (status mem true [])) "the ledger is open")
-    (is (= :later (status mem false near)) "a log is still in reach")
-    (is (= :later (status {} false [])) "no pillar was stood on")))
-
 (defn ^:async step-with-scaffold
-  "pillar/step on a call with no pillar yet and an open scaffold; the cleanup child leaves it open-after."
+  "pillar/round! on a call with no pillar yet and an open scaffold; the cleanup child leaves it open-after."
   [open-after cleanup-result]
   (let [open (atom true) started (atom false)]
     (with-redefs [ctx/mem (constantly {})
@@ -278,15 +258,16 @@
                   ctx/atomic (fn [_ _ _ f] (f))
                   ctx/call (fn [& _] (reset! open open-after) cleanup-result)
                   ctx/end (fn ([_ kind cause] [kind cause]) ([_ kind cause _] [kind cause]))
+                  log/blocked! (fn [_ text] [:blocked text])
                   pillar/start-pillar! (fn [_] (reset! started true) :started)]
-      {:r (await (pillar/step {:id "j"})) :started @started})))
+      {:r (await (pillar/round! {:id "j"})) :started @started})))
 
 (deftest a-call-starting-on-an-open-scaffold-takes-it-back-before-it-plans
   (async done
     (tu/run-async done
       (fn ^:async t []
         (is (= {:r :started :started true} (await (step-with-scaffold false :done))) "closed ledger: the call goes on to plan")
-        (is (= {:r [:nothing-possible :cleanup-open] :started false} (await (step-with-scaffold true :done))) "still open: ends, plans nothing")
+        (is (= {:r [:blocked "cannot take the pillar back"] :started false} (await (step-with-scaffold true :done))) "still open: ends, plans nothing")
         (is (= {:r :continue :started false} (await (step-with-scaffold true :continue))) "the cleanup child waits")))))
 
 (deftest fell-tree-quotes-axe-wear-and-the-logs-it-picks-up

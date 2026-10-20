@@ -169,6 +169,12 @@
          (filter #(if want (= want %) (and (sapling-name? %) (not (str/ends-with? % "_fungus")))))
          first)))
 
+(defn with-sapling
+  "The debts whose species' sapling is among items (a fungus included when its species wants one)."
+  [debts items]
+  (let [have (set (map :name items))]
+    (filterv #(have (sapling-of (:species %))) debts)))
+
 (def all-drops
   (vec (concat log-names (map #(sapling-of %) species) ["stick" "apple"])))
 

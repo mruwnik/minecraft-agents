@@ -13,7 +13,7 @@
             [jobs.lib.world :as known]))
 
 (a/defargs settings
-  {::spare-own-builds {:default true :doc "Whether the digging jobs (go-to's escalations, stair, clear-path, tunnel, mine, fell-tree, fell-from-pillar, cleanup) keep off the cells of plans this body made; false: they may dig them (go-to warns of each cell dug)." :spec boolean?}})
+  {::spare-own-builds {:default true :doc "Whether the digging jobs (go-to's escalations, stair, clear-path, tunnel, mine, fell-tree, cleanup) keep off the cells of plans this body made; false: they may dig them (go-to warns of each cell dug)." :spec boolean?}})
 
 (defn spare-own-builds [] (settings/get settings ::spare-own-builds))
 

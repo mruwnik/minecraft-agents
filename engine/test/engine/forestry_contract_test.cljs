@@ -1,5 +1,5 @@
 (ns engine.forestry-contract-test
-  "jobs.forestry.harvest-wood, forestry.tidy and gather.make-obsidian as contract jobs: they export the contract and end
+  "jobs.forestry.harvest-wood and gather.make-obsidian as contract jobs: they export the contract and end
   with a kind and a cause (0 of N is never done); a child's failed ending is read, not taken for success."
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
@@ -17,7 +17,7 @@
 
 (defn kc [e] {:kind (:kind e) :cause (contract/cause-key e)})
 
-(def jobs '[jobs.forestry.harvest-wood jobs.forestry.tidy jobs.gather.make-obsidian])
+(def jobs '[jobs.forestry.harvest-wood jobs.gather.make-obsidian])
 
 (deftest the-three-jobs-export-the-contract-and-quote-validly
   (async done
@@ -76,34 +76,6 @@
           (is (= [[3 0]] (get-in end [:data :columns]))))
         (let [{:keys [end]} (await (harvest-end oak {:species "oak" :radius 10} 40 (fail :condition-failed {:reason :need :any-of ["dirt"] :count 4})))]
           (is (= {:kind :condition-failed :cause :need} (kc end))))))))
-
-;; ------------------------------------------------------------------ tidy
-
-(def tidy 'jobs.forestry.tidy)
-(def sapling {:name "oak_sapling" :count 2})
-(defn part-cut [x] (apply dissoc (lt/tree x 0 "oak" 4) (map #(fm/k x % 0) [64])))
-
-(deftest tidy-ends-done-with-the-count-and-nothing-to-tidy-is-done-with-none
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (lt/setup {:blocks (merge (fm/ground [[6 0]]) (part-cut 6)) :inventory [sapling]})
-              e (await (ending-of s tidy {:radius 12} 150))]
-          (is (= :done (:kind e)))
-          (is (= {:tidied 1} (:data e))))
-        (let [s (lt/setup {:blocks (fm/ground [[6 0]])})
-              e (await (ending-of s tidy {:radius 12} 150))]
-          (is (= :done (:kind e)) "done at once, not a failed condition"))))))
-
-(deftest tidy-with-no-axe-and-no-fetch-ends-with-the-fell-ending-not-forever
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (lt/setup {:blocks (merge (fm/ground [[6 0]]) (part-cut 6)) :inventory [sapling]})
-              eng (assoc-in eng [:jobs 'jobs.forestry.fell-tree :round]
-                            (fn ^:async f [c] (ctx/end c :condition-failed {:reason :need :any-of ["dirt"] :count 4} nil)))
-              e (await (ending-of {:eng eng} tidy {:radius 12} 60))]
-          (is (= {:kind :condition-failed :cause :need} (kc e))))))))
 
 ;; ------------------------------------------------------------------ make-obsidian
 

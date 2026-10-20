@@ -8,13 +8,14 @@
             [jobs.lib.cond :as cond]
             [jobs.lib.gate :as gate]
             [jobs.lib.need :as need]
-            [jobs.lib.trees :refer [debts target-of sapling-for sapling-of sapling-name? log-name? replant-kind species]
+            [jobs.lib.trees :refer [debts target-of with-sapling sapling-for sapling-of sapling-name? log-name? replant-kind species]
              :rename {species all-species}]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]))
 
 (def doc
   "Plant a sapling at :at, or at the oldest replant debt (then at the next, until none is owed), and clear that debt.
+  With no :species a debt whose sapling is carried comes before older ones.
   With :near and :within only the debts within :within blocks of :near count; the others stay owed.
   A missing sapling is got with jobs.lib.need (a seen chest, or the leaves of its tree broken for the drop) unless the call's :ways are #{:carried}
   is false or leaves out :item. The sapling kind is the species' (mangrove propagule, fungus too); the same one already on the spot counts as
@@ -60,7 +61,12 @@
 
 (def saplings (mapv sapling-of all-species))
 
-(defn current-target [c] (target-of (debts c) (:args c)))
+(defn current-target
+  "The spot to plant: :at, else the oldest debt; of the debts whose sapling is carried first when no species is asked."
+  [c]
+  (let [ds (debts c)
+        carried (when-not (:species (:args c)) (seq (with-sapling ds (u/inventory (:primitives c)))))]
+    (target-of (or carried ds) (:args c))))
 
 (defn refusal
   "Why the job may not plant at pos (:refused or :no-zones; one warn per job), or nil."

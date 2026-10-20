@@ -1,14 +1,14 @@
 ;; Cards 2b670ae6 (fell-tree pillars on the logs it just cut: no dirt or cobblestone, no fetch), f37e64e6 (the body ends on the
 ;; ground, not on the canopy), b3241e1c (a canopy leaf beside the trunk is no stand), d7409d96 (the sapling goes on the ground,
 ;; not on a log), f89b18a5 (the logs that came in count: no :none-collected), b5d6f4aa (an axe is fetched from a seen chest),
-;; 9a44c786 (a tree of the body's own plan is skipped silently), 7b23de3a (tidy fells a part-cut trunk, leaves a log wall).
+;; 9a44c786 (a tree of the body's own plan is skipped silently), 7b23de3a (part-cut fells a part-cut trunk, leaves a log wall).
 ;; Tree: 10 logs at x 16, z 16 (y 0..9), persistent oak leaves round the top and two leaves beside the trunk at y 6 and 7.
 ;; The body carries no blocks unless a case says; the top logs are out of reach from the ground, so every felling pillars.
 ;; A same-species log wall touching the trunk in another owner's zone is left standing.
 ;; Should-succeed: whole tree felled with nothing carried but an axe; harvest-wood replants on the ground; the axe comes from a chest;
-;; the own plan's birch is spared and the oak felled; tidy fells a part-cut trunk. Should-fail: tidy leaves a leafless log wall.
+;; the own plan's birch is spared and the oak felled; part-cut fell-tree fells a part-cut trunk. Should-fail: it leaves a leafless log wall.
 {:defaults
- {:tags [:forestry :fell-tree :harvest-wood :tidy :pillar]
+ {:tags [:forestry :fell-tree :harvest-wood :part-cut :pillar]
   :plot {:height 24 :floor "grass_block"}
   :blocks [[:fill [16 0 16] [16 9 16] "oak_log"]
            [:fill [14 8 14] [18 10 18] "oak_leaves[persistent=true]"]
@@ -76,17 +76,17 @@
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :fell-tree.declined} :for-s 100 :until {:source :job :kind :completed}}]
    :after [[:block [8 0 12] "birch_log"] [:not-block [24 0 12] "oak_log"] [:item "oak_log" [:>= 4]]]}
-  {:name "tidy-fells-a-part-cut-trunk-and-replants"
+  {:name "part-cut-fells-a-hanging-trunk-and-owes-the-sapling"
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
    :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
-   :act [[:job (jobs.forestry.tidy {:radius 12})]]
+   :act [[:job (jobs.forestry.fell-tree {:part-cut? true :radius 12})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
-   :after [[:not-block [16 1 16] "oak_log"] [:not-block [16 6 16] "oak_log"] [:block [16 0 16] "oak_sapling"] [:item "oak_log" [:>= 5]]]}
-  {:name "tidy-leaves-a-log-wall-with-no-leaves"
+   :after [[:not-block [16 1 16] "oak_log"] [:not-block [16 6 16] "oak_log"] [:item "oak_log" [:>= 5]]]}
+  {:name "part-cut-leaves-a-log-wall-with-no-leaves"
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [14 1 16] [18 5 16] "oak_log"]]
-   :act [[:job (jobs.forestry.tidy {:radius 12})]]
+   :act [[:job (jobs.forestry.fell-tree {:part-cut? true :radius 12})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 60 :of-job true}]
    :after [[:block [14 1 16] "oak_log"] [:block [18 5 16] "oak_log"] [:item "oak_log" 0]]
    :limit-s 80}]}
