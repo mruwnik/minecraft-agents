@@ -24,7 +24,7 @@
   farmland and the layer above holds the crops, so max y is at least min y + 1.
   One run is one pass over seven steps in this order. Each step is a child job that runs when its conditions hold:
   - :harvest (jobs.farm.harvest, replanting): a ripe crop lies in the box.
-  - :irrigate (jobs.farm.irrigate over the ground layer, in plan mode over the bounding box of the plan's lowest ground layer, :for-plan): :irrigate is true and a ground cell is seen
+  - :irrigate (jobs.farm.irrigate over the ground layer, in plan mode over the plan's ground cells, per layer in pieces of at most till's max-cells, one piece per pass, :for-plan): :irrigate is true and a ground cell is seen
     dry (no water seen in reach, the whole reach seen). The child fetches a water bucket when none is carried; a failed
     call is booked as its summary {:poured n} and the run goes on.
   - :till (jobs.farm.till): :till is true, a hoe is carried, dirt or grass lies uncovered in the ground layer and
@@ -285,7 +285,7 @@
   [c report]
   (let [part (:part (:args c))
         out (part-report c report)]
-    (ctx/update-mem! c #(-> % (dissoc :todo :report :call-args :cur :till-tried :tilled)
+    (ctx/update-mem! c #(-> % (dissoc :todo :report :call-args :cur :till-tried :tilled :irrigate-tried :irrigated)
                             (assoc-in [:results (key-of part)] out)))
     :again))
 
@@ -326,6 +326,20 @@
                                       (and declined? (nil? %)) {:skipped :declined}
                                       :else %)))))
 
+(defn after-irrigate
+  "Memory after a plan irrigate child ended: the piece is tried, its pours counted, the step stays to be decided again
+  for the next piece."
+  [m call-args r-poured declined?]
+  (let [poured (+ (:irrigated m 0) r-poured)]
+    (-> m
+        (dissoc :call-args)
+        (update :irrigate-tried (fnil conj #{}) (:from call-args))
+        (assoc :irrigated poured)
+        (update-in [:report :irrigate] #(cond
+                                          (pos? poured) {:poured poured}
+                                          (and declined? (nil? %)) {:skipped :declined}
+                                          :else %)))))
+
 (defn refused?
   "Whether child ending e is a contract child's refusal before it started (condition-failed, no data): it counts as declined."
   [e]
@@ -336,8 +350,12 @@
   [m step call-args e]
   (let [declined? (or (refused? e) (= :impossible (:kind e)))
         r (:data e)]
-    (if (= :till step)
+    (cond
+      (= :till step)
       (after-till m call-args (if declined? 0 (:tilled r 0)) declined?)
+      (and (= :irrigate step) (:for-plan call-args))
+      (after-irrigate m call-args (if declined? 0 (count (:poured r))) declined?)
+      :else
       (-> m
           (update :todo rest)
           (dissoc :call-args)
@@ -354,7 +372,7 @@
   "One child call, or the report when no step is left: :again after a child ended, :continue while one waits."
   [c]
   (when-not (:todo (ctx/mem c))
-    (ctx/update-mem! c assoc :todo decide/steps :report {} :till-tried #{} :tilled 0))
+    (ctx/update-mem! c assoc :todo decide/steps :report {} :till-tried #{} :tilled 0 :irrigate-tried #{} :irrigated 0))
   (let [{:keys [call] :as p} (steps/next-plan decide/decide decide/jobs c facts)]
     (ctx/update-mem! c assoc :todo (:todo p) :report (:report p))
     (if-not call

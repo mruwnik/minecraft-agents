@@ -10,6 +10,7 @@
             [jobs.lib.crops :as crops]
             [jobs.farm.field :as fld]
             [jobs.farm.plant :as plant]
+            [jobs.farm.till :as till]
             [jobs.lib.farm :as farm]
             [jobs.farm.tidy :as tidy]
             [jobs.farm.tend-stock :as stock]
@@ -108,15 +109,22 @@
          (remove (fn [[pos _]] (tried pos)))
          (filter (fn [[pos _]] (stock/untilled? (ground-cell p pos)))))))
 
-(defn plan-ground-box
-  "The lowest-y ground layer's bounding box of the plan's ground cells (as box/ground-box), nil with none."
+(defn plan-ground-boxes
+  "The boxes (as box/ground-box) irrigate works over for the plan's ground cells: per y layer, tiles of at most
+  till/max-cells cells that hold a ground cell."
   [answer crops]
-  (let [ps (keys (ground-cells answer crops))
-        y (when (seq ps) (apply min (map :y ps)))
-        ps (filter #(= y (:y %)) ps)]
-    (when (seq ps)
-      {:min {:x (apply min (map :x ps)) :y y :z (apply min (map :z ps))}
-       :max {:x (apply max (map :x ps)) :y y :z (apply max (map :z ps))}})))
+  (let [side (max 1 (long (js/Math.floor (js/Math.sqrt (till/max-cells)))))]
+    (vec (for [[y ps] (sort-by key (group-by :y (keys (ground-cells answer crops))))
+               :let [x0 (apply min (map :x ps)) z0 (apply min (map :z ps))]
+               [_ cs] (sort-by key (group-by (fn [{:keys [x z]}] [(quot (- x x0) side) (quot (- z z0) side)]) ps))]
+           {:min {:x (apply min (map :x cs)) :y y :z (apply min (map :z cs))}
+            :max {:x (apply max (map :x cs)) :y y :z (apply max (map :z cs))}}))))
+
+(defn dry-box
+  "[box dry-count] of the first plan ground box not yet tried this pass with a cell irrigate would wet, nil when none."
+  [c answer crops]
+  (some (fn [box] (let [n (box/irrigate-need c box)] (when (pos? n) [box n])))
+        (remove #(contains? (:irrigate-tried (ctx/mem c) #{}) (:min %)) (plan-ground-boxes answer crops))))
 
 (defn plan-facts
   "What the decisions are made from for a plan, read live."
@@ -140,10 +148,10 @@
         wet (filter (fn [[pos _]] (wet? p pos)) unseeded)
         dry (remove (set wet) unseeded)
         tilled-cells (concat seeded wet)
-        ground-box (plan-ground-box answer crops)]
+        [ground-box dry-n] (when (:irrigate (:args c)) (dry-box c answer crops))]
     {:mid mid
      :ground-box ground-box
-     :dry (if (and (:irrigate (:args c)) ground-box) (box/irrigate-need c ground-box) 0)
+     :dry (or dry-n 0)
      :radius R
      :ripe (count (fld/planned-ripe p {} crops []))
      :hoe (some? (farm/hoe-of p))

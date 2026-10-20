@@ -555,3 +555,12 @@
                             {"mix" (plan-of)} 120))]
           (is (= {:poured 1} (step s :irrigate)))
           (is (= 1 (count (filter #(= "water" (block-at s (first %) 63 (second %))) (concat wheat-cells carrot-cells))))))))))
+
+(deftest plan-ground-boxes-cover-every-layer-in-pieces-within-the-till-limit
+  (let [crops (into {} (concat (for [x (range 20) z (range 20)] [{:x x :y 64 :z z} "wheat"])
+                               [[{:x 0 :y 70 :z 0} "wheat"]]))
+        boxes (tend-plan/plan-ground-boxes {:cells []} crops)
+        cells (fn [{lo :min hi :max}] (* (inc (- (:x hi) (:x lo))) (inc (- (:z hi) (:z lo)))))]
+    (is (= #{63 69} (set (map (comp :y :min) boxes))) "the upper terrace is watered too")
+    (is (every? #(<= (cells %) 256) boxes))
+    (is (= 5 (count boxes)) "20x20 in 16-wide tiles is four pieces, plus the upper cell")))

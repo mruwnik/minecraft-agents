@@ -28,4 +28,12 @@
    :plans [{:id "field" :metadata {:by "$body"} :parts [{:id "row" :box [#at [12 0 16] #at [20 0 16]] :want {:crop "wheat"}}]}]
    :act [[:job (jobs.farm.tend {:plan "$plan:field" :irrigate false})]]
    :expect [{:event {:source :job :kind :completed :data {:steps {:irrigate {:skipped :irrigate-off}}}} :within-s 100 :of-job true}]
-   :after [[:block [16 -1 16] "farmland[moisture=0]"] [:item "water_bucket" 1]]}]}
+   :after [[:block [16 -1 16] "farmland[moisture=0]"] [:item "water_bucket" 1]]}
+  {:name "plan-terraced-rows-are-each-wetted"
+   :body {:at [16.5 0 21.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["water_bucket" 2] ["wheat_seeds" 16] ["wooden_hoe" 1]]}
+   :blocks [[:fill [12 0 25] [20 0 27] "dirt"] [:fill [12 0 26] [20 0 26] "farmland[moisture=0]"]]
+   :plans [{:id "field" :metadata {:by "$body"} :parts [{:id "low" :box [#at [12 0 16] #at [20 0 16]] :want {:crop "wheat"}}
+                                                        {:id "high" :box [#at [12 1 26] #at [20 1 26]] :want {:crop "wheat"}}]}]
+   :act [[:job (jobs.farm.tend {:plan "$plan:field"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}]
+   :after [[:block [16 -1 16] "water"] [:block [16 0 26] "water"] [:item "water_bucket" 0]]}]}
